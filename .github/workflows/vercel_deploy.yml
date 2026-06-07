@@ -22,7 +22,8 @@ jobs:
         run: npm install -g vercel@latest
 
       - name: Build frontend
-        run: cd frontend && npm install && npm run build
+        working-directory: frontend
+        run: npm install && npm run build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -33,26 +34,25 @@ jobs:
           VITE_API_URL: /api
           VITE_APP_NAME: "PostureAI Pro"
 
-      - name: Pull Vercel project settings
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build with Vercel
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy prebuilt to Vercel
+      - name: Deploy frontend dist to Vercel
         id: deploy
+        working-directory: frontend
         run: |
-          OUTPUT=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1)
+          # Deploy just the dist folder as a static site + api/ folder as serverless
+          OUTPUT=$(vercel deploy dist --prod --token=${{ secrets.VERCEL_TOKEN }} \
+            --name postureai-pro \
+            2>&1)
           echo "$OUTPUT"
           URL=$(echo "$OUTPUT" | grep -Eo 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
-          echo "DEPLOYED_URL=$URL" >> $GITHUB_ENV
+          echo "✅ URL: $URL"
 
       - name: Save URL to repo
         run: |
-          echo "${{ steps.deploy.outputs.url }}" > VERCEL_URL.txt
+          URL="${{ steps.deploy.outputs.url }}"
+          echo "$URL" > VERCEL_URL.txt
           git config user.email "bot@postureai.io"
           git config user.name "PostureAI Bot"
           git add VERCEL_URL.txt
-          git diff --staged --quiet || git commit -m "chore: save vercel URL [skip ci]"
+          git diff --staged --quiet || git commit -m "chore: vercel URL=$URL [skip ci]"
           git push origin main || true
