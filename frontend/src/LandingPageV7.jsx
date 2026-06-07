@@ -418,7 +418,7 @@ function Hero({ lang, onCTA }) {
 function SocialProof({ lang }) {
   const ar = lang === "ar";
   const logos = [
-    "Vodafone","CIB","EFG","Majid Al Futtaim","Talaat Moustafa","Orascom",
+    "Coventry University ✓","Vodafone","CIB","EFG","Majid Al Futtaim","Talaat Moustafa","Orascom",
   ];
   return (
     <section style={{ borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
@@ -432,14 +432,23 @@ function SocialProof({ lang }) {
           alignItems:"center" }}>
           {logos.map(logo => (
             <div key={logo} style={{
-              color:C.muted, fontSize:15, fontWeight:600, letterSpacing:"-.01em",
-              opacity:.6, filter:"grayscale(1)",
+              color: logo.includes("✓") ? "#3b82f6" : C.muted,
+              fontSize:15, fontWeight:600, letterSpacing:"-.01em",
+              opacity: logo.includes("✓") ? 1 : .6, filter: logo.includes("✓") ? "none" : "grayscale(1)",
               transition:"opacity .2s",
             }}
             onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-            onMouseLeave={e=>e.currentTarget.style.opacity=".6"}>
+            onMouseLeave={e=>e.currentTarget.style.opacity= logo.includes("✓") ? "1" : ".6"}>
               {logo}
             </div>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap", marginTop:20 }}>
+          {["SOC 2 Type II — In Progress","ISO 27001","AES-256 Encryption","GDPR Ready","99.9% SLA"].map(badge => (
+            <span key={badge} style={{
+              background:"rgba(59,130,246,.1)", border:"1px solid rgba(59,130,246,.2)",
+              color:"#60a5fa", fontSize:11, padding:"4px 10px", borderRadius:99, fontWeight:500
+            }}>{badge}</span>
           ))}
         </div>
       </div>
@@ -496,7 +505,7 @@ function Features({ lang }) {
       detail:"API متكامل مع أنظمة HR الموجودة. تنبيهات تلقائية على Slack وTeams عند اكتشاف مخاطر عالية." },
     { icon:"🛡️", title:"أمان المستوى المؤسسي",
       desc:"SAML SSO · RBAC · تشفير كامل · سجلات التدقيق",
-      detail:"متوافق مع ISO27001. تشفير AES-256 للبيانات في حالة السكون. سجلات تدقيق شاملة لكل حدث." },
+      detail:"SOC 2 Type II قيد المراجعة · ISO27001 · تشفير AES-256 للبيانات في حالة السكون. سجلات تدقيق شاملة لكل حدث." },
   ] : [
     { icon:"🎯", title:"Precision AI Analysis",
       desc:"478-landmark tracking + 3D head pose at ~96% accuracy",
@@ -512,7 +521,7 @@ function Features({ lang }) {
       detail:"Full API integration with existing HR systems. Automatic Slack/Teams alerts when high-risk posture is detected." },
     { icon:"🛡️", title:"Enterprise-Grade Security",
       desc:"SAML SSO · RBAC · Full encryption · Audit logs",
-      detail:"ISO27001 compliant. AES-256 encryption at rest. Comprehensive audit logs for every system event." },
+      detail:"SOC 2 Type II audit in progress · ISO27001 · AES-256 encryption at rest. Comprehensive audit logs for every system event." },
   ];
 
   return (

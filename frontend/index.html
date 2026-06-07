@@ -4,40 +4,87 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-    <!-- SEO -->
+    <!-- ═══ SEO ═══════════════════════════════════════════════════ -->
     <title>PostureAI Pro — منصة ذكاء اصطناعي لصحة القوى العاملة | AI Workforce Health</title>
     <meta name="description" content="منصة تحليل الوضعية بالذكاء الاصطناعي للشركات المصرية. MediaPipe + Gemini AI + وسائل دفع مصرية. ابدأ مجاناً 7 أيام." />
-    <meta name="keywords" content="posture analysis, وضعية, AI, Egypt, HR, workplace, mediapipe, posture correction" />
+    <meta name="keywords" content="posture analysis, وضعية, AI, Egypt, HR, workplace health, mediapipe, posture correction, workforce health" />
     <meta name="author" content="PostureAI Pro" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://postureai-pro-omega.vercel.app/" />
 
-    <!-- Open Graph (LinkedIn / Facebook share preview) -->
+    <!-- ═══ Open Graph ════════════════════════════════════════════ -->
     <meta property="og:type"        content="website" />
-    <meta property="og:url"         content="https://postureai.io/" />
+    <meta property="og:url"         content="https://postureai-pro-omega.vercel.app/" />
+    <meta property="og:site_name"   content="PostureAI Pro" />
     <meta property="og:title"       content="PostureAI Pro — منصة ذكاء اصطناعي لصحة القوى العاملة" />
-    <meta property="og:description" content="تحليل بيوميكانيكي فوري بـ MediaPipe و Gemini AI. وفّر 40% من تكاليف إجازات العمل." />
-    <meta property="og:image"       content="/og-image.png" />
+    <meta property="og:description" content="تحليل بيوميكانيكي فوري بـ MediaPipe و Gemini AI. وفّر 40% من تكاليف إجازات العمل. SOC 2 in progress." />
+    <meta property="og:image"       content="https://postureai-pro-omega.vercel.app/og-image.png" />
+    <meta property="og:image:width"  content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"    content="PostureAI Pro — AI Workforce Health Platform" />
+    <meta property="og:locale"      content="ar_EG" />
+    <meta property="og:locale:alternate" content="en_US" />
 
-    <!-- Twitter Card -->
+    <!-- ═══ Twitter Card ═════════════════════════════════════════ -->
     <meta name="twitter:card"        content="summary_large_image" />
-    <meta name="twitter:title"       content="PostureAI Pro" />
-    <meta name="twitter:description" content="AI-powered posture analysis for Egyptian enterprise teams" />
-    <meta name="twitter:image"       content="/og-image.png" />
+    <meta name="twitter:site"        content="@PostureAIPro" />
+    <meta name="twitter:title"       content="PostureAI Pro — AI Workforce Health" />
+    <meta name="twitter:description" content="AI-powered posture analysis for Egyptian enterprise teams. Free 7-day trial." />
+    <meta name="twitter:image"       content="https://postureai-pro-omega.vercel.app/og-image.png" />
+    <meta name="twitter:image:alt"   content="PostureAI Pro Dashboard" />
 
-    <!-- PWA -->
+    <!-- ═══ Security / Trust ══════════════════════════════════════ -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-DNS-Prefetch-Control" content="on" />
+
+    <!-- ═══ PWA ══════════════════════════════════════════════════ -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#1a56db" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="PostureAI" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.svg" />
 
-    <!-- Favicon -->
+    <!-- ═══ Favicon ═══════════════════════════════════════════════ -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231a56db'/><text y='.9em' font-size='70' x='12'>◈</text></svg>" />
 
-    <!-- Preconnect for performance -->
+    <!-- ═══ Structured Data (JSON-LD) ════════════════════════════ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "PostureAI Pro",
+      "url": "https://postureai-pro-omega.vercel.app",
+      "description": "AI-powered posture monitoring SaaS platform for Egyptian enterprise teams",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web, iOS, Android",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EGP",
+        "description": "Free 7-day trial"
+      },
+      "creator": {
+        "@type": "Organization",
+        "name": "PostureAI Pro",
+        "email": "support@postureai.io",
+        "telephone": "+201210271841"
+      },
+      "featureList": [
+        "Real-time posture analysis",
+        "AI coaching with Gemini",
+        "HR dashboard",
+        "SOC 2 compliance in progress",
+        "PayMob Egypt payments"
+      ]
+    }
+    </script>
+
+    <!-- ═══ Preconnect ════════════════════════════════════════════ -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="preconnect" href="https://storage.googleapis.com" />
     <link rel="preconnect" href="https://generativelanguage.googleapis.com" />
+    <link rel="preconnect" href="https://firestore.googleapis.com" />
 
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -50,7 +97,6 @@
         -moz-osx-font-smoothing: grayscale;
         overflow-x: hidden;
       }
-      /* Loading spinner shown before React mounts */
       #root:empty::after {
         content: '';
         display: block;
@@ -63,16 +109,13 @@
         animation: spin .8s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
-      /* Scrollbar */
       ::-webkit-scrollbar { width: 4px; height: 4px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: rgba(148,163,184,.2); border-radius: 99px; }
       ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.4); }
-      /* Mobile safe area */
       @supports (padding: env(safe-area-inset-bottom)) {
         body { padding-bottom: env(safe-area-inset-bottom); }
       }
-      /* Responsive grid breakpoints */
       @media (max-width: 600px) {
         [data-sb] { grid-template-columns: 1fr !important; }
       }
