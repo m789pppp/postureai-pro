@@ -18,15 +18,6 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Test token and capture error
-        run: |
-          echo "=== Vercel version ==="
-          vercel --version
-          echo "=== whoami ==="
-          vercel whoami --token=${{ secrets.VERCEL_TOKEN }} 2>&1 || true
-          echo "=== ls projects ==="
-          vercel list --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | head -20 || true
-
       - name: Build frontend
         working-directory: frontend
         run: npm install && npm run build
@@ -40,15 +31,27 @@ jobs:
           VITE_API_URL: /api
           VITE_APP_NAME: "PostureAI Pro"
 
-      - name: Deploy and save result
+      - name: Deploy to Vercel
+        id: deploy
         run: |
           cd frontend
-          RESULT=$(vercel deploy dist --prod --token=${{ secrets.VERCEL_TOKEN }} --name=postureai-pro --yes 2>&1) || true
-          echo "$RESULT" > /tmp/vercel_result.txt
-          cd ..
-          cp /tmp/vercel_result.txt VERCEL_DEPLOY_LOG.txt
-          git config user.email "bot@postureai.io"
-          git config user.name "PostureAI Bot"
-          git add VERCEL_DEPLOY_LOG.txt
-          git commit -m "debug: vercel deploy output [skip ci]" || true
-          git push origin main || true
+          OUTPUT=$(vercel deploy dist --prod --yes \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --name=postureai-pro 2>&1)
+          echo "--- OUTPUT ---"
+          echo "$OUTPUT"
+          echo "--- END ---"
+          URL=$(echo "$OUTPUT" | grep -Eo 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
+          echo "URL=$URL" > /tmp/deploy_result.txt
+          echo "FULL_OUTPUT<<EOF" >> /tmp/deploy_result.txt
+          echo "$OUTPUT" >> /tmp/deploy_result.txt
+          echo "EOF" >> /tmp/deploy_result.txt
+          mkdir -p /tmp/artifacts
+          cp /tmp/deploy_result.txt /tmp/artifacts/
+
+      - name: Upload URL as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-deploy-url
+          path: /tmp/artifacts/deploy_result.txt
+          retention-days: 1
