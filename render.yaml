@@ -1,0 +1,48 @@
+# PostureAI Pro — Render.com deployment config
+# Free tier: 750 hours/month (enough for 1 service)
+# Deploy: render.com → New → Blueprint → connect this repo
+
+services:
+  - type: web
+    name: postureai-backend
+    env: python
+    region: frankfurt
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --config gunicorn.conf.py "backend:app"
+    healthCheckPath: /api/health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      # Add these in Render dashboard:
+      - key: SECRET_KEY
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: postureai-redis
+          property: connectionString
+
+  - type: redis
+    name: postureai-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
