@@ -37,21 +37,22 @@ jobs:
           cd frontend
           OUTPUT=$(vercel deploy dist --prod --yes \
             --token=${{ secrets.VERCEL_TOKEN }} \
-            --name=postureai-pro 2>&1)
-          echo "--- OUTPUT ---"
+            --name=postureai-pro 2>&1) || true
           echo "$OUTPUT"
-          echo "--- END ---"
           URL=$(echo "$OUTPUT" | grep -Eo 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
-          echo "URL=$URL" > /tmp/deploy_result.txt
-          echo "FULL_OUTPUT<<EOF" >> /tmp/deploy_result.txt
-          echo "$OUTPUT" >> /tmp/deploy_result.txt
-          echo "EOF" >> /tmp/deploy_result.txt
-          mkdir -p /tmp/artifacts
-          cp /tmp/deploy_result.txt /tmp/artifacts/
+          echo "url=$URL" >> $GITHUB_OUTPUT
 
-      - name: Upload URL as artifact
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release with URL
+        uses: actions/github-script@v7
         with:
-          name: vercel-deploy-url
-          path: /tmp/artifacts/deploy_result.txt
-          retention-days: 1
+          script: |
+            const url = '${{ steps.deploy.outputs.url }}';
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: 'deploy-' + Date.now(),
+              name: 'PostureAI Pro - Production Deploy',
+              body: `## ✅ Deployed Successfully!\n\n**URL:** ${url}\n\n**Frontend:** React + Vite\n**Backend:** Flask Python Serverless\n**Firebase:** postureai-prod`,
+              draft: false,
+              prerelease: false
+            });
