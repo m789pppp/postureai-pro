@@ -12,6 +12,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -34,33 +36,38 @@ jobs:
           VITE_APP_NAME: "PostureAI Pro"
           VITE_SUPPORT_EMAIL: support@postureai.io
 
-      - name: Deploy to Vercel
+      - name: Deploy to Vercel and capture URL
         id: deploy
         run: |
-          DEPLOY_URL=$(vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} \
-            --build-env VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY }} \
-            --build-env VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }} \
-            --build-env VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID }} \
-            --build-env VITE_FIREBASE_STORAGE_BUCKET=${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }} \
-            --build-env VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }} \
-            --build-env VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }} \
-            --build-env VITE_API_URL=/api \
-            2>&1 | grep -E "https://.*vercel\.app" | tail -1)
-          echo "DEPLOY_URL=$DEPLOY_URL" >> $GITHUB_ENV
+          set -e
+          # Run vercel deploy and capture ALL output
+          FULL_OUTPUT=$(vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1)
+          echo "=== FULL VERCEL OUTPUT ==="
+          echo "$FULL_OUTPUT"
+          echo "=========================="
+          # Extract URL - last https line
+          DEPLOY_URL=$(echo "$FULL_OUTPUT" | grep -Eo 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
+          if [ -z "$DEPLOY_URL" ]; then
+            DEPLOY_URL=$(echo "$FULL_OUTPUT" | grep -Eo 'https://[^ ]+' | tail -1)
+          fi
+          echo "DEPLOY_URL=$DEPLOY_URL"
           echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
-          echo "✅ Deployed: $DEPLOY_URL"
 
-      - name: Save URL to repo
+      - name: Save URL to file and push
         run: |
-          echo "${{ steps.deploy.outputs.url }}" > VERCEL_URL.txt
-          git config user.email "deploy@postureai.io"
+          DEPLOY_URL="${{ steps.deploy.outputs.url }}"
+          echo "Deployed URL: $DEPLOY_URL"
+          echo "$DEPLOY_URL" > VERCEL_URL.txt
+          git config user.email "bot@postureai.io"
           git config user.name "PostureAI Bot"
           git add VERCEL_URL.txt
-          git diff --staged --quiet || git commit -m "chore: save Vercel deployment URL [skip ci]"
-          git push || true
+          git diff --staged --quiet || git commit -m "chore: save deployment URL [skip ci]"
+          git push origin main || true
 
-      - name: Set backend env vars
+      - name: Add backend env vars to Vercel
         run: |
-          vercel env add SECRET_KEY "${{ secrets.SECRET_KEY }}" production --token=${{ secrets.VERCEL_TOKEN }} --yes 2>/dev/null || true
-          vercel env add FLASK_ENV "production" production --token=${{ secrets.VERCEL_TOKEN }} --yes 2>/dev/null || true
+          vercel env rm SECRET_KEY production --token=${{ secrets.VERCEL_TOKEN }} --yes 2>/dev/null || true
+          echo "${{ secrets.SECRET_KEY }}" | vercel env add SECRET_KEY production --token=${{ secrets.VERCEL_TOKEN }} 2>/dev/null || true
+          echo "production" | vercel env add FLASK_ENV production --token=${{ secrets.VERCEL_TOKEN }} 2>/dev/null || true
+          echo "https://m789pppp.github.io/postureai-pro,https://postureai-pro.vercel.app" | vercel env add ALLOWED_ORIGINS production --token=${{ secrets.VERCEL_TOKEN }} 2>/dev/null || true
         continue-on-error: true
