@@ -1,0 +1,107 @@
+// PostureAI Pro — Firestore Security Rules v2
+// FIX: Unified is_hr check — reads from Firestore doc (is_hr field)
+//      instead of custom token claims (which require Firebase Admin to set)
+// Deploy: firebase deploy --only firestore:rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth()     { return request.auth != null; }
+    function isOwner(uid) { return request.auth.uid == uid; }
+
+    // Admin: check Firestore doc (server-set, not client-writable due to notChangingSensitive)
+    function isAdmin() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get("is_admin", false) == true;
+    }
+
+    // HR: check is_hr field OR is_admin — consistent with App.jsx & backend
+    function isHR() {
+      return isAuth() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get("is_hr", false) == true ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get("is_admin", false) == true
+      );
+    }
+
+    // Prevent users from upgrading their own tier/role
+    function notChangingSensitive() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(["tier","is_admin","is_hr","is_trial","trial_expires_at","role","auto_approved","seats"]);
+    }
+
+    match /users/{uid} {
+      allow read:   if isOwner(uid) || isAdmin() || isHR();
+      allow create: if isAuth() && isOwner(uid);
+      allow update: if (isOwner(uid) && notChangingSensitive()) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /sessions/{sid} {
+      allow read:   if isAuth() && (resource.data.uid == request.auth.uid || isAdmin() || isHR());
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuth() && resource.data.uid == request.auth.uid;
+      allow delete: if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    match /payments/{pid} {
+      allow read:   if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuth()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == "pending"
+                    && request.resource.data.amount > 0;
+      allow update: if isAdmin();
+      allow delete: if false; // Never delete payment records
+    }
+
+    match /coupons/{code} {
+      allow read:          if isAuth();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isAuth() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["used"]) &&
+        request.resource.data.used == resource.data.used + 1
+      );
+    }
+
+    match /audit_logs/{logId} {
+      allow read:           if isAdmin();
+      allow create:         if isAuth();
+      allow update, delete: if false;
+    }
+
+    match /companies/{cid} {
+      allow read:                   if isAuth();
+      allow create, update, delete: if isAdmin() || isHR();
+    }
+
+    match /departments/{did} {
+      allow read:                   if isAuth();
+      allow create, update, delete: if isAdmin() || isHR();
+    }
+
+    match /leaderboard/{eid} {
+      allow read:  if isAuth();
+      allow write: if isAuth() && (resource == null || resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    match /calibrations/{uid} {
+      allow read:  if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid);
+    }
+
+    match /sso_configs/{domain} {
+      allow read:   if isAdmin() || isHR();
+      allow write:  if isAdmin();
+    }
+
+    match /referrals/{uid} {
+      allow read:  if isOwner(uid) || isAdmin();
+      allow write: if isAuth();
+    }
+
+    // Deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

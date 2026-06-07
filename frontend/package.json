@@ -1,0 +1,32 @@
+{
+  "name": "postureai-pro",
+  "private": true,
+  "version": "17.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "lint": "eslint src --ext .js,.jsx --report-unused-disable-directives --max-warnings 0",
+    "typecheck": "tsc --noEmit 2>/dev/null || true",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "analyze": "vite-bundle-visualizer"
+  },
+  "dependencies": {
+    "@sentry/react": "^8.0.0",
+    "firebase": "^10.12.0",
+    "posthog-js": "^1.131.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "vite": "^5.4.1",
+    "vite-bundle-visualizer": "^1.0.0"
+  }
+}

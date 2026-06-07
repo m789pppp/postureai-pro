@@ -1,0 +1,57 @@
+{
+  "_comment": "PostureAI — Cloudflare WAF + Performance Config",
+  "_instructions": "Import this in Cloudflare Dashboard → Security → WAF → Custom Rules",
+
+  "dns": {
+    "frontend": { "type": "CNAME", "name": "app",   "content": "cname.vercel-dns.com",    "proxied": true },
+    "api":      { "type": "CNAME", "name": "api",   "content": "your-app.railway.app",     "proxied": true },
+    "www":      { "type": "CNAME", "name": "www",   "content": "cname.vercel-dns.com",    "proxied": true }
+  },
+
+  "waf_rules": [
+    {
+      "name":        "Block brute-force login",
+      "expression":  "(http.request.uri.path eq \"/api/auth/login\" and cf.threat_score gt 15)",
+      "action":      "challenge"
+    },
+    {
+      "name":        "Rate-limit analyze endpoint",
+      "expression":  "(http.request.uri.path eq \"/api/analyze\" and cf.threat_score gt 10)",
+      "action":      "challenge"
+    },
+    {
+      "name":        "Block known bad bots",
+      "expression":  "(cf.client.bot)",
+      "action":      "block"
+    },
+    {
+      "name":        "Allow Stripe webhook IPs only",
+      "expression":  "(http.request.uri.path eq \"/api/stripe/webhook\" and not ip.src in {3.18.12.63 3.130.192.231 13.235.14.237 13.235.122.149})",
+      "action":      "block"
+    }
+  ],
+
+  "performance": {
+    "cache_rules": [
+      { "path": "/assets/*",  "ttl_browser": 31536000, "ttl_edge": 86400 },
+      { "path": "/*.woff2",   "ttl_browser": 31536000, "ttl_edge": 86400 },
+      { "path": "/api/*",     "cache": false }
+    ],
+    "minify":     { "html": true, "css": true, "js": true },
+    "brotli":     true,
+    "http2":      true,
+    "rocket_loader": false
+  },
+
+  "ddos": {
+    "sensitivity":   "medium",
+    "http_ddos_protection": "enabled",
+    "ddos_override":  "medium"
+  },
+
+  "bot_management": {
+    "fight_mode":    false,
+    "auto_update_model": true,
+    "javascript_detections": true
+  }
+}

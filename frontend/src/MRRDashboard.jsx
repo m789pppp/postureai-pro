@@ -1,0 +1,163 @@
+/**
+ * PostureAI Pro — MRR / Revenue Metrics Dashboard
+ * Shows: MRR trend, ARR, ARPU, LTV, churn rate, cohort retention
+ * Only visible to platform admins.
+ */
+import React, { useState, useEffect } from "react";
+import { apiFetch } from "./services/api.js";
+
+const fmt = (n, currency = "EGP") =>
+  typeof n === "number"
+    ? new Intl.NumberFormat("en-EG", { style: "currency", currency, maximumFractionDigits: 0 }).format(n)
+    : "—";
+
+const pct = (n) => (typeof n === "number" ? `${n.toFixed(1)}%` : "—");
+
+function MetCard({ label, value, sub, color = "#6366f1", icon }) {
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.03)", border: "1px solid rgba(148,163,184,.1)",
+      borderRadius: 16, padding: "20px 22px", minWidth: 160,
+    }}>
+      <p style={{ margin: "0 0 6px", fontSize: 12, color: "#64748b", textTransform: "uppercase", letterSpacing: ".06em" }}>
+        {icon} {label}
+      </p>
+      <p style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 700, color }}>{value}</p>
+      {sub && <p style={{ margin: 0, fontSize: 12, color: "#475569" }}>{sub}</p>}
+    </div>
+  );
+}
+
+function SimpleBar({ data, height = 80 }) {
+  if (!data?.length) return null;
+  const max = Math.max(...data.map(d => d.amount), 1);
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height, paddingTop: 8 }}>
+      {data.map((d, i) => (
+        <div key={i} title={`${d.date}: ${d.amount.toLocaleString()} EGP`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+          <div style={{ width: "100%", background: "#6366f1", borderRadius: "3px 3px 0 0", height: `${(d.amount / max) * (height - 16)}px`, minHeight: 2, transition: "height .3s" }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function MRRDashboard({ cs, lang, onClose }) {
+  const [data, setData]     = useState(null);
+  const [loading, setLoad]  = useState(true);
+  const [error, setError]   = useState("");
+  const isAr = lang === "ar";
+
+  useEffect(() => {
+    apiFetch("/metrics/revenue")
+      .then(d => { setData(d); setLoad(false); })
+      .catch(e => { setError(e.message); setLoad(false); });
+  }, []);
+
+  const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 };
+  const box = { background: "#0b1120", border: "1px solid rgba(148,163,184,.12)", borderRadius: 20, padding: "28px 24px", maxWidth: 900, width: "100%", maxHeight: "90vh", overflowY: "auto" };
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={box} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <div>
+            <h2 style={{ margin: 0, color: "#eef2ff", fontSize: 20, fontWeight: 700 }}>
+              {isAr ? "📊 لوحة الإيرادات" : "📊 Revenue Metrics"}
+            </h2>
+            <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>
+              {isAr ? "MRR · ARR · ARPU · LTV · الاشتراط الشهري" : "MRR · ARR · ARPU · LTV · Monthly Churn"}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,.06)", border: "none", borderRadius: 8, color: "#94a3b8", cursor: "pointer", padding: "6px 12px", fontSize: 13 }}>
+            {isAr ? "إغلاق" : "Close"}
+          </button>
+        </div>
+
+        {loading && <p style={{ color: "#64748b", textAlign: "center", padding: 40 }}>{isAr ? "جاري التحميل..." : "Loading..."}</p>}
+        {error && <p style={{ color: "#f87171", textAlign: "center", padding: 40 }}>Error: {error}</p>}
+
+        {data && (
+          <>
+            {/* Core metrics */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 24 }}>
+              <MetCard label="MRR" value={fmt(data.mrr)} sub={isAr ? "الإيراد الشهري المتكرر" : "Monthly recurring"} color="#10b981" icon="💰" />
+              <MetCard label="ARR" value={fmt(data.arr)} sub={isAr ? "الإيراد السنوي" : "Annual run rate"} color="#6366f1" icon="📈" />
+              <MetCard label="ARPU" value={fmt(data.arpu)} sub={isAr ? "متوسط إيراد المستخدم" : "Avg revenue/user"} color="#f59e0b" icon="👤" />
+              <MetCard label="LTV" value={fmt(data.ltv)} sub={isAr ? "قيمة العميل مدى الحياة" : "Lifetime value"} color="#0891b2" icon="♾️" />
+              <MetCard label={isAr ? "معدل الانسحاب" : "Monthly Churn"} value={pct(data.monthly_churn)} sub={isAr ? "انسحب هذا الشهر" : "Cancelled this month"} color={data.monthly_churn > 5 ? "#f87171" : "#10b981"} icon="📉" />
+              <MetCard label={isAr ? "المشتركون" : "Paid Users"} value={data.paid_users?.toLocaleString()} sub={`${data.trial_users} ${isAr ? "تجربة" : "trials"}`} color="#a78bfa" icon="💳" />
+            </div>
+
+            {/* Revenue chart */}
+            {data.revenue_chart?.length > 0 && (
+              <div style={{ background: "rgba(255,255,255,.02)", borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
+                <p style={{ margin: "0 0 12px", fontSize: 13, color: "#94a3b8" }}>
+                  {isAr ? "الإيرادات اليومية (آخر 30 يوم)" : "Daily revenue — last 30 days"}
+                </p>
+                <SimpleBar data={data.revenue_chart} height={90} />
+              </div>
+            )}
+
+            {/* Revenue by plan */}
+            {data.revenue_by_plan && (
+              <div style={{ marginBottom: 20 }}>
+                <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 12px" }}>
+                  {isAr ? "الإيراد حسب الخطة" : "Revenue by plan"}
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {Object.entries(data.revenue_by_plan)
+                    .filter(([,v]) => v > 0)
+                    .sort(([,a],[,b]) => b - a)
+                    .map(([plan, amount]) => (
+                      <div key={plan} style={{ background: "rgba(99,102,241,.1)", border: "1px solid rgba(99,102,241,.2)", borderRadius: 10, padding: "8px 14px", fontSize: 13 }}>
+                        <span style={{ color: "#a5b4fc", fontWeight: 600, textTransform: "capitalize" }}>{plan}</span>
+                        <span style={{ color: "#64748b", marginLeft: 8 }}>{fmt(amount)}/mo</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cohort retention */}
+            {data.cohorts?.length > 0 && (
+              <div style={{ background: "rgba(255,255,255,.02)", borderRadius: 12, padding: "16px 20px" }}>
+                <p style={{ margin: "0 0 12px", fontSize: 13, color: "#94a3b8" }}>
+                  {isAr ? "الاحتفاظ بالمستخدمين حسب الشهر" : "Cohort retention by signup month"}
+                </p>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ color: "#475569" }}>
+                        {["Month", "Signed Up", "30d Active", "90d Active", "Paid Conv."].map(h => (
+                          <th key={h} style={{ textAlign: "left", padding: "6px 10px", borderBottom: "1px solid rgba(148,163,184,.08)" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.cohorts.map(c => (
+                        <tr key={c.month}>
+                          <td style={{ padding: "7px 10px", color: "#94a3b8" }}>{c.month}</td>
+                          <td style={{ padding: "7px 10px", color: "#e2e8f0" }}>{c.signed_up}</td>
+                          <td style={{ padding: "7px 10px", color: c.retention_30d > 40 ? "#10b981" : "#f59e0b" }}>{pct(c.retention_30d)}</td>
+                          <td style={{ padding: "7px 10px", color: c.retention_90d > 20 ? "#10b981" : "#f87171" }}>{pct(c.retention_90d)}</td>
+                          <td style={{ padding: "7px 10px", color: c.conversion > 5 ? "#10b981" : "#64748b" }}>{pct(c.conversion)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <p style={{ textAlign: "center", color: "#334155", fontSize: 11, margin: "16px 0 0" }}>
+              {isAr ? "آخر تحديث:" : "Last updated:"} {new Date(data.generated_at).toLocaleString()}
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

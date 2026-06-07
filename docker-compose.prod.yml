@@ -1,0 +1,183 @@
+version: "3.9"
+
+# ============================================================
+# PostureAI Pro — Production Docker Compose
+# Services: backend, celery, celery-beat, nginx, redis
+# External: Supabase PostgreSQL, Firebase (managed)
+# ============================================================
+
+x-backend-env: &backend-env
+  FLASK_ENV: production
+  SUPABASE_URL: ${SUPABASE_URL}
+  SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+  SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+  FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
+  GEMINI_API_KEY: ${GEMINI_API_KEY}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+  STRIPE_PRICE_PRO_MONTHLY: ${STRIPE_PRICE_PRO_MONTHLY}
+  STRIPE_PRICE_PRO_YEARLY: ${STRIPE_PRICE_PRO_YEARLY}
+  STRIPE_PRICE_BUSINESS_MONTHLY: ${STRIPE_PRICE_BUSINESS_MONTHLY}
+  STRIPE_PRICE_BUSINESS_YEARLY: ${STRIPE_PRICE_BUSINESS_YEARLY}
+  PAYMOB_SECRET_KEY: ${PAYMOB_SECRET_KEY}
+  PAYMOB_HMAC_SECRET: ${PAYMOB_HMAC_SECRET}
+  PAYMOB_INTEGRATION_CARD: ${PAYMOB_INTEGRATION_CARD}
+  PAYMOB_INTEGRATION_WALLET: ${PAYMOB_INTEGRATION_WALLET}
+  RESEND_API_KEY: ${RESEND_API_KEY}
+  FROM_EMAIL: ${FROM_EMAIL:-PostureAI Pro <noreply@postureai.io>}
+  SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@postureai.io}
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  APP_URL: ${APP_URL:-https://postureai.io}
+  ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://postureai.io,https://www.postureai.io}
+  SENTRY_DSN: ${SENTRY_DSN}
+  SECRET_KEY: ${SECRET_KEY}
+  ADMIN_EMAIL: ${ADMIN_EMAIL}
+
+services:
+
+  # ── API Backend ───────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    image: postureai-backend:latest
+    restart: unless-stopped
+    ports:
+      - "5050:5050"
+    environment:
+      <<: *backend-env
+      PORT: 5050
+      WORKERS: ${GUNICORN_WORKERS:-4}
+    volumes:
+      - backend_tmp:/tmp/postureai
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
+        reservations:
+          memory: 512M
+
+  # ── Celery worker ─────────────────────────────────────────────
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    image: postureai-backend:latest
+    command: celery -A services.celery_app worker --loglevel=info --concurrency=2
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+    volumes:
+      - backend_tmp:/tmp/postureai
+    depends_on:
+      - redis
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1"
+
+  # ── Celery Beat (scheduled tasks) ────────────────────────────
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    image: postureai-backend:latest
+    command: celery -A services.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ── Redis ─────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --requirepass ${REDIS_PASSWORD:-}
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  # ── Nginx reverse proxy ───────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Certbot (Let's Encrypt) ───────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+volumes:
+  redis_data:
+    driver: local
+  backend_tmp:
+    driver: local
+  certbot_certs:
+    driver: local
+  certbot_www:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,180 @@
+rules_version = '2';
+
+// PostureAI Pro — Firestore Security Rules v3
+// SECURITY HARDENED:
+//   - Organization isolation: users can only read data within their company
+//   - is_admin can only be set by Cloud Functions (not by client writes)
+//   - Audit logs are append-only
+//   - Payment records are write-once (no client modification)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper Functions ────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().get('is_admin', false) == true;
+    }
+
+    function isHR() {
+      return isAuthenticated() && (
+        getUserData().get('is_hr', false) == true ||
+        getUserData().get('is_admin', false) == true
+      );
+    }
+
+    function isSameCompany(companyId) {
+      return isAuthenticated() && getUserData().get('company_id', null) == companyId;
+    }
+
+    function isValidTier(tier) {
+      return tier in ['standard', 'professional', 'elite', 'enterprise'];
+    }
+
+    // Prevent client from escalating their own privileges
+    function noPrivilegeEscalation() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['is_admin', 'tier', 'is_hr', 'company_id']);
+    }
+
+    // ── Users Collection ────────────────────────────────────────
+    match /users/{uid} {
+      // Read: own profile OR admin OR HR within same company
+      allow read: if isOwner(uid)
+                  || isAdmin()
+                  || (isHR() && isSameCompany(resource.data.get('company_id', '')));
+
+      // Create: own profile on signup
+      allow create: if isOwner(uid)
+                    && request.resource.data.get('is_admin', false) == false
+                    && request.resource.data.get('is_hr', false) == false;
+
+      // Update: own profile but CANNOT change is_admin, tier, is_hr, company_id
+      allow update: if isOwner(uid) && noPrivilegeEscalation();
+
+      // Delete: only admin
+      allow delete: if isAdmin();
+    }
+
+    // ── Sessions Collection ─────────────────────────────────────
+    match /sessions/{sessionId} {
+      // Read: own sessions OR admin OR HR in same company
+      allow read: if isAuthenticated() && (
+        resource.data.uid == request.auth.uid
+        || isAdmin()
+        || (isHR() && resource.data.get('company_id', '') != ''
+            && isSameCompany(resource.data.get('company_id', '')))
+      );
+      // Write: only own sessions
+      allow create, update: if isAuthenticated()
+                             && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated()
+                    && resource.data.uid == request.auth.uid;
+    }
+
+    // ── Companies Collection ─────────────────────────────────────
+    match /companies/{companyId} {
+      // Read: own company members OR admin
+      allow read: if isAdmin() || isSameCompany(companyId);
+
+      // Create: authenticated users (starting a company)
+      allow create: if isAuthenticated();
+
+      // Update: only admin or HR of that company
+      allow update: if isAdmin()
+                    || (isHR() && isSameCompany(companyId));
+
+      allow delete: if isAdmin();
+    }
+
+    // ── Departments Collection ───────────────────────────────────
+    match /departments/{deptId} {
+      allow read: if isAdmin()
+                  || (isAuthenticated()
+                      && isSameCompany(resource.data.get('company_id', '')));
+      allow create, update: if isAdmin()
+                             || (isHR()
+                                 && isSameCompany(request.resource.data.get('company_id', '')));
+      allow delete: if isAdmin();
+    }
+
+    // ── Payments Collection ──────────────────────────────────────
+    match /payments/{paymentId} {
+      // Read: own payments OR admin
+      allow read: if isAuthenticated()
+                  && (resource.data.uid == request.auth.uid || isAdmin());
+
+      // Write-once from server only (no client creates/updates)
+      // Payments are created by backend webhooks — clients cannot write
+      allow create, update, delete: if false;
+    }
+
+    // ── Audit Logs — append-only ─────────────────────────────────
+    match /audit_logs/{logId} {
+      // Read: admin only
+      allow read: if isAdmin();
+      // Create: any authenticated user (backend writes these)
+      allow create: if isAuthenticated();
+      // Update/Delete: NEVER (append-only for compliance)
+      allow update, delete: if false;
+    }
+
+    // ── Coupons ──────────────────────────────────────────────────
+    match /coupons/{code} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Notifications ────────────────────────────────────────────
+    match /notifications/{notifId} {
+      allow read, delete: if isAuthenticated()
+                          && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    // ── API Keys ─────────────────────────────────────────────────
+    match /api_keys/{keyId} {
+      allow read: if isAuthenticated()
+                  && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated()
+                    && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    // ── Webhooks ─────────────────────────────────────────────────
+    match /webhooks/{webhookId} {
+      allow read, create, update, delete: if isAuthenticated()
+                                          && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+    }
+
+    // ── Invites ──────────────────────────────────────────────────
+    match /invites/{inviteId} {
+      allow read: if isAuthenticated();
+      allow create: if isHR();
+      allow update: if isAuthenticated(); // accepting invite
+      allow delete: if isHR();
+    }
+
+    // ── Deny everything else ─────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

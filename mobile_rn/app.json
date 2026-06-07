@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "PostureAI",
+    "slug": "postureai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.postureai.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PostureAI needs camera access to analyse your posture in real time. Video is processed on-device and never stored.",
+        "NSFaceIDUsageDescription": "Use Face ID to securely sign in to PostureAI.",
+        "UIBackgroundModes": ["fetch", "remote-notification"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#0f172a" },
+      "package": "com.postureai.app",
+      "versionCode": 1,
+      "permissions": ["android.permission.CAMERA", "android.permission.USE_BIOMETRIC", "android.permission.RECEIVE_BOOT_COMPLETED"]
+    },
+    "plugins": [
+      ["expo-camera", { "cameraPermission": "Allow PostureAI to access your camera for posture analysis." }],
+      ["expo-notifications", { "icon": "./assets/notification-icon.png", "color": "#6366f1" }],
+      "expo-router",
+      "expo-secure-store",
+      ["react-native-vision-camera", { "cameraPermissionText": "PostureAI needs camera access for posture analysis." }]
+    ],
+    "extra": {
+      "eas": { "projectId": "your-eas-project-id" }
+    }
+  }
+}

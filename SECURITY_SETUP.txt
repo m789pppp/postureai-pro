@@ -1,0 +1,72 @@
+╔══════════════════════════════════════════════════════════════╗
+║  PostureAI Pro — Security Setup (اعمل ده قبل أي حاجة تاني) ║
+╚══════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. FIREBASE SECURITY RULES (الأهم)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+افتح:
+https://console.firebase.google.com/project/postureai-prod/firestore/rules
+
+انسخ الـ rules دي وحطها وادوس Publish:
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users — يشوف بياناته بس
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Sessions — صاحبها بس
+    match /sessions/{sid} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+    }
+
+    // Companies — أعضاء الشركة
+    match /companies/{cid} {
+      allow read: if request.auth != null && (
+        resource.data.admin_uid == request.auth.uid ||
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.company_id == cid
+      );
+      allow write: if request.auth != null && resource.data.admin_uid == request.auth.uid;
+      allow create: if request.auth != null;
+    }
+
+    // Departments — أعضاء نفس الشركة
+    match /departments/{did} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Invites — يقرأ اللي اتعزم
+    match /invites/{iid} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && resource.data.invited_by == request.auth.uid;
+    }
+
+    // Payments — صاحبه بس
+    match /payments/{pid} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null;
+    }
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. PAYMOB KEY (مهم)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+روح PayMob Dashboard وعمل rotate للـ Secret Key
+الـ Public Key (VITE_PAYMOB_PUBLIC_KEY) مش خطر — ممكن يفضل
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. .ENV.LOCAL (لا تشيله من الـ zip — شيله من الـ git)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+لو هتحط المشروع على GitHub:
+- الـ .gitignore موجود وبيشيل .env.local تلقائياً
+- Firebase API Key مش خطر (designed to be public)
+- الخطر الحقيقي = Security Rules مش مضبوطة (اعمل Step 1 فوق)

@@ -1,0 +1,49 @@
+{
+  "cli": { "version": ">= 12.0.0" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios":     { "simulator": true },
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_APP_ENV": "development" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios":     { "resourceClass": "m1-medium" },
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_APP_ENV": "staging" }
+    },
+    "production": {
+      "autoIncrement": true,
+      "ios": {
+        "resourceClass":     "m1-medium",
+        "image":             "latest",
+        "credentialsSource": "remote"
+      },
+      "android": {
+        "buildType":         "app-bundle",
+        "credentialsSource": "remote"
+      },
+      "env": { "EXPO_PUBLIC_APP_ENV": "production" }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId":             "REPLACE_WITH_APPLE_ID@email.com",
+        "ascAppId":            "REPLACE_WITH_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId":         "REPLACE_WITH_APPLE_TEAM_ID",
+        "language":            "English (U.S.)",
+        "releaseNotes":        "AI posture coaching for enterprise teams.",
+        "metadataPath":        "./eas/ios-metadata.json"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./eas/google-play-service-account.json",
+        "track":               "internal",
+        "releaseStatus":       "draft",
+        "changesNotSentForReview": false
+      }
+    }
+  }
+}

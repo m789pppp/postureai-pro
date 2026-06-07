@@ -1,0 +1,26 @@
+{
+  "apple": {
+    "info": {
+      "en-US": {
+        "title":       "PostureAI Pro — Workforce Health",
+        "subtitle":    "AI Posture Coach for Teams",
+        "description": "PostureAI Pro uses your camera and AI to analyze your posture in real time, giving you gentle coaching nudges and building healthy habits — for individuals and enterprise teams.\n\n✅ FEATURES:\n• Real-time AI posture analysis\n• Personalized coaching voice\n• Weekly health reports\n• Team leaderboard\n• HR analytics dashboard (enterprise)\n• Arabic + English support\n• Works on any Mac, Windows, or Linux\n\n🔒 PRIVACY:\nAll video is processed on-device. No frames, images, or video are ever stored or transmitted. Only anonymised posture scores are saved.\n\n🏢 ENTERPRISE:\nRBAC, SSO/SAML, multi-tenant, white-label, SLA. Contact sales@postureai.com.",
+        "keywords":    "posture, ergonomics, workplace health, AI, coaching, back pain, neck pain, HR analytics",
+        "privacyUrl":  "https://postureai.com/privacy",
+        "supportUrl":  "https://support.postureai.com",
+        "marketingUrl":"https://postureai.com"
+      }
+    },
+    "categories": ["HEALTH_AND_FITNESS", "PRODUCTIVITY"],
+    "contentRating": {
+      "ageRating": "4+",
+      "medicalOrTreatmentInformation": false,
+      "kidsAgeBand": null
+    },
+    "pricing": "free",
+    "availability": {
+      "availableInNewTerritories": true,
+      "territories": ["EGY","SAU","ARE","KWT","QAT","BHR","OMN","JOR","LBN","USA","GBR","DEU","FRA"]
+    }
+  }
+}

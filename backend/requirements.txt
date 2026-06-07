@@ -1,0 +1,65 @@
+# PostureAI Pro — Backend Requirements v2
+# Python 3.11+
+
+# ── Core ──────────────────────────────────────────────────────────
+flask==3.0.3
+flask-cors==4.0.1
+flask-limiter==3.7.0
+gunicorn==22.0.0
+python-dotenv==1.0.1
+requests==2.32.3
+httpx==0.27.0
+
+# ── Database ──────────────────────────────────────────────────────
+supabase==2.5.3
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.30          # optional ORM if needed
+
+# ── Auth ──────────────────────────────────────────────────────────
+firebase-admin==6.5.0
+PyJWT==2.8.0
+bcrypt==4.1.3
+
+# ── AI / Analysis ─────────────────────────────────────────────────
+mediapipe==0.10.14
+opencv-python-headless==4.10.0.82
+numpy==1.26.4
+google-generativeai==0.7.2
+
+# ── Billing ───────────────────────────────────────────────────────
+stripe==10.4.0
+
+# ── Email ─────────────────────────────────────────────────────────
+# Resend via httpx (included above)
+# SMTP via standard library smtplib
+
+# ── Task queue ────────────────────────────────────────────────────
+celery==5.4.0
+redis==5.0.6
+flower==2.0.1               # Celery monitoring UI
+
+# ── PDF generation ────────────────────────────────────────────────
+reportlab==4.2.2
+Pillow==10.4.0
+
+# ── Monitoring ────────────────────────────────────────────────────
+sentry-sdk[flask]==2.8.0
+
+# ── Utilities ─────────────────────────────────────────────────────
+python-dateutil==2.9.0
+pytz==2024.1
+pydantic==2.7.4             # request validation
+marshmallow==3.21.3         # serialization
+
+# ── Testing ───────────────────────────────────────────────────────
+pytest==8.2.2
+pytest-cov==5.0.0
+pytest-mock==3.14.0
+responses==0.25.3
+
+# ── Security ──────────────────────────────────────────────────────
+bandit==1.7.9
+safety==3.2.3
+
+# WorkOS SSO (merged from v13)
+workos>=3.0.0

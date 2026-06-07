@@ -1,0 +1,68 @@
+# ============================================================
+# PostureAI Pro — Backend Dockerfile
+# Multi-stage: base → deps → production
+# Python 3.11 · Gunicorn · Health-checked
+# ============================================================
+
+# ── Stage 1: Base ─────────────────────────────────────────────────
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# System dependencies for MediaPipe, OpenCV, ReportLab
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libglib2.0-0 \
+    libsm6 \
+    libxrender1 \
+    libxext6 \
+    libgl1-mesa-glx \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ── Stage 2: Dependencies ─────────────────────────────────────────
+FROM base AS deps
+
+COPY requirements.txt .
+
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# ── Stage 3: Production ───────────────────────────────────────────
+FROM deps AS production
+
+# Non-root user for security
+RUN groupadd -r postureai && useradd -r -g postureai -d /app -s /sbin/nologin postureai
+
+# Copy application
+COPY --chown=postureai:postureai . .
+
+# Create temp directory for analysis
+RUN mkdir -p /tmp/postureai && chown postureai:postureai /tmp/postureai
+
+USER postureai
+
+EXPOSE 5050
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:5050/api/health || exit 1
+
+CMD ["gunicorn", \
+     "--config", "gunicorn.conf.py", \
+     "--bind", "0.0.0.0:5050", \
+     "--workers", "4", \
+     "--worker-class", "sync", \
+     "--worker-connections", "1000", \
+     "--timeout", "120", \
+     "--keepalive", "5", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--log-level", "info", \
+     "app:app"]

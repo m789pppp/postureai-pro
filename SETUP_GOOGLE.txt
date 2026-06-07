@@ -1,0 +1,27 @@
+╔══════════════════════════════════════════════════╗
+║   تفعيل Google Sign-in — خطوتين بس              ║
+╚══════════════════════════════════════════════════╝
+
+الخطوة 1 — Firebase Console
+══════════════════════════════════════════════════
+1. افتح: https://console.firebase.google.com/project/postureai-prod/authentication/providers
+2. دوس على "Google"
+3. فعّل Enable
+4. حط اسمك في "Project support email"
+5. دوس Save
+
+الخطوة 2 — Authorized Domains
+══════════════════════════════════════════════════
+1. افتح: https://console.firebase.google.com/project/postureai-prod/authentication/settings
+2. تحت "Authorized domains" دوس "Add domain"
+3. ضيف: localhost
+4. دوس Add
+
+خلاص! Google Sign-in هيشتغل.
+
+══════════════════════════════════════════════════
+ملاحظة: Email/Password
+══════════════════════════════════════════════════
+تأكد إنه مفعّل:
+https://console.firebase.google.com/project/postureai-prod/authentication/providers
+→ Email/Password → Enable → Save

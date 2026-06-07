@@ -1,0 +1,11 @@
+# PostureAI Pro — Process definitions
+# Railway / Heroku / Render
+
+# Web: Gunicorn WSGI server
+web: gunicorn --config gunicorn.conf.py "backend:app"
+
+# Worker: Celery for async analysis (enable by setting CELERY_ENABLED=true)
+worker: celery -A services.celery_app worker --concurrency=2 --loglevel=info --queues=analysis,email,webhooks
+
+# Celery Beat Scheduler (cron jobs: drip emails, NPS triggers, health scores)
+beat: celery -A services.celery_beat beat --loglevel=info
