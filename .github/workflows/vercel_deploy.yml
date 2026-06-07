@@ -8,19 +8,23 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
       - name: Build frontend
         working-directory: frontend
-        run: npm install && npm run build
+        run: |
+          npm install
+          npm run build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -34,31 +38,22 @@ jobs:
       - name: Deploy to Vercel
         id: deploy
         run: |
+          npm install -g vercel@latest
           cd frontend
-          OUTPUT=$(vercel deploy dist --prod --yes \
+          RESULT=$(vercel deploy dist --prod --yes \
             --token=${{ secrets.VERCEL_TOKEN }} \
             --name=postureai-pro 2>&1) || true
-          echo "$OUTPUT"
-          URL=$(echo "$OUTPUT" | grep -Eo 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
+          echo "$RESULT"
+          URL=$(echo "$RESULT" | grep -Eo 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
-          # Write URL to file in repo
-          cd ..
-          echo "$URL" > LIVE_URL.txt
-          git config user.email "bot@postureai.io"
-          git config user.name "PostureAI Bot"
-          git add LIVE_URL.txt
-          git status
-          git diff --staged
-          git commit -m "live: $URL" --allow-empty
-          git push origin main
 
-      - name: Also update README with URL
+      - name: Write URL to file
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
         run: |
-          URL="${{ steps.deploy.outputs.url }}"
-          sed -i "s|LIVE_URL_PLACEHOLDER|$URL|g" README.md || true
-          echo "Live at: $URL" >> README.md
-          git config user.email "bot@postureai.io"
-          git config user.name "PostureAI Bot"
-          git add README.md
-          git diff --staged --quiet || git commit -m "docs: live URL [skip ci]"
-          git push origin main || true
+          echo "$DEPLOY_URL" > LIVE_URL.txt
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add LIVE_URL.txt
+          git commit -m "chore: update live URL [skip ci]" || echo "nothing to commit"
+          git push || echo "push failed"
