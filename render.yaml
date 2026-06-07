@@ -1,6 +1,5 @@
-# PostureAI Pro — Render.com deployment config
-# Free tier: 750 hours/month (enough for 1 service)
-# Deploy: render.com → New → Blueprint → connect this repo
+# PostureAI Pro — Render.com Blueprint
+# Deploy: render.com → New → Blueprint → connect postureai-pro repo
 
 services:
   - type: web
@@ -19,16 +18,42 @@ services:
         value: 10000
       - key: PYTHON_VERSION
         value: 3.11.0
-      # Add these in Render dashboard:
       - key: SECRET_KEY
-        sync: false
+        value: 2e69c60c8a4bf195feaf54b372c15fa7cc0be7b8f0761ae146feb2fa22ae691e
+      - key: APP_URL
+        value: https://m789pppp.github.io/postureai-pro
+      - key: ALLOWED_ORIGINS
+        value: https://m789pppp.github.io,https://m789pppp.github.io/postureai-pro
+      - key: ADMIN_EMAIL
+        value: admin@postureai.io
+      - key: SUPPORT_EMAIL
+        value: support@postureai.io
+      - key: ADMIN_PHONE
+        value: "+201210271841"
+      - key: WORK_HOURS_START
+        value: 9
+      - key: WORK_HOURS_END
+        value: 18
+      - key: CELERY_ENABLED
+        value: false
+      - key: SOCKETIO_ENABLED
+        value: false
+      # ── Add these manually in Render dashboard (secrets):
       - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
       - key: GEMINI_API_KEY
+        sync: false
+      - key: PAYMOB_SECRET_KEY
+        sync: false
+      - key: PAYMOB_PUBLIC_KEY
+        sync: false
+      - key: PAYMOB_INTEGRATION_CARD
+        sync: false
+      - key: PAYMOB_INTEGRATION_WALLET
+        sync: false
+      - key: PAYMOB_IFRAME_ID
+        sync: false
+      - key: PAYMOB_HMAC_SECRET
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -37,12 +62,4 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: postureai-redis
-          property: connectionString
-
-  - type: redis
-    name: postureai-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
+        sync: false
