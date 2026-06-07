@@ -1,14 +1,11 @@
 name: Deploy to Vercel
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,6 +17,15 @@ jobs:
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
+
+      - name: Test token and capture error
+        run: |
+          echo "=== Vercel version ==="
+          vercel --version
+          echo "=== whoami ==="
+          vercel whoami --token=${{ secrets.VERCEL_TOKEN }} 2>&1 || true
+          echo "=== ls projects ==="
+          vercel list --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | head -20 || true
 
       - name: Build frontend
         working-directory: frontend
@@ -34,25 +40,15 @@ jobs:
           VITE_API_URL: /api
           VITE_APP_NAME: "PostureAI Pro"
 
-      - name: Deploy frontend dist to Vercel
-        id: deploy
-        working-directory: frontend
+      - name: Deploy and save result
         run: |
-          # Deploy just the dist folder as a static site + api/ folder as serverless
-          OUTPUT=$(vercel deploy dist --prod --token=${{ secrets.VERCEL_TOKEN }} \
-            --name postureai-pro \
-            2>&1)
-          echo "$OUTPUT"
-          URL=$(echo "$OUTPUT" | grep -Eo 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
-          echo "url=$URL" >> $GITHUB_OUTPUT
-          echo "✅ URL: $URL"
-
-      - name: Save URL to repo
-        run: |
-          URL="${{ steps.deploy.outputs.url }}"
-          echo "$URL" > VERCEL_URL.txt
+          cd frontend
+          RESULT=$(vercel deploy dist --prod --token=${{ secrets.VERCEL_TOKEN }} --name=postureai-pro --yes 2>&1) || true
+          echo "$RESULT" > /tmp/vercel_result.txt
+          cd ..
+          cp /tmp/vercel_result.txt VERCEL_DEPLOY_LOG.txt
           git config user.email "bot@postureai.io"
           git config user.name "PostureAI Bot"
-          git add VERCEL_URL.txt
-          git diff --staged --quiet || git commit -m "chore: vercel URL=$URL [skip ci]"
+          git add VERCEL_DEPLOY_LOG.txt
+          git commit -m "debug: vercel deploy output [skip ci]" || true
           git push origin main || true
