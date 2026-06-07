@@ -1,0 +1,59 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Frontend + Backend to Vercel
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build frontend
+        run: cd frontend && npm install && npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_API_URL: /api
+          VITE_APP_NAME: "PostureAI Pro"
+          VITE_SUPPORT_EMAIL: support@postureai.io
+          VITE_ADMIN_PHONE: "+201210271841"
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | tail -1)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "✅ Deployed to: $URL"
+
+      - name: Set env vars on Vercel project
+        run: |
+          vercel env add FLASK_ENV production --token=${{ secrets.VERCEL_TOKEN }} --yes 2>/dev/null || true
+          vercel env add SECRET_KEY "${{ secrets.SECRET_KEY }}" production --token=${{ secrets.VERCEL_TOKEN }} --yes 2>/dev/null || true
+        continue-on-error: true
+
+      - name: Summary
+        run: |
+          echo "## 🚀 PostureAI Pro Deployed!" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** ${{ steps.deploy.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend:** React + Vite" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** Flask Python serverless" >> $GITHUB_STEP_SUMMARY
