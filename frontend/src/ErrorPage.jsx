@@ -1,3 +1,4 @@
+import React from "react";
 /**
  * PostureAI Pro — ErrorPage + NotFound + OfflinePage
  */

@@ -1,3 +1,4 @@
+import React from "react";
 /**
  * PostureAI Pro — Email Templates v1.0
  * Positioning: "AI Workforce Intelligence Platform"

@@ -1,3 +1,4 @@
+import React from "react";
 /**
  * PostureAI Pro — Observability & Advanced Detection
  * 1. Sentry error monitoring (frontend)
