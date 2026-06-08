@@ -2225,10 +2225,23 @@ export default function App(){
                   </div>
                 ))}
               </div>
-              <button onClick={()=>{
+              <button onClick={async ()=>{
                 if(!devicePref){addToast(isAr?"اختار جهازك الأول 👆":"Choose your device first 👆","warn");return;}
                 const defaultMode=devicePref==="laptop"?"laptop":"phone";
                 setMode(defaultMode);
+                // Save user_type to Firestore so role detection works
+                if(user?.uid){
+                  try{
+                    await updateDoc(doc(db,"users",user.uid),{
+                      user_type: acctType==="company"?"hr_admin":"individual",
+                      is_org_owner: acctType==="company",
+                      setup_complete: true,
+                      device_pref: devicePref,
+                    });
+                    setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", is_org_owner: acctType==="company"}));
+                  }catch(e){ console.warn("setup save failed",e); }
+                }
+                if(acctType==="company") setShowCompanyOnboard(true);
                 setPage("home");
               }}
                 style={{width:"100%",padding:"13px",background:devicePref?cs.blue:"rgba(148,163,184,.2)",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:devicePref?"pointer":"not-allowed",transition:"all .2s"}}>
