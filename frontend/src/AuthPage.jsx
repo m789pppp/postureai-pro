@@ -467,6 +467,66 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
           </form>
         </div>
 
+        {/* Demo accounts */}
+        {view === "login" && (
+          <div style={{ marginTop:20, padding:"14px 16px",
+            background:"rgba(99,102,241,.06)", border:"1px solid rgba(99,102,241,.2)",
+            borderRadius:10 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#a5b4fc",
+              marginBottom:10, textTransform:"uppercase", letterSpacing:".06em" }}>
+              {isAr ? "🎭 حسابات تجريبية" : "🎭 Demo Accounts"}
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+              {[
+                { label: isAr ? "👤 مستخدم فردي" : "👤 Individual User", email:"demo.individual@postureai.io", pass:"Demo1234!" },
+                { label: isAr ? "🏢 مدير شركة (HR)" : "🏢 HR Admin",        email:"demo.hr@postureai.io",         pass:"Demo1234!" },
+              ].map((d,i) => (
+                <button key={i} onClick={async () => {
+                  setErr(""); setLoading(true);
+                  try {
+                    const c = await signInEmail(d.email, d.pass);
+                    onAuth(c.user);
+                  } catch(e) {
+                    // Demo account doesn't exist yet - create it
+                    try {
+                      const c2 = await signUpEmail(d.email, d.pass);
+                      const { createUserProfile: cup } = await import("./firebase.js");
+                      await cup(c2.user.uid, {
+                        email: d.email,
+                        name: i === 0 ? "Demo User" : "Demo HR Admin",
+                        company: i === 1 ? "PostureAI Demo Co." : "",
+                        user_type: i === 1 ? "hr_admin" : "individual",
+                        is_org_owner: i === 1,
+                        tier: i === 1 ? "professional" : "standard",
+                        avg_score: i === 0 ? 74 : 68,
+                        sessions_count: i === 0 ? 12 : 3,
+                        streak_days: i === 0 ? 5 : 1,
+                        setup_complete: true,
+                      });
+                      // Seed realistic demo data
+                      const { seedDemoUser } = await import("./firebase.js");
+                      await seedDemoUser(c2.user.uid, i === 0 ? "individual" : "hr_admin").catch(()=>{});
+                      onAuth(c2.user);
+                    } catch(e2) { setErr(getErr(e2.message, isAr)); }
+                  }
+                  setLoading(false);
+                }} style={{
+                  padding:"8px 12px", background:"rgba(99,102,241,.1)",
+                  border:"1px solid rgba(99,102,241,.25)", borderRadius:7,
+                  color:"#c7d2fe", fontSize:12, fontWeight:600, cursor:"pointer",
+                  textAlign:"left", display:"flex", justifyContent:"space-between",
+                  alignItems:"center", transition:"all .15s",
+                }}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,.2)"}
+                onMouseLeave={e=>e.currentTarget.style.background="rgba(99,102,241,.1)"}>
+                  <span>{d.label}</span>
+                  <span style={{ fontSize:10, color:"rgba(199,210,254,.6)" }}>{isAr?"دخول فوري →":"Quick login →"}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div style={{ textAlign:"center",marginTop:20,fontSize:11.5,color:tok.muted }}>
           {isAr ? "الدعم الفني:" : "Support:"}{" "}

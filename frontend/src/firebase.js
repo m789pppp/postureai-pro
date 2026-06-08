@@ -414,3 +414,69 @@ export async function sendWeeklyProgressEmails(params) {
     return { ok: false, error: e.message };
   }
 }
+
+// ── Demo Data Seeder ──────────────────────────────────────────────
+export async function seedDemoUser(uid, type) {
+  const base = {
+    updated_at: _serverTimestamp(),
+    setup_complete: true,
+    last_session_at: _serverTimestamp(),
+  };
+
+  if (type === "individual") {
+    // 12 demo sessions
+    const sessions = [];
+    for (let i = 11; i >= 0; i--) {
+      const score = Math.round(65 + Math.random() * 25);
+      const d = new Date(); d.setDate(d.getDate() - i);
+      sessions.push({
+        uid, avg_score: score, duration_sec: 1200 + Math.round(Math.random()*1800),
+        created_at: d, feedback: score > 80 ? "great" : score > 65 ? "good" : "needs_work",
+      });
+    }
+    for (const s of sessions) {
+      await import("firebase/firestore").then(({addDoc,collection}) =>
+        addDoc(collection(db,"sessions"), s).catch(()=>{})
+      );
+    }
+    const scores = sessions.map(s=>s.avg_score);
+    const avg = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+    await import("firebase/firestore").then(({updateDoc,doc:_doc}) =>
+      updateDoc(_doc(db,"users",uid), { ...base, avg_score:avg, sessions_count:12, streak_days:5 }).catch(()=>{})
+    );
+  }
+
+  if (type === "hr_admin") {
+    // 5 demo employees
+    const employees = [
+      { name:"Ahmed Hassan",    email:"ahmed@democorp.com",   department:"Engineering", avg_score:82, sessions_count:18 },
+      { name:"Sara Mohamed",    email:"sara@democorp.com",    department:"Design",      avg_score:71, sessions_count:9  },
+      { name:"Omar Khalil",     email:"omar@democorp.com",    department:"Engineering", avg_score:44, sessions_count:3  },
+      { name:"Nada Youssef",    email:"nada@democorp.com",    department:"Marketing",   avg_score:88, sessions_count:22 },
+      { name:"Karim Farouk",    email:"karim@democorp.com",   department:"Sales",       avg_score:55, sessions_count:6  },
+    ];
+    const companyRef = await import("firebase/firestore").then(({addDoc,collection}) =>
+      addDoc(collection(db,"companies"), {
+        name:"PostureAI Demo Co.", owner_uid:uid, tier:"professional",
+        created_at:_serverTimestamp(), employee_count:employees.length,
+      }).catch(()=>({id:"demo-co"}))
+    );
+    const companyId = companyRef?.id || "demo-co";
+    for (const emp of employees) {
+      await import("firebase/firestore").then(({addDoc,collection}) =>
+        addDoc(collection(db,"users"), {
+          ...emp, company_id:companyId, user_type:"employee",
+          is_active:true, created_at:_serverTimestamp(),
+          last_session_at:_serverTimestamp(),
+        }).catch(()=>{})
+      );
+    }
+    await import("firebase/firestore").then(({updateDoc,doc:_doc}) =>
+      updateDoc(_doc(db,"users",uid), {
+        ...base, company_id:companyId, company:"PostureAI Demo Co.",
+        user_type:"hr_admin", is_org_owner:true, tier:"professional",
+        avg_score:68, sessions_count:3, streak_days:1,
+      }).catch(()=>{})
+    );
+  }
+}

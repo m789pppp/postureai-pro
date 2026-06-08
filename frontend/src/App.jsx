@@ -1696,6 +1696,10 @@ export default function App(){
           }
           // Background loads — never block auth
           getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
+          // Load team members for HR admin / employees
+          if(p?.company_id||p?.is_org_owner){
+            getAllUsers(p.company_id||null,false).then(setAllUsers).catch(()=>{});
+          }
           const lm=localStorage.getItem("last_mode");
           if(lm) setMode(lm);
           // Background: check subscription expiry
@@ -1712,6 +1716,7 @@ export default function App(){
           // Check for pending invite after login
           const pendingInvite=sessionStorage.getItem("pending_invite");
           if(pendingInvite){window.__invite_token=pendingInvite;setPage("invite");}
+          else if(p && !p.setup_complete) setPage("setup");
           else setPage(params.get("plan")&&TIERS[params.get("plan")]?"pricing":"home");
         } else {
           setPage("landing");
@@ -2079,7 +2084,7 @@ export default function App(){
             if(p){setProfile(p);if(p.tier&&p.tier!=="standard")setTier(p.tier);if(p.company_id)setCompanyId(p.company_id);}
             getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
           }).catch(()=>{});
-          if(isNew) { setShowOnboard(true); return; }
+          if(isNew) { setPage("setup"); return; }
           setPage("home");
         }}
       />
@@ -2364,6 +2369,8 @@ export default function App(){
         onSkip={()=>setShowCalibWizard(false)}/>}
       {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
+      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(plan);setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
+      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true}));addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
       {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
       {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
       {/* ── Merged from v13 & v18 ───────────────────────────────── */}
