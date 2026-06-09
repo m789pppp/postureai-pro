@@ -19,10 +19,16 @@ const ELITE_TIERS= ["elite","business"];
 function isPro(tier)   { return PRO_TIERS.includes(tier);   }
 function isElite(tier) { return ELITE_TIERS.includes(tier); }
 
-// ─── Avatar (initial + color) ──────────────────────────────────────
-function Avatar({ name, size = 36, style = {} }) {
-  const ch   = (name||"?")[0].toUpperCase();
-  const hue  = (name||"A").split("").reduce((a,c)=>a+c.charCodeAt(0),0) % 360;
+// ─── Avatar (photo or initial + color) ────────────────────────────
+function Avatar({ name, photo, size = 36, style = {} }) {
+  const label = (name||"User");
+  const ch    = label[0].toUpperCase();
+  const hue   = label.split("").reduce((a,c)=>a+c.charCodeAt(0),0) % 360;
+  if(photo) return (
+    <img src={photo} alt={label}
+      style={{ width:size, height:size, borderRadius:"50%", flexShrink:0,
+        objectFit:"cover", border:"2px solid rgba(255,255,255,.08)", ...style }}/>
+  );
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%", flexShrink: 0,
@@ -177,7 +183,7 @@ function DashIndividual({ profile, userSessions, tier, cs, isAr, setPage, startC
         <Ring score={last||avg} size={104}/>
         <div style={{ flex:1, minWidth:180 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-            <Avatar name={profile?.name} size={36}/>
+            <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
             <div>
               <div style={{ fontSize:18, fontWeight:800, color:cs.text, lineHeight:1.1 }}>
                 {isAr?`أهلاً, ${profile?.name?.split(" ")[0]||""}`:`Hey, ${profile?.name?.split(" ")[0]||""}!`}
@@ -205,7 +211,7 @@ function DashIndividual({ profile, userSessions, tier, cs, isAr, setPage, startC
       </div>
 
       {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
         <StatCard label={isAr?"آخر جلسة":"Last Session"} value={last||"—"} color={gradeColor(last)} cs={cs}/>
         <StatCard label={isAr?"المتوسط":"Average"} value={avg||"—"} color="#3b82f6" cs={cs}/>
         <StatCard label={isAr?"هذا الشهر":"This Month"} value={month||"—"} sub={isAr?"جلسة":"sessions"} color="#f59e0b" cs={cs}/>
@@ -246,7 +252,7 @@ function DashIndividual({ profile, userSessions, tier, cs, isAr, setPage, startC
       {/* Tools */}
       <div>
         <SectionHead title={isAr?"الأدوات":"Tools"} cs={cs}/>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))", gap:10 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))", gap:10 }}>
           <ToolBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="26,86,219"
             desc={isAr?"اضبط الكاميرا":"Setup camera"} onClick={onCalib} cs={cs}/>
           <ToolBtn icon="📊" label={isAr?"تحليلات":"Analytics"} color="8,145,178"
@@ -326,7 +332,7 @@ function DashEmployee({ profile, userSessions, allUsers, cs, isAr, setPage, star
         <Ring score={last||avg} size={104}/>
         <div style={{ flex:1, minWidth:180 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-            <Avatar name={profile?.name} size={36}/>
+            <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
             <div>
               <div style={{ fontSize:18, fontWeight:800, color:cs.text }}>
                 {isAr?`أهلاً, ${profile?.name?.split(" ")[0]||""}`:`Hey, ${profile?.name?.split(" ")[0]||""}!`}
@@ -350,7 +356,7 @@ function DashEmployee({ profile, userSessions, allUsers, cs, isAr, setPage, star
       </div>
 
       {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
         <StatCard label={isAr?"متوسطك":"Your Avg"} value={avg||"—"} color="#3b82f6" cs={cs}/>
         <StatCard label={isAr?"التواصل":"Streak"} value={streak?`${streak}d`:"—"} color="#10b981" cs={cs}/>
         {rank&&<StatCard label={isAr?"ترتيبك":"Rank"} value={`#${rank.pos}`} sub={`of ${rank.total}`} color="#f59e0b" cs={cs}/>}
@@ -381,7 +387,7 @@ function DashEmployee({ profile, userSessions, allUsers, cs, isAr, setPage, star
                   <div style={{ width:22, textAlign:"center", fontSize:13, color:cs.muted, fontWeight:700 }}>
                     {i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}
                   </div>
-                  <Avatar name={u.name||u.email} size={28}/>
+                  <Avatar name={u.name||u.email} photo={u.photoURL} size={28}/>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight:isMe?700:500,
                       color:isMe?"#60a5fa":cs.text,
@@ -465,7 +471,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
       </div>
 
       {/* KPIs */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
         <StatCard label={isAr?"متوسط الفريق":"Team Avg"} value={avg||"—"} color="#3b82f6" cs={cs}/>
         <StatCard label={isAr?"صحة ممتازة":"Healthy"} value={healthy}
           sub={`${users.length?Math.round(healthy/users.length*100):0}%`} color="#10b981" cs={cs}/>
@@ -478,7 +484,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
       {/* HR Tools */}
       <div>
         <SectionHead title={isAr?"أدوات الإدارة":"Management Tools"} cs={cs}/>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))", gap:10 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))", gap:10 }}>
           <ToolBtn icon="📊" label={isAr?"التحليلات":"Analytics"} color="8,145,178"
             desc={isAr?"إحصائيات الفريق":"Team stats"} onClick={onAnalytics} cs={cs}/>
           <ToolBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="124,58,237"
@@ -553,7 +559,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
               <div key={i} style={{ display:"flex", alignItems:"center", gap:10,
                 padding:"10px 16px", borderBottom:`1px solid ${cs.border}`,
                 background:risk?"rgba(239,68,68,.03)":"transparent" }}>
-                <Avatar name={u.name||u.email} size={32}/>
+                <Avatar name={u.name||u.email} photo={u.photoURL} size={32}/>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:cs.text,
                     overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
@@ -673,7 +679,34 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
       {/* User header */}
       <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14,
         padding:"20px 22px", display:"flex", gap:16, alignItems:"center" }}>
-        <Avatar name={profile?.name} size={56}/>
+        <div style={{ position:"relative", flexShrink:0 }}>
+          {profile?.photoURL
+            ? <img src={profile.photoURL} alt="avatar"
+                style={{ width:56, height:56, borderRadius:"50%",
+                  objectFit:"cover", border:"2px solid rgba(255,255,255,.1)" }}/>
+            : <Avatar name={profile?.name||profile?.email} size={56}/>}
+          <label title={isAr?"تغيير الصورة":"Change photo"}
+            style={{ position:"absolute", bottom:-2, right:-2, width:22, height:22,
+              background:"#1a56db", borderRadius:"50%", cursor:"pointer",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:11, border:"2px solid rgba(4,9,20,1)" }}>
+            📷
+            <input type="file" accept="image/*" style={{ display:"none" }}
+              onChange={async e=>{
+                const file=e.target.files[0]; if(!file) return;
+                if(file.size>2*1024*1024){ addToast(isAr?"الصورة أكبر من 2MB":"Image too large (max 2MB)","error"); return; }
+                const reader=new FileReader();
+                reader.onload=async ev=>{
+                  try{
+                    await updateUserProfile(user.uid,{photoURL:ev.target.result});
+                    setProfile(p=>({...p,photoURL:ev.target.result}));
+                    addToast(isAr?"تم تحديث الصورة ✓":"Photo updated ✓","success");
+                  }catch{ addToast(isAr?"خطأ في رفع الصورة":"Upload error","error"); }
+                };
+                reader.readAsDataURL(file);
+              }}/>
+          </label>
+        </div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:17, fontWeight:800, color:cs.text }}>{profile?.name||"—"}</div>
           <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>{user?.email||"—"}</div>
@@ -815,43 +848,54 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {isAr?"إعدادات الأمان":"Security Settings"}
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <div style={{ padding:"12px 14px", background:"rgba(255,255,255,.03)",
-              borderRadius:9, border:`1px solid ${cs.border}`,
-              display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div>
-                <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
-                  {isAr?"تسجيل الدخول بـ Google":"Google Sign-In"}
+            {/* Linked accounts */}
+            {(user?.providerData||[]).map((p,i)=>(
+              <div key={i} style={{ padding:"12px 14px", background:"rgba(255,255,255,.03)",
+                borderRadius:9, border:`1px solid ${cs.border}`,
+                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                  <span style={{ fontSize:18 }}>{p.providerId==="google.com"?"🔵":"📧"}</span>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+                      {p.providerId==="google.com"?(isAr?"حساب Google":"Google Account"):(isAr?"بريد إلكتروني":"Email/Password")}
+                    </div>
+                    <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>{p.email||user?.email||"—"}</div>
+                  </div>
                 </div>
-                <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
-                  {user?.providerData?.[0]?.providerId==="google.com"
-                    ?(isAr?"مفعّل — تستخدم Google للدخول":"Enabled — you sign in with Google")
-                    :(isAr?"غير مفعّل":"Not enabled")}
-                </div>
+                <span style={{ fontSize:10, fontWeight:700, color:"#10b981",
+                  background:"rgba(16,185,129,.1)", padding:"3px 8px", borderRadius:99 }}>
+                  {isAr?"مرتبط":"Linked"}
+                </span>
               </div>
-              <span style={{ fontSize:11, fontWeight:700, color:"#10b981",
-                background:"rgba(16,185,129,.1)", padding:"3px 9px", borderRadius:99 }}>
-                {user?.providerData?.[0]?.providerId==="google.com"?(isAr?"مفعّل":"Active"):(isAr?"غير مفعّل":"Inactive")}
-              </span>
-            </div>
-            <div style={{ padding:"12px 14px", background:"rgba(255,255,255,.03)",
-              borderRadius:9, border:`1px solid ${cs.border}`,
-              display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div>
-                <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
-                  {isAr?"البريد الإلكتروني":"Email"}
-                </div>
-                <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>{user?.email||"—"}</div>
+            ))}
+            {/* Add Google account link */}
+            {!(user?.providerData||[]).some(p=>p.providerId==="google.com")&&(
+              <button onClick={async ()=>{
+                try{
+                  const { GoogleAuthProvider, linkWithPopup } = await import("firebase/auth");
+                  const { auth } = await import("./firebase.js");
+                  await linkWithPopup(auth.currentUser, new GoogleAuthProvider());
+                  addToast(isAr?"✅ تم ربط حساب Google":"✅ Google account linked","success");
+                }catch(e){ addToast(e.message||"Error","error"); }
+              }} style={{ padding:"11px 14px", background:"rgba(59,130,246,.08)",
+                border:"1px solid rgba(59,130,246,.2)", borderRadius:9, cursor:"pointer",
+                display:"flex", alignItems:"center", gap:10, width:"100%", color:"#60a5fa",
+                fontSize:13, fontWeight:600 }}>
+                <span style={{ fontSize:16 }}>🔵</span>
+                {isAr?"+ ربط حساب Google":"+ Link Google Account"}
+              </button>
+            )}
+            {/* Add email/password */}
+            {!(user?.providerData||[]).some(p=>p.providerId==="password")&&(
+              <div style={{ fontSize:12, color:cs.muted, padding:"8px 0", textAlign:"center" }}>
+                {isAr?"تسجيل دخولك عبر Google فقط. يمكنك إضافة كلمة مرور من إعدادات Firebase.":"You sign in via Google only."}
               </div>
-              <span style={{ fontSize:11, fontWeight:700, color:"#10b981",
-                background:"rgba(16,185,129,.1)", padding:"3px 9px", borderRadius:99 }}>
-                {isAr?"مفعّل":"Active"}
-              </span>
-            </div>
+            )}
             <button onClick={onSignOut}
               style={{ marginTop:4, padding:"11px", background:"rgba(239,68,68,.1)",
                 color:"#f87171", border:"1px solid rgba(239,68,68,.2)",
                 borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-              {isAr?"⏻ تسجيل الخروج من جميع الأجهزة":"⏻ Sign Out from All Devices"}
+              {isAr?"⏻ تسجيل الخروج":"⏻ Sign Out"}
             </button>
           </div>
         </div>
@@ -981,7 +1025,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         {/* User + logout */}
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 8px",
           background:"rgba(255,255,255,.03)", borderRadius:8 }}>
-          <Avatar name={profile?.name} size={28}/>
+          <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={28}/>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:11, fontWeight:600, color:"#f0f6ff",
               overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -1134,7 +1178,7 @@ export default function HomePage({
             (allUsers||[]).filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50).map((u,i)=>(
               <div key={i} style={{ background:"rgba(239,68,68,.06)", border:"1px solid rgba(239,68,68,.18)",
                 borderRadius:12, padding:"14px 18px", display:"flex", gap:12, alignItems:"center" }}>
-                <Avatar name={u.name||u.email} size={40}/>
+                <Avatar name={u.name||u.email} photo={u.photoURL} size={40}/>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:600, color:"#f0f6ff" }}>{u.name||u.email}</div>
                   <div style={{ fontSize:12, color:"rgba(255,255,255,.4)" }}>
@@ -1217,12 +1261,12 @@ export default function HomePage({
             </button>
             <button onClick={()=>setTab("settings")}
               style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
-              <Avatar name={profile?.name} size={30}/>
+              <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={30}/>
             </button>
           </div>
         </header>
 
-        <div style={{ padding:"18px 20px", maxWidth:1060, margin:"0 auto" }}>
+        <div style={{ padding:"14px 16px", maxWidth:1060, margin:"0 auto" }}>
           {content}
         </div>
       </main>

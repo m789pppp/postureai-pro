@@ -1532,7 +1532,8 @@ export default function App(){
   const[showOnboardingAnalytics,setShowOnboardingAnalytics]=useState(false);
   const[showLegalCompliance,setShowLegalCompliance]=useState(false);
   const[showAccountActivity,setShowAccountActivity]=useState(false);
-  const[showBillingDashboard,setShowBillingDashboard]=useState(false);
+  const[showBillingDashboard,_setShowBillingDashboard]=useState(false);
+  const setShowBillingDashboard=(v)=>{ if(v) setShowBilling(true); else _setShowBillingDashboard(false); };
   // Phase 12 — Enterprise Scale
   const[showAPIMarketplace,setShowAPIMarketplace]=useState(false);
   const[showWhiteLabel,setShowWhiteLabel]=useState(false);
@@ -2835,62 +2836,55 @@ export default function App(){
           </button>
         </div>
 
-        {/* 4 Action buttons — Calibrate / Analytics / AI Coach / Progress */}
+        {/* Action buttons — filtered by role + tier */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <div style={{fontSize:9.5,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>
             {isAr?"الأدوات":"Tools"}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <ActionBtn
-              icon="🎯"
-              label={isAr?"معايرة":"Calibrate"}
-              color="#10b981" dimColor="#6ee7b7"
+            {/* Calibrate — everyone */}
+            <ActionBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="#10b981" dimColor="#6ee7b7"
               onClick={()=>setShowCalibWizard(true)}/>
-            <ActionBtn
-              icon="📊"
-              label={isAr?"التحليلات":"Analytics"}
-              color="#1a56db" dimColor="#93c5fd"
+            {/* Analytics — everyone */}
+            <ActionBtn icon="📊" label={isAr?"تحليلاتي":"My Analytics"} color="#1a56db" dimColor="#93c5fd"
               onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}/>
-            <ActionBtn
-              icon="🤖"
-              label={isAr?"مدرب AI":"AI Coach"}
-              color="#6366f1" dimColor="#a5b4fc"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
-            <ActionBtn
-              icon="🏆"
-              label={isAr?"التقدم":"Progress"}
-              color="#f59e0b" dimColor="#fbbf24"
+            {/* AI Coach — Pro+ only */}
+            {(tier==="professional"||tier==="elite"||tier==="business") ? (
+              <ActionBtn icon="🤖" label={isAr?"مدرب AI":"AI Coach"} color="#6366f1" dimColor="#a5b4fc"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
+            ) : (
+              <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+                padding:"10px 4px",borderRadius:10,border:`1px dashed ${cs.border}`,
+                cursor:"pointer",opacity:.6,position:"relative"}}>
+                <span style={{fontSize:20,filter:"grayscale(1)"}}>🤖</span>
+                <span style={{fontSize:11,color:cs.muted}}>{isAr?"مدرب AI":"AI Coach"}</span>
+                <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
+                  color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>PRO</span>
+              </div>
+            )}
+            {/* Progress — everyone */}
+            <ActionBtn icon="🏆" label={isAr?"التقدم":"Progress"} color="#f59e0b" dimColor="#fbbf24"
               onClick={()=>setShowGamification(true)}/>
-            <ActionBtn
-              icon="🧠"
-              label={isAr?"رؤى AI":"AI Insights"}
-              color="#0891b2" dimColor="#67e8f9"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
-            <ActionBtn
-              icon="🔮"
-              label={isAr?"التنبؤ":"Predictive"}
-              color="#7c3aed" dimColor="#c4b5fd"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowPredictiveAI(true);}}/>
-            <ActionBtn
-              icon="📊"
-              label={isAr?"التقارير":"Reports"}
-              color="#059669" dimColor="#6ee7b7"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
-            <ActionBtn
-              icon="🏭"
-              label={isAr?"تحليلات QW":"Workforce"}
-              color="#0891b2" dimColor="#67e8f9"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
-            <ActionBtn
-              icon="🔐"
-              label={isAr?"الأمان":"Security"}
-              color="#7c3aed" dimColor="#c4b5fd"
-              onClick={()=>{getAllUsers().then(setAllUsers);setShowEnterpriseRBAC(true);}}/>
-            <ActionBtn
-              icon="🔔"
-              label={isAr?"الإشعارات":"Notifications"}
-              color="#0891b2" dimColor="#67e8f9"
-              onClick={()=>setShowNotificationsHub(true)}/>
+            {/* Reports — Pro+ only */}
+            {(tier==="professional"||tier==="elite"||tier==="business") && (
+              <ActionBtn icon="📋" label={isAr?"التقارير":"Reports"} color="#059669" dimColor="#6ee7b7"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
+            )}
+            {/* Workforce — HR Admin only */}
+            {(isHRAdmin||isAdmin) && (
+              <ActionBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
+            )}
+            {/* AI Insights — Elite only (beta) */}
+            {(tier==="elite"||tier==="business") && (
+              <ActionBtn icon="🧠" label={isAr?"رؤى AI":"AI Insights"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
+            )}
+            {/* Security RBAC — HR Admin + Elite (beta) */}
+            {(isHRAdmin||isAdmin) && (tier==="elite"||tier==="business") && (
+              <ActionBtn icon="🔐" label={isAr?"الأمان":"Security"} color="#7c3aed" dimColor="#c4b5fd"
+                onClick={()=>{getAllUsers().then(setAllUsers);setShowEnterpriseRBAC(true);}}/>
+            )}
           </div>
         </div>
 
