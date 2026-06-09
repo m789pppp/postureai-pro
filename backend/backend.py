@@ -1058,7 +1058,7 @@ def analyze_front(image, mode="laptop", tier="standard"):
 
     # ── Metrics ────────────────────────────────────────────────────
     neck_lean  = angle_vert(mid_sh, mid_ear)
-    neck_sc    = score_m(neck_lean, 0, 5, 15)   # strict: was (0,10,28)
+    neck_sc    = score_m(neck_lean, 0, 7, 20)   # balanced: tighter than orig (10,28) but not over-strict
 
     head_tilt  = angle_horiz(l_eye, r_eye)
     tilt_sc    = score_m(head_tilt, 0, 3, 10)
@@ -1067,7 +1067,7 @@ def analyze_front(image, mode="laptop", tier="standard"):
     sh_sc      = score_m(sh_tilt, 0, 3, 10)
 
     spine_lean = angle_vert(mid_hip, mid_sh)
-    spine_sc   = score_m(spine_lean, 0, 3, 12)  # strict: was (0,6,18)
+    spine_sc   = score_m(spine_lean, 0, 5, 15)  # balanced: tighter than orig (6,18)
 
     # ── FaceMesh ───────────────────────────────────────────────────
     dist_cm = None
@@ -1090,8 +1090,14 @@ def analyze_front(image, mode="laptop", tier="standard"):
         dist_cm = max(20, min(150, dist_cm))
 
     lo, hi = (50, 80) if mode == "laptop" else (60, 90)
-    dist_sc = (100 if lo <= dist_cm <= hi else
-               72  if (lo-12) <= dist_cm <= (hi+18) else 30)
+    if lo <= dist_cm <= hi:
+        dist_sc = 100
+    elif (lo-8) <= dist_cm <= (hi+12):
+        dist_sc = 80
+    elif (lo-16) <= dist_cm <= (hi+20):
+        dist_sc = 55
+    else:
+        dist_sc = 30
 
     hp = out.get("head_pose")
     pose_sc = 75
@@ -1138,7 +1144,7 @@ def analyze_front(image, mode="laptop", tier="standard"):
             out["alerts"].append(f"Low blink rate ({br}/min) — remember to blink consciously.")
 
     # ── Overall score ──────────────────────────────────────────────
-    weights = {"neck": 0.27, "tilt": 0.15, "sh": 0.12, "spine": 0.13, "dist": 0.18}
+    weights = {"neck": 0.28, "tilt": 0.14, "sh": 0.11, "spine": 0.14, "dist": 0.18}
     score_val = neck_sc * weights["neck"] + tilt_sc * weights["tilt"] + sh_sc * weights["sh"] + spine_sc * weights["spine"] + dist_sc * weights["dist"]
     remaining = 1.0 - sum(weights.values())
     if wrist_sc is not None:
@@ -1149,8 +1155,13 @@ def analyze_front(image, mode="laptop", tier="standard"):
         remaining -= 0.06
     if hp:
         score_val += pose_sc * min(remaining, 0.10)
+        remaining -= min(remaining, 0.10)
 
-    overall = max(0, min(100, int(score_val)))
+    # Baseline comfort fill — prevents score from cratering when optional metrics absent
+    if remaining > 0.02:
+        score_val += 72 * remaining  # 72 = neutral comfortable sitting baseline
+
+    overall = max(0, min(100, int(round(score_val))))
     confidence = min(96, 82 + vis_bonus + (8 if out["engine"] == "mediapipe_pose+facemesh" else 0))
 
     out["score"]      = overall
@@ -1168,10 +1179,10 @@ def analyze_front(image, mode="laptop", tier="standard"):
         out["metrics"]["roll"]  = {"value": round(hp["roll"],1),  "score": pose_sc, "unit": "°", "label": "Head roll (3D)"}
 
     # ── Alerts ────────────────────────────────────────────────────
-    if neck_lean > 14:
-        out["alerts"].append(f"⚠️ Neck lean {round(neck_lean,1)}° — raise monitor to eye level immediately")
-    elif neck_lean > 8:
-        out["alerts"].append(f"Neck lean {round(neck_lean,1)}° — tuck chin slightly")
+    if neck_lean > 20:
+        out["alerts"].append(f"⚠️ Severe neck lean {round(neck_lean,1)}° — raise monitor to eye level immediately")
+    elif neck_lean > 12:
+        out["alerts"].append(f"Neck lean {round(neck_lean,1)}° — tuck chin slightly and check monitor height")
     if head_tilt > 10:
         out["alerts"].append(f"Head tilting {round(head_tilt,1)}° — check chair height and monitor centering")
     if sh_tilt > 10:
@@ -1182,8 +1193,10 @@ def analyze_front(image, mode="laptop", tier="standard"):
         out["alerts"].append(f"Too close to screen ({round(dist_cm)}cm) — move back to {lo}–{hi}cm")
     elif dist_cm > hi + 15:
         out["alerts"].append(f"Too far from screen ({round(dist_cm)}cm) — ideal is {lo}–{hi}cm")
-    if spine_lean > 11:
+    if spine_lean > 18:
         out["alerts"].append(f"⚠️ Spine lean {round(spine_lean,1)}° — sit back and use lumbar support")
+    elif spine_lean > 10:
+        out["alerts"].append(f"Spine lean {round(spine_lean,1)}° — engage your core and sit upright")
     if hp and abs(hp["pitch"]) > 20:
         out["alerts"].append(f"Head pitched {round(hp['pitch'],1)}° — {'raise your monitor' if hp['pitch'] < 0 else 'lower your monitor'}")
 
@@ -1249,7 +1262,7 @@ def analyze_side(image, tier="standard"):
     ankle = px(PL.L_ANKLE if S=="L" else PL.R_ANKLE)
 
     neck_lean  = angle_vert(sh, ear)
-    neck_sc    = score_m(neck_lean, 0, 5, 15)   # strict: was (0,10,28)
+    neck_sc    = score_m(neck_lean, 0, 8, 22)   # balanced for side view
 
     trunk_lean = angle_vert(hip, sh)
     trunk_sc   = score_m(trunk_lean, 0, 8, 22)
@@ -7655,5 +7668,6 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
