@@ -648,13 +648,25 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   },[profile]);
 
   async function save() {
+    if(!user?.uid){ addToast(isAr?"خطأ: لم يتم التعرف على المستخدم":"Error: user not identified","error"); return; }
     setSaving(true);
     try {
-      const updates = { name:name.trim(), company:company.trim(), department:dept.trim() };
+      const updates = {
+        name:     name.trim()    || profile?.name    || "",
+        company:  company.trim() || "",
+        department: dept.trim()  || "",
+      };
       await updateUserProfile(user.uid, updates);
-      setProfile(p=>({...p,...updates}));
-      addToast(isAr?"تم الحفظ ✓":"Saved ✓","success");
-    } catch { addToast(isAr?"خطأ في الحفظ":"Save error","error"); }
+      setProfile(p=>({...(p||{}), ...updates}));
+      // Force local state sync
+      setName(updates.name);
+      setCompany(updates.company);
+      setDept(updates.department);
+      addToast(isAr?"✅ تم الحفظ بنجاح":"✅ Saved successfully","success");
+    } catch(err) {
+      console.error("Save error:", err);
+      addToast(isAr?`خطأ: ${err?.message||"مجهول"}`:`Error: ${err?.message||"unknown"}`,"error");
+    }
     setSaving(false);
   }
 
@@ -694,16 +706,27 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             <input type="file" accept="image/*" style={{ display:"none" }}
               onChange={async e=>{
                 const file=e.target.files[0]; if(!file) return;
-                if(file.size>2*1024*1024){ addToast(isAr?"الصورة أكبر من 2MB":"Image too large (max 2MB)","error"); return; }
-                const reader=new FileReader();
-                reader.onload=async ev=>{
+                if(file.size>5*1024*1024){ addToast(isAr?"الصورة أكبر من 5MB":"Image too large (max 5MB)","error"); return; }
+                // Resize to 120x120 before saving (Firestore 1MB doc limit)
+                const img=new Image();
+                const url=URL.createObjectURL(file);
+                img.onload=async ()=>{
+                  const canvas=document.createElement("canvas");
+                  const S=120; canvas.width=S; canvas.height=S;
+                  const ctx=canvas.getContext("2d");
+                  // center-crop
+                  const minDim=Math.min(img.width,img.height);
+                  const sx=(img.width-minDim)/2, sy=(img.height-minDim)/2;
+                  ctx.drawImage(img,sx,sy,minDim,minDim,0,0,S,S);
+                  URL.revokeObjectURL(url);
+                  const dataUrl=canvas.toDataURL("image/jpeg",0.8);
                   try{
-                    await updateUserProfile(user.uid,{photoURL:ev.target.result});
-                    setProfile(p=>({...p,photoURL:ev.target.result}));
+                    await updateUserProfile(user.uid,{photoURL:dataUrl});
+                    setProfile(p=>({...p,photoURL:dataUrl}));
                     addToast(isAr?"تم تحديث الصورة ✓":"Photo updated ✓","success");
-                  }catch{ addToast(isAr?"خطأ في رفع الصورة":"Upload error","error"); }
+                  }catch(err){ addToast(err?.message||"Upload error","error"); }
                 };
-                reader.readAsDataURL(file);
+                img.src=url;
               }}/>
           </label>
         </div>
@@ -1156,12 +1179,15 @@ export default function HomePage({
     alerts:"التنبيهات",sessions:"الجلسات",team:"الفريق",settings:"الإعدادات" }};
 
   // ── Render tab content ─────────────────────────────────────────
+  // Settings NOT in useMemo so profile updates re-render immediately
+  const settingsContent = tab==="settings" ? (
+    <PanelSettings user={user} profile={profile} setProfile={setProfile}
+      cs={cs} isAr={isAr} addToast={addToast} onSignOut={handleSignOut}
+      tier={tier} onBilling={openBilling}/>
+  ) : null;
+
   const content = useMemo(()=>{
-    if(tab==="settings") return (
-      <PanelSettings user={user} profile={profile} setProfile={setProfile}
-        cs={cs} isAr={isAr} addToast={addToast} onSignOut={handleSignOut}
-        tier={tier} onBilling={openBilling}/>
-    );
+    if(tab==="settings") return null; // rendered separately above
 
     if(userRole==="hr_admin"||userRole==="platform_admin") {
       if(tab==="home"||tab==="employees") return (
@@ -1267,7 +1293,7 @@ export default function HomePage({
         </header>
 
         <div style={{ padding:"14px 16px", maxWidth:1060, margin:"0 auto" }}>
-          {content}
+          {settingsContent || content}
         </div>
       </main>
 

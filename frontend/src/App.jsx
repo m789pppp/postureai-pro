@@ -2145,17 +2145,7 @@ export default function App(){
       />
     </ErrorBoundary>
   );
-  if(page==="profile")return(
-    <ErrorBoundary>
-      <ProfilePage
-        user={user} profile={profile} sessions={userSessions}
-        cs={cs} lang={lang} addToast={addToast}
-        onBack={()=>setPage("home")}
-        onSave={p=>setProfile(p)}
-        setPage={setPage}
-      />
-    </ErrorBoundary>
-  );
+  if(page==="profile"){setPage("home"); return null; /* Settings handled in HomePage tabs */}
   if(page==="leaderboard")return <ErrorBoundary><Leaderboard {...shared} users={allUsers} onBack={()=>setPage("home")} lang={lang}/></ErrorBoundary>;
   // page==="live" and page==="home" fall through to their renders below
 
