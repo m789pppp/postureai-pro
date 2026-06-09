@@ -2295,6 +2295,7 @@ export default function App(){
         setShowGamification={setShowGamification} setShowBilling={setShowBilling}
         setShowCompanyOnboard={setShowCompanyOnboard} setShowAdmin={setShowAdmin}
         setShowWorkforceAnalytics={setShowWorkforceAnalytics}
+        setShowAIReports={setShowAIReports}
         setShowOnboard={setShowOnboard}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin} companyId={companyId}
         darkMode={darkMode} setDarkMode={setDarkMode} setLang={setLang}
