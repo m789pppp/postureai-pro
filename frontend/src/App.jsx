@@ -31,7 +31,7 @@ import { BillingDashboard } from "./BillingDashboard.jsx";
 import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI } from "./services/api.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
-import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP } from "./features/analysis/postureEngine.js";
+import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP } from "./features/analysis/postureEngine.js";
 import { getT } from "./lib/i18n.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
 // ── Phase 12: Enterprise Scale ────────────────────────────────────
@@ -1532,8 +1532,7 @@ export default function App(){
   const[showOnboardingAnalytics,setShowOnboardingAnalytics]=useState(false);
   const[showLegalCompliance,setShowLegalCompliance]=useState(false);
   const[showAccountActivity,setShowAccountActivity]=useState(false);
-  const[showBillingDashboard,_setShowBillingDashboard]=useState(false);
-  const setShowBillingDashboard=(v)=>{ if(v) setShowBilling(true); else _setShowBillingDashboard(false); };
+  const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   // Phase 12 — Enterprise Scale
   const[showAPIMarketplace,setShowAPIMarketplace]=useState(false);
   const[showWhiteLabel,setShowWhiteLabel]=useState(false);
@@ -1811,14 +1810,16 @@ export default function App(){
             setHistory([...histRef.current]);setAnalysis(result);lastAnalRef.current=result;
             if(mode==="side")drawSide(ctx,result,W,H);else drawFront(ctx,result,W,H);
             const now=Date.now();
-            if(result.overall<50){
+            if(result.overall<65){
               if(!badRef.current)badRef.current=now;
-              else if(now-badRef.current>30000&&now-lastAlRef.current>60000){
+              else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
                 lastAlRef.current=now;acRef.current.total++;
                 const nl=result.metrics?.neck_lean?.value||0,dist=result.distCm||0;
+                const yaw=result.headYaw||0;
                 const[lo,hi]=result.lo&&result.hi?[result.lo,result.hi]:[50,80];
                 let msg="Sustained poor posture — correct position now";
-                if(nl>18){msg=`Neck lean ${nl}° — pull chin back`;acRef.current.neck++;}
+                if(nl>14){msg=`Neck lean ${nl}° — raise monitor to eye level`;acRef.current.neck++;}
+                else if(Math.abs(yaw)>12){msg=`Head turned ${Math.round(Math.abs(yaw))}° — face the monitor directly`;}
                 else if(dist&&dist<lo){msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;acRef.current.dist++;}
                 setAlertCounts({...acRef.current});
                 alRef.current=[{time:new Date().toLocaleTimeString(),msg,score:result.overall},...alRef.current].slice(0,20);
@@ -1853,9 +1854,9 @@ export default function App(){
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             setHistory([...histRef.current]);setAnalysis(result);lastAnalRef.current=result;
             const now=Date.now();
-            if(result.overall<50){
+            if(result.overall<65){
               if(!badRef.current)badRef.current=now;
-              else if(now-badRef.current>30000&&now-lastAlRef.current>60000){
+              else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
                 lastAlRef.current=now;acRef.current.total++;
                 const msg=result.alerts?.[0]||"Poor posture — correct position";
                 setAlertCounts({...acRef.current});
@@ -1890,6 +1891,8 @@ export default function App(){
       }).catch(()=>{});
       if(!vidRef.current){return;}
       setCameraStatus("ready");
+      // Request notification permission on first session
+      requestNotificationPermission();
       let sid="local_"+Date.now();
       try{const d=await AnalysisAPI.startSession(mode,tier);sid=d.session_id||sid;}catch(e){}
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
@@ -2836,55 +2839,62 @@ export default function App(){
           </button>
         </div>
 
-        {/* Action buttons — filtered by role + tier */}
+        {/* 4 Action buttons — Calibrate / Analytics / AI Coach / Progress */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <div style={{fontSize:9.5,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>
             {isAr?"الأدوات":"Tools"}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {/* Calibrate — everyone */}
-            <ActionBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="#10b981" dimColor="#6ee7b7"
+            <ActionBtn
+              icon="🎯"
+              label={isAr?"معايرة":"Calibrate"}
+              color="#10b981" dimColor="#6ee7b7"
               onClick={()=>setShowCalibWizard(true)}/>
-            {/* Analytics — everyone */}
-            <ActionBtn icon="📊" label={isAr?"تحليلاتي":"My Analytics"} color="#1a56db" dimColor="#93c5fd"
+            <ActionBtn
+              icon="📊"
+              label={isAr?"التحليلات":"Analytics"}
+              color="#1a56db" dimColor="#93c5fd"
               onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}/>
-            {/* AI Coach — Pro+ only */}
-            {(tier==="professional"||tier==="elite"||tier==="business") ? (
-              <ActionBtn icon="🤖" label={isAr?"مدرب AI":"AI Coach"} color="#6366f1" dimColor="#a5b4fc"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
-            ) : (
-              <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
-                padding:"10px 4px",borderRadius:10,border:`1px dashed ${cs.border}`,
-                cursor:"pointer",opacity:.6,position:"relative"}}>
-                <span style={{fontSize:20,filter:"grayscale(1)"}}>🤖</span>
-                <span style={{fontSize:11,color:cs.muted}}>{isAr?"مدرب AI":"AI Coach"}</span>
-                <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
-                  color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>PRO</span>
-              </div>
-            )}
-            {/* Progress — everyone */}
-            <ActionBtn icon="🏆" label={isAr?"التقدم":"Progress"} color="#f59e0b" dimColor="#fbbf24"
+            <ActionBtn
+              icon="🤖"
+              label={isAr?"مدرب AI":"AI Coach"}
+              color="#6366f1" dimColor="#a5b4fc"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
+            <ActionBtn
+              icon="🏆"
+              label={isAr?"التقدم":"Progress"}
+              color="#f59e0b" dimColor="#fbbf24"
               onClick={()=>setShowGamification(true)}/>
-            {/* Reports — Pro+ only */}
-            {(tier==="professional"||tier==="elite"||tier==="business") && (
-              <ActionBtn icon="📋" label={isAr?"التقارير":"Reports"} color="#059669" dimColor="#6ee7b7"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
-            )}
-            {/* Workforce — HR Admin only */}
-            {(isHRAdmin||isAdmin) && (
-              <ActionBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
-            )}
-            {/* AI Insights — Elite only (beta) */}
-            {(tier==="elite"||tier==="business") && (
-              <ActionBtn icon="🧠" label={isAr?"رؤى AI":"AI Insights"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
-            )}
-            {/* Security RBAC — HR Admin + Elite (beta) */}
-            {(isHRAdmin||isAdmin) && (tier==="elite"||tier==="business") && (
-              <ActionBtn icon="🔐" label={isAr?"الأمان":"Security"} color="#7c3aed" dimColor="#c4b5fd"
-                onClick={()=>{getAllUsers().then(setAllUsers);setShowEnterpriseRBAC(true);}}/>
-            )}
+            <ActionBtn
+              icon="🧠"
+              label={isAr?"رؤى AI":"AI Insights"}
+              color="#0891b2" dimColor="#67e8f9"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
+            <ActionBtn
+              icon="🔮"
+              label={isAr?"التنبؤ":"Predictive"}
+              color="#7c3aed" dimColor="#c4b5fd"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowPredictiveAI(true);}}/>
+            <ActionBtn
+              icon="📊"
+              label={isAr?"التقارير":"Reports"}
+              color="#059669" dimColor="#6ee7b7"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
+            <ActionBtn
+              icon="🏭"
+              label={isAr?"تحليلات QW":"Workforce"}
+              color="#0891b2" dimColor="#67e8f9"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
+            <ActionBtn
+              icon="🔐"
+              label={isAr?"الأمان":"Security"}
+              color="#7c3aed" dimColor="#c4b5fd"
+              onClick={()=>{getAllUsers().then(setAllUsers);setShowEnterpriseRBAC(true);}}/>
+            <ActionBtn
+              icon="🔔"
+              label={isAr?"الإشعارات":"Notifications"}
+              color="#0891b2" dimColor="#67e8f9"
+              onClick={()=>setShowNotificationsHub(true)}/>
           </div>
         </div>
 
@@ -2927,3 +2937,4 @@ export default function App(){
     </div>
   </ErrorBoundary>);
 }
+
