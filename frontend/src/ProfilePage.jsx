@@ -33,7 +33,7 @@ function Inp({ value, onChange, placeholder, type="text", disabled=false }) {
   );
 }
 
-export default function ProfilePage({ user, profile, sessions=[], cs, lang="en", onBack, onSave, addToast, setPage }) {
+export default function ProfilePage({ user, profile, sessions=[], cs, lang="en", onBack, onSave, addToast, setPage, onSignOut, t }) {
   const isAr = lang==="ar";
   const [name,    setName]    = useState(profile?.name||"");
   const [company, setComp]    = useState(profile?.company||"");
@@ -132,6 +132,11 @@ export default function ProfilePage({ user, profile, sessions=[], cs, lang="en",
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <button onClick={onBack} style={{ background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.08)",borderRadius:8,padding:"6px 12px",fontSize:12,color:"#94a3b8",cursor:"pointer" }}>
             ← {isAr?"رجوع":"Back"}
+          </button>
+          <button onClick={()=>{ onSignOut?.(); }} style={{ background:"rgba(239,68,68,.1)",
+            border:"1px solid rgba(239,68,68,.2)", borderRadius:8, padding:"6px 14px",
+            fontSize:12, color:"#f87171", cursor:"pointer", fontWeight:600, marginLeft:8 }}>
+            {isAr ? "⏻ تسجيل الخروج" : "⏻ Sign Out"}
           </button>
           <div style={{ fontSize:14,fontWeight:700 }}>👤 {isAr?"الملف الشخصي":"Profile"}</div>
         </div>
