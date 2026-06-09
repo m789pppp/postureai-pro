@@ -1058,7 +1058,7 @@ def analyze_front(image, mode="laptop", tier="standard"):
 
     # ── Metrics ────────────────────────────────────────────────────
     neck_lean  = angle_vert(mid_sh, mid_ear)
-    neck_sc    = score_m(neck_lean, 0, 10, 28)
+    neck_sc    = score_m(neck_lean, 0, 5, 15)   # strict: was (0,10,28)
 
     head_tilt  = angle_horiz(l_eye, r_eye)
     tilt_sc    = score_m(head_tilt, 0, 3, 10)
@@ -1067,7 +1067,7 @@ def analyze_front(image, mode="laptop", tier="standard"):
     sh_sc      = score_m(sh_tilt, 0, 3, 10)
 
     spine_lean = angle_vert(mid_hip, mid_sh)
-    spine_sc   = score_m(spine_lean, 0, 6, 18)
+    spine_sc   = score_m(spine_lean, 0, 3, 12)  # strict: was (0,6,18)
 
     # ── FaceMesh ───────────────────────────────────────────────────
     dist_cm = None
@@ -1168,10 +1168,10 @@ def analyze_front(image, mode="laptop", tier="standard"):
         out["metrics"]["roll"]  = {"value": round(hp["roll"],1),  "score": pose_sc, "unit": "°", "label": "Head roll (3D)"}
 
     # ── Alerts ────────────────────────────────────────────────────
-    if neck_lean > 25:
-        out["alerts"].append(f"⚠️ Severe neck lean {round(neck_lean,1)}° — pull chin back, raise monitor to eye level immediately")
-    elif neck_lean > 15:
-        out["alerts"].append(f"Neck forward lean {round(neck_lean,1)}° — tuck chin slightly and check monitor height")
+    if neck_lean > 14:
+        out["alerts"].append(f"⚠️ Neck lean {round(neck_lean,1)}° — raise monitor to eye level immediately")
+    elif neck_lean > 8:
+        out["alerts"].append(f"Neck lean {round(neck_lean,1)}° — tuck chin slightly")
     if head_tilt > 10:
         out["alerts"].append(f"Head tilting {round(head_tilt,1)}° — check chair height and monitor centering")
     if sh_tilt > 10:
@@ -1182,7 +1182,7 @@ def analyze_front(image, mode="laptop", tier="standard"):
         out["alerts"].append(f"Too close to screen ({round(dist_cm)}cm) — move back to {lo}–{hi}cm")
     elif dist_cm > hi + 15:
         out["alerts"].append(f"Too far from screen ({round(dist_cm)}cm) — ideal is {lo}–{hi}cm")
-    if spine_lean > 20:
+    if spine_lean > 11:
         out["alerts"].append(f"⚠️ Spine lean {round(spine_lean,1)}° — sit back and use lumbar support")
     if hp and abs(hp["pitch"]) > 20:
         out["alerts"].append(f"Head pitched {round(hp['pitch'],1)}° — {'raise your monitor' if hp['pitch'] < 0 else 'lower your monitor'}")
@@ -1249,7 +1249,7 @@ def analyze_side(image, tier="standard"):
     ankle = px(PL.L_ANKLE if S=="L" else PL.R_ANKLE)
 
     neck_lean  = angle_vert(sh, ear)
-    neck_sc    = score_m(neck_lean, 0, 10, 28)
+    neck_sc    = score_m(neck_lean, 0, 5, 15)   # strict: was (0,10,28)
 
     trunk_lean = angle_vert(hip, sh)
     trunk_sc   = score_m(trunk_lean, 0, 8, 22)
@@ -1618,7 +1618,7 @@ def generate_pdf_en(sd):
         "roll":"3D head roll — lateral tilt angle (solvePnP)",
         "wrist_angle":"Wrist deviation from straight — CTD risk",
         "eye_strain":"Blink rate via FaceMesh iris — eye strain detection",
-        "neck_lean_side":"Neck forward lean from side profile",
+        out["alerts"].append(f"Neck lean {round(neck_lean,1)}° — tuck chin slightly")
         "trunk_lean":"Trunk lean from side: shoulder→hip from vertical",
         "hip_angle":"Hip flexion angle: shoulder–hip–knee (target 90°)",
         "knee_angle":"Knee flexion angle: hip–knee–ankle (target 90°)",
@@ -1895,7 +1895,7 @@ def analyze():
                 s.setdefault("alerts", []).append({"time": datetime.now().strftime("%H:%M:%S"), "msg": a, "score": result["score"]})
                 _s_dirty = True
 
-        if (tier in ("elite", "premium") and result["detected"] and
+        if (tier in ("elite", "premium", "professional", "pro", "basic") and result["detected"] and
             GEMINI_API_KEY and time.time() - s.get("last_ai",0) > 30):
             # Fire Gemini in background — don't block the analysis response
             _r, _ctx, _lg, _sid = dict(result), data.get("employee_context",""), lang, sid
@@ -7655,4 +7655,5 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
