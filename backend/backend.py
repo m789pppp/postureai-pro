@@ -1031,7 +1031,7 @@ def analyze_front(image, mode="laptop", tier="standard"):
         "eye_strain": None
     }
 
-    pose_model = POSE_FULL if tier in ("professional", "elite") else POSE_LITE
+    pose_model = POSE_FULL if tier in ("professional", "elite", "pro", "premium") else POSE_LITE
     pose_result = pose_model.process(rgb)
     face_result = FACE_MESH.process(rgb)
 
@@ -1237,7 +1237,7 @@ def analyze_side(image, tier="standard"):
         "confidence": 0, "engine": "mediapipe"
     }
 
-    pose_model = POSE_FULL if tier in ("professional", "elite") else POSE_LITE
+    pose_model = POSE_FULL if tier in ("professional", "elite", "pro", "premium") else POSE_LITE
     pose_result = pose_model.process(rgb)
 
     if not pose_result.pose_landmarks:
@@ -1680,7 +1680,6 @@ def generate_pdf_en(sd):
         "roll":"3D head roll — lateral tilt angle (solvePnP)",
         "wrist_angle":"Wrist deviation from straight — CTD risk",
         "eye_strain":"Blink rate via FaceMesh iris — eye strain detection",
-        out["alerts"].append(f"Neck lean {round(neck_lean,1)}° — tuck chin slightly")
         "trunk_lean":"Trunk lean from side: shoulder→hip from vertical",
         "hip_angle":"Hip flexion angle: shoulder–hip–knee (target 90°)",
         "knee_angle":"Knee flexion angle: hip–knee–ankle (target 90°)",
@@ -1887,20 +1886,32 @@ def add_snapshot():
 
 @app.route("/api/analyze", methods=["POST"])
 @require_auth
-@limiter.limit("30 per minute")
+@limiter.limit("60 per minute")
 def analyze():
     try:
+        t0 = time.perf_counter()
         data = request.get_json(force=True)
         ok, err = validate_frame(data)
         if not ok:
             return jsonify({"error": err}), 400
-        mode = data.get("mode","laptop")
+        mode = data.get("mode", "laptop")
         tier = getattr(g, "tier", None) or "standard"  # SECURITY: from auth, never client
         uid  = getattr(g, "uid", None) or ""
 
+        # ── Frame hash cache: if identical frame within 1.5s, return cached result ──
+        # Prevents duplicate analysis when frontend sends same frame twice
+        import hashlib as _hl
+        b64_raw = data.get("frame", "")
+        if "," in b64_raw: b64_raw = b64_raw.split(",", 1)[1]
+        frame_hash = _hl.md5(b64_raw[:2048].encode()).hexdigest()[:16]  # fast partial hash
+        cached_result = cache_get(f"frame:{uid}:{frame_hash}")
+        if cached_result:
+            import json as _j
+            r = _j.loads(cached_result)
+            r["cached"] = True
+            return jsonify(r)
+
         # ── Async mode: queue to Celery worker (recommended for scale) ──
-        # When CELERY_ENABLED=true, return a job_id immediately and let
-        # workers handle MediaPipe (avoids blocking Gunicorn workers).
         if os.getenv("CELERY_ENABLED", "false").lower() == "true":
             try:
                 from services.celery_app import analyze_frame_task
@@ -1908,25 +1919,54 @@ def analyze():
                 return jsonify({"job_id": job.id, "status": "queued"}), 202
             except Exception as celery_err:
                 print(f"[analyze] Celery queue failed, falling back to sync: {celery_err}", file=sys.stderr)
-                # Fall through to synchronous processing
-        lang = data.get("lang","en")
-        b64  = data["frame"]
-        if "," in b64: b64 = b64.split(",",1)[1]
-        img = cv2.imdecode(np.frombuffer(base64.b64decode(b64),np.uint8), cv2.IMREAD_COLOR)
-        if img is None: return jsonify({"error":"Cannot decode image"}), 400
-        if mode in ("laptop","phone"): img = cv2.flip(img,1)
+
+        lang = data.get("lang", "en")
+        img  = cv2.imdecode(np.frombuffer(base64.b64decode(b64_raw), np.uint8), cv2.IMREAD_COLOR)
+        if img is None: return jsonify({"error": "Cannot decode image"}), 400
+        if mode in ("laptop", "phone"): img = cv2.flip(img, 1)
+
+        # ── Resize to 480p max — MediaPipe doesn't need 720p, saves 60% CPU ──
+        h_img, w_img = img.shape[:2]
+        if h_img > 480:
+            scale = 480 / h_img
+            img = cv2.resize(img, (int(w_img * scale), 480), interpolation=cv2.INTER_AREA)
 
         # Low-light enhancement pipeline
         img_to_analyze, brightness, was_enhanced = enhance_low_light(img)
 
-        result = analyze_side(img_to_analyze, tier) if mode=="side" else analyze_front(img_to_analyze, mode, tier)
+        calib = data.get("calibration")   # personal calibration from Firestore
+        result = analyze_side(img_to_analyze, tier) if mode == "side" else analyze_front(img_to_analyze, mode, tier)
+        # Apply personal calibration offsets if provided
+        if calib and isinstance(calib, dict) and result.get("detected"):
+            tols = calib.get("tolerances", {})
+            met_map = {"neck_lean": "neck_angle", "head_tilt": "head_tilt",
+                       "shoulder_level": "shoulder_tilt", "spine_lean": "spine_angle"}
+            calib_scores = []
+            for met_key, calib_key in met_map.items():
+                met = result.get("metrics", {}).get(met_key)
+                tol = tols.get(calib_key)
+                if met and tol:
+                    d = abs(met["value"] - tol.get("ideal", 0))
+                    ok_t, bad_t = tol.get("ok", 7), tol.get("bad", 20)
+                    if d <= ok_t:   cs = max(0, int(100 - (d / max(ok_t, .1)) * 25))
+                    elif d <= bad_t: cs = max(0, int(75 - ((d - ok_t) / max(bad_t - ok_t, .1)) * 45))
+                    else:            cs = max(0, int(30 - (d - bad_t) * 1.8))
+                    result["metrics"][met_key]["score"] = cs
+                    result["metrics"][met_key]["calibrated"] = True
+                    calib_scores.append(cs)
+            if calib_scores:
+                raw_score = result.get("score", 0)
+                calib_avg = sum(calib_scores) / len(calib_scores)
+                result["score"]   = max(0, min(100, int(raw_score * 0.4 + calib_avg * 0.6)))
+                result["overall"] = result["score"]
+                result["calibration_applied"] = True
         result["brightness"] = round(brightness, 1)
         result["low_light_enhanced"] = was_enhanced
         result["tier"]    = tier
         result["overall"] = result.get("score", 0)
 
         # Redis score smoothing (if Redis available)
-        uid = data.get("uid", "")
+        # uid already resolved from auth token above — don't override from client data
         if uid and result.get("detected"):
             push_score(uid, result["overall"])
             smoothed = get_smoothed_score(uid)
@@ -1958,7 +1998,8 @@ def analyze():
                 _s_dirty = True
 
         if (tier in ("elite", "premium", "professional", "pro", "basic") and result["detected"] and
-            GEMINI_API_KEY and time.time() - s.get("last_ai",0) > 30):
+            result.get("score", 100) < 80 and   # skip Gemini when posture is already good
+            GEMINI_API_KEY and time.time() - s.get("last_ai", 0) > 60):  # 60s cooldown
             # Fire Gemini in background — don't block the analysis response
             _r, _ctx, _lg, _sid = dict(result), data.get("employee_context",""), lang, sid
             def _bg_gemini(r, ctx, lg, _session_id):
@@ -1983,22 +2024,23 @@ def analyze():
         if _s_dirty:
             sessions[sid] = s
 
-        # Track usage for billing limits
-        uid_for_usage = data.get("uid", "")
-        if uid_for_usage and result.get("detected"):
+        # Track usage for billing limits (use existing redis_service, not a new connection)
+        if uid and result.get("detected"):
             today = datetime.utcnow().strftime("%Y-%m-%d")
             month = datetime.utcnow().strftime("%Y-%m")
-            for key, ttl in [
-                (f"usage:{uid_for_usage}:sessions:{today}", 86400 * 2),
-                (f"usage:{uid_for_usage}:sessions:{month}", 86400 * 35),
-            ]:
-                try:
-                    import redis as _r
-                    _rc = _r.from_url(os.getenv("REDIS_URL","redis://localhost:6379/0"))
-                    _rc.incr(key)
-                    _rc.expire(key, ttl)
-                except Exception: pass
+            try:
+                rset(f"usage:{uid}:frames:{today}",
+                     str(int(cache_get(f"usage:{uid}:frames:{today}") or 0) + 1),
+                     86400 * 2)
+            except Exception: pass
 
+        # Cache result for 1.5s (avoids reprocessing identical frames)
+        try:
+            import json as _j
+            cache_set(f"frame:{uid}:{frame_hash}", _j.dumps(result), 2)
+        except Exception: pass
+
+        result["processing_ms"] = round((time.perf_counter() - t0) * 1000)
         return jsonify(result)
     except Exception as e:
         import traceback
@@ -7717,6 +7759,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
