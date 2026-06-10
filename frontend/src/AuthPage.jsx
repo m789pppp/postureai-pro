@@ -6,7 +6,7 @@
 import { useState, useCallback } from "react";
 import {
   signInGoogle, signInEmail, signUpEmail, resetPassword,
-  getUserProfile, createUserProfile,
+  getUserProfile, createUserProfile, seedDemoUser,
   AUTO_APPROVE_DOMAIN, SUPPORT_EMAIL,
   isAutoApproveEmail,
 } from "./firebase.js";
@@ -72,16 +72,19 @@ function pwStrength(p) {
 }
 
 // ── Sub-components ────────────────────────────────────────────────
-function FloatingInput({ tok, label, type = "text", value, onChange, autoComplete, required, disabled, rightEl }) {
+function FloatingInput({ tok, label, type = "text", value, onChange, autoComplete, required, disabled, rightEl, isRtl }) {
+  // FIX M-02: RTL-aware label and padding
   const [focused, setFocused] = useState(false);
   const active = focused || value;
+  const side = isRtl ? "right" : "left";
+  const oppSide = isRtl ? "left" : "right";
   return (
     <div style={{ position: "relative", marginBottom: 14 }}>
       <label style={{
-        position: "absolute", left: 14, top: active ? 6 : 14,
+        position: "absolute", [side]: 14, top: active ? 6 : 14,
         fontSize: active ? 10 : 13, color: active ? "#1a56db" : tok.muted,
         transition: "all .18s", pointerEvents: "none", fontWeight: active ? 500 : 400,
-        zIndex: 1,
+        zIndex: 1, direction: isRtl ? "rtl" : "ltr",
       }}>
         {label}
       </label>
@@ -92,20 +95,22 @@ function FloatingInput({ tok, label, type = "text", value, onChange, autoComplet
         required={required}
         disabled={disabled}
         autoComplete={autoComplete}
+        dir={isRtl ? "rtl" : "ltr"}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         style={{
           width: "100%", paddingTop: 20, paddingBottom: 8,
-          paddingLeft: 14, paddingRight: rightEl ? 44 : 14,
+          paddingLeft: isRtl ? (rightEl ? 44 : 14) : 14,
+          paddingRight: isRtl ? 14 : (rightEl ? 44 : 14),
           background: tok.inp,
           border: `1.5px solid ${focused ? tok.inpBH : tok.inpB}`,
           borderRadius: 10, fontSize: 13, color: tok.text,
           outline: "none", transition: "border-color .18s",
-          boxSizing: "border-box",
+          boxSizing: "border-box", textAlign: isRtl ? "right" : "left",
         }}
       />
       {rightEl && (
-        <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)" }}>
+        <div style={{ position: "absolute", [oppSide]: 12, top: "50%", transform: "translateY(-50%)" }}>
           {rightEl}
         </div>
       )}
@@ -193,8 +198,12 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
 
   const handleForgot = useCallback(async (e) => {
     e.preventDefault(); setErr(""); setLoading(true);
+    if (!email.trim()) {
+      setErr(isAr ? "أدخل بريدك الإلكتروني أولاً" : "Please enter your email address");
+      setLoading(false); return;
+    }
     try {
-      await resetPassword(email);
+      await resetPassword(email.trim());
       setOk(isAr ? "✅ تم إرسال رابط إعادة التعيين — تحقق من بريدك" : "✅ Reset link sent — check your email");
     } catch(e) { setErr(getErr(e.message, isAr)); }
     setLoading(false);
@@ -353,21 +362,21 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
           {/* Form */}
           <form onSubmit={view === "forgot" ? handleForgot : handleSubmit}>
             {view === "signup" && (
-              <FloatingInput tok={tok}
+              <FloatingInput tok={tok} isRtl={isAr}
                 label={isAr ? "الاسم الكامل *" : "Full name *"}
                 value={name} onChange={setName}
                 autoComplete="name" required
               />
             )}
             {view === "signup" && (
-              <FloatingInput tok={tok}
+              <FloatingInput tok={tok} isRtl={isAr}
                 label={isAr ? "الشركة (اختياري)" : "Company (optional)"}
                 value={co} onChange={setCo}
                 autoComplete="organization"
               />
             )}
 
-            <FloatingInput tok={tok}
+            <FloatingInput tok={tok} isRtl={isAr}
               label={isAr ? "البريد الإلكتروني" : "Email address"}
               type="email" value={email} onChange={setEmail}
               autoComplete="email" required
@@ -375,7 +384,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
 
             {view !== "forgot" && (
               <>
-                <FloatingInput tok={tok}
+                <FloatingInput tok={tok} isRtl={isAr}
                   label={isAr ? "كلمة المرور" : "Password"}
                   type={showP ? "text" : "password"}
                   value={pass} onChange={setPass}
@@ -467,8 +476,8 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
           </form>
         </div>
 
-        {/* Demo accounts */}
-        {view === "login" && (
+        {/* Demo accounts — only shown when VITE_SHOW_DEMO=true (dev/demo env) */}
+        {view === "login" && import.meta.env.VITE_SHOW_DEMO === "true" && (
           <div style={{ marginTop:20, padding:"14px 16px",
             background:"rgba(99,102,241,.06)", border:"1px solid rgba(99,102,241,.2)",
             borderRadius:10 }}>
@@ -490,8 +499,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
                     // Demo account doesn't exist yet - create it
                     try {
                       const c2 = await signUpEmail(d.email, d.pass);
-                      const { createUserProfile: cup } = await import("./firebase.js");
-                      await cup(c2.user.uid, {
+                      await createUserProfile(c2.user.uid, {
                         email: d.email,
                         name: i === 0 ? "Demo User" : "Demo HR Admin",
                         company: i === 1 ? "PostureAI Demo Co." : "",
@@ -504,7 +512,6 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
                         setup_complete: true,
                       });
                       // Seed realistic demo data
-                      const { seedDemoUser } = await import("./firebase.js");
                       await seedDemoUser(c2.user.uid, i === 0 ? "individual" : "hr_admin").catch(()=>{});
                       onAuth(c2.user);
                     } catch(e2) { setErr(getErr(e2.message, isAr)); }
@@ -538,3 +545,4 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
     </div>
   );
 }
+
