@@ -114,6 +114,16 @@ const TIERS = {
   }
 };
 
+// ── Tier ID normaliser — bridges personal plan IDs to server tier keys (FIX H-01) ──
+const TIER_NORMALIZE = {
+  // personal plan ids → tier key
+  basic: "standard", pro: "professional", premium: "elite",
+  personal_basic: "standard", personal_pro: "professional", personal_elite: "elite",
+  // already canonical
+  standard: "standard", professional: "professional", elite: "elite",
+};
+const normalizeTier = (t) => TIER_NORMALIZE[t] || t || "standard";
+
 // ── Payment Methods — Automatic PayMob only ───────────────────────
 const PAY_METHODS = [
   {id:"visa_card",   name:"Visa / Mastercard", nameAr:"فيزا / ماستركارد",
@@ -1314,7 +1324,7 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
           boxShadow:"0 8px 32px rgba(0,0,0,.18)",overflow:"hidden",
         }}>
           <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${cs.border}`}}>
-            <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}</div>
+            <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{profile?.name||user?.email?.split("@")[0]}</div>
             <div style={{fontSize:10,color:cs.muted,marginTop:2}}>{user?.email}</div>
             {profile?.tier&&<div style={{display:"inline-block",marginTop:5,background:`${tierColor}18`,border:`0.5px solid ${tierColor}40`,borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700,color:tierColor}}>{profile.tier.toUpperCase()}{profile.is_trial?" ⏱":""}</div>}
           </div>
@@ -1613,7 +1623,7 @@ export default function App(){
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
 
-  const T_=tier?(TIERS[tier]||PERSONAL_PLANS[tier]||PERSONAL_TIERS.find(p=>p.id===tier)||null):null;
+  const T_=tier?(TIERS[normalizeTier(tier)]||PERSONAL_PLANS[tier]||PERSONAL_TIERS.find(p=>p.id===tier)||null):null; // FIX H-01
   // Normalize T_ so live dashboard always has .name and .color
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
   const MC={
@@ -1657,13 +1667,23 @@ export default function App(){
         }
         setUser(u);
         setProfile(p);
-        if (p?.tier && p.tier !== "standard") setTier(p.tier);
+        if (p?.tier) setTier(normalizeTier(p.tier));
         if (p?.company_id) setCompanyId(p.company_id);
         getUserSessions(u.uid).then(setUserSessions).catch(() => {});
-        setPage("home");
+        setPage(p && !p.setup_complete ? "setup" : "home");
         setAuthChecked(true);
       }
-    }).catch(() => {});
+    }).catch((redirectErr) => {
+      // FIX H-05: surface redirect errors to user instead of swallowing silently
+      if (redirectErr?.code && redirectErr.code !== "auth/null-user") {
+        const msg = redirectErr.code === "auth/account-exists-with-different-credential"
+          ? (lang==="ar" ? "هذا البريد مسجل بطريقة تسجيل مختلفة" : "This email is linked to a different sign-in method")
+          : (lang==="ar" ? "حدث خطأ في تسجيل الدخول بجوجل" : "Google sign-in failed — please try again");
+        console.warn("[GoogleRedirect]", redirectErr.code);
+        // Store error to show after auth state settles
+        sessionStorage.setItem("_redirect_err", msg);
+      }
+    });
 
     const authTimeout=setTimeout(()=>{
       setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
@@ -1714,9 +1734,13 @@ export default function App(){
             }).catch(()=>{});
           const params=new URLSearchParams(window.location.search);
           // Check for pending invite after login
-          const pendingInvite=sessionStorage.getItem("pending_invite");
-          if(pendingInvite){window.__invite_token=pendingInvite;setPage("invite");}
-          else if(p && !p.setup_complete) setPage("setup");
+          // FIX M-06: check both sessionStorage AND URL param for invite token
+          const pendingInvite=sessionStorage.getItem("pending_invite")||params.get("invite");
+          if(pendingInvite){
+            window.__invite_token=pendingInvite;
+            sessionStorage.setItem("pending_invite",pendingInvite);
+            setPage("invite");
+          } else if(p && !p.setup_complete) setPage("setup");
           else setPage(params.get("plan")&&TIERS[params.get("plan")]?"pricing":"home");
         } else {
           setPage("landing");
@@ -2001,7 +2025,7 @@ export default function App(){
   const avg=history.length?Math.round(history.reduce((a,b)=>a+b,0)/history.length):0;
   const distCm=analysis?.distCm||(analysis?.metrics?.distance?.value)||null;
   const isAdmin=profile?.is_admin===true; // SECURITY: Firestore field only — no email comparison
-  const isHRAdmin=(HR_EMAILS||[]).includes(user?.email||"")||isAdmin;
+  const isHRAdmin=(HR_EMAILS||[]).includes(user?.email||"")||isAdmin||!!profile?.is_org_owner||!!profile?.company_id||profile?.user_type==="hr_admin"; // FIX H-02
 
   // Shared props
   const shared={cs,t,darkMode,setDarkMode,lang,setLang,addToast};
@@ -2176,7 +2200,7 @@ export default function App(){
                 {i>0&&<div style={{width:40,height:1.5,background:acctType?cs.blue:cs.border,margin:"0 4px",transition:"background .3s"}}/>}
                 <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                   <div style={{width:26,height:26,borderRadius:"50%",border:`2px solid ${(i===0&&!acctType)||(i===1&&acctType)?(acctType&&i===1&&devicePref)?cs.blue:cs.blue:(cs.border)}`,background:(i===0&&acctType)||(i===1&&devicePref)?"rgba(26,86,219,.15)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:(i===0&&acctType)||(i===1&&devicePref)?cs.blue:(!acctType&&i===0)?cs.blue:cs.muted,transition:"all .3s"}}>
-                    {(i===0&&acctType&&i<(acctType?1:0))||(i===1&&devicePref)?"✓":s.n}
+                    {(i===0&&acctType&&devicePref)||(i===1&&devicePref)?"✓":s.n}
                   </div>
                   <div style={{fontSize:9.5,color:(i===0&&!acctType)||(i===1&&acctType)?cs.text:cs.muted,fontWeight:(i===0&&!acctType)||(i===1&&acctType)?600:400,transition:"all .3s"}}>{s.lbl}</div>
                 </div>
@@ -2240,7 +2264,12 @@ export default function App(){
                     setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", is_org_owner: acctType==="company"}));
                   }catch(e){ console.warn("setup save failed",e); }
                 }
-                if(acctType==="company") setShowCompanyOnboard(true);
+                if(acctType==="company"){
+                  setShowCompanyOnboard(true);
+                } else {
+                  // FIX H-04: trigger onboarding wizard for individual users
+                  setTimeout(()=>setShowOnboard(true), 400);
+                }
                 setPage("home");
               }}
                 style={{width:"100%",padding:"13px",background:devicePref?cs.blue:"rgba(148,163,184,.2)",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:devicePref?"pointer":"not-allowed",transition:"all .2s"}}>
@@ -2252,7 +2281,7 @@ export default function App(){
             </>
           )}
           <div style={{textAlign:"center",marginTop:18,fontSize:10,color:cs.muted}}>
-            <button onClick={()=>{logOut();setUser(null);setProfile(null);setPage("landing");}} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:10}}>{t.signOut}</button>
+            <button onClick={()=>{ logOut(); /* FIX L-05: onAuthStateChanged handles navigation — no race */ }} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:10}}>{t.signOut}</button>
           </div>
         </div>
       </div>
@@ -2695,16 +2724,12 @@ export default function App(){
           {score>0&&(
             <div style={{
               position:"absolute",bottom:8,right:isAr?"auto":8,left:isAr?8:"auto",
-              background:"rgba(2,8,16,.92)",borderRadius:10,
-              padding:"8px 12px",textAlign:"center",
-              border:`2px solid ${sc(score)}60`,
-              backdropFilter:"blur(8px)",
+              background:"rgba(2,8,16,.88)",borderRadius:10,
+              padding:"6px 10px",textAlign:"center",
+              border:`1px solid ${sc(score)}40`,
             }}>
-              <div style={{fontSize:28,fontWeight:900,color:sc(score),lineHeight:1}}>{score}</div>
-              <div style={{fontSize:9,color:sc(score),marginTop:2,fontWeight:600,opacity:.7}}>/100</div>
-              <div style={{fontSize:8,color:"rgba(255,255,255,.5)",marginTop:1}}>
-                {score>=80?(isAr?"ممتاز":"Excellent"):score>=60?(isAr?"جيد":"Good"):(isAr?"ضعيف":"Poor")}
-              </div>
+              <div style={{fontSize:20,fontWeight:900,color:sc(score),lineHeight:1}}>{score}</div>
+              <div style={{fontSize:8,color:cs.muted,marginTop:1}}>/100</div>
             </div>
           )}
         </div>
@@ -2717,7 +2742,7 @@ export default function App(){
               {score ? grade(score,t) : (isAr?"ابدأ الكاميرا":"Start camera to begin")}
             </div>
             <div style={{fontSize:11,color:cs.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-              {profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}
+              {profile?.name||user?.email?.split("@")[0]}
             </div>
             <div style={{fontSize:10,color:cs.muted,marginTop:1}}>
               {isAr?"المسافة المثلى":"Optimal"}: {M_?.optDist[0]}–{M_?.optDist[1]}cm
@@ -2833,42 +2858,62 @@ export default function App(){
           </button>
         </div>
 
-        {/* Tools — filtered by role + tier */}
+        {/* 4 Action buttons — Calibrate / Analytics / AI Coach / Progress */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <div style={{fontSize:9.5,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>
             {isAr?"الأدوات":"Tools"}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <ActionBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="#10b981" dimColor="#6ee7b7"
+            <ActionBtn
+              icon="🎯"
+              label={isAr?"معايرة":"Calibrate"}
+              color="#10b981" dimColor="#6ee7b7"
               onClick={()=>setShowCalibWizard(true)}/>
-            <ActionBtn icon="📊" label={isAr?"تحليلاتي":"Analytics"} color="#1a56db" dimColor="#93c5fd"
+            <ActionBtn
+              icon="📊"
+              label={isAr?"التحليلات":"Analytics"}
+              color="#1a56db" dimColor="#93c5fd"
               onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}/>
-            {(tier==="professional"||tier==="elite"||tier==="business")
-              ? <ActionBtn icon="🤖" label={isAr?"مدرب AI":"AI Coach"} color="#6366f1" dimColor="#a5b4fc"
-                  onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
-              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
-                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
-                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.55,position:"relative"}}>
-                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🤖</span>
-                  <span style={{fontSize:11,color:cs.muted}}>AI Coach</span>
-                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
-                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>PRO</span>
-                </div>
-            }
-            <ActionBtn icon="🏆" label={isAr?"التقدم":"Progress"} color="#f59e0b" dimColor="#fbbf24"
+            <ActionBtn
+              icon="🤖"
+              label={isAr?"مدرب AI":"AI Coach"}
+              color="#6366f1" dimColor="#a5b4fc"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
+            <ActionBtn
+              icon="🏆"
+              label={isAr?"التقدم":"Progress"}
+              color="#f59e0b" dimColor="#fbbf24"
               onClick={()=>setShowGamification(true)}/>
-            {(tier==="professional"||tier==="elite"||tier==="business")&&(
-              <ActionBtn icon="📋" label={isAr?"التقارير":"Reports"} color="#059669" dimColor="#6ee7b7"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
-            )}
-            {(isHRAdmin||isAdmin)&&(
-              <ActionBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
-            )}
-            {(tier==="elite"||tier==="business")&&(
-              <ActionBtn icon="🧠" label={isAr?"رؤى AI":"AI Insights"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
-            )}
+            <ActionBtn
+              icon="🧠"
+              label={isAr?"رؤى AI":"AI Insights"}
+              color="#0891b2" dimColor="#67e8f9"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
+            <ActionBtn
+              icon="🔮"
+              label={isAr?"التنبؤ":"Predictive"}
+              color="#7c3aed" dimColor="#c4b5fd"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowPredictiveAI(true);}}/>
+            <ActionBtn
+              icon="📊"
+              label={isAr?"التقارير":"Reports"}
+              color="#059669" dimColor="#6ee7b7"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
+            <ActionBtn
+              icon="🏭"
+              label={isAr?"تحليلات QW":"Workforce"}
+              color="#0891b2" dimColor="#67e8f9"
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
+            <ActionBtn
+              icon="🔐"
+              label={isAr?"الأمان":"Security"}
+              color="#7c3aed" dimColor="#c4b5fd"
+              onClick={()=>{getAllUsers().then(setAllUsers);setShowEnterpriseRBAC(true);}}/>
+            <ActionBtn
+              icon="🔔"
+              label={isAr?"الإشعارات":"Notifications"}
+              color="#0891b2" dimColor="#67e8f9"
+              onClick={()=>setShowNotificationsHub(true)}/>
           </div>
         </div>
 
@@ -2911,4 +2956,5 @@ export default function App(){
     </div>
   </ErrorBoundary>);
 }
+
 
