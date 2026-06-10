@@ -2658,22 +2658,41 @@ export default function App(){
 
         {/* Score history chart */}
         <div style={{margin:"0 16px 12px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:14,padding:"14px 16px"}}>
-          <div style={{fontSize:10,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>
-            {isAr?"سجل النقاط":"Score History"}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:10,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".08em"}}>
+              {isAr?"سجل النقاط":"Score History"}
+            </div>
+            {history.length>0&&(
+              <div style={{fontSize:13,fontWeight:800,color:sc(history[history.length-1]||0)}}>
+                {history[history.length-1]||0}/100
+              </div>
+            )}
           </div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:60}}>
-            {(history.length?history:Array(40).fill(0)).map((s,i)=>(
-              <div key={i} style={{
-                flex:1, borderRadius:"3px 3px 0 0",
-                minHeight:3,
-                height: s ? Math.max(3,Math.round(s*.56)) : 3,
-                background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}88)` : "rgba(148,163,184,.08)",
-                transition:"height .3s ease",
-              }}/>
-            ))}
+          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:68,position:"relative"}}>
+            <div style={{position:"absolute",left:0,right:0,top:`${(1-80/100)*68}px`,
+              borderTop:"1px dashed rgba(16,185,129,.2)",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",left:0,right:0,top:`${(1-60/100)*68}px`,
+              borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
+            {(history.length?history:Array(40).fill(0)).map((s,i)=>{
+              const isLast=i===history.length-1;
+              return (
+                <div key={i} style={{
+                  flex:1, borderRadius:"3px 3px 0 0",
+                  minHeight:3,
+                  height: s ? Math.max(3,Math.round(s*.64)) : 3,
+                  background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
+                  transition:"height .25s ease",
+                  boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
+                }}/>
+              );
+            })}
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:9,color:cs.muted}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:5,fontSize:9,color:cs.muted}}>
             <span>{isAr?"الأقدم":"Oldest"}</span>
+            <div style={{display:"flex",gap:8}}>
+              <span style={{color:"rgba(16,185,129,.6)"}}>━ 80</span>
+              <span style={{color:"rgba(245,158,11,.5)"}}>━ 60</span>
+            </div>
             <span>{isAr?"الأحدث":"Newest"}</span>
           </div>
         </div>
@@ -2705,17 +2724,27 @@ export default function App(){
 
         {/* Alert log */}
         {alerts.length>0&&(
-          <div style={{margin:"0 16px 16px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontSize:9.5,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>
-              {isAr?"سجل التنبيهات":"Alert Log"}
-            </div>
-            {alerts.slice(0,5).map((a,i)=>(
-              <div key={i} style={{display:"flex",gap:8,padding:"6px 0",borderBottom:i<Math.min(alerts.length,5)-1?`1px solid ${cs.border}`:"none",alignItems:"flex-start"}}>
-                <span style={{fontSize:9,color:cs.muted,flexShrink:0,fontFamily:"monospace",minWidth:40}}>{a.time}</span>
-                <span style={{fontSize:11,color:cs.text,flex:1,lineHeight:1.4}}>{a.msg}</span>
-                <span style={{fontSize:10,fontWeight:700,color:"#ef4444",fontFamily:"monospace"}}>{a.score}/100</span>
+          <div style={{margin:"0 16px 16px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:12,overflow:"hidden"}}>
+            <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:9.5,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".06em"}}>
+                {isAr?"سجل التنبيهات":"Alert Log"}
               </div>
-            ))}
+              <span style={{fontSize:10,fontWeight:700,color:"#ef4444",background:"rgba(239,68,68,.12)",
+                borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
+            </div>
+            {alerts.slice(0,5).map((a,i)=>{
+              const sev = a.score<40?"#ef4444":a.score<60?"#f59e0b":"#10b981";
+              return (
+                <div key={i} style={{display:"flex",gap:8,padding:"8px 14px",
+                  borderBottom:i<Math.min(alerts.length,5)-1?`1px solid ${cs.border}`:"none",
+                  alignItems:"center", background:i===0?"rgba(239,68,68,.03)":"transparent"}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:sev,flexShrink:0}}/>
+                  <span style={{fontSize:9,color:cs.muted,flexShrink:0,fontFamily:"monospace",minWidth:38}}>{a.time}</span>
+                  <span style={{fontSize:11,color:cs.text,flex:1,lineHeight:1.4}}>{a.msg}</span>
+                  <span style={{fontSize:11,fontWeight:800,color:sev,fontFamily:"monospace"}}>{a.score}</span>
+                </div>
+              );
+            })}
           </div>
         )}
         <div style={{height:24}}/>
@@ -2812,17 +2841,44 @@ export default function App(){
         </div>
 
         {/* Score ring + user */}
-        <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:10}}>
-          <Ring score={score} size={52}/>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:700,color:scoreColor}}>
-              {score ? grade(score,t) : (isAr?"ابدأ الكاميرا":"Start camera to begin")}
+        <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
+          {/* User row */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            {profile?.photoURL
+              ? <img src={profile.photoURL} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
+              : <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,
+                  background:`hsl(${(profile?.name||"U").split("").reduce((a,c)=>a+c.charCodeAt(0),0)%360},50%,30%)`,
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:12,fontWeight:700,color:"#fff"}}>
+                  {(profile?.name||profile?.email||"U")[0].toUpperCase()}
+                </div>
+            }
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:700,color:cs.text,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}
+              </div>
+              <div style={{fontSize:9.5,color:cs.muted}}>
+                {isAr?"المسافة المثلى":"Optimal"}: {M_?.optDist[0]}–{M_?.optDist[1]}cm
+              </div>
             </div>
-            <div style={{fontSize:11,color:cs.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-              {profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}
-            </div>
-            <div style={{fontSize:10,color:cs.muted,marginTop:1}}>
-              {isAr?"المسافة المثلى":"Optimal"}: {M_?.optDist[0]}–{M_?.optDist[1]}cm
+          </div>
+          {/* Score + grade */}
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <Ring score={score} size={52}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:18,fontWeight:900,color:scoreColor,lineHeight:1}}>
+                {score||0}<span style={{fontSize:10,color:cs.muted,fontWeight:400}}>/100</span>
+              </div>
+              <div style={{fontSize:12,fontWeight:600,color:scoreColor,marginTop:2}}>
+                {score ? grade(score,t) : (isAr?"ابدأ الكاميرا":"Start camera")}
+              </div>
+              {/* Mini progress bar */}
+              <div style={{marginTop:6,height:3,borderRadius:99,background:"rgba(255,255,255,.06)"}}>
+                <div style={{height:"100%",width:`${score||0}%`,borderRadius:99,
+                  background:`linear-gradient(90deg,${scoreColor}88,${scoreColor})`,
+                  transition:"width .4s ease"}}/>
+              </div>
             </div>
           </div>
         </div>
@@ -2836,8 +2892,20 @@ export default function App(){
             ? Object.entries(analysis.metrics).map(([k,m])=><MetRow key={k} label={m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}/>)
             : (
               <div>
-                <div style={{fontSize:11,color:cs.muted,textAlign:"center",padding:"4px 0 10px"}}>
-                  {isAr?"ابدأ الكاميرا للتحليل":"Start camera to begin"}
+                <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0 8px"}}>
+                  {["Neck lean","Head tilt","Shoulder level","Spine lean"].map((m,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:10,color:cs.muted,flex:1}}>{isAr?["انحناء الرقبة","إمالة الرأس","مستوى الكتفين","انحناء العمود"][i]:m}</span>
+                      <div style={{width:80,height:3,borderRadius:99,
+                        background:`rgba(255,255,255,${.03+i*.01})`,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:"0%",background:"rgba(148,163,184,.1)"}}/>
+                      </div>
+                      <span style={{fontSize:10,color:"rgba(255,255,255,.15)",minWidth:16,textAlign:"right"}}>—</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{fontSize:10,color:cs.muted,textAlign:"center",padding:"2px 0"}}>
+                  {isAr?"ابدأ الكاميرا للتحليل":"Start camera to see metrics"}
                 </div>
                 <div style={{background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.12)",borderRadius:10,padding:"10px 12px"}}>
                   <div style={{fontSize:9.5,fontWeight:700,color:"#10b981",marginBottom:8,textTransform:"uppercase",letterSpacing:".05em"}}>
