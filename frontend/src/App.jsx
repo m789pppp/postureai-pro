@@ -56,6 +56,7 @@ import { UsageBilling }     from "./UsageBilling.jsx";
 import { ChurnPrediction }  from "./ChurnPrediction.jsx";
 import { CustomerSuccess }  from "./CustomerSuccess.jsx";
 import { GrowthHub }        from "./GrowthHub.jsx";
+import SessionComparison    from "./SessionComparison.jsx";
 import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
 import { IntegrationsHub }  from "./IntegrationsHub.jsx";
 import { ReferralProgram }  from "./ReferralProgram.jsx";
@@ -1532,6 +1533,7 @@ export default function App(){
   const[showChurnPrediction,setShowChurnPrediction]=useState(false);
   const[showCustomerSuccess,setShowCustomerSuccess]=useState(false);
   const[showGrowthHub,setShowGrowthHub]=useState(false);
+  const[showSessionComparison,setShowSessionComparison]=useState(false);
   const[showProductTour,setShowProductTour]=useState(false);
   const[showMFASetup,setShowMFASetup]=useState(false);
   const[showSecurityCenter,setShowSecurityCenter]=useState(false);
@@ -2477,6 +2479,7 @@ export default function App(){
       {showChurnPrediction&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
+      {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
       {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
       {showSecurityCenter&&<SecurityCenter token={authToken} user={profile} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)}/>}
       {showFeatureFlags&&<FeatureFlags token={authToken} onClose={()=>setShowFeatureFlags(false)}/>}
@@ -3033,6 +3036,10 @@ export default function App(){
             }
             <ActionBtn icon="🏆" label={isAr?"التقدم":"Progress"} color="#f59e0b" dimColor="#fbbf24"
               onClick={()=>setShowGamification(true)}/>
+            {userSessions.length>=2&&(
+              <ActionBtn icon="📊" label={isAr?"مقارنة":"Compare"} color="#a855f7" dimColor="#d8b4fe"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowSessionComparison(true);}}/>
+            )}
             {(tier==="professional"||tier==="elite"||tier==="business")&&(
               <ActionBtn icon="📋" label={isAr?"التقارير":"Reports"} color="#059669" dimColor="#6ee7b7"
                 onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
@@ -3150,6 +3157,7 @@ export default function App(){
     </div>
   </ErrorBoundary>);
 }
+
 
 
 
