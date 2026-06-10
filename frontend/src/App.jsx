@@ -114,14 +114,6 @@ const TIERS = {
   }
 };
 
-// ── Tier ID normaliser — bridges personal plan IDs to server tier keys ──────
-const TIER_NORMALIZE = {
-  basic:"standard", pro:"professional", premium:"elite",
-  personal_basic:"standard", personal_pro:"professional", personal_elite:"elite",
-  standard:"standard", professional:"professional", elite:"elite",
-};
-const normalizeTier = (t) => TIER_NORMALIZE[t] || t || "standard";
-
 // ── Payment Methods — Automatic PayMob only ───────────────────────
 const PAY_METHODS = [
   {id:"visa_card",   name:"Visa / Mastercard", nameAr:"فيزا / ماستركارد",
@@ -1490,13 +1482,11 @@ export default function App(){
   const[showOnboard,setShowOnboard]=useState(false);
   // ── Trigger onboarding for new users ──────────────────────────
   useEffect(()=>{
-    // FIX BUG-5: ![] is always false — check length instead
-    // Also check setup_complete so we don't double-show after fresh signup
-    if(user && profile && profile.setup_complete && !profile.onboarding_done?.length && page==="home"){
-      const timer = setTimeout(()=>setShowOnboard(true), 1200);
+    if(user && profile && !profile.onboarding_done && page==="home"){
+      const timer = setTimeout(()=>setShowOnboard(true), 800);
       return ()=>clearTimeout(timer);
     }
-  },[user, profile?.onboarding_done, profile?.setup_complete, page]);
+  },[user, profile?.onboarding_done, page]);
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
@@ -2162,13 +2152,11 @@ export default function App(){
           getUserProfile(u.uid).then(p=>{
             if(p){
               setProfile(p);
-              if(p.tier)setTier(normalizeTier(p.tier));
+              if(p.tier&&p.tier!=="standard")setTier(p.tier);
               if(p.company_id)setCompanyId(p.company_id);
             }
             getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
           }).catch(()=>{});
-          // FIX BUG-4: respect isNew flag — new users MUST go to setup
-          if(isNew){ setPage("setup"); return; }
           setPage("home");
         }}
       />
@@ -2277,23 +2265,10 @@ export default function App(){
                       setup_complete: true,
                       device_pref: devicePref,
                     });
+                    setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", is_org_owner: acctType==="company"}));
                   }catch(e){ console.warn("setup save failed",e); }
                 }
-                // FIX BUG-6: reload fresh profile from Firestore — never use stale state
-                const freshP = user?.uid ? await getUserProfile(user.uid).catch(()=>null) : null;
-                if(freshP){
-                  setProfile(freshP);
-                  if(freshP.tier) setTier(normalizeTier(freshP.tier));
-                  if(freshP.company_id) setCompanyId(freshP.company_id);
-                } else {
-                  setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", is_org_owner: acctType==="company", setup_complete:true}));
-                }
-                if(acctType==="company"){
-                  setShowCompanyOnboard(true);
-                } else {
-                  // Trigger onboarding wizard for individual users after navigation
-                  setTimeout(()=>setShowOnboard(true), 800);
-                }
+                if(acctType==="company") setShowCompanyOnboard(true);
                 setPage("home");
               }}
                 style={{width:"100%",padding:"13px",background:devicePref?cs.blue:"rgba(148,163,184,.2)",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:devicePref?"pointer":"not-allowed",transition:"all .2s"}}>
@@ -2305,7 +2280,7 @@ export default function App(){
             </>
           )}
           <div style={{textAlign:"center",marginTop:18,fontSize:10,color:cs.muted}}>
-            <button onClick={()=>{ logOut(); /* FIX BUG-7: onAuthStateChanged handles navigation — no race condition */ }} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:10}}>{t.signOut}</button>
+            <button onClick={()=>{logOut();setUser(null);setProfile(null);setPage("landing");}} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:10}}>{t.signOut}</button>
           </div>
         </div>
       </div>
@@ -2332,7 +2307,6 @@ export default function App(){
 
   if(page==="home") return(
     <ErrorBoundary>
-      {GlobalModals}
       <HomePage
         user={user} profile={profile} cs={cs} lang={lang} isAr={isAr} dir={dir}
         userSessions={userSessions} setUserSessions={setUserSessions}
@@ -2396,38 +2370,6 @@ export default function App(){
     );
   };
 
-  // ══════════════════════════════════════════════════════
-  // GLOBAL MODALS — render here so they work on ALL pages
-  // (home, live, setup, etc.) — FIX BUG-1+2+8
-  // ══════════════════════════════════════════════════════
-  const GlobalModals = (
-    <>
-      {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang}
-        onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}}
-        onSkip={()=>setShowCalibWizard(false)}/>}
-      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
-      {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
-      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
-      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
-      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
-      {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
-      {showMRR&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
-      {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
-      {showChangelog&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
-      {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowAIInsights(false)}/>}
-      {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowPredictiveAI(false)}/>}
-      {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowAIReports(false)}/>}
-      {showWorkforceAnalytics&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
-      {showEnterpriseRBAC&&<EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}
-      {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
-      {showSecurityCenter&&<SecurityCenter profile={profile} cs={cs} lang={lang} onClose={()=>setShowSecurityCenter(false)}/>}
-      {showFeatureFlags&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
-      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
-      {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>{setShowOnboard(false);}}/>}
-      {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
-    </>
-  );
-
   return(<ErrorBoundary>
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -2443,7 +2385,27 @@ export default function App(){
     }}>
       <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
       <OfflineBanner lang={lang}/>
-      {GlobalModals}
+
+      {/* Modals */}
+      {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang}
+        onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}}
+        onSkip={()=>setShowCalibWizard(false)}/>}
+      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
+      {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
+      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(plan);setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
+      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true}));addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
+      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
+      {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
+      {/* ── Merged from v13 & v18 ───────────────────────────────── */}
+      {showMRR&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
+      {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
+      {showChangelog&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
+      {/* AI Intelligence Layer */}
+      {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowAIInsights(false)}/>}
+      {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowPredictiveAI(false)}/>}
+      {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowAIReports(false)}/>}
+      {showWorkforceAnalytics&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
+      {showEnterpriseRBAC&&<EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}
                   {showAnnualUpsell && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>setShowAnnualUpsell(false)}>
@@ -2510,15 +2472,15 @@ export default function App(){
           </div>
         </div>
       )}
-      
+      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
       {showUsageBilling&&<UsageBilling profile={profile} cs={cs} lang={lang} onClose={()=>setShowUsageBilling(false)}/>}
       {showChurnPrediction&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
-      
-      
-      
+      {showSecurityCenter&&<SecurityCenter token={authToken} user={profile} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)}/>}
+      {showFeatureFlags&&<FeatureFlags token={authToken} onClose={()=>setShowFeatureFlags(false)}/>}
+      {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }
       {showMFASetup&&<MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)}/>}
       {showBillingDashboard&&<BillingDashboard profile={profile} user={user} cs={cs} lang={lang} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}
@@ -2602,7 +2564,7 @@ export default function App(){
           </div>
         </div>
       )}
-      {/* OnboardingWizard rendered at root level */}
+      {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>{setShowOnboard(false);setPage("home");}}/>}
 
       {/* ── LEFT PANEL — stats & history ── */}
       <div style={{
@@ -2826,7 +2788,7 @@ export default function App(){
               if(cameraStatus==="requesting") return pill("#f59e0b",isAr?"جاري الفتح...":"Opening...");
               if(cameraStatus==="denied")     return pill("#ef4444",isAr?"مرفوضة — اضغط سماح":"Denied — Allow camera");
               if(cameraStatus==="no-device")  return pill("#ef4444",isAr?"لا توجد كاميرا":"No camera found");
-              if(cameraStatus==="ready"&&camActive) return pill("#10b981",`${M_?.label||""} · Live`);
+              if(cameraStatus==="ready"&&camActive) return pill("#10b981",`${M_?.label||""} · Live · ${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`);
               return pill("#64748b",isAr?"الكاميرا متوقفة":"Camera off");
             })()}
           </div>
@@ -2950,20 +2912,26 @@ export default function App(){
                 {isAr?"▶ ابدأ التحليل":"▶ Start Analysis"}
               </button>
             : <button onClick={stopCamera} style={{
-                width:"100%",background:"rgba(239,68,68,.08)",color:"#fca5a5",
-                border:"1px solid rgba(239,68,68,.25)",borderRadius:10,
-                padding:"12px 0",fontSize:13,fontWeight:600,cursor:"pointer",
+                width:"100%",
+                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                color:"#fca5a5",
+                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
+                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
+                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
+                letterSpacing:"-.01em",
               }}>
                 {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
               </button>
           }
-          <button onClick={downloadPDF} style={{
-            background:"rgba(59,130,246,.08)",color:"#93c5fd",
-            border:"1px solid rgba(59,130,246,.2)",borderRadius:10,
-            padding:"10px 0",fontSize:12,fontWeight:600,cursor:"pointer",
-          }}>
-            {isAr?"📄 تحميل تقرير PDF":"📄 Download PDF Report"}
-          </button>
+          {(histRef.current?.length>0||(tier==="pro"||tier==="professional"||tier==="elite"||tier==="premium"))&&(
+            <button onClick={downloadPDF} style={{
+              background:"rgba(59,130,246,.08)",color:"#93c5fd",
+              border:"1px solid rgba(59,130,246,.2)",borderRadius:10,
+              padding:"10px 0",fontSize:12,fontWeight:600,cursor:"pointer",
+            }}>
+              {isAr?"📄 تحميل تقرير PDF":"📄 Download PDF Report"}
+            </button>
+          )}
           <button onClick={()=>setMuted(v=>!v)} style={{
             background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#10b981",
             border:`1px solid ${muted?cs.border:"rgba(16,185,129,.25)"}`,
