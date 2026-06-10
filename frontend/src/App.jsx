@@ -1568,17 +1568,20 @@ export default function App(){
   // ── Onboarding Wizard trigger ──────────────────────────────────────
   const handleOnboardComplete = useCallback((onboardProfile) => {
     setShowOnboard(false);
-    if(onboardProfile?.name && user?.uid) {
+    if(user?.uid) {
       updateDoc(doc(db,"users",user.uid),{
-        name: onboardProfile.name,
-        userType: onboardProfile.userType || "individual",
-        goals: onboardProfile.goals || [],
-        onboarding_done: true,
+        name: onboardProfile?.name || "",
+        userType: onboardProfile?.userType || "individual",
+        goals: onboardProfile?.goals || [],
+        onboarding_done: ["completed"],          // FIX: array not boolean — trigger checks .length
         onboarding_completed_at: new Date().toISOString(),
+        setup_complete: true,                    // FIX: prevent re-routing to setup on next login
+        updated_at: serverTimestamp(),
+      }).then(()=>{
+        setProfile(p=>p?({...p,onboarding_done:["completed"],setup_complete:true}):p);
       }).catch(()=>{});
     }
-    setPage("live");
-    setTimeout(()=>startCamera(),300);
+    setPage("home"); // FIX: go to home first, don't force camera
   },[user]);
   const[showBilling,setShowBilling]=useState(false);
   const[rsiData,setRsiData]=useState(null);
@@ -1717,7 +1720,7 @@ export default function App(){
           }
           if(p){
             setProfile(p);
-            if(p.tier&&p.tier!=="standard") setTier(p.tier);
+            if(p.tier) setTier(normalizeTier(p.tier));
             if(p.company_id) setCompanyId(p.company_id);
           }
           // Background loads — never block auth
@@ -2177,7 +2180,11 @@ export default function App(){
             getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
           }).catch(()=>{});
           if(isNew){setPage("setup");return;}
-          setPage("home");
+          // FIX 5: also check setup_complete for existing users interrupted mid-setup
+          getUserProfile(u.uid).then(p=>{
+            if(p&&!p.setup_complete) setPage("setup");
+            else setPage("home");
+          }).catch(()=>setPage("home"));
         }}
       />
     </ErrorBoundary>
