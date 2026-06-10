@@ -69,9 +69,23 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete }) {
         country:  company.country,
         plan:     profile.tier || "professional",
       });
+      // FIX C-03: immediately write company_id to user doc so refresh doesn't lose it
+      if (cid && profile?.uid) {
+        await updateDoc(doc(db, "users", profile.uid), {
+          company_id: cid,
+          company: company.name.trim(),
+          is_org_owner: true,
+          user_type: "hr_admin",
+          updated_at: serverTimestamp(),
+        }).catch(e => console.warn("[CompanyOnboard] user doc patch failed", e));
+      }
       setCid(cid);
       setStep(2);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("[CompanyOnboard] createCompany failed:", e);
+      // Show user-friendly error instead of silent fail
+      alert(lang === "ar" ? "حدث خطأ أثناء إنشاء الشركة، حاول مرة أخرى" : "Failed to create company — please try again");
+    }
     finally { setLoading(false); }
   };
 
@@ -88,15 +102,24 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete }) {
   };
 
   const saveStep3 = async () => {
+    // FIX M-04: guard against null companyId — step 1 must have succeeded
+    if (!companyId) {
+      alert(lang === "ar" ? "لم يتم إنشاء الشركة بعد — عد للخطوة الأولى" : "Company not created yet — please go back to step 1");
+      setStep(1); return;
+    }
     setLoading(true);
     try {
-      if (invites.trim() && companyId) {
+      if (invites.trim()) {
         const emails = invites.split(/[\n,;]/).map(e => e.trim().toLowerCase()).filter(e => e.includes("@"));
-        const employees = emails.map(email => ({ email, name: email.split("@")[0], company_id: companyId }));
-        await bulkInviteEmployees(employees, companyId, profile.uid);
+        if (emails.length > 0) {
+          const employees = emails.map(email => ({ email, name: email.split("@")[0], company_id: companyId }));
+          await bulkInviteEmployees(employees, companyId, profile.uid);
+        }
       }
       setStep(4);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("[CompanyOnboard] bulkInvite failed:", e);
+    }
     finally { setLoading(false); }
   };
 
@@ -279,3 +302,4 @@ export function useCompany(profile) {
 
   return { company, loading };
 }
+
