@@ -1314,7 +1314,7 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
           boxShadow:"0 8px 32px rgba(0,0,0,.18)",overflow:"hidden",
         }}>
           <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${cs.border}`}}>
-            <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{profile?.name||user?.email?.split("@")[0]}</div>
+            <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}</div>
             <div style={{fontSize:10,color:cs.muted,marginTop:2}}>{user?.email}</div>
             {profile?.tier&&<div style={{display:"inline-block",marginTop:5,background:`${tierColor}18`,border:`0.5px solid ${tierColor}40`,borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700,color:tierColor}}>{profile.tier.toUpperCase()}{profile.is_trial?" ⏱":""}</div>}
           </div>
@@ -2695,12 +2695,16 @@ export default function App(){
           {score>0&&(
             <div style={{
               position:"absolute",bottom:8,right:isAr?"auto":8,left:isAr?8:"auto",
-              background:"rgba(2,8,16,.88)",borderRadius:10,
-              padding:"6px 10px",textAlign:"center",
-              border:`1px solid ${sc(score)}40`,
+              background:"rgba(2,8,16,.92)",borderRadius:10,
+              padding:"8px 12px",textAlign:"center",
+              border:`2px solid ${sc(score)}60`,
+              backdropFilter:"blur(8px)",
             }}>
-              <div style={{fontSize:20,fontWeight:900,color:sc(score),lineHeight:1}}>{score}</div>
-              <div style={{fontSize:8,color:cs.muted,marginTop:1}}>/100</div>
+              <div style={{fontSize:28,fontWeight:900,color:sc(score),lineHeight:1}}>{score}</div>
+              <div style={{fontSize:9,color:sc(score),marginTop:2,fontWeight:600,opacity:.7}}>/100</div>
+              <div style={{fontSize:8,color:"rgba(255,255,255,.5)",marginTop:1}}>
+                {score>=80?(isAr?"ممتاز":"Excellent"):score>=60?(isAr?"جيد":"Good"):(isAr?"ضعيف":"Poor")}
+              </div>
             </div>
           )}
         </div>
@@ -2713,7 +2717,7 @@ export default function App(){
               {score ? grade(score,t) : (isAr?"ابدأ الكاميرا":"Start camera to begin")}
             </div>
             <div style={{fontSize:11,color:cs.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-              {profile?.name||user?.email?.split("@")[0]}
+              {profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}
             </div>
             <div style={{fontSize:10,color:cs.muted,marginTop:1}}>
               {isAr?"المسافة المثلى":"Optimal"}: {M_?.optDist[0]}–{M_?.optDist[1]}cm
@@ -2829,62 +2833,42 @@ export default function App(){
           </button>
         </div>
 
-        {/* 4 Action buttons — Calibrate / Analytics / AI Coach / Progress */}
+        {/* Tools — filtered by role + tier */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <div style={{fontSize:9.5,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>
             {isAr?"الأدوات":"Tools"}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <ActionBtn
-              icon="🎯"
-              label={isAr?"معايرة":"Calibrate"}
-              color="#10b981" dimColor="#6ee7b7"
+            <ActionBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="#10b981" dimColor="#6ee7b7"
               onClick={()=>setShowCalibWizard(true)}/>
-            <ActionBtn
-              icon="📊"
-              label={isAr?"التحليلات":"Analytics"}
-              color="#1a56db" dimColor="#93c5fd"
+            <ActionBtn icon="📊" label={isAr?"تحليلاتي":"Analytics"} color="#1a56db" dimColor="#93c5fd"
               onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}/>
-            <ActionBtn
-              icon="🤖"
-              label={isAr?"مدرب AI":"AI Coach"}
-              color="#6366f1" dimColor="#a5b4fc"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
-            <ActionBtn
-              icon="🏆"
-              label={isAr?"التقدم":"Progress"}
-              color="#f59e0b" dimColor="#fbbf24"
+            {(tier==="professional"||tier==="elite"||tier==="business")
+              ? <ActionBtn icon="🤖" label={isAr?"مدرب AI":"AI Coach"} color="#6366f1" dimColor="#a5b4fc"
+                  onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
+              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
+                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
+                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.55,position:"relative"}}>
+                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🤖</span>
+                  <span style={{fontSize:11,color:cs.muted}}>AI Coach</span>
+                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
+                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>PRO</span>
+                </div>
+            }
+            <ActionBtn icon="🏆" label={isAr?"التقدم":"Progress"} color="#f59e0b" dimColor="#fbbf24"
               onClick={()=>setShowGamification(true)}/>
-            <ActionBtn
-              icon="🧠"
-              label={isAr?"رؤى AI":"AI Insights"}
-              color="#0891b2" dimColor="#67e8f9"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
-            <ActionBtn
-              icon="🔮"
-              label={isAr?"التنبؤ":"Predictive"}
-              color="#7c3aed" dimColor="#c4b5fd"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowPredictiveAI(true);}}/>
-            <ActionBtn
-              icon="📊"
-              label={isAr?"التقارير":"Reports"}
-              color="#059669" dimColor="#6ee7b7"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
-            <ActionBtn
-              icon="🏭"
-              label={isAr?"تحليلات QW":"Workforce"}
-              color="#0891b2" dimColor="#67e8f9"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
-            <ActionBtn
-              icon="🔐"
-              label={isAr?"الأمان":"Security"}
-              color="#7c3aed" dimColor="#c4b5fd"
-              onClick={()=>{getAllUsers().then(setAllUsers);setShowEnterpriseRBAC(true);}}/>
-            <ActionBtn
-              icon="🔔"
-              label={isAr?"الإشعارات":"Notifications"}
-              color="#0891b2" dimColor="#67e8f9"
-              onClick={()=>setShowNotificationsHub(true)}/>
+            {(tier==="professional"||tier==="elite"||tier==="business")&&(
+              <ActionBtn icon="📋" label={isAr?"التقارير":"Reports"} color="#059669" dimColor="#6ee7b7"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
+            )}
+            {(isHRAdmin||isAdmin)&&(
+              <ActionBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
+            )}
+            {(tier==="elite"||tier==="business")&&(
+              <ActionBtn icon="🧠" label={isAr?"رؤى AI":"AI Insights"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
+            )}
           </div>
         </div>
 

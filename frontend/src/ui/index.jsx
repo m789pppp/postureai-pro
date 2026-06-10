@@ -949,21 +949,22 @@ export function Ring({ score, size = 78, strokeWidth = 6 }) {
 // ─────────────────────────────────────────────────────────────────
 export function MetRow({ label, value, unit, score: s, cs }) {
   const col = s>=75?C.green:s>=50?C.amber:s>0?C.red:"rgba(148,163,184,.25)";
+  const icon = s>=75?"✅":s>=50?"⚠️":s>0?"❌":"○";
   return (
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-      padding:"7px 0", borderBottom:`1px solid ${C.border}` }}>
-      <span style={{ fontSize:11, color:C.muted }}>{label}</span>
-      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-        <span style={{ fontSize:12, fontWeight:600, color:col }}>
-          {value??"—"}{unit&&value!=null?unit:""}
+    <div style={{ padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ fontSize:11 }}>{icon}</span>
+          <span style={{ fontSize:11.5, color:s>0?C.text:C.muted, fontWeight:s>0?500:400 }}>{label}</span>
+        </div>
+        <span style={{ fontSize:12, fontWeight:700, color:col }}>
+          {value!=null?value:"—"}{unit&&value!=null?unit:""}
         </span>
-        {s>0&&(
-          <div style={{ width:32, height:3, borderRadius:99,
-            background:"rgba(255,255,255,.06)", overflow:"hidden" }}>
-            <div style={{ height:"100%", width:`${Math.min(100,s)}%`,
-              background:col, borderRadius:99, transition:"width .6s ease" }}/>
-          </div>
-        )}
+      </div>
+      <div style={{ height:4, borderRadius:99, background:"rgba(255,255,255,.06)", overflow:"hidden" }}>
+        <div style={{ height:"100%", width:s>0?`${Math.min(100,s)}%`:"0%",
+          background:`linear-gradient(90deg,${col}88,${col})`,
+          borderRadius:99, transition:"width .5s cubic-bezier(.4,0,.2,1)" }}/>
       </div>
     </div>
   );

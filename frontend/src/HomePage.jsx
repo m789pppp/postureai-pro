@@ -186,7 +186,7 @@ function DashIndividual({ profile, userSessions, tier, cs, isAr, setPage, startC
             <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
             <div>
               <div style={{ fontSize:18, fontWeight:800, color:cs.text, lineHeight:1.1 }}>
-                {isAr?`أهلاً, ${profile?.name?.split(" ")[0]||""}`:`Hey, ${profile?.name?.split(" ")[0]||""}!`}
+                {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || profile?.email?.split("@")[0] || ""}!`:`Hey, ${profile?.name?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
               </div>
               <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:3 }}>
                 <TierBadge tier={tier}/>
@@ -335,7 +335,7 @@ function DashEmployee({ profile, userSessions, allUsers, cs, isAr, setPage, star
             <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
             <div>
               <div style={{ fontSize:18, fontWeight:800, color:cs.text }}>
-                {isAr?`أهلاً, ${profile?.name?.split(" ")[0]||""}`:`Hey, ${profile?.name?.split(" ")[0]||""}!`}
+                {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || profile?.email?.split("@")[0] || ""}!`:`Hey, ${profile?.name?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
               </div>
               <div style={{ fontSize:11, color:"#60a5fa", fontWeight:500, marginTop:2 }}>
                 {profile?.department||profile?.company||(isAr?"موظف":"Employee")}
@@ -691,18 +691,19 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
       {/* User header */}
       <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14,
         padding:"20px 22px", display:"flex", gap:16, alignItems:"center" }}>
-        <div style={{ position:"relative", flexShrink:0 }}>
-          {profile?.photoURL
-            ? <img src={profile.photoURL} alt="avatar"
-                style={{ width:56, height:56, borderRadius:"50%",
-                  objectFit:"cover", border:"2px solid rgba(255,255,255,.1)" }}/>
-            : <Avatar name={profile?.name||profile?.email} size={56}/>}
-          <label title={isAr?"تغيير الصورة":"Change photo"}
-            style={{ position:"absolute", bottom:-2, right:-2, width:22, height:22,
-              background:"#1a56db", borderRadius:"50%", cursor:"pointer",
-              display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:11, border:"2px solid rgba(4,9,20,1)" }}>
-            📷
+        <div style={{ flexShrink:0, display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+          <div style={{ position:"relative" }}>
+            {profile?.photoURL
+              ? <img src={profile.photoURL} alt="avatar"
+                  style={{ width:72, height:72, borderRadius:"50%",
+                    objectFit:"cover", border:"2px solid rgba(255,255,255,.1)" }}/>
+              : <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={72}/>}
+            <label title={isAr?"تغيير الصورة":"Change photo"}
+              style={{ position:"absolute", bottom:0, right:0, width:24, height:24,
+                background:"#1a56db", borderRadius:"50%", cursor:"pointer",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:12, border:"2px solid rgba(4,9,20,1)", boxShadow:"0 2px 8px rgba(0,0,0,.4)" }}>
+              📷
             <input type="file" accept="image/*" style={{ display:"none" }}
               onChange={async e=>{
                 const file=e.target.files[0]; if(!file) return;
@@ -729,6 +730,11 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 img.src=url;
               }}/>
           </label>
+          </div>
+          <span style={{ fontSize:10, color:"#3b82f6", cursor:"pointer", fontWeight:500 }}
+            onClick={()=>document.querySelector('input[type=file]')?.click()}>
+            {isAr?"تغيير الصورة":"Change photo"}
+          </span>
         </div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:17, fontWeight:800, color:cs.text }}>{profile?.name||"—"}</div>
@@ -774,13 +780,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </div>
               {inp(name, setName, isAr?"أدخل اسمك الكامل":"Enter full name")}
             </div>
-            <div>
-              <div style={{ fontSize:11, color:cs.muted, fontWeight:600, marginBottom:6,
-                textTransform:"uppercase", letterSpacing:".06em" }}>
-                {isAr?"الشركة":"Company"}
-              </div>
-              {inp(company, setCompany, isAr?"اسم الشركة (اختياري)":"Company name (optional)")}
-            </div>
+            {/* Company field hidden for personal accounts - managed by HR admin */}
             <div>
               <div style={{ fontSize:11, color:cs.muted, fontWeight:600, marginBottom:6,
                 textTransform:"uppercase", letterSpacing:".06em" }}>
