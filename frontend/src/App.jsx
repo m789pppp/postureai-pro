@@ -114,16 +114,6 @@ const TIERS = {
   }
 };
 
-// ── Tier ID normaliser — bridges personal plan IDs to server tier keys (FIX H-01) ──
-const TIER_NORMALIZE = {
-  // personal plan ids → tier key
-  basic: "standard", pro: "professional", premium: "elite",
-  personal_basic: "standard", personal_pro: "professional", personal_elite: "elite",
-  // already canonical
-  standard: "standard", professional: "professional", elite: "elite",
-};
-const normalizeTier = (t) => TIER_NORMALIZE[t] || t || "standard";
-
 // ── Payment Methods — Automatic PayMob only ───────────────────────
 const PAY_METHODS = [
   {id:"visa_card",   name:"Visa / Mastercard", nameAr:"فيزا / ماستركارد",
@@ -1324,7 +1314,7 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
           boxShadow:"0 8px 32px rgba(0,0,0,.18)",overflow:"hidden",
         }}>
           <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${cs.border}`}}>
-            <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{profile?.name||user?.email?.split("@")[0]}</div>
+            <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}</div>
             <div style={{fontSize:10,color:cs.muted,marginTop:2}}>{user?.email}</div>
             {profile?.tier&&<div style={{display:"inline-block",marginTop:5,background:`${tierColor}18`,border:`0.5px solid ${tierColor}40`,borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700,color:tierColor}}>{profile.tier.toUpperCase()}{profile.is_trial?" ⏱":""}</div>}
           </div>
@@ -1490,6 +1480,13 @@ export default function App(){
   const toast = addToast; // alias
   const isOnline = useOnline();
   const[showOnboard,setShowOnboard]=useState(false);
+  // ── Trigger onboarding for new users ──────────────────────────
+  useEffect(()=>{
+    if(user && profile && !profile.onboarding_done && page==="home"){
+      const timer = setTimeout(()=>setShowOnboard(true), 800);
+      return ()=>clearTimeout(timer);
+    }
+  },[user, profile?.onboarding_done, page]);
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
@@ -1623,7 +1620,7 @@ export default function App(){
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
 
-  const T_=tier?(TIERS[normalizeTier(tier)]||PERSONAL_PLANS[tier]||PERSONAL_TIERS.find(p=>p.id===tier)||null):null; // FIX H-01
+  const T_=tier?(TIERS[tier]||PERSONAL_PLANS[tier]||PERSONAL_TIERS.find(p=>p.id===tier)||null):null;
   // Normalize T_ so live dashboard always has .name and .color
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
   const MC={
@@ -1667,23 +1664,13 @@ export default function App(){
         }
         setUser(u);
         setProfile(p);
-        if (p?.tier) setTier(normalizeTier(p.tier));
+        if (p?.tier && p.tier !== "standard") setTier(p.tier);
         if (p?.company_id) setCompanyId(p.company_id);
         getUserSessions(u.uid).then(setUserSessions).catch(() => {});
-        setPage(p && !p.setup_complete ? "setup" : "home");
+        setPage("home");
         setAuthChecked(true);
       }
-    }).catch((redirectErr) => {
-      // FIX H-05: surface redirect errors to user instead of swallowing silently
-      if (redirectErr?.code && redirectErr.code !== "auth/null-user") {
-        const msg = redirectErr.code === "auth/account-exists-with-different-credential"
-          ? (lang==="ar" ? "هذا البريد مسجل بطريقة تسجيل مختلفة" : "This email is linked to a different sign-in method")
-          : (lang==="ar" ? "حدث خطأ في تسجيل الدخول بجوجل" : "Google sign-in failed — please try again");
-        console.warn("[GoogleRedirect]", redirectErr.code);
-        // Store error to show after auth state settles
-        sessionStorage.setItem("_redirect_err", msg);
-      }
-    });
+    }).catch(() => {});
 
     const authTimeout=setTimeout(()=>{
       setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
@@ -1734,13 +1721,9 @@ export default function App(){
             }).catch(()=>{});
           const params=new URLSearchParams(window.location.search);
           // Check for pending invite after login
-          // FIX M-06: check both sessionStorage AND URL param for invite token
-          const pendingInvite=sessionStorage.getItem("pending_invite")||params.get("invite");
-          if(pendingInvite){
-            window.__invite_token=pendingInvite;
-            sessionStorage.setItem("pending_invite",pendingInvite);
-            setPage("invite");
-          } else if(p && !p.setup_complete) setPage("setup");
+          const pendingInvite=sessionStorage.getItem("pending_invite");
+          if(pendingInvite){window.__invite_token=pendingInvite;setPage("invite");}
+          else if(p && !p.setup_complete) setPage("setup");
           else setPage(params.get("plan")&&TIERS[params.get("plan")]?"pricing":"home");
         } else {
           setPage("landing");
@@ -1859,7 +1842,7 @@ export default function App(){
         }
       }catch(e){}
     }
-    if(totalRef.current%4===0&&canvRef.current){
+    if(totalRef.current%30===0&&canvRef.current){  // backend every 30 frames (~1/sec) — not real-time display
       const c=canvRef.current,v2=vidRef.current;
       if(v2&&v2.readyState>=2){c.width=v2.videoWidth;c.height=v2.videoHeight;c.getContext("2d").drawImage(v2,0,0);}
       AnalysisAPI.analyze(c.toDataURL("image/jpeg",.72),mode,tier,lang,sessionId,null,calibData)
@@ -1952,6 +1935,8 @@ export default function App(){
     }
   }
 
+  const[sessionResult,setSessionResult]=useState(null);
+
   async function stopCamera(){
     if(streamRef.current){
       streamRef.current.getTracks().forEach(x=>{x.stop(); x.enabled=false;});
@@ -1961,20 +1946,39 @@ export default function App(){
     if(rafRef.current)cancelAnimationFrame(rafRef.current);
     if(ovRef.current)ovRef.current.getContext("2d").clearRect(0,0,ovRef.current.width||0,ovRef.current.height||0);
     setCamActive(false);
-    if(user&&histRef.current.length>0){
+
+    if(histRef.current.length>0){
       const la=lastAnalRef.current||{};
       const avg=Math.round(histRef.current.reduce((a,b)=>a+b,0)/histRef.current.length);
-      await saveSession(user.uid,{
-        session_id:sessionId,mode,tier,avg_score:avg,
-        good_pct:totalRef.current?Math.round(goodRef.current/totalRef.current*100):0,
-        duration_s:sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0,
+      const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
+      const gPct=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
+
+      // Build session result for display
+      const result={
+        avg_score:avg,
+        duration_s:dur,
+        good_pct:gPct,
         alerts_count:acRef.current.total,
-        score_history:histRef.current.slice(-20),
-        metrics:la.metrics||{}
-      });
-      addToast("Session saved!","success");
+        frames:totalRef.current,
+        top_metric: la.metrics ? Object.entries(la.metrics)
+          .filter(([,v])=>v.score<75)
+          .sort(([,a],[,b])=>a.score-b.score)[0] : null,
+        grade: avg>=85?"Excellent":avg>=70?"Good":avg>=55?"Fair":"Needs work",
+        gradeAr: avg>=85?"ممتاز":avg>=70?"جيد":avg>=55?"مقبول":"يحتاج تحسين",
+        color: avg>=75?"#10b981":avg>=50?"#f59e0b":"#ef4444",
+      };
+      setSessionResult(result);
+
+      if(user){
+        saveSession(user.uid,{
+          session_id:sessionId,mode,tier,avg_score:avg,
+          good_pct:gPct,duration_s:dur,
+          alerts_count:acRef.current.total,
+          score_history:histRef.current.slice(-20),
+          metrics:la.metrics||{}
+        }).catch(()=>{});
+      }
     }
-    setAlertMsg({text:"Session saved — click Download PDF",type:"info"});
   }
 
   async function downloadPDF(){
@@ -2025,7 +2029,7 @@ export default function App(){
   const avg=history.length?Math.round(history.reduce((a,b)=>a+b,0)/history.length):0;
   const distCm=analysis?.distCm||(analysis?.metrics?.distance?.value)||null;
   const isAdmin=profile?.is_admin===true; // SECURITY: Firestore field only — no email comparison
-  const isHRAdmin=(HR_EMAILS||[]).includes(user?.email||"")||isAdmin||!!profile?.is_org_owner||!!profile?.company_id||profile?.user_type==="hr_admin"; // FIX H-02
+  const isHRAdmin=(HR_EMAILS||[]).includes(user?.email||"")||isAdmin;
 
   // Shared props
   const shared={cs,t,darkMode,setDarkMode,lang,setLang,addToast};
@@ -2200,7 +2204,7 @@ export default function App(){
                 {i>0&&<div style={{width:40,height:1.5,background:acctType?cs.blue:cs.border,margin:"0 4px",transition:"background .3s"}}/>}
                 <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                   <div style={{width:26,height:26,borderRadius:"50%",border:`2px solid ${(i===0&&!acctType)||(i===1&&acctType)?(acctType&&i===1&&devicePref)?cs.blue:cs.blue:(cs.border)}`,background:(i===0&&acctType)||(i===1&&devicePref)?"rgba(26,86,219,.15)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:(i===0&&acctType)||(i===1&&devicePref)?cs.blue:(!acctType&&i===0)?cs.blue:cs.muted,transition:"all .3s"}}>
-                    {(i===0&&acctType&&devicePref)||(i===1&&devicePref)?"✓":s.n}
+                    {(i===0&&acctType&&i<(acctType?1:0))||(i===1&&devicePref)?"✓":s.n}
                   </div>
                   <div style={{fontSize:9.5,color:(i===0&&!acctType)||(i===1&&acctType)?cs.text:cs.muted,fontWeight:(i===0&&!acctType)||(i===1&&acctType)?600:400,transition:"all .3s"}}>{s.lbl}</div>
                 </div>
@@ -2264,12 +2268,7 @@ export default function App(){
                     setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", is_org_owner: acctType==="company"}));
                   }catch(e){ console.warn("setup save failed",e); }
                 }
-                if(acctType==="company"){
-                  setShowCompanyOnboard(true);
-                } else {
-                  // FIX H-04: trigger onboarding wizard for individual users
-                  setTimeout(()=>setShowOnboard(true), 400);
-                }
+                if(acctType==="company") setShowCompanyOnboard(true);
                 setPage("home");
               }}
                 style={{width:"100%",padding:"13px",background:devicePref?cs.blue:"rgba(148,163,184,.2)",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:devicePref?"pointer":"not-allowed",transition:"all .2s"}}>
@@ -2281,7 +2280,7 @@ export default function App(){
             </>
           )}
           <div style={{textAlign:"center",marginTop:18,fontSize:10,color:cs.muted}}>
-            <button onClick={()=>{ logOut(); /* FIX L-05: onAuthStateChanged handles navigation — no race */ }} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:10}}>{t.signOut}</button>
+            <button onClick={()=>{logOut();setUser(null);setProfile(null);setPage("landing");}} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:10}}>{t.signOut}</button>
           </div>
         </div>
       </div>
@@ -2491,6 +2490,80 @@ export default function App(){
       {showMultiTenant&&<MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/>}
       {showAuditSystem&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
       {showEnterpriseAdmin&&<EnterpriseAdminTools profile={profile} cs={cs} lang={lang} onClose={()=>setShowEnterpriseAdmin(false)}/>}
+
+      {/* ── Session Result Modal ── */}
+      {sessionResult&&(
+        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.82)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"rgba(8,14,28,.98)",border:`2px solid ${sessionResult.color}30`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+            {/* Score ring */}
+            <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>
+              <svg width="130" height="130" style={{transform:"rotate(-90deg)"}}>
+                <circle cx="65" cy="65" r="55" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="9"/>
+                <circle cx="65" cy="65" r="55" fill="none" stroke={sessionResult.color} strokeWidth="9"
+                  strokeDasharray={`${(sessionResult.avg_score/100)*345.6} 345.6`} strokeLinecap="round"/>
+              </svg>
+              <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                <div style={{fontSize:36,fontWeight:900,color:sessionResult.color,lineHeight:1}}>{sessionResult.avg_score}</div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,.4)",fontWeight:600}}>/ 100</div>
+              </div>
+            </div>
+
+            {/* Grade */}
+            <div style={{fontSize:22,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
+              {isAr?sessionResult.gradeAr:sessionResult.grade}
+            </div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginBottom:24}}>
+              {isAr?"متوسط وضعيتك في هذه الجلسة":"Your average posture score this session"}
+            </div>
+
+            {/* Stats row */}
+            <div style={{display:"flex",gap:12,marginBottom:24}}>
+              {[
+                {label:isAr?"مدة الجلسة":"Duration", value:`${Math.floor(sessionResult.duration_s/60)}:${String(sessionResult.duration_s%60).padStart(2,"0")}`},
+                {label:isAr?"وضعية جيدة":"Good posture", value:`${sessionResult.good_pct}%`},
+                {label:isAr?"التنبيهات":"Alerts", value:sessionResult.alerts_count},
+              ].map((s,i)=>(
+                <div key={i} style={{flex:1,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,padding:"10px 8px"}}>
+                  <div style={{fontSize:16,fontWeight:800,color:"#f0f6ff"}}>{s.value}</div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginTop:2}}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Top issue */}
+            {sessionResult.top_metric&&(
+              <div style={{background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,textAlign:"left"}}>
+                <div style={{fontSize:11,color:"#f59e0b",fontWeight:700,marginBottom:3}}>
+                  {isAr?"أبرز مشكلة":"Top issue to fix"}
+                </div>
+                <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
+                  {sessionResult.top_metric[1]?.label} — score {sessionResult.top_metric[1]?.score}/100
+                </div>
+              </div>
+            )}
+
+            {/* CTAs */}
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <button onClick={()=>{setSessionResult(null);setPage("live");setTimeout(()=>startCamera(),300);}}
+                style={{padding:"12px",background:`linear-gradient(135deg,#1a56db,#0891b2)`,color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                {isAr?"▶ جلسة جديدة":"▶ New Session"}
+              </button>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>{setSessionResult(null);setPage("home");}}
+                  style={{flex:1,padding:"10px",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  {isAr?"لوحة التحكم":"Dashboard"}
+                </button>
+                {(tier==="pro"||tier==="professional"||tier==="elite"||tier==="premium")&&(
+                  <button onClick={()=>{setSessionResult(null);downloadPDF();}}
+                    style={{flex:1,padding:"10px",background:"rgba(99,102,241,.15)",color:"#a5b4fc",border:"1px solid rgba(99,102,241,.3)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                    {isAr?"تحميل PDF":"Download PDF"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>{setShowOnboard(false);setPage("home");}}/>}
 
       {/* ── LEFT PANEL — stats & history ── */}
@@ -2724,12 +2797,16 @@ export default function App(){
           {score>0&&(
             <div style={{
               position:"absolute",bottom:8,right:isAr?"auto":8,left:isAr?8:"auto",
-              background:"rgba(2,8,16,.88)",borderRadius:10,
-              padding:"6px 10px",textAlign:"center",
-              border:`1px solid ${sc(score)}40`,
+              background:"rgba(2,8,16,.92)",borderRadius:10,
+              padding:"8px 12px",textAlign:"center",
+              border:`2px solid ${sc(score)}60`,
+              backdropFilter:"blur(8px)",
             }}>
-              <div style={{fontSize:20,fontWeight:900,color:sc(score),lineHeight:1}}>{score}</div>
-              <div style={{fontSize:8,color:cs.muted,marginTop:1}}>/100</div>
+              <div style={{fontSize:28,fontWeight:900,color:sc(score),lineHeight:1}}>{score}</div>
+              <div style={{fontSize:9,color:sc(score),marginTop:2,fontWeight:600,opacity:.7}}>/100</div>
+              <div style={{fontSize:8,color:"rgba(255,255,255,.5)",marginTop:1}}>
+                {score>=80?(isAr?"ممتاز":"Excellent"):score>=60?(isAr?"جيد":"Good"):(isAr?"ضعيف":"Poor")}
+              </div>
             </div>
           )}
         </div>
@@ -2742,7 +2819,7 @@ export default function App(){
               {score ? grade(score,t) : (isAr?"ابدأ الكاميرا":"Start camera to begin")}
             </div>
             <div style={{fontSize:11,color:cs.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-              {profile?.name||user?.email?.split("@")[0]}
+              {profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}
             </div>
             <div style={{fontSize:10,color:cs.muted,marginTop:1}}>
               {isAr?"المسافة المثلى":"Optimal"}: {M_?.optDist[0]}–{M_?.optDist[1]}cm
@@ -2858,62 +2935,42 @@ export default function App(){
           </button>
         </div>
 
-        {/* 4 Action buttons — Calibrate / Analytics / AI Coach / Progress */}
+        {/* Tools — filtered by role + tier */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <div style={{fontSize:9.5,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>
             {isAr?"الأدوات":"Tools"}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <ActionBtn
-              icon="🎯"
-              label={isAr?"معايرة":"Calibrate"}
-              color="#10b981" dimColor="#6ee7b7"
+            <ActionBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="#10b981" dimColor="#6ee7b7"
               onClick={()=>setShowCalibWizard(true)}/>
-            <ActionBtn
-              icon="📊"
-              label={isAr?"التحليلات":"Analytics"}
-              color="#1a56db" dimColor="#93c5fd"
+            <ActionBtn icon="📊" label={isAr?"تحليلاتي":"Analytics"} color="#1a56db" dimColor="#93c5fd"
               onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}/>
-            <ActionBtn
-              icon="🤖"
-              label={isAr?"مدرب AI":"AI Coach"}
-              color="#6366f1" dimColor="#a5b4fc"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
-            <ActionBtn
-              icon="🏆"
-              label={isAr?"التقدم":"Progress"}
-              color="#f59e0b" dimColor="#fbbf24"
+            {(tier==="professional"||tier==="elite"||tier==="business")
+              ? <ActionBtn icon="🤖" label={isAr?"مدرب AI":"AI Coach"} color="#6366f1" dimColor="#a5b4fc"
+                  onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
+              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
+                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
+                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.55,position:"relative"}}>
+                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🤖</span>
+                  <span style={{fontSize:11,color:cs.muted}}>AI Coach</span>
+                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
+                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>PRO</span>
+                </div>
+            }
+            <ActionBtn icon="🏆" label={isAr?"التقدم":"Progress"} color="#f59e0b" dimColor="#fbbf24"
               onClick={()=>setShowGamification(true)}/>
-            <ActionBtn
-              icon="🧠"
-              label={isAr?"رؤى AI":"AI Insights"}
-              color="#0891b2" dimColor="#67e8f9"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
-            <ActionBtn
-              icon="🔮"
-              label={isAr?"التنبؤ":"Predictive"}
-              color="#7c3aed" dimColor="#c4b5fd"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowPredictiveAI(true);}}/>
-            <ActionBtn
-              icon="📊"
-              label={isAr?"التقارير":"Reports"}
-              color="#059669" dimColor="#6ee7b7"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
-            <ActionBtn
-              icon="🏭"
-              label={isAr?"تحليلات QW":"Workforce"}
-              color="#0891b2" dimColor="#67e8f9"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
-            <ActionBtn
-              icon="🔐"
-              label={isAr?"الأمان":"Security"}
-              color="#7c3aed" dimColor="#c4b5fd"
-              onClick={()=>{getAllUsers().then(setAllUsers);setShowEnterpriseRBAC(true);}}/>
-            <ActionBtn
-              icon="🔔"
-              label={isAr?"الإشعارات":"Notifications"}
-              color="#0891b2" dimColor="#67e8f9"
-              onClick={()=>setShowNotificationsHub(true)}/>
+            {(tier==="professional"||tier==="elite"||tier==="business")&&(
+              <ActionBtn icon="📋" label={isAr?"التقارير":"Reports"} color="#059669" dimColor="#6ee7b7"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
+            )}
+            {(isHRAdmin||isAdmin)&&(
+              <ActionBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
+            )}
+            {(tier==="elite"||tier==="business")&&(
+              <ActionBtn icon="🧠" label={isAr?"رؤى AI":"AI Insights"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
+            )}
           </div>
         </div>
 
