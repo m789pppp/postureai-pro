@@ -1324,50 +1324,99 @@ eye_c  = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
 prof_c = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
 
 def analyze_front_cascade(image, mode, out):
-    _ensure_models()  # lazy-load MediaPipe on first call
+    """
+    Cascade fallback (OpenCV Haar) — uses SAME score_m thresholds and weights
+    as analyze_front() so score is consistent regardless of which engine runs.
+    Lower confidence (72) but same scoring formula.
+    """
+    _ensure_models()
     h, w = image.shape[:2]
-    gray = cv2.createCLAHE(2.5,(8,8)).apply(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
-    faces = face_c.detectMultiScale(gray, 1.08, 7, minSize=(50,50))
+    gray = cv2.createCLAHE(2.5, (8, 8)).apply(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
+    faces = face_c.detectMultiScale(gray, 1.08, 7, minSize=(50, 50))
     if not len(faces):
-        faces = face_c.detectMultiScale(gray, 1.14, 5, minSize=(35,35))
+        faces = face_c.detectMultiScale(gray, 1.14, 5, minSize=(35, 35))
     if not len(faces):
         out["engine"] = "no_detection"; return out
-    fx, fy, fw, fh = max(faces, key=lambda f: f[2]*f[3])
-    fcx, fcy = fx+fw//2, fy+fh//2
-    out["detected"] = True; out["engine"] = "cascade_fallback"
-    roi  = gray[fy:fy+int(fh*.55), fx:fx+fw]
-    eyes = eye_c.detectMultiScale(roi, 1.05, 4, minSize=(14,14))
-    dist_cm = round((14.0*600*(w/640))/fw, 1)
+
+    fx, fy, fw, fh = max(faces, key=lambda f: f[2] * f[3])
+    fcx, fcy       = fx + fw // 2, fy + fh // 2
+    out["detected"] = True
+    out["engine"]   = "cascade_fallback"
+
+    # ── Distance via IPD (face width fallback) ────────────────────
+    roi  = gray[fy:fy + int(fh * .55), fx:fx + fw]
+    eyes = eye_c.detectMultiScale(roi, 1.05, 4, minSize=(14, 14))
+    dist_cm = round((14.0 * 600 * (w / 640)) / max(fw, 1), 1)
     le = re = None
     if len(eyes) >= 2:
-        es = sorted(eyes, key=lambda e: e[0])
-        le = (fx+es[0][0]+es[0][2]//2, fy+es[0][1]+es[0][3]//2)
-        re = (fx+es[-1][0]+es[-1][2]//2, fy+es[-1][1]+es[-1][3]//2)
+        es  = sorted(eyes, key=lambda e: e[0])
+        le  = (fx + es[0][0]  + es[0][2]  // 2, fy + es[0][1]  + es[0][3]  // 2)
+        re  = (fx + es[-1][0] + es[-1][2] // 2, fy + es[-1][1] + es[-1][3] // 2)
         ipd = math.dist(le, re)
-        if ipd > 8: dist_cm = round((6.3 * 630*(w/640)) / ipd, 1)
-    lo, hi = (50,80) if mode=="laptop" else (60,90)
-    dist_sc = 100 if lo<=dist_cm<=hi else 65 if (lo-12)<=dist_cm<=(hi+18) else 28
+        if ipd > 8:
+            dist_cm = round((6.3 * 630 * (w / 640)) / ipd, 1)
+    dist_cm = max(20, min(150, dist_cm))
+
+    lo, hi = (50, 80) if mode == "laptop" else (60, 90)
+    # ── SAME dist_sc logic as analyze_front ──────────────────────
+    if   lo <= dist_cm <= hi:                                dist_sc = 100
+    elif (lo - 8)  <= dist_cm <= (hi + 12):                 dist_sc = 80
+    elif (lo - 16) <= dist_cm <= (hi + 20):                 dist_sc = 55
+    else:                                                    dist_sc = 30
+
+    # ── Head tilt from eye positions (same threshold as analyze_front) ──
     ht = 0.0
-    if le and re: ht = abs(math.degrees(math.atan2(re[1]-le[1], re[0]-le[0])))
-    nd = max(0, fcy/h - 0.34)*100
-    ar = (fw*fh)/(w*h)*100
-    sc1 = score_m(ht, 0, 4, 12); sc2 = score_m(nd, 0, 4, 18); sc3 = score_m(max(0,ar-14)*2, 0, 5, 20)
-    overall = max(0, min(100, int(sc1*.25+sc2*.25+dist_sc*.30+sc3*.20)))
-    out["score"] = overall; out["confidence"] = 72
-    out["metrics"] = {
-        "head_tilt":       {"value":round(ht,1), "score":sc1,    "unit":"°", "label":"Head tilt"},
-        "neck_lean":       {"value":round(nd,1), "score":sc2,    "unit":"°", "label":"Neck lean"},
-        "screen_distance": {"value":dist_cm,     "score":dist_sc,"unit":"cm","label":"Screen distance"},
-        "forward_lean":    {"value":round(ar,1), "score":sc3,    "unit":"%", "label":"Forward lean"},
+    if le and re:
+        ht = abs(math.degrees(math.atan2(re[1] - le[1], re[0] - le[0])))
+    tilt_sc = score_m(ht, 0, 3, 10)  # same as analyze_front
+
+    # ── Neck lean proxy: face center Y relative to frame ──────────
+    # fcy/h: face high in frame (~0.15) = forward lean; neutral ~0.30–0.38
+    neck_proxy = max(0.0, (fcy / h) - 0.30) * 80   # maps 0–0.25 → 0–20 degrees
+    neck_proxy = min(neck_proxy, 35.0)
+    neck_sc    = score_m(neck_proxy, 0, 7, 20)      # same thresholds as analyze_front
+
+    # ── Forward lean proxy: face area relative to frame ──────────
+    face_area_pct = (fw * fh) / (w * h) * 100
+    # neutral face area ~8–14%. > 18% = too close/leaning
+    forward_proxy = max(0.0, face_area_pct - 11) * 3
+    forward_sc    = score_m(forward_proxy, 0, 5, 18)
+
+    # ── Overall — SAME weights as analyze_front ───────────────────
+    # neck.28 tilt.14 dist.18 forward.11 → remaining=0.29 → baseline fill
+    score_val  = neck_sc * 0.28 + tilt_sc * 0.14 + dist_sc * 0.18 + forward_sc * 0.11
+    remaining  = 1.0 - (0.28 + 0.14 + 0.18 + 0.11)   # 0.29
+    score_val += 72 * remaining                         # same baseline as analyze_front
+    overall    = max(0, min(100, int(round(score_val))))
+
+    out["score"]      = overall
+    out["confidence"] = 68   # lower than MediaPipe (82+) to signal fallback quality
+    out["metrics"]    = {
+        "head_tilt":       {"value": round(ht, 1),           "score": tilt_sc,    "unit": "°",  "label": "Head tilt"},
+        "neck_lean":       {"value": round(neck_proxy, 1),   "score": neck_sc,    "unit": "°",  "label": "Neck lean (est.)"},
+        "screen_distance": {"value": dist_cm,                "score": dist_sc,    "unit": "cm", "label": "Screen distance"},
+        "forward_lean":    {"value": round(forward_proxy,1), "score": forward_sc, "unit": "°",  "label": "Forward lean (est.)"},
     }
-    if ht>8: out["alerts"].append(f"Head tilting {round(ht,1)}° — level your head")
-    if dist_cm<lo: out["alerts"].append(f"Too close ({round(dist_cm)}cm) — move to {lo}–{hi}cm")
-    if dist_cm>hi: out["alerts"].append(f"Too far ({round(dist_cm)}cm) — move to {lo}–{hi}cm")
-    g = "Good" if overall>=70 else "Fair" if overall>=50 else "Poor"
-    out["recommendations"] = [f"{g} posture — {'maintain' if overall>=70 else 'correct position now'}",
-                               f"Screen distance {round(dist_cm)}cm (ideal {lo}–{hi}cm)",
-                               "Keep ears above shoulders, chin parallel to floor"]
-    out["landmarks"] = [{"name":"face","x":round(fcx/w,4),"y":round(fcy/h,4)}]
+
+    # Alerts — same thresholds as analyze_front
+    if ht > 10:
+        out["alerts"].append(f"Head tilting {round(ht,1)}° — level your head")
+    if dist_cm < lo - 10:
+        out["alerts"].append(f"⚠️ Very close to screen ({round(dist_cm)}cm) — move back to {lo}–{hi}cm")
+    elif dist_cm < lo:
+        out["alerts"].append(f"Too close to screen ({round(dist_cm)}cm) — move back to {lo}–{hi}cm")
+    elif dist_cm > hi + 15:
+        out["alerts"].append(f"Too far from screen ({round(dist_cm)}cm) — ideal is {lo}–{hi}cm")
+    if neck_proxy > 20:
+        out["alerts"].append(f"Forward head detected — raise monitor to eye level")
+
+    grade = "Good" if overall >= 70 else "Fair" if overall >= 55 else "Poor"
+    out["recommendations"] = [
+        f"{grade} posture estimate (limited precision — ensure good lighting for full analysis)",
+        f"Screen distance ~{round(dist_cm)}cm (ideal {lo}–{hi}cm)",
+        "Keep ears directly above shoulders, chin parallel to floor",
+    ]
+    out["landmarks"] = [{"name": "face", "x": round(fcx / w, 4), "y": round(fcy / h, 4)}]
     return out
 
 def analyze_side_cascade(image, out):
@@ -7668,6 +7717,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
