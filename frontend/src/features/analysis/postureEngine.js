@@ -41,10 +41,13 @@ export function angle3pt(a, b, c) {
 }
 
 // ── Score formula ─────────────────────────────────────────────────
+// scoreMetric — mirrors backend score_m() exactly (same formula, same constants)
+// d<=ok: 100→75 | d<=bad: 75→30 | d>bad: 30→0
+// Any change here MUST be mirrored in backend.py score_m()
 export function scoreMetric(v, ideal, ok, bad) {
   const d = Math.abs(v - ideal);
   if (d <= ok)  return Math.max(0, Math.round(100 - (d / Math.max(ok, 0.1)) * 25));
-  if (d <= bad) return Math.max(0, Math.round(75 - ((d - ok) / Math.max(bad - ok, 0.1)) * 45));
+  if (d <= bad) return Math.max(0, Math.round(75  - ((d - ok) / Math.max(bad - ok, 0.1)) * 45));
   return Math.max(0, Math.round(30 - (d - bad) * 1.8));
 }
 
@@ -133,27 +136,26 @@ function estimateDistanceCm(lms, W, H) {
 // ── STRICT THRESHOLDS ─────────────────────────────────────────────
 // ok  = deviation where score stays near 100 (tight green zone)
 // bad = deviation where score hits ~30 (red zone begins)
+// ── THRESHOLDS — synced exactly with backend.py ────────────────────
+// Any change here MUST be mirrored in backend.py score_m calls
 const T = {
-  // Front analysis
-  neckLean:  { ok: 5,  bad: 15 },   // was ok:9 bad:26 — now much tighter
-  headTilt:  { ok: 3,  bad: 8  },   // was ok:3 bad:10 — slightly tighter
-  shTilt:    { ok: 2,  bad: 8  },   // was ok:3 bad:10
-  spineLean: { ok: 3,  bad: 12 },   // was ok:6 bad:18 — halved
+  // Front analysis (matches backend analyze_front)
+  neckLean:  { ok: 7,  bad: 20 },   // backend: score_m(neck_lean, 0, 7, 20)
+  headTilt:  { ok: 3,  bad: 10 },   // backend: score_m(head_tilt, 0, 3, 10)
+  shTilt:    { ok: 3,  bad: 10 },   // backend: score_m(sh_tilt,   0, 3, 10)
+  spineLean: { ok: 5,  bad: 15 },   // backend: score_m(spine_lean,0, 5, 15)
 
-  // Side analysis
-  neckLeanSide: { ok: 6,  bad: 18 },  // was ok:10 bad:28
-  trunkLean:    { ok: 4,  bad: 14 },  // was ok:8 bad:22
+  // Side analysis (matches backend analyze_side)
+  neckLeanSide: { ok: 8,  bad: 22 },
+  trunkLean:    { ok: 5,  bad: 16 },
 };
 
 // ── Distance score (strict) ───────────────────────────────────────
+// distanceScore — SYNCED with backend.py dist_sc logic exactly
 function distanceScore(distCm, lo, hi) {
-  if (distCm >= lo && distCm <= hi) return 100;
-  // ok zone ± 8cm (was ±12/18)
-  if (distCm >= lo - 8 && distCm < lo)  return Math.round(100 - ((lo - distCm) / 8) * 45);
-  if (distCm > hi && distCm <= hi + 8)  return Math.round(100 - ((distCm - hi) / 8) * 45);
-  // bad zone beyond ± 8cm
-  if (distCm < lo - 8)  return Math.max(0, Math.round(55 - (lo - 8 - distCm) * 2.5));
-  if (distCm > hi + 8)  return Math.max(0, Math.round(55 - (distCm - hi - 8) * 2.5));
+  if (distCm >= lo && distCm <= hi)                       return 100;
+  if (distCm >= lo - 8  && distCm <= hi + 12)             return 80;
+  if (distCm >= lo - 16 && distCm <= hi + 20)             return 55;
   return 30;
 }
 
@@ -197,27 +199,33 @@ export function analyzeMP(lms, W, H, mode) {
   // Yaw score: ok ≤ 8°, bad ≥ 20°
   const yawSc = scoreMetric(Math.abs(headYaw), 0, 8, 20);
 
+  // Weights — synced with backend.py (must sum ≤ 1.0; remaining filled with baseline)
+  const W_NECK = 0.28, W_TILT = 0.14, W_SH = 0.11, W_SPINE = 0.14, W_DIST = 0.18, W_YAW = 0.08;
+  const wSum   = W_NECK + W_TILT + W_SH + W_SPINE + W_DIST + W_YAW; // 0.93
+  const baseline = 72 * (1.0 - wSum);  // same 72-baseline as backend
+
   const overall = Math.max(0, Math.min(100, Math.round(
-    neckSc  * 0.26 +
-    tiltSc  * 0.12 +
-    shSc    * 0.10 +
-    spineSc * 0.14 +
-    distSc  * 0.18 +
-    yawSc   * 0.10 +
-    68      * 0.10   // baseline comfort
+    neckSc  * W_NECK  +
+    tiltSc  * W_TILT  +
+    shSc    * W_SH    +
+    spineSc * W_SPINE +
+    distSc  * W_DIST  +
+    yawSc   * W_YAW   +
+    baseline
   )));
 
-  // Alerts (stricter thresholds)
+  // Alerts — SYNCED with backend.py alert thresholds exactly
   const alerts = [
-    neckLean > 14   && `⚠️ Neck lean ${Math.round(neckLean)}° — raise monitor to eye level`,
-    neckLean > 8  && neckLean <= 14 && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly`,
-    headTilt > 7    && `Head tilt ${Math.round(headTilt)}° — level your head`,
-    shTilt > 7      && `Shoulder imbalance ${Math.round(shTilt)}° — adjust armrests`,
-    spineLean > 11  && `⚠️ Spine lean ${Math.round(spineLean)}° — use lumbar support`,
-    Math.abs(headYaw) > 12 && `Head turned ${Math.abs(Math.round(headYaw))}° ${headYaw > 0 ? "right" : "left"} — face monitor directly`,
-    distCm < lo - 6 && `⚠️ Too close (${distCm}cm) — move back to ${lo}–${hi}cm`,
-    distCm < lo && distCm >= lo - 6 && `Slightly close (${distCm}cm) — ideal ${lo}–${hi}cm`,
-    distCm > hi + 6 && `Too far (${distCm}cm) — ideal ${lo}–${hi}cm`,
+    neckLean > 20   && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`,
+    neckLean > 12 && neckLean <= 20 && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`,
+    headTilt > 10   && `Head tilting ${Math.round(headTilt)}° — check chair height and monitor centering`,
+    shTilt > 10     && `Shoulder imbalance ${Math.round(shTilt)}° — adjust armrests`,
+    spineLean > 18  && `⚠️ Spine lean ${Math.round(spineLean)}° — sit back and use lumbar support`,
+    spineLean > 10 && spineLean <= 18 && `Spine lean ${Math.round(spineLean)}° — engage your core and sit upright`,
+    Math.abs(headYaw) > 18 && `Head turned ${Math.abs(Math.round(headYaw))}° ${headYaw > 0 ? "right" : "left"} — face monitor directly`,
+    distCm < lo - 10 && `⚠️ Very close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
+    distCm < lo && distCm >= lo - 10 && `Too close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
+    distCm > hi + 15 && `Too far from screen (${distCm}cm) — ideal is ${lo}–${hi}cm`,
   ].filter(Boolean);
 
   return {
@@ -436,3 +444,4 @@ export function requestNotificationPermission() {
     Notification.requestPermission().catch(() => {});
   }
 }
+
