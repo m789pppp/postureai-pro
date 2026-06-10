@@ -116,6 +116,12 @@ const TIERS = {
   }
 };
 
+// ── Tier ID normaliser ──────────────────────────────────────────────
+const TIER_NORMALIZE={basic:"standard",pro:"professional",premium:"elite",
+  personal_basic:"standard",personal_pro:"professional",personal_elite:"elite",
+  standard:"standard",professional:"professional",elite:"elite"};
+const normalizeTier=(t)=>TIER_NORMALIZE[t]||t||"standard";
+
 // ── Payment Methods — Automatic PayMob only ───────────────────────
 const PAY_METHODS = [
   {id:"visa_card",   name:"Visa / Mastercard", nameAr:"فيزا / ماستركارد",
@@ -1447,7 +1453,9 @@ export default function App(){
   }, []);
   const[mode,setMode]=useState(null);
   const[tier,setTier]=useState(null);
-  const[acctType,setAcctType]=useState(null); // "company" | "personal"
+  const[acctType,setAcctType]=useState(profile?.acct_type||null);
+  // Sync acctType when profile loads (e.g. after Google login)
+  useEffect(()=>{ if(profile?.acct_type&&!acctType) setAcctType(profile.acct_type); },[profile?.acct_type]);; // "company" | "personal"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
@@ -1484,11 +1492,18 @@ export default function App(){
   const[showOnboard,setShowOnboard]=useState(false);
   // ── Trigger onboarding for new users ──────────────────────────
   useEffect(()=>{
-    if(user && profile && !profile.onboarding_done && page==="home"){
-      const timer = setTimeout(()=>setShowOnboard(true), 800);
-      return ()=>clearTimeout(timer);
+    if(!user||!profile||page!=="home") return;
+    // Company owner with no company_id → show company wizard
+    if(profile.setup_complete&&profile.acct_type==="company"&&!profile.company_id&&!showCompanyOnboard){
+      const t=setTimeout(()=>setShowCompanyOnboard(true),800);
+      return()=>clearTimeout(t);
     }
-  },[user, profile?.onboarding_done, page]);
+    // Individual: show onboarding wizard if not done yet (![] is always false, check length)
+    if(profile.setup_complete&&profile.acct_type!=="company"&&!profile.onboarding_done?.length&&!showOnboard){
+      const t=setTimeout(()=>setShowOnboard(true),1200);
+      return()=>clearTimeout(t);
+    }
+  },[user,profile?.onboarding_done,profile?.setup_complete,profile?.acct_type,profile?.company_id,page,showCompanyOnboard,showOnboard]);
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
@@ -2033,7 +2048,7 @@ export default function App(){
   const avg=history.length?Math.round(history.reduce((a,b)=>a+b,0)/history.length):0;
   const distCm=analysis?.distCm||(analysis?.metrics?.distance?.value)||null;
   const isAdmin=profile?.is_admin===true; // SECURITY: Firestore field only — no email comparison
-  const isHRAdmin=(HR_EMAILS||[]).includes(user?.email||"")||isAdmin;
+  const isHRAdmin=(HR_EMAILS||[]).includes(user?.email||"")||isAdmin||!!profile?.is_org_owner||!!profile?.company_id||profile?.user_type==="hr_admin";
 
   // Shared props
   const shared={cs,t,darkMode,setDarkMode,lang,setLang,addToast};
@@ -2156,11 +2171,12 @@ export default function App(){
           getUserProfile(u.uid).then(p=>{
             if(p){
               setProfile(p);
-              if(p.tier&&p.tier!=="standard")setTier(p.tier);
+              if(p.tier)setTier(normalizeTier(p.tier));
               if(p.company_id)setCompanyId(p.company_id);
             }
             getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
           }).catch(()=>{});
+          if(isNew){setPage("setup");return;}
           setPage("home");
         }}
       />
@@ -2208,7 +2224,7 @@ export default function App(){
                 {i>0&&<div style={{width:40,height:1.5,background:acctType?cs.blue:cs.border,margin:"0 4px",transition:"background .3s"}}/>}
                 <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                   <div style={{width:26,height:26,borderRadius:"50%",border:`2px solid ${(i===0&&!acctType)||(i===1&&acctType)?(acctType&&i===1&&devicePref)?cs.blue:cs.blue:(cs.border)}`,background:(i===0&&acctType)||(i===1&&devicePref)?"rgba(26,86,219,.15)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:(i===0&&acctType)||(i===1&&devicePref)?cs.blue:(!acctType&&i===0)?cs.blue:cs.muted,transition:"all .3s"}}>
-                    {(i===0&&acctType&&i<(acctType?1:0))||(i===1&&devicePref)?"✓":s.n}
+                    {(i===0&&acctType&&devicePref)||(i===1&&devicePref)?"✓":s.n}
                   </div>
                   <div style={{fontSize:9.5,color:(i===0&&!acctType)||(i===1&&acctType)?cs.text:cs.muted,fontWeight:(i===0&&!acctType)||(i===1&&acctType)?600:400,transition:"all .3s"}}>{s.lbl}</div>
                 </div>
@@ -2272,7 +2288,11 @@ export default function App(){
                     setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", is_org_owner: acctType==="company"}));
                   }catch(e){ console.warn("setup save failed",e); }
                 }
-                if(acctType==="company") setShowCompanyOnboard(true);
+                const freshP=user?.uid?await getUserProfile(user.uid).catch(()=>null):null;
+                if(freshP){setProfile(freshP);if(freshP.tier)setTier(normalizeTier(freshP.tier));if(freshP.company_id)setCompanyId(freshP.company_id);}
+                else{setProfile(p=>({...p,user_type:acctType==="company"?"hr_admin":"individual",is_org_owner:acctType==="company",setup_complete:true}));}
+                if(acctType==="company"){setShowCompanyOnboard(true);}
+                else{setTimeout(()=>setShowOnboard(true),800);}
                 setPage("home");
               }}
                 style={{width:"100%",padding:"13px",background:devicePref?cs.blue:"rgba(148,163,184,.2)",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:devicePref?"pointer":"not-allowed",transition:"all .2s"}}>
@@ -2284,7 +2304,7 @@ export default function App(){
             </>
           )}
           <div style={{textAlign:"center",marginTop:18,fontSize:10,color:cs.muted}}>
-            <button onClick={()=>{logOut();setUser(null);setProfile(null);setPage("landing");}} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:10}}>{t.signOut}</button>
+            <button onClick={()=>{logOut();}} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:10}}>{t.signOut}</button>
           </div>
         </div>
       </div>
@@ -2311,6 +2331,10 @@ export default function App(){
 
   if(page==="home") return(
     <ErrorBoundary>
+      {/* GlobalModals also shown on home page */}
+      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
+      {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>setShowOnboard(false)}/>}
+      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);}}/>}
       <HomePage
         user={user} profile={profile} cs={cs} lang={lang} isAr={isAr} dir={dir}
         userSessions={userSessions} setUserSessions={setUserSessions}
@@ -2390,6 +2414,29 @@ export default function App(){
       <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
       <OfflineBanner lang={lang}/>
 
+      {/* ── GlobalModals: render on ALL pages ──────────────────── */}
+      {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
+      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
+      {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
+      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
+      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const {doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const {db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){console.warn("onComplete Firestore failed",e);}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
+      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
+      {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
+      {showMRR&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
+      {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
+      {showChangelog&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
+      {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowAIInsights(false)}/>}
+      {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowPredictiveAI(false)}/>}
+      {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowAIReports(false)}/>}
+      {showWorkforceAnalytics&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
+      {showEnterpriseRBAC&&<EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}
+      {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
+      {showSecurityCenter&&<SecurityCenter profile={profile} cs={cs} lang={lang} onClose={()=>setShowSecurityCenter(false)}/>}
+      {showFeatureFlags&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
+      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
+      {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
+      {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>setShowOnboard(false)}/>}
+
       {/* Modals */}
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang}
         onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}}
@@ -2397,7 +2444,24 @@ export default function App(){
       {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
       {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(plan);setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
-      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true}));addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
+      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={async(company)=>{
+          setShowCompanyOnboard(false);
+          setCompanyId(company?.id);
+          setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));
+          // FIX: persist to Firestore so refresh doesn't lose HR role
+          if(user?.uid&&company?.id){
+            try{
+              const {doc,updateDoc,serverTimestamp}=await import("firebase/firestore");
+              const {db}=await import("./firebase.js");
+              await updateDoc(doc(db,"users",user.uid),{
+                company_id:company.id, company:company.name||"",
+                is_org_owner:true, user_type:"hr_admin",
+                setup_complete:true, updated_at:serverTimestamp()
+              });
+            }catch(e){console.warn("onComplete Firestore update failed",e);}
+          }
+          addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");
+        }}/>}
       {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
       {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
       {/* ── Merged from v13 & v18 ───────────────────────────────── */}
