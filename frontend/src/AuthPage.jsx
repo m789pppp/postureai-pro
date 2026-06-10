@@ -175,8 +175,9 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
       const c = await signInGoogle();
       if (!c) { setErr(isAr ? "جاري التوجيه إلى Google…" : "Redirecting to Google…"); return; }
       let p = await getUserProfile(c.user.uid);
+      const isNew = !p; // FIX BUG-3: detect new user BEFORE creating profile
       if (!p) await createUserProfile(c.user.uid, { email: c.user.email, name: c.user.displayName || "", company: "" });
-      onAuth(c.user);
+      onAuth(c.user, isNew); // FIX BUG-3: pass isNew so App routes to setup page
     } catch(e) { setErr(getErr(e.message, isAr)); }
     setLoading(false);
   }, [isAr, onAuth]);
@@ -545,4 +546,5 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth 
     </div>
   );
 }
+
 

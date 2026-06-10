@@ -235,10 +235,11 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     const calibData = {
       ...baseline,
       tolerances: {
-        neck_angle:    tol(baseline.neck_angle, 9, 26),
+        // Synced with backend score_m thresholds exactly
+        neck_angle:    tol(baseline.neck_angle, 7, 20),
         head_tilt:     tol(baseline.head_tilt, 3, 10),
         shoulder_tilt: tol(baseline.shoulder_tilt, 3, 10),
-        spine_angle:   tol(baseline.spine_angle, 6, 18),
+        spine_angle:   tol(baseline.spine_angle, 5, 15),
       },
     };
 
@@ -427,3 +428,4 @@ export function applyCalibration(rawMetrics, calibration) {
 
   return adjusted;
 }
+

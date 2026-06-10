@@ -2817,7 +2817,7 @@ export default function App(){
               if(cameraStatus==="requesting") return pill("#f59e0b",isAr?"جاري الفتح...":"Opening...");
               if(cameraStatus==="denied")     return pill("#ef4444",isAr?"مرفوضة — اضغط سماح":"Denied — Allow camera");
               if(cameraStatus==="no-device")  return pill("#ef4444",isAr?"لا توجد كاميرا":"No camera found");
-              if(cameraStatus==="ready"&&camActive) return pill("#10b981",`${M_?.label||""} · Live`);
+              if(cameraStatus==="ready"&&camActive) return pill("#10b981",`${M_?.label||""} · Live · ${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`);
               return pill("#64748b",isAr?"الكاميرا متوقفة":"Camera off");
             })()}
           </div>
@@ -2980,20 +2980,26 @@ export default function App(){
                 {isAr?"▶ ابدأ التحليل":"▶ Start Analysis"}
               </button>
             : <button onClick={stopCamera} style={{
-                width:"100%",background:"rgba(239,68,68,.08)",color:"#fca5a5",
-                border:"1px solid rgba(239,68,68,.25)",borderRadius:10,
-                padding:"12px 0",fontSize:13,fontWeight:600,cursor:"pointer",
+                width:"100%",
+                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                color:"#fca5a5",
+                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
+                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
+                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
+                letterSpacing:"-.01em",
               }}>
                 {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
               </button>
           }
-          <button onClick={downloadPDF} style={{
-            background:"rgba(59,130,246,.08)",color:"#93c5fd",
-            border:"1px solid rgba(59,130,246,.2)",borderRadius:10,
-            padding:"10px 0",fontSize:12,fontWeight:600,cursor:"pointer",
-          }}>
-            {isAr?"📄 تحميل تقرير PDF":"📄 Download PDF Report"}
-          </button>
+          {(histRef.current?.length>0||(tier==="pro"||tier==="professional"||tier==="elite"||tier==="premium"))&&(
+            <button onClick={downloadPDF} style={{
+              background:"rgba(59,130,246,.08)",color:"#93c5fd",
+              border:"1px solid rgba(59,130,246,.2)",borderRadius:10,
+              padding:"10px 0",fontSize:12,fontWeight:600,cursor:"pointer",
+            }}>
+              {isAr?"📄 تحميل تقرير PDF":"📄 Download PDF Report"}
+            </button>
+          )}
           <button onClick={()=>setMuted(v=>!v)} style={{
             background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#10b981",
             border:`1px solid ${muted?cs.border:"rgba(16,185,129,.25)"}`,
@@ -3040,6 +3046,69 @@ export default function App(){
                 onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
             )}
           </div>
+
+          {/* ── Growth, Security, Enterprise tools ─────────────────── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
+            {/* GrowthHub — all tiers */}
+            <ActionBtn icon="🚀" label={isAr?"النمو":"Growth"} color="#f59e0b" dimColor="#fbbf24"
+              onClick={()=>setShowGrowthHub(true)}/>
+
+            {/* SecurityCenter — all tiers */}
+            <ActionBtn icon="🔒" label={isAr?"الأمان":"Security"} color="#6366f1" dimColor="#a5b4fc"
+              onClick={()=>setShowSecurityCenter(true)}/>
+
+            {/* CustomerSuccess — HR/admin */}
+            {(isHRAdmin||isAdmin)&&(
+              <ActionBtn icon="💡" label={isAr?"نجاح العملاء":"Success"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>setShowCustomerSuccess(true)}/>
+            )}
+
+            {/* ChurnPrediction — HR/admin */}
+            {(isHRAdmin||isAdmin)&&(
+              <ActionBtn icon="📉" label={isAr?"توقع التسرب":"Churn AI"} color="#ef4444" dimColor="#fca5a5"
+                onClick={()=>setShowChurnPrediction(true)}/>
+            )}
+
+            {/* APIMarketplace — elite/business */}
+            {(tier==="elite"||tier==="business")
+              ? <ActionBtn icon="🔌" label={isAr?"سوق API":"API Market"} color="#10b981" dimColor="#6ee7b7"
+                  onClick={()=>setShowAPIMarketplace(true)}/>
+              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
+                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
+                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.45,position:"relative"}}>
+                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🔌</span>
+                  <span style={{fontSize:11,color:cs.muted}}>API Market</span>
+                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
+                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>ELITE</span>
+                </div>
+            }
+
+            {/* WhiteLabel — elite/business */}
+            {(tier==="elite"||tier==="business")
+              ? <ActionBtn icon="🏷️" label={isAr?"علامتي":"White-label"} color="#a855f7" dimColor="#d8b4fe"
+                  onClick={()=>setShowWhiteLabel(true)}/>
+              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
+                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
+                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.45,position:"relative"}}>
+                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🏷️</span>
+                  <span style={{fontSize:11,color:cs.muted}}>White-label</span>
+                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
+                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>ELITE</span>
+                </div>
+            }
+
+            {/* MultiTenant — elite/admin */}
+            {(isAdmin||(tier==="elite"||tier==="business"))&&(
+              <ActionBtn icon="🏢" label={isAr?"متعدد المستأجرين":"Multi-tenant"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>setShowMultiTenant(true)}/>
+            )}
+
+            {/* AuditSystem — HR/admin */}
+            {(isHRAdmin||isAdmin)&&(
+              <ActionBtn icon="📜" label={isAr?"سجل المراجعة":"Audit Log"} color="#64748b" dimColor="#94a3b8"
+                onClick={()=>setShowAuditSystem(true)}/>
+            )}
+          </div>
         </div>
 
         {/* Calibration active badge */}
@@ -3081,5 +3150,7 @@ export default function App(){
     </div>
   </ErrorBoundary>);
 }
+
+
 
 
