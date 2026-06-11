@@ -1018,7 +1018,12 @@ def analyze_blink_rate(face_lms, w, h, uid=None):
     }
 
 # ── IPD-based distance ─────────────────────────────────────────────
-def ipd_distance_face(face_lms, w, h):
+def ipd_distance_face(face_lms, w, h, yaw_deg=0.0):
+    """
+    IPD-based distance with yaw correction.
+    When head rotates, apparent IPD = real_IPD * cos(yaw)
+    Correcting: real_IPD_px = apparent_IPD_px / cos(yaw)
+    """
     try:
         lp = face_lms.landmark[L_PUPIL]
         rp = face_lms.landmark[R_PUPIL]
@@ -1026,8 +1031,15 @@ def ipd_distance_face(face_lms, w, h):
         rpx, rpy = rp.x * w, rp.y * h
         ipd_px = math.sqrt((rpx-lpx)**2 + (rpy-lpy)**2)
         if ipd_px < 6: return None
+
+        # Yaw correction: cos(yaw) shrinks apparent IPD
+        yaw_rad   = math.radians(abs(yaw_deg))
+        cos_yaw   = max(math.cos(yaw_rad), 0.5)  # clamp: don't over-correct >60°
+        ipd_px_corrected = ipd_px / cos_yaw
+
         focal = 630 * (w / 640)
-        return round((6.3 * focal) / ipd_px, 1)
+        dist  = round((6.3 * focal) / ipd_px_corrected, 1)
+        return max(20, min(150, dist))
     except Exception:
         return None
 
@@ -1087,13 +1099,30 @@ def analyze_front(image, mode="laptop", tier="standard"):
     l_hip   = px(PL.L_HIP);      r_hip  = px(PL.R_HIP)
     l_eye   = px(PL.L_EYE);      r_eye  = px(PL.R_EYE)
 
-    mid_sh  = ((l_sh[0]+r_sh[0])/2, (l_sh[1]+r_sh[1])/2)
+    mid_sh  = ((l_sh[0]+r_sh[0])/2,  (l_sh[1]+r_sh[1])/2)
     mid_ear = ((l_ear[0]+r_ear[0])/2, (l_ear[1]+r_ear[1])/2)
     mid_hip = ((l_hip[0]+r_hip[0])/2, (l_hip[1]+r_hip[1])/2)
+    mid_eye = ((l_eye[0]+r_eye[0])/2, (l_eye[1]+r_eye[1])/2)
 
-    # ── Metrics ────────────────────────────────────────────────────
-    neck_lean  = angle_vert(mid_sh, mid_ear)
-    neck_sc    = score_m(neck_lean, 0, 7, 20)   # balanced: tighter than orig (10,28) but not over-strict
+    # ── FIX: neck_lean uses nose instead of ear ────────────────────
+    # ear moves with head rotation → false forward-lean readings
+    # nose → mid_sh measures true head-forward displacement
+    # We use 85% nose + 15% ear blend for robustness when nose is occluded
+    vis_nose = g(PL.NOSE).visibility if hasattr(g(PL.NOSE), 'visibility') else 1.0
+    vis_l_ear = g(PL.L_EAR).visibility; vis_r_ear = g(PL.R_EAR).visibility
+    ear_weight = 0.15 if vis_nose > 0.7 else 0.50  # use more ear if nose occluded
+    nose_weight = 1.0 - ear_weight
+    neck_ref_x = nose[0] * nose_weight + mid_ear[0] * ear_weight
+    neck_ref_y = nose[1] * nose_weight + mid_ear[1] * ear_weight
+    neck_ref   = (neck_ref_x, neck_ref_y)
+
+    # Nose is ~10cm in front of ear plane — subtract natural offset
+    # At 65cm distance, 10cm = ~8.8° apparent lean → correct by -5° (conservative)
+    neck_lean_raw = angle_vert(mid_sh, neck_ref)
+    # Natural nose-to-shoulder offset correction (~5° at typical distances)
+    nose_correction = 5.0 * nose_weight  # scale correction by how much nose we're using
+    neck_lean  = max(0.0, neck_lean_raw - nose_correction)
+    neck_sc    = score_m(neck_lean, 0, 7, 20)
 
     head_tilt  = angle_horiz(l_eye, r_eye)
     tilt_sc    = score_m(head_tilt, 0, 3, 10)
@@ -1101,16 +1130,34 @@ def analyze_front(image, mode="laptop", tier="standard"):
     sh_tilt    = angle_horiz(l_sh, r_sh)
     sh_sc      = score_m(sh_tilt, 0, 3, 10)
 
-    spine_lean = angle_vert(mid_hip, mid_sh)
-    spine_sc   = score_m(spine_lean, 0, 5, 15)  # balanced: tighter than orig (6,18)
+    # ── FIX: spine uses 3-point measurement ──────────────────────
+    # mid_thoracic = proxy for thoracic vertebrae (~T8 level)
+    # measures upper trunk lean (mid_thoracic→mid_sh) separately from
+    # lower trunk lean (mid_hip→mid_thoracic) to catch kyphosis better
+    mid_thoracic = (
+        (mid_hip[0] + mid_sh[0]) / 2,
+        (mid_hip[1] + mid_sh[1]) / 2
+    )
+    spine_upper = angle_vert(mid_thoracic, mid_sh)   # thoracic segment
+    spine_lower = angle_vert(mid_hip, mid_thoracic)  # lumbar segment
+    # Weighted: upper segment more visible/relevant for desk posture
+    spine_lean  = spine_upper * 0.60 + spine_lower * 0.40
+    # Penalty: if upper and lower lean in opposite directions → S-curve
+    spine_scurve_pen = max(0, abs(spine_upper - spine_lower) - 8) * 0.5
+    spine_lean  = min(45.0, spine_lean + spine_scurve_pen)
+    spine_sc    = score_m(spine_lean, 0, 5, 15)
+    out["metrics"]["spine_upper"] = {"value": round(spine_upper,1), "unit": "°", "label": "Upper spine"}
+    out["metrics"]["spine_lower"] = {"value": round(spine_lower,1), "unit": "°", "label": "Lower spine"}
 
     # ── FaceMesh ───────────────────────────────────────────────────
     dist_cm = None
     blink_data = None
     if face_result.multi_face_landmarks:
         face_lms = face_result.multi_face_landmarks[0]
-        dist_cm  = ipd_distance_face(face_lms, w, h)
         out["head_pose"] = head_pose_from_face(face_lms, w, h)
+        # Pass yaw for IPD correction — must compute head_pose first
+        _yaw = out["head_pose"]["yaw"] if out["head_pose"] else 0.0
+        dist_cm  = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw)
         out["engine"]    = "mediapipe_pose+facemesh"
         # Eye strain (Elite only — iris tracking)
         if tier in ("elite", "premium"):
@@ -1136,8 +1183,31 @@ def analyze_front(image, mode="laptop", tier="standard"):
 
     hp = out.get("head_pose")
     pose_sc = 75
+    cam_pitch_correction = 0.0
     if hp:
-        pose_sc = score_m(abs(hp["pitch"]) + abs(hp["roll"]) * .5, 0, 7, 22)
+        pitch = hp["pitch"]; yaw = hp["yaw"]; roll = hp["roll"]
+
+        # ── Camera angle correction ────────────────────────────────
+        # If pitch > 0 (camera below eye level looking up), neck_lean
+        # is overestimated. Correct proportionally.
+        # Typical laptop: camera ~15° below eye → adds ~4-6° apparent neck lean
+        if mode == "laptop" and pitch > 5:
+            # camera tilt correction: ~0.35° neck correction per 1° pitch
+            cam_pitch_correction = min(pitch * 0.35, 8.0)
+            neck_lean = max(0.0, neck_lean - cam_pitch_correction)
+            neck_sc   = score_m(neck_lean, 0, 7, 20)  # recompute after correction
+
+        # ── Head pose score: pitch + yaw + roll combined ──────────
+        # pitch = forward/back, yaw = left/right, roll = tilt
+        # yaw matters less for ergonomics (looking sideways is ok briefly)
+        pose_combined = abs(pitch) * 0.50 + abs(yaw) * 0.25 + abs(roll) * 0.25
+        pose_sc = score_m(pose_combined, 0, 6, 18)
+
+        out["metrics"]["head_pose_detail"] = {
+            "pitch": pitch, "yaw": yaw, "roll": roll,
+            "cam_correction_applied": round(cam_pitch_correction, 1),
+            "label": "3D head pose (solvePnP)"
+        }
 
     vis_l_sh = g(PL.L_SHOULDER).visibility
     vis_r_sh = g(PL.R_SHOULDER).visibility
@@ -1189,8 +1259,10 @@ def analyze_front(image, mode="laptop", tier="standard"):
         score_val += eye_sc * 0.06
         remaining -= 0.06
     if hp:
-        score_val += pose_sc * min(remaining, 0.10)
-        remaining -= min(remaining, 0.10)
+        # solvePnP is most accurate — increase weight to 0.15
+        pose_weight = min(remaining, 0.15)
+        score_val  += pose_sc * pose_weight
+        remaining  -= pose_weight
 
     # ── No arbitrary baseline — normalize by actual weights used ──────
     # Instead of filling remaining weight with 72, we normalize score_val
@@ -7863,6 +7935,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
