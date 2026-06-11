@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { doc, updateDoc, serverTimestamp, collection, getDocs } from "firebase/firestore"; // FIX: direct Firestore ops
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -42,6 +43,7 @@ import { AuditSystem }         from "./AuditSystem.jsx";
 import { EnterpriseAdminTools }from "./EnterpriseAdminTools.jsx";
 import LandingPageLegacy from "./LandingPage.jsx";
 import LandingPageV7 from "./LandingPageV7.jsx";
+const Landing = LandingPageV7; // FIX: alias so <Landing> works
 import { AdminDashboard } from "./AdminDashboard.jsx";
 import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
 import { handleSSORedirect } from "./EnterpriseSSO.jsx";
@@ -2132,6 +2134,7 @@ export default function App(){
       <AuthPage
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
+        initialView={new URLSearchParams(window.location.search).get("mode")==="signup" ? "signup" : "login"}
         onAuth={(u,isNew)=>{
           setUser(u);
           getUserProfile(u.uid).then(p=>{
