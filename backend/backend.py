@@ -91,7 +91,16 @@ except ImportError as _pe:
 try:
     from middleware.errors import safe_error, register_error_handlers
 except ImportError:
-    def safe_error(e, msg="Internal server error", status=500):
+    pass  # use local safe_error defined below
+# ── Structured logging ─────────────────────────────────────
+def log_event(event, uid=None, meta=None):
+    import json as _j
+    rec = {"ts": datetime.utcnow().isoformat()+"Z", "event": event,
+           "uid": uid or getattr(g,"uid",None), "rid": getattr(g,"request_id",None)}
+    if meta: rec.update(meta)
+    print(_j.dumps(rec), flush=True)
+
+def safe_error(e, msg="Internal server error", status=500):
         import traceback, sys
         print(traceback.format_exc(), file=sys.stderr)
         env = os.getenv("FLASK_ENV","development")
@@ -100,7 +109,7 @@ except ImportError:
             return _j({"error": msg}), status
         from flask import jsonify as _j
         return _j({"error": str(e), "trace": traceback.format_exc()}), status
-    def register_error_handlers(app): pass
+def register_error_handlers(app): pass
 
 # ── Optional WebSocket / Socket.IO (enable with SOCKETIO_ENABLED=true) ────────
 if os.getenv("SOCKETIO_ENABLED", "false").lower() == "true":
@@ -278,6 +287,11 @@ if _extra:
     ALLOWED_ORIGINS += [o.strip() for o in _extra.split(",") if o.strip()]
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2MB max request — prevents OOM on large frames
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({"error": "Request too large — max 2MB"}), 413
 
 # ── Sentry monitoring (production error tracking) ─────────────────
 _sentry_dsn = os.getenv("SENTRY_DSN", "")
@@ -298,7 +312,19 @@ if _sentry_dsn:
     except Exception as e:
         print(f"⚠️  Sentry init failed: {e}")
 
-CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
+# CORS: explicit whitelist — never fallback to wildcard
+_cors_origins = [o.strip() for o in (os.getenv("ALLOWED_ORIGINS","") or "").split(",") if o.strip()]
+if not _cors_origins:
+    _cors_origins = [
+        "https://postureai-pro-omega.vercel.app",
+        "https://postureai.io",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]
+CORS(app, resources={
+    r"/api/*":   {"origins": _cors_origins, "supports_credentials": True},
+    r"/scim/*":  {"origins": "*"},   # SCIM needs open for IdP
+})
 register_error_handlers(app)
 
 # ── Register new v17 blueprints ────────────────────────────────────
@@ -1875,6 +1901,10 @@ def enhance_low_light(img_bgr: np.ndarray) -> tuple:
 def add_snapshot():
     try:
         data  = request.get_json(force=True) or {}
+        if not data.get("session_id"):
+            return jsonify({"error": "session_id required"}), 400
+        if "score" in data:
+            data["score"] = max(0, min(100, int(data.get("score", 0))))  # clamp
         sid   = data.get("session_id", "default")
         score = data.get("score", 0)
         ts    = data.get("timestamp", datetime.now().strftime("%H:%M:%S"))
@@ -1895,7 +1925,8 @@ def add_snapshot():
 
 @app.route("/api/analyze", methods=["POST"])
 @require_auth
-@limiter.limit("60 per minute")
+@limiter.limit("60 per minute")          # global
+@limiter.limit("30 per minute; uid", key_func=lambda: getattr(g,"uid","anon"))  # per-user
 def analyze():
     try:
         t0 = time.perf_counter()
@@ -1923,8 +1954,12 @@ def analyze():
         # ── Async mode: queue to Celery worker (recommended for scale) ──
         if os.getenv("CELERY_ENABLED", "false").lower() == "true":
             try:
-                from services.celery_app import analyze_frame_task
-                job = analyze_frame_task.delay(data, uid, tier)
+                # Lazy singleton — imported once, not on every request
+                global _celery_task
+                if _celery_task is None:
+                    from services.celery_app import analyze_frame_task as _act
+                    _celery_task = _act
+                job = _celery_task.delay(data, uid, tier)
                 return jsonify({"job_id": job.id, "status": "queued"}), 202
             except Exception as celery_err:
                 print(f"[analyze] Celery queue failed, falling back to sync: {celery_err}", file=sys.stderr)
@@ -2021,7 +2056,9 @@ def analyze():
                         sessions[_session_id] = _s
                 except Exception as _e:
                     print(f"⚠️  Background Gemini error: {_e}")
-            _ai_executor.submit(_bg_gemini, _r, _ctx, _lg, _sid)
+            fut = _ai_executor.submit(_bg_gemini, _r, _ctx, _lg, _sid)
+            # Discard future — fire-and-forget with 15s implicit timeout via executor
+            del fut
             s["last_ai"] = time.time()
             _s_dirty = True
             # Return cached Gemini text from previous call if available
@@ -2049,7 +2086,11 @@ def analyze():
             cache_set(f"frame:{uid}:{frame_hash}", _j.dumps(result), 2)
         except Exception: pass
 
-        result["processing_ms"] = round((time.perf_counter() - t0) * 1000)
+        ms = round((time.perf_counter() - t0) * 1000)
+        result["processing_ms"] = ms
+        # Log slow requests (>800ms) for performance monitoring
+        if ms > 800:
+            log_event("analyze_slow", meta={"ms": ms, "engine": result.get("engine"), "tier": tier})
         # Confidence floor: if MediaPipe detected landmarks, score ≥ 18
         # Prevents confusing "0" results from edge-case geometry
         if result.get("detected") and result.get("score", 100) < 18:
@@ -5213,6 +5254,7 @@ def user_payments():
     try:
         db   = firestore.client()
         docs = db.collection("payments").where("uid","==",g.uid).order_by("created_at",direction=firestore.Query.DESCENDING).limit(20).get()
+        docs = sorted(docs, key=lambda d: d.to_dict().get("created_at",""), reverse=True)[:50]
         pays = [d.to_dict() for d in docs]
         return jsonify({"payments": pays})
     except Exception as e:
@@ -5248,6 +5290,8 @@ def subscription_cancel():
 
 if __name__ == "__main__":
     import threading as _th; _th.Thread(target=_ensure_models, daemon=True).start()
+    import atexit as _ae
+    _ae.register(lambda: _ai_executor.shutdown(wait=False))
     os.makedirs("reports", exist_ok=True)
     print("="*60, flush=True)
     print("  PostureAI Pro Backend v15", flush=True)
@@ -7780,6 +7824,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
