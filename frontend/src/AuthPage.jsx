@@ -152,10 +152,10 @@ function GoogleButton({ tok, loading, onClick, isAr }) {
 }
 
 // ── Main AuthPage ─────────────────────────────────────────────────
-export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth }) {
+export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth, initialView }) {
   const isAr   = lang === "ar";
   const tok    = D[darkMode ? "dark" : "light"];
-  const [view,   setView]   = useState("login"); // login | signup | forgot
+  const [view,   setView]   = useState(initialView||"login"); // login | signup | forgot
   const [email,  setEmail]  = useState("");
   const [pass,   setPass]   = useState("");
   const [name,   setName]   = useState("");
