@@ -1998,11 +1998,7 @@ export default function App(){
           alerts_count:acRef.current.total,
           score_history:histRef.current.slice(-20),
           metrics:la.metrics||{}
-        }).then(()=>{
-          // Reload sessions + profile so dashboard is up to date
-          getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
-          getUserProfile(user.uid).then(p=>{ if(p){ setProfile(p); if(p.tier&&p.tier!=="standard") setTier(p.tier); }}).catch(()=>{});
-        }).catch(e=>{ console.warn("saveSession failed:",e?.code||e?.message); });
+        }).catch(()=>{});
       }
     }
   }
@@ -2342,10 +2338,28 @@ export default function App(){
 
   if(page==="home") return(
     <ErrorBoundary>
-      {/* GlobalModals also shown on home page */}
+      {/* ── ALL MODALS — shown on home page too ────────────────── */}
       {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
       {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>setShowOnboard(false)}/>}
-      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);}}/>}
+      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
+      {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
+      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
+      {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
+      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
+      {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
+      {showMRR&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
+      {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
+      {showChangelog&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
+      {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowAIInsights(false)}/>}
+      {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowPredictiveAI(false)}/>}
+      {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowAIReports(false)}/>}
+      {showWorkforceAnalytics&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
+      {showEnterpriseRBAC&&<EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}
+      {showSecurityCenter&&<SecurityCenter profile={profile} cs={cs} lang={lang} onClose={()=>setShowSecurityCenter(false)}/>}
+      {showFeatureFlags&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
+      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
+      {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
+      {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
       <HomePage
         user={user} profile={profile} cs={cs} lang={lang} isAr={isAr} dir={dir}
         userSessions={userSessions} setUserSessions={setUserSessions}
@@ -2446,45 +2460,10 @@ export default function App(){
       {showFeatureFlags&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
       {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
       {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
+      {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
       {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>setShowOnboard(false)}/>}
 
-      {/* Modals */}
-      {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang}
-        onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}}
-        onSkip={()=>setShowCalibWizard(false)}/>}
-      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
-      {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
-      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(plan);setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
-      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={async(company)=>{
-          setShowCompanyOnboard(false);
-          setCompanyId(company?.id);
-          setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));
-          // FIX: persist to Firestore so refresh doesn't lose HR role
-          if(user?.uid&&company?.id){
-            try{
-              const {doc,updateDoc,serverTimestamp}=await import("firebase/firestore");
-              const {db}=await import("./firebase.js");
-              await updateDoc(doc(db,"users",user.uid),{
-                company_id:company.id, company:company.name||"",
-                is_org_owner:true, user_type:"hr_admin",
-                setup_complete:true, updated_at:serverTimestamp()
-              });
-            }catch(e){console.warn("onComplete Firestore update failed",e);}
-          }
-          addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");
-        }}/>}
-      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
-      {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
-      {/* ── Merged from v13 & v18 ───────────────────────────────── */}
-      {showMRR&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
-      {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
-      {showChangelog&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
-      {/* AI Intelligence Layer */}
-      {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowAIInsights(false)}/>}
-      {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowPredictiveAI(false)}/>}
-      {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowAIReports(false)}/>}
-      {showWorkforceAnalytics&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
-      {showEnterpriseRBAC&&<EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}
+      {/* OLD DUPLICATE MODALS REMOVED — see GlobalModals block above */}
                   {showAnnualUpsell && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>setShowAnnualUpsell(false)}>
@@ -3136,7 +3115,68 @@ export default function App(){
             )}
           </div>
 
+          {/* ── Growth, Security, Enterprise tools ─────────────────── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
+            {/* GrowthHub — all tiers */}
+            <ActionBtn icon="🚀" label={isAr?"النمو":"Growth"} color="#f59e0b" dimColor="#fbbf24"
+              onClick={()=>setShowGrowthHub(true)}/>
 
+            {/* SecurityCenter — all tiers */}
+            <ActionBtn icon="🔒" label={isAr?"الأمان":"Security"} color="#6366f1" dimColor="#a5b4fc"
+              onClick={()=>setShowSecurityCenter(true)}/>
+
+            {/* CustomerSuccess — HR/admin */}
+            {(isHRAdmin||isAdmin)&&(
+              <ActionBtn icon="💡" label={isAr?"نجاح العملاء":"Success"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>setShowCustomerSuccess(true)}/>
+            )}
+
+            {/* ChurnPrediction — HR/admin */}
+            {(isHRAdmin||isAdmin)&&(
+              <ActionBtn icon="📉" label={isAr?"توقع التسرب":"Churn AI"} color="#ef4444" dimColor="#fca5a5"
+                onClick={()=>setShowChurnPrediction(true)}/>
+            )}
+
+            {/* APIMarketplace — elite/business */}
+            {(tier==="elite"||tier==="business")
+              ? <ActionBtn icon="🔌" label={isAr?"سوق API":"API Market"} color="#10b981" dimColor="#6ee7b7"
+                  onClick={()=>setShowAPIMarketplace(true)}/>
+              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
+                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
+                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.45,position:"relative"}}>
+                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🔌</span>
+                  <span style={{fontSize:11,color:cs.muted}}>API Market</span>
+                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
+                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>ELITE</span>
+                </div>
+            }
+
+            {/* WhiteLabel — elite/business */}
+            {(tier==="elite"||tier==="business")
+              ? <ActionBtn icon="🏷️" label={isAr?"علامتي":"White-label"} color="#a855f7" dimColor="#d8b4fe"
+                  onClick={()=>setShowWhiteLabel(true)}/>
+              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
+                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
+                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.45,position:"relative"}}>
+                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🏷️</span>
+                  <span style={{fontSize:11,color:cs.muted}}>White-label</span>
+                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
+                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>ELITE</span>
+                </div>
+            }
+
+            {/* MultiTenant — elite/admin */}
+            {(isAdmin||(tier==="elite"||tier==="business"))&&(
+              <ActionBtn icon="🏢" label={isAr?"متعدد المستأجرين":"Multi-tenant"} color="#0891b2" dimColor="#67e8f9"
+                onClick={()=>setShowMultiTenant(true)}/>
+            )}
+
+            {/* AuditSystem — HR/admin */}
+            {(isHRAdmin||isAdmin)&&(
+              <ActionBtn icon="📜" label={isAr?"سجل المراجعة":"Audit Log"} color="#64748b" dimColor="#94a3b8"
+                onClick={()=>setShowAuditSystem(true)}/>
+            )}
+          </div>
         </div>
 
         {/* Calibration active badge */}
