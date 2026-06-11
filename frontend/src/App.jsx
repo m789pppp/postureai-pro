@@ -2512,8 +2512,8 @@ export default function App(){
               {[1,2,3,4,5,6,7,8,9,10].map(n=>(
                 <button key={n} onClick={async()=>{
                   try {
-                    await apiFetch("/nps/submit",{method:"POST",body:{score:n,uid:profile?.uid}});
-                    await updateProfile(profile?.uid,{last_nps_at:new Date().toISOString()});
+                    // NPS submit - fire and forget
+                    try{ await updateUserProfile(user.uid,{last_nps_score:n,last_nps_at:new Date().toISOString()}); }catch(_){}
                   } catch(_) {}
                   setShowNPS(false);
                   if(n>=9) toast(lang==="ar"?"شكراً! 🎉":"Thank you! 🎉","success");
