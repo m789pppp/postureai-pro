@@ -1490,6 +1490,7 @@ export default function App(){
   const toast = addToast; // alias
   const isOnline = useOnline();
   const[showOnboard,setShowOnboard]=useState(false);
+  const[showCompanyOnboard,setShowCompanyOnboard]=useState(false);
   // ── Trigger onboarding for new users ──────────────────────────
   useEffect(()=>{
     if(!user||!profile||page!=="home") return;
@@ -1589,7 +1590,6 @@ export default function App(){
   const[showMRR,setShowMRR]=useState(false);
   const[showHelp,setShowHelp]=useState(false);
   const[showChangelog,setShowChangelog]=useState(false);
-  const[showCompanyOnboard,setShowCompanyOnboard]=useState(false);
   const { company } = useCompany(profile);
   // ── SW update banner ───────────────────────────────────────────
   const [swUpdateReady, setSwUpdateReady] = useState(false);
