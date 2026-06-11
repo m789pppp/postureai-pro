@@ -1192,12 +1192,32 @@ def analyze_front(image, mode="laptop", tier="standard"):
         score_val += pose_sc * min(remaining, 0.10)
         remaining -= min(remaining, 0.10)
 
-    # Baseline comfort fill — prevents score from cratering when optional metrics absent
-    if remaining > 0.02:
-        score_val += 72 * remaining  # 72 = neutral comfortable sitting baseline
+    # ── No arbitrary baseline — normalize by actual weights used ──────
+    # Instead of filling remaining weight with 72, we normalize score_val
+    # by the actual weight sum so absent optional metrics don't inflate score.
+    weight_used = 1.0 - remaining  # how much weight was actually scored
+    if weight_used > 0.01:
+        overall = max(0, min(100, int(round(score_val / weight_used))))
+    else:
+        overall = 0
 
-    overall = max(0, min(100, int(round(score_val))))
-    confidence = min(96, 82 + vis_bonus + (8 if out["engine"] == "mediapipe_pose+facemesh" else 0))
+    # ── Confidence: penalize low shoulder visibility ────────────────
+    vis_l_sh_val = vis_l_sh  # already computed above
+    vis_r_sh_val = vis_r_sh
+    avg_vis = (vis_l_sh_val + vis_r_sh_val) / 2
+    if avg_vis < 0.6:
+        # Low visibility — shoulders partially occluded
+        # Reduce score toward neutral (65) proportionally
+        penalty    = (0.6 - avg_vis) / 0.6  # 0→1 as vis→0
+        overall    = int(overall * (1 - penalty * 0.35) + 65 * penalty * 0.35)
+        overall    = max(0, min(100, overall))
+    confidence = min(96, int(
+        60                                                           # base
+        + (avg_vis * 22)                                            # visibility quality
+        + (vis_bonus)                                               # high-vis bonus
+        + (8 if out["engine"] == "mediapipe_pose+facemesh" else 0) # FaceMesh bonus
+        + (6 if hp else 0)                                          # head pose bonus
+    ))
 
     out["score"]      = overall
     out["confidence"] = confidence
@@ -1421,8 +1441,9 @@ def analyze_front_cascade(image, mode, out):
     # neck.28 tilt.14 dist.18 forward.11 → remaining=0.29 → baseline fill
     score_val  = neck_sc * 0.28 + tilt_sc * 0.14 + dist_sc * 0.18 + forward_sc * 0.11
     remaining  = 1.0 - (0.28 + 0.14 + 0.18 + 0.11)   # 0.29
-    score_val += 72 * remaining                         # same baseline as analyze_front
-    overall    = max(0, min(100, int(round(score_val))))
+    # Normalize by actual weights used — no arbitrary baseline
+    weight_used = 1.0 - remaining
+    overall = max(0, min(100, int(round(score_val / max(weight_used, 0.01))))) if weight_used > 0.01 else 0
 
     out["score"]      = overall
     out["confidence"] = 68   # lower than MediaPipe (82+) to signal fallback quality
@@ -2035,6 +2056,24 @@ def analyze():
             if result["score"] >= 65: s["good"] = s.get("good", 0) + 1
             s["engine"] = result.get("engine","")
             _s_dirty = True
+
+            # ── Temporal smoothing: weighted avg of last 3 frames ──
+            # Prevents single-frame outliers from affecting displayed score
+            # Weights: current=0.50, prev=0.30, oldest=0.20
+            hist = s["score_history"]
+            if len(hist) >= 3:
+                smoothed_local = int(round(
+                    hist[-1] * 0.50 + hist[-2] * 0.30 + hist[-3] * 0.20
+                ))
+            elif len(hist) == 2:
+                smoothed_local = int(round(hist[-1] * 0.65 + hist[-2] * 0.35))
+            else:
+                smoothed_local = hist[-1]
+            result["score_smoothed"] = smoothed_local
+            # Use smoothed score as the primary score if Redis not available
+            if result.get("overall_smoothed") is None:
+                result["overall"] = smoothed_local
+                result["score"]   = smoothed_local
         for a in result.get("alerts",[]):
             recent = [x.get("msg") for x in s.get("alerts",[])[-4:]]
             if a not in recent:
@@ -7824,6 +7863,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
