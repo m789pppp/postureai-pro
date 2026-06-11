@@ -732,6 +732,38 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera }) {
 // ══════════════════════════════════════════════════════════════════
 // SETTINGS PANEL (inline)
 // ══════════════════════════════════════════════════════════════════
+// ─── Add Password Form ─────────────────────────────────────────────
+function AddPasswordForm({ user, isAr, cs, addToast }) {
+  const [pw, setPw] = useState("");
+  const [saving, setSaving] = useState(false);
+  return (
+    <div style={{ display:"flex", gap:8 }}>
+      <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
+        placeholder={isAr?"كلمة مرور جديدة (6+ أحرف)":"New password (6+ chars)"}
+        style={{ flex:1, padding:"8px 12px", background:"rgba(255,255,255,.05)",
+          border:`1px solid ${cs.border}`, borderRadius:7, color:cs.text,
+          fontSize:12, outline:"none" }}/>
+      <button disabled={pw.length<6||saving} onClick={async ()=>{
+        setSaving(true);
+        try {
+          const { EmailAuthProvider, linkWithCredential } = await import("firebase/auth");
+          const { auth } = await import("./firebase.js");
+          const cred = EmailAuthProvider.credential(user.email, pw);
+          await linkWithCredential(auth.currentUser, cred);
+          addToast(isAr?"✅ تمت إضافة كلمة المرور":"✅ Password added","success");
+          setPw("");
+        } catch(e) { addToast(e.code==="auth/weak-password"?"Password too weak":e.message||"Error","error"); }
+        setSaving(false);
+      }} style={{ padding:"8px 14px", background:"#1a56db", color:"#fff",
+        border:"none", borderRadius:7, fontSize:12, fontWeight:600,
+        cursor:pw.length<6||saving?"not-allowed":"pointer", opacity:pw.length<6?.5:1 }}>
+        {saving?"...":"Add"}
+      </button>
+    </div>
+  );
+}
+
+
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling }) {
   const [name,    setName]    = useState(profile?.name||"");
   const [company, setCompany] = useState(profile?.company||"");
@@ -1009,8 +1041,11 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             )}
             {/* Add email/password */}
             {!(user?.providerData||[]).some(p=>p.providerId==="password")&&(
-              <div style={{ fontSize:12, color:cs.muted, padding:"8px 0", textAlign:"center" }}>
-                {isAr?"تسجيل دخولك عبر Google فقط. يمكنك إضافة كلمة مرور من إعدادات Firebase.":"You sign in via Google only."}
+              <div>
+                <div style={{ fontSize:11, color:cs.muted, marginBottom:8 }}>
+                  {isAr?"إضافة كلمة مرور للدخول بالإيميل أيضاً:":"Add password for email login too:"}
+                </div>
+                <AddPasswordForm user={user} isAr={isAr} cs={cs} addToast={addToast}/>
               </div>
             )}
             <button onClick={onSignOut}
