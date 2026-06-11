@@ -162,7 +162,7 @@ function TierBadge({ tier }) {
 // INDIVIDUAL DASHBOARD
 // ══════════════════════════════════════════════════════════════════
 function DashIndividual({ profile, userSessions, tier, cs, isAr, setPage, startCamera,
-  onCoach, onBilling, onAnalytics, onCalib, onReports, addToast }) {
+  onCoach, onBilling, onAnalytics, onCalib, onReports, onCompare, onTrend, addToast }) {
 
   const last   = userSessions[0]?.avg_score||0;
   const avg    = userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0;
@@ -269,7 +269,27 @@ function DashIndividual({ profile, userSessions, tier, cs, isAr, setPage, startC
       {/* Session history */}
       {userSessions.length>0 ? (
         <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"16px 18px" }}>
-          <SectionHead title={isAr?"آخر الجلسات":"Recent Sessions"} cs={cs}/>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+            <SectionHead title={isAr?"آخر الجلسات":"Recent Sessions"} cs={cs} noMargin/>
+            <div style={{ display:"flex", gap:6 }}>
+              {userSessions.length>=2&&onCompare&&(
+                <button onClick={onCompare}
+                  style={{ fontSize:11, fontWeight:600, padding:"5px 11px",
+                    background:"rgba(168,85,247,.1)", color:"#c084fc",
+                    border:"1px solid rgba(168,85,247,.25)", borderRadius:7, cursor:"pointer" }}>
+                  📊 {isAr?"مقارنة":"Compare"}
+                </button>
+              )}
+              {userSessions.length>=3&&onTrend&&(
+                <button onClick={onTrend}
+                  style={{ fontSize:11, fontWeight:600, padding:"5px 11px",
+                    background:"rgba(8,145,178,.1)", color:"#67e8f9",
+                    border:"1px solid rgba(8,145,178,.25)", borderRadius:7, cursor:"pointer" }}>
+                  📈 {isAr?"الاتجاه":"Trend"}
+                </button>
+              )}
+            </div>
+          </div>
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {userSessions.slice(0,6).map((s,i)=>{
               const d=s.created_at?.toDate?.()??new Date(s.created_at||0);
@@ -1148,6 +1168,7 @@ export default function HomePage({
   setShowCoach, setShowBilling, setShowCompanyOnboard,
   setShowDashboard, setShowWorkforceAnalytics, setShowAIReports,
   setShowCalibWizard,
+  setShowSessionComparison, setShowTrendChart,
   isAdmin, isHRAdmin, companyId,
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,
@@ -1243,7 +1264,8 @@ export default function HomePage({
       <DashIndividual profile={profile} userSessions={userSessions} tier={tier}
         cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
         onCoach={openCoach} onBilling={openBilling} onAnalytics={openAnalytics}
-        onCalib={openCalib} onReports={openReports} addToast={addToast}/>
+        onCalib={openCalib} onReports={openReports} addToast={addToast}
+        onCompare={()=>setShowSessionComparison?.(true)} onTrend={()=>setShowTrendChart?.(true)}/>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[tab, userRole, profile, userSessions, allUsers, tier, isAr, cs, atRisk]);
@@ -1305,3 +1327,4 @@ export default function HomePage({
     </div>
   );
 }
+
