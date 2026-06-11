@@ -233,7 +233,11 @@ export async function getCalibration(uid) {
 
 // ── User CRUD ─────────────────────────────────────────────────────
 export const getUserProfile   = async (uid) => { const s=await getDoc(doc(db,"users",uid)); return s.exists()?{id:s.id,...s.data()}:null; };
-export const updateUserProfile= async (uid,data) => updateDoc(doc(db,"users",uid),{...data,updated_at:_serverTimestamp()});
+export const updateUserProfile = async (uid, data) => {
+  // Strip protected fields that Firestore rules block client from changing
+  const { is_admin, tier, is_hr, company_id, ...safe } = data;
+  return updateDoc(doc(db,"users",uid), { ...safe, updated_at:_serverTimestamp() });
+};
 export const completeOnboardingStep = async (uid, step) => {
   const snap = await getDoc(doc(db,"users",uid));
   if (!snap.exists()) return;
@@ -248,13 +252,28 @@ export async function updateUserTier(uid, tier, months) {
 
 // ── Sessions ──────────────────────────────────────────────────────
 export async function saveSession(uid, data) {
+  // Save session document
   const ref = await addDoc(collection(db,"sessions"), { uid, ...data, created_at:_serverTimestamp() });
-  const prof = await getUserProfile(uid);
-  if (prof) {
-    const newCount = (prof.sessions_count||0)+1;
-    const newAvg   = Math.round(((prof.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
-    await updateDoc(doc(db,"users",uid), { sessions_count:newCount, avg_score:newAvg, last_session_at:_serverTimestamp(), updated_at:_serverTimestamp() });
-  }
+  // Update user stats — only safe fields (no tier/company_id/is_admin to avoid rules rejection)
+  try {
+    const prof = await getUserProfile(uid);
+    if (prof) {
+      const newCount = (prof.sessions_count||0)+1;
+      const newAvg   = Math.round(((prof.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
+      const streak   = prof.last_session_at ? (() => {
+        const last = prof.last_session_at.toDate ? prof.last_session_at.toDate() : new Date(prof.last_session_at);
+        const diff = (Date.now() - last.getTime()) / (1000*60*60*24);
+        return diff < 1.5 ? (prof.streak_days||0)+1 : 1;
+      })() : 1;
+      await updateDoc(doc(db,"users",uid), {
+        sessions_count: newCount,
+        avg_score:      newAvg,
+        streak_days:    streak,
+        last_session_at: _serverTimestamp(),
+        updated_at:     _serverTimestamp(),
+      });
+    }
+  } catch(e) { console.warn("saveSession stats update failed:", e.code||e.message); }
   return ref.id;
 }
 export async function getUserSessions(uid) {

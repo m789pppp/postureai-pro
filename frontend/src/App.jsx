@@ -1978,7 +1978,11 @@ export default function App(){
           alerts_count:acRef.current.total,
           score_history:histRef.current.slice(-20),
           metrics:la.metrics||{}
-        }).catch(()=>{});
+        }).then(()=>{
+          // Reload sessions + profile so dashboard is up to date
+          getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
+          getUserProfile(user.uid).then(p=>{ if(p){ setProfile(p); if(p.tier&&p.tier!=="standard") setTier(p.tier); }}).catch(()=>{});
+        }).catch(e=>{ console.warn("saveSession failed:",e?.code||e?.message); });
       }
     }
   }
@@ -3054,68 +3058,7 @@ export default function App(){
             )}
           </div>
 
-          {/* ── Growth, Security, Enterprise tools ─────────────────── */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
-            {/* GrowthHub — all tiers */}
-            <ActionBtn icon="🚀" label={isAr?"النمو":"Growth"} color="#f59e0b" dimColor="#fbbf24"
-              onClick={()=>setShowGrowthHub(true)}/>
 
-            {/* SecurityCenter — all tiers */}
-            <ActionBtn icon="🔒" label={isAr?"الأمان":"Security"} color="#6366f1" dimColor="#a5b4fc"
-              onClick={()=>setShowSecurityCenter(true)}/>
-
-            {/* CustomerSuccess — HR/admin */}
-            {(isHRAdmin||isAdmin)&&(
-              <ActionBtn icon="💡" label={isAr?"نجاح العملاء":"Success"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>setShowCustomerSuccess(true)}/>
-            )}
-
-            {/* ChurnPrediction — HR/admin */}
-            {(isHRAdmin||isAdmin)&&(
-              <ActionBtn icon="📉" label={isAr?"توقع التسرب":"Churn AI"} color="#ef4444" dimColor="#fca5a5"
-                onClick={()=>setShowChurnPrediction(true)}/>
-            )}
-
-            {/* APIMarketplace — elite/business */}
-            {(tier==="elite"||tier==="business")
-              ? <ActionBtn icon="🔌" label={isAr?"سوق API":"API Market"} color="#10b981" dimColor="#6ee7b7"
-                  onClick={()=>setShowAPIMarketplace(true)}/>
-              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
-                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
-                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.45,position:"relative"}}>
-                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🔌</span>
-                  <span style={{fontSize:11,color:cs.muted}}>API Market</span>
-                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
-                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>ELITE</span>
-                </div>
-            }
-
-            {/* WhiteLabel — elite/business */}
-            {(tier==="elite"||tier==="business")
-              ? <ActionBtn icon="🏷️" label={isAr?"علامتي":"White-label"} color="#a855f7" dimColor="#d8b4fe"
-                  onClick={()=>setShowWhiteLabel(true)}/>
-              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
-                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
-                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.45,position:"relative"}}>
-                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🏷️</span>
-                  <span style={{fontSize:11,color:cs.muted}}>White-label</span>
-                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
-                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>ELITE</span>
-                </div>
-            }
-
-            {/* MultiTenant — elite/admin */}
-            {(isAdmin||(tier==="elite"||tier==="business"))&&(
-              <ActionBtn icon="🏢" label={isAr?"متعدد المستأجرين":"Multi-tenant"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>setShowMultiTenant(true)}/>
-            )}
-
-            {/* AuditSystem — HR/admin */}
-            {(isHRAdmin||isAdmin)&&(
-              <ActionBtn icon="📜" label={isAr?"سجل المراجعة":"Audit Log"} color="#64748b" dimColor="#94a3b8"
-                onClick={()=>setShowAuditSystem(true)}/>
-            )}
-          </div>
         </div>
 
         {/* Calibration active badge */}
