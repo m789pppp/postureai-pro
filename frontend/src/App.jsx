@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { doc, updateDoc, serverTimestamp, collection, getDocs } from "firebase/firestore"; // FIX: direct Firestore ops
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -3223,6 +3222,7 @@ export default function App(){
     </div>
   </ErrorBoundary>);
 }
+
 
 
 
