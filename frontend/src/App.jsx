@@ -2372,6 +2372,8 @@ export default function App(){
         setShowWorkforceAnalytics={setShowWorkforceAnalytics}
         setShowAIReports={setShowAIReports}
         setShowOnboard={setShowOnboard}
+        setShowSessionComparison={setShowSessionComparison}
+        setShowTrendChart={setShowTrendChart}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin} companyId={companyId}
         darkMode={darkMode} setDarkMode={setDarkMode} setLang={setLang}
         t={t} logOut={logOut} setUser={setUser} setProfile={setProfile}
@@ -2512,8 +2514,8 @@ export default function App(){
               {[1,2,3,4,5,6,7,8,9,10].map(n=>(
                 <button key={n} onClick={async()=>{
                   try {
-                    // NPS submit - fire and forget
-                    try{ await updateUserProfile(user.uid,{last_nps_score:n,last_nps_at:new Date().toISOString()}); }catch(_){}
+                    await apiFetch("/nps/submit",{method:"POST",body:{score:n,uid:profile?.uid}});
+                    await updateProfile(profile?.uid,{last_nps_at:new Date().toISOString()});
                   } catch(_) {}
                   setShowNPS(false);
                   if(n>=9) toast(lang==="ar"?"شكراً! 🎉":"Thank you! 🎉","success");
@@ -3218,6 +3220,7 @@ export default function App(){
     </div>
   </ErrorBoundary>);
 }
+
 
 
 
