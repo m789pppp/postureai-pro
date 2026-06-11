@@ -210,14 +210,21 @@ def _ensure_models():
             _mp_pose    = mp.solutions.pose
             _mp_face    = mp.solutions.face_mesh
             _mp_drawing = mp.solutions.drawing_utils
-            POSE_LITE = _mp_pose.Pose(static_image_mode=True, model_complexity=0,
-                                       min_detection_confidence=0.45, min_tracking_confidence=0.45)
-            POSE_FULL = _mp_pose.Pose(static_image_mode=True, model_complexity=1,
-                                       min_detection_confidence=0.45, min_tracking_confidence=0.45)
-            FACE_MESH = _mp_face.FaceMesh(static_image_mode=True, max_num_faces=1,
+            # static_image_mode=False: MediaPipe reuses tracking across frames — 3x faster
+            POSE_LITE = _mp_pose.Pose(static_image_mode=False, model_complexity=0,
+                                       min_detection_confidence=0.50, min_tracking_confidence=0.50)
+            POSE_FULL = _mp_pose.Pose(static_image_mode=False, model_complexity=1,
+                                       min_detection_confidence=0.50, min_tracking_confidence=0.50)
+            FACE_MESH = _mp_face.FaceMesh(static_image_mode=False, max_num_faces=1,
                                            refine_landmarks=True,
-                                           min_detection_confidence=0.45, min_tracking_confidence=0.45)
+                                           min_detection_confidence=0.50, min_tracking_confidence=0.50)
             print("✅ MediaPipe models initialized on first request", flush=True)
+            # Warm up: process a tiny black image to pre-JIT the model
+            try:
+                warmup = _np.zeros((64, 64, 3), dtype=_np.uint8)
+                POSE_LITE.process(cv2.cvtColor(warmup, cv2.COLOR_BGR2RGB))
+            except Exception:
+                pass
             return True
         except Exception as e:
             print(f"⚠️  MediaPipe model init failed: {e}", flush=True)
@@ -908,10 +915,12 @@ def angle_3pt(a, b, c):
     return float(math.degrees(math.acos(max(-1.0, min(1.0, cos_a)))))
 
 def score_m(v, ideal, ok, bad):
+    """Piecewise score: 100→75 (ok zone) → 75→30 (bad zone) → 30→floor (beyond)"""
     d = abs(v - ideal)
     if d <= ok:  return max(0, int(100 - (d / max(ok, .1)) * 25))
     if d <= bad: return max(0, int(75  - ((d - ok) / max(bad - ok, .1)) * 45))
-    return max(0, int(30 - (d - bad) * 1.8))
+    # Beyond bad zone: decay but floor at 5 (not 0) to keep score readable
+    return max(5, int(30 - (d - bad) * 1.5))
 
 def cam_mat(w, h):
     return np.array([[w, 0, w/2], [0, w, h/2], [0, 0, 1]], dtype=np.float64)
@@ -2017,7 +2026,7 @@ def analyze():
             _s_dirty = True
             # Return cached Gemini text from previous call if available
             if s.get("last_gemini_text"):
-                result["claude_analysis"] = s["last_gemini_text"]
+                result["ai_tip"] = s["last_gemini_text"]; result["claude_analysis"] = s["last_gemini_text"]  # backward compat
                 result["ai_enhanced"]     = True
 
         # Persist session state back to Redis
@@ -2041,6 +2050,11 @@ def analyze():
         except Exception: pass
 
         result["processing_ms"] = round((time.perf_counter() - t0) * 1000)
+        # Confidence floor: if MediaPipe detected landmarks, score ≥ 18
+        # Prevents confusing "0" results from edge-case geometry
+        if result.get("detected") and result.get("score", 100) < 18:
+            result["score"]   = 18
+            result["overall"] = 18
         return jsonify(result)
     except Exception as e:
         import traceback
@@ -2941,8 +2955,8 @@ def nps_results():
 
         promoters  = sum(1 for r in responses if r.get("score",0)>=9)
         detractors = sum(1 for r in responses if r.get("score",0)<=6)
-        nps_score  = round((promoters-detractors)/len(responses)*100)
-        avg_score  = round(sum(r.get("score",0) for r in responses)/len(responses),1)
+        nps_score  = round((promoters-detractors)/len(responses)*100) if responses else 0
+        avg_score  = round(sum(r.get("score",0) for r in responses)/len(responses),1) if responses else 0
         return jsonify({"ok":True,"nps":nps_score,"avg":avg_score,"count":len(responses),"promoters":promoters,"detractors":detractors,"responses":responses[:50]})
     except Exception as e:
         return jsonify({"error":str(e)}),500
@@ -4120,10 +4134,13 @@ def user_activity_log():
 def health():
     # Fast liveness probe — do NOT call external APIs here
     gemini_ok = bool(GEMINI_API_KEY)
+    models_ready = POSE_LITE is not None
+    mp_ver  = mp.__version__  if (models_ready and mp)  else "not loaded"
+    cv2_ver = cv2.__version__ if (models_ready and cv2) else "not loaded"
     return jsonify({
         "status": "ok", "version": "17.0",
-        "engine": f"MediaPipe {mp.__version__} + OpenCV {cv2.__version__} + solvePnP",
-        "mediapipe": {"pose_lite":"loaded","pose_full":"loaded","face_mesh":"loaded (478 landmarks + iris + blink detection)"},
+        "engine": f"MediaPipe {mp_ver} + OpenCV {cv2_ver} + solvePnP",
+        "mediapipe": {"pose_lite": "loaded" if models_ready else "pending","pose_full": "loaded" if models_ready else "pending","face_mesh": "loaded" if models_ready else "pending"},
         "integrations": {
             "gemini":   {"configured": bool(GEMINI_API_KEY), "live": gemini_ok},
             "paymob":   {"configured": bool(PAYMOB_SECRET_KEY)},
@@ -5230,6 +5247,7 @@ def subscription_cancel():
         return safe_error(e)
 
 if __name__ == "__main__":
+    import threading as _th; _th.Thread(target=_ensure_models, daemon=True).start()
     os.makedirs("reports", exist_ok=True)
     print("="*60, flush=True)
     print("  PostureAI Pro Backend v15", flush=True)
@@ -5332,9 +5350,12 @@ def _check_risk_threshold(uid: str, score: int, threshold: int = 45, duration_s:
 
 @require_auth
 @app.route("/api/webhooks", methods=["GET"])
+@require_auth
 @limiter.limit("60 per minute")
 def list_webhooks():
-    return jsonify({"webhooks": list(_webhooks.values())})
+    uid = getattr(g, "uid", None)
+    user_hooks = {k: v for k,v in _webhooks.items() if v.get("uid") == uid}
+    return jsonify({"webhooks": list(user_hooks.values())})
 
 @require_auth
 @app.route("/api/webhooks", methods=["POST"])
@@ -7759,6 +7780,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
