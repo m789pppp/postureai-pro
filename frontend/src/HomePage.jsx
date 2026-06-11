@@ -249,22 +249,7 @@ function DashIndividual({ profile, userSessions, tier, cs, isAr, setPage, startC
         </div>
       )}
 
-      {/* Tools */}
-      <div>
-        <SectionHead title={isAr?"الأدوات":"Tools"} cs={cs}/>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))", gap:10 }}>
-          <ToolBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="26,86,219"
-            desc={isAr?"اضبط الكاميرا":"Setup camera"} onClick={onCalib} cs={cs}/>
-          <ToolBtn icon="📊" label={isAr?"تحليلات":"Analytics"} color="8,145,178"
-            desc={isAr?"إحصائيات تفصيلية":"Detailed stats"} onClick={onAnalytics} cs={cs}/>
-          <ToolBtn icon="🤖" label="AI Coach" color="16,185,129"
-            desc={isAr?"نصائح AI":"AI posture tips"} onClick={onCoach}
-            locked={!pro} cs={cs}/>
-          <ToolBtn icon="📋" label={isAr?"تقارير":"Reports"} color="124,58,237"
-            desc={isAr?"PDF تفصيلي":"Detailed PDF"} onClick={onReports}
-            locked={!pro} cs={cs}/>
-        </div>
-      </div>
+
 
       {/* Session history */}
       {userSessions.length>0 ? (
@@ -501,21 +486,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
           sub={`${users.length?Math.round(active/users.length*100):0}%`} color="#f59e0b" cs={cs}/>
       </div>
 
-      {/* HR Tools */}
-      <div>
-        <SectionHead title={isAr?"أدوات الإدارة":"Management Tools"} cs={cs}/>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))", gap:10 }}>
-          <ToolBtn icon="📊" label={isAr?"التحليلات":"Analytics"} color="8,145,178"
-            desc={isAr?"إحصائيات الفريق":"Team stats"} onClick={onAnalytics} cs={cs}/>
-          <ToolBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="124,58,237"
-            desc={isAr?"إنتاجية وإرهاق":"Productivity"} onClick={onWorkforce} cs={cs}/>
-          <ToolBtn icon="📋" label={isAr?"تقارير":"Reports"} color="16,185,129"
-            desc={isAr?"PDF تنفيذي":"Executive PDF"} onClick={onReports} cs={cs}/>
-          <ToolBtn icon="🔔" label={isAr?"تنبيهات":"Alerts"} color="245,158,11"
-            desc={isAr?`${atRisk} في خطر`:`${atRisk} at risk`}
-            onClick={()=>addToast(isAr?"تم إرسال تنبيهات لكل المعرضين للخطر":"Alerts sent to at-risk employees","success")} cs={cs}/>
-        </div>
-      </div>
+
 
       {/* Risk alert */}
       {atRisk>0&&(
@@ -653,8 +624,40 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera }) {
 // ══════════════════════════════════════════════════════════════════
 // SETTINGS PANEL (inline)
 // ══════════════════════════════════════════════════════════════════
+// ─── Add Password Form ─────────────────────────────────────────────
+function AddPasswordForm({ user, isAr, cs, addToast }) {
+  const [pw, setPw] = useState("");
+  const [saving, setSaving] = useState(false);
+  return (
+    <div style={{ display:"flex", gap:8 }}>
+      <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
+        placeholder={isAr?"كلمة مرور جديدة (6+ أحرف)":"New password (6+ chars)"}
+        style={{ flex:1, padding:"8px 12px", background:"rgba(255,255,255,.05)",
+          border:`1px solid ${cs.border}`, borderRadius:7, color:cs.text,
+          fontSize:12, outline:"none" }}/>
+      <button disabled={pw.length<6||saving} onClick={async ()=>{
+        setSaving(true);
+        try {
+          const { EmailAuthProvider, linkWithCredential } = await import("firebase/auth");
+          const { auth } = await import("./firebase.js");
+          const cred = EmailAuthProvider.credential(user.email, pw);
+          await linkWithCredential(auth.currentUser, cred);
+          addToast(isAr?"✅ تمت إضافة كلمة المرور":"✅ Password added","success");
+          setPw("");
+        } catch(e) { addToast(e.code==="auth/weak-password"?"Password too weak":e.message||"Error","error"); }
+        setSaving(false);
+      }} style={{ padding:"8px 14px", background:"#1a56db", color:"#fff",
+        border:"none", borderRadius:7, fontSize:12, fontWeight:600,
+        cursor:pw.length<6||saving?"not-allowed":"pointer", opacity:pw.length<6?.5:1 }}>
+        {saving?"...":"Add"}
+      </button>
+    </div>
+  );
+}
+
+
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling }) {
-  const [name,    setName]    = useState(profile?.name||"");
+  const [name,    setName]    = useState(profile?.name||profile?.displayName||"");
   const [company, setCompany] = useState(profile?.company||"");
   const [dept,    setDept]    = useState(profile?.department||"");
   const [saving,  setSaving]  = useState(false);
@@ -662,7 +665,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
 
   // Sync when profile changes
   useEffect(()=>{
-    setName(profile?.name||"");
+    setName(profile?.name||profile?.displayName||"");
     setCompany(profile?.company||"");
     setDept(profile?.department||"");
   },[profile]);
@@ -877,8 +880,20 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             </>
           )}
           {isPro(tier)&&(
-            <div style={{ fontSize:13, color:"#10b981", fontWeight:600, textAlign:"center", padding:"8px" }}>
-              ✅ {isAr?"أنت على خطة مدفوعة. شكراً!":"You're on a paid plan. Thank you!"}
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div style={{ fontSize:13, color:"#10b981", fontWeight:600, textAlign:"center", padding:"8px" }}>
+                ✅ {isAr?"أنت على خطة مدفوعة. شكراً!":"You're on a paid plan. Thank you!"}
+              </div>
+              <button onClick={async ()=>{
+                if(!window.confirm(isAr?"هل أنت متأكد من إلغاء الاشتراك؟":"Cancel subscription? You'll lose Pro features at end of billing period.")) return;
+                try {
+                  addToast(isAr?"تم طلب الإلغاء — سيتم معالجته خلال 24 ساعة":"Cancellation requested — will be processed within 24h","info");
+                } catch(e) { addToast("Error","error"); }
+              }} style={{ padding:"10px", background:"rgba(239,68,68,.08)",
+                color:"#f87171", border:"1px solid rgba(239,68,68,.2)",
+                borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                {isAr?"إلغاء الاشتراك":"Cancel Subscription"}
+              </button>
             </div>
           )}
         </div>
@@ -911,7 +926,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 </span>
               </div>
             ))}
-            {/* Add Google account link */}
+            {/* Link Google account */}
             {!(user?.providerData||[]).some(p=>p.providerId==="google.com")&&(
               <button onClick={async ()=>{
                 try{
@@ -919,7 +934,8 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                   const { auth } = await import("./firebase.js");
                   await linkWithPopup(auth.currentUser, new GoogleAuthProvider());
                   addToast(isAr?"✅ تم ربط حساب Google":"✅ Google account linked","success");
-                }catch(e){ addToast(e.message||"Error","error"); }
+                  window.location.reload();
+                }catch(e){ addToast(e.code==="auth/popup-closed-by-user"?"Popup closed":e.message||"Error","error"); }
               }} style={{ padding:"11px 14px", background:"rgba(59,130,246,.08)",
                 border:"1px solid rgba(59,130,246,.2)", borderRadius:9, cursor:"pointer",
                 display:"flex", alignItems:"center", gap:10, width:"100%", color:"#60a5fa",
@@ -928,10 +944,14 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 {isAr?"+ ربط حساب Google":"+ Link Google Account"}
               </button>
             )}
-            {/* Add email/password */}
-            {!(user?.providerData||[]).some(p=>p.providerId==="password")&&(
-              <div style={{ fontSize:12, color:cs.muted, padding:"8px 0", textAlign:"center" }}>
-                {isAr?"تسجيل دخولك عبر Google فقط. يمكنك إضافة كلمة مرور من إعدادات Firebase.":"You sign in via Google only."}
+            {/* Add email/password to Google account */}
+            {(user?.providerData||[]).some(p=>p.providerId==="google.com")&&
+             !(user?.providerData||[]).some(p=>p.providerId==="password")&&(
+              <div>
+                <div style={{ fontSize:11, color:cs.muted, marginBottom:8 }}>
+                  {isAr?"إضافة كلمة مرور للدخول بالإيميل أيضاً:":"Add password for email login too:"}
+                </div>
+                <AddPasswordForm user={user} isAr={isAr} cs={cs} addToast={addToast}/>
               </div>
             )}
             <button onClick={onSignOut}
