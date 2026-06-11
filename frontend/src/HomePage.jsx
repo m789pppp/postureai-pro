@@ -161,8 +161,15 @@ function TierBadge({ tier }) {
 // ══════════════════════════════════════════════════════════════════
 // INDIVIDUAL DASHBOARD
 // ══════════════════════════════════════════════════════════════════
-function DashIndividual({ profile, userSessions, tier, cs, isAr, setPage, startCamera,
-  onCoach, onBilling, onAnalytics, onCalib, onReports, onCompare, onTrend, addToast }) {
+function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs, isAr, setPage, startCamera,
+  onCoach, onBilling, onAnalytics, onCalib, onReports, onCompare, onTrend, addToast,
+  setShowGamification, setShowGrowthHub, setShowSecurityCenter, setShowAIInsights,
+  setShowPredictiveAI, setShowCustomerSuccess, setShowChurnPrediction,
+  setShowAPIMarketplace, setShowWhiteLabel, setShowMultiTenant, setShowAuditSystem,
+  setShowDashboard, setShowCoach, setShowCalibWizard, setShowBilling,
+  setShowAIReports, setShowSessionComparison, setShowTrendChart,
+  isAdmin, isHRAdmin, getAllUsers, setAllUsers, setShowWorkforceAnalytics,
+  setShowMRR, setShowChangelog, setShowNotificationsHub, setShowEnterpriseRBAC }) {
 
   const last   = userSessions[0]?.avg_score||0;
   const avg    = userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0;
@@ -1381,10 +1388,31 @@ export default function HomePage({
     );
 
     return (
-      <DashIndividual profile={profile} userSessions={userSessions} tier={tier}
+      <DashIndividual user={user} profile={profile} userSessions={userSessions} setUserSessions={setUserSessions} tier={tier}
         cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
         onCoach={openCoach} onBilling={openBilling} onAnalytics={openAnalytics}
         onCalib={openCalib} onReports={openReports} addToast={addToast}
+        isAdmin={isAdmin} isHRAdmin={isHRAdmin}
+        setShowGamification={setShowGamification}
+        setShowGrowthHub={setShowGrowthHub}
+        setShowSecurityCenter={setShowSecurityCenter}
+        setShowAIInsights={setShowAIInsights}
+        setShowPredictiveAI={setShowPredictiveAI}
+        setShowCustomerSuccess={setShowCustomerSuccess}
+        setShowChurnPrediction={setShowChurnPrediction}
+        setShowAPIMarketplace={setShowAPIMarketplace}
+        setShowWhiteLabel={setShowWhiteLabel}
+        setShowMultiTenant={setShowMultiTenant}
+        setShowAuditSystem={setShowAuditSystem}
+        setShowDashboard={setShowDashboard}
+        setShowCoach={setShowCoach}
+        setShowCalibWizard={setShowCalibWizard}
+        setShowBilling={setShowBilling}
+        setShowAIReports={setShowAIReports}
+        setShowSessionComparison={setShowSessionComparison}
+        setShowTrendChart={setShowTrendChart}
+        setShowWorkforceAnalytics={setShowWorkforceAnalytics}
+        getAllUsers={getAllUsers} setAllUsers={setAllUsers}
         onCompare={()=>setShowSessionComparison?.(true)} onTrend={()=>setShowTrendChart?.(true)}/>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
