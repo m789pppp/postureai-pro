@@ -128,7 +128,7 @@ function SectionHead({ title, cs }) {
 }
 
 // ─── Tool button (for the grid) ────────────────────────────────────
-function ToolBtn({ icon, label, desc, color, onClick, locked, cs }) {
+function ToolBtn({ icon, label, desc, color, onClick, locked, lockLabel="PRO", onLock, cs }) {
   const [hov,setHov]=useState(false);
   return (
     <button onClick={locked?undefined:onClick}
@@ -143,7 +143,7 @@ function ToolBtn({ icon, label, desc, color, onClick, locked, cs }) {
       <span style={{ fontSize:10, color:cs.muted, lineHeight:1.4 }}>{desc}</span>
       {locked&&<span style={{ position:"absolute", top:8, right:8, fontSize:9,
         background:"rgba(245,158,11,.15)", color:"#f59e0b",
-        padding:"2px 6px", borderRadius:4, fontWeight:700 }}>PRO</span>}
+        padding:"2px 6px", borderRadius:4, fontWeight:700 }}>{lockLabel}</span>}
     </button>
   );
 }
@@ -249,7 +249,101 @@ function DashIndividual({ profile, userSessions, tier, cs, isAr, setPage, startC
         </div>
       )}
 
+      {/* Tools */}
+      <div>
+        <SectionHead title={isAr?"الأدوات":"Tools"} cs={cs}/>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))", gap:10 }}>
+          {/* ── Core tools — all tiers ── */}
+          <ToolBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="16,185,129"
+            desc={isAr?"اضبط الكاميرا":"Setup camera"}
+            onClick={()=>setShowCalibWizard(true)} cs={cs}/>
+          <ToolBtn icon="📊" label={isAr?"تحليلات":"Analytics"} color="26,86,219"
+            desc={isAr?"إحصائيات تفصيلية":"Detailed stats"}
+            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}} cs={cs}/>
+          <ToolBtn icon="🏆" label={isAr?"التقدم":"Progress"} color="245,158,11"
+            desc={isAr?"الإنجازات والمكافآت":"Achievements & streaks"}
+            onClick={()=>setShowGamification?.(true)} cs={cs}/>
+          <ToolBtn icon="🚀" label={isAr?"النمو":"Growth"} color="245,158,11"
+            desc={isAr?"أدوات النمو":"Growth tools"}
+            onClick={()=>setShowGrowthHub?.(true)} cs={cs}/>
+          <ToolBtn icon="🔒" label={isAr?"الأمان":"Security"} color="99,102,241"
+            desc={isAr?"إعدادات الأمان":"Security settings"}
+            onClick={()=>setShowSecurityCenter?.(true)} cs={cs}/>
 
+          {/* ── Pro tools ── */}
+          <ToolBtn icon="🤖" label="AI Coach" color="16,185,129"
+            desc={isAr?"نصائح AI":"AI posture tips"}
+            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}
+            locked={!(tier==="professional"||tier==="elite"||tier==="business")}
+            lockLabel="PRO" onLock={()=>setShowBilling(true)} cs={cs}/>
+          <ToolBtn icon="📋" label={isAr?"تقارير":"Reports"} color="124,58,237"
+            desc={isAr?"PDF تفصيلي":"Detailed PDF"}
+            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}
+            locked={!(tier==="professional"||tier==="elite"||tier==="business")}
+            lockLabel="PRO" onLock={()=>setShowBilling(true)} cs={cs}/>
+          <ToolBtn icon="🧠" label={isAr?"رؤى AI":"AI Insights"} color="8,145,178"
+            desc={isAr?"تحليل عميق":"Deep analysis"}
+            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights?.(true);}}
+            locked={!(tier==="elite"||tier==="business")}
+            lockLabel="ELITE" onLock={()=>setShowBilling(true)} cs={cs}/>
+          <ToolBtn icon="🔮" label={isAr?"AI تنبؤي":"Predictive AI"} color="8,145,178"
+            desc={isAr?"توقع الأداء":"Predict performance"}
+            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowPredictiveAI?.(true);}}
+            locked={!(tier==="elite"||tier==="business")}
+            lockLabel="ELITE" onLock={()=>setShowBilling(true)} cs={cs}/>
+
+          {/* ── Compare / Trend — unlocked by sessions ── */}
+          {userSessions.length>=2&&(
+            <ToolBtn icon="📊" label={isAr?"مقارنة":"Compare"} color="168,85,247"
+              desc={isAr?"قارن الجلسات":"Compare sessions"}
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowSessionComparison(true);}} cs={cs}/>
+          )}
+          {userSessions.length>=3&&(
+            <ToolBtn icon="📈" label={isAr?"الاتجاه":"Trend"} color="8,145,178"
+              desc={isAr?"مسار التحسن":"Progress trend"}
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowTrendChart(true);}} cs={cs}/>
+          )}
+
+          {/* ── HR / Admin tools ── */}
+          {(isHRAdmin||isAdmin)&&(
+            <ToolBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="8,145,178"
+              desc={isAr?"تحليل الفريق":"Team analytics"}
+              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}} cs={cs}/>
+          )}
+          {(isHRAdmin||isAdmin)&&(
+            <ToolBtn icon="💡" label={isAr?"نجاح العملاء":"Success"} color="8,145,178"
+              desc={isAr?"متابعة العملاء":"Customer success"}
+              onClick={()=>setShowCustomerSuccess?.(true)} cs={cs}/>
+          )}
+          {(isHRAdmin||isAdmin)&&(
+            <ToolBtn icon="📉" label={isAr?"توقع التسرب":"Churn AI"} color="239,68,68"
+              desc={isAr?"منع التسرب":"Predict churn"}
+              onClick={()=>setShowChurnPrediction?.(true)} cs={cs}/>
+          )}
+          {(isHRAdmin||isAdmin)&&(
+            <ToolBtn icon="📜" label={isAr?"سجل المراجعة":"Audit Log"} color="100,116,139"
+              desc={isAr?"سجل النشاط":"Activity log"}
+              onClick={()=>setShowAuditSystem?.(true)} cs={cs}/>
+          )}
+
+          {/* ── Elite / Business ── */}
+          <ToolBtn icon="🔌" label={isAr?"سوق API":"API Market"} color="16,185,129"
+            desc={isAr?"تكاملات API":"API integrations"}
+            onClick={()=>setShowAPIMarketplace?.(true)}
+            locked={!(tier==="elite"||tier==="business")}
+            lockLabel="ELITE" onLock={()=>setShowBilling(true)} cs={cs}/>
+          <ToolBtn icon="🏷️" label={isAr?"علامتي":"White-label"} color="168,85,247"
+            desc={isAr?"علامة مخصصة":"Custom branding"}
+            onClick={()=>setShowWhiteLabel?.(true)}
+            locked={!(tier==="elite"||tier==="business")}
+            lockLabel="ELITE" onLock={()=>setShowBilling(true)} cs={cs}/>
+          {(isAdmin||(tier==="elite"||tier==="business"))&&(
+            <ToolBtn icon="🏢" label={isAr?"متعدد":"Multi-tenant"} color="8,145,178"
+              desc={isAr?"إدارة المستأجرين":"Tenant management"}
+              onClick={()=>setShowMultiTenant?.(true)} cs={cs}/>
+          )}
+        </div>
+      </div>
 
       {/* Session history */}
       {userSessions.length>0 ? (
@@ -486,7 +580,21 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
           sub={`${users.length?Math.round(active/users.length*100):0}%`} color="#f59e0b" cs={cs}/>
       </div>
 
-
+      {/* HR Tools */}
+      <div>
+        <SectionHead title={isAr?"أدوات الإدارة":"Management Tools"} cs={cs}/>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))", gap:10 }}>
+          <ToolBtn icon="📊" label={isAr?"التحليلات":"Analytics"} color="8,145,178"
+            desc={isAr?"إحصائيات الفريق":"Team stats"} onClick={onAnalytics} cs={cs}/>
+          <ToolBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="124,58,237"
+            desc={isAr?"إنتاجية وإرهاق":"Productivity"} onClick={onWorkforce} cs={cs}/>
+          <ToolBtn icon="📋" label={isAr?"تقارير":"Reports"} color="16,185,129"
+            desc={isAr?"PDF تنفيذي":"Executive PDF"} onClick={onReports} cs={cs}/>
+          <ToolBtn icon="🔔" label={isAr?"تنبيهات":"Alerts"} color="245,158,11"
+            desc={isAr?`${atRisk} في خطر`:`${atRisk} at risk`}
+            onClick={()=>addToast(isAr?"تم إرسال تنبيهات لكل المعرضين للخطر":"Alerts sent to at-risk employees","success")} cs={cs}/>
+        </div>
+      </div>
 
       {/* Risk alert */}
       {atRisk>0&&(
@@ -624,40 +732,8 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera }) {
 // ══════════════════════════════════════════════════════════════════
 // SETTINGS PANEL (inline)
 // ══════════════════════════════════════════════════════════════════
-// ─── Add Password Form ─────────────────────────────────────────────
-function AddPasswordForm({ user, isAr, cs, addToast }) {
-  const [pw, setPw] = useState("");
-  const [saving, setSaving] = useState(false);
-  return (
-    <div style={{ display:"flex", gap:8 }}>
-      <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
-        placeholder={isAr?"كلمة مرور جديدة (6+ أحرف)":"New password (6+ chars)"}
-        style={{ flex:1, padding:"8px 12px", background:"rgba(255,255,255,.05)",
-          border:`1px solid ${cs.border}`, borderRadius:7, color:cs.text,
-          fontSize:12, outline:"none" }}/>
-      <button disabled={pw.length<6||saving} onClick={async ()=>{
-        setSaving(true);
-        try {
-          const { EmailAuthProvider, linkWithCredential } = await import("firebase/auth");
-          const { auth } = await import("./firebase.js");
-          const cred = EmailAuthProvider.credential(user.email, pw);
-          await linkWithCredential(auth.currentUser, cred);
-          addToast(isAr?"✅ تمت إضافة كلمة المرور":"✅ Password added","success");
-          setPw("");
-        } catch(e) { addToast(e.code==="auth/weak-password"?"Password too weak":e.message||"Error","error"); }
-        setSaving(false);
-      }} style={{ padding:"8px 14px", background:"#1a56db", color:"#fff",
-        border:"none", borderRadius:7, fontSize:12, fontWeight:600,
-        cursor:pw.length<6||saving?"not-allowed":"pointer", opacity:pw.length<6?.5:1 }}>
-        {saving?"...":"Add"}
-      </button>
-    </div>
-  );
-}
-
-
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling }) {
-  const [name,    setName]    = useState(profile?.name||profile?.displayName||"");
+  const [name,    setName]    = useState(profile?.name||"");
   const [company, setCompany] = useState(profile?.company||"");
   const [dept,    setDept]    = useState(profile?.department||"");
   const [saving,  setSaving]  = useState(false);
@@ -665,7 +741,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
 
   // Sync when profile changes
   useEffect(()=>{
-    setName(profile?.name||profile?.displayName||"");
+    setName(profile?.name||"");
     setCompany(profile?.company||"");
     setDept(profile?.department||"");
   },[profile]);
@@ -880,20 +956,8 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             </>
           )}
           {isPro(tier)&&(
-            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-              <div style={{ fontSize:13, color:"#10b981", fontWeight:600, textAlign:"center", padding:"8px" }}>
-                ✅ {isAr?"أنت على خطة مدفوعة. شكراً!":"You're on a paid plan. Thank you!"}
-              </div>
-              <button onClick={async ()=>{
-                if(!window.confirm(isAr?"هل أنت متأكد من إلغاء الاشتراك؟":"Cancel subscription? You'll lose Pro features at end of billing period.")) return;
-                try {
-                  addToast(isAr?"تم طلب الإلغاء — سيتم معالجته خلال 24 ساعة":"Cancellation requested — will be processed within 24h","info");
-                } catch(e) { addToast("Error","error"); }
-              }} style={{ padding:"10px", background:"rgba(239,68,68,.08)",
-                color:"#f87171", border:"1px solid rgba(239,68,68,.2)",
-                borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer" }}>
-                {isAr?"إلغاء الاشتراك":"Cancel Subscription"}
-              </button>
+            <div style={{ fontSize:13, color:"#10b981", fontWeight:600, textAlign:"center", padding:"8px" }}>
+              ✅ {isAr?"أنت على خطة مدفوعة. شكراً!":"You're on a paid plan. Thank you!"}
             </div>
           )}
         </div>
@@ -926,7 +990,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 </span>
               </div>
             ))}
-            {/* Link Google account */}
+            {/* Add Google account link */}
             {!(user?.providerData||[]).some(p=>p.providerId==="google.com")&&(
               <button onClick={async ()=>{
                 try{
@@ -934,8 +998,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                   const { auth } = await import("./firebase.js");
                   await linkWithPopup(auth.currentUser, new GoogleAuthProvider());
                   addToast(isAr?"✅ تم ربط حساب Google":"✅ Google account linked","success");
-                  window.location.reload();
-                }catch(e){ addToast(e.code==="auth/popup-closed-by-user"?"Popup closed":e.message||"Error","error"); }
+                }catch(e){ addToast(e.message||"Error","error"); }
               }} style={{ padding:"11px 14px", background:"rgba(59,130,246,.08)",
                 border:"1px solid rgba(59,130,246,.2)", borderRadius:9, cursor:"pointer",
                 display:"flex", alignItems:"center", gap:10, width:"100%", color:"#60a5fa",
@@ -944,14 +1007,10 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 {isAr?"+ ربط حساب Google":"+ Link Google Account"}
               </button>
             )}
-            {/* Add email/password to Google account */}
-            {(user?.providerData||[]).some(p=>p.providerId==="google.com")&&
-             !(user?.providerData||[]).some(p=>p.providerId==="password")&&(
-              <div>
-                <div style={{ fontSize:11, color:cs.muted, marginBottom:8 }}>
-                  {isAr?"إضافة كلمة مرور للدخول بالإيميل أيضاً:":"Add password for email login too:"}
-                </div>
-                <AddPasswordForm user={user} isAr={isAr} cs={cs} addToast={addToast}/>
+            {/* Add email/password */}
+            {!(user?.providerData||[]).some(p=>p.providerId==="password")&&(
+              <div style={{ fontSize:12, color:cs.muted, padding:"8px 0", textAlign:"center" }}>
+                {isAr?"تسجيل دخولك عبر Google فقط. يمكنك إضافة كلمة مرور من إعدادات Firebase.":"You sign in via Google only."}
               </div>
             )}
             <button onClick={onSignOut}
@@ -1187,8 +1246,14 @@ export default function HomePage({
   setPage, startCamera, addToast,
   setShowCoach, setShowBilling, setShowCompanyOnboard,
   setShowDashboard, setShowWorkforceAnalytics, setShowAIReports,
-  setShowCalibWizard,
+  setShowCalibWizard, setShowGamification,
   setShowSessionComparison, setShowTrendChart,
+  setShowAIInsights, setShowGrowthHub, setShowSecurityCenter,
+  setShowCustomerSuccess, setShowChurnPrediction,
+  setShowAPIMarketplace, setShowWhiteLabel,
+  setShowMultiTenant, setShowAuditSystem,
+  setShowPredictiveAI, setShowMRR, setShowChangelog,
+  setShowNotificationsHub, setShowEnterpriseRBAC,
   isAdmin, isHRAdmin, companyId,
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,
