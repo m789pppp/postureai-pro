@@ -2375,17 +2375,26 @@ export default function App(){
         setShowOnboard={setShowOnboard}
         setShowSessionComparison={setShowSessionComparison}
         setShowTrendChart={setShowTrendChart}
+        setShowCalibWizard={setShowCalibWizard}
+        setShowAIInsights={setShowAIInsights}
+        setShowGrowthHub={setShowGrowthHub}
+        setShowSecurityCenter={setShowSecurityCenter}
+        setShowCustomerSuccess={setShowCustomerSuccess}
+        setShowChurnPrediction={setShowChurnPrediction}
+        setShowAPIMarketplace={setShowAPIMarketplace}
+        setShowWhiteLabel={setShowWhiteLabel}
+        setShowMultiTenant={setShowMultiTenant}
+        setShowAuditSystem={setShowAuditSystem}
+        setShowPredictiveAI={setShowPredictiveAI}
+        setShowMRR={setShowMRR}
+        setShowChangelog={setShowChangelog}
+        setShowNotificationsHub={setShowNotificationsHub}
+        setShowEnterpriseRBAC={setShowEnterpriseRBAC}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin} companyId={companyId}
         darkMode={darkMode} setDarkMode={setDarkMode} setLang={setLang}
         t={t} logOut={logOut} setUser={setUser} setProfile={setProfile}
-        showCalibWizard={showCalibWizard} setShowCalibWizard={setShowCalibWizard}
+        showCalibWizard={showCalibWizard}
         showBreak={showBreak} dismissBreak={dismissBreak}
-        showDashboard={showDashboard} showCoach={showCoach}
-        showGamification={showGamification} showBilling={showBilling}
-        showCompanyOnboard={showCompanyOnboard} showAdmin={showAdmin}
-        AnalyticsDashboard={AnalyticsDashboard} AICoach={AICoach}
-        GamificationPanel={GamificationPanel} BillingModal={BillingModal}
-        CompanyOnboarding={CompanyOnboarding} AdminDashboard={AdminDashboard}
         calibData={calibData} Toasts={Toasts} toasts={toasts} dismissToast={dismissToast}
         NavAvatarDropdown={NavAvatarDropdown} UpgradePrompt={UpgradePrompt}
         showUpgrade={showUpgrade} upgradeReason={upgradeReason}
@@ -3072,115 +3081,7 @@ export default function App(){
           </button>
         </div>
 
-        {/* Tools — filtered by role + tier */}
-        <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
-          <div style={{fontSize:9.5,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>
-            {isAr?"الأدوات":"Tools"}
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <ActionBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="#10b981" dimColor="#6ee7b7"
-              onClick={()=>setShowCalibWizard(true)}/>
-            <ActionBtn icon="📊" label={isAr?"تحليلاتي":"Analytics"} color="#1a56db" dimColor="#93c5fd"
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}/>
-            {(tier==="professional"||tier==="elite"||tier==="business")
-              ? <ActionBtn icon="🤖" label={isAr?"مدرب AI":"AI Coach"} color="#6366f1" dimColor="#a5b4fc"
-                  onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}/>
-              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
-                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
-                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.55,position:"relative"}}>
-                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🤖</span>
-                  <span style={{fontSize:11,color:cs.muted}}>AI Coach</span>
-                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
-                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>PRO</span>
-                </div>
-            }
-            <ActionBtn icon="🏆" label={isAr?"التقدم":"Progress"} color="#f59e0b" dimColor="#fbbf24"
-              onClick={()=>setShowGamification(true)}/>
-            {userSessions.length>=2&&(
-              <ActionBtn icon="📊" label={isAr?"مقارنة":"Compare"} color="#a855f7" dimColor="#d8b4fe"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowSessionComparison(true);}}/>
-            )}
-            {userSessions.length>=3&&(
-              <ActionBtn icon="📈" label={isAr?"الاتجاه":"Trend"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowTrendChart(true);}}/>
-            )}
-            {(tier==="professional"||tier==="elite"||tier==="business")&&(
-              <ActionBtn icon="📋" label={isAr?"التقارير":"Reports"} color="#059669" dimColor="#6ee7b7"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}/>
-            )}
-            {(isHRAdmin||isAdmin)&&(
-              <ActionBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}}/>
-            )}
-            {(tier==="elite"||tier==="business")&&(
-              <ActionBtn icon="🧠" label={isAr?"رؤى AI":"AI Insights"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights(true);}}/>
-            )}
-          </div>
-
-          {/* ── Growth, Security, Enterprise tools ─────────────────── */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
-            {/* GrowthHub — all tiers */}
-            <ActionBtn icon="🚀" label={isAr?"النمو":"Growth"} color="#f59e0b" dimColor="#fbbf24"
-              onClick={()=>setShowGrowthHub(true)}/>
-
-            {/* SecurityCenter — all tiers */}
-            <ActionBtn icon="🔒" label={isAr?"الأمان":"Security"} color="#6366f1" dimColor="#a5b4fc"
-              onClick={()=>setShowSecurityCenter(true)}/>
-
-            {/* CustomerSuccess — HR/admin */}
-            {(isHRAdmin||isAdmin)&&(
-              <ActionBtn icon="💡" label={isAr?"نجاح العملاء":"Success"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>setShowCustomerSuccess(true)}/>
-            )}
-
-            {/* ChurnPrediction — HR/admin */}
-            {(isHRAdmin||isAdmin)&&(
-              <ActionBtn icon="📉" label={isAr?"توقع التسرب":"Churn AI"} color="#ef4444" dimColor="#fca5a5"
-                onClick={()=>setShowChurnPrediction(true)}/>
-            )}
-
-            {/* APIMarketplace — elite/business */}
-            {(tier==="elite"||tier==="business")
-              ? <ActionBtn icon="🔌" label={isAr?"سوق API":"API Market"} color="#10b981" dimColor="#6ee7b7"
-                  onClick={()=>setShowAPIMarketplace(true)}/>
-              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
-                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
-                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.45,position:"relative"}}>
-                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🔌</span>
-                  <span style={{fontSize:11,color:cs.muted}}>API Market</span>
-                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
-                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>ELITE</span>
-                </div>
-            }
-
-            {/* WhiteLabel — elite/business */}
-            {(tier==="elite"||tier==="business")
-              ? <ActionBtn icon="🏷️" label={isAr?"علامتي":"White-label"} color="#a855f7" dimColor="#d8b4fe"
-                  onClick={()=>setShowWhiteLabel(true)}/>
-              : <div onClick={()=>setShowBilling(true)} style={{display:"flex",flexDirection:"column",
-                  alignItems:"center",gap:4,padding:"10px 4px",borderRadius:10,
-                  border:`1px dashed ${cs.border}`,cursor:"pointer",opacity:.45,position:"relative"}}>
-                  <span style={{fontSize:20,filter:"grayscale(1)"}}>🏷️</span>
-                  <span style={{fontSize:11,color:cs.muted}}>White-label</span>
-                  <span style={{position:"absolute",top:4,right:4,fontSize:8,background:"#f59e0b22",
-                    color:"#f59e0b",padding:"1px 4px",borderRadius:3,fontWeight:700}}>ELITE</span>
-                </div>
-            }
-
-            {/* MultiTenant — elite/admin */}
-            {(isAdmin||(tier==="elite"||tier==="business"))&&(
-              <ActionBtn icon="🏢" label={isAr?"متعدد المستأجرين":"Multi-tenant"} color="#0891b2" dimColor="#67e8f9"
-                onClick={()=>setShowMultiTenant(true)}/>
-            )}
-
-            {/* AuditSystem — HR/admin */}
-            {(isHRAdmin||isAdmin)&&(
-              <ActionBtn icon="📜" label={isAr?"سجل المراجعة":"Audit Log"} color="#64748b" dimColor="#94a3b8"
-                onClick={()=>setShowAuditSystem(true)}/>
-            )}
-          </div>
-        </div>
+        {/* Tools moved to Dashboard — see HomePage tools tab */}
 
         {/* Calibration active badge */}
         {calibData&&(
