@@ -749,33 +749,66 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera }) {
   const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
   const grade = (s,ar) => s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"ضعيف":"Poor");
 
+  const totalSessions = userSessions.length;
+  const avgScore = totalSessions ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/totalSessions) : 0;
+  const bestScore = Math.max(...userSessions.map(s=>s.avg_score||0));
+  const totalMinutes = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
+
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-      {userSessions.map((s,i)=>{
-        const d=s.created_at?.toDate?.()??new Date(s.created_at||0);
-        const sc=s.avg_score||0;
-        const col=gradeColor(sc);
-        const dur=s.duration_sec?`${Math.round(s.duration_sec/60)}m`:"";
-        return (
-          <div key={i} style={{ background:cs.card, border:`1px solid ${cs.border}`,
-            borderRadius:10, padding:"13px 16px", display:"flex", gap:12, alignItems:"center" }}>
-            <div style={{ width:40, height:40, borderRadius:8, flexShrink:0,
-              background:`${col}15`, display:"flex", alignItems:"center",
-              justifyContent:"center", fontSize:15, fontWeight:800, color:col }}>{sc||"—"}</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
-                {isAr?`جلسة #${userSessions.length-i}`:`Session #${userSessions.length-i}`}
-              </div>
-              <div style={{ fontSize:11, color:cs.muted }}>
-                {d.toLocaleDateString(isAr?"ar-EG":"en-US",{weekday:"short",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}
-                {dur&&<span> · {dur}</span>}
-              </div>
-            </div>
-            <span style={{ fontSize:11, fontWeight:600, padding:"3px 9px", borderRadius:99,
-              background:`${col}12`, color:col }}>{grade(sc,isAr)}</span>
+    <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+      {/* Summary stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+        {[
+          { label:isAr?"الجلسات":"Sessions",   val:totalSessions,       col:"#a855f7" },
+          { label:isAr?"المتوسط":"Avg Score",   val:avgScore,            col:"#3b82f6" },
+          { label:isAr?"الأفضل":"Best Score",   val:bestScore,           col:"#10b981" },
+          { label:isAr?"الدقائق":"Total Mins",  val:totalMinutes+"m",   col:"#f59e0b" },
+        ].map(m=>(
+          <div key={m.label} style={{ background:cs.card, border:`1px solid ${cs.border}`,
+            borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
+            <div style={{ fontSize:18, fontWeight:800, color:m.col }}>{m.val}</div>
+            <div style={{ fontSize:10, color:cs.muted, marginTop:2 }}>{m.label}</div>
           </div>
-        );
-      })}
+        ))}
+      </div>
+
+      {/* Session list */}
+      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+        {userSessions.map((s,i)=>{
+          const d=s.created_at?.toDate?.()??new Date(s.created_at||0);
+          const sc=s.avg_score||0;
+          const col=gradeColor(sc);
+          const durSec = s.duration_s || s.duration_sec || 0;
+          const dur = durSec >= 60 ? `${Math.round(durSec/60)}m` : durSec > 0 ? `${durSec}s` : "";
+          const goodPct = s.good_pct ? `${s.good_pct}% good posture` : "";
+          return (
+            <div key={s.id||i} style={{ background:cs.card, border:`1px solid ${cs.border}`,
+              borderRadius:10, padding:"13px 16px", display:"flex", gap:12, alignItems:"center" }}>
+              {/* Score badge */}
+              <div style={{ width:44, height:44, borderRadius:8, flexShrink:0,
+                background:`${col}15`, display:"flex", alignItems:"center",
+                justifyContent:"center", fontSize:16, fontWeight:800, color:col }}>{sc||"—"}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+                  {isAr?`جلسة #${totalSessions-i}`:`Session #${totalSessions-i}`}
+                  {s.mode && <span style={{ fontSize:10, color:cs.muted, marginLeft:8,
+                    background:"rgba(255,255,255,.06)", padding:"1px 7px", borderRadius:99 }}>
+                    {s.mode}
+                  </span>}
+                </div>
+                <div style={{ fontSize:11, color:cs.muted, marginTop:2, display:"flex", gap:8, flexWrap:"wrap" }}>
+                  <span>{d.toLocaleDateString(isAr?"ar-EG":"en-US",{weekday:"short",month:"short",day:"numeric"})}</span>
+                  <span>{d.toLocaleTimeString(isAr?"ar-EG":"en-US",{hour:"2-digit",minute:"2-digit"})}</span>
+                  {dur&&<span>· {dur}</span>}
+                  {goodPct&&<span style={{ color:"#10b981" }}>· {goodPct}</span>}
+                </div>
+              </div>
+              <span style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:99,
+                background:`${col}15`, color:col, flexShrink:0 }}>{grade(sc,isAr)}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
