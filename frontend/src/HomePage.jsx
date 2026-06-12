@@ -158,6 +158,157 @@ function TierBadge({ tier }) {
     border:`1px solid ${col}40` }}>{label}</span>;
 }
 
+// ─── Analytics Inline Section ─────────────────────────────────────
+function AnalyticsInline({ userSessions, cs, isAr, tier, onOpenFull, onCompare, onTrend }) {
+  const hasData = userSessions.length > 0;
+
+  // Compute per-day averages for last 14 days
+  const days14 = useMemo(()=>{
+    return Array.from({length:14},(_,i)=>{
+      const d=new Date(); d.setDate(d.getDate()-(13-i));
+      const ds=d.toDateString();
+      const ss=userSessions.filter(s=>(s.created_at?.toDate?.()??new Date(s.created_at||0)).toDateString()===ds);
+      const avg=ss.length?Math.round(ss.reduce((a,s)=>a+(s.avg_score||0),0)/ss.length):null;
+      return { label:["Su","Mo","Tu","We","Th","Fr","Sa"][d.getDay()], score:avg, count:ss.length };
+    });
+  },[userSessions]);
+
+  // Score distribution
+  const dist = useMemo(()=>{
+    const ex=userSessions.filter(s=>(s.avg_score||0)>=80).length;
+    const gd=userSessions.filter(s=>(s.avg_score||0)>=60&&(s.avg_score||0)<80).length;
+    const pr=userSessions.filter(s=>(s.avg_score||0)>0&&(s.avg_score||0)<60).length;
+    const total=ex+gd+pr||1;
+    return { ex, gd, pr, total };
+  },[userSessions]);
+
+  // Best/worst scores
+  const scores = userSessions.map(s=>s.avg_score||0).filter(Boolean);
+  const best  = scores.length ? Math.max(...scores) : 0;
+  const worst = scores.length ? Math.min(...scores) : 0;
+  const trend = scores.length>=2 ? scores[0]-scores[1] : 0; // positive = improving
+
+  const maxBar = Math.max(...days14.map(d=>d.score||0),1);
+
+  return (
+    <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14, overflow:"hidden" }}>
+      {/* Header */}
+      <div style={{ padding:"16px 18px 0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div>
+          <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>
+            {isAr?"تحليلات الوضعية":"Posture Analytics"}
+          </div>
+          <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+            {isAr?"آخر 14 يوم":"Last 14 days"}
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          {onCompare&&(
+            <button onClick={onCompare}
+              style={{ fontSize:11, fontWeight:600, padding:"5px 10px",
+                background:"rgba(168,85,247,.1)", color:"#c084fc",
+                border:"1px solid rgba(168,85,247,.25)", borderRadius:7, cursor:"pointer" }}>
+              📊 {isAr?"مقارنة":"Compare"}
+            </button>
+          )}
+          {onTrend&&(
+            <button onClick={onTrend}
+              style={{ fontSize:11, fontWeight:600, padding:"5px 10px",
+                background:"rgba(8,145,178,.1)", color:"#67e8f9",
+                border:"1px solid rgba(8,145,178,.25)", borderRadius:7, cursor:"pointer" }}>
+              📈 {isAr?"اتجاه":"Trend"}
+            </button>
+          )}
+          <button onClick={onOpenFull}
+            style={{ fontSize:11, fontWeight:600, padding:"5px 10px",
+              background:"rgba(59,130,246,.1)", color:"#60a5fa",
+              border:"1px solid rgba(59,130,246,.25)", borderRadius:7, cursor:"pointer" }}>
+            {isAr?"تفاصيل كاملة":"Full Report"}
+          </button>
+        </div>
+      </div>
+
+      {!hasData ? (
+        <div style={{ padding:"32px 18px", textAlign:"center", color:cs.muted, fontSize:13 }}>
+          {isAr?"ابدأ جلستك الأولى لعرض التحليلات":"Start your first session to see analytics"}
+        </div>
+      ) : (
+        <>
+          {/* Quick KPIs */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:0,
+            borderTop:`1px solid ${cs.border}`, marginTop:14 }}>
+            {[
+              { label:isAr?"أفضل نتيجة":"Best Score", val:best||"—", col:"#10b981" },
+              { label:isAr?"أسوأ نتيجة":"Worst Score", val:worst||"—", col:"#ef4444" },
+              { label:isAr?"الاتجاه":"Trend", val:trend>0?`+${trend}`:trend===0?"—":trend, col:trend>0?"#10b981":trend<0?"#ef4444":"#64748b" },
+              { label:isAr?"إجمالي الجلسات":"Sessions", val:userSessions.length, col:"#a855f7" },
+            ].map((k,i)=>(
+              <div key={i} style={{ padding:"12px 14px",
+                borderRight:i<3?`1px solid ${cs.border}`:"none",
+                borderTop:`1px solid ${cs.border}` }}>
+                <div style={{ fontSize:9, color:cs.muted, textTransform:"uppercase",
+                  letterSpacing:".07em", fontWeight:600, marginBottom:4 }}>{k.label}</div>
+                <div style={{ fontSize:20, fontWeight:800, color:k.col, lineHeight:1 }}>{k.val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 14-day bar chart */}
+          <div style={{ padding:"16px 18px" }}>
+            <div style={{ fontSize:10, color:cs.muted, fontWeight:600, marginBottom:10,
+              textTransform:"uppercase", letterSpacing:".07em" }}>
+              {isAr?"متوسط النتيجة يومياً":"Daily Average Score"}
+            </div>
+            <div style={{ display:"flex", gap:4, alignItems:"flex-end", height:64 }}>
+              {days14.map((d,i)=>{
+                const h = d.score ? Math.max(6,(d.score/maxBar)*60) : 3;
+                const col = !d.score?"rgba(255,255,255,.06)":d.score>=80?"#10b981":d.score>=60?"#f59e0b":"#ef4444";
+                return (
+                  <div key={i} style={{ flex:1, display:"flex", flexDirection:"column",
+                    alignItems:"center", gap:4 }}>
+                    <div title={d.score?`${d.score} — ${d.count} session${d.count!==1?"s":""}`:isAr?"لا توجد جلسات":"No sessions"}
+                      style={{ width:"100%", height:h, borderRadius:3, background:col,
+                        transition:"height .5s cubic-bezier(.4,0,.2,1)", cursor:d.score?"pointer":"default" }}/>
+                    {(i===0||i===6||i===13||d.count>0)&&(
+                      <span style={{ fontSize:8, color:cs.muted, fontWeight:500 }}>{d.label}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Score distribution */}
+          <div style={{ padding:"0 18px 16px" }}>
+            <div style={{ fontSize:10, color:cs.muted, fontWeight:600, marginBottom:10,
+              textTransform:"uppercase", letterSpacing:".07em" }}>
+              {isAr?"توزيع النتائج":"Score Distribution"}
+            </div>
+            <div style={{ display:"flex", gap:0, borderRadius:8, overflow:"hidden", height:8, marginBottom:8 }}>
+              {dist.ex>0&&<div style={{ flex:dist.ex, background:"#10b981" }}/>}
+              {dist.gd>0&&<div style={{ flex:dist.gd, background:"#f59e0b" }}/>}
+              {dist.pr>0&&<div style={{ flex:dist.pr, background:"#ef4444" }}/>}
+            </div>
+            <div style={{ display:"flex", gap:16 }}>
+              {[
+                { label:isAr?"ممتاز (80+)":"Excellent (80+)", val:dist.ex, col:"#10b981" },
+                { label:isAr?"جيد (60-79)":"Good (60-79)", val:dist.gd, col:"#f59e0b" },
+                { label:isAr?"ضعيف (<60)":"Poor (<60)", val:dist.pr, col:"#ef4444" },
+              ].map((d,i)=>(
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                  <div style={{ width:8, height:8, borderRadius:2, background:d.col, flexShrink:0 }}/>
+                  <span style={{ fontSize:10, color:cs.muted }}>{d.label}</span>
+                  <span style={{ fontSize:10, fontWeight:700, color:d.col }}>{d.val}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════
 // INDIVIDUAL DASHBOARD
 // ══════════════════════════════════════════════════════════════════
@@ -233,155 +384,46 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
         </div>
       )}
 
-      {/* Free tier notice */}
-      {!pro&&(
-        <div style={{ background:"linear-gradient(135deg,rgba(26,86,219,.08),rgba(8,145,178,.05))",
-          border:"1px solid rgba(59,130,246,.2)", borderRadius:12, padding:"16px 18px",
-          display:"flex", gap:14, alignItems:"center" }}>
-          <span style={{ fontSize:28 }}>⭐</span>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:"#60a5fa", marginBottom:3 }}>
-              {isAr?"ترقّ إلى Pro":"Upgrade to Pro"}
-            </div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,.45)" }}>
-              {isAr?"AI Coach، تقارير PDF، تحليلات متقدمة، بلا حد لعدد الجلسات":"AI Coach, PDF reports, advanced analytics, unlimited sessions"}
-            </div>
+      {/* Calibrate — always visible quick action */}
+      <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12,
+        padding:"16px 18px", display:"flex", alignItems:"center", gap:16 }}>
+        <div style={{ width:46, height:46, borderRadius:10, flexShrink:0,
+          background:"rgba(16,185,129,.12)", display:"flex", alignItems:"center",
+          justifyContent:"center", fontSize:22 }}>🎯</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:cs.text }}>
+            {isAr?"معايرة الكاميرا":"Camera Calibration"}
           </div>
-          <button onClick={onBilling}
-            style={{ padding:"8px 18px", background:"#1a56db", color:"#fff",
-              border:"none", borderRadius:8, fontSize:12, fontWeight:700,
-              cursor:"pointer", whiteSpace:"nowrap" }}>
-            {isAr?"ترقّ الآن":"Upgrade"}
-          </button>
+          <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>
+            {isAr?"اضبط موضع الكاميرا للحصول على دقة أعلى":"Align your camera for accurate posture tracking"}
+          </div>
         </div>
-      )}
-
-      {/* Tools */}
-      <div>
-        <SectionHead title={isAr?"الأدوات":"Tools"} cs={cs}/>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))", gap:10 }}>
-          {/* ── Core tools — all tiers ── */}
-          <ToolBtn icon="🎯" label={isAr?"معايرة":"Calibrate"} color="16,185,129"
-            desc={isAr?"اضبط الكاميرا":"Setup camera"}
-            onClick={()=>setShowCalibWizard(true)} cs={cs}/>
-          <ToolBtn icon="📊" label={isAr?"تحليلات":"Analytics"} color="26,86,219"
-            desc={isAr?"إحصائيات تفصيلية":"Detailed stats"}
-            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}} cs={cs}/>
-          <ToolBtn icon="🏆" label={isAr?"التقدم":"Progress"} color="245,158,11"
-            desc={isAr?"الإنجازات والمكافآت":"Achievements & streaks"}
-            onClick={()=>setShowGamification?.(true)} cs={cs}/>
-          <ToolBtn icon="🚀" label={isAr?"النمو":"Growth"} color="245,158,11"
-            desc={isAr?"أدوات النمو":"Growth tools"}
-            onClick={()=>setShowGrowthHub?.(true)} cs={cs}/>
-          <ToolBtn icon="🔒" label={isAr?"الأمان":"Security"} color="99,102,241"
-            desc={isAr?"إعدادات الأمان":"Security settings"}
-            onClick={()=>setShowSecurityCenter?.(true)} cs={cs}/>
-
-          {/* ── Pro tools ── */}
-          <ToolBtn icon="🤖" label="AI Coach" color="16,185,129"
-            desc={isAr?"نصائح AI":"AI posture tips"}
-            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowCoach(true);}}
-            locked={!(tier==="professional"||tier==="elite"||tier==="business")}
-            lockLabel="PRO" onLock={()=>setShowBilling(true)} cs={cs}/>
-          <ToolBtn icon="📋" label={isAr?"تقارير":"Reports"} color="124,58,237"
-            desc={isAr?"PDF تفصيلي":"Detailed PDF"}
-            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIReports(true);}}
-            locked={!(tier==="professional"||tier==="elite"||tier==="business")}
-            lockLabel="PRO" onLock={()=>setShowBilling(true)} cs={cs}/>
-          <ToolBtn icon="🧠" label={isAr?"رؤى AI":"AI Insights"} color="8,145,178"
-            desc={isAr?"تحليل عميق":"Deep analysis"}
-            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowAIInsights?.(true);}}
-            locked={!(tier==="elite"||tier==="business")}
-            lockLabel="ELITE" onLock={()=>setShowBilling(true)} cs={cs}/>
-          <ToolBtn icon="🔮" label={isAr?"AI تنبؤي":"Predictive AI"} color="8,145,178"
-            desc={isAr?"توقع الأداء":"Predict performance"}
-            onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowPredictiveAI?.(true);}}
-            locked={!(tier==="elite"||tier==="business")}
-            lockLabel="ELITE" onLock={()=>setShowBilling(true)} cs={cs}/>
-
-          {/* ── Compare / Trend — unlocked by sessions ── */}
-          {userSessions.length>=2&&(
-            <ToolBtn icon="📊" label={isAr?"مقارنة":"Compare"} color="168,85,247"
-              desc={isAr?"قارن الجلسات":"Compare sessions"}
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowSessionComparison(true);}} cs={cs}/>
-          )}
-          {userSessions.length>=3&&(
-            <ToolBtn icon="📈" label={isAr?"الاتجاه":"Trend"} color="8,145,178"
-              desc={isAr?"مسار التحسن":"Progress trend"}
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);setShowTrendChart(true);}} cs={cs}/>
-          )}
-
-          {/* ── HR / Admin tools ── */}
-          {(isHRAdmin||isAdmin)&&(
-            <ToolBtn icon="🏭" label={isAr?"قوى العمل":"Workforce"} color="8,145,178"
-              desc={isAr?"تحليل الفريق":"Team analytics"}
-              onClick={()=>{getUserSessions(user.uid).then(setUserSessions);getAllUsers().then(setAllUsers);setShowWorkforceAnalytics(true);}} cs={cs}/>
-          )}
-          {(isHRAdmin||isAdmin)&&(
-            <ToolBtn icon="💡" label={isAr?"نجاح العملاء":"Success"} color="8,145,178"
-              desc={isAr?"متابعة العملاء":"Customer success"}
-              onClick={()=>setShowCustomerSuccess?.(true)} cs={cs}/>
-          )}
-          {(isHRAdmin||isAdmin)&&(
-            <ToolBtn icon="📉" label={isAr?"توقع التسرب":"Churn AI"} color="239,68,68"
-              desc={isAr?"منع التسرب":"Predict churn"}
-              onClick={()=>setShowChurnPrediction?.(true)} cs={cs}/>
-          )}
-          {(isHRAdmin||isAdmin)&&(
-            <ToolBtn icon="📜" label={isAr?"سجل المراجعة":"Audit Log"} color="100,116,139"
-              desc={isAr?"سجل النشاط":"Activity log"}
-              onClick={()=>setShowAuditSystem?.(true)} cs={cs}/>
-          )}
-
-          {/* ── Elite / Business ── */}
-          <ToolBtn icon="🔌" label={isAr?"سوق API":"API Market"} color="16,185,129"
-            desc={isAr?"تكاملات API":"API integrations"}
-            onClick={()=>setShowAPIMarketplace?.(true)}
-            locked={!(tier==="elite"||tier==="business")}
-            lockLabel="ELITE" onLock={()=>setShowBilling(true)} cs={cs}/>
-          <ToolBtn icon="🏷️" label={isAr?"علامتي":"White-label"} color="168,85,247"
-            desc={isAr?"علامة مخصصة":"Custom branding"}
-            onClick={()=>setShowWhiteLabel?.(true)}
-            locked={!(tier==="elite"||tier==="business")}
-            lockLabel="ELITE" onLock={()=>setShowBilling(true)} cs={cs}/>
-          {(isAdmin||(tier==="elite"||tier==="business"))&&(
-            <ToolBtn icon="🏢" label={isAr?"متعدد":"Multi-tenant"} color="8,145,178"
-              desc={isAr?"إدارة المستأجرين":"Tenant management"}
-              onClick={()=>setShowMultiTenant?.(true)} cs={cs}/>
-          )}
-        </div>
+        <button onClick={()=>setShowCalibWizard(true)}
+          style={{ padding:"8px 16px", background:"rgba(16,185,129,.15)",
+            border:"1px solid rgba(16,185,129,.3)", borderRadius:8,
+            color:"#10b981", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
+          {isAr?"ابدأ المعايرة":"Calibrate"}
+        </button>
       </div>
+
+      {/* Analytics section — inline rich view */}
+      <AnalyticsInline
+        userSessions={userSessions} cs={cs} isAr={isAr} tier={tier}
+        onOpenFull={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}
+        onCompare={userSessions.length>=2?()=>{getUserSessions(user.uid).then(setUserSessions);setShowSessionComparison(true);}:null}
+        onTrend={userSessions.length>=3?()=>{getUserSessions(user.uid).then(setUserSessions);setShowTrendChart(true);}:null}
+      />
 
       {/* Session history */}
       {userSessions.length>0 ? (
         <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"16px 18px" }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-            <SectionHead title={isAr?"آخر الجلسات":"Recent Sessions"} cs={cs} noMargin/>
-            <div style={{ display:"flex", gap:6 }}>
-              {userSessions.length>=2&&onCompare&&(
-                <button onClick={onCompare}
-                  style={{ fontSize:11, fontWeight:600, padding:"5px 11px",
-                    background:"rgba(168,85,247,.1)", color:"#c084fc",
-                    border:"1px solid rgba(168,85,247,.25)", borderRadius:7, cursor:"pointer" }}>
-                  📊 {isAr?"مقارنة":"Compare"}
-                </button>
-              )}
-              {userSessions.length>=3&&onTrend&&(
-                <button onClick={onTrend}
-                  style={{ fontSize:11, fontWeight:600, padding:"5px 11px",
-                    background:"rgba(8,145,178,.1)", color:"#67e8f9",
-                    border:"1px solid rgba(8,145,178,.25)", borderRadius:7, cursor:"pointer" }}>
-                  📈 {isAr?"الاتجاه":"Trend"}
-                </button>
-              )}
-            </div>
-          </div>
+          <SectionHead title={isAr?"آخر الجلسات":"Recent Sessions"} cs={cs}/>
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {userSessions.slice(0,6).map((s,i)=>{
               const d=s.created_at?.toDate?.()??new Date(s.created_at||0);
               const sc=s.avg_score||0;
               const col=gradeColor(sc);
-              const dur=s.duration_sec?` · ${Math.round(s.duration_sec/60)}m`:"";
+              const dur=s.duration_sec?`${Math.round(s.duration_sec/60)}m`:"";
               return (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:12,
                   padding:"10px 12px", background:"rgba(255,255,255,.025)",
@@ -394,7 +436,8 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
                       {isAr?`جلسة #${userSessions.length-i}`:`Session #${userSessions.length-i}`}
                     </div>
                     <div style={{ fontSize:11, color:cs.muted }}>
-                      {d.toLocaleDateString(isAr?"ar-EG":"en-US",{weekday:"short",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}{dur}
+                      {d.toLocaleDateString(isAr?"ar-EG":"en-US",{weekday:"short",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}
+                      {dur&&<span> · {dur}</span>}
                     </div>
                   </div>
                   <span style={{ fontSize:11, fontWeight:600, padding:"3px 9px", borderRadius:99,
@@ -740,7 +783,7 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera }) {
 // SETTINGS PANEL (inline)
 // ══════════════════════════════════════════════════════════════════
 // ─── Add Password Form ─────────────────────────────────────────────
-function AddPasswordForm({ user, isAr, cs, addToast }) {
+function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
   const [pw, setPw] = useState("");
   const [saving, setSaving] = useState(false);
   return (
@@ -759,6 +802,7 @@ function AddPasswordForm({ user, isAr, cs, addToast }) {
           await linkWithCredential(auth.currentUser, cred);
           addToast(isAr?"✅ تمت إضافة كلمة المرور":"✅ Password added","success");
           setPw("");
+          onSuccess?.();
         } catch(e) { addToast(e.code==="auth/weak-password"?"Password too weak":e.message||"Error","error"); }
         setSaving(false);
       }} style={{ padding:"8px 14px", background:"#1a56db", color:"#fff",
@@ -772,60 +816,76 @@ function AddPasswordForm({ user, isAr, cs, addToast }) {
 
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling }) {
-  const [name,    setName]    = useState(profile?.name||"");
-  const [company, setCompany] = useState(profile?.company||"");
-  const [dept,    setDept]    = useState(profile?.department||"");
+  const [name,    setName]    = useState("");
+  const [dept,    setDept]    = useState("");
   const [saving,  setSaving]  = useState(false);
-  const [tab,     setTab]     = useState("profile"); // profile | security | billing
+  const [tab,     setTab]     = useState("profile");
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [addPwVisible, setAddPwVisible]   = useState(false);
 
-  // Sync when profile changes
+  // Always sync from profile (fixes new-user empty name bug)
   useEffect(()=>{
-    setName(profile?.name||"");
-    setCompany(profile?.company||"");
-    setDept(profile?.department||"");
-  },[profile]);
+    setName(profile?.name || "");
+    setDept(profile?.department || "");
+  },[profile?.name, profile?.department]);
 
   async function save() {
-    if(!user?.uid){ addToast(isAr?"خطأ: لم يتم التعرف على المستخدم":"Error: user not identified","error"); return; }
+    if(!user?.uid){ addToast(isAr?"خطأ: تسجيل الدخول منتهي":"Error: not signed in","error"); return; }
     setSaving(true);
     try {
       const updates = {
-        name:     name.trim()    || profile?.name    || "",
-        company:  company.trim() || "",
-        department: dept.trim()  || "",
+        name:       name.trim(),
+        department: dept.trim(),
       };
       await updateUserProfile(user.uid, updates);
       setProfile(p=>({...(p||{}), ...updates}));
-      // Force local state sync
-      setName(updates.name);
-      setCompany(updates.company);
-      setDept(updates.department);
-      addToast(isAr?"✅ تم الحفظ بنجاح":"✅ Saved successfully","success");
+      addToast(isAr?"✅ تم الحفظ":"✅ Saved","success");
     } catch(err) {
-      console.error("Save error:", err);
-      addToast(isAr?`خطأ: ${err?.message||"مجهول"}`:`Error: ${err?.message||"unknown"}`,"error");
+      addToast(`Error: ${err?.message||"unknown"}`,"error");
     }
     setSaving(false);
   }
 
-  const inp = (val,onChange,placeholder) => (
+  async function linkGoogle() {
+    setLinkingGoogle(true);
+    try {
+      const { GoogleAuthProvider, linkWithPopup } = await import("firebase/auth");
+      const { auth } = await import("./firebase.js");
+      await linkWithPopup(auth.currentUser, new GoogleAuthProvider());
+      addToast(isAr?"✅ تم ربط Google":"✅ Google linked","success");
+    } catch(e) {
+      if(e.code==="auth/credential-already-in-use") addToast(isAr?"هذا الحساب مرتبط بمستخدم آخر":"This Google account is already in use","error");
+      else addToast(e.message||"Error","error");
+    }
+    setLinkingGoogle(false);
+  }
+
+  const providers = user?.providerData || [];
+  const hasGoogle = providers.some(p=>p.providerId==="google.com");
+  const hasEmail  = providers.some(p=>p.providerId==="password");
+
+  const inp = (val, onChange, placeholder, disabled=false) => (
     <input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-      style={{ width:"100%", padding:"10px 12px", background:"rgba(255,255,255,.05)",
-        border:`1px solid ${cs.border}`, borderRadius:8, color:cs.text,
-        fontSize:13, outline:"none", boxSizing:"border-box",
+      disabled={disabled}
+      style={{ width:"100%", padding:"10px 12px",
+        background:disabled?"rgba(255,255,255,.02)":"rgba(255,255,255,.05)",
+        border:`1px solid ${cs.border}`, borderRadius:8, color:disabled?cs.muted:cs.text,
+        fontSize:13, outline:"none", boxSizing:"border-box", cursor:disabled?"not-allowed":"text",
         transition:"border-color .15s" }}
-      onFocus={e=>e.target.style.borderColor="#3b82f6"}
+      onFocus={e=>{ if(!disabled) e.target.style.borderColor="#3b82f6"; }}
       onBlur={e=>e.target.style.borderColor=cs.border}/>
   );
 
   const tabs = [
-    { id:"profile",  en:"Profile",       ar:"الملف الشخصي" },
-    { id:"billing",  en:"Subscription",  ar:"الاشتراك" },
-    { id:"security", en:"Security",      ar:"الأمان" },
+    { id:"profile",  en:"Profile",      ar:"الملف الشخصي" },
+    { id:"accounts", en:"Accounts",     ar:"الحسابات المرتبطة" },
+    { id:"billing",  en:"Subscription", ar:"الاشتراك" },
+    { id:"security", en:"Security",     ar:"الأمان" },
   ];
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:600 }}>
+
       {/* User header */}
       <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14,
         padding:"20px 22px", display:"flex", gap:16, alignItems:"center" }}>
@@ -835,39 +895,37 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               ? <img src={profile.photoURL} alt="avatar"
                   style={{ width:72, height:72, borderRadius:"50%",
                     objectFit:"cover", border:"2px solid rgba(255,255,255,.1)" }}/>
-              : <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={72}/>}
+              : <Avatar name={profile?.name||profile?.email} photo={null} size={72}/>}
             <label title={isAr?"تغيير الصورة":"Change photo"}
               style={{ position:"absolute", bottom:0, right:0, width:24, height:24,
                 background:"#1a56db", borderRadius:"50%", cursor:"pointer",
                 display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:12, border:"2px solid rgba(4,9,20,1)", boxShadow:"0 2px 8px rgba(0,0,0,.4)" }}>
+                fontSize:12, border:"2px solid rgba(4,9,20,1)" }}>
               📷
-            <input type="file" accept="image/*" style={{ display:"none" }}
-              onChange={async e=>{
-                const file=e.target.files[0]; if(!file) return;
-                if(file.size>5*1024*1024){ addToast(isAr?"الصورة أكبر من 5MB":"Image too large (max 5MB)","error"); return; }
-                // Resize to 120x120 before saving (Firestore 1MB doc limit)
-                const img=new Image();
-                const url=URL.createObjectURL(file);
-                img.onload=async ()=>{
-                  const canvas=document.createElement("canvas");
-                  const S=120; canvas.width=S; canvas.height=S;
-                  const ctx=canvas.getContext("2d");
-                  // center-crop
-                  const minDim=Math.min(img.width,img.height);
-                  const sx=(img.width-minDim)/2, sy=(img.height-minDim)/2;
-                  ctx.drawImage(img,sx,sy,minDim,minDim,0,0,S,S);
-                  URL.revokeObjectURL(url);
-                  const dataUrl=canvas.toDataURL("image/jpeg",0.8);
-                  try{
-                    await updateUserProfile(user.uid,{photoURL:dataUrl});
-                    setProfile(p=>({...p,photoURL:dataUrl}));
-                    addToast(isAr?"تم تحديث الصورة ✓":"Photo updated ✓","success");
-                  }catch(err){ addToast(err?.message||"Upload error","error"); }
-                };
-                img.src=url;
-              }}/>
-          </label>
+              <input type="file" accept="image/*" style={{ display:"none" }}
+                onChange={async e=>{
+                  const file=e.target.files[0]; if(!file) return;
+                  if(file.size>5*1024*1024){ addToast(isAr?"الصورة أكبر من 5MB":"Image > 5MB","error"); return; }
+                  const img=new Image();
+                  const url=URL.createObjectURL(file);
+                  img.onload=async()=>{
+                    const canvas=document.createElement("canvas");
+                    const S=120; canvas.width=S; canvas.height=S;
+                    const ctx=canvas.getContext("2d");
+                    const minDim=Math.min(img.width,img.height);
+                    const sx=(img.width-minDim)/2, sy=(img.height-minDim)/2;
+                    ctx.drawImage(img,sx,sy,minDim,minDim,0,0,S,S);
+                    URL.revokeObjectURL(url);
+                    const dataUrl=canvas.toDataURL("image/jpeg",0.8);
+                    try{
+                      await updateUserProfile(user.uid,{photoURL:dataUrl});
+                      setProfile(p=>({...p,photoURL:dataUrl}));
+                      addToast(isAr?"✅ تم تحديث الصورة":"✅ Photo updated","success");
+                    }catch(err){ addToast(err?.message||"Upload error","error"); }
+                  };
+                  img.src=url;
+                }}/>
+            </label>
           </div>
           <span style={{ fontSize:10, color:"#3b82f6", cursor:"pointer", fontWeight:500 }}
             onClick={()=>document.querySelector('input[type=file]')?.click()}>
@@ -875,11 +933,14 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           </span>
         </div>
         <div style={{ flex:1 }}>
-          <div style={{ fontSize:17, fontWeight:800, color:cs.text }}>{profile?.name||"—"}</div>
+          <div style={{ fontSize:17, fontWeight:800, color:cs.text }}>
+            {profile?.name || profile?.email?.split("@")[0] || "—"}
+          </div>
           <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>{user?.email||"—"}</div>
-          <div style={{ marginTop:6, display:"flex", gap:8, alignItems:"center" }}>
+          <div style={{ marginTop:6, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
             <TierBadge tier={tier}/>
-            {profile?.company&&<span style={{ fontSize:11, color:cs.muted }}>· {profile.company}</span>}
+            {hasGoogle&&<span style={{ fontSize:10, color:"#4285f4", fontWeight:600 }}>🔵 Google</span>}
+            {hasEmail&&<span style={{ fontSize:10, color:"#10b981", fontWeight:600 }}>📧 Email</span>}
           </div>
         </div>
         <button onClick={onSignOut}
@@ -895,10 +956,10 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
         border:`1px solid ${cs.border}`, borderRadius:10, padding:4 }}>
         {tabs.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{ flex:1, padding:"8px", border:"none", borderRadius:7, cursor:"pointer",
+            style={{ flex:1, padding:"8px 4px", border:"none", borderRadius:7, cursor:"pointer",
               background:tab===t.id?"rgba(59,130,246,.15)":"transparent",
               color:tab===t.id?"#60a5fa":cs.muted,
-              fontSize:12, fontWeight:tab===t.id?700:500, transition:"all .12s" }}>
+              fontSize:11, fontWeight:tab===t.id?700:500, transition:"all .12s" }}>
             {isAr?t.ar:t.en}
           </button>
         ))}
@@ -918,7 +979,6 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </div>
               {inp(name, setName, isAr?"أدخل اسمك الكامل":"Enter full name")}
             </div>
-            {/* Company field hidden for personal accounts - managed by HR admin */}
             <div>
               <div style={{ fontSize:11, color:cs.muted, fontWeight:600, marginBottom:6,
                 textTransform:"uppercase", letterSpacing:".06em" }}>
@@ -931,17 +991,99 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 textTransform:"uppercase", letterSpacing:".06em" }}>
                 {isAr?"البريد الإلكتروني":"Email"}
               </div>
-              <input value={user?.email||""} disabled
-                style={{ width:"100%", padding:"10px 12px", background:"rgba(255,255,255,.02)",
-                  border:`1px solid ${cs.border}`, borderRadius:8, color:cs.muted,
-                  fontSize:13, outline:"none", cursor:"not-allowed", boxSizing:"border-box" }}/>
+              {inp(user?.email||"", ()=>{}, "", true)}
             </div>
             <button onClick={save} disabled={saving}
               style={{ marginTop:4, padding:"11px", background:saving?"rgba(26,86,219,.5)":"#1a56db",
                 color:"#fff", border:"none", borderRadius:8, fontSize:13,
-                fontWeight:700, cursor:saving?"not-allowed":"pointer", transition:"all .15s" }}>
+                fontWeight:700, cursor:saving?"not-allowed":"pointer" }}>
               {saving?(isAr?"جاري الحفظ...":"Saving..."):(isAr?"حفظ التغييرات":"Save Changes")}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Accounts */}
+      {tab==="accounts"&&(
+        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:6 }}>
+            {isAr?"الحسابات المرتبطة":"Linked Accounts"}
+          </div>
+          <div style={{ fontSize:12, color:cs.muted, marginBottom:16, lineHeight:1.6 }}>
+            {isAr?"يمكنك ربط أكثر من طريقة دخول بحسابك — كل الحسابات المرتبطة تفتح نفس الداشبورد.":"Link multiple sign-in methods to your account — they all open the same dashboard."}
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {/* Google */}
+            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+              borderRadius:10, border:`1px solid ${hasGoogle?"rgba(66,133,244,.3)":cs.border}`,
+              display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                <span style={{ fontSize:22 }}>🔵</span>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>Google</div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+                    {hasGoogle ? (providers.find(p=>p.providerId==="google.com")?.email||user?.email) : (isAr?"غير مرتبط":"Not linked")}
+                  </div>
+                </div>
+              </div>
+              {hasGoogle
+                ? <span style={{ fontSize:10, fontWeight:700, color:"#10b981",
+                    background:"rgba(16,185,129,.1)", padding:"3px 10px", borderRadius:99 }}>
+                    {isAr?"مرتبط ✓":"Linked ✓"}
+                  </span>
+                : <button onClick={linkGoogle} disabled={linkingGoogle}
+                    style={{ padding:"7px 14px", background:"rgba(66,133,244,.15)",
+                      border:"1px solid rgba(66,133,244,.3)", borderRadius:7,
+                      color:"#4285f4", fontSize:12, fontWeight:600, cursor:"pointer",
+                      opacity:linkingGoogle?.6:1 }}>
+                    {linkingGoogle?(isAr?"جاري...":"Linking..."):(isAr?"+ ربط":"+ Link")}
+                  </button>
+              }
+            </div>
+            {/* Email/Password */}
+            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+              borderRadius:10, border:`1px solid ${hasEmail?"rgba(16,185,129,.25)":cs.border}` }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                  <span style={{ fontSize:22 }}>📧</span>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+                      {isAr?"بريد إلكتروني + كلمة مرور":"Email + Password"}
+                    </div>
+                    <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+                      {hasEmail ? user?.email : (isAr?"أضف كلمة مرور لتسجيل الدخول بالإيميل":"Add password to sign in with email")}
+                    </div>
+                  </div>
+                </div>
+                {hasEmail
+                  ? <span style={{ fontSize:10, fontWeight:700, color:"#10b981",
+                      background:"rgba(16,185,129,.1)", padding:"3px 10px", borderRadius:99 }}>
+                      {isAr?"مرتبط ✓":"Linked ✓"}
+                    </span>
+                  : <button onClick={()=>setAddPwVisible(v=>!v)}
+                      style={{ padding:"7px 14px", background:"rgba(16,185,129,.12)",
+                        border:"1px solid rgba(16,185,129,.25)", borderRadius:7,
+                        color:"#10b981", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                      {addPwVisible?(isAr?"إلغاء":"Cancel"):(isAr?"+ إضافة":"+ Add")}
+                    </button>
+                }
+              </div>
+              {addPwVisible&&!hasEmail&&(
+                <div style={{ marginTop:12 }}>
+                  <AddPasswordForm user={user} isAr={isAr} cs={cs} addToast={addToast}
+                    onSuccess={()=>setAddPwVisible(false)}/>
+                </div>
+              )}
+            </div>
+            {/* Info note */}
+            <div style={{ padding:"12px 14px", background:"rgba(59,130,246,.05)",
+              border:"1px solid rgba(59,130,246,.15)", borderRadius:9 }}>
+              <div style={{ fontSize:11, color:"rgba(147,197,253,.8)", lineHeight:1.6 }}>
+                {isAr
+                  ?"💡 كل الحسابات المرتبطة تستخدم نفس بيانات الوضعية والجلسات. يمكنك تسجيل الدخول بأي منها."
+                  :"💡 All linked accounts share the same posture data and sessions. Sign in with any of them."}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -963,9 +1105,9 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 {tier==="elite"?"Elite":tier==="professional"?"Professional":tier==="business"?"Business":"Free"}
               </div>
               <div style={{ fontSize:12, color:cs.muted, marginTop:3 }}>
-                {tier==="elite"?(isAr?"كل المميزات + تحليل AI متقدم":"All features + Advanced AI analysis")
+                {tier==="elite"?(isAr?"كل المميزات + تحليل AI متقدم":"All features + Advanced AI")
                 :tier==="professional"?(isAr?"AI Coach + تقارير PDF + تحليلات":"AI Coach + PDF reports + Analytics")
-                :tier==="business"?(isAr?"كل مميزات Pro + لوحة إدارة المجموعة":"All Pro features + Group management")
+                :tier==="business"?(isAr?"كل مميزات Pro + إدارة المجموعة":"All Pro + Group management")
                 :(isAr?"جلسات يومية محدودة":"Limited daily sessions")}
               </div>
             </div>
@@ -1009,8 +1151,8 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {isAr?"إعدادات الأمان":"Security Settings"}
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            {/* Linked accounts */}
-            {(user?.providerData||[]).map((p,i)=>(
+            {/* Active providers */}
+            {providers.map((p,i)=>(
               <div key={i} style={{ padding:"12px 14px", background:"rgba(255,255,255,.03)",
                 borderRadius:9, border:`1px solid ${cs.border}`,
                 display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -1025,41 +1167,15 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 </div>
                 <span style={{ fontSize:10, fontWeight:700, color:"#10b981",
                   background:"rgba(16,185,129,.1)", padding:"3px 8px", borderRadius:99 }}>
-                  {isAr?"مرتبط":"Linked"}
+                  {isAr?"نشط":"Active"}
                 </span>
               </div>
             ))}
-            {/* Add Google account link */}
-            {!(user?.providerData||[]).some(p=>p.providerId==="google.com")&&(
-              <button onClick={async ()=>{
-                try{
-                  const { GoogleAuthProvider, linkWithPopup } = await import("firebase/auth");
-                  const { auth } = await import("./firebase.js");
-                  await linkWithPopup(auth.currentUser, new GoogleAuthProvider());
-                  addToast(isAr?"✅ تم ربط حساب Google":"✅ Google account linked","success");
-                }catch(e){ addToast(e.message||"Error","error"); }
-              }} style={{ padding:"11px 14px", background:"rgba(59,130,246,.08)",
-                border:"1px solid rgba(59,130,246,.2)", borderRadius:9, cursor:"pointer",
-                display:"flex", alignItems:"center", gap:10, width:"100%", color:"#60a5fa",
-                fontSize:13, fontWeight:600 }}>
-                <span style={{ fontSize:16 }}>🔵</span>
-                {isAr?"+ ربط حساب Google":"+ Link Google Account"}
-              </button>
-            )}
-            {/* Add email/password */}
-            {!(user?.providerData||[]).some(p=>p.providerId==="password")&&(
-              <div>
-                <div style={{ fontSize:11, color:cs.muted, marginBottom:8 }}>
-                  {isAr?"إضافة كلمة مرور للدخول بالإيميل أيضاً:":"Add password for email login too:"}
-                </div>
-                <AddPasswordForm user={user} isAr={isAr} cs={cs} addToast={addToast}/>
-              </div>
-            )}
             <button onClick={onSignOut}
               style={{ marginTop:4, padding:"11px", background:"rgba(239,68,68,.1)",
                 color:"#f87171", border:"1px solid rgba(239,68,68,.2)",
                 borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-              {isAr?"⏻ تسجيل الخروج":"⏻ Sign Out"}
+              {isAr?"⏻ تسجيل الخروج من كل الأجهزة":"⏻ Sign Out Everywhere"}
             </button>
           </div>
         </div>
@@ -1072,48 +1188,108 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
 // SIDEBAR (desktop)
 // ══════════════════════════════════════════════════════════════════
 function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamera,
-  logOut, setUser, setProfile, isAdmin, darkMode, setDarkMode, setLang, lang, tier, atRisk }) {
-
+  logOut, setUser, setProfile, isAdmin, darkMode, setDarkMode, setLang, lang, tier, atRisk,
+  user, userSessions, setUserSessions, getAllUsers, setAllUsers,
+  setShowCoach, setShowBilling, setShowGamification, setShowGrowthHub, setShowSecurityCenter,
+  setShowAIInsights, setShowPredictiveAI, setShowCustomerSuccess, setShowChurnPrediction,
+  setShowAPIMarketplace, setShowWhiteLabel, setShowMultiTenant, setShowAuditSystem,
+  setShowAIReports, setShowSessionComparison, setShowTrendChart, setShowWorkforceAnalytics,
+  setShowCalibWizard, setShowDashboard,
+}) {
   const nav = useMemo(()=>{
     if(userRole==="hr_admin"||userRole==="platform_admin") return [
       { id:"home",      icon:"⊞",  en:"Overview",   ar:"النظرة العامة" },
       { id:"employees", icon:"👥", en:"Employees",  ar:"الموظفون" },
-      { id:"analytics", icon:"📊", en:"Analytics",  ar:"التحليلات" },
-      { id:"alerts",    icon:"🔔", en:"Alerts",      ar:"التنبيهات", badge:atRisk },
-      { id:"settings",  icon:"⚙️", en:"Settings",   ar:"الإعدادات" },
+      { id:"alerts",    icon:"🔔", en:"Alerts",     ar:"التنبيهات", badge:atRisk },
+      { id:"settings",  icon:"⚙️", en:"Settings",  ar:"الإعدادات" },
     ];
     if(userRole==="employee") return [
-      { id:"home",     icon:"⊞",  en:"Dashboard",  ar:"الرئيسية" },
-      { id:"sessions", icon:"📋", en:"Sessions",   ar:"جلساتي" },
-      { id:"team",     icon:"👥", en:"Team",        ar:"الفريق" },
-      { id:"settings", icon:"⚙️", en:"Settings",   ar:"الإعدادات" },
+      { id:"home",     icon:"⊞",  en:"Dashboard", ar:"الرئيسية" },
+      { id:"sessions", icon:"📋", en:"Sessions",  ar:"جلساتي" },
+      { id:"team",     icon:"👥", en:"Team",       ar:"الفريق" },
+      { id:"settings", icon:"⚙️", en:"Settings", ar:"الإعدادات" },
     ];
     return [
-      { id:"home",     icon:"⊞",  en:"Dashboard",    ar:"الرئيسية" },
-      { id:"sessions", icon:"📋", en:"Sessions",     ar:"جلساتي" },
-      { id:"settings", icon:"⚙️", en:"Settings",    ar:"الإعدادات" },
+      { id:"home",     icon:"⊞",  en:"Dashboard",  ar:"الرئيسية" },
+      { id:"sessions", icon:"📋", en:"Sessions",   ar:"جلساتي" },
+      { id:"settings", icon:"⚙️", en:"Settings",  ar:"الإعدادات" },
     ];
   },[userRole,atRisk]);
 
-  const [hov,setHov]=useState(null);
+  const tools = useMemo(()=>{
+    const pro   = isPro(tier);
+    const elite = isElite(tier);
+    const isHR  = userRole==="hr_admin"||userRole==="platform_admin";
+    const uid   = user?.uid;
+    const list = [
+      { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم",
+        sub:"Achievements & streaks",
+        onClick:()=>setShowGamification?.(true) },
+      { id:"t-growth",   icon:"🚀", en:"Growth",      ar:"النمو",
+        sub:"Personal growth plan",
+        onClick:()=>setShowGrowthHub?.(true) },
+      { id:"t-security", icon:"🔒", en:"Security",    ar:"الأمان",
+        sub:"Account security",
+        onClick:()=>setShowSecurityCenter?.(true) },
+      { id:"t-coach",    icon:"🤖", en:"AI Coach",    ar:"AI Coach",
+        sub:"AI-powered posture tips", locked:!pro, lockLabel:"PRO",
+        onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
+      { id:"t-reports",  icon:"📋", en:"Reports",     ar:"التقارير",
+        sub:"Monthly PDF report", locked:!pro, lockLabel:"PRO",
+        onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
+      { id:"t-compare",  icon:"📊", en:"Compare",     ar:"مقارنة الجلسات",
+        sub:"Compare sessions over time", locked:!pro, lockLabel:"PRO",
+        onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowSessionComparison?.(true); } else setShowBilling?.(true); }},
+      { id:"t-trend",    icon:"📈", en:"Trend",       ar:"مسار التحسن",
+        sub:"Progress trend chart", locked:!pro, lockLabel:"PRO",
+        onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowTrendChart?.(true); } else setShowBilling?.(true); }},
+      { id:"t-insights", icon:"🧠", en:"AI Insights", ar:"رؤى AI",
+        sub:"Deep AI data analysis", locked:!elite, lockLabel:"ELITE",
+        onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
+      { id:"t-predict",  icon:"🔮", en:"Predictive AI",ar:"AI تنبؤي",
+        sub:"Forecast performance", locked:!elite, lockLabel:"ELITE",
+        onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
+      { id:"t-api",      icon:"🔌", en:"API Market",  ar:"سوق API",
+        sub:"External integrations", locked:!elite, lockLabel:"ELITE",
+        onClick:()=>{ if(elite) setShowAPIMarketplace?.(true); else setShowBilling?.(true); }},
+      { id:"t-wl",       icon:"🏷️", en:"White-label", ar:"علامتي التجارية",
+        sub:"Custom branding", locked:!elite, lockLabel:"ELITE",
+        onClick:()=>{ if(elite) setShowWhiteLabel?.(true); else setShowBilling?.(true); }},
+    ];
+    if(isHR||isAdmin) list.push(
+      { id:"t-workforce", icon:"🏭", en:"Workforce",     ar:"قوى العمل",
+        onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
+      { id:"t-success",   icon:"💡", en:"Cust. Success", ar:"نجاح العملاء",
+        onClick:()=>setShowCustomerSuccess?.(true) },
+      { id:"t-churn",     icon:"📉", en:"Churn AI",      ar:"توقع التسرب",
+        onClick:()=>setShowChurnPrediction?.(true) },
+      { id:"t-audit",     icon:"📜", en:"Audit Log",     ar:"سجل المراجعة",
+        onClick:()=>setShowAuditSystem?.(true) },
+    );
+    if(elite||isAdmin) list.push(
+      { id:"t-tenant", icon:"🏢", en:"Multi-tenant", ar:"متعدد المستأجرين",
+        onClick:()=>setShowMultiTenant?.(true) },
+    );
+    return list;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[tier, userRole, isAdmin, user?.uid]);
+
+  const [hov, setHov] = useState(null);
 
   return (
-    <aside style={{ width:230, flexShrink:0, height:"100vh", position:"sticky", top:0,
+    <aside style={{ width:236, flexShrink:0, height:"100vh", position:"sticky", top:0,
       background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`,
       display:"flex", flexDirection:"column" }}>
 
       {/* Logo */}
-      <div style={{ padding:"16px 14px 12px", borderBottom:`1px solid ${cs.border}` }}>
+      <div style={{ padding:"16px 14px 12px", borderBottom:`1px solid ${cs.border}`, flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:30, height:30, background:"linear-gradient(135deg,#1a56db,#0891b2)",
             borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center",
             fontSize:16, flexShrink:0 }}>◈</div>
           <div>
-            <div style={{ fontSize:13, fontWeight:800, color:"#f0f6ff", letterSpacing:"-.01em" }}>
-              PostureAI
-            </div>
-            <div style={{ fontSize:9, color:"#3b82f6", fontWeight:600, textTransform:"uppercase",
-              letterSpacing:".06em" }}>
+            <div style={{ fontSize:13, fontWeight:800, color:"#f0f6ff", letterSpacing:"-.01em" }}>PostureAI</div>
+            <div style={{ fontSize:9, color:"#3b82f6", fontWeight:600, textTransform:"uppercase", letterSpacing:".06em" }}>
               {tier==="elite"?"Elite ✦":tier==="professional"?"Pro":tier==="business"?"Business":"Free"}
               {" · "}{userRole==="hr_admin"?"Admin":userRole==="employee"?"Employee":"Personal"}
             </div>
@@ -1121,42 +1297,40 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         </div>
       </div>
 
-      {/* Nav */}
-      <nav style={{ flex:1, padding:"8px 8px", display:"flex", flexDirection:"column",
-        gap:2, overflowY:"auto" }}>
-        {nav.map(item=>(
-          <button key={item.id}
-            onClick={()=>setTab(item.id)}
-            onMouseEnter={()=>setHov(item.id)}
-            onMouseLeave={()=>setHov(null)}
-            style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
-              padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
-              borderLeft:tab===item.id?"2px solid #3b82f6":"2px solid transparent",
-              background:tab===item.id?"rgba(59,130,246,.1)":hov===item.id?"rgba(255,255,255,.04)":"transparent",
-              color:tab===item.id?"#3b82f6":"rgba(255,255,255,.65)",
-              fontSize:12.5, fontWeight:tab===item.id?700:400,
-              textAlign:"left", transition:"all .1s", position:"relative" }}>
-            <span style={{ fontSize:14, width:18, textAlign:"center" }}>{item.icon}</span>
-            <span style={{ flex:1 }}>{isAr?item.ar:item.en}</span>
-            {item.badge>0&&<span style={{ background:"#ef4444", color:"#fff", fontSize:9,
-              fontWeight:700, borderRadius:99, padding:"1px 5px", minWidth:16,
-              textAlign:"center" }}>{item.badge}</span>}
-          </button>
-        ))}
+      {/* Scrollable body */}
+      <div style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column" }}>
+        {/* Main nav */}
+        <nav style={{ padding:"8px 8px 4px", display:"flex", flexDirection:"column", gap:2 }}>
+          {nav.map(item=>(
+            <button key={item.id} onClick={()=>setTab(item.id)}
+              onMouseEnter={()=>setHov(item.id)} onMouseLeave={()=>setHov(null)}
+              style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
+                padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
+                borderLeft:tab===item.id?"2px solid #3b82f6":"2px solid transparent",
+                background:tab===item.id?"rgba(59,130,246,.1)":hov===item.id?"rgba(255,255,255,.04)":"transparent",
+                color:tab===item.id?"#3b82f6":"rgba(255,255,255,.65)",
+                fontSize:12.5, fontWeight:tab===item.id?700:400, textAlign:"left", transition:"all .1s" }}>
+              <span style={{ fontSize:14, width:18, textAlign:"center" }}>{item.icon}</span>
+              <span style={{ flex:1 }}>{isAr?item.ar:item.en}</span>
+              {(item.badge||0)>0&&<span style={{ background:"#ef4444", color:"#fff", fontSize:9,
+                fontWeight:700, borderRadius:99, padding:"1px 5px", minWidth:16, textAlign:"center" }}>{item.badge}</span>}
+            </button>
+          ))}
+          {isAdmin&&(
+            <button onClick={()=>setPage("admin")}
+              onMouseEnter={()=>setHov("admin")} onMouseLeave={()=>setHov(null)}
+              style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
+                padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
+                background:hov==="admin"?"rgba(255,255,255,.04)":"transparent",
+                color:"rgba(255,255,255,.4)", fontSize:12.5, textAlign:"left" }}>
+              <span style={{ fontSize:14, width:18, textAlign:"center" }}>🔧</span>
+              {isAr?"منصة المشرف":"Platform Admin"}
+            </button>
+          )}
+        </nav>
 
-        {isAdmin&&(
-          <button onClick={()=>setPage("admin")}
-            style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
-              padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
-              background:"transparent", color:"rgba(255,255,255,.4)",
-              fontSize:12.5, textAlign:"left" }}>
-            <span style={{ fontSize:14, width:18, textAlign:"center" }}>🔧</span>
-            {isAr?"منصة المشرف":"Platform Admin"}
-          </button>
-        )}
-
-        {/* Start session */}
-        <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${cs.border}` }}>
+        {/* Start Session */}
+        <div style={{ padding:"4px 8px 8px" }}>
           <button onClick={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}
             style={{ width:"100%", padding:"9px", border:"none", borderRadius:8,
               background:"linear-gradient(135deg,#1a56db,#0891b2)", color:"#fff",
@@ -1166,27 +1340,56 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
             ▶ {isAr?"ابدأ جلسة":"Start Session"}
           </button>
         </div>
-      </nav>
+
+        {/* Tools divider */}
+        <div style={{ borderTop:`1px solid ${cs.border}`, margin:"0 8px", padding:"8px 3px 4px" }}>
+          <div style={{ fontSize:9, fontWeight:700, color:"rgba(255,255,255,.22)",
+            textTransform:"uppercase", letterSpacing:".1em", paddingLeft:8 }}>
+            {isAr?"الأدوات":"Tools"}
+          </div>
+        </div>
+
+        {/* Tools list */}
+        <div style={{ padding:"2px 8px 12px", display:"flex", flexDirection:"column", gap:1 }}>
+          {tools.map(tool=>(
+            <button key={tool.id} onClick={tool.onClick}
+              onMouseEnter={()=>setHov(tool.id)} onMouseLeave={()=>setHov(null)}
+              style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
+                padding:"7px 11px", border:"none", borderRadius:7, cursor:"pointer",
+                background:hov===tool.id&&!tool.locked?"rgba(255,255,255,.05)":"transparent",
+                color:tool.locked?"rgba(255,255,255,.28)":"rgba(255,255,255,.72)",
+                fontSize:12, fontWeight:500, textAlign:"left", transition:"all .1s" }}>
+              <span style={{ fontSize:13, width:18, textAlign:"center", opacity:tool.locked?.45:1 }}>{tool.icon}</span>
+              <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {isAr&&tool.ar ? tool.ar : tool.en}
+              </span>
+              {tool.locked&&(
+                <span style={{ fontSize:8,
+                  background:tool.lockLabel==="ELITE"?"rgba(168,85,247,.18)":"rgba(245,158,11,.18)",
+                  color:tool.lockLabel==="ELITE"?"#c084fc":"#f59e0b",
+                  padding:"1px 5px", borderRadius:3, fontWeight:700, flexShrink:0 }}>
+                  {tool.lockLabel}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* User footer */}
-      <div style={{ padding:"8px 8px 12px", borderTop:`1px solid ${cs.border}` }}>
-        {/* Lang/dark toggle */}
+      <div style={{ padding:"8px 8px 12px", borderTop:`1px solid ${cs.border}`, flexShrink:0 }}>
         <div style={{ display:"flex", gap:5, marginBottom:8 }}>
           <button onClick={()=>setLang(lang==="ar"?"en":"ar")}
             style={{ flex:1, padding:"5px", background:"rgba(255,255,255,.04)",
-              border:`1px solid ${cs.border}`, borderRadius:6,
-              color:cs.muted, fontSize:11, cursor:"pointer" }}>
+              border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer" }}>
             {lang==="ar"?"🇬🇧 EN":"🇪🇬 عربي"}
           </button>
           <button onClick={()=>setDarkMode(!darkMode)}
             style={{ padding:"5px 9px", background:"rgba(255,255,255,.04)",
-              border:`1px solid ${cs.border}`, borderRadius:6,
-              color:cs.muted, fontSize:11, cursor:"pointer" }}>
+              border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer" }}>
             {darkMode?"☀️":"🌙"}
           </button>
         </div>
-
-        {/* User + logout */}
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 8px",
           background:"rgba(255,255,255,.03)", borderRadius:8 }}>
           <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={28}/>
@@ -1204,8 +1407,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
             title={isAr?"تسجيل الخروج":"Sign out"}
             style={{ padding:"4px 7px", background:"rgba(239,68,68,.1)",
               border:"1px solid rgba(239,68,68,.2)", borderRadius:5,
-              color:"#f87171", fontSize:10, fontWeight:700, cursor:"pointer",
-              whiteSpace:"nowrap" }}>
+              color:"#f87171", fontSize:10, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
             {isAr?"خروج":"Out"}
           </button>
         </div>
@@ -1428,7 +1630,20 @@ export default function HomePage({
           isAr={isAr} cs={cs} setPage={setPage} startCamera={startCamera}
           logOut={logOut} setUser={setUser} setProfile={setProfile}
           isAdmin={isAdmin} darkMode={darkMode} setDarkMode={setDarkMode}
-          setLang={setLang} lang={lang} tier={tier} atRisk={atRisk}/>
+          setLang={setLang} lang={lang} tier={tier} atRisk={atRisk}
+          user={user} userSessions={userSessions} setUserSessions={setUserSessions}
+          getAllUsers={getAllUsers} setAllUsers={setAllUsers}
+          setShowCoach={setShowCoach} setShowBilling={setShowBilling}
+          setShowGamification={setShowGamification} setShowGrowthHub={setShowGrowthHub}
+          setShowSecurityCenter={setShowSecurityCenter} setShowAIInsights={setShowAIInsights}
+          setShowPredictiveAI={setShowPredictiveAI} setShowCustomerSuccess={setShowCustomerSuccess}
+          setShowChurnPrediction={setShowChurnPrediction} setShowAPIMarketplace={setShowAPIMarketplace}
+          setShowWhiteLabel={setShowWhiteLabel} setShowMultiTenant={setShowMultiTenant}
+          setShowAuditSystem={setShowAuditSystem} setShowAIReports={setShowAIReports}
+          setShowSessionComparison={setShowSessionComparison} setShowTrendChart={setShowTrendChart}
+          setShowWorkforceAnalytics={setShowWorkforceAnalytics}
+          setShowCalibWizard={setShowCalibWizard} setShowDashboard={setShowDashboard}
+        />
       )}
 
       <main style={{ flex:1, minWidth:0, overflowY:"auto", paddingBottom:mobile?80:0 }}>
