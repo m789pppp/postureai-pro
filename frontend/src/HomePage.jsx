@@ -168,7 +168,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
   setShowAPIMarketplace, setShowWhiteLabel, setShowMultiTenant, setShowAuditSystem,
   setShowDashboard, setShowCoach, setShowCalibWizard, setShowBilling,
   setShowAIReports, setShowSessionComparison, setShowTrendChart,
-  isAdmin, isHRAdmin, getAllUsers, setAllUsers, setShowWorkforceAnalytics,
+  isAdmin, isHRAdmin = false, getAllUsers, setAllUsers, setShowWorkforceAnalytics,
   setShowMRR, setShowChangelog, setShowNotificationsHub, setShowEnterpriseRBAC }) {
 
   const last   = userSessions[0]?.avg_score||0;
@@ -1416,7 +1416,7 @@ export default function HomePage({
         onCompare={()=>setShowSessionComparison?.(true)} onTrend={()=>setShowTrendChart?.(true)}/>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[tab, userRole, profile, userSessions, allUsers, tier, isAr, cs, atRisk]);
+  },[tab, userRole, profile, userSessions, allUsers, tier, isAr, cs, atRisk, isHRAdmin, isAdmin]);
 
   return (
     <div dir={dir} style={{ display:"flex", minHeight:"100vh",
