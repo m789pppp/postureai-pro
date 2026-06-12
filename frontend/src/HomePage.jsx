@@ -345,7 +345,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
             <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
             <div>
               <div style={{ fontSize:18, fontWeight:800, color:cs.text, lineHeight:1.1 }}>
-                {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || profile?.email?.split("@")[0] || ""}!`:`Hey, ${profile?.name?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
+                {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || ""}!`:`Hey, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
               </div>
               <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:3 }}>
                 <TierBadge tier={tier}/>
@@ -485,7 +485,7 @@ function DashEmployee({ profile, userSessions, allUsers, cs, isAr, setPage, star
             <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
             <div>
               <div style={{ fontSize:18, fontWeight:800, color:cs.text }}>
-                {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || profile?.email?.split("@")[0] || ""}!`:`Hey, ${profile?.name?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
+                {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || ""}!`:`Hey, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
               </div>
               <div style={{ fontSize:11, color:"#60a5fa", fontWeight:500, marginTop:2 }}>
                 {profile?.department||profile?.company||(isAr?"موظف":"Employee")}
@@ -826,8 +826,8 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
 
   // Always sync from profile (fixes new-user empty name bug)
   useEffect(()=>{
-    setName(profile?.name || "");
-  },[profile?.name]);
+    setName(profile?.name || user?.displayName || "");
+  },[profile?.name, user?.displayName]);
 
   async function save() {
     const trimmedName = name.trim();
@@ -882,6 +882,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
     { id:"profile",  en:"Profile",      ar:"الملف الشخصي" },
     { id:"accounts", en:"Accounts",     ar:"الحسابات المرتبطة" },
     { id:"billing",  en:"Subscription", ar:"الاشتراك" },
+    { id:"security", en:"Security",     ar:"الأمان" },
   ];
 
   return (
@@ -935,7 +936,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
         </div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:17, fontWeight:800, color:cs.text }}>
-            {profile?.name || profile?.email?.split("@")[0] || "—"}
+            {profile?.name || user?.displayName || profile?.email?.split("@")[0] || "—"}
           </div>
           <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>{user?.email||"—"}</div>
           <div style={{ marginTop:6, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
@@ -1161,6 +1162,123 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
         </div>
       )}
 
+
+      {/* Tab: Security */}
+      {tab==="security"&&(
+        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:6 }}>
+            {isAr?"الأمان":"Security"}
+          </div>
+          <div style={{ fontSize:12, color:cs.muted, marginBottom:16, lineHeight:1.6 }}>
+            {isAr?"إدارة أمان حسابك وجلساتك.":"Manage your account security and active sessions."}
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            {/* MFA / 2FA status */}
+            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+              borderRadius:10, border:`1px solid ${cs.border}`,
+              display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                <span style={{ fontSize:22 }}>🔐</span>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+                    {isAr?"المصادقة الثنائية (2FA)":"Two-Factor Authentication"}
+                  </div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+                    {isAr?"أضف طبقة حماية إضافية لحسابك":"Add an extra layer of protection"}
+                  </div>
+                </div>
+              </div>
+              <span style={{ fontSize:10, fontWeight:700,
+                background:"rgba(245,158,11,.1)", color:"#f59e0b",
+                padding:"3px 10px", borderRadius:99 }}>
+                {isAr?"قريباً":"Soon"}
+              </span>
+            </div>
+            {/* Active sessions */}
+            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+              borderRadius:10, border:`1px solid ${cs.border}` }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                  <span style={{ fontSize:22 }}>💻</span>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+                      {isAr?"الجلسات النشطة":"Active Sessions"}
+                    </div>
+                    <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+                      {isAr?"الأجهزة المتصلة حالياً":"Currently connected devices"}
+                    </div>
+                  </div>
+                </div>
+                <span style={{ fontSize:10, fontWeight:700,
+                  background:"rgba(16,185,129,.1)", color:"#10b981",
+                  padding:"3px 10px", borderRadius:99 }}>
+                  {isAr?"جلسة نشطة":"1 Active"}
+                </span>
+              </div>
+              <div style={{ padding:"10px 12px", background:"rgba(59,130,246,.06)",
+                border:"1px solid rgba(59,130,246,.15)", borderRadius:8,
+                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:600, color:cs.text }}>
+                    {isAr?"هذا الجهاز (الحالي)":"This device (current)"}
+                  </div>
+                  <div style={{ fontSize:10, color:cs.muted, marginTop:3 }}>
+                    {new Date().toLocaleDateString(isAr?"ar-EG":"en-US",{day:"numeric",month:"short",year:"numeric"})}
+                  </div>
+                </div>
+                <span style={{ fontSize:10, color:"#3b82f6", fontWeight:600 }}>
+                  {isAr?"نشط الآن":"Active now"}
+                </span>
+              </div>
+            </div>
+            {/* Password change */}
+            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+              borderRadius:10, border:`1px solid ${cs.border}`,
+              display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                <span style={{ fontSize:22 }}>🔑</span>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+                    {isAr?"تغيير كلمة المرور":"Change Password"}
+                  </div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+                    {isAr?"تحديث كلمة مرور حسابك":"Update your account password"}
+                  </div>
+                </div>
+              </div>
+              <button onClick={()=>setTab("accounts")}
+                style={{ padding:"7px 14px", background:"rgba(99,102,241,.12)",
+                  border:"1px solid rgba(99,102,241,.25)", borderRadius:7,
+                  color:"#a5b4fc", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                {isAr?"إدارة":"Manage"}
+              </button>
+            </div>
+            {/* Sign out all */}
+            <div style={{ padding:"14px 16px", background:"rgba(239,68,68,.04)",
+              borderRadius:10, border:"1px solid rgba(239,68,68,.12)",
+              display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                <span style={{ fontSize:22 }}>🚪</span>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:"#f87171" }}>
+                    {isAr?"تسجيل الخروج":"Sign Out"}
+                  </div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+                    {isAr?"تسجيل الخروج من جميع الأجهزة":"Sign out from all devices"}
+                  </div>
+                </div>
+              </div>
+              <button onClick={onSignOut}
+                style={{ padding:"7px 14px", background:"rgba(239,68,68,.12)",
+                  border:"1px solid rgba(239,68,68,.25)", borderRadius:7,
+                  color:"#f87171", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                {isAr?"خروج":"Sign Out"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -1206,9 +1324,6 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       { id:"t-growth",   icon:"🚀", en:"Growth",      ar:"النمو",
         sub:"Personal growth plan",
         onClick:()=>setShowGrowthHub?.(true) },
-      { id:"t-security", icon:"🔒", en:"Security",    ar:"الأمان",
-        sub:"Account security",
-        onClick:()=>setShowSecurityCenter?.(true) },
       { id:"t-coach",    icon:"🤖", en:"AI Coach",    ar:"AI Coach",
         sub:"AI-powered posture tips", locked:!pro, lockLabel:"PRO",
         onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
@@ -1381,7 +1496,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:11, fontWeight:600, color:"#f0f6ff",
               overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-              {profile?.name||profile?.email?.split("@")[0]||"—"}
+              {profile?.name||user?.displayName||profile?.email?.split("@")[0]||"—"}
             </div>
             <div style={{ fontSize:9.5, color:cs.muted,
               overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -1687,4 +1802,5 @@ export default function HomePage({
     </div>
   );
 }
+
 
