@@ -816,7 +816,8 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 }
 
 
-function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling }) {
+function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
+  lang, setLang, darkMode, setDarkMode }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
   const [tab,     setTab]     = useState("profile");
@@ -992,6 +993,29 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 fontWeight:700, cursor:saving?"not-allowed":"pointer" }}>
               {saving?(isAr?"جاري الحفظ...":"Saving..."):(isAr?"حفظ الاسم":"Save Name")}
             </button>
+
+            {/* Preferences */}
+            <div style={{ marginTop:8, paddingTop:16, borderTop:`1px solid ${cs.border}` }}>
+              <div style={{ fontSize:11, color:cs.muted, fontWeight:600, marginBottom:10,
+                textTransform:"uppercase", letterSpacing:".06em" }}>
+                {isAr?"التفضيلات":"Preferences"}
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={()=>setLang?.(lang==="ar"?"en":"ar")}
+                  style={{ flex:1, padding:"10px", background:"rgba(255,255,255,.04)",
+                    border:`1px solid ${cs.border}`, borderRadius:8,
+                    color:cs.text, fontSize:12, fontWeight:600, cursor:"pointer",
+                    display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+                  {lang==="ar"?"🇬🇧 Switch to English":"🇪🇬 التبديل للعربية"}
+                </button>
+                <button onClick={()=>setDarkMode?.(!darkMode)}
+                  style={{ padding:"10px 16px", background:"rgba(255,255,255,.04)",
+                    border:`1px solid ${cs.border}`, borderRadius:8,
+                    color:cs.text, fontSize:13, cursor:"pointer" }}>
+                  {darkMode?"☀️":"🌙"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1158,18 +1182,15 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       { id:"home",      icon:"⊞",  en:"Overview",   ar:"النظرة العامة" },
       { id:"employees", icon:"👥", en:"Employees",  ar:"الموظفون" },
       { id:"alerts",    icon:"🔔", en:"Alerts",     ar:"التنبيهات", badge:atRisk },
-      { id:"settings",  icon:"⚙️", en:"Settings",  ar:"الإعدادات" },
     ];
     if(userRole==="employee") return [
       { id:"home",     icon:"⊞",  en:"Dashboard", ar:"الرئيسية" },
       { id:"sessions", icon:"📋", en:"Sessions",  ar:"جلساتي" },
       { id:"team",     icon:"👥", en:"Team",       ar:"الفريق" },
-      { id:"settings", icon:"⚙️", en:"Settings", ar:"الإعدادات" },
     ];
     return [
       { id:"home",     icon:"⊞",  en:"Dashboard",  ar:"الرئيسية" },
       { id:"sessions", icon:"📋", en:"Sessions",   ar:"جلساتي" },
-      { id:"settings", icon:"⚙️", en:"Settings",  ar:"الإعدادات" },
     ];
   },[userRole,atRisk]);
 
@@ -1333,8 +1354,9 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         </div>
       </div>
 
-      {/* User footer */}
+      {/* Footer — Settings entry point */}
       <div style={{ padding:"8px 8px 12px", borderTop:`1px solid ${cs.border}`, flexShrink:0 }}>
+        {/* Lang + Dark mode row */}
         <div style={{ display:"flex", gap:5, marginBottom:8 }}>
           <button onClick={()=>setLang(lang==="ar"?"en":"ar")}
             style={{ flex:1, padding:"5px", background:"rgba(255,255,255,.04)",
@@ -1347,8 +1369,14 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
             {darkMode?"☀️":"🌙"}
           </button>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 8px",
-          background:"rgba(255,255,255,.03)", borderRadius:8 }}>
+        {/* User card — click → Settings */}
+        <button onClick={()=>setTab("settings")}
+          style={{ width:"100%", display:"flex", alignItems:"center", gap:8,
+            padding:"8px 9px", background:"rgba(255,255,255,.03)",
+            border:`1px solid ${cs.border}`, borderRadius:9, cursor:"pointer",
+            textAlign:"left", transition:"background .12s" }}
+          onMouseEnter={e=>e.currentTarget.style.background="rgba(59,130,246,.08)"}
+          onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,.03)"}>
           <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={28}/>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:11, fontWeight:600, color:"#f0f6ff",
@@ -1357,41 +1385,32 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
             </div>
             <div style={{ fontSize:9.5, color:cs.muted,
               overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-              {profile?.email||""}
+              {isAr?"⚙️ الإعدادات":"⚙️ Settings"}
             </div>
           </div>
-          <button onClick={()=>{ logOut?.(); setUser?.(null); setProfile?.(null); }}
-            title={isAr?"تسجيل الخروج":"Sign out"}
-            style={{ padding:"4px 7px", background:"rgba(239,68,68,.1)",
-              border:"1px solid rgba(239,68,68,.2)", borderRadius:5,
-              color:"#f87171", fontSize:10, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
-            {isAr?"خروج":"Out"}
-          </button>
-        </div>
+          <span style={{ fontSize:11, color:cs.muted, flexShrink:0 }}>›</span>
+        </button>
       </div>
     </aside>
   );
 }
 
 // ── Mobile nav ────────────────────────────────────────────────────
-function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRisk }) {
+function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRisk, profile }) {
   const tabs = userRole==="hr_admin"||userRole==="platform_admin" ? [
-    { id:"home",      icon:"⊞", en:"Overview",  ar:"نظرة" },
-    { id:"employees", icon:"👥",en:"Team",       ar:"فريق" },
-    { id:"live",      icon:"▶",  en:"Session",   ar:"جلسة",   special:true },
-    { id:"alerts",    icon:"🔔",en:"Alerts",     ar:"تنبيهات", badge:atRisk },
-    { id:"settings",  icon:"⚙️",en:"Settings",  ar:"إعدادات" },
+    { id:"home",      icon:"⊞", en:"Overview", ar:"نظرة" },
+    { id:"employees", icon:"👥",en:"Team",      ar:"فريق" },
+    { id:"live",      icon:"▶",  en:"Session",  ar:"جلسة", special:true },
+    { id:"alerts",    icon:"🔔",en:"Alerts",    ar:"تنبيهات", badge:atRisk },
   ] : userRole==="employee" ? [
-    { id:"home",     icon:"⊞", en:"Home",     ar:"الرئيسية" },
-    { id:"team",     icon:"👥",en:"Team",      ar:"الفريق" },
-    { id:"live",     icon:"▶",  en:"Session",  ar:"جلسة",   special:true },
-    { id:"sessions", icon:"📋",en:"History",   ar:"السجل" },
-    { id:"settings", icon:"⚙️",en:"Settings", ar:"إعدادات" },
+    { id:"home",     icon:"⊞", en:"Home",    ar:"الرئيسية" },
+    { id:"team",     icon:"👥",en:"Team",     ar:"الفريق" },
+    { id:"live",     icon:"▶",  en:"Session", ar:"جلسة", special:true },
+    { id:"sessions", icon:"📋",en:"History",  ar:"السجل" },
   ] : [
     { id:"home",     icon:"⊞", en:"Home",    ar:"الرئيسية" },
     { id:"sessions", icon:"📋",en:"History", ar:"السجل" },
-    { id:"live",     icon:"▶",  en:"Session", ar:"جلسة",   special:true },
-    { id:"settings", icon:"⚙️",en:"Settings",ar:"إعدادات" },
+    { id:"live",     icon:"▶",  en:"Session", ar:"جلسة", special:true },
   ];
 
   return (
@@ -1401,7 +1420,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
       padding:`6px 0 max(6px,env(safe-area-inset-bottom))` }}>
       {tabs.map(t=>(
         <button key={t.id}
-          onClick={()=>t.id==="live"?( setPage("live"),setTimeout(()=>startCamera?.(),200) ):setTab(t.id)}
+          onClick={()=>t.id==="live"?(setPage("live"),setTimeout(()=>startCamera?.(),200)):setTab(t.id)}
           style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center",
             gap:3, padding:"4px 0", background:"none", border:"none", cursor:"pointer",
             position:"relative" }}>
@@ -1433,6 +1452,26 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
           )}
         </button>
       ))}
+      {/* Settings — avatar button at end */}
+      <button onClick={()=>setTab("settings")}
+        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center",
+          gap:3, padding:"4px 0", background:"none", border:"none", cursor:"pointer" }}>
+        <div style={{ width:26, height:26, borderRadius:"50%", overflow:"hidden",
+          border:tab==="settings"?"2px solid #3b82f6":"2px solid rgba(255,255,255,.15)" }}>
+          {profile?.photoURL
+            ? <img src={profile.photoURL} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+            : <div style={{ width:"100%", height:"100%",
+                background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:11, color:"#fff", fontWeight:700 }}>
+                {(profile?.name||profile?.email||"U")[0].toUpperCase()}
+              </div>}
+        </div>
+        <span style={{ fontSize:9, fontWeight:tab==="settings"?700:400,
+          color:tab==="settings"?"#3b82f6":"rgba(255,255,255,.3)" }}>
+          {isAr?"إعدادات":"Settings"}
+        </span>
+      </button>
     </nav>
   );
 }
@@ -1490,7 +1529,8 @@ export default function HomePage({
   const settingsContent = tab==="settings" ? (
     <PanelSettings user={user} profile={profile} setProfile={setProfile}
       cs={cs} isAr={isAr} addToast={addToast} onSignOut={handleSignOut}
-      tier={tier} onBilling={openBilling}/>
+      tier={tier} onBilling={openBilling}
+      lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}/>
   ) : null;
 
   const content = useMemo(()=>{
@@ -1642,7 +1682,7 @@ export default function HomePage({
       {mobile&&(
         <MobileNav userRole={userRole} tab={tab} setTab={setTab}
           setPage={setPage} startCamera={startCamera}
-          isAr={isAr} cs={cs} atRisk={atRisk}/>
+          isAr={isAr} cs={cs} atRisk={atRisk} profile={profile}/>
       )}
     </div>
   );
