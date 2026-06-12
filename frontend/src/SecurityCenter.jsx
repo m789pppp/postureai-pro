@@ -250,5 +250,6 @@ export default function SecurityCenter({ token, user, onNavigate, onClose, profi
         </div>
       )}
     </div>
+    </div>
   );
 }
