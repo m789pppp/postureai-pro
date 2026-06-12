@@ -1301,48 +1301,63 @@ def analyze_front(image, mode="laptop", tier="standard"):
             out["alerts"].append(f"Low blink rate ({br}/min) — remember to blink consciously.")
 
     # ── Overall score — confidence-weighted ───────────────────────
-    # Base weights × confidence factor → effective weight
-    # Low-vis metric gets reduced weight AND its "missing" weight
-    # redistributes to dist_sc (camera-independent) for stability
-    BASE_W = {"neck": 0.28, "tilt": 0.14, "sh": 0.11, "spine": 0.14, "dist": 0.18}
+    # All weights defined upfront so normalization is correct.
+    # eye_sc weight 0.05 — always included when FaceMesh available
+    # wrist_sc weight 0.08 — only for paid tiers
+    # pose_sc weight up to 0.15 — solvePnP most accurate
+
+    # eye confidence: needs FaceMesh iris landmarks (very reliable when available)
+    conf_eye   = 1.0 if (eye_sc is not None) else 0.0
+    conf_wrist = 1.0 if (wrist_sc is not None) else 0.0
+
+    BASE_W = {"neck": 0.26, "tilt": 0.13, "sh": 0.10, "spine": 0.13, "dist": 0.17,
+              "eye": 0.05, "wrist": 0.08}
+    # Base weights sum = 0.92, leaving 0.08 for pose_sc
+
     eff_w = {
         "neck":  BASE_W["neck"]  * conf_neck,
         "tilt":  BASE_W["tilt"]  * conf_tilt,
         "sh":    BASE_W["sh"]    * conf_sh,
         "spine": BASE_W["spine"] * conf_spine,
-        "dist":  BASE_W["dist"],   # distance is camera-independent — no penalty
+        "dist":  BASE_W["dist"],                    # camera-independent — no penalty
+        "eye":   BASE_W["eye"]   * conf_eye,        # 0.05 when FaceMesh active, else 0
+        "wrist": BASE_W["wrist"] * conf_wrist,      # 0.08 for paid tiers, else 0
     }
-    # Redistribute lost weight to dist (stable) up to dist max 0.30
-    lost_w     = sum(BASE_W.values()) - sum(eff_w.values())
+
+    # Lost weight from low-vis metrics → redistributed to dist (stable)
+    lost_w = sum(BASE_W.values()) - sum(eff_w.values())
     eff_w["dist"] = min(0.30, eff_w["dist"] + lost_w)
 
-    score_val  = (neck_sc  * eff_w["neck"]  +
-                  tilt_sc  * eff_w["tilt"]  +
-                  sh_sc    * eff_w["sh"]    +
-                  spine_sc * eff_w["spine"] +
-                  dist_sc  * eff_w["dist"])
-    remaining  = 1.0 - sum(eff_w.values())
+    # Build score_val from all present metrics
+    scores = {
+        "neck":  neck_sc,
+        "tilt":  tilt_sc,
+        "sh":    sh_sc,
+        "spine": spine_sc,
+        "dist":  dist_sc,
+        "eye":   eye_sc   if eye_sc   is not None else 0,
+        "wrist": wrist_sc if wrist_sc is not None else 0,
+    }
+    score_val = sum(scores[k] * eff_w[k] for k in scores)
+    remaining = 1.0 - sum(eff_w.values())
 
-    # Store confidence breakdown in metrics for debugging/frontend display
+    # head_pose (solvePnP) — most accurate, gets remaining weight up to 0.15
+    if hp:
+        pose_weight = min(remaining, 0.15)
+        score_val  += pose_sc * pose_weight
+        remaining  -= pose_weight
+
+    # Store confidence breakdown for debugging and frontend display
     out["metrics"]["_confidence"] = {
         "neck":  round(conf_neck,  2),
         "tilt":  round(conf_tilt,  2),
         "sh":    round(conf_sh,    2),
         "spine": round(conf_spine, 2),
+        "eye":   round(conf_eye,   2),
+        "wrist": round(conf_wrist, 2),
         "eff_weights": {k: round(v, 3) for k, v in eff_w.items()},
         "label": "Per-metric visibility confidence",
     }
-    if wrist_sc is not None:
-        score_val += wrist_sc * 0.09
-        remaining -= 0.09
-    if eye_sc is not None:
-        score_val += eye_sc * 0.06
-        remaining -= 0.06
-    if hp:
-        # solvePnP is most accurate — increase weight to 0.15
-        pose_weight = min(remaining, 0.15)
-        score_val  += pose_sc * pose_weight
-        remaining  -= pose_weight
 
     # ── No arbitrary baseline — normalize by actual weights used ──────
     # Instead of filling remaining weight with 72, we normalize score_val
@@ -8065,6 +8080,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
