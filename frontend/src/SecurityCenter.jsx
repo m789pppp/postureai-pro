@@ -39,6 +39,7 @@ function ScoreRing({ score }) {
         <span style={{ fontSize:18, fontWeight:700, color, marginTop:-4 }}>{grade}</span>
       </div>
     </div>
+    </div>
   );
 }
 
@@ -64,7 +65,7 @@ function Check({ ok, label, action, impact }) {
   );
 }
 
-export default function SecurityCenter({ token, user, onNavigate }) {
+export default function SecurityCenter({ token, user, onNavigate, onClose, profile, cs, lang }) {
   const [data, setData]       = useState(null);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,17 +91,32 @@ export default function SecurityCenter({ token, user, onNavigate }) {
   };
 
   if (loading) return (
-    <div style={{ background:C.bg, minHeight:"100vh", display:"flex",
-      alignItems:"center", justifyContent:"center" }}>
-      <div style={{ fontSize:48, animation:"spin 1s linear infinite" }}>🔐</div>
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)",
+      zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={(e)=>{ if(e.target===e.currentTarget) onClose?.(); }}>
+      <div style={{ background:C.bg, borderRadius:16, padding:48, display:"flex",
+        alignItems:"center", justifyContent:"center" }}>
+        <div style={{ fontSize:48, animation:"spin 1s linear infinite" }}>🔐</div>
+      </div>
     </div>
   );
 
   const checks = data?.checks || {};
 
   return (
-    <div style={{ background:C.bg, minHeight:"100vh", padding:"32px 24px", color:C.text,
-      maxWidth:900, margin:"0 auto", fontFamily:"'Sora',sans-serif" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)",
+      zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center",
+      padding:"20px" }}
+      onClick={(e)=>{ if(e.target===e.currentTarget) onClose?.(); }}>
+      <div style={{ background:C.bg, borderRadius:16, padding:"28px 28px", color:C.text,
+        width:"100%", maxWidth:900, maxHeight:"90vh", overflowY:"auto",
+        fontFamily:"'Sora',sans-serif", position:"relative" }}>
+      {/* Close button */}
+      <button onClick={()=>onClose?.()}
+        style={{ position:"absolute", top:16, right:16, background:"rgba(255,255,255,.08)",
+          border:"none", borderRadius:8, width:32, height:32, cursor:"pointer",
+          color:C.text, fontSize:18, display:"flex", alignItems:"center",
+          justifyContent:"center", zIndex:10 }}>✕</button>
       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:32 }}>
         <span style={{ fontSize:32 }}>🔐</span>
         <div>
