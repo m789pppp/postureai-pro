@@ -1747,25 +1747,78 @@ Body parts at risk: [list]
 Single most important ergonomic adjustment to make RIGHT NOW.
 
 {"Respond entirely in Arabic." if is_ar else "Keep it professional and concise. Use medical terminology where appropriate."}"""
-    try:
-        # Tier-based model: elite/pro → gemini-1.5-pro (deeper), others → flash (fast)
-        _model = "gemini-1.5-pro" if tier in ("elite","premium","professional","pro") else "gemini-1.5-flash"
-        _tokens = 1200 if _model == "gemini-1.5-pro" else 900
-        url  = f"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={GEMINI_API_KEY}"
-        resp = req.post(url,
-                        headers={"Content-Type": "application/json"},
-                        json={"contents": [{"parts": [{"text": prompt}]}],
-                              "generationConfig": {"maxOutputTokens": _tokens, "temperature": 0.25}},
-                        timeout=22)
-        if resp.status_code == 200:
-            narrative = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-            if narrative:
-                cache_set(f"gemini:{_cache_key}", narrative, ttl_s=90)  # 90s cache
-            return narrative
-        return None
-    except Exception as e:
-        print(f"Gemini error: {e}")
-        return None
+    # ── Retry config ──────────────────────────────────────────────
+    # Max 2 attempts: attempt 1 → pro/flash, attempt 2 → flash fallback
+    # Exponential backoff: 1s, 2s between retries
+    # Retryable: timeout, 429, 500, 503 — Not retryable: 400, 401, 403
+    RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+    MAX_ATTEMPTS     = 2
+
+    _model  = "gemini-1.5-pro"   if tier in ("elite","premium","professional","pro") else "gemini-1.5-flash"
+    _tokens = 1200 if _model == "gemini-1.5-pro" else 900
+
+    for attempt in range(MAX_ATTEMPTS):
+        # Attempt 2: downgrade to flash if pro failed (faster, more available)
+        model_this_attempt = _model if attempt == 0 else "gemini-1.5-flash"
+        tokens_this_attempt = _tokens if attempt == 0 else 900
+
+        # Exponential backoff before retry (not before first attempt)
+        if attempt > 0:
+            backoff = 2 ** (attempt - 1)  # 1s, 2s, 4s...
+            time.sleep(backoff)
+            log_event("gemini_retry", meta={
+                "attempt": attempt + 1,
+                "model": model_this_attempt,
+                "backoff_s": backoff,
+            })
+
+        try:
+            url  = f"https://generativelanguage.googleapis.com/v1beta/models/{model_this_attempt}:generateContent?key={GEMINI_API_KEY}"
+            resp = req.post(url,
+                            headers={"Content-Type": "application/json"},
+                            json={"contents": [{"parts": [{"text": prompt}]}],
+                                  "generationConfig": {"maxOutputTokens": tokens_this_attempt, "temperature": 0.25}},
+                            timeout=20)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                # Guard: candidates might be empty (safety filter)
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    log_event("gemini_blocked", meta={"score": s, "reason": data.get("promptFeedback")})
+                    return None
+                narrative = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                if narrative:
+                    cache_set(f"gemini:{_cache_key}", narrative, ttl_s=90)
+                    log_event("gemini_ok", meta={"attempt": attempt+1, "model": model_this_attempt, "chars": len(narrative)})
+                return narrative or None
+
+            elif resp.status_code in RETRYABLE_STATUS:
+                log_event("gemini_retryable_error", meta={
+                    "status": resp.status_code,
+                    "attempt": attempt + 1,
+                    "model": model_this_attempt,
+                })
+                continue  # retry
+
+            else:
+                # Non-retryable (400 bad request, 401 invalid key, 403 quota)
+                log_event("gemini_fatal_error", meta={"status": resp.status_code, "model": model_this_attempt})
+                return None
+
+        except req.exceptions.Timeout:
+            log_event("gemini_timeout", meta={"attempt": attempt + 1, "model": model_this_attempt})
+            if attempt < MAX_ATTEMPTS - 1:
+                continue  # retry on timeout
+            return None
+
+        except Exception as e:
+            log_event("gemini_exception", meta={"error": str(e)[:120], "attempt": attempt + 1})
+            if attempt < MAX_ATTEMPTS - 1:
+                continue
+            return None
+
+    return None  # all attempts exhausted
 
 # ── PDF GENERATION ─────────────────────────────────────────────────
 def generate_pdf(sd):
@@ -8080,6 +8133,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
