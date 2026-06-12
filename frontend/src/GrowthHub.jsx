@@ -2,7 +2,7 @@
  * GrowthHub.jsx — PostureAI Phase 13
  * Public roadmap, changelog, status page, affiliate/partner program — all in one Growth hub
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const ROADMAP_ITEMS = [
   { id:"r1",  status:"shipped",     quarter:"Q1 2026", title:"API Marketplace",              votes:284, category:"platform",    desc:"Self-serve API key management with docs, SDKs, and usage analytics." },
@@ -54,23 +54,31 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
   const [items, setItems]   = useState(ROADMAP_ITEMS);
   const [catFilter, setCat] = useState("all");
   const [liveChangelog, setLiveChangelog] = useState([]);
+  const [voteSaved, setVoteSaved] = useState(false);
 
-  // Load live changelog from backend (runs once on mount)
-  // Using a ref to avoid adding useEffect import — this is in a side-effect-safe way
-  const _loadedRef = useState(false);
-  if (!_loadedRef[0]) {
-    _loadedRef[1](true);
+  // Persist votes to localStorage so they survive page refresh
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("gh_votes") || "{}");
+      setVoted(saved);
+    } catch {}
+  }, []);
+
+  // Load live changelog from backend
+  useEffect(() => {
     const API = (typeof import.meta !== "undefined" && import.meta?.env?.VITE_API_URL) || "/api";
     fetch(`${API}/changelog`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.entries?.length) setLiveChangelog(d.entries); })
       .catch(() => {});
-  }
+  }, []);
 
   const vote = (id) => {
     if (voted[id]) return;
-    setVoted(p=>({...p,[id]:true}));
+    const newVoted = {...voted, [id]: true};
+    setVoted(newVoted);
     setItems(p=>p.map(item=>item.id===id?{...item,votes:item.votes+1}:item));
+    try { localStorage.setItem("gh_votes", JSON.stringify(newVoted)); } catch {}
   };
 
   const filtered = catFilter==="all" ? items : items.filter(i=>i.category===catFilter);
@@ -266,7 +274,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
               <div style={{ background:"rgba(99,102,241,0.07)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:12, padding:16 }}>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:10, fontSize:14 }}>🔗 Affiliate Link Generator</div>
                 <div style={{ display:"flex", gap:8 }}>
-                  <input defaultValue="https://postureai.com?ref=YOUR_CODE" style={{ flex:1, background:"rgba(0,0,0,0.2)", border:`1px solid ${cs.border}`, color:"#a5f3fc", borderRadius:8, padding:"8px 13px", fontSize:12, fontFamily:"monospace", outline:"none" }} readOnly />
+                  <input defaultValue={profile?.referral_code ? `https://postureai.com?ref=${profile.referral_code}` : `https://postureai.com?ref=${(profile?.uid||"").slice(0,8)}`} style={{ flex:1, background:"rgba(0,0,0,0.2)", border:`1px solid ${cs.border}`, color:"#a5f3fc", borderRadius:8, padding:"8px 13px", fontSize:12, fontFamily:"monospace", outline:"none" }} readOnly />
                   <button style={{ background:"linear-gradient(135deg,#6366f1,#ec4899)", border:"none", color:"#fff", borderRadius:8, padding:"8px 16px", cursor:"pointer", fontWeight:700, fontSize:12 }}>Copy</button>
                 </div>
               </div>
