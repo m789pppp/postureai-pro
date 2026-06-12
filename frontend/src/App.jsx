@@ -1985,10 +1985,13 @@ export default function App(){
       if(user){
         saveSession(user.uid,{
           session_id:sessionId,mode,tier,avg_score:avg,
-          good_pct:gPct,duration_s:dur,
+          good_pct:gPct,duration_s:dur,duration_sec:dur,
           alerts_count:acRef.current.total,
           score_history:histRef.current.slice(-20),
           metrics:la.metrics||{}
+        }).then(()=>{
+          // Refresh sessions list so Sessions tab & dashboard update immediately
+          getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
         }).catch(()=>{});
       }
     }
@@ -2613,7 +2616,12 @@ export default function App(){
                 {isAr?"▶ جلسة جديدة":"▶ New Session"}
               </button>
               <div style={{display:"flex",gap:10}}>
-                <button onClick={()=>{setSessionResult(null);setPage("home");}}
+                <button onClick={()=>{
+                    setSessionResult(null);
+                    // Refresh sessions before going home so Sessions tab is up to date
+                    if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
+                    setPage("home");
+                  }}
                   style={{flex:1,padding:"10px",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {isAr?"لوحة التحكم":"Dashboard"}
                 </button>
@@ -2649,7 +2657,7 @@ export default function App(){
         }}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <button
-              onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
+              onClick={()=>{stopCamera();if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});setPage("home");setCamActive(false);}}
               style={{
                 background:"rgba(148,163,184,.08)",
                 border:`1px solid ${cs.border}`,
@@ -3114,6 +3122,7 @@ export default function App(){
     </div>
   </ErrorBoundary>);
 }
+
 
 
 
