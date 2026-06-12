@@ -2401,6 +2401,7 @@ export default function App(){
         setShowUpgrade={setShowUpgrade} BreakTimer={BreakTimer}
         CalibrationWizard={CalibrationWizard} setCalibData={setCalibData}
         toast={addToast}
+        isHRAdmin={isHRAdmin}
       />
     </ErrorBoundary>
   );
