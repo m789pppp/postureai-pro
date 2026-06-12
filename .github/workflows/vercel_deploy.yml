@@ -42,7 +42,7 @@ jobs:
           cd frontend
           RESULT=$(vercel deploy dist --prod --yes \
             --token=${{ secrets.VERCEL_TOKEN }} \
-            --name=postureai-pro 2>&1) || true
+            --name=postureai-pro-omega 2>&1) || true
           echo "$RESULT"
           URL=$(echo "$RESULT" | grep -Eo 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
