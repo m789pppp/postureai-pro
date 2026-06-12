@@ -835,15 +835,22 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
     if(!user?.uid){   addToast("Not signed in","error"); return; }
     setSaving(true);
     try {
+      // Update Firestore profile (name only)
       await updateUserProfile(user.uid, { name: trimmedName });
+      // Update Firebase Auth displayName
       if(auth.currentUser) {
         await fbUpdateProfile(auth.currentUser, { displayName: trimmedName });
       }
+      // Update local state immediately so UI reflects change without reload
       setProfile(p=>({...(p||{}), name: trimmedName}));
+      setName(trimmedName);
       addToast(isAr?"✅ تم حفظ الاسم":"✅ Name saved","success");
     } catch(err) {
-      console.error("Save name error:", err);
-      addToast(`Error: ${err?.message||"unknown"}`,"error");
+      console.error("Save name error:", err?.code, err?.message);
+      const msg = err?.code==="permission-denied"
+        ? (isAr?"خطأ في الصلاحيات — حاول تاني":"Permission denied — please try again")
+        : (err?.message||"Unknown error");
+      addToast(msg,"error");
     }
     setSaving(false);
   }
