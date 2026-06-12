@@ -96,14 +96,14 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
               <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#ec4899)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🚀</div>
               <div>
                 <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>Growth Hub</div>
-                <div style={{ fontSize:12, color:cs.textDim }}>Roadmap · Changelog · Status · Affiliate Program</div>
+                <div style={{ fontSize:12, color:cs.muted||"#64748b" }}>Roadmap · Changelog · Status · Affiliate Program</div>
               </div>
             </div>
             <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }}>✕</button>
           </div>
           <div style={{ display:"flex", gap:4 }}>
             {tabs.map(t=>(
-              <button key={t.id} onClick={()=>setTab(t.id)} style={{ background:tab===t.id?"rgba(99,102,241,0.12)":"transparent", border:"none", color:tab===t.id?"#6366f1":cs.textDim, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #6366f1":"2px solid transparent" }}>
+              <button key={t.id} onClick={()=>setTab(t.id)} style={{ background:tab===t.id?"rgba(99,102,241,0.12)":"transparent", border:"none", color:tab===t.id?"#6366f1":cs.muted||"#64748b", padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #6366f1":"2px solid transparent" }}>
                 {t.icon} {t.label}
               </button>
             ))}
@@ -118,7 +118,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
               {/* Category filters */}
               <div style={{ display:"flex", gap:6, marginBottom:20, flexWrap:"wrap" }}>
                 {categories.map(c=>(
-                  <button key={c} onClick={()=>setCat(c)} style={{ padding:"5px 13px", borderRadius:20, border:"1px solid", fontSize:11, cursor:"pointer", fontWeight:600, borderColor:catFilter===c?(CAT_COLORS[c]||"#6366f1"):cs.border, background:catFilter===c?`${CAT_COLORS[c]||"#6366f1"}18`:"transparent", color:catFilter===c?(CAT_COLORS[c]||"#6366f1"):cs.textDim }}>
+                  <button key={c} onClick={()=>setCat(c)} style={{ padding:"5px 13px", borderRadius:20, border:"1px solid", fontSize:11, cursor:"pointer", fontWeight:600, borderColor:catFilter===c?(CAT_COLORS[c]||"#6366f1"):cs.border, background:catFilter===c?`${CAT_COLORS[c]||"#6366f1"}18`:"transparent", color:catFilter===c?(CAT_COLORS[c]||"#6366f1"):cs.muted||"#64748b" }}>
                     {c}
                   </button>
                 ))}
@@ -142,9 +142,9 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
                             <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:4 }}>
                               <span style={{ fontWeight:700, color:cs.text, fontSize:14 }}>{item.title}</span>
                               <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20, background:`${CAT_COLORS[item.category]||"#6366f1"}18`, color:CAT_COLORS[item.category]||"#6366f1" }}>{item.category}</span>
-                              <span style={{ fontSize:10, color:cs.textDim }}>{item.quarter}</span>
+                              <span style={{ fontSize:10, color:cs.muted||"#64748b" }}>{item.quarter}</span>
                             </div>
-                            <div style={{ fontSize:12, color:cs.textDim, lineHeight:1.5 }}>{item.desc}</div>
+                            <div style={{ fontSize:12, color:cs.muted||"#64748b", lineHeight:1.5 }}>{item.desc}</div>
                           </div>
                           <button onClick={()=>vote(item.id)} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, background:voted[item.id]?"rgba(99,102,241,0.12)":"rgba(255,255,255,0.04)", border:`1px solid ${voted[item.id]?"#6366f1":cs.border}`, borderRadius:10, padding:"8px 14px", cursor:voted[item.id]?"default":"pointer", minWidth:56, transition:"all .2s" }}>
                             <span style={{ fontSize:16 }}>▲</span>
@@ -168,7 +168,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
                     <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:`${TYPE_COLORS[entry.type]}18`, color:TYPE_COLORS[entry.type] }}>{entry.type}</span>
                     <span style={{ fontWeight:800, fontSize:16, color:cs.text }}>{entry.version}</span>
                     <span style={{ fontSize:12, fontWeight:700, color:"#6366f1" }}>{entry.title}</span>
-                    <span style={{ fontSize:11, color:cs.textDim, marginLeft:"auto" }}>{entry.date}</span>
+                    <span style={{ fontSize:11, color:cs.muted||"#64748b", marginLeft:"auto" }}>{entry.date}</span>
                   </div>
                   <ul style={{ margin:0, padding:"0 0 0 18px", display:"flex", flexDirection:"column", gap:4 }}>
                     {entry.items.map((item,i)=>(
@@ -186,7 +186,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
               <div style={{ textAlign:"center", padding:"24px 0" }}>
                 <div style={{ fontSize:48 }}>✅</div>
                 <div style={{ fontSize:22, fontWeight:800, color:"#10b981", marginTop:8 }}>All Systems Operational</div>
-                <div style={{ fontSize:13, color:cs.textDim, marginTop:4 }}>Last checked: just now</div>
+                <div style={{ fontSize:13, color:cs.muted||"#64748b", marginTop:4 }}>Last checked: just now</div>
               </div>
               <div style={{ background:cs.bg, borderRadius:14, border:`1px solid ${cs.border}`, overflow:"hidden" }}>
                 {SERVICES_STATUS.map((s,i)=>(
@@ -234,7 +234,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
                   <div key={m.label} style={{ background:cs.bg, borderRadius:14, padding:16, border:`1px solid ${cs.border}` }}>
                     <div style={{ fontSize:24, fontWeight:900, color:m.color }}>{m.value}</div>
                     <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginTop:4 }}>{m.label}</div>
-                    <div style={{ fontSize:11, color:cs.textDim }}>{m.desc}</div>
+                    <div style={{ fontSize:11, color:cs.muted||"#64748b" }}>{m.desc}</div>
                   </div>
                 ))}
               </div>
@@ -247,7 +247,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
                       <span style={{ fontWeight:700, color:cs.text, fontSize:14 }}>{a.name}</span>
                       <span style={{ fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20, background:`${TIER_COLORS[a.tier]}18`, color:TIER_COLORS[a.tier], textTransform:"uppercase" }}>{a.tier}</span>
                     </div>
-                    <div style={{ fontSize:11, color:cs.textDim }}>{a.email} · Joined {a.joined}</div>
+                    <div style={{ fontSize:11, color:cs.muted||"#64748b" }}>{a.email} · Joined {a.joined}</div>
                   </div>
                   {[
                     { label:"Clicks", value:a.clicks.toLocaleString() },
@@ -256,10 +256,10 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
                   ].map(s=>(
                     <div key={s.label} style={{ textAlign:"center", padding:"6px 12px", background:"rgba(255,255,255,0.04)", borderRadius:8 }}>
                       <div style={{ fontSize:15, fontWeight:700, color:cs.text }}>{s.value}</div>
-                      <div style={{ fontSize:10, color:cs.textDim }}>{s.label}</div>
+                      <div style={{ fontSize:10, color:cs.muted||"#64748b" }}>{s.label}</div>
                     </div>
                   ))}
-                  <button style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:7, padding:"6px 12px", cursor:"pointer", fontSize:11 }}>Manage</button>
+                  <button style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted||"#64748b", borderRadius:7, padding:"6px 12px", cursor:"pointer", fontSize:11 }}>Manage</button>
                 </div>
               ))}
 
