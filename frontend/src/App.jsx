@@ -42,6 +42,7 @@ import { AuditSystem }         from "./AuditSystem.jsx";
 import { EnterpriseAdminTools }from "./EnterpriseAdminTools.jsx";
 import LandingPageLegacy from "./LandingPage.jsx";
 import LandingPageV7 from "./LandingPageV7.jsx";
+const Landing = LandingPageV7; // alias so <Landing> works
 import { AdminDashboard } from "./AdminDashboard.jsx";
 import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
 import { handleSSORedirect } from "./EnterpriseSSO.jsx";
