@@ -74,7 +74,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
   };
 
   const filtered = catFilter==="all" ? items : items.filter(i=>i.category===catFilter);
-  const grouped  = ["in_progress","planned","shipped","considering"].reduce((acc,s)=>({...acc,[s]:filtered.filter(i=>i.status===s)}),[]);
+  const grouped  = ["in_progress","planned","shipped","considering"].reduce((acc,s)=>({...acc,[s]:filtered.filter(i=>i.status===s)}),{});
 
   const tabs = [
     { id:"roadmap",   label:"Roadmap",   icon:"🗺" },

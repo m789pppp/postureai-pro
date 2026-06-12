@@ -3,7 +3,8 @@
  * Complete rewrite: proper role separation, working tools, real data, tier gates
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { getUserSessions, getAllUsers, updateUserProfile } from "./firebase.js";
+import { getUserSessions, getAllUsers, updateUserProfile, auth } from "./firebase.js";
+import { updateProfile as fbUpdateProfile } from "firebase/auth";
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -828,22 +829,19 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   },[profile?.name]);
 
   async function save() {
-    if(!user?.uid){ addToast(isAr?"خطأ: تسجيل الدخول منتهي":"Error: not signed in","error"); return; }
     const trimmedName = name.trim();
     if(!trimmedName){ addToast(isAr?"الاسم مش يكون فاضي":"Name can't be empty","error"); return; }
+    if(!user?.uid){   addToast("Not signed in","error"); return; }
     setSaving(true);
     try {
-      // 1) Update Firestore
-      const updates = { name: trimmedName };
-      await updateUserProfile(user.uid, updates);
-      // 2) Update Firebase Auth displayName so it persists immediately
-      const { updateProfile: fbUpdateProfile } = await import("firebase/auth");
-      const { auth } = await import("./firebase.js");
-      if(auth.currentUser) await fbUpdateProfile(auth.currentUser, { displayName: trimmedName });
-      // 3) Update local state
+      await updateUserProfile(user.uid, { name: trimmedName });
+      if(auth.currentUser) {
+        await fbUpdateProfile(auth.currentUser, { displayName: trimmedName });
+      }
       setProfile(p=>({...(p||{}), name: trimmedName}));
       addToast(isAr?"✅ تم حفظ الاسم":"✅ Name saved","success");
     } catch(err) {
+      console.error("Save name error:", err);
       addToast(`Error: ${err?.message||"unknown"}`,"error");
     }
     setSaving(false);
@@ -883,7 +881,6 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
     { id:"profile",  en:"Profile",      ar:"الملف الشخصي" },
     { id:"accounts", en:"Accounts",     ar:"الحسابات المرتبطة" },
     { id:"billing",  en:"Subscription", ar:"الاشتراك" },
-    { id:"security", en:"Security",     ar:"الأمان" },
   ];
 
   return (
@@ -1140,42 +1137,6 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
         </div>
       )}
 
-      {/* Tab: Security */}
-      {tab==="security"&&(
-        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
-          <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:16 }}>
-            {isAr?"إعدادات الأمان":"Security Settings"}
-          </div>
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            {/* Active providers */}
-            {providers.map((p,i)=>(
-              <div key={i} style={{ padding:"12px 14px", background:"rgba(255,255,255,.03)",
-                borderRadius:9, border:`1px solid ${cs.border}`,
-                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                  <span style={{ fontSize:18 }}>{p.providerId==="google.com"?"🔵":"📧"}</span>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
-                      {p.providerId==="google.com"?(isAr?"حساب Google":"Google Account"):(isAr?"بريد إلكتروني":"Email/Password")}
-                    </div>
-                    <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>{p.email||user?.email||"—"}</div>
-                  </div>
-                </div>
-                <span style={{ fontSize:10, fontWeight:700, color:"#10b981",
-                  background:"rgba(16,185,129,.1)", padding:"3px 8px", borderRadius:99 }}>
-                  {isAr?"نشط":"Active"}
-                </span>
-              </div>
-            ))}
-            <button onClick={onSignOut}
-              style={{ marginTop:4, padding:"11px", background:"rgba(239,68,68,.1)",
-                color:"#f87171", border:"1px solid rgba(239,68,68,.2)",
-                borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-              {isAr?"⏻ تسجيل الخروج من كل الأجهزة":"⏻ Sign Out Everywhere"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
