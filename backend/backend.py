@@ -8056,9 +8056,15 @@ def validate_uid(uid):
     if not uid or not isinstance(uid, str): return False
     return bool(_re.match(r'^[a-zA-Z0-9_\-]{4,128}$', uid.strip()))
 
+@app.before_request
+def _set_request_id():
+    import uuid as _uuid
+    g.request_id = _uuid.uuid4().hex[:12]
+
 @app.after_request
 def add_security_headers(response):
     """Add security headers to every response."""
+    response.headers["X-Request-ID"]            = getattr(g, "request_id", "-")
     response.headers["X-Content-Type-Options"]  = "nosniff"
     response.headers["X-Frame-Options"]          = "DENY"
     response.headers["X-XSS-Protection"]         = "1; mode=block"
@@ -8362,6 +8368,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
