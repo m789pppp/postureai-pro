@@ -949,10 +949,21 @@ def score_m(v, ideal, ok, bad):
     return max(5, int(30 - (d - bad) * 1.5))
 
 def cam_mat(w, h):
-    return np.array([[w, 0, w/2], [0, w, h/2], [0, 0, 1]], dtype=np.float64)
+    """
+    Camera intrinsic matrix with aspect-ratio-correct focal length.
+    Assumes ~70° horizontal FOV (typical webcam/phone).
+    fx = w / (2 * tan(hFOV/2)) ≈ w * 0.85 for 70° FOV
+    fy = h / (2 * tan(vFOV/2)) — preserves aspect ratio for portrait cameras
+    """
+    fx = w * 0.85          # horizontal focal: ~70° H-FOV
+    fy = h * 0.85          # vertical focal: scales with h, not w
+    cx, cy = w / 2, h / 2
+    return np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
 
 # ── Blink rate detection using FaceMesh ───────────────────────────
 _blink_history = []  # (timestamp, ear_ratio)
+_lm_history     = {}   # {session_id: [lm_array,...]} last 3 frames for jitter reduction
+_celery_task    = None  # lazy Celery singleton
 
 def compute_ear(face_lms, w, h):
     """Eye Aspect Ratio for blink detection and eye strain."""
@@ -1122,7 +1133,20 @@ def analyze_front(image, mode="laptop", tier="standard"):
     # Natural nose-to-shoulder offset correction (~5° at typical distances)
     nose_correction = 5.0 * nose_weight  # scale correction by how much nose we're using
     neck_lean  = max(0.0, neck_lean_raw - nose_correction)
-    neck_sc    = score_m(neck_lean, 0, 7, 20)
+
+    # ── Shoulder width normalization ────────────────────────────
+    # Wider shoulders = wider apparent angles at same posture quality
+    # Normalize threshold: ok/bad scale by (sh_width / ref_width)
+    # Reference: shoulder width ~42cm at 65cm = ~34% of frame width
+    sh_width_px  = abs(r_sh[0] - l_sh[0])
+    ref_sh_frac  = 0.34   # reference fraction of frame width
+    sh_frac      = sh_width_px / max(w, 1)
+    sh_ratio     = sh_frac / ref_sh_frac   # >1 = wider than avg, <1 = narrower
+    sh_ratio     = max(0.70, min(1.30, sh_ratio))  # clamp to ±30%
+    neck_ok_adj  = max(5.0, 7.0  * sh_ratio)
+    neck_bad_adj = max(14.0, 20.0 * sh_ratio)
+    neck_sc    = score_m(neck_lean, 0, neck_ok_adj, neck_bad_adj)
+    out["metrics"]["shoulder_width_ratio"] = {"value": round(sh_ratio, 2), "unit": "×", "label": "Shoulder width ratio"}
 
     head_tilt  = angle_horiz(l_eye, r_eye)
     tilt_sc    = score_m(head_tilt, 0, 3, 10)
@@ -1590,13 +1614,28 @@ def analyze_with_gemini(result, context="", lang="en"):
     hp    = result.get("head_pose")
     mode  = result.get("mode", "laptop")
     eng   = result.get("engine", "MediaPipe")
-    mtext = "\n".join([f"- {m['label']}: {m['value']}{m['unit']} (score {m['score']}/100)" for m in mets.values()])
-    pose_text = (f"3D head pose: pitch={hp['pitch']}°, yaw={hp['yaw']}°, roll={hp['roll']}°" if hp else "3D pose: unavailable")
+    tier  = result.get("tier", "free")
+
+    # All metrics including new ones (spine_upper/lower, shoulder_width, cam_correction)
+    def _fmt_met(k, m):
+        val  = m.get("value", "?"); unit = m.get("unit",""); sc = m.get("score","?")
+        calib = " [calibrated]" if m.get("calibrated") else ""
+        return f"- {m.get('label', k)}: {val}{unit} (score {sc}/100{calib})"
+    mtext = "\n".join([_fmt_met(k,m) for k,m in mets.items() if isinstance(m,dict) and "score" in m])
+
+    # Enrich with extra context
+    cam_corr = result.get("metrics",{}).get("head_pose_detail",{}).get("cam_correction_applied", 0)
+    blur_note = " [some frames were blurry — accuracy may be reduced]" if result.get("blurry_frame") else ""
+    sh_ratio  = result.get("metrics",{}).get("shoulder_width_ratio",{}).get("value","?")
+
+    pose_text = (f"3D head pose: pitch={hp['pitch']}°, yaw={hp['yaw']}°, roll={hp['roll']}° "
+                 f"(camera angle correction applied: {cam_corr}°)" if hp else "3D pose: unavailable")
     is_ar = lang == "ar"
     prompt = f"""You are a certified occupational physiotherapist (COPT) analyzing real-time workplace posture data.
 
-Camera mode: {mode} | Overall posture score: {s}/100 | Engine: {eng}
+Camera mode: {mode} | Overall posture score: {s}/100 | Engine: {eng}{blur_note}
 {pose_text}
+Shoulder width ratio: {sh_ratio}× (1.0 = average, >1 = wider)
 
 Metrics:
 {mtext}
@@ -1615,24 +1654,29 @@ For each alert:
 • Alert: [text]
 • What it means: [explain simply]
 • Fix RIGHT NOW: [1 immediate action]
-• If ignored: [injury risk]
+• If ignored: [injury risk in 6-12 months]
 
 **SECTION 3 — Top 3 Recommendations (evidence-based)**
+Cite relevant ergonomic standard if applicable (ISO 9241, OSHA).
 
 **SECTION 4 — Risk Assessment**
 Musculoskeletal injury risk: Low / Medium / High
+Body parts at risk: [list]
 
 **SECTION 5 — Immediate Action**
-Single most important ergonomic adjustment now.
+Single most important ergonomic adjustment to make RIGHT NOW.
 
-{"Respond entirely in Arabic." if is_ar else "Keep it professional and concise."}"""
+{"Respond entirely in Arabic." if is_ar else "Keep it professional and concise. Use medical terminology where appropriate."}"""
     try:
-        url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        # Tier-based model: elite/pro → gemini-1.5-pro (deeper), others → flash (fast)
+        _model = "gemini-1.5-pro" if tier in ("elite","premium","professional","pro") else "gemini-1.5-flash"
+        _tokens = 1200 if _model == "gemini-1.5-pro" else 900
+        url  = f"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={GEMINI_API_KEY}"
         resp = req.post(url,
                         headers={"Content-Type": "application/json"},
                         json={"contents": [{"parts": [{"text": prompt}]}],
-                              "generationConfig": {"maxOutputTokens": 900, "temperature": 0.3}},
-                        timeout=18)
+                              "generationConfig": {"maxOutputTokens": _tokens, "temperature": 0.25}},
+                        timeout=22)
         if resp.status_code == 200:
             narrative = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
             if narrative:
@@ -2068,6 +2112,21 @@ def analyze():
             scale = 480 / h_img
             img = cv2.resize(img, (int(w_img * scale), 480), interpolation=cv2.INTER_AREA)
 
+        # ── Motion blur detection (Laplacian variance) ────────────
+        # Blurry frames degrade landmark accuracy → skip and return cached
+        gray_check  = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blur_score  = cv2.Laplacian(gray_check, cv2.CV_64F).var()
+        is_blurry   = blur_score < 45  # threshold: <45 = motion blur
+        if is_blurry:
+            cached_blur = cache_get(f"last_valid:{uid}")
+            if cached_blur:
+                import json as _bj
+                rv = _bj.loads(cached_blur)
+                rv["blurry_frame"] = True
+                rv["blur_score"]   = round(blur_score, 1)
+                return jsonify(rv)
+            # No cache yet — process anyway but mark as low confidence
+
         # Low-light enhancement pipeline
         img_to_analyze, brightness, was_enhanced = enhance_low_light(img)
 
@@ -2199,6 +2258,12 @@ def analyze():
 
         ms = round((time.perf_counter() - t0) * 1000)
         result["processing_ms"] = ms
+        # Cache last valid (non-blurry) result for blur-frame fallback
+        if result.get("detected") and not result.get("blurry_frame"):
+            try:
+                import json as _vj
+                cache_set(f"last_valid:{uid}", _vj.dumps(result), 5)
+            except Exception: pass
         # Log slow requests (>800ms) for performance monitoring
         if ms > 800:
             log_event("analyze_slow", meta={"ms": ms, "engine": result.get("engine"), "tier": tier})
@@ -7935,6 +8000,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
