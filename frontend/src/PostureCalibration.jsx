@@ -6,6 +6,7 @@ const CALIB_DURATION = 10; // seconds
 const CALIB_FRAMES   = 30; // frames to average
 
 // ── Helpers ───────────────────────────────────────────────────────
+// Absolute angle (used for scoring thresholds)
 const angleV = (p1, p2) => {
   const dx = Math.abs(p2.x - p1.x), dy = Math.abs(p2.y - p1.y);
   return dy < 0.001 ? 90 : Math.abs(Math.atan2(dx, dy) * 180 / Math.PI);
@@ -14,6 +15,20 @@ const angleH = (p1, p2) => {
   const dx = Math.abs(p2.x - p1.x), dy = Math.abs(p2.y - p1.y);
   return dx < 0.001 ? 90 : Math.abs(Math.atan2(dy, dx) * 180 / Math.PI);
 };
+
+// Signed angles — positive = right/forward, negative = left/back
+// Used to detect DIRECTION of natural lean for asymmetric thresholds
+const angleV_signed = (p1, p2) => {
+  // positive = p2 is to the RIGHT of p1 (lean right)
+  const dx = p2.x - p1.x, dy = Math.abs(p2.y - p1.y);
+  return dy < 0.001 ? 0 : (Math.atan2(Math.abs(dx), dy) * 180 / Math.PI) * Math.sign(dx);
+};
+const angleH_signed = (p1, p2) => {
+  // positive = p2 is BELOW p1 (right shoulder lower = right tilt)
+  const dx = Math.abs(p2.x - p1.x), dy = p2.y - p1.y;
+  return dx < 0.001 ? 0 : (Math.atan2(Math.abs(dy), dx) * 180 / Math.PI) * Math.sign(dy);
+};
+
 const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
 const LM = { L_EYE:2, R_EYE:5, L_EAR:7, R_EAR:8, L_SHOULDER:11, R_SHOULDER:12, L_HIP:23, R_HIP:24 };
@@ -201,6 +216,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
 
     // Extract per-frame metrics
     const neckAngles = [], headTilts = [], shoulderTilts = [], spineAngles = [];
+    const neckAngles_s = [], headTilts_s = [], shoulderTilts_s = [], spineAngles_s = []; // signed
     collected.forEach(lms => {
       const lSh = lms[LM.L_SHOULDER], rSh = lms[LM.R_SHOULDER];
       const lEar = lms[LM.L_EAR],    rEar = lms[LM.R_EAR];
@@ -213,6 +229,11 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       headTilts.push(angleH(lEye, rEye));
       shoulderTilts.push(angleH(lSh, rSh));
       spineAngles.push(angleV(midHip, midSh));
+      // Signed for asymmetric offset detection
+      neckAngles_s.push(angleV_signed(midSh, midEar));
+      headTilts_s.push(angleH_signed(lEye, rEye));
+      shoulderTilts_s.push(angleH_signed(lSh, rSh));
+      spineAngles_s.push(angleV_signed(midHip, midSh));
     });
 
     // Compute personal baseline (with tolerance ±30% wider than default)
@@ -232,6 +253,15 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       bad:   Math.max(defaultBad, Math.abs(base) * 0.5 + defaultBad * 0.5),
     });
 
+    // Signed offsets — direction of natural lean
+    // positive = leans right/forward naturally, negative = left/back
+    const signedOffsets = {
+      neck_angle:    Math.round(avg(neckAngles_s)    * 10) / 10,
+      head_tilt:     Math.round(avg(headTilts_s)     * 10) / 10,
+      shoulder_tilt: Math.round(avg(shoulderTilts_s) * 10) / 10,
+      spine_angle:   Math.round(avg(spineAngles_s)   * 10) / 10,
+    };
+
     const calibData = {
       ...baseline,
       tolerances: {
@@ -241,6 +271,10 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
         shoulder_tilt: tol(baseline.shoulder_tilt, 3, 10),
         spine_angle:   tol(baseline.spine_angle, 5, 15),
       },
+      // Signed directional offsets for asymmetric threshold correction
+      // Backend uses these to widen tolerance in natural lean direction
+      offsets: signedOffsets,
+      asymmetric_correction: true,
     };
 
     setResult(calibData);
@@ -428,4 +462,5 @@ export function applyCalibration(rawMetrics, calibration) {
 
   return adjusted;
 }
+
 
