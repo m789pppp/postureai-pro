@@ -234,11 +234,10 @@ export async function getCalibration(uid) {
 // ── User CRUD ─────────────────────────────────────────────────────
 export const getUserProfile   = async (uid) => { const s=await getDoc(doc(db,"users",uid)); return s.exists()?{id:s.id,...s.data()}:null; };
 export const updateUserProfile = async (uid, data) => {
-  // Strip protected fields that Firestore rules block client from changing
-  const { is_admin, tier, is_hr, company_id, ...safe } = data;
-  // Use setDoc merge so missing fields don't cause issues
-  const { setDoc } = await import("firebase/firestore");
-  return setDoc(doc(db,"users",uid), { ...safe, updated_at:_serverTimestamp() }, { merge: true });
+  // Strip ALL protected fields that Firestore rules block client from changing
+  const { is_admin, tier, is_hr, company_id, uid: _uid, email: _email, ...safe } = data;
+  // Use updateDoc (not setDoc) — only sends specified fields, avoids noPrivilegeEscalation false-positive
+  return updateDoc(doc(db,"users",uid), { ...safe, updated_at:_serverTimestamp() });
 };
 export const completeOnboardingStep = async (uid, step) => {
   const snap = await getDoc(doc(db,"users",uid));
