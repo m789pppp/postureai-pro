@@ -1233,9 +1233,37 @@ def analyze_front(image, mode="laptop", tier="standard"):
             "label": "3D head pose (solvePnP)"
         }
 
-    vis_l_sh = g(PL.L_SHOULDER).visibility
-    vis_r_sh = g(PL.R_SHOULDER).visibility
-    vis_bonus = 10 if (vis_l_sh > 0.7 and vis_r_sh > 0.7) else 0
+    vis_l_sh  = g(PL.L_SHOULDER).visibility
+    vis_r_sh  = g(PL.R_SHOULDER).visibility
+    vis_l_ear = g(PL.L_EAR).visibility
+    vis_r_ear = g(PL.R_EAR).visibility
+    vis_l_hip = g(PL.L_HIP).visibility
+    vis_r_hip = g(PL.R_HIP).visibility
+    vis_nose  = g(PL.NOSE).visibility if hasattr(g(PL.NOSE), 'visibility') else 1.0
+
+    # ── Per-metric confidence factors ──────────────────────────────
+    # If a landmark group is low-visibility, reduce its metric's weight
+    # proportionally. Formula: conf = clamp(vis / 0.6, 0, 1)
+    # vis=0.6 → conf=1.0 (full weight), vis=0.3 → conf=0.5, vis=0.0 → conf=0
+    def vis_conf(v):
+        return max(0.0, min(1.0, v / 0.6))
+
+    avg_sh_vis    = (vis_l_sh  + vis_r_sh)  / 2
+    avg_ear_vis   = (vis_l_ear + vis_r_ear) / 2
+    avg_hip_vis   = (vis_l_hip + vis_r_hip) / 2
+    avg_eye_vis   = (g(PL.L_EYE).visibility + g(PL.R_EYE).visibility) / 2
+
+    # Confidence per metric
+    # neck_lean: needs ears + shoulders
+    conf_neck  = vis_conf(avg_ear_vis * 0.5 + avg_sh_vis * 0.5)
+    # head_tilt: needs eyes
+    conf_tilt  = vis_conf(avg_eye_vis)
+    # shoulder_level: needs both shoulders
+    conf_sh    = vis_conf(min(vis_l_sh, vis_r_sh))   # both must be visible
+    # spine_lean: needs shoulders + hips
+    conf_spine = vis_conf(avg_sh_vis * 0.5 + avg_hip_vis * 0.5)
+
+    vis_bonus = 10 if (avg_sh_vis > 0.7 and avg_ear_vis > 0.7) else 0
 
     # ── Wrist angle ────────────────────────────────────────────────
     wrist_sc = None
@@ -1272,10 +1300,38 @@ def analyze_front(image, mode="laptop", tier="standard"):
         elif blink_data["eye_strain_risk"] == "moderate":
             out["alerts"].append(f"Low blink rate ({br}/min) — remember to blink consciously.")
 
-    # ── Overall score ──────────────────────────────────────────────
-    weights = {"neck": 0.28, "tilt": 0.14, "sh": 0.11, "spine": 0.14, "dist": 0.18}
-    score_val = neck_sc * weights["neck"] + tilt_sc * weights["tilt"] + sh_sc * weights["sh"] + spine_sc * weights["spine"] + dist_sc * weights["dist"]
-    remaining = 1.0 - sum(weights.values())
+    # ── Overall score — confidence-weighted ───────────────────────
+    # Base weights × confidence factor → effective weight
+    # Low-vis metric gets reduced weight AND its "missing" weight
+    # redistributes to dist_sc (camera-independent) for stability
+    BASE_W = {"neck": 0.28, "tilt": 0.14, "sh": 0.11, "spine": 0.14, "dist": 0.18}
+    eff_w = {
+        "neck":  BASE_W["neck"]  * conf_neck,
+        "tilt":  BASE_W["tilt"]  * conf_tilt,
+        "sh":    BASE_W["sh"]    * conf_sh,
+        "spine": BASE_W["spine"] * conf_spine,
+        "dist":  BASE_W["dist"],   # distance is camera-independent — no penalty
+    }
+    # Redistribute lost weight to dist (stable) up to dist max 0.30
+    lost_w     = sum(BASE_W.values()) - sum(eff_w.values())
+    eff_w["dist"] = min(0.30, eff_w["dist"] + lost_w)
+
+    score_val  = (neck_sc  * eff_w["neck"]  +
+                  tilt_sc  * eff_w["tilt"]  +
+                  sh_sc    * eff_w["sh"]    +
+                  spine_sc * eff_w["spine"] +
+                  dist_sc  * eff_w["dist"])
+    remaining  = 1.0 - sum(eff_w.values())
+
+    # Store confidence breakdown in metrics for debugging/frontend display
+    out["metrics"]["_confidence"] = {
+        "neck":  round(conf_neck,  2),
+        "tilt":  round(conf_tilt,  2),
+        "sh":    round(conf_sh,    2),
+        "spine": round(conf_spine, 2),
+        "eff_weights": {k: round(v, 3) for k, v in eff_w.items()},
+        "label": "Per-metric visibility confidence",
+    }
     if wrist_sc is not None:
         score_val += wrist_sc * 0.09
         remaining -= 0.09
@@ -1307,12 +1363,21 @@ def analyze_front(image, mode="laptop", tier="standard"):
         penalty    = (0.6 - avg_vis) / 0.6  # 0→1 as vis→0
         overall    = int(overall * (1 - penalty * 0.35) + 65 * penalty * 0.35)
         overall    = max(0, min(100, overall))
+    # Confidence = weighted average of per-metric confidences
+    overall_conf_raw = (
+        conf_neck  * eff_w["neck"]  +
+        conf_tilt  * eff_w["tilt"]  +
+        conf_sh    * eff_w["sh"]    +
+        conf_spine * eff_w["spine"]
+    ) / max(sum(eff_w.values()) - eff_w["dist"], 0.01)  # exclude dist (always 1)
+
     confidence = min(96, int(
-        60                                                           # base
-        + (avg_vis * 22)                                            # visibility quality
-        + (vis_bonus)                                               # high-vis bonus
-        + (8 if out["engine"] == "mediapipe_pose+facemesh" else 0) # FaceMesh bonus
-        + (6 if hp else 0)                                          # head pose bonus
+        40                                                               # base
+        + (overall_conf_raw * 28)                                       # landmark quality (0-28)
+        + (vis_bonus)                                                    # high-vis bonus
+        + (8 if out["engine"] == "mediapipe_pose+facemesh" else 0)      # FaceMesh bonus
+        + (6 if hp else 0)                                               # head pose bonus
+        + (8 if len(_lm_history.get(out.get("session_id",""), [])) >= 3 else 0)  # avg bonus
     ))
 
     out["score"]      = overall
@@ -8000,6 +8065,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
