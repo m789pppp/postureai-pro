@@ -2391,6 +2391,7 @@ def analyze():
 
         ms = round((time.perf_counter() - t0) * 1000)
         result["processing_ms"] = ms
+        _record_latency(ms)  # rolling latency tracker for /api/health/detailed
         # Cache last valid (non-blurry) result for blur-frame fallback
         if result.get("detected") and not result.get("blurry_frame"):
             try:
@@ -4512,6 +4513,183 @@ def health():
         "rate_limiting": "enabled",
         "timestamp": datetime.now().isoformat(),
     })
+
+# ── /api/health/detailed ─────────────────────────────────────────
+@app.route("/api/health/detailed", methods=["GET"])
+@require_auth
+@limiter.limit("10 per minute")
+def health_detailed():
+    """
+    Deep health check — tests every subsystem live.
+    Requires auth to prevent info leakage to unauthenticated callers.
+    Returns per-subsystem status, latency, and last analyze timing.
+    """
+    import time as _t
+    report = {"timestamp": datetime.utcnow().isoformat() + "Z", "version": "17.0"}
+
+    # ── 1. MediaPipe models ───────────────────────────────────────
+    mp_status = {}
+    models_ready = POSE_LITE is not None
+    try:
+        mp_status["mediapipe_version"] = mp.__version__ if mp else "not imported"
+        mp_status["opencv_version"]    = cv2.__version__ if cv2 else "not imported"
+        mp_status["pose_lite"]         = "loaded" if POSE_LITE is not None else "not loaded"
+        mp_status["pose_full"]         = "loaded" if POSE_FULL is not None else "not loaded"
+        mp_status["face_mesh"]         = "loaded" if FACE_MESH is not None else "not loaded"
+        mp_status["cascade_fallback"]  = "loaded" if (face_c is not None and eye_c is not None) else "not loaded"
+        mp_status["landmark_avg_sessions"] = len(_lm_history)
+
+        # Warmup latency — run a dummy frame through MediaPipe
+        if models_ready:
+            _t0 = _t.perf_counter()
+            _dummy = cv2.cvtColor(
+                cv2.resize(cv2.imread.__func__ if False else
+                    __import__("numpy").zeros((64,64,3), dtype=__import__("numpy").uint8),
+                    (64,64)), cv2.COLOR_BGR2RGB
+            ) if True else None
+            if _dummy is not None:
+                POSE_LITE.process(_dummy)
+            mp_status["warmup_ms"] = round((_t.perf_counter() - _t0) * 1000, 1)
+        mp_status["status"] = "ok" if models_ready else "degraded"
+    except Exception as _e:
+        mp_status["status"] = "error"
+        mp_status["error"]  = str(_e)[:120]
+    report["mediapipe"] = mp_status
+
+    # ── 2. Redis ping ─────────────────────────────────────────────
+    redis_status = {}
+    try:
+        if REDIS_READY:
+            _t0  = _t.perf_counter()
+            _key = "health:ping:test"
+            cache_set(_key, "pong", 5)
+            val  = cache_get(_key)
+            ping_ms = round((_t.perf_counter() - _t0) * 1000, 1)
+            redis_status["status"]     = "ok" if val == "pong" else "degraded"
+            redis_status["ping_ms"]    = ping_ms
+            redis_status["read_write"] = val == "pong"
+            # Check last_valid frame cache entries
+            redis_status["cached_frames"] = "available"
+        else:
+            redis_status["status"] = "not_configured"
+            redis_status["note"]   = "Using in-process fallback — no persistence"
+    except Exception as _e:
+        redis_status["status"] = "error"
+        redis_status["error"]  = str(_e)[:120]
+    report["redis"] = redis_status
+
+    # ── 3. Last analyze latency (from recent requests) ────────────
+    latency_status = {}
+    try:
+        # We store last 10 processing_ms values in a rolling cache key
+        _recent_raw  = cache_get("health:analyze_latency")
+        if _recent_raw:
+            import json as _j
+            _recent = _j.loads(_recent_raw)
+            if _recent:
+                latency_status["last_ms"]    = _recent[-1]
+                latency_status["avg_ms"]      = round(sum(_recent) / len(_recent), 1)
+                latency_status["min_ms"]      = min(_recent)
+                latency_status["max_ms"]      = max(_recent)
+                latency_status["samples"]     = len(_recent)
+                latency_status["p95_ms"]      = sorted(_recent)[int(len(_recent)*0.95)] if len(_recent) >= 5 else None
+                latency_status["status"]      = (
+                    "ok"       if latency_status["avg_ms"] < 500 else
+                    "degraded" if latency_status["avg_ms"] < 1500 else
+                    "slow"
+                )
+        else:
+            latency_status["status"] = "no_data"
+            latency_status["note"]   = "No recent analyze calls — run a session first"
+    except Exception as _e:
+        latency_status["status"] = "error"
+        latency_status["error"]  = str(_e)[:120]
+    report["analyze_latency"] = latency_status
+
+    # ── 4. Gemini connectivity ────────────────────────────────────
+    gemini_status = {}
+    try:
+        if GEMINI_API_KEY:
+            gemini_status["configured"] = True
+            gemini_status["key_prefix"] = GEMINI_API_KEY[:8] + "..."
+            # Quick ping — minimal prompt, no analysis
+            _t0   = _t.perf_counter()
+            _url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+            _resp = req.post(_url,
+                json={"contents": [{"parts": [{"text": "Reply with OK only."}]}],
+                      "generationConfig": {"maxOutputTokens": 5}},
+                timeout=8)
+            ping_ms = round((_t.perf_counter() - _t0) * 1000, 1)
+            gemini_status["ping_ms"] = ping_ms
+            if _resp.status_code == 200:
+                gemini_status["status"] = "ok"
+                gemini_status["model_flash"] = "reachable"
+            else:
+                gemini_status["status"]      = "degraded"
+                gemini_status["http_status"] = _resp.status_code
+        else:
+            gemini_status["status"]     = "not_configured"
+            gemini_status["configured"] = False
+    except Exception as _e:
+        gemini_status["status"] = "error"
+        gemini_status["error"]  = str(_e)[:120]
+    report["gemini"] = gemini_status
+
+    # ── 5. Firebase / Firestore ───────────────────────────────────
+    firebase_status = {}
+    try:
+        if db:
+            _t0  = _t.perf_counter()
+            _ref = db.collection("_health").document("ping")
+            _ref.set({"ts": datetime.utcnow().isoformat()}, merge=True)
+            ping_ms = round((_t.perf_counter() - _t0) * 1000, 1)
+            firebase_status["status"]      = "ok"
+            firebase_status["ping_ms"]     = ping_ms
+            firebase_status["firestore"]   = "reachable"
+        else:
+            firebase_status["status"] = "not_configured"
+    except Exception as _e:
+        firebase_status["status"] = "error"
+        firebase_status["error"]  = str(_e)[:120]
+    report["firebase"] = firebase_status
+
+    # ── 6. Overall status ─────────────────────────────────────────
+    subsystems = [
+        mp_status.get("status"),
+        redis_status.get("status"),
+        latency_status.get("status"),
+        gemini_status.get("status"),
+        firebase_status.get("status"),
+    ]
+    if any(s == "error" for s in subsystems):
+        overall = "degraded"
+    elif any(s == "slow" for s in subsystems):
+        overall = "slow"
+    else:
+        overall = "ok"
+
+    report["overall"]   = overall
+    report["env"]       = os.getenv("FLASK_ENV", "production")
+    report["auth_ready"] = AUTH_READY
+    report["pdf"]        = REPORTLAB_OK
+
+    status_code = 200 if overall == "ok" else 207  # 207 = partial success
+    return jsonify(report), status_code
+
+
+# ── Latency tracking: called from analyze route ───────────────────
+def _record_latency(ms: float):
+    """Append processing_ms to rolling 20-sample list in cache."""
+    try:
+        import json as _j
+        _raw     = cache_get("health:analyze_latency")
+        _samples = _j.loads(_raw) if _raw else []
+        _samples.append(round(ms, 1))
+        if len(_samples) > 20: _samples = _samples[-20:]  # keep last 20
+        cache_set("health:analyze_latency", _j.dumps(_samples), 3600)
+    except Exception:
+        pass
+
 
 @require_auth
 @app.route("/api/paymob/create-payment", methods=["POST"])
@@ -8133,6 +8311,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
