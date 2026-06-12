@@ -2265,30 +2265,81 @@ def analyze():
 
         calib = data.get("calibration")   # personal calibration from Firestore
         result = analyze_side(img_to_analyze, tier) if mode == "side" else analyze_front(img_to_analyze, mode, tier)
-        # Apply personal calibration offsets if provided
+        # ── Apply personal calibration with asymmetric thresholds ──
+        # Asymmetric: if user's natural lean is toward right (+),
+        # we widen the ok/bad zone on the right side and tighten on left.
+        # This prevents penalizing natural anatomical asymmetry.
         if calib and isinstance(calib, dict) and result.get("detected"):
-            tols = calib.get("tolerances", {})
-            met_map = {"neck_lean": "neck_angle", "head_tilt": "head_tilt",
-                       "shoulder_level": "shoulder_tilt", "spine_lean": "spine_angle"}
+            tols     = calib.get("tolerances", {})
+            offsets  = calib.get("offsets", {})   # signed directional offsets
+            met_map  = {
+                "neck_lean":      "neck_angle",
+                "head_tilt":      "head_tilt",
+                "shoulder_level": "shoulder_tilt",
+                "spine_lean":     "spine_angle",
+            }
             calib_scores = []
+
             for met_key, calib_key in met_map.items():
                 met = result.get("metrics", {}).get(met_key)
                 tol = tols.get(calib_key)
-                if met and tol:
-                    d = abs(met["value"] - tol.get("ideal", 0))
-                    ok_t, bad_t = tol.get("ok", 7), tol.get("bad", 20)
-                    if d <= ok_t:   cs = max(0, int(100 - (d / max(ok_t, .1)) * 25))
-                    elif d <= bad_t: cs = max(0, int(75 - ((d - ok_t) / max(bad_t - ok_t, .1)) * 45))
-                    else:            cs = max(0, int(30 - (d - bad_t) * 1.8))
-                    result["metrics"][met_key]["score"] = cs
-                    result["metrics"][met_key]["calibrated"] = True
-                    calib_scores.append(cs)
+                if not (met and tol): continue
+
+                raw_val  = met["value"]                    # always positive (absolute angle)
+                ideal    = tol.get("ideal", 0)             # calibrated neutral (absolute)
+                ok_t     = tol.get("ok", 7)
+                bad_t    = tol.get("bad", 20)
+
+                # ── Asymmetric offset correction ──────────────────
+                # offset_signed: positive = user naturally leans right/forward
+                # negative = user naturally leans left/back
+                offset_signed = offsets.get(calib_key, 0.0)
+
+                # Compute signed deviation from user's personal neutral
+                # We use the calibrated ideal as the zero point
+                deviation = raw_val - ideal  # + = more than usual, - = less than usual
+
+                # Asymmetric threshold: widen ok/bad in the natural direction
+                # e.g. if offset = +5° (leans right naturally):
+                #   right side (deviation > 0): ok_right = ok_t + 3°, bad_right = bad_t + 4°
+                #   left side  (deviation < 0): ok_left  = ok_t - 1°, bad_left  = bad_t - 1°
+                asym_factor = max(-4.0, min(8.0, abs(offset_signed) * 0.6))
+                if (offset_signed >= 0 and deviation >= 0) or (offset_signed < 0 and deviation < 0):
+                    # Same direction as natural lean → widen tolerance
+                    ok_eff  = ok_t  + asym_factor
+                    bad_eff = bad_t + asym_factor * 1.2
+                else:
+                    # Opposite direction → slight tightening
+                    ok_eff  = max(3.0, ok_t  - asym_factor * 0.3)
+                    bad_eff = max(10.0, bad_t - asym_factor * 0.3)
+
+                # Score using effective asymmetric thresholds
+                d_eff = abs(deviation)
+                if d_eff <= ok_eff:
+                    cs = max(0, int(100 - (d_eff / max(ok_eff, .1)) * 25))
+                elif d_eff <= bad_eff:
+                    cs = max(0, int(75  - ((d_eff - ok_eff) / max(bad_eff - ok_eff, .1)) * 45))
+                else:
+                    cs = max(5, int(30 - (d_eff - bad_eff) * 1.5))
+
+                result["metrics"][met_key]["score"]      = cs
+                result["metrics"][met_key]["calibrated"] = True
+                result["metrics"][met_key]["calib_detail"] = {
+                    "ideal":       round(ideal, 1),
+                    "deviation":   round(deviation, 1),
+                    "offset":      round(offset_signed, 1),
+                    "ok_eff":      round(ok_eff, 1),
+                    "bad_eff":     round(bad_eff, 1),
+                }
+                calib_scores.append(cs)
+
             if calib_scores:
-                raw_score = result.get("score", 0)
-                calib_avg = sum(calib_scores) / len(calib_scores)
-                result["score"]   = max(0, min(100, int(raw_score * 0.4 + calib_avg * 0.6)))
+                raw_score  = result.get("score", 0)
+                calib_avg  = sum(calib_scores) / len(calib_scores)
+                result["score"]   = max(0, min(100, int(raw_score * 0.40 + calib_avg * 0.60)))
                 result["overall"] = result["score"]
-                result["calibration_applied"] = True
+                result["calibration_applied"]   = True
+                result["asymmetric_correction"] = True
         result["brightness"] = round(brightness, 1)
         result["low_light_enhanced"] = was_enhanced
         result["tier"]    = tier
@@ -8311,6 +8362,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
