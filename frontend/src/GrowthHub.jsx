@@ -2,7 +2,7 @@
  * GrowthHub.jsx — PostureAI Phase 13
  * Public roadmap, changelog, status page, affiliate/partner program — all in one Growth hub
  */
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 const ROADMAP_ITEMS = [
   { id:"r1",  status:"shipped",     quarter:"Q1 2026", title:"API Marketplace",              votes:284, category:"platform",    desc:"Self-serve API key management with docs, SDKs, and usage analytics." },
@@ -53,36 +53,17 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
   const [voted, setVoted]   = useState({});
   const [items, setItems]   = useState(ROADMAP_ITEMS);
   const [catFilter, setCat] = useState("all");
-  const [liveChangelog, setLiveChangelog] = useState([]);
-  const [voteSaved, setVoteSaved] = useState(false);
-
-  // Persist votes to localStorage so they survive page refresh
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("gh_votes") || "{}");
-      setVoted(saved);
-    } catch {}
-  }, []);
-
-  // Load live changelog from backend
-  useEffect(() => {
-    const API = (typeof import.meta !== "undefined" && import.meta?.env?.VITE_API_URL) || "/api";
-    fetch(`${API}/changelog`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.entries?.length) setLiveChangelog(d.entries); })
-      .catch(() => {});
-  }, []);
 
   const vote = (id) => {
     if (voted[id]) return;
-    const newVoted = {...voted, [id]: true};
-    setVoted(newVoted);
-    setItems(p=>p.map(item=>item.id===id?{...item,votes:item.votes+1}:item));
-    try { localStorage.setItem("gh_votes", JSON.stringify(newVoted)); } catch {}
+    setVoted(p => ({...p, [id]: true}));
+    setItems(p => p.map(item => item.id===id ? {...item, votes:item.votes+1} : item));
   };
 
   const filtered = catFilter==="all" ? items : items.filter(i=>i.category===catFilter);
-  const grouped  = ["in_progress","planned","shipped","considering"].reduce((acc,s)=>({...acc,[s]:filtered.filter(i=>i.status===s)}),{});
+  const grouped  = ["in_progress","planned","shipped","considering"].reduce(
+    (acc,s) => ({...acc, [s]: filtered.filter(i=>i.status===s)}), {}
+  );
 
   const tabs = [
     { id:"roadmap",   label:"Roadmap",   icon:"🗺" },
