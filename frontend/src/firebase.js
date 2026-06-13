@@ -262,34 +262,41 @@ export async function updateUserTier(uid, tier, months) {
 
 // ── Sessions ──────────────────────────────────────────────────────
 export async function saveSession(uid, data) {
-  // Save session document
   const ref = await addDoc(collection(db,"sessions"), { uid, ...data, created_at:_serverTimestamp() });
-  // Update user stats — only safe fields (no tier/company_id/is_admin to avoid rules rejection)
   try {
     const prof = await getUserProfile(uid);
-    if (prof) {
-      const newCount = (prof.sessions_count||0)+1;
-      const newAvg   = Math.round(((prof.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
-      const streak   = prof.last_session_at ? (() => {
-        const last = prof.last_session_at.toDate ? prof.last_session_at.toDate() : new Date(prof.last_session_at);
-        const diff = (Date.now() - last.getTime()) / (1000*60*60*24);
-        return diff < 1.5 ? (prof.streak_days||0)+1 : 1;
-      })() : 1;
-      await updateDoc(doc(db,"users",uid), {
-        sessions_count: newCount,
-        avg_score:      newAvg,
-        streak_days:    streak,
-        last_session_at: _serverTimestamp(),
-        updated_at:     _serverTimestamp(),
-      });
-    }
-  } catch(e) { console.warn("saveSession stats update failed:", e.code||e.message); }
+    const newCount = (prof?.sessions_count||0)+1;
+    const newAvg   = Math.round(((prof?.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
+    const streak   = prof?.last_session_at ? (() => {
+      const last = prof.last_session_at.toDate ? prof.last_session_at.toDate() : new Date(prof.last_session_at);
+      return (Date.now()-last.getTime()) < 1.5*86400000 ? (prof.streak_days||0)+1 : 1;
+    })() : 1;
+    // setDoc merge — works even if user doc doesn't exist yet
+    await setDoc(doc(db,"users",uid), {
+      sessions_count: newCount, avg_score: newAvg, streak_days: streak,
+      last_session_at: _serverTimestamp(), updated_at: _serverTimestamp(),
+    }, { merge: true });
+  } catch(e) { console.warn("saveSession stats:", e.code||e.message); }
   return ref.id;
 }
+
 export async function getUserSessions(uid) {
-  const q = query(collection(db,"sessions"), where("uid","==",uid), orderBy("created_at","desc"), limit(50));
-  const snaps = await getDocs(q);
-  return snaps.docs.map(d=>({id:d.id,...d.data()}));
+  try {
+    // Requires composite index uid+created_at — works once index is built
+    const q = query(collection(db,"sessions"), where("uid","==",uid), orderBy("created_at","desc"), limit(50));
+    const snaps = await getDocs(q);
+    return snaps.docs.map(d=>({id:d.id,...d.data()}));
+  } catch(e) {
+    // Fallback: no orderBy (no index needed), sort client-side
+    console.warn("getUserSessions fallback (no index?):", e.code);
+    const q2 = query(collection(db,"sessions"), where("uid","==",uid), limit(50));
+    const snaps = await getDocs(q2);
+    return snaps.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
+      const ta = a.created_at?.toDate?.()?.getTime?.()??0;
+      const tb = b.created_at?.toDate?.()?.getTime?.()??0;
+      return tb-ta;
+    });
+  }
 }
 
 // ── Departments (isolated) ────────────────────────────────────────

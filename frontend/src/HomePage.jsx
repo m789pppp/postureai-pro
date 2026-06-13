@@ -739,6 +739,34 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
+function makePDF(s, idx, total) {
+  const sc   = s.avg_score||0;
+  const dur  = s.duration_s||s.duration_sec||0;
+  const dStr = dur>=60 ? (Math.round(dur/60)+"m") : (dur+"s");
+  const gr   = sc>=85?"Excellent":sc>=70?"Good":sc>=55?"Fair":"Needs Work";
+  const d    = s.created_at?.toDate?.() ?? new Date(s.created_at||0);
+  const dt   = d.toLocaleString();
+  const gp   = (s.good_pct||0)+"%";
+  const card = function(v,l){ return "<div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;'><div style='font-size:28px;font-weight:800;color:#1a56db;'>"+v+"</div><div style='font-size:12px;color:#64748b;margin-top:4px;'>"+l+"</div></div>"; };
+  var html = "<!DOCTYPE html><html><head><meta charset='utf-8'/><title>PostureAI Report</title></head><body style='font-family:Arial,sans-serif;margin:40px;color:#0f172a;'>";
+  html += "<div style='color:#1a56db;font-size:22px;font-weight:800;margin-bottom:4px;'>◈ PostureAI Pro</div>";
+  html += "<div style='color:#64748b;font-size:13px;margin-bottom:24px;'>Session #"+(total-idx)+" · "+dt+"</div>";
+  html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;'>";
+  html += card(String(sc),"Posture Score");
+  html += card(gr,"Grade");
+  html += card(dStr,"Duration");
+  html += card(gp,"Good Posture");
+  html += card(String(s.alerts_count||0),"Alerts");
+  html += card(s.mode||"Standard","Mode");
+  html += "</div>";
+  html += "<div style='font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:12px;'>PostureAI Pro · "+new Date().toLocaleString()+"</div>";
+  html += "</body></html>";
+  var blob = new Blob([html],{type:"text/html"});
+  var url  = URL.createObjectURL(blob);
+  var w    = window.open(url,"_blank");
+  if(w) w.onload = function(){ w.print(); setTimeout(function(){ URL.revokeObjectURL(url); },2000); };
+}
+
 function PanelSessions({ userSessions, cs, isAr, setPage, startCamera }) {
   if(!userSessions.length) return <EmptyBlock icon="📋" cs={cs}
     title={isAr?"لا توجد جلسات":"No sessions yet"}
@@ -748,21 +776,20 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera }) {
 
   const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
   const grade = (s,ar) => s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"ضعيف":"Poor");
-
   const totalSessions = userSessions.length;
-  const avgScore = totalSessions ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/totalSessions) : 0;
-  const bestScore = Math.max(...userSessions.map(s=>s.avg_score||0));
-  const totalMinutes = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
+  const avgScore    = Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/totalSessions);
+  const bestScore   = Math.max(...userSessions.map(s=>s.avg_score||0));
+  const totalMins   = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-      {/* Summary stats */}
+      {/* Summary */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
         {[
-          { label:isAr?"الجلسات":"Sessions",   val:totalSessions,       col:"#a855f7" },
-          { label:isAr?"المتوسط":"Avg Score",   val:avgScore,            col:"#3b82f6" },
-          { label:isAr?"الأفضل":"Best Score",   val:bestScore,           col:"#10b981" },
-          { label:isAr?"الدقائق":"Total Mins",  val:totalMinutes+"m",   col:"#f59e0b" },
+          { label:isAr?"الجلسات":"Sessions",  val:totalSessions,  col:"#a855f7" },
+          { label:isAr?"المتوسط":"Avg Score", val:avgScore,       col:"#3b82f6" },
+          { label:isAr?"الأفضل":"Best",       val:bestScore,      col:"#10b981" },
+          { label:isAr?"الدقائق":"Mins",      val:totalMins+"m",  col:"#f59e0b" },
         ].map(m=>(
           <div key={m.label} style={{ background:cs.card, border:`1px solid ${cs.border}`,
             borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
@@ -772,26 +799,33 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera }) {
         ))}
       </div>
 
+      {/* PDF last session */}
+      <button onClick={()=>makePDF(userSessions[0],0,totalSessions)}
+        style={{ padding:"10px 16px", background:"rgba(26,86,219,.1)",
+          border:"1px solid rgba(26,86,219,.25)", borderRadius:9,
+          color:"#60a5fa", fontSize:12, fontWeight:600, cursor:"pointer",
+          display:"flex", alignItems:"center", gap:8, width:"fit-content" }}>
+        📄 {isAr?"تنزيل PDF آخر جلسة":"Download Last Session PDF"}
+      </button>
+
       {/* Session list */}
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         {userSessions.map((s,i)=>{
-          const d=s.created_at?.toDate?.()??new Date(s.created_at||0);
-          const sc=s.avg_score||0;
-          const col=gradeColor(sc);
-          const durSec = s.duration_s || s.duration_sec || 0;
-          const dur = durSec >= 60 ? `${Math.round(durSec/60)}m` : durSec > 0 ? `${durSec}s` : "";
-          const goodPct = s.good_pct ? `${s.good_pct}% good posture` : "";
+          const d   = s.created_at?.toDate?.()??new Date(s.created_at||0);
+          const sc  = s.avg_score||0;
+          const col = gradeColor(sc);
+          const dur = (s.duration_s||s.duration_sec||0);
+          const durStr = dur>=60 ? (Math.round(dur/60)+"m") : dur>0 ? (dur+"s") : "";
           return (
             <div key={s.id||i} style={{ background:cs.card, border:`1px solid ${cs.border}`,
               borderRadius:10, padding:"13px 16px", display:"flex", gap:12, alignItems:"center" }}>
-              {/* Score badge */}
               <div style={{ width:44, height:44, borderRadius:8, flexShrink:0,
                 background:`${col}15`, display:"flex", alignItems:"center",
                 justifyContent:"center", fontSize:16, fontWeight:800, color:col }}>{sc||"—"}</div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
-                  {isAr?`جلسة #${totalSessions-i}`:`Session #${totalSessions-i}`}
-                  {s.mode && <span style={{ fontSize:10, color:cs.muted, marginLeft:8,
+                  {isAr ? "جلسة #"+(totalSessions-i) : "Session #"+(totalSessions-i)}
+                  {s.mode&&<span style={{ fontSize:10, color:cs.muted, marginLeft:8,
                     background:"rgba(255,255,255,.06)", padding:"1px 7px", borderRadius:99 }}>
                     {s.mode}
                   </span>}
@@ -799,12 +833,20 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera }) {
                 <div style={{ fontSize:11, color:cs.muted, marginTop:2, display:"flex", gap:8, flexWrap:"wrap" }}>
                   <span>{d.toLocaleDateString(isAr?"ar-EG":"en-US",{weekday:"short",month:"short",day:"numeric"})}</span>
                   <span>{d.toLocaleTimeString(isAr?"ar-EG":"en-US",{hour:"2-digit",minute:"2-digit"})}</span>
-                  {dur&&<span>· {dur}</span>}
-                  {goodPct&&<span style={{ color:"#10b981" }}>· {goodPct}</span>}
+                  {durStr&&<span>· {durStr}</span>}
+                  {s.good_pct>0&&<span style={{color:"#10b981"}}>· {s.good_pct}%</span>}
                 </div>
               </div>
-              <span style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:99,
-                background:`${col}15`, color:col, flexShrink:0 }}>{grade(sc,isAr)}</span>
+              <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
+                <span style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:99,
+                  background:`${col}15`, color:col }}>{grade(sc,isAr)}</span>
+                <button onClick={()=>makePDF(s,i,totalSessions)}
+                  style={{ padding:"5px 9px", background:"rgba(26,86,219,.1)",
+                    border:"1px solid rgba(26,86,219,.2)", borderRadius:7,
+                    color:"#60a5fa", fontSize:11, fontWeight:600, cursor:"pointer" }}>
+                  📄
+                </button>
+              </div>
             </div>
           );
         })}
