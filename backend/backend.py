@@ -1317,6 +1317,31 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     # Nose is ~10cm in front of ear plane — subtract natural offset
     # At 65cm distance, 10cm = ~8.8° apparent lean → correct by -5° (conservative)
     neck_lean_raw = angle_vert(mid_sh, neck_ref)
+
+    # ── Forward Head Posture Index (FHP) ─────────────────────────
+    # Clinical measure: horizontal offset of ear ahead of shoulder
+    # Converts pixel offset to approximate cm using shoulder width reference
+    # Normal: <2cm forward. Each 2.5cm forward = +4-5kg neck load
+    try:
+        _ear_x_offset  = abs(mid_ear[0] - mid_sh[0])   # pixels
+        _sh_width_cm   = 42.0   # reference shoulder width in cm
+        _cm_per_px     = _sh_width_cm / max(sh_width_px, 1)
+        _fhp_cm        = round(_ear_x_offset * _cm_per_px, 1)
+        _extra_weight  = round(_fhp_cm / 2.5 * 4.5, 1)  # kg added to neck
+        _fhp_sc        = score_m(_fhp_cm, 0, 2, 6)
+        out["metrics"]["fhp_index"] = {
+            "value":        _fhp_cm,
+            "score":        _fhp_sc,
+            "unit":         "cm",
+            "label":        "Forward head posture",
+            "extra_load_kg": _extra_weight,
+        }
+        if _fhp_cm > 6:
+            out["alerts"].append(f"⚠️ Forward head posture {_fhp_cm}cm (+{_extra_weight}kg neck load) — critical: raise monitor immediately")
+        elif _fhp_cm > 3:
+            out["alerts"].append(f"Forward head posture {_fhp_cm}cm (+{_extra_weight}kg neck load) — tuck chin back")
+    except Exception:
+        pass
     # Natural nose-to-shoulder offset correction (~5° at typical distances)
     nose_correction = 5.0 * nose_weight  # scale correction by how much nose we're using
     neck_lean  = max(0.0, neck_lean_raw - nose_correction)
@@ -1458,6 +1483,42 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     conf_spine = vis_conf(avg_sh_vis * 0.5 + avg_hip_vis * 0.5)
 
     vis_bonus = 10 if (avg_sh_vis > 0.7 and avg_ear_vis > 0.7) else 0
+
+    # ── Desk ergonomics composite score ─────────────────────────
+    # Combines screen distance + monitor height (from pitch) + posture
+    # into a single actionable "workstation quality" metric
+    try:
+        # Monitor height score: pitch ~0° = monitor at eye level (ideal)
+        _pitch_now = out.get("head_pose", {}).get("pitch", 0) if out.get("head_pose") else 0
+        _monitor_sc = score_m(abs(_pitch_now), 0, 5, 18)
+
+        # Distance score already computed
+        _ergo_dist_sc = dist_sc
+
+        # Neck lean as posture component
+        _ergo_neck_sc = score_m(neck_lean, 0, 5, 15)
+
+        # Composite ergonomics score
+        _ergo_sc = int(round(
+            _monitor_sc    * 0.35 +   # monitor height most impactful
+            _ergo_dist_sc  * 0.35 +   # distance equally important
+            _ergo_neck_sc  * 0.30     # resulting neck posture
+        ))
+        _ergo_grade = "Excellent" if _ergo_sc>=85 else "Good" if _ergo_sc>=70 else "Fair" if _ergo_sc>=55 else "Poor"
+        out["metrics"]["ergonomics_score"] = {
+            "value": _ergo_sc, "score": _ergo_sc, "unit": "/100",
+            "label": "Workstation ergonomics",
+            "grade": _ergo_grade,
+            "components": {
+                "monitor_height": _monitor_sc,
+                "screen_distance": _ergo_dist_sc,
+                "neck_posture": _ergo_neck_sc,
+            }
+        }
+        if _ergo_sc < 55:
+            out["alerts"].append(f"⚠️ Poor workstation setup ({_ergo_sc}/100) — adjust monitor height and distance")
+    except Exception:
+        pass
 
     # ── Wrist angle ────────────────────────────────────────────────
     wrist_sc = None
@@ -1610,6 +1671,29 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         + (8 if len(_lm_history.get(out.get("session_id",""), [])) >= 3 else 0)  # avg bonus
     ))
 
+    # ── Neck muscle load model (biomechanics) ────────────────────
+    # Based on Hansraj 2014: head = 5.4kg at 0°
+    # Load increases ~2.5x per 15° forward lean
+    try:
+        _head_wt  = 5.4   # kg average adult head
+        _load_factor = 1 + (neck_lean / 15) ** 1.8 * 1.2
+        _neck_load_kg = round(_head_wt * _load_factor, 1)
+        out["metrics"]["neck_load"] = {
+            "value":      _neck_load_kg,
+            "score":      score_m(_neck_load_kg, 5.4, 3, 12),
+            "unit":       "kg",
+            "label":      "Estimated neck load",
+            "head_weight": _head_wt,
+            "multiplier":  round(_load_factor, 2),
+            "reference":  "Hansraj 2014 — spine biomechanics model",
+        }
+        if _neck_load_kg > 22:
+            out["alerts"].append(f"⚠️ Neck bearing ~{_neck_load_kg}kg (normal: 5.4kg) — critical forward head position")
+        elif _neck_load_kg > 12:
+            out["alerts"].append(f"Neck load ~{_neck_load_kg}kg (normal: 5.4kg) — straighten up to reduce strain")
+    except Exception:
+        pass
+
     out["score"]      = overall
     out["confidence"] = confidence
     out["metrics"].update({
@@ -1678,6 +1762,45 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         else:
             out["metrics"]["neck_lean"]["posture_type"] = "lateral"
 
+        # ── Breathing rate estimation from shoulder movement ────────
+    # Normal: 12-20 breaths/min. Stress/poor posture → shallow breathing
+    # Shoulders rise ~2-5% of frame per breath
+    try:
+        _br_key   = f"breath:{out.get('session_id','default')}"
+        _sh_y_now = (g(PL.L_SHOULDER).y + g(PL.R_SHOULDER).y) / 2
+        _br_buf   = _blink_sessions.setdefault(_br_key, [])
+        _br_buf.append((time.time(), _sh_y_now))
+        # Keep 30s window
+        _now_t = time.time()
+        _blink_sessions[_br_key] = [(t,y) for t,y in _br_buf if _now_t-t < 30]
+        _br_buf = _blink_sessions[_br_key]
+        if len(_br_buf) >= 30:
+            # Detect peaks in shoulder Y (rises = breaths)
+            _ys = [y for _,y in _br_buf]
+            _mn, _mx = min(_ys), max(_ys)
+            _amp = _mx - _mn
+            if _amp > 0.005:   # minimum 0.5% frame movement
+                _peaks = 0
+                _in_rise = False
+                _thresh = _mn + _amp * 0.4
+                for _y in _ys:
+                    if _y > _thresh and not _in_rise:
+                        _peaks += 1; _in_rise = True
+                    elif _y <= _thresh:
+                        _in_rise = False
+                _window_s = max(1, _br_buf[-1][0] - _br_buf[0][0])
+                _bpm = round(_peaks * 60 / _window_s)
+                _br_risk = "normal" if 12<=_bpm<=20 else "elevated" if _bpm>20 else "shallow"
+                out["metrics"]["breathing_rate"] = {
+                    "value": _bpm, "score": score_m(_bpm, 16, 4, 8),
+                    "unit": "breaths/min", "label": "Breathing rate (est.)",
+                    "amplitude": round(_amp*100, 1), "risk": _br_risk,
+                }
+                if _br_risk == "shallow":
+                    out["alerts"].append(f"Shallow breathing detected ({_bpm}/min) — take a deep breath, relax shoulders")
+    except Exception:
+        pass
+
     # ── Posture symmetry score ────────────────────────────────────
     # Compare left vs right landmark heights for imbalance detection
     # High asymmetry → possible scoliosis pattern or bad chair setup
@@ -1705,6 +1828,37 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             out["alerts"].append(f"⚠️ Significant body asymmetry {round(max_asym,1)}% — possible scoliosis pattern or uneven chair setup")
         elif max_asym > 2.5:
             out["alerts"].append(f"Body asymmetry {round(max_asym,1)}% — check armrest heights and sitting position")
+    except Exception:
+        pass
+
+    # ── Micro-movement / stillness score ────────────────────────
+    # Completely frozen posture → muscle fatigue → pain
+    # Optimal: small natural movements (5-15% position variance)
+    try:
+        _mv_key = f"mv:{out.get('session_id','default')}"
+        _nose_x, _nose_y = nose[0]/w, nose[1]/h
+        _mv_buf = _blink_sessions.setdefault(_mv_key, [])
+        _mv_buf.append((_nose_x, _nose_y))
+        if len(_mv_buf) > 15: _mv_buf.pop(0)
+        if len(_mv_buf) >= 10:
+            _xs = [p[0] for p in _mv_buf]; _ys = [p[1] for p in _mv_buf]
+            _mx_mean = sum(_xs)/len(_xs); _my_mean = sum(_ys)/len(_ys)
+            _variance = sum((x-_mx_mean)**2+(y-_my_mean)**2 for x,y in _mv_buf) / len(_mv_buf)
+            _movement_pct = round(_variance * 10000, 2)  # scale to 0-100
+            _mv_status = (
+                "frozen"   if _movement_pct < 0.5 else
+                "optimal"  if _movement_pct < 8.0 else
+                "restless"
+            )
+            out["metrics"]["movement"] = {
+                "value":  _movement_pct,
+                "score":  score_m(_movement_pct, 3.0, 2.5, 7.0),
+                "unit":   "%",
+                "label":  "Natural movement",
+                "status": _mv_status,
+            }
+            if _mv_status == "frozen":
+                out["alerts"].append("Body too still — shift position slightly every few minutes to prevent muscle fatigue")
     except Exception:
         pass
 
@@ -1744,6 +1898,34 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
                 out["alerts"].append(f"⚠️ Seated {round(_duration_min)}min — take a standing break (every 45-60min)")
             elif fatigue_factor > 0.2:
                 out["alerts"].append(f"Seated {round(_duration_min)}min — consider a short break soon")
+    except Exception:
+        pass
+
+    # ── RSI / Cumulative injury risk ──────────────────────────────
+    # Tracks session-cumulative risk for repetitive strain injuries
+    # Based on: wrist angle severity × duration + neck lean × duration
+    try:
+        _s_obj = sessions.get(out.get("session_id",""), {}) if "sessions" in dir() else {}
+        _dur_so_far = (time.time() - _s_obj.get("start", time.time())) / 60  # minutes
+        # RULA-inspired: angle × time weighting
+        _neck_risk   = max(0, neck_lean - 10) * 0.8   # degrees over threshold
+        _wrist_risk  = 0
+        if wrist_sc is not None:
+            _w_met = out["metrics"].get("wrist_angle", {})
+            _wrist_risk = max(0, _w_met.get("value",0) - 15) * 1.2
+        _rsi_rate    = (_neck_risk + _wrist_risk) * (_dur_so_far / 60)  # per hour
+        _rsi_level   = "low" if _rsi_rate < 2 else "moderate" if _rsi_rate < 6 else "high"
+        out["metrics"]["rsi_risk"] = {
+            "value":     round(_rsi_rate, 2),
+            "score":     score_m(_rsi_rate, 0, 2, 6),
+            "unit":      "risk units",
+            "label":     "RSI cumulative risk",
+            "level":     _rsi_level,
+            "neck_contrib":  round(_neck_risk, 1),
+            "wrist_contrib": round(_wrist_risk, 1),
+        }
+        if _rsi_level == "high":
+            out["alerts"].append(f"⚠️ High RSI risk — prolonged poor posture increases repetitive strain injury risk")
     except Exception:
         pass
 
@@ -2927,6 +3109,25 @@ def analyze():
             s["last_ewma"]          = smoothed_local
             result["score_smoothed"] = smoothed_local
             result["score_raw"]      = raw_score
+
+            # ── Within-session trend ───────────────────────────────
+            # Compare recent vs early scores: are you getting better?
+            if len(hist) >= 10:
+                _early  = hist[:5]
+                _recent = hist[-5:]
+                _early_avg  = sum(_early)  / len(_early)
+                _recent_avg = sum(_recent) / len(_recent)
+                _trend_delta = _recent_avg - _early_avg
+                _trend = ("improving"    if _trend_delta > 4  else
+                          "stable"       if _trend_delta > -4 else
+                          "deteriorating")
+                result["session_trend"] = {
+                    "trend":        _trend,
+                    "delta":        round(_trend_delta, 1),
+                    "early_avg":    round(_early_avg, 1),
+                    "recent_avg":   round(_recent_avg, 1),
+                    "frames_total": len(hist),
+                }
             if result.get("overall_smoothed") is None:
                 result["overall"] = smoothed_local
                 result["score"]   = smoothed_local
@@ -7091,6 +7292,11 @@ def explain_score():
         # ── Per-metric comparison ──────────────────────────────────
         METRIC_LABELS = {
             "neck_lean":       ("Neck lean",       "ميل الرقبة",      "°",  True),
+            "fhp_index":       ("Forward head",    "بروز الرأس للأمام","cm", True),
+            "neck_load":       ("Neck load",       "حمل الرقبة",      "kg", True),
+            "ergonomics_score":("Workstation",     "بيئة العمل",      "/100",False),
+            "rsi_risk":        ("RSI risk",        "خطر الإجهاد",     "pts",True),
+            "symmetry":        ("Body symmetry",   "تماثل الجسم",     "%",  True),
             "head_tilt":       ("Head tilt",        "ميل الرأس",       "°",  True),
             "shoulder_level":  ("Shoulder level",   "مستوى الكتفين",   "°",  True),
             "spine_lean":      ("Spine lean",       "ميل العمود",      "°",  True),
@@ -9413,6 +9619,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
