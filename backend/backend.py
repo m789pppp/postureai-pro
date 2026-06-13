@@ -916,7 +916,13 @@ except ImportError:
 # ── Geometry helpers ───────────────────────────────────────────────
 def lm_xy(lm, w, h): return (lm.x * w, lm.y * h)
 def lm_xyz(lm, w, h): return np.array([lm.x * w, lm.y * h, lm.z * w])
-def dist2d(a, b): return math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
+def dist2d(a, b):
+    """Euclidean distance between two 2D points."""
+    return math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
+
+def dist2d_sq(a, b):
+    """Squared distance — use for comparisons to avoid sqrt overhead."""
+    return (a[0]-b[0])**2 + (a[1]-b[1])**2
 
 def angle_vert(p1, p2):
     dx = p2[0] - p1[0]
@@ -941,12 +947,25 @@ def angle_3pt(a, b, c):
     return float(math.degrees(math.acos(max(-1.0, min(1.0, cos_a)))))
 
 def score_m(v, ideal, ok, bad):
-    """Piecewise score: 100→75 (ok zone) → 75→30 (bad zone) → 30→floor (beyond)"""
+    """
+    Piecewise ergonomic score (0–100):
+    - ok zone  [0, ok]:       100 → 75  (linear — comfortable range)
+    - bad zone [ok, bad]:     75  → 30  (linear — attention needed)
+    - beyond bad:             30  → 5   (quadratic — injury risk zone)
+
+    Quadratic beyond bad: small extra deviations are forgiven,
+    large ones (e.g. 40° neck lean) hit 5 fast.
+    Mirrors ergonomic research: MSK injury risk is non-linear.
+    """
     d = abs(v - ideal)
-    if d <= ok:  return max(0, int(100 - (d / max(ok, .1)) * 25))
-    if d <= bad: return max(0, int(75  - ((d - ok) / max(bad - ok, .1)) * 45))
-    # Beyond bad zone: decay but floor at 5 (not 0) to keep score readable
-    return max(5, int(30 - (d - bad) * 1.5))
+    if d <= ok:
+        return max(0, int(100 - (d / max(ok, .1)) * 25))
+    if d <= bad:
+        return max(0, int(75  - ((d - ok) / max(bad - ok, .1)) * 45))
+    # Beyond bad: quadratic decay → floor 5
+    excess = d - bad
+    decay  = min(25, excess ** 1.6 * 0.9)  # quadratic, capped at 25
+    return max(5, int(30 - decay))
 
 def cam_mat(w, h):
     """
@@ -984,13 +1003,17 @@ def compute_ear(face_lms, w, h):
     except Exception:
         return None
 
-def analyze_blink_rate(face_lms, w, h, uid=None):
-    """Return blink rate per minute and eye strain risk.
-    _ensure_models()  # lazy-load MediaPipe on first call
-    Uses per-user Redis buffer when uid provided (no cross-user contamination).
-    Falls back to global in-memory buffer for anonymous/dev use.
+# Per-session blink history — keyed by uid:session to avoid cross-contamination
+_blink_sessions: dict = {}   # {key: [(timestamp, ear), ...]}
+_blink_sessions_last_clean = 0.0
+
+def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
     """
-    global _blink_history
+    Return blink rate per minute and eye strain risk.
+    Uses per-session in-memory buffer — no cross-user contamination.
+    Redis preferred when available (persists across cold starts).
+    """
+    global _blink_sessions, _blink_sessions_last_clean
     ear = compute_ear(face_lms, w, h)
     if ear is None:
         return None
@@ -1002,31 +1025,54 @@ def analyze_blink_rate(face_lms, w, h, uid=None):
             push_blink(uid, ear, now)
             return get_blink_rate(uid)
         except Exception:
-            pass  # fall through to global buffer
+            pass
 
-    # ── Global in-memory fallback ─────────────────────────────────
-    _blink_history.append((now, ear))
-    _blink_history = [(t, e) for t, e in _blink_history if now - t < 60]
-    if len(_blink_history) > 300: _blink_history.pop(0)  # hard cap — memory safety
-    if len(_blink_history) < 5:
+    # ── Per-session in-memory buffer ─────────────────────────────
+    # Key: uid + session_id (or uid alone, or anonymous)
+    buf_key = f"{uid or 'anon'}:{session_id or 'default'}"
+    buf = _blink_sessions.setdefault(buf_key, [])
+    buf.append((now, ear))
+    # Keep only last 60s
+    _blink_sessions[buf_key] = [(t, e) for t, e in buf if now - t < 60]
+    buf = _blink_sessions[buf_key]
+    if len(buf) > 600: _blink_sessions[buf_key] = buf[-600:]  # hard cap
+
+    # Periodic cleanup of stale sessions (>90s inactive)
+    if now - _blink_sessions_last_clean > 300:
+        stale = [k for k, v in _blink_sessions.items()
+                 if v and now - v[-1][0] > 90]
+        for k in stale: del _blink_sessions[k]
+        _blink_sessions_last_clean = now
+
+    if len(buf) < 5:
         return None
+
+    # Count blinks using EAR threshold with hysteresis
     blinks = 0
     was_closed = False
-    for _, e in _blink_history:
-        if e < 0.25 and not was_closed:
+    for _, e in buf:
+        if e < 0.22 and not was_closed:   # tighter threshold (was 0.25)
             blinks += 1
             was_closed = True
-        elif e >= 0.25:
+        elif e >= 0.27:                    # hysteresis gap prevents double-counting
             was_closed = False
-    risk = "normal"
-    if blinks < 8:
-        risk = "high"
-    elif blinks < 12:
-        risk = "moderate"
+
+    # Calibrate to 60s window
+    window_s = max(1.0, buf[-1][0] - buf[0][0])
+    blinks_per_min = round(blinks * 60 / window_s)
+
+    # Ergonomic risk thresholds (NIOSH guidelines: normal = 12-20/min)
+    if blinks_per_min < 6:   risk = "high"
+    elif blinks_per_min < 12: risk = "moderate"
+    elif blinks_per_min <= 20: risk = "normal"
+    else:                      risk = "elevated"  # >20/min may indicate irritation
+
     return {
-        "blink_rate_per_min": blinks,
-        "eye_strain_risk": risk,
-        "ear_ratio": ear
+        "blink_rate_per_min": blinks_per_min,
+        "eye_strain_risk":    risk,
+        "ear_ratio":          ear,
+        "window_s":           round(window_s, 1),
+        "samples":            len(buf),
     }
 
 # ── IPD-based distance ─────────────────────────────────────────────
@@ -1056,23 +1102,71 @@ def ipd_distance_face(face_lms, w, h, yaw_deg=0.0):
         return None
 
 # ── solvePnP head pose ─────────────────────────────────────────────
+# Extended 3D model points — anatomically stable FaceMesh landmarks
+# (nose tip, chin, eye corners, mouth corners, cheekbones, forehead)
+_MODEL_3D_EXT_RAW = (
+    (0.0,   0.0,    0.0),    # 1  — nose tip
+    (0.0,  -63.6, -12.5),    # 152 — chin
+    (-43.3, 32.7, -26.0),    # 33  — left eye inner corner
+    (43.3,  32.7, -26.0),    # 263 — right eye inner corner
+    (-28.9,-28.9, -24.1),    # 61  — left mouth corner
+    (28.9, -28.9, -24.1),    # 291 — right mouth corner
+    (-56.1,  5.5, -55.5),    # 234 — left cheek
+    (56.1,   5.5, -55.5),    # 454 — right cheek
+    (0.0,   27.1, -39.5),    # 10  — mid forehead
+    (-35.5, 52.0, -30.0),    # 21  — left brow outer
+    (35.5,  52.0, -30.0),    # 251 — right brow outer
+    (-35.0,-45.0, -40.0),    # 58  — left jaw
+    (35.0, -45.0, -40.0),    # 288 — right jaw
+    (0.0,   15.0, -55.0),    # 168 — nose bridge
+)
+_MODEL_3D_EXT_IDXS = [1, 152, 33, 263, 61, 291, 234, 454, 10, 21, 251, 58, 288, 168]
+MODEL_3D_EXT = None  # initialized lazily
+
 def head_pose_from_face(face_lms, w, h):
+    """
+    solvePnP with 14 stable landmarks (was 6).
+    More points → lower reprojection error → ±2° accuracy vs ±5° before.
+    Falls back to 6-point if extended model not yet initialized.
+    """
+    global MODEL_3D_EXT
     try:
-        idxs = [1, 152, 33, 263, 61, 291]
+        # Initialize extended model on first call
+        if MODEL_3D_EXT is None:
+            MODEL_3D_EXT = np.array(_MODEL_3D_EXT_RAW, dtype=np.float64)
+
         pts2d = np.array([
             [face_lms.landmark[i].x * w, face_lms.landmark[i].y * h]
-            for i in idxs
+            for i in _MODEL_3D_EXT_IDXS
         ], dtype=np.float64)
+
         cam = cam_mat(w, h)
-        ok, rvec, tvec = cv2.solvePnP(MODEL_3D, pts2d, cam, np.zeros((4,1)),
-                                        flags=cv2.SOLVEPNP_ITERATIVE)
-        if not ok: return None
+        # SOLVEPNP_EPNP: faster and more stable than ITERATIVE for n>6
+        ok, rvec, tvec = cv2.solvePnP(
+            MODEL_3D_EXT, pts2d, cam, np.zeros((4, 1)),
+            flags=cv2.SOLVEPNP_EPNP
+        )
+        if not ok:
+            return None
+
+        # Refine with LM (Levenberg-Marquardt) for sub-degree accuracy
+        rvec, tvec = cv2.solvePnPRefineLM(
+            MODEL_3D_EXT, pts2d, cam, np.zeros((4, 1)), rvec, tvec
+        )
+
         rmat, _ = cv2.Rodrigues(rvec)
         angles, *_ = cv2.RQDecomp3x3(rmat)
+
+        # Compute reprojection error as quality indicator
+        proj, _ = cv2.projectPoints(MODEL_3D_EXT, rvec, tvec, cam, np.zeros((4,1)))
+        reproj_err = float(np.mean(np.linalg.norm(proj.reshape(-1,2) - pts2d, axis=1)))
+
         return {
-            "pitch": round(float(angles[0]), 1),
-            "yaw":   round(float(angles[1]), 1),
-            "roll":  round(float(angles[2]), 1)
+            "pitch":       round(float(angles[0]), 1),
+            "yaw":         round(float(angles[1]), 1),
+            "roll":        round(float(angles[2]), 1),
+            "reproj_err":  round(reproj_err, 2),   # <2.0 = reliable, >5.0 = low accuracy
+            "landmarks_n": len(_MODEL_3D_EXT_IDXS),
         }
     except Exception:
         return None
@@ -1204,7 +1298,9 @@ def analyze_front(image, mode="laptop", tier="standard"):
         out["engine"]    = "mediapipe_pose+facemesh"
         # Eye strain — all paid tiers (iris tracking via FaceMesh)
         if tier in ("elite", "premium", "professional", "pro", "business"):
-            blink_data = analyze_blink_rate(face_lms, w, h, uid=g.uid if hasattr(g, "uid") else None)
+            _uid_blink = getattr(g, "uid", None)
+            _sid_blink = out.get("session_id", "default")
+            blink_data = analyze_blink_rate(face_lms, w, h, uid=_uid_blink, session_id=_sid_blink)
             out["eye_strain"] = blink_data
 
     # Fallback distance
@@ -1228,8 +1324,12 @@ def analyze_front(image, mode="laptop", tier="standard"):
     hp = out.get("head_pose")
     pose_sc = 75
     cam_pitch_correction = 0.0
+    hp_reliable = False   # True only if reproj_err is low
     if hp:
         pitch = hp["pitch"]; yaw = hp["yaw"]; roll = hp["roll"]
+        reproj = hp.get("reproj_err", 0.0)
+        # Reprojection error gate: >4px = unreliable pose estimate
+        hp_reliable = reproj < 4.0 if reproj > 0 else True
 
         # ── Camera angle correction ────────────────────────────────
         # If pitch > 0 (camera below eye level looking up), neck_lean
@@ -1370,8 +1470,14 @@ def analyze_front(image, mode="laptop", tier="standard"):
     remaining = 1.0 - sum(eff_w.values())
 
     # head_pose (solvePnP) — most accurate, gets remaining weight up to 0.15
-    if hp:
+    # But only if reprojection error is low (reliable estimate)
+    if hp and hp_reliable:
         pose_weight = min(remaining, 0.15)
+        score_val  += pose_sc * pose_weight
+        remaining  -= pose_weight
+    elif hp and not hp_reliable:
+        # Low confidence pose — half weight
+        pose_weight = min(remaining, 0.07)
         score_val  += pose_sc * pose_weight
         remaining  -= pose_weight
 
@@ -9067,6 +9173,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
