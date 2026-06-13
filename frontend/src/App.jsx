@@ -2397,10 +2397,19 @@ export default function App(){
         toast={addToast}
         isHRAdmin={isHRAdmin}
       />
+      {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
+      {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
+      {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
+      {showChurnPrediction&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
+      {showCustomerSuccess&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
+      {showAPIMarketplace&&<APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/>}
+      {showWhiteLabel&&<WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/>}
+      {showMultiTenant&&<MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/>}
+      {showAuditSystem&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
+      {showWorkforceAnalytics&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
+      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
     </ErrorBoundary>
   );
-
-  // ── LIVE DASHBOARD ─────────────────────────────────────────────
   const TN = T_norm;
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const scoreColor = score ? sc(score) : cs.muted;
@@ -2541,7 +2550,6 @@ export default function App(){
       {showUsageBilling&&<UsageBilling profile={profile} cs={cs} lang={lang} onClose={()=>setShowUsageBilling(false)}/>}
       {showChurnPrediction&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
-      {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
       {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
       {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
