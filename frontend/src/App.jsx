@@ -1983,6 +1983,7 @@ export default function App(){
       setSessionResult(result);
 
       if(user){
+        addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
         saveSession(user.uid,{
           session_id:sessionId,mode,tier,avg_score:avg,
           good_pct:gPct,duration_s:dur,duration_sec:dur,
@@ -1990,9 +1991,14 @@ export default function App(){
           score_history:histRef.current.slice(-20),
           metrics:la.metrics||{}
         }).then(()=>{
-          // Refresh sessions list so Sessions tab & dashboard update immediately
+          addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
           getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
-        }).catch(e=>{ console.error("saveSession failed:", e?.code, e?.message); });
+        }).catch(e=>{
+          console.error("saveSession failed:", e?.code, e?.message);
+          addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
+        });
+      } else {
+        addToast(isAr?"تسجيل الدخول منتهي — لم تُحفظ الجلسة":"Not signed in — session not saved","error");
       }
     }
   }
