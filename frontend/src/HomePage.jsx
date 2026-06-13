@@ -857,10 +857,15 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [addPwVisible, setAddPwVisible]   = useState(false);
 
-  // Always sync from profile (fixes new-user empty name bug)
+  // Track whether user has started editing (prevents useEffect overriding their input)
+  const [nameDirty, setNameDirty] = useState(false);
+
+  // Sync from profile ONLY on initial load or when not actively editing
   useEffect(()=>{
-    setName(profile?.name || user?.displayName || "");
-  },[profile?.name, user?.displayName]);
+    if(!nameDirty) {
+      setName(profile?.name || user?.displayName || "");
+    }
+  },[profile?.name, user?.displayName]); // eslint-disable-line
 
   async function save() {
     const trimmedName = name.trim();
@@ -877,13 +882,37 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
       // Update local state immediately so UI reflects change without reload
       setProfile(p=>({...(p||{}), name: trimmedName}));
       setName(trimmedName);
+      setNameDirty(false); // Reset dirty flag after successful save
       addToast(isAr?"✅ تم حفظ الاسم":"✅ Name saved","success");
     } catch(err) {
-      console.error("Save name error:", err?.code, err?.message);
-      const msg = err?.code==="permission-denied"
-        ? (isAr?"خطأ في الصلاحيات — حاول تاني":"Permission denied — please try again")
-        : (err?.message||"Unknown error");
-      addToast(msg,"error");
+      console.error("Save name error:", err?.code, err?.message, err);
+      let msg;
+      if(err?.code==="permission-denied") {
+        msg = isAr?"خطأ في الصلاحيات — حاول تاني":"Permission denied — try again";
+      } else if(err?.code==="not-found") {
+        // Doc doesn't exist — try creating it from scratch
+        try {
+          const { doc: _doc, setDoc: _setDoc, serverTimestamp: _ts } = await import("firebase/firestore");
+          const { db: _db } = await import("./firebase.js");
+          await _setDoc(_doc(_db,"users",user.uid), {
+            name: trimmedName,
+            email: user.email||"",
+            updated_at: _ts()
+          }, { merge: true });
+          if(auth.currentUser) await fbUpdateProfile(auth.currentUser, { displayName: trimmedName });
+          setProfile(p=>({...(p||{}), name: trimmedName}));
+          setName(trimmedName);
+          setNameDirty(false);
+          addToast(isAr?"✅ تم حفظ الاسم":"✅ Name saved","success");
+          setSaving(false);
+          return;
+        } catch(e2) {
+          msg = e2?.message || "Failed to create profile";
+        }
+      } else {
+        msg = err?.message||"Unknown error";
+      }
+      addToast(isAr?`خطأ: ${msg}`:`Error: ${msg}`,"error");
     }
     setSaving(false);
   }
@@ -1019,7 +1048,14 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 textTransform:"uppercase", letterSpacing:".06em" }}>
                 {isAr?"الاسم الكامل":"Full Name"}
               </div>
-              {inp(name, setName, isAr?"أدخل اسمك الكامل":"Enter full name")}
+              <input
+                value={name}
+                onChange={e=>{ setName(e.target.value); setNameDirty(true); }}
+                placeholder={isAr?"أدخل اسمك الكامل":"Enter full name"}
+                style={{ width:"100%", padding:"10px 12px", background:"rgba(255,255,255,.05)",
+                  border:`1px solid ${cs.border}`, borderRadius:8, color:cs.text,
+                  fontSize:13, outline:"none", boxSizing:"border-box" }}
+              />
             </div>
             <div>
               <div style={{ fontSize:11, color:cs.muted, fontWeight:600, marginBottom:6,
