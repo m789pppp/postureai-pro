@@ -6527,6 +6527,251 @@ def compute_leaderboard():
 # ══════════════════════════════════════════════════════════════════
 @require_auth
 
+
+@app.route("/api/explain", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def explain_score():
+    """
+    Explains WHY score changed between two sessions/days.
+
+    POST body:
+    {
+      "today":     { session or day summary },
+      "yesterday": { session or day summary },
+      "lang": "en" | "ar"
+    }
+
+    Each session/day object:
+    {
+      "avg_score": 72,
+      "metrics": {
+        "neck_lean":       {"value": 14, "score": 55, "unit": "°"},
+        "head_tilt":       {"value": 3,  "score": 82, "unit": "°"},
+        "shoulder_level":  {"value": 5,  "score": 72, "unit": "°"},
+        "spine_lean":      {"value": 9,  "score": 61, "unit": "°"},
+        "screen_distance": {"value": 58, "score": 100,"unit": "cm"},
+        "head_yaw":        {"value": 6,  "score": 78, "unit": "°"},
+        "eye_strain":      {"value": 10, "score": 45, "unit": "bpm"},
+      },
+      "alerts": [...],
+      "quality_score": 88,
+      "duration_s": 900,
+      "good_pct": 65
+    }
+    """
+    try:
+        data      = request.get_json(force=True) or {}
+        today     = data.get("today")
+        yesterday = data.get("yesterday")
+        lang      = data.get("lang", "en")
+        is_ar     = lang == "ar"
+        uid       = getattr(g, "uid", None)
+
+        if not today:
+            return jsonify({"error": "today session data required"}), 400
+
+        # ── Score delta ───────────────────────────────────────────
+        score_today = today.get("avg_score", 0)
+        score_yest  = yesterday.get("avg_score", 0) if yesterday else None
+        delta       = round(score_today - score_yest) if score_yest is not None else None
+
+        # ── Per-metric comparison ──────────────────────────────────
+        METRIC_LABELS = {
+            "neck_lean":       ("Neck lean",       "ميل الرقبة",      "°",  True),
+            "head_tilt":       ("Head tilt",        "ميل الرأس",       "°",  True),
+            "shoulder_level":  ("Shoulder level",   "مستوى الكتفين",   "°",  True),
+            "spine_lean":      ("Spine lean",       "ميل العمود",      "°",  True),
+            "screen_distance": ("Screen distance",  "بُعد الشاشة",     "cm", False),
+            "head_yaw":        ("Head turn",        "دوران الرأس",     "°",  True),
+            "eye_strain":      ("Eye strain",       "إجهاد العين",     "bpm",True),
+        }
+
+        met_today = today.get("metrics", {})
+        met_yest  = yesterday.get("metrics", {}) if yesterday else {}
+
+        changes = []   # sorted by impact (biggest drop first)
+        improvements = []
+
+        for key, (en_lbl, ar_lbl, unit, low_good) in METRIC_LABELS.items():
+            t = met_today.get(key)
+            y = met_yest.get(key)
+            if not t: continue
+
+            t_score = t.get("score", 0)
+            t_val   = t.get("value")
+            y_score = y.get("score", 0)  if y else None
+            y_val   = y.get("value")     if y else None
+
+            score_diff = round(t_score - y_score) if y_score is not None else None
+            val_diff   = round(t_val   - y_val, 1) if (t_val is not None and y_val is not None) else None
+
+            label = ar_lbl if is_ar else en_lbl
+
+            entry = {
+                "metric":       key,
+                "label":        label,
+                "today_score":  t_score,
+                "today_value":  t_val,
+                "unit":         unit,
+                "yest_score":   y_score,
+                "yest_value":   y_val,
+                "score_diff":   score_diff,
+                "val_diff":     val_diff,
+                "low_good":     low_good,
+            }
+
+            if score_diff is not None:
+                if score_diff <= -8:
+                    changes.append(entry)       # significant drop
+                elif score_diff >= 8:
+                    improvements.append(entry)  # significant gain
+            elif t_score < 60:
+                changes.append(entry)           # no yesterday — just bad today
+
+        # Sort by impact
+        changes.sort(key=lambda x: x.get("score_diff") or -x["today_score"])
+        improvements.sort(key=lambda x: -(x.get("score_diff") or x["today_score"]))
+
+        # ── Generate human-readable explanations ──────────────────
+        def explain_metric(e, is_drop):
+            label  = e["label"]
+            t_sc   = e["today_score"]
+            t_val  = e["today_value"]
+            y_sc   = e["yest_score"]
+            y_val  = e["yest_value"]
+            unit   = e["unit"]
+            s_diff = e["score_diff"]
+            v_diff = e["val_diff"]
+            low_g  = e["low_good"]
+
+            if is_ar:
+                if is_drop:
+                    trend = f"ارتفع بـ {abs(v_diff)}{unit}" if (v_diff and low_g and v_diff > 0) else                             f"انخفض بـ {abs(v_diff)}{unit}" if (v_diff and not low_g and v_diff < 0) else ""
+                    return {
+                        "title":   f"⬇️ {label} تراجع",
+                        "detail":  f"النقطة: {t_sc}/100 ({trend})" if trend else f"النقطة: {t_sc}/100",
+                        "impact":  f"أثّر بـ {abs(s_diff or 0)} نقطة على نتيجتك",
+                        "fix":     _get_fix(e["metric"], t_val, is_ar=True),
+                    }
+                else:
+                    return {
+                        "title":   f"⬆️ {label} تحسّن",
+                        "detail":  f"النقطة: {t_sc}/100 ({'تحسّن ' + str(abs(v_diff or 0)) + unit if v_diff else ''})",
+                        "impact":  f"أضاف {abs(s_diff or 0)} نقطة لنتيجتك",
+                    }
+            else:
+                if is_drop:
+                    val_note = ""
+                    if v_diff and low_g and v_diff > 0:
+                        val_note = f" (+{v_diff}{unit} worse)"
+                    elif v_diff and not low_g and v_diff < 0:
+                        val_note = f" ({v_diff}{unit} from ideal)"
+                    return {
+                        "title":   f"⬇️ {label} declined",
+                        "detail":  f"Score dropped to {t_sc}/100{val_note}",
+                        "impact":  f"Caused ~{abs(s_diff or 0)}pt drop in overall score",
+                        "fix":     _get_fix(e["metric"], t_val, is_ar=False),
+                    }
+                else:
+                    return {
+                        "title":   f"⬆️ {label} improved",
+                        "detail":  f"Score rose to {t_sc}/100",
+                        "impact":  f"Added ~{abs(s_diff or 0)}pts to overall score",
+                    }
+
+        def _get_fix(metric, val, is_ar):
+            fixes = {
+                "neck_lean":       ("Raise monitor to eye level — use a stand or stack books",
+                                    "ارفع مستوى الشاشة لمستوى العيون"),
+                "head_tilt":       ("Level your head — check chair height and monitor centering",
+                                    "تأكد من استواء رأسك — اضبط ارتفاع الكرسي"),
+                "shoulder_level":  ("Adjust armrests to equal height — relax both shoulders",
+                                    "اضبط ذراعَي الكرسي لنفس الارتفاع"),
+                "spine_lean":      ("Sit back fully against chair back, engage lumbar support",
+                                    "اجلس للخلف واستخدم دعامة أسفل الظهر"),
+                "screen_distance": ("Move screen to 50–80cm away (arm's length)",
+                                    "ضع الشاشة على بُعد 50–80سم (مسافة ذراع)"),
+                "head_yaw":        ("Face monitor directly — reposition chair if needed",
+                                    "انظر للشاشة مباشرة — أعد ترتيب وضع الكرسي"),
+                "eye_strain":      ("20-20-20 rule: every 20 min look 6m away for 20 sec",
+                                    "قاعدة 20-20-20: كل 20 دقيقة انظر 6 أمتار بعيداً لـ 20 ثانية"),
+            }
+            f = fixes.get(metric, ("Correct your posture", "صحّح وضعيتك"))
+            return f[1] if is_ar else f[0]
+
+        explanations_drops  = [explain_metric(e, True)  for e in changes[:3]]
+        explanations_gains  = [explain_metric(e, False) for e in improvements[:2]]
+
+        # ── Overall verdict ───────────────────────────────────────
+        if delta is None:
+            if score_today >= 80:
+                verdict = "good_no_comparison"
+                verdict_text = "وضعيتك جيدة اليوم ✓" if is_ar else "Good posture today ✓"
+            elif score_today >= 60:
+                verdict = "fair_no_comparison"
+                verdict_text = "وضعيتك مقبولة — يمكن تحسينها" if is_ar else "Fair posture — room to improve"
+            else:
+                verdict = "poor_no_comparison"
+                verdict_text = "وضعيتك تحتاج انتباهاً" if is_ar else "Posture needs attention"
+        elif delta >= 5:
+            verdict = "improved"
+            verdict_text = f"تحسّن بـ {delta} نقطة مقارنة بالأمس 📈" if is_ar else f"Improved by {delta}pts vs yesterday 📈"
+        elif delta >= -4:
+            verdict = "stable"
+            verdict_text = "مستقرة مقارنة بالأمس ➡️" if is_ar else "Stable vs yesterday ➡️"
+        elif delta >= -10:
+            verdict = "slight_drop"
+            verdict_text = f"انخفض بـ {abs(delta)} نقطة عن الأمس ⚠️" if is_ar else f"Down {abs(delta)}pts from yesterday ⚠️"
+        else:
+            verdict = "significant_drop"
+            verdict_text = f"انخفض بـ {abs(delta)} نقطة — راجع وضعيتك 🔴" if is_ar else f"Down {abs(delta)}pts — review your setup 🔴"
+
+        # ── Context clues (non-metric reasons) ────────────────────
+        context_clues = []
+        qual_t = today.get("quality_score")
+        qual_y = yesterday.get("quality_score") if yesterday else None
+        dur_t  = today.get("duration_s", 0)
+        dur_y  = yesterday.get("duration_s", 0) if yesterday else 0
+
+        if qual_t and qual_t < 65:
+            context_clues.append(
+                "جودة الجلسة منخفضة — الإضاءة أو الكاميرا قد تؤثر على الدقة" if is_ar
+                else f"Session quality was low ({qual_t}/100) — lighting or camera angle may have affected accuracy"
+            )
+        if dur_t and dur_y and dur_t < dur_y * 0.5:
+            context_clues.append(
+                "الجلسة اليوم أقصر بكثير — قد لا تعكس يومًا كاملاً" if is_ar
+                else f"Today's session was much shorter ({dur_t//60}min vs {dur_y//60}min yesterday)"
+            )
+        if delta and delta < -5 and not changes:
+            context_clues.append(
+                "الانخفاض موزّع على عدة مقاييس — لا يوجد سبب واحد واضح" if is_ar
+                else "Drop is spread across multiple metrics — no single dominant cause"
+            )
+
+        log_event("explain_score", uid=uid, meta={
+            "delta": delta, "verdict": verdict,
+            "top_drop": changes[0]["metric"] if changes else None
+        })
+
+        return jsonify({
+            "verdict":       verdict,
+            "verdict_text":  verdict_text,
+            "score_today":   score_today,
+            "score_yesterday": score_yest,
+            "delta":         delta,
+            "drops":         explanations_drops,
+            "gains":         explanations_gains,
+            "context_clues": context_clues,
+            "raw_changes":   changes[:5],
+            "lang":          lang,
+        })
+
+    except Exception as e:
+        return safe_error(e)
+
+
 @app.route("/api/analytics/trend", methods=["POST"])
 @require_auth
 @limiter.limit("30 per minute")
@@ -8656,6 +8901,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
