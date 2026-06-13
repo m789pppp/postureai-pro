@@ -65,11 +65,12 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
     (acc,s) => ({...acc, [s]: filtered.filter(i=>i.status===s)}), {}
   );
 
+  const isAr = lang === "ar";
   const tabs = [
-    { id:"roadmap",   label:"Roadmap",   icon:"🗺" },
-    { id:"changelog", label:"Changelog", icon:"📋" },
-    { id:"status",    label:"Status",    icon:"🟢" },
-    { id:"affiliate", label:"Affiliate", icon:"🤝" },
+    { id:"roadmap",   label: isAr?"خارطة الطريق":"Roadmap",   icon:"🗺" },
+    { id:"changelog", label: isAr?"سجل التحديثات":"Changelog", icon:"📋" },
+    { id:"status",    label: isAr?"الحالة":"Status",    icon:"🟢" },
+    { id:"affiliate", label: isAr?"الشراكة":"Affiliate", icon:"🤝" },
   ];
 
   const categories = ["all",...new Set(ROADMAP_ITEMS.map(i=>i.category))];
@@ -85,7 +86,9 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
               <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#ec4899)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🚀</div>
               <div>
                 <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>Growth Hub</div>
-                <div style={{ fontSize:12, color:cs.muted||"#64748b" }}>Roadmap · Changelog · Status · Affiliate Program</div>
+                <div style={{ fontSize:12, color:cs.muted||"#64748b" }}>
+                  {isAr?"خارطة الطريق · التحديثات · الحالة · الشراكة":"Roadmap · Changelog · Status · Affiliate Program"}
+                </div>
               </div>
             </div>
             <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }}>✕</button>
@@ -114,10 +117,10 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
               </div>
 
               {[
-                { key:"in_progress", label:"🔨 In Progress" },
-                { key:"planned",     label:"📅 Planned" },
-                { key:"shipped",     label:"✅ Shipped" },
-                { key:"considering", label:"💭 Considering" },
+                { key:"in_progress", label: isAr?"🔨 قيد التنفيذ":"🔨 In Progress" },
+                { key:"planned",     label: isAr?"📅 مخطط":"📅 Planned" },
+                { key:"shipped",     label: isAr?"✅ تم الإطلاق":"✅ Shipped" },
+                { key:"considering", label: isAr?"💭 قيد الدراسة":"💭 Considering" },
               ].map(section=>{
                 const sItems = grouped[section.key] || [];
                 if (!sItems.length) return null;

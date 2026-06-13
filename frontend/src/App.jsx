@@ -1992,7 +1992,7 @@ export default function App(){
         }).then(()=>{
           // Refresh sessions list so Sessions tab & dashboard update immediately
           getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
-        }).catch(()=>{});
+        }).catch(e=>{ console.error("saveSession failed:", e?.code, e?.message); });
       }
     }
   }

@@ -236,8 +236,17 @@ export const getUserProfile   = async (uid) => { const s=await getDoc(doc(db,"us
 export const updateUserProfile = async (uid, data) => {
   // Strip ALL protected fields that Firestore rules block client from changing
   const { is_admin, tier, is_hr, company_id, uid: _uid, email: _email, ...safe } = data;
-  // Use updateDoc (not setDoc) — only sends specified fields, avoids noPrivilegeEscalation false-positive
-  return updateDoc(doc(db,"users",uid), { ...safe, updated_at:_serverTimestamp() });
+  const payload = { ...safe, updated_at: _serverTimestamp() };
+  try {
+    // updateDoc fails if doc doesn't exist — setDoc merge always works
+    return await updateDoc(doc(db,"users",uid), payload);
+  } catch(err) {
+    if(err?.code === "not-found") {
+      // Doc doesn't exist yet — create it
+      return setDoc(doc(db,"users",uid), payload, { merge: true });
+    }
+    throw err;
+  }
 };
 export const completeOnboardingStep = async (uid, step) => {
   const snap = await getDoc(doc(db,"users",uid));
