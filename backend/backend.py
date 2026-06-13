@@ -6526,6 +6526,182 @@ def compute_leaderboard():
 # HEATMAP ANALYTICS
 # ══════════════════════════════════════════════════════════════════
 @require_auth
+
+@app.route("/api/analytics/trend", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def analytics_trend():
+    """
+    Returns daily avg posture scores for the last 30 days + linear regression.
+
+    POST body:
+      { "sessions": [...], "days": 30, "include_weekly": true }
+
+    sessions array items:
+      { "avg_score": 78, "created_at_iso": "2026-06-01T09:00:00Z",
+        "duration_s": 900, "good_pct": 72, "quality_score": 85 }
+
+    Returns:
+      daily[]       - one entry per day (null if no sessions)
+      regression    - slope, intercept, r_squared, verdict
+      weekly[]      - 4-week breakdown with diffs
+      summary       - overall stats
+    """
+    try:
+        data     = request.get_json(force=True) or {}
+        sessions = data.get("sessions", [])
+        n_days   = min(max(int(data.get("days", 30)), 7), 90)
+        inc_week = data.get("include_weekly", True)
+        uid      = getattr(g, "uid", None)
+
+        if not sessions:
+            return jsonify({"error": "sessions array required"}), 400
+
+        # ── Build daily buckets ──────────────────────────────────
+        from collections import defaultdict
+        buckets = defaultdict(list)   # "YYYY-MM-DD" → [scores]
+        dur_map = defaultdict(list)   # duration per day
+        qual_map= defaultdict(list)   # quality scores per day
+
+        for s in sessions:
+            ts  = s.get("created_at_iso") or s.get("created_at", "")
+            sc  = s.get("avg_score", 0)
+            dur = s.get("duration_s", 0)
+            qsc = s.get("quality_score") or s.get("quality", {}).get("quality_score")
+            if not ts or not sc: continue
+            try:
+                dt  = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                day = dt.strftime("%Y-%m-%d")
+                buckets[day].append(sc)
+                dur_map[day].append(dur)
+                if qsc: qual_map[day].append(qsc)
+            except Exception:
+                continue
+
+        # ── Build 30-day array ───────────────────────────────────
+        today    = datetime.utcnow().date()
+        daily    = []
+        pts      = []   # (idx, avg) for regression — only days with data
+
+        for i in range(n_days - 1, -1, -1):
+            d     = today - __import__("datetime").timedelta(days=i)
+            ds    = d.strftime("%Y-%m-%d")
+            label = d.strftime("%b %-d")
+            scores= buckets.get(ds, [])
+            avg   = round(sum(scores) / len(scores)) if scores else None
+            entry = {
+                "date":        ds,
+                "label":       label,
+                "avg_score":   avg,
+                "sessions":    len(scores),
+                "min_score":   min(scores) if scores else None,
+                "max_score":   max(scores) if scores else None,
+                "avg_duration": round(sum(dur_map[ds]) / len(dur_map[ds])) if dur_map.get(ds) else None,
+                "avg_quality": round(sum(qual_map[ds]) / len(qual_map[ds])) if qual_map.get(ds) else None,
+            }
+            daily.append(entry)
+            if avg is not None:
+                pts.append((n_days - 1 - i, avg))   # x = days ago inverted
+
+        # ── Linear regression ────────────────────────────────────
+        regression = None
+        if len(pts) >= 3:
+            n   = len(pts)
+            sx  = sum(p[0] for p in pts)
+            sy  = sum(p[1] for p in pts)
+            sx2 = sum(p[0]**2 for p in pts)
+            sxy = sum(p[0]*p[1] for p in pts)
+            denom = n*sx2 - sx**2
+            if abs(denom) > 0.001:
+                m = (n*sxy - sx*sy) / denom          # slope pts/day
+                b = (sy - m*sx) / n                  # intercept
+                # R² — how well does the line fit
+                y_mean = sy / n
+                ss_tot = sum((p[1]-y_mean)**2 for p in pts)
+                ss_res = sum((p[1]-(m*p[0]+b))**2 for p in pts)
+                r2 = max(0.0, 1 - ss_res/ss_tot) if ss_tot > 0 else 0.0
+
+                # Trend verdict
+                slope_30 = m * 30   # projected change over 30 days
+                if   slope_30 >  8: verdict = "improving_fast"
+                elif slope_30 >  2: verdict = "improving"
+                elif slope_30 > -2: verdict = "stable"
+                elif slope_30 > -8: verdict = "declining"
+                else:               verdict = "declining_fast"
+
+                verdict_label = {
+                    "improving_fast": "📈 Clear improvement trend",
+                    "improving":      "📈 Gradual improvement",
+                    "stable":         "➡️  Stable — no clear change",
+                    "declining":      "📉 Slight decline — pay attention",
+                    "declining_fast": "📉 Clear decline — review habits",
+                }.get(verdict, "")
+
+                regression = {
+                    "slope":          round(m, 4),
+                    "slope_per_week": round(m * 7, 2),
+                    "intercept":      round(b, 2),
+                    "r_squared":      round(r2, 3),
+                    "projected_30d":  round(m * 30, 1),
+                    "verdict":        verdict,
+                    "verdict_label":  verdict_label,
+                    "data_points":    n,
+                    "reliable":       r2 >= 0.25 and n >= 7,
+                }
+
+        # ── Weekly breakdown ────────────────────────────────────
+        weekly = []
+        if inc_week:
+            for w in range(4):
+                w_days  = daily[w*7 : w*7+7]
+                w_pts   = [d["avg_score"] for d in w_days if d["avg_score"] is not None]
+                w_avg   = round(sum(w_pts)/len(w_pts)) if w_pts else None
+                w_start = w_days[0]["label"]  if w_days else ""
+                w_end   = w_days[-1]["label"] if w_days else ""
+                weekly.append({
+                    "week":       w + 1,
+                    "label":      f"{w_start} – {w_end}",
+                    "avg_score":  w_avg,
+                    "active_days":len(w_pts),
+                    "sessions":   sum(d["sessions"] for d in w_days),
+                })
+            # Add week-over-week diffs
+            for i in range(1, len(weekly)):
+                prev = weekly[i-1]["avg_score"]
+                curr = weekly[i]["avg_score"]
+                weekly[i]["diff_from_prev"] = (
+                    round(curr - prev) if curr is not None and prev is not None else None
+                )
+
+        # ── Summary ───────────────────────────────────────────────
+        all_scores  = [d["avg_score"] for d in daily if d["avg_score"] is not None]
+        active_days = len(all_scores)
+        summary = {
+            "overall_avg":  round(sum(all_scores)/active_days) if all_scores else None,
+            "best_score":   max(all_scores) if all_scores else None,
+            "worst_score":  min(all_scores) if all_scores else None,
+            "active_days":  active_days,
+            "total_days":   n_days,
+            "consistency":  round(active_days / n_days * 100),   # % days with sessions
+            "first_half_avg": round(sum(all_scores[:active_days//2]) / max(len(all_scores[:active_days//2]),1)) if all_scores else None,
+            "second_half_avg":round(sum(all_scores[active_days//2:]) / max(len(all_scores[active_days//2:]),1)) if all_scores else None,
+        }
+
+        log_event("analytics_trend", uid=uid, meta={"days": n_days, "sessions": len(sessions), "pts": len(pts)})
+
+        return jsonify({
+            "daily":      daily,
+            "regression": regression,
+            "weekly":     weekly if inc_week else [],
+            "summary":    summary,
+            "days":       n_days,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+        })
+
+    except Exception as e:
+        return safe_error(e)
+
+
 @app.route("/api/analytics/heatmap", methods=["POST"])
 @limiter.limit("30 per minute")
 @require_tier("professional")
@@ -8480,6 +8656,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
