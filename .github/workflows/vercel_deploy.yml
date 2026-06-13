@@ -20,6 +20,16 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel project settings
+        working-directory: frontend
+        run: |
+          vercel pull --yes --environment=production \
+            --token=${{ secrets.VERCEL_TOKEN }} || true
+        continue-on-error: true
+
       - name: Build frontend
         working-directory: frontend
         run: |
@@ -37,12 +47,15 @@ jobs:
 
       - name: Deploy to Vercel
         id: deploy
+        working-directory: frontend
         run: |
-          npm install -g vercel@latest
-          cd frontend
+          # Deploy with vercel.json for proper SPA routing
           RESULT=$(vercel deploy dist --prod --yes \
             --token=${{ secrets.VERCEL_TOKEN }} \
-            --name=postureai-pro-omega 2>&1) || true
+            --name=postureai-pro-omega \
+            --build-env SKIP_BUILD=1 2>&1) || \
+          RESULT=$(vercel deploy --prod --yes --prebuilt \
+            --token=${{ secrets.VERCEL_TOKEN }} 2>&1) || true
           echo "$RESULT"
           URL=$(echo "$RESULT" | grep -Eo 'https://[a-zA-Z0-9._-]+\.vercel\.app' | tail -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
