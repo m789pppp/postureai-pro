@@ -281,22 +281,42 @@ export async function saveSession(uid, data) {
 }
 
 export async function getUserSessions(uid) {
-  try {
-    // Requires composite index uid+created_at — works once index is built
-    const q = query(collection(db,"sessions"), where("uid","==",uid), orderBy("created_at","desc"), limit(50));
-    const snaps = await getDocs(q);
-    return snaps.docs.map(d=>({id:d.id,...d.data()}));
-  } catch(e) {
-    // Fallback: no orderBy (no index needed), sort client-side
-    console.warn("getUserSessions fallback (no index?):", e.code);
-    const q2 = query(collection(db,"sessions"), where("uid","==",uid), limit(50));
-    const snaps = await getDocs(q2);
-    return snaps.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
-      const ta = a.created_at?.toDate?.()?.getTime?.()??0;
-      const tb = b.created_at?.toDate?.()?.getTime?.()??0;
-      return tb-ta;
+  // Simple query — no orderBy, no composite index needed
+  // Sort client-side instead
+  const q = query(
+    collection(db,"sessions"),
+    where("uid","==",uid),
+    limit(50)
+  );
+  const snaps = await getDocs(q);
+  return snaps.docs
+    .map(d=>({id:d.id,...d.data()}))
+    .sort((a,b)=>{
+      const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
+      const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
+      return tb - ta;
     });
-  }
+}
+
+// Real-time listener version — keeps sessions always fresh
+export function onUserSessions(uid, callback) {
+  const q = query(
+    collection(db,"sessions"),
+    where("uid","==",uid),
+    limit(50)
+  );
+  return onSnapshot(q, snap => {
+    const sessions = snap.docs
+      .map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>{
+        const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
+        const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
+        return tb - ta;
+      });
+    callback(sessions);
+  }, err => {
+    console.warn("onUserSessions error:", err.code);
+  });
 }
 
 // ── Departments (isolated) ────────────────────────────────────────

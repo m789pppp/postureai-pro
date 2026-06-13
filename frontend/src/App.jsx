@@ -8,7 +8,7 @@ import {
   SUPPORT_EMAIL, PAYMOB_IFRAME_ID,
   AUTO_APPROVE_DOMAIN, serverTimestamp,
   notifyPaymentPending, notifyPaymentConfirmed,
-  getCompany, createCompany, getUserSessions, updateUserProfile,
+  getCompany, createCompany, getUserSessions, onUserSessions, updateUserProfile,
   checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, getReferralDiscount, checkAndSendNurtureEmails,
   doc, updateDoc,
 } from "./firebase.js";
@@ -1714,8 +1714,12 @@ export default function App(){
             if(p.tier) setTier(normalizeTier(p.tier));
             if(p.company_id) setCompanyId(p.company_id);
           }
-          // Background loads — never block auth
-          getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
+          // Real-time sessions listener — updates instantly when session saved
+          const unsubSessions = onUserSessions(u.uid, sessions => {
+            setUserSessions(sessions);
+          });
+          // Store unsub so we can clean up on sign-out
+          window.__unsubSessions = unsubSessions;
           // Load team members for HR admin / employees
           if(p?.company_id||p?.is_org_owner){
             getAllUsers(p.company_id||null,false).then(setAllUsers).catch(()=>{});
@@ -1739,6 +1743,9 @@ export default function App(){
           else if(p && !p.setup_complete) setPage("setup");
           else setPage(params.get("plan")&&TIERS[params.get("plan")]?"pricing":"home");
         } else {
+          // User signed out — clean up real-time listener
+          if(window.__unsubSessions) { window.__unsubSessions(); window.__unsubSessions = null; }
+          setUserSessions([]);
           setPage("landing");
         }
       } catch(e) {
@@ -1992,7 +1999,7 @@ export default function App(){
           metrics:la.metrics||{}
         }).then(()=>{
           addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
-          getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
+          // real-time listener auto-updates userSessions
         }).catch(e=>{
           console.error("saveSession failed:", e?.code, e?.message);
           addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
