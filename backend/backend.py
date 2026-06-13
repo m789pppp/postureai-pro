@@ -1098,9 +1098,27 @@ def analyze_front(image, mode="laptop", tier="standard"):
         out["alerts"].append("No person detected — ensure your upper body is visible in the camera frame")
         return analyze_front_cascade(image, mode, out)
 
-    lms = pose_result.pose_landmarks.landmark
+    # ── Landmark averaging: reduce ±3° jitter to ±1° ─────────────
+    _sid  = out.get("session_id", "front_default")
+    _raw  = pose_result.pose_landmarks.landmark
+    _hist = _lm_history.setdefault(_sid, [])
+    _hist.append(_raw)
+    if len(_hist) > 3: _hist.pop(0)
+
+    class _AvgLM:
+        __slots__ = ("x","y","z","visibility")
+        def __init__(self, idx):
+            self.x          = sum(h[idx].x          for h in _hist) / len(_hist)
+            self.y          = sum(h[idx].y          for h in _hist) / len(_hist)
+            self.z          = sum(h[idx].z          for h in _hist) / len(_hist)
+            self.visibility = sum(h[idx].visibility for h in _hist) / len(_hist)
+    class _AvgLMs:
+        def __getitem__(self, idx): return _AvgLM(idx)
+    lms = _AvgLMs()
+
     out["detected"] = True
     out["engine"]   = "mediapipe_pose"
+    out["avg_frames"] = len(_hist)   # how many frames averaged
 
     def g(idx): return lms[idx]
     def px(idx): return (g(idx).x * w, g(idx).y * h)
@@ -1184,16 +1202,17 @@ def analyze_front(image, mode="laptop", tier="standard"):
         _yaw = out["head_pose"]["yaw"] if out["head_pose"] else 0.0
         dist_cm  = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw)
         out["engine"]    = "mediapipe_pose+facemesh"
-        # Eye strain (Elite only — iris tracking)
-        if tier in ("elite", "premium"):
+        # Eye strain — all paid tiers (iris tracking via FaceMesh)
+        if tier in ("elite", "premium", "professional", "pro", "business"):
             blink_data = analyze_blink_rate(face_lms, w, h, uid=g.uid if hasattr(g, "uid") else None)
             out["eye_strain"] = blink_data
 
     # Fallback distance
     if dist_cm is None:
-        sh_width_px = dist2d(l_sh, r_sh)
-        focal = 600 * (w / 640)
-        dist_cm = round((40.0 * focal) / max(sh_width_px, 1), 1)
+        # Fresh shoulder width for distance fallback (not the normalized sh_width_px)
+        _sh_w_fallback = dist2d(l_sh, r_sh)
+        focal   = 600 * (w / 640)
+        dist_cm = round((40.0 * focal) / max(_sh_w_fallback, 1), 1)
         dist_cm = max(20, min(150, dist_cm))
 
     lo, hi = (50, 80) if mode == "laptop" else (60, 90)
@@ -1217,10 +1236,10 @@ def analyze_front(image, mode="laptop", tier="standard"):
         # is overestimated. Correct proportionally.
         # Typical laptop: camera ~15° below eye → adds ~4-6° apparent neck lean
         if mode == "laptop" and pitch > 5:
-            # camera tilt correction: ~0.35° neck correction per 1° pitch
             cam_pitch_correction = min(pitch * 0.35, 8.0)
             neck_lean = max(0.0, neck_lean - cam_pitch_correction)
-            neck_sc   = score_m(neck_lean, 0, 7, 20)  # recompute after correction
+            # Recompute with shoulder-normalized thresholds (not fixed 7/20)
+            neck_sc   = score_m(neck_lean, 0, neck_ok_adj, neck_bad_adj)
 
         # ── Head pose score: pitch + yaw + roll combined ──────────
         # pitch = forward/back, yaw = left/right, roll = tilt
@@ -1268,14 +1287,22 @@ def analyze_front(image, mode="laptop", tier="standard"):
 
     # ── Wrist angle ────────────────────────────────────────────────
     wrist_sc = None
-    if tier in ("professional","elite","pro","premium") and len(lms) > PL.R_WRIST:
+    if tier in ("professional","elite","pro","premium","business") and len(_hist[0]) > PL.R_WRIST if _hist else False:
         try:
-            l_elbow = px(PL.L_ELBOW); r_elbow = px(PL.R_ELBOW)
-            l_wrist = px(PL.L_WRIST); r_wrist = px(PL.R_WRIST)
-            l_wrist_angle = angle_horiz(l_elbow, l_wrist)
-            r_wrist_angle = angle_horiz(r_elbow, r_wrist)
-            wrist_angle   = (l_wrist_angle + r_wrist_angle) / 2
-            wrist_sc      = score_m(wrist_angle, 0, 10, 25)
+            # Visibility gate: both elbows must be visible for accurate wrist angle
+            vis_l_elbow = g(PL.L_ELBOW).visibility
+            vis_r_elbow = g(PL.R_ELBOW).visibility
+            vis_l_wrist = g(PL.L_WRIST).visibility
+            vis_r_wrist = g(PL.R_WRIST).visibility
+            elbow_ok = vis_l_elbow > 0.5 and vis_r_elbow > 0.5
+            wrist_ok = vis_l_wrist > 0.5 and vis_r_wrist > 0.5
+            if elbow_ok and wrist_ok:
+                l_elbow = px(PL.L_ELBOW); r_elbow = px(PL.R_ELBOW)
+                l_wrist = px(PL.L_WRIST); r_wrist = px(PL.R_WRIST)
+                l_wrist_angle = angle_horiz(l_elbow, l_wrist)
+                r_wrist_angle = angle_horiz(r_elbow, r_wrist)
+                wrist_angle   = (l_wrist_angle + r_wrist_angle) / 2
+                wrist_sc      = score_m(wrist_angle, 0, 10, 25)
             out["metrics"]["wrist_angle"] = {
                 "value": round(wrist_angle, 1), "score": wrist_sc,
                 "unit": "°", "label": "Wrist angle (CTD risk)"
@@ -1432,7 +1459,20 @@ def analyze_front(image, mode="laptop", tier="standard"):
     if hp and abs(hp["pitch"]) > 20:
         out["alerts"].append(f"Head pitched {round(hp['pitch'],1)}° — {'raise your monitor' if hp['pitch'] < 0 else 'lower your monitor'}")
 
-    grade_str = ("Excellent" if overall >= 85 else "Good" if overall >= 70 else "Fair — needs attention" if overall >= 55 else "Poor — correct now")
+    # ── Alert cleanup: deduplicate + sort by severity + cap at 5 ──
+    seen = set()
+    deduped = []
+    for alert in out["alerts"]:
+        key = alert[:30]   # first 30 chars as dedup key
+        if key not in seen:
+            seen.add(key)
+            deduped.append(alert)
+    # Severe (⚠️) first, then informational
+    deduped.sort(key=lambda a: (0 if a.startswith("⚠️") else 1))
+    out["alerts"] = deduped[:5]   # max 5 alerts — avoid overwhelming user
+
+    grade_str = ("Excellent" if overall >= 85 else "Good" if overall >= 70
+                 else "Fair — needs attention" if overall >= 55 else "Poor — correct now")
     out["recommendations"] = [
         f"Overall: {grade_str} ({overall}/100)",
         f"Screen distance: {'✓ Optimal' if lo <= dist_cm <= hi else f'Needs adjustment — move to {lo}–{hi}cm'} (current: {round(dist_cm)}cm)",
@@ -8902,6 +8942,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
