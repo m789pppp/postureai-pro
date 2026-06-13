@@ -2359,17 +2359,46 @@ def analyze():
             else:
                 clear_risk(uid)
 
-        sid = data.get("session_id","default")
+        sid = data.get("session_id", "default")
         s = sessions.setdefault(sid, {
-            "score_history":[],"alerts":[],"mode":mode,"tier":tier,
-            "start":time.time(),"frames":0,"good":0,"last_ai":0,"engine":"unknown"
+            "score_history": [], "alerts": [], "mode": mode, "tier": tier,
+            "start": time.time(), "frames": 0, "good": 0, "last_ai": 0,
+            "engine": "unknown",
+            # Quality tracking
+            "blurry_count": 0,   # frames that were too blurry to analyze
+            "total_frames": 0,   # all frames including blurry/undetected
+            "vis_sum":     0.0,   # sum of per-frame avg landmark visibility
+            "vis_count":   0,     # frames with visibility data
+            "conf_sum":    0.0,   # sum of per-frame confidence scores
+            "conf_count":  0,     # frames with confidence data
         })
-        _s_dirty = False  # track if we need to write back to Redis
+        _s_dirty = False
+        # Always count total frames (including blurry/undetected)
+        s["total_frames"] = s.get("total_frames", 0) + 1
+        if result.get("blurry_frame"):
+            s["blurry_count"] = s.get("blurry_count", 0) + 1
+
         if result["detected"] and result["score"] > 0:
             s.setdefault("score_history", []).append(result["score"])
             s["frames"] = s.get("frames", 0) + 1
             if result["score"] >= 65: s["good"] = s.get("good", 0) + 1
-            s["engine"] = result.get("engine","")
+            s["engine"] = result.get("engine", "")
+
+            # Accumulate visibility — from per-metric confidence data
+            conf_detail = result.get("metrics", {}).get("_confidence", {})
+            if conf_detail:
+                vis_vals = [v for k, v in conf_detail.items()
+                            if k in ("neck","tilt","sh","spine") and isinstance(v, (int,float))]
+                if vis_vals:
+                    s["vis_sum"]   = s.get("vis_sum", 0.0)   + sum(vis_vals) / len(vis_vals)
+                    s["vis_count"] = s.get("vis_count", 0)   + 1
+
+            # Accumulate confidence score
+            frame_conf = result.get("confidence", 0)
+            if frame_conf > 0:
+                s["conf_sum"]   = s.get("conf_sum", 0.0) + frame_conf
+                s["conf_count"] = s.get("conf_count", 0)  + 1
+
             _s_dirty = True
 
             # ── Temporal smoothing: weighted avg of last 3 frames ──
@@ -2443,6 +2472,10 @@ def analyze():
         ms = round((time.perf_counter() - t0) * 1000)
         result["processing_ms"] = ms
         _record_latency(ms)  # rolling latency tracker for /api/health/detailed
+
+        # Include live quality estimate in every 10th frame (avoid overhead)
+        if s.get("frames", 0) % 10 == 0 and s.get("total_frames", 0) >= 10:
+            result["session_quality"] = compute_session_quality(s)
         # Cache last valid (non-blurry) result for blur-frame fallback
         if result.get("detected") and not result.get("blurry_frame"):
             try:
@@ -2604,11 +2637,19 @@ def get_session(sid):
         s = sessions.get(sid)
         if not s: return jsonify({"error":"Session not found"}), 404
         h = s["score_history"]
+        quality = compute_session_quality(s)
         return jsonify({
-            "session_id": sid, "avg_score": round(sum(h)/len(h)) if h else 0,
-            "frames": s["frames"], "good_pct": round(s["good"]/max(s["frames"],1)*100),
-            "alerts": len(s["alerts"]), "duration_s": int(time.time()-s["start"]),
-            "mode": s["mode"], "tier": s.get("tier","standard"), "engine": s.get("engine",""),
+            "session_id":  sid,
+            "avg_score":   round(sum(h)/len(h)) if h else 0,
+            "frames":      s["frames"],
+            "good_pct":    round(s["good"] / max(s["frames"], 1) * 100),
+            "alerts":      len(s["alerts"]),
+            "duration_s":  int(time.time() - s["start"]),
+            "mode":        s["mode"],
+            "tier":        s.get("tier", "standard"),
+            "engine":      s.get("engine", ""),
+            # Quality metrics
+            "quality":     quality,
         })
     except Exception as e:
         return safe_error(e)
@@ -4729,6 +4770,77 @@ def health_detailed():
 
 
 # ── Latency tracking: called from analyze route ───────────────────
+def compute_session_quality(s: dict) -> dict:
+    """
+    Compute session quality score (0–100) from accumulated frame metrics.
+    Components:
+      - Detection rate:   % of frames where pose was detected        (30%)
+      - Blur rate:        % of non-blurry frames                     (20%)
+      - Avg visibility:   mean landmark visibility across frames      (25%)
+      - Avg confidence:   mean per-frame analysis confidence          (25%)
+
+    Grade:
+      90–100 = Excellent (full trust in results)
+      75–89  = Good
+      60–74  = Fair (some lighting/angle issues)
+      < 60   = Poor (results less reliable)
+    """
+    total   = max(s.get("total_frames", 1), 1)
+    detected = s.get("frames", 0)
+    blurry  = s.get("blurry_count", 0)
+
+    # 1. Detection rate (0–100)
+    detection_sc = min(100, int(detected / total * 100))
+
+    # 2. Blur rate — frames that were clear enough to analyze
+    clear_frames = total - blurry
+    blur_sc = min(100, int(clear_frames / total * 100))
+
+    # 3. Average visibility confidence (0–100, already 0–1 scale)
+    vis_count = s.get("vis_count", 0)
+    vis_sc = int((s.get("vis_sum", 0.0) / max(vis_count, 1)) * 100) if vis_count > 0 else 50
+
+    # 4. Average analysis confidence (already 0–96 range)
+    conf_count = s.get("conf_count", 0)
+    conf_raw   = s.get("conf_sum", 0.0) / max(conf_count, 1) if conf_count > 0 else 50
+    conf_sc    = min(100, int(conf_raw))  # already 0–96 scale, normalize to 100
+
+    # Weighted combination
+    quality = int(round(
+        detection_sc * 0.30 +
+        blur_sc      * 0.20 +
+        vis_sc       * 0.25 +
+        conf_sc      * 0.25
+    ))
+    quality = max(0, min(100, quality))
+
+    grade = ("Excellent" if quality >= 90 else
+             "Good"      if quality >= 75 else
+             "Fair"      if quality >= 60 else "Poor")
+
+    issues = []
+    if detection_sc < 70:  issues.append(f"Low detection rate ({detection_sc}%) — check camera angle and lighting")
+    if blur_sc < 80:       issues.append(f"Motion blur detected ({100-blur_sc}% of frames) — keep still during session")
+    if vis_sc < 60:        issues.append("Low landmark visibility — improve lighting or wear contrasting clothing")
+    if conf_sc < 65:       issues.append("Low confidence — full-body visibility recommended")
+
+    return {
+        "quality_score":   quality,
+        "grade":           grade,
+        "components": {
+            "detection_rate": detection_sc,
+            "blur_rate":      blur_sc,
+            "avg_visibility": vis_sc,
+            "avg_confidence": conf_sc,
+        },
+        "total_frames":    total,
+        "detected_frames": detected,
+        "blurry_frames":   blurry,
+        "issues":          issues,
+        "reliable":        quality >= 60,  # flag: can results be trusted?
+    }
+
+
 def _record_latency(ms: float):
     """Append processing_ms to rolling 20-sample list in cache."""
     try:
@@ -8368,6 +8480,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
