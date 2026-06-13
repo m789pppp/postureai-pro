@@ -1007,6 +1007,7 @@ def analyze_blink_rate(face_lms, w, h, uid=None):
     # ── Global in-memory fallback ─────────────────────────────────
     _blink_history.append((now, ear))
     _blink_history = [(t, e) for t, e in _blink_history if now - t < 60]
+    if len(_blink_history) > 300: _blink_history.pop(0)  # hard cap — memory safety
     if len(_blink_history) < 5:
         return None
     blinks = 0
@@ -8901,6 +8902,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
