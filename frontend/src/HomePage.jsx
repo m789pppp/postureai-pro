@@ -1352,44 +1352,41 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
     ];
   },[userRole,atRisk]);
 
-  const tools = useMemo(()=>{
-    const pro   = isPro(tier);
-    const elite = isElite(tier);
-    const isHR  = userRole==="hr_admin"||userRole==="platform_admin";
-    const uid   = user?.uid;
-    const list = [
-      { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم",
-        sub:"Achievements & streaks",
-        onClick:()=>setShowGamification?.(true) },
-      { id:"t-growth",   icon:"🚀", en:"Growth",      ar:"النمو",
-        sub:"Personal growth plan",
-        onClick:()=>setShowGrowthHub?.(true) },
-      { id:"t-coach",    icon:"🤖", en:"AI Coach",    ar:"AI Coach",
-        sub:"AI-powered posture tips", locked:!pro, lockLabel:"PRO",
-        onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
-      { id:"t-reports",  icon:"📋", en:"Reports",     ar:"التقارير",
-        sub:"Monthly PDF report", locked:!pro, lockLabel:"PRO",
-        onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
-      { id:"t-compare",  icon:"📊", en:"Compare",     ar:"مقارنة الجلسات",
-        sub:"Compare sessions over time", locked:!pro, lockLabel:"PRO",
-        onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowSessionComparison?.(true); } else setShowBilling?.(true); }},
-      { id:"t-trend",    icon:"📈", en:"Trend",       ar:"مسار التحسن",
-        sub:"Progress trend chart", locked:!pro, lockLabel:"PRO",
-        onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowTrendChart?.(true); } else setShowBilling?.(true); }},
-      { id:"t-insights", icon:"🧠", en:"AI Insights", ar:"رؤى AI",
-        sub:"Deep AI data analysis", locked:!elite, lockLabel:"ELITE",
-        onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
-      { id:"t-predict",  icon:"🔮", en:"Predictive AI",ar:"AI تنبؤي",
-        sub:"Forecast performance", locked:!elite, lockLabel:"ELITE",
-        onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
-      { id:"t-api",      icon:"🔌", en:"API Market",  ar:"سوق API",
-        sub:"External integrations", locked:!elite, lockLabel:"ELITE",
-        onClick:()=>{ if(elite) setShowAPIMarketplace?.(true); else setShowBilling?.(true); }},
-      { id:"t-wl",       icon:"🏷️", en:"White-label", ar:"علامتي التجارية",
-        sub:"Custom branding", locked:!elite, lockLabel:"ELITE",
-        onClick:()=>{ if(elite) setShowWhiteLabel?.(true); else setShowBilling?.(true); }},
-    ];
-    if(isHR||isAdmin) list.push(
+  const pro   = isPro(tier);
+  const elite = isElite(tier);
+  const isHR  = userRole==="hr_admin"||userRole==="platform_admin";
+  const uid   = user?.uid;
+
+  const tools = [
+    { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم",
+      onClick:()=>setShowGamification?.(true) },
+    { id:"t-growth",   icon:"🚀", en:"Growth",      ar:"النمو",
+      onClick:()=>setShowGrowthHub?.(true) },
+    { id:"t-coach",    icon:"🤖", en:"AI Coach",    ar:"AI Coach",
+      locked:!pro, lockLabel:"PRO",
+      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
+    { id:"t-reports",  icon:"📋", en:"Reports",     ar:"التقارير",
+      locked:!pro, lockLabel:"PRO",
+      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
+    { id:"t-compare",  icon:"📊", en:"Compare",     ar:"مقارنة الجلسات",
+      locked:!pro, lockLabel:"PRO",
+      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowSessionComparison?.(true); } else setShowBilling?.(true); }},
+    { id:"t-trend",    icon:"📈", en:"Trend",       ar:"مسار التحسن",
+      locked:!pro, lockLabel:"PRO",
+      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowTrendChart?.(true); } else setShowBilling?.(true); }},
+    { id:"t-insights", icon:"🧠", en:"AI Insights", ar:"رؤى AI",
+      locked:!elite, lockLabel:"ELITE",
+      onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
+    { id:"t-predict",  icon:"🔮", en:"Predictive AI",ar:"AI تنبؤي",
+      locked:!elite, lockLabel:"ELITE",
+      onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
+    { id:"t-api",      icon:"🔌", en:"API Market",  ar:"سوق API",
+      locked:!elite, lockLabel:"ELITE",
+      onClick:()=>{ if(elite) setShowAPIMarketplace?.(true); else setShowBilling?.(true); }},
+    { id:"t-wl",       icon:"🏷️", en:"White-label", ar:"علامتي التجارية",
+      locked:!elite, lockLabel:"ELITE",
+      onClick:()=>{ if(elite) setShowWhiteLabel?.(true); else setShowBilling?.(true); }},
+    ...(isHR||isAdmin ? [
       { id:"t-workforce", icon:"🏭", en:"Workforce",     ar:"قوى العمل",
         onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
       { id:"t-success",   icon:"💡", en:"Cust. Success", ar:"نجاح العملاء",
@@ -1398,14 +1395,12 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         onClick:()=>setShowChurnPrediction?.(true) },
       { id:"t-audit",     icon:"📜", en:"Audit Log",     ar:"سجل المراجعة",
         onClick:()=>setShowAuditSystem?.(true) },
-    );
-    if(elite||isAdmin) list.push(
+    ] : []),
+    ...(elite||isAdmin ? [
       { id:"t-tenant", icon:"🏢", en:"Multi-tenant", ar:"متعدد المستأجرين",
         onClick:()=>setShowMultiTenant?.(true) },
-    );
-    return list;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[tier, userRole, isAdmin, user?.uid]);
+    ] : []),
+  ];
 
   const [hov, setHov] = useState(null);
 
