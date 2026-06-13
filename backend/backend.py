@@ -1004,7 +1004,8 @@ def compute_ear(face_lms, w, h):
         return None
 
 # Per-session blink history — keyed by uid:session to avoid cross-contamination
-_blink_sessions: dict = {}   # {key: [(timestamp, ear), ...]}
+_blink_sessions: dict      = {}   # {key: [(timestamp, ear), ...]}
+_ear_baselines:  dict      = {}   # {key: float} — per-user open-eye EAR baseline
 _blink_sessions_last_clean = 0.0
 
 def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
@@ -1047,14 +1048,27 @@ def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
     if len(buf) < 5:
         return None
 
-    # Count blinks using EAR threshold with hysteresis
+    # ── Adaptive EAR threshold ───────────────────────────────────
+    # Baseline = average of top-40% EAR values (open-eye moments)
+    # Blink threshold = baseline * 0.60 (eye 40% closed = blink)
+    ear_vals = [e for _, e in buf]
+    if len(ear_vals) >= 10:
+        sorted_ears = sorted(ear_vals, reverse=True)
+        baseline = sum(sorted_ears[:max(1, len(sorted_ears)//3)]) / max(1, len(sorted_ears)//3)
+        _ear_baselines[buf_key] = baseline
+    else:
+        baseline = _ear_baselines.get(buf_key, 0.28)  # default if not enough data yet
+
+    close_thresh = baseline * 0.60   # blink = eye 40% closed
+    open_thresh  = baseline * 0.75   # hysteresis gap
+
     blinks = 0
     was_closed = False
     for _, e in buf:
-        if e < 0.22 and not was_closed:   # tighter threshold (was 0.25)
+        if e < close_thresh and not was_closed:
             blinks += 1
             was_closed = True
-        elif e >= 0.27:                    # hysteresis gap prevents double-counting
+        elif e >= open_thresh:
             was_closed = False
 
     # Calibrate to 60s window
@@ -1172,7 +1186,7 @@ def head_pose_from_face(face_lms, w, h):
         return None
 
 # ── FRONT ANALYSIS ─────────────────────────────────────────────────
-def analyze_front(image, mode="laptop", tier="standard"):
+def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     _ensure_models()  # lazy-load MediaPipe on first call
     h, w = image.shape[:2]
     rgb   = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -1184,7 +1198,7 @@ def analyze_front(image, mode="laptop", tier="standard"):
         "eye_strain": None
     }
 
-    pose_model = POSE_FULL if tier in ("professional", "elite", "pro", "premium") else POSE_LITE
+    pose_model = POSE_FULL if tier in ("professional", "elite", "pro", "premium", "business") else POSE_LITE
     pose_result = pose_model.process(rgb)
     face_result = FACE_MESH.process(rgb)
 
@@ -1193,26 +1207,35 @@ def analyze_front(image, mode="laptop", tier="standard"):
         return analyze_front_cascade(image, mode, out)
 
     # ── Landmark averaging: reduce ±3° jitter to ±1° ─────────────
-    _sid  = out.get("session_id", "front_default")
+    _sid  = session_id or out.get("session_id", "front_default")
     _raw  = pose_result.pose_landmarks.landmark
     _hist = _lm_history.setdefault(_sid, [])
     _hist.append(_raw)
     if len(_hist) > 3: _hist.pop(0)
 
+    # Exponential weighted moving average (α=0.6 recent, 0.3 prev, 0.1 oldest)
+    # Better than simple avg: recent frames matter more, stabilizes during movement
+    _w = [0.60, 0.30, 0.10][:len(_hist)]
+    _w_sum = sum(_w)
+    _w_norm = [wi / _w_sum for wi in _w]  # normalize to sum=1
+
     class _AvgLM:
         __slots__ = ("x","y","z","visibility")
         def __init__(self, idx):
-            self.x          = sum(h[idx].x          for h in _hist) / len(_hist)
-            self.y          = sum(h[idx].y          for h in _hist) / len(_hist)
-            self.z          = sum(h[idx].z          for h in _hist) / len(_hist)
-            self.visibility = sum(h[idx].visibility for h in _hist) / len(_hist)
+            # Weighted: most recent frame has highest weight
+            frames_rev = list(reversed(_hist))  # [newest, ..., oldest]
+            weights    = _w_norm[:len(frames_rev)]
+            self.x          = sum(frames_rev[i][idx].x          * weights[i] for i in range(len(frames_rev)))
+            self.y          = sum(frames_rev[i][idx].y          * weights[i] for i in range(len(frames_rev)))
+            self.z          = sum(frames_rev[i][idx].z          * weights[i] for i in range(len(frames_rev)))
+            self.visibility = sum(frames_rev[i][idx].visibility * weights[i] for i in range(len(frames_rev)))
     class _AvgLMs:
         def __getitem__(self, idx): return _AvgLM(idx)
     lms = _AvgLMs()
 
-    out["detected"] = True
-    out["engine"]   = "mediapipe_pose"
-    out["avg_frames"] = len(_hist)   # how many frames averaged
+    out["detected"]   = True
+    out["engine"]     = "mediapipe_pose"
+    out["avg_frames"] = len(_hist)   # how many frames averaged (max 3)
 
     def g(idx): return lms[idx]
     def px(idx): return (g(idx).x * w, g(idx).y * h)
@@ -1565,6 +1588,38 @@ def analyze_front(image, mode="laptop", tier="standard"):
     if hp and abs(hp["pitch"]) > 20:
         out["alerts"].append(f"Head pitched {round(hp['pitch'],1)}° — {'raise your monitor' if hp['pitch'] < 0 else 'lower your monitor'}")
 
+    # ── Hip height asymmetry ─────────────────────────────────────
+    # Measures Y-coordinate difference between left and right hip
+    # >3% of frame height = significant asymmetry (spinal compression risk)
+    hip_y_diff = abs(l_hip[1] - r_hip[1]) / max(h, 1) * 100
+    if hip_y_diff > 5.0:
+        higher_side = "left" if l_hip[1] < r_hip[1] else "right"
+        out["alerts"].append(f"Hip asymmetry — {higher_side} hip {round(hip_y_diff, 1)}% higher. Check seat levelness.")
+        out["metrics"]["hip_asymmetry"] = {
+            "value": round(hip_y_diff, 1), "score": max(5, int(100 - hip_y_diff * 8)),
+            "unit": "%", "label": "Hip height asymmetry"
+        }
+    elif hip_y_diff > 2.5:
+        out["metrics"]["hip_asymmetry"] = {
+            "value": round(hip_y_diff, 1), "score": max(30, int(100 - hip_y_diff * 8)),
+            "unit": "%", "label": "Hip height asymmetry"
+        }
+
+    # ── Neck flexion vs extension distinction ────────────────────
+    # pitch from solvePnP: negative = looking down (flexion), positive = up (extension)
+    # Forward head: neck lean UP + pitch negative = computer neck (most common)
+    # Looking up: neck lean + pitch positive = monitor too high
+    if hp and neck_lean > 8:
+        pitch = hp.get("pitch", 0)
+        if pitch < -10:
+            out["metrics"]["neck_lean"]["label"] = "Neck flexion (looking down)"
+            out["metrics"]["neck_lean"]["posture_type"] = "flexion"
+        elif pitch > 10:
+            out["metrics"]["neck_lean"]["label"] = "Neck extension (looking up)"
+            out["metrics"]["neck_lean"]["posture_type"] = "extension"
+        else:
+            out["metrics"]["neck_lean"]["posture_type"] = "lateral"
+
     # ── Alert cleanup: deduplicate + sort by severity + cap at 5 ──
     seen = set()
     deduped = []
@@ -1604,7 +1659,7 @@ def analyze_front(image, mode="laptop", tier="standard"):
     return out
 
 # ── SIDE ANALYSIS ──────────────────────────────────────────────────
-def analyze_side(image, tier="standard"):
+def analyze_side(image, tier="standard", session_id=None):
     """
     Side-camera posture analysis — full parity with analyze_front.
     Improvements over old version:
@@ -1635,18 +1690,24 @@ def analyze_side(image, tier="standard"):
     # ── Landmark averaging (same as analyze_front) ────────────────
     _sid  = out.get("session_id", "side_default")
     _raw  = pose_result.pose_landmarks.landmark
-    _key  = _sid + "_side"
+    _key  = (session_id or _sid) + "_side"
     _hist = _lm_history.setdefault(_key, [])
     _hist.append(_raw)
     if len(_hist) > 3: _hist.pop(0)
 
+    _w_s = [0.60, 0.30, 0.10][:len(_hist)]
+    _w_s_sum  = sum(_w_s)
+    _w_s_norm = [wi / _w_s_sum for wi in _w_s]
+
     class _AvgLM:
         __slots__ = ("x","y","z","visibility")
         def __init__(self, idx):
-            self.x          = sum(hh[idx].x          for hh in _hist) / len(_hist)
-            self.y          = sum(hh[idx].y          for hh in _hist) / len(_hist)
-            self.z          = sum(hh[idx].z          for hh in _hist) / len(_hist)
-            self.visibility = sum(hh[idx].visibility for hh in _hist) / len(_hist)
+            fr = list(reversed(_hist))
+            ws = _w_s_norm[:len(fr)]
+            self.x          = sum(fr[i][idx].x          * ws[i] for i in range(len(fr)))
+            self.y          = sum(fr[i][idx].y          * ws[i] for i in range(len(fr)))
+            self.z          = sum(fr[i][idx].z          * ws[i] for i in range(len(fr)))
+            self.visibility = sum(fr[i][idx].visibility * ws[i] for i in range(len(fr)))
     class _AvgLMs:
         def __getitem__(self, idx): return _AvgLM(idx)
     lms = _AvgLMs()
@@ -2400,8 +2461,8 @@ def enhance_low_light(img_bgr: np.ndarray) -> tuple:
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     brightness = float(np.mean(gray))
 
-    if brightness >= 100:
-        return img_bgr, brightness, False  # Good light — skip
+    if brightness >= 120:
+        return img_bgr, brightness, False  # Good light — skip CLAHE (saves ~8ms/frame)
 
     enhanced = img_bgr.copy()
 
@@ -2536,7 +2597,12 @@ def analyze():
         img_to_analyze, brightness, was_enhanced = enhance_low_light(img)
 
         calib = data.get("calibration")   # personal calibration from Firestore
-        result = analyze_side(img_to_analyze, tier) if mode == "side" else analyze_front(img_to_analyze, mode, tier)
+        # Pass session_id into analysis so landmark averaging uses correct per-session key
+        _session_id_for_analysis = data.get("session_id", f"{uid}:default")
+        if mode == "side":
+            result = analyze_side(img_to_analyze, tier, session_id=_session_id_for_analysis)
+        else:
+            result = analyze_front(img_to_analyze, mode, tier, session_id=_session_id_for_analysis)
         # ── Apply personal calibration with asymmetric thresholds ──
         # Asymmetric: if user's natural lean is toward right (+),
         # we widen the ok/bad zone on the right side and tighten on left.
@@ -2655,6 +2721,36 @@ def analyze():
             s["frames"] = s.get("frames", 0) + 1
             if result["score"] >= 65: s["good"] = s.get("good", 0) + 1
             s["engine"] = result.get("engine", "")
+
+            # ── Fatigue detection: score trend within session ────
+            hist_scores = s["score_history"]
+            if len(hist_scores) >= 10:
+                recent_10  = hist_scores[-10:]
+                recent_avg = sum(recent_10) / 10
+                # Compare to session first-quarter average (baseline when fresh)
+                q1_len = max(5, len(hist_scores) // 4)
+                q1_avg = sum(hist_scores[:q1_len]) / q1_len
+                drop   = q1_avg - recent_avg
+
+                if drop >= 8 and recent_avg < 70:
+                    result["fatigue_signal"] = {
+                        "detected":    True,
+                        "drop_pts":    round(drop, 1),
+                        "q1_avg":      round(q1_avg, 1),
+                        "recent_avg":  round(recent_avg, 1),
+                        "severity":    "high"   if drop >= 15 else "moderate",
+                        "message":     "Fatigue detected — posture declining. Take a 5-min break.",
+                    }
+                    if "⚠️ Fatigue" not in " ".join(result.get("alerts", [])):
+                        result.setdefault("alerts", []).insert(0,
+                            f"⚠️ Fatigue — posture dropped {round(drop)}pts this session. Take a break.")
+                elif drop >= 4:
+                    result["fatigue_signal"] = {
+                        "detected":   False,
+                        "drop_pts":   round(drop, 1),
+                        "severity":   "early",
+                        "message":    "Early fatigue — posture gradually declining.",
+                    }
 
             # Accumulate visibility — from per-metric confidence data
             conf_detail = result.get("metrics", {}).get("_confidence", {})
@@ -9173,6 +9269,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
