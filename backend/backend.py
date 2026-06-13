@@ -939,12 +939,24 @@ def angle_horiz(p1, p2):
     return abs(math.degrees(math.atan2(abs(dy), abs(dx))))
 
 def angle_3pt(a, b, c):
-    v1 = np.array([a[0]-b[0], a[1]-b[1]], dtype=float)
-    v2 = np.array([c[0]-b[0], c[1]-b[1]], dtype=float)
-    n1, n2 = np.linalg.norm(v1), np.linalg.norm(v2)
+    """Angle at point b in triangle abc — pure Python, no numpy overhead."""
+    v1x, v1y = a[0]-b[0], a[1]-b[1]
+    v2x, v2y = c[0]-b[0], c[1]-b[1]
+    n1 = math.sqrt(v1x*v1x + v1y*v1y)
+    n2 = math.sqrt(v2x*v2x + v2y*v2y)
     if n1 < 0.001 or n2 < 0.001: return 90.0
-    cos_a = np.dot(v1, v2) / (n1 * n2)
-    return float(math.degrees(math.acos(max(-1.0, min(1.0, cos_a)))))
+    cos_a = (v1x*v2x + v1y*v2y) / (n1 * n2)
+    return math.degrees(math.acos(max(-1.0, min(1.0, cos_a))))
+
+def angle_3pt_3d(a, b, c):
+    """3D angle at b using landmark (x,y,z) — more accurate for wrist/elbow."""
+    v1x,v1y,v1z = a[0]-b[0], a[1]-b[1], a[2]-b[2]
+    v2x,v2y,v2z = c[0]-b[0], c[1]-b[1], c[2]-b[2]
+    n1 = math.sqrt(v1x*v1x + v1y*v1y + v1z*v1z)
+    n2 = math.sqrt(v2x*v2x + v2y*v2y + v2z*v2z)
+    if n1 < 0.001 or n2 < 0.001: return 90.0
+    cos_a = (v1x*v2x + v1y*v2y + v1z*v2z) / (n1 * n2)
+    return math.degrees(math.acos(max(-1.0, min(1.0, cos_a))))
 
 def score_m(v, ideal, ok, bad):
     """
@@ -983,6 +995,45 @@ def cam_mat(w, h):
 _blink_history = []  # (timestamp, ear_ratio)
 _lm_history     = {}   # {session_id: [lm_array,...]} last 3 frames for jitter reduction
 _celery_task    = None  # lazy Celery singleton
+
+def compute_gaze(face_lms, w, h):
+    """
+    Estimate gaze direction from iris position within eye socket.
+    Returns (h_offset, v_offset) normalized -1..+1.
+    h_offset: +1=looking right, -1=looking left
+    v_offset: +1=looking down, -1=looking up
+    Returns None if iris not visible.
+    """
+    try:
+        def pt(i): return (face_lms.landmark[i].x*w, face_lms.landmark[i].y*h)
+        # Left iris center (468) within left eye socket (33=inner, 133=outer, 159=top, 145=bot)
+        l_iris  = pt(468)
+        l_inner = pt(33);  l_outer = pt(133)
+        l_top   = pt(159); l_bot   = pt(145)
+        l_cx = (l_inner[0]+l_outer[0])/2
+        l_cy = (l_top[1]+l_bot[1])/2
+        l_hw = max(abs(l_outer[0]-l_inner[0])/2, 1)
+        l_hh = max(abs(l_bot[1]-l_top[1])/2, 1)
+        l_gx = (l_iris[0]-l_cx) / l_hw   # -1..+1
+        l_gy = (l_iris[1]-l_cy) / l_hh
+
+        # Right iris center (473) within right eye socket
+        r_iris  = pt(473)
+        r_inner = pt(362); r_outer = pt(263)
+        r_top   = pt(386); r_bot   = pt(374)
+        r_cx = (r_inner[0]+r_outer[0])/2
+        r_cy = (r_top[1]+r_bot[1])/2
+        r_hw = max(abs(r_outer[0]-r_inner[0])/2, 1)
+        r_hh = max(abs(r_bot[1]-r_top[1])/2, 1)
+        r_gx = (r_iris[0]-r_cx) / r_hw
+        r_gy = (r_iris[1]-r_cy) / r_hh
+
+        gaze_h = (l_gx + r_gx) / 2   # + = looking right
+        gaze_v = (l_gy + r_gy) / 2   # + = looking down
+        return {"h": round(gaze_h,3), "v": round(gaze_v,3),
+                "looking_at_screen": abs(gaze_h) < 0.35 and abs(gaze_v) < 0.35}
+    except Exception:
+        return None
 
 def compute_ear(face_lms, w, h):
     """Eye Aspect Ratio for blink detection and eye strain."""
@@ -1420,12 +1471,19 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             elbow_ok = vis_l_elbow > 0.5 and vis_r_elbow > 0.5
             wrist_ok = vis_l_wrist > 0.5 and vis_r_wrist > 0.5
             if elbow_ok and wrist_ok:
-                l_elbow = px(PL.L_ELBOW); r_elbow = px(PL.R_ELBOW)
-                l_wrist = px(PL.L_WRIST); r_wrist = px(PL.R_WRIST)
-                l_wrist_angle = angle_horiz(l_elbow, l_wrist)
-                r_wrist_angle = angle_horiz(r_elbow, r_wrist)
-                wrist_angle   = (l_wrist_angle + r_wrist_angle) / 2
-                wrist_sc      = score_m(wrist_angle, 0, 10, 25)
+                # 3D wrist angle using Z depth from MediaPipe
+                def px3(idx):
+                    lm = g(idx)
+                    return (lm.x*w, lm.y*h, lm.z*w)  # z scaled by w (MediaPipe convention)
+                l_sh3 = px3(PL.L_SHOULDER); r_sh3 = px3(PL.R_SHOULDER)
+                l_el3 = px3(PL.L_ELBOW);   r_el3 = px3(PL.R_ELBOW)
+                l_wr3 = px3(PL.L_WRIST);   r_wr3 = px3(PL.R_WRIST)
+                # Upper arm vector for reference plane
+                l_wrist_angle = angle_3pt_3d(l_sh3, l_el3, l_wr3)
+                r_wrist_angle = angle_3pt_3d(r_sh3, r_el3, r_wr3)
+                # Ideal elbow angle = 90°, wrist deviation from straight
+                wrist_angle = ((180-l_wrist_angle) + (180-r_wrist_angle)) / 2
+                wrist_sc    = score_m(wrist_angle, 0, 10, 25)
             out["metrics"]["wrist_angle"] = {
                 "value": round(wrist_angle, 1), "score": wrist_sc,
                 "unit": "°", "label": "Wrist angle (CTD risk)"
@@ -1619,6 +1677,75 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             out["metrics"]["neck_lean"]["posture_type"] = "extension"
         else:
             out["metrics"]["neck_lean"]["posture_type"] = "lateral"
+
+    # ── Posture symmetry score ────────────────────────────────────
+    # Compare left vs right landmark heights for imbalance detection
+    # High asymmetry → possible scoliosis pattern or bad chair setup
+    try:
+        l_sh_y = g(PL.L_SHOULDER).y * h
+        r_sh_y = g(PL.R_SHOULDER).y * h
+        l_hip_y = g(PL.L_HIP).y * h
+        r_hip_y = g(PL.R_HIP).y * h
+        sh_asym  = abs(l_sh_y - r_sh_y) / h * 100   # % of frame height
+        hip_asym = abs(l_hip_y - r_hip_y) / h * 100
+
+        # Combined symmetry score
+        max_asym = max(sh_asym, hip_asym)
+        symmetry_sc = score_m(max_asym, 0, 1.5, 5.0)  # ok=1.5% bad=5% of frame
+
+        out["metrics"]["symmetry"] = {
+            "value":        round(max_asym, 2),
+            "score":        symmetry_sc,
+            "unit":         "%",
+            "label":        "Body symmetry",
+            "sh_asym":      round(sh_asym, 2),
+            "hip_asym":     round(hip_asym, 2),
+        }
+        if max_asym > 5.0:
+            out["alerts"].append(f"⚠️ Significant body asymmetry {round(max_asym,1)}% — possible scoliosis pattern or uneven chair setup")
+        elif max_asym > 2.5:
+            out["alerts"].append(f"Body asymmetry {round(max_asym,1)}% — check armrest heights and sitting position")
+    except Exception:
+        pass
+
+    # ── Gaze direction (if FaceMesh available) ────────────────────
+    if face_result and face_result.multi_face_landmarks:
+        try:
+            _gaze = compute_gaze(face_result.multi_face_landmarks[0], w, h)
+            if _gaze:
+                out["metrics"]["gaze"] = {
+                    "value": round(math.sqrt(_gaze["h"]**2 + _gaze["v"]**2), 3),
+                    "score": score_m(abs(_gaze["h"])*100, 0, 20, 40),
+                    "unit":  "offset",
+                    "label": "Gaze direction",
+                    "h":     _gaze["h"],
+                    "v":     _gaze["v"],
+                    "on_screen": _gaze["looking_at_screen"],
+                }
+                if not _gaze["looking_at_screen"]:
+                    out["alerts"].append(f"Eyes not focused on screen — gaze offset h={_gaze['h']:+.2f} v={_gaze['v']:+.2f}")
+        except Exception:
+            pass
+
+    # ── Sitting duration fatigue model ────────────────────────────
+    # If session has been running > 45min, flag fatigue risk
+    try:
+        _sid_dur = out.get("session_id", "")
+        _sess_start = sessions.get(_sid_dur, {}).get("start", time.time()) if "sessions" in dir() else time.time()
+        _duration_min = (time.time() - _sess_start) / 60
+        if _duration_min > 45:
+            fatigue_factor = min(1.0, (_duration_min - 45) / 60)
+            out["fatigue_risk"] = {
+                "duration_min":   round(_duration_min),
+                "fatigue_factor": round(fatigue_factor, 2),
+                "risk":           "high" if fatigue_factor > 0.5 else "moderate",
+            }
+            if fatigue_factor > 0.5:
+                out["alerts"].append(f"⚠️ Seated {round(_duration_min)}min — take a standing break (every 45-60min)")
+            elif fatigue_factor > 0.2:
+                out["alerts"].append(f"Seated {round(_duration_min)}min — consider a short break soon")
+    except Exception:
+        pass
 
     # ── Alert cleanup: deduplicate + sort by severity + cap at 5 ──
     seen = set()
@@ -1922,6 +2049,14 @@ def analyze_front_cascade(image, mode, out):
     dist_cm = max(20, min(150, dist_cm))
 
     lo, hi = (50, 80) if mode == "laptop" else (60, 90)
+    # ── Adaptive focal from face size (better than fixed 600) ────
+    # Standard face width ~14cm. Reference: 640px wide frame at 65cm → face ~140px
+    ref_face_pct = 0.22   # ~22% of frame width at reference distance
+    face_pct     = fw / max(w, 1)
+    if face_pct > 0.05:   # face large enough to estimate
+        adaptive_focal = 600 * (ref_face_pct / face_pct) * (w / 640)
+        dist_cm = round((14.0 * adaptive_focal) / max(fw, 1), 1)
+        dist_cm = max(20, min(150, dist_cm))
     # ── SAME dist_sc logic as analyze_front ──────────────────────
     if   lo <= dist_cm <= hi:                                dist_sc = 100
     elif (lo - 8)  <= dist_cm <= (hi + 12):                 dist_sc = 80
@@ -2769,20 +2904,29 @@ def analyze():
 
             _s_dirty = True
 
-            # ── Temporal smoothing: weighted avg of last 3 frames ──
-            # Prevents single-frame outliers from affecting displayed score
-            # Weights: current=0.50, prev=0.30, oldest=0.20
-            hist = s["score_history"]
-            if len(hist) >= 3:
-                smoothed_local = int(round(
-                    hist[-1] * 0.50 + hist[-2] * 0.30 + hist[-3] * 0.20
-                ))
-            elif len(hist) == 2:
-                smoothed_local = int(round(hist[-1] * 0.65 + hist[-2] * 0.35))
+            # ── EWMA score smoothing (α=0.30) ──────────────────────
+            # Exponential Weighted Moving Average — more responsive than
+            # simple 3-frame average, handles outliers better
+            # α=0.30: current frame gets 30% weight, history 70%
+            EWMA_ALPHA = 0.30
+            hist       = s["score_history"]
+            raw_score  = hist[-1]
+            if len(hist) == 1:
+                smoothed_local = raw_score
             else:
-                smoothed_local = hist[-1]
+                # Build EWMA from history
+                ewma = hist[0]
+                for sc in hist[1:]:
+                    ewma = EWMA_ALPHA * sc + (1 - EWMA_ALPHA) * ewma
+                smoothed_local = int(round(ewma))
+            # Clamp to prevent wild swings from blurry frames
+            if len(hist) > 1:
+                prev = s.get("last_ewma", smoothed_local)
+                max_jump = 12  # max ±12pts per frame
+                smoothed_local = max(prev - max_jump, min(prev + max_jump, smoothed_local))
+            s["last_ewma"]          = smoothed_local
             result["score_smoothed"] = smoothed_local
-            # Use smoothed score as the primary score if Redis not available
+            result["score_raw"]      = raw_score
             if result.get("overall_smoothed") is None:
                 result["overall"] = smoothed_local
                 result["score"]   = smoothed_local
@@ -9269,6 +9413,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
