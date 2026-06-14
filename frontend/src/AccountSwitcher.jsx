@@ -204,7 +204,7 @@ export default function AccountSwitcher({
       "info"
     );
     // Store the current account info so user can switch back
-    localStorage.setItem("postureai_prev_uid", user.uid);
+    try { localStorage.setItem("postureai_prev_uid", user.uid); } catch(e) {}
     // Call parent to handle sign-in of the linked account
     onSwitchAccount?.(account);
   }
