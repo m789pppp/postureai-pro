@@ -736,7 +736,8 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack }) {
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:T.bg, color:T.text,
+    <div style={{ position:"fixed", inset:0, zIndex:2000, overflowY:"auto",
+      background:T.bg, color:T.text,
       fontFamily:"'DM Sans',system-ui,sans-serif", direction:isAr?"rtl":"ltr" }}>
       <style>{GLOBAL_CSS}</style>
 
