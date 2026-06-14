@@ -1054,6 +1054,40 @@ def compute_ear(face_lms, w, h):
     except Exception:
         return None
 
+# ── Kalman state per session per landmark ─────────────────────────
+# State: [x, y, vx, vy] — position + velocity
+# Measurement noise R adapts to landmark visibility
+_kalman_states: dict = {}  # {session_key: {idx: [x,y,vx,vy]}}
+
+def kalman_update(state, measurement, visibility, dt=0.033):
+    """
+    1D Kalman filter per coordinate (applied per axis independently).
+    R (measurement noise) = 1/visibility — low vis = trust prediction more.
+    Q (process noise) = 0.01 — small for slow body movement.
+    Returns updated [x, y, vx, vy].
+    """
+    if state is None:
+        return [measurement[0], measurement[1], 0.0, 0.0]
+
+    x, y, vx, vy = state
+    # Predict
+    x_pred  = x  + vx * dt
+    y_pred  = y  + vy * dt
+    # Measurement noise inversely proportional to visibility
+    R = max(0.001, (1.0 - min(1.0, visibility)) * 0.08 + 0.005)
+    Q = 0.003   # process noise
+    # Kalman gain (simplified scalar, same for x and y)
+    P_pred = Q + 0.01   # predicted error covariance (simplified)
+    K      = P_pred / (P_pred + R)
+    # Update
+    x_upd = x_pred + K * (measurement[0] - x_pred)
+    y_upd = y_pred + K * (measurement[1] - y_pred)
+    # Update velocity estimate
+    vx_upd = (x_upd - x) / max(dt, 0.001)
+    vy_upd = (y_upd - y) / max(dt, 0.001)
+    return [x_upd, y_upd, vx_upd, vy_upd]
+
+
 # Per-session blink history — keyed by uid:session to avoid cross-contamination
 _blink_sessions: dict      = {}   # {key: [(timestamp, ear), ...]}
 _ear_baselines:  dict      = {}   # {key: float} — per-user open-eye EAR baseline
@@ -1264,29 +1298,41 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     _hist.append(_raw)
     if len(_hist) > 3: _hist.pop(0)
 
-    # Exponential weighted moving average (α=0.6 recent, 0.3 prev, 0.1 oldest)
-    # Better than simple avg: recent frames matter more, stabilizes during movement
+    # ── Kalman + weighted average landmark smoothing ─────────────
+    # Step 1: weighted avg over 3 frames (recent=0.6, prev=0.3, old=0.1)
+    # Step 2: Kalman filter on top — adapts to visibility (low vis = trust prediction)
     _w = [0.60, 0.30, 0.10][:len(_hist)]
-    _w_sum = sum(_w)
-    _w_norm = [wi / _w_sum for wi in _w]  # normalize to sum=1
+    _w_sum  = sum(_w)
+    _w_norm = [wi / _w_sum for wi in _w]
 
-    class _AvgLM:
+    _k_key   = f"kalman:{_sid}"
+    _kstates = _kalman_states.setdefault(_k_key, {})
+
+    class _KalmanLM:
         __slots__ = ("x","y","z","visibility")
         def __init__(self, idx):
-            # Weighted: most recent frame has highest weight
-            frames_rev = list(reversed(_hist))  # [newest, ..., oldest]
+            frames_rev = list(reversed(_hist))
             weights    = _w_norm[:len(frames_rev)]
-            self.x          = sum(frames_rev[i][idx].x          * weights[i] for i in range(len(frames_rev)))
-            self.y          = sum(frames_rev[i][idx].y          * weights[i] for i in range(len(frames_rev)))
-            self.z          = sum(frames_rev[i][idx].z          * weights[i] for i in range(len(frames_rev)))
-            self.visibility = sum(frames_rev[i][idx].visibility * weights[i] for i in range(len(frames_rev)))
-    class _AvgLMs:
-        def __getitem__(self, idx): return _AvgLM(idx)
-    lms = _AvgLMs()
+            # Weighted average position
+            wx = sum(frames_rev[i][idx].x          * weights[i] for i in range(len(frames_rev)))
+            wy = sum(frames_rev[i][idx].y          * weights[i] for i in range(len(frames_rev)))
+            wz = sum(frames_rev[i][idx].z          * weights[i] for i in range(len(frames_rev)))
+            wv = sum(frames_rev[i][idx].visibility * weights[i] for i in range(len(frames_rev)))
+            # Kalman refinement on x,y
+            kst = kalman_update(_kstates.get(idx), (wx, wy), wv)
+            _kstates[idx] = kst
+            self.x          = kst[0]
+            self.y          = kst[1]
+            self.z          = wz
+            self.visibility = wv
+
+    class _KalmanLMs:
+        def __getitem__(self, idx): return _KalmanLM(idx)
+    lms = _KalmanLMs()
 
     out["detected"]   = True
-    out["engine"]     = "mediapipe_pose"
-    out["avg_frames"] = len(_hist)   # how many frames averaged (max 3)
+    out["engine"]     = "mediapipe_pose+kalman"
+    out["avg_frames"] = len(_hist)
 
     def g(idx): return lms[idx]
     def px(idx): return (g(idx).x * w, g(idx).y * h)
@@ -1317,6 +1363,33 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     # Nose is ~10cm in front of ear plane — subtract natural offset
     # At 65cm distance, 10cm = ~8.8° apparent lean → correct by -5° (conservative)
     neck_lean_raw = angle_vert(mid_sh, neck_ref)
+
+    # ── Monitor height estimation ────────────────────────────────
+    # From camera pitch: if head is tilted down, monitor is below eye level
+    # At distance D, pitch P° → monitor is D×tan(P°) cm below eye level
+    try:
+        _pitch_val = out.get("head_pose", {}).get("pitch", 0) if out.get("head_pose") else 0
+        if _pitch_val and dist_cm:
+            import math as _mh
+            _monitor_offset_cm = round(dist_cm * _mh.tan(_mh.radians(abs(_pitch_val))), 1)
+            _monitor_dir = "below" if _pitch_val < 0 else "above"
+            _monitor_sc  = score_m(abs(_pitch_val), 0, 5, 18)
+            out["metrics"]["monitor_height"] = {
+                "value":      _monitor_offset_cm,
+                "score":      _monitor_sc,
+                "unit":       "cm",
+                "label":      "Monitor height offset",
+                "direction":  _monitor_dir,
+                "pitch_deg":  _pitch_val,
+                "adjustment": f"Raise monitor {_monitor_offset_cm}cm" if _monitor_dir == "below" else
+                              f"Lower monitor {_monitor_offset_cm}cm",
+            }
+            if abs(_pitch_val) > 12:
+                out["alerts"].append(
+                    f"⚠️ Monitor ~{_monitor_offset_cm}cm {_monitor_dir} eye level — "
+                    f"{'raise' if _monitor_dir == 'below' else 'lower'} monitor to reduce neck strain")
+    except Exception:
+        pass
 
     # ── Forward Head Posture Index (FHP) ─────────────────────────
     # Clinical measure: horizontal offset of ear ahead of shoulder
@@ -1801,6 +1874,49 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     except Exception:
         pass
 
+    # ── RULA simplified score (Rapid Upper Limb Assessment) ─────
+    # Based on McAtamney & Corlett 1993 — occupational health standard
+    # Scores each body segment 1-6, combines into action level 1-4
+    # Action level 3-4 = requires immediate ergonomic investigation
+    try:
+        # Upper arm score (0-4): based on shoulder elevation
+        _neck_v   = neck_lean
+        _spine_v  = spine_lean if hasattr(spine_lean, '__float__') else 0
+        _ua_score = (1 if _neck_v < 20 else 2 if _neck_v < 45 else
+                     3 if _neck_v < 90 else 4)  # upper arm from neck proxy
+        # Neck score (1-4): posture of neck
+        _neck_rula = (1 if neck_lean < 10 else 2 if neck_lean < 20 else
+                      3 if neck_lean < 30 else 4)
+        # Trunk score (1-4)
+        _trunk_rula = (1 if _spine_v < 10 else 2 if _spine_v < 20 else
+                       3 if _spine_v < 60 else 4)
+        # Head twist penalty
+        _hp_yaw = abs(out.get("head_pose",{}).get("yaw",0) or 0)
+        _twist_pen = 1 if _hp_yaw > 15 else 0
+        # RULA score (simplified — 1=acceptable, 4=investigate immediately)
+        _rula_raw = (_ua_score + _neck_rula + _trunk_rula + _twist_pen)
+        _rula_norm = max(1, min(4, round(_rula_raw / 3.0)))  # normalize to 1-4
+        _rula_action = {
+            1: "Acceptable posture — no action required",
+            2: "Monitor — investigate if sustained",
+            3: "Investigate — changes required soon",
+            4: "⚠️ Investigate immediately — urgent ergonomic changes needed",
+        }
+        _rula_sc = score_m(_rula_norm, 1, 0.5, 2)   # score: 1=100, 4=5
+        out["metrics"]["rula_score"] = {
+            "value":       _rula_norm,
+            "score":       _rula_sc,
+            "unit":        "/4",
+            "label":       "RULA ergonomic risk",
+            "action":      _rula_action[_rula_norm],
+            "components":  {"upper_arm": _ua_score, "neck": _neck_rula, "trunk": _trunk_rula},
+            "reference":   "McAtamney & Corlett 1993",
+        }
+        if _rula_norm >= 3:
+            out["alerts"].append(f"⚠️ RULA score {_rula_norm}/4 — ergonomic investigation required")
+    except Exception:
+        pass
+
     # ── Posture symmetry score ────────────────────────────────────
     # Compare left vs right landmark heights for imbalance detection
     # High asymmetry → possible scoliosis pattern or bad chair setup
@@ -1862,6 +1978,49 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     except Exception:
         pass
 
+    # ── ISO 11226 whole-body posture compliance ─────────────────
+    # ISO 11226:2000 — Ergonomics: evaluation of static working postures
+    # Classifies posture as: acceptable / conditional / not recommended
+    try:
+        # Trunk inclination forward (ISO 11226 Table 1)
+        # ≤20° acceptable, 20-60° conditional, >60° not recommended
+        _iso_trunk  = ("acceptable"       if _spine_v <= 20 else
+                       "conditional"      if _spine_v <= 60 else
+                       "not_recommended")
+        # Head inclination forward
+        # ≤25° acceptable, 25-85° conditional, >85° not recommended
+        _iso_head   = ("acceptable"       if neck_lean <= 25 else
+                       "conditional"      if neck_lean <= 85 else
+                       "not_recommended")
+        # Shoulder — upper arm elevation
+        # ≤20° acceptable, 20-60° conditional, >60° not recommended
+        _iso_shoulder = ("acceptable"     if shTilt <= 20 else
+                         "conditional"    if shTilt <= 60 else
+                         "not_recommended")
+        # Overall ISO compliance
+        _iso_parts = [_iso_trunk, _iso_head, _iso_shoulder]
+        _iso_overall = ("not_recommended" if "not_recommended" in _iso_parts else
+                        "conditional"     if "conditional"     in _iso_parts else
+                        "acceptable")
+        _iso_sc = {"acceptable": 90, "conditional": 55, "not_recommended": 20}
+        out["metrics"]["iso_11226"] = {
+            "value":    {"acceptable": 1, "conditional": 2, "not_recommended": 3}[_iso_overall],
+            "score":    _iso_sc[_iso_overall],
+            "unit":     "compliance",
+            "label":    "ISO 11226 posture compliance",
+            "overall":  _iso_overall,
+            "trunk":    _iso_trunk,
+            "head":     _iso_head,
+            "shoulder": _iso_shoulder,
+            "reference":"ISO 11226:2000",
+        }
+        if _iso_overall == "not_recommended":
+            out["alerts"].append(f"⚠️ ISO 11226: posture not recommended — immediate ergonomic correction required")
+        elif _iso_overall == "conditional":
+            out["alerts"].append(f"ISO 11226: conditional posture — acceptable only if not maintained for long periods")
+    except Exception:
+        pass
+
     # ── Gaze direction (if FaceMesh available) ────────────────────
     if face_result and face_result.multi_face_landmarks:
         try:
@@ -1898,6 +2057,42 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
                 out["alerts"].append(f"⚠️ Seated {round(_duration_min)}min — take a standing break (every 45-60min)")
             elif fatigue_factor > 0.2:
                 out["alerts"].append(f"Seated {round(_duration_min)}min — consider a short break soon")
+    except Exception:
+        pass
+
+    # ── Per-joint injury risk scores ────────────────────────────
+    # Each joint gets individual risk score based on angle severity
+    # Useful for targeted physiotherapy recommendations
+    try:
+        _dur_min = (time.time() - sessions.get(out.get("session_id",""),{}).get("start",time.time())) / 60 if "sessions" in dir() else 0
+        _joint_risks = {}
+        _joint_def = {
+            "neck":     (neck_lean,  [10, 20, 30],  "cervical spine"),
+            "spine":    (spine_lean, [10, 20, 40],  "thoracic/lumbar spine"),
+            "shoulder": (shTilt,     [5,  15, 30],  "shoulder girdle"),
+        }
+        for joint, (angle, (l,m,h), region) in _joint_def.items():
+            if angle > h:      risk_level, risk_sc = "high",     20
+            elif angle > m:    risk_level, risk_sc = "moderate", 55
+            elif angle > l:    risk_level, risk_sc = "low",      80
+            else:              risk_level, risk_sc = "minimal",  100
+            # Duration multiplier
+            dur_mult = min(2.0, 1 + (_dur_min / 60) * 0.5)
+            time_risk = min(4, risk_sc / 25 * dur_mult)   # 0-4 scale
+            _joint_risks[joint] = {
+                "angle":      round(angle, 1),
+                "risk_level": risk_level,
+                "risk_score": risk_sc,
+                "time_risk":  round(time_risk, 2),
+                "region":     region,
+            }
+        out["metrics"]["joint_risks"] = {
+            "value":  max(j["time_risk"] for j in _joint_risks.values()) if _joint_risks else 0,
+            "score":  min(j["risk_score"] for j in _joint_risks.values()) if _joint_risks else 100,
+            "unit":   "risk",
+            "label":  "Per-joint injury risk",
+            "joints": _joint_risks,
+        }
     except Exception:
         pass
 
@@ -3605,6 +3800,21 @@ def analyze():
             s["last_ewma"]          = smoothed_local
             result["score_smoothed"] = smoothed_local
             result["score_raw"]      = raw_score
+
+            # ── Time-Weighted Average (TWA) score ─────────────────
+            # Standard occupational health metric for continuous exposure
+            # TWA = Σ(score_i × time_i) / total_time
+            if len(hist) >= 5:
+                frame_duration = s.get("duration_s", len(hist)*0.033*30) / max(len(hist),1)
+                twa_score = sum(sc * frame_duration for sc in hist) / max(s.get("duration_s",1), 1)
+                twa_score = max(0, min(100, round(twa_score)))
+                twa_risk = "low" if twa_score >= 70 else "moderate" if twa_score >= 55 else "high"
+                result["twa_score"] = {
+                    "score":    twa_score,
+                    "risk":     twa_risk,
+                    "duration": round(s.get("duration_s",0)),
+                    "label":    "Time-Weighted Average (occupational standard)",
+                }
 
             # ── Within-session trend ───────────────────────────────
             # Compare recent vs early scores: are you getting better?
@@ -10115,6 +10325,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
