@@ -298,6 +298,10 @@ export async function getUserSessions(uid) {
     });
 }
 
+export async function deleteSession(sessionId) {
+  return deleteDoc(doc(db,"sessions",sessionId));
+}
+
 // Real-time listener version — keeps sessions always fresh
 export function onUserSessions(uid, callback) {
   const q = query(

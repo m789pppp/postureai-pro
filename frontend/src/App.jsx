@@ -8,7 +8,7 @@ import {
   SUPPORT_EMAIL, PAYMOB_IFRAME_ID,
   AUTO_APPROVE_DOMAIN, serverTimestamp,
   notifyPaymentPending, notifyPaymentConfirmed,
-  getCompany, createCompany, getUserSessions, onUserSessions, updateUserProfile,
+  getCompany, createCompany, getUserSessions, onUserSessions, deleteSession, updateUserProfile,
   checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, getReferralDiscount, checkAndSendNurtureEmails,
   doc, updateDoc,
 } from "./firebase.js";
@@ -2409,6 +2409,7 @@ export default function App(){
         CalibrationWizard={CalibrationWizard} setCalibData={setCalibData}
         toast={addToast}
         isHRAdmin={isHRAdmin}
+        deleteSession={deleteSession}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
