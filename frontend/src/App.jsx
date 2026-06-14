@@ -2474,8 +2474,6 @@ export default function App(){
       {showWhiteLabel&&<WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/>}
       {showMultiTenant&&<MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/>}
       {showAuditSystem&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
-      {showWorkforceAnalytics&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
-      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
     </ErrorBoundary>
   );
   const TN = T_norm;
@@ -2524,28 +2522,7 @@ export default function App(){
       <OfflineBanner lang={lang}/>
 
       {/* ── GlobalModals: render on ALL pages ──────────────────── */}
-      {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
-      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
-      {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
-      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
-      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const {doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const {db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){console.warn("onComplete Firestore failed",e);}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
-      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
-      {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
-      {showMRR&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
-      {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
-      {showChangelog&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
-      {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowAIInsights(false)}/>}
-      {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowPredictiveAI(false)}/>}
-      {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowAIReports(false)}/>}
-      {showWorkforceAnalytics&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
-      {showEnterpriseRBAC&&<EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}
-      {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
       
-      {showFeatureFlags&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
-      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
-      {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
-      {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
-      {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>setShowOnboard(false)}/>}
 
       {/* OLD DUPLICATE MODALS REMOVED — see GlobalModals block above */}
                   {showAnnualUpsell && (
@@ -2614,24 +2591,13 @@ export default function App(){
           </div>
         </div>
       )}
-      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
       {showUsageBilling&&<UsageBilling profile={profile} cs={cs} lang={lang} onClose={()=>setShowUsageBilling(false)}/>}
-      {showChurnPrediction&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
-      {showCustomerSuccess&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
-      {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
-      {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
       {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
       {showSecurityCenter&&<SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/>}
-      {showFeatureFlags&&<FeatureFlags token={authToken} onClose={()=>setShowFeatureFlags(false)}/>}
-      {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }
       {showMFASetup&&<MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)}/>}
       {showBillingDashboard&&<BillingDashboard profile={profile} user={user} cs={cs} lang={lang} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}
       {/* Phase 12 — Enterprise Scale */}
-      {showAPIMarketplace&&<APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/>}
-      {showWhiteLabel&&<WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/>}
-      {showMultiTenant&&<MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/>}
-      {showAuditSystem&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
       {showEnterpriseAdmin&&<EnterpriseAdminTools profile={profile} cs={cs} lang={lang} onClose={()=>setShowEnterpriseAdmin(false)}/>}
 
       {/* ── Session Result Modal ── */}
@@ -2730,7 +2696,6 @@ export default function App(){
           </div>
         </div>
       )}
-      {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>{setShowOnboard(false);setPage("home");}}/>}
 
       {/* ── LEFT PANEL — stats & history ── */}
       <div style={{
