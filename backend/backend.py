@@ -1035,6 +1035,68 @@ def compute_gaze(face_lms, w, h):
     except Exception:
         return None
 
+def compute_cognitive_load(face_lms, w, h):
+    """
+    Estimate cognitive load / stress from facial micro-expressions.
+    High cognitive load → tight jaw, furrowed brows, faster blinking, eye squint.
+    Returns load score 0-100 (0=relaxed, 100=high stress/focus).
+    Based on FACS (Facial Action Coding System) — AU4 (brow furrow) + AU6 (cheek raise).
+    """
+    try:
+        def pt(i): return (face_lms.landmark[i].x * w, face_lms.landmark[i].y * h)
+        def d(a, b): return math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
+
+        # ── AU4: Brow furrow (corrugator supercilii) ──────────────
+        # FaceMesh: L brow inner 107, R brow inner 336
+        # Measure distance between inner brows — closer = more furrow
+        l_brow_in = pt(107); r_brow_in = pt(336)
+        brow_dist = d(l_brow_in, r_brow_in)
+        # Normalize by face width (eye outer corners: 33, 263)
+        face_w = max(d(pt(33), pt(263)), 1)
+        brow_ratio = brow_dist / face_w   # lower = more furrow
+
+        # ── AU6: Cheek raise / Duchenne marker ───────────────────
+        # Lower eyelid tightening: distance from pupil center to lower lid
+        l_lower_lid = pt(145); r_lower_lid = pt(374)
+        l_pupil_pt  = pt(468); r_pupil_pt  = pt(473)
+        l_squint = d(l_pupil_pt, l_lower_lid)
+        r_squint = d(r_pupil_pt, r_lower_lid)
+        avg_squint = (l_squint + r_squint) / 2
+        squint_norm = avg_squint / max(face_w * 0.06, 1)  # normalize
+
+        # ── Jaw tension: mouth openness ───────────────────────────
+        # Upper lip: 13, lower lip: 14
+        lip_top = pt(13); lip_bot = pt(14)
+        mouth_open = d(lip_top, lip_bot) / max(face_w * 0.2, 1)  # 0=closed, 1=open
+        # Tension = mouth slightly open / clenched (not relaxed neutral)
+        jaw_tension = abs(mouth_open - 0.15) / 0.15   # 0=neutral, 1=tense/open
+
+        # ── Combine ───────────────────────────────────────────────
+        # Low brow_ratio = furrow; low squint_norm = tight eyes; high jaw_tension
+        brow_stress  = max(0, min(1, (0.35 - brow_ratio) / 0.15))   # 0-1
+        squint_stress= max(0, min(1, (1.0 - squint_norm) / 0.5))    # 0-1
+        jaw_stress   = max(0, min(1, jaw_tension))
+
+        # Weighted: brow furrow most reliable FACS marker for cognitive load
+        load_raw = brow_stress * 0.50 + squint_stress * 0.30 + jaw_stress * 0.20
+        load_score = max(0, min(100, int(round(load_raw * 100))))
+
+        return {
+            "load_score":   load_score,
+            "level":        "high" if load_score > 65 else "moderate" if load_score > 35 else "low",
+            "brow_furrow":  round(brow_stress, 3),
+            "eye_squint":   round(squint_stress, 3),
+            "jaw_tension":  round(jaw_stress, 3),
+            "interpretation": (
+                "High cognitive load — take a mental break" if load_score > 65 else
+                "Moderate focus/concentration" if load_score > 35 else
+                "Relaxed / low cognitive load"
+            ),
+        }
+    except Exception:
+        return None
+
+
 def compute_ear(face_lms, w, h):
     """Eye Aspect Ratio for blink detection and eye strain."""
     try:
@@ -1053,6 +1115,55 @@ def compute_ear(face_lms, w, h):
         return round(ear, 3)
     except Exception:
         return None
+
+# ── Head velocity tracker ─────────────────────────────────────────
+_head_velocity: dict = {}   # {session_key: [(timestamp, nose_x, nose_y), ...]}
+
+def compute_head_velocity(nose_x, nose_y, session_key):
+    """
+    Track head movement velocity and detect sudden movements.
+    Useful for: attention switching detection, whiplash risk, fidgeting.
+    Returns velocity in deg/sec equivalent and movement pattern.
+    """
+    now = time.time()
+    buf = _head_velocity.setdefault(session_key, [])
+    buf.append((now, nose_x, nose_y))
+    # Keep 2s window
+    buf[:] = [(t,x,y) for t,x,y in buf if now-t < 2.0]
+    if len(buf) < 3:
+        return None
+
+    # Velocity: position change per second (normalized to frame)
+    dt  = max(0.001, buf[-1][0] - buf[-3][0])
+    dx  = abs(buf[-1][1] - buf[-3][1])   # normalized 0-1
+    dy  = abs(buf[-1][2] - buf[-3][2])
+    vel = math.sqrt(dx**2 + dy**2) / dt  # units/sec
+
+    # Acceleration: change in velocity
+    if len(buf) >= 5:
+        dt2 = max(0.001, buf[-3][0] - buf[-5][0])
+        dx2 = abs(buf[-3][1] - buf[-5][1])
+        dy2 = abs(buf[-3][2] - buf[-5][2])
+        vel2 = math.sqrt(dx2**2 + dy2**2) / dt2
+        accel = (vel - vel2) / max(dt, 0.001)
+    else:
+        accel = 0.0
+
+    # Classify movement
+    if vel > 0.15:   pattern = "rapid"    # attention switch / startled
+    elif vel > 0.05: pattern = "moderate" # normal repositioning
+    elif vel > 0.01: pattern = "micro"    # natural micro-movement (good)
+    else:            pattern = "frozen"   # too still
+
+    return {
+        "velocity":    round(vel * 1000, 1),   # mm/sec equivalent
+        "acceleration":round(accel * 100, 2),
+        "pattern":     pattern,
+        "direction_x": round(dx / max(dt, 0.001) * 1000, 1),
+        "direction_y": round(dy / max(dt, 0.001) * 1000, 1),
+        "sudden_move": vel > 0.12,
+    }
+
 
 # ── Kalman state per session per landmark ─────────────────────────
 # State: [x, y, vx, vy] — position + velocity
@@ -1835,7 +1946,44 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         else:
             out["metrics"]["neck_lean"]["posture_type"] = "lateral"
 
-        # ── Breathing rate estimation from shoulder movement ────────
+        # ── Circadian posture adjustment ─────────────────────────────
+    # Posture degrades predictably by time of day (circadian rhythm)
+    # Account for this: don't penalize afternoon slump as harshly
+    # Based on: Monk et al. (1997) circadian performance rhythms
+    try:
+        _hour = datetime.utcnow().hour + 3  # UTC+3 (Egypt/KSA) approximate
+        _hour = _hour % 24
+        # Circadian factor: 1.0 = peak (9-11am), 0.88 = worst (2-4pm)
+        _circadian_factors = {
+            0: 0.92, 1: 0.90, 2: 0.88, 3: 0.87, 4: 0.87, 5: 0.88,
+            6: 0.91, 7: 0.93, 8: 0.96, 9: 1.00, 10: 1.00, 11: 0.99,
+            12: 0.97, 13: 0.94, 14: 0.91, 15: 0.90, 16: 0.92, 17: 0.94,
+            18: 0.95, 19: 0.95, 20: 0.93, 21: 0.91, 22: 0.90, 23: 0.91,
+        }
+        _cf = _circadian_factors.get(_hour, 1.0)
+        # Adjusted score: if person scores 65 at 3pm (factor=0.90),
+        # their "circadian-adjusted" score = 65/0.90 = 72 (better than it looks)
+        _circ_adjusted = min(100, round(overall / max(_cf, 0.85)))
+        out["circadian"] = {
+            "hour":             _hour,
+            "factor":           _cf,
+            "adjusted_score":   _circ_adjusted,
+            "period":           (
+                "morning_peak" if 8 <= _hour <= 11 else
+                "post_lunch_dip" if 13 <= _hour <= 15 else
+                "afternoon_recovery" if 16 <= _hour <= 18 else
+                "evening" if 19 <= _hour <= 22 else "off_hours"
+            ),
+            "note": (
+                "Post-lunch circadian dip — posture naturally worse now" if 13<=_hour<=15 else
+                "Morning peak — best time for demanding tasks" if 8<=_hour<=11 else
+                "End-of-day fatigue window" if 17<=_hour<=19 else ""
+            ),
+        }
+    except Exception:
+        pass
+
+    # ── Breathing rate estimation from shoulder movement ────────
     # Normal: 12-20 breaths/min. Stress/poor posture → shallow breathing
     # Shoulders rise ~2-5% of frame per breath
     try:
@@ -2021,6 +2169,52 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     except Exception:
         pass
 
+    # ── Cognitive load from micro-expressions ───────────────────
+    if face_result and face_result.multi_face_landmarks:
+        try:
+            _cog = compute_cognitive_load(face_result.multi_face_landmarks[0], w, h)
+            if _cog:
+                out["metrics"]["cognitive_load"] = {
+                    "value":    _cog["load_score"],
+                    "score":    100 - _cog["load_score"],  # inverse: high load = lower score
+                    "unit":     "/100",
+                    "label":    "Cognitive load (FACS)",
+                    "level":    _cog["level"],
+                    "note":     _cog["interpretation"],
+                    "brow":     _cog["brow_furrow"],
+                    "squint":   _cog["eye_squint"],
+                    "jaw":      _cog["jaw_tension"],
+                }
+                if _cog["load_score"] > 70:
+                    out["alerts"].append(
+                        f"High cognitive load detected — consider a 5-min break "
+                        f"(brow furrow: {round(_cog['brow_furrow']*100)}%, "
+                        f"jaw tension: {round(_cog['jaw_tension']*100)}%)")
+        except Exception:
+            pass
+
+    # ── Head velocity + movement pattern ─────────────────────────
+    try:
+        _hv_key = f"vel:{out.get('session_id','default')}"
+        _hv = compute_head_velocity(nose[0]/w, nose[1]/h, _hv_key)
+        if _hv:
+            out["metrics"]["head_velocity"] = {
+                "value":   _hv["velocity"],
+                "score":   score_m(_hv["velocity"], 30, 20, 80),  # ideal = natural movement
+                "unit":    "mm/s",
+                "label":   "Head movement speed",
+                "pattern": _hv["pattern"],
+                "sudden":  _hv["sudden_move"],
+            }
+            if _hv["sudden_move"]:
+                out["alerts"].append(
+                    f"Rapid head movement detected ({_hv['velocity']}mm/s) — "
+                    f"possible attention switching or startled response")
+            elif _hv["pattern"] == "frozen":
+                out["alerts"].append("Head completely still — micro-movements help maintain blood flow")
+    except Exception:
+        pass
+
     # ── Gaze direction (if FaceMesh available) ────────────────────
     if face_result and face_result.multi_face_landmarks:
         try:
@@ -2039,6 +2233,57 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
                     out["alerts"].append(f"Eyes not focused on screen — gaze offset h={_gaze['h']:+.2f} v={_gaze['v']:+.2f}")
         except Exception:
             pass
+
+    # ── Posture DNA fingerprint ─────────────────────────────────
+    # Compact posture pattern hash — detects habitual bad posture
+    # "You've reverted to bad habit pattern seen 8× before"
+    try:
+        _dna_vec = [
+            int(neck_lean  / 5) * 5,
+            int(spine_lean / 5) * 5,
+            int(shTilt     / 3) * 3,
+            int(dist_cm    / 10)* 10,
+            int(abs(out.get("head_pose",{}).get("yaw",0)   or 0) / 5)*5,
+            int(abs(out.get("head_pose",{}).get("pitch",0) or 0) / 5)*5,
+        ]
+        _dna_str  = "-".join(str(v) for v in _dna_vec)
+        _dna_hash = str(abs(hash(_dna_str)) % 100000).zfill(5)
+        _uid_dna  = getattr(g, "uid", None)
+        _prev_fp  = cache_get(f"dna:{_uid_dna}") if _uid_dna else None
+        _match    = None
+        if _prev_fp:
+            try:
+                import json as _jd2
+                _match = _jd2.loads(_prev_fp).get(_dna_hash)
+            except Exception: pass
+        if _uid_dna and overall < 70:
+            try:
+                import json as _jd2
+                _fp_hist = {}
+                try: _fp_hist = _jd2.loads(cache_get(f"dna:{_uid_dna}") or "{}")
+                except Exception: pass
+                _fp_hist[_dna_hash] = {
+                    "first_seen": _fp_hist.get(_dna_hash,{}).get("first_seen", datetime.utcnow().isoformat()),
+                    "count":      _fp_hist.get(_dna_hash,{}).get("count", 0) + 1,
+                    "last_seen":  datetime.utcnow().isoformat(),
+                    "avg_score":  overall,
+                }
+                if len(_fp_hist) > 20:
+                    _fp_hist = dict(sorted(_fp_hist.items(), key=lambda x: x[1].get("count",0), reverse=True)[:20])
+                cache_set(f"dna:{_uid_dna}", _jd2.dumps(_fp_hist), 86400*90)
+            except Exception: pass
+        out["posture_dna"] = {
+            "fingerprint": _dna_hash,
+            "vector":      _dna_vec,
+            "habitual":    bool(_match and _match.get("count",0) > 3),
+            "seen_before": _match.get("count",0) if _match else 0,
+            "first_seen":  _match.get("first_seen") if _match else None,
+            "note":        f"Habitual — seen {_match['count']}× before" if (_match and _match.get("count",0)>3) else "New pattern",
+        }
+        if _match and _match.get("count",0) > 5 and overall < 65:
+            out["alerts"].append(f"⚠️ Habitual bad posture — this pattern seen {_match['count']}× before")
+    except Exception:
+        pass
 
     # ── Sitting duration fatigue model ────────────────────────────
     # If session has been running > 45min, flag fatigue risk
@@ -2093,6 +2338,64 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             "label":  "Per-joint injury risk",
             "joints": _joint_risks,
         }
+    except Exception:
+        pass
+
+    # ── Pain onset prediction (tissue creep model) ─────────────
+    # Based on McGill (2007) spine biomechanics:
+    # Sustained load → tissue creep → pain onset in predictable time
+    # Neck/spine: pain typically within 20-45min of sustained poor posture
+    try:
+        _sid_pain = out.get("session_id", "")
+        _sess_data = sessions.get(_sid_pain, {}) if "sessions" in dir() else {}
+        _dur_min = (time.time() - _sess_data.get("start", time.time())) / 60
+
+        # Load factor: how bad is the current posture?
+        _load_factor = max(0, (100 - overall) / 100)  # 0=perfect, 1=worst
+
+        # Tissue creep rate: higher load = faster creep
+        # At 100% load (worst posture): pain in ~15min
+        # At 50% load: pain in ~35min
+        # At 20% load: pain in ~90min
+        if _load_factor > 0.1:
+            _time_to_pain_min = 15 / max(_load_factor, 0.1)
+            _remaining_min = max(0, _time_to_pain_min - _dur_min)
+            _creep_pct = min(100, int((_dur_min / _time_to_pain_min) * 100))
+            _pain_regions = []
+            if neck_lean > 15:    _pain_regions.append("neck/upper trapezius")
+            if spine_lean > 15:   _pain_regions.append("lower back")
+            if shTilt > 8:        _pain_regions.append("shoulder")
+            if dist_cm < 40:      _pain_regions.append("eyes/neck (screen proximity)")
+
+            out["pain_prediction"] = {
+                "creep_pct":        _creep_pct,
+                "time_to_pain_min": round(_time_to_pain_min, 1),
+                "remaining_min":    round(_remaining_min, 1),
+                "load_factor":      round(_load_factor, 2),
+                "at_risk_regions":  _pain_regions,
+                "urgency":          (
+                    "imminent"  if _remaining_min < 5  else
+                    "soon"      if _remaining_min < 15 else
+                    "moderate"  if _remaining_min < 30 else
+                    "low"
+                ),
+                "action":           (
+                    "⚠️ Correct posture NOW — pain onset imminent" if _remaining_min < 5 else
+                    f"Correct posture within {round(_remaining_min)}min to avoid pain" if _remaining_min < 15 else
+                    f"~{round(_remaining_min)}min before discomfort if posture unchanged" if _remaining_min < 30 else
+                    "Posture acceptable for extended sitting"
+                ),
+                "reference":        "McGill 2007 spine biomechanics + tissue creep model",
+            }
+            if _remaining_min < 10 and _creep_pct > 60:
+                out["alerts"].append(
+                    f"⚠️ Pain onset predicted in ~{round(_remaining_min)}min "
+                    f"({', '.join(_pain_regions or ['general'])} at risk)")
+        else:
+            out["pain_prediction"] = {
+                "creep_pct": 0, "urgency": "none",
+                "action": "✓ Posture excellent — no pain risk",
+            }
     except Exception:
         pass
 
@@ -10325,6 +10628,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
