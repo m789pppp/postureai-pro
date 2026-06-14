@@ -1967,48 +1967,48 @@ export default function App(){
     if(ovRef.current)ovRef.current.getContext("2d").clearRect(0,0,ovRef.current.width||0,ovRef.current.height||0);
     setCamActive(false);
 
-    if(histRef.current.length>0){
-      const la=lastAnalRef.current||{};
-      const avg=Math.round(histRef.current.reduce((a,b)=>a+b,0)/histRef.current.length);
-      const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
-      const gPct=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
+    // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
+    const la  = lastAnalRef.current||{};
+    const hist = histRef.current||[];
+    const avg  = hist.length ? Math.round(hist.reduce((a,b)=>a+b,0)/hist.length) : 0;
+    const dur  = sessRef.current ? Math.floor((Date.now()-sessRef.current)/1000) : 0;
+    const gPct = totalRef.current ? Math.round(goodRef.current/totalRef.current*100) : 0;
 
-      // Build session result for display
-      const result={
-        avg_score:avg,
-        duration_s:dur,
-        good_pct:gPct,
-        alerts_count:acRef.current.total,
-        frames:totalRef.current,
-        top_metric: la.metrics ? Object.entries(la.metrics)
-          .filter(([,v])=>v.score<75)
-          .sort(([,a],[,b])=>a.score-b.score)[0] : null,
-        grade: avg>=85?"Excellent":avg>=70?"Good":avg>=55?"Fair":"Needs work",
-        gradeAr: avg>=85?"ممتاز":avg>=70?"جيد":avg>=55?"مقبول":"يحتاج تحسين",
-        color: avg>=75?"#10b981":avg>=50?"#f59e0b":"#ef4444",
-      };
-      setSessionResult(result);
+    const result={
+      avg_score:avg,
+      duration_s:dur,
+      good_pct:gPct,
+      alerts_count:acRef.current?.total||0,
+      frames:totalRef.current||0,
+      top_metric: la.metrics ? Object.entries(la.metrics)
+        .filter(([,v])=>v.score<75)
+        .sort(([,a],[,b])=>a.score-b.score)[0] : null,
+      grade: avg>=85?"Excellent":avg>=70?"Good":avg>=55?"Fair":"Needs work",
+      gradeAr: avg>=85?"ممتاز":avg>=70?"جيد":avg>=55?"مقبول":"يحتاج تحسين",
+      color: avg>=75?"#10b981":avg>=50?"#f59e0b":"#ef4444",
+    };
+    setSessionResult(result);
 
-      if(user){
-        addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
-        saveSession(user.uid,{
-          session_id:sessionId,mode,tier,avg_score:avg,
-          good_pct:gPct,duration_s:dur,duration_sec:dur,
-          alerts_count:acRef.current.total,
-          score_history:histRef.current.slice(-20),
-          metrics:la.metrics||{}
-        }).then(()=>{
-          addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
-          // real-time listener auto-updates userSessions
-        }).catch(e=>{
-          console.error("saveSession failed:", e?.code, e?.message);
-          addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
-        });
-      } else {
-        addToast(isAr?"تسجيل الدخول منتهي — لم تُحفظ الجلسة":"Not signed in — session not saved","error");
-      }
+    if(user && dur >= 5){ // Save if session lasted at least 5 seconds
+      addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
+      saveSession(user.uid,{
+        session_id:sessionId, mode, tier, avg_score:avg,
+        good_pct:gPct, duration_s:dur, duration_sec:dur,
+        alerts_count:acRef.current?.total||0,
+        score_history:hist.slice(-20),
+        metrics:la.metrics||{}
+      }).then(()=>{
+        addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
+      }).catch(e=>{
+        console.error("saveSession failed:", e?.code, e?.message);
+        addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
+      });
+    } else if(user && dur < 5){
+      addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
+    } else if(!user){
+      addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
-  }
+  } // end stopCamera
 
   async function downloadPDF(){
     const la=lastAnalRef.current||{};
