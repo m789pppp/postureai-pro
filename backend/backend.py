@@ -2534,185 +2534,681 @@ def generate_pdf_ar(sd):
     doc.build(story); buf.seek(0); return buf
 
 def generate_pdf_en(sd):
+    """
+    Professional Elite PDF report — multi-page, paginated footer/header,
+    visual score ring, bar chart, new metrics (FHP, RSI, ergonomics, neck load),
+    employee health model section, and AI clinical narrative.
+    """
     if not REPORTLAB_OK: raise ImportError("pip install reportlab")
+
+    # ── Colour palette ────────────────────────────────────────────
     NAVY  = colors.HexColor("#05101f"); BLUE  = colors.HexColor("#1a56db")
     BLUE2 = colors.HexColor("#3b82f6"); TEAL  = colors.HexColor("#0891b2")
     GREEN = colors.HexColor("#059669"); AMBER = colors.HexColor("#d97706")
     RED   = colors.HexColor("#dc2626"); GRAY  = colors.HexColor("#64748b")
     LGRAY = colors.HexColor("#f1f5f9"); DGRAY = colors.HexColor("#1e293b")
-    WHITE = colors.white
-    def sc_col(s): return GREEN if s>=75 else AMBER if s>=50 else RED
-    def sc_lbl(s): return "Excellent" if s>=85 else "Good" if s>=70 else "Fair" if s>=50 else "Poor"
+    MGRAY = colors.HexColor("#e2e8f0"); BGRAY = colors.HexColor("#f8fafc")
+    WHITE = colors.white; ELBLUE = colors.HexColor("#dbeafe")
+    ELGREEN= colors.HexColor("#dcfce7"); ELRED = colors.HexColor("#fee2e2")
+    ELAMBER= colors.HexColor("#fef3c7"); ELTEAL= colors.HexColor("#cffafe")
+
+    def sc_col(s):
+        return GREEN if s >= 75 else AMBER if s >= 50 else RED
+    def sc_bg(s):
+        return ELGREEN if s >= 75 else ELAMBER if s >= 50 else ELRED
+    def sc_lbl(s):
+        return "Excellent" if s >= 85 else "Good" if s >= 70 else "Fair" if s >= 50 else "Poor"
+    def risk_col(r):
+        return {"low": GREEN, "moderate": AMBER, "high": RED}.get(str(r).lower(), GRAY)
+
     def ps(name, **kw):
-        d = dict(fontName='Helvetica', fontSize=9, textColor=DGRAY, leading=13, spaceAfter=2)
-        d.update(kw); return ParagraphStyle(name, **d)
-    buf = io.BytesIO(); W, _ = A4; uw = W - 34*mm
-    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=17*mm, rightMargin=17*mm, topMargin=12*mm, bottomMargin=12*mm)
-    co   = sd.get("company_info", {}); emp  = sd.get("employee", {})
-    hist = sd.get("score_history",[]); alts = sd.get("alerts", [])
-    recs = sd.get("recommendations",[]); met = sd.get("metrics", {})
-    mode = sd.get("mode","laptop"); avs  = sd.get("avg_score",0)
-    gp   = sd.get("good_pct",0);   dur  = sd.get("duration_s",0)
-    tf   = sd.get("total_frames",0); sid  = sd.get("session_id","—")
-    tier = sd.get("tier","standard"); ai_a = sd.get("claude_analysis")
+        d = dict(fontName="Helvetica", fontSize=9, textColor=DGRAY, leading=13, spaceAfter=2)
+        d.update(kw)
+        return ParagraphStyle(name, **d)
+
+    # ── Session data ──────────────────────────────────────────────
+    buf  = io.BytesIO()
+    W, H = A4
+    uw   = W - 34 * mm
+
+    co   = sd.get("company_info", {})
+    emp  = sd.get("employee", {})
+    hist = sd.get("score_history", [])
+    alts = sd.get("alerts", [])
+    recs = sd.get("recommendations", [])
+    met  = sd.get("metrics", {})
+    mode = sd.get("mode", "laptop")
+    avs  = sd.get("avg_score", 0) or 0
+    gp   = sd.get("good_pct", 0) or 0
+    dur  = sd.get("duration_s", 0) or 0
+    tf   = sd.get("total_frames", 0) or 0
+    sid  = sd.get("session_id", "—")
+    tier = sd.get("tier", "standard")
+    ai_a = sd.get("claude_analysis") or sd.get("ai_tip")
     dt   = sd.get("date", datetime.now().strftime("%B %d, %Y"))
-    hp   = sd.get("head_pose"); conf = sd.get("confidence",0)
-    eng  = sd.get("engine","")
-    mlab = {"laptop":"Laptop Camera","phone":"Phone Camera","side":"Side Camera — Full Body"}
-    tlab = {"standard":"Standard","professional":"Professional","elite":"Elite + AI"}
+    hp   = sd.get("head_pose")
+    conf = sd.get("confidence", 0) or 0
+    eng  = sd.get("engine", "")
+    qual = sd.get("quality", {}) or {}
+    qual_sc = qual.get("quality_score", 0) or 0
+    trend   = sd.get("session_trend", {}) or {}
+
+    mlab = {"laptop": "Laptop Camera", "phone": "Phone Camera", "side": "Side Camera"}
+    tlab = {"standard": "Standard", "professional": "Professional", "elite": "Elite + AI", "business": "Business + AI"}
+
     story = []
-    acc = Drawing(uw, 4)
+
+    # ══════════════════════════════════════════════════════════════
+    # PAGE TEMPLATE — running header/footer
+    # ══════════════════════════════════════════════════════════════
+    def on_page(canvas_obj, doc_obj):
+        canvas_obj.saveState()
+        pg = doc_obj.page
+        # Footer line
+        canvas_obj.setStrokeColor(MGRAY)
+        canvas_obj.setLineWidth(0.4)
+        canvas_obj.line(17*mm, 10*mm, W-17*mm, 10*mm)
+        canvas_obj.setFont("Helvetica", 6.5)
+        canvas_obj.setFillColor(GRAY)
+        canvas_obj.drawString(17*mm, 7*mm,
+            f"PostureAI Pro  ·  {co.get('name', 'Confidential')}  ·  {dt}  ·  Session {sid[:16]}")
+        canvas_obj.drawRightString(W-17*mm, 7*mm, f"Page {pg}")
+        # Top accent bar (pages 2+)
+        if pg > 1:
+            canvas_obj.setFillColor(NAVY)
+            canvas_obj.rect(17*mm, H-12*mm, uw, 6, fill=1, stroke=0)
+            canvas_obj.setFillColor(WHITE)
+            canvas_obj.setFont("Helvetica-Bold", 7)
+            canvas_obj.drawString(19*mm, H-9.5*mm, "PostureAI Pro — Posture Assessment Report (continued)")
+        canvas_obj.restoreState()
+
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+        leftMargin=17*mm, rightMargin=17*mm,
+        topMargin=14*mm, bottomMargin=18*mm)
+
+    # ══════════════════════════════════════════════════════════════
+    # PAGE 1 — HEADER
+    # ══════════════════════════════════════════════════════════════
+    # Gradient accent bar
+    acc = Drawing(uw, 5)
     for i, c in enumerate([BLUE, TEAL, GREEN]):
-        acc.add(Rect(i*(uw/3), 0, uw/3, 4, fillColor=c, strokeColor=None))
+        acc.add(Rect(i*(uw/3), 0, uw/3+1, 5, fillColor=c, strokeColor=None))
+
     hdr = Table([[
-        Paragraph(f'<b>{co.get("logo_text","PostureAI")}</b>', ps('hl', fontSize=18, textColor=WHITE, fontName='Helvetica-Bold')),
-        Paragraph(f'<b>{co.get("name","PostureAI Client")}</b><br/><font size="8" color="#94a3b8">Posture Assessment — {tlab.get(tier,"Standard")} Tier</font>',
-            ps('hr', fontSize=11, textColor=WHITE, alignment=TA_RIGHT))
+        Paragraph(
+            f'<b><font size="20">{co.get("logo_text","PostureAI")}</font></b>'
+            f'<br/><font size="8" color="#94a3b8">Workplace Posture Intelligence</font>',
+            ps("hl", textColor=WHITE, leading=26)),
+        Paragraph(
+            f'<b><font size="11">{co.get("name","PostureAI Client")}</font></b>'
+            f'<br/><font size="8" color="#94a3b8">Posture Assessment Report</font>'
+            f'<br/><font size="7" color="#60a5fa">{tlab.get(tier,"Standard")} Tier  ·  Confidential</font>',
+            ps("hr", textColor=WHITE, alignment=TA_RIGHT, leading=16)),
     ]], colWidths=[uw*.52, uw*.48])
-    hdr.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),NAVY),('PADDING',(0,0),(-1,-1),13),('VALIGN',(0,0),(-1,-1),'MIDDLE')]))
-    story.append(hdr); story.append(acc); story.append(Spacer(1,7))
+    hdr.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), NAVY),
+        ("PADDING",    (0,0), (-1,-1), 14),
+        ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
+    ]))
+    story.append(hdr)
+    story.append(acc)
+    story.append(Spacer(1, 8))
+
+    # ── Session meta bar ─────────────────────────────────────────
+    meta_items = [
+        ("Date",       dt),
+        ("Duration",   f"{dur//60}m {dur%60}s"),
+        ("Camera",     mlab.get(mode, mode)),
+        ("Engine",     (eng or "OpenCV")[:18]),
+        ("Confidence", f"{conf}%"),
+        ("Session",    sid[:14]),
+    ]
     meta = Table([[
-        Paragraph(f'<font color="#64748b" size="7.5">Date</font><br/><b>{dt}</b>', ps('m')),
-        Paragraph(f'<font color="#64748b" size="7.5">Session</font><br/><b>{sid}</b>', ps('m')),
-        Paragraph(f'<font color="#64748b" size="7.5">Mode</font><br/><b>{mlab.get(mode,mode)}</b>', ps('m')),
-        Paragraph(f'<font color="#64748b" size="7.5">Duration</font><br/><b>{dur//60}m {dur%60}s</b>', ps('m')),
-        Paragraph(f'<font color="#64748b" size="7.5">Engine</font><br/><b>{eng or "OpenCV"}</b>', ps('m', fontSize=8)),
-        Paragraph(f'<font color="#64748b" size="7.5">Confidence</font><br/><b>{conf}%</b>', ps('m')),
+        Paragraph(
+            f'<font color="#94a3b8" size="7">{lbl}</font><br/>'
+            f'<b><font size="9">{val}</font></b>',
+            ps(f"m{i}", leading=14))
+        for i, (lbl, val) in enumerate(meta_items)
     ]], colWidths=[uw/6]*6)
-    meta.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),LGRAY),('PADDING',(0,0),(-1,-1),(7,5)),('LINEBETWEEN',(0,0),(-1,-1),0.4,colors.HexColor("#e2e8f0")),('LINEBELOW',(0,0),(-1,-1),0.5,colors.HexColor("#cbd5e1"))]))
-    story.append(meta); story.append(Spacer(1,10))
+    meta.setStyle(TableStyle([
+        ("BACKGROUND",  (0,0), (-1,-1), BGRAY),
+        ("PADDING",     (0,0), (-1,-1), (8,6)),
+        ("LINEBETWEEN", (0,0), (-1,-1), 0.3, MGRAY),
+        ("LINEBELOW",   (0,0), (-1,-1), 0.6, colors.HexColor("#cbd5e1")),
+    ]))
+    story.append(meta)
+    story.append(Spacer(1, 10))
+
+    # ── Employee info ─────────────────────────────────────────────
     if emp and any(emp.values()):
-        story.append(Paragraph("Employee Information", ps('h2', fontSize=11, fontName='Helvetica-Bold', textColor=DGRAY, spaceAfter=6)))
+        emp_items = [
+            ("Name",        emp.get("name","—")),
+            ("Department",  emp.get("dept","—")),
+            ("Position",    emp.get("position","—")),
+            ("Employee ID", emp.get("id","—")),
+        ]
         er = Table([[
-            Paragraph(f'<font color="#64748b" size="7.5">Name</font><br/><b>{emp.get("name","—")}</b>', ps('e')),
-            Paragraph(f'<font color="#64748b" size="7.5">Department</font><br/><b>{emp.get("dept","—")}</b>', ps('e')),
-            Paragraph(f'<font color="#64748b" size="7.5">Position</font><br/><b>{emp.get("position","—")}</b>', ps('e')),
-            Paragraph(f'<font color="#64748b" size="7.5">Employee ID</font><br/><b>{emp.get("id","—")}</b>', ps('e')),
+            Paragraph(
+                f'<font color="#94a3b8" size="7">{lbl}</font><br/>'
+                f'<b><font size="9">{val}</font></b>',
+                ps(f"e{i}", leading=14))
+            for i, (lbl, val) in enumerate(emp_items)
         ]], colWidths=[uw*.28, uw*.22, uw*.28, uw*.22])
-        er.setStyle(TableStyle([('BOX',(0,0),(-1,-1),0.5,colors.HexColor("#e2e8f0")),('LINEBETWEEN',(0,0),(-1,-1),0.4,colors.HexColor("#e2e8f0")),('PADDING',(0,0),(-1,-1),(10,7))]))
-        story.append(er); story.append(Spacer(1,10))
-    story.append(Paragraph("Session Overview", ps('h2', fontSize=11, fontName='Helvetica-Bold', textColor=DGRAY, spaceAfter=6)))
-    col2 = sc_col(avs)
-    col_hex = {GREEN:"#059669",AMBER:"#d97706",RED:"#dc2626"}.get(col2,"#64748b")
-    ov = Table([[
-        Paragraph(f'<b><font size="42" color="{col_hex}">{avs}</font></b><br/><font size="9" color="#64748b">/ 100 — {sc_lbl(avs)}</font>',
-                  ps('ov', alignment=TA_CENTER, leading=50)),
-        Table([
-            [Paragraph('<font color="#64748b" size="7.5">Good posture</font>', ps('sv')), Paragraph(f'<b><font size="16" color="#059669">{gp}%</font></b>', ps('sv'))],
-            [Paragraph('<font color="#64748b" size="7.5">Total alerts</font>', ps('sv')), Paragraph(f'<b><font size="16" color="#d97706">{len(alts)}</font></b>', ps('sv'))],
-            [Paragraph('<font color="#64748b" size="7.5">Frames analyzed</font>', ps('sv')), Paragraph(f'<b><font size="14">{tf}</font></b>', ps('sv'))],
-        ], colWidths=[uw*.25, uw*.18]),
-    ]], colWidths=[uw*.28, uw*.72])
-    ov.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),('BACKGROUND',(0,0),(-1,-1),LGRAY),('PADDING',(0,0),(-1,-1),10),('LINEAFTER',(0,0),(0,-1),0.5,colors.HexColor("#e2e8f0"))]))
-    story.append(ov); story.append(Spacer(1,12))
+        er.setStyle(TableStyle([
+            ("BOX",         (0,0), (-1,-1), 0.5, MGRAY),
+            ("LINEBETWEEN", (0,0), (-1,-1), 0.3, MGRAY),
+            ("PADDING",     (0,0), (-1,-1), (10,7)),
+            ("BACKGROUND",  (0,0), (-1,-1), BGRAY),
+        ]))
+        story.append(er)
+        story.append(Spacer(1, 10))
+
+    # ══════════════════════════════════════════════════════════════
+    # SCORE RING (SVG-style via Drawing) + KPI ROW
+    # ══════════════════════════════════════════════════════════════
+    story.append(Paragraph("Session Overview",
+        ps("h1", fontSize=12, fontName="Helvetica-Bold", textColor=NAVY, spaceAfter=8)))
+
+    ring_w, ring_h = 90, 90
+    ring = Drawing(ring_w, ring_h)
+    cx, cy, R = ring_w/2, ring_h/2, 36
+    # Background ring
+    ring.add(Drawing(ring_w, ring_h))
+    # Simulate arc with thin lines (ReportLab Drawing)
+    import math as _m
+    steps = 120
+    for i in range(steps):
+        a0 = _m.radians(90 - (i/steps)*360)
+        a1 = _m.radians(90 - ((i+1)/steps)*360)
+        ring.add(Line(
+            cx + R*_m.cos(a0), cy + R*_m.sin(a0),
+            cx + R*_m.cos(a1), cy + R*_m.sin(a1),
+            strokeColor=MGRAY, strokeWidth=8))
+    # Filled arc = score
+    fill_steps = int(steps * avs / 100)
+    arc_col = sc_col(avs)
+    for i in range(fill_steps):
+        a0 = _m.radians(90 - (i/steps)*360)
+        a1 = _m.radians(90 - ((i+1)/steps)*360)
+        ring.add(Line(
+            cx + R*_m.cos(a0), cy + R*_m.sin(a0),
+            cx + R*_m.cos(a1), cy + R*_m.sin(a1),
+            strokeColor=arc_col, strokeWidth=8))
+    # Score text
+    ring.add(String(cx, cy+6,  str(avs),
+        fontSize=22, fontName="Helvetica-Bold",
+        fillColor=arc_col, textAnchor="middle"))
+    ring.add(String(cx, cy-8, "/100",
+        fontSize=8, fillColor=GRAY, textAnchor="middle"))
+    ring.add(String(cx, cy-18, sc_lbl(avs),
+        fontSize=7.5, fontName="Helvetica-Bold",
+        fillColor=arc_col, textAnchor="middle"))
+
+    # KPI cards row
+    kpi_items = [
+        ("Good Posture",    f"{gp}%",       GREEN  if gp >= 70 else AMBER),
+        ("Alerts",          str(len(alts)), RED    if len(alts) > 3 else AMBER if alts else GREEN),
+        ("Frames",          str(tf),        BLUE),
+        ("Data Quality",    f"{qual_sc}/100", sc_col(qual_sc)),
+        ("Session Trend",   trend.get("trend","—").replace("_"," ").title(), GREEN if "improv" in trend.get("trend","") else AMBER if "stable" in trend.get("trend","") else RED),
+    ]
+    kpi_cells = []
+    for lbl, val, col in kpi_items:
+        kpi_cells.append(Paragraph(
+            f'<font color="#94a3b8" size="7">{lbl}</font><br/>'
+            f'<b><font size="14" color="#{col.hexval()[1:]}">{val}</font></b>',
+            ps(f"kpi{lbl}", leading=18, alignment=TA_CENTER)))
+
+    ov_row = Table([[ring, Table([kpi_cells], colWidths=[uw*.145]*5)]],
+        colWidths=[ring_w+10, uw-ring_w-10])
+    ov_row.setStyle(TableStyle([
+        ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
+        ("BACKGROUND", (0,0), (-1,-1), BGRAY),
+        ("PADDING",    (0,0), (-1,-1), 10),
+        ("LINEAFTER",  (0,0), (0,-1),  0.5, MGRAY),
+        ("BOX",        (0,0), (-1,-1), 0.5, MGRAY),
+    ]))
+    story.append(ov_row)
+    story.append(Spacer(1, 12))
+
+    # ══════════════════════════════════════════════════════════════
+    # SCORE HISTORY BAR CHART (improved — with moving avg line)
+    # ══════════════════════════════════════════════════════════════
     if hist:
-        story.append(Paragraph("Score History", ps('h2', fontSize=11, fontName='Helvetica-Bold', textColor=DGRAY, spaceAfter=6)))
-        ch_w = float(uw*.94); ch_h = 82.0
+        story.append(Paragraph("Score Timeline",
+            ps("h2", fontSize=11, fontName="Helvetica-Bold", textColor=DGRAY, spaceAfter=6)))
+        ch_w = float(uw * 0.96); ch_h = 90.0
         d = Drawing(ch_w, ch_h)
-        d.add(Rect(0,0,ch_w,ch_h, fillColor=colors.HexColor("#f8fafc"), strokeColor=None))
-        for pct in [25,50,75,100]:
-            y = ch_h*pct/100
-            d.add(Line(0,y,ch_w,y, strokeColor=colors.HexColor("#e2e8f0"), strokeWidth=0.4))
-            d.add(String(ch_w-2,y+1,str(pct),fontSize=6.5,fillColor=GRAY,textAnchor='end'))
-        ry = ch_h*65/100
-        d.add(Line(0,ry,ch_w,ry, strokeColor=AMBER, strokeDashArray=[4,3], strokeWidth=0.8))
-        bw = ch_w/max(len(hist),1)
+        d.add(Rect(0, 0, ch_w, ch_h, fillColor=BGRAY, strokeColor=None))
+        # Grid lines
+        for pct in [25, 50, 75, 100]:
+            y = ch_h * pct / 100
+            d.add(Line(0, y, ch_w, y, strokeColor=MGRAY, strokeWidth=0.4))
+            d.add(String(ch_w-2, y+1, str(pct), fontSize=6, fillColor=GRAY, textAnchor="end"))
+        # 65% threshold line
+        d.add(Line(0, ch_h*0.65, ch_w, ch_h*0.65,
+            strokeColor=AMBER, strokeDashArray=[4,3], strokeWidth=0.8))
+        d.add(String(3, ch_h*0.65+2, "65 (good)", fontSize=6, fillColor=AMBER))
+        # Bars
+        bw = ch_w / max(len(hist), 1)
         for i, sv in enumerate(hist):
-            bh = max(1.5, ch_h*sv/100)
-            d.add(Rect(i*bw+0.7,0,max(1.5,bw-1.4),bh,fillColor=sc_col(sv),strokeColor=None))
-        story.append(d); story.append(Spacer(1,12))
-    story.append(Paragraph("Detailed Metrics", ps('h2', fontSize=11, fontName='Helvetica-Bold', textColor=DGRAY, spaceAfter=6)))
-    mh = [Paragraph(f"<b>{t}</b>", ps('mh',textColor=WHITE,fontSize=8.5)) for t in ["Metric","Value","Score","Status","Method"]]
-    m_rows = [mh]
+            bh = max(1.5, ch_h * sv / 100)
+            d.add(Rect(i*bw+0.8, 0, max(1.5, bw-1.6), bh,
+                fillColor=sc_col(sv), strokeColor=None))
+        # 7-point moving average line
+        if len(hist) >= 5:
+            ma_pts = []
+            for i in range(len(hist)):
+                sl = hist[max(0, i-3):i+4]
+                ma_pts.append((i*bw + bw/2, ch_h * (sum(sl)/len(sl)) / 100))
+            for i in range(len(ma_pts)-1):
+                d.add(Line(ma_pts[i][0], ma_pts[i][1],
+                            ma_pts[i+1][0], ma_pts[i+1][1],
+                    strokeColor=NAVY, strokeWidth=1.2, strokeDashArray=[2,2]))
+        story.append(d)
+        story.append(Spacer(1, 4))
+        story.append(Paragraph(
+            '<font color="#64748b" size="7">Bars = per-frame score  ·  Dashed line = 7-frame moving avg  ·  Amber line = 65pt threshold</font>',
+            ps("chart_leg", fontSize=7, textColor=GRAY)))
+        story.append(Spacer(1, 12))
+
+    # ══════════════════════════════════════════════════════════════
+    # DETAILED METRICS TABLE — incl. new features
+    # ══════════════════════════════════════════════════════════════
+    story.append(Paragraph("Detailed Posture Metrics",
+        ps("h2", fontSize=11, fontName="Helvetica-Bold", textColor=DGRAY, spaceAfter=6)))
+
+    # Extended metric descriptions + clinical context
     mdesc = {
-        "neck_lean":"Forward neck lean via ear–shoulder–vertical angle",
-        "head_tilt":"Lateral head tilt from eye-line angle (FaceMesh)",
-        "shoulder_level":"Shoulder height asymmetry from pose landmarks",
-        "spine_lean":"Trunk lean angle: shoulder→hip from vertical",
-        "screen_distance":"IPD-based distance from FaceMesh iris landmarks",
-        "pitch":"3D head pitch via solvePnP on FaceMesh landmarks",
-        "yaw":"3D head yaw — left/right turn angle (solvePnP)",
-        "roll":"3D head roll — lateral tilt angle (solvePnP)",
-        "wrist_angle":"Wrist deviation from straight — CTD risk",
-        "eye_strain":"Blink rate via FaceMesh iris — eye strain detection",
-        "trunk_lean":"Trunk lean from side: shoulder→hip from vertical",
-        "hip_angle":"Hip flexion angle: shoulder–hip–knee (target 90°)",
-        "knee_angle":"Knee flexion angle: hip–knee–ankle (target 90°)",
-        "spine_align":"Horizontal offset ear vs ankle (spinal plumb line)",
+        "neck_lean":        ("Neck lean",        "Forward lean of ear ahead of shoulder vertical"),
+        "head_tilt":        ("Head tilt",         "Lateral head tilt measured from eye-line angle (FaceMesh)"),
+        "shoulder_level":   ("Shoulder symmetry", "Height asymmetry between left and right shoulders"),
+        "spine_lean":       ("Spine lean",        "Trunk lean angle: shoulder→hip vs vertical"),
+        "spine_upper_s":    ("Upper spine",       "Thoracic spine segment lean (3-point measurement)"),
+        "spine_lower_s":    ("Lower spine",       "Lumbar spine segment lean (3-point measurement)"),
+        "screen_distance":  ("Screen distance",   "IPD-based distance via FaceMesh iris landmarks"),
+        "head_yaw":         ("Head turn",         "Left/right head rotation from camera forward axis"),
+        "wrist_angle":      ("Wrist angle",       "Wrist deviation — CTD/RSI risk indicator (3D)"),
+        "eye_strain":       ("Eye strain",        "Blink rate vs NIOSH standard (12–20/min normal)"),
+        "symmetry":         ("Body symmetry",     "Shoulder/hip height asymmetry — scoliosis indicator"),
+        "ergonomics_score": ("Workstation",       "Composite: monitor height + distance + neck posture"),
+        "fhp_index":        ("Forward head (FHP)","Clinical: ear offset from shoulder plumb line in cm"),
+        "neck_load":        ("Neck load",         "Estimated head weight on cervical spine (Hansraj 2014)"),
+        "rsi_risk":         ("RSI risk",          "Cumulative repetitive strain injury risk (session)"),
+        "breathing_rate":   ("Breathing",         "Estimated breaths/min from shoulder movement cycle"),
+        "movement":         ("Micro-movement",    "Natural position variance — frozen posture detection"),
+        "gaze":             ("Gaze direction",    "Iris position within eye socket — screen attention"),
+        "hip_angle":        ("Hip angle",         "Hip flexion: shoulder–hip–knee (target 90°)"),
+        "knee_angle":       ("Knee angle",        "Knee flexion: hip–knee–ankle (target 90°)"),
+        "trunk_lean":       ("Trunk lean",        "Side-view trunk lean: shoulder→hip from vertical"),
     }
+    SKIP_METRICS = {"_confidence", "_side_confidence", "head_pose_detail", "spine_curvature"}
+
+    mh_row = [Paragraph(f"<b>{t}</b>",
+        ps(f"mh{t}", textColor=WHITE, fontSize=8, alignment=TA_CENTER if t != "Metric" else TA_LEFT))
+        for t in ["Metric", "Value", "Score", "Status", "Clinical Context"]]
+    m_rows = [mh_row]
+
     for k, m3 in met.items():
-        s3 = m3.get("score",0); v3 = m3.get("value")
-        vs = (f"{round(v3)}{m3.get('unit','')}" if isinstance(v3,(int,float)) else str(v3) if v3 is not None else "—")
+        if k in SKIP_METRICS or not isinstance(m3, dict) or "score" not in m3: continue
+        s3  = m3.get("score", 0) or 0
+        v3  = m3.get("value")
+        u3  = m3.get("unit", "")
+        vs  = (f"{round(v3,1)}{u3}" if isinstance(v3, float) else
+               f"{v3}{u3}"           if isinstance(v3, int) else
+               str(v3)               if v3 is not None else "—")
+        lbl, ctx = mdesc.get(k, (m3.get("label", k), ""))
+        # Special: show extra sub-values for complex metrics
+        extra = ""
+        if k == "neck_load":
+            extra = f' (+{m3.get("extra_load_kg","?"):}kg vs 5.4kg baseline)'
+        elif k == "fhp_index":
+            extra = f' ({m3.get("extra_load_kg","?"):}kg extra load)'
+        elif k == "rsi_risk":
+            extra = f' ({m3.get("level","?")} risk)'
+        elif k == "ergonomics_score":
+            extra = f' ({m3.get("grade","?")})'
+        elif k == "breathing_rate":
+            extra = f' ({m3.get("risk","?")})'
+
         m_rows.append([
-            Paragraph(m3.get("label",k), ps('mc',fontSize=8.5)),
-            Paragraph(f"<b>{vs}</b>",    ps('mv',fontSize=8.5,fontName='Helvetica-Bold',textColor=DGRAY)),
-            Paragraph(str(s3),           ps('ms',fontSize=8.5,fontName='Helvetica-Bold',textColor=sc_col(s3),alignment=TA_CENTER)),
-            Paragraph(sc_lbl(s3),        ps('mst',fontSize=7.5,textColor=sc_col(s3),alignment=TA_CENTER)),
-            Paragraph(mdesc.get(k,m3.get("label","")), ps('md',fontSize=7.5,textColor=GRAY)),
+            Paragraph(f"{lbl}",              ps(f"mc{k}", fontSize=8)),
+            Paragraph(f"<b>{vs}{extra}</b>", ps(f"mv{k}", fontSize=8, fontName="Helvetica-Bold",
+                                                textColor=sc_col(s3) if s3 < 60 else DGRAY)),
+            Paragraph(f"<b>{s3}</b>",        ps(f"ms{k}", fontSize=8.5, fontName="Helvetica-Bold",
+                                                textColor=sc_col(s3), alignment=TA_CENTER)),
+            Paragraph(sc_lbl(s3),            ps(f"mst{k}", fontSize=7.5, textColor=sc_col(s3),
+                                                alignment=TA_CENTER)),
+            Paragraph(ctx,                   ps(f"md{k}", fontSize=7.5, textColor=GRAY, leading=11)),
         ])
-    mt2 = Table(m_rows, colWidths=[uw*.21,uw*.11,uw*.09,uw*.12,uw*.47])
-    mt2.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),NAVY),('FONTSIZE',(0,0),(-1,0),8.5),('PADDING',(0,0),(-1,-1),(7,5)),('ROWBACKGROUNDS',(0,1),(-1,-1),[WHITE,LGRAY]),('LINEBELOW',(0,0),(-1,-1),0.3,colors.HexColor("#e2e8f0")),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('LINEBELOW',(0,0),(-1,0),1.0,BLUE)]))
-    story.append(mt2); story.append(Spacer(1,12))
+
+    mt2 = Table(m_rows, colWidths=[uw*.18, uw*.16, uw*.08, uw*.10, uw*.48])
+    mt2.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),  (-1,0),  NAVY),
+        ("TEXTCOLOR",     (0,0),  (-1,0),  WHITE),
+        ("FONTSIZE",      (0,0),  (-1,0),  8),
+        ("PADDING",       (0,0),  (-1,-1), (6,5)),
+        ("ROWBACKGROUNDS",(0,1),  (-1,-1), [WHITE, BGRAY]),
+        ("LINEBELOW",     (0,0),  (-1,-1), 0.3, MGRAY),
+        ("VALIGN",        (0,0),  (-1,-1), "MIDDLE"),
+        ("LINEBELOW",     (0,0),  (-1,0),  1.2, BLUE),
+    ]))
+    story.append(mt2)
+    story.append(Spacer(1, 12))
+
+    # ══════════════════════════════════════════════════════════════
+    # HEAD POSE 3D TABLE
+    # ══════════════════════════════════════════════════════════════
     if hp:
-        story.append(Paragraph("3D Head Pose — solvePnP on FaceMesh", ps('h2', fontSize=11, fontName='Helvetica-Bold', textColor=DGRAY, spaceAfter=6)))
+        story.append(Paragraph("3D Head Pose  (solvePnP · 14 landmarks · EPNP+LM)",
+            ps("h2", fontSize=11, fontName="Helvetica-Bold", textColor=DGRAY, spaceAfter=6)))
+        reproj = hp.get("reproj_err", 0)
+        reliability = "High" if reproj < 2 else "Medium" if reproj < 4 else "Low"
+        rel_col = GREEN if reproj < 2 else AMBER if reproj < 4 else RED
         pi = {
-            "pitch": lambda v: "Head down — chin toward chest" if v<-18 else "Head up — looking above screen" if v>18 else f"Pitch optimal ({v}°) ✓",
-            "yaw":   lambda v: f"Turning {'left' if v<0 else 'right'} {abs(round(v,1))}° — asymmetric load" if abs(v)>12 else "Facing forward ✓",
-            "roll":  lambda v: f"Lateral tilt {'left' if v<0 else 'right'} {abs(round(v,1))}° — shoulder asymmetry" if abs(v)>7 else "Head level ✓",
+            "pitch": lambda v: f"Head down {abs(v)}°" if v<-10 else f"Head up {abs(v)}°" if v>10 else "✓ At eye level",
+            "yaw":   lambda v: f"Turned {'left' if v<0 else 'right'} {abs(round(v,1))}° — asymmetric load" if abs(v)>8 else "✓ Facing forward",
+            "roll":  lambda v: f"Tilted {'left' if v<0 else 'right'} {abs(round(v,1))}° — shoulder asymmetry" if abs(v)>5 else "✓ Head level",
         }
-        pr2 = [[Paragraph(f"<b>{t}</b>", ps('ph',textColor=WHITE,fontSize=8.5)) for t in ["Axis","Value","Interpretation"]]]
+        pr2 = [[Paragraph(f"<b>{t}</b>", ps(f"ph{t}", textColor=WHITE, fontSize=8))
+                for t in ["Axis","Value","Interpretation","Risk"]]]
         for axis in ["pitch","yaw","roll"]:
-            v3 = hp.get(axis,0); c3 = GREEN if abs(v3)<10 else AMBER if abs(v3)<20 else RED
-            pr2.append([Paragraph(axis.capitalize(), ps('pa',fontSize=8.5)),
-                        Paragraph(f"<b>{v3}°</b>", ps('pv',fontSize=8.5,fontName='Helvetica-Bold',textColor=c3)),
-                        Paragraph(pi[axis](v3), ps('pi',fontSize=8.5))])
-        pt = Table(pr2, colWidths=[uw*.14,uw*.14,uw*.72])
-        pt.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),TEAL),('FONTSIZE',(0,0),(-1,0),8.5),('PADDING',(0,0),(-1,-1),(7,5)),('ROWBACKGROUNDS',(0,1),(-1,-1),[WHITE,LGRAY]),('LINEBELOW',(0,0),(-1,-1),0.3,colors.HexColor("#e2e8f0"))]))
-        story.append(pt); story.append(Spacer(1,12))
+            v3 = hp.get(axis, 0) or 0
+            c3 = GREEN if abs(v3) < 8 else AMBER if abs(v3) < 18 else RED
+            risk_label = "Low" if abs(v3) < 8 else "Moderate" if abs(v3) < 18 else "High"
+            pr2.append([
+                Paragraph(axis.capitalize(), ps(f"pa{axis}", fontSize=8.5)),
+                Paragraph(f"<b>{v3}°</b>",  ps(f"pv{axis}", fontSize=8.5,
+                    fontName="Helvetica-Bold", textColor=c3)),
+                Paragraph(pi[axis](v3),      ps(f"pi{axis}", fontSize=8)),
+                Paragraph(risk_label,        ps(f"pr{axis}", fontSize=8, textColor=c3,
+                    fontName="Helvetica-Bold", alignment=TA_CENTER)),
+            ])
+        pt = Table(pr2, colWidths=[uw*.12, uw*.12, uw*.58, uw*.18])
+        pt.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0),  TEAL),
+            ("TEXTCOLOR",     (0,0), (-1,0),  WHITE),
+            ("PADDING",       (0,0), (-1,-1), (7,5)),
+            ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, BGRAY]),
+            ("LINEBELOW",     (0,0), (-1,-1), 0.3, MGRAY),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ]))
+        story.append(pt)
+        story.append(Paragraph(
+            f'<font color="#64748b" size="7">Reprojection error: {reproj}px  ·  '
+            f'Reliability: <b>{reliability}</b>  ·  '
+            f'Landmarks used: {hp.get("landmarks_n", 6)}  ·  '
+            f'Camera correction applied: {sd.get("cam_correction_applied", 0)}°</font>',
+            ps("reproj", fontSize=7, textColor=GRAY)))
+        story.append(Spacer(1, 12))
+
+    # ══════════════════════════════════════════════════════════════
+    # EMPLOYEE HEALTH MODEL — the premium differentiator
+    # ══════════════════════════════════════════════════════════════
+    story.append(PageBreak())
+    story.append(Paragraph("Employee Musculoskeletal Health Model",
+        ps("h1", fontSize=13, fontName="Helvetica-Bold", textColor=NAVY, spaceAfter=4)))
+    story.append(Paragraph(
+        "Evidence-based risk assessment across 4 body regions based on ISO 9241-110, OSHA 3125, and NIOSH ergonomic guidelines.",
+        ps("sub", fontSize=8.5, textColor=GRAY, spaceAfter=10)))
+
+    # Body region risk matrix
+    fhp = met.get("fhp_index", {})
+    neck_load_m = met.get("neck_load", {})
+    rsi_m  = met.get("rsi_risk", {})
+    ergo_m = met.get("ergonomics_score", {})
+    sym_m  = met.get("symmetry", {})
+    eye_m  = met.get("eye_strain", {})
+    breath_m = met.get("breathing_rate", {})
+    wrist_m  = met.get("wrist_angle", {})
+
+    def risk_from_score(s):
+        if not s: return "Unknown", GRAY
+        if s >= 75: return "Low", GREEN
+        if s >= 55: return "Moderate", AMBER
+        return "High", RED
+
+    regions = [
+        {
+            "region": "Cervical Spine (Neck)",
+            "icon":   "🔴 CRITICAL" if (fhp.get("value",0) or 0) > 6 else "🟡 MODERATE" if (fhp.get("value",0) or 0) > 3 else "🟢 NORMAL",
+            "metrics": [
+                ("Forward Head Posture", f'{fhp.get("value","—")}cm', f'+{fhp.get("extra_load_kg","?")}kg neck load'),
+                ("Neck Load Est.",       f'{neck_load_m.get("value","—")}kg', f'Multiplier: {neck_load_m.get("multiplier","?")}×'),
+                ("Neck Lean Score",      f'{met.get("neck_lean",{}).get("value","—")}°', f'Score: {met.get("neck_lean",{}).get("score","?")}'),
+            ],
+            "risk_score": met.get("neck_lean",{}).get("score",0) or 0,
+            "intervention": "Raise monitor to eye level. Each 2.5cm of forward head adds ~4.5kg cervical load. Target: ear directly above shoulder.",
+        },
+        {
+            "region": "Thoracic & Lumbar Spine",
+            "icon":   "🔴 HIGH RISK" if (met.get("spine_lean",{}).get("score",0) or 0) < 50 else "🟡 MODERATE" if (met.get("spine_lean",{}).get("score",0) or 0) < 70 else "🟢 NORMAL",
+            "metrics": [
+                ("Spine Lean",     f'{met.get("spine_lean",{}).get("value","—")}°',     f'Score: {met.get("spine_lean",{}).get("score","?")}'),
+                ("Upper Spine",    f'{met.get("spine_upper_s",{}).get("value","—")}°',  "Thoracic segment"),
+                ("Lower Spine",    f'{met.get("spine_lower_s",{}).get("value","—")}°',  "Lumbar segment"),
+                ("Body Symmetry",  f'{sym_m.get("value","—")}%',                        f'sh: {sym_m.get("sh_asym","?")}%  hip: {sym_m.get("hip_asym","?")}%'),
+            ],
+            "risk_score": met.get("spine_lean",{}).get("score",0) or 0,
+            "intervention": "Ensure lumbar support contacts lower back. Sit back fully in chair. Symmetry > 5% warrants ergonomic assessment.",
+        },
+        {
+            "region": "Upper Extremity (Wrist & Arm)",
+            "icon":   "🔴 HIGH RISK" if (wrist_m.get("score",0) or 0) < 50 else "🟡 MODERATE" if (wrist_m.get("score",0) or 0) < 70 else "🟢 NORMAL",
+            "metrics": [
+                ("Wrist Angle 3D", f'{wrist_m.get("value","—")}°',  f'Score: {wrist_m.get("score","?")}'),
+                ("RSI Risk Index", f'{rsi_m.get("value","—")}',      f'{rsi_m.get("level","?")} ({rsi_m.get("neck_contrib","?")} neck + {rsi_m.get("wrist_contrib","?")} wrist)'),
+                ("Workstation",    f'{ergo_m.get("value","—")}/100', f'Grade: {ergo_m.get("grade","?")}'),
+            ],
+            "risk_score": wrist_m.get("score",0) or 0,
+            "intervention": "Keyboard at elbow height. Wrist deviation >15° significantly increases CTD risk. Consider wrist rest and keyboard tray.",
+        },
+        {
+            "region": "Visual & Autonomic System",
+            "icon":   "🔴 HIGH RISK" if (eye_m.get("score",0) or 0) < 50 else "🟡 MODERATE" if (eye_m.get("score",0) or 0) < 70 else "🟢 NORMAL",
+            "metrics": [
+                ("Blink Rate",    f'{eye_m.get("value","—")}/min',    f'Risk: {eye_m.get("eye_strain_risk","?")}'),
+                ("Breathing",     f'{breath_m.get("value","—")}/min', f'Amplitude: {breath_m.get("amplitude","?")}%'),
+                ("Gaze on Screen",f'{met.get("gaze",{}).get("on_screen","?")}', "Screen focus indicator"),
+            ],
+            "risk_score": eye_m.get("score",0) or 0,
+            "intervention": "Apply 20-20-20 rule: every 20 min, look 6m away for 20 sec. Blink <12/min = digital eye strain. Breathing <12/min = stress indicator.",
+        },
+    ]
+
+    for reg in regions:
+        rs = reg["risk_score"]
+        r_bg = ELGREEN if rs >= 75 else ELAMBER if rs >= 55 else ELRED
+        r_col = GREEN  if rs >= 75 else AMBER   if rs >= 55 else RED
+
+        # Region header
+        reg_hdr = Table([[
+            Paragraph(f'<b>{reg["region"]}</b>', ps("rh", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE)),
+            Paragraph(reg["icon"], ps("ri", fontSize=8, textColor=WHITE, alignment=TA_RIGHT)),
+        ]], colWidths=[uw*.72, uw*.28])
+        reg_hdr.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), NAVY),
+            ("PADDING",    (0,0), (-1,-1), (10,7)),
+            ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
+        ]))
+        story.append(reg_hdr)
+
+        # Metrics grid
+        m_cells = []
+        for lbl, val, note in reg["metrics"]:
+            m_cells.append(Paragraph(
+                f'<font color="#64748b" size="7">{lbl}</font><br/>'
+                f'<b><font size="10">{val}</font></b><br/>'
+                f'<font size="7" color="#94a3b8">{note}</font>',
+                ps(f"rc{lbl}", leading=14, alignment=TA_CENTER)))
+        # Pad to 4
+        while len(m_cells) < 4:
+            m_cells.append(Paragraph("", ps("empty")))
+
+        risk_bar_h = 6
+        risk_bar = Drawing(uw*0.22, risk_bar_h)
+        risk_bar.add(Rect(0, 0, uw*0.22, risk_bar_h, fillColor=MGRAY, strokeColor=None))
+        risk_bar.add(Rect(0, 0, uw*0.22*rs/100, risk_bar_h, fillColor=r_col, strokeColor=None))
+
+        met_row = Table(
+            [m_cells[:4]] if len(m_cells) >= 4 else [m_cells],
+            colWidths=[uw*.25]*4)
+        met_row.setStyle(TableStyle([
+            ("BACKGROUND",  (0,0), (-1,-1), r_bg),
+            ("PADDING",     (0,0), (-1,-1), (8,8)),
+            ("LINEBETWEEN", (0,0), (-1,-1), 0.3, MGRAY),
+        ]))
+        story.append(met_row)
+
+        # Intervention recommendation
+        intv = Table([[
+            Paragraph("⚕ Intervention:", ps("il", fontSize=8, fontName="Helvetica-Bold", textColor=TEAL)),
+            Paragraph(reg["intervention"], ps("it", fontSize=8, textColor=DGRAY, leading=12)),
+        ]], colWidths=[uw*.18, uw*.82])
+        intv.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), ELTEAL),
+            ("PADDING",    (0,0), (-1,-1), (8,6)),
+        ]))
+        story.append(intv)
+        story.append(Spacer(1, 8))
+
+    # ══════════════════════════════════════════════════════════════
+    # AI CLINICAL NARRATIVE
+    # ══════════════════════════════════════════════════════════════
     if ai_a:
-        story.append(Paragraph("AI Clinical Analysis — Gemini", ps('h2', fontSize=11, fontName='Helvetica-Bold', textColor=DGRAY, spaceAfter=6)))
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("AI Clinical Analysis  (Gemini Pro — Physiotherapist Mode)",
+            ps("h2", fontSize=11, fontName="Helvetica-Bold", textColor=DGRAY, spaceAfter=6)))
         ai_box = Table([[
-            Paragraph("AI", ps('aib',fontSize=9,fontName='Helvetica-Bold',textColor=WHITE,alignment=TA_CENTER)),
-            Paragraph(ai_a, ps('ait',fontSize=8.5,textColor=DGRAY,leading=13)),
+            Paragraph("AI", ps("aib", fontSize=10, fontName="Helvetica-Bold",
+                textColor=WHITE, alignment=TA_CENTER)),
+            Paragraph(ai_a, ps("ait", fontSize=8.5, textColor=DGRAY, leading=13)),
         ]], colWidths=[uw*.07, uw*.93])
-        ai_box.setStyle(TableStyle([('BACKGROUND',(0,0),(0,-1),BLUE),('BACKGROUND',(1,0),(1,-1),colors.HexColor("#eff6ff")),('VALIGN',(0,0),(-1,-1),'TOP'),('PADDING',(0,0),(-1,-1),(8,8)),('BOX',(0,0),(-1,-1),0.5,BLUE2)]))
-        story.append(ai_box); story.append(Spacer(1,12))
-    story.append(Paragraph("Alert Log", ps('h2', fontSize=11, fontName='Helvetica-Bold', textColor=DGRAY, spaceAfter=6)))
+        ai_box.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (0,-1), BLUE),
+            ("BACKGROUND", (1,0), (1,-1), ELBLUE),
+            ("VALIGN",     (0,0), (-1,-1), "TOP"),
+            ("PADDING",    (0,0), (-1,-1), (9,9)),
+            ("BOX",        (0,0), (-1,-1), 0.8, BLUE2),
+        ]))
+        story.append(ai_box)
+        story.append(Spacer(1, 10))
+
+    # ══════════════════════════════════════════════════════════════
+    # ALERT LOG
+    # ══════════════════════════════════════════════════════════════
+    story.append(Paragraph("Alert Log",
+        ps("h2", fontSize=11, fontName="Helvetica-Bold", textColor=DGRAY, spaceAfter=6)))
     if alts:
-        a_rows = [[Paragraph(f"<b>{t}</b>", ps('ah',textColor=WHITE,fontSize=8)) for t in ["Time","Alert","Score"]]]
-        for a3 in alts[:14]:
-            s3 = a3.get("score",0)
-            a_rows.append([Paragraph(a3.get("time","—"), ps('at',fontSize=8,textColor=GRAY)),
-                           Paragraph(a3.get("msg","—"), ps('am',fontSize=8.5)),
-                           Paragraph(f"<b>{s3}</b>", ps('as',fontSize=8,fontName='Helvetica-Bold',textColor=sc_col(s3),alignment=TA_CENTER))])
-        at2 = Table(a_rows, colWidths=[uw*.13,uw*.71,uw*.16])
-        at2.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),DGRAY),('PADDING',(0,0),(-1,-1),(7,5)),('ROWBACKGROUNDS',(0,1),(-1,-1),[WHITE,LGRAY]),('LINEBELOW',(0,0),(-1,-1),0.3,colors.HexColor("#e2e8f0"))]))
+        a_rows = [[Paragraph(f"<b>{t}</b>", ps(f"ah{t}", textColor=WHITE, fontSize=8))
+                   for t in ["#","Alert","Severity"]]]
+        for idx, a3 in enumerate(alts[:20]):
+            msg  = a3.get("msg", a3) if isinstance(a3, dict) else str(a3)
+            sev  = "⚠️ High" if msg.startswith("⚠️") else "ℹ️ Info"
+            scol = RED if msg.startswith("⚠️") else AMBER
+            a_rows.append([
+                Paragraph(str(idx+1),   ps(f"an{idx}", fontSize=8, textColor=GRAY, alignment=TA_CENTER)),
+                Paragraph(msg.replace("⚠️","").strip(), ps(f"am{idx}", fontSize=8.5)),
+                Paragraph(sev,          ps(f"as{idx}", fontSize=8, textColor=scol, fontName="Helvetica-Bold")),
+            ])
+        at2 = Table(a_rows, colWidths=[uw*.06, uw*.76, uw*.18])
+        at2.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0),  DGRAY),
+            ("TEXTCOLOR",     (0,0), (-1,0),  WHITE),
+            ("PADDING",       (0,0), (-1,-1), (7,5)),
+            ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, BGRAY]),
+            ("LINEBELOW",     (0,0), (-1,-1), 0.3, MGRAY),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ]))
         story.append(at2)
     else:
-        story.append(Paragraph("No alerts triggered — excellent session compliance.", ps('na',fontSize=9,textColor=GREEN)))
-    story.append(Spacer(1,12))
+        story.append(Paragraph("✓ No alerts triggered — excellent session compliance.",
+            ps("na", fontSize=9, textColor=GREEN)))
+    story.append(Spacer(1, 12))
+
+    # ══════════════════════════════════════════════════════════════
+    # RECOMMENDATIONS
+    # ══════════════════════════════════════════════════════════════
     if recs:
-        story.append(Paragraph("Recommendations", ps('h2', fontSize=11, fontName='Helvetica-Bold', textColor=DGRAY, spaceAfter=6)))
-        r_rows = [[Paragraph(f"<b>{i+1}</b>", ps('rn',fontSize=10,fontName='Helvetica-Bold',textColor=WHITE,alignment=TA_CENTER)),
-                   Paragraph(r3, ps('rb',fontSize=8.5))] for i, r3 in enumerate(recs)]
+        story.append(Paragraph("Evidence-Based Recommendations",
+            ps("h2", fontSize=11, fontName="Helvetica-Bold", textColor=DGRAY, spaceAfter=6)))
+        r_rows = []
+        for i, r3 in enumerate(recs):
+            priority = "🔴" if i == 0 else "🟡" if i < 3 else "🟢"
+            r_rows.append([
+                Paragraph(f"<b>{i+1}</b>",   ps(f"rn{i}", fontSize=9, fontName="Helvetica-Bold",
+                    textColor=WHITE, alignment=TA_CENTER)),
+                Paragraph(f"{priority} {r3}", ps(f"rb{i}", fontSize=8.5, leading=13)),
+            ])
         rt = Table(r_rows, colWidths=[uw*.055, uw*.945])
-        rt.setStyle(TableStyle([('BACKGROUND',(0,0),(0,-1),BLUE),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('PADDING',(0,0),(-1,-1),(7,6)),('ROWBACKGROUNDS',(1,0),(1,-1),[LGRAY,WHITE]),('LINEBELOW',(0,0),(-1,-1),0.3,colors.HexColor("#e2e8f0"))]))
-        story.append(rt); story.append(Spacer(1,12))
-    story.append(HRFlowable(width=uw,thickness=0.5,color=colors.HexColor("#e2e8f0")))
-    story.append(Spacer(1,5))
+        rt.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0),  (0,-1),  BLUE),
+            ("VALIGN",        (0,0),  (-1,-1), "MIDDLE"),
+            ("PADDING",       (0,0),  (-1,-1), (7,6)),
+            ("ROWBACKGROUNDS",(1,0),  (1,-1),  [BGRAY, WHITE]),
+            ("LINEBELOW",     (0,0),  (-1,-1), 0.3, MGRAY),
+        ]))
+        story.append(rt)
+        story.append(Spacer(1, 10))
+
+    # ══════════════════════════════════════════════════════════════
+    # SESSION QUALITY & DATA INTEGRITY
+    # ══════════════════════════════════════════════════════════════
+    if qual:
+        story.append(Paragraph("Session Data Quality",
+            ps("h2", fontSize=11, fontName="Helvetica-Bold", textColor=DGRAY, spaceAfter=6)))
+        qcomp = qual.get("components", {})
+        q_items = [
+            ("Detection Rate",   qcomp.get("detection_rate", 0), "%"),
+            ("Blur Rate",        qcomp.get("blur_rate", 0),      "%"),
+            ("Avg Visibility",   qcomp.get("avg_visibility", 0), "%"),
+            ("Avg Confidence",   qcomp.get("avg_confidence", 0), "%"),
+            ("Overall Quality",  qual_sc,                        "/100"),
+        ]
+        q_rows = [[Paragraph(f"<b>{t}</b>", ps(f"qh{t}", textColor=WHITE, fontSize=8))
+                   for t in ["Component","Value","Quality Bar","Interpretation"]]]
+        for lbl, val, unit in q_items:
+            q_rows.append([
+                Paragraph(lbl, ps(f"ql{lbl}", fontSize=8.5)),
+                Paragraph(f"<b>{val}{unit}</b>", ps(f"qv{lbl}", fontSize=9,
+                    fontName="Helvetica-Bold", textColor=sc_col(val))),
+                Paragraph(
+                    f'{"█"*int(val//10)}{"░"*int(10-val//10)}',
+                    ps(f"qb{lbl}", fontSize=9, textColor=sc_col(val), fontName="Helvetica")),
+                Paragraph(sc_lbl(val), ps(f"qi{lbl}", fontSize=8, textColor=sc_col(val))),
+            ])
+        qt = Table(q_rows, colWidths=[uw*.26, uw*.14, uw*.22, uw*.38])
+        qt.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0),  DGRAY),
+            ("TEXTCOLOR",     (0,0), (-1,0),  WHITE),
+            ("PADDING",       (0,0), (-1,-1), (7,5)),
+            ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, BGRAY]),
+            ("LINEBELOW",     (0,0), (-1,-1), 0.3, MGRAY),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ]))
+        story.append(qt)
+        if qual.get("issues"):
+            story.append(Spacer(1,4))
+            for issue in qual["issues"]:
+                story.append(Paragraph(f"• {issue}",
+                    ps(f"qi{issue[:10]}", fontSize=8, textColor=AMBER, leftIndent=8)))
+        story.append(Spacer(1, 10))
+
+    # ══════════════════════════════════════════════════════════════
+    # LEGAL FOOTER
+    # ══════════════════════════════════════════════════════════════
+    story.append(HRFlowable(width=uw, thickness=0.5, color=MGRAY))
+    story.append(Spacer(1, 4))
     story.append(Paragraph(
-        "This report is generated by PostureAI Pro using MediaPipe computer vision. "
-        "Results are indicative and do not constitute medical advice. "
-        "Consult a qualified physiotherapist for clinical assessment. "
-        "All video processing is local — no video is transmitted externally.",
-        ps('disc',fontSize=7,textColor=GRAY,alignment=TA_CENTER,leading=10)))
-    story.append(Spacer(1,3))
-    story.append(Paragraph(
-        f"PostureAI Pro  ·  postureai.io  ·  Generated {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        f"  ·  Session {sid}  ·  Tier: {tlab.get(tier,'Standard')}  ·  Engine: {eng or 'OpenCV'}",
-        ps('ft',fontSize=7,textColor=GRAY,alignment=TA_CENTER)))
-    doc.build(story)
+        "This report is generated by PostureAI Pro and is intended for occupational health monitoring purposes only. "
+        "It does not constitute medical advice. For clinical diagnosis or treatment, consult a qualified healthcare professional. "
+        "Data processed in accordance with applicable data protection regulations.",
+        ps("legal", fontSize=6.5, textColor=GRAY, alignment=TA_CENTER, leading=10)))
+
+    # ── Build ─────────────────────────────────────────────────────
+    doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
     return buf.getvalue()
+
 
 def blur_face_in_frame(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -9619,6 +10115,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
