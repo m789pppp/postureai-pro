@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -8,7 +8,7 @@ import {
   SUPPORT_EMAIL, PAYMOB_IFRAME_ID,
   AUTO_APPROVE_DOMAIN, serverTimestamp,
   notifyPaymentPending, notifyPaymentConfirmed,
-  getCompany, createCompany, getUserSessions, onUserSessions, deleteSession, updateUserProfile,
+  getCompany, createCompany, getUserSessions, onUserSessions, updateUserProfile,
   checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, getReferralDiscount, checkAndSendNurtureEmails,
   doc, updateDoc,
 } from "./firebase.js";
@@ -1989,8 +1989,8 @@ export default function App(){
     };
     setSessionResult(result);
 
-    if(user && dur >= 1){ // Save if session lasted at least 1 second
-      addToast("💾 Saving... uid="+user.uid.slice(0,8)+" dur="+dur+"s","info");
+    if(user && dur >= 5){ // Save if session lasted at least 5 seconds
+      addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
       saveSession(user.uid,{
         session_id:sessionId, mode, tier, avg_score:avg,
         good_pct:gPct, duration_s:dur, duration_sec:dur,
@@ -2000,57 +2000,51 @@ export default function App(){
       }).then(()=>{
         addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
       }).catch(e=>{
-        console.error("saveSession failed:", e?.code, e?.message, e);
-        addToast("❌ "+( e?.code||e?.message||"unknown"),"error");
+        console.error("saveSession failed:", e?.code, e?.message);
+        addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
       });
-    } else if(user && dur < 1){
-      addToast("⚠️ dur="+dur+"s — too short, not saved","info");
+    } else if(user && dur < 5){
+      addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
     } else if(!user){
-      addToast("❌ Not signed in — uid=null","error");
+      addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
   } // end stopCamera
 
-  async function downloadPDF(){
+  async function downloadPDF(sessionOverride){
     const la=lastAnalRef.current||{};
     const hist=histRef.current||[];
     const avg=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
     const gPctPDF=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
     const durS=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
-    if(!la.metrics&&hist.length===0){
-      addToast("No session data yet — start a session first","warn"); return;
+
+    const sessionData = sessionOverride || {
+      session_id: sessionId,
+      avg_score: avg,
+      good_pct: gPctPDF,
+      duration_s: durS,
+      score_history: hist,
+      alerts_count: alRef.current?.length||0,
+      metrics: la.metrics||{},
+      tier, mode,
+      created_at: new Date(),
+    };
+
+    if(!sessionOverride && hist.length===0){
+      addToast(isAr?"ابدأ جلسة أولاً لتنزيل PDF":"No session data yet","warn"); return;
     }
-    addToast("Generating PDF...","info");
+
+    addToast(isAr?"جاري إنشاء الـ PDF...":"Generating PDF...","info");
     try{
-      const resp=await ReportAPI.downloadPDF({
-        body:JSON.stringify({
-          session_id:sessionId,
-          last_analysis:la,
-          lang,
-          score_history:hist,
-          avg_score:avg,
-          good_pct:gPctPDF,
-          duration_s:durS,
-          total_frames:totalRef.current,
-          alerts:alRef.current,
-          tier,mode,
-          company_info:{name:profile?.company||"PostureAI",logo_text:"◈ PostureAI"},
-          employee:{name:profile?.name||user?.email?.split("@")[0]||"",
-                    id:user?.uid?.slice(0,8)||"",
-                    dept:profile?.department||"",position:profile?.position||""},
-        })});
-      if(resp.ok){
-        const blob=await resp.blob();
-        const url=URL.createObjectURL(blob);
-        const a=document.createElement("a");
-        a.href=url;
-        a.download=`PostureAI_${tier}_${sessionId||new Date().toISOString().slice(0,10)}.pdf`;
-        a.click();URL.revokeObjectURL(url);
-        addToast("✅ PDF downloaded","success");
-      }else{
-        const err=await resp.json().catch(()=>({}));
-        addToast(err.error||"Backend error — make sure backend is running on port 5050","error");
-      }
-    }catch{addToast("Backend not running — start backend.py first","error");}
+      const { generateSessionPDF } = await import("./firebase.js");
+      const idx = sessionOverride
+        ? (userSessions.findIndex(s=>s.id===sessionOverride.id)+1 || userSessions.length)
+        : (userSessions.length + 1);
+      await generateSessionPDF({ session:sessionData, profile, user, lang, sessionIndex:idx });
+      addToast(isAr?"✅ تم تحميل الـ PDF":"✅ PDF downloaded","success");
+    }catch(err){
+      console.error("PDF error:",err);
+      addToast(isAr?`خطأ PDF: ${err.message}`:`PDF error: ${err.message}`,"error");
+    }
   }
 
   const score=analysis?.overall||0;
@@ -2409,7 +2403,7 @@ export default function App(){
         CalibrationWizard={CalibrationWizard} setCalibData={setCalibData}
         toast={addToast}
         isHRAdmin={isHRAdmin}
-        deleteSession={deleteSession}
+        downloadPDF={downloadPDF}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}

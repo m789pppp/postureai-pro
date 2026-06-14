@@ -299,7 +299,7 @@ export async function getUserSessions(uid) {
 }
 
 export async function deleteSession(sessionId) {
-  return deleteDoc(doc(db,"sessions",sessionId));
+  await deleteDoc(doc(db, "sessions", sessionId));
 }
 
 // Real-time listener version — keeps sessions always fresh
@@ -542,3 +542,136 @@ export async function seedDemoUser(uid, type) {
   }
 }
 
+// ── Client-side PDF Report Generator ─────────────────────────────
+export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex }) {
+  const { jsPDF } = await import("jspdf");
+  const isAr = lang === "ar";
+  const doc  = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+  const W=210, H=297, ml=18, mr=18;
+  let y = 18;
+
+  const gradeColor = s => s>=80?[16,185,129]:s>=60?[245,158,11]:[239,68,68];
+  const gradeLabel = s => s>=80?(isAr?"ممتاز":"Excellent"):s>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs Work");
+  const fmtDur = s => { if(!s) return "—"; const m=Math.floor(s/60),sec=s%60; return m>0?`${m}m ${sec}s`:`${sec}s`; };
+  const fmtDate = ts => {
+    if(!ts) return "—";
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleString(isAr?"ar-EG":"en-US",{ weekday:"long", year:"numeric", month:"long", day:"numeric", hour:"2-digit", minute:"2-digit" });
+  };
+
+  const avg     = session.avg_score || 0;
+  const dur     = session.duration_s || session.duration_sec || 0;
+  const goodPct = session.good_pct  || 0;
+  const gradeC  = gradeColor(avg);
+
+  // ── Header ────────────────────────────────────────────────────────
+  doc.setFillColor(3,11,20); doc.rect(0,0,W,38,"F");
+  doc.setFontSize(20); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+  doc.text("PostureAI Pro", ml, 16);
+  doc.setFontSize(9); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+  doc.text(isAr?"تقرير جلسة الوضعية":"Posture Session Report", ml, 24);
+  doc.text(`Generated: ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})}`, ml, 31);
+  // Tier badge
+  doc.setFillColor(26,86,219); doc.roundedRect(W-mr-28,12,28,10,2,2,"F");
+  doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+  doc.text((session.tier||"standard").toUpperCase(), W-mr-14, 18.5, {align:"center"});
+  y = 48;
+
+  // ── Session title ─────────────────────────────────────────────────
+  doc.setFontSize(14); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+  doc.text(isAr?`جلسة رقم ${sessionIndex||""}`:`Session #${sessionIndex||""}`, ml, y); y+=7;
+  doc.setFontSize(9); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+  doc.text(fmtDate(session.created_at), ml, y); y+=14;
+
+  // ── Score card ────────────────────────────────────────────────────
+  doc.setFillColor(248,250,252); doc.roundedRect(ml,y,W-ml-mr,42,4,4,"F");
+  doc.setDrawColor(...gradeC); doc.setLineWidth(0.5); doc.roundedRect(ml,y,W-ml-mr,42,4,4,"S");
+  const cx=ml+26, cy=y+21;
+  doc.setFillColor(...gradeC); doc.circle(cx,cy,15,"F");
+  doc.setFontSize(avg>=100?14:17); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+  doc.text(String(avg), cx, cy+6, {align:"center"});
+  doc.setFontSize(16); doc.setTextColor(...gradeC); doc.setFont("helvetica","bold");
+  doc.text(gradeLabel(avg), ml+48, y+14);
+  doc.setFontSize(9); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+  doc.text(isAr?"درجة الوضعية الكلية":"Overall Posture Score", ml+48, y+22);
+  [
+    { label:isAr?"المدة":"Duration",     val:fmtDur(dur) },
+    { label:isAr?"وضعية جيدة":"Good %", val:`${goodPct}%` },
+    { label:isAr?"تنبيهات":"Alerts",    val:String(session.alerts_count||0) },
+  ].forEach((st,i)=>{
+    const sx = W-mr-90+i*31;
+    doc.setFontSize(13); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+    doc.text(st.val, sx, y+20, {align:"center"});
+    doc.setFontSize(7); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+    doc.text(st.label, sx, y+27, {align:"center"});
+  });
+  y+=52;
+
+  // ── Score history sparkline ───────────────────────────────────────
+  const hist = session.score_history||[];
+  if(hist.length>1){
+    doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+    doc.text(isAr?"سجل النقاط":"Score History", ml, y); y+=6;
+    const bw=W-ml-mr, bh=28;
+    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,bw,bh,3,3,"F");
+    const slice=hist.slice(-40);
+    const maxS=Math.max(...slice,1), minS=Math.min(...slice,0);
+    const pts=slice.map((s,i,arr)=>({
+      x: ml+4+(i/Math.max(arr.length-1,1))*(bw-8),
+      y: y+bh-4-((s-minS)/Math.max(maxS-minS,1))*(bh-8),
+    }));
+    doc.setDrawColor(...gradeC); doc.setLineWidth(0.9);
+    pts.forEach((p,i)=>{ if(i>0) doc.line(pts[i-1].x,pts[i-1].y,p.x,p.y); });
+    pts.forEach(p=>{ doc.setFillColor(...gradeC); doc.circle(p.x,p.y,0.9,"F"); });
+    y+=bh+10;
+  }
+
+  // ── Metrics breakdown ─────────────────────────────────────────────
+  const metrics=session.metrics||{};
+  const entries=Object.entries(metrics);
+  if(entries.length>0){
+    doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+    doc.text(isAr?"تفصيل المقاييس":"Metrics Breakdown", ml, y); y+=7;
+    entries.forEach(([key,val])=>{
+      if(y>H-45){ doc.addPage(); y=20; }
+      const sc  = val?.score ?? (typeof val==="number"?val:0);
+      const col = gradeColor(sc);
+      const lbl = val?.label || key.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+      doc.setFillColor(248,250,252); doc.roundedRect(ml,y,W-ml-mr,13,2,2,"F");
+      doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
+      doc.text(lbl, ml+3, y+8.5);
+      const bx=ml+82, bw2=W-ml-mr-102;
+      doc.setFillColor(226,232,240); doc.roundedRect(bx,y+4.5,bw2,4,1,1,"F");
+      doc.setFillColor(...col); doc.roundedRect(bx,y+4.5,bw2*(sc/100),4,1,1,"F");
+      doc.setFontSize(8); doc.setTextColor(...col); doc.setFont("helvetica","bold");
+      doc.text(`${Math.round(sc)}`, W-mr-2, y+8.5, {align:"right"});
+      y+=16;
+    });
+    y+=4;
+  }
+
+  // ── User info footer ──────────────────────────────────────────────
+  if(y>H-40){ doc.addPage(); y=20; }
+  doc.setFillColor(248,250,252); doc.roundedRect(ml,y,W-ml-mr,22,3,3,"F");
+  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+  const name  = profile?.name||user?.displayName||user?.email?.split("@")[0]||"User";
+  const email = user?.email||"";
+  doc.text(isAr?`الاسم: ${name}`:`Name: ${name}`, ml+4, y+8);
+  doc.text(isAr?`البريد: ${email}`:`Email: ${email}`, ml+4, y+15);
+  doc.text(isAr?`الشركة: ${profile?.company||"—"}`:`Company: ${profile?.company||"—"}`, W-mr-4, y+8, {align:"right"});
+  doc.text(`ID: ${(session.session_id||session.id||"—").slice(0,12)}`, W-mr-4, y+15, {align:"right"});
+
+  // ── Page numbers ──────────────────────────────────────────────────
+  const pages=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pages;i++){
+    doc.setPage(i);
+    doc.setFillColor(3,11,20); doc.rect(0,H-10,W,10,"F");
+    doc.setFontSize(7); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+    doc.text("PostureAI Pro — Confidential", ml, H-3.5);
+    doc.text(`Page ${i} of ${pages}`, W-mr, H-3.5, {align:"right"});
+  }
+
+  const filename=`PostureAI_Session${sessionIndex?"_"+sessionIndex:""}_${new Date().toISOString().slice(0,10)}.pdf`;
+  doc.save(filename);
+  return filename;
+}

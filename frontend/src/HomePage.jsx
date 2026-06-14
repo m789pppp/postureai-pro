@@ -3,7 +3,7 @@
  * Complete rewrite: proper role separation, working tools, real data, tier gates
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { getUserSessions, getAllUsers, updateUserProfile, auth } from "./firebase.js";
+import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession } from "./firebase.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 
 // ─── Role detection ────────────────────────────────────────────────
@@ -767,43 +767,45 @@ function makePDF(s, idx, total) {
   if(w) w.onload = function(){ w.print(); setTimeout(function(){ URL.revokeObjectURL(url); },2000); };
 }
 
-function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, deleteSession, onTrend }) {
+function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDeleteSession, onTrend }) {
   const [deleting, setDeleting] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(null);
 
-  if(!userSessions.length) return (
-    <EmptyBlock icon="📋" cs={cs}
-      title={isAr?"لا توجد جلسات":"No sessions yet"}
-      desc={isAr?"ابدأ جلستك الأولى وستظهر هنا":"Start your first session and it will appear here"}
-      action={isAr?"ابدأ جلسة":"Start Session"}
-      onAction={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}/>
-  );
+  if(!userSessions.length) return <EmptyBlock icon="📋" cs={cs}
+    title={isAr?"لا توجد جلسات":"No sessions yet"}
+    desc={isAr?"ابدأ جلستك الأولى وستظهر هنا":"Start your first session and it will appear here"}
+    action={isAr?"ابدأ جلسة":"Start Session"}
+    onAction={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}/>;
 
-  const gc  = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
-  const gl  = (s,ar) => s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"ضعيف":"Poor");
-  const total   = userSessions.length;
-  const avgSc   = Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/total);
-  const best    = Math.max(...userSessions.map(s=>s.avg_score||0));
-  const mins    = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
+  const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
+  const grade = (s,ar) => s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"ضعيف":"Poor");
+  const totalSessions = userSessions.length;
+  const avgScore  = Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/totalSessions);
+  const bestScore = Math.max(...userSessions.map(s=>s.avg_score||0));
+  const totalMins = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
+
+  async function handlePDF(s, i) {
+    setPdfLoading(s.id||i);
+    await onDownloadPDF?.(s);
+    setPdfLoading(null);
+  }
 
   async function handleDelete(s) {
-    if(!s.id){ alert("No session ID"); return; }
-    if(!window.confirm(isAr?"حذف هذه الجلسة نهائياً؟":"Permanently delete this session?")) return;
+    if(!window.confirm(isAr?"هل تريد حذف هذه الجلسة نهائياً؟":"Delete this session permanently?")) return;
     setDeleting(s.id);
-    try { await deleteSession(s.id); }
-    catch(e){ alert("Delete failed: "+(e?.code||e?.message)); }
+    await onDeleteSession?.(s.id);
     setDeleting(null);
   }
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-
-      {/* Summary */}
+      {/* Summary stats */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
         {[
-          { label:isAr?"الجلسات":"Sessions", val:total,    col:"#a855f7" },
-          { label:isAr?"المتوسط":"Avg",       val:avgSc,    col:"#3b82f6" },
-          { label:isAr?"الأفضل":"Best",       val:best,     col:"#10b981" },
-          { label:isAr?"الدقائق":"Mins",      val:mins+"m", col:"#f59e0b" },
+          { label:isAr?"الجلسات":"Sessions",   val:totalSessions,    col:"#a855f7" },
+          { label:isAr?"المتوسط":"Avg Score",  val:avgScore||"—",    col:"#3b82f6" },
+          { label:isAr?"الأفضل":"Best",         val:bestScore||"—",   col:"#10b981" },
+          { label:isAr?"الدقائق":"Total Mins",  val:(totalMins||0)+"m", col:"#f59e0b" },
         ].map(m=>(
           <div key={m.label} style={{ background:cs.card, border:`1px solid ${cs.border}`,
             borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
@@ -813,88 +815,87 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, deleteSes
         ))}
       </div>
 
-      {/* Action buttons */}
-      <div style={{ display:"flex", gap:8 }}>
-        <button onClick={()=>makePDF(userSessions[0],0,total)}
-          style={{ flex:1, padding:"9px 14px", background:"rgba(26,86,219,.1)",
-            border:"1px solid rgba(26,86,219,.25)", borderRadius:8,
+      {/* Action buttons row */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+        <button onClick={()=>handlePDF(userSessions[0], totalSessions)}
+          style={{ padding:"9px 14px", background:"rgba(26,86,219,.12)",
+            border:"1px solid rgba(26,86,219,.3)", borderRadius:9,
             color:"#60a5fa", fontSize:12, fontWeight:600, cursor:"pointer",
-            display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-          📄 {isAr?"PDF آخر جلسة":"Last Session PDF"}
+            display:"flex", alignItems:"center", gap:6 }}>
+          📄 {isAr?"تنزيل PDF آخر جلسة":"Download Last Session PDF"}
         </button>
-        {total>=3&&onTrend&&(
+        {onTrend && totalSessions>=3 && (
           <button onClick={onTrend}
-            style={{ flex:1, padding:"9px 14px", background:"rgba(99,102,241,.1)",
-              border:"1px solid rgba(99,102,241,.25)", borderRadius:8,
-              color:"#a5b4fc", fontSize:12, fontWeight:600, cursor:"pointer",
-              display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-            📈 {isAr?"عرض الاتجاه":"View Trend"}
+            style={{ padding:"9px 14px", background:"rgba(168,85,247,.12)",
+              border:"1px solid rgba(168,85,247,.3)", borderRadius:9,
+              color:"#c084fc", fontSize:12, fontWeight:600, cursor:"pointer",
+              display:"flex", alignItems:"center", gap:6 }}>
+            📈 {isAr?"رسم الاتجاه":"Trend Chart"}
           </button>
         )}
       </div>
 
-      {/* Session list */}
+      {/* Sessions list */}
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         {userSessions.map((s,i)=>{
-          const d      = s.created_at?.toDate?.() ?? new Date((s.created_at?.seconds||0)*1000);
-          const sc     = s.avg_score||0;
-          const col    = gc(sc);
-          const dur    = s.duration_s||s.duration_sec||0;
-          const durStr = dur>=60?(Math.round(dur/60)+"m"):dur>0?(dur+"s"):"";
-          const isDel  = deleting===s.id;
+          const d   = s.created_at?.toDate?.() ?? new Date(s.created_at||0);
+          const sc  = s.avg_score||0;
+          const col = gradeColor(sc);
+          const dur = s.duration_s || s.duration_sec || 0;
+          const durStr = dur>=60 ? (Math.floor(dur/60)+"m "+(dur%60)+"s") : dur>0 ? (dur+"s") : "";
+          const isLoadingPDF = pdfLoading === (s.id||i);
+          const isLoadingDel = deleting  === s.id;
           return (
             <div key={s.id||i} style={{ background:cs.card, border:`1px solid ${cs.border}`,
-              borderRadius:10, padding:"12px 14px",
-              display:"flex", gap:12, alignItems:"center",
-              opacity:isDel?.4:1, transition:"opacity .2s" }}>
-
-              {/* Score */}
-              <div style={{ width:42, height:42, borderRadius:8, flexShrink:0,
-                background:`${col}15`, display:"flex", alignItems:"center",
-                justifyContent:"center", fontSize:15, fontWeight:800, color:col }}>
+              borderRadius:10, padding:"13px 16px", display:"flex", gap:12, alignItems:"center",
+              opacity: isLoadingDel ? 0.4 : 1, transition:"opacity .2s" }}>
+              {/* Score circle */}
+              <div style={{ width:44, height:44, borderRadius:8, flexShrink:0,
+                background:`${col}18`, display:"flex", alignItems:"center",
+                justifyContent:"center", fontSize:16, fontWeight:800, color:col }}>
                 {sc||"—"}
               </div>
-
               {/* Info */}
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:cs.text, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                  <span>{isAr?"جلسة #":"Session #"}{total-i}</span>
-                  {s.mode&&<span style={{ fontSize:10, color:cs.muted,
+                <div style={{ fontSize:13, fontWeight:600, color:cs.text, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                  {isAr ? `جلسة #${totalSessions-i}` : `Session #${totalSessions-i}`}
+                  {s.mode && <span style={{ fontSize:10, color:cs.muted,
                     background:"rgba(255,255,255,.06)", padding:"1px 7px", borderRadius:99 }}>
                     {s.mode}
                   </span>}
                 </div>
-                <div style={{ fontSize:11, color:cs.muted, marginTop:3, display:"flex", gap:6, flexWrap:"wrap" }}>
+                <div style={{ fontSize:11, color:cs.muted, marginTop:3, display:"flex", gap:8, flexWrap:"wrap" }}>
                   <span>{d.toLocaleDateString(isAr?"ar-EG":"en-US",{weekday:"short",month:"short",day:"numeric"})}</span>
-                  <span>· {d.toLocaleTimeString(isAr?"ar-EG":"en-US",{hour:"2-digit",minute:"2-digit"})}</span>
-                  {durStr&&<span>· {durStr}</span>}
-                  {(s.good_pct||0)>0&&<span style={{color:"#10b981"}}>· {s.good_pct}% {isAr?"جيد":"good"}</span>}
+                  <span>{d.toLocaleTimeString(isAr?"ar-EG":"en-US",{hour:"2-digit",minute:"2-digit"})}</span>
+                  {durStr && <span>· {durStr}</span>}
+                  {s.good_pct>0 && <span style={{color:"#10b981"}}>· {s.good_pct}%{isAr?" جيدة":""}</span>}
                 </div>
               </div>
-
-              {/* Grade */}
-              <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99,
-                background:`${col}15`, color:col, flexShrink:0 }}>
-                {gl(sc,isAr)}
-              </span>
-
-              {/* PDF */}
-              <button onClick={()=>makePDF(s,i,total)} title="PDF"
-                style={{ padding:"6px 10px", background:"rgba(26,86,219,.1)",
-                  border:"1px solid rgba(26,86,219,.2)", borderRadius:7,
-                  color:"#60a5fa", fontSize:12, cursor:"pointer", flexShrink:0 }}>
-                📄
-              </button>
-
-              {/* Delete */}
-              <button onClick={()=>handleDelete(s)} disabled={isDel||!s.id}
-                title={isAr?"حذف":"Delete"}
-                style={{ padding:"6px 10px", background:"rgba(239,68,68,.08)",
-                  border:"1px solid rgba(239,68,68,.2)", borderRadius:7,
-                  color:"#f87171", fontSize:12, cursor:isDel?"not-allowed":"pointer",
-                  flexShrink:0, opacity:isDel?.5:1 }}>
-                {isDel?"⏳":"🗑"}
-              </button>
+              {/* Actions */}
+              <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
+                <span style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:99,
+                  background:`${col}18`, color:col }}>{grade(sc,isAr)}</span>
+                {/* PDF button */}
+                <button onClick={()=>handlePDF(s, totalSessions-i)}
+                  disabled={isLoadingPDF}
+                  title={isAr?"تنزيل PDF":"Download PDF"}
+                  style={{ padding:"6px 10px", background:"rgba(26,86,219,.12)",
+                    border:"1px solid rgba(26,86,219,.25)", borderRadius:7,
+                    color: isLoadingPDF?"#94a3b8":"#60a5fa", fontSize:13, fontWeight:600,
+                    cursor: isLoadingPDF?"wait":"pointer", transition:"all .2s" }}>
+                  {isLoadingPDF ? "⏳" : "📄"}
+                </button>
+                {/* Delete button */}
+                <button onClick={()=>handleDelete(s)}
+                  disabled={isLoadingDel}
+                  title={isAr?"حذف الجلسة":"Delete session"}
+                  style={{ padding:"6px 10px", background:"rgba(239,68,68,.1)",
+                    border:"1px solid rgba(239,68,68,.2)", borderRadius:7,
+                    color: isLoadingDel?"#94a3b8":"#f87171", fontSize:13, fontWeight:600,
+                    cursor: isLoadingDel?"wait":"pointer", transition:"all .2s" }}>
+                  {isLoadingDel ? "⏳" : "🗑️"}
+                </button>
+              </div>
             </div>
           );
         })}
@@ -1773,7 +1774,7 @@ export default function HomePage({
   isAdmin, isHRAdmin, companyId,
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,
-  deleteSession,
+  downloadPDF,
 }) {
   const [tab,    setTab]    = useState("home");
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
@@ -1810,17 +1811,8 @@ export default function HomePage({
       lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}/>
   ) : null;
 
-  // Sessions outside useMemo — needs live deleteSession + onTrend callbacks
-  const sessionsContent = tab==="sessions" ? (
-    <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
-      setPage={setPage} startCamera={startCamera}
-      deleteSession={deleteSession}
-      onTrend={userSessions.length>=3 ? ()=>setShowTrendChart?.(true) : null}/>
-  ) : null;
-
   const content = useMemo(()=>{
-    if(tab==="settings") return null; // rendered separately
-    if(tab==="sessions") return null; // rendered separately
+    if(tab==="settings") return null; // rendered separately above
 
     if(userRole==="hr_admin"||userRole==="platform_admin") {
       if(tab==="home"||tab==="employees") return (
@@ -1862,14 +1854,20 @@ export default function HomePage({
       );
       if(tab==="sessions") return (
         <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
-          setPage={setPage} startCamera={startCamera}/>
+          setPage={setPage} startCamera={startCamera}
+          onDownloadPDF={downloadPDF}
+          onDeleteSession={async(id)=>{ await deleteSession(id); setUserSessions(p=>p.filter(s=>s.id!==id)); }}
+          onTrend={()=>setShowTrendChart(true)}/>
       );
     }
 
     // Individual
     if(tab==="sessions") return (
       <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
-        setPage={setPage} startCamera={startCamera}/>
+        setPage={setPage} startCamera={startCamera}
+        onDownloadPDF={downloadPDF}
+        onDeleteSession={async(id)=>{ await deleteSession(id); setUserSessions(p=>p.filter(s=>s.id!==id)); }}
+        onTrend={()=>setShowTrendChart(true)}/>
     );
 
     return (
@@ -1961,7 +1959,7 @@ export default function HomePage({
         </header>
 
         <div style={{ padding:"14px 16px", maxWidth:1060, margin:"0 auto" }}>
-          {settingsContent || sessionsContent || content}
+          {settingsContent || content}
         </div>
       </main>
 
