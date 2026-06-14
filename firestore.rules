@@ -175,6 +175,20 @@ service cloud.firestore {
       allow delete: if isHR();
     }
 
+    // ── Linked Accounts ──────────────────────────────────────────
+    // Format: {primaryUid}__{linkedUid}
+    // Only the primary account owner can read/write their linked accounts
+    match /linked_accounts/{linkId} {
+      allow read: if isAuthenticated()
+                  && resource.data.primary_uid == request.auth.uid;
+      allow create: if isAuthenticated()
+                    && request.resource.data.primary_uid == request.auth.uid
+                    && request.resource.data.primary_uid != request.resource.data.linked_uid;
+      allow delete: if isAuthenticated()
+                    && resource.data.primary_uid == request.auth.uid;
+      allow update: if false; // immutable — delete and recreate
+    }
+
     // ── Deny everything else ─────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

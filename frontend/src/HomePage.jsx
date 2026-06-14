@@ -941,7 +941,7 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
-  lang, setLang, darkMode, setDarkMode }) {
+  lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
   const [tab,     setTab]     = useState("profile");
@@ -1111,6 +1111,13 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             color:"#f87171", fontSize:12, fontWeight:700, cursor:"pointer" }}>
           {isAr?"⏻ خروج":"⏻ Sign Out"}
         </button>
+        {AccountSwitcher && (
+          <AccountSwitcher
+            user={user} cs={cs} isAr={isAr}
+            addToast={addToast}
+            onSwitchAccount={onSwitchAccount}
+          />
+        )}
       </div>
 
       {/* Tabs */}
@@ -1775,6 +1782,7 @@ export default function HomePage({
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,
   downloadPDF,
+  AccountSwitcher, onSwitchAccount,
 }) {
   const [tab,    setTab]    = useState("home");
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
@@ -1808,7 +1816,8 @@ export default function HomePage({
     <PanelSettings user={user} profile={profile} setProfile={setProfile}
       cs={cs} isAr={isAr} addToast={addToast} onSignOut={handleSignOut}
       tier={tier} onBilling={openBilling}
-      lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}/>
+      lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}
+      AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}/>
   ) : null;
 
   const content = useMemo(()=>{

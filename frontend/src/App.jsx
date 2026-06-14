@@ -49,6 +49,7 @@ import { handleSSORedirect } from "./EnterpriseSSO.jsx";
 // initSentry moved to sentry.js (V12)
 import AuthPage from "./AuthPage.jsx";
 import HomePage from "./HomePage.jsx";
+import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
 import ProfilePage from "./ProfilePage.jsx";
@@ -2010,6 +2011,63 @@ export default function App(){
     }
   } // end stopCamera
 
+  // ── Multi-Account Switch ────────────────────────────────────────
+  async function handleSwitchAccount(linkedAccount) {
+    // linkedAccount = { linked_uid, email, display_name, provider }
+    // We sign into the secondary Firebase app with a fresh Google popup
+    // then use the credential to sign into the PRIMARY app (replacing current user)
+    try {
+      const { initializeApp: _initApp, getApp: _getApp } = await import("firebase/app");
+      const { getAuth: _getAuth, signInWithPopup: _popup, signInWithEmailAndPassword: _signEmail,
+              GoogleAuthProvider: _GP, signInWithCredential: _signCred } = await import("firebase/auth");
+
+      // Get or create secondary app
+      let secondaryApp;
+      try { secondaryApp = _getApp("secondary"); }
+      catch { secondaryApp = _initApp({
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: import.meta.env.VITE_FIREBASE_APP_ID,
+      }, "secondary"); }
+
+      const secondaryAuth = _getAuth(secondaryApp);
+
+      if (linkedAccount.provider === "google" || !linkedAccount.provider) {
+        const provider = new _GP();
+        provider.setCustomParameters({ prompt: "select_account", login_hint: linkedAccount.email });
+        addToast(isAr ? "اختر الأكونت من الـ popup..." : "Select account in popup...", "info");
+        const result = await _popup(secondaryAuth, provider);
+        // Verify it's the right account
+        if (result.user.uid !== linkedAccount.linked_uid) {
+          addToast(isAr ? "اختار الأكونت الصح من الـ popup" : "Please select the correct account in the popup", "warn");
+          await secondaryAuth.signOut();
+          return;
+        }
+        // Now sign into primary auth with the same credential
+        const credential = _GP.credentialFromResult(result);
+        await secondaryAuth.signOut();
+        await _signCred(auth, credential);
+      } else {
+        // Email account — can't auto-switch without password; show message
+        addToast(
+          isAr
+            ? `للتبديل لـ ${linkedAccount.email} — سجل خروج وادخل بالبريد وكلمة السر`
+            : `To switch to ${linkedAccount.email} — sign out and sign in with email/password`,
+          "warn"
+        );
+      }
+      // onAuthStateChanged will fire and reload everything for the new user
+    } catch (err) {
+      if (err.code !== "auth/popup-closed-by-user") {
+        console.error("Switch account error:", err);
+        addToast(isAr ? `خطأ في التبديل: ${err.message}` : `Switch error: ${err.message}`, "error");
+      }
+    }
+  }
+
   async function downloadPDF(sessionOverride){
     const la=lastAnalRef.current||{};
     const hist=histRef.current||[];
@@ -2404,6 +2462,8 @@ export default function App(){
         toast={addToast}
         isHRAdmin={isHRAdmin}
         downloadPDF={downloadPDF}
+        AccountSwitcher={AccountSwitcher}
+        onSwitchAccount={handleSwitchAccount}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
