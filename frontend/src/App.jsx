@@ -1989,8 +1989,8 @@ export default function App(){
     };
     setSessionResult(result);
 
-    if(user && dur >= 5){ // Save if session lasted at least 5 seconds
-      addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
+    if(user && dur >= 1){ // Save if session lasted at least 1 second
+      addToast("💾 Saving... uid="+user.uid.slice(0,8)+" dur="+dur+"s","info");
       saveSession(user.uid,{
         session_id:sessionId, mode, tier, avg_score:avg,
         good_pct:gPct, duration_s:dur, duration_sec:dur,
@@ -2000,13 +2000,13 @@ export default function App(){
       }).then(()=>{
         addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
       }).catch(e=>{
-        console.error("saveSession failed:", e?.code, e?.message);
-        addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
+        console.error("saveSession failed:", e?.code, e?.message, e);
+        addToast("❌ "+( e?.code||e?.message||"unknown"),"error");
       });
-    } else if(user && dur < 5){
-      addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
+    } else if(user && dur < 1){
+      addToast("⚠️ dur="+dur+"s — too short, not saved","info");
     } else if(!user){
-      addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
+      addToast("❌ Not signed in — uid=null","error");
     }
   } // end stopCamera
 
