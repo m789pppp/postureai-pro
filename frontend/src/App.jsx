@@ -2488,7 +2488,7 @@ export default function App(){
         AccountSwitcher={AccountSwitcher}
         onSwitchAccount={handleSwitchAccount}
       />
-      {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
+      {showGrowthHub&&isAdmin&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
       {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
       {showChurnPrediction&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}

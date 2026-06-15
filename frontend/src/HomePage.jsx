@@ -1466,8 +1466,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const tools = [
     { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم",
       onClick:()=>setShowGamification?.(true) },
-    { id:"t-growth",   icon:"🚀", en:"Growth",      ar:"النمو",
-      onClick:()=>setShowGrowthHub?.(true) },
+    ...(isAdmin ? [{ id:"t-growth", icon:"🚀", en:"Growth Hub", ar:"مركز النمو",
+      onClick:()=>setShowGrowthHub?.(true) }] : []),
     { id:"t-coach",    icon:"🤖", en:"AI Coach",    ar:"AI Coach",
       locked:!pro, lockLabel:"PRO",
       onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
@@ -1495,12 +1495,14 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
     ...(isHR||isAdmin ? [
       { id:"t-workforce", icon:"🏭", en:"Workforce",     ar:"قوى العمل",
         onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
+      { id:"t-audit",     icon:"📜", en:"Audit Log",     ar:"سجل المراجعة",
+        onClick:()=>setShowAuditSystem?.(true) },
+    ] : []),
+    ...(isAdmin ? [
       { id:"t-success",   icon:"💡", en:"Cust. Success", ar:"نجاح العملاء",
         onClick:()=>setShowCustomerSuccess?.(true) },
       { id:"t-churn",     icon:"📉", en:"Churn AI",      ar:"توقع التسرب",
         onClick:()=>setShowChurnPrediction?.(true) },
-      { id:"t-audit",     icon:"📜", en:"Audit Log",     ar:"سجل المراجعة",
-        onClick:()=>setShowAuditSystem?.(true) },
     ] : []),
     ...(elite||isAdmin ? [
       { id:"t-tenant", icon:"🏢", en:"Multi-tenant", ar:"متعدد المستأجرين",
