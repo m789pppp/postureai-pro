@@ -1423,6 +1423,15 @@ export default function App(){
   const[backendDown,setBackendDown]=useState(false);
   const[profile,setProfile]=useState(null);
   const[authChecked,setAuthChecked]=useState(false);
+  const[startupError,setStartupError]=useState(null);
+
+  // ── ABSOLUTE SAFETY NET — app MUST unblock within 6s no matter what ──
+  useEffect(()=>{
+    const t = setTimeout(()=>{
+      setAuthChecked(c=>{ if(!c){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
+    }, 6000);
+    return ()=>clearTimeout(t);
+  },[]); // eslint-disable-line
   // ── Hash-based routing — fixes back button & enables deep links ──
   const hashToPage = (h) => h.replace(/^#\/?/, "") || "landing";
   const [page, setPageRaw] = useState(() => {
@@ -1688,69 +1697,67 @@ export default function App(){
 
     const authTimeout=setTimeout(()=>{
       setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
-    }, 3000); // 3s max — if Firebase doesn't respond, show landing
+    }, 5000);
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
       try {
         setUser(u);
         if(u){
+          // Load profile — never crash
           let p = null;
-          try { p = await getUserProfile(u.uid); } catch(e) {}
+          try { p = await getUserProfile(u.uid); } catch(e){ console.warn("[Auth] profile:",e?.code); }
+
           if(!p){
             try {
               await createUserProfile(u.uid,{email:u.email,name:u.displayName||"",company:""});
               p = await getUserProfile(u.uid);
-            } catch(e) {}
-            // Fire-and-forget welcome email
-            EmailAPI.sequence({email:u.email,name:u.displayName||u.email.split("@")[0],
-              day:0,tier:"professional",session_count:0,avg_score:0}).catch(()=>{});
+            } catch(e){ console.warn("[Auth] create:",e?.code); }
+            try { EmailAPI.sequence({email:u.email,name:u.displayName||u.email.split("@")[0],
+              day:0,tier:"professional",session_count:0,avg_score:0}).catch(()=>{}); } catch{}
           } else {
-            // Background tasks — never block auth
-            checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked) setProfile(checked); }).catch(()=>{});
-            checkAndSendNurtureEmails(u.uid, p, API).catch(()=>{});
+            try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked) setProfile(checked); }).catch(()=>{}); } catch{}
+            try { checkAndSendNurtureEmails(u.uid, p, API).catch(()=>{}); } catch{}
           }
+
           if(p){
             setProfile(p);
-            if(p.tier) setTier(normalizeTier(p.tier));
-            if(p.company_id) setCompanyId(p.company_id);
+            try { if(p.tier) setTier(normalizeTier(p.tier)); } catch{}
+            try { if(p.company_id) setCompanyId(p.company_id); } catch{}
           }
-          // Real-time sessions listener — updates instantly when session saved
-          const unsubSessions = onUserSessions(u.uid, sessions => {
-            setUserSessions(sessions);
-          });
-          // Store unsub so we can clean up on sign-out
-          window.__unsubSessions = unsubSessions;
-          // Load team members for HR admin / employees
-          if(p?.company_id||p?.is_org_owner){
-            getAllUsers(p.company_id||null,false).then(setAllUsers).catch(()=>{});
-          }
-          const lm=localStorage.getItem("last_mode");
-          if(lm) setMode(lm);
-          // Background: check subscription expiry
-          const API_URL=import.meta.env.VITE_API_URL||"http://localhost:5050/api";
-          fetch(`${API_URL}/subscription/check`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:u.uid})})
-            .then(r=>r.json()).then(res=>{
-              if(res.downgraded){
-                setTier("standard");
-                setProfile(p=>p?({...p,tier:"standard"}):p);
-                addToast(isAr?"انتهى اشتراكك — تم التحويل للباقة المجانية":"Subscription expired — downgraded to free","warn");
-              }
-            }).catch(()=>{});
-          const params=new URLSearchParams(window.location.search);
-          // Check for pending invite after login
-          const pendingInvite=sessionStorage.getItem("pending_invite");
-          if(pendingInvite){window.__invite_token=pendingInvite;setPage("invite");}
-          else if(p && !p.setup_complete) setPage("setup");
-          else setPage(params.get("plan")&&TIERS[params.get("plan")]?"pricing":"home");
+
+          // Real-time sessions listener
+          try {
+            if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; }
+            const unsubSessions = onUserSessions(u.uid, sessions=>{ setUserSessions(sessions); });
+            window.__unsubSessions = unsubSessions;
+          } catch(e){ console.warn("[Auth] sessions:",e?.code); }
+
+          // Load team members
+          try {
+            if(p?.company_id||p?.is_org_owner){
+              getAllUsers(p.company_id||null,false).then(setAllUsers).catch(()=>{});
+            }
+          } catch{}
+
+          try { const lm=localStorage.getItem("last_mode"); if(lm) setMode(lm); } catch{}
+
+          // Navigate
+          try {
+            const params=new URLSearchParams(window.location.search);
+            const pendingInvite=sessionStorage.getItem("pending_invite");
+            if(pendingInvite){ window.__invite_token=pendingInvite; setPage("invite"); }
+            else if(p && !p.setup_complete) setPage("setup");
+            else setPage(params.get("plan")&&TIERS[params.get("plan")]?"pricing":"home");
+          } catch{ setPage("home"); }
+
         } else {
-          // User signed out — clean up real-time listener
-          if(window.__unsubSessions) { window.__unsubSessions(); window.__unsubSessions = null; }
+          try { if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; } } catch{}
           setUserSessions([]);
           setPage("landing");
         }
       } catch(e) {
-        console.error("[Auth] error:", e);
+        console.error("[Auth] fatal:", e);
         setPage("landing");
       } finally {
         setAuthChecked(true);
