@@ -4198,6 +4198,59 @@ def analyze():
         # Include live quality estimate in every 10th frame (avoid overhead)
         if s.get("frames", 0) % 10 == 0 and s.get("total_frames", 0) >= 10:
             result["session_quality"] = compute_session_quality(s)
+
+        # Ergonomic twin: update + detect setup drift
+        if uid and result.get("detected"):
+            try:
+                _twin = update_ergonomic_twin(uid, result)
+                result["ergonomic_twin"] = {
+                    "calibrated":     _twin.get("calibrated", False),
+                    "optimal_dist":   _twin.get("optimal_distance"),
+                    "optimal_pitch":  _twin.get("optimal_pitch"),
+                    "drift_alerts":   _twin.get("drift_alerts", []),
+                    "drift_count":    _twin.get("drift_count", 0),
+                    "sessions_to_learn": _twin.get("sessions_to_learn", 5),
+                }
+                for da in _twin.get("drift_alerts", []):
+                    if da not in result.get("alerts", []):
+                        result.setdefault("alerts", []).insert(0, da)
+            except Exception:
+                pass
+
+        # Keystroke stress correlation (if client sends typing data)
+        _ks_data = data.get("keystroke_data")
+        if _ks_data and isinstance(_ks_data, dict):
+            try:
+                _ks_stress = analyze_keystroke_stress(_ks_data)
+                if _ks_stress:
+                    result["keystroke_stress"] = _ks_stress
+                    # Correlate: high stress + bad posture = compound risk
+                    if _ks_stress["stress_score"] > 60 and result["score"] < 65:
+                        result["compound_risk"] = {
+                            "level": "high",
+                            "note":  "High work stress + poor posture = elevated MSK injury risk",
+                            "action":"Take a 5-min break immediately",
+                        }
+                        result["alerts"] = result.get("alerts", [])
+                        result["alerts"].insert(0, "⚠️ Compound risk: work stress + poor posture — break now")
+            except Exception:
+                pass
+
+        # Update adaptive coaching profile every 15th frame
+        if s.get("frames", 0) % 15 == 0 and uid:
+            try:
+                _cp = update_coaching_profile(uid, result, result.get("metrics", {}))
+                result["coaching"] = {
+                    "phase":        _cp.get("coach_phase"),
+                    "plan":         _cp.get("coaching_plan", [])[:2],  # top 2 only
+                    "message":      _cp.get("phase_message"),
+                    "sessions_n":   _cp.get("sessions_analyzed"),
+                    "new_badges":   [b for b in _cp.get("badges_earned",[])
+                                     if b not in s.get("prev_badges",[])],
+                }
+                s["prev_badges"] = _cp.get("badges_earned", [])
+            except Exception:
+                pass
         # Cache last valid (non-blurry) result for blur-frame fallback
         if result.get("detected") and not result.get("blurry_frame"):
             try:
@@ -6492,6 +6545,119 @@ def health_detailed():
 
 
 # ── Latency tracking: called from analyze route ───────────────────
+def analyze_keystroke_stress(keystroke_data: dict) -> dict:
+    """
+    Detect work stress from typing patterns.
+    Correlates with posture: stressed users lean forward more.
+    Input: {wpm, error_rate, pause_ratio, burst_ratio}
+    Based on: Epp et al. 2011 "Identifying Emotional States Using Keystroke Dynamics"
+    """
+    if not keystroke_data:
+        return None
+    try:
+        wpm         = keystroke_data.get("wpm", 60)           # words per minute
+        error_rate  = keystroke_data.get("error_rate", 0.02)  # fraction of errors
+        pause_ratio = keystroke_data.get("pause_ratio", 0.3)  # fraction of time paused
+        burst_ratio = keystroke_data.get("burst_ratio", 0.5)  # fraction in bursts
+
+        # Stress indicators:
+        # High WPM + high errors = rushed/anxious
+        # Low pause ratio = no thinking breaks (reactive mode)
+        # High burst ratio = start-stop pattern (interrupted focus)
+        rush_score    = min(1.0, max(0, (wpm - 60) / 60) * 0.5 + error_rate * 5)
+        reactive_sc   = max(0, 1.0 - pause_ratio * 2)
+        interrupted_sc= max(0, burst_ratio - 0.4) * 2
+
+        stress_raw = rush_score * 0.40 + reactive_sc * 0.35 + interrupted_sc * 0.25
+        stress_sc  = max(0, min(100, int(stress_raw * 100)))
+
+        return {
+            "stress_score":  stress_sc,
+            "level":         "high" if stress_sc > 65 else "moderate" if stress_sc > 35 else "low",
+            "wpm":           wpm,
+            "rush_factor":   round(rush_score, 2),
+            "interruptions": round(interrupted_sc, 2),
+            "note":          (
+                "High work stress — correlates with forward lean posture" if stress_sc > 65 else
+                "Moderate work pace" if stress_sc > 35 else
+                "Calm, focused work state"
+            ),
+        }
+    except Exception:
+        return None
+
+
+def compute_posture_forecast(uid: str, recent_sessions: list) -> dict:
+    """
+    Predict tomorrow's posture risk based on historical patterns.
+    Factors: recent trajectory, day-of-week patterns, time patterns.
+    Returns: risk_level, predicted_score, contributing_factors, prevention_tips.
+    """
+    if not recent_sessions:
+        return {"status": "insufficient_data", "sessions_needed": 5}
+
+    now = datetime.utcnow()
+    tomorrow_dow = (now.weekday() + 1) % 7  # 0=Monday
+
+    # ── Day-of-week posture patterns (based on ergonomics research) ──
+    # Mondays: back pain highest (weekend deconditioning)
+    # Fridays: fatigue accumulation
+    # Midweek: best posture (in routine)
+    DOW_RISK = {0: 0.85, 1: 0.92, 2: 0.95, 3: 0.93, 4: 0.88, 5: 0.96, 6: 0.98}
+    dow_factor = DOW_RISK.get(tomorrow_dow, 0.9)
+
+    # ── Recent trajectory ─────────────────────────────────────────
+    scores = [s.get("avg_score", 0) for s in recent_sessions[-10:] if s.get("avg_score")]
+    if len(scores) >= 3:
+        # Simple linear trend over last sessions
+        n = len(scores)
+        slope = (scores[-1] - scores[0]) / max(n - 1, 1)
+        trend_adjustment = slope * 2  # project 2 sessions forward
+    else:
+        slope = 0
+        trend_adjustment = 0
+
+    # ── Base prediction ───────────────────────────────────────────
+    base_score = sum(scores[-5:]) / max(len(scores[-5:]), 1)
+    predicted  = max(0, min(100, round(base_score * dow_factor + trend_adjustment)))
+
+    # ── Risk assessment ───────────────────────────────────────────
+    risk = "high" if predicted < 55 else "moderate" if predicted < 70 else "low"
+
+    # ── Contributing factors ──────────────────────────────────────
+    factors = []
+    if tomorrow_dow == 0:
+        factors.append("Monday effect: weekend posture deconditioning")
+    if tomorrow_dow == 4:
+        factors.append("Friday fatigue: end-of-week energy decline")
+    if slope < -2:
+        factors.append(f"Declining trend: -{abs(round(slope,1))}pts per session")
+    if base_score < 65:
+        factors.append("Recent sessions below threshold")
+
+    # ── Prevention tips ───────────────────────────────────────────
+    tips = []
+    if tomorrow_dow == 0:
+        tips.append("Monday prep: do 5min stretching before sitting down")
+    if predicted < 60:
+        tips.append("Set posture reminder for every 20 minutes tomorrow")
+    if slope < -3:
+        tips.append("Check monitor height — declining scores suggest setup drift")
+    tips.append("Start tomorrow's first session within first hour of work")
+
+    return {
+        "predicted_score":     predicted,
+        "risk_level":          risk,
+        "day_of_week":         ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][tomorrow_dow],
+        "dow_factor":          round(dow_factor, 2),
+        "recent_trend_slope":  round(slope, 2),
+        "contributing_factors":factors,
+        "prevention_tips":     tips[:3],
+        "confidence":          "high" if len(scores) >= 7 else "medium" if len(scores) >= 3 else "low",
+        "based_on_sessions":   len(scores),
+    }
+
+
 def compute_session_quality(s: dict) -> dict:
     """
     Compute session quality score (0–100) from accumulated frame metrics.
@@ -6561,6 +6727,217 @@ def compute_session_quality(s: dict) -> dict:
         "issues":          issues,
         "reliable":        quality >= 60,  # flag: can results be trusted?
     }
+
+
+# ══════════════════════════════════════════════════════════════
+# ADAPTIVE AI COACHING ENGINE
+# Builds personal posture improvement program from history
+# ══════════════════════════════════════════════════════════════
+
+def get_ergonomic_twin(uid: str) -> dict:
+    """
+    Ergonomic digital twin of user's workstation setup.
+    Learns the user's optimal setup from their best sessions.
+    Detects when setup changes (monitor moved, chair adjusted).
+    """
+    try:
+        import json as _jt
+        raw = cache_get(f"twin:{uid}")
+        if raw:
+            return _jt.loads(raw)
+    except Exception:
+        pass
+    return {
+        "calibrated":        False,
+        "optimal_distance":  None,   # cm — learned from best sessions
+        "optimal_pitch":     None,   # degrees — monitor angle
+        "optimal_neck":      None,   # degrees — user's natural neck angle
+        "setup_fingerprint": None,   # hash of optimal setup
+        "drift_count":       0,      # times setup has drifted from optimal
+        "last_calibrated":   None,
+        "sessions_to_learn": 5,      # sessions before twin is calibrated
+        "history":           [],     # last 20 setup snapshots
+    }
+
+
+def update_ergonomic_twin(uid: str, result: dict) -> dict:
+    """
+    Update ergonomic twin with current session data.
+    If session quality > 80, use it to refine optimal setup.
+    Detect drift: current setup vs optimal.
+    """
+    import json as _jt2
+    twin = get_ergonomic_twin(uid)
+    sc   = result.get("score", 0) or 0
+    met  = result.get("metrics", {})
+
+    dist    = met.get("screen_distance", {}).get("value")
+    pitch   = result.get("head_pose", {}).get("pitch")
+    neck    = met.get("neck_lean", {}).get("value")
+    qual_sc = result.get("session_quality", {}).get("quality_score", 0) if isinstance(result.get("session_quality"), dict) else 0
+
+    # Only learn from high-quality, good-posture sessions
+    if sc >= 80 and qual_sc >= 75:
+        snap = {"dist": dist, "pitch": pitch, "neck": neck, "score": sc, "ts": datetime.utcnow().isoformat()}
+        hist = twin.get("history", [])
+        hist.append(snap)
+        if len(hist) > 20: hist = hist[-20:]
+        twin["history"] = hist
+
+        # Calibrate after 5 good sessions
+        good_snaps = [h for h in hist if h.get("score", 0) >= 80]
+        if len(good_snaps) >= 5:
+            twin["optimal_distance"] = round(sum(h["dist"]  for h in good_snaps if h.get("dist"))  / max(sum(1 for h in good_snaps if h.get("dist")),  1), 1)
+            twin["optimal_pitch"]    = round(sum(h["pitch"] for h in good_snaps if h.get("pitch")) / max(sum(1 for h in good_snaps if h.get("pitch")), 1), 1)
+            twin["optimal_neck"]     = round(sum(h["neck"]  for h in good_snaps if h.get("neck"))  / max(sum(1 for h in good_snaps if h.get("neck")),  1), 1)
+            twin["calibrated"]       = True
+            twin["last_calibrated"]  = datetime.utcnow().isoformat()
+            twin["sessions_to_learn"]= max(0, 5 - len(good_snaps))
+
+    # Detect setup drift if calibrated
+    drift_alerts = []
+    if twin.get("calibrated") and dist and twin.get("optimal_distance"):
+        dist_drift = abs(dist - twin["optimal_distance"])
+        if dist_drift > 12:
+            twin["drift_count"] = twin.get("drift_count", 0) + 1
+            drift_alerts.append(
+                f"⚠️ Setup drift: screen moved {round(dist_drift)}cm from your optimal {twin['optimal_distance']}cm")
+    if twin.get("calibrated") and pitch is not None and twin.get("optimal_pitch") is not None:
+        pitch_drift = abs(pitch - twin["optimal_pitch"])
+        if pitch_drift > 8:
+            drift_alerts.append(
+                f"Monitor angle changed {round(pitch_drift)}° — readjust to your optimal setup")
+
+    twin["drift_alerts"] = drift_alerts
+
+    # Save
+    try:
+        cache_set(f"twin:{uid}", _jt2.dumps(twin), 86400 * 180)
+    except Exception:
+        pass
+    return twin
+
+
+def get_coaching_profile(uid: str) -> dict:
+    """Load or initialize user coaching profile from cache/Redis."""
+    try:
+        import json as _jc
+        raw = cache_get(f"coach:{uid}")
+        if raw:
+            return _jc.loads(raw)
+    except Exception:
+        pass
+    return {
+        "sessions_analyzed": 0,
+        "recurring_issues":  {},    # {metric: {count, avg_severity, last_seen}}
+        "ignored_advice":    {},    # {advice_hash: ignore_count}
+        "improvement_rate":  {},    # {metric: slope over last 10 sessions}
+        "coach_phase":       "onboarding",  # onboarding→building→maintaining→optimizing
+        "personal_goals":    [],
+        "badges_earned":     [],
+        "streak_days":       0,
+        "last_session":      None,
+    }
+
+
+def update_coaching_profile(uid: str, result: dict, session_metrics: dict) -> dict:
+    """
+    Update coaching profile after each session.
+    Tracks improvement, recurring issues, ignored advice.
+    Returns updated profile + coaching plan.
+    """
+    import json as _jc, hashlib as _hsh
+
+    profile = get_coaching_profile(uid)
+    profile["sessions_analyzed"] = profile.get("sessions_analyzed", 0) + 1
+    n = profile["sessions_analyzed"]
+
+    # ── Track recurring issues ───────────────────────────────────
+    for key, met in session_metrics.items():
+        if not isinstance(met, dict) or "score" not in met: continue
+        sc = met.get("score", 100)
+        if sc < 70:   # issue threshold
+            ri = profile["recurring_issues"].setdefault(key, {
+                "count": 0, "total_severity": 0, "last_seen": None, "worst": 0,
+            })
+            ri["count"]          += 1
+            ri["total_severity"] += (100 - sc)
+            ri["last_seen"]       = datetime.utcnow().isoformat()
+            ri["worst"]           = max(ri.get("worst", 0), 100 - sc)
+            ri["avg_severity"]    = ri["total_severity"] / ri["count"]
+
+    # ── Determine coach phase ────────────────────────────────────
+    if   n < 5:   phase = "onboarding"    # still learning user
+    elif n < 20:  phase = "building"      # building habits
+    elif n < 50:  phase = "maintaining"   # maintaining progress
+    else:         phase = "optimizing"    # fine-tuning
+
+    profile["coach_phase"] = phase
+
+    # ── Generate coaching plan ───────────────────────────────────
+    # Sort recurring issues by: frequency × severity
+    sorted_issues = sorted(
+        [(k, v) for k, v in profile["recurring_issues"].items()],
+        key=lambda x: x[1]["count"] * x[1]["avg_severity"],
+        reverse=True
+    )
+
+    ISSUE_ADVICE = {
+        "neck_lean":       ("Raise monitor to exact eye level", "Place monitor on books/stand"),
+        "spine_lean":      ("Engage lumbar support", "Sit back fully, activate core"),
+        "screen_distance": ("Position screen arm-length away", "Use monitor arm for easy adjustment"),
+        "head_yaw":        ("Reposition chair to face screen directly", "Place main screen directly ahead"),
+        "shoulder_level":  ("Set armrests to equal height", "Check chair arm height settings"),
+        "eye_strain":      ("Apply 20-20-20 rule every session", "Enable night mode, reduce brightness"),
+        "wrist_angle":     ("Use wrist rest, lower keyboard", "Check keyboard tray height"),
+        "breathing_rate":  ("Practice diaphragmatic breathing", "Set breathing reminder every 20min"),
+        "fhp_index":       ("Chin tuck exercise x10 daily", "Wall posture check 3x per day"),
+        "rsi_risk":        ("Take micro-breaks every 25min", "Try Pomodoro technique"),
+    }
+
+    coaching_plan = []
+    for key, issue_data in sorted_issues[:3]:   # top 3 issues only
+        if key in ISSUE_ADVICE:
+            quick, deep = ISSUE_ADVICE[key]
+            coaching_plan.append({
+                "issue":          key,
+                "frequency":      issue_data["count"],
+                "avg_severity":   round(issue_data["avg_severity"], 1),
+                "quick_fix":      quick,
+                "deep_fix":       deep,
+                "priority":       "high" if issue_data["count"] > 5 else "medium",
+            })
+
+    # ── Phase-specific coaching message ──────────────────────────
+    phase_msg = {
+        "onboarding":  f"Session {n}/5 — Learning your posture patterns. Keep going!",
+        "building":    f"Building habits ({n} sessions). Focus on your top issue: {sorted_issues[0][0].replace('_',' ') if sorted_issues else 'consistency'}.",
+        "maintaining": f"Great consistency ({n} sessions)! Fine-tune your weak spots.",
+        "optimizing":  f"Expert level ({n} sessions). You're in the top tier of posture awareness!",
+    }.get(phase, "Keep going!")
+
+    # ── Badges ───────────────────────────────────────────────────
+    badges = profile.get("badges_earned", [])
+    if n == 5   and "first_week"    not in badges: badges.append("first_week")
+    if n == 20  and "habit_builder" not in badges: badges.append("habit_builder")
+    if n == 50  and "posture_pro"   not in badges: badges.append("posture_pro")
+    if n == 100 and "elite_posture" not in badges: badges.append("elite_posture")
+    overall_sc = result.get("score", 0)
+    if overall_sc >= 90 and "perfect_session" not in badges: badges.append("perfect_session")
+    profile["badges_earned"] = badges
+
+    profile["coaching_plan"]  = coaching_plan
+    profile["phase_message"]  = phase_msg
+    profile["last_updated"]   = datetime.utcnow().isoformat()
+
+    # Save back to cache
+    try:
+        import json as _jc2
+        cache_set(f"coach:{uid}", _jc2.dumps(profile), 86400 * 90)
+    except Exception:
+        pass
+
+    return profile
 
 
 def _record_latency(ms: float):
@@ -8495,6 +8872,54 @@ def explain_score():
             "lang":          lang,
         })
 
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/forecast", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def posture_forecast():
+    """
+    Predict tomorrow's posture risk.
+    POST: { "sessions": [...recent sessions...] }
+    """
+    try:
+        data     = request.get_json(force=True) or {}
+        sessions_data = data.get("sessions", [])
+        uid      = getattr(g, "uid", None)
+        forecast = compute_posture_forecast(uid, sessions_data)
+        log_event("forecast_generated", uid=uid, meta={"risk": forecast.get("risk_level")})
+        return jsonify(forecast)
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/coaching/profile", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def get_coaching():
+    """Get user's full coaching profile + plan."""
+    try:
+        uid     = getattr(g, "uid", None)
+        if not uid: return jsonify({"error": "auth required"}), 401
+        profile = get_coaching_profile(uid)
+        return jsonify(profile)
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/coaching/reset", methods=["POST"])
+@require_auth
+@limiter.limit("5 per minute")
+def reset_coaching():
+    """Reset coaching profile (user request)."""
+    try:
+        uid = getattr(g, "uid", None)
+        if not uid: return jsonify({"error": "auth required"}), 401
+        cache_set(f"coach:{uid}", "{}", 86400*90)
+        log_event("coaching_reset", uid=uid)
+        return jsonify({"status": "reset", "uid": uid})
     except Exception as e:
         return safe_error(e)
 
@@ -10628,6 +11053,7 @@ def org_send_invite():
         return jsonify({"ok": True, "sent": True, "to": email})
     except Exception as e:
         return safe_error(e)
+
 
 
 
