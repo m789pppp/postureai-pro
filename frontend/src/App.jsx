@@ -2403,7 +2403,7 @@ export default function App(){
       {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>setShowOnboard(false)}/>}
       {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
-      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
+      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
       {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
       {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}

@@ -24,6 +24,23 @@ const T = {
 
 // ─── Micro components ────────────────────────────────────────────
 function Card({ children, style, title, sub, action, noPad }) {
+  return (
+    <div style={{ background:T.card, borderRadius:R.lg, border:`1px solid ${T.border}`,
+      overflow:"hidden", ...style }}>
+      {(title||sub||action)&&(
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:`${SP[4]}px ${SP[5]}px`, borderBottom:`1px solid ${T.border}` }}>
+          <div>
+            {title&&<div style={{ fontSize:TY.md, fontWeight:700, color:T.text }}>{title}</div>}
+            {sub&&<div style={{ fontSize:TY.sm, color:T.muted, marginTop:2 }}>{sub}</div>}
+          </div>
+          {action&&<div>{action}</div>}
+        </div>
+      )}
+      <div style={{ padding: noPad ? 0 : `${SP[4]}px ${SP[5]}px` }}>{children}</div>
+    </div>
+  );
+}
 
   // ── Tab Content Renderer ──────────────────────────────────────────
   // Extracted from ternary chain to fix esbuild Arabic RTL parse error
@@ -434,28 +451,6 @@ function Card({ children, style, title, sub, action, noPad }) {
     noSessionsDesc:  isAr ? "ابدأ جلستك الأولى لترى تحليلاتك" : "Start your first session to see analytics",
   };
 
-
-  return (
-    <div style={{ background:T.card, border:`1px solid ${T.border}`,
-      borderRadius:R.lg, overflow:"hidden", ...style }}>
-      {title && (
-        <div style={{ padding:`${SP[4]}px ${SP[5]}px ${SP[3]}px`,
-          display:"flex", justifyContent:"space-between", alignItems:"flex-start",
-          borderBottom: noPad ? `1px solid ${T.border}` : "none" }}>
-          <div>
-            <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{title}</div>
-            {sub && <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{sub}</div>}
-          </div>
-          {action}
-        </div>
-      )}
-      <div style={noPad ? {} : { padding:`${SP[3]}px ${SP[5]}px ${SP[4]}px` }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function KpiBox({ label, value, sub, color, icon, trend, accent }) {
   const col = color || T.text;
   return (
@@ -588,9 +583,9 @@ function ForecastBar({ day, score, confidence }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────
-export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack }) {
-  const [sessions, setSessions]   = useState([]);
-  const [loading, setLoading]     = useState(true);
+export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessions:propSessions }) {
+  const [sessions, setSessions]   = useState(propSessions||[]);
+  const [loading, setLoading]     = useState(!propSessions);
   const [tab, setTab]             = useState("overview");
   const [dateRange, setDateRange] = useState("30d");
   const [referral, setReferral]   = useState(null);
@@ -627,16 +622,19 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack }) {
   const t = L[lang]||L.en;
 
   useEffect(() => {
-    if (!uid) return;
+    if (propSessions) { setSessions(propSessions); setLoading(false); return; }
+    if (!uid) { setLoading(false); return; }
     setLoading(true);
     Promise.all([
-      getUserSessions(uid),
+      getUserSessions(uid).catch(()=>[]),
       getReferralStats(uid).catch(()=>null),
     ]).then(([sess,ref]) => {
       setSessions(sess||[]);
       setReferral(ref);
+    }).catch(()=>{
+      setSessions([]);
     }).finally(()=>setLoading(false));
-  }, [uid]);
+  }, [uid, propSessions]);
 
   // Load AI insights when tab changes to "ai"
   const loadAI = useCallback(async (force=false) => {
