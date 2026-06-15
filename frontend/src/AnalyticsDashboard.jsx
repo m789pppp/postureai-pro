@@ -42,6 +42,131 @@ function Card({ children, style, title, sub, action, noPad }) {
   );
 }
 
+function ScoreLine({ scores, color="#6366f1", h=70 }) {
+  if (!scores || scores.length < 2) return (
+    <div style={{ height:h, display:"flex", alignItems:"center",
+      justifyContent:"center", fontSize:11, color:T.muted }}>
+      Not enough data yet
+    </div>
+  );
+  const max = Math.max(...scores, 100);
+  const pts = scores.map((s,i) => {
+    const x=(i/(scores.length-1))*100, y=((max-s)/max)*h;
+    return `${x},${y}`;
+  }).join(" ");
+  const fill = `0,${h} ${pts} 100,${h}`;
+  return (
+    <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none"
+      style={{ width:"100%", height:h, display:"block" }}>
+      <defs>
+        <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={color} stopOpacity=".25"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points={fill} fill="url(#lg)"/>
+      <polyline points={pts} fill="none" stroke={color}
+        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function HourlyHeatmap({ hourly }) {
+  if (!hourly || !Object.keys(hourly).length) return (
+    <div style={{ fontSize:11, color:T.muted, padding:"8px 0" }}>No hourly data yet</div>
+  );
+  const hours = Array.from({length:24},(_,i)=>i);
+  const vals  = Object.values(hourly);
+  const max   = Math.max(...vals, 1);
+  return (
+    <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+      {hours.map(h => {
+        const v = hourly[h];
+        const col = v ? sc(v) : "rgba(255,255,255,.04)";
+        const opacity = v ? .3 + (v/max)*.7 : 1;
+        return (
+          <div key={h} title={v?`${h}:00 — ${v}/100`:`${h}:00 — no data`}
+            style={{ width:26, height:26, borderRadius:5, background:col,
+              opacity, display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:8, color:"rgba(255,255,255,.5)", fontWeight:700 }}>
+            {h}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RiskGauge({ value, label }) {
+  const col = value>=60?T.red:value>=30?T.amber:T.green;
+  const r=28, circ=2*Math.PI*r, dash=circ*(value/100);
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
+      <svg width={72} height={72} style={{ transform:"rotate(-90deg)" }}>
+        <circle cx={36} cy={36} r={r} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth={6}/>
+        <circle cx={36} cy={36} r={r} fill="none" stroke={col} strokeWidth={6}
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+          style={{ transition:"stroke-dasharray .8s ease" }}/>
+        <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
+          style={{ transform:"rotate(90deg)", transformOrigin:"center",
+            fontFamily:TY.fontSans, fontSize:14, fontWeight:800, fill:col }}>
+          {value}
+        </text>
+      </svg>
+      <span style={{ fontSize:10, fontWeight:700, color:col }}>{label}</span>
+    </div>
+  );
+}
+
+function InsightCard({ icon, title, body, priority }) {
+  const colMap = { high:T.red, medium:T.amber, low:T.green };
+  const col = colMap[priority] || T.blue;
+  return (
+    <div style={{ display:"flex", gap:12, padding:`${SP[3]}px`, background:"rgba(255,255,255,.025)",
+      border:`1px solid rgba(255,255,255,.05)`, borderRadius:R.sm, alignItems:"flex-start",
+      borderLeft:`3px solid ${col}` }}>
+      <span style={{ fontSize:20, flexShrink:0 }}>{icon}</span>
+      <div>
+        <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:3 }}>{title}</div>
+        <div style={{ fontSize:11, color:T.muted, lineHeight:1.6 }}>{body}</div>
+      </div>
+      <Badge label={priority||"info"} color={col} bg={`${col}15`}
+        style={{ marginLeft:"auto", flexShrink:0 }}/>
+    </div>
+  );
+}
+
+function ForecastBar({ day, score, confidence }) {
+  const col = sc(score);
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+      <div style={{ fontSize:10, color:T.muted, fontFamily:"DM Mono,monospace" }}>{score}</div>
+      <div style={{ width:"100%", borderRadius:"3px 3px 0 0",
+        background:col, opacity:.6+confidence*.004,
+        height:Math.max(4,Math.round(score/100*52)), transition:"height .5s ease" }}/>
+      <div style={{ fontSize:9, color:T.muted }}>D{day}</div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────
+export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessions:propSessions }) {
+  const [sessions, setSessions]   = useState(propSessions||[]);
+  const [loading, setLoading]     = useState(!propSessions);
+  const [tab, setTab]             = useState("overview");
+  const [dateRange, setDateRange] = useState("30d");
+  const [referral, setReferral]   = useState(null);
+
+  // AI state
+  const [aiSummary, setAiSummary]     = useState(null);
+  const [aiPredict, setAiPredict]     = useState(null);
+  const [aiWeekly, setAiWeekly]       = useState(null);
+  const [aiFatigue, setAiFatigue]     = useState(null);
+  const [aiLoading, setAiLoading]     = useState({});
+  const [aiError, setAiError]         = useState({});
+
+  const isAr = lang === "ar";
+
   // ── Tab Content Renderer ──────────────────────────────────────────
   // Extracted from ternary chain to fix esbuild Arabic RTL parse error
   function renderTabContent() {
@@ -475,130 +600,6 @@ function KpiBox({ label, value, sub, color, icon, trend, accent }) {
   );
 }
 
-function ScoreLine({ scores, color="#6366f1", h=70 }) {
-  if (!scores || scores.length < 2) return (
-    <div style={{ height:h, display:"flex", alignItems:"center",
-      justifyContent:"center", fontSize:11, color:T.muted }}>
-      Not enough data yet
-    </div>
-  );
-  const max = Math.max(...scores, 100);
-  const pts = scores.map((s,i) => {
-    const x=(i/(scores.length-1))*100, y=((max-s)/max)*h;
-    return `${x},${y}`;
-  }).join(" ");
-  const fill = `0,${h} ${pts} 100,${h}`;
-  return (
-    <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none"
-      style={{ width:"100%", height:h, display:"block" }}>
-      <defs>
-        <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor={color} stopOpacity=".25"/>
-          <stop offset="100%" stopColor={color} stopOpacity="0"/>
-        </linearGradient>
-      </defs>
-      <polygon points={fill} fill="url(#lg)"/>
-      <polyline points={pts} fill="none" stroke={color}
-        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function HourlyHeatmap({ hourly }) {
-  if (!hourly || !Object.keys(hourly).length) return (
-    <div style={{ fontSize:11, color:T.muted, padding:"8px 0" }}>No hourly data yet</div>
-  );
-  const hours = Array.from({length:24},(_,i)=>i);
-  const vals  = Object.values(hourly);
-  const max   = Math.max(...vals, 1);
-  return (
-    <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-      {hours.map(h => {
-        const v = hourly[h];
-        const col = v ? sc(v) : "rgba(255,255,255,.04)";
-        const opacity = v ? .3 + (v/max)*.7 : 1;
-        return (
-          <div key={h} title={v?`${h}:00 — ${v}/100`:`${h}:00 — no data`}
-            style={{ width:26, height:26, borderRadius:5, background:col,
-              opacity, display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:8, color:"rgba(255,255,255,.5)", fontWeight:700 }}>
-            {h}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function RiskGauge({ value, label }) {
-  const col = value>=60?T.red:value>=30?T.amber:T.green;
-  const r=28, circ=2*Math.PI*r, dash=circ*(value/100);
-  return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
-      <svg width={72} height={72} style={{ transform:"rotate(-90deg)" }}>
-        <circle cx={36} cy={36} r={r} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth={6}/>
-        <circle cx={36} cy={36} r={r} fill="none" stroke={col} strokeWidth={6}
-          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-          style={{ transition:"stroke-dasharray .8s ease" }}/>
-        <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
-          style={{ transform:"rotate(90deg)", transformOrigin:"center",
-            fontFamily:TY.fontSans, fontSize:14, fontWeight:800, fill:col }}>
-          {value}
-        </text>
-      </svg>
-      <span style={{ fontSize:10, fontWeight:700, color:col }}>{label}</span>
-    </div>
-  );
-}
-
-function InsightCard({ icon, title, body, priority }) {
-  const colMap = { high:T.red, medium:T.amber, low:T.green };
-  const col = colMap[priority] || T.blue;
-  return (
-    <div style={{ display:"flex", gap:12, padding:`${SP[3]}px`, background:"rgba(255,255,255,.025)",
-      border:`1px solid rgba(255,255,255,.05)`, borderRadius:R.sm, alignItems:"flex-start",
-      borderLeft:`3px solid ${col}` }}>
-      <span style={{ fontSize:20, flexShrink:0 }}>{icon}</span>
-      <div>
-        <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:3 }}>{title}</div>
-        <div style={{ fontSize:11, color:T.muted, lineHeight:1.6 }}>{body}</div>
-      </div>
-      <Badge label={priority||"info"} color={col} bg={`${col}15`}
-        style={{ marginLeft:"auto", flexShrink:0 }}/>
-    </div>
-  );
-}
-
-function ForecastBar({ day, score, confidence }) {
-  const col = sc(score);
-  return (
-    <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-      <div style={{ fontSize:10, color:T.muted, fontFamily:"DM Mono,monospace" }}>{score}</div>
-      <div style={{ width:"100%", borderRadius:"3px 3px 0 0",
-        background:col, opacity:.6+confidence*.004,
-        height:Math.max(4,Math.round(score/100*52)), transition:"height .5s ease" }}/>
-      <div style={{ fontSize:9, color:T.muted }}>D{day}</div>
-    </div>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────
-export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessions:propSessions }) {
-  const [sessions, setSessions]   = useState(propSessions||[]);
-  const [loading, setLoading]     = useState(!propSessions);
-  const [tab, setTab]             = useState("overview");
-  const [dateRange, setDateRange] = useState("30d");
-  const [referral, setReferral]   = useState(null);
-
-  // AI state
-  const [aiSummary, setAiSummary]     = useState(null);
-  const [aiPredict, setAiPredict]     = useState(null);
-  const [aiWeekly, setAiWeekly]       = useState(null);
-  const [aiFatigue, setAiFatigue]     = useState(null);
-  const [aiLoading, setAiLoading]     = useState({});
-  const [aiError, setAiError]         = useState({});
-
-  const isAr = lang === "ar";
 
   // Labels
   const L = {

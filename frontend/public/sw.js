@@ -1,7 +1,7 @@
-// PostureAI Pro — Service Worker v3 — Full PWA + Offline Support
-const CACHE_VER   = "postureai-v3";
-const MP_CACHE    = "mediapipe-v2";
-const DATA_CACHE  = "postureai-data-v1";
+// PostureAI Pro — Service Worker v4 — Full PWA + Offline Support
+const CACHE_VER   = "postureai-v4";
+const MP_CACHE    = "mediapipe-v3";
+const DATA_CACHE  = "postureai-data-v2";
 
 const SHELL = [
   "/", "/index.html", "/manifest.json",
