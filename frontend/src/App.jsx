@@ -1688,7 +1688,7 @@ export default function App(){
 
     const authTimeout=setTimeout(()=>{
       setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
-    }, 8000);
+    }, 3000); // 3s max — if Firebase doesn't respond, show landing
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
