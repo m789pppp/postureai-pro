@@ -207,7 +207,7 @@ function TopNav({ user, profile, isAr, darkMode, setDarkMode, setLang,
 // ─────────────────────────────────────────────────────────────────
 function BottomNav({ setPage, startCamera, setMode, mode, isAr, companyId, profile }) {
   const goSession = () => {
-    const m = mode || localStorage.getItem("last_mode") || "laptop";
+    const m = mode || (()=>{try{return localStorage.getItem("last_mode");}catch(e){return null;}})() || "laptop";
     setMode(m);
     setPage("live");
     setTimeout(() => startCamera?.(), 150);
@@ -293,7 +293,7 @@ export default function HomeScreen(props) {
 
   // ── Computed ─────────────────────────────────────────────────
   const { isMobile, isTablet, bp } = useBreakpoint();
-  const savedMode = localStorage.getItem("last_mode") || "laptop";
+  const savedMode = (()=>{try{return localStorage.getItem("last_mode");}catch(e){return null;}})() || "laptop";
   const curMode   = mode || savedMode;
   const [achievement, setAchievement] = useState(null);
   const [showConfetti, setConfetti]   = useState(false);
@@ -379,7 +379,7 @@ export default function HomeScreen(props) {
 
   const goLive = () => {
     setMode(curMode);
-    localStorage.setItem("last_mode", curMode);
+    (()=>{try{localStorage.setItem("last_mode",curMode);}catch(e){}})();
     setPage("live");
     setTimeout(()=>startCamera?.(),150);
   };
@@ -562,7 +562,7 @@ export default function HomeScreen(props) {
           ].map(m=>(
             <ModeBtn key={m.id} {...m} label={isAr?m.ar:m.en}
               active={curMode===m.id}
-              onClick={id=>{setMode(id);localStorage.setItem("last_mode",id);}}/>
+              onClick={id=>{setMode(id);(()=>{try{localStorage.setItem("last_mode",id);}catch(e){}})();}}/>
           ))}
         </div>
 

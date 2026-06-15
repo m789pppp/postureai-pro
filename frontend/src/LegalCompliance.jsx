@@ -13,24 +13,24 @@ export function CookieConsent({ cs }) {
   const [prefs, setPrefs]   = useState({ necessary: true, analytics: false, marketing: false });
 
   useEffect(() => {
-    const stored = localStorage.getItem(COOKIE_KEY);
+    const stored = (()=>{try{return localStorage.getItem(COOKIE_KEY);}catch(e){return null;}})();
     if (!stored) setShow(true);
   }, []);
 
   const acceptAll = () => {
     const consent = { necessary: true, analytics: true, marketing: true, ts: Date.now() };
-    localStorage.setItem(COOKIE_KEY, JSON.stringify(consent));
+    try { localStorage.setItem(COOKIE_KEY, JSON.stringify(consent)); } catch(e) {}
     setShow(false);
   };
 
   const acceptSelected = () => {
-    localStorage.setItem(COOKIE_KEY, JSON.stringify({ ...prefs, ts: Date.now() }));
+    try { localStorage.setItem(COOKIE_KEY, JSON.stringify({ ...prefs, ts: Date.now() })); } catch(e) {}
     setShow(false);
   };
 
   const rejectAll = () => {
     const consent = { necessary: true, analytics: false, marketing: false, ts: Date.now() };
-    localStorage.setItem(COOKIE_KEY, JSON.stringify(consent));
+    try { localStorage.setItem(COOKIE_KEY, JSON.stringify(consent)); } catch(e) {}
     setShow(false);
   };
 

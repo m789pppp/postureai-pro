@@ -286,7 +286,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       try { await saveCalibration(uid, calibData); } catch (e) { console.warn("Calibration save:", e); }
     }
     // Also save to localStorage for offline use
-    localStorage.setItem("posture_calibration", JSON.stringify(calibData));
+    try { localStorage.setItem("posture_calibration", JSON.stringify(calibData)); } catch(e) {}
   }, [uid, stopCamera, t.err_pose]);
 
   const DARK  = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", blue: "#1a56db" };
@@ -407,14 +407,14 @@ export function useCalibration(uid) {
 
   useEffect(() => {
     // Try localStorage first (fast)
-    const local = localStorage.getItem("posture_calibration");
+    const local = (()=>{try{return localStorage.getItem("posture_calibration");}catch(e){return null;}})();
     if (local) {
       try { setCalibration(JSON.parse(local)); } catch {}
     }
     // Then sync from Firestore
     if (uid) {
       getCalibration(uid)
-        .then(data => { if (data) { setCalibration(data); localStorage.setItem("posture_calibration", JSON.stringify(data)); } })
+        .then(data => { if (data) { setCalibration(data); try { localStorage.setItem("posture_calibration", JSON.stringify(data)); } catch(e) {} } })
         .catch(() => {})
         .finally(() => setLoading(false));
     } else {
