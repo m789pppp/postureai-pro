@@ -462,7 +462,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 // ══════════════════════════════════════════════════════════════════
 // EMPLOYEE DASHBOARD
 // ══════════════════════════════════════════════════════════════════
-function DashEmployee({ profile, userSessions, allUsers, cs, isAr, setPage, startCamera, onCoach }) {
+function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage, startCamera, onCoach }) {
   const last   = userSessions[0]?.avg_score||0;
   const avg    = userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0;
   const streak = profile?.streak_days||0;
@@ -739,16 +739,6 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
-async function makePDF(s, idx, total, profile, lang) {
-  try {
-    const { generateSessionPDF } = await import("./firebase.js");
-    await generateSessionPDF({ session:s, profile:profile||{}, user:null, lang:lang||"en", sessionIndex:total-idx });
-  } catch(e) {
-    console.error("PDF:", e);
-    alert("PDF failed: "+(e?.message||"unknown"));
-  }
-}
-
 function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDeleteSession, onTrend }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
@@ -1787,6 +1777,13 @@ export default function HomePage({
 
   const handleSignOut = useCallback(()=>{ logOut?.(); setUser?.(null); setProfile?.(null); },[logOut,setUser,setProfile]);
 
+  const handleDeleteSession = useCallback(async(id)=>{
+    await deleteSession(id);
+    setUserSessions(p=>p.filter(s=>s.id!==id));
+  },[setUserSessions]);
+
+  const handleTrend = useCallback(()=>setShowTrendChart?.(true),[setShowTrendChart]);
+
   const tabLabels = { en:{ home:"Dashboard",employees:"Employees",analytics:"Analytics",
     alerts:"Alerts",sessions:"Sessions",team:"Team",settings:"Settings" },
     ar:{ home:"الرئيسية",employees:"الموظفون",analytics:"التحليلات",
@@ -1840,15 +1837,15 @@ export default function HomePage({
 
     if(userRole==="employee") {
       if(tab==="home"||tab==="team") return (
-        <DashEmployee profile={profile} userSessions={userSessions} allUsers={allUsers}
+        <DashEmployee user={user} profile={profile} userSessions={userSessions} allUsers={allUsers}
           cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera} onCoach={openCoach}/>
       );
       if(tab==="sessions") return (
         <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
           setPage={setPage} startCamera={startCamera}
           onDownloadPDF={downloadPDF}
-          onDeleteSession={async(id)=>{ await deleteSession(id); setUserSessions(p=>p.filter(s=>s.id!==id)); }}
-          onTrend={()=>setShowTrendChart(true)}/>
+          onDeleteSession={handleDeleteSession}
+          onTrend={handleTrend}/>
       );
     }
 
@@ -1857,8 +1854,8 @@ export default function HomePage({
       <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
         setPage={setPage} startCamera={startCamera}
         onDownloadPDF={downloadPDF}
-        onDeleteSession={async(id)=>{ await deleteSession(id); setUserSessions(p=>p.filter(s=>s.id!==id)); }}
-        onTrend={()=>setShowTrendChart(true)}/>
+        onDeleteSession={handleDeleteSession}
+        onTrend={handleTrend}/>
     );
 
     return (
@@ -1866,6 +1863,7 @@ export default function HomePage({
         cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
         onCoach={openCoach} onBilling={openBilling} onAnalytics={openAnalytics}
         onCalib={openCalib} onReports={openReports} addToast={addToast}
+        onDownloadPDF={downloadPDF}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin}
         setShowGamification={setShowGamification}
         setShowGrowthHub={setShowGrowthHub}
@@ -1890,7 +1888,7 @@ export default function HomePage({
         onCompare={()=>setShowSessionComparison?.(true)} onTrend={()=>setShowTrendChart?.(true)}/>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[tab, userRole, profile, userSessions, allUsers, tier, isAr, cs, atRisk, isHRAdmin, isAdmin]);
+  },[tab, userRole, user, profile, userSessions, allUsers, tier, isAr, cs, atRisk, isHRAdmin, isAdmin, downloadPDF, handleDeleteSession, handleTrend, openCoach, openBilling, openAnalytics, openCalib, openReports]);
 
   return (
     <div dir={dir} style={{ display:"flex", minHeight:"100vh",
