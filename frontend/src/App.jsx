@@ -2667,26 +2667,20 @@ export default function App(){
                   style={{flex:1,padding:"10px",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {isAr?"لوحة التحكم":"Dashboard"}
                 </button>
-                <button onClick={()=>{
-                  var sc=sessionResult.avg_score||0;
-                  var dur=sessionResult.duration_s||0;
-                  var dStr=dur>=60?(Math.round(dur/60)+"m"):(dur+"s");
-                  var gr=sc>=85?"Excellent":sc>=70?"Good":sc>=55?"Fair":"Needs Work";
-                  var gp=(sessionResult.good_pct||0)+"%";
-                  var card=function(v,l){return "<div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;'><div style='font-size:28px;font-weight:800;color:#1a56db;'>"+v+"</div><div style='font-size:12px;color:#64748b;margin-top:4px;'>"+l+"</div></div>";};
-                  var html="<!DOCTYPE html><html><head><meta charset='utf-8'/><title>PostureAI Report</title></head><body style='font-family:Arial,sans-serif;margin:40px;color:#0f172a;'>"
-                    +"<div style='color:#1a56db;font-size:22px;font-weight:800;margin-bottom:4px;'>◈ PostureAI Pro</div>"
-                    +"<div style='color:#64748b;font-size:13px;margin-bottom:24px;'>"+new Date().toLocaleString()+"</div>"
-                    +"<div style='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;'>"
-                    +card(String(sc),"Posture Score")+card(gr,"Grade")+card(dStr,"Duration")+card(gp,"Good Posture")
-                    +card(String(sessionResult.alerts_count||0),"Alerts")+card(mode||"Standard","Mode")
-                    +"</div>"
-                    +"<div style='font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:12px;'>PostureAI Pro · "+new Date().toLocaleString()+"</div>"
-                    +"</body></html>";
-                  var blob=new Blob([html],{type:"text/html"});
-                  var url=URL.createObjectURL(blob);
-                  var w=window.open(url,"_blank");
-                  if(w) w.onload=function(){w.print();setTimeout(function(){URL.revokeObjectURL(url);},2000);};
+                <button onClick={async ()=>{
+                  addToast(isAr?"جاري إنشاء PDF...":"Generating PDF...","info");
+                  try {
+                    const { generateSessionPDF } = await import("./firebase.js");
+                    await generateSessionPDF({
+                      session: { ...sessionResult, created_at: new Date(), mode, tier,
+                        session_id: sessionId, score_history: histRef.current||[] },
+                      profile, user, lang,
+                      sessionIndex: (userSessions.length||0)+1,
+                    });
+                    addToast(isAr?"✅ تم تحميل PDF":"✅ PDF downloaded","success");
+                  } catch(e) {
+                    addToast("PDF error: "+(e?.message||"unknown"),"error");
+                  }
                 }}
                   style={{flex:1,padding:"10px",background:"rgba(99,102,241,.15)",color:"#a5b4fc",border:"1px solid rgba(99,102,241,.3)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   📄 {isAr?"تنزيل PDF":"Download PDF"}
@@ -3123,27 +3117,21 @@ export default function App(){
               </button>
           }
           {histRef.current?.length>0&&(
-            <button onClick={()=>{
-              var hist=histRef.current||[];
-              var sc=hist.length?Math.round(hist.reduce(function(a,b){return a+b;},0)/hist.length):0;
-              var dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
-              var dStr=dur>=60?(Math.round(dur/60)+"m"):(dur+"s");
-              var gr=sc>=85?"Excellent":sc>=70?"Good":sc>=55?"Fair":"Needs Work";
-              var gp=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
-              var card=function(v,l){return "<div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;'><div style='font-size:28px;font-weight:800;color:#1a56db;'>"+v+"</div><div style='font-size:12px;color:#64748b;margin-top:4px;'>"+l+"</div></div>";};
-              var html="<!DOCTYPE html><html><head><meta charset='utf-8'/><title>PostureAI Report</title></head><body style='font-family:Arial,sans-serif;margin:40px;color:#0f172a;'>"
-                +"<div style='color:#1a56db;font-size:22px;font-weight:800;margin-bottom:4px;'>◈ PostureAI Pro</div>"
-                +"<div style='color:#64748b;font-size:13px;margin-bottom:24px;'>"+new Date().toLocaleString()+"</div>"
-                +"<div style='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;'>"
-                +card(String(sc),"Posture Score")+card(gr,"Grade")+card(dStr,"Duration")+card(gp+"%","Good Posture")
-                +card(String(acRef.current?.total||0),"Alerts")+card(mode||"Standard","Mode")
-                +"</div>"
-                +"<div style='font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:12px;'>PostureAI Pro · "+new Date().toLocaleString()+"</div>"
-                +"</body></html>";
-              var blob=new Blob([html],{type:"text/html"});
-              var url=URL.createObjectURL(blob);
-              var w=window.open(url,"_blank");
-              if(w) w.onload=function(){w.print();setTimeout(function(){URL.revokeObjectURL(url);},2000);};
+            <button onClick={async ()=>{
+              const hist=histRef.current||[];
+              const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
+              const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
+              const gp=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
+              try {
+                const { generateSessionPDF } = await import("./firebase.js");
+                await generateSessionPDF({
+                  session:{ avg_score:sc, duration_s:dur, good_pct:gp,
+                    alerts_count:acRef.current?.total||0, mode, tier,
+                    score_history:hist.slice(-40), created_at:new Date() },
+                  profile, user, lang,
+                  sessionIndex:(userSessions.length||0)+1,
+                });
+              } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
             }} style={{
               background:"rgba(59,130,246,.08)",color:"#93c5fd",
               border:"1px solid rgba(59,130,246,.2)",borderRadius:10,

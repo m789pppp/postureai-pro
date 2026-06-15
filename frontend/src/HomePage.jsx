@@ -739,32 +739,14 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
-function makePDF(s, idx, total) {
-  const sc   = s.avg_score||0;
-  const dur  = s.duration_s||s.duration_sec||0;
-  const dStr = dur>=60 ? (Math.round(dur/60)+"m") : (dur+"s");
-  const gr   = sc>=85?"Excellent":sc>=70?"Good":sc>=55?"Fair":"Needs Work";
-  const d    = s.created_at?.toDate?.() ?? new Date(s.created_at||0);
-  const dt   = d.toLocaleString();
-  const gp   = (s.good_pct||0)+"%";
-  const card = function(v,l){ return "<div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;'><div style='font-size:28px;font-weight:800;color:#1a56db;'>"+v+"</div><div style='font-size:12px;color:#64748b;margin-top:4px;'>"+l+"</div></div>"; };
-  var html = "<!DOCTYPE html><html><head><meta charset='utf-8'/><title>PostureAI Report</title></head><body style='font-family:Arial,sans-serif;margin:40px;color:#0f172a;'>";
-  html += "<div style='color:#1a56db;font-size:22px;font-weight:800;margin-bottom:4px;'>◈ PostureAI Pro</div>";
-  html += "<div style='color:#64748b;font-size:13px;margin-bottom:24px;'>Session #"+(total-idx)+" · "+dt+"</div>";
-  html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;'>";
-  html += card(String(sc),"Posture Score");
-  html += card(gr,"Grade");
-  html += card(dStr,"Duration");
-  html += card(gp,"Good Posture");
-  html += card(String(s.alerts_count||0),"Alerts");
-  html += card(s.mode||"Standard","Mode");
-  html += "</div>";
-  html += "<div style='font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:12px;'>PostureAI Pro · "+new Date().toLocaleString()+"</div>";
-  html += "</body></html>";
-  var blob = new Blob([html],{type:"text/html"});
-  var url  = URL.createObjectURL(blob);
-  var w    = window.open(url,"_blank");
-  if(w) w.onload = function(){ w.print(); setTimeout(function(){ URL.revokeObjectURL(url); },2000); };
+async function makePDF(s, idx, total, profile, lang) {
+  try {
+    const { generateSessionPDF } = await import("./firebase.js");
+    await generateSessionPDF({ session:s, profile:profile||{}, user:null, lang:lang||"en", sessionIndex:total-idx });
+  } catch(e) {
+    console.error("PDF:", e);
+    alert("PDF failed: "+(e?.message||"unknown"));
+  }
 }
 
 function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDeleteSession, onTrend }) {
