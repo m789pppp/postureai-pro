@@ -1492,20 +1492,23 @@ export default function App(){
   const isOnline = useOnline();
   const[showOnboard,setShowOnboard]=useState(false);
   const[showCompanyOnboard,setShowCompanyOnboard]=useState(false);
-  // ── Trigger onboarding for new users ──────────────────────────
+  // ── Trigger onboarding — ONE clear condition ───────────────────
   useEffect(()=>{
     if(!user||!profile||page!=="home") return;
+    // Already done or skipped → never show again
+    const done = profile.onboarding_done?.length > 0;
+    if(done) return;
     // Company owner with no company_id → show company wizard
-    if(profile.setup_complete&&profile.acct_type==="company"&&!profile.company_id&&!showCompanyOnboard){
+    if(profile.setup_complete && profile.acct_type==="company" && !profile.company_id && !showCompanyOnboard){
       const t=setTimeout(()=>setShowCompanyOnboard(true),800);
       return()=>clearTimeout(t);
     }
-    // Individual: show onboarding wizard if not done yet (![] is always false, check length)
-    if(profile.setup_complete&&profile.acct_type!=="company"&&!profile.onboarding_done?.length&&!showOnboard){
+    // Individual: show onboarding wizard only once
+    if(profile.setup_complete && profile.acct_type!=="company" && !showOnboard){
       const t=setTimeout(()=>setShowOnboard(true),1200);
       return()=>clearTimeout(t);
     }
-  },[user,profile?.onboarding_done,profile?.setup_complete,profile?.acct_type,profile?.company_id,page,showCompanyOnboard,showOnboard]);
+  },[user,profile?.onboarding_done,profile?.setup_complete,profile?.acct_type,profile?.company_id,page]); // eslint-disable-line
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
@@ -2358,8 +2361,9 @@ export default function App(){
                       is_org_owner: acctType==="company",
                       setup_complete: true,
                       device_pref: devicePref,
+                      updated_at: serverTimestamp(),
                     });
-                    setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", is_org_owner: acctType==="company"}));
+                    setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", is_org_owner: acctType==="company", setup_complete:true}));
                   }catch(e){ console.warn("setup save failed",e); }
                 }
                 const freshP=user?.uid?await getUserProfile(user.uid).catch(()=>null):null;
@@ -2407,7 +2411,20 @@ export default function App(){
     <ErrorBoundary>
       {/* ── ALL MODALS — shown on home page too ────────────────── */}
       {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
-      {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={()=>setShowOnboard(false)}/>}
+      {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={async()=>{
+        setShowOnboard(false);
+        // Persist skip so wizard never shows again on next login
+        if(user?.uid){
+          try{
+            await updateDoc(doc(db,"users",user.uid),{
+              onboarding_done:["skipped"],
+              setup_complete:true,
+              updated_at:serverTimestamp(),
+            });
+            setProfile(p=>p?({...p,onboarding_done:["skipped"],setup_complete:true}):p);
+          }catch(e){ console.warn("skip onboard:",e?.code); }
+        }
+      }}/>}
       {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
       {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
