@@ -10761,7 +10761,7 @@ def add_security_headers(response):
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://accept.paymob.com; "
             "frame-src https://accept.paymob.com; "
-            "connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com; "
+            "connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseapp.com https://*.googleapis.com; "
             "img-src 'self' data: blob:; "
             "style-src 'self' 'unsafe-inline';"
         )
