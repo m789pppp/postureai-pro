@@ -2479,17 +2479,17 @@ export default function App(){
       {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
       {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowGamification(false)}/>}
-      {showAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
-      {showMRR&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
+      {showAdmin&&isAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
+      {showMRR&&isAdmin&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
       {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
-      {showChangelog&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
+      {showChangelog&&isAdmin&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
       {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowAIInsights(false)}/>}
       {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowPredictiveAI(false)}/>}
       {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowAIReports(false)}/>}
-      {showWorkforceAnalytics&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
+      {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
       {showEnterpriseRBAC&&<EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}
       
-      {showFeatureFlags&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
+      {showFeatureFlags&&isAdmin&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
       {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
       {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
       {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
@@ -2540,12 +2540,12 @@ export default function App(){
       {showGrowthHub&&isAdmin&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
       {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
-      {showChurnPrediction&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
-      {showCustomerSuccess&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
+      {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
+      {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
       {showAPIMarketplace&&<APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/>}
       {showWhiteLabel&&<WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/>}
       {showMultiTenant&&<MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/>}
-      {showAuditSystem&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
+      {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
     </ErrorBoundary>
   );
   const TN = T_norm;
@@ -2670,7 +2670,7 @@ export default function App(){
       {showMFASetup&&<MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)}/>}
       {showBillingDashboard&&<BillingDashboard profile={profile} user={user} cs={cs} lang={lang} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}
       {/* Phase 12 — Enterprise Scale */}
-      {showEnterpriseAdmin&&<EnterpriseAdminTools profile={profile} cs={cs} lang={lang} onClose={()=>setShowEnterpriseAdmin(false)}/>}
+      {showEnterpriseAdmin&&isAdmin&&<EnterpriseAdminTools profile={profile} cs={cs} lang={lang} onClose={()=>setShowEnterpriseAdmin(false)}/>}
 
       {/* ── Session Result Modal ── */}
       {sessionResult&&(

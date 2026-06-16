@@ -1847,8 +1847,13 @@ export default function HomePage({
     }
 
     if(userRole==="employee") {
+      // Strip sensitive fields — employees only see name, avatar, score, department
+      const teamData = (allUsers||[]).filter(u=>u.company_id===profile?.company_id).map(u=>({
+        uid:u.uid, id:u.id, name:u.name, photoURL:u.photoURL,
+        avg_score:u.avg_score, department:u.department,
+      }));
       if(tab==="home"||tab==="team") return (
-        <DashEmployee user={user} profile={profile} userSessions={userSessions} allUsers={allUsers}
+        <DashEmployee user={user} profile={profile} userSessions={userSessions} allUsers={teamData}
           cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera} onCoach={openCoach}/>
       );
       if(tab==="sessions") return (
