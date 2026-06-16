@@ -72,7 +72,7 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
   const T = {
     en: {
       title:       "AI Posture Coach",
-      subtitle:    "Powered by Gemini AI — Professional tier & above",
+      subtitle:    `Powered by Gemini AI — ${coachLimitLabel}`,
       placeholder: "Ask me anything about your posture…",
       send:        "Send",
       clear:       "Clear chat",
@@ -84,7 +84,7 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
     },
     ar: {
       title:       "مدرب الوضعية الذكي",
-      subtitle:    "مدعوم بـ Gemini AI — خطة Elite",
+      subtitle:    `مدعوم بـ Gemini AI — ${coachLimitLabel}`,
       placeholder: "اسألني أي حاجة عن وضعيتك…",
       send:        "إرسال",
       clear:       "مسح المحادثة",
@@ -96,10 +96,12 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
   const t = T[lang] || T.en;
   const isAr = lang === "ar";
 
-  // Backend enforces "professional" tier minimum — match that here
-  // Backend: @require_tier("professional") — professional, elite, premium, enterprise all allowed
-  const canUseCoach = ["professional", "elite", "premium", "enterprise"].includes(profile?.tier);
-  const isElite = canUseCoach; // alias kept for JSX below
+  // All tiers can use AI Coach — backend controls usage limits per tier
+  const canUseCoach = true;
+  const isElite = true;
+  const TIER_LIMITS = { standard: 5, basic: 10, pro: 30, professional: 50, elite: -1, premium: -1, enterprise: -1 };
+  const coachLimit = TIER_LIMITS[profile?.tier] ?? 5;
+  const coachLimitLabel = coachLimit === -1 ? (lang === "ar" ? "غير محدود" : "Unlimited") : `${coachLimit} ${lang === "ar" ? "رسالة/شهر" : "msgs/month"}`;
 
   // Build analytics context for Gemini
   const context = {
@@ -142,6 +144,11 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
       });
       if (data.ok && data.text) {
         setMessages(prev => [...prev, { role: "assistant", content: data.text, ts: Date.now() }]);
+      } else if (data.error === "coach_limit_reached") {
+        setError(isAr
+          ? `وصلت للحد الشهري (${data.limit} رسالة). رقّي خطتك للمزيد.`
+          : `Monthly limit reached (${data.limit} msgs). Upgrade for more.`
+        );
       } else {
         setError(data.error || "Failed to get response");
       }
@@ -202,6 +209,7 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
             ["📅", isAr ? `${context.sessions_count} جلسة` : `${context.sessions_count} sessions`],
             ["🎯", context.has_calibration ? (isAr ? "معايَر ✓" : "Calibrated") : (isAr ? "غير معايَر" : "Not calibrated")],
             ["⭐", profile?.tier || "standard"],
+            [coachLimit === -1 ? "💬" : "💬", coachLimit === -1 ? (isAr ? "∞ رسائل" : "∞ msgs") : `${coachLimit} ${isAr ? "رسالة/شهر" : "msgs/mo"}`],
           ].map(([icon, label]) => (
             <div key={label} style={{ fontSize: 10, color: DARK.muted, whiteSpace: "nowrap", display: "flex", gap: 4, alignItems: "center" }}>
               <span>{icon}</span><span>{label}</span>
@@ -241,7 +249,18 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
               </div>
             </div>
           )}
-          {error && <div style={{ fontSize: 11, color: "#ef4444", textAlign: "center", padding: "6px 12px", background: "rgba(239,68,68,.08)", borderRadius: 8 }}>{error}</div>}
+          {error && (
+            <div style={{ fontSize: 11, color: "#ef4444", textAlign: "center", padding: "8px 14px", background: "rgba(239,68,68,.08)", borderRadius: 8 }}>
+              {error}
+              {error.includes("limit") && (
+                <div style={{ marginTop: 6 }}>
+                  <a href="/pricing" style={{ color: "#93c5fd", fontSize: 11, fontWeight: 600 }}>
+                    {isAr ? "⬆ ترقية للمزيد ←" : "⬆ Upgrade for more →"}
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
 
@@ -290,3 +309,4 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
     </div>
   );
 }
+
