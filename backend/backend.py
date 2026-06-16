@@ -4427,18 +4427,82 @@ def get_session(sid):
         if not s: return jsonify({"error":"Session not found"}), 404
         h = s["score_history"]
         quality = compute_session_quality(s)
+        avg = round(sum(h)/len(h)) if h else 0
+        duration_s = int(time.time() - s["start"])
+
+        # ── Grade ─────────────────────────────────────────────────
+        grade = (
+            "A" if avg >= 85 else
+            "B" if avg >= 70 else
+            "C" if avg >= 55 else
+            "D" if avg >= 40 else "F"
+        )
+
+        # ── Score trend: compare first vs last 20% of frames ──────
+        trend = "stable"
+        if len(h) >= 10:
+            split = max(3, len(h) // 5)
+            early_avg = sum(h[:split]) / split
+            late_avg  = sum(h[-split:]) / split
+            diff = late_avg - early_avg
+            trend = "improving" if diff > 5 else "declining" if diff < -5 else "stable"
+
+        # ── Top unique alerts (deduped) ────────────────────────────
+        seen_alerts = []
+        for a in s.get("alerts", []):
+            txt = a if isinstance(a, str) else a.get("text", str(a))
+            if txt not in seen_alerts:
+                seen_alerts.append(txt)
+        top_alerts = seen_alerts[:5]
+
+        # ── Worst metric + improvement tip ────────────────────────
+        metric_scores = s.get("metric_scores", {})
+        worst_metric  = None
+        worst_score   = 101
+        tip_map = {
+            "neck":  "Raise your monitor to eye level to reduce neck flexion.",
+            "spine": "Sit back fully in your chair and use lumbar support.",
+            "dist":  "Move your screen to 50–70cm away from your eyes.",
+            "tilt":  "Keep your head level — avoid tilting toward your dominant side.",
+            "sh":    "Relax your shoulders down and back, away from your ears.",
+            "wrist": "Keep wrists straight and elbows at 90° when typing.",
+        }
+        for metric, sc in metric_scores.items():
+            if isinstance(sc, (int, float)) and sc < worst_score:
+                worst_score  = sc
+                worst_metric = metric
+        improvement_tip = tip_map.get(worst_metric, "Take a 2-minute posture break every 30 minutes.")
+
+        # ── Pain prediction summary ────────────────────────────────
+        pain_mins = s.get("pain_prediction_min")
+        pain_summary = None
+        if pain_mins and isinstance(pain_mins, (int, float)):
+            if pain_mins < 30:
+                pain_summary = f"Discomfort likely within {int(pain_mins)} min — take a break now."
+            elif pain_mins < 90:
+                pain_summary = f"~{int(pain_mins)} min before likely discomfort."
+            else:
+                pain_summary = "No imminent discomfort predicted."
+
         return jsonify({
-            "session_id":  sid,
-            "avg_score":   round(sum(h)/len(h)) if h else 0,
-            "frames":      s["frames"],
-            "good_pct":    round(s["good"] / max(s["frames"], 1) * 100),
-            "alerts":      len(s["alerts"]),
-            "duration_s":  int(time.time() - s["start"]),
-            "mode":        s["mode"],
-            "tier":        s.get("tier", "standard"),
-            "engine":      s.get("engine", ""),
-            # Quality metrics
-            "quality":     quality,
+            "session_id":       sid,
+            "avg_score":        avg,
+            "grade":            grade,
+            "frames":           s["frames"],
+            "good_pct":         round(s["good"] / max(s["frames"], 1) * 100),
+            "alerts_count":     len(s.get("alerts", [])),
+            "top_alerts":       top_alerts,
+            "duration_s":       duration_s,
+            "duration_min":     round(duration_s / 60, 1),
+            "mode":             s["mode"],
+            "tier":             s.get("tier", "standard"),
+            "engine":           s.get("engine", ""),
+            "trend":            trend,
+            "worst_metric":     worst_metric,
+            "improvement_tip":  improvement_tip,
+            "pain_summary":     pain_summary,
+            "quality":          quality,
+            "score_history":    h[-30:] if h else [],   # last 30 frames for mini chart
         })
     except Exception as e:
         return safe_error(e)
@@ -8225,24 +8289,73 @@ def _fire_webhooks(event: str, data: dict):
         }
         _threading.Thread(target=_deliver_webhook, args=[wh, payload], daemon=True).start()
 
+# ── Trend buffer: stores recent scores per uid for 3-day rolling avg ──
+_trend_buffer: dict = {}   # {uid: [(timestamp, score)]}
+_TREND_WINDOW_S = 3 * 24 * 3600   # 3 days
+
+def _get_trend_avg(uid: str) -> float:
+    """Return 3-day rolling average score for uid. Returns -1 if insufficient data."""
+    buf = _trend_buffer.get(uid, [])
+    cutoff = time.time() - _TREND_WINDOW_S
+    recent = [(t, s) for t, s in buf if t >= cutoff]
+    if len(recent) < 10:   # need at least 10 data points (≈ 10 frames) to trust trend
+        return -1.0
+    return sum(s for _, s in recent) / len(recent)
+
 def _check_risk_threshold(uid: str, score: int, threshold: int = 45, duration_s: int = 300):
-    """Fire webhook if score < threshold for > duration_s seconds."""
+    """
+    Trend-aware HR alert system.
+    - Records every score into a 3-day rolling buffer.
+    - Alert fires only when the 3-day average drops below threshold
+      AND the current session score has been low for > duration_s seconds.
+    - This prevents false alerts from a single bad frame or brief slouch.
+    """
     now = time.time()
+
+    # ── Update trend buffer ──────────────────────────────────────
+    buf = _trend_buffer.setdefault(uid, [])
+    buf.append((now, score))
+    # Prune old entries (>3 days)
+    cutoff = now - _TREND_WINDOW_S
+    _trend_buffer[uid] = [(t, s) for t, s in buf if t >= cutoff]
+    # Cap buffer size (max 10000 entries per user)
+    if len(_trend_buffer[uid]) > 10000:
+        _trend_buffer[uid] = _trend_buffer[uid][-5000:]
+
+    # ── Get 3-day trend avg ──────────────────────────────────────
+    trend_avg = _get_trend_avg(uid)
+
+    # ── Instant session tracker (unchanged logic) ────────────────
     if score < threshold:
         if uid not in _risk_tracker:
             _risk_tracker[uid] = {"score": score, "since": now}
         else:
             elapsed = now - _risk_tracker[uid]["since"]
             if elapsed >= duration_s:
-                _fire_webhooks("posture.risk_alert", {
-                    "employee_uid":     uid,
-                    "risk_level":       "high" if score < 35 else "medium",
-                    "posture_score":    score,
-                    "duration_seconds": int(elapsed),
-                    "threshold":        threshold,
-                    "triggered_at":     datetime.now().isoformat(),
-                })
-                del _risk_tracker[uid]   # reset after firing
+                # Only fire if trend also confirms chronic poor posture
+                # trend_avg == -1 means insufficient data → fire anyway (new user)
+                trend_confirms = (trend_avg == -1.0) or (trend_avg < threshold + 10)
+                if trend_confirms:
+                    risk_level = (
+                        "critical" if (trend_avg != -1 and trend_avg < 30) else
+                        "high"     if score < 35 else
+                        "medium"
+                    )
+                    _fire_webhooks("posture.risk_alert", {
+                        "employee_uid":     uid,
+                        "risk_level":       risk_level,
+                        "posture_score":    score,
+                        "trend_avg_3day":   round(trend_avg, 1) if trend_avg != -1 else None,
+                        "trend_confirmed":  trend_avg != -1,
+                        "duration_seconds": int(elapsed),
+                        "threshold":        threshold,
+                        "triggered_at":     datetime.now().isoformat(),
+                        "note": (
+                            "Trend-confirmed chronic issue" if trend_avg != -1
+                            else "Insufficient trend data — alert based on session only"
+                        ),
+                    })
+                del _risk_tracker[uid]   # reset after firing (whether fired or suppressed)
     else:
         _risk_tracker.pop(uid, None)
 
@@ -8441,7 +8554,7 @@ def set_user_claims():
 @require_auth
 @app.route("/api/coach/chat", methods=["POST"])
 @limiter.limit("30 per minute")
-@require_tier("professional")
+@require_auth
 def coach_chat():
     try:
         data     = request.get_json(force=True) or {}
@@ -8453,6 +8566,36 @@ def coach_chat():
             return jsonify({"error": "messages required"}), 400
         if not GEMINI_API_KEY:
             return jsonify({"error": "Gemini not configured", "text": None}), 503
+
+        # ── Tier-based AI Coach limits ─────────────────────────────
+        _uid_coach  = getattr(g, "uid", "")
+        _tier_coach = getattr(g, "tier", "standard") or "standard"
+        _month_key  = f"usage:{_uid_coach}:ai_coach:{datetime.utcnow().strftime('%Y-%m')}"
+        _coach_limits = {
+            "standard":     5,    # 5 free messages/month — taste of AI Coach
+            "professional": 50,   # 50/month
+            "elite":        -1,   # unlimited
+            "enterprise":   -1,   # unlimited
+            "premium":      -1,   # unlimited
+            "pro":          30,   # 30/month
+            "basic":        10,   # 10/month
+        }
+        _limit = _coach_limits.get(_tier_coach, 5)
+        if _limit > 0:
+            try:
+                import redis as _rc_coach
+                _rc = _rc_coach.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_timeout=1)
+                _used = int(_rc.get(_month_key) or 0)
+            except Exception:
+                _used = 0
+            if _used >= _limit:
+                return jsonify({
+                    "error":   "coach_limit_reached",
+                    "message": f"You've used all {_limit} AI Coach messages this month. Upgrade to get more.",
+                    "used":    _used,
+                    "limit":   _limit,
+                    "upgrade_url": "/pricing",
+                }), 429
 
         # Build system prompt with full posture context
         avg_score  = context.get("avg_score", 0)
