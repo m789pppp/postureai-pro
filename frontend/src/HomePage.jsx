@@ -1663,12 +1663,16 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
 }
 
 // ── Mobile nav ────────────────────────────────────────────────────
-function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRisk, profile }) {
+function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRisk, profile,
+  tools, setShowCoach, setShowBilling }) {
+  const [showMore, setShowMore] = useState(false);
+
   const tabs = userRole==="hr_admin"||userRole==="platform_admin" ? [
     { id:"home",      icon:"⊞", en:"Overview", ar:"نظرة" },
     { id:"employees", icon:"👥",en:"Team",      ar:"فريق" },
     { id:"live",      icon:"▶",  en:"Session",  ar:"جلسة", special:true },
     { id:"alerts",    icon:"🔔",en:"Alerts",    ar:"تنبيهات", badge:atRisk },
+    { id:"sessions",  icon:"📋",en:"History",   ar:"السجل" },
   ] : userRole==="employee" ? [
     { id:"home",     icon:"⊞", en:"Home",    ar:"الرئيسية" },
     { id:"team",     icon:"👥",en:"Team",     ar:"الفريق" },
@@ -1678,68 +1682,98 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
     { id:"home",     icon:"⊞", en:"Home",    ar:"الرئيسية" },
     { id:"sessions", icon:"📋",en:"History", ar:"السجل" },
     { id:"live",     icon:"▶",  en:"Session", ar:"جلسة", special:true },
+    { id:"analytics",icon:"📊",en:"Analytics",ar:"تحليلات" },
   ];
 
   return (
-    <nav style={{ position:"fixed", bottom:0, left:0, right:0, zIndex:200,
-      background:"rgba(4,9,20,.97)", borderTop:`1px solid ${cs.border}`,
-      backdropFilter:"blur(20px)", display:"flex",
-      padding:`6px 0 max(6px,env(safe-area-inset-bottom))` }}>
-      {tabs.map(t=>(
-        <button key={t.id}
-          onClick={()=>t.id==="live"?(setPage("live"),setTimeout(()=>startCamera?.(),200)):setTab(t.id)}
-          style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center",
-            gap:3, padding:"4px 0", background:"none", border:"none", cursor:"pointer",
-            position:"relative" }}>
-          {t.special ? (
-            <div style={{ width:42, height:42, borderRadius:"50%",
-              background:"linear-gradient(135deg,#1a56db,#0891b2)",
-              display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:17, color:"#fff", marginTop:-14,
-              boxShadow:"0 4px 14px rgba(26,86,219,.5)" }}>▶</div>
-          ) : (
-            <>
-              <span style={{ fontSize:17, color:tab===t.id?"#3b82f6":"rgba(255,255,255,.3)" }}>
-                {t.icon}
-              </span>
-              {(t.badge||0)>0&&(
-                <span style={{ position:"absolute", top:0, right:"15%",
-                  background:"#ef4444", color:"#fff", fontSize:8, fontWeight:700,
-                  borderRadius:99, padding:"0 4px", minWidth:14, textAlign:"center" }}>
-                  {t.badge}
-                </span>
-              )}
-            </>
-          )}
-          {!t.special&&(
-            <span style={{ fontSize:9, fontWeight:tab===t.id?700:400,
-              color:tab===t.id?"#3b82f6":"rgba(255,255,255,.3)" }}>
-              {isAr?t.ar:t.en}
-            </span>
-          )}
-        </button>
-      ))}
-      {/* Settings — avatar button at end */}
-      <button onClick={()=>setTab("settings")}
-        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center",
-          gap:3, padding:"4px 0", background:"none", border:"none", cursor:"pointer" }}>
-        <div style={{ width:26, height:26, borderRadius:"50%", overflow:"hidden",
-          border:tab==="settings"?"2px solid #3b82f6":"2px solid rgba(255,255,255,.15)" }}>
-          {profile?.photoURL
-            ? <img src={profile.photoURL} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
-            : <div style={{ width:"100%", height:"100%",
+    <>
+      {/* Tools Drawer */}
+      {showMore && (
+        <div style={{ position:"fixed", inset:0, zIndex:299 }} onClick={()=>setShowMore(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{
+            position:"fixed", bottom:64, left:8, right:8, zIndex:300,
+            background:"rgba(5,16,31,.98)", border:"1px solid rgba(148,163,184,.12)",
+            borderRadius:16, padding:"16px 12px", backdropFilter:"blur(24px)",
+            boxShadow:"0 -8px 40px rgba(0,0,0,.5)",
+          }}>
+            <div style={{ fontSize:10, color:"#64748b", fontWeight:700, textTransform:"uppercase",
+              letterSpacing:1, marginBottom:12, paddingLeft:4 }}>
+              {isAr ? "الأدوات" : "Tools"}
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+              {(tools||[]).map(t=>(
+                <button key={t.id} onClick={()=>{ t.onClick?.(); setShowMore(false); }}
+                  style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4,
+                    padding:"10px 6px", background:"rgba(255,255,255,.04)",
+                    border:"1px solid rgba(255,255,255,.06)", borderRadius:10,
+                    cursor:"pointer" }}>
+                  <span style={{ fontSize:20 }}>{t.icon}</span>
+                  <span style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textAlign:"center",
+                    lineHeight:1.2 }}>{isAr?t.ar:t.en}</span>
+                </button>
+              ))}
+              {/* Settings shortcut */}
+              <button onClick={()=>{ setTab("settings"); setShowMore(false); }}
+                style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4,
+                  padding:"10px 6px", background:"rgba(255,255,255,.04)",
+                  border:"1px solid rgba(255,255,255,.06)", borderRadius:10, cursor:"pointer" }}>
+                <span style={{ fontSize:20 }}>⚙️</span>
+                <span style={{ fontSize:9, color:"#94a3b8", fontWeight:600 }}>{isAr?"إعدادات":"Settings"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav style={{ position:"fixed", bottom:0, left:0, right:0, zIndex:200,
+        background:"rgba(4,9,20,.97)", borderTop:`1px solid ${cs.border}`,
+        backdropFilter:"blur(20px)", display:"flex",
+        padding:`6px 0 max(6px,env(safe-area-inset-bottom))` }}>
+        {tabs.map(t=>(
+          <button key={t.id}
+            onClick={()=>t.id==="live"?(setPage("live"),setTimeout(()=>startCamera?.(),200)):setTab(t.id)}
+            style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center",
+              gap:3, padding:"4px 0", background:"none", border:"none", cursor:"pointer",
+              position:"relative" }}>
+            {t.special ? (
+              <div style={{ width:42, height:42, borderRadius:"50%",
                 background:"linear-gradient(135deg,#1a56db,#0891b2)",
                 display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:11, color:"#fff", fontWeight:700 }}>
-                {(profile?.name||profile?.email||"U")[0].toUpperCase()}
-              </div>}
-        </div>
-        <span style={{ fontSize:9, fontWeight:tab==="settings"?700:400,
-          color:tab==="settings"?"#3b82f6":"rgba(255,255,255,.3)" }}>
-          {isAr?"إعدادات":"Settings"}
-        </span>
-      </button>
-    </nav>
+                fontSize:17, color:"#fff", marginTop:-14,
+                boxShadow:"0 4px 14px rgba(26,86,219,.5)" }}>▶</div>
+            ) : (
+              <>
+                <span style={{ fontSize:17, color:tab===t.id?"#3b82f6":"rgba(255,255,255,.3)" }}>
+                  {t.icon}
+                </span>
+                {(t.badge||0)>0&&(
+                  <span style={{ position:"absolute", top:0, right:"15%",
+                    background:"#ef4444", color:"#fff", fontSize:8, fontWeight:700,
+                    borderRadius:99, padding:"0 4px", minWidth:14, textAlign:"center" }}>
+                    {t.badge}
+                  </span>
+                )}
+              </>
+            )}
+            {!t.special&&(
+              <span style={{ fontSize:9, fontWeight:tab===t.id?700:400,
+                color:tab===t.id?"#3b82f6":"rgba(255,255,255,.3)" }}>
+                {isAr?t.ar:t.en}
+              </span>
+            )}
+          </button>
+        ))}
+        {/* More button */}
+        <button onClick={()=>setShowMore(o=>!o)}
+          style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center",
+            gap:3, padding:"4px 0", background:"none", border:"none", cursor:"pointer" }}>
+          <span style={{ fontSize:17, color:showMore?"#3b82f6":"rgba(255,255,255,.3)" }}>⋯</span>
+          <span style={{ fontSize:9, fontWeight:600, color:showMore?"#3b82f6":"rgba(255,255,255,.3)" }}>
+            {isAr?"المزيد":"More"}
+          </span>
+        </button>
+      </nav>
+    </>
   );
 }
 
@@ -1971,7 +2005,9 @@ export default function HomePage({
       {mobile&&(
         <MobileNav userRole={userRole} tab={tab} setTab={setTab}
           setPage={setPage} startCamera={startCamera}
-          isAr={isAr} cs={cs} atRisk={atRisk} profile={profile}/>
+          isAr={isAr} cs={cs} atRisk={atRisk} profile={profile}
+          tools={tools}
+          setShowCoach={setShowCoach} setShowBilling={setShowBilling}/>
       )}
     </div>
   );
