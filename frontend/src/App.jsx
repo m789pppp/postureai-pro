@@ -1492,23 +1492,24 @@ export default function App(){
   const isOnline = useOnline();
   const[showOnboard,setShowOnboard]=useState(false);
   const[showCompanyOnboard,setShowCompanyOnboard]=useState(false);
-  // ── Trigger onboarding — ONE clear condition ───────────────────
+  // ── Trigger onboarding — show for ALL new users ─────────────────
   useEffect(()=>{
     if(!user||!profile||page!=="home") return;
     // Already done or skipped → never show again
     const done = profile.onboarding_done?.length > 0;
     if(done) return;
     // Company owner with no company_id → show company wizard
-    if(profile.setup_complete && profile.acct_type==="company" && !profile.company_id && !showCompanyOnboard){
+    if(profile.acct_type==="company" && !profile.company_id && !showCompanyOnboard){
       const t=setTimeout(()=>setShowCompanyOnboard(true),800);
       return()=>clearTimeout(t);
     }
-    // Individual: show onboarding wizard only once
-    if(profile.setup_complete && profile.acct_type!=="company" && !showOnboard){
+    // Individual or new user: show onboarding wizard — removed setup_complete gate
+    // so new users who just signed up always see it
+    if(profile.acct_type!=="company" && !showOnboard){
       const t=setTimeout(()=>setShowOnboard(true),1200);
       return()=>clearTimeout(t);
     }
-  },[user,profile?.onboarding_done,profile?.setup_complete,profile?.acct_type,profile?.company_id,page]); // eslint-disable-line
+  },[user,profile?.onboarding_done,profile?.acct_type,profile?.company_id,page,showOnboard,showCompanyOnboard]); // eslint-disable-line
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
@@ -1856,12 +1857,14 @@ export default function App(){
                 const yaw=result.headYaw||0;
                 const[lo,hi]=result.lo&&result.hi?[result.lo,result.hi]:[50,80];
                 let msg="Sustained poor posture — correct position now";
-                if(nl>14){msg=`Neck lean ${nl}° — raise monitor to eye level`;acRef.current.neck++;}
-                else if(Math.abs(yaw)>12){msg=`Head turned ${Math.round(Math.abs(yaw))}° — face the monitor directly`;}
-                else if(dist&&dist<lo){msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;acRef.current.dist++;}
+                let msgAr="وضعية سيئة مستمرة — صحّح وضعيتك الآن";
+                if(nl>14){msg=`Neck lean ${nl}° — raise monitor to eye level`;msgAr=`ميل رقبة ${nl}° — ارفع الشاشة لمستوى عينيك`;acRef.current.neck++;}
+                else if(Math.abs(yaw)>12){msg=`Head turned ${Math.round(Math.abs(yaw))}° — face the monitor`;msgAr=`الرأس مائل ${Math.round(Math.abs(yaw))}° — واجه الشاشة مباشرة`;}
+                else if(dist&&dist<lo){msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;msgAr=`قريب جداً (${dist}سم) — ابتعد إلى ${lo}–${hi}سم`;acRef.current.dist++;}
+                const displayMsg = isAr ? msgAr : msg;
                 setAlertCounts({...acRef.current});
-                alRef.current=[{time:new Date().toLocaleTimeString(),msg,score:result.overall},...alRef.current].slice(0,20);
-                setAlerts([...alRef.current]);setAlertMsg({text:msg,type:"warn"});
+                alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:result.overall},...alRef.current].slice(0,20);
+                setAlerts([...alRef.current]);setAlertMsg({text:displayMsg,type:"warn"});
                 if(sound)playBeep();
                 sendDesktopNotif(msg,result.overall);
               }
@@ -1896,12 +1899,14 @@ export default function App(){
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
                 lastAlRef.current=now;acRef.current.total++;
-                const msg=result.alerts?.[0]||"Poor posture — correct position";
+                const msgFb = isAr
+                  ? (result.alerts_ar?.[0] || "وضعية سيئة — صحّح وضعيتك")
+                  : (result.alerts?.[0] || "Poor posture — correct position");
                 setAlertCounts({...acRef.current});
-                alRef.current=[{time:new Date().toLocaleTimeString(),msg,score:result.overall},...alRef.current].slice(0,20);
-                setAlerts([...alRef.current]);setAlertMsg({text:msg,type:"warn"});
+                alRef.current=[{time:new Date().toLocaleTimeString(),msg:msgFb,score:result.overall},...alRef.current].slice(0,20);
+                setAlerts([...alRef.current]);setAlertMsg({text:msgFb,type:"warn"});
                 if(sound)playBeep();
-                sendDesktopNotif(msg,result.overall);
+                sendDesktopNotif(msgFb,result.overall);
               }
             }else{
               badRef.current=null;
@@ -3017,6 +3022,25 @@ export default function App(){
           </span>
         </div>
 
+        {/* ── Quick Start Banner (for users who skipped onboarding) ─── */}
+        {profile?.onboarding_done?.[0]==="skipped" && !score && (
+          <div style={{margin:"10px 14px",background:"rgba(26,86,219,.08)",border:"1px solid rgba(26,86,219,.2)",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:18}}>👋</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#93c5fd"}}>
+                {isAr?"هل تريد جولة سريعة؟":"Want a quick tour?"}
+              </div>
+              <div style={{fontSize:10,color:"#64748b",marginTop:1}}>
+                {isAr?"اضغط لإعادة معالج الإعداد":"Tap to restart the setup wizard"}
+              </div>
+            </div>
+            <button onClick={()=>setShowOnboard(true)}
+              style={{background:"rgba(26,86,219,.2)",border:"1px solid rgba(26,86,219,.35)",borderRadius:8,padding:"5px 11px",fontSize:10,color:"#93c5fd",cursor:"pointer",fontWeight:700,flexShrink:0}}>
+              {isAr?"إعادة":"Restart"}
+            </button>
+          </div>
+        )}
+
         {/* Camera feed */}
         <div style={{position:"relative",aspectRatio:"4/3",background:"#020810",flexShrink:0}}>
           <video ref={vidRef} autoPlay muted playsInline
@@ -3108,6 +3132,47 @@ export default function App(){
             </div>
           </div>
         </div>
+
+        {/* Percentile badge */}
+        {analysis?.percentile != null && (
+          <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`,
+            background:"rgba(99,102,241,.06)",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:16}}>🏆</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#a5b4fc"}}>
+                {isAr
+                  ? `أحسن من ${analysis.percentile}% من المستخدمين`
+                  : `Better than ${analysis.percentile}% of users`}
+              </div>
+            </div>
+            <div style={{fontSize:18,fontWeight:900,color:"#818cf8"}}>
+              {analysis.percentile}%
+            </div>
+          </div>
+        )}
+
+        {/* Pain bar */}
+        {analysis?.pain_bar && analysis.pain_bar.urgency !== "none" && (
+          <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,
+            background:`${analysis.pain_bar.color}12`,
+            borderLeft:`3px solid ${analysis.pain_bar.color}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+              <span style={{fontSize:13}}>
+                {analysis.pain_bar.urgency==="imminent"?"🔴":
+                 analysis.pain_bar.urgency==="soon"?"🟠":"🟡"}
+              </span>
+              <div style={{fontSize:10,fontWeight:700,color:analysis.pain_bar.color}}>
+                {isAr ? analysis.pain_bar.label_ar : analysis.pain_bar.label}
+              </div>
+            </div>
+            <div style={{height:3,borderRadius:99,background:"rgba(255,255,255,.08)"}}>
+              <div style={{height:"100%",borderRadius:99,
+                width:`${Math.min(100,analysis.pain_bar.pct||0)}%`,
+                background:analysis.pain_bar.color,
+                transition:"width .5s ease"}}/>
+            </div>
+          </div>
+        )}
 
         {/* Live metrics */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
