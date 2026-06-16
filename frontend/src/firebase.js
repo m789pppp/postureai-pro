@@ -235,7 +235,7 @@ export async function getCalibration(uid) {
 export const getUserProfile   = async (uid) => { const s=await getDoc(doc(db,"users",uid)); return s.exists()?{id:s.id,...s.data()}:null; };
 export const updateUserProfile = async (uid, data) => {
   // Strip ALL protected fields that Firestore rules block client from changing
-  const { is_admin, tier, is_hr, company_id, uid: _uid, email: _email, ...safe } = data;
+  const { is_admin, tier, is_hr, is_org_owner, user_type, company_id, uid: _uid, email: _email, ...safe } = data;
   const payload = { ...safe, updated_at: _serverTimestamp() };
   try {
     // updateDoc fails if doc doesn't exist — setDoc merge always works

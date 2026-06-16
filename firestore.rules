@@ -45,7 +45,7 @@ service cloud.firestore {
     // Prevent client from escalating their own privileges
     function noPrivilegeEscalation() {
       return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['is_admin', 'tier', 'is_hr', 'company_id']);
+        .hasAny(['is_admin', 'tier', 'is_hr', 'is_org_owner', 'user_type', 'company_id']);
     }
 
     // ── Users Collection ────────────────────────────────────────

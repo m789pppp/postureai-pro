@@ -9,8 +9,11 @@ import { updateProfile as fbUpdateProfile } from "firebase/auth";
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
   if (isAdmin) return "platform_admin";
-  if (isHRAdmin || profile?.is_org_owner || profile?.is_hr || profile?.user_type === "hr_admin") return "hr_admin";
-  if (profile?.company_id && profile?.user_type !== "hr_admin") return "employee";
+  // HR admin: explicitly set — NOT just having company_id
+  if (isHRAdmin) return "hr_admin";
+  // Employee: belongs to a company but not HR
+  if (profile?.company_id && !isHRAdmin) return "employee";
+  // Default: personal/individual user
   return "individual";
 }
 
@@ -1525,9 +1528,15 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
             fontSize:16, flexShrink:0 }}>◈</div>
           <div>
             <div style={{ fontSize:13, fontWeight:800, color:"#f0f6ff", letterSpacing:"-.01em" }}>PostureAI</div>
-            <div style={{ fontSize:9, color:"#3b82f6", fontWeight:600, textTransform:"uppercase", letterSpacing:".06em" }}>
+            <div style={{ fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em",
+              color: userRole==="platform_admin"?"#f87171":
+                     userRole==="hr_admin"?"#34d399":
+                     userRole==="employee"?"#60a5fa":"#3b82f6" }}>
               {tier==="elite"?"Elite ✦":tier==="professional"?"Pro":tier==="business"?"Business":"Free"}
-              {" · "}{userRole==="hr_admin"?"Admin":userRole==="employee"?"Employee":"Personal"}
+              {" · "}
+              {userRole==="platform_admin"?"🛡 Platform Admin":
+               userRole==="hr_admin"?"🏢 HR Admin":
+               userRole==="employee"?"👤 Employee":"Personal"}
             </div>
           </div>
         </div>

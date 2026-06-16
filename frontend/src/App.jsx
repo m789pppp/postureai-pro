@@ -2119,8 +2119,17 @@ export default function App(){
   const gPct=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
   const avg=history.length?Math.round(history.reduce((a,b)=>a+b,0)/history.length):0;
   const distCm=analysis?.distCm||(analysis?.metrics?.distance?.value)||null;
-  const isAdmin=profile?.is_admin===true; // SECURITY: Firestore field only — no email comparison
-  const isHRAdmin=(HR_EMAILS||[]).includes(user?.email||"")||isAdmin||!!profile?.is_org_owner||!!profile?.company_id||profile?.user_type==="hr_admin";
+  // ── Role Detection ─────────────────────────────────────────────
+  // platform_admin: is_admin=true in Firestore (set manually, never by client)
+  const isAdmin   = profile?.is_admin === true;
+  // hr_admin: org owner OR explicitly set as HR — NOT just having company_id
+  const isHRAdmin = isAdmin
+    || profile?.is_org_owner === true
+    || profile?.user_type === "hr_admin"
+    || profile?.is_hr === true
+    || (HR_EMAILS||[]).includes(user?.email||"");
+  // employee: has company_id but is NOT hr_admin
+  // individual: no company_id and not HR
 
   // Shared props
   const shared={cs,t,darkMode,setDarkMode,lang,setLang,addToast};
@@ -2259,7 +2268,7 @@ export default function App(){
       />
     </ErrorBoundary>
   );  if(page==="admin"&&isAdmin)return <ErrorBoundary><Admin {...shared} adminUser={user} onBack={()=>setPage("home")}/></ErrorBoundary>;
-  if(page==="hr"&&(isAdmin||isHRAdmin||profile?.is_hr||profile?.is_org_owner||profile?.company_id||HR_EMAILS.includes(user?.email||"")))return <ErrorBoundary><HRPanel {...shared} user={user} profile={profile} companyId={companyId||profile?.company_id} onBack={()=>setPage("home")}/></ErrorBoundary>;
+  if(page==="hr"&&(isAdmin||isHRAdmin))return <ErrorBoundary><HRPanel {...shared} user={user} profile={profile} companyId={companyId||profile?.company_id} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="pricing") return(
     <ErrorBoundary>
       <PricingPage
