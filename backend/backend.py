@@ -3852,6 +3852,20 @@ def analyze():
         tier = getattr(g, "tier", None) or "standard"  # SECURITY: from auth, never client
         uid  = getattr(g, "uid", None) or ""
 
+        # ── Employee Consent Gate ──────────────────────────────────────────
+        # Employees invited by HR must explicitly consent before monitoring starts
+        company_id = getattr(g, "company_id", None)
+        if company_id:  # only check for invited employees (not direct signups)
+            _consent_doc = db.collection("user_consent").document(uid).get()
+            _consented = _consent_doc.to_dict().get("consented", False) if _consent_doc.exists else False
+            if not _consented:
+                return jsonify({
+                    "error": "consent_required",
+                    "message": "Employee must accept monitoring consent before analysis can begin.",
+                    "consent_url": "/consent"
+                }), 403
+
+
         # ── Frame hash cache: if identical frame within 1.5s, return cached result ──
         # Prevents duplicate analysis when frontend sends same frame twice
         import hashlib as _hl
@@ -6347,6 +6361,37 @@ def user_activity_log():
         return safe_error(e, "Failed to load activity log")
 
 
+
+# ── Cold Start Prevention ──────────────────────────────────────────
+@app.route("/api/ping", methods=["GET", "HEAD"])
+def ping():
+    """
+    Ultra-fast liveness probe — no auth, no DB, no MediaPipe.
+    Used by uptime monitors (UptimeRobot / BetterUptime / cron-job.org)
+    to keep Render from spinning down the backend.
+    Responds in <5ms. HEAD method supported for zero-body pings.
+    """
+    return jsonify({"ok": True, "ts": datetime.utcnow().isoformat() + "Z"}), 200
+
+@app.route("/api/warmup", methods=["POST", "GET"])
+def warmup():
+    """
+    Trigger MediaPipe model load in advance (called on frontend mount).
+    Returns instantly if already warm. Takes ~2-3s if cold.
+    Safe to call without auth — only loads models, touches no user data.
+    """
+    try:
+        was_cold = POSE_LITE is None
+        _ensure_models()
+        return jsonify({
+            "ok":      True,
+            "warm":    not was_cold,
+            "message": "Models ready" if not was_cold else "Models loaded from cold start",
+            "ts":      datetime.utcnow().isoformat() + "Z",
+        }), 200
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route("/api/system/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
 def health():
@@ -7433,6 +7478,66 @@ def org_invite_accept():
         return jsonify({"ok":True,"company_id":company_id})
     except Exception as e:
         return jsonify({"error":str(e)}),500
+
+
+# ── Employee Consent ───────────────────────────────────────────────
+@app.route("/api/employee/consent", methods=["GET"])
+@require_auth
+def get_consent_status():
+    """Return consent status for the authenticated employee."""
+    try:
+        uid = getattr(g, "uid", "")
+        doc = db.collection("user_consent").document(uid).get()
+        if doc.exists:
+            d = doc.to_dict()
+            return jsonify({
+                "consented":   d.get("consented", False),
+                "consented_at": d.get("consented_at", ""),
+                "version":     d.get("version", "1.0"),
+            })
+        return jsonify({"consented": False})
+    except Exception as e:
+        return safe_error(e)
+
+@app.route("/api/employee/consent", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def set_consent():
+    """Record employee consent to posture monitoring."""
+    try:
+        uid  = getattr(g, "uid", "")
+        data = request.get_json(force=True) or {}
+        accepted = bool(data.get("accepted", False))
+        db.collection("user_consent").document(uid).set({
+            "uid":          uid,
+            "consented":    accepted,
+            "consented_at": datetime.utcnow().isoformat() + "Z",
+            "version":      "1.0",
+            "ip":           request.headers.get("X-Forwarded-For", request.remote_addr),
+            "user_agent":   request.headers.get("User-Agent", ""),
+        }, merge=True)
+        log_event("employee_consent", uid, {"accepted": accepted})
+        return jsonify({"ok": True, "consented": accepted})
+    except Exception as e:
+        return safe_error(e)
+
+@app.route("/api/employee/consent/revoke", methods=["POST"])
+@require_auth
+@limiter.limit("5 per minute")
+def revoke_consent():
+    """Employee can revoke consent at any time — stops all monitoring."""
+    try:
+        uid = getattr(g, "uid", "")
+        db.collection("user_consent").document(uid).set({
+            "consented":   False,
+            "revoked_at":  datetime.utcnow().isoformat() + "Z",
+            "version":     "1.0",
+        }, merge=True)
+        log_event("employee_consent_revoked", uid, {})
+        return jsonify({"ok": True, "message": "Consent revoked. Monitoring stopped."})
+    except Exception as e:
+        return safe_error(e)
+
 
 
 # ── Subscription status check ──────────────────────────────────────
