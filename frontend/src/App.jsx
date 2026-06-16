@@ -1997,6 +1997,46 @@ export default function App(){
       grade: avg>=85?"Excellent":avg>=70?"Good":avg>=55?"Fair":"Needs work",
       gradeAr: avg>=85?"ممتاز":avg>=70?"جيد":avg>=55?"مقبول":"يحتاج تحسين",
       color: avg>=75?"#10b981":avg>=50?"#f59e0b":"#ef4444",
+      // Trend: compare first vs last 20% of frames
+      trend: (()=>{
+        if(hist.length<10) return "stable";
+        const split=Math.max(3,Math.floor(hist.length/5));
+        const early=hist.slice(0,split).reduce((a,b)=>a+b,0)/split;
+        const late=hist.slice(-split).reduce((a,b)=>a+b,0)/split;
+        const diff=late-early;
+        return diff>5?"improving":diff<-5?"declining":"stable";
+      })(),
+      // Improvement tip for worst metric
+      improvement_tip: (()=>{
+        const tips={
+          neck_lean:"Raise your monitor to eye level to reduce neck flexion.",
+          spine_lean:"Sit back fully in your chair and use lumbar support.",
+          screen_distance:"Move your screen to 50–70cm from your eyes.",
+          head_tilt:"Keep your head level — avoid tilting to one side.",
+          shoulder_level:"Relax your shoulders down and back, away from your ears.",
+          wrist:"Keep wrists straight and elbows at 90° when typing.",
+        };
+        const tipAr={
+          neck_lean:"ارفع الشاشة لمستوى عينيك لتقليل ميل الرقبة.",
+          spine_lean:"اجلس للخلف واستخدم دعم أسفل الظهر.",
+          screen_distance:"ضع الشاشة على بُعد 50–70 سم من عينيك.",
+          head_tilt:"حافظ على استقامة رأسك — تجنب الميل لأحد الجانبين.",
+          shoulder_level:"أرخِ كتفيك للأسفل والخلف.",
+          wrist:"حافظ على استقامة معصميك وزاوية 90° للكوعين.",
+        };
+        if(!la.metrics) return isAr?"خذ استراحة وضعية كل 30 دقيقة.":"Take a posture break every 30 minutes.";
+        const worst=Object.entries(la.metrics).filter(([,v])=>v.score<75).sort(([,a],[,b])=>a.score-b.score)[0];
+        if(!worst) return isAr?"وضعيتك ممتازة! استمر.":"Great posture! Keep it up.";
+        return (isAr?tipAr:tips)[worst[0]] || (isAr?"خذ استراحة كل 30 دقيقة.":"Take a break every 30 minutes.");
+      })(),
+      // Pain prediction
+      pain_summary: (()=>{
+        const painMins=la.pain_prediction?.minutes_to_pain;
+        if(!painMins) return null;
+        if(painMins<30) return isAr?`⚠️ توقع إزعاج خلال ${Math.round(painMins)} دقيقة — خذ استراحة الآن`:`⚠️ Discomfort likely in ${Math.round(painMins)} min — take a break now`;
+        if(painMins<90) return isAr?`~${Math.round(painMins)} دقيقة قبل الإزعاج المحتمل`:`~${Math.round(painMins)} min before likely discomfort`;
+        return null;
+      })(),
     };
     setSessionResult(result);
 
@@ -2680,6 +2720,35 @@ export default function App(){
                 <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
                   {sessionResult.top_metric[1]?.label} — score {sessionResult.top_metric[1]?.score}/100
                 </div>
+              </div>
+            )}
+
+            {/* Trend badge */}
+            {sessionResult.trend && sessionResult.trend !== "stable" && (
+              <div style={{display:"flex",alignItems:"center",gap:8,background:sessionResult.trend==="improving"?"rgba(16,185,129,.08)":"rgba(239,68,68,.08)",border:`1px solid ${sessionResult.trend==="improving"?"rgba(16,185,129,.25)":"rgba(239,68,68,.25)"}`,borderRadius:10,padding:"9px 14px",marginBottom:12}}>
+                <span style={{fontSize:18}}>{sessionResult.trend==="improving"?"📈":"📉"}</span>
+                <div style={{fontSize:12,color:sessionResult.trend==="improving"?"#10b981":"#ef4444",fontWeight:600}}>
+                  {sessionResult.trend==="improving"
+                    ?(isAr?"وضعيتك تتحسن خلال هذه الجلسة 💪":"Your posture improved during this session 💪")
+                    :(isAr?"وضعيتك تراجعت — خذ استراحة":"Posture declined — consider a break")}
+                </div>
+              </div>
+            )}
+
+            {/* Improvement tip */}
+            {sessionResult.improvement_tip && (
+              <div style={{background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.2)",borderRadius:10,padding:"10px 14px",marginBottom:12,textAlign:"left"}}>
+                <div style={{fontSize:10,color:"#818cf8",fontWeight:700,marginBottom:3}}>
+                  💡 {isAr?"نصيحة للتحسين":"Improvement tip"}
+                </div>
+                <div style={{fontSize:12,color:"#e0e7ff",lineHeight:1.5}}>{sessionResult.improvement_tip}</div>
+              </div>
+            )}
+
+            {/* Pain prediction */}
+            {sessionResult.pain_summary && (
+              <div style={{background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.25)",borderRadius:10,padding:"9px 14px",marginBottom:12}}>
+                <div style={{fontSize:12,color:"#f59e0b",fontWeight:600}}>{sessionResult.pain_summary}</div>
               </div>
             )}
 
