@@ -1539,8 +1539,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     sh_frac      = sh_width_px / max(w, 1)
     sh_ratio     = sh_frac / ref_sh_frac   # >1 = wider than avg, <1 = narrower
     sh_ratio     = max(0.70, min(1.30, sh_ratio))  # clamp to ±30%
-    neck_ok_adj  = max(5.0, 7.0  * sh_ratio)
-    neck_bad_adj = max(14.0, 20.0 * sh_ratio)
+    neck_ok_adj  = max(5.0, 6.0  * sh_ratio)   # tightened: >10° starts degrading
+    neck_bad_adj = max(12.0, 17.0 * sh_ratio)  # tightened: >15° = bad (Hansraj 2014)
     neck_sc    = score_m(neck_lean, 0, neck_ok_adj, neck_bad_adj)
     out["metrics"]["shoulder_width_ratio"] = {"value": round(sh_ratio, 2), "unit": "×", "label": "Shoulder width ratio"}
 
@@ -1565,7 +1565,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     # Penalty: if upper and lower lean in opposite directions → S-curve
     spine_scurve_pen = max(0, abs(spine_upper - spine_lower) - 8) * 0.5
     spine_lean  = min(45.0, spine_lean + spine_scurve_pen)
-    spine_sc    = score_m(spine_lean, 0, 5, 15)
+    spine_sc    = score_m(spine_lean, 0, 4, 12)  # tightened: McGill lumbar tolerance
     out["metrics"]["spine_upper"] = {"value": round(spine_upper,1), "unit": "°", "label": "Upper spine"}
     out["metrics"]["spine_lower"] = {"value": round(spine_lower,1), "unit": "°", "label": "Lower spine"}
 
@@ -1764,9 +1764,9 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     conf_eye   = 1.0 if (eye_sc is not None) else 0.0
     conf_wrist = 1.0 if (wrist_sc is not None) else 0.0
 
-    BASE_W = {"neck": 0.26, "tilt": 0.13, "sh": 0.10, "spine": 0.13, "dist": 0.17,
-              "eye": 0.05, "wrist": 0.08}
-    # Base weights sum = 0.92, leaving 0.08 for pose_sc
+    BASE_W = {"neck": 0.30, "tilt": 0.12, "sh": 0.08, "spine": 0.20, "dist": 0.15,
+              "eye": 0.05, "wrist": 0.10}
+    # Base weights sum = 1.00 — evidence-based (McGill 2007, Hansraj 2014)
 
     eff_w = {
         "neck":  BASE_W["neck"]  * conf_neck,
@@ -2565,7 +2565,7 @@ def analyze_side(image, tier="standard", session_id=None):
 
     # ── Trunk lean ────────────────────────────────────────────────
     trunk_lean = angle_vert(hip, sh)
-    trunk_sc   = score_m(trunk_lean, 0, 8, 22)
+    trunk_sc   = score_m(trunk_lean, 0, 6, 16)  # tightened: >6° trunk lean = risky
 
     # ── 3-point spine (upper + lower + S-curve) ───────────────────
     mid_thoracic_s = ((sh[0]+hip[0])/2, (sh[1]+hip[1])/2)
@@ -2574,7 +2574,7 @@ def analyze_side(image, tier="standard", session_id=None):
     spine_scurve   = max(0, abs(spine_upper_s - spine_lower_s) - 8) * 0.5
     spine_combined = spine_upper_s * 0.60 + spine_lower_s * 0.40 + spine_scurve
     spine_combined = min(45.0, spine_combined)
-    spine_sc       = score_m(spine_combined, 0, 6, 18)
+    spine_sc       = score_m(spine_combined, 0, 5, 14)  # tightened: side-view curvature
 
     # ── Spinal plumb line alignment (ear above ankle) ─────────────
     spine_align = abs(ear[0] - ankle[0]) / w * 100
@@ -2589,12 +2589,12 @@ def analyze_side(image, tier="standard", session_id=None):
 
     # ── Confidence-weighted overall ───────────────────────────────
     BASE_W_S = {
-        "neck":  0.28,   # most important for desk workers
-        "trunk": 0.24,   # trunk lean
-        "spine": 0.14,   # 3-point curvature
+        "neck":  0.30,   # most important — FHP most common desk issue
+        "trunk": 0.25,   # trunk lean — direct back pain predictor
+        "spine": 0.18,   # 3-point curvature — S-curve detection
         "align": 0.10,   # plumb line
-        "hip":   0.13,   # hip angle
-        "knee":  0.11,   # knee angle
+        "hip":   0.10,   # hip angle — 90° optimal
+        "knee":  0.07,   # knee angle — 90° optimal
     }
     eff_w_s = {
         "neck":  BASE_W_S["neck"]  * conf_neck,
@@ -3840,7 +3840,7 @@ def add_snapshot():
 @app.route("/api/analyze", methods=["POST"])
 @require_auth
 @limiter.limit("60 per minute")          # global
-@limiter.limit("30 per minute; uid", key_func=lambda: getattr(g,"uid","anon"))  # per-user
+@limiter.limit("60 per minute; uid", key_func=lambda: getattr(g,"uid","anon"))  # per-user
 def analyze():
     try:
         t0 = time.perf_counter()
@@ -4148,7 +4148,7 @@ def analyze():
 
         if (tier in ("elite", "premium", "professional", "pro", "basic") and result["detected"] and
             result.get("score", 100) < 80 and   # skip Gemini when posture is already good
-            GEMINI_API_KEY and time.time() - s.get("last_ai", 0) > 60):  # 60s cooldown
+            GEMINI_API_KEY and time.time() - s.get("last_ai", 0) > 30):  # 30s cooldown
             # Fire Gemini in background — don't block the analysis response
             _r, _ctx, _lg, _sid = dict(result), data.get("employee_context",""), lang, sid
             def _bg_gemini(r, ctx, lg, _session_id):
