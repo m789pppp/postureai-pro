@@ -12,9 +12,10 @@ import {
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 
 export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
-  const [status, setStatus] = useState("loading"); // loading | found | accepted | error
+  const [status, setStatus] = useState("loading"); // loading | found | accepted | consent | error
   const [invite, setInvite] = useState(null);
   const [err,    setErr]    = useState("");
+  const [consentLoading, setConsentLoading] = useState(false);
   const isAr = lang === "ar";
 
   useEffect(() => {
@@ -89,11 +90,31 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
         });
       } catch {} // Non-critical
 
-      setStatus("accepted");
-      setTimeout(() => onAccepted?.({ company_id: invite.company_id, role: invite.role }), 1500);
+      setStatus("consent"); // Show consent screen before redirecting
     } catch (e) {
       setStatus("error");
       setErr(e.message);
+    }
+  }
+
+  async function handleConsent(accepted) {
+    setConsentLoading(true);
+    try {
+      const tok = await getAuthToken();
+      const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+      await fetch(`${API}/employee/consent`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
+        body:    JSON.stringify({ accepted }),
+      });
+    } catch {} // Non-critical — proceed either way
+    setConsentLoading(false);
+    if (accepted) {
+      setStatus("accepted");
+      setTimeout(() => onAccepted?.({ company_id: invite?.company_id, role: invite?.role }), 1500);
+    } else {
+      // Revoke = don't redirect to dashboard, go home
+      window.location.hash = "home";
     }
   }
 
@@ -170,6 +191,66 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
             </div>
             <div style={{ fontSize: 13, color: "#64748b" }}>
               {isAr ? "جاري تحويلك إلى الداشبورد..." : "Redirecting to dashboard..."}
+            </div>
+          </div>
+        )}
+
+        {/* Consent Screen */}
+        {status === "consent" && (
+          <div style={{ marginTop: 24, background: "rgba(26,86,219,.06)", border: "1px solid rgba(26,86,219,.2)", borderRadius: 20, padding: 28, textAlign: isAr ? "right" : "left" }}>
+            <div style={{ fontSize: 32, marginBottom: 12, textAlign: "center" }}>🔍</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#f0f6ff", marginBottom: 10, textAlign: "center" }}>
+              {isAr ? "موافقة على مراقبة الوضعية" : "Posture Monitoring Consent"}
+            </div>
+
+            {/* What we monitor */}
+            <div style={{ background: "rgba(255,255,255,.04)", borderRadius: 12, padding: "14px 16px", marginBottom: 16, fontSize: 12, color: "#94a3b8", lineHeight: 1.7 }}>
+              <div style={{ fontWeight: 700, color: "#e2e8f0", marginBottom: 8 }}>
+                {isAr ? "ماذا نراقب؟" : "What we monitor:"}
+              </div>
+              {(isAr ? [
+                "✅ زوايا الرقبة والظهر والكتفين",
+                "✅ المسافة من الشاشة",
+                "✅ مدة الجلوس وعدد الإطارات",
+                "❌ لا نحفظ صور أو فيديو",
+                "❌ لا نشارك بياناتك الفردية مع أحد",
+              ] : [
+                "✅ Neck, back, and shoulder angles",
+                "✅ Screen distance and posture score",
+                "✅ Session duration and frame count",
+                "❌ No photos or video are stored",
+                "❌ Individual data is never shared externally",
+              ]).map((item, i) => <div key={i}>{item}</div>)}
+            </div>
+
+            {/* HR sharing note */}
+            <div style={{ background: "rgba(245,158,11,.06)", border: "1px solid rgba(245,158,11,.15)", borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 11, color: "#fbbf24" }}>
+              ⚠️ {isAr
+                ? "قد يطّلع مدير الموارد البشرية على متوسط درجاتك الأسبوعية عند تجاوز الحدود المحددة."
+                : "Your HR manager may see your weekly average score if it falls below set thresholds."}
+            </div>
+
+            {/* You can revoke */}
+            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 20, textAlign: "center" }}>
+              {isAr
+                ? "يمكنك سحب موافقتك في أي وقت من إعدادات الحساب."
+                : "You can revoke consent at any time from your account settings."}
+            </div>
+
+            {/* Buttons */}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => handleConsent(false)}
+                disabled={consentLoading}
+                style={{ flex: 1, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12, padding: "12px 0", fontSize: 13, color: "#94a3b8", cursor: "pointer", fontWeight: 600 }}>
+                {isAr ? "رفض" : "Decline"}
+              </button>
+              <button
+                onClick={() => handleConsent(true)}
+                disabled={consentLoading}
+                style={{ flex: 2, background: "linear-gradient(135deg,#1a56db,#0891b2)", border: "none", borderRadius: 12, padding: "12px 0", fontSize: 14, color: "#fff", cursor: "pointer", fontWeight: 700, opacity: consentLoading ? .7 : 1 }}>
+                {consentLoading ? "..." : (isAr ? "✅ أوافق — ابدأ المراقبة" : "✅ I Agree — Start Monitoring")}
+              </button>
             </div>
           </div>
         )}
