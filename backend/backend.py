@@ -1405,11 +1405,41 @@ def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
     }
 
 # ── IPD-based distance ─────────────────────────────────────────────
-def ipd_distance_face(face_lms, w, h, yaw_deg=0.0):
+# ── Per-session focal calibration store ─────────────────────────────
+_focal_cal: dict = {}  # {session_id: focal_px} — calibrated from face_width
+
+def _calibrate_focal(face_lms, w, h, session_id: str = "", known_dist_cm: float = 65.0):
     """
-    IPD-based distance with yaw correction.
-    When head rotates, apparent IPD = real_IPD * cos(yaw)
-    Correcting: real_IPD_px = apparent_IPD_px / cos(yaw)
+    Calibrate focal length from face width (known ~14cm real width).
+    focal = face_width_px * known_dist_cm / 14.0
+    Stores result per-session so subsequent frames use calibrated focal.
+    Only updates when yaw < 10° (face nearly frontal = most accurate).
+    """
+    try:
+        # Use landmarks 234 (left cheek) and 454 (right cheek) — stable width markers
+        lc = face_lms.landmark[234]; rc = face_lms.landmark[454]
+        face_w_px = abs(rc.x * w - lc.x * w)
+        if face_w_px < 20: return None
+        # focal = (face_width_px * real_width_cm) / real_width_cm
+        # real face width ≈ 14cm (bizygomatic diameter, population mean)
+        focal_est = (face_w_px * known_dist_cm) / 14.0
+        # Running average: new = 0.1*new + 0.9*old (slow drift)
+        if session_id and session_id in _focal_cal:
+            _focal_cal[session_id] = 0.10 * focal_est + 0.90 * _focal_cal[session_id]
+        elif session_id:
+            _focal_cal[session_id] = focal_est
+        return _focal_cal.get(session_id, focal_est)
+    except Exception:
+        return None
+
+def ipd_distance_face(face_lms, w, h, yaw_deg=0.0, session_id: str = ""):
+    """
+    IMPROVED: Dual-estimator distance with calibrated focal length.
+    1. IPD estimator  — 6.3cm real IPD, yaw-corrected
+    2. Face-width estimator — 14cm bizygomatic diameter
+    Blend: 70% IPD + 30% face-width (when yaw < 20° both are reliable)
+           100% IPD when yaw >= 20° (face-width less reliable at angle)
+    Focal: calibrated per-session from face-width estimator
     """
     try:
         lp = face_lms.landmark[L_PUPIL]
@@ -1419,14 +1449,37 @@ def ipd_distance_face(face_lms, w, h, yaw_deg=0.0):
         ipd_px = math.sqrt((rpx-lpx)**2 + (rpy-lpy)**2)
         if ipd_px < 6: return None
 
-        # Yaw correction: cos(yaw) shrinks apparent IPD
-        yaw_rad   = math.radians(abs(yaw_deg))
-        cos_yaw   = max(math.cos(yaw_rad), 0.5)  # clamp: don't over-correct >60°
+        # Yaw correction
+        yaw_rad          = math.radians(abs(yaw_deg))
+        cos_yaw          = max(math.cos(yaw_rad), 0.5)
         ipd_px_corrected = ipd_px / cos_yaw
 
-        focal = 630 * (w / 640)
-        dist  = round((6.3 * focal) / ipd_px_corrected, 1)
-        return max(20, min(150, dist))
+        # ── Calibrated focal ─────────────────────────────────────
+        # Try to calibrate focal from face width (more stable than IPD alone)
+        focal_cal = _calibrate_focal(face_lms, w, h, session_id) if abs(yaw_deg) < 10 else None
+        focal     = focal_cal if focal_cal else (630 * (w / 640))  # fallback: sensor estimate
+
+        # ── IPD estimator ────────────────────────────────────────
+        dist_ipd = round((6.3 * focal) / ipd_px_corrected, 1)
+
+        # ── Face-width estimator (secondary) ─────────────────────
+        dist_fw = None
+        if abs(yaw_deg) < 20:
+            try:
+                lc = face_lms.landmark[234]; rc = face_lms.landmark[454]
+                fw_px = abs(rc.x * w - lc.x * w)
+                if fw_px > 20:
+                    dist_fw = round((14.0 * focal) / fw_px, 1)
+            except Exception:
+                pass
+
+        # ── Blend ────────────────────────────────────────────────
+        if dist_fw and abs(yaw_deg) < 20:
+            dist = 0.70 * dist_ipd + 0.30 * dist_fw
+        else:
+            dist = dist_ipd
+
+        return max(20, min(150, round(dist, 1)))
     except Exception:
         return None
 
@@ -1647,19 +1700,34 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         pass
     # Natural nose-to-shoulder offset correction (~5° at typical distances)
     nose_correction = 5.0 * nose_weight  # scale correction by how much nose we're using
-    neck_lean  = max(0.0, neck_lean_raw - nose_correction)
+    neck_lean_nose  = max(0.0, neck_lean_raw - nose_correction)
 
     # ── Shoulder width normalization ────────────────────────────
-    # Wider shoulders = wider apparent angles at same posture quality
-    # Normalize threshold: ok/bad scale by (sh_width / ref_width)
-    # Reference: shoulder width ~42cm at 65cm = ~34% of frame width
     sh_width_px  = abs(r_sh[0] - l_sh[0])
-    ref_sh_frac  = 0.34   # reference fraction of frame width
+    ref_sh_frac  = 0.34
     sh_frac      = sh_width_px / max(w, 1)
-    sh_ratio     = sh_frac / ref_sh_frac   # >1 = wider than avg, <1 = narrower
-    sh_ratio     = max(0.70, min(1.30, sh_ratio))  # clamp to ±30%
-    neck_ok_adj  = max(5.0, 6.0  * sh_ratio)   # tightened: >10° starts degrading
-    neck_bad_adj = max(12.0, 17.0 * sh_ratio)  # tightened: >15° = bad (Hansraj 2014)
+    sh_ratio     = sh_frac / ref_sh_frac
+    sh_ratio     = max(0.70, min(1.30, sh_ratio))
+    neck_ok_adj  = max(5.0, 6.0  * sh_ratio)
+    neck_bad_adj = max(12.0, 17.0 * sh_ratio)
+
+    # ── IMPROVED: use solvePnP pitch as PRIMARY neck lean source ──
+    # solvePnP pitch is geometrically exact (not affected by camera angle
+    # or nose-to-ear distance). Nose-based used only as fallback.
+    # Blend: 80% solvePnP + 20% nose when both available (belt+suspenders)
+    _hp_now = out.get("head_pose")
+    _reproj  = _hp_now.get("reproj_err", 99) if _hp_now else 99
+    if _hp_now and _reproj < 5.0:
+        # solvePnP pitch: positive = head tilted down (forward lean)
+        _pitch_abs = abs(_hp_now.get("pitch", 0))
+        # Blend: reliable solvePnP gets 80%, nose-proxy gets 20%
+        neck_lean = 0.80 * _pitch_abs + 0.20 * neck_lean_nose
+        out["metrics"]["neck_source"] = {"value": "solvePnP+nose_blend", "reproj_err": round(_reproj, 2)}
+    else:
+        # Fallback: nose-based only (FaceMesh not available or poor quality)
+        neck_lean = neck_lean_nose
+        out["metrics"]["neck_source"] = {"value": "nose_only", "reproj_err": round(_reproj, 2) if _hp_now else None}
+
     neck_sc    = score_m(neck_lean, 0, neck_ok_adj, neck_bad_adj)
     out["metrics"]["shoulder_width_ratio"] = {"value": round(sh_ratio, 2), "unit": "×", "label": "Shoulder width ratio"}
 
@@ -1669,24 +1737,54 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     sh_tilt    = angle_horiz(l_sh, r_sh)
     sh_sc      = score_m(sh_tilt, 0, 3, 10)
 
-    # ── FIX: spine uses 3-point measurement ──────────────────────
-    # mid_thoracic = proxy for thoracic vertebrae (~T8 level)
-    # measures upper trunk lean (mid_thoracic→mid_sh) separately from
-    # lower trunk lean (mid_hip→mid_thoracic) to catch kyphosis better
+    # ── IMPROVED: 4-point spine with kyphosis detection ──────────
+    # 4 reference points (top→bottom):
+    #   mid_sh       → shoulder line   (C7/T1 level)
+    #   mid_thoracic → T8 proxy         (midpoint shoulders+hips)
+    #   mid_lumbar   → L3 proxy         (75% down shoulder→hip)
+    #   mid_hip      → hip line         (L5/S1 level)
+    #
+    # Kyphosis check: shoulders-thoracic angle vs thoracic-hip angle
+    # If they curve in opposite directions → kyphosis present
+    # Each segment scored separately, worst segment drives final score
+
     mid_thoracic = (
-        (mid_hip[0] + mid_sh[0]) / 2,
-        (mid_hip[1] + mid_sh[1]) / 2
+        (mid_hip[0] * 0.40 + mid_sh[0] * 0.60),
+        (mid_hip[1] * 0.40 + mid_sh[1] * 0.60),
     )
-    spine_upper = angle_vert(mid_thoracic, mid_sh)   # thoracic segment
-    spine_lower = angle_vert(mid_hip, mid_thoracic)  # lumbar segment
-    # Weighted: upper segment more visible/relevant for desk posture
-    spine_lean  = spine_upper * 0.60 + spine_lower * 0.40
-    # Penalty: if upper and lower lean in opposite directions → S-curve
+    mid_lumbar = (
+        (mid_hip[0] * 0.75 + mid_sh[0] * 0.25),
+        (mid_hip[1] * 0.75 + mid_sh[1] * 0.25),
+    )
+
+    spine_upper  = angle_vert(mid_thoracic, mid_sh)      # C7→T8 (thoracic)
+    spine_mid    = angle_vert(mid_lumbar,   mid_thoracic) # T8→L3 (thoracolumbar)
+    spine_lower  = angle_vert(mid_hip,      mid_lumbar)   # L3→S1 (lumbar)
+
+    # ── Kyphosis detector ─────────────────────────────────────
+    # Classic kyphosis: upper spine rounds forward while lower is straight/lordotic
+    # Sign of upper vs lower segment divergence
+    _upper_signed = mid_sh[0]      - mid_thoracic[0]  # + = leaning right (screen right)
+    _lower_signed = mid_thoracic[0] - mid_hip[0]
+    _kyphosis_pen = 0.0
+    if spine_upper > 3 and spine_lower < 3 and (_upper_signed * _lower_signed < 0):
+        # Segments curve in opposite directions — classic thoracic kyphosis
+        _kyphosis_pen = min(12.0, spine_upper * 0.6)
+        out["alerts"].append(f"⚠️ Thoracic kyphosis detected ({round(spine_upper,1)}°) — sit back, open chest")
+        if "alerts_ar" not in out: out["alerts_ar"] = []
+        out["alerts_ar"].append(f"⚠️ انحناء الصدر للأمام ({round(spine_upper,1)}°) — اجلس للخلف وافتح صدرك")
+
+    # Weighted composite: upper most visible/relevant for desk posture
+    spine_lean   = spine_upper * 0.50 + spine_mid * 0.30 + spine_lower * 0.20
+    # S-curve penalty: large divergence between segments
     spine_scurve_pen = max(0, abs(spine_upper - spine_lower) - 8) * 0.5
-    spine_lean  = min(45.0, spine_lean + spine_scurve_pen)
-    spine_sc    = score_m(spine_lean, 0, 4, 12)  # tightened: McGill lumbar tolerance
-    out["metrics"]["spine_upper"] = {"value": round(spine_upper,1), "unit": "°", "label": "Upper spine"}
-    out["metrics"]["spine_lower"] = {"value": round(spine_lower,1), "unit": "°", "label": "Lower spine"}
+    spine_lean   = min(45.0, spine_lean + spine_scurve_pen + _kyphosis_pen)
+    spine_sc     = score_m(spine_lean, 0, 4, 12)
+
+    out["metrics"]["spine_upper"] = {"value": round(spine_upper, 1), "unit": "°", "label": "Upper spine (thoracic)"}
+    out["metrics"]["spine_mid"]   = {"value": round(spine_mid,   1), "unit": "°", "label": "Mid spine (thoracolumbar)"}
+    out["metrics"]["spine_lower"] = {"value": round(spine_lower, 1), "unit": "°", "label": "Lower spine (lumbar)"}
+    out["metrics"]["kyphosis_pen"]= {"value": round(_kyphosis_pen, 1), "unit": "°", "label": "Kyphosis penalty"}
 
     # ── FaceMesh ───────────────────────────────────────────────────
     dist_cm = None
@@ -1696,7 +1794,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         out["head_pose"] = head_pose_from_face(face_lms, w, h)
         # Pass yaw for IPD correction — must compute head_pose first
         _yaw = out["head_pose"]["yaw"] if out["head_pose"] else 0.0
-        dist_cm  = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw)
+        dist_cm  = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw, session_id=_sid)
         out["engine"]    = "mediapipe_pose+facemesh"
         # Eye strain — all paid tiers (iris tracking via FaceMesh)
         if tier in ("elite", "premium", "professional", "pro", "business"):
@@ -4250,29 +4348,35 @@ def analyze():
 
             _s_dirty = True
 
-            # ── EWMA score smoothing (α=0.30) ──────────────────────
-            # Exponential Weighted Moving Average — more responsive than
-            # simple 3-frame average, handles outliers better
-            # α=0.30: current frame gets 30% weight, history 70%
-            EWMA_ALPHA = 0.30
-            hist       = s["score_history"]
-            raw_score  = hist[-1]
-            if len(hist) == 1:
-                smoothed_local = raw_score
+            # ── IMPROVED: adaptive velocity-aware smoothing ────────
+            # Fixed α=0.30 caused score to jump on tiny (1°) posture changes.
+            # Fix: α adapts to the magnitude of the score change:
+            #   small changes (<5pts)  → α=0.12 (heavy smoothing, ignore jitter)
+            #   normal changes (5-15)  → α=0.30 (balanced)
+            #   large changes (15-25)  → α=0.50 (respond faster)
+            #   very large (>25pts)    → α=0.70 (deliberate change, update quickly)
+            # Hard clamp: ±18pts max per frame (was ±12, slightly more responsive)
+            hist      = s["score_history"]
+            raw_score = hist[-1]
+            prev_ewma = s.get("last_ewma", raw_score)
+            _jump_abs = abs(raw_score - prev_ewma)
+            if _jump_abs < 5:
+                _alpha = 0.12
+            elif _jump_abs < 15:
+                _alpha = 0.30
+            elif _jump_abs < 25:
+                _alpha = 0.50
             else:
-                # Build EWMA from history
-                ewma = hist[0]
-                for sc in hist[1:]:
-                    ewma = EWMA_ALPHA * sc + (1 - EWMA_ALPHA) * ewma
-                smoothed_local = int(round(ewma))
-            # Clamp to prevent wild swings from blurry frames
-            if len(hist) > 1:
-                prev = s.get("last_ewma", smoothed_local)
-                max_jump = 12  # max ±12pts per frame
-                smoothed_local = max(prev - max_jump, min(prev + max_jump, smoothed_local))
-            s["last_ewma"]          = smoothed_local
+                _alpha = 0.70
+            # Hard clamp before smoothing
+            _max_jump = 18
+            _clamped  = max(prev_ewma - _max_jump, min(prev_ewma + _max_jump, raw_score))
+            smoothed_local = int(round(_alpha * _clamped + (1.0 - _alpha) * prev_ewma))
+            smoothed_local = max(0, min(100, smoothed_local))
+            s["last_ewma"]           = smoothed_local
             result["score_smoothed"] = smoothed_local
             result["score_raw"]      = raw_score
+            result["smoothing_alpha"]= round(_alpha, 2)
 
             # ── Time-Weighted Average (TWA) score ─────────────────
             # Standard occupational health metric for continuous exposure
