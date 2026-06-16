@@ -388,6 +388,8 @@ ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:4173",
+    "https://postureai-pro-omega-nine.vercel.app",   # ← LIVE (primary)
+    "https://postureai-pro-omega.vercel.app",         # ← old (keep for redirect safety)
     "https://postureai.vercel.app",
     "https://postureai-pro.vercel.app",
     "https://postureai.io",
@@ -430,8 +432,10 @@ if _sentry_dsn:
 _cors_origins = [o.strip() for o in (os.getenv("ALLOWED_ORIGINS","") or "").split(",") if o.strip()]
 if not _cors_origins:
     _cors_origins = [
-        "https://postureai-pro-omega.vercel.app",
+        "https://postureai-pro-omega-nine.vercel.app",  # ← LIVE (primary)
+        "https://postureai-pro-omega.vercel.app",        # ← old (keep for safety)
         "https://postureai.io",
+        "https://www.postureai.io",
         "http://localhost:5173",
         "http://localhost:3000",
     ]
