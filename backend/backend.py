@@ -93,6 +93,120 @@ try:
 except ImportError:
     pass  # use local safe_error defined below
 # ── Structured logging ─────────────────────────────────────
+def compute_percentile(score: int) -> int:
+    """
+    Returns what % of recent users this score beats (0-99).
+    Uses Redis sorted set when available, in-memory pool as fallback.
+    Returns -1 if < 10 data points (not enough to be meaningful).
+    """
+    global _score_pool
+    try:
+        import redis as _rp, time as _tp
+        _rc = _rp.from_url(os.getenv("REDIS_URL","redis://localhost:6379/0"), socket_timeout=1)
+        _rc.zadd("score_pool", {f"{_tp.time()}:{score}": score})
+        _rc.zremrangebyrank("score_pool", 0, -10001)
+        total = _rc.zcard("score_pool")
+        below = _rc.zcount("score_pool", 0, score - 1)
+        if total >= 10:
+            return min(99, int((below / total) * 100))
+    except Exception:
+        pass
+    _score_pool.append(score)
+    if len(_score_pool) > 10000:
+        _score_pool = _score_pool[-5000:]
+    if len(_score_pool) < 10:
+        return -1
+    below = sum(1 for s in _score_pool if s < score)
+    return min(99, int((below / len(_score_pool)) * 100))
+
+
+# ── Arabic alert translations ─────────────────────────────────────
+_ALERT_AR = {
+    # Detection
+    "No person detected — ensure your upper body is visible in the camera frame":
+        "لم يتم اكتشاف شخص — تأكد من ظهور الجزء العلوي من جسمك في الكاميرا",
+    "No person detected — camera should be 90° to your side, 80–120cm away":
+        "لم يتم الاكتشاف — ضع الكاميرا على بُعد 80-120سم وبزاوية 90° من جانبك",
+    # Neck / FHP
+    "⚠️ Forward head posture": "⚠️ وضعية الرأس للأمام",
+    "Forward head posture":    "وضعية الرأس للأمام",
+    "⚠️ Neck bearing":         "⚠️ حِمل الرقبة",
+    "Neck load":               "حِمل الرقبة",
+    "⚠️ Severe neck lean":     "⚠️ ميل حاد في الرقبة",
+    "Neck lean":               "ميل الرقبة",
+    "raise monitor to eye level immediately": "ارفع الشاشة لمستوى عينيك فوراً",
+    "tuck chin slightly and check monitor height": "اسحب ذقنك للخلف قليلاً وتحقق من ارتفاع الشاشة",
+    # Head
+    "Head tilting":            "ميل الرأس",
+    "check chair height and monitor centering": "تحقق من ارتفاع الكرسي ومركزية الشاشة",
+    "Head pitched":            "زاوية ميل الرأس",
+    "raise your monitor":      "ارفع شاشتك",
+    "lower your monitor":      "اخفض شاشتك",
+    # Shoulders
+    "Shoulder imbalance":      "عدم توازن الكتفين",
+    "adjust armrests":         "اضبط مسند الذراعين",
+    "⚠️ Significant body asymmetry": "⚠️ عدم تماثل كبير في الجسم",
+    "Body asymmetry":          "عدم تماثل الجسم",
+    "check armrest heights and sitting position": "تحقق من ارتفاع مسند الذراعين ووضعية الجلوس",
+    # Spine
+    "⚠️ Spine lean":           "⚠️ ميل العمود الفقري",
+    "Spine lean":              "ميل العمود الفقري",
+    "sit back and use lumbar support": "اجلس للخلف واستخدم دعم أسفل الظهر",
+    "engage your core and sit upright": "شد عضلات البطن واجلس منتصباً",
+    # Distance
+    "⚠️ Very close to screen": "⚠️ قريب جداً من الشاشة",
+    "Too close to screen":     "قريب جداً من الشاشة",
+    "Too far from screen":     "بعيد جداً عن الشاشة",
+    "move back to":            "ابتعد إلى",
+    "ideal is":                "المثالي هو",
+    # Wrist / RSI
+    "⚠️ Wrist deviation":      "⚠️ انحراف المعصم",
+    "Wrist deviation":         "انحراف المعصم",
+    "risk of Carpal Tunnel. Keep wrists straight.": "خطر متلازمة النفق الرسغي. حافظ على استقامة معصميك.",
+    "try to keep wrists flat on desk.": "حاول إبقاء معصميك مستويين على المكتب.",
+    "⚠️ High RSI risk":        "⚠️ خطر إصابة RSI مرتفع",
+    # Blink / eyes
+    "⚠️ Eye strain risk":      "⚠️ خطر إجهاد العينين",
+    "Low blink rate":          "معدل رمش منخفض",
+    "Apply 20-20-20 rule.":    "طبّق قاعدة 20-20-20.",
+    "remember to blink consciously.": "تذكر أن تومض عينيك بوعي.",
+    # Ergonomics
+    "⚠️ Poor workstation setup": "⚠️ إعداد بيئة عمل سيئ",
+    "adjust monitor height and distance": "اضبط ارتفاع الشاشة والمسافة منها",
+    # Pain
+    "⚠️ Pain onset predicted in": "⚠️ توقع ظهور الألم خلال",
+    "at risk":                 "في خطر",
+    # Break
+    "⚠️ Seated":               "⚠️ جلست",
+    "take a standing break (every 45-60min)": "خذ استراحة واقفاً (كل 45-60 دقيقة)",
+    "consider a short break soon": "فكر في أخذ استراحة قصيرة قريباً",
+    # Posture DNA
+    "⚠️ Habitual bad posture": "⚠️ عادة وضعية سيئة متكررة",
+    # ISO
+    "⚠️ ISO 11226: posture not recommended": "⚠️ ISO 11226: الوضعية غير موصى بها",
+    "ISO 11226: conditional posture":        "ISO 11226: وضعية مشروطة",
+    # Breathing
+    "Shallow breathing detected":  "تم اكتشاف تنفس ضحل",
+    "take a deep breath, relax shoulders": "خذ نفساً عميقاً، أرخِ كتفيك",
+    # Stillness
+    "Body too still":          "الجسم ساكن جداً",
+    "shift position slightly every few minutes": "غيّر وضعيتك قليلاً كل بضع دقائق",
+    # Trunk (side view)
+    "⚠️ Forward head":         "⚠️ الرأس للأمام",
+    "ear must align directly above shoulder": "يجب أن يكون الأذن مباشرة فوق الكتف",
+    "tuck chin and lengthen spine": "اسحب الذقن للخلف ومدّ عمودك الفقري",
+    "⚠️ Trunk leaning":        "⚠️ ميل الجذع",
+    "press back fully into chair backrest": "اضغط بظهرك كاملاً على مسند الكرسي",
+}
+
+def translate_alert_ar(alert: str) -> str:
+    """Translate an English alert string to Arabic using keyword matching."""
+    for en, ar in _ALERT_AR.items():
+        if en in alert:
+            # Replace matched substring, preserve numbers/values
+            return alert.replace(en, ar)
+    return alert   # return as-is if no match found
+
 def log_event(event, uid=None, meta=None):
     import json as _j
     rec = {"ts": datetime.utcnow().isoformat()+"Z", "event": event,
@@ -995,6 +1109,7 @@ def cam_mat(w, h):
 _blink_history = []  # (timestamp, ear_ratio)
 _lm_history     = {}   # {session_id: [lm_array,...]} last 3 frames for jitter reduction
 _celery_task    = None  # lazy Celery singleton
+_score_pool     = []   # rolling pool of recent scores for percentile (max 10000)
 
 def compute_gaze(face_lms, w, h):
     """
@@ -2367,25 +2482,56 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             if shTilt > 8:        _pain_regions.append("shoulder")
             if dist_cm < 40:      _pain_regions.append("eyes/neck (screen proximity)")
 
+            _urgency = (
+                "imminent" if _remaining_min < 5  else
+                "soon"     if _remaining_min < 15 else
+                "moderate" if _remaining_min < 30 else
+                "low"
+            )
+            _action_en = (
+                "⚠️ Correct posture NOW — pain onset imminent" if _remaining_min < 5 else
+                f"Correct posture within {round(_remaining_min)}min to avoid pain" if _remaining_min < 15 else
+                f"~{round(_remaining_min)}min before discomfort if posture unchanged" if _remaining_min < 30 else
+                "Posture acceptable for extended sitting"
+            )
+            _action_ar = (
+                "⚠️ صحّح وضعيتك الآن — الألم وشيك" if _remaining_min < 5 else
+                f"صحّح وضعيتك خلال {round(_remaining_min)} دقيقة لتجنب الألم" if _remaining_min < 15 else
+                f"~{round(_remaining_min)} دقيقة قبل الإزعاج إذا لم تتغير الوضعية" if _remaining_min < 30 else
+                "الوضعية مقبولة للجلوس لفترة أطول"
+            )
+            _pain_color = (
+                "#ef4444" if _urgency == "imminent" else
+                "#f97316" if _urgency == "soon"     else
+                "#f59e0b" if _urgency == "moderate" else
+                "#10b981"
+            )
             out["pain_prediction"] = {
                 "creep_pct":        _creep_pct,
                 "time_to_pain_min": round(_time_to_pain_min, 1),
                 "remaining_min":    round(_remaining_min, 1),
                 "load_factor":      round(_load_factor, 2),
                 "at_risk_regions":  _pain_regions,
-                "urgency":          (
-                    "imminent"  if _remaining_min < 5  else
-                    "soon"      if _remaining_min < 15 else
-                    "moderate"  if _remaining_min < 30 else
-                    "low"
-                ),
-                "action":           (
-                    "⚠️ Correct posture NOW — pain onset imminent" if _remaining_min < 5 else
-                    f"Correct posture within {round(_remaining_min)}min to avoid pain" if _remaining_min < 15 else
-                    f"~{round(_remaining_min)}min before discomfort if posture unchanged" if _remaining_min < 30 else
-                    "Posture acceptable for extended sitting"
-                ),
-                "reference":        "McGill 2007 spine biomechanics + tissue creep model",
+                "at_risk_regions_ar": [
+                    {"neck/upper trapezius": "الرقبة / الشريط العلوي",
+                     "lower back": "أسفل الظهر",
+                     "shoulder": "الكتف",
+                     "eyes/neck (screen proximity)": "العينان / الرقبة (قرب الشاشة)"
+                    }.get(r, r) for r in _pain_regions
+                ],
+                "urgency":    _urgency,
+                "action":     _action_en,
+                "action_ar":  _action_ar,
+                "reference":  "McGill 2007 spine biomechanics + tissue creep model",
+            }
+            # ── pain_bar: top-level prominent field for UI ────────
+            out["pain_bar"] = {
+                "pct":      _creep_pct,
+                "urgency":  _urgency,
+                "remaining_min": round(_remaining_min, 1),
+                "label":    _action_en,
+                "label_ar": _action_ar,
+                "color":    _pain_color,
             }
             if _remaining_min < 10 and _creep_pct > 60:
                 out["alerts"].append(
@@ -2395,7 +2541,9 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             out["pain_prediction"] = {
                 "creep_pct": 0, "urgency": "none",
                 "action": "✓ Posture excellent — no pain risk",
+                "action_ar": "✓ وضعية ممتازة — لا خطر ألم",
             }
+            out["pain_bar"] = {"pct": 0, "urgency": "none", "label": "No pain risk", "label_ar": "لا خطر ألم", "color": "#10b981"}
     except Exception:
         pass
 
@@ -2438,6 +2586,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     # Severe (⚠️) first, then informational
     deduped.sort(key=lambda a: (0 if a.startswith("⚠️") else 1))
     out["alerts"] = deduped[:5]   # max 5 alerts — avoid overwhelming user
+    # ── Arabic alerts ─────────────────────────────────────────────
+    out["alerts_ar"] = [translate_alert_ar(a) for a in out["alerts"]]
 
     grade_str = ("Excellent" if overall >= 85 else "Good" if overall >= 70
                  else "Fair — needs attention" if overall >= 55 else "Poor — correct now")
@@ -2670,6 +2820,8 @@ def analyze_side(image, tier="standard", session_id=None):
             seen_s.add(k); deduped_s.append(a)
     deduped_s.sort(key=lambda a: (0 if a.startswith("⚠️") else 1))
     out["alerts"] = deduped_s[:5]
+    # ── Arabic alerts (side view) ─────────────────────────────────
+    out["alerts_ar"] = [translate_alert_ar(a) for a in out["alerts"]]
 
     grade = ("Excellent" if overall >= 85 else "Good" if overall >= 70
              else "Fair" if overall >= 55 else "Poor")
@@ -4279,6 +4431,12 @@ def analyze():
         if result.get("detected") and result.get("score", 100) < 18:
             result["score"]   = 18
             result["overall"] = 18
+        # ── Percentile score ──────────────────────────────────────
+        if result.get("detected") and result.get("score") is not None:
+            _pct = compute_percentile(int(result["score"]))
+            if _pct >= 0:
+                result["percentile"]       = _pct
+                result["percentile_label"] = f"Better than {_pct}% of users"
         return jsonify(result)
     except Exception as e:
         import traceback
@@ -6455,6 +6613,174 @@ def warmup():
         }), 200
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ── Data Export ────────────────────────────────────────────────────
+@app.route("/api/export/sessions", methods=["GET"])
+@require_auth
+@limiter.limit("10 per minute")
+def export_sessions():
+    """
+    Export user's session history as CSV or PDF.
+    Query params:
+      format=csv|pdf  (default: csv)
+      days=7|30|90    (default: 30)
+    """
+    try:
+        uid    = getattr(g, "uid", "")
+        fmt    = request.args.get("format", "csv").lower()
+        days   = min(90, max(1, int(request.args.get("days", 30))))
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        # Fetch sessions from Firestore
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .where("created_at", ">=", cutoff)
+                  .order_by("created_at", direction="DESCENDING")
+                  .limit(500)
+                  .stream())
+
+        rows = []
+        for doc in docs:
+            d = doc.to_dict()
+            rows.append({
+                "date":         d.get("created_at", "").isoformat()[:10] if hasattr(d.get("created_at",""), "isoformat") else str(d.get("created_at",""))[:10],
+                "avg_score":    d.get("avg_score", ""),
+                "grade":        ("A" if (d.get("avg_score") or 0)>=85 else "B" if (d.get("avg_score") or 0)>=70 else "C" if (d.get("avg_score") or 0)>=55 else "D"),
+                "duration_min": round((d.get("duration_s") or 0) / 60, 1),
+                "frames":       d.get("frames", ""),
+                "good_pct":     d.get("good_pct", ""),
+                "mode":         d.get("mode", ""),
+                "alerts":       d.get("alerts_count", ""),
+                "trend":        d.get("trend", ""),
+                "worst_metric": d.get("worst_metric", ""),
+            })
+
+        if not rows:
+            return jsonify({"error": "No sessions found for this period"}), 404
+
+        if fmt == "csv":
+            import csv, io
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+            csv_bytes = output.getvalue().encode("utf-8-sig")  # UTF-8 BOM for Excel
+            resp = make_response(csv_bytes)
+            resp.headers["Content-Type"]        = "text/csv; charset=utf-8"
+            resp.headers["Content-Disposition"] = f'attachment; filename="postureai_sessions_{datetime.utcnow().strftime("%Y%m%d")}.csv"'
+            return resp
+
+        elif fmt == "pdf":
+            # Use ReportLab for PDF export
+            try:
+                from reportlab.lib.pagesizes import A4
+                from reportlab.lib import colors
+                from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+                from reportlab.lib.styles import getSampleStyleSheet
+                import io
+
+                buf = io.BytesIO()
+                doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=40, bottomMargin=40)
+                styles = getSampleStyleSheet()
+                elements = []
+
+                # Title
+                elements.append(Paragraph(f"PostureAI Pro — Session History ({days} days)", styles["Title"]))
+                elements.append(Paragraph(f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | User: {uid[:8]}...", styles["Normal"]))
+                elements.append(Spacer(1, 16))
+
+                # Summary stats
+                scores = [r["avg_score"] for r in rows if isinstance(r["avg_score"], (int, float))]
+                if scores:
+                    summary_data = [
+                        ["Metric", "Value"],
+                        ["Sessions", str(len(rows))],
+                        ["Avg Score", str(round(sum(scores)/len(scores), 1))],
+                        ["Best Score", str(max(scores))],
+                        ["Worst Score", str(min(scores))],
+                        ["Total Time", f"{round(sum(r['duration_min'] for r in rows if isinstance(r['duration_min'],(int,float))), 1)} min"],
+                    ]
+                    summary = Table(summary_data, colWidths=[200, 200])
+                    summary.setStyle(TableStyle([
+                        ("BACKGROUND",  (0,0), (-1,0), colors.HexColor("#6366f1")),
+                        ("TEXTCOLOR",   (0,0), (-1,0), colors.white),
+                        ("FONTNAME",    (0,0), (-1,0), "Helvetica-Bold"),
+                        ("BACKGROUND",  (0,1), (-1,-1), colors.HexColor("#f8fafc")),
+                        ("GRID",        (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
+                        ("FONTSIZE",    (0,0), (-1,-1), 10),
+                        ("PADDING",     (0,0), (-1,-1), 6),
+                    ]))
+                    elements.append(summary)
+                    elements.append(Spacer(1, 16))
+
+                # Sessions table
+                elements.append(Paragraph("Session Details", styles["Heading2"]))
+                elements.append(Spacer(1, 8))
+                header = ["Date", "Score", "Grade", "Duration", "Good%", "Mode", "Trend"]
+                table_data = [header] + [
+                    [r["date"], r["avg_score"], r["grade"],
+                     f"{r['duration_min']}m", f"{r['good_pct']}%",
+                     r["mode"], r["trend"]]
+                    for r in rows[:50]   # max 50 rows in PDF
+                ]
+                t = Table(table_data, colWidths=[70,45,40,55,45,55,60])
+                t.setStyle(TableStyle([
+                    ("BACKGROUND",  (0,0), (-1,0), colors.HexColor("#6366f1")),
+                    ("TEXTCOLOR",   (0,0), (-1,0), colors.white),
+                    ("FONTNAME",    (0,0), (-1,0), "Helvetica-Bold"),
+                    ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f1f5f9")]),
+                    ("GRID",        (0,0), (-1,-1), 0.3, colors.HexColor("#cbd5e1")),
+                    ("FONTSIZE",    (0,0), (-1,-1), 8),
+                    ("PADDING",     (0,0), (-1,-1), 5),
+                    ("ALIGN",       (1,0), (-1,-1), "CENTER"),
+                ]))
+                elements.append(t)
+
+                doc.build(elements)
+                pdf_bytes = buf.getvalue()
+                resp = make_response(pdf_bytes)
+                resp.headers["Content-Type"]        = "application/pdf"
+                resp.headers["Content-Disposition"] = f'attachment; filename="postureai_report_{datetime.utcnow().strftime("%Y%m%d")}.pdf"'
+                return resp
+            except ImportError:
+                return jsonify({"error": "PDF generation unavailable — use format=csv"}), 500
+        else:
+            return jsonify({"error": "Invalid format — use csv or pdf"}), 400
+
+    except Exception as e:
+        return safe_error(e)
+
+@app.route("/api/export/sessions/summary", methods=["GET"])
+@require_auth
+@limiter.limit("20 per minute")
+def export_sessions_summary():
+    """Quick JSON summary for export preview (no file download)."""
+    try:
+        uid  = getattr(g, "uid", "")
+        days = min(90, max(1, int(request.args.get("days", 30))))
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .where("created_at", ">=", cutoff)
+                  .order_by("created_at", direction="DESCENDING")
+                  .limit(500).stream())
+        rows   = [d.to_dict() for d in docs]
+        scores = [r.get("avg_score") for r in rows if isinstance(r.get("avg_score"), (int,float))]
+        return jsonify({
+            "sessions":    len(rows),
+            "days":        days,
+            "avg_score":   round(sum(scores)/len(scores), 1) if scores else None,
+            "best_score":  max(scores) if scores else None,
+            "worst_score": min(scores) if scores else None,
+            "total_min":   round(sum(r.get("duration_s",0) for r in rows)/60, 1),
+            "export_urls": {
+                "csv": f"/api/export/sessions?format=csv&days={days}",
+                "pdf": f"/api/export/sessions?format=pdf&days={days}",
+            }
+        })
+    except Exception as e:
+        return safe_error(e)
 
 @app.route("/api/system/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
