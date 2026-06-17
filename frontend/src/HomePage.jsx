@@ -1829,6 +1829,33 @@ export default function HomePage({
 
   const handleTrend = useCallback(()=>setShowTrendChart?.(true),[setShowTrendChart]);
 
+  // ── Tools (for sidebar + mobile nav) ─────────────────────────────
+  const isPro_   = ["professional","elite","pro","premium","business"].includes(tier);
+  const isElite_ = ["elite","premium"].includes(tier);
+  const tools = [
+    { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم",
+      onClick:()=>setShowGamification?.(true) },
+    ...(isAdmin ? [{ id:"t-growth", icon:"🚀", en:"Growth Hub", ar:"مركز النمو",
+      onClick:()=>setShowGrowthHub?.(true) }] : []),
+    { id:"t-coach",    icon:"🤖", en:"AI Coach",    ar:"AI Coach",
+      onClick:()=>setShowCoach?.(true) },
+    { id:"t-insights", icon:"📊", en:"AI Insights", ar:"تحليلات ذكية",
+      onClick:()=>setShowAIInsights?.(true) },
+    { id:"t-calib",    icon:"🎯", en:"Calibrate",   ar:"معايرة",
+      onClick:()=>setShowCalibWizard?.(true) },
+    { id:"t-reports",  icon:"📋", en:"AI Reports",  ar:"تقارير AI",
+      locked:!isPro_, lockLabel:"PRO",
+      onClick:()=>isPro_&&setShowAIReports?.(true) },
+    { id:"t-security", icon:"🔒", en:"Security",    ar:"الأمان",
+      onClick:()=>setShowSecurityCenter?.(true) },
+    ...(isAdmin ? [
+      { id:"t-mrr",    icon:"💰", en:"Revenue",     ar:"الإيرادات",
+        onClick:()=>setShowMRR?.(true) },
+      { id:"t-audit",  icon:"📝", en:"Audit Log",   ar:"سجل التدقيق",
+        onClick:()=>setShowAuditSystem?.(true) },
+    ] : []),
+  ];
+
   const tabLabels = { en:{ home:"Dashboard",employees:"Employees",analytics:"Analytics",
     alerts:"Alerts",sessions:"Sessions",team:"Team",settings:"Settings" },
     ar:{ home:"الرئيسية",employees:"الموظفون",analytics:"التحليلات",
