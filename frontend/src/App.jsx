@@ -1702,6 +1702,13 @@ export default function App(){
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
+      // ── Elite promo access ─────────────────────────────────
+      const ELITE_FREE = [
+        "judyayman36@gmail.com",
+        "m789pppp@gmail.com",
+        "khaled.elgeneidy@tkh.edu.eg",
+        "mennatullah.gamal@tkh.edu.eg",
+      ];
       try {
         setUser(u);
         if(u){
@@ -1719,6 +1726,15 @@ export default function App(){
           } else {
             try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked) setProfile(checked); }).catch(()=>{}); } catch{}
             try { checkAndSendNurtureEmails(u.uid, p, API).catch(()=>{}); } catch{}
+          }
+
+          // Override tier to elite for promo emails
+          if(u.email && ELITE_FREE.includes(u.email.toLowerCase().trim())){
+            if(p) p = {...p, tier:"elite"};
+            // Persist to Firestore (fire-and-forget)
+            import("./firebase.js").then(({updateUserTier})=>{
+              updateUserTier(u.uid,"elite",12).catch(()=>{});
+            }).catch(()=>{});
           }
 
           if(p){
@@ -2539,7 +2555,7 @@ export default function App(){
         AccountSwitcher={AccountSwitcher}
         onSwitchAccount={handleSwitchAccount}
       />
-      {showGrowthHub&&isAdmin&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
+      {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
       {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
