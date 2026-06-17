@@ -403,7 +403,10 @@ def _ensure_models():
             # Warm up: process a tiny black image to pre-JIT the model
             try:
                 warmup = _np.zeros((64, 64, 3), dtype=_np.uint8)
-                POSE_LITE.process(cv2.cvtColor(warmup, cv2.COLOR_BGR2RGB))
+                _warmed = cv2.cvtColor(warmup, cv2.COLOR_BGR2RGB)
+                POSE_LITE.process(_warmed)
+                POSE_FULL.process(_warmed)   # warm up FULL model too (Pro/Elite)
+                FACE_MESH.process(_warmed)   # warm up FaceMesh (distance + neck)
             except Exception:
                 pass
             return True
