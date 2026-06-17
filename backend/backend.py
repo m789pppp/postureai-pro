@@ -8025,6 +8025,501 @@ def generate_share_card():
     except Exception as e:
         return safe_error(e)
 
+
+# ══════════════════════════════════════════════════════════════════
+# B2C: PUSH NOTIFICATIONS (Firebase Cloud Messaging)
+# ══════════════════════════════════════════════════════════════════
+
+def _send_fcm(token: str, title: str, body: str, data: dict = None) -> bool:
+    """
+    Send a push notification via Firebase Admin SDK (FCM).
+    Returns True if sent successfully.
+    """
+    try:
+        from firebase_admin import messaging as _fcm
+        msg = _fcm.Message(
+            notification=_fcm.Notification(title=title, body=body),
+            data={str(k): str(v) for k, v in (data or {}).items()},
+            token=token,
+            android=_fcm.AndroidConfig(priority="high"),
+            apns=_fcm.APNSConfig(
+                payload=_fcm.APNSPayload(
+                    aps=_fcm.Aps(sound="default", badge=1)
+                )
+            ),
+        )
+        _fcm.send(msg)
+        return True
+    except Exception as e:
+        log_event("fcm_error", meta={"error": str(e)[:100], "token": token[:20]})
+        return False
+
+def _send_fcm_multicast(tokens: list, title: str, body: str, data: dict = None) -> dict:
+    """Send to multiple tokens at once (max 500 per call)."""
+    if not tokens: return {"success": 0, "failure": 0}
+    try:
+        from firebase_admin import messaging as _fcm
+        msg = _fcm.MulticastMessage(
+            notification=_fcm.Notification(title=title, body=body),
+            data={str(k): str(v) for k, v in (data or {}).items()},
+            tokens=tokens[:500],
+            android=_fcm.AndroidConfig(priority="high"),
+        )
+        result = _fcm.send_each_for_multicast(msg)
+        return {"success": result.success_count, "failure": result.failure_count}
+    except Exception as e:
+        log_event("fcm_multicast_error", meta={"error": str(e)[:100]})
+        return {"success": 0, "failure": len(tokens)}
+
+
+@app.route("/api/push/register", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def push_register():
+    """
+    Register or update a device push token for the authenticated user.
+    Call this on app launch and whenever FCM token refreshes.
+    """
+    try:
+        uid  = getattr(g, "uid", "")
+        data = request.get_json(force=True) or {}
+        token    = data.get("token", "").strip()
+        platform = data.get("platform", "web")   # web | ios | android
+        lang     = data.get("lang", "en")
+
+        if not token:
+            return jsonify({"error": "token required"}), 400
+
+        # Save token to Firestore (one doc per uid+token combo)
+        import hashlib as _hl
+        token_hash = _hl.md5(token.encode()).hexdigest()[:16]
+        db.collection("push_tokens").document(f"{uid}_{token_hash}").set({
+            "uid":        uid,
+            "token":      token,
+            "platform":   platform,
+            "lang":       lang,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "active":     True,
+        }, merge=True)
+
+        # Also cache in Redis for fast lookup
+        _rc = get_redis()
+        if _rc:
+            import json as _j
+            existing = _rc.get(f"push_tokens:{uid}")
+            tokens_list = _j.loads(existing) if existing else []
+            if token not in tokens_list:
+                tokens_list.append(token)
+                tokens_list = tokens_list[-5:]  # keep last 5 tokens per user
+            _rc.setex(f"push_tokens:{uid}", 86400 * 30, _j.dumps(tokens_list))
+
+        log_event("push_token_registered", uid, {"platform": platform})
+        return jsonify({"ok": True, "platform": platform})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/push/unregister", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def push_unregister():
+    """Remove a device token (called on logout or notification opt-out)."""
+    try:
+        uid   = getattr(g, "uid", "")
+        data  = request.get_json(force=True) or {}
+        token = data.get("token", "").strip()
+        if not token:
+            return jsonify({"error": "token required"}), 400
+
+        import hashlib as _hl
+        token_hash = _hl.md5(token.encode()).hexdigest()[:16]
+        db.collection("push_tokens").document(f"{uid}_{token_hash}").update({"active": False})
+
+        _rc = get_redis()
+        if _rc:
+            import json as _j
+            existing = _rc.get(f"push_tokens:{uid}")
+            if existing:
+                tokens_list = [t for t in _j.loads(existing) if t != token]
+                _rc.setex(f"push_tokens:{uid}", 86400 * 30, _j.dumps(tokens_list))
+
+        return jsonify({"ok": True})
+    except Exception as e:
+        return safe_error(e)
+
+
+def _get_user_tokens(uid: str) -> list:
+    """Get all active push tokens for a user. Tries Redis then Firestore."""
+    try:
+        _rc = get_redis()
+        if _rc:
+            import json as _j
+            cached = _rc.get(f"push_tokens:{uid}")
+            if cached:
+                return _j.loads(cached)
+        docs = (db.collection("push_tokens")
+                  .where("uid", "==", uid)
+                  .where("active", "==", True)
+                  .limit(5).stream())
+        return [d.to_dict().get("token") for d in docs if d.to_dict().get("token")]
+    except Exception:
+        return []
+
+
+@app.route("/api/push/streak-reminder", methods=["POST"])
+@limiter.limit("5 per minute")
+def push_streak_reminder():
+    """
+    Cron job endpoint — call daily at 19:00 user local time.
+    Sends streak reminder to users who haven't done a session today.
+    Secured by CRON_SECRET env var (not user auth).
+    """
+    try:
+        # Verify cron secret
+        secret = request.headers.get("X-Cron-Secret", "")
+        if secret != os.getenv("CRON_SECRET", ""):
+            return jsonify({"error": "Unauthorized"}), 401
+
+        data     = request.get_json(force=True) or {}
+        min_streak = int(data.get("min_streak", 2))   # only remind users with streak >= 2
+        today    = datetime.utcnow().date()
+        today_str = str(today)
+
+        # Find users with active streaks who haven't done a session today
+        # Query push_tokens to get all active users
+        token_docs = db.collection("push_tokens").where("active","==",True).limit(1000).stream()
+        uids_seen  = set()
+        reminders_sent = 0
+        reminders_skipped = 0
+
+        for tdoc in token_docs:
+            td  = tdoc.to_dict()
+            uid = td.get("uid")
+            tok = td.get("token")
+            lang = td.get("lang", "en")
+            if not uid or not tok or uid in uids_seen:
+                continue
+            uids_seen.add(uid)
+
+            # Check if user already had a session today
+            today_sessions = (db.collection("sessions")
+                                .where("uid", "==", uid)
+                                .where("created_at", ">=", datetime.utcnow().replace(hour=0,minute=0,second=0))
+                                .limit(1).stream())
+            had_session_today = any(True for _ in today_sessions)
+            if had_session_today:
+                reminders_skipped += 1
+                continue
+
+            # Check current streak
+            cutoff = datetime.utcnow() - timedelta(days=35)
+            sess_docs = (db.collection("sessions")
+                           .where("uid", "==", uid)
+                           .where("created_at", ">=", cutoff)
+                           .order_by("created_at", direction="DESCENDING")
+                           .limit(50).stream())
+            day_scores: dict = {}
+            for sd in sess_docs:
+                d = sd.to_dict(); sc = d.get("avg_score"); ts = d.get("created_at")
+                if not sc or not ts: continue
+                try:
+                    day = ts.strftime("%Y-%m-%d") if hasattr(ts,"strftime") else str(ts)[:10]
+                    day_scores[day] = max(day_scores.get(day,0), sc)
+                except Exception:
+                    pass
+            active_days = {d for d,sc in day_scores.items() if sc >= 55}
+            streak = 0
+            chk = today - timedelta(days=1)   # yesterday (today not done yet)
+            while str(chk) in active_days:
+                streak += 1; chk -= timedelta(days=1)
+
+            if streak < min_streak:
+                reminders_skipped += 1
+                continue
+
+            # Send notification
+            is_ar = lang == "ar"
+            if streak >= 30:
+                title = "👑 لا توقف سلسلتك!" if is_ar else "👑 Don't break your streak!"
+                body  = f"عندك {streak} يوم متتالي — جلسة واحدة تحافظ عليها!" if is_ar else f"You're on a {streak}-day streak — one session to keep it alive!"
+            elif streak >= 7:
+                title = "🔥 السلسلة على المحك!" if is_ar else "🔥 Your streak is at risk!"
+                body  = f"{streak} أيام متتاليين! لا تضيعها الليلة" if is_ar else f"{streak} days strong! Don't let it end tonight"
+            else:
+                title = "💪 تحقق من وضعيتك اليوم" if is_ar else "💪 Check your posture today"
+                body  = f"لديك سلسلة {streak} أيام — حافظ عليها!" if is_ar else f"You have a {streak}-day streak — keep it going!"
+
+            sent = _send_fcm(tok, title, body, {"type": "streak_reminder", "streak": str(streak)})
+            if sent:
+                reminders_sent += 1
+
+        log_event("streak_reminders_sent", meta={"sent": reminders_sent, "skipped": reminders_skipped})
+        return jsonify({"ok": True, "sent": reminders_sent, "skipped": reminders_skipped})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/push/test", methods=["POST"])
+@require_auth
+@limiter.limit("5 per minute")
+def push_test():
+    """Send a test push notification to the authenticated user."""
+    try:
+        uid   = getattr(g, "uid", "")
+        data  = request.get_json(force=True) or {}
+        lang  = data.get("lang", "en")
+        tokens = _get_user_tokens(uid)
+        if not tokens:
+            return jsonify({"error": "No registered device tokens — call /api/push/register first"}), 400
+
+        title = "🎉 الإشعارات تعمل!" if lang=="ar" else "🎉 Push notifications work!"
+        body  = "سيصلك إشعار عند خطر انكسار سلسلتك" if lang=="ar" else "You'll be notified when your streak is at risk"
+        results = [_send_fcm(t, title, body, {"type": "test"}) for t in tokens]
+        return jsonify({"ok": True, "tokens": len(tokens), "sent": sum(results)})
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# B2C: ANONYMOUS GLOBAL LEADERBOARD
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/leaderboard/submit", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def leaderboard_submit():
+    """
+    Submit user's weekly average to the global leaderboard.
+    Privacy: stored anonymously — no name, email, or UID exposed publicly.
+    Display name = user-chosen alias (default: "User####")
+    """
+    try:
+        uid  = getattr(g, "uid", "")
+        data = request.get_json(force=True) or {}
+        alias    = data.get("alias", "")[:20].strip()  # user-chosen display name
+        score    = float(data.get("score", 0))
+        streak   = int(data.get("streak", 0))
+        sessions = int(data.get("sessions", 0))
+        period   = data.get("period", "week")   # week | month | alltime
+
+        if not 0 <= score <= 100:
+            return jsonify({"error": "score must be 0-100"}), 400
+
+        # Generate anonymous alias if not provided
+        if not alias:
+            import hashlib as _hl
+            alias = "User" + _hl.md5(uid.encode()).hexdigest()[:4].upper()
+
+        # Composite score: 70% posture + 20% streak + 10% consistency
+        streak_bonus   = min(20, streak * 0.5)           # max 20pts from streak
+        session_bonus  = min(10, sessions * 0.2)          # max 10pts from sessions
+        composite = round(score * 0.70 + streak_bonus + session_bonus, 1)
+
+        # Upsert to Firestore leaderboard collection
+        now = datetime.utcnow()
+        period_key = {
+            "week":    now.strftime("%Y-W%W"),
+            "month":   now.strftime("%Y-%m"),
+            "alltime": "alltime",
+        }.get(period, now.strftime("%Y-W%W"))
+
+        doc_id = f"{period_key}_{uid}"
+        db.collection("leaderboard").document(doc_id).set({
+            "uid_hash":      __import__("hashlib").md5(uid.encode()).hexdigest()[:12],  # anonymized
+            "alias":         alias,
+            "score":         round(score, 1),
+            "streak":        streak,
+            "sessions":      sessions,
+            "composite":     composite,
+            "period":        period,
+            "period_key":    period_key,
+            "updated_at":    now.isoformat() + "Z",
+            "grade":         "A" if score>=85 else "B" if score>=70 else "C" if score>=55 else "D",
+        }, merge=True)
+
+        # Also update Redis sorted set for fast leaderboard queries
+        _rc = get_redis()
+        if _rc:
+            _rc.zadd(f"lb:{period_key}", {doc_id: composite})
+            _rc.zremrangebyrank(f"lb:{period_key}", 0, -1001)  # keep top 1000
+            _rc.expire(f"lb:{period_key}", 86400 * 8)           # 8 days TTL
+
+        log_event("leaderboard_submit", uid, {"score": score, "period": period, "composite": composite})
+        return jsonify({"ok": True, "composite": composite, "alias": alias, "period_key": period_key})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/leaderboard", methods=["GET"])
+@limiter.limit("60 per minute")
+def get_leaderboard():
+    """
+    Return global leaderboard. No auth required — public endpoint.
+    Query params:
+      period=week|month|alltime  (default: week)
+      limit=10-100               (default: 50)
+      uid=<optional>             show authenticated user's rank
+    """
+    try:
+        period = request.args.get("period", "week")
+        limit  = min(100, max(10, int(request.args.get("limit", 50))))
+        uid    = request.args.get("uid", "")  # optional — to find user's rank
+
+        now = datetime.utcnow()
+        period_key = {
+            "week":    now.strftime("%Y-W%W"),
+            "month":   now.strftime("%Y-%m"),
+            "alltime": "alltime",
+        }.get(period, now.strftime("%Y-W%W"))
+
+        # Try Redis sorted set first (fast)
+        _rc = get_redis()
+        board = []
+        user_rank = None
+
+        if _rc:
+            try:
+                # Get top N entries by composite score (descending)
+                top_ids = _rc.zrevrange(f"lb:{period_key}", 0, limit-1, withscores=True)
+                if top_ids:
+                    import json as _j
+                    for rank, (doc_id_bytes, composite) in enumerate(top_ids, start=1):
+                        doc_id = doc_id_bytes.decode() if isinstance(doc_id_bytes, bytes) else doc_id_bytes
+                        # Fetch full data from Firestore
+                        doc = db.collection("leaderboard").document(doc_id).get()
+                        if doc.exists:
+                            d = doc.to_dict()
+                            entry = {
+                                "rank":      rank,
+                                "medal":     {1:"🥇",2:"🥈",3:"🥉"}.get(rank,""),
+                                "alias":     d.get("alias","Anonymous"),
+                                "score":     d.get("score"),
+                                "streak":    d.get("streak",0),
+                                "composite": round(composite, 1),
+                                "grade":     d.get("grade",""),
+                                "is_me":     uid and doc_id.endswith(uid),
+                            }
+                            board.append(entry)
+                            if uid and doc_id.endswith(uid):
+                                user_rank = rank
+
+                    # Find user rank if not in top N
+                    if uid and not user_rank:
+                        doc_id = f"{period_key}_{uid}"
+                        user_rank_raw = _rc.zrevrank(f"lb:{period_key}", doc_id)
+                        if user_rank_raw is not None:
+                            user_rank = user_rank_raw + 1
+            except Exception:
+                pass
+
+        # Firestore fallback
+        if not board:
+            docs = (db.collection("leaderboard")
+                      .where("period_key","==",period_key)
+                      .order_by("composite", direction="DESCENDING")
+                      .limit(limit).stream())
+            for rank, doc in enumerate(docs, start=1):
+                d = doc.to_dict()
+                board.append({
+                    "rank":      rank,
+                    "medal":     {1:"🥇",2:"🥈",3:"🥉"}.get(rank,""),
+                    "alias":     d.get("alias","Anonymous"),
+                    "score":     d.get("score"),
+                    "streak":    d.get("streak",0),
+                    "composite": d.get("composite"),
+                    "grade":     d.get("grade",""),
+                    "is_me":     uid and doc.id.endswith(uid),
+                })
+                if uid and doc.id.endswith(uid):
+                    user_rank = rank
+
+        # Stats
+        total = len(board)
+        avg_score = round(sum(e["score"] for e in board if e["score"])/max(total,1), 1)
+        top_streak = max((e["streak"] for e in board), default=0)
+
+        return jsonify({
+            "ok":         True,
+            "period":     period,
+            "period_key": period_key,
+            "board":      board,
+            "user_rank":  user_rank,
+            "total":      total,
+            "stats": {
+                "avg_score":  avg_score,
+                "top_streak": top_streak,
+                "participants": total,
+            },
+            "privacy_note": "All entries are anonymous. No personal data is exposed.",
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/leaderboard/my-rank", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def my_leaderboard_rank():
+    """Return the authenticated user's rank + nearby competitors."""
+    try:
+        uid    = getattr(g, "uid", "")
+        period = request.args.get("period", "week")
+        now    = datetime.utcnow()
+        period_key = {
+            "week":    now.strftime("%Y-W%W"),
+            "month":   now.strftime("%Y-%m"),
+            "alltime": "alltime",
+        }.get(period, now.strftime("%Y-W%W"))
+
+        doc_id = f"{period_key}_{uid}"
+        doc = db.collection("leaderboard").document(doc_id).get()
+        if not doc.exists:
+            return jsonify({
+                "ok":       True,
+                "ranked":   False,
+                "message":  "Not on leaderboard yet — submit your score via /api/leaderboard/submit",
+                "message_ar": "لست في المتصفحة بعد — ابعت درجتك عبر /api/leaderboard/submit",
+            })
+
+        my_data = doc.to_dict()
+        _rc     = get_redis()
+        my_rank = None
+        nearby  = []
+
+        if _rc:
+            raw_rank = _rc.zrevrank(f"lb:{period_key}", doc_id)
+            if raw_rank is not None:
+                my_rank = raw_rank + 1
+                # Get 2 above + 2 below for context
+                start = max(0, raw_rank - 2)
+                end   = raw_rank + 2
+                nearby_ids = _rc.zrevrange(f"lb:{period_key}", start, end, withscores=True)
+                for r_offset, (nid_bytes, composite) in enumerate(nearby_ids, start=start+1):
+                    nid = nid_bytes.decode() if isinstance(nid_bytes, bytes) else nid_bytes
+                    ndoc = db.collection("leaderboard").document(nid).get()
+                    if ndoc.exists:
+                        nd = ndoc.to_dict()
+                        nearby.append({
+                            "rank":      r_offset,
+                            "alias":     nd.get("alias","Anonymous"),
+                            "composite": round(composite,1),
+                            "is_me":     nid == doc_id,
+                        })
+
+        return jsonify({
+            "ok":        True,
+            "ranked":    True,
+            "rank":      my_rank,
+            "composite": my_data.get("composite"),
+            "score":     my_data.get("score"),
+            "streak":    my_data.get("streak"),
+            "alias":     my_data.get("alias"),
+            "nearby":    nearby,
+            "period":    period,
+        })
+    except Exception as e:
+        return safe_error(e)
+
 @app.route("/api/system/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
 def health():
