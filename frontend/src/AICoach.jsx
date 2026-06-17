@@ -67,6 +67,15 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
     muted: "#64748b", blue: "#1a56db",
   };
 
+  // ── Coach limits — defined here so T object can reference coachLimitLabel ──
+  const canUseCoach = true;
+  const isElite = true;
+  const TIER_LIMITS = { standard: 5, basic: 10, pro: 30, professional: 50, elite: -1, premium: -1, enterprise: -1 };
+  const coachLimit      = TIER_LIMITS[profile?.tier] ?? 5;
+  const coachLimitLabel = coachLimit === -1
+    ? (lang === "ar" ? "غير محدود" : "Unlimited")
+    : `${coachLimit} ${lang === "ar" ? "رسالة/شهر" : "msgs/month"}`;
+
   const T = {
     en: {
       title:       "AI Posture Coach",
@@ -94,12 +103,6 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
   const t = T[lang] || T.en;
   const isAr = lang === "ar";
 
-  // All tiers can use AI Coach — backend controls usage limits per tier
-  const canUseCoach = true;
-  const isElite = true;
-  const TIER_LIMITS = { standard: 5, basic: 10, pro: 30, professional: 50, elite: -1, premium: -1, enterprise: -1 };
-  const coachLimit = TIER_LIMITS[profile?.tier] ?? 5;
-  const coachLimitLabel = coachLimit === -1 ? (lang === "ar" ? "غير محدود" : "Unlimited") : `${coachLimit} ${lang === "ar" ? "رسالة/شهر" : "msgs/month"}`;
 
   // Build analytics context for Gemini
   const context = {
