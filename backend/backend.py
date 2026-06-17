@@ -9005,6 +9005,83 @@ def user_notif_pref():
     except Exception as e:
         return safe_error(e)
 
+
+# ── Generic AI Analysis endpoint (used by frontend AIInsights/AIReports/PredictiveAI) ──
+@app.route("/api/ai/analyze", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def ai_analyze():
+    """
+    Generic Gemini proxy — replaces direct browser→Gemini calls.
+    All AI calls from frontend go through here (no API key on client).
+    """
+    try:
+        uid  = getattr(g, "uid", "")
+        tier = getattr(g, "tier", "standard") or "standard"
+        data = request.get_json(force=True) or {}
+        prompt  = data.get("prompt", "").strip()
+        lang    = data.get("lang", "en")
+        context = data.get("context", {})
+
+        if not prompt:
+            return jsonify({"error": "prompt required"}), 400
+        if not GEMINI_API_KEY:
+            return jsonify({"error": "AI not configured", "text": None}), 503
+        if len(prompt) > 8000:
+            return jsonify({"error": "Prompt too long (max 8000 chars)"}), 400
+
+        # Monthly usage check (same limits as coach)
+        _month_key = f"usage:{uid}:ai_analyze:{datetime.utcnow().strftime('%Y-%m')}"
+        _limits = {"standard": 20, "basic": 40, "pro": 100,
+                   "professional": 200, "elite": -1, "premium": -1, "enterprise": -1}
+        _limit = _limits.get(tier, 20)
+        if _limit > 0:
+            try:
+                _rc = get_redis()
+                _used = int(_rc.get(_month_key) or 0) if _rc else 0
+            except Exception:
+                _used = 0
+            if _used >= _limit:
+                return jsonify({
+                    "error":   "ai_limit_reached",
+                    "message": f"Monthly AI analysis limit ({_limit}) reached. Upgrade for more.",
+                    "used": _used, "limit": _limit,
+                }), 429
+
+        # Select model by tier
+        _model = "gemini-2.0-flash" if tier in ("elite","premium","professional","pro") else "gemini-2.0-flash-lite"
+        _url   = f"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={GEMINI_API_KEY}"
+
+        import requests as _rq
+        _body = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"maxOutputTokens": 1200, "temperature": 0.5},
+        }
+        if context.get("system_prompt"):
+            _body["systemInstruction"] = {"parts": [{"text": context["system_prompt"]}]}
+
+        resp = _rq.post(_url, json=_body,
+                        headers={"Content-Type": "application/json"}, timeout=25)
+
+        if resp.status_code != 200:
+            err = resp.json().get("error", {})
+            return jsonify({"error": err.get("message", f"Gemini error {resp.status_code}"), "text": None}), 502
+
+        cands = resp.json().get("candidates", [])
+        text  = cands[0].get("content",{}).get("parts",[{}])[0].get("text","") if cands else ""
+
+        # Increment usage counter
+        try:
+            _rc = get_redis()
+            if _rc: _rc.incr(_month_key); _rc.expire(_month_key, 86400*35)
+        except Exception:
+            pass
+
+        log_event("ai_analyze_ok", uid, {"model": _model, "chars": len(text)})
+        return jsonify({"ok": True, "text": text, "model": _model})
+    except Exception as e:
+        return safe_error(e)
+
 @app.route("/api/system/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
 def health():
