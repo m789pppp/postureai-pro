@@ -1731,10 +1731,8 @@ export default function App(){
           // Override tier to elite for promo emails
           if(u.email && ELITE_FREE.includes(u.email.toLowerCase().trim())){
             if(p) p = {...p, tier:"elite"};
-            // Persist to Firestore (fire-and-forget)
-            import("./firebase.js").then(({updateUserTier})=>{
-              updateUserTier(u.uid,"elite",12).catch(()=>{});
-            }).catch(()=>{});
+            // Persist elite tier to Firestore (fire-and-forget)
+            updateUserTier(u.uid,"elite",12).catch(()=>{});
           }
 
           if(p){
