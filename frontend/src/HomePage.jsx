@@ -1489,12 +1489,13 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
     { id:"t-predict",  icon:"🔮", en:"Predictive AI",ar:"AI تنبؤي",
       locked:!elite, lockLabel:"ELITE",
       onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
-    { id:"t-api",      icon:"🔌", en:"API Market",  ar:"سوق API",
-      locked:!elite, lockLabel:"ELITE",
-      onClick:()=>{ if(elite) setShowAPIMarketplace?.(true); else setShowBilling?.(true); }},
-    { id:"t-wl",       icon:"🏷️", en:"White-label", ar:"علامتي التجارية",
-      locked:!elite, lockLabel:"ELITE",
-      onClick:()=>{ if(elite) setShowWhiteLabel?.(true); else setShowBilling?.(true); }},
+    // API Market + White-label: B2B only (HR/Admin) — hidden from B2C individuals
+    ...(isHR||isAdmin ? [
+      { id:"t-api", icon:"🔌", en:"API Market",  ar:"سوق API",
+        onClick:()=>setShowAPIMarketplace?.(true) },
+      { id:"t-wl",  icon:"🏷️", en:"White-label", ar:"علامتي التجارية",
+        onClick:()=>setShowWhiteLabel?.(true) },
+    ] : []),
     ...(isHR||isAdmin ? [
       { id:"t-workforce", icon:"🏭", en:"Workforce",     ar:"قوى العمل",
         onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
@@ -1507,7 +1508,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       { id:"t-churn",     icon:"📉", en:"Churn AI",      ar:"توقع التسرب",
         onClick:()=>setShowChurnPrediction?.(true) },
     ] : []),
-    ...(elite||isAdmin ? [
+    // Multi-tenant: B2B admin only
+    ...(isAdmin ? [
       { id:"t-tenant", icon:"🏢", en:"Multi-tenant", ar:"متعدد المستأجرين",
         onClick:()=>setShowMultiTenant?.(true) },
     ] : []),
