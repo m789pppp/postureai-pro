@@ -1,4 +1,4 @@
-# PostureAI Pro — Security Hardening Report (ULTIMATE v4)
+# Corvus — Security Hardening Report (ULTIMATE v4)
 
 ## Critical Issues Fixed
 
@@ -33,7 +33,7 @@
 |---|-------|-----|
 | 16 | Analysis endpoint rate limit 30/min (too permissive) | Reduced to 10/min |
 | 17 | No nginx security headers | Fixed: X-Frame-Options, CSP, HSTS, etc. |
-| 18 | No non-root Docker user | Fixed: `postureai` user in Dockerfile |
+| 18 | No non-root Docker user | Fixed: `corvus` user in Dockerfile |
 | 19 | Celery disabled in v60 requirements | Fixed: Celery enabled and configured |
 | 20 | No structured error logging | Fixed: stderr-only logging in production |
 

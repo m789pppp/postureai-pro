@@ -1,6 +1,6 @@
 import React from "react";
 /**
- * PostureAI Pro — ErrorPage + NotFound + OfflinePage
+ * Corvus — ErrorPage + NotFound + OfflinePage
  */
 export function NotFound({ onHome, lang="en" }) {
   const isAr = lang==="ar";

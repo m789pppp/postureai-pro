@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — InviteAccept
+ * Corvus — InviteAccept
  * Shown when user opens ?invite=TOKEN link
  * Looks up invite in Firestore, links user to company, redirects to home
  */
@@ -131,7 +131,7 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
 
         {/* Logo */}
         <div style={{ width: 56, height: 56, background: "linear-gradient(135deg,#1a56db,#0891b2)", borderRadius: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 26, marginBottom: 20, boxShadow: "0 8px 32px rgba(26,86,219,.35)" }}>◈</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#f0f6ff", marginBottom: 6, letterSpacing: "-.025em" }}>PostureAI Pro</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#f0f6ff", marginBottom: 6, letterSpacing: "-.025em" }}>Corvus</div>
 
         {/* Loading */}
         {status === "loading" && (
@@ -150,8 +150,8 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
             </div>
             <div style={{ fontSize: 14, color: "#94a3b8", marginBottom: 24, lineHeight: 1.6 }}>
               {isAr
-                ? <>انضم إلى فريق <strong style={{ color: "#60a5fa" }}>{invite.name || invite.email}</strong> على PostureAI Pro</>
-                : <>Join <strong style={{ color: "#60a5fa" }}>{invite.name || invite.email}</strong>'s team on PostureAI Pro</>
+                ? <>انضم إلى فريق <strong style={{ color: "#60a5fa" }}>{invite.name || invite.email}</strong> على Corvus</>
+                : <>Join <strong style={{ color: "#60a5fa" }}>{invite.name || invite.email}</strong>'s team on Corvus</>
               }
               {invite.role && <div style={{ marginTop: 8, fontSize: 12 }}>
                 {isAr ? "دورك: " : "Role: "}

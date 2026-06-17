@@ -1,4 +1,4 @@
-# PostureAI — Production Deployment Guide
+# Corvus — Production Deployment Guide
 
 ## Architecture Overview
 
@@ -66,11 +66,11 @@ PAYMOB_HMAC_SECRET=...
 
 # Email
 SENDGRID_API_KEY=SG...
-EMAIL_FROM=noreply@postureai.com
+EMAIL_FROM=noreply@corvus.com
 
 # Security
 RESULT_SIGNING_SECRET=<32-char random>
-CORS_ORIGINS=https://app.postureai.com,https://postureai.com
+CORS_ORIGINS=https://app.corvus.com,https://corvus.com
 
 # Feature flags
 CELERY_ENABLED=true
@@ -87,7 +87,7 @@ Output Directory: dist
 Install Command: npm ci
 
 # Environment variables
-VITE_BACKEND_URL=https://api.postureai.com
+VITE_BACKEND_URL=https://api.corvus.com
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_PROJECT_ID=...
 VITE_FIREBASE_AUTH_DOMAIN=...

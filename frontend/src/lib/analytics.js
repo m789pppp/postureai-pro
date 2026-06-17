@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Analytics & Monitoring
+ * Corvus — Analytics & Monitoring
  * PostHog: product analytics, funnels, feature flags
  * Sentry: error tracking, performance monitoring
  */
@@ -79,7 +79,7 @@ export async function initSentry() {
     Sentry.init({
       dsn: SENTRY_DSN,
       environment: ENV,
-      release: `postureai@${import.meta.env.VITE_APP_VERSION || "0.0.0"}`,
+      release: `corvus@${import.meta.env.VITE_APP_VERSION || "0.0.0"}`,
       tracesSampleRate: ENV === "production" ? 0.1 : 1.0,
       // Don't send PII
       beforeSend(event) {

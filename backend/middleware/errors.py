@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Centralized Error Handling
+Corvus — Centralized Error Handling
 SECURITY: Stack traces are NEVER returned to API clients in production.
           All tracebacks are logged to stderr only.
 """
@@ -9,7 +9,7 @@ import traceback
 import logging
 from flask import jsonify
 
-logger = logging.getLogger("postureai.errors")
+logger = logging.getLogger("corvus.errors")
 
 IS_PRODUCTION = os.getenv("FLASK_ENV", "development") == "production"
 

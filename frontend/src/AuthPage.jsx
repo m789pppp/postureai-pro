@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — AuthPage v31
+ * Corvus — AuthPage v31
  * Professional SaaS auth: Login · Sign Up · Forgot Password
  * Design: Notion/Linear quality, dark-first, RTL-ready
  */
@@ -264,7 +264,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
             animation:"glow 3s ease infinite",
           }}>◈</div>
           <div style={{ fontSize:22,fontWeight:800,color:tok.text,letterSpacing:"-.025em",marginBottom:4 }}>
-            PostureAI Pro
+            Corvus
           </div>
           <div style={{ fontSize:13,color:tok.muted,fontWeight:400 }}>
             {isAr ? "صحة العمل بالذكاء الاصطناعي" : "AI-powered workplace health"}
@@ -488,8 +488,8 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
               {[
-                { label: isAr ? "👤 مستخدم فردي" : "👤 Individual User", email:"demo.individual@postureai.io", pass:"Demo1234!" },
-                { label: isAr ? "🏢 مدير شركة (HR)" : "🏢 HR Admin",        email:"demo.hr@postureai.io",         pass:"Demo1234!" },
+                { label: isAr ? "👤 مستخدم فردي" : "👤 Individual User", email:"demo.individual@corvus.io", pass:"Demo1234!" },
+                { label: isAr ? "🏢 مدير شركة (HR)" : "🏢 HR Admin",        email:"demo.hr@corvus.io",         pass:"Demo1234!" },
               ].map((d,i) => (
                 <button key={i} onClick={async () => {
                   setErr(""); setLoading(true);
@@ -503,7 +503,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                       await createUserProfile(c2.user.uid, {
                         email: d.email,
                         name: i === 0 ? "Demo User" : "Demo HR Admin",
-                        company: i === 1 ? "PostureAI Demo Co." : "",
+                        company: i === 1 ? "Corvus Demo Co." : "",
                         user_type: i === 1 ? "hr_admin" : "individual",
                         is_org_owner: i === 1,
                         tier: i === 1 ? "professional" : "standard",

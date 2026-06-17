@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Notifications & Integrations Hub v1.0
+ * Corvus — Notifications & Integrations Hub v1.0
  * Phase 10: Full ecosystem
  * Queue system · Retries · Scheduled digests · AI alerts
  * Slack · Microsoft Teams · Google Calendar · Jira · Zoom
@@ -122,7 +122,7 @@ const INTEGRATIONS_META = {
     fields:[
       {key:"webhook_url",  label:"Webhook URL",      labelAr:"رابط Webhook",   placeholder:"https://hooks.slack.com/services/...", type:"url"},
       {key:"channel",      label:"Channel",          labelAr:"القناة",          placeholder:"#hr-posture", type:"text"},
-      {key:"bot_name",     label:"Bot Name",         labelAr:"اسم البوت",       placeholder:"PostureAI Bot", type:"text"},
+      {key:"bot_name",     label:"Bot Name",         labelAr:"اسم البوت",       placeholder:"Corvus Bot", type:"text"},
     ],
     events:["burnout_alert","risk_alert","weekly_digest","achievement","team_milestone"],
     docs:"https://api.slack.com/messaging/webhooks",
@@ -181,10 +181,10 @@ const INTEGRATIONS_META = {
 async function sendToSlack(config, message) {
   const payload = {
     channel: config.channel,
-    username: config.bot_name || "PostureAI Bot",
+    username: config.bot_name || "Corvus Bot",
     icon_emoji: ":health:",
     blocks: [
-      { type:"section", text:{ type:"mrkdwn", text: `*PostureAI Alert*\n${message.text}` } },
+      { type:"section", text:{ type:"mrkdwn", text: `*Corvus Alert*\n${message.text}` } },
       message.score != null ? {
         type:"context", elements:[{type:"mrkdwn", text:`Score: *${message.score}/100* | ${new Date().toLocaleString()}`}]
       } : null,
@@ -199,12 +199,12 @@ async function sendToTeams(config, message) {
   const payload = {
     "@type":"MessageCard", "@context":"http://schema.org/extensions",
     themeColor: message.color || "1A56DB",
-    summary: "PostureAI Notification",
-    sections:[{ activityTitle:"PostureAI Workforce Intelligence",
+    summary: "Corvus Notification",
+    sections:[{ activityTitle:"Corvus Workforce Intelligence",
       activitySubtitle: message.subtitle || new Date().toLocaleString(),
       activityText: message.text, markdown:true }],
     potentialAction:[{ "@type":"OpenUri", name:"Open Dashboard",
-      targets:[{os:"default", uri:"https://app.postureai.io"}] }],
+      targets:[{os:"default", uri:"https://app.corvus.io"}] }],
   };
   // Real: return fetch(config.webhook_url, {method:"POST", body:JSON.stringify(payload)})
   return { ok: true, simulated: true };
@@ -331,7 +331,7 @@ function QueuePanel({orgId,profile,isAr}) {
   const sendTest=async()=>{
     setSending(true);
     globalQueue.enqueue(mkQueueEntry("ai_insight",{
-      text:"Test notification from PostureAI",
+      text:"Test notification from Corvus",
       score:Math.round(60+Math.random()*30),
     },["in_app","slack"]));
     await new Promise(r=>setTimeout(r,600));
@@ -695,7 +695,7 @@ function IntegrationsPanel({orgId,profile,isAr}) {
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <div>
         <div style={{fontFamily:SYNE,fontSize:14,fontWeight:800,color:D.text}}>{isAr?"تكاملات النظام":"System Integrations"}</div>
-        <div style={{fontSize:11,color:D.muted,marginTop:2}}>{isAr?"ربط PostureAI مع منصاتك المفضلة":"Connect PostureAI with your favourite platforms"}</div>
+        <div style={{fontSize:11,color:D.muted,marginTop:2}}>{isAr?"ربط Corvus مع منصاتك المفضلة":"Connect Corvus with your favourite platforms"}</div>
       </div>
 
       {/* Integration cards grid */}
@@ -829,7 +829,7 @@ function AIAlertsPanel({orgId,profile,sessions=[],allUsers=[],isAr}) {
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"claude-sonnet-4-20250514",max_tokens:600,
-          system:`You are PostureAI's alert rule generator. Generate 3 smart alert rule suggestions for a workforce health platform. Respond in ${isAr?"Arabic":"English"} as a JSON array with fields: name, condition, action, severity, rationale.`,
+          system:`You are Corvus's alert rule generator. Generate 3 smart alert rule suggestions for a workforce health platform. Respond in ${isAr?"Arabic":"English"} as a JSON array with fields: name, condition, action, severity, rationale.`,
           messages:[{role:"user",content:`Generate 3 alert rules for: avg posture score ${Math.round(50+Math.random()*30)}/100, ${sessions.length} sessions, ${allUsers.length} employees. Make them practical and specific.`}],
         }),
       });

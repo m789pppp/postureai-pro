@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Authentication & Authorization Middleware v3
+Corvus — Authentication & Authorization Middleware v3
 SECURITY HARDENED:
   - Auth bypass REMOVED: JWT is NEVER accepted without signature verification
   - Production startup check: hard-fails if Firebase Admin SDK not configured

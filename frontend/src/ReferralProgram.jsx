@@ -1,5 +1,5 @@
 /**
- * ReferralProgram.jsx — PostureAI Phase 15
+ * ReferralProgram.jsx — Corvus Phase 15
  * User-facing referral: unique links, rewards, leaderboard, redemption
  */
 import { useState, useEffect } from "react";
@@ -32,7 +32,7 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
   const [shareMethod, setShare] = useState(null);
 
   const refCode = `PAI-${(profile?.uid || "USER").slice(0,6).toUpperCase()}`;
-  const refLink = `https://postureai.com?ref=${refCode}`;
+  const refLink = `https://corvus.com?ref=${refCode}`;
   const totalReferrals = MOCK_REFERRALS.filter(r => r.status === "active").length;
   const totalEarned    = MOCK_REFERRALS.reduce((s, r) => s + r.earned, 0);
   const nextMilestone  = REWARDS.find(r => r.milestone > totalReferrals) || REWARDS[REWARDS.length - 1];
@@ -45,10 +45,10 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
   };
 
   const shareLinks = {
-    email:    `mailto:?subject=Try PostureAI free&body=Hey! I've been using PostureAI to fix my posture and it's amazing. Try it free: ${refLink}`,
+    email:    `mailto:?subject=Try Corvus free&body=Hey! I've been using Corvus to fix my posture and it's amazing. Try it free: ${refLink}`,
     linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(refLink)}`,
-    twitter:  `https://twitter.com/intent/tweet?text=${encodeURIComponent("I've been using @PostureAI to fix my posture. Try it free → " + refLink)}`,
-    whatsapp: `https://wa.me/?text=${encodeURIComponent("Check out PostureAI — AI posture analysis that actually works! Free trial: " + refLink)}`,
+    twitter:  `https://twitter.com/intent/tweet?text=${encodeURIComponent("I've been using @Corvus to fix my posture. Try it free → " + refLink)}`,
+    whatsapp: `https://wa.me/?text=${encodeURIComponent("Check out Corvus — AI posture analysis that actually works! Free trial: " + refLink)}`,
   };
 
   const tabs = [
@@ -249,9 +249,9 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
               {/* Pre-written messages */}
               <div style={{ fontWeight:700, color:cs.text, fontSize:14, marginBottom:4 }}>📝 Pre-written Messages</div>
               {[
-                { label:"Professional",  text:`I've been using PostureAI at work and my neck pain has significantly reduced. It uses AI to monitor and coach your posture in real time. Try it free: ${refLink}` },
+                { label:"Professional",  text:`I've been using Corvus at work and my neck pain has significantly reduced. It uses AI to monitor and coach your posture in real time. Try it free: ${refLink}` },
                 { label:"Casual",        text:`This posture app is actually really good lol. Uses your camera to track posture and gives you AI coaching. Check it out: ${refLink}` },
-                { label:"For HR/Managers", text:`If you're looking for a scalable employee wellness tool, PostureAI has been great for our team. AI-powered posture monitoring with team dashboards: ${refLink}` },
+                { label:"For HR/Managers", text:`If you're looking for a scalable employee wellness tool, Corvus has been great for our team. AI-powered posture monitoring with team dashboards: ${refLink}` },
               ].map(m => (
                 <div key={m.label} style={{ background:cs.bg, borderRadius:12, padding:16, border:`1px solid ${cs.border}` }}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>

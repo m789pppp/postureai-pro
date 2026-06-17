@@ -21,62 +21,52 @@ async function getStripe() {
   return stripeInstance;
 }
 
-// ── Pricing config ────────────────────────────────────────────────
+// ── Pricing config — MUST match TIERS in App.jsx exactly (single source of truth) ──
 export const PLANS = {
   standard: {
     id:          "standard",
-    name:        "Standard",
-    nameAr:      "الأساسية",
-    priceEGP:    { monthly: 0,    yearly: 0 },
-    priceUSD:    { monthly: 0,    yearly: 0 },
-    stripePriceId: { monthly: "", yearly: "" },  // Free plan — no Stripe needed
-    isFree:      true,
-    color:       "#64748b",
-    features:    ["Posture analysis", "Basic score", "3 sessions/day", "PDF report"],
-    featuresAr:  ["تحليل الوضعية", "نقاط أساسية", "3 جلسات يومياً", "تقرير PDF"],
-    limit:       3,
+    name:        "Starter",
+    nameAr:      "ستارتر",
+    priceEGP:    { monthly: 2499, yearly: 23990 },
+    priceUSD:    { monthly: 79,   yearly: 758 },
+    stripePriceId: {
+      monthly: import.meta.env.VITE_STRIPE_PRICE_STANDARD_MONTHLY || "",
+      yearly:  import.meta.env.VITE_STRIPE_PRICE_STANDARD_YEARLY  || "",
+    },
+    color:       "#6366f1",
+    features:    ["33-landmark pose detection", "Head tilt & neck lean", "IPD screen distance", "PDF reports", "30 employees", "HR dashboard", "Email support"],
+    featuresAr:  ["كشف 33 نقطة بالـAI", "ميل الرأس والرقبة", "مسافة الشاشة IPD", "تقارير PDF", "30 موظف", "لوحة تحكم HR", "دعم بالبريد"],
+    limit:       -1,
   },
   professional: {
     id:          "professional",
-    name:        "Professional",
-    nameAr:      "الاحترافية",
-    priceEGP:    { monthly: 199,  yearly: 1590 },
-    priceUSD:    { monthly: 4,    yearly: 32 },
+    name:        "Growth",
+    nameAr:      "جروث",
+    priceEGP:    { monthly: 6999, yearly: 67190 },
+    priceUSD:    { monthly: 199,  yearly: 1910 },
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_PRO_YEARLY  || "",
     },
     color:       "#0ea5e9",
     popular:     true,
-    features:    ["Everything in Standard", "Unlimited sessions", "Wrist & RSI detection", "3D head pose", "Slack/Teams alerts", "Monthly HR report", "Priority support"],
-    featuresAr:  ["كل ما في الأساسية", "جلسات غير محدودة", "كشف RSI والمعصم", "وضع الرأس ثلاثي الأبعاد", "تنبيهات Slack/Teams", "تقرير HR شهري", "دعم أولوية"],
+    features:    ["Everything in Starter", "FaceMesh 478 landmarks", "3D solvePnP head pose", "Iris IPD precision", "Spine + shoulder analysis", "Advanced HR analytics", "Clinical PDF + 3D", "100 employees", "Priority support"],
+    featuresAr:  ["كل مزايا ستارتر", "كشف 478 نقطة FaceMesh", "وضع رأس 3D solvePnP", "دقة IPD بالقزحية", "تحليل العمود الفقري والكتف", "تحليلات HR متقدمة", "تقرير PDF سريري + 3D", "100 موظف", "دعم أولوية"],
     limit:       -1,
   },
   elite: {
     id:          "elite",
-    name:        "Elite",
-    nameAr:      "النخبة",
-    priceEGP:    { monthly: 399,  yearly: 3190 },
-    priceUSD:    { monthly: 8,    yearly: 64 },
+    name:        "Enterprise",
+    nameAr:      "إنتربرايز",
+    priceEGP:    { monthly: null, yearly: null },
+    priceUSD:    { monthly: null, yearly: null, startingAt: 499 },
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_ELITE_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_ELITE_YEARLY  || "",
     },
-    color:       "#8b5cf6",
-    features:    ["Everything in Professional", "Gemini AI analysis", "AI Posture Coach chat", "Eye strain detection", "Posture heatmaps", "Gamification & XP", "Department isolation", "Webhook integrations", "API access"],
-    featuresAr:  ["كل ما في الاحترافية", "تحليل Gemini AI", "محادثة مع مدرب AI", "كشف إجهاد العيون", "خرائط الوضعية الحرارية", "الإنجازات والـ XP", "عزل الأقسام", "تكاملات Webhook", "وصول API"],
-    limit:       -1,
-  },
-  enterprise: {
-    id:          "enterprise",
-    name:        "Enterprise",
-    nameAr:      "المؤسسات",
-    priceEGP:    { monthly: null, yearly: null },
-    priceUSD:    { monthly: null, yearly: null },
-    stripePriceId: { monthly: "", yearly: "" },
     color:       "#10b981",
-    features:    ["Everything in Elite", "Unlimited employees", "SAML SSO / Azure AD", "Custom webhooks", "Dedicated support", "SLA guarantee", "Data residency", "White-label option", "Custom contracts"],
-    featuresAr:  ["كل ما في النخبة", "موظفون غير محدودون", "SAML SSO / Azure AD", "Webhooks مخصصة", "دعم مخصص", "ضمان SLA", "استضافة داخل مصر", "خيار white-label", "عقود مخصصة"],
+    features:    ["Everything in Growth", "Gemini AI clinical narrative", "Unlimited employees", "White-label branding", "Custom SLA", "API access", "SSO/SAML", "Dedicated success manager"],
+    featuresAr:  ["كل مزايا جروث", "تحليل سردي بالـ Gemini AI", "موظفون غير محدودون", "علامة تجارية White-label", "ضمان SLA مخصص", "وصول API", "SSO/SAML", "مدير نجاح مخصص"],
     limit:       -1,
   },
 };
@@ -95,7 +85,7 @@ export async function createStripeCheckout({ planId, billing, userEmail, userId,
       throw new Error("Standard plan is free — no payment required");
     }
     if (planId === "enterprise") {
-      throw new Error("Enterprise plan requires a custom contract — contact sales@postureai.io");
+      throw new Error("Enterprise plan requires a custom contract — contact sales@corvus.io");
     }
     throw new Error(
       `Stripe price ID not configured for ${planId}/${billing}. ` +
@@ -150,8 +140,8 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   const DARK  = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
 
   const T = {
-    en: { title: "Choose your plan", billing: "Billing", monthly: "Monthly", yearly: "Yearly", save: "Save 33%", current: "Current plan", upgrade: "Upgrade", downgrade: "Downgrade", contact: "Contact sales", free: "Free forever", perMonth: "/mo", perYear: "/yr", stripeNote: "Secure payment via Stripe — cancel anytime", paymobNote: "Secure payment via PayMob — Egypt cards & wallets", or: "or pay with" },
-    ar: { title: "اختر خطتك", billing: "الفوترة", monthly: "شهري", yearly: "سنوي", save: "وفر 33%", current: "خطتك الحالية", upgrade: "ترقية", downgrade: "تخفيض", contact: "تواصل مع المبيعات", free: "مجاني للأبد", perMonth: "/شهر", perYear: "/سنة", stripeNote: "دفع آمن عبر Stripe — إلغاء في أي وقت", paymobNote: "دفع آمن عبر PayMob — بطاقات ومحافظ مصرية", or: "أو ادفع بـ" },
+    en: { title: "Choose your plan", billing: "Billing", monthly: "Monthly", yearly: "Yearly", save: "Save 20%", current: "Current plan", upgrade: "Upgrade", downgrade: "Downgrade", contact: "Contact sales", free: "Free forever", perMonth: "/mo", perYear: "/yr", stripeNote: "Secure payment via Stripe — cancel anytime", paymobNote: "Secure payment via PayMob — Egypt cards & wallets", or: "or pay with" },
+    ar: { title: "اختر خطتك", billing: "الفوترة", monthly: "شهري", yearly: "سنوي", save: "وفر 20%", current: "خطتك الحالية", upgrade: "ترقية", downgrade: "تخفيض", contact: "تواصل مع المبيعات", free: "مجاني للأبد", perMonth: "/شهر", perYear: "/سنة", stripeNote: "دفع آمن عبر Stripe — إلغاء في أي وقت", paymobNote: "دفع آمن عبر PayMob — بطاقات ومحافظ مصرية", or: "أو ادفع بـ" },
   };
   const t = T[lang] || T.en;
 
@@ -223,7 +213,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
         <div style={{ padding: "22px 24px 16px", borderBottom: `0.5px solid ${DARK.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 17, fontWeight: 700, color: DARK.text }}>{t.title}</div>
-            <div style={{ fontSize: 11, color: DARK.muted, marginTop: 2 }}>PostureAI Pro</div>
+            <div style={{ fontSize: 11, color: DARK.muted, marginTop: 2 }}>Corvus</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             {/* Currency toggle */}
@@ -250,8 +240,8 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
             const plan   = PLANS[planId];
             const price  = currency === "USD" ? plan.priceUSD[billing] : plan.priceEGP[billing];
             const isCurr = currentPlan === planId;
-            const isEnt  = planId === "enterprise";
-            const isFree = planId === "standard";
+            const isEnt  = planId === "elite"; // Elite tier = Enterprise, custom pricing
+            const isFree = false; // No free tier — Starter is the entry-level paid plan
             const name   = isAr ? plan.nameAr : plan.name;
             const feats  = isAr ? plan.featuresAr : plan.features;
             const col    = plan.color;
@@ -276,7 +266,14 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                   {isFree ? (
                     <span style={{ fontSize: 22, fontWeight: 700, color: DARK.text }}>{t.free}</span>
                   ) : isEnt ? (
-                    <span style={{ fontSize: 18, fontWeight: 700, color: col }}>{isAr ? "حسب الطلب" : "Custom"}</span>
+                    <div>
+                      <span style={{ fontSize: 18, fontWeight: 700, color: col }}>{isAr ? "حسب الطلب" : "Custom"}</span>
+                      {plan.priceUSD?.startingAt && (
+                        <div style={{ fontSize: 10, color: DARK.muted, marginTop: 3 }}>
+                          {isAr ? `يبدأ من $${plan.priceUSD.startingAt}/شهر` : `Starting at $${plan.priceUSD.startingAt}/mo`}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <>
                       <span style={{ fontSize: 28, fontWeight: 800, color: DARK.text }}>{price?.toLocaleString()}</span>
@@ -302,7 +299,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                     {isAr ? "الاستمرار مجاناً" : "Continue free"}
                   </button>
                 ) : isEnt ? (
-                  <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL || "sales@postureai.io"}?subject=Enterprise%20Inquiry`} style={{ display: "block", width: "100%", background: col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
+                  <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL || "sales@corvus.io"}?subject=Enterprise%20Inquiry`} style={{ display: "block", width: "100%", background: col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
                     {t.contact}
                   </a>
                 ) : isCurr ? (

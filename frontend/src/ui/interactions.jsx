@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Micro-interactions & Animations v1.0
+ * Corvus — Micro-interactions & Animations v1.0
  * Transitions · Hover states · Success animations · Confetti achievements
  */
 import { useState, useEffect, useRef, useCallback } from "react";

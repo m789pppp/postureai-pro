@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Design System v1
+ * Corvus — Design System v1
  * Single source of truth for all UI tokens
  * Import: import { DS, Comp } from "./DesignSystem.js"
  */

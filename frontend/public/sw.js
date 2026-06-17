@@ -1,7 +1,7 @@
-// PostureAI Pro — Service Worker v4 — Full PWA + Offline Support
-const CACHE_VER   = "postureai-v4";
+// Corvus — Service Worker v4 — Full PWA + Offline Support
+const CACHE_VER   = "corvus-v4";
 const MP_CACHE    = "mediapipe-v3";
-const DATA_CACHE  = "postureai-data-v2";
+const DATA_CACHE  = "corvus-data-v2";
 
 const SHELL = [
   "/", "/index.html", "/manifest.json",
@@ -102,11 +102,11 @@ async function syncOfflineSessions() {
 self.addEventListener("push", e => {
   const data = e.data?.json() || {};
   e.waitUntil(
-    self.registration.showNotification(data.title || "PostureAI Pro", {
+    self.registration.showNotification(data.title || "Corvus", {
       body:    data.body || "Time to check your posture!",
       icon:    "/icon-192.png",
       badge:   "/icon-192.png",
-      tag:     data.tag || "postureai",
+      tag:     data.tag || "corvus",
       data:    { url: data.url || "/" },
       actions: [
         { action: "open",   title: "Open app" },

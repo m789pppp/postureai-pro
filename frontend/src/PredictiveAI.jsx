@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Predictive AI Engine v1.0
+ * Corvus — Predictive AI Engine v1.0
  * Burnout prediction · Anomaly detection
  * Posture risk scoring · Trend forecasting
  */
@@ -192,7 +192,7 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
     (anomalies.filter(a => a.direction === "low").length * 5)
   ));
 
-  const system = `You are PostureAI's Predictive Intelligence engine. You analyze posture and ergonomics data to generate predictive health insights.
+  const system = `You are Corvus's Predictive Intelligence engine. You analyze posture and ergonomics data to generate predictive health insights.
 Respond in ${lang === "ar" ? "Arabic" : "English"}. Use markdown formatting. Be concise, data-driven, and actionable. Max 200 words per response.`;
 
   const prompts = {

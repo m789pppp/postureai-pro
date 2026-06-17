@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Gunicorn Configuration
+Corvus — Gunicorn Configuration
 Optimized for Railway/Render deployment with Redis session store.
 """
 import os
@@ -32,11 +32,11 @@ loglevel    = os.getenv("LOG_LEVEL", "info")
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s %(D)sμs'
 
 # ── Process Name ───────────────────────────────────────────────────
-proc_name = "postureai-web"
+proc_name = "corvus-web"
 
 # ── Pre-fork hooks ─────────────────────────────────────────────────
 def on_starting(server):
-    print(f"🚀 PostureAI starting: {workers} workers on :{port}")
+    print(f"🚀 Corvus starting: {workers} workers on :{port}")
 
 def worker_exit(server, worker):
     print(f"Worker {worker.pid} exited")

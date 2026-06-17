@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — In-App Help Center
+ * Corvus — In-App Help Center
  * FAQ + quick start guides, bilingual AR/EN
  * No external deps — pure React with search
  */
@@ -17,8 +17,8 @@ const FAQ = [
     category: "score",       category_ar: "النتيجة",
     q_en: "How is my posture score calculated?",
     q_ar: "كيف تُحسب نتيجة وضعيتي؟",
-    a_en: "PostureAI uses 33 body landmarks and 478 face landmarks detected by our AI. It measures: shoulder alignment (30%), head angle (25%), spine curve (25%), and eye fatigue (20%). 100 = perfect, 0 = very poor.",
-    a_ar: "يستخدم PostureAI 33 نقطة في الجسم و478 نقطة في الوجه. يقيس: محاذاة الكتفين (30٪)، زاوية الرأس (25٪)، انحناء العمود الفقري (25٪)، وتعب العينين (20٪).",
+    a_en: "Corvus uses 33 body landmarks and 478 face landmarks detected by our AI. It measures: shoulder alignment (30%), head angle (25%), spine curve (25%), and eye fatigue (20%). 100 = perfect, 0 = very poor.",
+    a_ar: "يستخدم Corvus 33 نقطة في الجسم و478 نقطة في الوجه. يقيس: محاذاة الكتفين (30٪)، زاوية الرأس (25٪)، انحناء العمود الفقري (25٪)، وتعب العينين (20٪).",
   },
   {
     category: "billing",     category_ar: "الفواتير",
@@ -36,10 +36,10 @@ const FAQ = [
   },
   {
     category: "privacy",     category_ar: "الخصوصية",
-    q_en: "Does PostureAI record or store my video?",
-    q_ar: "هل يسجل PostureAI أو يحفظ الفيديو الخاص بي؟",
-    a_en: "No. PostureAI processes your camera feed locally in your browser. We only send anonymized posture scores and measurements to our servers — never video or images.",
-    a_ar: "لا. يعالج PostureAI صورة الكاميرا محلياً في متصفحك. نرسل فقط نتائج وضعية الجسم المجهولة — وليس الفيديو أو الصور أبداً.",
+    q_en: "Does Corvus record or store my video?",
+    q_ar: "هل يسجل Corvus أو يحفظ الفيديو الخاص بي؟",
+    a_en: "No. Corvus processes your camera feed locally in your browser. We only send anonymized posture scores and measurements to our servers — never video or images.",
+    a_ar: "لا. يعالج Corvus صورة الكاميرا محلياً في متصفحك. نرسل فقط نتائج وضعية الجسم المجهولة — وليس الفيديو أو الصور أبداً.",
   },
   {
     category: "enterprise",  category_ar: "المؤسسات",
@@ -50,10 +50,10 @@ const FAQ = [
   },
   {
     category: "enterprise",  category_ar: "المؤسسات",
-    q_en: "Does PostureAI support Single Sign-On (SSO)?",
-    q_ar: "هل يدعم PostureAI تسجيل الدخول الموحد SSO؟",
-    a_en: "Yes. PostureAI supports Google Workspace, Microsoft Azure AD, Okta, and custom OIDC/SAML providers. Contact your account manager or go to Settings → Security → SSO Configuration.",
-    a_ar: "نعم. يدعم PostureAI Google Workspace، Microsoft Azure AD، Okta، ومزودي OIDC/SAML المخصصين. تواصل مع مدير حسابك أو اذهب إلى الإعدادات ← الأمان ← إعداد SSO.",
+    q_en: "Does Corvus support Single Sign-On (SSO)?",
+    q_ar: "هل يدعم Corvus تسجيل الدخول الموحد SSO؟",
+    a_en: "Yes. Corvus supports Google Workspace, Microsoft Azure AD, Okta, and custom OIDC/SAML providers. Contact your account manager or go to Settings → Security → SSO Configuration.",
+    a_ar: "نعم. يدعم Corvus Google Workspace، Microsoft Azure AD، Okta، ومزودي OIDC/SAML المخصصين. تواصل مع مدير حسابك أو اذهب إلى الإعدادات ← الأمان ← إعداد SSO.",
   },
   {
     category: "ai",          category_ar: "الذكاء الاصطناعي",
@@ -116,7 +116,7 @@ export function HelpCenter({ cs, lang, onClose }) {
         {/* FAQ items */}
         {filtered.length === 0 && (
           <p style={{color:"#475569",textAlign:"center",padding:24}}>
-            {isAr ? "لا توجد نتائج" : "No results found"} — <a href="mailto:support@postureai.io" style={{color:"#6366f1"}}>Contact support</a>
+            {isAr ? "لا توجد نتائج" : "No results found"} — <a href="mailto:support@corvus.io" style={{color:"#6366f1"}}>Contact support</a>
           </p>
         )}
 
@@ -142,7 +142,7 @@ export function HelpCenter({ cs, lang, onClose }) {
           <p style={{margin:"0 0 10px",color:"#94a3b8",fontSize:13}}>
             {isAr ? "لم تجد إجابتك؟" : "Didn't find what you need?"}
           </p>
-          <a href="mailto:support@postureai.io"
+          <a href="mailto:support@corvus.io"
              style={{padding:"9px 20px",borderRadius:8,background:"#6366f1",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:600}}>
             {isAr ? "تواصل مع الدعم ←" : "Contact Support →"}
           </a>

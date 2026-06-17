@@ -1,6 +1,6 @@
 import React from "react";
 /**
- * PostureAI Pro — Observability & Advanced Detection
+ * Corvus — Observability & Advanced Detection
  * 1. Sentry error monitoring (frontend)
  * 2. RSI / Wrist / Elbow detection
  * 3. Multi-person detection (MediaPipe Holistic multi-pose)
@@ -20,7 +20,7 @@ export async function initSentry() {
     Sentry.init({
       dsn:         SENTRY_DSN,
       environment: import.meta.env.MODE || "production",
-      release:     `postureai@${import.meta.env.VITE_APP_VERSION || "27.0.0"}`,
+      release:     `corvus@${import.meta.env.VITE_APP_VERSION || "27.0.0"}`,
       tracesSampleRate: 0.1,
       beforeSend(event) {
         // Strip PII
@@ -41,7 +41,7 @@ export function captureError(err, context = {}) {
       window.__sentry.captureException(err);
     });
   } else {
-    console.error("[PostureAI Error]", err, context);
+    console.error("[Corvus Error]", err, context);
   }
 }
 

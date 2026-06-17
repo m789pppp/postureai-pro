@@ -1,5 +1,5 @@
 /**
- * MultiTenantManager.jsx — PostureAI Phase 12
+ * MultiTenantManager.jsx — Corvus Phase 12
  * Manage all tenants/organizations from one super-admin panel
  */
 import { useState, useMemo } from "react";
@@ -27,10 +27,10 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [tab, setTab] = useState("tenants");
   const [actionLog, setActionLog] = useState([
-    { id:1, ts:"2026-06-02 08:14", tenant:"Acme Corp",    action:"Seat limit increased 200→240",  by:"admin@postureai.com" },
+    { id:1, ts:"2026-06-02 08:14", tenant:"Acme Corp",    action:"Seat limit increased 200→240",  by:"admin@corvus.com" },
     { id:2, ts:"2026-06-01 17:33", tenant:"MediCare Plus",action:"Tenant suspended (payment fail)",by:"billing-bot" },
-    { id:3, ts:"2026-06-01 11:20", tenant:"HealthFirst",  action:"Plan upgraded scale→enterprise", by:"admin@postureai.com" },
-    { id:4, ts:"2026-05-31 09:05", tenant:"StartupXYZ",  action:"Trial extended 14 days",         by:"admin@postureai.com" },
+    { id:3, ts:"2026-06-01 11:20", tenant:"HealthFirst",  action:"Plan upgraded scale→enterprise", by:"admin@corvus.com" },
+    { id:4, ts:"2026-05-31 09:05", tenant:"StartupXYZ",  action:"Trial extended 14 days",         by:"admin@corvus.com" },
   ]);
 
   const filtered = useMemo(() => {

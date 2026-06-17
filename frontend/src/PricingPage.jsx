@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — PricingPage v5.0
+ * Corvus — PricingPage v5.0
  * Positioning: "AI Workforce Intelligence Platform"
  * Focus: ROI · productivity · workforce intelligence
  */
@@ -11,7 +11,7 @@ const PLANS = [
     id: "standard",
     name: { en: "Starter", ar: "ستارتر" },
     tagline: { en: "Teams getting started with workforce health", ar: "فرق تبدأ في إدارة صحة القوى العاملة" },
-    price: { monthly: 1990, yearly: 19900 },
+    price: { monthly: 2499, yearly: 23990 },
     color: "#6366f1",
     seats: 25,
     badge: null,
@@ -43,7 +43,7 @@ const PLANS = [
     id: "professional",
     name: { en: "Growth", ar: "جروث" },
     tagline: { en: "For HR teams serious about workforce ROI", ar: "لفرق HR الجادة في عائد الاستثمار" },
-    price: { monthly: 4990, yearly: 49900 },
+    price: { monthly: 6999, yearly: 67190 },
     color: "#1a56db",
     seats: 100,
     badge: { en: "Most Popular", ar: "الأكثر طلباً" },
@@ -73,63 +73,33 @@ const PLANS = [
   },
   {
     id: "elite",
-    name: { en: "Business", ar: "بيزنس" },
-    tagline: { en: "Enterprise-grade workforce intelligence", ar: "ذكاء قوى عاملة على مستوى المؤسسات" },
-    price: { monthly: 14990, yearly: 149900 },
-    color: "#10b981",
-    seats: 500,
-    badge: { en: "Enterprise", ar: "مؤسسات" },
-    features: {
-      en: [
-        "500 employees",
-        "Custom AI workforce models",
-        "Department comparison analytics",
-        "C-suite ROI dashboards",
-        "API + Webhooks",
-        "White-label reporting option",
-        "Dedicated success manager",
-        "Custom SLA guarantee",
-      ],
-      ar: [
-        "500 موظف",
-        "نماذج AI مخصصة للقوى العاملة",
-        "تحليلات مقارنة الأقسام",
-        "لوحات ROI للإدارة العليا",
-        "API + Webhooks",
-        "خيار تقارير White-label",
-        "مدير نجاح مخصص",
-        "ضمان SLA مخصص",
-      ],
-    },
-    roi: { en: "Full 3–5× ROI guarantee within 6 months", ar: "ضمان 3-5 أضعاف ROI خلال 6 أشهر" },
-  },
-  {
-    id: "enterprise",
     name: { en: "Enterprise", ar: "إنتربرايز" },
     tagline: { en: "For large organisations & global teams", ar: "للمنظمات الكبرى والفرق العالمية" },
-    price: { monthly: null, yearly: null },
-    color: "#f59e0b",
+    price: { monthly: null, yearly: null, startingUsd: 499 },
+    color: "#10b981",
     seats: -1,
     badge: { en: "Custom", ar: "مخصص" },
     features: {
       en: [
         "Unlimited employees",
+        "Everything in Growth",
+        "Gemini AI clinical narrative",
         "SSO / SAML / Azure AD / Okta",
-        "Custom AI models & training",
-        "Full white-label platform",
-        "HIPAA + data residency options",
-        "Dedicated implementation team",
-        "Board-ready ROI reporting",
+        "White-label branding",
+        "API + Webhooks access",
+        "Dedicated success manager",
+        "Custom SLA guarantee",
         "24/7 dedicated support",
       ],
       ar: [
         "موظفون غير محدودون",
+        "كل مزايا Growth",
+        "تحليل سردي بالـ Gemini AI",
         "SSO / SAML / Azure AD / Okta",
-        "نماذج AI مخصصة وتدريب",
-        "منصة White-label كاملة",
-        "HIPAA + خيارات إقامة البيانات",
-        "فريق تنفيذ مخصص",
-        "تقارير ROI جاهزة للمجلس",
+        "علامة تجارية White-label",
+        "وصول API + Webhooks",
+        "مدير نجاح مخصص",
+        "ضمان SLA مخصص",
         "دعم مخصص 24/7",
       ],
     },
@@ -137,39 +107,43 @@ const PLANS = [
   },
 ];
 
+// Individual plans use the SAME ids & prices as company plans (single source of truth —
+// see TIERS in App.jsx). Only taglines/features differ to speak to a solo user vs HR buyer.
 const B2C_PLANS = [
   {
-    id: "free",
-    name: { en: "Free", ar: "مجاني" },
-    tagline: { en: "Get started, no commitment", ar: "ابدأ بلا التزامات" },
-    price: { monthly: 0, yearly: 0 },
+    id: "standard",
+    name: { en: "Starter", ar: "ستارتر" },
+    tagline: { en: "For individuals getting started", ar: "للأفراد المبتدئين" },
+    price: { monthly: 2499, yearly: 23990 },
     color: "#6366f1",
+    badge: null,
     features: {
-      en: ["5 sessions/month", "Real-time posture score", "7-day history", "Basic analytics"],
-      ar: ["5 جلسات/شهر", "نقاط الوضعية الآنية", "سجل 7 أيام", "تحليلات أساسية"],
+      en: ["Unlimited sessions", "Real-time posture score", "33-landmark detection", "PDF wellness reports", "7-day free trial", "Email support"],
+      ar: ["جلسات غير محدودة", "نقاط الوضعية الآنية", "كشف 33 نقطة", "تقارير PDF صحية", "تجربة مجانية 7 أيام", "دعم بالبريد"],
     },
   },
   {
     id: "professional",
-    name: { en: "Professional", ar: "بروفيشنال" },
-    tagline: { en: "For serious remote workers", ar: "للعاملين عن بُعد بجدية" },
-    price: { monthly: 499, yearly: 4990 },
+    name: { en: "Growth", ar: "جروث" },
+    tagline: { en: "For serious remote professionals", ar: "للمحترفين الجادين عن بُعد" },
+    price: { monthly: 6999, yearly: 67190 },
     color: "#1a56db",
     badge: { en: "Most Popular", ar: "الأكثر طلباً" },
     features: {
-      en: ["Unlimited sessions", "AI Posture Coach (Claude)", "Fatigue index", "Burnout tracking", "PDF wellness reports", "Priority support"],
-      ar: ["جلسات غير محدودة", "مدرب AI للوضعية (Claude)", "مؤشر الإرهاق", "تتبع الإنهاك", "تقارير PDF صحية", "دعم أولوية"],
+      en: ["Everything in Starter", "AI Posture Coach", "Fatigue index", "Burnout tracking", "478-landmark FaceMesh", "Priority support"],
+      ar: ["كل مزايا ستارتر", "مدرب AI للوضعية", "مؤشر الإرهاق", "تتبع الإنهاك", "كشف 478 نقطة FaceMesh", "دعم أولوية"],
     },
   },
   {
     id: "elite",
-    name: { en: "Elite", ar: "إيليت" },
-    tagline: { en: "Full intelligence stack", ar: "حزمة الذكاء الكاملة" },
-    price: { monthly: 999, yearly: 9990 },
+    name: { en: "Enterprise", ar: "إنتربرايز" },
+    tagline: { en: "Full intelligence stack, custom pricing", ar: "حزمة الذكاء الكاملة، سعر مخصص" },
+    price: { monthly: null, yearly: null, startingUsd: 499 },
     color: "#10b981",
+    badge: { en: "Custom", ar: "مخصص" },
     features: {
-      en: ["Everything in Professional", "Predictive burnout AI", "7-day performance forecast", "AI executive summaries", "API access"],
-      ar: ["كل مزايا Professional", "AI تنبؤي للإرهاق", "توقع أداء 7 أيام", "ملخصات تنفيذية بالـ AI", "وصول API"],
+      en: ["Everything in Growth", "Gemini AI clinical narrative", "Predictive burnout AI", "API access", "Dedicated support"],
+      ar: ["كل مزايا جروث", "تحليل سردي بالـ Gemini AI", "AI تنبؤي للإرهاق", "وصول API", "دعم مخصص"],
     },
   },
 ];
@@ -236,7 +210,14 @@ function PlanCard({ plan, billing, lang, cs, currentPlan, onSelect, onContact })
       {/* Price */}
       <div style={{ marginBottom: 20 }}>
         {isEnterprise ? (
-          <div style={{ fontFamily: "Syne,sans-serif", fontSize: 24, fontWeight: 800, color: cs.text }}>{isAr ? "تواصل معنا" : "Custom"}</div>
+          <div>
+            <div style={{ fontFamily: "Syne,sans-serif", fontSize: 24, fontWeight: 800, color: cs.text }}>{isAr ? "تواصل معنا" : "Custom"}</div>
+            {plan.price?.startingUsd && (
+              <div style={{ fontSize: 11, color: cs.muted, marginTop: 3 }}>
+                {isAr ? `يبدأ من $${plan.price.startingUsd}/شهر` : `Starting at $${plan.price.startingUsd}/mo`}
+              </div>
+            )}
+          </div>
         ) : price === 0 ? (
           <div style={{ fontFamily: "Syne,sans-serif", fontSize: 34, fontWeight: 800, color: cs.text }}>{isAr ? "مجاني" : "Free"}</div>
         ) : (
@@ -248,7 +229,7 @@ function PlanCard({ plan, billing, lang, cs, currentPlan, onSelect, onContact })
         )}
         {billing === "yearly" && !isEnterprise && price > 0 && (
           <div style={{ fontSize: 10, color: "#10b981", fontWeight: 600, marginTop: 4 }}>
-            {isAr ? "✓ وفّر 17% سنوياً" : "✓ Save 17% annually"}
+            {isAr ? "✓ وفّر 20% سنوياً (شهرين مجاناً)" : "✓ Save 20% annually (2 months free)"}
           </div>
         )}
       </div>
@@ -293,10 +274,15 @@ function PlanCard({ plan, billing, lang, cs, currentPlan, onSelect, onContact })
   );
 }
 
-export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onBack, cs: csProp }) {
+export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, onBack, cs: csProp }) {
   const [billing, setBilling] = useState("monthly");
   const [seg, setSeg]         = useState("b2b");
   const isAr  = lang === "ar";
+  // App.jsx passes onSelectPlan(planId, billing) — support both prop names safely
+  const handleSelect = (planId) => {
+    if (onSelectPlan) onSelectPlan(planId, billing);
+    else if (onSelect) onSelect(planId, billing);
+  };
 
   const D = { bg:"#030812", surf:"#060e1c", card:"#0a1428", border:"rgba(148,163,184,.08)", borderH:"rgba(148,163,184,.2)", text:"#eef2ff", sub:"#94a3b8", muted:"#475569" };
   const L = { bg:"#f8faff", surf:"#f0f4ff", card:"#ffffff", border:"rgba(15,23,42,.07)", borderH:"rgba(15,23,42,.18)", text:"#0f172a", sub:"#334155", muted:"#64748b" };
@@ -305,7 +291,7 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onBa
   const plans = seg === "b2b" ? PLANS : B2C_PLANS;
 
   const handleContact = () => {
-    window.open(`mailto:${SUPPORT_EMAIL}?subject=Enterprise Inquiry — PostureAI Workforce Intelligence`, "_blank");
+    window.open(`mailto:${SUPPORT_EMAIL}?subject=Enterprise Inquiry — Corvus Workforce Intelligence`, "_blank");
   };
 
   return (
@@ -377,7 +363,7 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onBa
           <PlanCard
             key={plan.id} plan={plan} billing={billing} lang={lang}
             cs={cs} currentPlan={currentPlan}
-            onSelect={onSelect} onContact={handleContact}
+            onSelect={handleSelect} onContact={handleContact}
           />
         ))}
       </div>

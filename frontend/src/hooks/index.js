@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Custom React Hooks v2
+ * Corvus — Custom React Hooks v2
  * All reusable hooks — auth, toasts, online, keyboard, storage, debounce, idle
  */
 import { useState, useEffect, useRef, useCallback } from "react";

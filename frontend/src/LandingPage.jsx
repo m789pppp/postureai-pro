@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Landing Page v6
+ * Corvus — Landing Page v6
  * Phase 6: Conversion-optimised · Enterprise-grade
  * Sections: Navbar → Hero → Social Proof Bar → Stats → Live Demo Preview
  *           → Case Studies → B2B Features → B2C Features
@@ -7,7 +7,7 @@
  */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
-const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "sales@postureai.io";
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "sales@corvus.io";
 const ADMIN_PHONE   = import.meta.env.VITE_ADMIN_PHONE   || "+20 100 000 0000";
 const APP_URL       = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -116,7 +116,7 @@ const COPY = {
       { n:"31",  sfx:"%", label:"Reduction in sick leave within 90 days" },
       { n:"18",  pfx:"$",sfx:"K", label:"Average annual cost per injured employee — eliminated" },
       { n:"40",  sfx:"%", label:"Productivity recovered from MSK absenteeism" },
-      { n:"500", sfx:"+", label:"Companies and teams across MENA trust PostureAI" },
+      { n:"500", sfx:"+", label:"Companies and teams across MENA trust Corvus" },
     ],
     demo: {
       eyebrow: "LIVE PLATFORM PREVIEW",
@@ -141,7 +141,7 @@ const COPY = {
           metric1:{ n:"31%", label:"Sick leave reduction" },
           metric2:{ n:"$420K", label:"Annual healthcare savings" },
           metric3:{ n:"22%", label:"Productivity improvement" },
-          quote:"PostureAI's burnout detection flagged three engineers at risk 6 weeks before we'd have seen it in HR data. That alone saved us two re-hiring cycles.",
+          quote:"Corvus's burnout detection flagged three engineers at risk 6 weeks before we'd have seen it in HR data. That alone saved us two re-hiring cycles.",
           person:"Ahmed Mostafa, HR Director",
         },
         {
@@ -230,12 +230,12 @@ const COPY = {
       { q:"Does it integrate with our HRIS and communication tools?",
         a:"Yes — Slack, Teams, WhatsApp, and webhook-based integration with any HRIS. Enterprise plans include SSO/SAML, Azure AD, Okta, and Google Workspace." },
       { q:"How accurate is the AI posture analysis?",
-        a:"PostureAI uses Google MediaPipe, the same AI pipeline powering Google Meet's effects. It tracks 33 body landmarks at up to 10× per second. Professional tier reaches ~93% accuracy; Elite tier ~96%." },
+        a:"Corvus uses Google MediaPipe, the same AI pipeline powering Google Meet's effects. It tracks 33 body landmarks at up to 10× per second. Professional tier reaches ~93% accuracy; Elite tier ~96%." },
     ],
     finalCta: {
       h2a:"Ready to turn workforce health",
       h2b:"into a competitive advantage?",
-      sub:"Join 500+ companies using PostureAI Pro to reduce injuries, cut sick-leave costs, and boost productivity.",
+      sub:"Join 500+ companies using Corvus to reduce injuries, cut sick-leave costs, and boost productivity.",
       cta1:"Start Free Trial →",
       cta2:"Talk to Sales",
     },
@@ -267,7 +267,7 @@ const COPY = {
       { n:"31",  sfx:"%", label:"انخفاض في الإجازات المرضية خلال 90 يوماً" },
       { n:"18",  pfx:"$",sfx:"K", label:"تكلفة الموظف المصاب سنوياً — يتم تجنبها" },
       { n:"40",  sfx:"%", label:"من الإنتاجية تُستعاد من الغياب المرتبط بالعضلات" },
-      { n:"500", sfx:"+", label:"شركة وفريق عبر الشرق الأوسط يثقون بـ PostureAI" },
+      { n:"500", sfx:"+", label:"شركة وفريق عبر الشرق الأوسط يثقون بـ Corvus" },
     ],
     demo: {
       eyebrow: "معاينة المنصة المباشرة",
@@ -292,7 +292,7 @@ const COPY = {
           metric1:{ n:"31%", label:"انخفاض الإجازات المرضية" },
           metric2:{ n:"$420K", label:"وفورات الرعاية الصحية سنوياً" },
           metric3:{ n:"22%", label:"تحسن الإنتاجية" },
-          quote:"كشف نظام رصد الإرهاق لدى PostureAI عن 3 مهندسين في خطر قبل 6 أسابيع من أن نلاحظ ذلك في بيانات الموارد البشرية. هذا وحده وفّر علينا دورتَي توظيف كاملتين.",
+          quote:"كشف نظام رصد الإرهاق لدى Corvus عن 3 مهندسين في خطر قبل 6 أسابيع من أن نلاحظ ذلك في بيانات الموارد البشرية. هذا وحده وفّر علينا دورتَي توظيف كاملتين.",
           person:"أحمد مصطفى، مدير الموارد البشرية",
         },
         {
@@ -381,12 +381,12 @@ const COPY = {
       { q:"هل يتكامل مع أنظمة الموارد البشرية وأدوات التواصل؟",
         a:"نعم — Slack وTeams وWhatsApp وتكامل Webhook مع أي نظام موارد بشرية. خطط المؤسسات تشمل SSO/SAML وAzure AD وOkta." },
       { q:"ما مدى دقة تحليل الوضعية بالذكاء الاصطناعي؟",
-        a:"يستخدم PostureAI Google MediaPipe لتتبع 33 نقطة في الجسم بمعدل 10 مرات في الثانية. الخطة الاحترافية تصل لـ 93% دقة؛ والإيليت 96%." },
+        a:"يستخدم Corvus Google MediaPipe لتتبع 33 نقطة في الجسم بمعدل 10 مرات في الثانية. الخطة الاحترافية تصل لـ 93% دقة؛ والإيليت 96%." },
     ],
     finalCta: {
       h2a:"جاهز لتحويل صحة القوى العاملة",
       h2b:"إلى ميزة تنافسية؟",
-      sub:"انضم لأكثر من 500 شركة تستخدم PostureAI Pro لتقليل التكاليف وزيادة الإنتاجية.",
+      sub:"انضم لأكثر من 500 شركة تستخدم Corvus لتقليل التكاليف وزيادة الإنتاجية.",
       cta1:"ابدأ التجربة المجانية ←",
       cta2:"تحدث مع المبيعات",
     },
@@ -670,7 +670,7 @@ function DemoPreview({ demo, isAr }) {
             background: "rgba(255,255,255,.04)", borderRadius: 6,
             padding: "3px 14px", fontSize: 11, color: D.muted,
           }}>
-            🔒 app.postureai.io/dashboard
+            🔒 app.corvus.io/dashboard
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -858,7 +858,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             boxShadow: navScrolled ? `0 0 14px rgba(99,102,241,.3)` : "none",
           }}>◈</div>
           <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.025em" }}>
-            PostureAI <span style={{ color: D.blue }}>Pro</span>
+            Corvus <span style={{ color: D.blue }}>Pro</span>
           </span>
         </div>
 
@@ -1463,8 +1463,8 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                 icon:"📷",
                 en_title:"Allow Camera Access",
                 ar_title:"اسمح بالوصول للكاميرا",
-                en_desc:"One-click permission. PostureAI uses your existing webcam — no account, no hardware, no app install. Works on any modern browser.",
-                ar_desc:"إذن بنقرة واحدة. يستخدم PostureAI كاميرا الويب الموجودة — لا تثبيت، لا أجهزة.",
+                en_desc:"One-click permission. Corvus uses your existing webcam — no account, no hardware, no app install. Works on any modern browser.",
+                ar_desc:"إذن بنقرة واحدة. يستخدم Corvus كاميرا الويب الموجودة — لا تثبيت، لا أجهزة.",
                 color:"#6366f1",
               },
               {
@@ -1636,7 +1636,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%",
                 background: D.green, boxShadow: `0 0 6px ${D.green}` }}/>
-              {isAr ? "500+ شركة تثق بنا الآن" : "500+ companies trust PostureAI"}
+              {isAr ? "500+ شركة تثق بنا الآن" : "500+ companies trust Corvus"}
             </div>
 
             <h2 style={{
@@ -1692,7 +1692,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                 <div style={{ width: 28, height: 28, background: D.gPrimary,
                   borderRadius: 9, display: "flex", alignItems: "center",
                   justifyContent: "center", fontSize: 15 }}>◈</div>
-                <span style={{ fontSize: 15, fontWeight: 800 }}>PostureAI Pro</span>
+                <span style={{ fontSize: 15, fontWeight: 800 }}>Corvus</span>
               </div>
               <div style={{ fontSize: 11.5, color: D.muted, lineHeight: 1.6 }}>
                 {t.footer.tagline}
@@ -1719,7 +1719,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
           <div style={{ display: "flex", justifyContent: "space-between",
             alignItems: "center", flexWrap: "wrap", gap: 12 }}>
             <span style={{ fontSize: 11, color: D.muted }}>
-              © {new Date().getFullYear()} PostureAI Pro · {t.footer.rights}
+              © {new Date().getFullYear()} Corvus · {t.footer.rights}
             </span>
             <div style={{ display: "flex", gap: 16 }}>
               <button onClick={() => setLang(isAr ? "en" : "ar")} style={{

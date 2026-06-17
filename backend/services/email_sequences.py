@@ -1,5 +1,5 @@
 """
-email_sequences.py — PostureAI Phase 15
+email_sequences.py — Corvus Phase 15
 Drip email automation: welcome, activation, upsell, win-back, weekly digest
 Run with APScheduler or Celery — called from backend.py scheduler
 """
@@ -10,7 +10,7 @@ from typing import List, Optional
 import sendgrid
 from sendgrid.helpers.mail import Mail, To, DynamicTemplateData
 
-log = logging.getLogger("postureai.email")
+log = logging.getLogger("corvus.email")
 sg  = sendgrid.SendGridAPIClient(api_key=os.getenv("SENDGRID_API_KEY",""))
 
 # ── Template IDs (set in SendGrid dashboard) ─────────────────────
@@ -36,8 +36,8 @@ TEMPLATES = {
     "nps_survey":        os.getenv("SG_T_NPS",         "d-nps"),
 }
 
-FROM_EMAIL = os.getenv("EMAIL_FROM",      "noreply@postureai.com")
-FROM_NAME  = os.getenv("EMAIL_FROM_NAME", "PostureAI")
+FROM_EMAIL = os.getenv("EMAIL_FROM",      "noreply@corvus.com")
+FROM_NAME  = os.getenv("EMAIL_FROM_NAME", "Corvus")
 
 
 @dataclass
@@ -65,8 +65,8 @@ def send_email(ctx: EmailContext) -> bool:
     msg.dynamic_template_data = {
         "first_name":   ctx.to_name.split()[0],
         "plan":         ctx.plan,
-        "app_url":      "https://app.postureai.com",
-        "unsubscribe":  f"https://app.postureai.com/unsubscribe?uid={ctx.user_id}",
+        "app_url":      "https://app.corvus.com",
+        "unsubscribe":  f"https://app.corvus.com/unsubscribe?uid={ctx.user_id}",
         **ctx.data,
     }
 
@@ -227,7 +227,7 @@ def send_trial_ending(user: dict, days_left: int) -> bool:
         to_email=user["email"], to_name=user.get("name",""),
         user_id=user["uid"], plan=user.get("plan","starter"),
         template_key="trial_ending",
-        data={"days_left": days_left, "upgrade_url": "https://app.postureai.com/billing"}
+        data={"days_left": days_left, "upgrade_url": "https://app.corvus.com/billing"}
     )
     return send_email(ctx)
 
@@ -238,7 +238,7 @@ def send_nps_survey(user: dict) -> bool:
         to_email=user["email"], to_name=user.get("name",""),
         user_id=user["uid"], plan=user.get("plan","starter"),
         template_key="nps_survey",
-        data={"survey_url": f"https://app.postureai.com/nps?uid={user['uid']}"}
+        data={"survey_url": f"https://app.corvus.com/nps?uid={user['uid']}"}
     )
     return send_email(ctx)
 

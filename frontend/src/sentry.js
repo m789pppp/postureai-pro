@@ -1,5 +1,5 @@
 /**
- * sentry.js — PostureAI ULTIMATE v12
+ * sentry.js — Corvus ULTIMATE v12
  * Frontend Sentry initialization. Import once in main.jsx.
  * Set VITE_SENTRY_DSN in Vercel environment variables.
  */
@@ -16,7 +16,7 @@ export function initSentry() {
   Sentry.init({
     dsn:         DSN,
     environment: ENV,
-    release:     `postureai@${import.meta.env.__APP_VERSION__ || "unknown"}`,
+    release:     `corvus@${import.meta.env.__APP_VERSION__ || "unknown"}`,
     integrations: [
       Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({

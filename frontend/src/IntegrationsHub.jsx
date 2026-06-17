@@ -1,5 +1,5 @@
 /**
- * IntegrationsHub.jsx — PostureAI Phase 15
+ * IntegrationsHub.jsx — Corvus Phase 15
  * Native connectors: Slack, Microsoft Teams, Zapier, Make.com, Google Sheets, Webhooks
  */
 import { useState } from "react";
@@ -16,40 +16,40 @@ const INTEGRATIONS = [
       { key:"weekly",    label:"Weekly Digest",      placeholder:"",                    type:"toggle" },
       { key:"leaderboard",label:"Monthly Leaderboard",placeholder:"",                  type:"toggle" },
     ],
-    color:"#4A154B", docs:"https://docs.postureai.com/integrations/slack",
+    color:"#4A154B", docs:"https://docs.corvus.com/integrations/slack",
   },
   {
     id:"teams", name:"Microsoft Teams", icon:"🟦", category:"messaging", status:"available",
     desc:"Post posture insights and alerts directly to your Microsoft Teams channels.",
     features:["Adaptive card alerts","Weekly health summary","HR compliance reports","Direct messages to at-risk employees"],
-    setupSteps:["Add PostureAI app to your Teams","Authenticate with Microsoft","Choose target team and channel","Configure alert rules"],
+    setupSteps:["Add Corvus app to your Teams","Authenticate with Microsoft","Choose target team and channel","Configure alert rules"],
     configFields:[
       { key:"webhook_url",label:"Teams Webhook URL", placeholder:"https://outlook.office.com/webhook/...", type:"text" },
       { key:"threshold",  label:"Alert Threshold",   placeholder:"70",    type:"number" },
     ],
-    color:"#5558AF", docs:"https://docs.postureai.com/integrations/teams",
+    color:"#5558AF", docs:"https://docs.corvus.com/integrations/teams",
   },
   {
     id:"zapier", name:"Zapier", icon:"⚡", category:"automation", status:"available",
-    desc:"Connect PostureAI to 5,000+ apps. Trigger workflows on posture events without code.",
+    desc:"Connect Corvus to 5,000+ apps. Trigger workflows on posture events without code.",
     features:["Trigger on score drop","New session completed","Alert triggered","Weekly report ready","User joined org"],
-    setupSteps:["Search 'PostureAI' on Zapier","Choose a trigger event","Connect your PostureAI account","Build your Zap"],
+    setupSteps:["Search 'Corvus' on Zapier","Choose a trigger event","Connect your Corvus account","Build your Zap"],
     configFields:[
       { key:"api_key", label:"API Key", placeholder:"pak_live_...", type:"text" },
     ],
-    zapierUrl:"https://zapier.com/apps/postureai",
-    color:"#FF4A00", docs:"https://docs.postureai.com/integrations/zapier",
+    zapierUrl:"https://zapier.com/apps/corvus",
+    color:"#FF4A00", docs:"https://docs.corvus.com/integrations/zapier",
   },
   {
     id:"make", name:"Make.com", icon:"🟣", category:"automation", status:"available",
-    desc:"Visual automation scenarios for PostureAI. More powerful than Zapier for complex flows.",
+    desc:"Visual automation scenarios for Corvus. More powerful than Zapier for complex flows.",
     features:["All Zapier triggers +","Batch data processing","Multi-step scenarios","Data transformation","Error handling"],
-    setupSteps:["Install PostureAI module on Make","Add API credentials","Build your scenario"],
+    setupSteps:["Install Corvus module on Make","Add API credentials","Build your scenario"],
     configFields:[
       { key:"api_key", label:"API Key", placeholder:"pak_live_...", type:"text" },
     ],
-    makeUrl:"https://make.com/en/integrations/postureai",
-    color:"#6D00CC", docs:"https://docs.postureai.com/integrations/make",
+    makeUrl:"https://make.com/en/integrations/corvus",
+    color:"#6D00CC", docs:"https://docs.corvus.com/integrations/make",
   },
   {
     id:"sheets", name:"Google Sheets", icon:"📊", category:"data", status:"available",
@@ -60,7 +60,7 @@ const INTEGRATIONS = [
       { key:"sheet_id",  label:"Spreadsheet ID",    placeholder:"1BxiM...",      type:"text" },
       { key:"frequency", label:"Export Frequency",  placeholder:"daily",         type:"select", options:["realtime","hourly","daily","weekly"] },
     ],
-    color:"#34A853", docs:"https://docs.postureai.com/integrations/sheets",
+    color:"#34A853", docs:"https://docs.corvus.com/integrations/sheets",
   },
   {
     id:"hr_systems", name:"HR Systems", icon:"👔", category:"enterprise", status:"enterprise",
@@ -72,7 +72,7 @@ const INTEGRATIONS = [
       { key:"api_url",    label:"HRIS API URL",  placeholder:"https://api.bamboohr.com/...", type:"text" },
       { key:"api_key",    label:"HRIS API Key",  placeholder:"•••••",                    type:"password" },
     ],
-    color:"#0F4C81", docs:"https://docs.postureai.com/integrations/hr",
+    color:"#0F4C81", docs:"https://docs.corvus.com/integrations/hr",
   },
   {
     id:"jira", name:"Jira / Linear", icon:"🔵", category:"productivity", status:"beta",
@@ -83,17 +83,17 @@ const INTEGRATIONS = [
       { key:"project",  label:"Project Key",  placeholder:"EHS",                           type:"text" },
       { key:"token",    label:"API Token",    placeholder:"•••••",                         type:"password" },
     ],
-    color:"#0052CC", docs:"https://docs.postureai.com/integrations/jira",
+    color:"#0052CC", docs:"https://docs.corvus.com/integrations/jira",
   },
   {
     id:"webhooks", name:"Custom Webhooks", icon:"🔗", category:"developer", status:"available",
-    desc:"Send any PostureAI event to your own endpoint. Full control, JSON payload.",
+    desc:"Send any Corvus event to your own endpoint. Full control, JSON payload.",
     features:["15 event types","HMAC signature verification","Retry on failure (3x)","Event payload explorer"],
     configFields:[
       { key:"url",    label:"Endpoint URL",  placeholder:"https://yourapp.com/webhooks/posture", type:"text" },
       { key:"secret", label:"Signing Secret",placeholder:"auto-generated",                        type:"text" },
     ],
-    color:"#6366F1", docs:"https://docs.postureai.com/integrations/webhooks",
+    color:"#6366F1", docs:"https://docs.corvus.com/integrations/webhooks",
   },
 ];
 
@@ -134,7 +134,7 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
             <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🔌</div>
             <div>
               <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>Integrations Hub</div>
-              <div style={{ fontSize:12, color:cs.textDim }}>Connect PostureAI to your existing tools</div>
+              <div style={{ fontSize:12, color:cs.textDim }}>Connect Corvus to your existing tools</div>
             </div>
           </div>
           <div style={{ display:"flex", gap:10, alignItems:"center" }}>

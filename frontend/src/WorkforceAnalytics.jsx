@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — WorkforceAnalytics v1.0
+ * Corvus — WorkforceAnalytics v1.0
  * Phase 7: Advanced Analytics
  * Workforce Analytics: productivity trends · focus · fatigue · engagement · risk heatmaps
  * Executive KPIs: company wellness · dept comparison · productivity index · burnout · monthly insights
@@ -764,7 +764,7 @@ export function WorkforceAnalytics({ uid, profile, sessions:initialSessions=[], 
 
   const data = buildAnalytics(sessions, allUsers, profile);
 
-  const system = `You are PostureAI's Workforce Intelligence engine. Generate professional, concise workforce health analytics reports.
+  const system = `You are Corvus's Workforce Intelligence engine. Generate professional, concise workforce health analytics reports.
 Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bullets). Max 220 words. Be data-driven, executive-ready.`;
 
   const AI_PROMPTS = {

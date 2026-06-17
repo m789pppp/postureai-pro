@@ -1,5 +1,5 @@
 /**
- * SecurityCenter.jsx — PostureAI
+ * SecurityCenter.jsx — Corvus
  * Client-side only — Firebase Auth metadata, no backend needed
  */
 import { useState, useMemo } from "react";

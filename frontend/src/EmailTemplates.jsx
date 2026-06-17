@@ -1,6 +1,6 @@
 import React from "react";
 /**
- * PostureAI Pro — Email Templates v1.0
+ * Corvus — Email Templates v1.0
  * Positioning: "AI Workforce Intelligence Platform"
  * Templates: Welcome · Weekly Report · Risk Alert · Trial Expiry
  * · Manager Summary · Onboarding · Upgrade
@@ -14,7 +14,7 @@ const BASE = (content, lang = "en") => {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>PostureAI Pro</title>
+<title>Corvus</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -64,15 +64,15 @@ const BASE = (content, lang = "en") => {
     <div class="logo">
       <div class="logo-mark">◈</div>
       <div>
-        <div class="logo-name">PostureAI <span>Pro</span></div>
+        <div class="logo-name">Corvus <span>Pro</span></div>
         <div class="logo-tag">${isAr ? "منصة ذكاء القوى العاملة" : "AI Workforce Intelligence Platform"}</div>
       </div>
     </div>
   </div>
   <div class="body">${content}</div>
   <div class="footer">
-    <p>${isAr ? "بريد الدعم" : "Support"}: <a href="mailto:support@postureai.io">support@postureai.io</a> &nbsp;·&nbsp; <a href="#">${isAr ? "إلغاء الاشتراك" : "Unsubscribe"}</a></p>
-    <p style="margin-top:4px">© ${new Date().getFullYear()} PostureAI Pro. ${isAr ? "جميع الحقوق محفوظة." : "All rights reserved."}</p>
+    <p>${isAr ? "بريد الدعم" : "Support"}: <a href="mailto:support@corvus.io">support@corvus.io</a> &nbsp;·&nbsp; <a href="#">${isAr ? "إلغاء الاشتراك" : "Unsubscribe"}</a></p>
+    <p style="margin-top:4px">© ${new Date().getFullYear()} Corvus. ${isAr ? "جميع الحقوق محفوظة." : "All rights reserved."}</p>
   </div>
 </div>
 </body>
@@ -90,10 +90,10 @@ export function welcomeEmail({ name, tier = "professional", lang = "en" }) {
   const isAr = lang === "ar";
   const firstName = name?.split(" ")[0] || (isAr ? "زميلي" : "there");
   const content = isAr ? `
-    <div class="eyebrow">مرحباً بك في PostureAI Pro</div>
+    <div class="eyebrow">مرحباً بك في Corvus</div>
     <h1>أهلاً ${firstName}، منصة ذكاء القوى العاملة جاهزة 🎉</h1>
-    <p>حسابك على <strong>PostureAI Pro — منصة ذكاء القوى العاملة بالـ AI</strong> جاهز. لقد انضممت إلى أكثر من 500 شركة تستخدم PostureAI لتحويل صحة موظفيها إلى ميزة تنافسية.</p>
-    <a href="https://app.postureai.io" class="cta-btn">ابدأ جلستك الأولى ←</a>
+    <p>حسابك على <strong>Corvus — منصة ذكاء القوى العاملة بالـ AI</strong> جاهز. لقد انضممت إلى أكثر من 500 شركة تستخدم Corvus لتحويل صحة موظفيها إلى ميزة تنافسية.</p>
+    <a href="https://app.corvus.io" class="cta-btn">ابدأ جلستك الأولى ←</a>
     <h2>ما يمكنك فعله الآن:</h2>
     <div class="feature-row"><div class="feature-icon">🧠</div><div class="feature-text"><div class="feature-title">طبقة الذكاء الاصطناعي</div><div class="feature-desc">ملخصات تنفيذية، تحليل إرهاق، وتوصيات مخصصة — مدعومة بـ Claude AI</div></div></div>
     <div class="feature-row"><div class="feature-icon">🔮</div><div class="feature-text"><div class="feature-title">الذكاء التنبؤي</div><div class="feature-desc">التنبؤ بالإرهاق الوظيفي واكتشاف الشذوذات قبل أن تتحول إلى مشاكل</div></div></div>
@@ -102,10 +102,10 @@ export function welcomeEmail({ name, tier = "professional", lang = "en" }) {
     <div class="divider"></div>
     <p style="font-size:12px;color:#94a3b8">خطتك: <strong>${tier}</strong> · تجربة مجانية 7 أيام · بلا بطاقة بنكية مطلوبة</p>
   ` : `
-    <div class="eyebrow">Welcome to PostureAI Pro</div>
+    <div class="eyebrow">Welcome to Corvus</div>
     <h1>Welcome, ${firstName}. Your workforce intelligence is ready. 🎉</h1>
-    <p>Your <strong>PostureAI Pro — AI Workforce Intelligence Platform</strong> account is active. You've joined 500+ companies using PostureAI to turn employee health into a competitive advantage.</p>
-    <a href="https://app.postureai.io" class="cta-btn">Start Your First Session →</a>
+    <p>Your <strong>Corvus — AI Workforce Intelligence Platform</strong> account is active. You've joined 500+ companies using Corvus to turn employee health into a competitive advantage.</p>
+    <a href="https://app.corvus.io" class="cta-btn">Start Your First Session →</a>
     <h2>What you can do right now:</h2>
     <div class="feature-row"><div class="feature-icon">🧠</div><div class="feature-text"><div class="feature-title">AI Intelligence Layer</div><div class="feature-desc">Executive summaries, fatigue analysis, and personalised recommendations — powered by Claude AI</div></div></div>
     <div class="feature-row"><div class="feature-icon">🔮</div><div class="feature-text"><div class="feature-title">Predictive Intelligence</div><div class="feature-desc">Burnout prediction and anomaly detection before issues become costly</div></div></div>
@@ -138,8 +138,8 @@ export function weeklyReportEmail({ name, avgScore = 0, sessCount = 0, trendPct 
     </div>
     ${fatigueLevel >= 45 ? `<div class="risk-box ${fatigueLevel >= 70 ? "risk-high" : "risk-med"}"><div class="risk-title" style="color:${fatigueLevel >= 70 ? "#dc2626" : "#d97706"}">${fatigueLevel >= 70 ? "⚠️ مؤشر إرهاق مرتفع" : "⚡ مؤشر إرهاق متوسط"}</div><div class="risk-desc">مؤشر الإرهاق هذا الأسبوع: ${fatigueLevel}%. ${fatigueLevel >= 70 ? "يُوصى بأخذ استراحات أكثر وتقليل وقت الجلوس." : "راقب وضعيتك واحرص على الاستراحات المنتظمة."}</div></div>` : ""}
     ${topRec ? `<h2>توصية الذكاء الأسبوعية</h2><div class="risk-box risk-low"><div class="risk-desc">💡 ${topRec}</div></div>` : ""}
-    <a href="https://app.postureai.io" class="cta-btn">عرض التحليل الكامل ←</a>
-    <a href="https://app.postureai.io" class="cta-btn-outline">فتح رؤى الذكاء الاصطناعي</a>
+    <a href="https://app.corvus.io" class="cta-btn">عرض التحليل الكامل ←</a>
+    <a href="https://app.corvus.io" class="cta-btn-outline">فتح رؤى الذكاء الاصطناعي</a>
   ` : `
     <div class="eyebrow">Weekly Workforce Intelligence Report</div>
     <h1>Your Weekly Workforce Health Report — ${firstName}</h1>
@@ -151,8 +151,8 @@ export function weeklyReportEmail({ name, avgScore = 0, sessCount = 0, trendPct 
     </div>
     ${fatigueLevel >= 45 ? `<div class="risk-box ${fatigueLevel >= 70 ? "risk-high" : "risk-med"}"><div class="risk-title" style="color:${fatigueLevel >= 70 ? "#dc2626" : "#d97706"}">${fatigueLevel >= 70 ? "⚠️ High Fatigue Index" : "⚡ Moderate Fatigue Index"}</div><div class="risk-desc">Your fatigue index this week: ${fatigueLevel}%. ${fatigueLevel >= 70 ? "We recommend more frequent breaks and reducing continuous sitting time." : "Monitor your posture and maintain regular break intervals."}</div></div>` : ""}
     ${topRec ? `<h2>This Week's AI Recommendation</h2><div class="risk-box risk-low"><div class="risk-desc">💡 ${topRec}</div></div>` : ""}
-    <a href="https://app.postureai.io" class="cta-btn">View Full Intelligence Report →</a>
-    <a href="https://app.postureai.io" class="cta-btn-outline">Open AI Insights Dashboard</a>
+    <a href="https://app.corvus.io" class="cta-btn">View Full Intelligence Report →</a>
+    <a href="https://app.corvus.io" class="cta-btn-outline">Open AI Insights Dashboard</a>
   `;
   return BASE(content, lang);
 }
@@ -175,7 +175,7 @@ export function riskAlertEmail({ managerName, employeeName, riskType = "burnout"
   const content = isAr ? `
     <div class="eyebrow">تنبيه مخاطر القوى العاملة</div>
     <h1>${isHigh ? "⚠️" : "⚡"} تنبيه ${riskLabel} — ${isHigh ? "مستوى مرتفع" : "مستوى متوسط"}</h1>
-    <p>مرحباً ${firstName}، رصد نظام الذكاء التنبؤي في PostureAI مؤشرات ${riskLabel.toLowerCase()} لدى موظف في ${deptName || "فريقك"}.</p>
+    <p>مرحباً ${firstName}، رصد نظام الذكاء التنبؤي في Corvus مؤشرات ${riskLabel.toLowerCase()} لدى موظف في ${deptName || "فريقك"}.</p>
     <div class="risk-box ${isHigh ? "risk-high" : "risk-med"}">
       <div class="risk-title" style="color:${isHigh ? "#dc2626" : "#d97706"}">الموظف: ${employeeName || "—"} · نقاط الخطر: ${riskScore}/100</div>
       <div class="risk-desc">رصد الذكاء الاصطناعي أنماطاً تشير إلى ${riskType === "burnout" ? "إنهاك وظيفي محتمل" : riskType === "fatigue" ? "مستويات إرهاق مرتفعة" : "مخاطر وضعية عالية"}. يُنصح بالتدخل خلال 48 ساعة لمنع تطور المشكلة.</div>
@@ -184,11 +184,11 @@ export function riskAlertEmail({ managerName, employeeName, riskType = "burnout"
     <div class="feature-row"><div class="feature-icon">💬</div><div class="feature-text"><div class="feature-title">اجتماع فردي</div><div class="feature-desc">جدول اجتماعاً خلال 48 ساعة لمناقشة عبء العمل ومستويات الضغط</div></div></div>
     <div class="feature-row"><div class="feature-icon">🔧</div><div class="feature-text"><div class="feature-title">مراجعة بيئة العمل</div><div class="feature-desc">تحقق من إعدادات مكان العمل والإضاءة والشاشة</div></div></div>
     <div class="feature-row"><div class="feature-icon">📅</div><div class="feature-text"><div class="feature-title">مراجعة عبء العمل</div><div class="feature-desc">قيّم الأولويات وإعادة توزيع المهام إذا لزم الأمر</div></div></div>
-    <a href="https://app.postureai.io/hr" class="cta-btn">عرض لوحة صحة القوى العاملة ←</a>
+    <a href="https://app.corvus.io/hr" class="cta-btn">عرض لوحة صحة القوى العاملة ←</a>
   ` : `
     <div class="eyebrow">Workforce Risk Alert</div>
     <h1>${isHigh ? "⚠️" : "⚡"} ${riskLabel} Alert — ${isHigh ? "High Level" : "Moderate Level"}</h1>
-    <p>Hi ${firstName}, PostureAI's predictive intelligence has detected ${riskLabel.toLowerCase()} indicators for an employee in ${deptName || "your team"}.</p>
+    <p>Hi ${firstName}, Corvus's predictive intelligence has detected ${riskLabel.toLowerCase()} indicators for an employee in ${deptName || "your team"}.</p>
     <div class="risk-box ${isHigh ? "risk-high" : "risk-med"}">
       <div class="risk-title" style="color:${isHigh ? "#dc2626" : "#d97706"}">Employee: ${employeeName || "—"} · Risk score: ${riskScore}/100</div>
       <div class="risk-desc">AI detected patterns indicating ${riskType === "burnout" ? "potential burnout" : riskType === "fatigue" ? "elevated fatigue levels" : "high posture risk"}. Early intervention within 48 hours is recommended to prevent escalation.</div>
@@ -197,7 +197,7 @@ export function riskAlertEmail({ managerName, employeeName, riskType = "burnout"
     <div class="feature-row"><div class="feature-icon">💬</div><div class="feature-text"><div class="feature-title">1:1 Check-in</div><div class="feature-desc">Schedule a conversation within 48 hours to discuss workload and stress levels</div></div></div>
     <div class="feature-row"><div class="feature-icon">🔧</div><div class="feature-text"><div class="feature-title">Workstation Review</div><div class="feature-desc">Verify ergonomic setup — monitor height, lighting, chair position</div></div></div>
     <div class="feature-row"><div class="feature-icon">📅</div><div class="feature-text"><div class="feature-title">Workload Assessment</div><div class="feature-desc">Review current priorities and redistribute tasks if needed</div></div></div>
-    <a href="https://app.postureai.io/hr" class="cta-btn">View Workforce Health Dashboard →</a>
+    <a href="https://app.corvus.io/hr" class="cta-btn">View Workforce Health Dashboard →</a>
   `;
   return BASE(content, lang);
 }
@@ -221,8 +221,8 @@ export function trialExpiryEmail({ name, daysLeft = 2, avgScore = 0, sessCount =
     </div>
     <h2>ماذا ستفقد بعد انتهاء التجربة؟</h2>
     <div class="risk-box risk-high"><div class="risk-desc">❌ طبقة الذكاء الاصطناعي · ❌ الذكاء التنبؤي · ❌ التقارير التنفيذية · ❌ مدرب AI الشخصي · ❌ سجل الجلسات الكامل</div></div>
-    <a href="https://app.postureai.io/pricing" class="cta-btn">ترقية الآن واحتفظ ببياناتك ←</a>
-    <p style="font-size:12px;color:#94a3b8;text-align:center">شركات PostureAI تخفض أيام المرض 31% في المتوسط. عائد الاستثمار يبدأ من الشهر الأول.</p>
+    <a href="https://app.corvus.io/pricing" class="cta-btn">ترقية الآن واحتفظ ببياناتك ←</a>
+    <p style="font-size:12px;color:#94a3b8;text-align:center">شركات Corvus تخفض أيام المرض 31% في المتوسط. عائد الاستثمار يبدأ من الشهر الأول.</p>
   ` : `
     <div class="eyebrow">${urgent ? "⏰ Expires Today" : `${daysLeft} Days Left`}</div>
     <h1>${urgent ? "Your trial ends today — don't lose your intelligence!" : `${daysLeft} days left in your free trial`}</h1>
@@ -234,8 +234,8 @@ export function trialExpiryEmail({ name, daysLeft = 2, avgScore = 0, sessCount =
     </div>
     <h2>What you'll lose when your trial ends:</h2>
     <div class="risk-box risk-high"><div class="risk-desc">❌ AI Intelligence Layer · ❌ Predictive analytics · ❌ Executive PDF reports · ❌ Personal AI Coach · ❌ Full session history</div></div>
-    <a href="https://app.postureai.io/pricing" class="cta-btn">Upgrade Now & Keep Your Data →</a>
-    <p style="font-size:12px;color:#94a3b8;text-align:center">PostureAI companies reduce sick days by 31% on average. ROI starts from month one.</p>
+    <a href="https://app.corvus.io/pricing" class="cta-btn">Upgrade Now & Keep Your Data →</a>
+    <p style="font-size:12px;color:#94a3b8;text-align:center">Corvus companies reduce sick days by 31% on average. ROI starts from month one.</p>
   `;
   return BASE(content, lang);
 }
@@ -257,9 +257,9 @@ export function onboardingNudgeEmail({ name, sessCount = 0, lang = "en" }) {
     }</p>
     <div class="risk-box risk-low">
       <div class="risk-title" style="color:#059669">💡 لماذا الآن؟</div>
-      <div class="risk-desc">الشركات التي تستخدم PostureAI بانتظام تشهد تراجعاً 31% في أيام المرض وزيادة 22% في إنتاجية الفريق خلال 60 يوماً.</div>
+      <div class="risk-desc">الشركات التي تستخدم Corvus بانتظام تشهد تراجعاً 31% في أيام المرض وزيادة 22% في إنتاجية الفريق خلال 60 يوماً.</div>
     </div>
-    <a href="https://app.postureai.io" class="cta-btn">${hasSessions ? "أكمل ذكاءك الكامل ←" : "ابدأ جلستك الأولى الآن ←"}</a>
+    <a href="https://app.corvus.io" class="cta-btn">${hasSessions ? "أكمل ذكاءك الكامل ←" : "ابدأ جلستك الأولى الآن ←"}</a>
   ` : `
     <div class="eyebrow">Day 3 of Your Journey</div>
     <h1>${hasSessions ? `Great start, ${firstName}! ${sessCount} session${sessCount !== 1 ? "s" : ""} in ✅` : `${firstName}, your intelligence is waiting for you 🧠`}</h1>
@@ -269,9 +269,9 @@ export function onboardingNudgeEmail({ name, sessCount = 0, lang = "en" }) {
     }</p>
     <div class="risk-box risk-low">
       <div class="risk-title" style="color:#059669">💡 Why now?</div>
-      <div class="risk-desc">Organisations that use PostureAI consistently see a 31% reduction in sick days and a 22% increase in team productivity within 60 days.</div>
+      <div class="risk-desc">Organisations that use Corvus consistently see a 31% reduction in sick days and a 22% increase in team productivity within 60 days.</div>
     </div>
-    <a href="https://app.postureai.io" class="cta-btn">${hasSessions ? "Unlock Your Full Intelligence →" : "Start Your First Session Now →"}</a>
+    <a href="https://app.corvus.io" class="cta-btn">${hasSessions ? "Unlock Your Full Intelligence →" : "Start Your First Session Now →"}</a>
   `;
   return BASE(content, lang);
 }
@@ -295,8 +295,8 @@ export function hrMonthlySummaryEmail({ managerName, orgName, teamAvg = 0, teamS
     </div>
     ${sickDayChange !== 0 ? `<div class="risk-box ${sickDayChange < 0 ? "risk-low" : "risk-med"}"><div class="risk-title" style="color:${sickDayChange < 0 ? "#059669" : "#d97706"}">${sickDayChange < 0 ? `📉 تراجع في أيام المرض: ${Math.abs(sickDayChange)}%` : `📈 زيادة في أيام المرض: ${sickDayChange}%`}</div><div class="risk-desc">${sickDayChange < 0 ? "أداء ممتاز! استمر في هذا المستوى من الرقابة." : "يُوصى بمراجعة الأقسام ذات الأداء المنخفض."}</div></div>` : ""}
     ${highRiskCount > 0 ? `<div class="risk-box risk-high"><div class="risk-title" style="color:#dc2626">⚠️ ${highRiskCount} موظف يحتاج اهتماماً فورياً</div><div class="risk-desc">يُنصح بمراجعة تقارير المخاطر الفردية في لوحة HR واتخاذ إجراءات استباقية خلال الأسبوع الجاري.</div></div>` : ""}
-    <a href="https://app.postureai.io/hr" class="cta-btn">فتح لوحة صحة القوى العاملة ←</a>
-    <a href="https://app.postureai.io/hr/reports" class="cta-btn-outline">تحميل التقرير التنفيذي PDF</a>
+    <a href="https://app.corvus.io/hr" class="cta-btn">فتح لوحة صحة القوى العاملة ←</a>
+    <a href="https://app.corvus.io/hr/reports" class="cta-btn-outline">تحميل التقرير التنفيذي PDF</a>
   ` : `
     <div class="eyebrow">Monthly HR Report — ${orgName || "Your Organisation"}</div>
     <h1>Monthly Workforce Health Report — ${firstName}</h1>
@@ -308,8 +308,8 @@ export function hrMonthlySummaryEmail({ managerName, orgName, teamAvg = 0, teamS
     </div>
     ${sickDayChange !== 0 ? `<div class="risk-box ${sickDayChange < 0 ? "risk-low" : "risk-med"}"><div class="risk-title" style="color:${sickDayChange < 0 ? "#059669" : "#d97706"}">${sickDayChange < 0 ? `📉 Sick day reduction: ${Math.abs(sickDayChange)}%` : `📈 Sick day increase: ${sickDayChange}%`}</div><div class="risk-desc">${sickDayChange < 0 ? "Excellent progress. Maintain this monitoring level." : "Department-level review recommended for underperforming teams."}</div></div>` : ""}
     ${highRiskCount > 0 ? `<div class="risk-box risk-high"><div class="risk-title" style="color:#dc2626">⚠️ ${highRiskCount} employee${highRiskCount !== 1 ? "s" : ""} need immediate attention</div><div class="risk-desc">Review individual risk reports in the HR dashboard and take proactive steps this week.</div></div>` : ""}
-    <a href="https://app.postureai.io/hr" class="cta-btn">Open Workforce Health Dashboard →</a>
-    <a href="https://app.postureai.io/hr/reports" class="cta-btn-outline">Download Executive PDF Report</a>
+    <a href="https://app.corvus.io/hr" class="cta-btn">Open Workforce Health Dashboard →</a>
+    <a href="https://app.corvus.io/hr/reports" class="cta-btn-outline">Download Executive PDF Report</a>
   `;
   return BASE(content, lang);
 }

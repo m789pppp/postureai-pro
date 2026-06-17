@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Posture Analysis Engine v2
+ * Corvus — Posture Analysis Engine v2
  * ✅ Strict thresholds (tighter ok/bad windows)
  * ✅ Head yaw detection (left/right turn) from front camera
  * ✅ Distance estimation via eye IPD (more accurate than shoulder width)
@@ -430,10 +430,10 @@ export function playBeep(muted = false) {
 export function sendDesktopNotif(msg, score) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const icon = score < 50 ? "🔴" : score < 65 ? "🟡" : "🟢";
-  new Notification("PostureAI Pro", {
+  new Notification("Corvus", {
     body: `${icon} ${msg}`,
     icon: "/icon-192.png",
-    tag: "postureai-alert",
+    tag: "corvus-alert",
   });
 }
 

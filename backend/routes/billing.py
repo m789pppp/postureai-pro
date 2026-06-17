@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Billing Routes Blueprint
+Corvus — Billing Routes Blueprint
 Handles: Stripe, PayMob, usage tracking, proration, dunning, invoices
 All pricing logic delegates to config/pricing.py (server-side authoritative)
 """

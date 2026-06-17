@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Backend v15
+Corvus — Backend v15
 Real MediaPipe Pose (33 landmarks) + FaceMesh (478 landmarks)
 Accuracy: Standard ~88% | Professional ~93% | Elite ~96%
 3 Modes: Laptop | Phone | Side
@@ -318,9 +318,9 @@ def validate_plan_request(tier: str, billing: str) -> tuple[bool, str]:
     if billing.lower() not in valid_billings:
         return False, f"Unknown billing: {billing}. Valid: monthly, yearly"
     return True, ""
-APP_URL        = os.getenv("APP_URL", "https://postureai.vercel.app")
-SUPPORT_EMAIL  = os.getenv("SUPPORT_EMAIL", "support@postureai.io")
-ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@postureai.io")
+APP_URL        = os.getenv("APP_URL", "https://corvus.vercel.app")
+SUPPORT_EMAIL  = os.getenv("SUPPORT_EMAIL", "support@corvus.io")
+ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@corvus.io")
 ADMIN_PHONE    = os.getenv("ADMIN_PHONE", "")
 WORK_HOURS_START = int(os.getenv("WORK_HOURS_START", "9"))
 WORK_HOURS_END   = int(os.getenv("WORK_HOURS_END", "18"))
@@ -449,14 +449,14 @@ ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:4173",
-    "https://postureai-pro-omega-nine.vercel.app",   # ← LIVE (primary)
-    "https://postureai-pro-omega.vercel.app",         # ← old (keep for redirect safety)
-    "https://postureai.vercel.app",
-    "https://postureai-pro.vercel.app",
-    "https://postureai.io",
-    "https://www.postureai.io",
-    "https://postureai-prod.web.app",
-    "https://postureai-prod.firebaseapp.com",
+    "https://corvus-omega-nine.vercel.app",   # ← LIVE (primary)
+    "https://corvus-omega.vercel.app",         # ← old (keep for redirect safety)
+    "https://corvus.vercel.app",
+    "https://corvus.vercel.app",
+    "https://corvus.io",
+    "https://www.corvus.io",
+    "https://corvusd.web.app",
+    "https://corvusd.firebaseapp.com",
 ]
 # Allow custom origins from env (Railway preview URLs, white-label domains)
 _extra = os.getenv("ALLOWED_ORIGINS", "")
@@ -493,10 +493,10 @@ if _sentry_dsn:
 _cors_origins = [o.strip() for o in (os.getenv("ALLOWED_ORIGINS","") or "").split(",") if o.strip()]
 if not _cors_origins:
     _cors_origins = [
-        "https://postureai-pro-omega-nine.vercel.app",  # ← LIVE (primary)
-        "https://postureai-pro-omega.vercel.app",        # ← old (keep for safety)
-        "https://postureai.io",
-        "https://www.postureai.io",
+        "https://corvus-omega-nine.vercel.app",  # ← LIVE (primary)
+        "https://corvus-omega.vercel.app",        # ← old (keep for safety)
+        "https://corvus.io",
+        "https://www.corvus.io",
         "http://localhost:5173",
         "http://localhost:3000",
     ]
@@ -664,7 +664,7 @@ def send_slack(text: str, score: int = 0) -> dict:
         "attachments": [{
             "color": color,
             "blocks": [
-                {"type": "header", "text": {"type": "plain_text", "text": "⚠️ PostureAI Alert", "emoji": True}},
+                {"type": "header", "text": {"type": "plain_text", "text": "⚠️ Corvus Alert", "emoji": True}},
                 {"type": "section", "text": {"type": "mrkdwn", "text": text}},
                 {"type": "context", "elements": [{"type": "mrkdwn", "text": f"Score: *{score}/100* · {datetime.now().strftime('%H:%M')}"}]}
             ]
@@ -687,7 +687,7 @@ def send_teams(text: str, score: int = 0, employee: str = "") -> dict:
                 "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                 "type": "AdaptiveCard", "version": "1.4",
                 "body": [
-                    {"type": "TextBlock", "text": "⚠️ PostureAI Alert", "weight": "Bolder", "size": "Medium", "color": "Attention"},
+                    {"type": "TextBlock", "text": "⚠️ Corvus Alert", "weight": "Bolder", "size": "Medium", "color": "Attention"},
                     {"type": "TextBlock", "text": text, "wrap": True},
                     {"type": "FactSet", "facts": [
                         {"title": "Employee", "value": employee or "—"},
@@ -771,7 +771,7 @@ def notify_user(uid: str, title: str, body: str,
 
         # 1. WhatsApp (highest open rate ~98%)
         if channel in ("auto", "whatsapp") and phone:
-            wa_text = f"*{title}*\n\n{body}\n\n_PostureAI Pro_"
+            wa_text = f"*{title}*\n\n{body}\n\n_Corvus_"
             result  = send_whatsapp(phone, wa_text, lang=lang)
             results["whatsapp"] = result
             if result.get("ok"):
@@ -790,7 +790,7 @@ def notify_user(uid: str, title: str, body: str,
 
         # 3. Email (fallback)
         if not sent and channel in ("auto", "email") and email:
-            html = f"<h2>{title}</h2><p>{body}</p><p><small>PostureAI Pro</small></p>"
+            html = f"<h2>{title}</h2><p>{body}</p><p><small>Corvus</small></p>"
             ok   = send_email(email, title, html)
             results["email"] = {"sent": ok}
             if ok:
@@ -803,7 +803,7 @@ def notify_user(uid: str, title: str, body: str,
     results["sent"] = sent
     return results
 
-def send_email(to_email: str, subject: str, html_body: str, from_name: str = "PostureAI") -> bool:
+def send_email(to_email: str, subject: str, html_body: str, from_name: str = "Corvus") -> bool:
     """
     Send transactional email.
     Priority: 1) SendGrid API  2) SMTP (warning in production if Gmail)
@@ -820,7 +820,7 @@ def send_email(to_email: str, subject: str, html_body: str, from_name: str = "Po
                 headers={"Authorization": f"Bearer {SENDGRID_API_KEY}", "Content-Type": "application/json"},
                 json={
                     "personalizations": [{"to": [{"email": to_email}]}],
-                    "from":    {"email": SMTP_USER or "noreply@postureai.io", "name": from_name},
+                    "from":    {"email": SMTP_USER or "noreply@corvus.io", "name": from_name},
                     "subject": subject,
                     "content": [{"type": "text/html", "value": html_body}],
                 },
@@ -875,7 +875,7 @@ def send_invoice_email(payment: dict) -> bool:
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#030b14;color:#f0f4f8;border-radius:12px;overflow:hidden">
       <div style="background:linear-gradient(135deg,#1a56db,#0891b2);padding:28px;text-align:center">
         <div style="font-size:32px;margin-bottom:8px">◈</div>
-        <div style="font-size:22px;font-weight:700">PostureAI Pro</div>
+        <div style="font-size:22px;font-weight:700">Corvus</div>
         <div style="font-size:13px;opacity:.8;margin-top:4px">Payment Confirmed ✓</div>
       </div>
       <div style="padding:28px">
@@ -892,12 +892,12 @@ def send_invoice_email(payment: dict) -> bool:
           </table>
         </div>
         <div style="text-align:center;margin-bottom:24px">
-          <a href="{APP_URL}" style="background:#1a56db;color:white;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Open PostureAI Pro →</a>
+          <a href="{APP_URL}" style="background:#1a56db;color:white;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Open Corvus →</a>
         </div>
         <p style="font-size:12px;color:#475569;text-align:center">Questions? Reply to this email or WhatsApp: <strong style="color:#f0f4f8">{ADMIN_PHONE}</strong></p>
       </div>
     </div>"""
-    return send_email(email, f"✅ PostureAI Pro — {tier.title()} Intelligence Plan Activated", html)
+    return send_email(email, f"✅ Corvus — {tier.title()} Intelligence Plan Activated", html)
 
 def send_admin_notification(payment: dict) -> bool:
     name   = payment.get("user_name", "—")
@@ -958,7 +958,7 @@ def email_sequence():
   <p style="color:#94a3b8;font-size:13px;margin:0 0 20px">Your AI health intelligence layer is now active. Here's how to generate your first insights in under 60 seconds:</p>
   <div style="background:#0c1728;border-radius:10px;padding:18px;margin-bottom:20px;border:1px solid rgba(255,255,255,.06)">
     <div style="color:#cbd5e1;font-size:13px;line-height:2.2">
-      <b style="color:#818cf8">Step 1:</b> Open PostureAI Pro → select camera mode<br>
+      <b style="color:#818cf8">Step 1:</b> Open Corvus → select camera mode<br>
       <b style="color:#38bdf8">Step 2:</b> Click "Start Session" → sit naturally<br>
       <b style="color:#10b981">Step 3:</b> AI score appears in 5 seconds — your intelligence layer is live
     </div>
@@ -986,7 +986,7 @@ def email_sequence():
   </div>
   <div style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:10px;padding:16px;margin-bottom:20px">
     <div style="font-size:12px;color:#a5b4fc;font-weight:600;margin-bottom:6px">📊 Industry Benchmark</div>
-    <div style="font-size:13px;color:#cbd5e1;line-height:1.6">Companies using PostureAI's workforce intelligence platform reduce sick leave costs by <b style="color:#10b981">31% within 90 days</b>. Average MSK injury cost: $18K per employee per year — eliminated.</div>
+    <div style="font-size:13px;color:#cbd5e1;line-height:1.6">Companies using Corvus's workforce intelligence platform reduce sick leave costs by <b style="color:#10b981">31% within 90 days</b>. Average MSK injury cost: $18K per employee per year — eliminated.</div>
   </div>
   <div style="text-align:center">
     <a href="{APP_URL}" style="background:linear-gradient(135deg,#4f46e5,#0891b2);color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">View Your Intelligence Report →</a>
@@ -1081,8 +1081,8 @@ def email_sequence():
   </div>
 </div></div>""",
         }
-        subject   = subjects.get(day, f"PostureAI Pro — Day {day} workforce health update")
-        html_body = bodies.get(day, f"<p>Hi {name}, thanks for using PostureAI Pro.</p>")
+        subject   = subjects.get(day, f"Corvus — Day {day} workforce health update")
+        html_body = bodies.get(day, f"<p>Hi {name}, thanks for using Corvus.</p>")
         ok = send_email(to, subject, html_body)
         return jsonify({"ok": ok, "day": day, "to": to})
     except Exception as e:
@@ -3613,8 +3613,8 @@ def generate_pdf_ar(sd):
     def ar_grade(s): return "ممتاز" if s>=85 else "جيد" if s>=70 else "مقبول" if s>=50 else "ضعيف"
     story=[]
     hdr=Table([[
-        Paragraph(f'<b>{co.get("logo_text","PostureAI")}</b>',ps('hl',fontSize=18,textColor=WHITE,fontName='Helvetica-Bold')),
-        Paragraph(f'<b>{co.get("name","PostureAI")}</b><br/><font size="8" color="#94a3b8">تقرير تحليل وضعية الجلوس</font>',ps('hr',fontSize=11,textColor=WHITE,alignment=TA_RIGHT))
+        Paragraph(f'<b>{co.get("logo_text","Corvus")}</b>',ps('hl',fontSize=18,textColor=WHITE,fontName='Helvetica-Bold')),
+        Paragraph(f'<b>{co.get("name","Corvus")}</b><br/><font size="8" color="#94a3b8">تقرير تحليل وضعية الجلوس</font>',ps('hr',fontSize=11,textColor=WHITE,alignment=TA_RIGHT))
     ]],colWidths=[uw*.52,uw*.48])
     hdr.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),NAVY),('PADDING',(0,0),(-1,-1),13),('VALIGN',(0,0),(-1,-1),'MIDDLE')]))
     story.append(hdr); story.append(Spacer(1,7))
@@ -3642,7 +3642,7 @@ def generate_pdf_ar(sd):
                 story.append(Paragraph(para_text.strip(),ps('ai',fontSize=9,textColor=DGRAY,spaceAfter=3)))
         story.append(Spacer(1,8))
     story.append(HRFlowable(width=uw,thickness=0.5,color=colors.HexColor("#e2e8f0")))
-    story.append(Paragraph("تقرير صادر عن PostureAI Pro — للأغراض المعلوماتية فقط وليس تشخيصاً طبياً.",
+    story.append(Paragraph("تقرير صادر عن Corvus — للأغراض المعلوماتية فقط وليس تشخيصاً طبياً.",
         ps('ft',fontSize=7.5,textColor=GRAY,alignment=TA_CENTER)))
     doc.build(story); buf.seek(0); return buf
 
@@ -3724,7 +3724,7 @@ def generate_pdf_en(sd):
         canvas_obj.setFont("Helvetica", 6.5)
         canvas_obj.setFillColor(GRAY)
         canvas_obj.drawString(17*mm, 7*mm,
-            f"PostureAI Pro  ·  {co.get('name', 'Confidential')}  ·  {dt}  ·  Session {sid[:16]}")
+            f"Corvus  ·  {co.get('name', 'Confidential')}  ·  {dt}  ·  Session {sid[:16]}")
         canvas_obj.drawRightString(W-17*mm, 7*mm, f"Page {pg}")
         # Top accent bar (pages 2+)
         if pg > 1:
@@ -3732,7 +3732,7 @@ def generate_pdf_en(sd):
             canvas_obj.rect(17*mm, H-12*mm, uw, 6, fill=1, stroke=0)
             canvas_obj.setFillColor(WHITE)
             canvas_obj.setFont("Helvetica-Bold", 7)
-            canvas_obj.drawString(19*mm, H-9.5*mm, "PostureAI Pro — Posture Assessment Report (continued)")
+            canvas_obj.drawString(19*mm, H-9.5*mm, "Corvus — Posture Assessment Report (continued)")
         canvas_obj.restoreState()
 
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -3749,11 +3749,11 @@ def generate_pdf_en(sd):
 
     hdr = Table([[
         Paragraph(
-            f'<b><font size="20">{co.get("logo_text","PostureAI")}</font></b>'
+            f'<b><font size="20">{co.get("logo_text","Corvus")}</font></b>'
             f'<br/><font size="8" color="#94a3b8">Workplace Posture Intelligence</font>',
             ps("hl", textColor=WHITE, leading=26)),
         Paragraph(
-            f'<b><font size="11">{co.get("name","PostureAI Client")}</font></b>'
+            f'<b><font size="11">{co.get("name","Corvus Client")}</font></b>'
             f'<br/><font size="8" color="#94a3b8">Posture Assessment Report</font>'
             f'<br/><font size="7" color="#60a5fa">{tlab.get(tier,"Standard")} Tier  ·  Confidential</font>',
             ps("hr", textColor=WHITE, alignment=TA_RIGHT, leading=16)),
@@ -4313,7 +4313,7 @@ def generate_pdf_en(sd):
     story.append(HRFlowable(width=uw, thickness=0.5, color=MGRAY))
     story.append(Spacer(1, 4))
     story.append(Paragraph(
-        "This report is generated by PostureAI Pro and is intended for occupational health monitoring purposes only. "
+        "This report is generated by Corvus and is intended for occupational health monitoring purposes only. "
         "It does not constitute medical advice. For clinical diagnosis or treatment, consult a qualified healthcare professional. "
         "Data processed in accordance with applicable data protection regulations.",
         ps("legal", fontSize=6.5, textColor=GRAY, alignment=TA_CENTER, leading=10)))
@@ -4989,7 +4989,7 @@ def pdf_endpoint():
             "claude_analysis": la.get("claude_analysis") or data.get("claude_analysis"),
             "confidence":      la.get("confidence",0),
             "engine":          sess.get("engine","") or la.get("engine",""),
-            "company_info": data.get("company_info", {"name":"PostureAI Client","logo_text":"PostureAI"}),
+            "company_info": data.get("company_info", {"name":"Corvus Client","logo_text":"Corvus"}),
             "employee":     data.get("employee",{}),
             "snapshots":    session_snapshots.get(sid, []),
             "lang":         data.get("lang","en"),
@@ -5012,7 +5012,7 @@ def pdf_endpoint():
                 sd2["claude_analysis"] = None
         pdf_bytes = generate_pdf(sd2)
         buf  = io.BytesIO(pdf_bytes)
-        fname = (f"PostureAI_{sd2['tier']}_{sid}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf")
+        fname = (f"Corvus_{sd2['tier']}_{sid}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf")
         return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=fname)
     except Exception as e:
         import traceback
@@ -5180,7 +5180,7 @@ def notify_whatsapp():
         data = request.get_json(force=True) or {}
         phone = data.get("phone","")
         if not phone: return jsonify({"ok":False,"reason":"phone required"}), 400
-        result = send_whatsapp(phone, data.get("text","PostureAI posture alert"))
+        result = send_whatsapp(phone, data.get("text","Corvus posture alert"))
         return jsonify(result), 200 if result["ok"] else 400
     except Exception as e:
         return safe_error(e)
@@ -5768,7 +5768,7 @@ def convert_referral():
                                     f"🎉 You earned {earned} EGP — your referral upgraded!",
                                     f"<p>Hi {r_name},</p>"
                                     f"<p>Someone you referred just upgraded to <b>{plan.title()}</b>.</p>"
-                                    f"<p>We've added <b>{earned} EGP</b> to your PostureAI account credit.</p>"
+                                    f"<p>We've added <b>{earned} EGP</b> to your Corvus account credit.</p>"
                                     f"<p><a href=\"{APP_URL}/#referral\">View your referral dashboard →</a></p>",
                                 )
                     except Exception as _ne:
@@ -5831,9 +5831,9 @@ def send_slack_message():
             return jsonify({"error":"Slack not connected — no webhook URL"}),400
 
         payload = {
-            "text": data.get("text","PostureAI alert"),
+            "text": data.get("text","Corvus alert"),
             "blocks": data.get("blocks",[
-                {"type":"section","text":{"type":"mrkdwn","text": data.get("text","PostureAI notification")}}
+                {"type":"section","text":{"type":"mrkdwn","text": data.get("text","Corvus notification")}}
             ])
         }
         r = req.post(webhook, json=payload, timeout=8)
@@ -5972,7 +5972,7 @@ def user_onboard():
             drip_send(ctx)
         except ImportError:
             # Fallback to basic send_email if SendGrid templates not configured
-            send_email(email, f"Welcome to PostureAI Pro 👋",
+            send_email(email, f"Welcome to Corvus 👋",
                 f"<p>Hi {name},</p><p>Your account is ready. <a href=\"{APP_URL}\">Start your first session →</a></p>")
         except Exception as drip_err:
             print(f"[onboard] Drip email error: {drip_err}", file=sys.stderr)
@@ -6581,12 +6581,12 @@ def enterprise_contact():
         # Auto-reply to prospect
         prospect_html = f"""
         <p>Hi {name},</p>
-        <p>Thank you for your interest in PostureAI Enterprise.</p>
+        <p>Thank you for your interest in Corvus Enterprise.</p>
         <p>Our enterprise team will reach out within <b>24 hours</b> to schedule a personalized demo.</p>
         <p>In the meantime, <a href="{APP_URL}">explore our platform</a> or reply to this email with any questions.</p>
-        <p>— PostureAI Enterprise Team</p>
+        <p>— Corvus Enterprise Team</p>
         """
-        send_email(email, "PostureAI Enterprise — We'll be in touch soon", prospect_html)
+        send_email(email, "Corvus Enterprise — We'll be in touch soon", prospect_html)
 
         audit("anonymous", "enterprise_inquiry", "marketing", {"email": email, "company": company})
         return jsonify({"ok": True})
@@ -7153,7 +7153,7 @@ def export_sessions():
             csv_bytes = output.getvalue().encode("utf-8-sig")  # UTF-8 BOM for Excel
             resp = make_response(csv_bytes)
             resp.headers["Content-Type"]        = "text/csv; charset=utf-8"
-            resp.headers["Content-Disposition"] = f'attachment; filename="postureai_sessions_{datetime.utcnow().strftime("%Y%m%d")}.csv"'
+            resp.headers["Content-Disposition"] = f'attachment; filename="corvus_sessions_{datetime.utcnow().strftime("%Y%m%d")}.csv"'
             return resp
 
         elif fmt == "pdf":
@@ -7171,7 +7171,7 @@ def export_sessions():
                 elements = []
 
                 # Title
-                elements.append(Paragraph(f"PostureAI Pro — Session History ({days} days)", styles["Title"]))
+                elements.append(Paragraph(f"Corvus — Session History ({days} days)", styles["Title"]))
                 elements.append(Paragraph(f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC | User: {uid[:8]}...", styles["Normal"]))
                 elements.append(Spacer(1, 16))
 
@@ -7226,7 +7226,7 @@ def export_sessions():
                 pdf_bytes = buf.getvalue()
                 resp = make_response(pdf_bytes)
                 resp.headers["Content-Type"]        = "application/pdf"
-                resp.headers["Content-Disposition"] = f'attachment; filename="postureai_report_{datetime.utcnow().strftime("%Y%m%d")}.pdf"'
+                resp.headers["Content-Disposition"] = f'attachment; filename="corvus_report_{datetime.utcnow().strftime("%Y%m%d")}.pdf"'
                 return resp
             except ImportError:
                 return jsonify({"error": "PDF generation unavailable — use format=csv"}), 500
@@ -7701,7 +7701,7 @@ def weekly_report():
                 doc_pdf = SimpleDocTemplate(buf, pagesize=A4, topMargin=40, bottomMargin=40)
                 styles  = getSampleStyleSheet()
                 elements = []
-                elements.append(Paragraph(f"PostureAI Weekly Report — {report['week_start']} to {report['week_end']}", styles["Title"]))
+                elements.append(Paragraph(f"Corvus Weekly Report — {report['week_start']} to {report['week_end']}", styles["Title"]))
                 elements.append(Paragraph(f"Grade: {grade}  |  Avg Score: {avg}/100  |  Sessions: {len(sessions_data)}", styles["Normal"]))
                 elements.append(Spacer(1, 12))
                 # Daily table
@@ -8099,7 +8099,7 @@ def generate_share_card():
         label_grade = "التقييم" if is_ar else "Grade"
         label_pct   = (f"أحسن من {percentile}% من المستخدمين" if is_ar
                        else f"Better than {percentile}% of users") if percentile else ""
-        label_url   = "postureai-pro-omega-nine.vercel.app"
+        label_url   = "corvus-omega-nine.vercel.app"
         label_try   = "جرب مجاناً" if is_ar else "Try for free"
 
         # Build SVG parts
@@ -8135,7 +8135,7 @@ def generate_share_card():
             '</defs>',
             '<rect width="400" height="500" fill="url(#bg)" rx="20"/>',
             f'<rect width="400" height="500" fill="none" stroke="{color}33" stroke-width="1.5" rx="20"/>',
-            '<text x="200" y="48" text-anchor="middle" font-family="Inter,Arial" font-size="14" fill="#6366f1" font-weight="700" letter-spacing="2">PostureAI Pro</text>',
+            '<text x="200" y="48" text-anchor="middle" font-family="Inter,Arial" font-size="14" fill="#6366f1" font-weight="700" letter-spacing="2">Corvus</text>',
             f'<text x="200" y="68" text-anchor="middle" font-family="Inter,Arial" font-size="11" fill="#475569">{date_str}</text>',
             '<circle cx="200" cy="170" r="90" fill="none" stroke="#1e293b" stroke-width="14"/>',
             f'<circle cx="200" cy="170" r="90" fill="none" stroke="url(#ring)" stroke-width="14" stroke-dasharray="{dash} 565.5" stroke-linecap="round" transform="rotate(-90 200 170)" filter="url(#glow)"/>',
@@ -8161,8 +8161,8 @@ def generate_share_card():
             "grade": grade,
             "meta": {
                 "title":       f"My posture score: {score}/100 ({grade})",
-                "description": label_pct or f"Tracked with PostureAI Pro",
-                "hashtags":    ["PostureAI", "PostureCheck", "WorkplaceWellness"],
+                "description": label_pct or f"Tracked with Corvus",
+                "hashtags":    ["Corvus", "PostureCheck", "WorkplaceWellness"],
             }
         })
     except Exception as e:
@@ -8772,7 +8772,7 @@ def company_dashboard():
 
         # ── ROI estimate ──────────────────────────────────────────
         # Based on WHO: poor posture costs ~3.5 sick days/year per employee
-        # PostureAI targets 40% reduction → 1.4 days saved per employee
+        # Corvus targets 40% reduction → 1.4 days saved per employee
         # Egypt avg daily wage: ~400 EGP
         _emp_count   = len(emp_uids)
         _days_saved  = round(_emp_count * 1.4, 1)
@@ -9653,9 +9653,9 @@ def paymob_create_payment():
                               json={"auth_token": auth_token, "delivery_needed": False,
                                     "amount_cents": amount_cents, "currency": currency,
                                     "merchant_order_id": f"PAI-{getattr(g,'uid','anon')}-{tier[:12]}-{billing[:1]}-{int(time.time())}",
-                                    "items": [{"name": f"PostureAI {tier.title()} ({billing})",
+                                    "items": [{"name": f"Corvus {tier.title()} ({billing})",
                                                "amount_cents": amount_cents,
-                                               "description": f"PostureAI Pro — {tier.title()} Workforce Intelligence Plan, {billing} billing",
+                                               "description": f"Corvus — {tier.title()} Workforce Intelligence Plan, {billing} billing",
                                                "quantity": 1}]},
                               headers=headers, timeout=15)
         order_resp.raise_for_status()
@@ -10028,7 +10028,7 @@ def monthly_hr_report():
         doc = SimpleDocTemplate(buf,pagesize=A4,topMargin=2*cm,bottomMargin=2*cm,leftMargin=2*cm,rightMargin=2*cm)
         styles = getSampleStyleSheet(); story = []
         title_style = ParagraphStyle("T",parent=styles["Title"],textColor=colors.HexColor("#1a56db"),fontSize=22,spaceAfter=4)
-        story.append(Paragraph(f"PostureAI Pro — Workforce Health Intelligence Report",title_style))
+        story.append(Paragraph(f"Corvus — Workforce Health Intelligence Report",title_style))
         story.append(Paragraph(f"{company} · {month_name} {year}",ParagraphStyle("S",parent=styles["Normal"],textColor=colors.HexColor("#64748b"),fontSize=12,spaceAfter=20)))
         kpi_data = [["Metric","Value","Status"],
                     ["Total Sessions",str(total_sess),"✓"],
@@ -10048,10 +10048,10 @@ def monthly_hr_report():
             rt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#ef4444")),("TEXTCOLOR",(0,0),(-1,0),colors.white),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,-1),9),("GRID",(0,0),(-1,-1),0.5,colors.HexColor("#fecaca")),("PADDING",(0,0),(-1,-1),6)]))
             story.append(rt); story.append(Spacer(1,0.3*cm))
         story.append(Spacer(1,1*cm))
-        story.append(Paragraph(f"Report generated by PostureAI Pro on {datetime.now().strftime('%d %B %Y at %H:%M')}. This report is for HR use only.",
+        story.append(Paragraph(f"Report generated by Corvus on {datetime.now().strftime('%d %B %Y at %H:%M')}. This report is for HR use only.",
             ParagraphStyle("F",parent=styles["Normal"],fontSize=8,textColor=colors.HexColor("#94a3b8"))))
         doc.build(story); buf.seek(0)
-        fname = f"PostureAI_HR_Report_{company}_{month_name}_{year}.pdf".replace(" ","_")
+        fname = f"Corvus_HR_Report_{company}_{month_name}_{year}.pdf".replace(" ","_")
         return send_file(buf,as_attachment=True,download_name=fname,mimetype="application/pdf")
     except Exception as e:
         import traceback
@@ -10205,17 +10205,17 @@ def subscription_check():
 
 def _send_renewal_reminder(email, name, tier, expired=False, days_left=0):
     if not email: return
-    subject = f"⏰ Your PostureAI Pro subscription {'expired' if expired else f'expires in {days_left} days'}"
+    subject = f"⏰ Your Corvus subscription {'expired' if expired else f'expires in {days_left} days'}"
     body = f"""
     <div style="font-family:Inter,system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px">
       <div style="text-align:center;margin-bottom:20px">
         <div style="width:48px;height:48px;background:linear-gradient(135deg,#1a56db,#0891b2);border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:22px">◈</div>
-        <h2 style="margin:12px 0 4px;font-size:18px;color:#f0f6ff">PostureAI Pro</h2>
+        <h2 style="margin:12px 0 4px;font-size:18px;color:#f0f6ff">Corvus</h2>
       </div>
       {"<p style='color:#ef4444;font-weight:700;font-size:16px'>Your subscription has expired.</p>" if expired else f"<p style='color:#f59e0b;font-weight:700;font-size:16px'>Your subscription expires in {days_left} day{'s' if days_left!=1 else ''}.</p>"}
       <p style="color:#94a3b8;font-size:13px">You were on the <strong>{tier.title()}</strong> plan. {"Your account has been downgraded to the free tier." if expired else "Renew now to keep your data and settings."}</p>
       <div style="text-align:center;margin-top:24px">
-        <a href="{os.getenv('APP_URL','https://postureai.vercel.app')}#pricing"
+        <a href="{os.getenv('APP_URL','https://corvus.vercel.app')}#pricing"
            style="background:#1a56db;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px">
           {"Reactivate Plan →" if expired else "Renew Now →"}
         </a>
@@ -10486,7 +10486,7 @@ def send_welcome_ep():
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;background:#07111f;border-radius:16px;overflow:hidden">
   <div style="background:linear-gradient(135deg,#4f46e5,#0891b2);padding:36px 32px;text-align:center">
     <div style="font-size:32px;margin-bottom:12px">◈</div>
-    <div style="font-size:22px;font-weight:700;color:white;letter-spacing:-.03em;margin-bottom:4px">Welcome to PostureAI Pro</div>
+    <div style="font-size:22px;font-weight:700;color:white;letter-spacing:-.03em;margin-bottom:4px">Welcome to Corvus</div>
     <div style="font-size:13px;color:rgba(255,255,255,.65)">AI Workforce Intelligence Platform</div>
   </div>
   <div style="padding:32px">
@@ -10522,10 +10522,10 @@ def send_welcome_ep():
       </div>
     </div>
 
-    <p style="color:#475569;font-size:11px;text-align:center;margin:0">PostureAI Pro · <a href="mailto:{SUPPORT_EMAIL}" style="color:#6366f1">{SUPPORT_EMAIL}</a> · {ADMIN_PHONE}</p>
+    <p style="color:#475569;font-size:11px;text-align:center;margin:0">Corvus · <a href="mailto:{SUPPORT_EMAIL}" style="color:#6366f1">{SUPPORT_EMAIL}</a> · {ADMIN_PHONE}</p>
   </div>
 </div>"""
-        ok = send_email(to=to, subject="✦ Welcome to PostureAI Pro — Your AI workforce intelligence is live", html_body=html)
+        ok = send_email(to=to, subject="✦ Welcome to Corvus — Your AI workforce intelligence is live", html_body=html)
         return jsonify({"ok":ok})
     except Exception as e:
         return safe_error(e)
@@ -10747,7 +10747,7 @@ def subscription_cancel():
         })
         # Notify admin
         threading.Thread(target=_send_email_smtp, args=(
-            os.getenv("ADMIN_EMAIL","admin@postureai.io"),
+            os.getenv("ADMIN_EMAIL","admin@corvus.io"),
             f"⚠️ Cancellation Request — {email} ({tier})",
             f"<p>User <strong>{email}</strong> (uid: {uid}) requested cancellation of their <strong>{tier}</strong> plan.</p><p>Process in PayMob and update Firestore.</p>"
         ), daemon=True).start()
@@ -10761,7 +10761,7 @@ if __name__ == "__main__":
     _ae.register(lambda: _ai_executor.shutdown(wait=False))
     os.makedirs("reports", exist_ok=True)
     print("="*60, flush=True)
-    print("  PostureAI Pro Backend v15", flush=True)
+    print("  Corvus Backend v15", flush=True)
     print(f"  MediaPipe {mp.__version__} — Pose + FaceMesh + solvePnP + Blink Detection", flush=True)
     print(f"  AI:  {'✅ Gemini ready' if GEMINI_API_KEY else '⚠️  Add GEMINI_API_KEY to .env'}", flush=True)
     print(f"  PDF: {'✅ ReportLab ready' if REPORTLAB_OK else '⚠️  pip install reportlab'}", flush=True)
@@ -10794,10 +10794,10 @@ def _deliver_webhook(wh: dict, payload: dict, attempt: int = 1):
     sig     = _sign_payload(wh.get("secret", ""), body)
     headers = {
         "Content-Type":          "application/json",
-        "X-PostureAI-Signature": sig,
-        "X-PostureAI-Event":     payload.get("event", "posture.alert"),
-        "X-PostureAI-Delivery":  payload.get("delivery_id", ""),
-        "User-Agent":            "PostureAI-Webhooks/1.0",
+        "X-Corvus-Signature": sig,
+        "X-Corvus-Event":     payload.get("event", "posture.alert"),
+        "X-Corvus-Delivery":  payload.get("delivery_id", ""),
+        "User-Agent":            "Corvus-Webhooks/1.0",
     }
     log_entry = {
         "webhook_id":   wh["id"],
@@ -10961,7 +10961,7 @@ def test_webhook(wid):
     payload = {
         "event": "webhook.test", "delivery_id": str(uuid.uuid4())[:12],
         "timestamp": datetime.now().isoformat(),
-        "data": {"message": "PostureAI webhook test — delivery confirmed ✓"},
+        "data": {"message": "Corvus webhook test — delivery confirmed ✓"},
     }
     _threading.Thread(target=_deliver_webhook, args=[wh, payload], daemon=True).start()
     return jsonify({"ok": True, "message": "Test delivery queued"})
@@ -11155,9 +11155,9 @@ def coach_chat():
         tier       = context.get("tier", "professional")
         is_ar      = lang == "ar"
 
-        sys_prompt = f"""You are PostureAI Coach — a certified ergonomics and physiotherapy AI assistant embedded in the PostureAI Pro platform.
+        sys_prompt = f"""You are Corvus Coach — a certified ergonomics and physiotherapy AI assistant embedded in the Corvus platform.
 
-You are PostureAI's workforce health intelligence coach. You analyze employee health data and translate it into actionable productivity and wellness insights.
+You are Corvus's workforce health intelligence coach. You analyze employee health data and translate it into actionable productivity and wellness insights.
 
 You have access to this user's real workforce health analytics:
 - Average posture score: {avg_score}/100
@@ -11192,7 +11192,7 @@ You can help with:
         # 4. assistant messages mapped to "model" (Gemini API name).
         gemini_contents = []
         context_tag = (
-            f"[PostureAI context — avg={avg_score}/100, sessions={sessions_n}, "
+            f"[Corvus context — avg={avg_score}/100, sessions={sessions_n}, "
             f"worst_time={worst_time}, top_alerts={', '.join(top_alerts[:3]) or 'none'}, "
             f"calibration={'active' if calib else 'off'}]"
         )
@@ -12018,9 +12018,9 @@ def _require_api_key(f):
     from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
-        key = request.headers.get("X-PostureAI-Key") or request.args.get("api_key")
+        key = request.headers.get("X-Corvus-Key") or request.args.get("api_key")
         if not key:
-            return jsonify({"error": "API key required. Add X-PostureAI-Key header."}), 401
+            return jsonify({"error": "API key required. Add X-Corvus-Key header."}), 401
         key_hash = _hashlib.sha256(key.encode()).hexdigest()[:32]
         meta     = _api_keys.get(key_hash)
         if not meta:
@@ -12077,8 +12077,8 @@ def api_v1_summary():
         "plan":       meta.get("plan"),
         "api_usage":  meta.get("usage"),
         "timestamp":  datetime.now().isoformat(),
-        "message":    "PostureAI Enterprise API v1",
-        "docs":       "https://docs.postureai.io/api",
+        "message":    "Corvus Enterprise API v1",
+        "docs":       "https://docs.corvus.io/api",
     })
 
 # ══════════════════════════════════════════════════════════════════
@@ -12123,7 +12123,7 @@ def weekly_progress_email():
         _streak_lbl = "أيام متتالية" if is_ar else "Streak"
         _ach_block  = f'<div style="margin-bottom:20px">{ach_html}</div>' if ach_html else ""
         _ins_title  = "توصيات الأسبوع" if is_ar else "This week's insights"
-        _cta_txt    = "فتح PostureAI ←" if is_ar else "Open PostureAI →"
+        _cta_txt    = "فتح Corvus ←" if is_ar else "Open Corvus →"
 
         html = f"""
 <div dir="{_dir}" style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;background:#030b14;border-radius:14px;overflow:hidden">
@@ -12155,7 +12155,7 @@ def weekly_progress_email():
     <div style="text-align:center">
       <a href="{APP_URL}" style="background:#1a56db;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px">{_cta_txt}</a>
     </div>
-    <p style="font-size:10px;color:#334155;text-align:center;margin-top:20px">PostureAI Pro · {SUPPORT_EMAIL}</p>
+    <p style="font-size:10px;color:#334155;text-align:center;margin-top:20px">Corvus · {SUPPORT_EMAIL}</p>
   </div>
 </div>"""
         ok = send_email(to, subject, html)
@@ -12910,8 +12910,8 @@ def stripe_webhook():
                 "user_name": email.split("@")[0] if email else "Customer"
             })
             if email:
-                send_email(email, f"✅ PostureAI {plan.title()} — Payment Confirmed",
-                           f"<p>Your {plan.title()} plan is now active. <a href='{APP_URL}'>Open PostureAI</a></p>")
+                send_email(email, f"✅ Corvus {plan.title()} — Payment Confirmed",
+                           f"<p>Your {plan.title()} plan is now active. <a href='{APP_URL}'>Open Corvus</a></p>")
 
         elif etype == "customer.subscription.deleted":
             uid = obj.get("metadata", {}).get("uid", "")
@@ -13052,23 +13052,23 @@ def billing_dunning_send():
 
         stage_copy = {
             1: {
-                "subject":  f"⚠️ Action needed — PostureAI {tier.title()} payment",
+                "subject":  f"⚠️ Action needed — Corvus {tier.title()} payment",
                 "headline": "Your payment didn't go through",
                 "body":     f"We tried to process your {tier.title()} subscription ({amount:,} EGP) but it was unsuccessful. Please update your payment method to keep your intelligence platform active.",
                 "cta":      "Update Payment Method →",
                 "color":    "#f59e0b",
             },
             2: {
-                "subject":  f"🔴 Final notice — PostureAI account at risk",
+                "subject":  f"🔴 Final notice — Corvus account at risk",
                 "headline": "Your account will be suspended in 24 hours",
                 "body":     f"Your {tier.title()} plan payment of {amount:,} EGP is overdue. Your workforce intelligence data will be paused at midnight if not resolved. Use code RECOVER10 for 10% off your next payment.",
                 "cta":      "Resolve Payment Now →",
                 "color":    "#ef4444",
             },
             3: {
-                "subject":  f"Account suspended — PostureAI Pro",
+                "subject":  f"Account suspended — Corvus",
                 "headline": "Your account has been suspended",
-                "body":     f"Your PostureAI Pro account has been suspended due to non-payment. Your data is secured for 30 days. Reactivate now to restore full access and retain all your workforce health intelligence history.",
+                "body":     f"Your Corvus account has been suspended due to non-payment. Your data is secured for 30 days. Reactivate now to restore full access and retain all your workforce health intelligence history.",
                 "cta":      "Reactivate Account →",
                 "color":    "#7f1d1d",
             },
@@ -13339,7 +13339,7 @@ def billing_invoice_pdf():
 
         # ── Header ────────────────────────────────────────────────
         story.append(Table([
-            [Paragraph("◈ PostureAI Pro", h1),
+            [Paragraph("◈ Corvus", h1),
              Paragraph("INVOICE", ParagraphStyle("inv", fontName="Helvetica-Bold",
                 fontSize=11, textColor=BL, alignment=TA_RIGHT))],
         ], colWidths=[W*0.6, W*0.4]))
@@ -13377,7 +13377,7 @@ def billing_invoice_pdf():
              Paragraph("Unit Price", lab),
              Paragraph("Total", ParagraphStyle("r", fontName="Helvetica",
                 fontSize=9, textColor=MU, alignment=TA_RIGHT))],
-            [Paragraph(f"PostureAI Pro — {tier.title()} Intelligence Plan ({cycle.title()})", val),
+            [Paragraph(f"Corvus — {tier.title()} Intelligence Plan ({cycle.title()})", val),
              Paragraph("1", val),
              Paragraph(f"{amount:,} EGP", val),
              Paragraph(f"<b>{amount:,} EGP</b>",
@@ -13426,7 +13426,7 @@ def billing_invoice_pdf():
 
         story.append(Spacer(1, 4*mm))
         story.append(Paragraph(
-            "PostureAI Pro · AI Workforce Intelligence Platform · postureai.io",
+            "Corvus · AI Workforce Intelligence Platform · corvus.io",
             ParagraphStyle("tag", fontSize=8, textColor=MU, alignment=TA_CENTER)
         ))
 
@@ -13436,7 +13436,7 @@ def billing_invoice_pdf():
             buf,
             mimetype="application/pdf",
             as_attachment=True,
-            download_name=f"postureai_invoice_{inv_number}.pdf",
+            download_name=f"corvus_invoice_{inv_number}.pdf",
         )
     except Exception as e:
         import traceback
@@ -13675,7 +13675,7 @@ Focus on actionable recommendations. {"Respond in Arabic." if lang=="ar" else "B
 
         # Header
         hdr = Table([[
-            Paragraph(f'<b>◈ PostureAI Pro</b>', ps('h',fontSize=16,textColor=WHITE,fontName='Helvetica-Bold')),
+            Paragraph(f'<b>◈ Corvus</b>', ps('h',fontSize=16,textColor=WHITE,fontName='Helvetica-Bold')),
             Paragraph(f'<b>Personal Health Report</b><br/><font size="8" color="#94a3b8">{date_range} · {tier.title()}</font>', ps('hr',fontSize=11,textColor=WHITE,textColor2=GRAY,alignment=TA_RIGHT)),
         ]], colWidths=[uw*.5,uw*.5])
         hdr.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),NAVY),('PADDING',(0,0),(-1,-1),14),('VALIGN',(0,0),(-1,-1),'MIDDLE')]))
@@ -13752,12 +13752,12 @@ Focus on actionable recommendations. {"Respond in Arabic." if lang=="ar" else "B
         # Footer
         story.append(HRFlowable(width=uw,thickness=0.5,color=colors.HexColor("#e2e8f0")))
         story.append(Paragraph(
-            f"Report generated by PostureAI Pro v20 · {datetime.now().strftime('%d %B %Y')} · For occupational health purposes only · Not medical advice",
+            f"Report generated by Corvus v20 · {datetime.now().strftime('%d %B %Y')} · For occupational health purposes only · Not medical advice",
             ps('ft',fontSize=7,textColor=GRAY,alignment=TA_CENTER)))
 
         doc.build(story)
         buf.seek(0)
-        fname = f"PostureAI_Report_{name.replace(' ','_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        fname = f"Corvus_Report_{name.replace(' ','_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
         return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=fname)
     except Exception as e:
         import traceback
@@ -13784,7 +13784,7 @@ def weekly_summary():
         elif avg_score >= 50: insights.append("Fair posture. Schedule more frequent breaks.")
         else: insights.append("Posture needs attention. Consider an ergonomic assessment.")
         if good_pct < 50: insights.append("Less than half your time was at good posture — try posture reminders.")
-        if total_min < 30: insights.append("Low monitoring time. Try to use PostureAI for at least 30 min/day.")
+        if total_min < 30: insights.append("Low monitoring time. Try to use Corvus for at least 30 min/day.")
         return jsonify({"avg_score":avg_score,"sessions":len(sessions),"good_pct":good_pct,"total_min":total_min,"trend":"stable","insights":insights})
     except Exception as e:
         return safe_error(e)
@@ -13817,17 +13817,17 @@ def org_send_invite():
         except Exception:
             pass
 
-        subject = f"[{company_name}] You're invited to PostureAI — AI Workforce Intelligence Platform"
+        subject = f"[{company_name}] You're invited to Corvus — AI Workforce Intelligence Platform"
         html    = f"""
 <div style="font-family:Inter,system-ui,sans-serif;max-width:520px;margin:0 auto;padding:28px 24px;background:#030b14;color:#f0f6ff;border-radius:16px">
   <div style="text-align:center;margin-bottom:24px">
     <div style="width:52px;height:52px;background:linear-gradient(135deg,#1a56db,#0891b2);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:26px">◈</div>
-    <h1 style="margin:12px 0 4px;font-size:20px;font-weight:800">PostureAI Pro</h1>
+    <h1 style="margin:12px 0 4px;font-size:20px;font-weight:800">Corvus</h1>
     <p style="color:#64748b;font-size:13px;margin:0">AI-powered workplace health</p>
   </div>
   <h2 style="font-size:18px;font-weight:700;margin-bottom:8px">Hi {name} 👋</h2>
   <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:24px">
-    <strong style="color:#f0f6ff">{company_name}</strong> has invited you to join their PostureAI Pro workspace.
+    <strong style="color:#f0f6ff">{company_name}</strong> has invited you to join their Corvus workspace.
     Real-time AI posture analysis to protect your health at work.
   </p>
   <div style="text-align:center;margin:28px 0">
@@ -13837,7 +13837,7 @@ def org_send_invite():
   </div>
   <p style="color:#475569;font-size:11px;text-align:center;margin-top:24px">
     This invite expires in 7 days. If you didn't expect this, ignore it safely.
-    <br>Need help? <a href="mailto:{os.getenv('SUPPORT_EMAIL','support@postureai.io')}" style="color:#1a56db">{os.getenv('SUPPORT_EMAIL','support@postureai.io')}</a>
+    <br>Need help? <a href="mailto:{os.getenv('SUPPORT_EMAIL','support@corvus.io')}" style="color:#1a56db">{os.getenv('SUPPORT_EMAIL','support@corvus.io')}</a>
   </p>
 </div>"""
 

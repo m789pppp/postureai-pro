@@ -1,5 +1,5 @@
 /**
- * APIMarketplace.jsx — PostureAI Phase 12
+ * APIMarketplace.jsx — Corvus Phase 12
  * Full API marketplace: key management, docs, usage analytics, webhooks, SDKs
  */
 import { useState, useEffect, useCallback } from "react";
@@ -35,9 +35,9 @@ const WEBHOOK_EVENTS = [
 ];
 
 const SDK_LANGS = [
-  { id:"js",     label:"JavaScript", icon:"🟨", install:"npm install @postureai/sdk", snippet:`import PostureAI from '@postureai/sdk';\n\nconst client = new PostureAI({ apiKey: 'YOUR_KEY' });\n\nconst result = await client.analyze.frame({\n  image: frameBuffer,\n  mode: 'laptop',\n  userId: 'usr_123',\n});\nconsole.log(result.score, result.alerts);` },
-  { id:"python", label:"Python",     icon:"🐍", install:"pip install postureai",      snippet:`from postureai import PostureAI\n\nclient = PostureAI(api_key="YOUR_KEY")\n\nresult = client.analyze.frame(\n    image=frame_bytes,\n    mode="laptop",\n    user_id="usr_123",\n)\nprint(result.score, result.alerts)` },
-  { id:"curl",   label:"cURL",       icon:"⚡", install:"(built-in)",                snippet:`curl -X POST https://api.postureai.com/v1/analyze/frame \\\n  -H "Authorization: Bearer YOUR_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"image":"<base64>","mode":"laptop","userId":"usr_123"}'` },
+  { id:"js",     label:"JavaScript", icon:"🟨", install:"npm install @corvus/sdk", snippet:`import Corvus from '@corvus/sdk';\n\nconst client = new Corvus({ apiKey: 'YOUR_KEY' });\n\nconst result = await client.analyze.frame({\n  image: frameBuffer,\n  mode: 'laptop',\n  userId: 'usr_123',\n});\nconsole.log(result.score, result.alerts);` },
+  { id:"python", label:"Python",     icon:"🐍", install:"pip install corvus",      snippet:`from corvus import Corvus\n\nclient = Corvus(api_key="YOUR_KEY")\n\nresult = client.analyze.frame(\n    image=frame_bytes,\n    mode="laptop",\n    user_id="usr_123",\n)\nprint(result.score, result.alerts)` },
+  { id:"curl",   label:"cURL",       icon:"⚡", install:"(built-in)",                snippet:`curl -X POST https://api.corvus.com/v1/analyze/frame \\\n  -H "Authorization: Bearer YOUR_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"image":"<base64>","mode":"laptop","userId":"usr_123"}'` },
 ];
 
 const METHOD_COLORS = { GET:"#10b981", POST:"#6366f1", DELETE:"#ef4444", PUT:"#f59e0b", PATCH:"#0ea5e9" };
@@ -117,7 +117,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
               <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🛒</div>
               <div>
                 <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>API Marketplace</div>
-                <div style={{ fontSize:12, color:cs.textDim }}>Integrate PostureAI into any platform</div>
+                <div style={{ fontSize:12, color:cs.textDim }}>Integrate Corvus into any platform</div>
               </div>
             </div>
             <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -282,7 +282,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                       <div style={{ fontSize:12, color:cs.textDim }}>🔒 Min plan: <b style={{ color:"#6366f1" }}>{selectedEndpoint.tier}</b></div>
                     </div>
                     <div style={{ fontWeight:700, color:cs.text, marginBottom:8, fontSize:13 }}>Example Request</div>
-                    <pre style={{ background:"rgba(0,0,0,0.3)", borderRadius:10, padding:14, color:"#a5f3fc", fontSize:12, overflowX:"auto", lineHeight:1.6 }}>{`curl -X ${selectedEndpoint.method} https://api.postureai.com${selectedEndpoint.path} \\
+                    <pre style={{ background:"rgba(0,0,0,0.3)", borderRadius:10, padding:14, color:"#a5f3fc", fontSize:12, overflowX:"auto", lineHeight:1.6 }}>{`curl -X ${selectedEndpoint.method} https://api.corvus.com${selectedEndpoint.path} \\
   -H "Authorization: Bearer pak_live_xxxxx" \\
   -H "Content-Type: application/json"${selectedEndpoint.method!=="GET"?` \\
   -d '{"userId":"usr_123","mode":"laptop"}'`:""}`}</pre>

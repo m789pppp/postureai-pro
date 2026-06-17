@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — BillingDashboard v1
+ * Corvus — BillingDashboard v1
  * Phase 8: Billing Maturity
  * Tabs: Overview · Usage · Invoices · Plan Change · Analytics (admin)
  */
@@ -19,12 +19,11 @@ const T = {
 
 const PLAN_META = {
   standard:     { color:"#64748b", label:"Starter",      labelAr:"ستارتر"    },
-  professional: { color:"#38bdf8", label:"Professional", labelAr:"احترافي"   },
-  elite:        { color:"#a78bfa", label:"Elite",        labelAr:"إيليت"     },
-  enterprise:   { color:"#f59e0b", label:"Enterprise",   labelAr:"مؤسسات"   },
+  professional: { color:"#38bdf8", label:"Growth",       labelAr:"جروث"      },
+  elite:        { color:"#10b981", label:"Enterprise",   labelAr:"إنتربرايز" },
 };
 
-const PLAN_ORDER = ["standard","professional","elite","enterprise"];
+const PLAN_ORDER = ["standard","professional","elite"];
 const planRank   = p => PLAN_ORDER.indexOf(p);
 
 const money = n => n != null ? `${Number(n).toLocaleString()} EGP` : "—";
@@ -618,9 +617,9 @@ export function BillingDashboard({ profile, payments=[], isAr, onClose, isAdmin=
             <Divider label={isAr_?"اختر خطة جديدة":"Select New Plan"}/>
 
             {/* Plan selector */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)",
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)",
               gap:SP[2], marginBottom:SP[4] }}>
-              {PLAN_ORDER.filter(p=>p!=="enterprise").map(plan => {
+              {PLAN_ORDER.map(plan => {
                 const m   = PLAN_META[plan];
                 const sel = newPlan === plan;
                 const cur = tier   === plan;

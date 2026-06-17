@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — UI Library v3
+ * Corvus — UI Library v3
  * Complete system: Mobile Polish + States + Smooth UX
  * ─────────────────────────────────────────────────────────────────
  * Exports:
@@ -464,7 +464,7 @@ export function ZeroDashboard({ isAr, onStart }) {
         animation:"pop .5s cubic-bezier(.34,1.56,.64,1) both" }}>🏃</div>
       <div style={{ fontSize:20, fontWeight:800, color:C.text, letterSpacing:"-.04em",
         marginBottom:6 }}>
-        {isAr ? "ابدأ رحلتك مع PostureAI" : "Your journey starts here"}
+        {isAr ? "ابدأ رحلتك مع Corvus" : "Your journey starts here"}
       </div>
       <div style={{ fontSize:13, color:C.muted, marginBottom:28, lineHeight:1.7 }}>
         {isAr

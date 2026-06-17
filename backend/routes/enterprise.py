@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Enterprise Routes Blueprint
+Corvus — Enterprise Routes Blueprint
 Handles: HR import, org management, audit logs, RBAC, seat management
 """
 from flask import Blueprint, request, jsonify, g

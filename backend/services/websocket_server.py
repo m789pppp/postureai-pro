@@ -1,5 +1,5 @@
 """
-websocket_server.py — PostureAI
+websocket_server.py — Corvus
 Real-time posture scoring via WebSocket (Flask-SocketIO)
 Replaces the polling pattern (analyze every 3s) with push-based updates.
 Add SOCKETIO_ENABLED=true to env to activate.
@@ -7,7 +7,7 @@ Add SOCKETIO_ENABLED=true to env to activate.
 import os, base64, json, time, logging
 from datetime import datetime
 
-log = logging.getLogger("postureai.ws")
+log = logging.getLogger("corvus.ws")
 
 def init_socketio(app):
     """Initialize Socket.IO server. Call from backend.py if SOCKETIO_ENABLED=true."""

@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Stripe Billing Routes v2
+Corvus — Stripe Billing Routes v2
 Handles: Checkout sessions, webhooks, portal, subscription management
 Security: Webhook signature verification, server-side pricing, idempotency
 """
@@ -9,13 +9,13 @@ import logging
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, g
 
-logger = logging.getLogger("postureai.billing")
+logger = logging.getLogger("corvus.billing")
 
 stripe_bp = Blueprint("stripe", __name__)
 
 STRIPE_SECRET_KEY    = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-APP_URL = os.getenv("APP_URL", "https://postureai.io")
+APP_URL = os.getenv("APP_URL", "https://corvus.io")
 
 # ── Server-side pricing (NEVER trust client amount) ───────────────
 STRIPE_PRICES = {

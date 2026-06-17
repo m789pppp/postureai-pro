@@ -78,7 +78,7 @@ import { APIChangelog }   from "./APIChangelog.jsx";
 import EmbedWidget        from "./EmbedWidget.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
-// Example: VITE_API_URL=https://postureai-backend.railway.app/api
+// Example: VITE_API_URL=https://corvus-backend.railway.app/api
 const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
 
 // ── i18n ──────────────────────────────────────────────────────────
@@ -89,34 +89,58 @@ const TR = {
   ar: getT("ar"),
 };
 
-const PERSONAL_PLANS = {
-  basic:   { id:"basic",   name:"Basic",        color:"#6366f1", colorDim:"rgba(99,102,241,.12)",  price_monthly:499,  price_yearly:4990,  accuracy:"~88%", features:["33-landmark detection","Head tilt & neck lean","Screen distance","PDF report","Email support"] },
-  pro:     { id:"pro",     name:"Pro",           color:"#0ea5e9", colorDim:"rgba(14,165,233,.12)",  price_monthly:699,  price_yearly:6990,  accuracy:"~93%", features:["Everything in Basic","FaceMesh 478 landmarks","3D head pose","AI recommendations","Priority support"], badge:"Popular" },
-  premium: { id:"premium", name:"Premium",       color:"#10b981", colorDim:"rgba(16,185,129,.12)",  price_monthly:1199, price_yearly:11990, accuracy:"~96%", features:["Everything in Pro","Gemini AI narrative","Unlimited history","Advanced analytics","Phone support"], badge:"Best" },
-};
-
+// ══════════════════════════════════════════════════════════════════
+// CORVUS — Single Source of Truth for Pricing
+// EGP = Egypt market (PayMob) · USD = Gulf/International market (Stripe)
+// Annual = 20% discount (2 months free) — applied at checkout, not stored here
+// ══════════════════════════════════════════════════════════════════
 const COUPONS = {}; // Coupons validated server-side via /api/coupon/validate
 
 const TIERS = {
   standard:{
-    id:"standard",name:"Standard",color:"#6366f1",colorDim:"rgba(99,102,241,.12)",
-    price_monthly:199,price_yearly:1990,seats:25,accuracy:"~88%",
-    features:["33-landmark pose detection","Head tilt & neck lean","IPD screen distance","PDF reports","25 employees","HR dashboard","Email support"],
+    id:"standard",name:"Starter",color:"#6366f1",colorDim:"rgba(99,102,241,.12)",
+    price_egp_monthly:2499, price_egp_yearly:23990,   // 20% off annual
+    price_usd_monthly:79,   price_usd_yearly:758,
+    seats:30,accuracy:"~88%",
+    features:["33-landmark pose detection","Head tilt & neck lean","IPD screen distance","PDF reports","30 employees","HR dashboard","Email support"],
     badge:null
   },
   professional:{
-    id:"professional",name:"Professional",color:"#0ea5e9",colorDim:"rgba(14,165,233,.12)",
-    price_monthly:499,price_yearly:4990,seats:100,accuracy:"~93%",
-    features:["Everything in Standard","FaceMesh 478 landmarks","3D solvePnP head pose","Iris IPD precision","Spine + shoulder analysis","Advanced HR analytics","Clinical PDF + 3D","Alert log + timestamps","100 employees","Priority support"],
+    id:"professional",name:"Growth",color:"#0ea5e9",colorDim:"rgba(14,165,233,.12)",
+    price_egp_monthly:6999, price_egp_yearly:67190,
+    price_usd_monthly:199,  price_usd_yearly:1910,
+    seats:100,accuracy:"~93%",
+    features:["Everything in Starter","FaceMesh 478 landmarks","3D solvePnP head pose","Iris IPD precision","Spine + shoulder analysis","Advanced HR analytics","Clinical PDF + 3D","Alert log + timestamps","100 employees","Priority support"],
     badge:"Most Popular"
   },
   elite:{
-    id:"elite",name:"Elite",color:"#10b981",colorDim:"rgba(16,185,129,.12)",
-    price_monthly:null,price_yearly:null,seats:-1,accuracy:"~96%",
-    features:["Everything in Professional","Gemini AI clinical narrative","Unlimited employees","White-label branding","Custom SLA","API access"],
+    id:"elite",name:"Enterprise",color:"#10b981",colorDim:"rgba(16,185,129,.12)",
+    price_egp_monthly:null, price_egp_yearly:null,    // Custom — sales contact
+    price_usd_monthly:499,  price_usd_yearly:null,    // "Starting at" price shown
+    seats:-1,accuracy:"~96%",
+    features:["Everything in Growth","Gemini AI clinical narrative","Unlimited employees","White-label branding","Custom SLA","API access","SSO/SAML","Dedicated success manager"],
     badge:"Enterprise"
   }
 };
+
+// Legacy field aliases — keeps old price_monthly/price_yearly reads working
+// (defaults to EGP; call getPriceForCurrency() for explicit currency)
+for(const k in TIERS){
+  TIERS[k].price_monthly = TIERS[k].price_egp_monthly;
+  TIERS[k].price_yearly  = TIERS[k].price_egp_yearly;
+}
+
+// ── Currency-aware price getter ──────────────────────────────────
+// region: "EG" → EGP, anything else (Gulf/intl) → USD
+function getTierPrice(tierId, period="monthly", region="EG"){
+  const t = TIERS[tierId];
+  if(!t) return null;
+  const currency = region==="EG" ? "egp" : "usd";
+  return t[`price_${currency}_${period}`];
+}
+function getCurrencySymbol(region="EG"){
+  return region==="EG" ? "EGP" : "USD";
+}
 
 // ── Tier ID normaliser ──────────────────────────────────────────────
 const TIER_NORMALIZE={basic:"standard",pro:"professional",premium:"elite",
@@ -138,11 +162,9 @@ const PAY_METHODS = [
    type:"wallet"},
 ];
 
-const PERSONAL_TIERS = [
-  {id:"personal_basic",  name:"Basic",   color:"#6366f1", price:499,  accuracy:"~88%", features:["Laptop & Phone camera","Posture score & alerts","Session PDF report","7-day history","Email support"]},
-  {id:"personal_pro",   name:"Pro",     color:"#0ea5e9", price:699,  accuracy:"~93%", features:["Everything in Basic","FaceMesh precision","AI Gemini insights","30-day history","Priority support"]},
-  {id:"personal_elite", name:"Elite",   color:"#10b981", price:1199, accuracy:"~96%", features:["Everything in Pro","3D head pose analysis","Unlimited history","Custom alerts","VIP support"]},
-];
+// Personal/individual users share the same TIERS pricing as companies —
+// acct_type ("individual" vs "company") determines seat count display only.
+// Legacy personal_basic/personal_pro/personal_elite IDs are normalized via TIER_NORMALIZE.
 
 // Emails that can access HR Panel and Admin Panel
 // HR_EMAILS — list of emails with HR admin access
@@ -852,7 +874,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
     <div style={{padding:"12px 19px",borderBottom:`0.5px solid ${cs.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:cs.card}}>
       <div style={{display:"flex",alignItems:"center",gap:9}}>
         <div style={{width:25,height:25,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>◈</div>
-        <div><div style={{fontSize:12,fontWeight:700}}>PostureAI Admin</div><div style={{fontSize:9,color:cs.muted}}>{adminUser?.email}</div></div>
+        <div><div style={{fontSize:12,fontWeight:700}}>Corvus Admin</div><div style={{fontSize:9,color:cs.muted}}>{adminUser?.email}</div></div>
       </div>
       <div style={{display:"flex",gap:9,alignItems:"center"}}>
         <div style={{fontSize:12,color:"#10b981",fontWeight:600}}>{totalRev.toLocaleString()} EGP total</div>
@@ -1015,7 +1037,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
 
   useEffect(()=>{
     if(step==="plan"&&price&&price>0){
-      askGemini(`In 2 sentences, why is ${tier.name} PostureAI at ${price} EGP/${billing==="monthly"?"month":"year"} good ROI for Egyptian companies? Focus on sick-leave cost savings.`).then(setAiTip);
+      askGemini(`In 2 sentences, why is ${tier.name} Corvus at ${price} EGP/${billing==="monthly"?"month":"year"} good ROI for Egyptian companies? Focus on sick-leave cost savings.`).then(setAiTip);
     }
   },[selTier,billing,seats,step]);
 
@@ -1360,7 +1382,7 @@ function AccountTypeSelect({cs,t,lang,onSelect}){
       <div style={{textAlign:"center",marginBottom:32}}>
         <div style={{width:52,height:52,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 14px"}}>◈</div>
         <div style={{fontSize:20,fontWeight:700,color:cs.text,marginBottom:6}}>{t.acctType}</div>
-        <div style={{fontSize:12,color:cs.muted}}>PostureAI Pro</div>
+        <div style={{fontSize:12,color:cs.muted}}>Corvus</div>
       </div>
       <div style={{display:"grid",gap:14}}>
         {[
@@ -1630,11 +1652,11 @@ export default function App(){
 
   // Update document title on page change
   useEffect(()=>{
-    const titles={landing:"PostureAI Pro",auth:"Sign In — PostureAI Pro",setup:"Setup — PostureAI Pro",
-      home:"Dashboard — PostureAI Pro",live:"Live Session — PostureAI Pro",
-      profile:"Profile — PostureAI Pro",pricing:"Plans — PostureAI Pro",
-      leaderboard:"Leaderboard — PostureAI Pro",admin:"Admin — PostureAI Pro",hr:"HR Panel — PostureAI Pro"};
-    document.title=titles[page]||"PostureAI Pro";
+    const titles={landing:"Corvus",auth:"Sign In — Corvus",setup:"Setup — Corvus",
+      home:"Dashboard — Corvus",live:"Live Session — Corvus",
+      profile:"Profile — Corvus",pricing:"Plans — Corvus",
+      leaderboard:"Leaderboard — Corvus",admin:"Admin — Corvus",hr:"HR Panel — Corvus"};
+    document.title=titles[page]||"Corvus";
   },[page]);
 
   const vidRef=useRef();const ovRef=useRef();const canvRef=useRef();
@@ -1644,7 +1666,7 @@ export default function App(){
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
 
-  const T_=tier?(TIERS[tier]||PERSONAL_PLANS[tier]||PERSONAL_TIERS.find(p=>p.id===tier)||null):null;
+  const T_=tier?(TIERS[normalizeTier(tier)]||null):null;
   // Normalize T_ so live dashboard always has .name and .color
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
   const MC={
@@ -2234,7 +2256,7 @@ export default function App(){
         color: darkMode ? "#f0f6ff" : "#0f172a",
         letterSpacing: "-.03em",
         marginBottom: 6,
-      }}>PostureAI Pro</div>
+      }}>Corvus</div>
 
       {/* Tagline */}
       <div style={{
@@ -2657,7 +2679,7 @@ export default function App(){
             onClick={e=>e.stopPropagation()}>
             <p style={{fontSize:28,marginBottom:8}}>👋</p>
             <p style={{fontSize:18,fontWeight:700,color:"var(--color-text-primary,#eef2ff)",marginBottom:8}}>
-              {lang==="ar"?"كيف تقيّم PostureAI؟":"How would you rate PostureAI?"}
+              {lang==="ar"?"كيف تقيّم Corvus؟":"How would you rate Corvus?"}
             </p>
             <p style={{fontSize:13,color:"var(--color-text-secondary,#94a3b8)",marginBottom:24}}>
               {lang==="ar"?"رأيك يساعدنا على التحسين":"Your feedback helps us improve"}
@@ -3017,7 +3039,7 @@ export default function App(){
         }}>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
             <div style={{width:22,height:22,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>◈</div>
-            <span style={{fontSize:12,fontWeight:700,color:cs.text}}>PostureAI</span>
+            <span style={{fontSize:12,fontWeight:700,color:cs.text}}>Corvus</span>
           </div>
           <div style={{display:"flex",gap:5,alignItems:"center"}}>
             {TN&&<span style={{background:TN.colorDim,border:`1px solid ${TN.color}40`,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,color:TN.color}}>{TN.name}</span>}

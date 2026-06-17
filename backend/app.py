@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Application Entry Point v3
+Corvus — Application Entry Point v3
 Modular architecture — previously monolithic backend.py (5,539 lines)
 is now organized into focused modules.
 
@@ -30,5 +30,5 @@ from backend import app  # noqa: F401
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5050))
     debug = os.getenv("FLASK_ENV", "development") == "development"
-    print(f"🚀 PostureAI starting on port {port} (debug={debug})")
+    print(f"🚀 Corvus starting on port {port} (debug={debug})")
     app.run(host="0.0.0.0", port=port, debug=debug)

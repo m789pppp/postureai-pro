@@ -1,5 +1,5 @@
 """
-PostureAI Pro — AI Routes Blueprint  
+Corvus — AI Routes Blueprint  
 Handles: Gemini proxy, AI analytics, coach chat, predictive, heatmaps
 """
 from flask import Blueprint, request, jsonify, g

@@ -1,4 +1,4 @@
-# PostureAI Pro — Merged Build Notes
+# Corvus — Merged Build Notes
 **Base:** v17 Audited (best SaaS infrastructure)
 **Added from v13:** WorkOS SSO + Custom Domains (backend) + APIChangelog + EmbedWidget (frontend)
 **Added from v18:** MRRDashboard + HelpCenter + ShareCard (frontend) + App Store Checklist (mobile)

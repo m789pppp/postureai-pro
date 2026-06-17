@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Landing Page v7
+ * Corvus — Landing Page v7
  * CRO-optimized: Hero → Social Proof → Benefits → Features →
  *   How It Works → Case Studies → Pricing → FAQ → Testimonials → CTA → Footer
  * Design: Premium dark SaaS, Stripe/Linear quality
@@ -7,8 +7,8 @@
  */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
-const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "sales@postureai.io";
-const CALENDLY_URL  = import.meta.env.VITE_CALENDLY_URL  || "https://calendly.com/postureai/demo";
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "sales@corvus.io";
+const CALENDLY_URL  = import.meta.env.VITE_CALENDLY_URL  || "https://calendly.com/corvus/demo";
 const APP_URL       = typeof window !== "undefined" ? window.location.origin : "";
 
 // ── Scroll-triggered reveal ───────────────────────────────────────
@@ -166,7 +166,7 @@ function Nav({ lang, setLang, onCTA }) {
             background: C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
             fontSize:18, boxShadow:"0 4px 16px rgba(79,124,249,.4)" }}>🧘</div>
           <span style={{ fontWeight:700, fontSize:17, letterSpacing:"-.02em" }}>
-            PostureAI <span style={{ background:C.gHero, WebkitBackgroundClip:"text",
+            Corvus <span style={{ background:C.gHero, WebkitBackgroundClip:"text",
               WebkitTextFillColor:"transparent" }}>Pro</span>
           </span>
         </a>
@@ -708,38 +708,32 @@ function Pricing({ lang, onCTA }) {
   const ar = lang === "ar";
   const [billing, setBilling] = useState("yearly");
 
+  // Flat-rate pricing — matches TIERS in App.jsx exactly (single source of truth).
+  // EGP shown for Egypt market, USD shown for Gulf/international (not per-seat — flat platform fee).
   const plans = [
     {
-      id:"starter", name: ar?"البداية":"Starter",
-      priceUSD:{ monthly:0, yearly:0 }, priceEGP:{ monthly:0, yearly:0 },
-      isFree:true, color:C.sub,
+      id:"standard", name: ar?"ستارتر":"Starter",
+      priceUSD:{ monthly:79, yearly:758 }, priceEGP:{ monthly:2499, yearly:23990 },
+      color:C.sub,
       features: ar
-        ? ["3 جلسات يومياً","تحليل أساسي","تقرير PDF","دعم البريد الإلكتروني"]
-        : ["3 sessions/day","Basic posture score","PDF report","Email support"],
+        ? ["حتى 30 موظف","كشف 33 نقطة بالـAI","تقارير PDF","لوحة تحليلات HR","تجربة مجانية 7 أيام","دعم بالبريد"]
+        : ["Up to 30 employees","33-point AI pose detection","PDF reports","HR analytics dashboard","7-day free trial","Email support"],
     },
     {
-      id:"professional", name: ar?"الاحترافية":"Professional",
-      priceUSD:{ monthly:9, yearly:7 }, priceEGP:{ monthly:199, yearly:159 },
+      id:"professional", name: ar?"جروث":"Growth",
+      priceUSD:{ monthly:199, yearly:1910 }, priceEGP:{ monthly:6999, yearly:67190 },
       popular:true, color:C.blue,
       features: ar
-        ? ["جلسات غير محدودة","FaceMesh 478 نقطة","وضع رأس ثلاثي الأبعاد","تنبيهات Slack/Teams","تقرير HR شهري","دعم أولوية","حتى 100 موظف"]
-        : ["Unlimited sessions","FaceMesh 478 landmarks","3D head pose","Slack/Teams alerts","Monthly HR report","Priority support","Up to 100 employees"],
+        ? ["حتى 100 موظف","FaceMesh 478 نقطة","وضع رأس ثلاثي الأبعاد","تنبيهات Slack/Teams","تقرير HR تنفيذي","دعم أولوية + SLA"]
+        : ["Up to 100 employees","FaceMesh 478 landmarks","3D head pose","Slack/Teams alerts","Executive HR reports","Priority support + SLA"],
     },
     {
-      id:"business", name: ar?"الأعمال":"Business",
-      priceUSD:{ monthly:19, yearly:15 }, priceEGP:{ monthly:399, yearly:319 },
-      color:C.violet,
-      features: ar
-        ? ["كل ما في الاحترافية","Gemini AI narrative","مدرب AI شخصي","خرائط حرارية","الإنجازات والـXP","Webhook تكاملات","وصول API","حتى 500 موظف"]
-        : ["Everything in Professional","Gemini AI narrative","AI Posture Coach chat","Posture heatmaps","Gamification & XP","Webhook integrations","API access","Up to 500 employees"],
-    },
-    {
-      id:"enterprise", name: ar?"المؤسسات":"Enterprise",
-      priceUSD:{ monthly:null, yearly:null }, priceEGP:{ monthly:null, yearly:null },
+      id:"elite", name: ar?"إنتربرايز":"Enterprise",
+      priceUSD:{ monthly:null, yearly:null, startingAt:499 }, priceEGP:{ monthly:null, yearly:null },
       isEnterprise:true, color:C.green,
       features: ar
-        ? ["كل شيء في الأعمال","موظفون غير محدودون","SAML SSO / Azure AD","White-label","SLA مخصص","مدير نجاح مخصص","إقامة البيانات","عقود مرنة"]
-        : ["Everything in Business","Unlimited employees","SAML SSO / Azure AD","White-label option","Custom SLA","Dedicated success manager","Data residency","Custom contracts"],
+        ? ["موظفون غير محدودون","Gemini AI narrative","SAML SSO / Azure AD","White-label","SLA مخصص","مدير نجاح مخصص"]
+        : ["Unlimited employees","Gemini AI narrative","SAML SSO / Azure AD","White-label","Custom SLA","Dedicated success manager"],
     },
   ];
 
@@ -778,7 +772,7 @@ function Pricing({ lang, onCTA }) {
           </div>
         </Reveal>
 
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:20 }}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20 }}
           className="pricing-grid">
           {plans.map((p, i) => (
             <Reveal key={p.id} delay={i * 80}>
@@ -800,24 +794,27 @@ function Pricing({ lang, onCTA }) {
                     {p.name}
                   </div>
                   {p.isEnterprise ? (
-                    <div style={{ fontSize:28, fontWeight:800, color:C.text }}>
-                      {ar ? "تواصل معنا" : "Contact us"}
+                    <div>
+                      <div style={{ fontSize:28, fontWeight:800, color:C.text }}>
+                        {ar ? "تواصل معنا" : "Contact us"}
+                      </div>
+                      {p.priceUSD?.startingAt && (
+                        <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>
+                          {ar ? `يبدأ من $${p.priceUSD.startingAt}/شهر` : `Starting at $${p.priceUSD.startingAt}/mo`}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
                       <span style={{ fontSize:36, fontWeight:800, color:C.text }}>
-                        {p.isFree ? (ar ? "مجاني" : "Free") : `$${p.priceUSD[billing]}`}
+                        ${p.priceUSD[billing]}
                       </span>
-                      {!p.isFree && (
-                        <span style={{ fontSize:14, color:C.muted }}>
-                          /{ar ? "مستخدم/شهر" : "user/mo"}
-                        </span>
-                      )}
-                    {!p.isFree && !p.isEnterprise && (
-                      <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>
-                        ≈ {billing==="monthly" ? p.priceEGP.monthly : p.priceEGP.yearly} {ar ? "ج.م./مستخدم/شهر" : "EGP/user/mo"}
-                      </div>
-                    )}
+                      <span style={{ fontSize:14, color:C.muted }}>
+                        /{ar ? "شهر" : "mo"}
+                      </span>
+                    <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>
+                      ≈ {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()} {ar ? "ج.م./شهر" : "EGP/mo"}
+                    </div>
                     </div>
                   )}
                 </div>
@@ -983,8 +980,8 @@ function FinalCTA({ lang, onCTA }) {
             </h2>
             <p style={{ fontSize:17, color:C.sub, maxWidth:480, margin:"0 auto 36px" }}>
               {ar
-                ? "انضم إلى أكثر من 200 شركة تستخدم PostureAI Pro. تجربة مجانية 7 أيام."
-                : "Join 200+ companies using PostureAI Pro. 7-day free trial, no credit card required."}
+                ? "انضم إلى أكثر من 200 شركة تستخدم Corvus. تجربة مجانية 7 أيام."
+                : "Join 200+ companies using Corvus. 7-day free trial, no credit card required."}
             </p>
             <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" }}>
               <a href="#" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
@@ -1027,7 +1024,7 @@ function Footer({ lang }) {
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
               <div style={{ width:32, height:32, borderRadius:8, background:C.gBlue,
                 display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🧘</div>
-              <span style={{ fontWeight:700, color:C.text, fontSize:16 }}>PostureAI Pro</span>
+              <span style={{ fontWeight:700, color:C.text, fontSize:16 }}>Corvus</span>
             </div>
             <p style={{ fontSize:14, color:C.muted, lineHeight:1.7, maxWidth:280, margin:"0 0 16px" }}>
               {ar
@@ -1036,7 +1033,7 @@ function Footer({ lang }) {
             </p>
             <div style={{ display:"flex", gap:10 }}>
               {["LinkedIn","Twitter","YouTube"].map(s => (
-                <a key={s} href={`https://${s.toLowerCase()}.com/postureai`}
+                <a key={s} href={`https://${s.toLowerCase()}.com/corvus`}
                   target="_blank" rel="noopener noreferrer"
                   style={{ color:C.muted, fontSize:12, textDecoration:"none",
                     padding:"6px 10px", border:`1px solid ${C.border}`,
@@ -1076,7 +1073,7 @@ function Footer({ lang }) {
           flexWrap:"wrap", gap:12,
         }}>
           <span style={{ fontSize:13, color:C.muted }}>
-            © {new Date().getFullYear()} PostureAI Pro. {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
+            © {new Date().getFullYear()} Corvus. {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
           </span>
           <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color:C.sub, fontSize:13, textDecoration:"none" }}>
             {SUPPORT_EMAIL}

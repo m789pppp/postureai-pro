@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — HomePage v4
+ * Corvus — HomePage v4
  * Complete rewrite: proper role separation, working tools, real data, tier gates
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -1527,7 +1527,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
             borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center",
             fontSize:16, flexShrink:0 }}>◈</div>
           <div>
-            <div style={{ fontSize:13, fontWeight:800, color:"#f0f6ff", letterSpacing:"-.01em" }}>PostureAI</div>
+            <div style={{ fontSize:13, fontWeight:800, color:"#f0f6ff", letterSpacing:"-.01em" }}>Corvus</div>
             <div style={{ fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em",
               color: userRole==="platform_admin"?"#f87171":
                      userRole==="hr_admin"?"#34d399":
@@ -2004,7 +2004,7 @@ export default function HomePage({
               <div style={{ width:26, height:26, background:"linear-gradient(135deg,#1a56db,#0891b2)",
                 borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:14 }}>◈</div>
-              <span style={{ fontSize:13, fontWeight:800, color:"#f0f6ff" }}>PostureAI</span>
+              <span style={{ fontSize:13, fontWeight:800, color:"#f0f6ff" }}>Corvus</span>
             </div>
           )}
           <div style={{ fontSize:14, fontWeight:700, color:"#f0f6ff" }}>

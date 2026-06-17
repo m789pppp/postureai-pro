@@ -1,12 +1,12 @@
 import { Component } from "react";
 
-const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "support@postureai.io";
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "support@corvus.io";
 
 export class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
   componentDidCatch(error, info) {
-    console.error("PostureAI Error:", error, info);
+    console.error("Corvus Error:", error, info);
     // Report to Sentry if loaded
     try { window.Sentry?.captureException(error, { extra: info }); } catch {}
   }
@@ -36,7 +36,7 @@ export class ErrorBoundary extends Component {
               Try Again
             </button>
           </div>
-          <a href={`mailto:${SUPPORT_EMAIL}?subject=PostureAI Error&body=${encodeURIComponent(err?.message||"")}`}
+          <a href={`mailto:${SUPPORT_EMAIL}?subject=Corvus Error&body=${encodeURIComponent(err?.message||"")}`}
             style={{ fontSize: 11, color: "#3b82f6", textDecoration: "none" }}>
             {SUPPORT_EMAIL}
           </a>

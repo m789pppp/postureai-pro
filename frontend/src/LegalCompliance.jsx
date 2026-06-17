@@ -1,10 +1,10 @@
 /**
- * LegalCompliance.jsx — PostureAI Phase 14
+ * LegalCompliance.jsx — Corvus Phase 14
  * Cookie consent banner, ToS, Privacy Policy, DPA — GDPR/CCPA compliant
  */
 import { useState, useEffect } from "react";
 
-const COOKIE_KEY = "postureai_cookie_consent_v1";
+const COOKIE_KEY = "corvus_cookie_consent_v1";
 
 // ── Cookie Consent Banner ───────────────────────────────────────
 export function CookieConsent({ cs }) {
@@ -86,15 +86,15 @@ export function LegalModal({ doc, cs, onClose }) {
       title: "Terms of Service",
       lastUpdated: "2026-06-01",
       sections: [
-        { heading: "1. Acceptance", body: "By accessing or using PostureAI, you agree to be bound by these Terms. If you do not agree, do not use the Service." },
-        { heading: "2. Service Description", body: "PostureAI provides AI-powered posture analysis via camera, health reporting, and related enterprise tools. The Service is not a medical device and does not provide medical advice." },
+        { heading: "1. Acceptance", body: "By accessing or using Corvus, you agree to be bound by these Terms. If you do not agree, do not use the Service." },
+        { heading: "2. Service Description", body: "Corvus provides AI-powered posture analysis via camera, health reporting, and related enterprise tools. The Service is not a medical device and does not provide medical advice." },
         { heading: "3. Account Obligations", body: "You are responsible for maintaining the security of your account credentials. You agree not to share your login or API keys with unauthorised parties." },
         { heading: "4. Acceptable Use", body: "You may not use the Service to: (a) violate laws; (b) infringe IP rights; (c) transmit malware; (d) reverse-engineer proprietary models; (e) scrape data without authorisation." },
         { heading: "5. Data & Privacy", body: "Camera frames are processed in-memory and never stored on our servers. Session scores and metadata are stored per our Privacy Policy. You retain ownership of your data and may export or delete it at any time." },
         { heading: "6. Billing", body: "Subscriptions are billed monthly or annually. Overages are charged at metered rates shown in the Billing dashboard. Refunds are at our discretion within 14 days of charge." },
         { heading: "7. Uptime & SLA", body: "We target 99.9% monthly uptime for Enterprise plans. Credits are issued for downtime exceeding 0.1% in a calendar month, up to one month's base fee." },
-        { heading: "8. IP Rights", body: "PostureAI owns all IP in the Service. We grant you a limited, non-exclusive licence to use the Service per your plan. Nothing here transfers ownership of our models or code." },
-        { heading: "9. Limitation of Liability", body: "To the maximum extent permitted by law, PostureAI is not liable for indirect, incidental, or consequential damages. Our total liability shall not exceed the fees paid in the 3 months preceding the claim." },
+        { heading: "8. IP Rights", body: "Corvus owns all IP in the Service. We grant you a limited, non-exclusive licence to use the Service per your plan. Nothing here transfers ownership of our models or code." },
+        { heading: "9. Limitation of Liability", body: "To the maximum extent permitted by law, Corvus is not liable for indirect, incidental, or consequential damages. Our total liability shall not exceed the fees paid in the 3 months preceding the claim." },
         { heading: "10. Governing Law", body: "These Terms are governed by the laws of England and Wales. Disputes shall be resolved in the courts of London, UK." },
         { heading: "11. Changes", body: "We may update these Terms with 30 days' notice. Continued use after the effective date constitutes acceptance." },
       ],
@@ -108,27 +108,27 @@ export function LegalModal({ doc, cs, onClose }) {
         { heading: "3. How We Use Data", body: "To provide the Service; improve AI models (aggregate only, never individual frames); send reports and alerts you configure; process billing; comply with legal obligations." },
         { heading: "4. Data Sharing", body: "We share data with: Stripe (payments), SendGrid (email), Sentry (error logs), Google Firebase (database), and your employer if you use an enterprise plan. We never sell personal data." },
         { heading: "5. Data Retention", body: "Session data: 2 years. Audit logs: 7 years. AI frames: never stored. Payment records: 10 years (legal requirement). You may request deletion at any time." },
-        { heading: "6. Your Rights (GDPR)", body: "Right to access, rectify, erase, restrict, portability, and object. Submit requests to privacy@postureai.com. We respond within 30 days." },
-        { heading: "7. CCPA Rights", body: "California residents may opt out of sale of personal information (we don't sell), request disclosure, and request deletion. Email privacy@postureai.com." },
+        { heading: "6. Your Rights (GDPR)", body: "Right to access, rectify, erase, restrict, portability, and object. Submit requests to privacy@corvus.com. We respond within 30 days." },
+        { heading: "7. CCPA Rights", body: "California residents may opt out of sale of personal information (we don't sell), request disclosure, and request deletion. Email privacy@corvus.com." },
         { heading: "8. Cookies", body: "We use necessary cookies (session), analytics cookies (with consent), and no third-party advertising cookies. Manage preferences via the cookie banner." },
         { heading: "9. Security", body: "Data is encrypted in transit (TLS 1.3) and at rest (AES-256). Access is restricted by RBAC. We hold SOC 2 Type II and ISO 27001 certifications." },
-        { heading: "10. Contact", body: "Data Controller: PostureAI Ltd, London, UK. DPO: dpo@postureai.com. Privacy team: privacy@postureai.com." },
+        { heading: "10. Contact", body: "Data Controller: Corvus Ltd, London, UK. DPO: dpo@corvus.com. Privacy team: privacy@corvus.com." },
       ],
     },
     dpa: {
       title: "Data Processing Agreement",
       lastUpdated: "2026-06-01",
       sections: [
-        { heading: "1. Parties", body: "This DPA is between PostureAI Ltd ('Processor') and the Customer ('Controller'). It supplements the main Terms of Service." },
-        { heading: "2. Subject Matter", body: "PostureAI processes personal data on behalf of the Customer solely to provide the Service described in the Terms of Service." },
+        { heading: "1. Parties", body: "This DPA is between Corvus Ltd ('Processor') and the Customer ('Controller'). It supplements the main Terms of Service." },
+        { heading: "2. Subject Matter", body: "Corvus processes personal data on behalf of the Customer solely to provide the Service described in the Terms of Service." },
         { heading: "3. Categories of Data", body: "Employee names and emails; posture session scores; usage metadata. Special category data (health-related scores) is processed under Article 9(2)(b) GDPR (employment context)." },
         { heading: "4. Customer Obligations", body: "The Customer warrants it has lawful basis to provide employee data; has informed employees of processing; has obtained necessary consents where required." },
-        { heading: "5. PostureAI Obligations", body: "Process data only on documented Customer instructions; ensure personnel are bound by confidentiality; implement Article 32 security measures; assist with DSAR requests within 5 business days." },
+        { heading: "5. Corvus Obligations", body: "Process data only on documented Customer instructions; ensure personnel are bound by confidentiality; implement Article 32 security measures; assist with DSAR requests within 5 business days." },
         { heading: "6. Sub-processors", body: "Current sub-processors: Google Firebase (Ireland), Stripe (Ireland), SendGrid (USA — SCCs in place), Sentry (USA — SCCs in place). 30 days' notice given for changes." },
         { heading: "7. International Transfers", body: "Transfers outside the EEA are protected by Standard Contractual Clauses (2021/914/EU). Data is primarily stored in EU-West (Ireland)." },
-        { heading: "8. Data Breach", body: "PostureAI will notify the Customer within 72 hours of becoming aware of a personal data breach, with information per Article 33(3) GDPR." },
-        { heading: "9. Deletion", body: "On termination, PostureAI will delete or return all personal data within 30 days, unless retention is required by law." },
-        { heading: "10. Audit", body: "PostureAI will provide information necessary to demonstrate compliance and allow Customer audits (or third-party auditor) with 30 days' notice, at Customer's cost." },
+        { heading: "8. Data Breach", body: "Corvus will notify the Customer within 72 hours of becoming aware of a personal data breach, with information per Article 33(3) GDPR." },
+        { heading: "9. Deletion", body: "On termination, Corvus will delete or return all personal data within 30 days, unless retention is required by law." },
+        { heading: "10. Audit", body: "Corvus will provide information necessary to demonstrate compliance and allow Customer audits (or third-party auditor) with 30 days' notice, at Customer's cost." },
       ],
     },
   };
@@ -142,7 +142,7 @@ export function LegalModal({ doc, cs, onClose }) {
         <div style={{ padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 20, color: cs?.text || "#fff" }}>{content.title}</div>
-            <div style={{ fontSize: 12, color: cs?.textDim || "#94a3b8", marginTop: 3 }}>Last updated: {content.lastUpdated} · PostureAI Ltd</div>
+            <div style={{ fontSize: 12, color: cs?.textDim || "#94a3b8", marginTop: 3 }}>Last updated: {content.lastUpdated} · Corvus Ltd</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => window.print?.()} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: cs?.textDim || "#94a3b8", borderRadius: 9, padding: "7px 14px", cursor: "pointer", fontSize: 12 }}>🖨 Print</button>
@@ -157,7 +157,7 @@ export function LegalModal({ doc, cs, onClose }) {
             </div>
           ))}
           <div style={{ marginTop: 32, padding: 16, background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 10, fontSize: 12, color: cs?.textDim || "#94a3b8", lineHeight: 1.6 }}>
-            Questions? Contact <a href="mailto:legal@postureai.com" style={{ color: "#6366f1" }}>legal@postureai.com</a>
+            Questions? Contact <a href="mailto:legal@corvus.com" style={{ color: "#6366f1" }}>legal@corvus.com</a>
           </div>
         </div>
       </div>
@@ -174,7 +174,7 @@ export function LegalFooter({ cs }) {
         {[["tos","Terms of Service"],["privacy","Privacy Policy"],["dpa","DPA"]].map(([k,l]) => (
           <button key={k} onClick={() => setOpen(k)} style={{ background: "none", border: "none", color: cs?.textDim || "#94a3b8", fontSize: 11, cursor: "pointer", textDecoration: "underline", padding: 0 }}>{l}</button>
         ))}
-        <a href="mailto:privacy@postureai.com" style={{ color: cs?.textDim || "#94a3b8", fontSize: 11, textDecoration: "underline" }}>Privacy Requests</a>
+        <a href="mailto:privacy@corvus.com" style={{ color: cs?.textDim || "#94a3b8", fontSize: 11, textDecoration: "underline" }}>Privacy Requests</a>
       </div>
       {open && <LegalModal doc={open} cs={cs} onClose={() => setOpen(null)} />}
     </>

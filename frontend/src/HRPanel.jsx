@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — HRPanel v32 (B2B Complete)
+ * Corvus — HRPanel v32 (B2B Complete)
  * Full HR dashboard: Overview · Departments · Employees · Billing · Invite
  */
 import { useState, useEffect, useRef } from "react";
@@ -161,7 +161,7 @@ function B2BPlanCard({ plan, billing, current, isAr, addToast }) {
             {isAr?"ترقية ←":"Upgrade →"}
           </button>
         ):(
-          <a href={`mailto:support@postureai.io?subject=Enterprise Plan`}
+          <a href={`mailto:support@corvus.io?subject=Enterprise Plan`}
             style={{display:"block",background:`${plan.color}12`,border:`1px solid ${plan.color}25`,borderRadius:8,padding:"9px 0",textAlign:"center",fontSize:12,fontWeight:700,color:plan.color,textDecoration:"none"}}>
             {isAr?"تواصل معنا":"Contact Sales"}
           </a>

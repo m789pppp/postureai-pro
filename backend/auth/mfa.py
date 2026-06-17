@@ -1,5 +1,5 @@
 """
-PostureAI Pro — MFA Backend (ULTIMATE v5)
+Corvus — MFA Backend (ULTIMATE v5)
 TOTP (Google Authenticator) + SMS via Twilio + Backup codes
 
 Endpoints (registered in backend.py):
@@ -55,7 +55,7 @@ def generate_totp_secret() -> str:
     return pyotp.random_base32()
 
 
-def get_totp_uri(secret: str, email: str, issuer: str = "PostureAI") -> str:
+def get_totp_uri(secret: str, email: str, issuer: str = "Corvus") -> str:
     """Return an otpauth:// URI for QR code rendering."""
     if not PYOTP_OK:
         raise RuntimeError("pyotp not installed")
@@ -83,7 +83,7 @@ def send_sms_code(phone: str, uid: str) -> bool:
             pass
     try:
         _twilio.messages.create(
-            body=f"Your PostureAI verification code: {code}. Expires in 10 minutes.",
+            body=f"Your Corvus verification code: {code}. Expires in 10 minutes.",
             from_=TWILIO_FROM,
             to=phone,
         )

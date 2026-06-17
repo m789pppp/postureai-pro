@@ -1,14 +1,14 @@
 """
-email_templates.py — PostureAI
+email_templates.py — Corvus
 Production-ready HTML email templates.
 Used by email_sequences.py as fallback when SendGrid dynamic templates are not set.
 Also used to seed SendGrid templates via the /api/admin/email-templates/seed route.
 """
 import os
 
-APP_URL   = os.getenv("APP_URL",   "https://app.postureai.com")
+APP_URL   = os.getenv("APP_URL",   "https://app.corvus.com")
 BRAND_CLR = os.getenv("BRAND_COLOR","#6366f1")
-FROM_NAME = os.getenv("EMAIL_FROM_NAME","PostureAI")
+FROM_NAME = os.getenv("EMAIL_FROM_NAME","Corvus")
 
 def _base(title: str, body: str, unsubscribe: str = "") -> str:
     return f"""<!DOCTYPE html>
@@ -41,7 +41,7 @@ def _base(title: str, body: str, unsubscribe: str = "") -> str:
     <div class="hdr"><h1>🧘 {FROM_NAME}</h1></div>
     <div class="body">{body}</div>
     <div class="footer">
-      <p>© 2026 PostureAI Ltd · <a href="{APP_URL}/privacy">Privacy</a> · <a href="{APP_URL}/terms">Terms</a></p>
+      <p>© 2026 Corvus Ltd · <a href="{APP_URL}/privacy">Privacy</a> · <a href="{APP_URL}/terms">Terms</a></p>
       {f'<p><a href="{unsubscribe}">Unsubscribe</a></p>' if unsubscribe else ""}
     </div>
   </div>
@@ -51,15 +51,15 @@ def _base(title: str, body: str, unsubscribe: str = "") -> str:
 
 def welcome(first_name: str, app_url: str = APP_URL, **_) -> tuple[str, str]:
     """Subject + HTML body for welcome email."""
-    subject = f"Welcome to PostureAI, {first_name}! 🧘"
+    subject = f"Welcome to Corvus, {first_name}! 🧘"
     body = f"""
       <h2>Hey {first_name}, welcome aboard! 🎉</h2>
-      <p>Your PostureAI account is ready. You're one click away from discovering how your posture affects your health, energy, and focus.</p>
+      <p>Your Corvus account is ready. You're one click away from discovering how your posture affects your health, energy, and focus.</p>
       <p style="text-align:center">
         <a class="btn" href="{app_url}">Start your first session →</a>
       </p>
       <div class="tip">💡 <b>Quick tip:</b> Your first session takes under 3 minutes. Just allow camera access and sit naturally.</div>
-      <p>Here's what you can do with PostureAI:</p>
+      <p>Here's what you can do with Corvus:</p>
       <ul style="color:#475569;line-height:2">
         <li>📷 Real-time posture analysis while you work</li>
         <li>🤖 AI coaching that adapts to your patterns</li>
@@ -67,7 +67,7 @@ def welcome(first_name: str, app_url: str = APP_URL, **_) -> tuple[str, str]:
         <li>👥 Compare scores with your team</li>
       </ul>
       <p>Any questions? Reply to this email — we read every message.</p>
-      <p>To great posture,<br/><b>The PostureAI Team</b></p>
+      <p>To great posture,<br/><b>The Corvus Team</b></p>
     """
     return subject, _base(subject, body)
 
@@ -94,7 +94,7 @@ def day3_activate(first_name: str, app_url: str = APP_URL, **_) -> tuple[str, st
       <p>It's been 3 days and we haven't seen your first session yet. No worries — it happens.</p>
       <p>Your first analysis takes <b>under 60 seconds</b>. Here's all you need:</p>
       <ol style="color:#475569;line-height:2.2;padding-left:20px">
-        <li>Open PostureAI on your computer</li>
+        <li>Open Corvus on your computer</li>
         <li>Click <b>"Start Session"</b></li>
         <li>Allow camera access</li>
         <li>Sit normally for 60 seconds</li>
@@ -207,7 +207,7 @@ def win_back_14d(first_name: str, app_url: str = APP_URL, **_) -> tuple[str, str
 
 
 def win_back_30d(first_name: str, app_url: str = APP_URL, **_) -> tuple[str, str]:
-    subject = f"Last chance — your PostureAI trial is expiring, {first_name}"
+    subject = f"Last chance — your Corvus trial is expiring, {first_name}"
     body = f"""
       <h2>We don't want to lose you</h2>
       <p>It's been 30 days. We're offering you <b>30% off</b> your first paid month if you come back this week.</p>
@@ -221,7 +221,7 @@ def win_back_30d(first_name: str, app_url: str = APP_URL, **_) -> tuple[str, str
 
 def payment_failed(first_name: str, invoice_id: str = "", amount: float = 0,
                     retry_date: str = "", app_url: str = APP_URL, **_) -> tuple[str, str]:
-    subject = f"Action required: payment failed for your PostureAI account"
+    subject = f"Action required: payment failed for your Corvus account"
     body = f"""
       <h2>⚠️ Payment failed</h2>
       <p>Hi {first_name}, we couldn't process your payment{f' for invoice {invoice_id}' if invoice_id else ''}.</p>
@@ -237,7 +237,7 @@ def payment_failed(first_name: str, invoice_id: str = "", amount: float = 0,
 
 def trial_ending(first_name: str, days_left: int = 3,
                   app_url: str = APP_URL, **_) -> tuple[str, str]:
-    subject = f"Your PostureAI trial ends in {days_left} day{'s' if days_left != 1 else ''}"
+    subject = f"Your Corvus trial ends in {days_left} day{'s' if days_left != 1 else ''}"
     body = f"""
       <h2>⏰ Trial ending soon</h2>
       <p>Hi {first_name}, your free trial ends in <b>{days_left} day{'s' if days_left != 1 else ''}</b>.</p>
@@ -255,8 +255,8 @@ def nps_survey(first_name: str, survey_url: str = "", **_) -> tuple[str, str]:
     url = survey_url or f"{APP_URL}/nps"
     body = f"""
       <h2>How are we doing? 🙏</h2>
-      <p>Hi {first_name}, you've been using PostureAI for 30 days. We'd love your honest feedback.</p>
-      <p><b>On a scale of 0–10, how likely are you to recommend PostureAI to a colleague?</b></p>
+      <p>Hi {first_name}, you've been using Corvus for 30 days. We'd love your honest feedback.</p>
+      <p><b>On a scale of 0–10, how likely are you to recommend Corvus to a colleague?</b></p>
       <p style="text-align:center;font-size:28px;letter-spacing:6px">
         {"".join(f'<a href="{url}?score={i}" style="color:#6366f1;text-decoration:none">{i}</a> ' for i in range(11))}
       </p>

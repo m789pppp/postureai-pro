@@ -1,5 +1,5 @@
 /**
- * FeatureFlags.jsx — PostureAI ULTIMATE FINAL
+ * FeatureFlags.jsx — Corvus ULTIMATE FINAL
  * Admin: manage rollout flags with tier targeting + percentage rollout
  */
 import { useState, useEffect } from "react";

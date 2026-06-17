@@ -22,7 +22,7 @@ if (!firebaseConfig.apiKey) console.error("❌ Firebase config missing — check
 
 // Admin status is determined ONLY from Firestore profile.is_admin (set server-side).
 // Exposing admin email in the client bundle allows role discovery attacks.
-export const SUPPORT_EMAIL       = import.meta.env.VITE_SUPPORT_EMAIL       || "support@postureai.io";
+export const SUPPORT_EMAIL       = import.meta.env.VITE_SUPPORT_EMAIL       || "support@corvus.io";
 export const ADMIN_PHONE         = import.meta.env.VITE_ADMIN_PHONE         || "";
 export const AUTO_APPROVE_DOMAIN = import.meta.env.VITE_AUTO_APPROVE_DOMAIN || "";
 export const PAYMOB_IFRAME_ID    = import.meta.env.VITE_PAYMOB_IFRAME_ID    || "";
@@ -518,7 +518,7 @@ export async function seedDemoUser(uid, type) {
     ];
     const companyRef = await import("firebase/firestore").then(({addDoc,collection}) =>
       addDoc(collection(db,"companies"), {
-        name:"PostureAI Demo Co.", owner_uid:uid, tier:"professional",
+        name:"Corvus Demo Co.", owner_uid:uid, tier:"professional",
         created_at:_serverTimestamp(), employee_count:employees.length,
       }).catch(()=>({id:"demo-co"}))
     );
@@ -534,7 +534,7 @@ export async function seedDemoUser(uid, type) {
     }
     await import("firebase/firestore").then(({updateDoc,doc:_doc}) =>
       updateDoc(_doc(db,"users",uid), {
-        ...base, company_id:companyId, company:"PostureAI Demo Co.",
+        ...base, company_id:companyId, company:"Corvus Demo Co.",
         user_type:"hr_admin", is_org_owner:true, tier:"professional",
         avg_score:68, sessions_count:3, streak_days:1,
       }).catch(()=>{})
@@ -567,7 +567,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // ── Header ────────────────────────────────────────────────────────
   doc.setFillColor(3,11,20); doc.rect(0,0,W,38,"F");
   doc.setFontSize(20); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text("PostureAI Pro", ml, 16);
+  doc.text("Corvus", ml, 16);
   doc.setFontSize(9); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
   doc.text(isAr?"تقرير جلسة الوضعية":"Posture Session Report", ml, 24);
   doc.text(`Generated: ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})}`, ml, 31);
@@ -667,11 +667,11 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.setPage(i);
     doc.setFillColor(3,11,20); doc.rect(0,H-10,W,10,"F");
     doc.setFontSize(7); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-    doc.text("PostureAI Pro — Confidential", ml, H-3.5);
+    doc.text("Corvus — Confidential", ml, H-3.5);
     doc.text(`Page ${i} of ${pages}`, W-mr, H-3.5, {align:"right"});
   }
 
-  const filename=`PostureAI_Session${sessionIndex?"_"+sessionIndex:""}_${new Date().toISOString().slice(0,10)}.pdf`;
+  const filename=`Corvus_Session${sessionIndex?"_"+sessionIndex:""}_${new Date().toISOString().slice(0,10)}.pdf`;
   doc.save(filename);
   return filename;
 }

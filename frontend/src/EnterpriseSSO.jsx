@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Enterprise SSO / SAML 2.0
+ * Corvus — Enterprise SSO / SAML 2.0
  * Supports: Azure AD, Okta, Google Workspace, Auth0, OneLogin
  * Firebase handles the OIDC/SAML flow — this file manages the UI + config
  */

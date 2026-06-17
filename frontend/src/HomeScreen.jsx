@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — HomeScreen v3
+ * Corvus — HomeScreen v3
  * Full redesign using Design System tokens
  * Inline JSX block — rendered directly inside App.jsx
  * All variables (user, profile, cs, t, etc.) are in parent scope.
@@ -175,7 +175,7 @@ function TopNav({ user, profile, isAr, darkMode, setDarkMode, setLang,
           justifyContent:"center", fontSize:16, color:"white", fontWeight:TY.extrabold,
         }}>◈</div>
         <span style={{ fontSize:15, fontWeight:TY.extrabold, color:C.text, letterSpacing:"-.03em" }}>
-          PostureAI <span style={{ color:C.blue }}>Pro</span>
+          Corvus <span style={{ color:C.blue }}>Pro</span>
         </span>
       </div>
 

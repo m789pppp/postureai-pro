@@ -1,4 +1,4 @@
-# PostureAI Pro — Production Deployment Guide v2
+# Corvus — Production Deployment Guide v2
 
 ## Architecture Overview
 
@@ -33,7 +33,7 @@ Railway (Backend · Flask · Gunicorn · 4 workers)
 
 ### 1.1 Create Supabase project
 1. Go to https://supabase.com → New project
-2. Name: `postureai-prod`, Region: `Middle East (Bahrain)` or `EU West`
+2. Name: `corvusd`, Region: `Middle East (Bahrain)` or `EU West`
 3. Generate a strong database password — save it
 
 ### 1.2 Run schema
@@ -52,7 +52,7 @@ From Project Settings → API:
 ## Phase 2 — Firebase Setup
 
 ### 2.1 Project (if not already set up)
-1. https://console.firebase.google.com → Add project: `postureai-prod`
+1. https://console.firebase.google.com → Add project: `corvusd`
 2. Enable Google Analytics (optional)
 
 ### 2.2 Authentication
@@ -104,7 +104,7 @@ stripe listen --forward-to localhost:5050/api/stripe/webhook
 
 ### 4.1 Account & Domain
 1. https://resend.com → Sign up
-2. Domains → Add domain: `postureai.io`
+2. Domains → Add domain: `corvus.io`
 3. Add DNS records (SPF, DKIM, DMARC) to your domain registrar
 4. Wait for verification (usually <1 hour)
 
@@ -178,7 +178,7 @@ Already included in `frontend/vercel.json`:
 
 ### 6.4 Custom domain
 1. Vercel → Project Settings → Domains
-2. Add `postureai.io` and `www.postureai.io`
+2. Add `corvus.io` and `www.corvus.io`
 3. Update DNS at your registrar
 
 ---
@@ -253,7 +253,7 @@ cp infrastructure/docker/deploy.yml .github/workflows/deploy.yml
 ### After deploy
 ```bash
 # Test auth
-curl -X POST https://api.postureai.io/api/health
+curl -X POST https://api.corvus.io/api/health
 
 # Test Stripe webhook
 stripe trigger checkout.session.completed
@@ -268,7 +268,7 @@ cd e2e && npx playwright test tests/01-landing.spec.ts
 
 ```bash
 # Railway: rollback to previous deploy
-railway up --service postureai-backend --detach --rollback
+railway up --service corvus-backend --detach --rollback
 
 # Vercel: rollback via CLI or dashboard
 vercel rollback

@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Admin Dashboard v2
+ * Corvus — Admin Dashboard v2
  * Premium redesign: refined dark, clear hierarchy, modern sidebar
  */
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -461,7 +461,7 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
               fontSize:18, fontWeight:700, color:"white", letterSpacing:"-1px",
             }}>◈</div>
             <div>
-              <div style={{ fontSize:13, fontWeight:700, color:T.text, lineHeight:1 }}>PostureAI</div>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text, lineHeight:1 }}>Corvus</div>
               <div style={{ fontSize:9, color:T.muted, fontWeight:500, letterSpacing:".06em", marginTop:2 }}>INTELLIGENCE CONSOLE</div>
             </div>
           </div>
@@ -1080,7 +1080,7 @@ function SystemPanel({ health, lang, adminProfile, onRefresh, showToast }) {
       <Card title={isAr?"مفاتيح API للمطورين":"Developer API Keys"}>
         <div style={{ padding:"0 20px 20px" }}>
           <p style={{ fontSize:12, color:T.muted, lineHeight:1.7, marginBottom:16 }}>
-            {isAr ? "أنشئ مفتاح API لتكامل PostureAI مع أنظمة الشركة (SAP, Workday, إلخ)" : "Generate API keys for enterprise integrations (SAP, Workday, custom HR systems)."}
+            {isAr ? "أنشئ مفتاح API لتكامل Corvus مع أنظمة الشركة (SAP, Workday, إلخ)" : "Generate API keys for enterprise integrations (SAP, Workday, custom HR systems)."}
           </p>
           <Btn onClick={generateKey} disabled={genLoading}>
             {genLoading ? "Generating…" : isAr ? "إنشاء مفتاح API" : "Generate API Key"}
@@ -1097,7 +1097,7 @@ function SystemPanel({ health, lang, adminProfile, onRefresh, showToast }) {
           )}
 
           <div style={{ marginTop:16, padding:"12px 16px", background:"rgba(255,255,255,.02)", borderRadius:T.radiusSm, border:`1px solid ${T.border}`, fontFamily:"DM Mono,monospace", fontSize:10, color:T.muted, lineHeight:2 }}>
-            <span style={{ color:T.sky }}>Header:</span> X-PostureAI-Key: pai_xxx<br/>
+            <span style={{ color:T.sky }}>Header:</span> X-Corvus-Key: pai_xxx<br/>
             <span style={{ color:T.sky }}>Endpoint:</span> POST /api/v1/posture/analyze
           </div>
         </div>

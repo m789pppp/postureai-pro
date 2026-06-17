@@ -1,5 +1,5 @@
 /**
- * ChurnPrediction.jsx — PostureAI ULTIMATE v12
+ * ChurnPrediction.jsx — Corvus ULTIMATE v12
  * REAL FIRESTORE DATA — no mock, no fake.
  * Pulls live customer health scores, login frequency, session counts from Firestore.
  */

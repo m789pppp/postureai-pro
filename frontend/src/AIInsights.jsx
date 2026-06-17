@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — AI Insights Panel v1.0
+ * Corvus — AI Insights Panel v1.0
  * Executive summaries · Posture trends · Fatigue analysis
  * Weekly insights · Smart recommendations
  * Uses Gemini AI directly (no backend needed)
@@ -200,11 +200,11 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
     lang,
   }), [profile, sessions, avgScore, weekAvg, fatigueScore, lang]);
 
-  const systemPrompt = `You are an AI health analytics engine for PostureAI Pro — an ergonomic monitoring platform.
+  const systemPrompt = `You are an AI health analytics engine for Corvus — an ergonomic monitoring platform.
 You analyze posture data and generate professional, actionable, empathetic insights.
 Always respond in ${lang === "ar" ? "Arabic" : "English"}.
 Keep responses concise, data-driven, and formatted with markdown (** for bold, ## for headers, - for bullets).
-Never mention you're an AI assistant or Claude. Refer to yourself as "PostureAI Intelligence".`;
+Never mention you're an AI assistant or Claude. Refer to yourself as "Corvus Intelligence".`;
 
   const tabPrompts = {
     executive: (ctx) => `Generate an executive summary for ${ctx.name}:

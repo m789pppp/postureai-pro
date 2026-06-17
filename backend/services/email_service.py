@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Email Service v2
+Corvus — Email Service v2
 Provider: Resend (production) / SMTP fallback
 Handles: Welcome, Verification, Password Reset, Trial Ending,
          Billing Notifications, Weekly HR Reports
@@ -9,12 +9,12 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-logger = logging.getLogger("postureai.email")
+logger = logging.getLogger("corvus.email")
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-FROM_EMAIL     = os.getenv("FROM_EMAIL", "PostureAI Pro <noreply@postureai.io>")
-SUPPORT_EMAIL  = os.getenv("SUPPORT_EMAIL", "support@postureai.io")
-APP_URL        = os.getenv("APP_URL", "https://postureai.io")
+FROM_EMAIL     = os.getenv("FROM_EMAIL", "Corvus <noreply@corvus.io>")
+SUPPORT_EMAIL  = os.getenv("SUPPORT_EMAIL", "support@corvus.io")
+APP_URL        = os.getenv("APP_URL", "https://corvus.io")
 
 
 def _resend_send(to: str, subject: str, html: str, text: str = "") -> bool:
@@ -113,7 +113,7 @@ def _base_template(title: str, content: str, cta_text: str = "", cta_url: str = 
 <div class="wrapper">
   <div class="card">
     <div class="header">
-      <div class="logo">PostureAI <span>Pro</span></div>
+      <div class="logo">Corvus <span>Pro</span></div>
     </div>
     <div class="body">
       <table width="100%" cellpadding="0" cellspacing="0">
@@ -122,7 +122,7 @@ def _base_template(title: str, content: str, cta_text: str = "", cta_url: str = 
       </table>
     </div>
     <div class="footer">
-      <p>PostureAI Pro · AI Workforce Health Intelligence</p>
+      <p>Corvus · AI Workforce Health Intelligence</p>
       <p>Questions? <a href="mailto:{SUPPORT_EMAIL}" style="color:#4f7cf9">{SUPPORT_EMAIL}</a></p>
       <p style="margin-top:8px"><a href="{APP_URL}/unsubscribe" style="color:#94a3b8;text-decoration:none">Unsubscribe</a></p>
     </div>
@@ -134,7 +134,7 @@ def _base_template(title: str, content: str, cta_text: str = "", cta_url: str = 
 def send_welcome(to: str, name: str) -> bool:
     name_display = name or "there"
     content = f"""
-    <h1>Welcome to PostureAI Pro, {name_display}! 🎉</h1>
+    <h1>Welcome to Corvus, {name_display}! 🎉</h1>
     <p>You're all set to start improving your team's posture and productivity with AI-powered analysis.</p>
     <div class="highlight">
       <strong>Your 14-day free trial is now active.</strong><br>
@@ -148,37 +148,37 @@ def send_welcome(to: str, name: str) -> bool:
       <li>Review your first AI health report</li>
     </ol>
     """
-    html = _base_template("Welcome to PostureAI Pro", content,
+    html = _base_template("Welcome to Corvus", content,
                           "Start Your First Session →", f"{APP_URL}/app")
-    return send_email(to, "Welcome to PostureAI Pro 🧘 — Your trial is active", html)
+    return send_email(to, "Welcome to Corvus 🧘 — Your trial is active", html)
 
 
 def send_verification(to: str, name: str, token: str) -> bool:
     verify_url = f"{APP_URL}/verify-email?token={token}"
     content = f"""
     <h1>Verify your email address</h1>
-    <p>Hi {name or 'there'}, please verify your email to activate your PostureAI Pro account.</p>
+    <p>Hi {name or 'there'}, please verify your email to activate your Corvus account.</p>
     <div class="highlight">This link expires in <strong>24 hours</strong>.</div>
     """
     html = _base_template("Verify Email", content, "Verify My Email →", verify_url)
-    return send_email(to, "Verify your PostureAI Pro email", html)
+    return send_email(to, "Verify your Corvus email", html)
 
 
 def send_password_reset(to: str, name: str, token: str) -> bool:
     reset_url = f"{APP_URL}/reset-password?token={token}"
     content = f"""
     <h1>Reset your password</h1>
-    <p>Hi {name or 'there'}, we received a request to reset your PostureAI Pro password.</p>
+    <p>Hi {name or 'there'}, we received a request to reset your Corvus password.</p>
     <div class="highlight">This link expires in <strong>1 hour</strong>. If you didn't request this, you can safely ignore this email.</div>
     """
     html = _base_template("Reset Password", content, "Reset My Password →", reset_url)
-    return send_email(to, "Reset your PostureAI Pro password", html)
+    return send_email(to, "Reset your Corvus password", html)
 
 
 def send_trial_ending(to: str, name: str, days_left: int) -> bool:
     content = f"""
     <h1>Your trial ends in {days_left} {'day' if days_left == 1 else 'days'}</h1>
-    <p>Hi {name or 'there'}, your PostureAI Pro free trial is almost over.</p>
+    <p>Hi {name or 'there'}, your Corvus free trial is almost over.</p>
     <p>To keep your access to AI posture analysis, team dashboards, and HR reports, upgrade to a paid plan today.</p>
     <div class="highlight">
       Plans start at <strong>$9/month</strong> — less than one physiotherapy appointment.
@@ -186,13 +186,13 @@ def send_trial_ending(to: str, name: str, days_left: int) -> bool:
     """
     html = _base_template("Trial Ending Soon", content, "Upgrade My Plan →",
                           f"{APP_URL}/billing?source=trial_email")
-    return send_email(to, f"Your PostureAI trial ends in {days_left} days", html)
+    return send_email(to, f"Your Corvus trial ends in {days_left} days", html)
 
 
 def send_payment_confirmation(to: str, name: str, plan: str, amount: str, next_date: str) -> bool:
     content = f"""
     <h1>Payment confirmed ✓</h1>
-    <p>Hi {name or 'there'}, your PostureAI Pro subscription has been renewed.</p>
+    <p>Hi {name or 'there'}, your Corvus subscription has been renewed.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
       <tr style="border-bottom:1px solid #e2e8f0">
         <td style="padding:10px 0;color:#475569;font-size:14px">Plan</td>
@@ -210,7 +210,7 @@ def send_payment_confirmation(to: str, name: str, plan: str, amount: str, next_d
     """
     html = _base_template("Payment Confirmed", content, "View Invoice →",
                           f"{APP_URL}/billing/invoices")
-    return send_email(to, "PostureAI Pro — Payment confirmed", html)
+    return send_email(to, "Corvus — Payment confirmed", html)
 
 
 def send_payment_failed(to: str, name: str, amount: str, next_attempt: str) -> bool:
@@ -221,7 +221,7 @@ def send_payment_failed(to: str, name: str, amount: str, next_attempt: str) -> b
     """
     html = _base_template("Payment Failed", content, "Update Payment Method →",
                           f"{APP_URL}/billing?action=update_payment")
-    return send_email(to, "⚠️ PostureAI Pro — Action required: payment failed", html)
+    return send_email(to, "⚠️ Corvus — Action required: payment failed", html)
 
 
 def send_weekly_hr_report(to: str, org_name: str, week_data: dict) -> bool:
@@ -264,8 +264,8 @@ def send_team_invite(to: str, invited_by: str, org_name: str, role: str, token: 
     accept_url = f"{APP_URL}/invite/{token}"
     content = f"""
     <h1>You've been invited to join {org_name}</h1>
-    <p><strong>{invited_by}</strong> has invited you to join <strong>{org_name}</strong> on PostureAI Pro as a <strong>{role}</strong>.</p>
+    <p><strong>{invited_by}</strong> has invited you to join <strong>{org_name}</strong> on Corvus as a <strong>{role}</strong>.</p>
     <div class="highlight">This invitation expires in <strong>7 days</strong>.</div>
     """
     html = _base_template("Team Invitation", content, "Accept Invitation →", accept_url)
-    return send_email(to, f"You're invited to join {org_name} on PostureAI Pro", html)
+    return send_email(to, f"You're invited to join {org_name} on Corvus", html)

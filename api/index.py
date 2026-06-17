@@ -1,4 +1,4 @@
-# PostureAI Pro — Vercel Serverless Entry Point
+# Corvus — Vercel Serverless Entry Point
 # Vercel runs this file as a Python serverless function
 # All /api/* requests are routed here via vercel.json
 

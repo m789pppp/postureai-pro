@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Admin Panel v2
+ * Corvus — Admin Panel v2
  * Super-admin interface: Users, Organizations, Revenue, Analytics,
  *   Feature Flags, Support, Platform Settings
  * Access: is_admin=true ONLY (set server-side)
@@ -303,8 +303,8 @@ function PlatformSettings() {
     signup_enabled: true,
     trial_days: 14,
     max_users_per_org: 500,
-    support_email: "support@postureai.io",
-    allowed_origins: "https://postureai.io",
+    support_email: "support@corvus.io",
+    allowed_origins: "https://corvus.io",
   });
 
   const save = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };

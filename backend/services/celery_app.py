@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Celery Task Queue
+Corvus — Celery Task Queue
 Offloads CPU-heavy MediaPipe analysis from the Gunicorn web workers.
 
 Architecture:
@@ -21,7 +21,7 @@ from celery import Celery
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 celery_app = Celery(
-    "postureai",
+    "corvus",
     broker=REDIS_URL,
     backend=REDIS_URL,
 )
@@ -43,7 +43,7 @@ celery_app.conf.update(
 )
 
 
-@celery_app.task(bind=True, name="postureai.analyze_frame", max_retries=2)
+@celery_app.task(bind=True, name="corvus.analyze_frame", max_retries=2)
 def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard") -> dict:
     """
     Run MediaPipe pose + face analysis on a frame.
@@ -117,7 +117,7 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
         raise self.retry(exc=exc, countdown=2 ** self.request.retries)
 
 
-@celery_app.task(name="postureai.send_email_async")
+@celery_app.task(name="corvus.send_email_async")
 def send_email_task(to: str, subject: str, html: str) -> dict:
     """Send an email asynchronously — frees web worker immediately."""
     try:
@@ -131,7 +131,7 @@ def send_email_task(to: str, subject: str, html: str) -> dict:
         return {"sent": False, "error": str(e)}
 
 
-@celery_app.task(name="postureai.fire_webhook_async")
+@celery_app.task(name="corvus.fire_webhook_async")
 def fire_webhook_task(url: str, payload: dict, secret: str = "") -> dict:
     """Fire a webhook asynchronously with HMAC signature + retry."""
     import requests
@@ -140,12 +140,12 @@ def fire_webhook_task(url: str, payload: dict, secret: str = "") -> dict:
     body = json.dumps(payload, default=str)
     headers = {
         "Content-Type": "application/json",
-        "User-Agent":   "PostureAI-Webhooks/3.0",
-        "X-PostureAI-Timestamp": str(int(time.time())),
+        "User-Agent":   "Corvus-Webhooks/3.0",
+        "X-Corvus-Timestamp": str(int(time.time())),
     }
     if secret:
         sig = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
-        headers["X-PostureAI-Signature"] = f"sha256={sig}"
+        headers["X-Corvus-Signature"] = f"sha256={sig}"
 
     try:
         resp = requests.post(url, data=body, headers=headers, timeout=10)
@@ -159,22 +159,22 @@ from celery.schedules import crontab
 celery_app.conf.beat_schedule = {
     # Daily email jobs: onboarding sequences, win-back, NPS
     "daily-email-jobs": {
-        "task": "postureai.daily_email_jobs",
+        "task": "corvus.daily_email_jobs",
         "schedule": crontab(hour=7, minute=0),   # 09:00 Cairo time (UTC+2)
     },
     # Weekly digest: every Monday at 08:00 UTC
     "weekly-digest": {
-        "task": "postureai.weekly_digest_jobs",
+        "task": "corvus.weekly_digest_jobs",
         "schedule": crontab(hour=8, minute=0, day_of_week=1),
     },
     # Hourly: fire pending webhooks that failed and need retry
     "webhook-retry": {
-        "task": "postureai.retry_failed_webhooks",
+        "task": "corvus.retry_failed_webhooks",
         "schedule": crontab(minute=15),          # :15 past every hour
     },
     # Daily: compute churn risk scores for all orgs
     "churn-score-refresh": {
-        "task": "postureai.refresh_churn_scores",
+        "task": "corvus.refresh_churn_scores",
         "schedule": crontab(hour=6, minute=0),   # 08:00 Cairo
     },
 }
@@ -182,7 +182,7 @@ celery_app.conf.timezone = "UTC"
 
 
 
-@celery_app.task(bind=True, name="postureai.analyze_frame", max_retries=2)
+@celery_app.task(bind=True, name="corvus.analyze_frame", max_retries=2)
 def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard") -> dict:
     """
     Run MediaPipe pose + face analysis on a frame.
@@ -256,7 +256,7 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
         raise self.retry(exc=exc, countdown=2 ** self.request.retries)
 
 
-@celery_app.task(name="postureai.send_email_async")
+@celery_app.task(name="corvus.send_email_async")
 def send_email_task(to: str, subject: str, html: str) -> dict:
     """Send an email asynchronously — frees web worker immediately."""
     try:
@@ -270,7 +270,7 @@ def send_email_task(to: str, subject: str, html: str) -> dict:
         return {"sent": False, "error": str(e)}
 
 
-@celery_app.task(name="postureai.fire_webhook_async")
+@celery_app.task(name="corvus.fire_webhook_async")
 def fire_webhook_task(url: str, payload: dict, secret: str = "") -> dict:
     """Fire a webhook asynchronously with HMAC signature + retry."""
     import requests
@@ -279,12 +279,12 @@ def fire_webhook_task(url: str, payload: dict, secret: str = "") -> dict:
     body = json.dumps(payload, default=str)
     headers = {
         "Content-Type": "application/json",
-        "User-Agent":   "PostureAI-Webhooks/3.0",
-        "X-PostureAI-Timestamp": str(int(time.time())),
+        "User-Agent":   "Corvus-Webhooks/3.0",
+        "X-Corvus-Timestamp": str(int(time.time())),
     }
     if secret:
         sig = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
-        headers["X-PostureAI-Signature"] = f"sha256={sig}"
+        headers["X-Corvus-Signature"] = f"sha256={sig}"
 
     try:
         resp = requests.post(url, data=body, headers=headers, timeout=10)
@@ -299,29 +299,29 @@ from celery.schedules import crontab
 celery_app.conf.beat_schedule = {
     # Daily email jobs: onboarding sequences, win-back, NPS
     "daily-email-jobs": {
-        "task": "postureai.daily_email_jobs",
+        "task": "corvus.daily_email_jobs",
         "schedule": crontab(hour=7, minute=0),   # 09:00 Cairo time (UTC+2)
     },
     # Weekly digest: every Monday at 08:00 UTC
     "weekly-digest": {
-        "task": "postureai.weekly_digest_jobs",
+        "task": "corvus.weekly_digest_jobs",
         "schedule": crontab(hour=8, minute=0, day_of_week=1),
     },
     # Hourly: fire pending webhooks that failed and need retry
     "webhook-retry": {
-        "task": "postureai.retry_failed_webhooks",
+        "task": "corvus.retry_failed_webhooks",
         "schedule": crontab(minute=15),          # :15 past every hour
     },
     # Daily: compute churn risk scores for all orgs
     "churn-score-refresh": {
-        "task": "postureai.refresh_churn_scores",
+        "task": "corvus.refresh_churn_scores",
         "schedule": crontab(hour=6, minute=0),   # 08:00 Cairo
     },
 }
 celery_app.conf.timezone = "UTC"
 
 
-@celery_app.task(name="postureai.daily_email_jobs")
+@celery_app.task(name="corvus.daily_email_jobs")
 def daily_email_jobs_task() -> dict:
     """Run all daily drip email sequences."""
     try:
@@ -338,7 +338,7 @@ def daily_email_jobs_task() -> dict:
 
 
 
-@celery_app.task(name="postureai.weekly_digest_jobs")
+@celery_app.task(name="corvus.weekly_digest_jobs")
 def weekly_digest_jobs_task() -> dict:
     """Send weekly digest emails to all active users."""
     try:
@@ -361,7 +361,7 @@ def weekly_digest_jobs_task() -> dict:
 
 
 
-@celery_app.task(name="postureai.retry_failed_webhooks")
+@celery_app.task(name="corvus.retry_failed_webhooks")
 def retry_failed_webhooks_task() -> dict:
     """Retry webhook deliveries that failed in the last hour."""
     try:
@@ -396,7 +396,7 @@ def retry_failed_webhooks_task() -> dict:
 
 
 
-@celery_app.task(name="postureai.refresh_churn_scores")
+@celery_app.task(name="corvus.refresh_churn_scores")
 def refresh_churn_scores_task() -> dict:
     """Recompute health + churn risk scores for all users and cache in Redis."""
     try:

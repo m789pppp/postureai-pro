@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Health & Readiness Routes
+Corvus — Health & Readiness Routes
 Provides: /api/health, /api/ready, /api/version
 Used by: Docker HEALTHCHECK, Railway, load balancers, monitoring
 """
@@ -10,7 +10,7 @@ import logging
 from flask import Blueprint, jsonify
 
 health_bp = Blueprint("health", __name__)
-logger = logging.getLogger("postureai.health")
+logger = logging.getLogger("corvus.health")
 
 _start_time = time.time()
 
@@ -23,7 +23,7 @@ def health():
     """
     return jsonify({
         "status": "ok",
-        "service": "postureai-backend",
+        "service": "corvus-backend",
         "env": os.getenv("FLASK_ENV", "development"),
         "uptime_sec": round(time.time() - _start_time),
     }), 200

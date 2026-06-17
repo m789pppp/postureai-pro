@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Analytics Routes Blueprint
+Corvus — Analytics Routes Blueprint
 Handles: posture insights, heatmaps, gamification, reports
 """
 from flask import Blueprint, request, jsonify, g

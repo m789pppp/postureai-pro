@@ -1,5 +1,5 @@
 """
-PostureAI — Celery Beat Schedule (ULTIMATE v12)
+Corvus — Celery Beat Schedule (ULTIMATE v12)
 Runs daily jobs: email sequences, weekly digest, NPS surveys, health score refresh.
 
 Start worker:
@@ -13,10 +13,10 @@ import os, logging
 from celery import Celery
 from celery.schedules import crontab
 
-log = logging.getLogger("postureai.beat")
+log = logging.getLogger("corvus.beat")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-app = Celery("postureai_beat", broker=REDIS_URL, backend=REDIS_URL)
+app = Celery("corvus_beat", broker=REDIS_URL, backend=REDIS_URL)
 
 app.conf.update(
     timezone                 = "Africa/Cairo",
@@ -157,7 +157,7 @@ def trigger_nps_surveys(self):
                         to_email=u["email"], to_name=u.get("name",""),
                         uid=doc.id, plan=u.get("tier","starter"),
                         template_key="nps_survey",
-                        subject="Quick question about PostureAI (30 seconds) 🙏",
+                        subject="Quick question about Corvus (30 seconds) 🙏",
                         data={"uid": doc.id},
                     )
                     if send_email(ctx):
@@ -190,7 +190,7 @@ def run_payment_dunning(self):
                 to_email=u["email"], to_name=u.get("name",""),
                 uid=doc.id, plan=u.get("tier","starter"),
                 template_key="payment_failed",
-                subject="Action needed — PostureAI payment failed",
+                subject="Action needed — Corvus payment failed",
             )
             if send_email(ctx):
                 sent += 1

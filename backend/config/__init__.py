@@ -1,1 +1,1 @@
-"""PostureAI backend configuration package."""
+"""Corvus backend configuration package."""

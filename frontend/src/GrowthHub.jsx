@@ -1,5 +1,5 @@
 /**
- * GrowthHub.jsx — PostureAI Phase 13
+ * GrowthHub.jsx — Corvus Phase 13
  * Public roadmap, changelog, status page, affiliate/partner program — all in one Growth hub
  */
 import { useState } from "react";
@@ -258,7 +258,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
               <div style={{ background:"rgba(99,102,241,0.07)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:12, padding:16 }}>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:10, fontSize:14 }}>🔗 Affiliate Link Generator</div>
                 <div style={{ display:"flex", gap:8 }}>
-                  <input defaultValue={profile?.referral_code ? `https://postureai.com?ref=${profile.referral_code}` : `https://postureai.com?ref=${(profile?.uid||"").slice(0,8)}`} style={{ flex:1, background:"rgba(0,0,0,0.2)", border:`1px solid ${cs.border}`, color:"#a5f3fc", borderRadius:8, padding:"8px 13px", fontSize:12, fontFamily:"monospace", outline:"none" }} readOnly />
+                  <input defaultValue={profile?.referral_code ? `https://corvus.com?ref=${profile.referral_code}` : `https://corvus.com?ref=${(profile?.uid||"").slice(0,8)}`} style={{ flex:1, background:"rgba(0,0,0,0.2)", border:`1px solid ${cs.border}`, color:"#a5f3fc", borderRadius:8, padding:"8px 13px", fontSize:12, fontFamily:"monospace", outline:"none" }} readOnly />
                   <button style={{ background:"linear-gradient(135deg,#6366f1,#ec4899)", border:"none", color:"#fff", borderRadius:8, padding:"8px 16px", cursor:"pointer", fontWeight:700, fontSize:12 }}>Copy</button>
                 </div>
               </div>

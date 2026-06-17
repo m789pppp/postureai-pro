@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — ShareCard v2
+ * Corvus — ShareCard v2
  * Fixes:
  * ✅ No external images — pure canvas (eliminates all CORS issues)
  * ✅ roundRect polyfill — works on Chrome <99, Safari, Firefox
@@ -106,7 +106,7 @@ function drawCard(canvas, data) {
     // Brand name
     ctx.font = "bold 26px -apple-system,sans-serif";
     ctx.fillStyle = "#f0f6ff";
-    ctx.fillText("PostureAI Pro", rx, ry + 26);
+    ctx.fillText("Corvus", rx, ry + 26);
 
     // Tagline
     ctx.font = "13px -apple-system,sans-serif";
@@ -160,7 +160,7 @@ function drawCard(canvas, data) {
     ctx.font = "13px -apple-system,sans-serif";
     ctx.fillStyle = "#a5b4fc";
     ctx.textAlign = "center";
-    ctx.fillText("🌐 postureai-pro-omega.vercel.app", rx + 155, ctaY + 24);
+    ctx.fillText("🌐 corvus-omega.vercel.app", rx + 155, ctaY + 24);
 
     // Date
     ctx.textAlign = "right"; ctx.textBaseline = "alphabetic";
@@ -181,7 +181,7 @@ function FallbackCard({ score, isAr }) {
   return (
     <div style={{ width:"100%", aspectRatio:"16/8.5", background:"linear-gradient(135deg,#080e1e,#0d1527)", border:"1px solid rgba(99,102,241,.3)", borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:8 }}>
       <div style={{ fontSize:52, fontWeight:900, color }}>{score}</div>
-      <div style={{ fontSize:14, color:"rgba(255,255,255,.5)" }}>PostureAI Pro</div>
+      <div style={{ fontSize:14, color:"rgba(255,255,255,.5)" }}>Corvus</div>
     </div>
   );
 }
@@ -219,15 +219,15 @@ export function ShareCard({ score, sessions, avgScore, streak, name, lang, onClo
     if (!url) { alert(isAr ? "تعذّر تصدير الصورة" : "Could not export image"); return; }
     const a  = document.createElement("a");
     a.href   = url;
-    a.download = `postureai-score-${score}.png`;
+    a.download = `corvus-score-${score}.png`;
     a.click();
   };
 
   const share = async () => {
     setSharing(true);
     const text = isAr
-      ? `حققت نتيجة ${score}/100 في وضعية الجسم على PostureAI Pro 🧠💪\nجرّب مجاناً: postureai-pro-omega.vercel.app`
-      : `I scored ${score}/100 on posture health with PostureAI Pro 🧠💪\nTry free: postureai-pro-omega.vercel.app`;
+      ? `حققت نتيجة ${score}/100 في وضعية الجسم على Corvus 🧠💪\nجرّب مجاناً: corvus-omega.vercel.app`
+      : `I scored ${score}/100 on posture health with Corvus 🧠💪\nTry free: corvus-omega.vercel.app`;
     try {
       const url  = getDataURL();
       if (url && navigator.canShare) {
@@ -235,7 +235,7 @@ export function ShareCard({ score, sessions, avgScore, streak, name, lang, onClo
         const blob = await res.blob();
         const file = new File([blob], "posture-score.png", { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ text, files: [file], title: "My PostureAI Score" });
+          await navigator.share({ text, files: [file], title: "My Corvus Score" });
           setSharing(false); return;
         }
       }

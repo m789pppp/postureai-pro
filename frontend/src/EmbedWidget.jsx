@@ -1,6 +1,6 @@
 /**
- * EmbedWidget.jsx — PostureAI public leaderboard embed
- * <iframe src="https://app.postureai.com/embed/leaderboard?org=ORGID&theme=dark" />
+ * EmbedWidget.jsx — Corvus public leaderboard embed
+ * <iframe src="https://app.corvus.com/embed/leaderboard?org=ORGID&theme=dark" />
  * B2B viral: companies can embed their team leaderboard in Notion, Confluence, Slack tabs
  */
 import { useState, useEffect } from "react";
@@ -35,7 +35,7 @@ export default function EmbedWidget() {
   const showDept = params.get("dept") !== "false";
 
   const [board,   setBoard]   = useState(MOCK_BOARD.slice(0, limit));
-  const [org,     setOrg]     = useState({ name: "PostureAI Team", logo: null });
+  const [org,     setOrg]     = useState({ name: "Corvus Team", logo: null });
   const [loading, setLoading] = useState(false);
 
   const isDark = theme === "dark";
@@ -70,9 +70,9 @@ export default function EmbedWidget() {
             <div style={{ fontSize: 11, color: dim }}>Posture Leaderboard</div>
           </div>
         </div>
-        <a href="https://postureai.com" target="_blank" rel="noreferrer"
+        <a href="https://corvus.com" target="_blank" rel="noreferrer"
            style={{ fontSize: 10, color: dim, textDecoration: "none" }}>
-          Powered by PostureAI 🧘
+          Powered by Corvus 🧘
         </a>
       </div>
 
@@ -127,7 +127,7 @@ export default function EmbedWidget() {
 
       {/* Footer CTA */}
       <div style={{ textAlign: "center", marginTop: 16 }}>
-        <a href={`https://app.postureai.com?ref=embed&org=${orgId}`}
+        <a href={`https://app.corvus.com?ref=embed&org=${orgId}`}
            target="_blank" rel="noreferrer"
            style={{ fontSize: 12, color: "#6366f1", textDecoration: "none", fontWeight: 600 }}>
           Join the leaderboard →

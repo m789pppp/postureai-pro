@@ -1,5 +1,5 @@
 /**
- * CustomerSuccess.jsx — PostureAI ULTIMATE v12
+ * CustomerSuccess.jsx — Corvus ULTIMATE v12
  * REAL FIRESTORE DATA — live NPS responses, support tickets, help articles.
  * NPS submit → backend API. Chat → real-time or support email fallback.
  */
@@ -33,7 +33,7 @@ const BOT_RESPONSES = {
   camera:   "Camera fix: 1) Allow camera permissions, 2) Refresh, 3) Try Chrome. Which step?",
   export:   "To export: Analytics → Export → choose CSV/PDF → Download. Need help?",
   mfa:      "MFA setup: Settings → Security → Enable 2FA. Choose TOTP or SMS.",
-  default:  "Hi! I'm PostureAI support. Describe your issue (billing, camera, export, MFA)?",
+  default:  "Hi! I'm Corvus support. Describe your issue (billing, camera, export, MFA)?",
 };
 
 function getBotReply(msg) {
@@ -58,7 +58,7 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
   const [chatOpen, setChatOpen]   = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatMsgs, setChatMsgs]   = useState([
-    { role:"bot", text:"Hi! 👋 I'm PostureAI Support. How can I help?" }
+    { role:"bot", text:"Hi! 👋 I'm Corvus Support. How can I help?" }
   ]);
   const [helpSearch, setHelpSearch] = useState("");
   const chatEnd = useRef(null);
@@ -259,7 +259,7 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
               <div style={{ background:"rgba(99,102,241,.07)", borderRadius:14, padding:"20px",
                 border:`1px solid rgba(99,102,241,.22)`, marginBottom:20 }}>
                 <div style={{ fontSize:14, fontWeight:700, marginBottom:12, color:C.text }}>
-                  {submitted ? "✅ Thank you for your feedback!" : "Rate PostureAI (0–10)"}
+                  {submitted ? "✅ Thank you for your feedback!" : "Rate Corvus (0–10)"}
                 </div>
                 {!submitted && (
                   <>
@@ -347,7 +347,7 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
                 <div style={{ fontSize:14, fontWeight:700, color:C.text }}>
                   Support Tickets ({tickets.length})
                 </div>
-                <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL||"support@postureai.com"}?subject=Support Request`}
+                <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL||"support@corvus.com"}?subject=Support Request`}
                   style={{ padding:"8px 18px", borderRadius:9, background:C.primary, color:"#fff",
                     textDecoration:"none", fontWeight:600, fontSize:13 }}>
                   + Open Ticket
@@ -360,8 +360,8 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
                   <div style={{ fontSize:48, marginBottom:12 }}>🎉</div>
                   <div style={{ fontSize:16, fontWeight:700, color:C.green }}>No open tickets!</div>
                   <div style={{ fontSize:13, color:C.muted, marginTop:6 }}>
-                    Email <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL||"support@postureai.com"}`}
-                      style={{ color:C.primary }}>support@postureai.com</a> to open one.
+                    Email <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL||"support@corvus.com"}`}
+                      style={{ color:C.primary }}>support@corvus.com</a> to open one.
                   </div>
                 </div>
               ) : (

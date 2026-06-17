@@ -1,5 +1,5 @@
 """
-custom_domains.py — PostureAI White-Label Domain Automation
+custom_domains.py — Corvus White-Label Domain Automation
 Automates: DNS verification → Vercel domain add → SSL → Cloudflare proxy
 When an enterprise org sets their custom domain in WhiteLabel settings,
 this module provisions it end-to-end without manual steps.
@@ -8,7 +8,7 @@ import os, logging, requests as _req
 from datetime import datetime
 from flask import request, jsonify
 
-log = logging.getLogger("postureai.domains")
+log = logging.getLogger("corvus.domains")
 
 VERCEL_TOKEN   = os.getenv("VERCEL_TOKEN","")
 VERCEL_PROJECT = os.getenv("VERCEL_PROJECT_ID","")

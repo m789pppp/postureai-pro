@@ -1,5 +1,5 @@
 /**
- * MFASetup.jsx — PostureAI Phase 15
+ * MFASetup.jsx — Corvus Phase 15
  * Full MFA: TOTP (Google Authenticator) + SMS via Twilio + backup codes
  */
 import { useState, useEffect, useRef } from "react";
@@ -10,7 +10,7 @@ const BACKUP_CODES = Array.from({ length: 8 }, () =>
 
 // Mock TOTP QR (in production: generate server-side with speakeasy)
 const MOCK_TOTP_SECRET = "JBSWY3DPEHPK3PXP";
-const MOCK_QR_URL = `otpauth://totp/PostureAI:user@company.com?secret=${MOCK_TOTP_SECRET}&issuer=PostureAI`;
+const MOCK_QR_URL = `otpauth://totp/Corvus:user@company.com?secret=${MOCK_TOTP_SECRET}&issuer=Corvus`;
 
 export function MFASetup({ profile, cs, lang, onClose, onEnabled }) {
   const [tab,        setTab]       = useState("overview");
@@ -183,7 +183,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled }) {
               {totpStep === 2 && (
                 <>
                   <div style={{ fontWeight:700, color:cs.text, fontSize:15, marginBottom:4 }}>Step 2: Enter the 6-digit code</div>
-                  <p style={{ fontSize:13, color:cs.textDim, lineHeight:1.6, margin:"0 0 16px" }}>Open your authenticator app and enter the current 6-digit code for PostureAI.</p>
+                  <p style={{ fontSize:13, color:cs.textDim, lineHeight:1.6, margin:"0 0 16px" }}>Open your authenticator app and enter the current 6-digit code for Corvus.</p>
                   <CodeInputRow onVerify={verifyTOTP} />
                   <button onClick={() => setTotpStep(1)} style={{ background:"transparent", border:"none", color:cs.textDim, cursor:"pointer", fontSize:12, textAlign:"center" }}>← Back</button>
                 </>

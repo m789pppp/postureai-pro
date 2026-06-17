@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Unit Tests for Pose Analysis
+Corvus — Unit Tests for Pose Analysis
 Run: cd backend && pip install pytest && pytest tests/ -v
 """
 import sys, os, math

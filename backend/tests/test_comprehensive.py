@@ -1,5 +1,5 @@
 """
-PostureAI — Comprehensive Test Suite  (Phase 14)
+Corvus — Comprehensive Test Suite  (Phase 14)
 Run:  cd backend && pytest tests/ -v --tb=short
 Covers: auth, analysis, billing, webhooks, audit, admin, AI routes
 """

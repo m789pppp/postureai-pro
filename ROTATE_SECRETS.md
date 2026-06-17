@@ -5,14 +5,14 @@ The following credentials were committed to the git repository and MUST be rotat
 ## 1. Firebase API Key
 **Exposed key:** `AIzaSyADLL_muc6ooQnfr1cKDCZFX3FKYknTxiI`
 **Action required:**
-1. Go to https://console.firebase.google.com → postureai-prod → Project Settings → General
+1. Go to https://console.firebase.google.com → corvusd → Project Settings → General
 2. Under "Your apps" → Web app → click the settings gear
 3. Scroll to "Web API Key" → click "Rotate API key"
 4. Update VITE_FIREBASE_API_KEY in Vercel environment settings
 5. Update your local frontend/.env.local
 
 ## 2. Firebase Project Details
-**Exposed:** Project ID `postureai-prod`, App ID, Messaging Sender ID
+**Exposed:** Project ID `corvusd`, App ID, Messaging Sender ID
 These are used for Firebase Auth. While less sensitive than the API key,
 review your Firebase Security Rules to ensure they're production-hardened.
 

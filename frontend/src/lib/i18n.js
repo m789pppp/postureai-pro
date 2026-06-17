@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — i18n v5.0
+ * Corvus — i18n v5.0
  * Positioning: "AI Workforce Intelligence Platform"
  * All strings updated: productivity · ROI · workforce intelligence
  */
@@ -7,7 +7,7 @@
 export const translations = {
   en: {
     // ── App meta ──────────────────────────────────────────────────
-    appName:      "PostureAI Pro",
+    appName:      "Corvus",
     tagline:      "AI Workforce Intelligence Platform",
     taglineSub:   "Turn employee health into measurable business ROI",
 
@@ -29,7 +29,7 @@ export const translations = {
     company:      "Organisation name",
     google:       "Continue with Google",
     haveAccount:  "Already have an account?",
-    noAccount:    "New to PostureAI?",
+    noAccount:    "New to Corvus?",
 
     // ── Camera modes ──────────────────────────────────────────────
     laptopMode:   "Desk Setup",
@@ -195,7 +195,7 @@ export const translations = {
     waitConfirm:   "Waiting for confirmation…",
     pending:       "Pending",
     ob1:  "Welcome",         ob1d: "Let's set up your profile",
-    ob2:  "Your Device",     ob2d: "How will you use PostureAI?",
+    ob2:  "Your Device",     ob2d: "How will you use Corvus?",
     ob3:  "Your Goals",      ob3d: "What do you want to achieve?",
     ob4:  "All Set!",        ob4d: "You're ready to start tracking",
     save:       "Save",       finish:     "Finish",
@@ -203,7 +203,7 @@ export const translations = {
     tryAgain:   "Try again",  selectAll:  "Select all",
     editProfile:"Edit Profile", exportCSV: "Export CSV",
     leaderboard:"Leaderboard", referral:  "Referral Programme",
-    referralDesc:"Share PostureAI and earn free months",
+    referralDesc:"Share Corvus and earn free months",
     revenue:    "Revenue",    users:      "Users",
     title:      "Title",      desc:       "Description",
     btn:        "Button",     reject:     "Reject",
@@ -212,7 +212,7 @@ export const translations = {
 
   ar: {
     // ── App meta ──────────────────────────────────────────────────
-    appName:      "PostureAI Pro",
+    appName:      "Corvus",
     tagline:      "منصة ذكاء القوى العاملة بالـ AI",
     taglineSub:   "حوّل صحة موظفيك إلى عائد استثمار قابل للقياس",
 
@@ -234,7 +234,7 @@ export const translations = {
     company:      "اسم المؤسسة",
     google:       "المتابعة بـ Google",
     haveAccount:  "لديك حساب بالفعل؟",
-    noAccount:    "جديد في PostureAI؟",
+    noAccount:    "جديد في Corvus؟",
 
     // ── Camera modes ──────────────────────────────────────────────
     laptopMode:   "وضع المكتب",
@@ -374,7 +374,7 @@ export const translations = {
     copied:       "تم النسخ!",
   },
   fr: {
-    "app_name":           "PostureAI",
+    "app_name":           "Corvus",
     "score":              "Score",
     "session":            "Séance",
     "sessions":           "Séances",
@@ -415,7 +415,7 @@ export const translations = {
     "export":             "Exporter",
   },
   de: {
-    "app_name":           "PostureAI",
+    "app_name":           "Corvus",
     "score":              "Bewertung",
     "session":            "Sitzung",
     "sessions":           "Sitzungen",

@@ -1,5 +1,5 @@
 {
-  "_comment": "PostureAI — Cloudflare WAF + Performance Config",
+  "_comment": "Corvus — Cloudflare WAF + Performance Config",
   "_instructions": "Import this in Cloudflare Dashboard → Security → WAF → Custom Rules",
 
   "dns": {

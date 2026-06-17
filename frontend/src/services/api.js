@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — API Service Layer v3
+ * Corvus — API Service Layer v3
  * - Automatic token injection on every request
  * - 401 auto-refresh
  * - Timeout + AbortController

@@ -1,5 +1,5 @@
 /**
- * AnnouncementsBar.jsx — PostureAI ULTIMATE FINAL
+ * AnnouncementsBar.jsx — Corvus ULTIMATE FINAL
  * In-app announcements banner with dismiss, type icons, and auto-fetch
  */
 import { useState, useEffect } from "react";

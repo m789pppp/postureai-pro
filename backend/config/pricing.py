@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Server-Side Pricing Configuration
+Corvus — Server-Side Pricing Configuration
 SECURITY: This is the ONLY authoritative source of pricing.
           The frontend MUST NEVER determine payment amounts.
           All amount_cents values are generated here, server-side.
@@ -137,6 +137,6 @@ def record_stripe_usage(subscription_item_id: str, quantity: int, timestamp: int
         return True
     except Exception as e:
         import logging
-        logging.getLogger("postureai").warning(f"Stripe usage record failed: {e}")
+        logging.getLogger("corvus").warning(f"Stripe usage record failed: {e}")
         return False
 

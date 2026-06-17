@@ -1,11 +1,11 @@
 /**
- * WhiteLabel.jsx — PostureAI Phase 12
+ * WhiteLabel.jsx — Corvus Phase 12
  * Complete white-label configuration: branding, domain, colors, emails, login page
  */
 import { useState, useRef } from "react";
 
 const DEFAULT_CONFIG = {
-  companyName: "PostureAI",
+  companyName: "Corvus",
   tagline: "Smart Posture Intelligence",
   primaryColor: "#6366f1",
   accentColor: "#0ea5e9",
@@ -13,14 +13,14 @@ const DEFAULT_CONFIG = {
   logoUrl: "",
   faviconUrl: "",
   customDomain: "",
-  supportEmail: "support@postureai.com",
+  supportEmail: "support@corvus.com",
   privacyUrl: "",
   termsUrl: "",
-  hidePostureAIBranding: false,
+  hideCorvusBranding: false,
   customLoginBg: "",
-  emailFromName: "PostureAI",
-  emailFromAddress: "noreply@postureai.com",
-  footerText: "© 2026 PostureAI. All rights reserved.",
+  emailFromName: "Corvus",
+  emailFromAddress: "noreply@corvus.com",
+  footerText: "© 2026 Corvus. All rights reserved.",
   welcomeMessage: "Welcome to your posture dashboard",
   loginBtnText: "Sign in with Google",
   fontFamily: "Inter",
@@ -39,7 +39,7 @@ const PRESET_THEMES = [
 ];
 
 export function WhiteLabel({ profile, cs, lang, onClose }) {
-  const [config, setConfig] = useState({ ...DEFAULT_CONFIG, companyName: profile?.company || "PostureAI" });
+  const [config, setConfig] = useState({ ...DEFAULT_CONFIG, companyName: profile?.company || "Corvus" });
   const [tab, setTab] = useState("branding");
   const [saved, setSaved] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
@@ -102,7 +102,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
               <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#8b5cf6,#ec4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🏷️</div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 20, color: cs.text }}>White-Label Configuration</div>
-                <div style={{ fontSize: 12, color: cs.textDim }}>Fully rebrand PostureAI for your clients</div>
+                <div style={{ fontSize: 12, color: cs.textDim }}>Fully rebrand Corvus for your clients</div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
@@ -193,7 +193,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                   <input type="range" min={0} max={24} value={config.borderRadius} onChange={e => set("borderRadius", e.target.value)} style={{ width: "100%" }} />
                 </div>
 
-                <Toggle label="Hide 'Powered by PostureAI'" hint="Remove all PostureAI branding from the UI" value={config.hidePostureAIBranding} onChange={v => set("hidePostureAIBranding", v)} />
+                <Toggle label="Hide 'Powered by Corvus'" hint="Remove all Corvus branding from the UI" value={config.hideCorvusBranding} onChange={v => set("hideCorvusBranding", v)} />
                 <Toggle label="Show 'Powered by' footer link" hint="Show a small link in the footer" value={config.showPoweredBy} onChange={v => set("showPoweredBy", v)} />
 
                 <InputRow label="Footer Text" value={config.footerText} onChange={v => set("footerText", v)} placeholder="© 2026 Your Company" />
@@ -204,9 +204,9 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
             {tab === "domain" && (
               <div>
                 <div style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 12, padding: 14, marginBottom: 20, fontSize: 13, color: cs.textDim, lineHeight: 1.6 }}>
-                  ℹ️ To use a custom domain, add a <b style={{ color: cs.text }}>CNAME record</b> pointing to <code style={{ color: "#a5f3fc" }}>whitelabel.postureai.com</code> from your DNS provider. SSL is provisioned automatically.
+                  ℹ️ To use a custom domain, add a <b style={{ color: cs.text }}>CNAME record</b> pointing to <code style={{ color: "#a5f3fc" }}>whitelabel.corvus.com</code> from your DNS provider. SSL is provisioned automatically.
                 </div>
-                <InputRow label="Custom Domain" value={config.customDomain} onChange={v => set("customDomain", v)} placeholder="app.yourcompany.com" hint="e.g. app.acme.com — must have CNAME to whitelabel.postureai.com" />
+                <InputRow label="Custom Domain" value={config.customDomain} onChange={v => set("customDomain", v)} placeholder="app.yourcompany.com" hint="e.g. app.acme.com — must have CNAME to whitelabel.corvus.com" />
                 <InputRow label="Support Email" value={config.supportEmail} onChange={v => set("supportEmail", v)} placeholder="support@yourcompany.com" />
                 <InputRow label="Privacy Policy URL" value={config.privacyUrl} onChange={v => set("privacyUrl", v)} placeholder="https://yourcompany.com/privacy" />
                 <InputRow label="Terms of Service URL" value={config.termsUrl} onChange={v => set("termsUrl", v)} placeholder="https://yourcompany.com/terms" />
@@ -215,7 +215,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                 <div style={{ background: cs.bg, borderRadius: 12, padding: 16, border: `1px solid ${cs.border}`, marginTop: 8 }}>
                   <div style={{ fontWeight: 700, color: cs.text, marginBottom: 12, fontSize: 13 }}>DNS Status</div>
                   {[
-                    { record: "CNAME", host: config.customDomain || "app.yourcompany.com", value: "whitelabel.postureai.com", status: config.customDomain ? "pending" : "not_set" },
+                    { record: "CNAME", host: config.customDomain || "app.yourcompany.com", value: "whitelabel.corvus.com", status: config.customDomain ? "pending" : "not_set" },
                     { record: "SSL",   host: config.customDomain || "—", value: "Auto-provisioned", status: config.customDomain ? "provisioning" : "not_set" },
                   ].map(r => (
                     <div key={r.record} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${cs.border}` }}>
@@ -256,7 +256,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
             {/* ── EMAILS ── */}
             {tab === "emails" && (
               <div>
-                <InputRow label="From Name" value={config.emailFromName} onChange={v => set("emailFromName", v)} placeholder="PostureAI" />
+                <InputRow label="From Name" value={config.emailFromName} onChange={v => set("emailFromName", v)} placeholder="Corvus" />
                 <InputRow label="From Address" value={config.emailFromAddress} onChange={v => set("emailFromAddress", v)} placeholder="noreply@yourcompany.com" hint="Must be verified in your SMTP settings" type="email" />
 
                 <div style={{ background: cs.bg, borderRadius: 12, padding: 16, border: `1px solid ${cs.border}`, marginTop: 8 }}>
@@ -330,8 +330,8 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                 <div style={{ fontFamily: config.fontFamily, fontSize: 11, color: "rgba(255,255,255,0.5)", textAlign: "center" }}>{config.tagline}</div>
                 <div style={{ fontFamily: config.fontFamily, fontSize: 12, color: "rgba(255,255,255,0.6)", textAlign: "center" }}>{config.welcomeMessage}</div>
                 <button style={{ fontFamily: config.fontFamily, background: config.primaryColor, border: "none", color: "#fff", borderRadius: parseInt(config.borderRadius), padding: "10px 20px", cursor: "pointer", fontWeight: 700, fontSize: 13, width: "100%" }}>{config.loginBtnText}</button>
-                {config.showPoweredBy && !config.hidePostureAIBranding && (
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: config.fontFamily }}>Powered by PostureAI</div>
+                {config.showPoweredBy && !config.hideCorvusBranding && (
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: config.fontFamily }}>Powered by Corvus</div>
                 )}
               </div>
             </div>
@@ -352,7 +352,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                   ))}
                 </div>
                 <div style={{ marginTop: 8, fontSize: 9, color: "rgba(255,255,255,0.25)", fontFamily: config.fontFamily, textAlign: "center" }}>
-                  {!config.hidePostureAIBranding && config.showPoweredBy ? "Powered by PostureAI" : config.footerText}
+                  {!config.hideCorvusBranding && config.showPoweredBy ? "Powered by Corvus" : config.footerText}
                 </div>
               </div>
             </div>

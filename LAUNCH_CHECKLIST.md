@@ -1,4 +1,4 @@
-# 🚀 PostureAI Pro — Launch Checklist
+# 🚀 Corvus — Launch Checklist
 > آخر تحديث: $(date +%Y-%m-%d)
 
 ---
@@ -39,8 +39,8 @@
 
 **إنشاء الـ Products في Stripe:**
 1. Stripe Dashboard → Products → Add Product
-2. اسم: "PostureAI Pro" — Price: $19/month → احفظ الـ price ID
-3. اسم: "PostureAI Elite" — Price: $49/month → احفظ الـ price ID
+2. اسم: "Corvus" — Price: $19/month → احفظ الـ price ID
+3. اسم: "Corvus Elite" — Price: $49/month → احفظ الـ price ID
 
 | Variable | القيمة |
 |---|---|
@@ -85,7 +85,7 @@
 | Variable | القيمة |
 |---|---|
 | `SENDGRID_API_KEY` | `SG.xxxxx` |
-| `SUPPORT_EMAIL` | البريد المتحقق منه في SendGrid مثال: `support@postureai.io` |
+| `SUPPORT_EMAIL` | البريد المتحقق منه في SendGrid مثال: `support@corvus.io` |
 
 > ⚠️ لازم تتحقق من الـ domain في SendGrid Sender Authentication
 
@@ -95,8 +95,8 @@
 | Variable | القيمة |
 |---|---|
 | `VITE_API_URL` | `https://YOUR-BACKEND.railway.app/api` |
-| `APP_URL` | `https://postureai-pro-omega-nine.vercel.app` |
-| `ALLOWED_ORIGINS` | `https://postureai-pro-omega-nine.vercel.app` |
+| `APP_URL` | `https://corvus-omega-nine.vercel.app` |
+| `ALLOWED_ORIGINS` | `https://corvus-omega-nine.vercel.app` |
 | `FLASK_ENV` | `production` |
 
 ---
@@ -112,8 +112,8 @@
 | `VITE_POSTHOG_HOST` | `https://app.posthog.com` | |
 | `VITE_CRISP_WEBSITE_ID` | app.crisp.chat → Settings → Website ID | Live chat support |
 | `ADMIN_EMAIL` | بريدك | تلقي notifications |
-| `VITE_SUPPORT_EMAIL` | `support@postureai.io` | ظاهر للـ users |
-| `VITE_AUTO_APPROVE_DOMAIN` | `postureai.io` | Auto-approve HR from your domain |
+| `VITE_SUPPORT_EMAIL` | `support@corvus.io` | ظاهر للـ users |
+| `VITE_AUTO_APPROVE_DOMAIN` | `corvus.io` | Auto-approve HR from your domain |
 
 ---
 

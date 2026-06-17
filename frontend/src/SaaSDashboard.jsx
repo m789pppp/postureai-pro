@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — SaaS Dashboard v1
+ * Corvus — SaaS Dashboard v1
  * Modern analytics dashboard: Overview, Usage, Activity, Team, Billing, Settings
  * Design: Linear/Stripe quality — dark premium — fully responsive
  * WCAG 2.1 AA · RTL-ready
@@ -127,7 +127,7 @@ function Sidebar({ active, setActive, user, lang }) {
           <div style={{ width:32, height:32, borderRadius:8,
             background:C.gBlue, display:"flex", alignItems:"center",
             justifyContent:"center", fontSize:16 }}>🧘</div>
-          <span style={{ fontWeight:700, fontSize:15, color:C.text }}>PostureAI</span>
+          <span style={{ fontWeight:700, fontSize:15, color:C.text }}>Corvus</span>
         </div>
       </div>
 

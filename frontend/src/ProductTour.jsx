@@ -1,5 +1,5 @@
 /**
- * ProductTour.jsx — PostureAI Phase 15
+ * ProductTour.jsx — Corvus Phase 15
  * Interactive guided tour: hotspots, tooltips, progress, skip/resume
  */
 import { useState, useEffect, useCallback } from "react";
@@ -56,7 +56,7 @@ const TOUR_STEPS = [
   {
     id: "notifications",
     title: "Smart Reminders",
-    body: "PostureAI will nudge you when your posture drifts — and go quiet when you're already sitting well. Zero noise.",
+    body: "Corvus will nudge you when your posture drifts — and go quiet when you're already sitting well. Zero noise.",
     target: "notifications-btn",
     position: "left",
     icon: "🔔",
@@ -194,7 +194,7 @@ export function ProductTour({ onComplete, cs }) {
             <button onClick={prev} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>← Back</button>
           )}
           <button onClick={next} style={{ flex: 1, background: "linear-gradient(135deg,#6366f1,#0ea5e9)", border: "none", color: "#fff", borderRadius: 10, padding: "12px 20px", cursor: "pointer", fontWeight: 800, fontSize: 14 }}>
-            {isLast ? "🚀 Start Using PostureAI" : "Next →"}
+            {isLast ? "🚀 Start Using Corvus" : "Next →"}
           </button>
           {!isLast && (
             <button onClick={skip} style={{ background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: 12, padding: "10px 8px" }}>Skip</button>

@@ -1,5 +1,5 @@
 /**
- * UsageBilling.jsx — PostureAI Phase 13
+ * UsageBilling.jsx — Corvus Phase 13
  * Usage-based billing: metered usage, overage charges, dunning / payment retry
  */
 import { useState, useEffect } from "react";

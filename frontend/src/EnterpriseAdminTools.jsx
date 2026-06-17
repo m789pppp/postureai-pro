@@ -1,5 +1,5 @@
 /**
- * EnterpriseAdminTools.jsx — PostureAI Phase 12
+ * EnterpriseAdminTools.jsx — Corvus Phase 12
  * Super-admin: feature flags, system health, user impersonation, announcements, DB management
  */
 import { useState, useEffect } from "react";

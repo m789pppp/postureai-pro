@@ -1,5 +1,5 @@
 /**
- * AuditSystem.jsx — PostureAI ULTIMATE v12
+ * AuditSystem.jsx — Corvus ULTIMATE v12
  * REAL FIRESTORE DATA — live audit_logs collection, no mock.
  * Compliance checks, anomaly detection, CSV export via backend API.
  */

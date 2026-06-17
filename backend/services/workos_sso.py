@@ -1,16 +1,16 @@
 """
-workos_sso.py — PostureAI Enterprise SSO via WorkOS
+workos_sso.py — Corvus Enterprise SSO via WorkOS
 Handles SAML 2.0, OIDC, Google Workspace, Azure AD, Okta, OneLogin
 WorkOS provides a unified SSO API so we don't implement each IdP separately.
 """
 import os, logging
 from flask import redirect, request, jsonify
 
-log = logging.getLogger("postureai.sso")
+log = logging.getLogger("corvus.sso")
 
 WORKOS_API_KEY      = os.getenv("WORKOS_API_KEY", "")
 WORKOS_CLIENT_ID    = os.getenv("WORKOS_CLIENT_ID", "")
-APP_URL             = os.getenv("APP_URL", "https://app.postureai.com")
+APP_URL             = os.getenv("APP_URL", "https://app.corvus.com")
 
 def _wos():
     """Lazy-import WorkOS client."""

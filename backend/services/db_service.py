@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Database Service v1
+Corvus — Database Service v1
 Supabase (PostgreSQL) client with connection pooling,
 retry logic, and type-safe query helpers.
 """
@@ -8,7 +8,7 @@ import logging
 from functools import lru_cache
 from typing import Optional, Any
 
-logger = logging.getLogger("postureai.db")
+logger = logging.getLogger("corvus.db")
 
 SUPABASE_URL     = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")  # server-side only

@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — AnalyticsDashboard v3
+ * Corvus — AnalyticsDashboard v3
  * AI Intelligence Layer: Executive Summary · Predictive AI · Fatigue · Reports
  */
 import { useState, useEffect, useCallback } from "react";

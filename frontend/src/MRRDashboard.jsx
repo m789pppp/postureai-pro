@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — MRR / Revenue Metrics Dashboard
+ * Corvus — MRR / Revenue Metrics Dashboard
  * Shows: MRR trend, ARR, ARPU, LTV, churn rate, cohort retention
  * Only visible to platform admins.
  */

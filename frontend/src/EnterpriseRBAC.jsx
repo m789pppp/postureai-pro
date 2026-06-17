@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Enterprise Security & RBAC v1.0
+ * Corvus — Enterprise Security & RBAC v1.0
  * Granular permissions · Role scopes · Audit logs · Activity tracking
  * SAML SSO config · GDPR tools
  */
@@ -772,7 +772,7 @@ function SAMLConfig({orgId,adminUid,isAr}) {
               placeholder="https://your-idp.com/saml/sso" />
             <Input label={isAr?"معرّف الكيان (Entity ID)":"Entity ID"}
               value={config.entityId} onChange={e=>setConfig(c=>({...c,entityId:e.target.value}))}
-              placeholder="https://app.postureai.io/saml/metadata" />
+              placeholder="https://app.corvus.io/saml/metadata" />
           </div>
 
           <div style={{marginBottom:14}}>
@@ -823,12 +823,12 @@ function SAMLConfig({orgId,adminUid,isAr}) {
           {/* ACS / metadata URLs (read-only) */}
           <div style={{background:D.bg2,border:`1px solid ${D.border}`,borderRadius:11,padding:"14px",marginBottom:16}}>
             <div style={{fontSize:11,fontWeight:700,color:D.text2,marginBottom:10,letterSpacing:".03em"}}>
-              {isAr?"روابط PostureAI (SP) — انسخها لـ IdP":"PostureAI (SP) URLs — copy to your IdP"}
+              {isAr?"روابط Corvus (SP) — انسخها لـ IdP":"Corvus (SP) URLs — copy to your IdP"}
             </div>
             {[
-              {l:isAr?"ACS URL":"ACS URL",                v:`https://app.postureai.io/saml/acs`},
-              {l:isAr?"رابط البيانات الوصفية":"Metadata", v:`https://app.postureai.io/saml/metadata`},
-              {l:isAr?"رابط تسجيل الخروج":"Logout URL",  v:`https://app.postureai.io/saml/logout`},
+              {l:isAr?"ACS URL":"ACS URL",                v:`https://app.corvus.io/saml/acs`},
+              {l:isAr?"رابط البيانات الوصفية":"Metadata", v:`https://app.corvus.io/saml/metadata`},
+              {l:isAr?"رابط تسجيل الخروج":"Logout URL",  v:`https://app.corvus.io/saml/logout`},
             ].map(({l,v})=>(
               <div key={l} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${D.border}`}}>
                 <span style={{fontSize:11,color:D.muted,minWidth:120,fontWeight:500}}>{l}</span>
