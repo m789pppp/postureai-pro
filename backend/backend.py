@@ -261,6 +261,63 @@ PAYMOB_INTEGRATIONS = {
     "card":          os.getenv("PAYMOB_INTEGRATION_CARD", ""),
     "mobile_wallet": os.getenv("PAYMOB_INTEGRATION_WALLET", ""),
 }
+
+# ── User type constants ───────────────────────────────────────────
+USER_TYPE_B2C = "b2c"   # individual user (global)
+USER_TYPE_B2B = "b2b"   # company/HR (Egypt enterprise)
+
+def _detect_user_type(uid: str = "", role: dict = None) -> str:
+    """B2B: has company_id or acct_type=company/hr/employee. B2C: everyone else."""
+    if not role: role = {}
+    if role.get("company_id"): return USER_TYPE_B2B
+    if role.get("acct_type") in ("company","hr","employee"): return USER_TYPE_B2B
+    return USER_TYPE_B2C
+
+# ── Pricing table (EGP cents) ──────────────────────────────────────
+# B2C (individual users — برا مصر بـ USD equivalent in EGP)
+# B2B (companies in Egypt — per seat/month)
+# 1 USD ≈ 48 EGP (2025)
+_PAYMOB_PRICES = {
+    # B2C individual plans
+    "standard":     {"monthly": 0,      "yearly": 0},       # free
+    "basic":        {"monthly": 4900,   "yearly": 49000},   # 49 EGP/mo (~$1)
+    "professional": {"monthly": 14900,  "yearly": 149000},  # 149 EGP/mo (~$3)
+    "elite":        {"monthly": 29900,  "yearly": 299000},  # 299 EGP/mo (~$6)
+    # B2B per-seat plans (HR/company)
+    "b2b_starter":  {"monthly": 9900,   "yearly": 99000},   # 99 EGP/seat/mo
+    "b2b_growth":   {"monthly": 7900,   "yearly": 79000},   # 79 EGP/seat/mo (10+ seats)
+    "b2b_enterprise":{"monthly": 5900,  "yearly": 59000},   # 59 EGP/seat/mo (50+ seats)
+}
+
+def get_paymob_amount(tier: str, billing: str = "monthly", user_type: str = "b2c") -> int | None:
+    """
+    Return amount in EGP cents for PayMob.
+    user_type: 'b2c' (individual) | 'b2b' (company)
+    Returns None if plan is free or not found.
+    """
+    prices = _PAYMOB_PRICES.get(tier.lower(), {})
+    amount = prices.get(billing.lower())
+    return amount if amount else None
+
+def get_stripe_amount(tier: str, billing: str = "monthly") -> int | None:
+    """Amount in USD cents for Stripe (B2C international)."""
+    _STRIPE_PRICES = {
+        "basic":        {"monthly": 99,   "yearly": 990},    # $0.99/mo
+        "professional": {"monthly": 299,  "yearly": 2990},   # $2.99/mo
+        "elite":        {"monthly": 599,  "yearly": 5990},   # $5.99/mo
+    }
+    prices = _STRIPE_PRICES.get(tier.lower(), {})
+    return prices.get(billing.lower())
+
+def validate_plan_request(tier: str, billing: str) -> tuple[bool, str]:
+    """Validate that tier+billing is a known plan."""
+    valid_tiers    = set(_PAYMOB_PRICES.keys()) | {"pro", "premium", "enterprise"}
+    valid_billings = {"monthly", "yearly", "annual"}
+    if tier.lower() not in valid_tiers:
+        return False, f"Unknown tier: {tier}. Valid: {sorted(valid_tiers)}"
+    if billing.lower() not in valid_billings:
+        return False, f"Unknown billing: {billing}. Valid: monthly, yearly"
+    return True, ""
 APP_URL        = os.getenv("APP_URL", "https://postureai.vercel.app")
 SUPPORT_EMAIL  = os.getenv("SUPPORT_EMAIL", "support@postureai.io")
 ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@postureai.io")
@@ -644,22 +701,104 @@ def send_teams(text: str, score: int = 0, employee: str = "") -> dict:
     except Exception as e:
         return {"ok": False, "reason": str(e)}
 
-def send_whatsapp(to_phone: str, text: str) -> dict:
+def send_whatsapp(to_phone: str, text: str, template: str = None, lang: str = "en") -> dict:
+    """
+    Send WhatsApp message via Meta Cloud API.
+    Supports: text messages + approved templates (for marketing/alerts).
+    phone: international format e.g. "+201012345678" or "201012345678"
+    """
     if not WA_PHONE_ID or not WA_ACCESS_TOKEN:
         return {"ok": False, "reason": "WA_PHONE_NUMBER_ID or WA_ACCESS_TOKEN not set"}
+    phone_clean = to_phone.replace("+","").replace(" ","").replace("-","")
     url = f"https://graph.facebook.com/v18.0/{WA_PHONE_ID}/messages"
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_phone.replace("+", "").replace(" ", ""),
-        "type": "text",
-        "text": {"body": text}
-    }
     headers = {"Authorization": f"Bearer {WA_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    if template:
+        # Template message (pre-approved by Meta — needed for first contact)
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone_clean,
+            "type": "template",
+            "template": {
+                "name": template,
+                "language": {"code": "ar" if lang == "ar" else "en_US"},
+            }
+        }
+    else:
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone_clean,
+            "type": "text",
+            "text": {"body": text, "preview_url": False}
+        }
     try:
         r = req.post(url, json=payload, headers=headers, timeout=10)
-        return {"ok": r.status_code == 200, "status": r.status_code, "data": r.json()}
+        result = r.json()
+        ok = r.status_code == 200
+        if not ok:
+            log_event("whatsapp_error", meta={"status": r.status_code, "error": str(result)[:100]})
+        return {"ok": ok, "status": r.status_code, "data": result}
     except Exception as e:
         return {"ok": False, "reason": str(e)}
+
+
+def notify_user(uid: str, title: str, body: str,
+                channel: str = "auto", lang: str = "en",
+                data: dict = None) -> dict:
+    """
+    Smart notification router — sends via best available channel.
+    channel: "auto" | "whatsapp" | "push" | "email"
+    "auto" priority: WhatsApp (if phone known) → Push (if token registered) → Email
+
+    Used for BOTH B2B (HR alerts) and B2C (streak reminders, milestones).
+    """
+    results = {}
+    try:
+        # Load user profile for contact info
+        user_doc = db.collection("users").document(uid).get()
+        user     = user_doc.to_dict() if user_doc.exists else {}
+        phone    = user.get("phone") or user.get("wa_phone") or ""
+        email    = user.get("email") or ""
+        notif_pref = user.get("notif_channel", "auto")  # user preference
+
+        # Respect user preference
+        if notif_pref != "auto" and channel == "auto":
+            channel = notif_pref
+
+        sent = False
+
+        # 1. WhatsApp (highest open rate ~98%)
+        if channel in ("auto", "whatsapp") and phone:
+            wa_text = f"*{title}*\n\n{body}\n\n_PostureAI Pro_"
+            result  = send_whatsapp(phone, wa_text, lang=lang)
+            results["whatsapp"] = result
+            if result.get("ok"):
+                sent = True
+                log_event("notify_whatsapp_sent", uid, {"title": title[:40]})
+
+        # 2. Push notification (FCM)
+        if not sent and channel in ("auto", "push"):
+            tokens = _get_user_tokens(uid)
+            if tokens:
+                push_results = [_send_fcm(t, title, body, data or {}) for t in tokens]
+                results["push"] = {"sent": sum(push_results), "tokens": len(tokens)}
+                if any(push_results):
+                    sent = True
+                    log_event("notify_push_sent", uid, {"title": title[:40]})
+
+        # 3. Email (fallback)
+        if not sent and channel in ("auto", "email") and email:
+            html = f"<h2>{title}</h2><p>{body}</p><p><small>PostureAI Pro</small></p>"
+            ok   = send_email(email, title, html)
+            results["email"] = {"sent": ok}
+            if ok:
+                sent = True
+                log_event("notify_email_sent", uid, {"title": title[:40]})
+
+    except Exception as e:
+        results["error"] = str(e)
+
+    results["sent"] = sent
+    return results
 
 def send_email(to_email: str, subject: str, html_body: str, from_name: str = "PostureAI") -> bool:
     """
@@ -4321,9 +4460,10 @@ def analyze():
         ok, err = validate_frame(data)
         if not ok:
             return jsonify({"error": err}), 400
-        mode = data.get("mode", "laptop")
-        tier = getattr(g, "tier", None) or "standard"  # SECURITY: from auth, never client
-        uid  = getattr(g, "uid", None) or ""
+        mode      = data.get("mode", "laptop")
+        tier      = getattr(g, "tier", None) or "standard"  # SECURITY: from auth, never client
+        uid       = getattr(g, "uid", None) or ""
+        user_type = getattr(g, "user_type", None) or _detect_user_type(uid, getattr(g,"role",{}))
 
         # ── Employee Consent Gate ──────────────────────────────────────────
         # Employees invited by HR must explicitly consent before monitoring starts
@@ -8517,6 +8657,348 @@ def my_leaderboard_rank():
             "nearby":    nearby,
             "period":    period,
         })
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# B2B: COMPANY DASHBOARD API (Arabic-first HR dashboard)
+# ══════════════════════════════════════════════════════════════════
+
+def _require_b2b(f):
+    """Decorator: ensures user is B2B (company/HR). Returns 403 for B2C users."""
+    from functools import wraps
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        user_type = getattr(g, "user_type", None) or _detect_user_type(
+            getattr(g,"uid",""), getattr(g,"role",{}))
+        company_id = getattr(g, "company_id", "") or getattr(g,"role",{}).get("company_id","")
+        if not company_id:
+            return jsonify({
+                "error": "b2b_required",
+                "message": "This endpoint requires a company account.",
+                "message_ar": "هذا الطلب يتطلب حساب شركة.",
+            }), 403
+        g.company_id = company_id
+        return f(*args, **kwargs)
+    return wrapper
+
+
+@app.route("/api/company/dashboard", methods=["GET"])
+@require_auth
+@_require_b2b
+@limiter.limit("30 per minute")
+def company_dashboard():
+    """
+    Full HR dashboard — aggregate stats for the whole company.
+    Returns bilingual (AR + EN) labels for Arabic-first UI.
+    """
+    try:
+        company_id = g.company_id
+        lang       = request.args.get("lang", "ar")  # default Arabic for B2B Egypt
+        days       = min(90, max(7, int(request.args.get("days", 30))))
+        cutoff     = datetime.utcnow() - timedelta(days=days)
+
+        # ── Fetch all employees in this company ───────────────────
+        emp_docs = (db.collection("users")
+                      .where("company_id", "==", company_id)
+                      .limit(500).stream())
+        employees = {d.id: d.to_dict() for d in emp_docs}
+        emp_uids  = list(employees.keys())
+
+        if not emp_uids:
+            return jsonify({
+                "ok": True,
+                "company_id": company_id,
+                "message": "No employees found. Invite employees via /api/org/send-invite",
+                "message_ar": "لا يوجد موظفون. أرسل دعوات عبر /api/org/send-invite",
+            })
+
+        # ── Fetch sessions for all employees ──────────────────────
+        # Firestore: batch query (max 10 UIDs per __in__ query)
+        all_sessions = []
+        for i in range(0, len(emp_uids), 10):
+            batch = emp_uids[i:i+10]
+            docs  = (db.collection("sessions")
+                       .where("uid", "in", batch)
+                       .where("created_at", ">=", cutoff)
+                       .limit(2000).stream())
+            all_sessions.extend([d.to_dict() for d in docs])
+
+        # ── Per-employee aggregation ───────────────────────────────
+        emp_stats: dict = {uid: {
+            "uid":      uid,
+            "name":     employees[uid].get("name") or employees[uid].get("displayName") or f"Employee {uid[:6]}",
+            "email":    employees[uid].get("email",""),
+            "sessions": 0, "scores": [], "alerts_count": 0,
+            "avg_score": None, "grade": None, "trend": "stable",
+        } for uid in emp_uids}
+
+        for s in all_sessions:
+            uid = s.get("uid")
+            sc  = s.get("avg_score")
+            if uid not in emp_stats: continue
+            emp_stats[uid]["sessions"] += 1
+            if isinstance(sc, (int, float)):
+                emp_stats[uid]["scores"].append(sc)
+            emp_stats[uid]["alerts_count"] += s.get("alerts_count", 0) or 0
+
+        for uid, es in emp_stats.items():
+            scores = es["scores"]
+            if scores:
+                avg = round(sum(scores)/len(scores), 1)
+                es["avg_score"] = avg
+                es["grade"]     = "A" if avg>=85 else "B" if avg>=70 else "C" if avg>=55 else "D"
+                # Trend: first half vs second half
+                if len(scores) >= 4:
+                    half = len(scores)//2
+                    early = sum(scores[:half])/half
+                    late  = sum(scores[half:])/half
+                    es["trend"] = "improving" if late-early>5 else "declining" if late-early<-5 else "stable"
+
+        emp_list = sorted(emp_stats.values(), key=lambda x: (x["avg_score"] or 0), reverse=True)
+
+        # ── Company-wide KPIs ─────────────────────────────────────
+        all_scores  = [e["avg_score"] for e in emp_list if e["avg_score"] is not None]
+        company_avg = round(sum(all_scores)/len(all_scores), 1) if all_scores else None
+        at_risk     = [e for e in emp_list if (e["avg_score"] or 100) < 55]
+        improving   = [e for e in emp_list if e["trend"] == "improving"]
+        declining   = [e for e in emp_list if e["trend"] == "declining"]
+        top_5       = emp_list[:5]
+        bottom_5    = [e for e in reversed(emp_list) if e["avg_score"] is not None][:5]
+
+        # ── ROI estimate ──────────────────────────────────────────
+        # Based on WHO: poor posture costs ~3.5 sick days/year per employee
+        # PostureAI targets 40% reduction → 1.4 days saved per employee
+        # Egypt avg daily wage: ~400 EGP
+        _emp_count   = len(emp_uids)
+        _days_saved  = round(_emp_count * 1.4, 1)
+        _egp_saved   = round(_days_saved * 400, 0)
+        _roi_note    = "Estimated based on WHO musculoskeletal sick leave data"
+
+        # ── Bilingual labels ──────────────────────────────────────
+        is_ar = lang == "ar"
+        def _label(en, ar): return ar if is_ar else en
+
+        return jsonify({
+            "ok":          True,
+            "company_id":  company_id,
+            "period_days": days,
+            "lang":        lang,
+
+            # KPIs
+            "kpis": {
+                "company_avg_score": company_avg,
+                "company_grade":     "A" if (company_avg or 0)>=85 else "B" if (company_avg or 0)>=70 else "C" if (company_avg or 0)>=55 else "D",
+                "total_employees":   _emp_count,
+                "active_employees":  sum(1 for e in emp_list if e["sessions"]>0),
+                "at_risk_count":     len(at_risk),
+                "at_risk_pct":       round(len(at_risk)/_emp_count*100, 1) if _emp_count else 0,
+                "improving_count":   len(improving),
+                "declining_count":   len(declining),
+                "total_sessions":    len(all_sessions),
+
+                # Labels (bilingual)
+                "labels": {
+                    "company_avg":   _label("Company Average","متوسط الشركة"),
+                    "at_risk":       _label("At Risk","في خطر"),
+                    "improving":     _label("Improving","يتحسن"),
+                    "declining":     _label("Declining","يتراجع"),
+                    "sessions":      _label("Total Sessions","إجمالي الجلسات"),
+                },
+            },
+
+            # Employee lists
+            "top_performers":  [_employee_card(e, is_ar) for e in top_5],
+            "needs_attention": [_employee_card(e, is_ar) for e in bottom_5],
+            "at_risk":         [_employee_card(e, is_ar) for e in at_risk],
+            "all_employees":   [_employee_card(e, is_ar) for e in emp_list],
+
+            # ROI
+            "roi_estimate": {
+                "employees":      _emp_count,
+                "sick_days_saved": _days_saved,
+                "egp_saved":      _egp_saved,
+                "note":           _label(_roi_note, "تقدير بناءً على بيانات منظمة الصحة العالمية"),
+            },
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+def _employee_card(e: dict, is_ar: bool) -> dict:
+    """Format employee data for dashboard display."""
+    trend_labels = {
+        "improving": ("📈 Improving", "📈 يتحسن"),
+        "declining":  ("📉 Declining", "📉 يتراجع"),
+        "stable":     ("➡️ Stable",   "➡️ مستقر"),
+    }
+    trend = e.get("trend","stable")
+    tl    = trend_labels.get(trend, ("➡️ Stable","➡️ مستقر"))
+    return {
+        "uid":         e["uid"],
+        "name":        e["name"],
+        "email":       e["email"],
+        "avg_score":   e["avg_score"],
+        "grade":       e["grade"],
+        "sessions":    e["sessions"],
+        "alerts_count":e["alerts_count"],
+        "trend":       trend,
+        "trend_label": tl[1] if is_ar else tl[0],
+        "status":      ("🔴 في خطر" if is_ar else "🔴 At Risk") if (e["avg_score"] or 100) < 55
+                  else ("🟡 يحتاج انتباه" if is_ar else "🟡 Needs Attention") if (e["avg_score"] or 100) < 70
+                  else ("🟢 جيد" if is_ar else "🟢 Good"),
+    }
+
+
+@app.route("/api/company/alert-employees", methods=["POST"])
+@require_auth
+@_require_b2b
+@limiter.limit("10 per minute")
+def company_alert_employees():
+    """
+    HR sends WhatsApp/push alert to specific employees or all at-risk.
+    target: "all" | "at_risk" | [uid1, uid2, ...]
+    """
+    try:
+        company_id = g.company_id
+        hr_uid     = g.uid
+        data       = request.get_json(force=True) or {}
+        target     = data.get("target", "at_risk")
+        message    = data.get("message", "")
+        lang       = data.get("lang", "ar")
+
+        if not message:
+            return jsonify({"error": "message required"}), 400
+
+        # Get target UIDs
+        if isinstance(target, list):
+            uids = target
+        else:
+            emp_docs = (db.collection("users")
+                          .where("company_id","==",company_id).limit(500).stream())
+            all_uids = [d.id for d in emp_docs]
+            if target == "at_risk":
+                # Filter for employees with avg_score < 55 in last 7 days
+                cutoff = datetime.utcnow() - timedelta(days=7)
+                uids   = []
+                for uid in all_uids:
+                    sess = (db.collection("sessions")
+                              .where("uid","==",uid)
+                              .where("created_at",">=",cutoff)
+                              .limit(20).stream())
+                    scores = [s.to_dict().get("avg_score",0) for s in sess]
+                    if scores and sum(scores)/len(scores) < 55:
+                        uids.append(uid)
+            else:
+                uids = all_uids
+
+        # Send notification to each employee
+        sent = 0; failed = 0
+        for uid in uids[:100]:  # cap at 100 per call
+            result = notify_user(uid, 
+                title="تنبيه وضعية من HR" if lang=="ar" else "HR Posture Alert",
+                body=message, lang=lang,
+                data={"type":"hr_alert","from":hr_uid})
+            if result.get("sent"): sent += 1
+            else: failed += 1
+
+        log_event("company_alert_sent", hr_uid, {
+            "company_id": company_id, "target": str(target)[:20],
+            "sent": sent, "failed": failed
+        })
+        return jsonify({"ok": True, "sent": sent, "failed": failed, "total": len(uids)})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/company/stats", methods=["GET"])
+@require_auth
+@_require_b2b
+@limiter.limit("30 per minute")
+def company_stats():
+    """Quick KPI summary for C-suite (no employee details)."""
+    try:
+        company_id = g.company_id
+        lang       = request.args.get("lang","ar")
+        days       = min(90, max(7, int(request.args.get("days",30))))
+        cutoff     = datetime.utcnow() - timedelta(days=days)
+        is_ar      = lang == "ar"
+
+        emp_docs  = db.collection("users").where("company_id","==",company_id).limit(500).stream()
+        emp_uids  = [d.id for d in emp_docs]
+        all_sessions = []
+        for i in range(0, len(emp_uids), 10):
+            batch = emp_uids[i:i+10]
+            docs  = (db.collection("sessions")
+                       .where("uid","in",batch)
+                       .where("created_at",">=",cutoff)
+                       .limit(2000).stream())
+            all_sessions.extend([d.to_dict() for d in docs])
+
+        scores     = [s.get("avg_score") for s in all_sessions if isinstance(s.get("avg_score"),(int,float))]
+        avg        = round(sum(scores)/len(scores),1) if scores else None
+        at_risk_ct = sum(1 for s in scores if s < 55)
+
+        return jsonify({
+            "ok":            True,
+            "company_id":    company_id,
+            "period_days":   days,
+            "avg_score":     avg,
+            "total_sessions":len(all_sessions),
+            "employees":     len(emp_uids),
+            "at_risk_pct":   round(at_risk_ct/max(len(scores),1)*100,1),
+            "grade":         "A" if (avg or 0)>=85 else "B" if (avg or 0)>=70 else "C" if (avg or 0)>=55 else "D",
+            "labels": {
+                "avg_score":   "متوسط درجة الوضعية" if is_ar else "Avg Posture Score",
+                "at_risk_pct": "نسبة الموظفين في خطر" if is_ar else "% Employees At Risk",
+                "sessions":    "إجمالي الجلسات" if is_ar else "Total Sessions",
+                "grade":       "تقييم الشركة" if is_ar else "Company Grade",
+            },
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# USER NOTIFICATION PREFERENCES
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/user/notif-pref", methods=["GET", "PUT"])
+@require_auth
+@limiter.limit("20 per minute")
+def user_notif_pref():
+    """Get or set user notification channel preference."""
+    try:
+        uid = getattr(g, "uid", "")
+        if request.method == "GET":
+            doc = db.collection("users").document(uid).get()
+            d   = doc.to_dict() if doc.exists else {}
+            return jsonify({
+                "ok":           True,
+                "notif_channel": d.get("notif_channel","auto"),
+                "wa_phone":     d.get("wa_phone",""),
+                "channels": {
+                    "auto":      "WhatsApp → Push → Email (recommended)",
+                    "whatsapp":  "WhatsApp only",
+                    "push":      "Push notifications only",
+                    "email":     "Email only",
+                    "none":      "No notifications",
+                }
+            })
+        data    = request.get_json(force=True) or {}
+        channel = data.get("channel","auto")
+        wa_phone= data.get("wa_phone","").strip()
+        valid   = ("auto","whatsapp","push","email","none")
+        if channel not in valid:
+            return jsonify({"error": f"Invalid channel. Valid: {valid}"}), 400
+        update = {"notif_channel": channel}
+        if wa_phone:
+            update["wa_phone"] = wa_phone
+            update["phone"]    = wa_phone
+        db.collection("users").document(uid).update(update)
+        log_event("notif_pref_updated", uid, {"channel": channel})
+        return jsonify({"ok": True, "notif_channel": channel})
     except Exception as e:
         return safe_error(e)
 
