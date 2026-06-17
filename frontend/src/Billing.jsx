@@ -80,11 +80,8 @@ export async function createStripeCheckout({ planId, billing, userEmail, userId,
   if (!plan) throw new Error("Invalid plan");
   const priceId = plan.stripePriceId[billing];
   if (!priceId) {
-    // Standard (free) and Enterprise (contact sales) don't go through Stripe checkout
-    if (planId === "standard") {
-      throw new Error("Standard plan is free — no payment required");
-    }
-    if (planId === "enterprise") {
+    // Elite (Enterprise) is contact-sales / custom-priced — doesn't go through Stripe checkout
+    if (planId === "elite") {
       throw new Error("Enterprise plan requires a custom contract — contact sales@corvus.io");
     }
     throw new Error(
@@ -203,7 +200,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
     }
   }, [billing, profile]);
 
-  const planList = ["standard", "professional", "elite", "enterprise"];
+  const planList = ["standard", "professional", "elite"];
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9500, backdropFilter: "blur(12px)", overflowY: "auto", padding: 20 }}>
