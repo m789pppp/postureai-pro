@@ -1925,35 +1925,52 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     wrist_sc = None
     if tier in ("professional","elite","pro","premium","business") and len(_hist[0]) > PL.R_WRIST if _hist else False:
         try:
-            # Visibility gate: both elbows must be visible for accurate wrist angle
             vis_l_elbow = g(PL.L_ELBOW).visibility
             vis_r_elbow = g(PL.R_ELBOW).visibility
             vis_l_wrist = g(PL.L_WRIST).visibility
             vis_r_wrist = g(PL.R_WRIST).visibility
-            elbow_ok = vis_l_elbow > 0.5 and vis_r_elbow > 0.5
-            wrist_ok = vis_l_wrist > 0.5 and vis_r_wrist > 0.5
-            if elbow_ok and wrist_ok:
-                # 3D wrist angle using Z depth from MediaPipe
-                def px3(idx):
-                    lm = g(idx)
-                    return (lm.x*w, lm.y*h, lm.z*w)  # z scaled by w (MediaPipe convention)
+            _l_ok = vis_l_elbow > 0.45 and vis_l_wrist > 0.45
+            _r_ok = vis_r_elbow > 0.45 and vis_r_wrist > 0.45
+            both_ok = _l_ok and _r_ok
+
+            def px3(idx):
+                lm = g(idx)
+                return (lm.x*w, lm.y*h, lm.z*w)
+
+            wrist_angle = None
+            _wrist_source = "none"
+
+            if both_ok:
+                # Both sides — average for best accuracy
                 l_sh3 = px3(PL.L_SHOULDER); r_sh3 = px3(PL.R_SHOULDER)
                 l_el3 = px3(PL.L_ELBOW);   r_el3 = px3(PL.R_ELBOW)
                 l_wr3 = px3(PL.L_WRIST);   r_wr3 = px3(PL.R_WRIST)
-                # Upper arm vector for reference plane
                 l_wrist_angle = angle_3pt_3d(l_sh3, l_el3, l_wr3)
                 r_wrist_angle = angle_3pt_3d(r_sh3, r_el3, r_wr3)
-                # Ideal elbow angle = 90°, wrist deviation from straight
-                wrist_angle = ((180-l_wrist_angle) + (180-r_wrist_angle)) / 2
-                wrist_sc    = score_m(wrist_angle, 0, 10, 25)
-            out["metrics"]["wrist_angle"] = {
-                "value": round(wrist_angle, 1), "score": wrist_sc,
-                "unit": "°", "label": "Wrist angle (CTD risk)"
-            }
-            if wrist_angle > 20:
-                out["alerts"].append(f"⚠️ Wrist deviation {round(wrist_angle,1)}° — risk of Carpal Tunnel. Keep wrists straight.")
-            elif wrist_angle > 12:
-                out["alerts"].append(f"Wrist deviation {round(wrist_angle,1)}° — try to keep wrists flat on desk.")
+                wrist_angle   = ((180-l_wrist_angle) + (180-r_wrist_angle)) / 2
+                _wrist_source = "both_elbows"
+            elif _l_ok:
+                # Left only fallback
+                l_wrist_angle = angle_3pt_3d(px3(PL.L_SHOULDER), px3(PL.L_ELBOW), px3(PL.L_WRIST))
+                wrist_angle   = 180 - l_wrist_angle
+                _wrist_source = "left_elbow_only"
+            elif _r_ok:
+                # Right only fallback
+                r_wrist_angle = angle_3pt_3d(px3(PL.R_SHOULDER), px3(PL.R_ELBOW), px3(PL.R_WRIST))
+                wrist_angle   = 180 - r_wrist_angle
+                _wrist_source = "right_elbow_only"
+
+            if wrist_angle is not None:
+                wrist_sc = score_m(wrist_angle, 0, 10, 25)
+                out["metrics"]["wrist_angle"] = {
+                    "value": round(wrist_angle, 1), "score": wrist_sc,
+                    "unit": "°", "label": "Wrist angle (CTD risk)",
+                    "source": _wrist_source,
+                }
+                if wrist_angle > 20:
+                    out["alerts"].append(f"⚠️ Wrist deviation {round(wrist_angle,1)}° — risk of Carpal Tunnel. Keep wrists straight.")
+                elif wrist_angle > 12:
+                    out["alerts"].append(f"Wrist deviation {round(wrist_angle,1)}° — try to keep wrists flat on desk.")
         except Exception:
             pass
 
@@ -2502,6 +2519,61 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     except Exception:
         pass
 
+    # ── Head-shoulder-hip plumb line alignment (front view) ──────
+    # Ideal: nose, mid_sh, mid_hip all on same vertical line
+    # Deviation = lateral sway / leaning to one side
+    try:
+        _nose_x  = nose[0]     / max(w, 1)
+        _sh_x    = mid_sh[0]   / max(w, 1)
+        _hip_x   = mid_hip[0]  / max(w, 1)
+        # Upper plumb: nose vs shoulder center (lateral head displacement)
+        _plumb_upper = abs(_nose_x - _sh_x) * 100   # % of frame width
+        # Lower plumb: shoulder center vs hip center (trunk lateral sway)
+        _plumb_lower = abs(_sh_x - _hip_x) * 100
+        # Combined: worst segment drives score
+        _plumb_total = _plumb_upper * 0.55 + _plumb_lower * 0.45
+        _plumb_sc    = score_m(_plumb_total, 0, 3, 8)
+        out["metrics"]["plumb_line"] = {
+            "value":       round(_plumb_total, 1),
+            "upper_dev":   round(_plumb_upper, 1),
+            "lower_dev":   round(_plumb_lower, 1),
+            "score":       _plumb_sc,
+            "unit":        "% frame",
+            "label":       "Head-shoulder-hip alignment",
+            "reference":   "Physiotherapy plumb line assessment",
+        }
+        if _plumb_total > 6:
+            out["alerts"].append(f"⚠️ Body lateral sway {round(_plumb_total,1)}% — realign head over shoulders over hips")
+        elif _plumb_total > 3.5:
+            out["alerts"].append(f"Slight lateral lean {round(_plumb_total,1)}% — check chair balance and armrest height")
+    except Exception:
+        pass
+
+    # ── Hip flexion angle (front view proxy) ─────────────────────
+    # From front camera: hip flexion estimated from hip-to-knee vertical ratio
+    # More accurate from side, but front gives useful proxy
+    try:
+        _vis_l_hip  = g(PL.L_HIP).visibility;  _vis_r_hip  = g(PL.R_HIP).visibility
+        _vis_l_knee = g(PL.L_KNEE).visibility;  _vis_r_knee = g(PL.R_KNEE).visibility
+        if min(_vis_l_hip, _vis_r_hip, _vis_l_knee, _vis_r_knee) > 0.4:
+            _l_hip_knee_dy = abs(g(PL.L_KNEE).y - g(PL.L_HIP).y) * h
+            _r_hip_knee_dy = abs(g(PL.R_KNEE).y - g(PL.R_HIP).y) * h
+            _l_hip_knee_dx = abs(g(PL.L_KNEE).x - g(PL.L_HIP).x) * w
+            _r_hip_knee_dx = abs(g(PL.R_KNEE).x - g(PL.R_HIP).x) * w
+            _l_hip_ang = math.degrees(math.atan2(_l_hip_knee_dx, _l_hip_knee_dy + 0.001))
+            _r_hip_ang = math.degrees(math.atan2(_r_hip_knee_dx, _r_hip_knee_dy + 0.001))
+            _hip_flex  = round((_l_hip_ang + _r_hip_ang) / 2, 1)
+            _hip_flex_sc = score_m(abs(_hip_flex - 10), 0, 10, 25)  # ideal ~10° outward
+            out["metrics"]["hip_flexion_front"] = {
+                "value": _hip_flex, "score": _hip_flex_sc,
+                "unit": "°", "label": "Hip flexion (front proxy)",
+            }
+    except Exception:
+        pass
+
+    # ── Wrist single-elbow fallback ───────────────────────────────
+    # (already computed above — gate loosened to single elbow)
+
     # ── Sitting duration fatigue model ────────────────────────────
     # If session has been running > 45min, flag fatigue risk
     try:
@@ -2805,7 +2877,7 @@ def analyze_side(image, tier="standard", session_id=None):
     conf_knee  = vis_conf(min(vis_hip, vis_knee, vis_ankle))
     conf_spine = vis_conf(vis_ear * 0.4 + vis_sh * 0.3 + vis_ankle * 0.3)
 
-    # ── Neck lean — shoulder-width normalized ─────────────────────
+    # ── Neck lean — ear-to-shoulder (side view is geometrically exact) ──
     sh_width_px = abs(g(PL.L_SHOULDER).x * w - g(PL.R_SHOULDER).x * w)
     sh_frac     = sh_width_px / max(w, 1)
     sh_ratio    = max(0.7, min(1.3, sh_frac / 0.34))
@@ -2814,19 +2886,49 @@ def analyze_side(image, tier="standard", session_id=None):
     neck_ok    = max(5.0,  8.0 * sh_ratio)
     neck_bad   = max(16.0, 22.0 * sh_ratio)
     neck_sc    = score_m(neck_lean, 0, neck_ok, neck_bad)
+    # FHP from side: horizontal ear-to-shoulder offset in cm
+    _sh_w_cm      = 42.0
+    _cm_per_px_s  = _sh_w_cm / max(sh_width_px, 1)
+    _fhp_side_cm  = round(abs(ear[0] - sh[0]) * _cm_per_px_s, 1)
+    _fhp_side_sc  = score_m(_fhp_side_cm, 0, 2.5, 7)
+    if _fhp_side_cm > 5:
+        out["alerts"].append(f"⚠️ Forward head posture {_fhp_side_cm}cm (side view) — tuck chin, pull head back over shoulders")
 
     # ── Trunk lean ────────────────────────────────────────────────
     trunk_lean = angle_vert(hip, sh)
-    trunk_sc   = score_m(trunk_lean, 0, 6, 16)  # tightened: >6° trunk lean = risky
+    trunk_sc   = score_m(trunk_lean, 0, 6, 16)
 
-    # ── 3-point spine (upper + lower + S-curve) ───────────────────
-    mid_thoracic_s = ((sh[0]+hip[0])/2, (sh[1]+hip[1])/2)
-    spine_upper_s  = angle_vert(mid_thoracic_s, sh)
-    spine_lower_s  = angle_vert(hip, mid_thoracic_s)
+    # ── IMPROVED: 4-point spine + kyphosis + lumbar lordosis ──────
+    # 4 reference points: sh → T8 → L3 → hip
+    mid_thoracic_s = (sh[0]*0.60 + hip[0]*0.40, sh[1]*0.60 + hip[1]*0.40)  # T8
+    mid_lumbar_s   = (sh[0]*0.25 + hip[0]*0.75, sh[1]*0.25 + hip[1]*0.75)  # L3
+
+    spine_upper_s  = angle_vert(mid_thoracic_s, sh)         # C7→T8
+    spine_mid_s    = angle_vert(mid_lumbar_s,   mid_thoracic_s)  # T8→L3
+    spine_lower_s  = angle_vert(hip,             mid_lumbar_s)    # L3→S1
+
+    # ── Kyphosis: thoracic rounds forward, lumbar compensates ─────
+    _upper_signed_s = sh[0]           - mid_thoracic_s[0]
+    _lower_signed_s = mid_thoracic_s[0] - hip[0]
+    _kyphosis_pen_s = 0.0
+    if spine_upper_s > 3 and spine_lower_s < 3 and (_upper_signed_s * _lower_signed_s < 0):
+        _kyphosis_pen_s = min(12.0, spine_upper_s * 0.6)
+        out["alerts"].append(f"⚠️ Thoracic kyphosis (side) {round(spine_upper_s,1)}° — open chest, pull shoulder blades together")
+
+    # ── Lumbar lordosis: normal = slight backward curve ───────────
+    # Measured as angle between lumbar segment and vertical
+    # <3° = flat back (lost lordosis) — risk of disc compression
+    _lordosis_angle = abs(spine_lower_s - spine_mid_s)
+    _lordosis_sc    = 100 if _lordosis_angle > 2 else score_m(2 - _lordosis_angle, 0, 1, 3)
+    if spine_lower_s < 2 and spine_mid_s < 2:
+        out["alerts"].append("Flat lower back detected — use lumbar support or sit further back in chair")
+        _lordosis_sc = 60
+
     spine_scurve   = max(0, abs(spine_upper_s - spine_lower_s) - 8) * 0.5
-    spine_combined = spine_upper_s * 0.60 + spine_lower_s * 0.40 + spine_scurve
+    spine_combined = (spine_upper_s * 0.45 + spine_mid_s * 0.30 +
+                      spine_lower_s * 0.25 + spine_scurve + _kyphosis_pen_s)
     spine_combined = min(45.0, spine_combined)
-    spine_sc       = score_m(spine_combined, 0, 5, 14)  # tightened: side-view curvature
+    spine_sc       = score_m(spine_combined, 0, 5, 14)
 
     # ── Spinal plumb line alignment (ear above ankle) ─────────────
     spine_align = abs(ear[0] - ankle[0]) / w * 100
@@ -2883,11 +2985,15 @@ def analyze_side(image, tier="standard", session_id=None):
         "neck_lean_side": {"value": round(neck_lean,1),     "score": neck_sc,   "unit": "°", "label": "Neck lean (side)"},
         "trunk_lean":     {"value": round(trunk_lean,1),    "score": trunk_sc,  "unit": "°", "label": "Trunk lean"},
         "spine_curvature":{"value": round(spine_combined,1),"score": spine_sc,  "unit": "°", "label": "Spine curvature"},
-        "spine_upper_s":  {"value": round(spine_upper_s,1), "score": spine_sc,  "unit": "°", "label": "Upper spine (side)"},
-        "spine_lower_s":  {"value": round(spine_lower_s,1), "score": spine_sc,  "unit": "°", "label": "Lower spine (side)"},
-        "spine_align":    {"value": round(spine_align,1),   "score": align_sc,  "unit": "%", "label": "Spinal plumb line"},
-        "hip_angle":      {"value": round(hip_angle,1),     "score": hip_sc,    "unit": "°", "label": "Hip angle"},
-        "knee_angle":     {"value": round(knee_angle,1),    "score": knee_sc,   "unit": "°", "label": "Knee angle"},
+        "spine_upper_s":   {"value": round(spine_upper_s,1),   "score": spine_sc,      "unit": "°", "label": "Upper spine C7→T8 (side)"},
+        "spine_mid_s":     {"value": round(spine_mid_s,1),     "score": spine_sc,      "unit": "°", "label": "Mid spine T8→L3 (side)"},
+        "spine_lower_s":   {"value": round(spine_lower_s,1),   "score": spine_sc,      "unit": "°", "label": "Lower spine L3→S1 (side)"},
+        "kyphosis_pen_s":  {"value": round(_kyphosis_pen_s,1), "score": max(0,100-_kyphosis_pen_s*5), "unit": "°", "label": "Kyphosis penalty (side)"},
+        "lumbar_lordosis": {"value": round(_lordosis_angle,1), "score": _lordosis_sc, "unit": "°", "label": "Lumbar lordosis"},
+        "fhp_side_cm":     {"value": _fhp_side_cm,            "score": _fhp_side_sc, "unit": "cm","label": "Forward head posture (side)"},
+        "spine_align":     {"value": round(spine_align,1),     "score": align_sc,     "unit": "%", "label": "Spinal plumb line"},
+        "hip_angle":       {"value": round(hip_angle,1),       "score": hip_sc,       "unit": "°", "label": "Hip flexion angle"},
+        "knee_angle":      {"value": round(knee_angle,1),      "score": knee_sc,      "unit": "°", "label": "Knee angle"},
         "_side_confidence": {
             "neck": round(conf_neck,2), "trunk": round(conf_trunk,2),
             "hip":  round(conf_hip,2),  "knee":  round(conf_knee,2),
@@ -3110,45 +3216,84 @@ def analyze_with_gemini(result, context="", lang="en"):
     blur_note = " [some frames were blurry — accuracy may be reduced]" if result.get("blurry_frame") else ""
     sh_ratio  = result.get("metrics",{}).get("shoulder_width_ratio",{}).get("value","?")
 
+    # ── Build enriched context for Gemini ───────────────────────
     pose_text = (f"3D head pose: pitch={hp['pitch']}°, yaw={hp['yaw']}°, roll={hp['roll']}° "
-                 f"(camera angle correction applied: {cam_corr}°)" if hp else "3D pose: unavailable")
+                 f"(reproj_err={hp.get('reproj_err','?')}, cam_correction={cam_corr}°)"
+                 if hp else "3D pose: unavailable")
+
+    # Extra clinical metrics for richer AI output
+    pain_bar    = result.get("pain_bar", {})
+    fhp         = mets.get("fhp_index", {})
+    neck_load   = mets.get("neck_load", {})
+    rula        = mets.get("rula_score", {})
+    iso         = mets.get("iso_11226", {})
+    kyphosis    = mets.get("kyphosis_pen", {})
+    plumb       = mets.get("plumb_line", {})
+    lumbar      = mets.get("lumbar_lordosis", {})
+    rsi         = mets.get("rsi_risk", {})
+    twa         = mets.get("twa_score", {})
+    neck_src    = mets.get("neck_source", {})
+    dist_m      = mets.get("screen_distance", {})
+    percentile  = result.get("percentile")
+
+    clinical_ctx = []
+    if fhp.get("value"):        clinical_ctx.append(f"FHP index: {fhp['value']}cm (Hansraj model — adds {round(fhp['value']*1.4,1)}kg to cervical spine)")
+    if neck_load.get("value"):  clinical_ctx.append(f"Neck load: {neck_load['value']}kg on cervical spine (Hansraj 2014)")
+    if rula.get("value"):       clinical_ctx.append(f"RULA score: {rula['value']}/7 (McAtamney 1993 — {'action required' if rula['value']>=4 else 'acceptable'})")
+    if iso.get("value"):        clinical_ctx.append(f"ISO 11226 compliance: {iso['value']}")
+    if kyphosis.get("value"):   clinical_ctx.append(f"Kyphosis penalty: {kyphosis['value']}° (thoracic rounding detected)")
+    if plumb.get("value"):      clinical_ctx.append(f"Plumb line deviation: {plumb['value']}% (upper:{plumb.get('upper_dev','?')}%, lower:{plumb.get('lower_dev','?')}%)")
+    if lumbar.get("value") is not None: clinical_ctx.append(f"Lumbar lordosis angle: {lumbar['value']}° ({'normal' if lumbar['value']>2 else 'FLAT BACK — risk of disc compression'})")
+    if rsi.get("value"):        clinical_ctx.append(f"RSI risk index: {rsi['value']} ({'high' if rsi['value']>0.7 else 'moderate' if rsi['value']>0.4 else 'low'})")
+    if twa.get("value"):        clinical_ctx.append(f"Time-weighted average score: {twa['value']}/100")
+    if pain_bar.get("urgency"): clinical_ctx.append(f"Pain prediction: {pain_bar.get('label','?')} (tissue creep model, McGill 2007)")
+    if dist_m.get("value"):     clinical_ctx.append(f"Screen distance: {dist_m['value']}cm (neck_source: {neck_src.get('value','nose_only')})")
+    if percentile is not None:  clinical_ctx.append(f"User percentile: top {100-percentile}% of {mode} users")
+
+    clinical_text = "\n".join(clinical_ctx) if clinical_ctx else "No additional clinical data"
     is_ar = lang == "ar"
-    prompt = f"""You are a certified occupational physiotherapist (COPT) analyzing real-time workplace posture data.
 
-Camera mode: {mode} | Overall posture score: {s}/100 | Engine: {eng}{blur_note}
+    prompt = f"""You are a certified occupational physiotherapist (COPT) with expertise in workplace ergonomics and musculoskeletal injury prevention. Analyze this real-time posture data and provide a precise clinical assessment.
+
+═══ SESSION DATA ═══
+Camera mode: {mode} | Score: {s}/100 | Engine: {eng}{blur_note}
 {pose_text}
-Shoulder width ratio: {sh_ratio}× (1.0 = average, >1 = wider)
+Shoulder ratio: {sh_ratio}× reference
 
-Metrics:
+═══ ALL METRICS (with scores) ═══
 {mtext}
 
-Active alerts:
-{chr(10).join(alts) if alts else 'No alerts triggered'}
-{f'Employee context: {context}' if context else ''}
+═══ CLINICAL CONTEXT ═══
+{clinical_text}
 
-Write a {'brief Arabic' if is_ar else 'professional English'} clinical assessment:
+═══ ACTIVE ALERTS ═══
+{chr(10).join(alts) if alts else "✓ No alerts — posture within acceptable range"}
+{f"Employee context: {context}" if context else ""}
 
-**SECTION 1 — Summary (2 sentences)**
-Summarize posture quality and most critical finding.
+{"Write a complete clinical assessment in Arabic." if is_ar else "Write a complete clinical assessment in English."}
 
-**SECTION 2 — Alert Explanations**
-For each alert:
-• Alert: [text]
-• What it means: [explain simply]
-• Fix RIGHT NOW: [1 immediate action]
-• If ignored: [injury risk in 6-12 months]
+**SECTION 1 — Clinical Summary** (2 sentences)
+State overall posture quality and single most critical finding with specific angle/measurement.
 
-**SECTION 3 — Top 3 Recommendations (evidence-based)**
-Cite relevant ergonomic standard if applicable (ISO 9241, OSHA).
+**SECTION 2 — Alert Analysis**
+For each active alert:
+• Finding: [metric name + value]
+• Clinical significance: [what tissue/joint is stressed]
+• Immediate correction: [1 specific action]
+• Long-term risk if ignored: [injury name + timeframe]
 
-**SECTION 4 — Risk Assessment**
-Musculoskeletal injury risk: Low / Medium / High
-Body parts at risk: [list]
+**SECTION 3 — Evidence-Based Recommendations** (top 3)
+Each recommendation must cite: standard (ISO 9241-5 / OSHA / NIOSH / Hansraj 2014 / McGill 2007).
 
-**SECTION 5 — Immediate Action**
-Single most important ergonomic adjustment to make RIGHT NOW.
+**SECTION 4 — Injury Risk Profile**
+Overall MSK risk: Low / Medium / High / Critical
+Structures at risk: [specific muscles, discs, nerves]
+Estimated time to injury onset if unchanged: [X months]
 
-{"Respond entirely in Arabic." if is_ar else "Keep it professional and concise. Use medical terminology where appropriate."}"""
+**SECTION 5 — Priority Action**
+The single ergonomic adjustment with highest injury-prevention ROI right now.
+
+{"أجب بالعربية الفصحى الطبية." if is_ar else "Use precise anatomical and ergonomic terminology. Be concise and actionable."}"""
     # ── Retry config ──────────────────────────────────────────────
     # Max 2 attempts: attempt 1 → pro/flash, attempt 2 → flash fallback
     # Exponential backoff: 1s, 2s between retries
@@ -6886,6 +7031,122 @@ def export_sessions_summary():
                 "csv": f"/api/export/sessions?format=csv&days={days}",
                 "pdf": f"/api/export/sessions?format=pdf&days={days}",
             }
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+# ── Session Comparison ─────────────────────────────────────────────
+@app.route("/api/session/compare", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def compare_sessions():
+    """
+    Compare last 2 sessions for the user.
+    Returns per-metric deltas + AI narrative of what improved/worsened.
+    Optional body: { "session_a": sid, "session_b": sid }
+    """
+    try:
+        uid  = getattr(g, "uid", "")
+        data = request.get_json(force=True) or {}
+        lang = data.get("lang", "en")
+
+        # Fetch last 2 sessions from Firestore
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .order_by("created_at", direction="DESCENDING")
+                  .limit(2)
+                  .stream())
+        sessions_list = [d.to_dict() for d in docs]
+
+        if len(sessions_list) < 2:
+            return jsonify({"error": "Need at least 2 sessions to compare", "sessions_found": len(sessions_list)}), 400
+
+        new_s, old_s = sessions_list[0], sessions_list[1]
+
+        # ── Per-metric deltas ─────────────────────────────────────
+        new_mets = new_s.get("metrics", {})
+        old_mets = old_s.get("metrics", {})
+        deltas   = {}
+        for key in set(list(new_mets.keys()) + list(old_mets.keys())):
+            nv = new_mets.get(key, {})
+            ov = old_mets.get(key, {})
+            if isinstance(nv, dict) and isinstance(ov, dict):
+                n_val = nv.get("value"); o_val = ov.get("value")
+                if isinstance(n_val, (int, float)) and isinstance(o_val, (int, float)):
+                    delta = round(n_val - o_val, 1)
+                    deltas[key] = {
+                        "prev":    o_val,
+                        "current": n_val,
+                        "delta":   delta,
+                        "unit":    nv.get("unit", ""),
+                        "label":   nv.get("label", key),
+                        "trend":   "improved" if delta < 0 else "worsened" if delta > 0 else "stable",
+                    }
+
+        # ── Score comparison ──────────────────────────────────────
+        score_delta  = (new_s.get("avg_score", 0) or 0) - (old_s.get("avg_score", 0) or 0)
+        score_trend  = "improved" if score_delta > 2 else "declined" if score_delta < -2 else "stable"
+
+        # ── Most improved / most worsened metrics ─────────────────
+        sorted_deltas = sorted(
+            [(k, v) for k, v in deltas.items() if abs(v["delta"]) > 0.5],
+            key=lambda x: x[1]["delta"]
+        )
+        most_improved = [{"metric": k, **v} for k, v in sorted_deltas[:3]]        # most negative delta = improved
+        most_worsened = [{"metric": k, **v} for k, v in sorted_deltas[-3:][::-1]] # most positive = worsened
+
+        # ── AI narrative (Gemini) ─────────────────────────────────
+        narrative = None
+        if GEMINI_API_KEY:
+            try:
+                _imp_txt = "\n".join([f"  ✅ {d['label']}: {d['prev']}{d['unit']} → {d['current']}{d['unit']} ({d['delta']:+.1f})" for d in most_improved]) or "  None"
+                _wrs_txt = "\n".join([f"  ⚠️ {d['label']}: {d['prev']}{d['unit']} → {d['current']}{d['unit']} ({d['delta']:+.1f})" for d in most_worsened]) or "  None"
+                _cmp_prompt = f"""You are a physiotherapist reviewing two posture monitoring sessions.
+
+Previous session: score {old_s.get('avg_score',0)}/100, duration {round((old_s.get('duration_s',0) or 0)/60,1)} min
+Current session:  score {new_s.get('avg_score',0)}/100, duration {round((new_s.get('duration_s',0) or 0)/60,1)} min
+Score change: {score_delta:+.0f} points ({score_trend})
+
+Most improved metrics:
+{_imp_txt}
+
+Most worsened metrics:
+{_wrs_txt}
+
+Write a 3-sentence {'Arabic' if lang=='ar' else 'English'} clinical comparison:
+1. Overall progress statement with score change
+2. What specifically improved and why it matters
+3. What needs attention and one actionable recommendation
+
+{"أجب بالعربية." if lang=='ar' else "Be specific, encouraging, and actionable."}"""
+
+                _url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+                import requests as _rq
+                _resp = _rq.post(_url,
+                    headers={"Content-Type": "application/json"},
+                    json={"contents": [{"parts": [{"text": _cmp_prompt}]}],
+                          "generationConfig": {"maxOutputTokens": 400, "temperature": 0.3}},
+                    timeout=15)
+                if _resp.status_code == 200:
+                    _cands = _resp.json().get("candidates", [])
+                    if _cands:
+                        narrative = _cands[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            except Exception:
+                pass
+
+        return jsonify({
+            "ok":           True,
+            "score_prev":   old_s.get("avg_score"),
+            "score_current":new_s.get("avg_score"),
+            "score_delta":  score_delta,
+            "score_trend":  score_trend,
+            "date_prev":    str(old_s.get("created_at", ""))[:10],
+            "date_current": str(new_s.get("created_at", ""))[:10],
+            "most_improved":most_improved,
+            "most_worsened":most_worsened,
+            "all_deltas":   deltas,
+            "narrative":    narrative,
         })
     except Exception as e:
         return safe_error(e)
