@@ -256,6 +256,27 @@ except ImportError:
 
 # ── Config ─────────────────────────────────────────────────────────
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
+
+def _load_gemini_key() -> str:
+    """Load Gemini key: env var first, Firestore fallback."""
+    global GEMINI_API_KEY
+    if GEMINI_API_KEY:
+        return GEMINI_API_KEY
+    try:
+        doc = db.collection("app_config").document("gemini").get()
+        if doc.exists:
+            key = doc.to_dict().get("api_key", "")
+            if key:
+                GEMINI_API_KEY = key
+                return key
+    except Exception:
+        pass
+    return ""
+
+try:
+    _load_gemini_key()
+except Exception:
+    pass
 PAYMOB_SECRET_KEY   = os.getenv("PAYMOB_SECRET_KEY", "")
 PAYMOB_INTEGRATIONS = {
     "card":          os.getenv("PAYMOB_INTEGRATION_CARD", ""),
@@ -9079,6 +9100,35 @@ def ai_analyze():
 
         log_event("ai_analyze_ok", uid, {"model": _model, "chars": len(text)})
         return jsonify({"ok": True, "text": text, "model": _model})
+    except Exception as e:
+        return safe_error(e)
+
+
+# ── Admin: set Gemini API key ─────────────────────────────────────
+@app.route("/api/admin/set-gemini-key", methods=["POST"])
+@require_auth
+@limiter.limit("5 per minute")
+def set_gemini_key():
+    """Store Gemini API key in Firestore — called once from browser."""
+    try:
+        uid  = getattr(g, "uid", "")
+        role = getattr(g, "role", {})
+        if role.get("acct_type") not in ("platform_admin","admin") and role.get("tier") != "elite":
+            return jsonify({"error": "Admin only"}), 403
+        data = request.get_json(force=True) or {}
+        key  = data.get("key","").strip()
+        if not key:
+            return jsonify({"error": "key required"}), 400
+        db.collection("app_config").document("gemini").set({
+            "api_key":    key,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "updated_by": uid,
+        })
+        global GEMINI_API_KEY
+        GEMINI_API_KEY = key
+        _load_gemini_key()
+        log_event("gemini_key_updated", uid, {})
+        return jsonify({"ok": True, "message": "Gemini key updated"})
     except Exception as e:
         return safe_error(e)
 
