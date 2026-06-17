@@ -7587,6 +7587,444 @@ def weekly_report():
     except Exception as e:
         return safe_error(e)
 
+
+# ══════════════════════════════════════════════════════════════════
+# B2C: STREAK SYSTEM
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/streak", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def get_streak():
+    """
+    Return current streak, longest streak, and last 30 days activity map.
+    Streak = consecutive days with at least 1 session scoring >= 55.
+    """
+    try:
+        uid = getattr(g, "uid", "")
+        # Check Redis cache first
+        _rc = get_redis()
+        if _rc:
+            import json as _j
+            cached = _rc.get(f"streak:{uid}")
+            if cached:
+                return jsonify({**_j.loads(cached), "cached": True})
+
+        cutoff = datetime.utcnow() - timedelta(days=60)
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .where("created_at", ">=", cutoff)
+                  .order_by("created_at", direction="DESCENDING")
+                  .limit(200).stream())
+
+        # Build day → best_score map
+        day_scores: dict = {}
+        for doc in docs:
+            d = doc.to_dict()
+            sc = d.get("avg_score"); ts = d.get("created_at")
+            if not sc or not ts: continue
+            try:
+                day = ts.strftime("%Y-%m-%d") if hasattr(ts,"strftime") else str(ts)[:10]
+                day_scores[day] = max(day_scores.get(day, 0), sc)
+            except Exception:
+                pass
+
+        # Active days = days with score >= 55
+        STREAK_MIN_SCORE = 55
+        active_days = {d for d, sc in day_scores.items() if sc >= STREAK_MIN_SCORE}
+
+        # Current streak (from today backwards)
+        today = datetime.utcnow().date()
+        current_streak = 0
+        check_day = today
+        # Allow today OR yesterday to count (don't break streak if user hasn't done today yet)
+        if str(today) not in active_days and str(today - timedelta(days=1)) in active_days:
+            check_day = today - timedelta(days=1)
+        while str(check_day) in active_days:
+            current_streak += 1
+            check_day -= timedelta(days=1)
+
+        # Longest streak ever
+        longest = 0
+        run = 0
+        for i in range(60):
+            d = str(today - timedelta(days=i))
+            if d in active_days:
+                run += 1
+                longest = max(longest, run)
+            else:
+                run = 0
+
+        # Last 30 days activity map
+        activity_map = {}
+        for i in range(30):
+            d = str(today - timedelta(days=i))
+            activity_map[d] = {
+                "active":    d in active_days,
+                "score":     day_scores.get(d),
+                "day_label": (today - timedelta(days=i)).strftime("%a"),
+            }
+
+        # Milestone check
+        milestones = [3, 7, 14, 30, 60, 100]
+        next_milestone = next((m for m in milestones if m > current_streak), None)
+        days_to_milestone = (next_milestone - current_streak) if next_milestone else None
+
+        result = {
+            "ok":                True,
+            "current_streak":    current_streak,
+            "longest_streak":    longest,
+            "active_days_30":    sum(1 for d in activity_map.values() if d["active"]),
+            "activity_map":      activity_map,
+            "next_milestone":    next_milestone,
+            "days_to_milestone": days_to_milestone,
+            "streak_min_score":  STREAK_MIN_SCORE,
+            "streak_message": (
+                f"🔥 {current_streak} day streak! Keep it up!" if current_streak >= 3
+                else "Start your streak today — 3 days in a row unlocks your first badge!"
+            ),
+            "streak_message_ar": (
+                f"🔥 {current_streak} يوم متتالي! واصل!" if current_streak >= 3
+                else "ابدأ سلسلتك اليوم — 3 أيام متتاليين يفتح أول badge!"
+            ),
+        }
+
+        # Cache for 5 min
+        if _rc:
+            import json as _j
+            _rc.setex(f"streak:{uid}", 300, _j.dumps(result))
+
+        return jsonify(result)
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/streak/check", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def check_streak():
+    """
+    Called after a session ends. Recalculates streak, invalidates cache,
+    returns whether a milestone was just hit.
+    """
+    try:
+        uid = getattr(g, "uid", "")
+        # Invalidate streak cache
+        _rc = get_redis()
+        if _rc:
+            _rc.delete(f"streak:{uid}")
+
+        # Re-fetch streak
+        import requests as _req_streak
+        tok = request.headers.get("Authorization", "")
+        streak_resp = get_streak.__wrapped__() if hasattr(get_streak, "__wrapped__") else None
+
+        # Simple recalculation inline
+        cutoff = datetime.utcnow() - timedelta(days=60)
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .where("created_at", ">=", cutoff)
+                  .order_by("created_at", direction="DESCENDING")
+                  .limit(200).stream())
+        day_scores: dict = {}
+        for doc in docs:
+            d = doc.to_dict()
+            sc = d.get("avg_score"); ts = d.get("created_at")
+            if not sc or not ts: continue
+            try:
+                day = ts.strftime("%Y-%m-%d") if hasattr(ts,"strftime") else str(ts)[:10]
+                day_scores[day] = max(day_scores.get(day, 0), sc)
+            except Exception:
+                pass
+        active_days = {d for d, sc in day_scores.items() if sc >= 55}
+        today = datetime.utcnow().date()
+        current_streak = 0
+        check_day = today
+        while str(check_day) in active_days:
+            current_streak += 1
+            check_day -= timedelta(days=1)
+
+        milestones     = [3, 7, 14, 30, 60, 100]
+        hit_milestone  = current_streak in milestones
+        milestone_msg  = None
+        if hit_milestone:
+            msgs = {
+                3:  ("🔥 3-Day Streak!", "3 أيام متتاليين! 🔥"),
+                7:  ("⚡ Week Warrior! 7 days!", "محارب الأسبوع! 7 أيام! ⚡"),
+                14: ("💪 Two Week Champ!", "بطل أسبوعين! 💪"),
+                30: ("🏆 Monthly Master!", "سيد الشهر! 🏆"),
+                60: ("💎 60-Day Legend!", "أسطورة 60 يوم! 💎"),
+                100:("👑 100 Days — Elite!", "100 يوم — نخبة! 👑"),
+            }
+            milestone_msg = msgs.get(current_streak)
+
+        return jsonify({
+            "ok":             True,
+            "current_streak": current_streak,
+            "hit_milestone":  hit_milestone,
+            "milestone_msg":  milestone_msg,
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# B2C: GOALS SYSTEM
+# ══════════════════════════════════════════════════════════════════
+
+_GOAL_TEMPLATES = [
+    {"id": "score_70",    "name": "Reach Score 70",      "name_ar": "الوصول لـ 70",      "type": "score",   "target": 70,  "icon": "🎯"},
+    {"id": "score_80",    "name": "Reach Score 80",      "name_ar": "الوصول لـ 80",      "type": "score",   "target": 80,  "icon": "⭐"},
+    {"id": "score_90",    "name": "Reach Score 90",      "name_ar": "الوصول لـ 90",      "type": "score",   "target": 90,  "icon": "🏆"},
+    {"id": "streak_7",   "name": "7-Day Streak",         "name_ar": "7 أيام متتاليين",   "type": "streak",  "target": 7,   "icon": "🔥"},
+    {"id": "streak_30",  "name": "30-Day Streak",        "name_ar": "30 يوم متتالي",     "type": "streak",  "target": 30,  "icon": "💎"},
+    {"id": "sessions_20","name": "Complete 20 Sessions", "name_ar": "20 جلسة",           "type": "sessions","target": 20,  "icon": "📊"},
+    {"id": "neck_fix",   "name": "Fix Neck Posture",     "name_ar": "تحسين وضعية الرقبة","type": "metric",  "target": 80,  "metric": "neck_lean", "icon": "🦒"},
+    {"id": "no_pain",    "name": "7 Days Pain-Free",     "name_ar": "7 أيام بدون ألم",   "type": "pain_free","target": 7,  "icon": "💚"},
+]
+
+@app.route("/api/goals", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def get_goals():
+    """Return user's active goals with current progress."""
+    try:
+        uid = getattr(g, "uid", "")
+        docs = db.collection("user_goals").where("uid","==",uid).where("status","in",["active","completed"]).limit(10).stream()
+        goals = [d.to_dict() for d in docs]
+        return jsonify({"ok": True, "goals": goals, "templates": _GOAL_TEMPLATES})
+    except Exception as e:
+        return safe_error(e)
+
+@app.route("/api/goals", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def set_goal():
+    """Create or update a user goal."""
+    try:
+        uid  = getattr(g, "uid", "")
+        data = request.get_json(force=True) or {}
+        goal_id    = data.get("goal_id")    # from _GOAL_TEMPLATES
+        custom_target = data.get("target")  # optional override
+        deadline   = data.get("deadline")   # optional YYYY-MM-DD
+
+        template = next((t for t in _GOAL_TEMPLATES if t["id"] == goal_id), None)
+        if not template:
+            return jsonify({"error": f"Unknown goal_id: {goal_id}. Available: {[t['id'] for t in _GOAL_TEMPLATES]}"}), 400
+
+        goal = {
+            **template,
+            "uid":        uid,
+            "status":     "active",
+            "progress":   0,
+            "target":     custom_target or template["target"],
+            "deadline":   deadline,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "completed_at": None,
+        }
+
+        # Save to Firestore (upsert by uid+goal_id)
+        doc_id = f"{uid}_{goal_id}"
+        db.collection("user_goals").document(doc_id).set(goal, merge=True)
+        log_event("goal_set", uid, {"goal_id": goal_id, "target": goal["target"]})
+        return jsonify({"ok": True, "goal": goal})
+    except Exception as e:
+        return safe_error(e)
+
+@app.route("/api/goals/progress", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def goals_progress():
+    """
+    Check progress on all active goals.
+    Updates Firestore and returns which goals were just completed.
+    """
+    try:
+        uid = getattr(g, "uid", "")
+        # Fetch active goals
+        goal_docs = list(db.collection("user_goals")
+                          .where("uid","==",uid)
+                          .where("status","==","active")
+                          .limit(10).stream())
+        if not goal_docs:
+            return jsonify({"ok": True, "goals": [], "just_completed": []})
+
+        # Fetch recent sessions for progress calculation
+        cutoff = datetime.utcnow() - timedelta(days=90)
+        sess_docs = (db.collection("sessions")
+                       .where("uid","==",uid)
+                       .where("created_at",">=",cutoff)
+                       .order_by("created_at",direction="DESCENDING")
+                       .limit(500).stream())
+        sessions_list = [d.to_dict() for d in sess_docs]
+        scores   = [s.get("avg_score",0) for s in sessions_list if s.get("avg_score")]
+        best_sc  = max(scores) if scores else 0
+        n_sess   = len(sessions_list)
+
+        # Current streak (simplified)
+        day_scores: dict = {}
+        for s in sessions_list:
+            sc = s.get("avg_score"); ts = s.get("created_at")
+            if not sc or not ts: continue
+            try:
+                day = ts.strftime("%Y-%m-%d") if hasattr(ts,"strftime") else str(ts)[:10]
+                day_scores[day] = max(day_scores.get(day,0), sc)
+            except Exception:
+                pass
+        active_days = {d for d,sc in day_scores.items() if sc >= 55}
+        today = datetime.utcnow().date()
+        streak = 0
+        chk = today
+        while str(chk) in active_days:
+            streak += 1; chk -= timedelta(days=1)
+
+        updated_goals = []
+        just_completed = []
+
+        for doc in goal_docs:
+            g_data = doc.to_dict()
+            gtype  = g_data.get("type")
+            target = g_data.get("target", 100)
+            progress = 0
+
+            if gtype == "score":
+                progress = min(100, int((best_sc / target) * 100))
+                current_val = best_sc
+            elif gtype == "streak":
+                progress = min(100, int((streak / target) * 100))
+                current_val = streak
+            elif gtype == "sessions":
+                progress = min(100, int((n_sess / target) * 100))
+                current_val = n_sess
+            elif gtype == "pain_free":
+                pain_free_days = sum(1 for s in sessions_list
+                    if (s.get("pain_bar",{}) or {}).get("urgency","low") in ("low","none"))
+                progress = min(100, int((pain_free_days / target) * 100))
+                current_val = pain_free_days
+            else:
+                current_val = 0
+
+            completed = progress >= 100
+            updates = {"progress": progress, "current_value": current_val}
+            if completed and g_data.get("status") == "active":
+                updates["status"]       = "completed"
+                updates["completed_at"] = datetime.utcnow().isoformat() + "Z"
+                just_completed.append({**g_data, **updates})
+                log_event("goal_completed", uid, {"goal_id": g_data.get("id"), "type": gtype})
+
+            db.collection("user_goals").document(doc.id).update(updates)
+            updated_goals.append({**g_data, **updates})
+
+        return jsonify({
+            "ok":            True,
+            "goals":         updated_goals,
+            "just_completed":just_completed,
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# B2C: SHARE CARD
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/share/card", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def generate_share_card():
+    """
+    Generate a shareable posture score card as SVG.
+    Frontend: SVG → Canvas → PNG for Instagram/LinkedIn.
+    """
+    try:
+        uid  = getattr(g, "uid", "")
+        data = request.get_json(force=True) or {}
+        score      = int(data.get("score", 0))
+        grade      = data.get("grade", "A" if score>=85 else "B" if score>=70 else "C" if score>=55 else "D")
+        streak     = int(data.get("streak", 0))
+        percentile = data.get("percentile")
+        lang       = data.get("lang", "en")
+        username   = data.get("username", "")
+        date_str   = datetime.utcnow().strftime("%b %d, %Y")
+
+        color      = "#10b981" if score>=75 else "#f59e0b" if score>=55 else "#ef4444"
+        grade_color= {"A":"#10b981","B":"#3b82f6","C":"#f59e0b","D":"#ef4444"}.get(grade,"#6366f1")
+        is_ar      = lang == "ar"
+
+        label_score = "درجة الوضعية" if is_ar else "Posture Score"
+        label_streak = "أيام متتاليين" if is_ar else "Day Streak"
+        label_grade = "التقييم" if is_ar else "Grade"
+        label_pct   = (f"أحسن من {percentile}% من المستخدمين" if is_ar
+                       else f"Better than {percentile}% of users") if percentile else ""
+        label_url   = "postureai-pro-omega-nine.vercel.app"
+        label_try   = "جرب مجاناً" if is_ar else "Try for free"
+
+        # Build SVG parts
+        pct_line = (f'<text x="200" y="310" text-anchor="middle" font-family="Inter,Arial" ' +
+                    f'font-size="11" fill="#94a3b8">{label_pct}</text>') if percentile else ""
+
+        streak_rect = ""
+        if streak >= 3:
+            streak_rect = (
+                f'<rect x="130" y="325" width="140" height="38" rx="10" ' +
+                f'fill="rgba(245,158,11,0.12)" stroke="rgba(245,158,11,0.3)" stroke-width="1"/>' +
+                f'<text x="200" y="349" text-anchor="middle" font-family="Inter,Arial" ' +
+                f'font-size="13" fill="#f59e0b" font-weight="700">🔥 {streak} {label_streak}</text>'
+            )
+
+        user_line = (f'<text x="200" y="400" text-anchor="middle" font-family="Inter,Arial" ' +
+                     f'font-size="12" fill="#475569">@{username}</text>') if username else ""
+
+        dash = int(score * 5.655)
+        svg_lines = [
+            '<svg width="400" height="500" xmlns="http://www.w3.org/2000/svg">',
+            '<defs>',
+            '<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">',
+            '<stop offset="0%" stop-color="#020d1f"/>',
+            '<stop offset="100%" stop-color="#0d1b2e"/>',
+            '</linearGradient>',
+            f'<linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">',
+            f'<stop offset="0%" stop-color="{color}"/>',
+            f'<stop offset="100%" stop-color="{color}88"/>',
+            '</linearGradient>',
+            '<filter id="glow"><feGaussianBlur stdDeviation="4" result="blur"/>',
+            '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>',
+            '</defs>',
+            '<rect width="400" height="500" fill="url(#bg)" rx="20"/>',
+            f'<rect width="400" height="500" fill="none" stroke="{color}33" stroke-width="1.5" rx="20"/>',
+            '<text x="200" y="48" text-anchor="middle" font-family="Inter,Arial" font-size="14" fill="#6366f1" font-weight="700" letter-spacing="2">PostureAI Pro</text>',
+            f'<text x="200" y="68" text-anchor="middle" font-family="Inter,Arial" font-size="11" fill="#475569">{date_str}</text>',
+            '<circle cx="200" cy="170" r="90" fill="none" stroke="#1e293b" stroke-width="14"/>',
+            f'<circle cx="200" cy="170" r="90" fill="none" stroke="url(#ring)" stroke-width="14" stroke-dasharray="{dash} 565.5" stroke-linecap="round" transform="rotate(-90 200 170)" filter="url(#glow)"/>',
+            f'<text x="200" y="158" text-anchor="middle" font-family="Inter,Arial" font-size="52" fill="white" font-weight="900">{score}</text>',
+            '<text x="200" y="182" text-anchor="middle" font-family="Inter,Arial" font-size="13" fill="#94a3b8">/100</text>',
+            f'<text x="200" y="202" text-anchor="middle" font-family="Inter,Arial" font-size="11" fill="#64748b">{label_score}</text>',
+            f'<rect x="162" y="272" width="76" height="34" rx="8" fill="{grade_color}22" stroke="{grade_color}55" stroke-width="1"/>',
+            f'<text x="200" y="294" text-anchor="middle" font-family="Inter,Arial" font-size="16" fill="{grade_color}" font-weight="800">{label_grade}: {grade}</text>',
+            pct_line,
+            streak_rect,
+            user_line,
+            f'<rect x="100" y="430" width="200" height="36" rx="10" fill="#6366f1"/>',
+            f'<text x="200" y="453" text-anchor="middle" font-family="Inter,Arial" font-size="12" fill="white" font-weight="700">{label_try} → {label_url}</text>',
+            '</svg>',
+        ]
+        svg = "\n".join(svg_lines)
+
+        log_event("share_card_generated", uid, {"score": score, "lang": lang, "streak": streak})
+        return jsonify({
+            "ok":    True,
+            "svg":   svg,
+            "score": score,
+            "grade": grade,
+            "meta": {
+                "title":       f"My posture score: {score}/100 ({grade})",
+                "description": label_pct or f"Tracked with PostureAI Pro",
+                "hashtags":    ["PostureAI", "PostureCheck", "WorkplaceWellness"],
+            }
+        })
+    except Exception as e:
+        return safe_error(e)
+
 @app.route("/api/system/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
 def health():
