@@ -4,20 +4,10 @@
  * Posture risk scoring · Trend forecasting
  */
 import { useState, useEffect, useCallback } from "react";
+import { geminiChat } from "./gemini.js";
 
 async function callClaude(prompt, system, maxTokens = 900) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  const d = await res.json();
-  return d?.content?.find(b => b.type === "text")?.text || "";
+  return geminiChat(prompt, { systemPrompt: system, maxTokens });
 }
 
 function MdText({ text }) {

@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-
-import { apiFetch } from "./services/api.js";
-const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+import { geminiChat, buildCoachContext } from "./gemini.js";
 
 // ── Markdown renderer (lightweight) ──────────────────────────────
 function MdText({ text }) {
@@ -133,32 +131,25 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
     setMessages(newMessages);
     setLoading(true);
 
-    // Only send last 8 messages to stay within token budget
-    const recent = newMessages.slice(-8).map(m => ({ role: m.role, content: m.content }));
-
     try {
-      const data = await apiFetch("/coach/chat", {
-        method: "POST",
-        body:   { messages: recent, context, lang },
-        timeout: 30000,
-      });
-      if (data.ok && data.text) {
-        setMessages(prev => [...prev, { role: "assistant", content: data.text, ts: Date.now() }]);
-      } else if (data.error === "coach_limit_reached") {
-        setError(isAr
-          ? `وصلت للحد الشهري (${data.limit} رسالة). رقّي خطتك للمزيد.`
-          : `Monthly limit reached (${data.limit} msgs). Upgrade for more.`
-        );
-      } else {
-        setError(data.error || "Failed to get response");
-      }
+      // Build conversation history as a single prompt
+      const history = newMessages.slice(-8).map(m =>
+        `${m.role === "user" ? "User" : "Coach"}: ${m.content}`
+      ).join("\n\n");
+
+      const systemPrompt = isAr
+        ? `أنت مدرب وضعية جسم شخصي ذكي. استخدم البيانات التالية:\n${context}\nكن موجزاً ومفيداً وودوداً. أجب بالعربية.`
+        : `You are a personal posture coach. Use this user data:\n${context}\nBe concise, helpful and friendly.`;
+
+      const reply = await geminiChat(history, { systemPrompt, maxTokens: 512 });
+      setMessages(prev => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
     } catch (e) {
-      setError("Network error — check backend connection");
+      setError(isAr ? "خطأ في الاتصال بـ AI" : "AI connection error — " + (e?.message || "unknown"));
     } finally {
       setLoading(false);
       inputRef.current?.focus();
     }
-  }, [input, messages, loading, context, lang]);
+  }, [input, messages, loading, context, lang, isAr]);
 
   const handleKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }

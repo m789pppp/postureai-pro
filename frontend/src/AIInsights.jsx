@@ -2,9 +2,15 @@
  * PostureAI Pro — AI Insights Panel v1.0
  * Executive summaries · Posture trends · Fatigue analysis
  * Weekly insights · Smart recommendations
- * Uses Anthropic API directly (claude-sonnet-4-20250514)
+ * Uses Gemini AI directly (no backend needed)
  */
 import { useState, useEffect, useCallback } from "react";
+import { geminiChat } from "./gemini.js";
+
+// ── AI call via Gemini ─────────────────────────────────────────────
+async function callClaude(prompt, systemPrompt, maxTokens = 1000) {
+  return geminiChat(prompt, { systemPrompt, maxTokens });
+}
 
 // ── helpers ───────────────────────────────────────────────────────
 const sc = v => v >= 75 ? "#10b981" : v >= 50 ? "#f59e0b" : "#ef4444";
@@ -22,22 +28,6 @@ function MdText({ text }) {
     .replace(/\n\n/g, "<br/><br/>")
     .replace(/\n/g,   "<br/>");
   return <span dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 1.75 }} />;
-}
-
-// ── AI call via Anthropic API ──────────────────────────────────────
-async function callClaude(prompt, systemPrompt, maxTokens = 1000) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  const data = await res.json();
-  return data?.content?.find(b => b.type === "text")?.text || "";
 }
 
 // ── Fatigue Gauge ──────────────────────────────────────────────────
