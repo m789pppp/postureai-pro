@@ -507,9 +507,6 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                         user_type: i === 1 ? "hr_admin" : "individual",
                         is_org_owner: i === 1,
                         tier: i === 1 ? "professional" : "standard",
-                        avg_score: i === 0 ? 74 : 68,
-                        sessions_count: i === 0 ? 12 : 3,
-                        streak_days: i === 0 ? 5 : 1,
                         setup_complete: true,
                       });
                       // Seed realistic demo data
