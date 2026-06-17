@@ -1887,7 +1887,12 @@ export default function App(){
         }
       }catch(e){}
     }
-    if(totalRef.current%30===0&&canvRef.current){  // backend every 30 frames (~1/sec) — not real-time display
+    // Backend call ONLY when actually needed — not a duplicate of local analysis:
+    //  1) Fallback mode (local MediaPipe failed to load) → backend IS the analysis
+    //  2) Elite tier → snapshots for PDF report + Gemini AI insights
+    // Standard/Pro tiers with working local MediaPipe never touch the backend here.
+    const needsBackend = mpStatus==="fallback" || tier==="elite" || tier==="premium";
+    if(needsBackend && totalRef.current%30===0 && canvRef.current){
       const c=canvRef.current,v2=vidRef.current;
       if(v2&&v2.readyState>=2){c.width=v2.videoWidth;c.height=v2.videoHeight;c.getContext("2d").drawImage(v2,0,0);}
       AnalysisAPI.analyze(c.toDataURL("image/jpeg",.72),mode,tier,lang,sessionId,null,calibData)
@@ -1929,7 +1934,7 @@ export default function App(){
         }).catch(()=>{});
     }
     rafRef.current=requestAnimationFrame(runLoop);
-  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded]);
+  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus]);
 
   async function startCamera(){
     setCameraStatus("requesting");
