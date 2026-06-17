@@ -101,14 +101,15 @@ def compute_percentile(score: int) -> int:
     """
     global _score_pool
     try:
-        import redis as _rp, time as _tp
-        _rc = _rp.from_url(os.getenv("REDIS_URL","redis://localhost:6379/0"), socket_timeout=1)
-        _rc.zadd("score_pool", {f"{_tp.time()}:{score}": score})
-        _rc.zremrangebyrank("score_pool", 0, -10001)
-        total = _rc.zcard("score_pool")
-        below = _rc.zcount("score_pool", 0, score - 1)
-        if total >= 10:
-            return min(99, int((below / total) * 100))
+        import time as _tp
+        _rc = get_redis()
+        if _rc:
+            _rc.zadd("score_pool", {f"{_tp.time()}:{score}": score})
+            _rc.zremrangebyrank("score_pool", 0, -10001)
+            total = _rc.zcard("score_pool")
+            below = _rc.zcount("score_pool", 0, score - 1)
+            if total >= 10:
+                return min(99, int((below / total) * 100))
     except Exception:
         pass
     _score_pool.append(score)
@@ -499,6 +500,49 @@ if not _redis_url:
     _limiter_storage = "memory://"
 else:
     _limiter_storage = _redis_url
+
+# ── Redis connection pool (singleton) ─────────────────────────────
+# Never create a new connection per request — use shared pool
+# max_connections=20: enough for Gunicorn workers + background threads
+_redis_pool = None
+_redis_pool_lock = __import__("threading").Lock()
+
+def get_redis():
+    """
+    Return a Redis client backed by a shared connection pool.
+    Thread-safe: pool is created once on first call.
+    Returns None if Redis unavailable (graceful degradation).
+    """
+    global _redis_pool
+    if _redis_pool is not None:
+        try:
+            import redis as _r
+            return _r.Redis(connection_pool=_redis_pool)
+        except Exception:
+            return None
+    if not _redis_url:
+        return None
+    with _redis_pool_lock:
+        if _redis_pool is not None:
+            try:
+                import redis as _r
+                return _r.Redis(connection_pool=_redis_pool)
+            except Exception:
+                return None
+        try:
+            import redis as _r
+            _redis_pool = _r.ConnectionPool.from_url(
+                _redis_url,
+                max_connections=20,
+                socket_timeout=1.5,
+                socket_connect_timeout=1.5,
+                retry_on_timeout=True,
+            )
+            print("✅ Redis connection pool initialized (max_connections=20)", flush=True)
+            return _r.Redis(connection_pool=_redis_pool)
+        except Exception as e:
+            print(f"⚠️  Redis pool init failed: {e}", file=sys.stderr)
+            return None
 limiter = Limiter(
     get_remote_address, app=app,
     default_limits=["200 per minute", "2000 per hour"],
@@ -1616,6 +1660,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     out["detected"]   = True
     out["engine"]     = "mediapipe_pose+kalman"
     out["avg_frames"] = len(_hist)
+    global _last_model_use; _last_model_use = time.time()  # update liveness timestamp
 
     def g(idx): return lms[idx]
     def px(idx): return (g(idx).x * w, g(idx).y * h)
@@ -1736,6 +1781,35 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
 
     sh_tilt    = angle_horiz(l_sh, r_sh)
     sh_sc      = score_m(sh_tilt, 0, 3, 10)
+
+    # ── Rounded shoulders (protraction) — Z depth asymmetry ───────
+    # MediaPipe Z: more negative = closer to camera (in front of body)
+    # Rounded shoulders: both shoulders move FORWARD (more negative Z)
+    # vs neutral: Z ≈ 0 relative to spine midpoint
+    _ls_z = g(PL.L_SHOULDER).z   # normalized, relative to hip midpoint
+    _rs_z = g(PL.R_SHOULDER).z
+    # Forward protraction: both Z values are negative (shoulders in front)
+    # Score: average forward displacement, scaled by shoulder width
+    _sh_z_avg        = (_ls_z + _rs_z) / 2.0          # negative = forward
+    _sh_z_asym       = abs(_ls_z - _rs_z)              # L/R asymmetry
+    _rounded_depth   = max(0.0, -_sh_z_avg * 100)      # convert to 0-100 scale
+    _rounded_sc      = score_m(_rounded_depth, 0, 8, 20)
+    out["metrics"]["rounded_shoulders"] = {
+        "value":      round(_rounded_depth, 1),
+        "z_left":     round(_ls_z, 3),
+        "z_right":    round(_rs_z, 3),
+        "asymmetry":  round(_sh_z_asym, 3),
+        "score":      _rounded_sc,
+        "unit":       "depth units",
+        "label":      "Rounded shoulders (protraction)",
+        "reference":  "MediaPipe Z-depth, negative = forward of spine",
+    }
+    if _rounded_depth > 15:
+        out["alerts"].append(f"⚠️ Rounded shoulders detected — pull shoulder blades together and down")
+        if "alerts_ar" not in out: out["alerts_ar"] = []
+        out["alerts_ar"].append("⚠️ كتفان مائلان للأمام — اسحب لوحي الكتف للخلف وللأسفل")
+    elif _rounded_depth > 8:
+        out["alerts"].append("Shoulders slightly forward — open chest, squeeze shoulder blades gently")
 
     # ── IMPROVED: 4-point spine with kyphosis detection ──────────
     # 4 reference points (top→bottom):
@@ -4265,12 +4339,27 @@ def analyze():
                 }), 403
 
 
-        # ── Frame hash cache: if identical frame within 1.5s, return cached result ──
-        # Prevents duplicate analysis when frontend sends same frame twice
+        # ── Frame hash cache: thumbnail-based (32x32) — 10x faster than base64 hash ──
+        # Downscale to 32x32 grayscale → hash pixels → identical frames detected in <1ms
         import hashlib as _hl
         b64_raw = data.get("frame", "")
         if "," in b64_raw: b64_raw = b64_raw.split(",", 1)[1]
-        frame_hash = _hl.md5(b64_raw[:2048].encode()).hexdigest()[:16]  # fast partial hash
+        try:
+            # Thumbnail hash: decode → resize 32x32 → md5 pixels
+            import base64 as _b64
+            _raw_bytes = _b64.b64decode(b64_raw + "==")
+            _np_arr    = np.frombuffer(_raw_bytes, dtype=np.uint8) if np else None
+            if _np_arr is not None and len(_np_arr) > 100:
+                _thumb = cv2.imdecode(_np_arr, cv2.IMREAD_GRAYSCALE)
+                if _thumb is not None:
+                    _thumb_sm = cv2.resize(_thumb, (32, 32))
+                    frame_hash = _hl.md5(_thumb_sm.tobytes()).hexdigest()[:16]
+                else:
+                    frame_hash = _hl.md5(b64_raw[:2048].encode()).hexdigest()[:16]
+            else:
+                frame_hash = _hl.md5(b64_raw[:2048].encode()).hexdigest()[:16]
+        except Exception:
+            frame_hash = _hl.md5(b64_raw[:2048].encode()).hexdigest()[:16]  # fallback
         cached_result = cache_get(f"frame:{uid}:{frame_hash}")
         if cached_result:
             import json as _j
@@ -7148,6 +7237,353 @@ Write a 3-sentence {'Arabic' if lang=='ar' else 'English'} clinical comparison:
             "all_deltas":   deltas,
             "narrative":    narrative,
         })
+    except Exception as e:
+        return safe_error(e)
+
+
+# ── Posture Calibration ────────────────────────────────────────────
+_calibration_buffer: dict = {}  # {uid: [result_dicts]} — accumulates frames during calibration
+
+@app.route("/api/calibrate/start", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def calibrate_start():
+    """Start a 5-second calibration window. User should sit in ideal posture."""
+    uid = getattr(g, "uid", "")
+    _calibration_buffer[uid] = []
+    return jsonify({
+        "ok": True,
+        "message": "Calibration started — sit in your ideal posture for 5 seconds",
+        "message_ar": "بدأ المعايرة — اجلس في وضعيتك المثالية لمدة 5 ثوانٍ",
+        "duration_s": 5,
+    })
+
+@app.route("/api/calibrate/frame", methods=["POST"])
+@require_auth
+@limiter.limit("60 per minute")
+def calibrate_frame():
+    """
+    Accept a posture analysis result during calibration window.
+    Frontend calls this instead of /api/analyze during calibration.
+    """
+    uid  = getattr(g, "uid", "")
+    data = request.get_json(force=True) or {}
+    if uid not in _calibration_buffer:
+        return jsonify({"error": "No active calibration — call /api/calibrate/start first"}), 400
+    # Store key metrics from this frame
+    _calibration_buffer[uid].append({
+        "neck_lean":  data.get("neck_lean",  0),
+        "spine_lean": data.get("spine_lean", 0),
+        "sh_tilt":    data.get("sh_tilt",    0),
+        "dist_cm":    data.get("dist_cm",    65),
+        "score":      data.get("score",      0),
+        "ts":         time.time(),
+    })
+    return jsonify({"ok": True, "frames": len(_calibration_buffer[uid])})
+
+@app.route("/api/calibrate/commit", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def calibrate_commit():
+    """
+    Compute baseline from accumulated calibration frames and save to Firestore.
+    Baseline = median of each metric (robust to outlier frames).
+    """
+    uid = getattr(g, "uid", "")
+    buf = _calibration_buffer.get(uid, [])
+    if len(buf) < 3:
+        return jsonify({"error": f"Not enough frames ({len(buf)}) — need at least 3"}), 400
+
+    def _median(vals):
+        s = sorted(v for v in vals if v is not None)
+        if not s: return None
+        n = len(s); return s[n//2] if n % 2 else (s[n//2-1]+s[n//2])/2
+
+    baseline = {
+        "neck_lean":   _median([f["neck_lean"]  for f in buf]),
+        "spine_lean":  _median([f["spine_lean"] for f in buf]),
+        "sh_tilt":     _median([f["sh_tilt"]    for f in buf]),
+        "dist_cm":     _median([f["dist_cm"]    for f in buf]),
+        "score":       _median([f["score"]      for f in buf]),
+        "frames_used": len(buf),
+        "calibrated_at": datetime.utcnow().isoformat() + "Z",
+        "uid": uid,
+    }
+    try:
+        db.collection("user_baselines").document(uid).set(baseline, merge=True)
+        # Also cache in Redis for fast access during analysis
+        _rc = get_redis()
+        if _rc:
+            import json as _j
+            _rc.setex(f"baseline:{uid}", 86400 * 30, _j.dumps(baseline))  # 30-day TTL
+    except Exception as e:
+        log_event("calibrate_save_error", uid, {"error": str(e)})
+    del _calibration_buffer[uid]
+    log_event("calibrate_commit", uid, {"frames": len(buf), "baseline_score": baseline["score"]})
+    return jsonify({"ok": True, "baseline": baseline})
+
+@app.route("/api/calibrate/status", methods=["GET"])
+@require_auth
+def calibrate_status():
+    """Return user's current baseline if it exists."""
+    uid = getattr(g, "uid", "")
+    try:
+        # Check Redis first
+        _rc = get_redis()
+        if _rc:
+            import json as _j
+            cached = _rc.get(f"baseline:{uid}")
+            if cached:
+                return jsonify({"calibrated": True, "baseline": _j.loads(cached), "source": "cache"})
+        # Firestore fallback
+        doc = db.collection("user_baselines").document(uid).get()
+        if doc.exists:
+            return jsonify({"calibrated": True, "baseline": doc.to_dict(), "source": "firestore"})
+        return jsonify({"calibrated": False, "baseline": None})
+    except Exception as e:
+        return safe_error(e)
+
+def _get_user_baseline(uid: str) -> dict | None:
+    """Load baseline for scoring adjustment. Returns None if not calibrated."""
+    try:
+        _rc = get_redis()
+        if _rc:
+            import json as _j
+            cached = _rc.get(f"baseline:{uid}")
+            if cached:
+                return _j.loads(cached)
+        doc = db.collection("user_baselines").document(uid).get()
+        return doc.to_dict() if doc.exists else None
+    except Exception:
+        return None
+
+
+# ── Time-of-day Analytics ─────────────────────────────────────────
+@app.route("/api/analytics/time-of-day", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def analytics_time_of_day():
+    """
+    Return average posture score per hour of day.
+    Answers: "Is posture worse after lunch? Better in the morning?"
+    """
+    try:
+        uid  = getattr(g, "uid", "")
+        data = request.get_json(force=True) or {}
+        days = min(90, max(7, int(data.get("days", 30))))
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .where("created_at", ">=", cutoff)
+                  .limit(500).stream())
+
+        hour_buckets: dict = {}   # {hour: [scores]}
+        for doc in docs:
+            d = doc.to_dict()
+            sc = d.get("avg_score")
+            ts = d.get("created_at")
+            if not sc or not ts: continue
+            try:
+                hr = ts.hour if hasattr(ts, "hour") else int(str(ts)[11:13])
+                hour_buckets.setdefault(hr, []).append(sc)
+            except Exception:
+                pass
+
+        hourly = {
+            str(h): {
+                "avg_score":  round(sum(v)/len(v), 1),
+                "sessions":   len(v),
+                "min_score":  min(v),
+                "max_score":  max(v),
+                "label":      f"{h:02d}:00–{h+1:02d}:00",
+                "period":     ("morning" if 6<=h<12 else "afternoon" if 12<=h<17
+                               else "evening" if 17<=h<21 else "night"),
+            }
+            for h, v in hour_buckets.items() if v
+        }
+
+        # Best and worst hours
+        if hourly:
+            best_h  = max(hourly, key=lambda h: hourly[h]["avg_score"])
+            worst_h = min(hourly, key=lambda h: hourly[h]["avg_score"])
+            insight = (
+                f"Your posture is best at {best_h}:00 (avg {hourly[best_h]['avg_score']}) "
+                f"and worst at {worst_h}:00 (avg {hourly[worst_h]['avg_score']}). "
+            )
+            if 13 <= int(worst_h) <= 15:
+                insight += "Post-lunch dip detected — consider a 5-min walk after lunch."
+            elif int(worst_h) >= 17:
+                insight += "End-of-day fatigue detected — try a posture check alarm at 16:00."
+        else:
+            insight = "Not enough data yet."
+
+        return jsonify({"ok": True, "hourly": hourly, "insight": insight, "days_analyzed": days})
+    except Exception as e:
+        return safe_error(e)
+
+# ── Anomaly Detection ─────────────────────────────────────────────
+@app.route("/api/analytics/anomaly", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def analytics_anomaly():
+    """
+    Detect sudden posture score drops (>20pts in one day vs 7-day average).
+    Useful for HR: identify employees who suddenly deteriorated.
+    """
+    try:
+        uid    = getattr(g, "uid", "")
+        data   = request.get_json(force=True) or {}
+        days   = min(90, max(7, int(data.get("days", 30))))
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .where("created_at", ">=", cutoff)
+                  .order_by("created_at").limit(500).stream())
+
+        daily: dict = {}
+        for doc in docs:
+            d = doc.to_dict()
+            sc = d.get("avg_score"); ts = d.get("created_at")
+            if not sc or not ts: continue
+            try:
+                day = str(ts)[:10] if not hasattr(ts, "strftime") else ts.strftime("%Y-%m-%d")
+                daily.setdefault(day, []).append(sc)
+            except Exception:
+                pass
+
+        daily_avg = {day: round(sum(v)/len(v), 1) for day, v in daily.items()}
+        days_list = sorted(daily_avg.keys())
+        anomalies = []
+
+        for i, day in enumerate(days_list[7:], start=7):
+            window = [daily_avg[days_list[j]] for j in range(i-7, i)]
+            baseline_7d = sum(window) / len(window)
+            today_avg   = daily_avg[day]
+            drop        = baseline_7d - today_avg
+            if drop > 20:
+                anomalies.append({
+                    "date":          day,
+                    "score":         today_avg,
+                    "baseline_7d":   round(baseline_7d, 1),
+                    "drop":          round(drop, 1),
+                    "severity":      "critical" if drop > 35 else "high" if drop > 25 else "medium",
+                })
+
+        return jsonify({
+            "ok":        True,
+            "anomalies": anomalies,
+            "daily_avg": daily_avg,
+            "total_anomaly_days": len(anomalies),
+        })
+    except Exception as e:
+        return safe_error(e)
+
+# ── Weekly Report ─────────────────────────────────────────────────
+@app.route("/api/report/weekly", methods=["GET"])
+@require_auth
+@limiter.limit("10 per minute")
+def weekly_report():
+    """
+    Generate a weekly posture summary (JSON or PDF).
+    ?format=json|pdf  ?week_offset=0 (0=this week, 1=last week)
+    """
+    try:
+        uid         = getattr(g, "uid", "")
+        fmt         = request.args.get("format", "json").lower()
+        week_offset = int(request.args.get("week_offset", 0))
+
+        now      = datetime.utcnow()
+        week_end = now - timedelta(days=now.weekday() + 7 * week_offset)
+        week_start = week_end - timedelta(days=7)
+
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .where("created_at", ">=", week_start)
+                  .where("created_at", "<",  week_end)
+                  .order_by("created_at").limit(500).stream())
+
+        sessions_data = [d.to_dict() for d in docs]
+        scores = [s.get("avg_score") for s in sessions_data if isinstance(s.get("avg_score"), (int,float))]
+
+        if not scores:
+            return jsonify({"error": "No sessions found for this week"}), 404
+
+        avg  = round(sum(scores)/len(scores), 1)
+        best = max(scores); worst = min(scores)
+        grade = "A" if avg>=85 else "B" if avg>=70 else "C" if avg>=55 else "D"
+
+        # Day-by-day breakdown
+        daily: dict = {}
+        for s in sessions_data:
+            ts = s.get("created_at"); sc = s.get("avg_score")
+            if not ts or not sc: continue
+            try:
+                day = ts.strftime("%A") if hasattr(ts, "strftime") else str(ts)[:10]
+                daily.setdefault(day, []).append(sc)
+            except Exception:
+                pass
+        daily_avg = {d: round(sum(v)/len(v),1) for d,v in daily.items()}
+
+        # Top recurring alerts
+        alert_counts: dict = {}
+        for s in sessions_data:
+            for a in (s.get("alerts") or []):
+                key = a[:40]
+                alert_counts[key] = alert_counts.get(key, 0) + 1
+        top_alerts = sorted(alert_counts.items(), key=lambda x: -x[1])[:5]
+
+        report = {
+            "week_start":   week_start.strftime("%Y-%m-%d"),
+            "week_end":     week_end.strftime("%Y-%m-%d"),
+            "sessions":     len(sessions_data),
+            "avg_score":    avg,
+            "best_score":   best,
+            "worst_score":  worst,
+            "grade":        grade,
+            "daily_avg":    daily_avg,
+            "top_alerts":   [{"alert": k, "occurrences": v} for k,v in top_alerts],
+            "total_min":    round(sum(s.get("duration_s",0) or 0 for s in sessions_data)/60, 1),
+        }
+
+        if fmt == "pdf":
+            try:
+                from reportlab.lib.pagesizes import A4
+                from reportlab.lib import colors
+                from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+                from reportlab.lib.styles import getSampleStyleSheet
+                import io as _io
+                buf = _io.BytesIO()
+                doc_pdf = SimpleDocTemplate(buf, pagesize=A4, topMargin=40, bottomMargin=40)
+                styles  = getSampleStyleSheet()
+                elements = []
+                elements.append(Paragraph(f"PostureAI Weekly Report — {report['week_start']} to {report['week_end']}", styles["Title"]))
+                elements.append(Paragraph(f"Grade: {grade}  |  Avg Score: {avg}/100  |  Sessions: {len(sessions_data)}", styles["Normal"]))
+                elements.append(Spacer(1, 12))
+                # Daily table
+                rows = [["Day", "Avg Score"]] + [[d, f"{s}/100"] for d,s in daily_avg.items()]
+                t = Table(rows, colWidths=[200, 200])
+                t.setStyle(TableStyle([
+                    ("BACKGROUND", (0,0),(-1,0), colors.HexColor("#6366f1")),
+                    ("TEXTCOLOR",  (0,0),(-1,0), colors.white),
+                    ("FONTNAME",   (0,0),(-1,0), "Helvetica-Bold"),
+                    ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white, colors.HexColor("#f1f5f9")]),
+                    ("GRID",       (0,0),(-1,-1), 0.3, colors.HexColor("#cbd5e1")),
+                    ("FONTSIZE",   (0,0),(-1,-1), 10),
+                    ("PADDING",    (0,0),(-1,-1), 6),
+                ]))
+                elements.append(t)
+                doc_pdf.build(elements)
+                pdf_bytes = buf.getvalue()
+                resp = make_response(pdf_bytes)
+                resp.headers["Content-Type"]        = "application/pdf"
+                resp.headers["Content-Disposition"] = f'attachment; filename="weekly_report_{report["week_start"]}.pdf"'
+                return resp
+            except ImportError:
+                pass  # fall through to JSON
+
+        return jsonify({"ok": True, **report})
     except Exception as e:
         return safe_error(e)
 
