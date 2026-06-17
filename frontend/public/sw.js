@@ -1,7 +1,7 @@
-// PostureAI Pro — Service Worker v4 — Full PWA + Offline Support
-const CACHE_VER   = "postureai-v4";
+// Posmoz — Service Worker v4 — Full PWA + Offline Support
+const CACHE_VER   = "posmoz-v4";
 const MP_CACHE    = "mediapipe-v3";
-const DATA_CACHE  = "postureai-data-v2";
+const DATA_CACHE  = "posmoz-data-v2";
 
 const SHELL = [
   "/", "/index.html", "/manifest.json",
@@ -102,11 +102,11 @@ async function syncOfflineSessions() {
 self.addEventListener("push", e => {
   const data = e.data?.json() || {};
   e.waitUntil(
-    self.registration.showNotification(data.title || "PostureAI Pro", {
+    self.registration.showNotification(data.title || "Posmoz", {
       body:    data.body || "Time to check your posture!",
       icon:    "/icon-192.png",
       badge:   "/icon-192.png",
-      tag:     data.tag || "postureai",
+      tag:     data.tag || "posmoz",
       data:    { url: data.url || "/" },
       actions: [
         { action: "open",   title: "Open app" },

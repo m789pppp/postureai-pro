@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — 404 Not Found
+ * Posmoz — 404 Not Found
  * Clean, branded, bilingual
  */
 import React from "react";

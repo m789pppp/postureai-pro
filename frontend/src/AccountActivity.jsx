@@ -1,5 +1,5 @@
 /**
- * AccountActivity.jsx — PostureAI Enterprise
+ * AccountActivity.jsx — Posmoz Enterprise
  * Full account activity timeline: actions, logins, billing events, team changes
  */
 import { useState, useEffect, useCallback } from "react";

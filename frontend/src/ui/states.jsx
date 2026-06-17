@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Empty / Loading / Error States v1.0
+ * Posmoz — Empty / Loading / Error States v1.0
  * Skeleton loaders · Onboarding · Zero-state dashboards · Error states
  */
 import { useState, useEffect } from "react";
@@ -408,8 +408,8 @@ export function OnboardingWelcome({ profile, isAr, onNext }) {
         lineHeight: 1.7, maxWidth: 300, margin: "0 auto var(--space-6)",
       }}>
         {isAr
-          ? "PostureAI Pro جاهز يساعدك تحسّن وضعيتك وتحمي ظهرك. خلينا نبدأ بخطوات بسيطة."
-          : "PostureAI Pro is ready to help you improve your posture and protect your back. Let's get started."}
+          ? "Posmoz جاهز يساعدك تحسّن وضعيتك وتحمي ظهرك. خلينا نبدأ بخطوات بسيطة."
+          : "Posmoz is ready to help you improve your posture and protect your back. Let's get started."}
       </div>
       {/* Feature pills */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: "var(--space-6)" }}>

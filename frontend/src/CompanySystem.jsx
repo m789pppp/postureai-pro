@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Multi-Tenant Company System
+ * Posmoz — Multi-Tenant Company System
  * Company onboarding, workspace setup, employee invites
  */
 import { useState, useEffect, useCallback } from "react";

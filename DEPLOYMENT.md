@@ -1,4 +1,4 @@
-# PostureAI — Production Deployment Guide
+# Posmoz — Production Deployment Guide
 
 ## Architecture Overview
 
@@ -66,11 +66,11 @@ PAYMOB_HMAC_SECRET=...
 
 # Email
 SENDGRID_API_KEY=SG...
-EMAIL_FROM=noreply@postureai.com
+EMAIL_FROM=noreply@posmoz.com
 
 # Security
 RESULT_SIGNING_SECRET=<32-char random>
-CORS_ORIGINS=https://app.postureai.com,https://postureai.com
+CORS_ORIGINS=https://app.posmoz.com,https://posmoz.com
 
 # Feature flags
 CELERY_ENABLED=true
@@ -87,7 +87,7 @@ Output Directory: dist
 Install Command: npm ci
 
 # Environment variables
-VITE_BACKEND_URL=https://api.postureai.com
+VITE_BACKEND_URL=https://api.posmoz.com
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_PROJECT_ID=...
 VITE_FIREBASE_AUTH_DOMAIN=...

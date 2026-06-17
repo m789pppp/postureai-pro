@@ -1,4 +1,4 @@
-# PostureAI — v50 MERGED (Billing + Onboarding)
+# Posmoz — v50 MERGED (Billing + Onboarding)
 
 ## 🚀 What's in this version?
 

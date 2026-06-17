@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Admin Routes Blueprint
+Posmoz — Admin Routes Blueprint
 All routes require @require_auth + @require_admin
 """
 from flask import Blueprint, request, jsonify, g

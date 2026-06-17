@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — Onboarding Wizard v1.0
+ * Posmoz — Onboarding Wizard v1.0
  * Phase 11: Onboarding Experience
  * Setup wizard · Guided onboarding · Demo workspace
  * Sample analytics · Interactive walkthroughs
@@ -316,7 +316,7 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
         {cameraOk === null && (
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <div style={{ fontSize: 11, color: "#475569", flex: 1 }}>
-              {isAr ? "تحتاج PostureAI للوصول إلى كاميرتك للتحليل الآني" : "PostureAI needs camera access for real-time analysis"}
+              {isAr ? "تحتاج Posmoz للوصول إلى كاميرتك للتحليل الآني" : "Posmoz needs camera access for real-time analysis"}
             </div>
             <Btn size="sm" variant="secondary" onClick={checkCamera} loading={checking} icon="📷">
               {isAr ? "فحص" : "Check"}
@@ -335,8 +335,8 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
             </div>
             <div style={{ fontSize: 11, color: "#475569", lineHeight: 1.6 }}>
               {isAr
-                ? "اذهب إلى إعدادات المتصفح ← الخصوصية ← الكاميرا وأضف postureai.io للمواقع المسموح بها"
-                : "Go to browser Settings → Privacy → Camera → allow postureai.io"}
+                ? "اذهب إلى إعدادات المتصفح ← الخصوصية ← الكاميرا وأضف posmoz.io للمواقع المسموح بها"
+                : "Go to browser Settings → Privacy → Camera → allow posmoz.io"}
             </div>
           </div>
         )}
@@ -881,7 +881,7 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
             {/* Logo */}
             <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
               <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#1a56db,#0891b2)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#fff" }}>◈</div>
-              <span style={{ fontFamily: SYNE, fontSize: 14, fontWeight: 800, letterSpacing: "-.025em", color: "#e8f0fe" }}>PostureAI <span style={{ color: "#60a5fa" }}>Pro</span></span>
+              <span style={{ fontFamily: SYNE, fontSize: 14, fontWeight: 800, letterSpacing: "-.025em", color: "#e8f0fe" }}>Posmoz <span style={{ color: "#60a5fa" }}>Pro</span></span>
             </div>
             {/* Step indicator + skip */}
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

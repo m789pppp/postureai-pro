@@ -1,1 +1,1 @@
-"""PostureAI backend configuration package."""
+"""Posmoz backend configuration package."""

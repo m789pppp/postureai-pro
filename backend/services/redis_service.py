@@ -1,5 +1,5 @@
 """
-PostureAI Pro — Redis Service
+Posmoz — Redis Service
 Unified Redis wrapper for: sessions, caching, rate limiting, queues, realtime buffers
 Supports: Railway Redis, Upstash Redis, local Redis
 Falls back to in-memory if Redis unavailable (development mode)

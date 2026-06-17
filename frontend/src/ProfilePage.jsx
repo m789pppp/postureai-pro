@@ -1,5 +1,5 @@
 /**
- * PostureAI Pro — ProfilePage v32
+ * Posmoz — ProfilePage v32
  * Full profile: edit info, stats, subscription, payments, password, referral
  */
 import { useState, useEffect } from "react";

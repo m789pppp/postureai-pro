@@ -1,5 +1,5 @@
 /**
- * OnboardingAnalytics.jsx — PostureAI ULTIMATE FINAL
+ * OnboardingAnalytics.jsx — Posmoz ULTIMATE FINAL
  * Funnel visualization: step-by-step drop-off, time-to-complete, cohort analysis
  */
 import { useState, useEffect } from "react";
