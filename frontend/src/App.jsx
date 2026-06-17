@@ -1492,24 +1492,21 @@ export default function App(){
   const isOnline = useOnline();
   const[showOnboard,setShowOnboard]=useState(false);
   const[showCompanyOnboard,setShowCompanyOnboard]=useState(false);
-  // ── Trigger onboarding — show for ALL new users ─────────────────
+  // ── Trigger onboarding — ONE-TIME for new users only ────────────
   useEffect(()=>{
     if(!user||!profile||page!=="home") return;
-    // Already done or skipped → never show again
-    const done = profile.onboarding_done?.length > 0;
+    const done = (profile.onboarding_done?.length||0) > 0;
     if(done) return;
-    // Company owner with no company_id → show company wizard
-    if(profile.acct_type==="company" && !profile.company_id && !showCompanyOnboard){
+    if(profile.acct_type==="company" && !profile.company_id){
       const t=setTimeout(()=>setShowCompanyOnboard(true),800);
       return()=>clearTimeout(t);
     }
-    // Individual or new user: show onboarding wizard — removed setup_complete gate
-    // so new users who just signed up always see it
-    if(profile.acct_type!=="company" && !showOnboard){
+    if(profile.acct_type!=="company"){
       const t=setTimeout(()=>setShowOnboard(true),1200);
       return()=>clearTimeout(t);
     }
-  },[user,profile?.onboarding_done,profile?.acct_type,profile?.company_id,page,showOnboard,showCompanyOnboard]); // eslint-disable-line
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[user?.uid, profile?.onboarding_done?.length, profile?.acct_type, profile?.company_id, page]);
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
