@@ -3,7 +3,7 @@
  * No API key needed on frontend — backend handles authentication securely
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://postureai-pro-omega-nine.vercel.app/api";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 async function getAuthToken() {
   try {
