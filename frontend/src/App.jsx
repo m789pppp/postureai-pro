@@ -2450,17 +2450,18 @@ export default function App(){
                   try{
                     await updateDoc(doc(db,"users",user.uid),{
                       user_type: acctType==="company"?"hr_admin":"individual",
+                      acct_type: acctType==="company"?"company":"individual",
                       is_org_owner: acctType==="company",
                       setup_complete: true,
                       device_pref: devicePref,
                       updated_at: serverTimestamp(),
                     });
-                    setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", is_org_owner: acctType==="company", setup_complete:true}));
+                    setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", acct_type: acctType==="company"?"company":"individual", is_org_owner: acctType==="company", setup_complete:true}));
                   }catch(e){ console.warn("setup save failed",e); }
                 }
                 const freshP=user?.uid?await getUserProfile(user.uid).catch(()=>null):null;
                 if(freshP){setProfile(freshP);if(freshP.tier)setTier(normalizeTier(freshP.tier));if(freshP.company_id)setCompanyId(freshP.company_id);}
-                else{setProfile(p=>({...p,user_type:acctType==="company"?"hr_admin":"individual",is_org_owner:acctType==="company",setup_complete:true}));}
+                else{setProfile(p=>({...p,user_type:acctType==="company"?"hr_admin":"individual",acct_type:acctType==="company"?"company":"individual",is_org_owner:acctType==="company",setup_complete:true}));}
                 if(acctType==="company"){setShowCompanyOnboard(true);}
                 else{setTimeout(()=>setShowOnboard(true),800);}
                 setPage("home");
