@@ -21,53 +21,58 @@ async function getStripe() {
   return stripeInstance;
 }
 
-// ── Pricing config — MUST match TIERS in App.jsx exactly (single source of truth) ──
+// ── Pricing config — B2C Egypt + Gulf ────────────────────────────
+// Egypt: PayMob EGP | Gulf/Global: Stripe USD
+// Amounts in CENTS
 export const PLANS = {
   standard: {
-    id:          "standard",
-    name:        "Starter",
-    nameAr:      "ستارتر",
-    priceEGP:    { monthly: 2499, yearly: 23990 },
-    priceUSD:    { monthly: 79,   yearly: 758 },
+    id:"standard", name:"Free", nameAr:"مجاني",
+    priceEGP: { monthly: 0,     yearly: 0 },
+    priceUSD: { monthly: 0,     yearly: 0 },
+    stripePriceId: { monthly: "", yearly: "" },
+    color:"#6366f1",
+    features:   ["5 sessions/month", "Posture score", "Basic alerts"],
+    featuresAr: ["5 جلسات/شهر", "درجة الوضعية", "تنبيهات أساسية"],
+    limit: -1,
+  },
+  basic: {
+    id:"basic", name:"Basic", nameAr:"أساسي",
+    priceEGP: { monthly: 19900, yearly: 159000 },  // 199 EGP/mo | 1,590/yr
+    priceUSD: { monthly: 999,   yearly: 7999 },    // $9.99/mo  | $79.99/yr
     stripePriceId: {
-      monthly: import.meta.env.VITE_STRIPE_PRICE_STANDARD_MONTHLY || "",
-      yearly:  import.meta.env.VITE_STRIPE_PRICE_STANDARD_YEARLY  || "",
+      monthly: import.meta.env.VITE_STRIPE_PRICE_BASIC_MONTHLY || "",
+      yearly:  import.meta.env.VITE_STRIPE_PRICE_BASIC_YEARLY  || "",
     },
-    color:       "#6366f1",
-    features:    ["33-landmark pose detection", "Head tilt & neck lean", "IPD screen distance", "PDF reports", "30 employees", "HR dashboard", "Email support"],
-    featuresAr:  ["كشف 33 نقطة بالـAI", "ميل الرأس والرقبة", "مسافة الشاشة IPD", "تقارير PDF", "30 موظف", "لوحة تحكم HR", "دعم بالبريد"],
-    limit:       -1,
+    color:"#3b82f6",
+    features:   ["Unlimited sessions", "AI Coach (10 msgs/mo)", "Streak tracking", "Goals", "Pain prediction"],
+    featuresAr: ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "تتبع السلسلة", "الأهداف", "توقع الألم"],
+    limit: -1,
   },
   professional: {
-    id:          "professional",
-    name:        "Growth",
-    nameAr:      "جروث",
-    priceEGP:    { monthly: 6999, yearly: 67190 },
-    priceUSD:    { monthly: 199,  yearly: 1910 },
+    id:"professional", name:"Pro", nameAr:"احترافي",
+    priceEGP: { monthly: 39900, yearly: 319000 },  // 399 EGP/mo | 3,190/yr
+    priceUSD: { monthly: 1999,  yearly: 15999 },   // $19.99/mo | $159.99/yr
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_PRO_YEARLY  || "",
     },
-    color:       "#0ea5e9",
-    popular:     true,
-    features:    ["Everything in Starter", "FaceMesh 478 landmarks", "3D solvePnP head pose", "Iris IPD precision", "Spine + shoulder analysis", "Advanced HR analytics", "Clinical PDF + 3D", "100 employees", "Priority support"],
-    featuresAr:  ["كل مزايا ستارتر", "كشف 478 نقطة FaceMesh", "وضع رأس 3D solvePnP", "دقة IPD بالقزحية", "تحليل العمود الفقري والكتف", "تحليلات HR متقدمة", "تقرير PDF سريري + 3D", "100 موظف", "دعم أولوية"],
-    limit:       -1,
+    color:"#8b5cf6", popular:true,
+    features:   ["Everything in Basic", "AI Insights", "Reports", "Session compare", "Leaderboard", "Export CSV/PDF"],
+    featuresAr: ["كل Basic", "رؤى AI", "تقارير", "مقارنة الجلسات", "المتصدرين", "تصدير CSV/PDF"],
+    limit: -1,
   },
   elite: {
-    id:          "elite",
-    name:        "Enterprise",
-    nameAr:      "إنتربرايز",
-    priceEGP:    { monthly: null, yearly: null },
-    priceUSD:    { monthly: null, yearly: null, startingAt: 499 },
+    id:"elite", name:"Elite", nameAr:"إيليت",
+    priceEGP: { monthly: 69900, yearly: 559000 },  // 699 EGP/mo | 5,590/yr
+    priceUSD: { monthly: 3999,  yearly: 29999 },   // $39.99/mo | $299.99/yr
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_ELITE_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_ELITE_YEARLY  || "",
     },
-    color:       "#10b981",
-    features:    ["Everything in Growth", "Gemini AI clinical narrative", "Unlimited employees", "White-label branding", "Custom SLA", "API access", "SSO/SAML", "Dedicated success manager"],
-    featuresAr:  ["كل مزايا جروث", "تحليل سردي بالـ Gemini AI", "موظفون غير محدودون", "علامة تجارية White-label", "ضمان SLA مخصص", "وصول API", "SSO/SAML", "مدير نجاح مخصص"],
-    limit:       -1,
+    color:"#f59e0b",
+    features:   ["Everything in Pro", "AI Coach unlimited", "Predictive AI", "PDF report", "Priority support"],
+    featuresAr: ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي", "تقرير PDF", "دعم أولوية"],
+    limit: -1,
   },
 };
 
