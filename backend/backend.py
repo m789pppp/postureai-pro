@@ -294,51 +294,118 @@ def _detect_user_type(uid: str = "", role: dict = None) -> str:
     if role.get("acct_type") in ("company","hr","employee"): return USER_TYPE_B2B
     return USER_TYPE_B2C
 
-# ── Pricing table (EGP cents) ──────────────────────────────────────
-# B2C (individual users — برا مصر بـ USD equivalent in EGP)
-# B2B (companies in Egypt — per seat/month)
-# 1 USD ≈ 48 EGP (2025)
+# ── Pricing table ─────────────────────────────────────────────────
+# B2C Egypt (EGP cents via PayMob)
+# B2C Gulf/Global (USD cents via Stripe)
+# Amounts in CENTS (EGP cents / USD cents)
+
 _PAYMOB_PRICES = {
-    # B2C individual plans
-    "standard":     {"monthly": 0,      "yearly": 0},       # free
-    "basic":        {"monthly": 4900,   "yearly": 49000},   # 49 EGP/mo (~$1)
-    "professional": {"monthly": 14900,  "yearly": 149000},  # 149 EGP/mo (~$3)
-    "elite":        {"monthly": 29900,  "yearly": 299000},  # 299 EGP/mo (~$6)
-    # B2B per-seat plans (HR/company)
-    "b2b_starter":  {"monthly": 9900,   "yearly": 99000},   # 99 EGP/seat/mo
-    "b2b_growth":   {"monthly": 7900,   "yearly": 79000},   # 79 EGP/seat/mo (10+ seats)
-    "b2b_enterprise":{"monthly": 5900,  "yearly": 59000},   # 59 EGP/seat/mo (50+ seats)
+    # B2C Egypt — EGP cents
+    "standard":     {"monthly": 0,       "yearly": 0},
+    "basic":        {"monthly": 19900,   "yearly": 159000},   # 199 EGP/mo | 1,590/yr
+    "professional": {"monthly": 39900,   "yearly": 319000},   # 399 EGP/mo | 3,190/yr
+    "pro":          {"monthly": 39900,   "yearly": 319000},   # alias
+    "elite":        {"monthly": 69900,   "yearly": 559000},   # 699 EGP/mo | 5,590/yr
+    "premium":      {"monthly": 69900,   "yearly": 559000},   # alias
+}
+
+_STRIPE_PRICES = {
+    # B2C Gulf/Global — USD cents
+    "standard":     {"monthly": 0,      "yearly": 0},
+    "basic":        {"monthly": 999,    "yearly": 7999},    # $9.99/mo  | $79.99/yr
+    "professional": {"monthly": 1999,   "yearly": 15999},   # $19.99/mo | $159.99/yr
+    "pro":          {"monthly": 1999,   "yearly": 15999},   # alias
+    "elite":        {"monthly": 3999,   "yearly": 29999},   # $39.99/mo | $299.99/yr
+    "premium":      {"monthly": 3999,   "yearly": 29999},   # alias
+}
+
+# Human-readable prices for UI display
+PRICING_DISPLAY = {
+    "egypt": {
+        "basic":        {"monthly": "199 EGP",  "yearly": "1,590 EGP", "yearly_note": "وفّر شهرين"},
+        "professional": {"monthly": "399 EGP",  "yearly": "3,190 EGP", "yearly_note": "وفّر شهرين"},
+        "elite":        {"monthly": "699 EGP",  "yearly": "5,590 EGP", "yearly_note": "وفّر شهرين"},
+    },
+    "gulf": {
+        "basic":        {"monthly": "$9.99",   "yearly": "$79.99",   "yearly_note": "Save 2 months"},
+        "professional": {"monthly": "$19.99",  "yearly": "$159.99",  "yearly_note": "Save 2 months"},
+        "elite":        {"monthly": "$39.99",  "yearly": "$299.99",  "yearly_note": "Save 2 months"},
+    },
 }
 
 def get_paymob_amount(tier: str, billing: str = "monthly", user_type: str = "b2c") -> int | None:
-    """
-    Return amount in EGP cents for PayMob.
-    user_type: 'b2c' (individual) | 'b2b' (company)
-    Returns None if plan is free or not found.
-    """
+    """Return amount in EGP cents for PayMob. None if free."""
     prices = _PAYMOB_PRICES.get(tier.lower(), {})
     amount = prices.get(billing.lower())
     return amount if amount else None
 
 def get_stripe_amount(tier: str, billing: str = "monthly") -> int | None:
-    """Amount in USD cents for Stripe (B2C international)."""
-    _STRIPE_PRICES = {
-        "basic":        {"monthly": 99,   "yearly": 990},    # $0.99/mo
-        "professional": {"monthly": 299,  "yearly": 2990},   # $2.99/mo
-        "elite":        {"monthly": 599,  "yearly": 5990},   # $5.99/mo
-    }
+    """Return amount in USD cents for Stripe. None if free."""
     prices = _STRIPE_PRICES.get(tier.lower(), {})
     return prices.get(billing.lower())
 
 def validate_plan_request(tier: str, billing: str) -> tuple[bool, str]:
-    """Validate that tier+billing is a known plan."""
-    valid_tiers    = set(_PAYMOB_PRICES.keys()) | {"pro", "premium", "enterprise"}
+    """Validate tier + billing combo."""
+    valid_tiers    = set(_PAYMOB_PRICES.keys()) | set(_STRIPE_PRICES.keys())
     valid_billings = {"monthly", "yearly", "annual"}
     if tier.lower() not in valid_tiers:
         return False, f"Unknown tier: {tier}. Valid: {sorted(valid_tiers)}"
     if billing.lower() not in valid_billings:
         return False, f"Unknown billing: {billing}. Valid: monthly, yearly"
     return True, ""
+
+@app.route("/api/pricing", methods=["GET"])
+@limiter.limit("60 per minute")
+def get_pricing():
+    """Public endpoint — return pricing for Egypt and Gulf markets."""
+    region = request.args.get("region", "gulf").lower()
+    lang   = request.args.get("lang", "en")
+    is_ar  = lang == "ar"
+
+    plans = [
+        {
+            "id":    "basic",
+            "name":  "Basic" if not is_ar else "أساسي",
+            "color": "#3b82f6",
+            "features": {
+                "en": ["Unlimited sessions", "AI Coach (10 msgs/month)", "Streak tracking", "Goals"],
+                "ar": ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "تتبع السلسلة", "الأهداف"],
+            },
+            "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("basic", {}),
+            "cta": "ابدأ الآن" if is_ar else "Get Started",
+        },
+        {
+            "id":    "professional",
+            "name":  "Pro" if not is_ar else "احترافي",
+            "color": "#8b5cf6",
+            "popular": True,
+            "features": {
+                "en": ["Everything in Basic", "AI Insights", "Reports", "Compare sessions", "Pain prediction"],
+                "ar": ["كل Basic", "رؤى AI", "تقارير", "مقارنة الجلسات", "توقع الألم"],
+            },
+            "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("professional", {}),
+            "cta": "الأكثر شعبية" if is_ar else "Most Popular",
+        },
+        {
+            "id":    "elite",
+            "name":  "Elite",
+            "color": "#f59e0b",
+            "features": {
+                "en": ["Everything in Pro", "AI Coach unlimited", "Predictive AI", "PDF report", "Priority support"],
+                "ar": ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي", "تقرير PDF", "دعم أولوية"],
+            },
+            "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("elite", {}),
+            "cta": "الأفضل" if is_ar else "Best Value",
+        },
+    ]
+
+    return jsonify({
+        "ok":     True,
+        "region": region,
+        "currency": "EGP" if region == "egypt" else "USD",
+        "gateway": "paymob" if region == "egypt" else "stripe",
+        "plans":  plans,
+    })
 APP_URL        = os.getenv("APP_URL", "https://postureai.vercel.app")
 SUPPORT_EMAIL  = os.getenv("SUPPORT_EMAIL", "support@postureai.io")
 ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@postureai.io")
