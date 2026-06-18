@@ -136,6 +136,34 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   const isAr  = lang === "ar";
   const DARK  = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
 
+  // ── Individual vs Company — drives feature copy + Enterprise checkout flow ──
+  // NOTE: acct_type is set in local UI state during setup but never persisted to
+  // Firestore — the real signal is user_type / is_org_owner / company_id, which
+  // ARE saved. We check those first and fall back to acct_type for safety.
+  const isCompany = profile?.user_type === "hr_admin"
+    || profile?.user_type === "employee"
+    || !!profile?.is_org_owner
+    || !!profile?.company_id
+    || profile?.acct_type === "company";
+
+  // Feature lists are tier-identical in price, but worded for who's actually buying.
+  // Individuals never see employee counts, HR dashboards, or "Contact sales" —
+  // a solo user has no procurement process and should be able to pay immediately.
+  const INDIVIDUAL_FEATURES = {
+    standard: {
+      en: ["33-landmark pose detection", "Head tilt & neck lean", "IPD screen distance", "PDF wellness reports", "7-day session history", "Email support"],
+      ar: ["كشف 33 نقطة بالـAI", "ميل الرأس والرقبة", "مسافة الشاشة IPD", "تقارير PDF صحية", "سجل جلسات 7 أيام", "دعم بالبريد"],
+    },
+    professional: {
+      en: ["Everything in Starter", "FaceMesh 478 landmarks", "3D solvePnP head pose", "Iris IPD precision", "AI Posture Coach", "Fatigue & burnout tracking", "Priority support"],
+      ar: ["كل مزايا ستارتر", "كشف 478 نقطة FaceMesh", "وضع رأس 3D solvePnP", "دقة IPD بالقزحية", "مدرب AI للوضعية", "تتبع الإرهاق والإنهاك", "دعم أولوية"],
+    },
+    elite: {
+      en: ["Everything in Growth", "Gemini AI clinical narrative", "Predictive burnout AI", "Unlimited session history", "API access", "Dedicated support"],
+      ar: ["كل مزايا جروث", "تحليل سردي بالـ Gemini AI", "AI تنبؤي للإرهاق", "سجل جلسات غير محدود", "وصول API", "دعم مخصص"],
+    },
+  };
+
   const T = {
     en: { title: "Choose your plan", billing: "Billing", monthly: "Monthly", yearly: "Yearly", save: "Save 20%", current: "Current plan", upgrade: "Upgrade", downgrade: "Downgrade", contact: "Contact sales", free: "Free forever", perMonth: "/mo", perYear: "/yr", stripeNote: "Secure payment via Stripe — cancel anytime", paymobNote: "Secure payment via PayMob — Egypt cards & wallets", or: "or pay with" },
     ar: { title: "اختر خطتك", billing: "الفوترة", monthly: "شهري", yearly: "سنوي", save: "وفر 20%", current: "خطتك الحالية", upgrade: "ترقية", downgrade: "تخفيض", contact: "تواصل مع المبيعات", free: "مجاني للأبد", perMonth: "/شهر", perYear: "/سنة", stripeNote: "دفع آمن عبر Stripe — إلغاء في أي وقت", paymobNote: "دفع آمن عبر PayMob — بطاقات ومحافظ مصرية", or: "أو ادفع بـ" },
@@ -238,9 +266,15 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
             const price  = currency === "USD" ? plan.priceUSD[billing] : plan.priceEGP[billing];
             const isCurr = currentPlan === planId;
             const isEnt  = planId === "elite"; // Elite tier = Enterprise, custom pricing
+            // Company Enterprise → always "Contact sales" (seat negotiation, SSO setup, contracts).
+            // Individual Enterprise → can self-serve checkout once Stripe price exists.
+            const isEntCustom = isEnt && (isCompany || !plan.stripePriceId[billing]);
             const isFree = false; // No free tier — Starter is the entry-level paid plan
             const name   = isAr ? plan.nameAr : plan.name;
-            const feats  = isAr ? plan.featuresAr : plan.features;
+            // Individuals see solo-user-relevant copy (no employee counts / HR dashboards)
+            const feats  = isCompany
+              ? (isAr ? plan.featuresAr : plan.features)
+              : (isAr ? INDIVIDUAL_FEATURES[planId].ar : INDIVIDUAL_FEATURES[planId].en);
             const col    = plan.color;
 
             return (
@@ -262,7 +296,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                 <div style={{ marginBottom: 16 }}>
                   {isFree ? (
                     <span style={{ fontSize: 22, fontWeight: 700, color: DARK.text }}>{t.free}</span>
-                  ) : isEnt ? (
+                  ) : isEntCustom ? (
                     <div>
                       <span style={{ fontSize: 18, fontWeight: 700, color: col }}>{isAr ? "حسب الطلب" : "Custom"}</span>
                       {plan.priceUSD?.startingAt && (
@@ -271,6 +305,12 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                         </div>
                       )}
                     </div>
+                  ) : isEnt ? (
+                    // Individual Enterprise with a real Stripe price configured — show actual price
+                    <>
+                      <span style={{ fontSize: 28, fontWeight: 800, color: DARK.text }}>${plan.priceUSD?.startingAt || price}</span>
+                      <span style={{ fontSize: 11, color: DARK.muted }}> USD {billing === "monthly" ? t.perMonth : t.perYear}</span>
+                    </>
                   ) : (
                     <>
                       <span style={{ fontSize: 28, fontWeight: 800, color: DARK.text }}>{price?.toLocaleString()}</span>
@@ -295,7 +335,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                   <button onClick={onClose} style={{ width: "100%", background: "none", border: `0.5px solid ${DARK.border}`, borderRadius: 9, padding: "10px 0", fontSize: 12, color: DARK.muted, cursor: "pointer" }}>
                     {isAr ? "الاستمرار مجاناً" : "Continue free"}
                   </button>
-                ) : isEnt ? (
+                ) : isEntCustom ? (
                   <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL || "sales@corvus.io"}?subject=Enterprise%20Inquiry`} style={{ display: "block", width: "100%", background: col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
                     {t.contact}
                   </a>
