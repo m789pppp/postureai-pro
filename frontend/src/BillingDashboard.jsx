@@ -166,7 +166,7 @@ function ProrationCard({ currentPlan, newPlan, prorate, isAr }) {
 }
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────
-export function BillingDashboard({ profile, payments=[], isAr, onClose, isAdmin=false }) {
+export function BillingDashboard({ profile, user, payments=[], isAr, onClose, isAdmin=false, onUpgrade }) {
   const [tab, setTab]         = useState("overview");
   const [usage, setUsage]     = useState(null);
   const [analytics, setAnaly] = useState(null);
@@ -178,8 +178,15 @@ export function BillingDashboard({ profile, payments=[], isAr, onClose, isAdmin=
   const [toast, setToast]     = useState("");
   const [invoiceLoading, setInvoiceLoading] = useState({});
 
-  const tier = profile?.tier || "standard";
+  const tier  = profile?.tier || "standard";
   const isAr_ = isAr;
+
+  // Individual vs Company — same detection as Billing.jsx
+  const isCompany = profile?.user_type === "hr_admin"
+    || profile?.user_type === "employee"
+    || !!profile?.is_org_owner
+    || !!profile?.company_id
+    || profile?.acct_type === "company";
 
   const showToast = useCallback((msg) => {
     setToast(msg);
@@ -665,7 +672,7 @@ export function BillingDashboard({ profile, payments=[], isAr, onClose, isAdmin=
                       fontSize:10, fontWeight:600, cursor:"pointer",
                     }}>
                       {cy==="monthly"?(isAr_?"شهري":"Monthly"):(isAr_?"سنوي":"Yearly")}
-                      {cy==="yearly"&&<span style={{ fontSize:8, color:T.green, marginLeft:4 }}>-17%</span>}
+                      {cy==="yearly"&&<span style={{ fontSize:8, color:T.green, marginLeft:4 }}>-20%</span>}
                     </button>
                   ))}
                 </div>

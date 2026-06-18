@@ -167,6 +167,13 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
 
   const isAr = lang === "ar";
 
+  // Individual vs Company — same as Billing.jsx detection
+  const isCompany = profile?.user_type === "hr_admin"
+    || profile?.user_type === "employee"
+    || !!profile?.is_org_owner
+    || !!profile?.company_id
+    || profile?.acct_type === "company";
+
   // ── Tab Content Renderer ──────────────────────────────────────────
   // Extracted from ternary chain to fix esbuild Arabic RTL parse error
   function renderTabContent() {
@@ -752,7 +759,9 @@ function KpiBox({ label, value, sub, color, icon, trend, accent }) {
           </button>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:16, fontWeight:800, color:T.text, letterSpacing:"-.03em" }}>
-              {isAr?"لوحة ذكاء القوى العاملة":"Workforce Intelligence Dashboard"}
+              {isCompany
+                ? (isAr ? "لوحة ذكاء القوى العاملة" : "Workforce Intelligence Dashboard")
+                : (isAr ? "لوحة التحليلات الشخصية"  : "Personal Analytics Dashboard")}
             </div>
             <div style={{ fontSize:10, color:T.muted, marginTop:1 }}>
               {profile?.name||profile?.email}

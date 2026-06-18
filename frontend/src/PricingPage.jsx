@@ -274,10 +274,18 @@ function PlanCard({ plan, billing, lang, cs, currentPlan, onSelect, onContact })
   );
 }
 
-export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, onBack, cs: csProp }) {
+export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, onBack, cs: csProp, profile }) {
   const [billing, setBilling] = useState("monthly");
-  const [seg, setSeg]         = useState("b2b");
   const isAr  = lang === "ar";
+
+  // Auto-detect segment from profile — if logged in, no need for manual toggle
+  const profileIsCompany = profile?.user_type === "hr_admin"
+    || profile?.user_type === "employee"
+    || !!profile?.is_org_owner
+    || !!profile?.company_id
+    || profile?.acct_type === "company";
+  const [seg, setSeg] = useState(profile ? (profileIsCompany ? "b2b" : "b2c") : "b2b");
+
   // App.jsx passes onSelectPlan(planId, billing) — support both prop names safely
   const handleSelect = (planId) => {
     if (onSelectPlan) onSelectPlan(planId, billing);
