@@ -96,35 +96,41 @@ const TR = {
 // ══════════════════════════════════════════════════════════════════
 const COUPONS = {}; // Coupons validated server-side via /api/coupon/validate
 
+// ── B2C Pricing (Egypt + Gulf) ────────────────────────────────────
+// Egypt: PayMob in EGP | Gulf/Global: Stripe in USD
+// Amounts stored in CENTS (EGP cents / USD cents)
 const TIERS = {
   standard:{
-    id:"standard",name:"Starter",color:"#6366f1",colorDim:"rgba(99,102,241,.12)",
-    price_egp_monthly:2499, price_egp_yearly:23990,   // 20% off annual
-    price_usd_monthly:79,   price_usd_yearly:758,
-    seats:30,accuracy:"~88%",
-    features:["33-landmark pose detection","Head tilt & neck lean","IPD screen distance","PDF reports","30 employees","HR dashboard","Email support"],
+    id:"standard", name:"Free", color:"#6366f1", colorDim:"rgba(99,102,241,.12)",
+    price_egp_monthly:0,     price_egp_yearly:0,
+    price_usd_monthly:0,     price_usd_yearly:0,
+    features:["5 sessions/month","Posture score","Basic alerts"],
+    badge:null
+  },
+  basic:{
+    id:"basic", name:"Basic", color:"#3b82f6", colorDim:"rgba(59,130,246,.12)",
+    price_egp_monthly:19900, price_egp_yearly:159000,  // 199 EGP/mo | 1,590/yr
+    price_usd_monthly:999,   price_usd_yearly:7999,    // $9.99/mo  | $79.99/yr
+    features:["Unlimited sessions","AI Coach (10 msgs/mo)","Streak tracking","Goals","Pain prediction"],
     badge:null
   },
   professional:{
-    id:"professional",name:"Growth",color:"#0ea5e9",colorDim:"rgba(14,165,233,.12)",
-    price_egp_monthly:6999, price_egp_yearly:67190,
-    price_usd_monthly:199,  price_usd_yearly:1910,
-    seats:100,accuracy:"~93%",
-    features:["Everything in Starter","FaceMesh 478 landmarks","3D solvePnP head pose","Iris IPD precision","Spine + shoulder analysis","Advanced HR analytics","Clinical PDF + 3D","Alert log + timestamps","100 employees","Priority support"],
+    id:"professional", name:"Pro", color:"#8b5cf6", colorDim:"rgba(139,92,246,.12)",
+    price_egp_monthly:39900, price_egp_yearly:319000,  // 399 EGP/mo | 3,190/yr
+    price_usd_monthly:1999,  price_usd_yearly:15999,   // $19.99/mo | $159.99/yr
+    features:["Everything in Basic","AI Insights","Reports","Session compare","Leaderboard","Export CSV/PDF"],
     badge:"Most Popular"
   },
   elite:{
-    id:"elite",name:"Enterprise",color:"#10b981",colorDim:"rgba(16,185,129,.12)",
-    price_egp_monthly:null, price_egp_yearly:null,    // Custom — sales contact
-    price_usd_monthly:499,  price_usd_yearly:null,    // "Starting at" price shown
-    seats:-1,accuracy:"~96%",
-    features:["Everything in Growth","Gemini AI clinical narrative","Unlimited employees","White-label branding","Custom SLA","API access","SSO/SAML","Dedicated success manager"],
-    badge:"Enterprise"
+    id:"elite", name:"Elite", color:"#f59e0b", colorDim:"rgba(245,158,11,.12)",
+    price_egp_monthly:69900, price_egp_yearly:559000,  // 699 EGP/mo | 5,590/yr
+    price_usd_monthly:3999,  price_usd_yearly:29999,   // $39.99/mo | $299.99/yr
+    features:["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support","Calibration"],
+    badge:"Best Value"
   }
 };
 
-// Legacy field aliases — keeps old price_monthly/price_yearly reads working
-// (defaults to EGP; call getPriceForCurrency() for explicit currency)
+// Legacy field aliases
 for(const k in TIERS){
   TIERS[k].price_monthly = TIERS[k].price_egp_monthly;
   TIERS[k].price_yearly  = TIERS[k].price_egp_yearly;
