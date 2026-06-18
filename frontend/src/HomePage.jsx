@@ -1076,6 +1076,15 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>{user?.email||"—"}</div>
           <div style={{ marginTop:6, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
             <TierBadge tier={tier}/>
+            {/* Account type badge */}
+            {(() => {
+              const isCompanyAcct = profile?.user_type==="hr_admin"||profile?.user_type==="employee"||!!profile?.is_org_owner||!!profile?.company_id||profile?.acct_type==="company";
+              const label = isCompanyAcct
+                ? (profile?.user_type==="hr_admin"||profile?.is_org_owner ? (isAr?"مشرف شركة":"Company Admin") : (isAr?"موظف":"Employee"))
+                : (isAr?"حساب شخصي":"Individual");
+              const color = isCompanyAcct ? "#a78bfa" : "#60a5fa";
+              return <span style={{ fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${color}15`, color, border:`1px solid ${color}25` }}>{label}</span>;
+            })()}
             {hasGoogle&&<span style={{ fontSize:10, color:"#4285f4", fontWeight:600 }}>🔵 Google</span>}
             {hasEmail&&<span style={{ fontSize:10, color:"#10b981", fontWeight:600 }}>📧 Email</span>}
           </div>
