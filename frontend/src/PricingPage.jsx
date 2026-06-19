@@ -1,5 +1,9 @@
+import React from "react";
+
 // ═══════════════════════════════════════════════════════════════════
-// PricingPage.jsx — SINGLE SOURCE OF TRUTH for B2C pricing display
+// PricingPage.jsx — SINGLE SOURCE OF TRUTH for B2C + B2B pricing
+// B2C: basic/professional/elite (199/399/699 EGP | $9.99/$19.99/$39.99)
+// B2B: b2b_starter/b2b_growth/b2b_enterprise (per seat)
 // Egypt: PayMob EGP | Gulf/Global: Stripe USD
 // !! DO NOT change prices here without updating App.jsx TIERS and
 //    Billing.jsx PLANS and backend _PAYMOB_PRICES/_STRIPE_PRICES !!
@@ -59,21 +63,59 @@ const PAID_PLANS = [
   },
 ];
 
+const B2B_PAID_PLANS = [
+  {
+    id: "b2b_starter",
+    name:    { en: "Starter",    ar: "ستارتر" },
+    tagline: { en: "For small teams (5-10 seats)", ar: "للفرق الصغيرة (5-10 مقاعد)" },
+    color:   "#6366f1", badge: null,
+    perSeat: { egp_monthly: 249, egp_yearly: 2390, usd_monthly: 7.99, usd_yearly: 76.99 },
+    features: {
+      en: ["Up to 10 seats", "HR Dashboard", "Posture analytics", "Email alerts", "Basic reports"],
+      ar: ["حتى 10 مقاعد", "لوحة HR", "تحليلات الوضعية", "تنبيهات بريدية", "تقارير أساسية"],
+    },
+  },
+  {
+    id: "b2b_growth",
+    name:    { en: "Growth",     ar: "نمو" },
+    tagline: { en: "For growing teams (11-50 seats)", ar: "للفرق النامية (11-50 مقعداً)" },
+    color:   "#0ea5e9", badge: { en: "Most Popular", ar: "الأكثر طلباً" },
+    perSeat: { egp_monthly: 199, egp_yearly: 1990, usd_monthly: 5.99, usd_yearly: 57.99 },
+    features: {
+      en: ["Up to 50 seats", "Everything in Starter", "WhatsApp alerts", "AI Coach/employee", "Weekly report", "Anomaly detection"],
+      ar: ["حتى 50 مقعداً", "كل Starter", "تنبيهات واتساب", "مدرب AI لكل موظف", "تقرير أسبوعي", "كشف الشذوذ"],
+    },
+  },
+  {
+    id: "b2b_enterprise",
+    name:    { en: "Enterprise", ar: "إنتربرايز" },
+    tagline: { en: "For large organizations (50+ seats)", ar: "للمنظمات الكبيرة (50+ مقعداً)" },
+    color:   "#10b981", badge: { en: "Custom",       ar: "مخصص" },
+    perSeat: null,  // Custom pricing
+    features: {
+      en: ["Unlimited seats", "Everything in Growth", "SSO/SAML", "API access", "White-label", "Custom SLA", "Dedicated CSM"],
+      ar: ["مقاعد غير محدودة", "كل Growth", "SSO/SAML", "وصول API", "علامة تجارية", "SLA مخصص", "مدير نجاح"],
+    },
+  },
+];
+
 function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
   const isAr    = lang === "ar";
   const isEGP   = region === "egypt";
   const isCurr  = currentPlan === plan.id;
   const isPopular = !!plan.badge;
 
-  const price   = isEGP
-    ? (billing === "yearly" ? plan.price.egp_yearly : plan.price.egp_monthly)
-    : (billing === "yearly" ? plan.price.usd_yearly : plan.price.usd_monthly);
-  const currency = isEGP ? "EGP" : "$";
-  const perMonth = billing === "yearly"
-    ? (isEGP ? Math.round(plan.price.egp_yearly/12) : (plan.price.usd_yearly/12).toFixed(2))
+  const isB2BPlan = plan.id && plan.id.startsWith("b2b_");
+  const priceObj  = isB2BPlan ? plan.perSeat : plan.price;
+  const price     = priceObj
+    ? (isEGP
+        ? (billing==="yearly" ? priceObj.egp_yearly : priceObj.egp_monthly)
+        : (billing==="yearly" ? priceObj.usd_yearly : priceObj.usd_monthly))
     : null;
-
-  const savings_pct = billing === "yearly" ? 20 : 0;
+  const currency  = isEGP ? "EGP" : "$";
+  const perMonth  = (billing==="yearly" && price)
+    ? (isEGP ? Math.round(price/12) : (price/12).toFixed(2))
+    : null;
 
   return (
     <div style={{
@@ -101,17 +143,25 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
 
       {/* Price */}
       <div style={{ marginBottom: 20 }}>
-        <span style={{ fontSize: 40, fontWeight: 900, color: "#f0f6ff" }}>
-          {!isEGP && "$"}{billing === "yearly" ? perMonth : price}
-        </span>
-        <span style={{ fontSize: 13, color: "#64748b", marginLeft: 4 }}>
-          {isEGP && "EGP "}/{isAr ? "شهر" : "mo"}
-        </span>
-        {billing === "yearly" && (
-          <div style={{ fontSize: 11, color: "#10b981", marginTop: 4 }}>
-            {isAr ? `${isEGP ? price + " EGP" : "$" + price} / سنة — وفّر 20%`
-                  : `${isEGP ? price + " EGP" : "$" + price} / year — Save 20%`}
+        {price == null ? (
+          <div style={{ fontSize:22, fontWeight:800, color:"#f0f6ff" }}>
+            {isAr ? "تواصل معنا" : "Contact Sales"}
           </div>
+        ) : (
+          <>
+            <span style={{ fontSize: 40, fontWeight: 900, color: "#f0f6ff" }}>
+              {!isEGP && "$"}{billing === "yearly" ? perMonth : price}
+            </span>
+            <span style={{ fontSize: 13, color: "#64748b", marginLeft: 4 }}>
+              {isEGP && "EGP "}/{isB2BPlan ? (isAr?"مقعد/شهر":"seat/mo") : (isAr?"شهر":"mo")}
+            </span>
+            {billing === "yearly" && (
+              <div style={{ fontSize: 11, color: "#10b981", marginTop: 4 }}>
+                {isAr ? `${isEGP?price+" EGP":"$"+price} / سنة — وفّر 20%`
+                       : `${isEGP?price+" EGP":"$"+price} / year — Save 20%`}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -142,10 +192,13 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
   );
 }
 
-export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, cs: csProp }) {
+export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, cs: csProp, defaultSeg }) {
   const [billing, setBilling] = React.useState("monthly");
-  const [region,  setRegion]  = React.useState("gulf");  // "egypt" | "gulf"
-  const isAr = lang === "ar";
+  const [region,  setRegion]  = React.useState("gulf");
+  const [seg,     setSeg]     = React.useState(defaultSeg || "b2c");  // "b2c" | "b2b"
+  const isAr   = lang === "ar";
+  const isB2B  = seg === "b2b";
+  const plans  = isB2B ? B2B_PAID_PLANS : PAID_PLANS;
 
   const D = { bg:"#020d1f", card:"#05101f", border:"rgba(148,163,184,.1)", text:"#f0f6ff", muted:"#64748b" };
   const L = { bg:"#f8fafc", card:"#ffffff", border:"rgba(0,0,0,.08)", text:"#0f172a", muted:"#64748b" };
@@ -167,6 +220,22 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSe
         <div style={{ fontSize: 14, color: cs.muted }}>
           {isAr ? "بدون عقود — ألغِ في أي وقت" : "No contracts — cancel anytime"}
         </div>
+      </div>
+
+      {/* B2C / B2B toggle */}
+      <div style={{ display:"flex", justifyContent:"center", gap:8, marginBottom:20 }}>
+        {[
+          { id:"b2c", label:isAr?"👤 أفراد":"👤 Individuals" },
+          { id:"b2b", label:isAr?"🏢 شركات":"🏢 Companies" },
+        ].map(s=>(
+          <button key={s.id} onClick={()=>setSeg(s.id)} style={{
+            padding:"8px 28px", borderRadius:10,
+            background: seg===s.id ? "#6366f1" : "rgba(255,255,255,.05)",
+            border:`1px solid ${seg===s.id ? "#6366f1":"rgba(255,255,255,.1)"}`,
+            color: seg===s.id ? "#fff" : "#64748b",
+            fontWeight:700, fontSize:14, cursor:"pointer",
+          }}>{s.label}</button>
+        ))}
       </div>
 
       {/* Region toggle */}
@@ -206,7 +275,7 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSe
 
       {/* Plan cards */}
       <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
-        {PAID_PLANS.map(plan => (
+        {plans.map(plan => (
           <PlanCard
             key={plan.id}
             plan={plan}
