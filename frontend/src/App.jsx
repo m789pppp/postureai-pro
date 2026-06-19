@@ -136,6 +136,50 @@ for(const k in TIERS){
   TIERS[k].price_yearly  = TIERS[k].price_egp_yearly;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// B2B TIERS — Companies only. Completely separate from B2C TIERS.
+// IDs: b2b_starter / b2b_growth / b2b_enterprise
+// Egypt: PayMob EGP per seat | Gulf: Stripe USD per seat
+// !! Never mix these IDs with B2C IDs (standard/basic/professional/elite) !!
+// ══════════════════════════════════════════════════════════════════
+const B2B_TIERS = {
+  b2b_starter: {
+    id:"b2b_starter", name:"Starter", nameAr:"ستارتر",
+    color:"#6366f1", colorDim:"rgba(99,102,241,.12)",
+    price_egp_monthly:24900, price_egp_yearly:239000,   // 249 EGP/seat/mo
+    price_usd_monthly:799,   price_usd_yearly:7990,     // $7.99/seat/mo
+    seats:10, min_seats:5,
+    features:["Up to 10 seats","HR Dashboard","Posture analytics","Email alerts","Basic reports"],
+    featuresAr:["حتى 10 مقاعد","لوحة HR","تحليلات الوضعية","تنبيهات بريدية","تقارير أساسية"],
+    badge:null,
+  },
+  b2b_growth: {
+    id:"b2b_growth", name:"Growth", nameAr:"نمو",
+    color:"#0ea5e9", colorDim:"rgba(14,165,233,.12)",
+    price_egp_monthly:19900, price_egp_yearly:199000,   // 199 EGP/seat/mo
+    price_usd_monthly:599,   price_usd_yearly:5990,     // $5.99/seat/mo
+    seats:50, min_seats:11,
+    features:["Up to 50 seats","Everything in Starter","WhatsApp alerts","AI Coach per employee","Weekly company report","Anomaly detection"],
+    featuresAr:["حتى 50 مقعداً","كل Starter","تنبيهات واتساب","مدرب AI لكل موظف","تقرير شركة أسبوعي","كشف الشذوذ"],
+    badge:"Most Popular",
+  },
+  b2b_enterprise: {
+    id:"b2b_enterprise", name:"Enterprise", nameAr:"إنتربرايز",
+    color:"#10b981", colorDim:"rgba(16,185,129,.12)",
+    price_egp_monthly:null, price_egp_yearly:null,
+    price_usd_monthly:null, price_usd_yearly:null,
+    seats:-1, min_seats:51,
+    features:["Unlimited seats","Everything in Growth","SSO/SAML","API access","White-label","Custom SLA","Dedicated CSM"],
+    featuresAr:["مقاعد غير محدودة","كل Growth","SSO/SAML","وصول API","علامة تجارية خاصة","SLA مخصص","مدير نجاح مخصص"],
+    badge:"Enterprise",
+  },
+};
+
+// Helper: is this a B2B tier ID?
+const isB2BTier = (id) => id && id.startsWith("b2b_");
+// Helper: is this a B2C tier ID?
+const isB2CTier = (id) => id && !id.startsWith("b2b_");
+
 // ── Currency-aware price getter ──────────────────────────────────
 // region: "EG" → EGP, anything else (Gulf/intl) → USD
 function getTierPrice(tierId, period="monthly", region="EG"){
@@ -150,13 +194,15 @@ function getCurrencySymbol(region="EG"){
 
 // ── Tier ID normaliser ──────────────────────────────────────────────
 const TIER_NORMALIZE={
-  // Direct mappings
+  // B2C direct
   standard:"standard", basic:"basic", professional:"professional", elite:"elite",
-  // Aliases
+  // B2C aliases
   pro:"professional", premium:"elite",
   personal_basic:"basic", personal_pro:"professional", personal_elite:"elite",
-  // Legacy
-  starter:"standard", growth:"professional", enterprise:"elite",
+  // B2B — keep as-is (never map to B2C IDs!)
+  b2b_starter:"b2b_starter", b2b_growth:"b2b_growth", b2b_enterprise:"b2b_enterprise",
+  // Legacy B2C (deprecated)
+  starter:"basic", growth:"professional", enterprise:"elite",
 };
 const normalizeTier=(t)=>TIER_NORMALIZE[t]||t||"standard";
 
