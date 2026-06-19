@@ -63,8 +63,8 @@ export const PLANS = {
   },
   elite: {
     id:"elite", name:"Elite", nameAr:"إيليت",
-    priceEGP: { monthly: 69900, yearly: 559000 },  // 699 EGP/mo | 5,590/yr
-    priceUSD: { monthly: 3999,  yearly: 29999 },   // $39.99/mo | $299.99/yr
+    priceEGP: { monthly: 69900, yearly: 559000 },
+    priceUSD: { monthly: 3999,  yearly: 29999 },
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_ELITE_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_ELITE_YEARLY  || "",
@@ -75,6 +75,54 @@ export const PLANS = {
     limit: -1,
   },
 };
+
+// ══════════════════════════════════════════════════════════════════
+// B2B_PLANS — Companies only. IDs start with "b2b_"
+// Never merge with PLANS — completely separate checkout flows
+// Egypt: PayMob per seat | Gulf: Stripe per seat
+// ══════════════════════════════════════════════════════════════════
+export const B2B_PLANS = {
+  b2b_starter: {
+    id:"b2b_starter", name:"Starter", nameAr:"ستارتر",
+    priceEGP: { monthly: 24900, yearly: 239000 },  // 249 EGP/seat/mo
+    priceUSD: { monthly: 799,   yearly: 7990 },    // $7.99/seat/mo
+    stripePriceId: {
+      monthly: import.meta.env.VITE_STRIPE_PRICE_B2B_STARTER_MONTHLY || "",
+      yearly:  import.meta.env.VITE_STRIPE_PRICE_B2B_STARTER_YEARLY  || "",
+    },
+    color:"#6366f1", minSeats:5, maxSeats:10,
+    features:   ["Up to 10 seats","HR Dashboard","Posture analytics","Email alerts"],
+    featuresAr: ["حتى 10 مقاعد","لوحة HR","تحليلات الوضعية","تنبيهات بريدية"],
+  },
+  b2b_growth: {
+    id:"b2b_growth", name:"Growth", nameAr:"نمو",
+    priceEGP: { monthly: 19900, yearly: 199000 },  // 199 EGP/seat/mo
+    priceUSD: { monthly: 599,   yearly: 5990 },    // $5.99/seat/mo
+    stripePriceId: {
+      monthly: import.meta.env.VITE_STRIPE_PRICE_B2B_GROWTH_MONTHLY || "",
+      yearly:  import.meta.env.VITE_STRIPE_PRICE_B2B_GROWTH_YEARLY  || "",
+    },
+    color:"#0ea5e9", minSeats:11, maxSeats:50, popular:true,
+    features:   ["Up to 50 seats","Everything in Starter","WhatsApp alerts","AI Coach per employee","Weekly report"],
+    featuresAr: ["حتى 50 مقعداً","كل Starter","تنبيهات واتساب","مدرب AI لكل موظف","تقرير أسبوعي"],
+  },
+  b2b_enterprise: {
+    id:"b2b_enterprise", name:"Enterprise", nameAr:"إنتربرايز",
+    priceEGP: { monthly: null, yearly: null },
+    priceUSD: { monthly: null, yearly: null },
+    stripePriceId: { monthly: "", yearly: "" },
+    color:"#10b981", minSeats:51, maxSeats:-1,
+    features:   ["Unlimited seats","Everything in Growth","SSO/SAML","API access","White-label","Custom SLA"],
+    featuresAr: ["مقاعد غير محدودة","كل Growth","SSO/SAML","وصول API","علامة تجارية","SLA مخصص"],
+  },
+};
+
+// Helper: get the right plan set based on account type
+export function getActivePlans(isCompany = false) {
+  return isCompany ? B2B_PLANS : PLANS;
+}
+export const B2C_PLAN_LIST = ["basic", "professional", "elite"];
+export const B2B_PLAN_LIST = ["b2b_starter", "b2b_growth", "b2b_enterprise"];
 
 // ── Stripe Checkout ───────────────────────────────────────────────
 export async function createStripeCheckout({ planId, billing, userEmail, userId, lang = "en" }) {
@@ -233,7 +281,9 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
     }
   }, [billing, profile]);
 
-  const planList = ["basic", "professional", "elite"];  // B2C paid tiers only
+  const isCompanyAccount = profile?.acct_type === "company" || profile?.acct_type === "hr" || !!profile?.company_id;
+  const activePlans  = isCompanyAccount ? B2B_PLANS : PLANS;
+  const planList     = isCompanyAccount ? B2B_PLAN_LIST : B2C_PLAN_LIST;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9500, backdropFilter: "blur(12px)", overflowY: "auto", padding: 20 }}>
