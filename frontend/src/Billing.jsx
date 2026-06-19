@@ -203,15 +203,24 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   // Individuals never see employee counts, HR dashboards, or "Contact sales" —
   // a solo user has no procurement process and should be able to pay immediately.
   const INDIVIDUAL_FEATURES = {
+    // B2C tier features — must match planList = ["basic","professional","elite"]
     standard: {
-      en: ["33-landmark pose detection", "Head tilt & neck lean", "IPD screen distance", "PDF wellness reports", "7-day session history", "Email support"],
-      ar: ["كشف 33 نقطة بالـAI", "ميل الرأس والرقبة", "مسافة الشاشة IPD", "تقارير PDF صحية", "سجل جلسات 7 أيام", "دعم بالبريد"],
+      en: ["5 sessions/month", "Posture score", "Basic alerts", "Streak tracking"],
+      ar: ["5 جلسات/شهر", "درجة الوضعية", "تنبيهات أساسية", "تتبع السلسلة"],
+    },
+    basic: {
+      en: ["Unlimited sessions", "AI Coach (10 msgs/mo)", "Streak & Goals", "Pain prediction", "Leaderboard"],
+      ar: ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "سلسلة وأهداف", "توقع الألم", "المتصدرين"],
     },
     professional: {
-      en: ["Everything in Starter", "FaceMesh 478 landmarks", "3D solvePnP head pose", "Iris IPD precision", "AI Posture Coach", "Fatigue & burnout tracking", "Priority support"],
-      ar: ["كل مزايا ستارتر", "كشف 478 نقطة FaceMesh", "وضع رأس 3D solvePnP", "دقة IPD بالقزحية", "مدرب AI للوضعية", "تتبع الإرهاق والإنهاك", "دعم أولوية"],
+      en: ["Everything in Basic", "AI Insights", "Full Reports", "Session compare", "Export CSV/PDF", "Weekly report"],
+      ar: ["كل Basic", "رؤى AI", "تقارير كاملة", "مقارنة الجلسات", "تصدير CSV/PDF", "تقرير أسبوعي"],
     },
     elite: {
+      en: ["Everything in Pro", "AI Coach unlimited", "Predictive AI", "PDF report", "Priority support", "Calibration"],
+      ar: ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي", "تقرير PDF", "دعم أولوية", "معايرة"],
+    },
+    elite_old: {
       en: ["Everything in Growth", "Gemini AI clinical narrative", "Predictive burnout AI", "Unlimited session history", "API access", "Dedicated support"],
       ar: ["كل مزايا جروث", "تحليل سردي بالـ Gemini AI", "AI تنبؤي للإرهاق", "سجل جلسات غير محدود", "وصول API", "دعم مخصص"],
     },
