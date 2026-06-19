@@ -1291,24 +1291,70 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           </div>
           {!isPro(tier)&&(
             <>
+              {/* ── Upgrade Plans ── */}
               <div style={{ fontSize:12, color:cs.muted, marginBottom:12 }}>
-                {isAr?"ترقّ للحصول على:":"Upgrade to unlock:"}
+                {isAr?"اختر خطتك:":"Choose your plan:"}
               </div>
               {[
-                isAr?"🤖 AI Coach — نصائح مخصصة بالذكاء الاصطناعي":"🤖 AI Coach — Personalized AI coaching",
-                isAr?"📊 تحليلات متقدمة — رسوم بيانية تفصيلية":"📊 Advanced Analytics — Detailed charts",
-                isAr?"📋 تقارير PDF — ملخص شهري كامل":"📋 PDF Reports — Full monthly summary",
-                isAr?"📅 جلسات غير محدودة":"📅 Unlimited sessions",
-              ].map((f,i)=>(
-                <div key={i} style={{ display:"flex", gap:10, alignItems:"center",
-                  padding:"8px 0", borderBottom:i<3?`1px solid ${cs.border}`:"none",
-                  fontSize:13, color:cs.text }}>{f}</div>
+                {
+                  id:"basic", color:"#3b82f6",
+                  name:    isAr?"أساسي":"Basic",
+                  priceEGP:199, priceUSD:9.99,
+                  tag:     isAr?"للمبتدئين":"Starter",
+                  features:isAr
+                    ?["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","سلسلة وأهداف","توقع الألم"]
+                    :["Unlimited sessions","AI Coach (10 msgs/mo)","Streak & Goals","Pain prediction"],
+                },
+                {
+                  id:"professional", color:"#8b5cf6",
+                  name:    isAr?"احترافي":"Pro",
+                  priceEGP:399, priceUSD:19.99,
+                  tag:     isAr?"الأكثر طلباً ⭐":"Most Popular ⭐",
+                  features:isAr
+                    ?["كل Basic","رؤى AI","تقارير","مقارنة الجلسات","تصدير CSV/PDF"]
+                    :["Everything in Basic","AI Insights","Reports","Compare sessions","Export CSV/PDF"],
+                },
+                {
+                  id:"elite", color:"#f59e0b",
+                  name:    isAr?"إيليت":"Elite",
+                  priceEGP:699, priceUSD:39.99,
+                  tag:     isAr?"أفضل قيمة":"Best Value",
+                  features:isAr
+                    ?["كل Pro","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية"]
+                    :["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support"],
+                },
+              ].map((plan)=>(
+                <div key={plan.id}
+                  style={{ border:`1px solid ${plan.color}44`, borderRadius:10,
+                    padding:"12px 14px", marginBottom:10,
+                    background:`${plan.color}08`, cursor:"pointer" }}
+                  onClick={()=>onBilling?.(plan.id)}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:13, fontWeight:800, color:plan.color }}>{plan.name}</span>
+                      <span style={{ fontSize:9, background:`${plan.color}22`, color:plan.color,
+                        padding:"2px 7px", borderRadius:20, fontWeight:700 }}>{plan.tag}</span>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <span style={{ fontSize:15, fontWeight:900, color:"#f0f6ff" }}>
+                        {plan.priceEGP} EGP
+                      </span>
+                      <span style={{ fontSize:10, color:cs.muted }}> /{isAr?"شهر":"mo"}</span>
+                      <div style={{ fontSize:9, color:cs.muted }}>${plan.priceUSD}/{isAr?"شهر":"mo"}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                    {plan.features.slice(0,3).map((f,i)=>(
+                      <span key={i} style={{ fontSize:10, color:cs.muted }}>✓ {f}</span>
+                    ))}
+                  </div>
+                </div>
               ))}
-              <button onClick={onBilling}
-                style={{ marginTop:16, width:"100%", padding:"11px",
-                  background:"linear-gradient(135deg,#1a56db,#0891b2)", color:"#fff",
+              <button onClick={()=>onBilling?.()}
+                style={{ marginTop:4, width:"100%", padding:"11px",
+                  background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff",
                   border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-                {isAr?"ترقّ الآن — ابدأ بـ 7 أيام مجاناً":"Upgrade Now — Start 7-day free trial"}
+                {isAr?"مقارنة كل الخطط →":"Compare All Plans →"}
               </button>
             </>
           )}
