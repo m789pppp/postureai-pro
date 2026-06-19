@@ -233,7 +233,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
     }
   }, [billing, profile]);
 
-  const planList = ["standard", "professional", "elite"];
+  const planList = ["basic", "professional", "elite"];  // B2C paid tiers only
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9500, backdropFilter: "blur(12px)", overflowY: "auto", padding: 20 }}>
@@ -274,7 +274,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
             // Company Enterprise → always "Contact sales" (seat negotiation, SSO setup, contracts).
             // Individual Enterprise → can self-serve checkout once Stripe price exists.
             const isEntCustom = isEnt && (isCompany || !plan.stripePriceId[billing]);
-            const isFree = false; // No free tier — Starter is the entry-level paid plan
+            const isFree = false; // No free checkout — standard users see upgrade prompt
             const name   = isAr ? plan.nameAr : plan.name;
             // Individuals see solo-user-relevant copy (no employee counts / HR dashboards)
             const feats  = isCompany
