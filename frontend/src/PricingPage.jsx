@@ -1,342 +1,230 @@
-/**
- * Corvus — PricingPage v5.0
- * Positioning: "AI Workforce Intelligence Platform"
- * Focus: ROI · productivity · workforce intelligence
- */
-import { useState } from "react";
-import { SUPPORT_EMAIL } from "./firebase.js";
+// ═══════════════════════════════════════════════════════════════════
+// PricingPage.jsx — SINGLE SOURCE OF TRUTH for B2C pricing display
+// Egypt: PayMob EGP | Gulf/Global: Stripe USD
+// !! DO NOT change prices here without updating App.jsx TIERS and
+//    Billing.jsx PLANS and backend _PAYMOB_PRICES/_STRIPE_PRICES !!
+// ═══════════════════════════════════════════════════════════════════
 
-const PLANS = [
-  {
-    id: "standard",
-    name: { en: "Free", ar: "مجاني" },
-    tagline: { en: "Get started with posture tracking", ar: "ابدأ مع تتبع الوضعية" },
-    price: { monthly: 0, yearly: 0, egp_monthly: 0, egp_yearly: 0 },
-    color: "#6366f1", badge: null,
-    features: {
-      en: ["5 sessions/month", "Posture score", "Basic alerts", "Streak tracking"],
-      ar: ["5 جلسات/شهر", "درجة الوضعية", "تنبيهات أساسية", "تتبع السلسلة"],
-    },
-  },
+const PAID_PLANS = [
   {
     id: "basic",
-    name: { en: "Basic", ar: "أساسي" },
-    tagline: { en: "For individuals starting their posture journey", ar: "للأفراد الذين يبدأون رحلة الوضعية" },
-    price: { monthly: 999, yearly: 7999, egp_monthly: 19900, egp_yearly: 159000 },
-    color: "#3b82f6", badge: null,
+    name:    { en: "Basic",       ar: "أساسي" },
+    tagline: { en: "Start your posture journey", ar: "ابدأ رحلة وضعيتك" },
+    color:   "#3b82f6",
+    badge:   null,
+    price: {
+      egp_monthly: 199,   egp_yearly: 1590,
+      usd_monthly: 9.99,  usd_yearly: 79.99,
+    },
     features: {
-      en: ["Unlimited sessions", "AI Coach (10 msgs/mo)", "Streak & Goals", "Pain prediction", "Leaderboard"],
-      ar: ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "سلسلة وأهداف", "توقع الألم", "المتصدرين"],
+      en: ["Unlimited sessions", "AI Coach (10 msgs/mo)", "Streak & Goals",
+           "Pain prediction", "Leaderboard", "Share card"],
+      ar: ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "سلسلة وأهداف",
+           "توقع الألم", "المتصدرين", "بطاقة مشاركة"],
     },
   },
   {
     id: "professional",
-    name: { en: "Pro", ar: "احترافي" },
-    tagline: { en: "For those serious about posture improvement", ar: "لمن يريد تحسين وضعيته بجدية" },
-    price: { monthly: 1999, yearly: 15999, egp_monthly: 39900, egp_yearly: 319000 },
-    color: "#8b5cf6", badge: { en: "Most Popular", ar: "الأكثر طلباً" },
+    name:    { en: "Pro",          ar: "احترافي" },
+    tagline: { en: "For serious posture improvement", ar: "لتحسين الوضعية بجدية" },
+    color:   "#8b5cf6",
+    badge:   { en: "Most Popular", ar: "الأكثر طلباً" },
+    price: {
+      egp_monthly: 399,   egp_yearly: 3190,
+      usd_monthly: 19.99, usd_yearly: 159.99,
+    },
     features: {
-      en: ["Everything in Basic", "AI Insights", "Full Reports", "Session compare", "Export CSV/PDF", "Weekly report"],
-      ar: ["كل Basic", "رؤى AI", "تقارير كاملة", "مقارنة الجلسات", "تصدير CSV/PDF", "تقرير أسبوعي"],
+      en: ["Everything in Basic", "AI Insights", "Full Reports",
+           "Session compare", "Export CSV/PDF", "Weekly report", "Anomaly alerts"],
+      ar: ["كل Basic", "رؤى AI", "تقارير كاملة",
+           "مقارنة الجلسات", "تصدير CSV/PDF", "تقرير أسبوعي", "تنبيهات الشذوذ"],
     },
   },
   {
     id: "elite",
-    name: { en: "Elite", ar: "إيليت" },
-    tagline: { en: "Maximum AI power for your posture health", ar: "أقصى قوة AI لصحة وضعيتك" },
-    price: { monthly: 3999, yearly: 29999, egp_monthly: 69900, egp_yearly: 559000 },
-    color: "#f59e0b", badge: { en: "Best Value", ar: "أفضل قيمة" },
+    name:    { en: "Elite",       ar: "إيليت" },
+    tagline: { en: "Maximum AI for your health", ar: "أقصى قوة AI لصحتك" },
+    color:   "#f59e0b",
+    badge:   { en: "Best Value",  ar: "أفضل قيمة" },
+    price: {
+      egp_monthly: 699,   egp_yearly: 5590,
+      usd_monthly: 39.99, usd_yearly: 299.99,
+    },
     features: {
-      en: ["Everything in Pro", "AI Coach unlimited", "Predictive AI", "PDF reports", "Priority support", "Calibration"],
-      ar: ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي", "تقارير PDF", "دعم أولوية", "معايرة"],
+      en: ["Everything in Pro", "AI Coach unlimited", "Predictive AI",
+           "PDF report", "Priority support", "Calibration", "Session narrative"],
+      ar: ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي",
+           "تقرير PDF", "دعم أولوية", "معايرة", "سرد الجلسة"],
     },
   },
 ];
 
-// Individual plans use the SAME ids & prices as company plans (single source of truth —
-// see TIERS in App.jsx). Only taglines/features differ to speak to a solo user vs HR buyer.
-const B2C_PLANS = [
-  {
-    id: "standard",
-    name: { en: "Starter", ar: "ستارتر" },
-    tagline: { en: "For individuals getting started", ar: "للأفراد المبتدئين" },
-    price: { monthly: 2499, yearly: 23990 },
-    color: "#6366f1",
-    badge: null,
-    features: {
-      en: ["Unlimited sessions", "Real-time posture score", "33-landmark detection", "PDF wellness reports", "7-day free trial", "Email support"],
-      ar: ["جلسات غير محدودة", "نقاط الوضعية الآنية", "كشف 33 نقطة", "تقارير PDF صحية", "تجربة مجانية 7 أيام", "دعم بالبريد"],
-    },
-  },
-  {
-    id: "professional",
-    name: { en: "Growth", ar: "جروث" },
-    tagline: { en: "For serious remote professionals", ar: "للمحترفين الجادين عن بُعد" },
-    price: { monthly: 6999, yearly: 67190 },
-    color: "#1a56db",
-    badge: { en: "Most Popular", ar: "الأكثر طلباً" },
-    features: {
-      en: ["Everything in Starter", "AI Posture Coach", "Fatigue index", "Burnout tracking", "478-landmark FaceMesh", "Priority support"],
-      ar: ["كل مزايا ستارتر", "مدرب AI للوضعية", "مؤشر الإرهاق", "تتبع الإنهاك", "كشف 478 نقطة FaceMesh", "دعم أولوية"],
-    },
-  },
-  {
-    id: "elite",
-    name: { en: "Enterprise", ar: "إنتربرايز" },
-    tagline: { en: "Full intelligence stack, custom pricing", ar: "حزمة الذكاء الكاملة، سعر مخصص" },
-    price: { monthly: null, yearly: null, startingUsd: 499 },
-    color: "#10b981",
-    badge: { en: "Custom", ar: "مخصص" },
-    features: {
-      en: ["Everything in Growth", "Gemini AI clinical narrative", "Predictive burnout AI", "API access", "Dedicated support"],
-      ar: ["كل مزايا جروث", "تحليل سردي بالـ Gemini AI", "AI تنبؤي للإرهاق", "وصول API", "دعم مخصص"],
-    },
-  },
-];
+function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
+  const isAr    = lang === "ar";
+  const isEGP   = region === "egypt";
+  const isCurr  = currentPlan === plan.id;
+  const isPopular = !!plan.badge;
 
-function PlanCard({ plan, billing, lang, cs, currentPlan, onSelect, onContact }) {
-  const [hov, setHov] = useState(false);
-  const isAr      = lang === "ar";
-  const isCurrent = currentPlan === plan.id;
-  const isEnterprise = plan.price?.monthly === null;
-  const price     = isEnterprise ? null : billing === "yearly" ? plan.price?.yearly : plan.price?.monthly;
-  const name      = plan.name?.[lang] || plan.name?.en;
-  const tagline   = plan.tagline?.[lang] || plan.tagline?.en;
-  const features  = plan.features?.[lang] || plan.features?.en || [];
-  const badge     = plan.badge?.[lang] || plan.badge?.en;
-  const roi       = plan.roi?.[lang] || plan.roi?.en;
-  const isPopular = !!plan.badge?.en && plan.badge.en !== "Custom" && plan.badge.en !== "Enterprise";
+  const price   = isEGP
+    ? (billing === "yearly" ? plan.price.egp_yearly : plan.price.egp_monthly)
+    : (billing === "yearly" ? plan.price.usd_yearly : plan.price.usd_monthly);
+  const currency = isEGP ? "EGP" : "$";
+  const perMonth = billing === "yearly"
+    ? (isEGP ? Math.round(plan.price.egp_yearly/12) : (plan.price.usd_yearly/12).toFixed(2))
+    : null;
+
+  const savings_pct = billing === "yearly" ? 20 : 0;
 
   return (
-    <div
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        background: isPopular
-          ? `linear-gradient(145deg,rgba(26,86,219,.1),rgba(8,145,178,.06))`
-          : cs.card,
-        border: `1.5px solid ${isCurrent ? plan.color + "70" : hov ? plan.color + "45" : cs.border}`,
-        borderRadius: 18,
-        padding: "26px 22px",
-        position: "relative",
-        display: "flex", flexDirection: "column",
-        transition: "all 280ms cubic-bezier(.16,1,.3,1)",
-        transform: hov ? "translateY(-4px)" : "none",
-        boxShadow: hov ? "0 16px 48px rgba(0,0,0,.18)" : "none",
-      }}>
-
-      {/* Top accent line */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg,${plan.color},transparent)`, borderRadius: "18px 18px 0 0" }} />
-
-      {/* Popular badge */}
+    <div style={{
+      background: isPopular ? `${plan.color}08` : "rgba(255,255,255,.03)",
+      border: `1.5px solid ${isPopular ? plan.color : "rgba(255,255,255,.08)"}`,
+      borderRadius: 16, padding: "28px 24px", flex: 1, minWidth: 240, maxWidth: 320,
+      position: "relative", transition: "transform .2s",
+    }}>
       {isPopular && (
-        <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: `linear-gradient(135deg,${plan.color},#0891b2)`, borderRadius: 99, padding: "4px 16px", fontSize: 10, fontWeight: 800, color: "#fff", whiteSpace: "nowrap", letterSpacing: "0.04em" }}>
-          ★ {badge}
+        <div style={{
+          position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)",
+          background: plan.color, color: "#fff", fontSize: 11, fontWeight: 700,
+          padding: "3px 14px", borderRadius: 20,
+        }}>
+          {isAr ? plan.badge?.ar : plan.badge?.en}
         </div>
       )}
 
-      {/* Name + tagline */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-          <span style={{ fontFamily: "Syne,sans-serif", fontSize: 17, fontWeight: 800, color: cs.text, letterSpacing: "-0.02em" }}>{name}</span>
-          {badge && !isPopular && (
-            <span style={{ background: `${plan.color}15`, border: `1px solid ${plan.color}30`, borderRadius: 99, padding: "2px 9px", fontSize: 9, fontWeight: 700, color: plan.color, textTransform: "uppercase", letterSpacing: "0.06em" }}>{badge}</span>
-          )}
-        </div>
-        <div style={{ fontSize: 11, color: cs.muted }}>{tagline}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: plan.color, marginBottom: 4, letterSpacing: 1 }}>
+        {isAr ? plan.name.ar : plan.name.en}
       </div>
-
-      {/* Seats badge */}
-      {plan.seats !== undefined && (
-        <div style={{ background: `${plan.color}10`, border: `1px solid ${plan.color}22`, borderRadius: 7, padding: "4px 10px", fontSize: 10, fontWeight: 700, color: plan.color, marginBottom: 14, display: "inline-block" }}>
-          {plan.seats < 0 ? (isAr ? "غير محدود" : "Unlimited seats") : `${isAr ? "حتى" : "Up to"} ${plan.seats} ${isAr ? "موظف" : "seats"}`}
-        </div>
-      )}
+      <div style={{ fontSize: 11, color: "#64748b", marginBottom: 20 }}>
+        {isAr ? plan.tagline.ar : plan.tagline.en}
+      </div>
 
       {/* Price */}
       <div style={{ marginBottom: 20 }}>
-        {isEnterprise ? (
-          <div>
-            <div style={{ fontFamily: "Syne,sans-serif", fontSize: 24, fontWeight: 800, color: cs.text }}>{isAr ? "تواصل معنا" : "Custom"}</div>
-            {plan.price?.startingUsd && (
-              <div style={{ fontSize: 11, color: cs.muted, marginTop: 3 }}>
-                {isAr ? `يبدأ من $${plan.price.startingUsd}/شهر` : `Starting at $${plan.price.startingUsd}/mo`}
-              </div>
-            )}
-          </div>
-        ) : price === 0 ? (
-          <div style={{ fontFamily: "Syne,sans-serif", fontSize: 34, fontWeight: 800, color: cs.text }}>{isAr ? "مجاني" : "Free"}</div>
-        ) : (
-          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-            <span style={{ fontSize: 12, color: cs.muted }}>EGP</span>
-            <span style={{ fontFamily: "Syne,sans-serif", fontSize: 36, fontWeight: 800, color: plan.color, lineHeight: 1, letterSpacing: "-0.03em" }}>{price?.toLocaleString()}</span>
-            <span style={{ fontSize: 11, color: cs.muted }}>{billing === "yearly" ? (isAr ? "/سنة" : "/yr") : (isAr ? "/شهر" : "/mo")}</span>
-          </div>
-        )}
-        {billing === "yearly" && !isEnterprise && price > 0 && (
-          <div style={{ fontSize: 10, color: "#10b981", fontWeight: 600, marginTop: 4 }}>
-            {isAr ? "✓ وفّر 20% سنوياً (شهرين مجاناً)" : "✓ Save 20% annually (2 months free)"}
+        <span style={{ fontSize: 40, fontWeight: 900, color: "#f0f6ff" }}>
+          {!isEGP && "$"}{billing === "yearly" ? perMonth : price}
+        </span>
+        <span style={{ fontSize: 13, color: "#64748b", marginLeft: 4 }}>
+          {isEGP && "EGP "}/{isAr ? "شهر" : "mo"}
+        </span>
+        {billing === "yearly" && (
+          <div style={{ fontSize: 11, color: "#10b981", marginTop: 4 }}>
+            {isAr ? `${isEGP ? price + " EGP" : "$" + price} / سنة — وفّر 20%`
+                  : `${isEGP ? price + " EGP" : "$" + price} / year — Save 20%`}
           </div>
         )}
       </div>
 
       {/* Features */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9, marginBottom: 18 }}>
-        {features.map((f, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 12.5, color: cs.sub }}>
-            <span style={{ fontSize: 12, color: plan.color, flexShrink: 0, marginTop: 1 }}>✓</span>
-            <span style={{ lineHeight: 1.5 }}>{f}</span>
+      <div style={{ marginBottom: 24 }}>
+        {(isAr ? plan.features.ar : plan.features.en).map((f, i) => (
+          <div key={i} style={{ fontSize: 12, color: "#94a3b8", marginBottom: 7, display: "flex", gap: 8 }}>
+            <span style={{ color: plan.color }}>✓</span> {f}
           </div>
         ))}
       </div>
 
-      {/* ROI note */}
-      {roi && (
-        <div style={{ background: `${plan.color}08`, border: `1px solid ${plan.color}18`, borderRadius: 9, padding: "8px 12px", fontSize: 11, color: plan.color, fontWeight: 600, marginBottom: 16, lineHeight: 1.5 }}>
-          📈 {roi}
-        </div>
-      )}
-
-      {/* CTA */}
       <button
-        onClick={isEnterprise ? onContact : () => onSelect(plan.id)}
+        onClick={() => onSelect(plan.id)}
+        disabled={isCurr}
         style={{
-          width: "100%",
-          background: isCurrent ? `${plan.color}15` : isPopular ? `linear-gradient(135deg,${plan.color},#0891b2)` : `${plan.color}15`,
-          border: `1.5px solid ${plan.color}`,
-          borderRadius: 10, padding: "12px 0",
-          fontSize: 13, fontWeight: 700,
-          color: isPopular && !isCurrent ? "#fff" : plan.color,
-          cursor: "pointer", transition: "all 200ms",
-          boxShadow: isPopular && !isCurrent ? `0 6px 24px ${plan.color}40` : "none",
-        }}>
-        {isCurrent
-          ? (isAr ? "خطتك الحالية" : "Your Current Plan")
-          : isEnterprise
-          ? (isAr ? "تحدّث مع المبيعات ←" : "Talk to Sales →")
-          : (isAr ? "ابدأ الآن ←" : "Get Started →")}
+          width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
+          background: isCurr ? "rgba(255,255,255,.06)" : plan.color,
+          color: isCurr ? "#64748b" : "#fff", fontWeight: 700, fontSize: 14,
+          cursor: isCurr ? "default" : "pointer",
+        }}
+      >
+        {isCurr
+          ? (isAr ? "خطتك الحالية" : "Current Plan")
+          : (isAr ? "اشترك الآن" : "Get Started")}
       </button>
     </div>
   );
 }
 
-export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, onBack, cs: csProp, profile }) {
-  const [billing, setBilling] = useState("monthly");
-  const isAr  = lang === "ar";
+export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, cs: csProp }) {
+  const [billing, setBilling] = React.useState("monthly");
+  const [region,  setRegion]  = React.useState("gulf");  // "egypt" | "gulf"
+  const isAr = lang === "ar";
 
-  // Auto-detect segment from profile — if logged in, no need for manual toggle
-  const profileIsCompany = profile?.user_type === "hr_admin"
-    || profile?.user_type === "employee"
-    || !!profile?.is_org_owner
-    || !!profile?.company_id
-    || profile?.acct_type === "company";
-  const [seg, setSeg] = useState(profile ? (profileIsCompany ? "b2b" : "b2c") : "b2b");
-
-  // App.jsx passes onSelectPlan(planId, billing) — support both prop names safely
-  const handleSelect = (planId) => {
-    if (onSelectPlan) onSelectPlan(planId, billing);
-    else if (onSelect) onSelect(planId, billing);
-  };
-
-  const D = { bg:"#030812", surf:"#060e1c", card:"#0a1428", border:"rgba(148,163,184,.08)", borderH:"rgba(148,163,184,.2)", text:"#eef2ff", sub:"#94a3b8", muted:"#475569" };
-  const L = { bg:"#f8faff", surf:"#f0f4ff", card:"#ffffff", border:"rgba(15,23,42,.07)", borderH:"rgba(15,23,42,.18)", text:"#0f172a", sub:"#334155", muted:"#64748b" };
+  const D = { bg:"#020d1f", card:"#05101f", border:"rgba(148,163,184,.1)", text:"#f0f6ff", muted:"#64748b" };
+  const L = { bg:"#f8fafc", card:"#ffffff", border:"rgba(0,0,0,.08)", text:"#0f172a", muted:"#64748b" };
   const cs = csProp || (darkMode ? D : L);
 
-  const plans = seg === "b2b" ? PLANS : B2C_PLANS;
-
-  const handleContact = () => {
-    window.open(`mailto:${SUPPORT_EMAIL}?subject=Enterprise Inquiry — Corvus Workforce Intelligence`, "_blank");
+  const handleSelect = (planId) => {
+    if (onSelectPlan) onSelectPlan(planId, billing, region);
+    else if (onSelect) onSelect(planId);
   };
 
   return (
-    <div dir={isAr ? "rtl" : "ltr"} style={{ background: cs.bg, color: cs.text, minHeight: "100vh", fontFamily: "'DM Sans', system-ui, sans-serif", padding: "40px 5vw 80px" }}>
-
-      {/* Back */}
-      {onBack && (
-        <button onClick={onBack} style={{ background: "none", border: "none", color: cs.muted, cursor: "pointer", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, marginBottom: 32 }}>
-          {isAr ? "→" : "←"} {isAr ? "رجوع" : "Back"}
-        </button>
-      )}
+    <div style={{ fontFamily: "Inter,sans-serif", padding: "40px 20px", maxWidth: 1100, margin: "0 auto" }}>
 
       {/* Header */}
-      <div style={{ textAlign: "center", maxWidth: 680, margin: "0 auto 48px" }}>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#1a56db", marginBottom: 12 }}>
-          {isAr ? "الأسعار" : "PRICING"}
+      <div style={{ textAlign: "center", marginBottom: 40 }}>
+        <div style={{ fontSize: 32, fontWeight: 900, color: cs.text, marginBottom: 8 }}>
+          {isAr ? "اختر خطتك" : "Choose Your Plan"}
         </div>
-        <h1 style={{ fontFamily: "Syne,sans-serif", fontSize: "clamp(26px,4vw,44px)", fontWeight: 800, letterSpacing: "-0.035em", marginBottom: 14, lineHeight: 1.15 }}>
-          {isAr ? "أسعار شفافة. عائد استثمار قابل للقياس." : "Transparent pricing. Measurable ROI."}
-        </h1>
-        <p style={{ fontSize: 15, color: cs.sub, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 20px" }}>
-          {isAr
-            ? "بدون عقود. بدون رسوم خفية. إلغاء في أي وقت. كل خطة تتضمن تجربة مجانية 7 أيام."
-            : "No contracts. No hidden fees. Cancel anytime. Every plan includes a 7-day free trial."}
-        </p>
-
-        {/* ROI callout */}
-        <div style={{ background: "rgba(16,185,129,.08)", border: "1px solid rgba(16,185,129,.18)", borderRadius: 12, padding: "12px 20px", display: "inline-block", fontSize: 12.5, color: "#10b981", fontWeight: 500, marginBottom: 28, lineHeight: 1.6 }}>
-          💡 {isAr
-            ? "توفر الشركات في المتوسط 12K$ – 18K$ لكل موظف سنوياً من خلال الإدارة الاستباقية لمخاطر العضلات والهيكل العظمي."
-            : "Companies save an average of $12K–$18K per employee per year by proactively managing MSK risk."}
-        </div>
-
-        {/* Segment toggle */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-          <div style={{ background: cs.card, border: `1px solid ${cs.border}`, borderRadius: 12, padding: 4, display: "inline-flex", gap: 4 }}>
-            {["b2b", "b2c"].map(s => (
-              <button key={s} onClick={() => setSeg(s)} style={{
-                padding: "9px 22px", borderRadius: 9, border: "none",
-                fontSize: 13, fontWeight: 700, cursor: "pointer",
-                background: seg === s ? "linear-gradient(135deg,#1a56db,#0891b2)" : "transparent",
-                color: seg === s ? "#fff" : cs.muted,
-                transition: "all 220ms",
-              }}>
-                {s === "b2b" ? (isAr ? "للمؤسسات والفرق" : "Enterprise & Teams") : (isAr ? "للأفراد" : "Individual Plans")}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Billing toggle */}
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: billing === "monthly" ? cs.text : cs.muted }}>{isAr ? "شهري" : "Monthly"}</span>
-          <button onClick={() => setBilling(b => b === "monthly" ? "yearly" : "monthly")} style={{ width: 46, height: 26, borderRadius: 99, background: billing === "yearly" ? "#1a56db" : cs.border, border: "none", cursor: "pointer", position: "relative", transition: "background 200ms" }}>
-            <span style={{ position: "absolute", top: 4, left: billing === "yearly" ? 24 : 4, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 220ms", boxShadow: "0 1px 4px rgba(0,0,0,.25)" }} />
-          </button>
-          <span style={{ fontSize: 13, fontWeight: 600, color: billing === "yearly" ? cs.text : cs.muted }}>{isAr ? "سنوي" : "Annual"}</span>
-          {billing === "yearly" && (
-            <span style={{ background: "rgba(16,185,129,.12)", border: "1px solid rgba(16,185,129,.25)", borderRadius: 99, padding: "3px 11px", fontSize: 11, fontWeight: 700, color: "#10b981" }}>
-              {isAr ? "وفّر 17%" : "Save 17%"}
-            </span>
-          )}
+        <div style={{ fontSize: 14, color: cs.muted }}>
+          {isAr ? "بدون عقود — ألغِ في أي وقت" : "No contracts — cancel anytime"}
         </div>
       </div>
 
-      {/* Plan grid */}
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(plans.length, 4)}, minmax(240px, 1fr))`, gap: 16, maxWidth: 1200, margin: "0 auto 48px" }}>
-        {plans.map((plan, i) => (
+      {/* Region toggle */}
+      <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 20 }}>
+        {[
+          { id: "egypt", label: "🇪🇬 مصر", sub: "EGP / PayMob" },
+          { id: "gulf",  label: "🇸🇦🇦🇪 الخليج", sub: "USD / Stripe" },
+        ].map(r => (
+          <button key={r.id} onClick={() => setRegion(r.id)} style={{
+            padding: "8px 20px", borderRadius: 10,
+            background: region === r.id ? "#6366f1" : "rgba(255,255,255,.05)",
+            border: `1px solid ${region === r.id ? "#6366f1" : "rgba(255,255,255,.1)"}`,
+            color: region === r.id ? "#fff" : cs.muted,
+            fontWeight: 600, fontSize: 13, cursor: "pointer",
+          }}>
+            {r.label} <span style={{ fontSize: 10, opacity: .7 }}>{r.sub}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Billing toggle */}
+      <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 40 }}>
+        {["monthly", "yearly"].map(b => (
+          <button key={b} onClick={() => setBilling(b)} style={{
+            padding: "7px 22px", borderRadius: 20,
+            background: billing === b ? "#6366f1" : "transparent",
+            border: `1px solid ${billing === b ? "#6366f1" : "rgba(255,255,255,.15)"}`,
+            color: billing === b ? "#fff" : cs.muted,
+            fontWeight: 600, fontSize: 13, cursor: "pointer",
+          }}>
+            {b === "monthly"
+              ? (isAr ? "شهري" : "Monthly")
+              : (isAr ? "سنوي — وفّر 20%" : "Yearly — Save 20%")}
+          </button>
+        ))}
+      </div>
+
+      {/* Plan cards */}
+      <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
+        {PAID_PLANS.map(plan => (
           <PlanCard
-            key={plan.id} plan={plan} billing={billing} lang={lang}
-            cs={cs} currentPlan={currentPlan}
-            onSelect={handleSelect} onContact={handleContact}
+            key={plan.id}
+            plan={plan}
+            billing={billing}
+            region={region}
+            onSelect={handleSelect}
+            currentPlan={currentPlan}
+            lang={lang}
+            cs={cs}
           />
         ))}
       </div>
 
-      {/* Enterprise CTA strip */}
-      <div style={{ maxWidth: 760, margin: "0 auto", background: "linear-gradient(135deg,rgba(26,86,219,.1),rgba(8,145,178,.06))", border: "1px solid rgba(26,86,219,.18)", borderRadius: 18, padding: "28px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontFamily: "Syne,sans-serif", fontSize: 17, fontWeight: 800, color: cs.text, marginBottom: 6 }}>
-            {isAr ? "مؤسسة كبيرة؟ نبني لك نموذجاً مخصصاً." : "Large organisation? We'll build a custom model for you."}
-          </div>
-          <div style={{ fontSize: 13, color: cs.sub, lineHeight: 1.65, maxWidth: 480 }}>
-            {isAr
-              ? "فرق من 500+ موظف تحصل على نماذج AI مخصصة، وتكامل HR، وتقارير ROI جاهزة للمجلس."
-              : "Teams of 500+ get custom AI models, HR system integration, and board-ready ROI reports."}
-          </div>
-        </div>
-        <button onClick={handleContact} style={{ background: "linear-gradient(135deg,#1a56db,#0891b2)", border: "none", borderRadius: 12, padding: "13px 26px", fontSize: 13, fontWeight: 800, color: "#fff", cursor: "pointer", boxShadow: "0 6px 24px rgba(26,86,219,.4)", whiteSpace: "nowrap", fontFamily: "Syne,sans-serif" }}>
-          {isAr ? "تحدّث مع فريق المبيعات →" : "Talk to Sales Team →"}
-        </button>
+      {/* Footer note */}
+      <div style={{ textAlign: "center", marginTop: 32, fontSize: 11, color: cs.muted }}>
+        {isAr
+          ? "الأسعار بالجنيه المصري (مصر) أو الدولار الأمريكي (الخليج) — مفيش رسوم خفية"
+          : "Prices in EGP (Egypt) or USD (Gulf/Global) — no hidden fees"}
       </div>
     </div>
   );
