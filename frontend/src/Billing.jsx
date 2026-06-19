@@ -317,19 +317,21 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
         {/* Plans grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, padding: 20 }}>
           {planList.map(planId => {
-            const plan   = PLANS[planId];
-            const price  = currency === "USD" ? plan.priceUSD[billing] : plan.priceEGP[billing];
+            const plan   = activePlans[planId];
+            if (!plan) return null;  // safety guard
+            const price  = currency === "USD" ? plan.priceUSD?.[billing] : plan.priceEGP?.[billing];
             const isCurr = currentPlan === planId;
-            const isEnt  = planId === "elite"; // Elite tier = Enterprise, custom pricing
-            // Company Enterprise → always "Contact sales" (seat negotiation, SSO setup, contracts).
-            // Individual Enterprise → can self-serve checkout once Stripe price exists.
-            const isEntCustom = isEnt && (isCompany || !plan.stripePriceId[billing]);
-            const isFree = false; // No free checkout — standard users see upgrade prompt
+            const isEnt  = planId === "b2b_enterprise" || planId === "elite";
+            const isEntCustom = isEnt && (price == null || !plan.stripePriceId?.[billing]);
+            const isFree = false;
             const name   = isAr ? plan.nameAr : plan.name;
-            // Individuals see solo-user-relevant copy (no employee counts / HR dashboards)
-            const feats  = isCompany
+            // B2C individuals: use INDIVIDUAL_FEATURES for cleaner copy
+            // B2B companies: use plan's own features
+            const feats  = isCompanyAccount
               ? (isAr ? plan.featuresAr : plan.features)
-              : (isAr ? INDIVIDUAL_FEATURES[planId].ar : INDIVIDUAL_FEATURES[planId].en);
+              : (INDIVIDUAL_FEATURES[planId]
+                  ? (isAr ? INDIVIDUAL_FEATURES[planId].ar : INDIVIDUAL_FEATURES[planId].en)
+                  : (isAr ? plan.featuresAr : plan.features));
             const col    = plan.color;
 
             return (
