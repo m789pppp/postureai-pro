@@ -194,13 +194,11 @@ const COPY = {
       getStarted:"Get Started →", contactSales:"Contact Sales →",
       seats: n => n < 0 ? "Unlimited seats" : `Up to ${n} seats`,
       b2cPlans: [
-        { id:"standard", name:"Free",  price:0,    priceEGP:0,     color:"#6366f1",
-          features:["5 sessions/month","Posture score","Basic alerts"] },
-        { id:"basic",    name:"Basic", price:999,  priceEGP:19900, color:"#3b82f6",
+        { id:"basic",        name:"Basic", price:999,  priceEGP:19900, color:"#3b82f6",
           features:["Unlimited sessions","AI Coach (10 msgs/mo)","Streak & Goals","Pain prediction"] },
-        { id:"professional", name:"Pro", price:1999, priceEGP:39900, color:"#8b5cf6", popular:true,
+        { id:"professional", name:"Pro",   price:1999, priceEGP:39900, color:"#8b5cf6", popular:true,
           features:["Everything in Basic","AI Insights","Reports","Export CSV/PDF","Session compare"] },
-        { id:"elite",    name:"Elite", price:3999, priceEGP:69900, color:"#f59e0b",
+        { id:"elite",        name:"Elite", price:3999, priceEGP:69900, color:"#f59e0b",
           features:["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support"] },
       ],
       b2bPlans: [
