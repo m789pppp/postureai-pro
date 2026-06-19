@@ -24,7 +24,7 @@ const FAQ = [
     category: "billing",     category_ar: "الفواتير",
     q_en: "Can I switch from monthly to annual billing?",
     q_ar: "هل يمكنني التحويل من الفوترة الشهرية إلى السنوية؟",
-    a_en: "Yes! Go to Settings → Billing and click 'Switch to Annual'. You'll save 17% (2 months free) and we'll prorate your current month.",
+    a_en: "Yes! Go to Settings → Billing and click 'Switch to Annual'. You'll save 20% (2 months free) and we'll prorate your current month.",
     a_ar: "نعم! اذهب إلى الإعدادات ← الفواتير وانقر 'التحويل للاشتراك السنوي'. ستوفر 17٪ وسنحسب الفرق تلقائياً.",
   },
   {
