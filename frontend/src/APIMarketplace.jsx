@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from "react";
 
 const PLANS_API = [
-  { id:"starter", name:"Starter", price:0, reqs:1000, rps:2, color:"#6366f1", features:["REST API","Basic endpoints","Email support","1 webhook"] },
+  { id:"api_free", name:"Free", price:0, reqs:1000, rps:2, color:"#6366f1", features:["REST API","Basic endpoints","Email support","1 webhook"] },
   { id:"growth",  name:"Growth",  price:49, reqs:50000, rps:10, color:"#0ea5e9", features:["Everything in Starter","Batch analysis","Webhooks (10)","Dashboard access","Priority support"], badge:"Popular" },
   { id:"scale",   name:"Scale",   price:199, reqs:500000, rps:50, color:"#10b981", features:["Everything in Growth","Dedicated rate limits","Custom models","SLA 99.9%","Slack support"], badge:"Best" },
   { id:"enterprise", name:"Enterprise", price:null, reqs:-1, rps:-1, color:"#f59e0b", features:["Unlimited requests","Custom RPS","On-prem option","White-label API","24/7 phone support"], badge:"Custom" },
