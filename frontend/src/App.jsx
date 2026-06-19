@@ -149,9 +149,15 @@ function getCurrencySymbol(region="EG"){
 }
 
 // ── Tier ID normaliser ──────────────────────────────────────────────
-const TIER_NORMALIZE={basic:"standard",pro:"professional",premium:"elite",
-  personal_basic:"standard",personal_pro:"professional",personal_elite:"elite",
-  standard:"standard",professional:"professional",elite:"elite"};
+const TIER_NORMALIZE={
+  // Direct mappings
+  standard:"standard", basic:"basic", professional:"professional", elite:"elite",
+  // Aliases
+  pro:"professional", premium:"elite",
+  personal_basic:"basic", personal_pro:"professional", personal_elite:"elite",
+  // Legacy
+  starter:"standard", growth:"professional", enterprise:"elite",
+};
 const normalizeTier=(t)=>TIER_NORMALIZE[t]||t||"standard";
 
 // ── Payment Methods — Automatic PayMob only ───────────────────────
@@ -1033,13 +1039,13 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
     return()=>clearTimeout(id);
   },[coupon]);
 
-  const tier=TIERS[selTier];
+  const tier=TIERS[selTier] || TIERS["standard"];
   const basePrice=billing==="monthly"?tier.price_monthly:tier.price_yearly;
-  const seatsExtra=Math.max(0,seats-25);
-  const seatAddon=seatsExtra*(billing==="monthly"?5:50);
-  const subtotal=basePrice?Math.round((basePrice+seatAddon)):null;
+  // B2C: no seat-based pricing
+  const subtotal=basePrice?Math.round(basePrice):null;
   const disc=couponData?couponData.discount:(referralDiscount?referralDiscount.discount_pct:0);
   const price=subtotal?Math.round(subtotal*(1-disc/100)):null;
+  const seatAddon=0; // B2C: no seat addon
 
   useEffect(()=>{
     if(step==="plan"&&price&&price>0){
