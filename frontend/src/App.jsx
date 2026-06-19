@@ -2665,7 +2665,7 @@ export default function App(){
               {lang==="ar"?"وفّر شهرين مجاناً 🎉":"Save 2 months free 🎉"}
             </h3>
             <p style={{fontSize:14,color:"#94a3b8",margin:"0 0 20px",lineHeight:1.6}}>
-              {lang==="ar"?"حوّل اشتراكك لخطة سنوية واستمتع بتوفير 17٪":"Switch to annual and save 17% — that's 2 months free."}
+              {lang==="ar"?"حوّل اشتراكك لخطة سنوية واستمتع بتوفير 20٪":"Switch to annual and save 20% — that's 2 months free."}
             </p>
             <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"16px",marginBottom:20}}>
               <p style={{margin:0,color:"#a5b4fc",fontSize:13}}>
