@@ -194,11 +194,11 @@ const COPY = {
       getStarted:"Get Started →", contactSales:"Contact Sales →",
       seats: n => n < 0 ? "Unlimited seats" : `Up to ${n} seats`,
       b2cPlans: [
-        { id:"basic",        name:"Basic", price:999,  priceEGP:19900, color:"#3b82f6",
+        { id:"basic",        name:"Basic", price:9.99,  priceEGP:199, color:"#3b82f6",
           features:["Unlimited sessions","AI Coach (10 msgs/mo)","Streak & Goals","Pain prediction"] },
-        { id:"professional", name:"Pro",   price:1999, priceEGP:39900, color:"#8b5cf6", popular:true,
+        { id:"professional", name:"Pro",   price:19.99, priceEGP:399, color:"#8b5cf6", popular:true,
           features:["Everything in Basic","AI Insights","Reports","Export CSV/PDF","Session compare"] },
-        { id:"elite",        name:"Elite", price:3999, priceEGP:69900, color:"#f59e0b",
+        { id:"elite",        name:"Elite", price:39.99, priceEGP:699, color:"#f59e0b",
           features:["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support"] },
       ],
       b2bPlans: [
@@ -345,11 +345,11 @@ const COPY = {
       getStarted:"ابدأ الآن ←", contactSales:"تواصل مع المبيعات ←",
       seats: n => n < 0 ? "مقاعد غير محدودة" : `حتى ${n} مقعد`,
       b2cPlans: [
-        { id:"basic",        name:"أساسي",       price:19900, color:"#3b82f6",
+        { id:"basic",        name:"أساسي",       price:199, color:"#3b82f6",
           features:["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","سلسلة وأهداف","توقع الألم","المتصدرين"] },
-        { id:"professional", name:"احترافي",     price:39900, color:"#8b5cf6", popular:true,
+        { id:"professional", name:"احترافي",     price:399, color:"#8b5cf6", popular:true,
           features:["كل Basic","رؤى AI","تقارير كاملة","مقارنة الجلسات","تصدير CSV/PDF","تقرير أسبوعي"] },
-        { id:"elite",        name:"إيليت",       price:69900, color:"#f59e0b",
+        { id:"elite",        name:"إيليت",       price:699, color:"#f59e0b",
           features:["كل Pro","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية","معايرة"] },
       ],
       b2bPlans: [
