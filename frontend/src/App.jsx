@@ -110,22 +110,22 @@ const TIERS = {
   },
   basic:{
     id:"basic", name:"Basic", color:"#3b82f6", colorDim:"rgba(59,130,246,.12)",
-    price_egp_monthly:19900, price_egp_yearly:159000,  // 199 EGP/mo | 1,590/yr
-    price_usd_monthly:999,   price_usd_yearly:7999,    // $9.99/mo  | $79.99/yr
+    price_egp_monthly:199, price_egp_yearly:1590,  // 199 EGP/mo | 1,590/yr
+    price_usd_monthly:9.99,   price_usd_yearly:79.99,    // $9.99/mo  | $79.99/yr
     features:["Unlimited sessions","AI Coach (10 msgs/mo)","Streak tracking","Goals","Pain prediction"],
     badge:null
   },
   professional:{
     id:"professional", name:"Pro", color:"#8b5cf6", colorDim:"rgba(139,92,246,.12)",
-    price_egp_monthly:39900, price_egp_yearly:319000,  // 399 EGP/mo | 3,190/yr
-    price_usd_monthly:1999,  price_usd_yearly:15999,   // $19.99/mo | $159.99/yr
+    price_egp_monthly:399, price_egp_yearly:3190,  // 399 EGP/mo | 3,190/yr
+    price_usd_monthly:19.99,  price_usd_yearly:159.99,   // $19.99/mo | $159.99/yr
     features:["Everything in Basic","AI Insights","Reports","Session compare","Leaderboard","Export CSV/PDF"],
     badge:"Most Popular"
   },
   elite:{
     id:"elite", name:"Elite", color:"#f59e0b", colorDim:"rgba(245,158,11,.12)",
-    price_egp_monthly:69900, price_egp_yearly:559000,  // 699 EGP/mo | 5,590/yr
-    price_usd_monthly:3999,  price_usd_yearly:29999,   // $39.99/mo | $299.99/yr
+    price_egp_monthly:699, price_egp_yearly:5590,  // 699 EGP/mo | 5,590/yr
+    price_usd_monthly:39.99,  price_usd_yearly:299.99,   // $39.99/mo | $299.99/yr
     features:["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support","Calibration"],
     badge:"Best Value"
   }
@@ -147,8 +147,8 @@ const B2B_TIERS = {
   b2b_starter: {
     id:"b2b_starter", name:"Starter", nameAr:"ستارتر",
     color:"#6366f1", colorDim:"rgba(99,102,241,.12)",
-    price_egp_monthly:24900, price_egp_yearly:239000,   // 249 EGP/seat/mo
-    price_usd_monthly:799,   price_usd_yearly:7990,     // $7.99/seat/mo
+    price_egp_monthly:249, price_egp_yearly:2390,   // 249 EGP/seat/mo
+    price_usd_monthly:7.99,   price_usd_yearly:79.90,     // $7.99/seat/mo
     seats:10, min_seats:5,
     features:["Up to 10 seats","HR Dashboard","Posture analytics","Email alerts","Basic reports"],
     featuresAr:["حتى 10 مقاعد","لوحة HR","تحليلات الوضعية","تنبيهات بريدية","تقارير أساسية"],
@@ -157,8 +157,8 @@ const B2B_TIERS = {
   b2b_growth: {
     id:"b2b_growth", name:"Growth", nameAr:"نمو",
     color:"#0ea5e9", colorDim:"rgba(14,165,233,.12)",
-    price_egp_monthly:19900, price_egp_yearly:199000,   // 199 EGP/seat/mo
-    price_usd_monthly:599,   price_usd_yearly:5990,     // $5.99/seat/mo
+    price_egp_monthly:199, price_egp_yearly:1990,   // 199 EGP/seat/mo
+    price_usd_monthly:5.99,   price_usd_yearly:59.90,     // $5.99/seat/mo
     seats:50, min_seats:11,
     features:["Up to 50 seats","Everything in Starter","WhatsApp alerts","AI Coach per employee","Weekly company report","Anomaly detection"],
     featuresAr:["حتى 50 مقعداً","كل Starter","تنبيهات واتساب","مدرب AI لكل موظف","تقرير شركة أسبوعي","كشف الشذوذ"],
