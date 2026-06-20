@@ -366,9 +366,10 @@ function Nav({ lang, setLang, onCTA }) {
 }
 
 // ── Hero ──────────────────────────────────────────────────────────
-function Hero({ lang, onCTA }) {
+function Hero({ lang, onCTA, mode, setMode }) {
   const ar = lang === "ar";
   const reduce = useReducedMotion();
+  const isCompany = mode === "company";
   const [demoScore, setDemoScore] = useState(82);
   useEffect(() => {
     const iv = setInterval(() => {
@@ -429,6 +430,31 @@ function Hero({ lang, onCTA }) {
         {/* Left */}
         <div>
           <Reveal>
+            {/* Individual / Company toggle — drives the rest of the page */}
+            <div style={{
+              display:"inline-flex", alignItems:"center", gap:3,
+              background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
+              borderRadius:100, padding:4, marginBottom:24,
+            }}>
+              {[
+                { id:"individual", en:"👤 Individual", ar:"👤 فردي" },
+                { id:"company",    en:"🏢 Company & Teams", ar:"🏢 شركات وفرق" },
+              ].map(m => (
+                <button key={m.id} onClick={()=>setMode(m.id)} style={{
+                  padding:"8px 18px", borderRadius:99, border:"none",
+                  fontSize:13.5, fontWeight:600, cursor:"pointer",
+                  background: mode===m.id ? C.gHero : "transparent",
+                  color: mode===m.id ? "#06121f" : C.sub,
+                  boxShadow: mode===m.id ? "0 2px 12px rgba(34,211,238,.25)" : "none",
+                  transition:"background .25s, color .25s, box-shadow .25s",
+                }}>
+                  {ar ? m.ar : m.en}
+                </button>
+              ))}
+            </div>
+          </Reveal>
+
+          <Reveal delay={40}>
             <div style={{
               display:"inline-flex", alignItems:"center", gap:9,
               background:"rgba(79,124,249,.1)", border:"1px solid rgba(79,124,249,.25)",
@@ -448,29 +474,44 @@ function Hero({ lang, onCTA }) {
             <h1 style={{
               ...TYPE.hero, color:C.text, margin:"0 0 24px", fontFamily:FONT_DISPLAY,
             }}>
-              {ar
-                ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>ذكاء اصطناعي</span>{" "}لصحة موظفيك</>
-                : <>AI-Powered <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Workforce</span><br/>Health Intelligence</>
-              }
+              {isCompany ? (
+                ar
+                  ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>ذكاء اصطناعي</span>{" "}لصحة موظفيك</>
+                  : <>AI-Powered <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Workforce</span><br/>Health Intelligence</>
+              ) : (
+                ar
+                  ? <>تصحيح وضعيتك بـ<span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>{" "}الذكاء الاصطناعي</span></>
+                  : <>Fix Your Posture with{" "}<span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>AI Coaching</span></>
+              )}
             </h1>
           </Reveal>
 
           <Reveal delay={140}>
             <p style={{ ...TYPE.body, color:C.sub, maxWidth:520, margin:"0 0 40px" }}>
-              {ar
-                ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
-                : "Reduce occupational sick days by 47% and boost productivity with real-time AI posture coaching. Built for enterprise teams in MENA and beyond."
+              {isCompany
+                ? (ar
+                    ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
+                    : "Reduce occupational sick days by 47% and boost productivity with real-time AI posture coaching. Built for enterprise teams in MENA and beyond.")
+                : (ar
+                    ? "تحليل فوري لوضعيتك من كاميرا جهازك. مدرب AI شخصي يساعدك تتجنب آلام الرقبة والظهر — بدون أجهزة إضافية."
+                    : "Real-time posture analysis from your webcam. A personal AI coach that helps you avoid neck and back pain — no extra hardware needed.")
               }
             </p>
           </Reveal>
 
           <Reveal delay={200}>
             <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:36 }}>
-              <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
-                {ar ? "🚀 ابدأ مجاناً — لفريقي" : "🚀 Start Free — For My Team"}
-              </a>
-              <a href="#" className="lp-btn lp-btn-ghost" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=personal_pro")}} style={btn("ghost","lg")}>
-                {ar ? "👤 للاستخدام الشخصي" : "👤 Personal Use"}
+              {isCompany ? (
+                <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
+                  {ar ? "🚀 تجربة مجانية 7 أيام — لفريقي" : "🚀 Free 7-Day Trial — For My Team"}
+                </a>
+              ) : (
+                <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=personal_pro")}} style={btn("primary","lg")}>
+                  {ar ? "🚀 تجربة مجانية 7 أيام" : "🚀 Start 7-Day Free Trial"}
+                </a>
+              )}
+              <a href="#pricing" className="lp-btn lp-btn-ghost" onClick={(e)=>{onCTA(e)}} style={btn("ghost","lg")}>
+                {ar ? "عرض الأسعار" : "View Pricing"}
               </a>
             </div>
           </Reveal>
@@ -945,15 +986,43 @@ function CaseStudies({ lang }) {
 }
 
 // ── Pricing ───────────────────────────────────────────────────────
-function Pricing({ lang, onCTA }) {
+function Pricing({ lang, onCTA, mode }) {
   const ar = lang === "ar";
   const [billing, setBilling] = useState("yearly");
+  const isCompany = mode === "company";
 
-  // Flat-rate pricing — matches B2B_PLANS in Billing.jsx exactly (single source of truth).
-  // EGP shown for Egypt market, USD shown for Gulf/international (not per-seat — flat platform fee).
-  const plans = [
+  // ── Single source of truth — MUST match App.jsx TIERS/B2B_TIERS,
+  //    Billing.jsx PLANS/B2B_PLANS, and PricingPage.jsx exactly ──
+  const b2cPlans = [
     {
-      id:"standard", name: ar?"ستارتر":"Starter",
+      id:"basic", name: ar?"أساسي":"Basic",
+      priceUSD:{ monthly:9.99, yearly:79.99 }, priceEGP:{ monthly:199, yearly:1590 },
+      color:C.sub,
+      features: ar
+        ? ["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","سلسلة وأهداف","توقع الألم","المتصدرين","بطاقة مشاركة"]
+        : ["Unlimited sessions","AI Coach (10 msgs/mo)","Streak & Goals","Pain prediction","Leaderboard","Share card"],
+    },
+    {
+      id:"professional", name: ar?"احترافي":"Pro",
+      priceUSD:{ monthly:19.99, yearly:159.99 }, priceEGP:{ monthly:399, yearly:3190 },
+      popular:true, color:C.blue,
+      features: ar
+        ? ["كل Basic","رؤى AI","تقارير كاملة","مقارنة الجلسات","تصدير CSV/PDF","تقرير أسبوعي","تنبيهات الشذوذ"]
+        : ["Everything in Basic","AI Insights","Full Reports","Session compare","Export CSV/PDF","Weekly report","Anomaly alerts"],
+    },
+    {
+      id:"elite", name: ar?"إيليت":"Elite",
+      priceUSD:{ monthly:39.99, yearly:299.99 }, priceEGP:{ monthly:699, yearly:5590 },
+      color:C.green,
+      features: ar
+        ? ["كل Pro","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية","معايرة","سرد الجلسة"]
+        : ["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support","Calibration","Session narrative"],
+    },
+  ];
+
+  const b2bPlans = [
+    {
+      id:"b2b_starter", name: ar?"ستارتر":"Starter",
       priceUSD:{ monthly:79, yearly:758 }, priceEGP:{ monthly:2499, yearly:23990 },
       color:C.sub,
       features: ar
@@ -961,7 +1030,7 @@ function Pricing({ lang, onCTA }) {
         : ["Up to 30 employees","33-point AI pose detection","PDF reports","HR analytics dashboard","7-day free trial","Email support"],
     },
     {
-      id:"professional", name: ar?"جروث":"Growth",
+      id:"b2b_growth", name: ar?"جروث":"Growth",
       priceUSD:{ monthly:199, yearly:1910 }, priceEGP:{ monthly:6999, yearly:67190 },
       popular:true, color:C.blue,
       features: ar
@@ -969,7 +1038,7 @@ function Pricing({ lang, onCTA }) {
         : ["Up to 100 employees","FaceMesh 478 landmarks","3D head pose","Slack/Teams alerts","Executive HR reports","Priority support + SLA"],
     },
     {
-      id:"elite", name: ar?"إنتربرايز":"Enterprise",
+      id:"b2b_enterprise", name: ar?"إنتربرايز":"Enterprise",
       priceUSD:{ monthly:null, yearly:null, startingAt:499 }, priceEGP:{ monthly:null, yearly:null },
       isEnterprise:true, color:C.green,
       features: ar
@@ -977,6 +1046,8 @@ function Pricing({ lang, onCTA }) {
         : ["Unlimited employees","Gemini AI narrative","SAML SSO / Azure AD","White-label","Custom SLA","Dedicated success manager"],
     },
   ];
+
+  const plans = isCompany ? b2bPlans : b2cPlans;
 
   return (
     <section id="pricing" className="lp-section" style={{ background:C.bg1 }}>
@@ -987,7 +1058,7 @@ function Pricing({ lang, onCTA }) {
               {ar ? "أسعار بسيطة وشفافة" : "Simple, transparent pricing"}
             </h2>
             <p style={{ ...TYPE.body, color:C.sub, marginBottom:30 }}>
-              {ar ? "ابدأ مجاناً · لا بطاقة ائتمان" : "Start free · No credit card required"}
+              {ar ? "تجربة مجانية 7 أيام · لا بطاقة ائتمان" : "7-day free trial · No credit card required"}
             </p>
             {/* Toggle */}
             <div style={{
@@ -1254,7 +1325,7 @@ function FinalCTA({ lang, onCTA }) {
             </p>
             <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" }}>
               <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
-                {ar ? "🚀 ابدأ مجاناً الآن" : "🚀 Start Free Trial"}
+                {ar ? "🚀 ابدأ تجربتك المجانية" : "🚀 Start Free Trial"}
               </a>
               <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-ghost" style={btn("ghost","lg")}>
                 {ar ? "احجز عرضاً" : "Book Demo"}
@@ -1355,11 +1426,15 @@ export default function LandingPage({ onNavigate }) {
   const [lang, setLang] = useState(
     typeof navigator !== "undefined" && navigator.language.startsWith("ar") ? "ar" : "en"
   );
+  // Individual vs Company — drives Hero copy + Pricing plan set across the whole page.
+  // Defaults to "company" since this is primarily a B2B workforce intelligence product,
+  // but individuals get an equally first-class path via the toggle.
+  const [mode, setMode] = useState("company"); // "individual" | "company"
 
   const handleCTA = useCallback(e => {
     // Track conversion click
-    if (window.posthog) window.posthog.capture("landing_cta_click");
-  }, []);
+    if (window.posthog) window.posthog.capture("landing_cta_click", { mode });
+  }, [mode]);
 
   useEffect(() => {
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
@@ -1369,14 +1444,14 @@ export default function LandingPage({ onNavigate }) {
   return (
     <div style={{ background:C.bg, minHeight:"100vh", color:C.text, fontFamily:FONT_DISPLAY }}>
       <GlobalStyle/>
-      <Nav lang={lang} setLang={setLang} onCTA={handleCTA}/>
-      <Hero lang={lang} onCTA={handleCTA}/>
+      <Nav lang={lang} setLang={setLang} onCTA={handleCTA} mode={mode} setMode={setMode}/>
+      <Hero lang={lang} onCTA={handleCTA} mode={mode} setMode={setMode}/>
       <SocialProof lang={lang}/>
       <Stats lang={lang}/>
       <Features lang={lang}/>
       <HowItWorks lang={lang}/>
       <CaseStudies lang={lang}/>
-      <Pricing lang={lang} onCTA={handleCTA}/>
+      <Pricing lang={lang} onCTA={handleCTA} mode={mode}/>
       <Testimonials lang={lang}/>
       <FAQ lang={lang}/>
       <FinalCTA lang={lang} onCTA={handleCTA}/>

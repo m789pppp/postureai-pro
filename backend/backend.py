@@ -307,6 +307,10 @@ _PAYMOB_PRICES = {
     "pro":          {"monthly": 39900,   "yearly": 319000},   # alias
     "elite":        {"monthly": 69900,   "yearly": 559000},   # 699 EGP/mo | 5,590/yr
     "premium":      {"monthly": 69900,   "yearly": 559000},   # alias
+    # B2B Egypt (companies) — EGP cents, flat-rate (NOT per-seat)
+    "b2b_starter":    {"monthly": 249900,   "yearly": 2399000},   # 2,499 EGP/mo | 23,990/yr
+    "b2b_growth":     {"monthly": 699900,   "yearly": 6719000},   # 6,999 EGP/mo | 67,190/yr
+    # b2b_enterprise intentionally has NO price — always contact-sales/custom
 }
 
 _STRIPE_PRICES = {
@@ -317,6 +321,10 @@ _STRIPE_PRICES = {
     "pro":          {"monthly": 1999,   "yearly": 15999},   # alias
     "elite":        {"monthly": 3999,   "yearly": 29999},   # $39.99/mo | $299.99/yr
     "premium":      {"monthly": 3999,   "yearly": 29999},   # alias
+    # B2B Gulf/Global (companies) — USD cents, flat-rate (NOT per-seat)
+    "b2b_starter":    {"monthly": 7900,    "yearly": 75800},    # $79/mo | $758/yr
+    "b2b_growth":     {"monthly": 19900,   "yearly": 191000},   # $199/mo | $1,910/yr
+    # b2b_enterprise intentionally has NO price — always contact-sales/custom, starts at $499/mo
 }
 
 # Human-readable prices for UI display
@@ -325,11 +333,19 @@ PRICING_DISPLAY = {
         "basic":        {"monthly": "199 EGP",  "yearly": "1,590 EGP", "yearly_note": "وفّر شهرين"},
         "professional": {"monthly": "399 EGP",  "yearly": "3,190 EGP", "yearly_note": "وفّر شهرين"},
         "elite":        {"monthly": "699 EGP",  "yearly": "5,590 EGP", "yearly_note": "وفّر شهرين"},
+        # B2B (companies) — flat-rate
+        "b2b_starter":    {"monthly": "2,499 EGP", "yearly": "23,990 EGP", "yearly_note": "وفّر 20%"},
+        "b2b_growth":     {"monthly": "6,999 EGP", "yearly": "67,190 EGP", "yearly_note": "وفّر 20%"},
+        "b2b_enterprise": {"monthly": "تواصل معنا", "yearly": "تواصل معنا", "yearly_note": "يبدأ من $499/شهر"},
     },
     "gulf": {
         "basic":        {"monthly": "$9.99",   "yearly": "$79.99",   "yearly_note": "Save 2 months"},
         "professional": {"monthly": "$19.99",  "yearly": "$159.99",  "yearly_note": "Save 2 months"},
         "elite":        {"monthly": "$39.99",  "yearly": "$299.99",  "yearly_note": "Save 2 months"},
+        # B2B (companies) — flat-rate
+        "b2b_starter":    {"monthly": "$79",   "yearly": "$758",   "yearly_note": "Save 20%"},
+        "b2b_growth":     {"monthly": "$199",  "yearly": "$1,910", "yearly_note": "Save 20%"},
+        "b2b_enterprise": {"monthly": "Contact us", "yearly": "Contact us", "yearly_note": "Starting at $499/mo"},
     },
 }
 
@@ -346,9 +362,13 @@ def get_stripe_amount(tier: str, billing: str = "monthly") -> int | None:
 
 def validate_plan_request(tier: str, billing: str) -> tuple[bool, str]:
     """Validate tier + billing combo."""
+    tier_lower = tier.lower()
+    # Enterprise tiers are always custom/contact-sales — never go through automated checkout
+    if tier_lower in ("b2b_enterprise", "enterprise"):
+        return False, "Enterprise plans require a custom contract — contact sales@corvus.io"
     valid_tiers    = set(_PAYMOB_PRICES.keys()) | set(_STRIPE_PRICES.keys())
     valid_billings = {"monthly", "yearly", "annual"}
-    if tier.lower() not in valid_tiers:
+    if tier_lower not in valid_tiers:
         return False, f"Unknown tier: {tier}. Valid: {sorted(valid_tiers)}"
     if billing.lower() not in valid_billings:
         return False, f"Unknown billing: {billing}. Valid: monthly, yearly"
@@ -2417,7 +2437,18 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         pass
 
     out["score"]      = overall
+    out["overall"]    = overall   # alias for frontend
     out["confidence"] = confidence
+    out["distCm"]     = dist_cm   # top-level for frontend skeleton
+    # raw object for frontend drawFront function
+    out["raw"] = {
+        "distCm": dist_cm,
+        "lo":     lo if dist_cm else None,
+        "hi":     hi if dist_cm else None,
+        "neckLean": round(neck_lean, 1),
+        "spineLean": round(spine_lean, 1),
+        "shTilt":  round(sh_tilt, 1),
+    }
     out["metrics"].update({
         "neck_lean":       {"value": round(neck_lean, 1),  "score": neck_sc,  "unit": "°",  "label": "Neck lean"},
         "head_tilt":       {"value": round(head_tilt, 1),  "score": tilt_sc,  "unit": "°",  "label": "Head tilt"},
@@ -2429,6 +2460,30 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         out["metrics"]["pitch"] = {"value": round(hp["pitch"],1), "score": pose_sc, "unit": "°", "label": "Head pitch (3D)"}
         out["metrics"]["yaw"]   = {"value": round(hp["yaw"],1),   "score": pose_sc, "unit": "°", "label": "Head yaw (3D)"}
         out["metrics"]["roll"]  = {"value": round(hp["roll"],1),  "score": pose_sc, "unit": "°", "label": "Head roll (3D)"}
+
+    # ── Landmark dict for frontend skeleton ─────────────────────
+    # Frontend drawFront needs landmark positions as {x, y} normalized
+    try:
+        def _lm(idx):
+            lm = g(idx)
+            return {"x": round(lm.x, 4), "y": round(lm.y, 4), "visibility": round(lm.visibility, 2)}
+        out["lms"] = {
+            "lSh":    _lm(PL.L_SHOULDER), "rSh":   _lm(PL.R_SHOULDER),
+            "lEar":   _lm(PL.L_EAR),      "rEar":  _lm(PL.R_EAR),
+            "lEye":   _lm(PL.L_EYE),      "rEye":  _lm(PL.R_EYE),
+            "lHip":   _lm(PL.L_HIP),      "rHip":  _lm(PL.R_HIP),
+            "lElbow": _lm(PL.L_ELBOW),    "rElbow":_lm(PL.R_ELBOW),
+            "lWrist": _lm(PL.L_WRIST),    "rWrist":_lm(PL.R_WRIST),
+            # Computed midpoints
+            "midSh":  {"x": round((g(PL.L_SHOULDER).x+g(PL.R_SHOULDER).x)/2,4),
+                       "y": round((g(PL.L_SHOULDER).y+g(PL.R_SHOULDER).y)/2,4), "visibility":1.0},
+            "midHip": {"x": round((g(PL.L_HIP).x+g(PL.R_HIP).x)/2,4),
+                       "y": round((g(PL.L_HIP).y+g(PL.R_HIP).y)/2,4), "visibility":1.0},
+            "midEar": {"x": round((g(PL.L_EAR).x+g(PL.R_EAR).x)/2,4),
+                       "y": round((g(PL.L_EAR).y+g(PL.R_EAR).y)/2,4), "visibility":1.0},
+        }
+    except Exception:
+        pass
 
     # ── Alerts ────────────────────────────────────────────────────
     if neck_lean > 20:

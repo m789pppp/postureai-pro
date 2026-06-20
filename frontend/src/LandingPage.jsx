@@ -202,14 +202,12 @@ const COPY = {
           features:["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support"] },
       ],
       b2bPlans: [
-        { id:"starter",    name:"Starter",    seats:25,  price:1990,  color:"#6366f1",
-          features:["25 employees","Workforce intelligence dashboard","Department health reports","Email & chat support"] },
-        { id:"growth",     name:"Growth",     seats:100, price:4990,  color:"#0891b2", popular:true,
-          features:["100 employees","Predictive burnout detection","Real-time risk alerts","Slack / Teams / WhatsApp","ROI tracking","Priority support"] },
-        { id:"business",   name:"Business",   seats:500, price:14990, color:"#10b981",
-          features:["500 employees","AI executive reports","Custom analytics","Full API access","SLA guarantee","Dedicated CSM"] },
-        { id:"enterprise", name:"Enterprise", seats:-1,  price:null,  color:"#f59e0b",
-          features:["Unlimited employees","SSO/SAML · Azure AD · Okta","White-label dashboard","Custom AI models","ISO-ready audit logs","Dedicated success team"] },
+        { id:"b2b_starter",    name:"Starter",    seats:10,  price:7.99,  priceEGP:249, perSeat:true, color:"#6366f1",
+          features:["Up to 10 seats","HR Dashboard","Posture analytics","Email alerts","Basic reports"] },
+        { id:"b2b_growth",     name:"Growth",     seats:50,  price:5.99,  priceEGP:199, perSeat:true, color:"#0ea5e9", popular:true,
+          features:["Up to 50 seats","Everything in Starter","WhatsApp alerts","AI Coach/employee","Weekly company report","Anomaly detection"] },
+        { id:"b2b_enterprise", name:"Enterprise", seats:-1,  price:null,  priceEGP:null,perSeat:true, color:"#10b981",
+          features:["Unlimited seats","Everything in Growth","SSO/SAML","API access","White-label","Custom SLA","Dedicated CSM"] },
       ],
     },
     testimonials: [
@@ -353,14 +351,12 @@ const COPY = {
           features:["كل Pro","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية","معايرة"] },
       ],
       b2bPlans: [
-        { id:"starter",    name:"ستارتر",    seats:25,  price:1990,  color:"#6366f1",
-          features:["25 موظف","لوحة ذكاء القوى العاملة","تقارير صحة الأقسام","دعم بريد وشات"] },
-        { id:"growth",     name:"نمو",        seats:100, price:4990,  color:"#0891b2", popular:true,
-          features:["100 موظف","كشف الإرهاق المبكر","تنبيهات مخاطر فورية","Slack / Teams / WhatsApp","تتبع العائد","دعم أولوية"] },
-        { id:"business",   name:"أعمال",      seats:500, price:14990, color:"#10b981",
-          features:["500 موظف","تقارير تنفيذية AI","تحليلات مخصصة","وصول API كامل","ضمان SLA","مدير نجاح"] },
-        { id:"enterprise", name:"مؤسسات",    seats:-1,  price:null,  color:"#f59e0b",
-          features:["موظفون غير محدودون","SSO/SAML · Azure AD · Okta","لوحة بلا علامة تجارية","نماذج AI مخصصة","سجلات تدقيق ISO","فريق نجاح مخصص"] },
+        { id:"b2b_starter",    name:"ستارتر",   seats:10,  price:7.99,  priceEGP:249, perSeat:true, color:"#6366f1",
+          features:["حتى 10 مقاعد","لوحة HR","تحليلات الوضعية","تنبيهات بريدية","تقارير أساسية"] },
+        { id:"b2b_growth",     name:"نمو",       seats:50,  price:5.99,  priceEGP:199, perSeat:true, color:"#0ea5e9", popular:true,
+          features:["حتى 50 مقعداً","كل Starter","تنبيهات واتساب","مدرب AI لكل موظف","تقرير شركة أسبوعي","كشف الشذوذ"] },
+        { id:"b2b_enterprise", name:"إنتربرايز", seats:-1,  price:null,  priceEGP:null,perSeat:true, color:"#10b981",
+          features:["مقاعد غير محدودة","كل Growth","SSO/SAML","وصول API","علامة تجارية خاصة","SLA مخصص","مدير نجاح"] },
       ],
     },
     testimonials: [
@@ -1344,8 +1340,10 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             gap: 14,
           }}>
             {(pricingTab === "b2b" ? t.pricing.b2bPlans : t.pricing.b2cPlans).map((plan, i) => {
-              const price = billingCycle === "yearly" && plan.price
-                ? Math.round(plan.price * .83) : plan.price;
+              const yearlyPrice = plan.price ? +(plan.price * 12 * 0.80).toFixed(2) : null;
+              const price = billingCycle === "yearly" ? yearlyPrice : plan.price;
+              const egpPrice = billingCycle === "yearly" && plan.priceEGP
+                ? Math.round(plan.priceEGP * 12 * 0.80) : plan.priceEGP;
               return (
                 <PlanCard key={plan.id} plan={plan} price={price} i={i}
                   t={t} isAr={isAr} onStart={onStart}/>
