@@ -78,42 +78,43 @@ export const PLANS = {
 
 // ══════════════════════════════════════════════════════════════════
 // B2B_PLANS — Companies only. IDs start with "b2b_"
-// Never merge with PLANS — completely separate checkout flows
-// Egypt: PayMob per seat | Gulf: Stripe per seat
+// Never merge with PLANS — completely separate checkout flows.
+// FLAT-RATE pricing — one price for the whole plan up to a seat cap, NOT per-seat.
+// Egypt: PayMob EGP | Gulf: Stripe USD.
 // ══════════════════════════════════════════════════════════════════
 export const B2B_PLANS = {
   b2b_starter: {
     id:"b2b_starter", name:"Starter", nameAr:"ستارتر",
-    priceEGP: { monthly: 249, yearly: 2390 },  // 249 EGP/seat/mo
-    priceUSD: { monthly: 7.99,   yearly: 79.90 },    // $7.99/seat/mo
+    priceEGP: { monthly: 2499, yearly: 23990 },  // 2,499 EGP/mo flat
+    priceUSD: { monthly: 79,   yearly: 758 },    // $79/mo flat
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_B2B_STARTER_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_B2B_STARTER_YEARLY  || "",
     },
-    color:"#6366f1", minSeats:5, maxSeats:10,
-    features:   ["Up to 10 seats","HR Dashboard","Posture analytics","Email alerts"],
-    featuresAr: ["حتى 10 مقاعد","لوحة HR","تحليلات الوضعية","تنبيهات بريدية"],
+    color:"#6366f1", seats:30,
+    features:   ["Up to 30 employees","33-landmark AI pose detection","Real-time posture score","PDF wellness reports","HR analytics dashboard","Email support"],
+    featuresAr: ["حتى 30 موظف","كشف 33 نقطة بالـAI","نقاط الوضعية الآنية","تقارير PDF صحية","لوحة تحليلات HR","دعم بالبريد"],
   },
   b2b_growth: {
-    id:"b2b_growth", name:"Growth", nameAr:"نمو",
-    priceEGP: { monthly: 199, yearly: 1990 },  // 199 EGP/seat/mo
-    priceUSD: { monthly: 5.99,   yearly: 59.90 },    // $5.99/seat/mo
+    id:"b2b_growth", name:"Growth", nameAr:"جروث",
+    priceEGP: { monthly: 6999, yearly: 67190 },  // 6,999 EGP/mo flat
+    priceUSD: { monthly: 199,  yearly: 1910 },   // $199/mo flat
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_B2B_GROWTH_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_B2B_GROWTH_YEARLY  || "",
     },
-    color:"#0ea5e9", minSeats:11, maxSeats:50, popular:true,
-    features:   ["Up to 50 seats","Everything in Starter","WhatsApp alerts","AI Coach per employee","Weekly report"],
-    featuresAr: ["حتى 50 مقعداً","كل Starter","تنبيهات واتساب","مدرب AI لكل موظف","تقرير أسبوعي"],
+    color:"#1a56db", seats:100, popular:true,
+    features:   ["Up to 100 employees","Everything in Starter","FaceMesh 478 landmarks","3D solvePnP head pose","Advanced HR analytics","Priority support"],
+    featuresAr: ["حتى 100 موظف","كل مزايا ستارتر","كشف 478 نقطة FaceMesh","وضع رأس 3D solvePnP","تحليلات HR متقدمة","دعم أولوية"],
   },
   b2b_enterprise: {
     id:"b2b_enterprise", name:"Enterprise", nameAr:"إنتربرايز",
     priceEGP: { monthly: null, yearly: null },
-    priceUSD: { monthly: null, yearly: null },
-    stripePriceId: { monthly: "", yearly: "" },
-    color:"#10b981", minSeats:51, maxSeats:-1,
-    features:   ["Unlimited seats","Everything in Growth","SSO/SAML","API access","White-label","Custom SLA"],
-    featuresAr: ["مقاعد غير محدودة","كل Growth","SSO/SAML","وصول API","علامة تجارية","SLA مخصص"],
+    priceUSD: { monthly: null, yearly: null, startingAt: 499 }, // Starting at $499/mo
+    stripePriceId: { monthly: "", yearly: "" }, // Always custom/contact-sales
+    color:"#10b981", seats:-1,
+    features:   ["Unlimited employees","Everything in Growth","Gemini AI clinical narrative","SSO/SAML","White-label","API access","Dedicated success manager"],
+    featuresAr: ["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالـ Gemini AI","SSO/SAML","White-label","وصول API","مدير نجاح مخصص"],
   },
 };
 

@@ -3,10 +3,11 @@ import React from "react";
 // ═══════════════════════════════════════════════════════════════════
 // PricingPage.jsx — SINGLE SOURCE OF TRUTH for B2C + B2B pricing
 // B2C: basic/professional/elite (199/399/699 EGP | $9.99/$19.99/$39.99)
-// B2B: b2b_starter/b2b_growth/b2b_enterprise (per seat)
+// B2B: b2b_starter/b2b_growth/b2b_enterprise — FLAT-RATE platform fee
+//      (2,499/6,999 EGP | $79/$199), NOT per-seat. Enterprise = Custom from $499/mo.
 // Egypt: PayMob EGP | Gulf/Global: Stripe USD
-// !! DO NOT change prices here without updating App.jsx TIERS and
-//    Billing.jsx PLANS and backend _PAYMOB_PRICES/_STRIPE_PRICES !!
+// !! DO NOT change prices here without updating App.jsx TIERS/B2B_TIERS and
+//    Billing.jsx PLANS/B2B_PLANS and backend _PAYMOB_PRICES/_STRIPE_PRICES !!
 // ═══════════════════════════════════════════════════════════════════
 
 const PAID_PLANS = [
@@ -67,34 +68,34 @@ const B2B_PAID_PLANS = [
   {
     id: "b2b_starter",
     name:    { en: "Starter",    ar: "ستارتر" },
-    tagline: { en: "For small teams (5-10 seats)", ar: "للفرق الصغيرة (5-10 مقاعد)" },
+    tagline: { en: "For small teams getting started", ar: "للفرق الصغيرة في البداية" },
     color:   "#6366f1", badge: null,
-    perSeat: { egp_monthly: 249, egp_yearly: 2390, usd_monthly: 7.99, usd_yearly: 76.99 },
+    price: { egp_monthly: 2499, egp_yearly: 23990, usd_monthly: 79, usd_yearly: 758 },
     features: {
-      en: ["Up to 10 seats", "HR Dashboard", "Posture analytics", "Email alerts", "Basic reports"],
-      ar: ["حتى 10 مقاعد", "لوحة HR", "تحليلات الوضعية", "تنبيهات بريدية", "تقارير أساسية"],
+      en: ["Up to 30 employees", "33-landmark AI pose detection", "Real-time posture score", "PDF wellness reports", "HR analytics dashboard", "Email support"],
+      ar: ["حتى 30 موظف", "كشف 33 نقطة بالـAI", "نقاط الوضعية الآنية", "تقارير PDF صحية", "لوحة تحليلات HR", "دعم بالبريد"],
     },
   },
   {
     id: "b2b_growth",
-    name:    { en: "Growth",     ar: "نمو" },
-    tagline: { en: "For growing teams (11-50 seats)", ar: "للفرق النامية (11-50 مقعداً)" },
-    color:   "#0ea5e9", badge: { en: "Most Popular", ar: "الأكثر طلباً" },
-    perSeat: { egp_monthly: 199, egp_yearly: 1990, usd_monthly: 5.99, usd_yearly: 57.99 },
+    name:    { en: "Growth",     ar: "جروث" },
+    tagline: { en: "For growing teams that need deeper insight", ar: "للفرق المتنامية التي تحتاج رؤى أعمق" },
+    color:   "#1a56db", badge: { en: "Most Popular", ar: "الأكثر طلباً" },
+    price: { egp_monthly: 6999, egp_yearly: 67190, usd_monthly: 199, usd_yearly: 1910 },
     features: {
-      en: ["Up to 50 seats", "Everything in Starter", "WhatsApp alerts", "AI Coach/employee", "Weekly report", "Anomaly detection"],
-      ar: ["حتى 50 مقعداً", "كل Starter", "تنبيهات واتساب", "مدرب AI لكل موظف", "تقرير أسبوعي", "كشف الشذوذ"],
+      en: ["Up to 100 employees", "Everything in Starter", "FaceMesh 478 landmarks", "3D solvePnP head pose", "Advanced HR analytics", "Priority support"],
+      ar: ["حتى 100 موظف", "كل مزايا ستارتر", "كشف 478 نقطة FaceMesh", "وضع رأس 3D solvePnP", "تحليلات HR متقدمة", "دعم أولوية"],
     },
   },
   {
     id: "b2b_enterprise",
     name:    { en: "Enterprise", ar: "إنتربرايز" },
-    tagline: { en: "For large organizations (50+ seats)", ar: "للمنظمات الكبيرة (50+ مقعداً)" },
+    tagline: { en: "For large organisations & global teams", ar: "للمنظمات الكبرى والفرق العالمية" },
     color:   "#10b981", badge: { en: "Custom",       ar: "مخصص" },
-    perSeat: null,  // Custom pricing
+    price: null, startingAtUsd: 499,  // Custom pricing — starting at $499/mo
     features: {
-      en: ["Unlimited seats", "Everything in Growth", "SSO/SAML", "API access", "White-label", "Custom SLA", "Dedicated CSM"],
-      ar: ["مقاعد غير محدودة", "كل Growth", "SSO/SAML", "وصول API", "علامة تجارية", "SLA مخصص", "مدير نجاح"],
+      en: ["Unlimited employees", "Everything in Growth", "Gemini AI clinical narrative", "SSO/SAML/Azure AD/Okta", "White-label branding", "API access", "Dedicated success manager"],
+      ar: ["موظفون غير محدودون", "كل مزايا جروث", "تحليل سردي بالـ Gemini AI", "SSO/SAML/Azure AD/Okta", "علامة تجارية White-label", "وصول API", "مدير نجاح مخصص"],
     },
   },
 ];
@@ -105,12 +106,10 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
   const isCurr  = currentPlan === plan.id;
   const isPopular = !!plan.badge;
 
-  const isB2BPlan = plan.id && plan.id.startsWith("b2b_");
-  const priceObj  = isB2BPlan ? plan.perSeat : plan.price;
-  const price     = priceObj
+  const price     = plan.price
     ? (isEGP
-        ? (billing==="yearly" ? priceObj.egp_yearly : priceObj.egp_monthly)
-        : (billing==="yearly" ? priceObj.usd_yearly : priceObj.usd_monthly))
+        ? (billing==="yearly" ? plan.price.egp_yearly : plan.price.egp_monthly)
+        : (billing==="yearly" ? plan.price.usd_yearly : plan.price.usd_monthly))
     : null;
   const currency  = isEGP ? "EGP" : "$";
   const perMonth  = (billing==="yearly" && price)
@@ -144,8 +143,15 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
       {/* Price */}
       <div style={{ marginBottom: 20 }}>
         {price == null ? (
-          <div style={{ fontSize:22, fontWeight:800, color:"#f0f6ff" }}>
-            {isAr ? "تواصل معنا" : "Contact Sales"}
+          <div>
+            <div style={{ fontSize:22, fontWeight:800, color:"#f0f6ff" }}>
+              {isAr ? "تواصل معنا" : "Contact Sales"}
+            </div>
+            {plan.startingAtUsd && (
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
+                {isAr ? `يبدأ من $${plan.startingAtUsd}/شهر` : `Starting at $${plan.startingAtUsd}/mo`}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -153,7 +159,7 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
               {!isEGP && "$"}{billing === "yearly" ? perMonth : price}
             </span>
             <span style={{ fontSize: 13, color: "#64748b", marginLeft: 4 }}>
-              {isEGP && "EGP "}/{isB2BPlan ? (isAr?"مقعد/شهر":"seat/mo") : (isAr?"شهر":"mo")}
+              {isEGP && "EGP "}/{isAr?"شهر":"mo"}
             </span>
             {billing === "yearly" && (
               <div style={{ fontSize: 11, color: "#10b981", marginTop: 4 }}>
@@ -186,6 +192,8 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
       >
         {isCurr
           ? (isAr ? "خطتك الحالية" : "Current Plan")
+          : price == null
+          ? (isAr ? "تواصل مع المبيعات" : "Contact Sales")
           : (isAr ? "اشترك الآن" : "Get Started")}
       </button>
     </div>

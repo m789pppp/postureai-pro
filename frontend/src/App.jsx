@@ -60,7 +60,7 @@ import { CustomerSuccess }  from "./CustomerSuccess.jsx";
 import { GrowthHub }        from "./GrowthHub.jsx";
 import SessionComparison    from "./SessionComparison.jsx";
 import TrendChart           from "./TrendChart.jsx";
-import ShareCard            from "./ShareCard.jsx";
+import { ShareCard }        from "./ShareCard.jsx";
 import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
 import { IntegrationsHub }  from "./IntegrationsHub.jsx";
 import { ReferralProgram }  from "./ReferralProgram.jsx";
@@ -140,41 +140,48 @@ for(const k in TIERS){
 // ══════════════════════════════════════════════════════════════════
 // B2B TIERS — Companies only. Completely separate from B2C TIERS.
 // IDs: b2b_starter / b2b_growth / b2b_enterprise
-// Egypt: PayMob EGP per seat | Gulf: Stripe USD per seat
+// FLAT-RATE pricing — one price for the whole plan up to a seat cap, NOT
+// per-seat. Egypt: PayMob EGP | Gulf: Stripe USD.
 // !! Never mix these IDs with B2C IDs (standard/basic/professional/elite) !!
 // ══════════════════════════════════════════════════════════════════
 const B2B_TIERS = {
   b2b_starter: {
     id:"b2b_starter", name:"Starter", nameAr:"ستارتر",
     color:"#6366f1", colorDim:"rgba(99,102,241,.12)",
-    price_egp_monthly:249, price_egp_yearly:2390,   // 249 EGP/seat/mo
-    price_usd_monthly:7.99,   price_usd_yearly:79.90,     // $7.99/seat/mo
-    seats:10, min_seats:5,
-    features:["Up to 10 seats","HR Dashboard","Posture analytics","Email alerts","Basic reports"],
-    featuresAr:["حتى 10 مقاعد","لوحة HR","تحليلات الوضعية","تنبيهات بريدية","تقارير أساسية"],
+    price_egp_monthly:2499, price_egp_yearly:23990,   // 2,499 EGP/mo flat | 23,990/yr
+    price_usd_monthly:79,   price_usd_yearly:758,     // $79/mo flat | $758/yr
+    seats:30,
+    features:["Up to 30 employees","33-landmark AI pose detection","Real-time posture score","PDF wellness reports","HR analytics dashboard","Email support"],
+    featuresAr:["حتى 30 موظف","كشف 33 نقطة بالـAI","نقاط الوضعية الآنية","تقارير PDF صحية","لوحة تحليلات HR","دعم بالبريد"],
     badge:null,
   },
   b2b_growth: {
-    id:"b2b_growth", name:"Growth", nameAr:"نمو",
-    color:"#0ea5e9", colorDim:"rgba(14,165,233,.12)",
-    price_egp_monthly:199, price_egp_yearly:1990,   // 199 EGP/seat/mo
-    price_usd_monthly:5.99,   price_usd_yearly:59.90,     // $5.99/seat/mo
-    seats:50, min_seats:11,
-    features:["Up to 50 seats","Everything in Starter","WhatsApp alerts","AI Coach per employee","Weekly company report","Anomaly detection"],
-    featuresAr:["حتى 50 مقعداً","كل Starter","تنبيهات واتساب","مدرب AI لكل موظف","تقرير شركة أسبوعي","كشف الشذوذ"],
+    id:"b2b_growth", name:"Growth", nameAr:"جروث",
+    color:"#1a56db", colorDim:"rgba(26,86,219,.12)",
+    price_egp_monthly:6999, price_egp_yearly:67190,   // 6,999 EGP/mo flat | 67,190/yr
+    price_usd_monthly:199,  price_usd_yearly:1910,    // $199/mo flat | $1,910/yr
+    seats:100,
+    features:["Up to 100 employees","Everything in Starter","FaceMesh 478 landmarks","3D solvePnP head pose","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
+    featuresAr:["حتى 100 موظف","كل مزايا ستارتر","كشف 478 نقطة FaceMesh","وضع رأس 3D solvePnP","تحليلات HR متقدمة","تنبيهات Slack/Teams","تقارير HR تنفيذية","دعم أولوية"],
     badge:"Most Popular",
   },
   b2b_enterprise: {
     id:"b2b_enterprise", name:"Enterprise", nameAr:"إنتربرايز",
     color:"#10b981", colorDim:"rgba(16,185,129,.12)",
-    price_egp_monthly:null, price_egp_yearly:null,
-    price_usd_monthly:null, price_usd_yearly:null,
-    seats:-1, min_seats:51,
-    features:["Unlimited seats","Everything in Growth","SSO/SAML","API access","White-label","Custom SLA","Dedicated CSM"],
-    featuresAr:["مقاعد غير محدودة","كل Growth","SSO/SAML","وصول API","علامة تجارية خاصة","SLA مخصص","مدير نجاح مخصص"],
-    badge:"Enterprise",
+    price_egp_monthly:null, price_egp_yearly:null,    // Custom — contact sales
+    price_usd_monthly:null, price_usd_yearly:null, price_usd_starting_at:499, // Starting at $499/mo
+    seats:-1,
+    features:["Unlimited employees","Everything in Growth","Gemini AI clinical narrative","SSO / SAML / Azure AD / Okta","White-label branding","API + Webhooks access","Dedicated success manager","Custom SLA guarantee"],
+    featuresAr:["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالـ Gemini AI","SSO / SAML / Azure AD / Okta","علامة تجارية White-label","وصول API + Webhooks","مدير نجاح مخصص","ضمان SLA مخصص"],
+    badge:"Custom",
   },
 };
+
+// Legacy field aliases (same pattern as B2C TIERS above)
+for(const k in B2B_TIERS){
+  B2B_TIERS[k].price_monthly = B2B_TIERS[k].price_egp_monthly;
+  B2B_TIERS[k].price_yearly  = B2B_TIERS[k].price_egp_yearly;
+}
 
 // Helper: is this a B2B tier ID?
 const isB2BTier = (id) => id && id.startsWith("b2b_");
