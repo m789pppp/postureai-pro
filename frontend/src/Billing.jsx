@@ -37,8 +37,8 @@ export const PLANS = {
   },
   basic: {
     id:"basic", name:"Basic", nameAr:"أساسي",
-    priceEGP: { monthly: 19900, yearly: 159000 },  // 199 EGP/mo | 1,590/yr
-    priceUSD: { monthly: 999,   yearly: 7999 },    // $9.99/mo  | $79.99/yr
+    priceEGP: { monthly: 199, yearly: 1590 },  // 199 EGP/mo | 1,590/yr
+    priceUSD: { monthly: 9.99,   yearly: 79.99 },    // $9.99/mo  | $79.99/yr
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_BASIC_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_BASIC_YEARLY  || "",
@@ -50,8 +50,8 @@ export const PLANS = {
   },
   professional: {
     id:"professional", name:"Pro", nameAr:"احترافي",
-    priceEGP: { monthly: 39900, yearly: 319000 },  // 399 EGP/mo | 3,190/yr
-    priceUSD: { monthly: 1999,  yearly: 15999 },   // $19.99/mo | $159.99/yr
+    priceEGP: { monthly: 399, yearly: 3190 },  // 399 EGP/mo | 3,190/yr
+    priceUSD: { monthly: 19.99,  yearly: 159.99 },   // $19.99/mo | $159.99/yr
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_PRO_YEARLY  || "",
@@ -63,8 +63,8 @@ export const PLANS = {
   },
   elite: {
     id:"elite", name:"Elite", nameAr:"إيليت",
-    priceEGP: { monthly: 69900, yearly: 559000 },
-    priceUSD: { monthly: 3999,  yearly: 29999 },
+    priceEGP: { monthly: 699, yearly: 5590 },
+    priceUSD: { monthly: 39.99,  yearly: 299.99 },
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_ELITE_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_ELITE_YEARLY  || "",
@@ -84,8 +84,8 @@ export const PLANS = {
 export const B2B_PLANS = {
   b2b_starter: {
     id:"b2b_starter", name:"Starter", nameAr:"ستارتر",
-    priceEGP: { monthly: 24900, yearly: 239000 },  // 249 EGP/seat/mo
-    priceUSD: { monthly: 799,   yearly: 7990 },    // $7.99/seat/mo
+    priceEGP: { monthly: 249, yearly: 2390 },  // 249 EGP/seat/mo
+    priceUSD: { monthly: 7.99,   yearly: 79.90 },    // $7.99/seat/mo
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_B2B_STARTER_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_B2B_STARTER_YEARLY  || "",
@@ -96,8 +96,8 @@ export const B2B_PLANS = {
   },
   b2b_growth: {
     id:"b2b_growth", name:"Growth", nameAr:"نمو",
-    priceEGP: { monthly: 19900, yearly: 199000 },  // 199 EGP/seat/mo
-    priceUSD: { monthly: 599,   yearly: 5990 },    // $5.99/seat/mo
+    priceEGP: { monthly: 199, yearly: 1990 },  // 199 EGP/seat/mo
+    priceUSD: { monthly: 5.99,   yearly: 59.90 },    // $5.99/seat/mo
     stripePriceId: {
       monthly: import.meta.env.VITE_STRIPE_PRICE_B2B_GROWTH_MONTHLY || "",
       yearly:  import.meta.env.VITE_STRIPE_PRICE_B2B_GROWTH_YEARLY  || "",
