@@ -808,7 +808,6 @@ Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bul
     { id:"workforce", icon:"📊", en:"Workforce",  ar:"القوى العاملة" },
     { id:"executive", icon:"🎯", en:"Executive",  ar:"تنفيذي" },
     { id:"risks",     icon:"⚠️", en:"Risk Map",  ar:"خريطة المخاطر" },
-    { id:"insights",  icon:"🔮", en:"Insights",   ar:"رؤى الشهر" },
   ];
 
   return (
@@ -914,15 +913,6 @@ Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bul
               onAI={()=>runAI("department")} aiData={aiData.department} aiLoading={aiLoading.department} aiError={aiError.department}/>
           </>}
 
-          {/* ── Insights Tab ── */}
-          {tab==="insights" && <>
-            <div style={{gridColumn:"1/-1"}}>
-              <MonthlyInsights data={data} profile={profile} isAr={isAr} loading={loading}
-                onAI={()=>runAI("monthly")} aiData={aiData.monthly} aiLoading={aiLoading.monthly} aiError={aiError.monthly}/>
-            </div>
-            <EngagementAnalytics data={data} profile={profile} isAr={isAr} loading={loading}/>
-            <BurnoutAlerts data={data} isAr={isAr} loading={loading}/>
-          </>}
         </div>
       </div>
       <style>{`

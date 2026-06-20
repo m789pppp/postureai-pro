@@ -130,12 +130,12 @@ export async function createStripeCheckout({ planId, billing, userEmail, userId,
   if (!STRIPE_KEY) {
     throw new Error("Stripe not configured — add VITE_STRIPE_PUBLIC_KEY to .env.local");
   }
-  const plan = PLANS[planId];
+  const plan = PLANS[planId] || B2B_PLANS[planId];
   if (!plan) throw new Error("Invalid plan");
   const priceId = plan.stripePriceId[billing];
   if (!priceId) {
-    // Elite (Enterprise) is contact-sales / custom-priced — doesn't go through Stripe checkout
-    if (planId === "elite") {
+    // Enterprise (company tier) is contact-sales / custom-priced — doesn't go through Stripe checkout
+    if (planId === "b2b_enterprise") {
       throw new Error("Enterprise plan requires a custom contract — contact sales@corvus.io");
     }
     throw new Error(
@@ -233,6 +233,10 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   };
   const t = T[lang] || T.en;
 
+  const isCompanyAccount = profile?.acct_type === "company" || profile?.acct_type === "hr" || !!profile?.company_id;
+  const activePlans  = isCompanyAccount ? B2B_PLANS : PLANS;
+  const planList     = isCompanyAccount ? B2B_PLAN_LIST : B2C_PLAN_LIST;
+
   const handleStripe = useCallback(async (planId) => {
     setError(""); setLoading(planId);
     try {
@@ -256,7 +260,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   const handlePayMob = useCallback(async (planId) => {
     setError(""); setLoading(`pm_${planId}`);
     try {
-      const plan   = PLANS[planId];
+      const plan   = activePlans[planId];
       const amount = billing === "yearly" ? plan.priceEGP.yearly : plan.priceEGP.monthly;
       if (!amount) { setError("Contact sales for Enterprise pricing"); setLoading(null); return; }
       const tok3 = await getAuthToken();
@@ -290,10 +294,6 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       setLoading(null);
     }
   }, [billing, profile]);
-
-  const isCompanyAccount = profile?.acct_type === "company" || profile?.acct_type === "hr" || !!profile?.company_id;
-  const activePlans  = isCompanyAccount ? B2B_PLANS : PLANS;
-  const planList     = isCompanyAccount ? B2B_PLAN_LIST : B2C_PLAN_LIST;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9500, backdropFilter: "blur(12px)", overflowY: "auto", padding: 20 }}>
@@ -331,7 +331,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
             if (!plan) return null;  // safety guard
             const price  = currency === "USD" ? plan.priceUSD?.[billing] : plan.priceEGP?.[billing];
             const isCurr = currentPlan === planId;
-            const isEnt  = planId === "b2b_enterprise" || planId === "elite";
+            const isEnt  = planId === "b2b_enterprise";
             const isEntCustom = isEnt && (price == null || !plan.stripePriceId?.[billing]);
             const isFree = false;
             const name   = isAr ? plan.nameAr : plan.name;
@@ -372,12 +372,6 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                         </div>
                       )}
                     </div>
-                  ) : isEnt ? (
-                    // Individual Enterprise with a real Stripe price configured — show actual price
-                    <>
-                      <span style={{ fontSize: 28, fontWeight: 800, color: DARK.text }}>${plan.priceUSD?.startingAt || price}</span>
-                      <span style={{ fontSize: 11, color: DARK.muted }}> USD {billing === "monthly" ? t.perMonth : t.perYear}</span>
-                    </>
                   ) : (
                     <>
                       <span style={{ fontSize: 28, fontWeight: 800, color: DARK.text }}>{price?.toLocaleString()}</span>
