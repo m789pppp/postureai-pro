@@ -2437,7 +2437,18 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         pass
 
     out["score"]      = overall
+    out["overall"]    = overall   # alias for frontend
     out["confidence"] = confidence
+    out["distCm"]     = dist_cm   # top-level for frontend skeleton
+    # raw object for frontend drawFront function
+    out["raw"] = {
+        "distCm": dist_cm,
+        "lo":     lo if dist_cm else None,
+        "hi":     hi if dist_cm else None,
+        "neckLean": round(neck_lean, 1),
+        "spineLean": round(spine_lean, 1),
+        "shTilt":  round(sh_tilt, 1),
+    }
     out["metrics"].update({
         "neck_lean":       {"value": round(neck_lean, 1),  "score": neck_sc,  "unit": "°",  "label": "Neck lean"},
         "head_tilt":       {"value": round(head_tilt, 1),  "score": tilt_sc,  "unit": "°",  "label": "Head tilt"},
@@ -2449,6 +2460,30 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         out["metrics"]["pitch"] = {"value": round(hp["pitch"],1), "score": pose_sc, "unit": "°", "label": "Head pitch (3D)"}
         out["metrics"]["yaw"]   = {"value": round(hp["yaw"],1),   "score": pose_sc, "unit": "°", "label": "Head yaw (3D)"}
         out["metrics"]["roll"]  = {"value": round(hp["roll"],1),  "score": pose_sc, "unit": "°", "label": "Head roll (3D)"}
+
+    # ── Landmark dict for frontend skeleton ─────────────────────
+    # Frontend drawFront needs landmark positions as {x, y} normalized
+    try:
+        def _lm(idx):
+            lm = g(idx)
+            return {"x": round(lm.x, 4), "y": round(lm.y, 4), "visibility": round(lm.visibility, 2)}
+        out["lms"] = {
+            "lSh":    _lm(PL.L_SHOULDER), "rSh":   _lm(PL.R_SHOULDER),
+            "lEar":   _lm(PL.L_EAR),      "rEar":  _lm(PL.R_EAR),
+            "lEye":   _lm(PL.L_EYE),      "rEye":  _lm(PL.R_EYE),
+            "lHip":   _lm(PL.L_HIP),      "rHip":  _lm(PL.R_HIP),
+            "lElbow": _lm(PL.L_ELBOW),    "rElbow":_lm(PL.R_ELBOW),
+            "lWrist": _lm(PL.L_WRIST),    "rWrist":_lm(PL.R_WRIST),
+            # Computed midpoints
+            "midSh":  {"x": round((g(PL.L_SHOULDER).x+g(PL.R_SHOULDER).x)/2,4),
+                       "y": round((g(PL.L_SHOULDER).y+g(PL.R_SHOULDER).y)/2,4), "visibility":1.0},
+            "midHip": {"x": round((g(PL.L_HIP).x+g(PL.R_HIP).x)/2,4),
+                       "y": round((g(PL.L_HIP).y+g(PL.R_HIP).y)/2,4), "visibility":1.0},
+            "midEar": {"x": round((g(PL.L_EAR).x+g(PL.R_EAR).x)/2,4),
+                       "y": round((g(PL.L_EAR).y+g(PL.R_EAR).y)/2,4), "visibility":1.0},
+        }
+    except Exception:
+        pass
 
     # ── Alerts ────────────────────────────────────────────────────
     if neck_lean > 20:
