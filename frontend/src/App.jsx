@@ -60,6 +60,7 @@ import { CustomerSuccess }  from "./CustomerSuccess.jsx";
 import { GrowthHub }        from "./GrowthHub.jsx";
 import SessionComparison    from "./SessionComparison.jsx";
 import TrendChart           from "./TrendChart.jsx";
+import ShareCard            from "./ShareCard.jsx";
 import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
 import { IntegrationsHub }  from "./IntegrationsHub.jsx";
 import { ReferralProgram }  from "./ReferralProgram.jsx";
@@ -1634,6 +1635,8 @@ export default function App(){
   const[showGrowthHub,setShowGrowthHub]=useState(false);
   const[showSessionComparison,setShowSessionComparison]=useState(false);
   const[showTrendChart,setShowTrendChart]=useState(false);
+  const[showShareCard,setShowShareCard]=useState(false);
+  const[shareCardData,setShareCardData]=useState(null);
   const[showProductTour,setShowProductTour]=useState(false);
   const[showMFASetup,setShowMFASetup]=useState(false);
   const[showSecurityCenter,setShowSecurityCenter]=useState(false);
@@ -2140,6 +2143,9 @@ export default function App(){
       })(),
     };
     setSessionResult(result);
+      if((result.avg_score||0)>=70){
+        setShareCardData({score:result.avg_score,grade:result.grade,streak:0});
+      }
 
     if(user && dur >= 5){ // Save if session lasted at least 5 seconds
       addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
@@ -2640,7 +2646,12 @@ export default function App(){
         onSwitchAccount={handleSwitchAccount}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
-      {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
+      {showShareCard&&shareCardData&&(
+      <ShareCard score={shareCardData.score} grade={shareCardData.grade}
+        streak={shareCardData.streak||0} percentile={null}
+        lang={lang} cs={cs} onClose={()=>setShowShareCard(false)}/>
+    )}
+    {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
       {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
