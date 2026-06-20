@@ -713,7 +713,7 @@ function Pricing({ lang, onCTA }) {
   const plans = [
     {
       id:"standard", name: ar?"ستارتر":"Starter",
-      priceUSD:{ monthly:79, yearly:758 }, priceEGP:{ monthly:2499, yearly:23990 },
+      priceUSD:{ monthly:799, yearly:7990 }, priceEGP:{ monthly:24900, yearly:239000 },
       color:C.sub,
       features: ar
         ? ["حتى 30 موظف","كشف 33 نقطة بالـAI","تقارير PDF","لوحة تحليلات HR","تجربة مجانية 7 أيام","دعم بالبريد"]
@@ -721,7 +721,7 @@ function Pricing({ lang, onCTA }) {
     },
     {
       id:"professional", name: ar?"جروث":"Growth",
-      priceUSD:{ monthly:199, yearly:1910 }, priceEGP:{ monthly:6999, yearly:67190 },
+      priceUSD:{ monthly:599, yearly:5990 }, priceEGP:{ monthly:19900, yearly:199000 },
       popular:true, color:C.blue,
       features: ar
         ? ["حتى 100 موظف","FaceMesh 478 نقطة","وضع رأس ثلاثي الأبعاد","تنبيهات Slack/Teams","تقرير HR تنفيذي","دعم أولوية + SLA"]
