@@ -1120,17 +1120,31 @@ function Pricing({ lang, onCTA, mode }) {
                     </div>
                   ) : (
                     <div>
-                      <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
-                        <span style={{ fontSize:40, fontWeight:800, color:C.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
-                          ${p.priceUSD[billing]}
-                        </span>
-                        <span style={{ fontSize:14.5, color:C.muted }}>
-                          /{ar ? "شهر" : "mo"}
-                        </span>
-                      </div>
-                      <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
-                        ≈ {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()} {ar ? "ج.م./شهر" : "EGP/mo"}
-                      </div>
+                      {ar ? (
+                        <>
+                          <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
+                            <span style={{ fontSize:40, fontWeight:800, color:C.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
+                              {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()}
+                            </span>
+                            <span style={{ fontSize:14.5, color:C.muted }}>ج.م./شهر</span>
+                          </div>
+                          <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
+                            ≈ ${p.priceUSD[billing]}/mo
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
+                            <span style={{ fontSize:40, fontWeight:800, color:C.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
+                              ${p.priceUSD[billing]}
+                            </span>
+                            <span style={{ fontSize:14.5, color:C.muted }}>/mo</span>
+                          </div>
+                          <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
+                            ≈ {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()} EGP/mo
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
