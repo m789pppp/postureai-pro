@@ -708,12 +708,12 @@ function Pricing({ lang, onCTA }) {
   const ar = lang === "ar";
   const [billing, setBilling] = useState("yearly");
 
-  // Flat-rate pricing — matches TIERS in App.jsx exactly (single source of truth).
+  // Flat-rate pricing — matches B2B_PLANS in Billing.jsx exactly (single source of truth).
   // EGP shown for Egypt market, USD shown for Gulf/international (not per-seat — flat platform fee).
   const plans = [
     {
       id:"standard", name: ar?"ستارتر":"Starter",
-      priceUSD:{ monthly:7.99, yearly:79.90 }, priceEGP:{ monthly:249, yearly:2390 },
+      priceUSD:{ monthly:79, yearly:758 }, priceEGP:{ monthly:2499, yearly:23990 },
       color:C.sub,
       features: ar
         ? ["حتى 30 موظف","كشف 33 نقطة بالـAI","تقارير PDF","لوحة تحليلات HR","تجربة مجانية 7 أيام","دعم بالبريد"]
@@ -721,7 +721,7 @@ function Pricing({ lang, onCTA }) {
     },
     {
       id:"professional", name: ar?"جروث":"Growth",
-      priceUSD:{ monthly:5.99, yearly:59.90 }, priceEGP:{ monthly:199, yearly:1990 },
+      priceUSD:{ monthly:199, yearly:1910 }, priceEGP:{ monthly:6999, yearly:67190 },
       popular:true, color:C.blue,
       features: ar
         ? ["حتى 100 موظف","FaceMesh 478 نقطة","وضع رأس ثلاثي الأبعاد","تنبيهات Slack/Teams","تقرير HR تنفيذي","دعم أولوية + SLA"]
