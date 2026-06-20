@@ -1,62 +1,82 @@
 /**
- * Corvus — Landing Page v7
- * CRO-optimized: Hero → Social Proof → Benefits → Features →
- *   How It Works → Case Studies → Pricing → FAQ → Testimonials → CTA → Footer
- * Design: Premium dark SaaS, Stripe/Linear quality
+ * Corvus — Landing Page v8
+ * CRO-optimized: Hero → Social Proof → Stats → Features →
+ *   How It Works → Case Studies → Pricing → Testimonials → FAQ → CTA → Footer
+ * Design: Premium dark SaaS, Stripe/Linear/Vercel quality
  * RTL-ready · Mobile-first · Accessibility: WCAG 2.1 AA
  */
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "sales@corvus.io";
 const CALENDLY_URL  = import.meta.env.VITE_CALENDLY_URL  || "https://calendly.com/corvus/demo";
 const APP_URL       = typeof window !== "undefined" ? window.location.origin : "";
 
-// ── Scroll-triggered reveal ───────────────────────────────────────
-
 // ── SPA navigation — dispatches event instead of full-page reload ─
 function navTo(path) {
-  // If running inside the SPA (App.jsx), dispatch event
   const event = new CustomEvent('spa:navigate', { detail: { path } });
   if (window.dispatchEvent(event) && window.__spaNavigate) {
     window.__spaNavigate(path);
   } else {
-    // Fallback: real navigation (works when landing is standalone)
     window.location.href = path;
   }
 }
 
-function useInView(threshold = 0.12) {
-  const ref = useRef(null);
-  const [vis, setVis] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect(); } },
-      { threshold }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-  return [ref, vis];
+// ── Scroll-triggered reveal (Framer Motion) ────────────────────────
+// Same external API as before (children, delay, y) so every call site
+// elsewhere in this file keeps working unchanged — now spring-eased.
+function Reveal({ children, delay = 0, y = 28, style = {}, className }) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      className={className}
+      style={style}
+      initial={reduce ? false : { opacity: 0, y }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ duration: 0.6, delay: delay / 1000, ease: [0.22, 1, 0.36, 1] }}
+    >{children}</motion.div>
+  );
 }
 
-function Reveal({ children, delay = 0, y = 32, style = {} }) {
-  const [ref, vis] = useInView();
+// Stagger container — wraps a group of children so they cascade in
+// one after another on scroll, instead of each needing its own delay.
+function Stagger({ children, gap = 0.08, style = {}, className }) {
+  const reduce = useReducedMotion();
   return (
-    <div ref={ref} style={{
-      transition: `opacity .65s cubic-bezier(.22,1,.36,1) ${delay}ms, transform .65s cubic-bezier(.22,1,.36,1) ${delay}ms`,
-      opacity: vis ? 1 : 0,
-      transform: vis ? "none" : `translateY(${y}px)`,
-      ...style,
-    }}>{children}</div>
+    <motion.div
+      className={className}
+      style={style}
+      initial={reduce ? false : "hidden"}
+      whileInView="show"
+      viewport={{ once: true, amount: 0.15 }}
+      variants={{ hidden:{}, show:{ transition:{ staggerChildren: gap } } }}
+    >{children}</motion.div>
+  );
+}
+function StaggerItem({ children, y = 24, style = {}, className }) {
+  return (
+    <motion.div
+      className={className}
+      style={style}
+      variants={{ hidden:{ opacity:0, y }, show:{ opacity:1, y:0,
+        transition:{ duration:.55, ease:[0.22,1,0.36,1] } } }}
+    >{children}</motion.div>
   );
 }
 
 function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
-  const [ref, vis] = useInView();
+  const ref = useRef(null);
+  const [vis, setVis] = useState(false);
   const [v, setV] = useState(0);
   const started = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect(); } }, { threshold: 0.3 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
   useEffect(() => {
     if (!vis || started.current) return;
     started.current = true;
@@ -73,7 +93,7 @@ function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
   return <span ref={ref}>{prefix}{v.toFixed(decimals)}{suffix}</span>;
 }
 
-// ── Design tokens ─────────────────────────────────────────────────
+// ── Design tokens (brand colors — unchanged) ───────────────────────
 const C = {
   bg:    "#030b14",
   bg1:   "#040d18",
@@ -97,15 +117,31 @@ const C = {
   gCard: "linear-gradient(140deg,rgba(79,124,249,.08),rgba(34,211,238,.04))",
 };
 
+// ── Type & layout scale ─────────────────────────────────────────────
+// font-display: characterful, bilingual (AR+LAT in one face) → IBM Plex Sans Arabic
+// font-mono: precision data — scores, stats, badges → IBM Plex Mono
+const FONT_DISPLAY = "'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif";
+const FONT_MONO    = "'IBM Plex Mono','Segoe UI',monospace";
+
+const TYPE = {
+  hero:    { fontSize:"clamp(40px,4.6vw + 14px,72px)", lineHeight:1.06, letterSpacing:"-.03em", fontWeight:800 },
+  h2:      { fontSize:"clamp(28px,2.6vw + 14px,48px)", lineHeight:1.12, letterSpacing:"-.025em", fontWeight:800 },
+  h3:      { fontSize:"clamp(19px,1vw + 14px,24px)",   lineHeight:1.25, letterSpacing:"-.015em", fontWeight:700 },
+  body:    { fontSize:"clamp(16px,.3vw + 15px,18px)",  lineHeight:1.7 },
+  bodySm:  { fontSize:15, lineHeight:1.65 },
+  eyebrow: { fontSize:13, fontWeight:600, letterSpacing:".08em", textTransform:"uppercase" },
+};
+
 // ── Shared styles ─────────────────────────────────────────────────
 const btn = (variant = "primary", size = "md") => {
-  const sizes = { sm: "10px 20px", md: "13px 26px", lg: "16px 34px" };
+  const sizes = { sm: { h:40, pad:"0 18px", fs:14 }, md: { h:46, pad:"0 24px", fs:15 }, lg: { h:52, pad:"0 32px", fs:16.5 } };
+  const s = sizes[size];
   const base = {
-    display: "inline-flex", alignItems: "center", gap: 8,
-    padding: sizes[size], borderRadius: 10, fontWeight: 600,
-    fontSize: size === "lg" ? 17 : 15, cursor: "pointer",
-    transition: "all .2s", border: "none", textDecoration: "none",
-    letterSpacing: "-.01em",
+    display: "inline-flex", alignItems: "center", justifyContent:"center", gap: 8,
+    height: s.h, padding: s.pad, borderRadius: 12, fontWeight: 600,
+    fontSize: s.fs, cursor: "pointer",
+    transition: "transform .25s cubic-bezier(.16,1,.3,1), box-shadow .25s, background .25s, border-color .25s",
+    border: "none", textDecoration: "none", letterSpacing: "-.01em", whiteSpace:"nowrap",
   };
   if (variant === "primary") return { ...base,
     background: C.gBlue, color: "#fff",
@@ -125,12 +161,69 @@ const btn = (variant = "primary", size = "md") => {
 const card = (glow = false) => ({
   background: C.card,
   border: `1px solid ${glow ? "rgba(79,124,249,.25)" : C.border}`,
-  borderRadius: 16,
-  padding: 28,
+  borderRadius: 20,
+  padding: 32,
   backdropFilter: "blur(12px)",
   boxShadow: glow ? "0 0 40px rgba(79,124,249,.08),0 8px 32px rgba(0,0,0,.3)"
                   : "0 4px 24px rgba(0,0,0,.25)",
 });
+
+// Eyebrow pill — used above most section headings
+function Eyebrow({ children, color = C.indigo, bg = "rgba(129,140,248,.1)", border = "rgba(129,140,248,.2)" }) {
+  return (
+    <span style={{
+      background:bg, border:`1px solid ${border}`, borderRadius:100,
+      padding:"6px 16px", display:"inline-block", marginBottom:18,
+      color, ...TYPE.eyebrow,
+    }}>{children}</span>
+  );
+}
+
+// Section heading block — eyebrow + title + optional sub, centered
+function SectionHead({ eyebrow, eyebrowColor, eyebrowBg, eyebrowBorder, title, sub, subMax = 560, align = "center" }) {
+  return (
+    <Reveal>
+      <div style={{ textAlign:align, marginBottom:"clamp(40px,5vw,72px)",
+        marginInline: align==="center" ? "auto" : 0 }}>
+        {eyebrow && <Eyebrow color={eyebrowColor} bg={eyebrowBg} border={eyebrowBorder}>{eyebrow}</Eyebrow>}
+        <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 18px", fontFamily:FONT_DISPLAY }}>{title}</h2>
+        {sub && <p style={{ ...TYPE.body, color:C.sub, maxWidth:subMax, margin: align==="center" ? "0 auto" : 0 }}>{sub}</p>}
+      </div>
+    </Reveal>
+  );
+}
+
+// ── Global stylesheet — one place, no selector collisions ─────────
+function GlobalStyle() {
+  return (
+    <style>{`
+      .lp-wrap{max-width:1280px;margin:0 auto;width:100%}
+      .lp-section{padding:120px 32px}
+      @media(max-width:1024px){.lp-section{padding:80px 24px}}
+      @media(max-width:600px){.lp-section{padding:60px 16px}}
+
+      .lp-lift{transition:transform .3s cubic-bezier(.16,1,.3,1),border-color .3s}
+      .lp-lift:hover{transform:translateY(-6px)}
+
+      .lp-glow{position:relative;isolation:isolate}
+      .lp-glow::before{content:"";position:absolute;inset:-1.5px;border-radius:inherit;
+        background:linear-gradient(135deg,rgba(79,124,249,.55),rgba(34,211,238,.45));
+        opacity:0;transition:opacity .35s;z-index:-1;filter:blur(16px)}
+      .lp-glow:hover::before{opacity:1}
+
+      .lp-btn:hover{transform:translateY(-2px)}
+      .lp-btn-primary:hover{box-shadow:0 8px 32px rgba(79,124,249,.5)!important}
+      .lp-btn-ghost:hover{background:rgba(255,255,255,.09)!important;border-color:${C.borderM}!important}
+      .lp-btn-outline:hover{background:rgba(129,140,248,.08)!important}
+      .lp-btn:active{transform:translateY(0)}
+
+      @media(prefers-reduced-motion:reduce){
+        .lp-lift,.lp-btn,.lp-glow::before{transition:none!important}
+      }
+      :focus-visible{outline:2px solid ${C.indigo};outline-offset:3px}
+    `}</style>
+  );
+}
 
 // ── Navigation ────────────────────────────────────────────────────
 function Nav({ lang, setLang, onCTA }) {
@@ -143,6 +236,13 @@ function Nav({ lang, setLang, onCTA }) {
     return () => window.removeEventListener("scroll", h);
   }, []);
 
+  // Close the mobile menu automatically if the viewport grows back to desktop
+  useEffect(() => {
+    const h = () => { if (window.innerWidth > 860) setMobileOpen(false); };
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+
   const ar = lang === "ar";
   const links = ar
     ? [["المنصة","#features"],["الأسعار","#pricing"],["المؤسسات","#enterprise"],["نتائج حقيقية","#casestudies"]]
@@ -152,33 +252,31 @@ function Nav({ lang, setLang, onCTA }) {
     <nav style={{
       position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000,
       padding: "0 24px",
-      background: scrolled ? "rgba(3,11,20,.92)" : "transparent",
-      backdropFilter: scrolled ? "blur(20px)" : "none",
-      borderBottom: scrolled ? `1px solid ${C.border}` : "none",
-      transition: "all .3s",
+      background: scrolled || mobileOpen ? "rgba(3,11,20,.94)" : "transparent",
+      backdropFilter: scrolled || mobileOpen ? "blur(20px)" : "none",
+      borderBottom: scrolled || mobileOpen ? `1px solid ${C.border}` : "none",
+      transition: "background .3s,border-color .3s",
     }}>
-      <div style={{ maxWidth: 1180, margin: "0 auto", height: 68,
+      <div className="lp-wrap" style={{ height: 72,
         display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         {/* Logo */}
         <a href="#" style={{ display:"flex", alignItems:"center", gap:10,
-          textDecoration:"none", color:C.text }}>
-          <div style={{ width:36, height:36, borderRadius:10,
+          textDecoration:"none", color:C.text, flexShrink:0 }}>
+          <div style={{ width:38, height:38, borderRadius:11,
             background: C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:18, boxShadow:"0 4px 16px rgba(79,124,249,.4)" }}>🧘</div>
-          <span style={{ fontWeight:700, fontSize:17, letterSpacing:"-.02em" }}>
+            fontSize:19, boxShadow:"0 4px 16px rgba(79,124,249,.4)" }}>🧘</div>
+          <span style={{ fontWeight:700, fontSize:18, letterSpacing:"-.02em", fontFamily:FONT_DISPLAY }}>
             Corvus <span style={{ background:C.gHero, WebkitBackgroundClip:"text",
               WebkitTextFillColor:"transparent" }}>Pro</span>
           </span>
         </a>
 
         {/* Desktop links */}
-        <div style={{ display:"flex", alignItems:"center", gap:6,
-          "@media(max-width:768px)":{ display:"none" } }}
-          className="nav-links">
+        <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:4 }}>
           {links.map(([label, href]) => (
             <a key={href} href={href} style={{
-              color:C.sub, textDecoration:"none", padding:"8px 14px",
-              borderRadius:8, fontSize:14, fontWeight:500,
+              color:C.sub, textDecoration:"none", padding:"9px 16px",
+              borderRadius:8, fontSize:14.5, fontWeight:500,
               transition:"color .2s",
             }}
             onMouseEnter={e => e.target.style.color = C.text}
@@ -186,25 +284,82 @@ function Nav({ lang, setLang, onCTA }) {
           ))}
         </div>
 
-        {/* Actions */}
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        {/* Desktop actions */}
+        <div className="lp-nav-actions" style={{ display:"flex", alignItems:"center", gap:10 }}>
           <button onClick={() => setLang(ar ? "en" : "ar")} style={{
             background:"transparent", border:`1px solid ${C.border}`,
-            color:C.sub, padding:"6px 14px", borderRadius:8,
+            color:C.sub, padding:"7px 14px", borderRadius:8,
             cursor:"pointer", fontSize:13, fontWeight:500,
           }}>{ar ? "EN" : "عربي"}</button>
           <a href="#" onClick={(e)=>{e.preventDefault();navTo("/auth")}} style={{
-            color:C.sub, textDecoration:"none", fontSize:14, fontWeight:500,
+            color:C.sub, textDecoration:"none", fontSize:14.5, fontWeight:500,
             padding:"8px 14px", display:"inline-block",
           }}>{ar ? "تسجيل دخول" : "Sign in"}</a>
-          <a href="#" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","sm")}>
+          <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","sm")}>
             {ar ? "جرّب مجاناً" : "Start Free Trial"}
           </a>
         </div>
+
+        {/* Mobile hamburger */}
+        <button aria-label={ar ? "فتح القائمة" : "Open menu"} aria-expanded={mobileOpen}
+          className="lp-nav-burger" onClick={() => setMobileOpen(o => !o)}
+          style={{
+            display:"none", width:40, height:40, borderRadius:9, flexShrink:0,
+            background:"rgba(255,255,255,.06)", border:`1px solid ${C.border}`,
+            cursor:"pointer", alignItems:"center", justifyContent:"center", gap:0,
+          }}>
+          <div style={{ width:18, height:13, position:"relative" }}>
+            {[0,1,2].map(i => (
+              <span key={i} style={{
+                position:"absolute", left:0, right:0, height:1.6, borderRadius:2,
+                background:C.text, top: i===0 ? 0 : i===1 ? 5.5 : 11,
+                transition:"transform .25s, opacity .2s",
+                transform: mobileOpen
+                  ? (i===0 ? "translateY(5.5px) rotate(45deg)" : i===1 ? "scaleX(0)" : "translateY(-5.5px) rotate(-45deg)")
+                  : "none",
+                opacity: mobileOpen && i===1 ? 0 : 1,
+              }}/>
+            ))}
+          </div>
+        </button>
       </div>
 
+      {/* Mobile dropdown panel */}
+      {mobileOpen && (
+        <motion.div
+          initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }}
+          exit={{ opacity:0, height:0 }} transition={{ duration:.25, ease:[0.22,1,0.36,1] }}
+          style={{ overflow:"hidden", borderTop:`1px solid ${C.border}` }}>
+          <div style={{ padding:"16px 24px 24px", display:"flex", flexDirection:"column", gap:4 }}>
+            {links.map(([label, href]) => (
+              <a key={href} href={href} onClick={() => setMobileOpen(false)} style={{
+                color:C.sub, textDecoration:"none", padding:"12px 6px",
+                fontSize:16, fontWeight:500, borderBottom:`1px solid ${C.border}`,
+              }}>{label}</a>
+            ))}
+            <div style={{ display:"flex", gap:10, marginTop:16, alignItems:"center" }}>
+              <button onClick={() => setLang(ar ? "en" : "ar")} style={{
+                background:"transparent", border:`1px solid ${C.border}`,
+                color:C.sub, padding:"9px 16px", borderRadius:8,
+                cursor:"pointer", fontSize:13.5, fontWeight:500,
+              }}>{ar ? "EN" : "عربي"}</button>
+              <a href="#" onClick={(e)=>{e.preventDefault();navTo("/auth")}} style={{
+                color:C.sub, textDecoration:"none", fontSize:14.5, fontWeight:500,
+              }}>{ar ? "تسجيل دخول" : "Sign in"}</a>
+            </div>
+            <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
+              style={{ ...btn("primary","lg"), width:"100%", marginTop:14 }}>
+              {ar ? "جرّب مجاناً" : "Start Free Trial"}
+            </a>
+          </div>
+        </motion.div>
+      )}
+
       <style>{`
-        @media(max-width:768px){.nav-links{display:none!important}}
+        @media(max-width:860px){
+          .lp-nav-links,.lp-nav-actions{display:none!important}
+          .lp-nav-burger{display:flex!important}
+        }
       `}</style>
     </nav>
   );
@@ -213,6 +368,7 @@ function Nav({ lang, setLang, onCTA }) {
 // ── Hero ──────────────────────────────────────────────────────────
 function Hero({ lang, onCTA }) {
   const ar = lang === "ar";
+  const reduce = useReducedMotion();
   const [demoScore, setDemoScore] = useState(82);
   useEffect(() => {
     const iv = setInterval(() => {
@@ -225,24 +381,34 @@ function Hero({ lang, onCTA }) {
   }, []);
 
   const scoreColor = demoScore >= 80 ? C.green : demoScore >= 60 ? C.amber : C.red;
+  const float = (delay = 0, dist = 10) => reduce ? {} : {
+    animate: { y: [0, -dist, 0] },
+    transition: { duration: 5, repeat: Infinity, ease: "easeInOut", delay },
+  };
 
   return (
     <section style={{
       minHeight: "100vh", display:"flex", alignItems:"center",
-      padding:"120px 24px 80px", position:"relative", overflow:"hidden",
+      padding:"132px 24px 90px", position:"relative", overflow:"hidden",
     }}>
       {/* Ambient background */}
       <div style={{ position:"absolute", inset:0, pointerEvents:"none" }}>
-        <div style={{
-          position:"absolute", top:"15%", left:"60%",
-          width:600, height:600,
-          background:"radial-gradient(circle,rgba(79,124,249,.12) 0%,transparent 70%)",
+        <div className="lp-drift-a" style={{
+          position:"absolute", top:"8%", left:"58%",
+          width:680, height:680,
+          background:"radial-gradient(circle,rgba(79,124,249,.16) 0%,transparent 70%)",
           borderRadius:"50%", transform:"translate(-50%,-50%)",
         }}/>
+        <div className="lp-drift-b" style={{
+          position:"absolute", bottom:"12%", left:"14%",
+          width:460, height:460,
+          background:"radial-gradient(circle,rgba(16,217,160,.1) 0%,transparent 70%)",
+          borderRadius:"50%",
+        }}/>
         <div style={{
-          position:"absolute", bottom:"20%", left:"20%",
-          width:400, height:400,
-          background:"radial-gradient(circle,rgba(16,217,160,.08) 0%,transparent 70%)",
+          position:"absolute", top:"42%", right:"6%",
+          width:320, height:320,
+          background:"radial-gradient(circle,rgba(34,211,238,.08) 0%,transparent 70%)",
           borderRadius:"50%",
         }}/>
         {/* Grid */}
@@ -257,23 +423,22 @@ function Hero({ lang, onCTA }) {
         </svg>
       </div>
 
-      <div style={{ maxWidth:1180, margin:"0 auto", width:"100%",
-        display:"grid", gridTemplateColumns:"1fr 1fr", gap:60, alignItems:"center",
-        direction: ar ? "rtl" : "ltr" }}
-        className="hero-grid">
+      <div className="lp-wrap lp-hero-grid" style={{ width:"100%",
+        display:"grid", gridTemplateColumns:"1.08fr 1fr", gap:"clamp(40px,5vw,80px)", alignItems:"center",
+        direction: ar ? "rtl" : "ltr" }}>
         {/* Left */}
         <div>
           <Reveal>
             <div style={{
-              display:"inline-flex", alignItems:"center", gap:8,
+              display:"inline-flex", alignItems:"center", gap:9,
               background:"rgba(79,124,249,.1)", border:"1px solid rgba(79,124,249,.25)",
-              borderRadius:100, padding:"6px 14px", marginBottom:24,
-              fontSize:13, color:C.indigo, fontWeight:500,
+              borderRadius:100, padding:"7px 16px", marginBottom:28,
+              fontSize:13.5, color:C.indigo, fontWeight:500,
             }}>
               <span style={{
                 width:6, height:6, borderRadius:"50%", background:C.green,
                 boxShadow:`0 0 8px ${C.green}`,
-                animation:"pulse 1.5s ease-in-out infinite",
+                animation:"lp-pulse 1.5s ease-in-out infinite",
               }}/>
               {ar ? "جاهز للإنتاج · الإصدار 16" : "Production Ready · v16 Enterprise"}
             </div>
@@ -281,9 +446,7 @@ function Hero({ lang, onCTA }) {
 
           <Reveal delay={80}>
             <h1 style={{
-              fontSize:"clamp(36px,5vw,58px)", fontWeight:800,
-              lineHeight:1.1, letterSpacing:"-.03em", color:C.text,
-              margin:"0 0 20px",
+              ...TYPE.hero, color:C.text, margin:"0 0 24px", fontFamily:FONT_DISPLAY,
             }}>
               {ar
                 ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>ذكاء اصطناعي</span>{" "}لصحة موظفيك</>
@@ -293,7 +456,7 @@ function Hero({ lang, onCTA }) {
           </Reveal>
 
           <Reveal delay={140}>
-            <p style={{ fontSize:18, color:C.sub, lineHeight:1.7, maxWidth:500, margin:"0 0 36px" }}>
+            <p style={{ ...TYPE.body, color:C.sub, maxWidth:520, margin:"0 0 40px" }}>
               {ar
                 ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
                 : "Reduce occupational sick days by 47% and boost productivity with real-time AI posture coaching. Built for enterprise teams in MENA and beyond."
@@ -302,113 +465,179 @@ function Hero({ lang, onCTA }) {
           </Reveal>
 
           <Reveal delay={200}>
-            <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:40 }}>
-              <a href="#" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
+            <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:36 }}>
+              <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
                 {ar ? "🚀 ابدأ مجاناً — لفريقي" : "🚀 Start Free — For My Team"}
               </a>
-              <a href="#" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=personal_pro")}} style={btn("ghost","lg")}>
+              <a href="#" className="lp-btn lp-btn-ghost" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=personal_pro")}} style={btn("ghost","lg")}>
                 {ar ? "👤 للاستخدام الشخصي" : "👤 Personal Use"}
               </a>
             </div>
           </Reveal>
 
           <Reveal delay={260}>
-            <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+            <div style={{ display:"flex", gap:"10px 26px", flexWrap:"wrap" }}>
               {(ar
-                ? ["✓ بدون بطاقة ائتمان","✓ 7 أيام مجاناً","✓ إعداد في 5 دقائق"]
-                : ["✓ No credit card","✓ 7-day free trial","✓ Setup in 5 min"]
+                ? ["بدون بطاقة ائتمان","7 أيام مجاناً","إعداد في 5 دقائق"]
+                : ["No credit card","7-day free trial","Setup in 5 min"]
               ).map(t => (
-                <span key={t} style={{ color:C.muted, fontSize:14, fontWeight:500 }}>{t}</span>
+                <span key={t} style={{ display:"flex", alignItems:"center", gap:7, color:C.muted, fontSize:14, fontWeight:500 }}>
+                  <span style={{ color:C.green, fontSize:13 }}>✓</span>{t}
+                </span>
               ))}
             </div>
           </Reveal>
         </div>
 
-        {/* Right — live demo card */}
+        {/* Right — interactive dashboard mockup with floating glass cards */}
         <Reveal delay={100}>
-          <div style={{ ...card(true), position:"relative" }}>
-            {/* Header */}
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-              marginBottom:20 }}>
-              <div>
-                <div style={{ fontSize:13, color:C.sub, marginBottom:4 }}>
-                  {ar ? "جلسة مباشرة" : "Live Session"}
-                </div>
-                <div style={{ fontSize:20, fontWeight:700, color:C.text }}>
-                  {ar ? "تحليل الوضعية" : "Posture Analysis"}
-                </div>
-              </div>
-              <div style={{
-                background:"rgba(16,217,160,.1)", border:"1px solid rgba(16,217,160,.25)",
-                borderRadius:100, padding:"4px 12px", fontSize:12, color:C.green, fontWeight:600,
-              }}>● LIVE</div>
-            </div>
-
-            {/* Score circle */}
-            <div style={{ display:"flex", justifyContent:"center", margin:"24px 0" }}>
-              <div style={{ position:"relative", width:140, height:140 }}>
-                <svg width={140} height={140} style={{ transform:"rotate(-90deg)" }}>
-                  <circle cx={70} cy={70} r={58} fill="none"
-                    stroke="rgba(255,255,255,.06)" strokeWidth={10}/>
-                  <circle cx={70} cy={70} r={58} fill="none"
-                    stroke={scoreColor} strokeWidth={10}
-                    strokeDasharray={`${2*Math.PI*58}`}
-                    strokeDashoffset={`${2*Math.PI*58*(1-demoScore/100)}`}
-                    strokeLinecap="round"
-                    style={{ transition:"stroke-dashoffset .8s ease, stroke .4s" }}/>
-                </svg>
-                <div style={{ position:"absolute", inset:0, display:"flex",
-                  flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
-                  <span style={{ fontSize:36, fontWeight:800, color:scoreColor,
-                    transition:"color .4s" }}>{demoScore}</span>
-                  <span style={{ fontSize:12, color:C.sub }}>{ar ? "نقطة" : "score"}</span>
+          <div style={{ position:"relative", paddingTop:34, paddingBottom:30 }}>
+            {/* Main dashboard mockup */}
+            <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
+              {/* Browser chrome */}
+              <div style={{ display:"flex", alignItems:"center", gap:8,
+                padding:"12px 16px", borderBottom:`1px solid ${C.border}`,
+                background:"rgba(255,255,255,.02)" }}>
+                <span style={{ width:9, height:9, borderRadius:"50%", background:"#f87171" }}/>
+                <span style={{ width:9, height:9, borderRadius:"50%", background:"#f59e0b" }}/>
+                <span style={{ width:9, height:9, borderRadius:"50%", background:"#10d9a0" }}/>
+                <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
+                  <span style={{ fontSize:11.5, color:C.muted, fontFamily:FONT_MONO,
+                    background:"rgba(255,255,255,.04)", padding:"3px 14px", borderRadius:6 }}>
+                    app.corvus.io/dashboard
+                  </span>
                 </div>
               </div>
-            </div>
 
-            {/* Metrics */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-              {(ar
-                ? [["انحناء الرقبة","12°",C.amber],["وضع الكتف","جيد",C.green],["المسافة","58cm",C.blue]]
-                : [["Neck Tilt","12°",C.amber],["Shoulder","Good",C.green],["Distance","58cm",C.blue]]
-              ).map(([label, val, color]) => (
-                <div key={label} style={{
-                  background:"rgba(255,255,255,.04)", borderRadius:10,
-                  padding:"12px 14px", textAlign:"center",
+              <div style={{ padding:28 }}>
+                {/* Header */}
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                  marginBottom:22 }}>
+                  <div>
+                    <div style={{ fontSize:13, color:C.sub, marginBottom:4 }}>
+                      {ar ? "جلسة مباشرة" : "Live Session"}
+                    </div>
+                    <div style={{ fontSize:21, fontWeight:700, color:C.text, fontFamily:FONT_DISPLAY }}>
+                      {ar ? "تحليل الوضعية" : "Posture Analysis"}
+                    </div>
+                  </div>
+                  <div style={{
+                    background:"rgba(16,217,160,.1)", border:"1px solid rgba(16,217,160,.25)",
+                    borderRadius:100, padding:"5px 13px", fontSize:12, color:C.green, fontWeight:600,
+                    fontFamily:FONT_MONO, display:"flex", alignItems:"center", gap:6,
+                  }}>
+                    <span style={{ width:6,height:6,borderRadius:"50%",background:C.green,
+                      animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
+                    LIVE
+                  </div>
+                </div>
+
+                {/* Score circle */}
+                <div style={{ display:"flex", justifyContent:"center", margin:"26px 0" }}>
+                  <div style={{ position:"relative", width:152, height:152 }}>
+                    <svg width={152} height={152} style={{ transform:"rotate(-90deg)" }}>
+                      <circle cx={76} cy={76} r={64} fill="none"
+                        stroke="rgba(255,255,255,.06)" strokeWidth={11}/>
+                      <circle cx={76} cy={76} r={64} fill="none"
+                        stroke={scoreColor} strokeWidth={11}
+                        strokeDasharray={`${2*Math.PI*64}`}
+                        strokeDashoffset={`${2*Math.PI*64*(1-demoScore/100)}`}
+                        strokeLinecap="round"
+                        style={{ transition:"stroke-dashoffset .8s ease, stroke .4s" }}/>
+                    </svg>
+                    <div style={{ position:"absolute", inset:0, display:"flex",
+                      flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+                      <span style={{ fontSize:40, fontWeight:800, color:scoreColor,
+                        transition:"color .4s", fontFamily:FONT_MONO }}>{demoScore}</span>
+                      <span style={{ fontSize:12, color:C.sub }}>{ar ? "نقطة" : "score"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metrics */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+                  {(ar
+                    ? [["انحناء الرقبة","12°",C.amber],["وضع الكتف","جيد",C.green],["المسافة","58cm",C.blue]]
+                    : [["Neck Tilt","12°",C.amber],["Shoulder","Good",C.green],["Distance","58cm",C.blue]]
+                  ).map(([label, val, color]) => (
+                    <div key={label} style={{
+                      background:"rgba(255,255,255,.04)", borderRadius:12,
+                      padding:"13px 14px", textAlign:"center",
+                    }}>
+                      <div style={{ fontSize:18, fontWeight:700, color, marginBottom:3, fontFamily:FONT_MONO }}>{val}</div>
+                      <div style={{ fontSize:11, color:C.muted }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* AI tip */}
+                <div style={{
+                  marginTop:18, padding:"13px 14px",
+                  background:"rgba(79,124,249,.08)", borderRadius:12,
+                  border:"1px solid rgba(79,124,249,.15)",
+                  display:"flex", gap:10, alignItems:"flex-start",
                 }}>
-                  <div style={{ fontSize:18, fontWeight:700, color, marginBottom:2 }}>{val}</div>
-                  <div style={{ fontSize:11, color:C.muted }}>{label}</div>
+                  <span style={{ fontSize:18 }}>🤖</span>
+                  <p style={{ margin:0, fontSize:13, color:C.sub, lineHeight:1.5 }}>
+                    {ar
+                      ? "مرفق رقبتك قليلاً للأمام. اقترح استراحة 5 دقائق كل 45 دقيقة."
+                      : "Your neck is slightly forward. Consider a 5-min break every 45 mins and raise your monitor 2cm."}
+                  </p>
                 </div>
-              ))}
+              </div>
             </div>
 
-            {/* AI tip */}
-            <div style={{
-              marginTop:16, padding:"12px 14px",
-              background:"rgba(79,124,249,.08)", borderRadius:10,
-              border:"1px solid rgba(79,124,249,.15)",
-              display:"flex", gap:10, alignItems:"flex-start",
+            {/* Floating glass card — top edge, stat highlight */}
+            <motion.div {...float(0, 9)} style={{
+              position:"absolute", top:-12, [ar?"left":"right"]:-18,
+              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
+              border:`1px solid ${C.borderM}`, borderRadius:16,
+              padding:"12px 16px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
+              display:"flex", alignItems:"center", gap:10, zIndex:2,
             }}>
-              <span style={{ fontSize:18 }}>🤖</span>
-              <p style={{ margin:0, fontSize:13, color:C.sub, lineHeight:1.5 }}>
-                {ar
-                  ? "مرفق رقبتك قليلاً للأمام. اقترح استراحة 5 دقائق كل 45 دقيقة."
-                  : "Your neck is slightly forward. Consider a 5-min break every 45 mins and raise your monitor 2cm."}
-              </p>
-            </div>
+              <span style={{ fontSize:20 }}>📉</span>
+              <div>
+                <div style={{ fontSize:15, fontWeight:800, color:C.green, fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
+                <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{ar ? "إجازات مرضية" : "sick leave"}</div>
+              </div>
+            </motion.div>
 
-            <style>{`
-              @keyframes pulse {
-                0%,100%{opacity:1;transform:scale(1)}
-                50%{opacity:.6;transform:scale(1.4)}
-              }
-            `}</style>
+            {/* Floating glass card — bottom edge, alert toast */}
+            <motion.div {...float(1.4, 8)} style={{
+              position:"absolute", bottom:-6, [ar?"right":"left"]:-22,
+              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
+              border:`1px solid ${C.borderM}`, borderRadius:16,
+              padding:"11px 15px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
+              display:"flex", alignItems:"center", gap:9, zIndex:2, maxWidth:190,
+            }}>
+              <span style={{ width:8, height:8, borderRadius:"50%", background:C.blue, flexShrink:0,
+                boxShadow:`0 0 8px ${C.blue}` }}/>
+              <span style={{ fontSize:12, color:C.sub, lineHeight:1.4 }}>
+                {ar ? "تنبيه HR أُرسل تلقائياً" : "HR alert sent automatically"}
+              </span>
+            </motion.div>
           </div>
         </Reveal>
       </div>
 
+      {/* Scroll cue */}
+      {!reduce && (
+        <motion.div aria-hidden="true"
+          animate={{ y:[0,8,0] }} transition={{ duration:1.8, repeat:Infinity, ease:"easeInOut" }}
+          style={{ position:"absolute", bottom:28, left:"50%", transform:"translateX(-50%)",
+            color:C.muted, fontSize:20, opacity:.6 }}>
+          ↓
+        </motion.div>
+      )}
+
       <style>{`
-        @media(max-width:768px){.hero-grid{grid-template-columns:1fr!important;gap:40px!important}}
+        @keyframes lp-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.4)}}
+        @keyframes lp-drift-a{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-46%,-54%)}}
+        @keyframes lp-drift-b{0%,100%{transform:translate(0,0)}50%{transform:translate(3%,-4%)}}
+        .lp-drift-a{animation:lp-drift-a 16s ease-in-out infinite}
+        .lp-drift-b{animation:lp-drift-b 20s ease-in-out infinite}
+        @media(prefers-reduced-motion:reduce){.lp-drift-a,.lp-drift-b{animation:none}}
+        @media(max-width:860px){.lp-hero-grid{grid-template-columns:1fr!important;gap:56px!important}}
       `}</style>
     </section>
   );
@@ -422,36 +651,38 @@ function SocialProof({ lang }) {
   ];
   return (
     <section style={{ borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
-      padding:"28px 24px", overflow:"hidden" }}>
-      <div style={{ maxWidth:1180, margin:"0 auto" }}>
-        <p style={{ textAlign:"center", color:C.muted, fontSize:13, marginBottom:20,
-          letterSpacing:".08em", textTransform:"uppercase", fontWeight:500 }}>
-          {ar ? "موثوق به من قِبل فرق الموارد البشرية في" : "Trusted by HR teams at"}
-        </p>
-        <div style={{ display:"flex", gap:40, justifyContent:"center", flexWrap:"wrap",
-          alignItems:"center" }}>
-          {logos.map(logo => (
-            <div key={logo} style={{
-              color: logo.includes("✓") ? "#3b82f6" : C.muted,
-              fontSize:15, fontWeight:600, letterSpacing:"-.01em",
-              opacity: logo.includes("✓") ? 1 : .6, filter: logo.includes("✓") ? "none" : "grayscale(1)",
-              transition:"opacity .2s",
-            }}
-            onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-            onMouseLeave={e=>e.currentTarget.style.opacity= logo.includes("✓") ? "1" : ".6"}>
-              {logo}
-            </div>
-          ))}
+      padding:"44px 24px" }}>
+      <Reveal>
+        <div className="lp-wrap">
+          <p style={{ textAlign:"center", color:C.muted, marginBottom:28, ...TYPE.eyebrow }}>
+            {ar ? "موثوق به من قِبل فرق الموارد البشرية في" : "Trusted by HR teams at"}
+          </p>
+          <div style={{ display:"flex", gap:"16px 44px", justifyContent:"center", flexWrap:"wrap",
+            alignItems:"center" }}>
+            {logos.map(logo => (
+              <div key={logo} style={{
+                color: logo.includes("✓") ? "#3b82f6" : C.muted,
+                fontSize:16, fontWeight:600, letterSpacing:"-.01em",
+                opacity: logo.includes("✓") ? 1 : .6, filter: logo.includes("✓") ? "none" : "grayscale(1)",
+                transition:"opacity .2s",
+              }}
+              onMouseEnter={e=>e.currentTarget.style.opacity="1"}
+              onMouseLeave={e=>e.currentTarget.style.opacity= logo.includes("✓") ? "1" : ".6"}>
+                {logo}
+              </div>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap", marginTop:26 }}>
+            {["SOC 2 Type II — In Progress","ISO 27001","AES-256 Encryption","GDPR Ready","99.9% SLA"].map(badge => (
+              <span key={badge} style={{
+                background:"rgba(59,130,246,.1)", border:"1px solid rgba(59,130,246,.2)",
+                color:"#60a5fa", fontSize:11.5, padding:"5px 12px", borderRadius:99, fontWeight:500,
+                fontFamily:FONT_MONO,
+              }}>{badge}</span>
+            ))}
+          </div>
         </div>
-        <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap", marginTop:20 }}>
-          {["SOC 2 Type II — In Progress","ISO 27001","AES-256 Encryption","GDPR Ready","99.9% SLA"].map(badge => (
-            <span key={badge} style={{
-              background:"rgba(59,130,246,.1)", border:"1px solid rgba(59,130,246,.2)",
-              color:"#60a5fa", fontSize:11, padding:"4px 10px", borderRadius:99, fontWeight:500
-            }}>{badge}</span>
-          ))}
-        </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -463,24 +694,27 @@ function Stats({ lang }) {
     ? [["47%","تقليل الإجازات المرضية"],["3.2×","عائد الاستثمار"],["15دق","وقت الإعداد"],["98%","رضا العملاء"]]
     : [["47%","Reduction in sick leave"],["3.2×","Average ROI in year 1"],["15min","Team onboarding time"],["98%","Customer satisfaction"]];
   return (
-    <section style={{ padding:"80px 24px" }}>
-      <div style={{ maxWidth:1180, margin:"0 auto",
-        display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:24 }}
-        className="stats-grid">
+    <section className="lp-section" style={{ paddingTop:"clamp(60px,7vw,100px)", paddingBottom:"clamp(60px,7vw,100px)" }}>
+      <div className="lp-wrap lp-stats-grid" style={{
+        display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:22 }}>
         {stats.map(([val, label], i) => (
-          <Reveal key={label} delay={i * 80}>
-            <div style={{ ...card(), textAlign:"center" }}>
+          <Reveal key={label} delay={i * 80} y={20}>
+            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"36px 24px" }}>
               <div style={{
-                fontSize:46, fontWeight:800, letterSpacing:"-.03em",
+                fontSize:"clamp(38px,3.2vw,52px)", fontWeight:700, letterSpacing:"-.02em",
                 background:C.gHero, WebkitBackgroundClip:"text",
-                WebkitTextFillColor:"transparent", lineHeight:1, marginBottom:8,
+                WebkitTextFillColor:"transparent", lineHeight:1, marginBottom:12,
+                fontFamily:FONT_MONO,
               }}>{val}</div>
-              <div style={{ fontSize:14, color:C.sub, lineHeight:1.5 }}>{label}</div>
+              <div style={{ fontSize:14.5, color:C.sub, lineHeight:1.5 }}>{label}</div>
             </div>
           </Reveal>
         ))}
       </div>
-      <style>{`@media(max-width:768px){.stats-grid{grid-template-columns:1fr 1fr!important}}`}</style>
+      <style>{`
+        @media(max-width:860px){.lp-stats-grid{grid-template-columns:1fr 1fr!important}}
+        @media(max-width:480px){.lp-stats-grid{grid-template-columns:1fr!important}}
+      `}</style>
     </section>
   );
 }
@@ -524,66 +758,72 @@ function Features({ lang }) {
       detail:"SOC 2 Type II audit in progress · ISO27001 · AES-256 encryption at rest. Comprehensive audit logs for every system event." },
   ];
 
-  return (
-    <section id="features" style={{ padding:"100px 24px" }}>
-      <div style={{ maxWidth:1180, margin:"0 auto" }}>
-        <Reveal>
-          <div style={{ textAlign:"center", marginBottom:64 }}>
-            <span style={{
-              background:"rgba(129,140,248,.1)", border:"1px solid rgba(129,140,248,.2)",
-              borderRadius:100, padding:"5px 16px", fontSize:13, color:C.indigo,
-              fontWeight:500, display:"inline-block", marginBottom:16,
-            }}>
-              {ar ? "المنصة" : "Platform"}
-            </span>
-            <h2 style={{ fontSize:"clamp(28px,4vw,44px)", fontWeight:800,
-              letterSpacing:"-.03em", color:C.text, margin:"0 0 16px" }}>
-              {ar ? "كل ما تحتاجه لصحة موظفيك" : "Everything your workforce health program needs"}
-            </h2>
-            <p style={{ fontSize:17, color:C.sub, maxWidth:560, margin:"0 auto" }}>
-              {ar
-                ? "من التحليل الفوري إلى الرؤى المؤسسية — كل شيء في مكان واحد"
-                : "From real-time analysis to enterprise insights — everything in one platform"}
-            </p>
-          </div>
-        </Reveal>
+  const f = features[active];
 
-        <div style={{ display:"grid", gridTemplateColumns:"240px 1fr", gap:32 }}
-          className="features-grid">
+  return (
+    <section id="features" className="lp-section">
+      <div className="lp-wrap">
+        <SectionHead eyebrow={ar ? "المنصة" : "Platform"}
+          title={ar ? "كل ما تحتاجه لصحة موظفيك" : "Everything your workforce health program needs"}
+          sub={ar ? "من التحليل الفوري إلى الرؤى المؤسسية — كل شيء في مكان واحد"
+                  : "From real-time analysis to enterprise insights — everything in one platform"}/>
+
+        <div className="lp-features-grid" style={{ display:"grid", gridTemplateColumns:"300px 1fr", gap:36 }}>
           {/* Feature tabs */}
-          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-            {features.map((f, i) => (
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }} className="lp-features-tabs">
+            {features.map((item, i) => (
               <button key={i} onClick={() => setActive(i)} style={{
                 background: active === i ? "rgba(79,124,249,.12)" : "transparent",
-                border: active === i ? "1px solid rgba(79,124,249,.25)" : "1px solid transparent",
-                borderRadius:10, padding:"14px 16px",
-                cursor:"pointer", textAlign:"left",
-                transition:"all .2s",
-                display:"flex", alignItems:"center", gap:10,
+                border: active === i ? "1px solid rgba(79,124,249,.28)" : "1px solid transparent",
+                borderRadius:14, padding:"15px 16px",
+                cursor:"pointer", textAlign: ar ? "right" : "left",
+                transition:"background .2s,border-color .2s",
+                display:"flex", alignItems:"center", gap:13,
               }}>
-                <span style={{ fontSize:20 }}>{f.icon}</span>
-                <span style={{ fontSize:14, fontWeight:500,
-                  color: active === i ? C.text : C.sub }}>{f.title}</span>
+                <span style={{
+                  width:38, height:38, borderRadius:11, flexShrink:0,
+                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
+                  background: active === i ? C.gBlue : "rgba(255,255,255,.05)",
+                  boxShadow: active === i ? "0 4px 14px rgba(79,124,249,.4)" : "none",
+                  transition:"background .2s,box-shadow .2s",
+                }}>{item.icon}</span>
+                <span style={{ fontSize:14.5, fontWeight:500,
+                  color: active === i ? C.text : C.sub }}>{item.title}</span>
               </button>
             ))}
           </div>
 
           {/* Feature detail */}
-          <div style={{ ...card(true), display:"flex", flexDirection:"column", gap:16 }}>
-            <div style={{ fontSize:40 }}>{features[active].icon}</div>
-            <h3 style={{ fontSize:24, fontWeight:700, color:C.text, margin:0 }}>
-              {features[active].title}
+          <motion.div key={active}
+            initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
+            transition={{ duration:.35, ease:[0.22,1,0.36,1] }}
+            style={{ ...card(true), display:"flex", flexDirection:"column", gap:18, padding:"clamp(28px,3vw,44px)" }}>
+            <span style={{
+              width:60, height:60, borderRadius:16, fontSize:28,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              background:C.gBlue, boxShadow:"0 6px 20px rgba(79,124,249,.4)",
+            }}>{f.icon}</span>
+            <h3 style={{ ...TYPE.h3, fontSize:26, color:C.text, margin:0, fontFamily:FONT_DISPLAY }}>
+              {f.title}
             </h3>
-            <p style={{ fontSize:16, color:C.indigo, margin:0, fontWeight:500 }}>
-              {features[active].desc}
+            <p style={{ fontSize:16.5, color:C.indigo, margin:0, fontWeight:500 }}>
+              {f.desc}
             </p>
-            <p style={{ fontSize:15, color:C.sub, lineHeight:1.7, margin:0 }}>
-              {features[active].detail}
+            <p style={{ ...TYPE.bodySm, color:C.sub, margin:0 }}>
+              {f.detail}
             </p>
-          </div>
+          </motion.div>
         </div>
       </div>
-      <style>{`@media(max-width:768px){.features-grid{grid-template-columns:1fr!important}}`}</style>
+      <style>{`
+        @media(max-width:860px){
+          .lp-features-grid{grid-template-columns:1fr!important}
+          .lp-features-tabs{flex-direction:row!important;overflow-x:auto;gap:8px!important;
+            padding-bottom:6px;-webkit-overflow-scrolling:touch}
+          .lp-features-tabs button{flex-shrink:0}
+          .lp-features-tabs button span:last-child{display:none}
+        }
+      `}</style>
     </section>
   );
 }
@@ -602,40 +842,48 @@ function HowItWorks({ lang }) {
   ];
 
   return (
-    <section style={{ padding:"100px 24px", background:C.bg1 }}>
-      <div style={{ maxWidth:1180, margin:"0 auto" }}>
-        <Reveal>
-          <div style={{ textAlign:"center", marginBottom:64 }}>
-            <h2 style={{ fontSize:"clamp(28px,4vw,44px)", fontWeight:800,
-              letterSpacing:"-.03em", color:C.text, margin:"0 0 16px" }}>
-              {ar ? "كيف يعمل النظام" : "How it works"}
-            </h2>
-            <p style={{ fontSize:17, color:C.sub }}>
-              {ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "Three simple steps to a healthier team"}
-            </p>
-          </div>
-        </Reveal>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}
-          className="steps-grid">
-          {steps.map((s, i) => (
-            <Reveal key={s.n} delay={i * 100}>
-              <div style={{ ...card(), position:"relative" }}>
-                <div style={{
-                  fontSize:48, fontWeight:900, letterSpacing:"-.04em",
-                  color:"rgba(79,124,249,.15)", lineHeight:1, marginBottom:16,
-                }}>{s.n}</div>
-                <h3 style={{ fontSize:20, fontWeight:700, color:C.text, margin:"0 0 10px" }}>
-                  {s.title}
-                </h3>
-                <p style={{ fontSize:15, color:C.sub, lineHeight:1.6, margin:0 }}>
-                  {s.desc}
-                </p>
-              </div>
-            </Reveal>
-          ))}
+    <section className="lp-section" style={{ background:C.bg1 }}>
+      <div className="lp-wrap">
+        <SectionHead title={ar ? "كيف يعمل النظام" : "How it works"}
+          sub={ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "Three simple steps to a healthier team"}/>
+
+        <div style={{ position:"relative" }}>
+          {/* Connecting line — these steps are a real sequence, so the timeline earns its keep */}
+          <div className="lp-timeline-line" style={{
+            position:"absolute", top:0, left:"16.6%", right:"16.6%", height:2,
+            background:"linear-gradient(90deg,rgba(79,124,249,.45),rgba(34,211,238,.45),rgba(16,217,160,.45))",
+          }}/>
+          <Stagger className="lp-steps-grid" gap={0.12} style={{
+            display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:28, position:"relative" }}>
+            {steps.map((s) => (
+              <StaggerItem key={s.n}>
+                <div className="lp-lift" style={{ ...card(), textAlign:"center" }}>
+                  <div className="lp-timeline-node" style={{
+                    width:64, height:64, borderRadius:"50%", margin:"-64px auto 22px",
+                    background:C.bg1, border:`2px solid rgba(79,124,249,.4)`,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    fontFamily:FONT_MONO, fontSize:21, fontWeight:700, color:C.blue,
+                    boxShadow:"0 0 0 6px "+C.bg1+", 0 4px 18px rgba(79,124,249,.25)",
+                  }}>{s.n}</div>
+                  <h3 style={{ ...TYPE.h3, color:C.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
+                    {s.title}
+                  </h3>
+                  <p style={{ ...TYPE.bodySm, color:C.sub, margin:0 }}>
+                    {s.desc}
+                  </p>
+                </div>
+              </StaggerItem>
+            ))}
+          </Stagger>
         </div>
       </div>
-      <style>{`@media(max-width:768px){.steps-grid{grid-template-columns:1fr!important}}`}</style>
+      <style>{`
+        @media(max-width:860px){
+          .lp-steps-grid{grid-template-columns:1fr!important}
+          .lp-timeline-line{display:none}
+          .lp-timeline-node{margin:0 auto 18px!important;box-shadow:none!important}
+        }
+      `}</style>
     </section>
   );
 }
@@ -644,61 +892,54 @@ function HowItWorks({ lang }) {
 function CaseStudies({ lang }) {
   const ar = lang === "ar";
   const cases = ar ? [
-    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52% غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي" },
-    { co:"بنك وطني", industry:"مصرفية", employees:"850", result:"↑23% رضا الموظفين", time:"3 أشهر", detail:"انتشار ممتاز: 94% معدل استخدام يومي" },
-    { co:"شركة تقنية ناشئة", industry:"تكنولوجيا", employees:"120", result:"↓38% شكاوى آلام الظهر", time:"4 أشهر", detail:"عائد استثمار 4.1× خلال السنة الأولى" },
+    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52%", resultLabel:"غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي" },
+    { co:"بنك وطني", industry:"مصرفية", employees:"850", result:"↑23%", resultLabel:"رضا الموظفين", time:"3 أشهر", detail:"انتشار ممتاز: 94% معدل استخدام يومي" },
+    { co:"شركة تقنية ناشئة", industry:"تكنولوجيا", employees:"120", result:"↓38%", resultLabel:"شكاوى آلام الظهر", time:"4 أشهر", detail:"عائد استثمار 4.1× خلال السنة الأولى" },
   ] : [
-    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52% posture-related absences", time:"6 months", detail:"Saved $340K annually in physiotherapy costs" },
-    { co:"National Bank", industry:"Banking", employees:"850", result:"↑23% employee satisfaction", time:"3 months", detail:"Excellent adoption: 94% daily active rate" },
-    { co:"Tech Startup", industry:"Technology", employees:"120", result:"↓38% back pain complaints", time:"4 months", detail:"4.1× ROI in the first year" },
+    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52%", resultLabel:"posture-related absences", time:"6 months", detail:"Saved $340K annually in physiotherapy costs" },
+    { co:"National Bank", industry:"Banking", employees:"850", result:"↑23%", resultLabel:"employee satisfaction", time:"3 months", detail:"Excellent adoption: 94% daily active rate" },
+    { co:"Tech Startup", industry:"Technology", employees:"120", result:"↓38%", resultLabel:"back pain complaints", time:"4 months", detail:"4.1× ROI in the first year" },
   ];
 
   return (
-    <section id="casestudies" style={{ padding:"100px 24px" }}>
-      <div style={{ maxWidth:1180, margin:"0 auto" }}>
-        <Reveal>
-          <div style={{ textAlign:"center", marginBottom:64 }}>
-            <span style={{
-              background:"rgba(16,217,160,.08)", border:"1px solid rgba(16,217,160,.2)",
-              borderRadius:100, padding:"5px 16px", fontSize:13, color:C.green,
-              fontWeight:500, display:"inline-block", marginBottom:16,
-            }}>
-              {ar ? "نتائج حقيقية" : "Real Results"}
-            </span>
-            <h2 style={{ fontSize:"clamp(28px,4vw,44px)", fontWeight:800,
-              letterSpacing:"-.03em", color:C.text, margin:"0 0 16px" }}>
-              {ar ? "عملاؤنا يحقّقون نتائج قابلة للقياس" : "Our customers achieve measurable results"}
-            </h2>
-          </div>
-        </Reveal>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}
-          className="cases-grid">
-          {cases.map((c, i) => (
-            <Reveal key={c.co} delay={i * 100}>
-              <div style={{ ...card(), height:"100%" }}>
+    <section id="casestudies" className="lp-section">
+      <div className="lp-wrap">
+        <SectionHead eyebrow={ar ? "نتائج حقيقية" : "Real Results"}
+          eyebrowColor={C.green} eyebrowBg="rgba(16,217,160,.08)" eyebrowBorder="rgba(16,217,160,.2)"
+          title={ar ? "عملاؤنا يحقّقون نتائج قابلة للقياس" : "Our customers achieve measurable results"}/>
+
+        <Stagger className="lp-cases-grid" style={{
+          display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
+          {cases.map((c) => (
+            <StaggerItem key={c.co}>
+              <div className="lp-lift" style={{ ...card(), height:"100%" }}>
                 <div style={{
                   background:"rgba(79,124,249,.08)", borderRadius:8,
-                  padding:"4px 10px", fontSize:12, color:C.indigo,
-                  fontWeight:500, display:"inline-block", marginBottom:14,
+                  padding:"5px 12px", fontSize:12.5, color:C.indigo,
+                  fontWeight:500, display:"inline-block", marginBottom:18,
                 }}>{c.industry}</div>
-                <h3 style={{ fontSize:17, fontWeight:700, color:C.text, margin:"0 0 6px" }}>
+                <h3 style={{ fontSize:17.5, fontWeight:700, color:C.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
                   {c.co}
                 </h3>
-                <div style={{ fontSize:13, color:C.muted, marginBottom:18 }}>
+                <div style={{ fontSize:13, color:C.muted, marginBottom:22 }}>
                   {c.employees} {ar ? "موظف" : "employees"} · {c.time}
                 </div>
                 <div style={{
-                  fontSize:22, fontWeight:800, color:C.green, marginBottom:10,
+                  fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:C.green, marginBottom:6,
+                  fontFamily:FONT_MONO, lineHeight:1,
                 }}>{c.result}</div>
-                <p style={{ fontSize:14, color:C.sub, margin:0, lineHeight:1.6 }}>
+                <div style={{ fontSize:14.5, color:C.text, fontWeight:600, marginBottom:16 }}>
+                  {c.resultLabel}
+                </div>
+                <p style={{ ...TYPE.bodySm, color:C.sub, margin:0, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
                   {c.detail}
                 </p>
               </div>
-            </Reveal>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </div>
-      <style>{`@media(max-width:768px){.cases-grid{grid-template-columns:1fr!important}}`}</style>
+      <style>{`@media(max-width:860px){.lp-cases-grid{grid-template-columns:1fr!important}}`}</style>
     </section>
   );
 }
@@ -738,15 +979,14 @@ function Pricing({ lang, onCTA }) {
   ];
 
   return (
-    <section id="pricing" style={{ padding:"100px 24px", background:C.bg1 }}>
-      <div style={{ maxWidth:1180, margin:"0 auto" }}>
+    <section id="pricing" className="lp-section" style={{ background:C.bg1 }}>
+      <div className="lp-wrap">
         <Reveal>
           <div style={{ textAlign:"center", marginBottom:48 }}>
-            <h2 style={{ fontSize:"clamp(28px,4vw,44px)", fontWeight:800,
-              letterSpacing:"-.03em", color:C.text, margin:"0 0 16px" }}>
+            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 16px", fontFamily:FONT_DISPLAY }}>
               {ar ? "أسعار بسيطة وشفافة" : "Simple, transparent pricing"}
             </h2>
-            <p style={{ fontSize:17, color:C.sub, marginBottom:28 }}>
+            <p style={{ ...TYPE.body, color:C.sub, marginBottom:30 }}>
               {ar ? "ابدأ مجاناً · لا بطاقة ائتمان" : "Start free · No credit card required"}
             </p>
             {/* Toggle */}
@@ -759,9 +999,9 @@ function Pricing({ lang, onCTA }) {
                 <button key={b} onClick={() => setBilling(b)} style={{
                   background: billing === b ? C.blue : "transparent",
                   color: billing === b ? "#fff" : C.sub,
-                  border:"none", borderRadius:100, padding:"8px 20px",
-                  cursor:"pointer", fontWeight:500, fontSize:14,
-                  transition:"all .2s",
+                  border:"none", borderRadius:100, padding:"10px 22px",
+                  cursor:"pointer", fontWeight:500, fontSize:14.5,
+                  transition:"background .2s,color .2s",
                 }}>
                   {b === "monthly"
                     ? (ar ? "شهري" : "Monthly")
@@ -772,82 +1012,94 @@ function Pricing({ lang, onCTA }) {
           </div>
         </Reveal>
 
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20 }}
-          className="pricing-grid">
-          {plans.map((p, i) => (
-            <Reveal key={p.id} delay={i * 80}>
-              <div style={{
+        <Stagger className="lp-pricing-grid" style={{
+          display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:22, alignItems:"start" }}>
+          {plans.map((p) => (
+            <StaggerItem key={p.id}>
+              <div className={p.popular ? "lp-lift lp-glow" : "lp-lift"} style={{
                 ...card(p.popular),
-                border: p.popular ? `1px solid rgba(79,124,249,.4)` : `1px solid ${C.border}`,
+                border: p.popular ? `1px solid rgba(79,124,249,.45)` : `1px solid ${C.border}`,
                 position:"relative", height:"100%", display:"flex", flexDirection:"column",
+                padding:"clamp(28px,2.6vw,36px)",
+                transform: p.popular ? "scale(1.035)" : "none",
               }}>
                 {p.popular && (
                   <div style={{
-                    position:"absolute", top:-12, left:"50%", transform:"translateX(-50%)",
+                    position:"absolute", top:-14, left:"50%", transform:"translateX(-50%)",
                     background:C.gBlue, color:"#fff", borderRadius:100,
-                    padding:"4px 16px", fontSize:12, fontWeight:600, whiteSpace:"nowrap",
-                  }}>{ar ? "الأكثر شيوعاً" : "Most Popular"}</div>
+                    padding:"5px 18px", fontSize:12.5, fontWeight:600, whiteSpace:"nowrap",
+                    boxShadow:"0 4px 16px rgba(79,124,249,.5)",
+                  }}>{ar ? "✦ الأكثر شيوعاً" : "✦ Most Popular"}</div>
                 )}
-                <div style={{ marginBottom:20 }}>
-                  <div style={{ fontSize:13, color:p.color, fontWeight:600,
-                    marginBottom:6, textTransform:"uppercase", letterSpacing:".06em" }}>
+                <div style={{ marginBottom:24 }}>
+                  <div style={{ fontSize:13.5, color:p.color, fontWeight:600,
+                    marginBottom:10, textTransform:"uppercase", letterSpacing:".06em" }}>
                     {p.name}
                   </div>
                   {p.isEnterprise ? (
                     <div>
-                      <div style={{ fontSize:28, fontWeight:800, color:C.text }}>
+                      <div style={{ fontSize:32, fontWeight:800, color:C.text, fontFamily:FONT_DISPLAY }}>
                         {ar ? "تواصل معنا" : "Contact us"}
                       </div>
                       {p.priceUSD?.startingAt && (
-                        <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>
+                        <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
                           {ar ? `يبدأ من $${p.priceUSD.startingAt}/شهر` : `Starting at $${p.priceUSD.startingAt}/mo`}
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
-                      <span style={{ fontSize:36, fontWeight:800, color:C.text }}>
-                        ${p.priceUSD[billing]}
-                      </span>
-                      <span style={{ fontSize:14, color:C.muted }}>
-                        /{ar ? "شهر" : "mo"}
-                      </span>
-                    <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>
-                      ≈ {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()} {ar ? "ج.م./شهر" : "EGP/mo"}
-                    </div>
+                    <div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:40, fontWeight:800, color:C.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
+                          ${p.priceUSD[billing]}
+                        </span>
+                        <span style={{ fontSize:14.5, color:C.muted }}>
+                          /{ar ? "شهر" : "mo"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
+                        ≈ {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()} {ar ? "ج.م./شهر" : "EGP/mo"}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <ul style={{ listStyle:"none", padding:0, margin:"0 0 24px", flex:1 }}>
+                <ul style={{ listStyle:"none", padding:0, margin:"0 0 28px", flex:1 }}>
                   {p.features.map(f => (
-                    <li key={f} style={{ display:"flex", gap:8, alignItems:"flex-start",
-                      marginBottom:8, fontSize:14, color:C.sub }}>
-                      <span style={{ color:p.color, marginTop:2, flexShrink:0 }}>✓</span>
+                    <li key={f} style={{ display:"flex", gap:10, alignItems:"flex-start",
+                      marginBottom:12, fontSize:14.5, color:C.sub }}>
+                      <span style={{
+                        width:18, height:18, borderRadius:"50%", flexShrink:0, marginTop:1,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        background:"rgba(255,255,255,.08)",
+                        color:p.color, fontSize:11, fontWeight:700,
+                      }}>✓</span>
                       {f}
                     </li>
                   ))}
                 </ul>
 
                 {p.isEnterprise ? (
-                  <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer"
-                    style={{ ...btn("outline"), display:"block", textAlign:"center" }}>
+                  <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-outline"
+                    style={{ ...btn("outline","lg"), display:"flex", width:"100%" }}>
                     {ar ? "احجز عرضاً" : "Book a Demo"}
                   </a>
                 ) : (
                   <a href={`/auth?mode=signup&plan=${p.id}`} onClick={onCTA}
-                    style={{ ...(p.popular ? btn("primary") : btn("ghost")),
-                      display:"block", textAlign:"center" }}>
+                    className={p.popular ? "lp-btn lp-btn-primary" : "lp-btn lp-btn-ghost"}
+                    style={{ ...(p.popular ? btn("primary","lg") : btn("ghost","lg")),
+                      display:"flex", width:"100%" }}>
                     {ar ? "ابدأ الآن" : "Get started"}
                   </a>
                 )}
               </div>
-            </Reveal>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </div>
-      <style>{`@media(max-width:1024px){.pricing-grid{grid-template-columns:1fr 1fr!important}}
-        @media(max-width:600px){.pricing-grid{grid-template-columns:1fr!important}}`}</style>
+      <style>{`@media(max-width:1024px){.lp-pricing-grid{grid-template-columns:1fr 1fr!important}}
+        @media(max-width:600px){.lp-pricing-grid{grid-template-columns:1fr!important}
+        .lp-pricing-grid > div > div{transform:none!important}}`}</style>
     </section>
   );
 }
@@ -866,45 +1118,85 @@ function Testimonials({ lang }) {
   ];
 
   return (
-    <section style={{ padding:"100px 24px" }}>
-      <div style={{ maxWidth:1180, margin:"0 auto" }}>
-        <Reveal>
-          <h2 style={{ textAlign:"center", fontSize:"clamp(28px,4vw,44px)", fontWeight:800,
-            letterSpacing:"-.03em", color:C.text, margin:"0 0 56px" }}>
-            {ar ? "ماذا يقول عملاؤنا" : "What our customers say"}
-          </h2>
-        </Reveal>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}
-          className="testimonials-grid">
-          {testimonials.map((t, i) => (
-            <Reveal key={t.name} delay={i * 100}>
-              <div style={{ ...card(), height:"100%" }}>
-                <div style={{ display:"flex", gap:2, marginBottom:14 }}>
+    <section className="lp-section">
+      <div className="lp-wrap">
+        <SectionHead title={ar ? "ماذا يقول عملاؤنا" : "What our customers say"} />
+        <Stagger className="lp-testi-grid" style={{
+          display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
+          {testimonials.map((t) => (
+            <StaggerItem key={t.name}>
+              <div className="lp-lift" style={{
+                height:"100%", borderRadius:20, padding:30, position:"relative",
+                background:"rgba(255,255,255,.035)", border:`1px solid ${C.border}`,
+                backdropFilter:"blur(16px)",
+              }}>
+                <div style={{ position:"absolute", top:22, [ar?"left":"right"]:26,
+                  fontSize:40, color:"rgba(79,124,249,.18)", fontFamily:"Georgia,serif", lineHeight:1 }}>"</div>
+                <div style={{ display:"flex", gap:2, marginBottom:16 }}>
                   {"★★★★★".split("").map((s,i) => (
-                    <span key={i} style={{ color:C.amber, fontSize:16 }}>{s}</span>
+                    <span key={i} style={{ color:C.amber, fontSize:15 }}>{s}</span>
                   ))}
-                  <span style={{ color:C.muted, fontSize:13, marginLeft:8 }}>{t.score}</span>
+                  <span style={{ color:C.muted, fontSize:12.5, marginLeft:8, fontFamily:FONT_MONO }}>{t.score}</span>
                 </div>
-                <p style={{ fontSize:15, color:C.sub, lineHeight:1.7, margin:"0 0 20px",
-                  fontStyle:"italic" }}>"{t.text}"</p>
-                <div>
-                  <div style={{ fontWeight:600, color:C.text, fontSize:15 }}>{t.name}</div>
-                  <div style={{ color:C.muted, fontSize:13 }}>{t.role}</div>
+                <p style={{ fontSize:15.5, color:C.sub, lineHeight:1.7, margin:"0 0 24px" }}>{t.text}</p>
+                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                  <div style={{
+                    width:42, height:42, borderRadius:"50%", flexShrink:0,
+                    background:C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:14.5, fontWeight:700, color:"#fff",
+                  }}>{t.name.split(" ").map(w=>w[0]).slice(0,2).join("")}</div>
+                  <div>
+                    <div style={{ fontWeight:600, color:C.text, fontSize:14.5 }}>{t.name}</div>
+                    <div style={{ color:C.muted, fontSize:12.5 }}>{t.role}</div>
+                  </div>
                 </div>
               </div>
-            </Reveal>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </div>
-      <style>{`@media(max-width:768px){.testimonials-grid{grid-template-columns:1fr!important}}`}</style>
+      <style>{`@media(max-width:860px){.lp-testi-grid{grid-template-columns:1fr!important}}`}</style>
     </section>
   );
 }
 
 // ── FAQ ───────────────────────────────────────────────────────────
+function FAQItem({ q, a, isOpen, onToggle, ar }) {
+  return (
+    <div style={{
+      background:C.card, border:`1px solid ${isOpen ? "rgba(79,124,249,.35)" : C.border}`,
+      borderRadius:16, overflow:"hidden", transition:"border-color .25s",
+    }}>
+      <button onClick={onToggle} aria-expanded={isOpen} style={{
+        width:"100%", padding:"20px 22px", background:"transparent",
+        border:"none", cursor:"pointer",
+        display:"flex", justifyContent:"space-between", alignItems:"center", gap:16,
+        textAlign: ar ? "right" : "left",
+      }}>
+        <span style={{ fontWeight:600, color:C.text, fontSize:15.5, flex:1, fontFamily:FONT_DISPLAY }}>{q}</span>
+        <span style={{
+          width:28, height:28, borderRadius:"50%", flexShrink:0,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          background: isOpen ? "rgba(79,124,249,.18)" : "rgba(255,255,255,.05)",
+          color:C.blue, fontSize:17,
+          transform: isOpen ? "rotate(45deg)" : "none",
+          transition:"transform .25s, background .25s",
+        }}>+</span>
+      </button>
+      <motion.div
+        initial={false}
+        animate={{ height: isOpen ? "auto" : 0, opacity: isOpen ? 1 : 0 }}
+        transition={{ duration:.28, ease:[0.22,1,0.36,1] }}
+        style={{ overflow:"hidden" }}>
+        <p style={{ color:C.sub, fontSize:15, lineHeight:1.7, margin:0, padding:"0 22px 20px" }}>{a}</p>
+      </motion.div>
+    </div>
+  );
+}
+
 function FAQ({ lang }) {
   const ar = lang === "ar";
-  const [open, setOpen] = useState(null);
+  const [open, setOpen] = useState(0);
   const items = ar ? [
     ["هل يحتاج الموظفون لأجهزة خاصة؟","لا. يعمل النظام مع أي كاميرا ويب عادية على الحاسوب أو الهاتف الذكي."],
     ["كيف يُحمى خصوصية الموظفين؟","لا نحتفظ بصور أو فيديو. نعالج البيانات محلياً ونرسل فقط إحداثيات الوضعية المجهولة."],
@@ -920,39 +1212,13 @@ function FAQ({ lang }) {
   ];
 
   return (
-    <section style={{ padding:"100px 24px", background:C.bg1 }}>
-      <div style={{ maxWidth:720, margin:"0 auto" }}>
-        <Reveal>
-          <h2 style={{ textAlign:"center", fontSize:"clamp(28px,4vw,40px)", fontWeight:800,
-            letterSpacing:"-.03em", color:C.text, margin:"0 0 56px" }}>
-            {ar ? "أسئلة شائعة" : "Frequently asked questions"}
-          </h2>
-        </Reveal>
+    <section className="lp-section" style={{ background:C.bg1 }}>
+      <div style={{ maxWidth:740, margin:"0 auto", padding:"0 24px" }}>
+        <SectionHead title={ar ? "أسئلة شائعة" : "Frequently asked questions"} />
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           {items.map(([q, a], i) => (
-            <Reveal key={i} delay={i * 50}>
-              <div style={{
-                background:C.card, border:`1px solid ${open===i ? "rgba(79,124,249,.3)" : C.border}`,
-                borderRadius:12, overflow:"hidden", transition:"border-color .2s",
-              }}>
-                <button onClick={() => setOpen(open===i ? null : i)} style={{
-                  width:"100%", padding:"18px 20px", background:"transparent",
-                  border:"none", cursor:"pointer",
-                  display:"flex", justifyContent:"space-between", alignItems:"center",
-                  textAlign:"left",
-                }}>
-                  <span style={{ fontWeight:600, color:C.text, fontSize:15, flex:1 }}>{q}</span>
-                  <span style={{
-                    color:C.blue, fontSize:20, transform: open===i ? "rotate(45deg)":"none",
-                    transition:"transform .2s", marginLeft:12, flexShrink:0,
-                  }}>+</span>
-                </button>
-                {open === i && (
-                  <div style={{ padding:"0 20px 18px" }}>
-                    <p style={{ color:C.sub, fontSize:15, lineHeight:1.7, margin:0 }}>{a}</p>
-                  </div>
-                )}
-              </div>
+            <Reveal key={i} delay={i * 50} y={16}>
+              <FAQItem q={q} a={a} ar={ar} isOpen={open===i} onToggle={() => setOpen(open===i ? null : i)}/>
             </Reveal>
           ))}
         </div>
@@ -965,30 +1231,33 @@ function FAQ({ lang }) {
 function FinalCTA({ lang, onCTA }) {
   const ar = lang === "ar";
   return (
-    <section style={{ padding:"120px 24px" }}>
-      <div style={{ maxWidth:760, margin:"0 auto", textAlign:"center" }}>
+    <section className="lp-section">
+      <div style={{ maxWidth:780, margin:"0 auto", textAlign:"center", padding:"0 24px" }}>
         <Reveal>
-          <div style={{
-            background:"linear-gradient(135deg,rgba(79,124,249,.08),rgba(16,217,160,.04))",
-            border:`1px solid rgba(79,124,249,.2)`,
-            borderRadius:24, padding:"64px 48px",
+          <div className="lp-glow" style={{
+            background:"linear-gradient(135deg,rgba(79,124,249,.1),rgba(16,217,160,.05))",
+            border:`1px solid rgba(79,124,249,.22)`,
+            borderRadius:28, padding:"clamp(48px,6vw,76px) clamp(28px,5vw,56px)",
           }}>
-            <div style={{ fontSize:48, marginBottom:20 }}>🧘</div>
-            <h2 style={{ fontSize:"clamp(28px,4vw,40px)", fontWeight:800,
-              letterSpacing:"-.03em", color:C.text, margin:"0 0 16px" }}>
+            <div style={{
+              width:72, height:72, borderRadius:20, margin:"0 auto 26px",
+              background:C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:34, boxShadow:"0 8px 28px rgba(79,124,249,.45)",
+            }}>🧘</div>
+            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 18px", fontFamily:FONT_DISPLAY }}>
               {ar ? "ابدأ تحسين صحة فريقك اليوم" : "Start improving your team's health today"}
             </h2>
-            <p style={{ fontSize:17, color:C.sub, maxWidth:480, margin:"0 auto 36px" }}>
+            <p style={{ ...TYPE.body, color:C.sub, maxWidth:480, margin:"0 auto 40px" }}>
               {ar
-                ? "انضم إلى أكثر من 200 شركة تستخدم Corvus. تجربة مجانية 7 أيام."
-                : "Join 200+ companies using Corvus. 7-day free trial, no credit card required."}
+                ? "انضم إلى الشركات التي تستخدم Corvus. تجربة مجانية 7 أيام."
+                : "Join companies reducing workplace pain using AI-powered posture intelligence. 7-day free trial, no credit card required."}
             </p>
             <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" }}>
-              <a href="#" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
-                {ar ? "🚀 ابدأ مجاناً الآن" : "🚀 Start Free Today"}
+              <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
+                {ar ? "🚀 ابدأ مجاناً الآن" : "🚀 Start Free Trial"}
               </a>
-              <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" style={btn("ghost","lg")}>
-                {ar ? "تحدث مع المبيعات" : "Talk to Sales"}
+              <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-ghost" style={btn("ghost","lg")}>
+                {ar ? "احجز عرضاً" : "Book Demo"}
               </a>
             </div>
           </div>
@@ -1012,34 +1281,31 @@ function Footer({ lang }) {
   };
 
   return (
-    <footer style={{
-      borderTop:`1px solid ${C.border}`, padding:"64px 24px 32px",
-      background:C.bg,
-    }}>
-      <div style={{ maxWidth:1180, margin:"0 auto" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr", gap:40,
-          marginBottom:48 }} className="footer-grid">
+    <footer style={{ borderTop:`1px solid ${C.border}`, padding:"72px 24px 36px", background:C.bg }}>
+      <div className="lp-wrap">
+        <div className="footer-grid" style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr", gap:44,
+          marginBottom:52 }}>
           {/* Brand */}
           <div>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-              <div style={{ width:32, height:32, borderRadius:8, background:C.gBlue,
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:18 }}>
+              <div style={{ width:34, height:34, borderRadius:9, background:C.gBlue,
                 display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🧘</div>
-              <span style={{ fontWeight:700, color:C.text, fontSize:16 }}>Corvus</span>
+              <span style={{ fontWeight:700, color:C.text, fontSize:16.5, fontFamily:FONT_DISPLAY }}>Corvus</span>
             </div>
-            <p style={{ fontSize:14, color:C.muted, lineHeight:1.7, maxWidth:280, margin:"0 0 16px" }}>
+            <p style={{ fontSize:14, color:C.muted, lineHeight:1.7, maxWidth:280, margin:"0 0 18px" }}>
               {ar
-                ? "منصة ذكاء اصطناعي لصحة القوى العاملة. موثوقة من قِبل 200+ شركة في منطقة MENA."
-                : "AI-powered workforce health intelligence. Trusted by 200+ companies across MENA."}
+                ? "منصة ذكاء اصطناعي لصحة القوى العاملة لفرق MENA."
+                : "AI-powered workforce health intelligence for MENA teams."}
             </p>
             <div style={{ display:"flex", gap:10 }}>
               {["LinkedIn","Twitter","YouTube"].map(s => (
                 <a key={s} href={`https://${s.toLowerCase()}.com/corvus`}
                   target="_blank" rel="noopener noreferrer"
                   style={{ color:C.muted, fontSize:12, textDecoration:"none",
-                    padding:"6px 10px", border:`1px solid ${C.border}`,
-                    borderRadius:6, transition:"color .2s" }}
-                  onMouseEnter={e=>e.target.style.color=C.text}
-                  onMouseLeave={e=>e.target.style.color=C.muted}>
+                    padding:"7px 11px", border:`1px solid ${C.border}`,
+                    borderRadius:7, transition:"color .2s,border-color .2s" }}
+                  onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM}}
+                  onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border}}>
                   {s}
                 </a>
               ))}
@@ -1048,14 +1314,13 @@ function Footer({ lang }) {
           {/* Link columns */}
           {Object.values(sections).map(sec => (
             <div key={sec.title}>
-              <div style={{ fontSize:12, fontWeight:600, color:C.muted,
-                textTransform:"uppercase", letterSpacing:".08em", marginBottom:16 }}>
+              <div style={{ ...TYPE.eyebrow, color:C.muted, marginBottom:18 }}>
                 {sec.title}
               </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                 {sec.links.map(([label, href]) => (
                   <a key={label} href={href} style={{
-                    color:C.sub, fontSize:14, textDecoration:"none",
+                    color:C.sub, fontSize:14.5, textDecoration:"none",
                     transition:"color .2s",
                   }}
                   onMouseEnter={e=>e.target.style.color=C.text}
@@ -1068,7 +1333,7 @@ function Footer({ lang }) {
           ))}
         </div>
         <div style={{
-          borderTop:`1px solid ${C.border}`, paddingTop:24,
+          borderTop:`1px solid ${C.border}`, paddingTop:26,
           display:"flex", justifyContent:"space-between", alignItems:"center",
           flexWrap:"wrap", gap:12,
         }}>
@@ -1102,8 +1367,8 @@ export default function LandingPage({ onNavigate }) {
   }, [lang]);
 
   return (
-    <div style={{ background:C.bg, minHeight:"100vh", color:C.text,
-      fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
+    <div style={{ background:C.bg, minHeight:"100vh", color:C.text, fontFamily:FONT_DISPLAY }}>
+      <GlobalStyle/>
       <Nav lang={lang} setLang={setLang} onCTA={handleCTA}/>
       <Hero lang={lang} onCTA={handleCTA}/>
       <SocialProof lang={lang}/>
