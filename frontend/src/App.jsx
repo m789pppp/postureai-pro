@@ -327,40 +327,270 @@ function _buildSideLmsRefs(lms,W,H){
          ankle:{x:g(si("L_ANKLE")).x,y:g(si("L_ANKLE")).y}};
 }
 
-function drawFront(ctx,res,W,H){
+function _riskColor(score){
+  if(score==null) return "#94a3b8";
+  if(score>=80) return "#10b981";
+  if(score>=60) return "#f59e0b";
+  return "#ef4444";
+}
+function _riskLabel(score,isAr){
+  if(score==null) return isAr?"غير متاح":"N/A";
+  if(score>=80) return isAr?"منخفض":"Low";
+  if(score>=60) return isAr?"متوسط":"Medium";
+  return isAr?"مرتفع":"High";
+}
+function _angle2pt(a,b){
+  if(!a||!b) return null;
+  const dx=b.x-a.x, dy=b.y-a.y;
+  return Math.round(Math.abs(Math.atan2(dy,dx)*180/Math.PI));
+}
+function _angle3pt(a,b,c){
+  if(!a||!b||!c) return null;
+  const ax=a.x-b.x,ay=a.y-b.y,cx=c.x-b.x,cy=c.y-b.y;
+  const dot=ax*cx+ay*cy,mag=Math.sqrt(ax*ax+ay*ay)*Math.sqrt(cx*cx+cy*cy);
+  if(!mag) return null;
+  return Math.round(Math.acos(Math.min(1,Math.max(-1,dot/mag)))*180/Math.PI);
+}
+
+function drawFront(ctx,res,W,H,isAr=false){
   if(!res?.lms) return;
-  const{lms:lm,raw,overall}=res, col=sc(overall), px=p=>[p.x*W,p.y*H];
-  ctx.save(); ctx.lineWidth=2.5; ctx.globalAlpha=.88; ctx.strokeStyle=col;
-  [[lm.lSh,lm.rSh],[lm.lEar,lm.rEar],[lm.lEar,lm.lSh],[lm.rEar,lm.rSh],
-   [lm.midSh,lm.midHip],[lm.midEar,lm.midSh],[lm.lEye,lm.rEye]].forEach(([a,b])=>{
-    if(!a||!b) return;
+  const{lms:lm,raw,overall,metrics}=res;
+  const px=p=>p?[p.x*W,p.y*H]:[0,0];
+  const valid=p=>p&&(p.visibility==null||p.visibility>0.3);
+
+  // ── Risk colors per zone ──────────────────────────────────────
+  const neckScore = metrics?.neck_lean?.score ?? overall;
+  const shScore   = metrics?.shoulder_level?.score ?? overall;
+  const backScore = metrics?.spine_lean?.score ?? overall;
+  const neckCol   = _riskColor(neckScore);
+  const shCol     = _riskColor(shScore);
+  const backCol   = _riskColor(backScore);
+
+  ctx.save();
+
+  // ── Connections with zone colors ─────────────────────────────
+  const CONNECTIONS = [
+    // Head/neck zone
+    { pts:[lm.lEye,lm.rEye],       col:neckCol, w:2 },
+    { pts:[lm.lEar,lm.rEar],       col:neckCol, w:2 },
+    { pts:[lm.lEar,lm.lSh],        col:neckCol, w:2.5 },
+    { pts:[lm.rEar,lm.rSh],        col:neckCol, w:2.5 },
+    { pts:[lm.midEar,lm.midSh],    col:neckCol, w:3 },
+    // Shoulder zone
+    { pts:[lm.lSh,lm.rSh],         col:shCol,   w:3 },
+    // Spine/back zone
+    { pts:[lm.midSh,lm.midHip],    col:backCol, w:3.5 },
+    // Hip
+    { pts:[lm.lHip,lm.rHip],       col:"#6366f1", w:2.5 },
+    { pts:[lm.lSh,lm.lHip],        col:backCol, w:2 },
+    { pts:[lm.rSh,lm.rHip],        col:backCol, w:2 },
+  ];
+
+  CONNECTIONS.forEach(({pts:[a,b],col,w})=>{
+    if(!valid(a)||!valid(b)) return;
     const[ax,ay]=px(a),[bx,by]=px(b);
+    ctx.globalAlpha=.9; ctx.lineWidth=w; ctx.strokeStyle=col;
     ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
   });
-  [lm.lSh,lm.rSh,lm.lEar,lm.rEar,lm.midSh,lm.midEar,lm.lEye,lm.rEye].filter(Boolean).forEach(p=>{
-    const[x,y]=px(p); ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fillStyle=col; ctx.fill();
+
+  // ── Joints with glow effect ──────────────────────────────────
+  const JOINTS = [
+    { p:lm.lSh,  col:shCol,   r:6  },
+    { p:lm.rSh,  col:shCol,   r:6  },
+    { p:lm.lEar, col:neckCol, r:5  },
+    { p:lm.rEar, col:neckCol, r:5  },
+    { p:lm.midSh,col:backCol, r:7  },
+    { p:lm.lHip, col:"#6366f1",r:5 },
+    { p:lm.rHip, col:"#6366f1",r:5 },
+    { p:lm.lEye, col:neckCol, r:3  },
+    { p:lm.rEye, col:neckCol, r:3  },
+  ];
+
+  JOINTS.forEach(({p,col,r})=>{
+    if(!valid(p)) return;
+    const[x,y]=px(p);
+    // Glow
+    ctx.globalAlpha=.18;
+    ctx.beginPath(); ctx.arc(x,y,r*2.5,0,Math.PI*2); ctx.fillStyle=col; ctx.fill();
+    // Core
+    ctx.globalAlpha=1;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=col; ctx.fill();
+    ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,.6)";
+    ctx.stroke();
   });
+
+  // ── Joint angles labels ───────────────────────────────────────
+  ctx.font="bold 10px system-ui"; ctx.globalAlpha=.95;
+
+  // Neck angle (ear-shoulder vertical)
+  if(valid(lm.midEar)&&valid(lm.midSh)){
+    const neckAng = metrics?.neck_lean?.value ?? _angle2pt(lm.midEar,lm.midSh);
+    if(neckAng!=null){
+      const[sx,sy]=px(lm.midSh);
+      ctx.fillStyle="rgba(0,0,0,.55)";
+      ctx.fillRect(sx+6,sy-14,40,16); ctx.fillStyle=neckCol;
+      ctx.fillText(`${neckAng}°`,sx+8,sy-2);
+    }
+  }
+
+  // Shoulder tilt angle
+  if(valid(lm.lSh)&&valid(lm.rSh)){
+    const[lx,ly]=px(lm.lSh),[rx,ry]=px(lm.rSh);
+    const tiltAng=Math.round(Math.abs(Math.atan2(ry-ly,rx-lx)*180/Math.PI));
+    const mx=(lx+rx)/2, my=(ly+ry)/2-14;
+    ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(mx-20,my-12,42,16);
+    ctx.fillStyle=shCol; ctx.fillText(`${tiltAng}°`,mx-18,my);
+  }
+
+  // Screen distance
   if(raw?.distCm){
     const dc=raw.distCm>=raw.lo&&raw.distCm<=raw.hi?"#10b981":raw.distCm>=(raw.lo-15)?"#f59e0b":"#ef4444";
-    ctx.fillStyle=dc; ctx.font="500 11px system-ui"; ctx.globalAlpha=.88; ctx.fillText(raw.distCm+"cm",W-50,H-10);
+    const[sx,sy]=px(lm.midEar||{x:.5,y:.1});
+    ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(W-62,H-26,58,18);
+    ctx.fillStyle=dc; ctx.font="bold 11px system-ui";
+    ctx.fillText(`📏 ${raw.distCm}cm`,W-60,H-12);
   }
-  ctx.fillStyle=col; ctx.font="600 12px system-ui"; ctx.globalAlpha=.92; ctx.fillText(overall+"/100",8,H-8);
+
+  // ── Risk panel (bottom-left) ──────────────────────────────────
+  const panelX=8, panelY=H-92, panelW=148, panelH=86;
+  ctx.globalAlpha=.82;
+  ctx.fillStyle="rgba(2,8,20,.85)";
+  _roundRect(ctx,panelX,panelY,panelW,panelH,8);
+  ctx.fill();
+  ctx.globalAlpha=1;
+
+  const rows=[
+    { label:isAr?"الرقبة":"Neck",     col:neckCol, score:neckScore },
+    { label:isAr?"الكتفين":"Shoulder", col:shCol,   score:shScore  },
+    { label:isAr?"الظهر":"Back",       col:backCol, score:backScore },
+  ];
+  ctx.font="bold 10px system-ui";
+  rows.forEach(({label,col,score},i)=>{
+    const ry=panelY+14+i*24;
+    // Label
+    ctx.fillStyle="#94a3b8"; ctx.fillText(label,panelX+8,ry);
+    // Risk bar (50px wide)
+    const barX=panelX+60, barW=60, barFill=Math.max(4,(score??0)/100*barW);
+    ctx.fillStyle="rgba(255,255,255,.08)";
+    _roundRect(ctx,barX,ry-9,barW,10,5); ctx.fill();
+    ctx.fillStyle=col;
+    _roundRect(ctx,barX,ry-9,barFill,10,5); ctx.fill();
+    // Risk text
+    ctx.fillStyle=col;
+    ctx.font="600 9px system-ui";
+    ctx.fillText(_riskLabel(score,isAr),barX+barW+4,ry);
+    ctx.font="bold 10px system-ui";
+  });
+
   ctx.restore();
 }
 
-function drawSide(ctx,res,W,H){
+function _roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.arcTo(x+w,y,x+w,y+r,r); ctx.lineTo(x+w,y+h-r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r); ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r); ctx.lineTo(x,y+r);
+  ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+}
+
+function drawSide(ctx,res,W,H,isAr=false){
   if(!res?.lms) return;
-  const{lms:lm,overall}=res, col=sc(overall), px=p=>[p.x*W,p.y*H];
-  ctx.save(); ctx.lineWidth=2.5; ctx.globalAlpha=.88; ctx.strokeStyle=col;
-  [[lm.ear,lm.sh],[lm.sh,lm.hip],[lm.hip,lm.knee],[lm.knee,lm.ankle]].forEach(([a,b])=>{
-    if(!a||!b) return;
+  const{lms:lm,overall,metrics}=res;
+  const px=p=>p?[p.x*W,p.y*H]:[0,0];
+  const valid=p=>p&&(p.visibility==null||p.visibility>0.3);
+
+  const neckScore = metrics?.neck_lean?.score  ?? overall;
+  const trunkScore= metrics?.trunk_lean?.score ?? overall;
+  const hipScore  = metrics?.hip_angle?.score  ?? overall;
+  const neckCol   = _riskColor(neckScore);
+  const trunkCol  = _riskColor(trunkScore);
+  const hipCol    = _riskColor(hipScore);
+
+  ctx.save();
+
+  // ── Connections ───────────────────────────────────────────────
+  const SIDE_CONN=[
+    {pts:[lm.ear,lm.sh],   col:neckCol,  w:3},
+    {pts:[lm.sh,lm.hip],   col:trunkCol, w:3.5},
+    {pts:[lm.hip,lm.knee], col:hipCol,   w:3},
+    {pts:[lm.knee,lm.ankle],col:"#6366f1",w:2.5},
+  ];
+  SIDE_CONN.forEach(({pts:[a,b],col,w})=>{
+    if(!valid(a)||!valid(b)) return;
     const[ax,ay]=px(a),[bx,by]=px(b);
+    ctx.globalAlpha=.9; ctx.lineWidth=w; ctx.strokeStyle=col;
     ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
   });
-  [lm.ear,lm.sh,lm.hip,lm.knee,lm.ankle].filter(Boolean).forEach(p=>{
-    const[x,y]=px(p); ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fillStyle=col; ctx.fill();
+
+  // ── Joints ────────────────────────────────────────────────────
+  [{p:lm.ear,col:neckCol,r:5},{p:lm.sh,col:neckCol,r:7},
+   {p:lm.hip,col:hipCol,r:6},{p:lm.knee,col:"#6366f1",r:5},
+   {p:lm.ankle,col:"#6366f1",r:4}].forEach(({p,col,r})=>{
+    if(!valid(p)) return;
+    const[x,y]=px(p);
+    ctx.globalAlpha=.18; ctx.beginPath(); ctx.arc(x,y,r*2.5,0,Math.PI*2);
+    ctx.fillStyle=col; ctx.fill();
+    ctx.globalAlpha=1; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=col; ctx.fill();
+    ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,.6)"; ctx.stroke();
   });
-  ctx.fillStyle=col; ctx.font="600 12px system-ui"; ctx.globalAlpha=.92; ctx.fillText(overall+"/100",8,H-8);
+
+  // ── Angle labels ──────────────────────────────────────────────
+  ctx.font="bold 10px system-ui"; ctx.globalAlpha=.95;
+
+  // Neck angle at shoulder
+  if(valid(lm.ear)&&valid(lm.sh)){
+    const neckAng=metrics?.neck_lean?.value??_angle2pt(lm.ear,lm.sh);
+    if(neckAng!=null){
+      const[sx,sy]=px(lm.sh);
+      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(sx+8,sy-14,40,16);
+      ctx.fillStyle=neckCol; ctx.fillText(`${neckAng}°`,sx+10,sy-2);
+    }
+  }
+  // Hip angle
+  if(valid(lm.sh)&&valid(lm.hip)&&valid(lm.knee)){
+    const hipAng=_angle3pt(lm.sh,lm.hip,lm.knee);
+    if(hipAng!=null){
+      const[hx,hy]=px(lm.hip);
+      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(hx+8,hy-14,44,16);
+      ctx.fillStyle=hipCol; ctx.fillText(`${hipAng}°`,hx+10,hy-2);
+    }
+  }
+  // Knee angle
+  if(valid(lm.hip)&&valid(lm.knee)&&valid(lm.ankle)){
+    const kneeAng=_angle3pt(lm.hip,lm.knee,lm.ankle);
+    if(kneeAng!=null){
+      const[kx,ky]=px(lm.knee);
+      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(kx+8,ky-14,44,16);
+      ctx.fillStyle="#6366f1"; ctx.fillText(`${kneeAng}°`,kx+10,ky-2);
+    }
+  }
+
+  // ── Risk panel ────────────────────────────────────────────────
+  const panelX=8,panelY=H-92,panelW=148,panelH=86;
+  ctx.globalAlpha=.82; ctx.fillStyle="rgba(2,8,20,.85)";
+  _roundRect(ctx,panelX,panelY,panelW,panelH,8); ctx.fill();
+  ctx.globalAlpha=1;
+  const rows=[
+    {label:isAr?"الرقبة":"Neck",  col:neckCol,  score:neckScore},
+    {label:isAr?"الجذع":"Trunk",  col:trunkCol, score:trunkScore},
+    {label:isAr?"الورك":"Hip",    col:hipCol,   score:hipScore},
+  ];
+  ctx.font="bold 10px system-ui";
+  rows.forEach(({label,col,score},i)=>{
+    const ry=panelY+14+i*24;
+    ctx.fillStyle="#94a3b8"; ctx.fillText(label,panelX+8,ry);
+    const barX=panelX+60,barW=60,barFill=Math.max(4,(score??0)/100*barW);
+    ctx.fillStyle="rgba(255,255,255,.08)";
+    _roundRect(ctx,barX,ry-9,barW,10,5); ctx.fill();
+    ctx.fillStyle=col; _roundRect(ctx,barX,ry-9,barFill,10,5); ctx.fill();
+    ctx.fillStyle=col; ctx.font="600 9px system-ui";
+    ctx.fillText(_riskLabel(score,isAr),barX+barW+4,ry);
+    ctx.font="bold 10px system-ui";
+  });
+
   ctx.restore();
 }
 
@@ -1948,7 +2178,7 @@ export default function App(){
             histRef.current.push(smoothed1||finalResult.overall);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             setHistory([...histRef.current]);setAnalysis(result);lastAnalRef.current=result;
-            if(mode==="side")drawSide(ctx,result,W,H);else drawFront(ctx,result,W,H);
+            if(mode==="side")drawSide(ctx,finalResult,W,H,isAr);else drawFront(ctx,finalResult,W,H,isAr);
             const now=Date.now();
             if(result.overall<65){
               if(!badRef.current)badRef.current=now;
@@ -3188,6 +3418,90 @@ export default function App(){
           </div>
 
           {/* Score overlay */}
+        {/* Professional live metrics panel */}
+        {analysis && score > 0 && (
+          <div style={{
+            position:"absolute", top:10, right:10,
+            background:"rgba(2,8,20,.88)", backdropFilter:"blur(8px)",
+            border:"1px solid rgba(255,255,255,.08)", borderRadius:12,
+            padding:"10px 14px", minWidth:160, zIndex:10,
+          }}>
+            {/* Ergonomic Score */}
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,
+              paddingBottom:8,borderBottom:"1px solid rgba(255,255,255,.06)"}}>
+              <div style={{
+                width:38,height:38,borderRadius:"50%",
+                background:`conic-gradient(${score>=75?"#10b981":score>=55?"#f59e0b":"#ef4444"} ${score*3.6}deg, rgba(255,255,255,.06) 0deg)`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:11,fontWeight:900,color:"#f0f6ff",flexShrink:0,
+              }}>{score}</div>
+              <div>
+                <div style={{fontSize:9,color:"#64748b",fontWeight:600,letterSpacing:.5}}>
+                  {isAr?"الدرجة الكلية":"ERGONOMIC SCORE"}
+                </div>
+                <div style={{fontSize:11,fontWeight:700,
+                  color:score>=75?"#10b981":score>=55?"#f59e0b":"#ef4444"}}>
+                  {score>=75?(isAr?"ممتاز":"Excellent"):score>=55?(isAr?"مقبول":"Fair"):(isAr?"ضعيف":"Poor")}
+                </div>
+              </div>
+            </div>
+
+            {/* Risk zones */}
+            {[
+              {
+                label:    isAr?"الرقبة":"Neck",
+                score:    analysis?.metrics?.neck_lean?.score,
+                value:    analysis?.metrics?.neck_lean?.value,
+                unit:     "°",
+              },
+              {
+                label:    isAr?"الكتفين":"Shoulder",
+                score:    analysis?.metrics?.shoulder_level?.score,
+                value:    analysis?.metrics?.shoulder_level?.value,
+                unit:     "°",
+              },
+              {
+                label:    isAr?"الظهر":"Back",
+                score:    analysis?.metrics?.spine_lean?.score ?? analysis?.metrics?.spine_upper?.score,
+                value:    analysis?.metrics?.spine_lean?.value,
+                unit:     "°",
+              },
+              {
+                label:    isAr?"المسافة":"Distance",
+                score:    analysis?.metrics?.screen_distance?.score,
+                value:    analysis?.distCm,
+                unit:     "cm",
+              },
+            ].map(({label,score:s,value,unit},i)=>{
+              const col = s==null?"#475569":s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
+              const risk= s==null?(isAr?"—":"—"):s>=80?(isAr?"منخفض":"Low"):s>=60?(isAr?"متوسط":"Med"):(isAr?"مرتفع":"High");
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",
+                  justifyContent:"space-between",marginBottom:5}}>
+                  <div style={{fontSize:10,color:"#64748b",width:60}}>{label}</div>
+                  <div style={{flex:1,height:4,background:"rgba(255,255,255,.06)",
+                    borderRadius:2,margin:"0 6px",overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${s??0}%`,
+                      background:col,borderRadius:2,transition:"width .4s ease"}}/>
+                  </div>
+                  <div style={{fontSize:9,fontWeight:700,color:col,width:28,textAlign:"right"}}>
+                    {risk}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Pain prediction */}
+            {analysis?.pain_bar?.urgency && analysis.pain_bar.urgency !== "none" && (
+              <div style={{marginTop:8,paddingTop:8,
+                borderTop:"1px solid rgba(255,255,255,.06)"}}>
+                <div style={{fontSize:9,color:analysis.pain_bar.color,fontWeight:700}}>
+                  {isAr ? analysis.pain_bar.label_ar : analysis.pain_bar.label}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
           {score>0&&(
             <div style={{
               position:"absolute",bottom:8,right:isAr?"auto":8,left:isAr?8:"auto",
