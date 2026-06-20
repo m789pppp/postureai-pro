@@ -222,6 +222,15 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   const [exported, setExported] = useState(false);
   const isAr = lang === "ar";
 
+  // Individual vs Company — same detection pattern used everywhere else.
+  // Manager Insights and Department comparisons are company-only concepts —
+  // an individual has no department or manager to compare against.
+  const isCompany = profile?.user_type === "hr_admin"
+    || profile?.user_type === "employee"
+    || !!profile?.is_org_owner
+    || !!profile?.company_id
+    || profile?.acct_type === "company";
+
   const allScores  = sessions.map(s => s.avg_score || 0).filter(Boolean);
   const avgScore   = avg(allScores);
   const thisWeek   = sessions.filter(s => (Date.now() - (s.created_at?.toDate?.() || new Date(s.created_at || 0))) < 7 * 86400000);
@@ -298,8 +307,12 @@ This user score: ${avgScore}/100
 
   const TABS = [
     { id: "summary",    icon: "📋", en: "Weekly Summary",    ar: "ملخص أسبوعي" },
-    { id: "manager",    icon: "👔", en: "Manager Insights",  ar: "تقرير المدير" },
-    { id: "department", icon: "🏢", en: "Department",        ar: "المقارنة" },
+    // Manager Insights and Department comparison are company-only — an
+    // individual has no manager or department to be compared against.
+    ...(isCompany ? [
+      { id: "manager",    icon: "👔", en: "Manager Insights",  ar: "تقرير المدير" },
+      { id: "department", icon: "🏢", en: "Department",        ar: "المقارنة" },
+    ] : []),
   ];
 
   // Mock dept data if no allUsers
@@ -326,7 +339,9 @@ This user score: ${avgScore}/100
                   {isAr ? "تقارير الذكاء الاصطناعي" : "AI Reports Engine"}
                 </div>
                 <div style={{ fontSize: 10, color: "#059669", fontWeight: 600 }}>
-                  {isAr ? "تقارير تلقائية · PDF تنفيذي · مقارنة أقسام" : "Automated summaries · Executive PDF · Dept comparisons"}
+                  {isCompany
+                    ? (isAr ? "تقارير تلقائية · PDF تنفيذي · مقارنة أقسام" : "Automated summaries · Executive PDF · Dept comparisons")
+                    : (isAr ? "تقارير تلقائية · ملخص أسبوعي شخصي" : "Automated summaries · Personal weekly wrap-up")}
                 </div>
               </div>
             </div>
@@ -408,8 +423,8 @@ This user score: ${avgScore}/100
             </div>
           )}
 
-          {/* ── Manager Insights ── */}
-          {tab === "manager" && sessions.length > 0 && (
+          {/* ── Manager Insights — company only ── */}
+          {tab === "manager" && isCompany && sessions.length > 0 && (
             <div>
               <div style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, padding: 16, marginBottom: 16 }}>
                 <div style={{ fontFamily: "Syne,sans-serif", fontSize: 13, fontWeight: 800, color: "#e8f0fe", marginBottom: 12 }}>
@@ -436,8 +451,8 @@ This user score: ${avgScore}/100
             </div>
           )}
 
-          {/* ── Department Comparison ── */}
-          {tab === "department" && (
+          {/* ── Department Comparison — company only ── */}
+          {tab === "department" && isCompany && (
             <div>
               <div style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, padding: 16, marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
