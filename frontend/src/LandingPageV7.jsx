@@ -93,6 +93,46 @@ function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
   return <span ref={ref}>{prefix}{v.toFixed(decimals)}{suffix}</span>;
 }
 
+// ── Currency detection ──────────────────────────────────────────────
+// Real IP-based country lookup (not language!) — a Saudi visitor browsing
+// in Arabic still pays USD via Stripe; an Egyptian visitor browsing in
+// English still pays EGP via PayMob. Detected once per browser session,
+// cached, with a silent fallback to the language heuristic if the lookup
+// fails (ad-blockers, offline, slow network) — never breaks the page.
+function useCurrency(arFallback) {
+  const [country, setCountry] = useState(() => {
+    try { return sessionStorage.getItem("corvus_geo_country") || null; } catch { return null; }
+  });
+  const [override, setOverrideState] = useState(() => {
+    try { return sessionStorage.getItem("corvus_currency_override") || null; } catch { return null; }
+  });
+
+  useEffect(() => {
+    if (country) return; // already cached this session
+    let cancelled = false;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2500);
+    fetch("https://get.geojs.io/v1/ip/country.json", { signal: ctrl.signal })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled || !data?.country) return;
+        setCountry(data.country);
+        try { sessionStorage.setItem("corvus_geo_country", data.country); } catch {}
+      })
+      .catch(() => {}) // silent — falls back to language heuristic below
+      .finally(() => clearTimeout(t));
+    return () => { cancelled = true; ctrl.abort(); clearTimeout(t); };
+  }, [country]);
+
+  const setOverride = (code) => {
+    setOverrideState(code);
+    try { sessionStorage.setItem("corvus_currency_override", code); } catch {}
+  };
+
+  const isEgypt = override ? override === "EGP" : (country ? country === "EG" : arFallback);
+  return { isEgypt, setOverride };
+}
+
 // ── Design tokens (brand colors — unchanged) ───────────────────────
 const C = {
   bg:    "#030b14",
@@ -986,7 +1026,7 @@ function CaseStudies({ lang }) {
 }
 
 // ── Pricing ───────────────────────────────────────────────────────
-function Pricing({ lang, onCTA, mode }) {
+function Pricing({ lang, onCTA, mode, isEgypt, setCurrencyOverride }) {
   const ar = lang === "ar";
   const [billing, setBilling] = useState("yearly");
   const isCompany = mode === "company";
@@ -1080,6 +1120,21 @@ function Pricing({ lang, onCTA, mode }) {
                 </button>
               ))}
             </div>
+
+            <div style={{ marginTop:16, fontSize:13, color:C.muted }}>
+              {isEgypt
+                ? (ar ? "🇪🇬 الأسعار معروضة بالجنيه المصري" : "🇪🇬 Prices shown in EGP")
+                : (ar ? "🌍 الأسعار معروضة بالدولار الأمريكي" : "🌍 Prices shown in USD")}
+              {" · "}
+              <button onClick={() => setCurrencyOverride(isEgypt ? "USD" : "EGP")} style={{
+                background:"none", border:"none", color:C.indigo, cursor:"pointer",
+                fontSize:13, textDecoration:"underline", padding:0, fontFamily:"inherit",
+              }}>
+                {isEgypt
+                  ? (ar ? "اعرض بالدولار" : "Show in USD")
+                  : (ar ? "اعرض بالجنيه" : "Show in EGP")}
+              </button>
+            </div>
           </div>
         </Reveal>
 
@@ -1120,13 +1175,13 @@ function Pricing({ lang, onCTA, mode }) {
                     </div>
                   ) : (
                     <div>
-                      {ar ? (
+                      {isEgypt ? (
                         <>
                           <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
                             <span style={{ fontSize:40, fontWeight:800, color:C.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
                               {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()}
                             </span>
-                            <span style={{ fontSize:14.5, color:C.muted }}>ج.م./شهر</span>
+                            <span style={{ fontSize:14.5, color:C.muted }}>{ar ? "ج.م./شهر" : "EGP/mo"}</span>
                           </div>
                           <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
                             ≈ ${p.priceUSD[billing]}/mo
@@ -1138,10 +1193,10 @@ function Pricing({ lang, onCTA, mode }) {
                             <span style={{ fontSize:40, fontWeight:800, color:C.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
                               ${p.priceUSD[billing]}
                             </span>
-                            <span style={{ fontSize:14.5, color:C.muted }}>/mo</span>
+                            <span style={{ fontSize:14.5, color:C.muted }}>/{ar ? "شهر" : "mo"}</span>
                           </div>
                           <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
-                            ≈ {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()} EGP/mo
+                            ≈ {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()} {ar ? "ج.م./شهر" : "EGP/mo"}
                           </div>
                         </>
                       )}
@@ -1445,6 +1500,11 @@ export default function LandingPage({ onNavigate }) {
   // but individuals get an equally first-class path via the toggle.
   const [mode, setMode] = useState("company"); // "individual" | "company"
 
+  // Real country detection (IP-based) decides which currency is primary
+  // in Pricing — independent of UI language. Falls back to the language
+  // heuristic if the lookup fails or hasn't resolved yet.
+  const { isEgypt, setOverride } = useCurrency(lang === "ar");
+
   const handleCTA = useCallback(e => {
     // Track conversion click
     if (window.posthog) window.posthog.capture("landing_cta_click", { mode });
@@ -1465,7 +1525,7 @@ export default function LandingPage({ onNavigate }) {
       <Features lang={lang}/>
       <HowItWorks lang={lang}/>
       <CaseStudies lang={lang}/>
-      <Pricing lang={lang} onCTA={handleCTA} mode={mode}/>
+      <Pricing lang={lang} onCTA={handleCTA} mode={mode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
       <Testimonials lang={lang}/>
       <FAQ lang={lang}/>
       <FinalCTA lang={lang} onCTA={handleCTA}/>
