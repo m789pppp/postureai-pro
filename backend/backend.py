@@ -727,7 +727,8 @@ def validate_frame(data):
     if "," in frame:
         frame = frame.split(",", 1)[1]
     if len(frame) > 960_000:
-        return False, f"Frame too large ({len(frame)//1024}KB, max 700KB)"
+        actual_kb = int(len(frame) * 3 / 4 / 1024)  # base64 → real decoded byte size
+        return False, f"Frame too large ({actual_kb}KB, max 700KB)"
     mode = data.get("mode", "")
     if mode not in ("laptop", "phone", "side", ""):
         return False, f"Invalid mode: {mode}"
@@ -2441,13 +2442,18 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     out["confidence"] = confidence
     out["distCm"]     = dist_cm   # top-level for frontend skeleton
     # raw object for frontend drawFront function
+    # NOTE: idealDistLo/idealDistHi are the recommended distance range for
+    # the current device mode (laptop vs external monitor) — NOT a
+    # confidence interval on distCm itself. dist_cm is always a number by
+    # this point (fallback at the top of this function guarantees it),
+    # so these are never actually None in practice; kept defensive anyway.
     out["raw"] = {
-        "distCm": dist_cm,
-        "lo":     lo if dist_cm else None,
-        "hi":     hi if dist_cm else None,
-        "neckLean": round(neck_lean, 1),
-        "spineLean": round(spine_lean, 1),
-        "shTilt":  round(sh_tilt, 1),
+        "distCm":      dist_cm,
+        "idealDistLo": lo if dist_cm else None,
+        "idealDistHi": hi if dist_cm else None,
+        "neckLean":    round(neck_lean, 1)  if neck_lean  is not None else None,
+        "spineLean":   round(spine_lean, 1) if spine_lean is not None else None,
+        "shTilt":      round(sh_tilt, 1)    if sh_tilt    is not None else None,
     }
     out["metrics"].update({
         "neck_lean":       {"value": round(neck_lean, 1),  "score": neck_sc,  "unit": "°",  "label": "Neck lean"},
@@ -4630,10 +4636,17 @@ def analyze():
         import hashlib as _hl
         b64_raw = data.get("frame", "")
         if "," in b64_raw: b64_raw = b64_raw.split(",", 1)[1]
+        # Browsers always emit correctly-padded base64, but some clients/proxies
+        # strip trailing '='. Pad to the correct length (0/1/2 chars) rather than
+        # blindly appending '==', which only happens to work when exactly 2 are
+        # missing and raises "Incorrect padding" otherwise.
+        _pad_needed = (-len(b64_raw)) % 4
+        if _pad_needed:
+            b64_raw = b64_raw + ("=" * _pad_needed)
         try:
             # Thumbnail hash: decode → resize 32x32 → md5 pixels
             import base64 as _b64
-            _raw_bytes = _b64.b64decode(b64_raw + "==")
+            _raw_bytes = _b64.b64decode(b64_raw)
             _np_arr    = np.frombuffer(_raw_bytes, dtype=np.uint8) if np else None
             if _np_arr is not None and len(_np_arr) > 100:
                 _thumb = cv2.imdecode(_np_arr, cv2.IMREAD_GRAYSCALE)
