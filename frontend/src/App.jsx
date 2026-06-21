@@ -2188,8 +2188,10 @@ export default function App(){
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
                 lastAlRef.current=now;acRef.current.total++;
-                const nl=finalResult.metrics?.neck_lean?.value||0,dist=finalResult.distCm||0;
-                const yaw=finalResult.metrics?.head_yaw?.value||0;
+                const nlMet=finalResult.metrics?.neck_lean, yawMet=finalResult.metrics?.head_yaw;
+                const nl=nlMet?.reliable!==false?(nlMet?.value||0):0;
+                const yaw=yawMet?.reliable!==false?(yawMet?.value||0):0;
+                const dist=finalResult.distCm||0;
                 const[lo,hi]=finalResult.lo&&finalResult.hi?[finalResult.lo,finalResult.hi]:[50,80];
                 let msg="Sustained poor posture — correct position now";
                 let msgAr="وضعية سيئة مستمرة — صحّح وضعيتك الآن";
