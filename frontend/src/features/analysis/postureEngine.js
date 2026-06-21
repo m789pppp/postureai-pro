@@ -145,7 +145,11 @@ function estimateHeadYaw(lms, W, H) {
 // ── Distance estimation v2 (IPD-based, more accurate) ────────────
 // Average adult IPD ≈ 63mm. Focal length calibrated to 720p.
 // Falls back to shoulder width if eyes not visible.
-function estimateDistanceCm(lms, W, H) {
+// yawDeg corrects for foreshortening: when the head is turned, the
+// projected eye-to-eye width shrinks even at constant distance, which
+// previously read as "moved closer" and fired false proximity alerts
+// during normal side glances.
+function estimateDistanceCm(lms, W, H, yawDeg = 0) {
   try {
     const g = idx => lms[idx];
     const lEye = { x: g(PL.L_EYE).x * W };
@@ -154,7 +158,11 @@ function estimateDistanceCm(lms, W, H) {
     const rEyeVis = g(PL.R_EYE)?.visibility || 0;
 
     if (lEyeVis > 0.5 && rEyeVis > 0.5) {
-      const ipdPx = Math.abs(rEye.x - lEye.x);
+      let ipdPx = Math.abs(rEye.x - lEye.x);
+      // Undo foreshortening, clamp correction to avoid blow-up at extreme yaw
+      const yawRad = Math.min(50, Math.abs(yawDeg)) * Math.PI / 180;
+      const cosYaw = Math.max(Math.cos(yawRad), 0.55); // cap ~1.8x correction
+      ipdPx = ipdPx / cosYaw;
       if (ipdPx > 4) {
         // focal_px at 720p ≈ 800; IPD_real ≈ 6.3cm
         const focal = 800 * (W / 1280);
@@ -229,7 +237,7 @@ export function analyzeMP(lms, W, H, mode) {
   const headYaw = estimateHeadYaw(lms, W, H);
 
   // Distance (IPD-based)
-  const distCm = estimateDistanceCm(lms, W, H);
+  const distCm = estimateDistanceCm(lms, W, H, headYaw);
   const lo = mode === "laptop" ? 50 : 60;
   const hi = mode === "laptop" ? 80 : 90;
   const distSc = distanceScore(distCm, lo, hi);
