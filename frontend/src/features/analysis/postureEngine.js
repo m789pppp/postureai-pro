@@ -192,7 +192,7 @@ function estimateDistanceCm(lms, W, H, yawDeg = 0) {
 // Any change here MUST be mirrored in backend.py score_m calls
 const T = {
   // Front analysis (matches backend analyze_front)
-  neckLean:  { ok: 7,  bad: 20 },   // backend: score_m(neck_lean, 0, 7, 20)
+  neckLean:  { ok: 7,  bad: 20 },   // superseded in analyzeMP() by shoulder-width-adjusted neckOkAdj/neckBadAdj; kept as fallback reference
   headTilt:  { ok: 3,  bad: 10 },   // backend: score_m(head_tilt, 0, 3, 10)
   shTilt:    { ok: 3,  bad: 10 },   // backend: score_m(sh_tilt,   0, 3, 10)
   spineLean: { ok: 5,  bad: 15 },   // backend: score_m(spine_lean,0, 5, 15)
@@ -228,7 +228,23 @@ export function analyzeMP(lms, W, H, mode) {
   const midEar = { x: (lEar.x + rEar.x) / 2, y: (lEar.y + rEar.y) / 2 };
   const midHip = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
 
-  const neckLean  = angleVert(midSh, midEar);
+  // ── Neck lean: nose+ear blend (ported from backend.py's fix) ────
+  // Ear-only reference is biased by head yaw: turning the head shifts
+  // the ear sideways relative to the shoulder and reads as "more
+  // forward lean" even with perfect posture. Nose→shoulder measures
+  // true forward head displacement and isn't fooled by yaw. Stays
+  // ear-weighted when the nose itself isn't reliably visible.
+  const noseVis    = g(PL.NOSE)?.visibility ?? 1;
+  const earWeight  = noseVis > 0.7 ? 0.15 : 0.50;
+  const noseWeight = 1 - earWeight;
+  const neckRef = {
+    x: nose.x * noseWeight + midEar.x * earWeight,
+    y: nose.y * noseWeight + midEar.y * earWeight,
+  };
+  const neckLeanRaw    = angleVert(midSh, neckRef);
+  const noseCorrection = 5.0 * noseWeight; // nose sits ~10cm ahead of the ear plane
+  const neckLean = Math.max(0, neckLeanRaw - noseCorrection);
+
   const headTilt  = angleHoriz(lEye, rEye);
   const shTilt    = angleHoriz(lSh, rSh);
   const spineLean = angleVert(midHip, midSh);
@@ -241,6 +257,17 @@ export function analyzeMP(lms, W, H, mode) {
   const lo = mode === "laptop" ? 50 : 60;
   const hi = mode === "laptop" ? 80 : 90;
   const distSc = distanceScore(distCm, lo, hi);
+
+  // ── Neck threshold normalization by apparent shoulder width ─────
+  // A fixed degree threshold is too strict when sitting close to the
+  // camera (shoulders fill more of the frame → angles read larger for
+  // the same real lean) and too loose far away. Matches backend.py.
+  const shWidthPx = Math.abs(rSh.x - lSh.x);
+  const refShFrac = 0.34;
+  const shFrac    = shWidthPx / Math.max(W, 1);
+  const shRatio   = Math.max(0.70, Math.min(1.30, shFrac / refShFrac));
+  const neckOkAdj  = Math.max(5.0, 6.0  * shRatio);
+  const neckBadAdj = Math.max(12.0, 17.0 * shRatio);
 
   // ── Confidence gating ─────────────────────────────────────────
   // If the landmarks a metric depends on aren't reliably visible
@@ -257,14 +284,37 @@ export function analyzeMP(lms, W, H, mode) {
   const neckOK  = shOK && earOK;
   const spineOK = shOK && hipOK;
 
-  // Scores — strict thresholds
-  const neckSc  = neckOK  ? scoreMetric(neckLean,  0, T.neckLean.ok,  T.neckLean.bad) : NEUTRAL;
-  const tiltSc  = eyeOK   ? scoreMetric(headTilt,  0, T.headTilt.ok,  T.headTilt.bad) : NEUTRAL;
-  const shSc    = shOK    ? scoreMetric(shTilt,    0, T.shTilt.ok,    T.shTilt.bad)   : NEUTRAL;
-  const spineSc = spineOK ? scoreMetric(spineLean, 0, T.spineLean.ok, T.spineLean.bad): NEUTRAL;
+  // Scores — strict thresholds (neck now uses shoulder-width-adjusted thresholds)
+  const neckSc  = neckOK  ? scoreMetric(neckLean,  0, neckOkAdj,     neckBadAdj)    : NEUTRAL;
+  const tiltSc  = eyeOK   ? scoreMetric(headTilt,  0, T.headTilt.ok, T.headTilt.bad): NEUTRAL;
+  const shSc    = shOK    ? scoreMetric(shTilt,    0, T.shTilt.ok,   T.shTilt.bad)  : NEUTRAL;
+  const spineSc = spineOK ? scoreMetric(spineLean, 0, T.spineLean.ok,T.spineLean.bad): NEUTRAL;
 
   // Yaw score: ok ≤ 8°, bad ≥ 20°
   const yawSc = eyeOK ? scoreMetric(Math.abs(headYaw), 0, 8, 20) : NEUTRAL;
+
+  // ── Forward Head Posture index (cm) — ported from backend.py ────
+  // Converts the ear→shoulder pixel offset to real-world cm using
+  // shoulder width as a reference scale. More clinically readable
+  // than a bare degree number. Informational — not in the weighted
+  // overall score (would double-count with neck_lean above).
+  const shWidthCm   = 42.0;
+  const cmPerPx     = shWidthCm / Math.max(shWidthPx, 1);
+  const fhpCm       = Math.round(Math.abs(midEar.x - midSh.x) * cmPerPx * 10) / 10;
+  const extraLoadKg = Math.round((fhpCm / 2.5) * 4.5 * 10) / 10;
+  const fhpSc       = neckOK ? scoreMetric(fhpCm, 0, 2, 6) : NEUTRAL;
+
+  // ── Rounded shoulders (protraction) via Z-depth — ported from backend.py ──
+  // MediaPipe Z: more negative = closer to camera (in front of body).
+  // Rounded/hunched shoulders push both shoulders forward (toward the
+  // camera) relative to the torso. Uses the Pose landmark Z directly —
+  // no FaceMesh/solvePnP needed. Informational, not in weighted score.
+  const lShZ = g(PL.L_SHOULDER)?.z ?? 0;
+  const rShZ = g(PL.R_SHOULDER)?.z ?? 0;
+  const shZAvg       = (lShZ + rShZ) / 2;
+  const shZAsym      = Math.abs(lShZ - rShZ);
+  const roundedDepth = Math.max(0, -shZAvg * 100);
+  const roundedSc    = shOK ? scoreMetric(roundedDepth, 0, 8, 20) : NEUTRAL;
 
   // Weights — synced with backend.py (must sum ≤ 1.0; remaining filled with baseline)
   const W_NECK = 0.28, W_TILT = 0.14, W_SH = 0.11, W_SPINE = 0.14, W_DIST = 0.18, W_YAW = 0.08;
@@ -295,17 +345,23 @@ export function analyzeMP(lms, W, H, mode) {
     distCm < lo - 10 && `⚠️ Very close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
     distCm < lo && distCm >= lo - 10 && `Too close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
     distCm > hi + 15 && `Too far from screen (${distCm}cm) — ideal is ${lo}–${hi}cm`,
+    neckOK && fhpCm > 6 && `⚠️ Forward head posture ${fhpCm}cm (+${extraLoadKg}kg neck load) — critical: raise monitor immediately`,
+    neckOK && fhpCm > 3 && fhpCm <= 6 && `Forward head posture ${fhpCm}cm (+${extraLoadKg}kg neck load) — tuck chin back`,
+    shOK && roundedDepth > 15 && `⚠️ Rounded shoulders detected — pull shoulder blades together and down`,
+    shOK && roundedDepth > 8 && roundedDepth <= 15 && `Shoulders slightly forward — open chest, squeeze shoulder blades gently`,
   ].filter(Boolean);
 
   return {
     score: overall,
     metrics: {
-      neck_lean:       { value: Math.round(neckLean),  score: neckSc,  unit: "°",  label: "Neck lean",     reliable: neckOK },
-      head_tilt:       { value: Math.round(headTilt),  score: tiltSc,  unit: "°",  label: "Head tilt",     reliable: eyeOK },
-      shoulder_level:  { value: Math.round(shTilt),    score: shSc,    unit: "°",  label: "Shoulder level",reliable: shOK },
-      spine_lean:      { value: Math.round(spineLean), score: spineSc, unit: "°",  label: "Spine lean",    reliable: spineOK },
-      head_yaw:        { value: Math.round(headYaw),   score: yawSc,   unit: "°",  label: "Head turn",     reliable: eyeOK },
-      screen_distance: { value: distCm,                score: distSc,  unit: "cm", label: "Screen distance" },
+      neck_lean:        { value: Math.round(neckLean),  score: neckSc,    unit: "°",     label: "Neck lean",                reliable: neckOK },
+      head_tilt:        { value: Math.round(headTilt),  score: tiltSc,    unit: "°",     label: "Head tilt",                reliable: eyeOK },
+      shoulder_level:   { value: Math.round(shTilt),    score: shSc,      unit: "°",     label: "Shoulder level",           reliable: shOK },
+      spine_lean:       { value: Math.round(spineLean), score: spineSc,   unit: "°",     label: "Spine lean",               reliable: spineOK },
+      head_yaw:         { value: Math.round(headYaw),   score: yawSc,     unit: "°",     label: "Head turn",                reliable: eyeOK },
+      screen_distance:  { value: distCm,                score: distSc,   unit: "cm",    label: "Screen distance" },
+      fhp_index:        { value: fhpCm, score: fhpSc, unit: "cm", label: "Forward head posture", extra_load_kg: extraLoadKg, reliable: neckOK },
+      rounded_shoulders:{ value: Math.round(roundedDepth*10)/10, score: roundedSc, unit: "depth", label: "Rounded shoulders", asymmetry: Math.round(shZAsym*1000)/1000, reliable: shOK },
     },
     alerts,
     recommendations: [
