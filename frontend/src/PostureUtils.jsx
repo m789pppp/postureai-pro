@@ -2,36 +2,47 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 // ── Score Smoothing ───────────────────────────────────────────────
 /**
- * useScoreSmoothing — moving average + exponential smoothing
+ * useScoreSmoothing — time-windowed, time-weighted average
+ *
+ * Previously this was a *sample-count* window (e.g. 5 samples), which
+ * at a ~60fps analysis loop is under 100ms of real time — nowhere
+ * near long enough to avoid a 1-second head turn visibly yanking the
+ * displayed score. This version drops anything older than `windowMs`
+ * and weights what's left by actual elapsed time (not array position,
+ * so it's correct regardless of frame rate / dropped frames), giving
+ * a genuinely ~10-second representative average.
+ *
  * Returns { smoothed, push, reset }
  */
-export function useScoreSmoothing(windowSize = 5, alpha = 0.35) {
-  const bufferRef  = useRef([]);
-  const smoothedRef= useRef(0);
+export function useScoreSmoothing(windowMs = 10000, halfLifeMs = 3000) {
+  const bufferRef  = useRef([]); // [{t, v}]
   const [display, setDisplay] = useState(0);
 
   const push = useCallback((rawScore) => {
     if (rawScore == null || rawScore < 0) return;
 
+    const now = Date.now();
     const buf = bufferRef.current;
-    buf.push(rawScore);
-    if (buf.length > windowSize) buf.shift();
+    buf.push({ t: now, v: rawScore });
+    while (buf.length && now - buf[0].t > windowMs) buf.shift();
 
-    // Moving average
-    const movAvg = buf.reduce((a, b) => a + b, 0) / buf.length;
+    // Time-weighted average: a sample halfLifeMs old counts half as
+    // much as a fresh one. Still spans the whole window (so a brief
+    // dip doesn't disappear instantly), but stays responsive enough
+    // to reflect genuinely sustained changes, not just a single frame.
+    let wSum = 0, vSum = 0;
+    for (const s of buf) {
+      const w = Math.pow(0.5, (now - s.t) / halfLifeMs);
+      wSum += w; vSum += w * s.v;
+    }
+    const next = wSum > 0 ? Math.round(vSum / wSum) : Math.round(rawScore);
 
-    // Exponential smoothing on top
-    const prev = smoothedRef.current;
-    const next  = prev === 0 ? movAvg : Math.round(alpha * movAvg + (1 - alpha) * prev);
-
-    smoothedRef.current = next;
     setDisplay(next);
     return next;
-  }, [windowSize, alpha]);
+  }, [windowMs, halfLifeMs]);
 
   const reset = useCallback(() => {
     bufferRef.current  = [];
-    smoothedRef.current= 0;
     setDisplay(0);
   }, []);
 
