@@ -68,21 +68,54 @@ export function scoreColor(s)   { return s >= 75 ? "#10b981"   : s >= 50 ? "#f59
 // blended in more slowly so a single bad detection can't yank a
 // metric off — the smoother leans on recent history instead.
 //
+// Outlier rejection: a single-frame jump faster than any plausible
+// human movement (given the actual elapsed time between frames) is
+// treated as a tracking glitch — EMA alone still partially absorbs an
+// outlier into the average, this rejects it outright and holds the
+// previous position instead. If the "implausible" jump persists for
+// several consecutive frames, it's accepted as a real fast movement
+// (e.g. a quick head turn) rather than being ignored forever.
+//
 // Usage: const smoother = createLandmarkSmoother(); ...
 //        const lms = smoother.smooth(rawLandmarksFromMediaPipe);
 //        smoother.reset() on camera start/stop/mode change.
 export function createLandmarkSmoother(alpha = 0.4) {
   let prev = null;
+  let rejectStreak = null;
+  let lastT = null;
+  const MAX_VEL = 3.0;          // normalized units/sec — generous bound for legit human motion
+  const MAX_REJECT_STREAK = 3;  // accept the jump anyway after this many consecutive flagged frames
+
   return {
     smooth(lms) {
       if (!lms || !lms.length) return lms;
+      const now = (typeof performance !== "undefined") ? performance.now() : Date.now();
+      const dt  = lastT ? Math.min(0.5, Math.max(0.001, (now - lastT) / 1000)) : 1 / 30;
+      lastT = now;
+
       if (!prev || prev.length !== lms.length) {
         prev = lms.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility }));
+        rejectStreak = new Array(lms.length).fill(0);
         return prev;
       }
+      const maxDist = MAX_VEL * dt;
       const out = new Array(lms.length);
       for (let i = 0; i < lms.length; i++) {
         const c = lms[i], p = prev[i];
+        const dxJump = c.x - p.x, dyJump = c.y - p.y;
+        const jump = Math.sqrt(dxJump * dxJump + dyJump * dyJump);
+
+        if (jump > maxDist && rejectStreak[i] < MAX_REJECT_STREAK) {
+          // Implausible single-frame jump — most likely a detection
+          // glitch. Hold the previous smoothed position this frame
+          // instead of letting a bad read yank the metric off.
+          rejectStreak[i]++;
+          out[i] = { ...p };
+          continue;
+        }
+        // Either a plausible move, or it's persisted long enough to be
+        // a real fast movement (not a glitch) — accept it.
+        rejectStreak[i] = 0;
         const vis = c.visibility ?? 1;
         // Low-confidence landmark this frame → trust history more, raw value less
         const a = vis < 0.5 ? alpha * 0.4 : alpha;
@@ -96,7 +129,7 @@ export function createLandmarkSmoother(alpha = 0.4) {
       prev = out;
       return out;
     },
-    reset() { prev = null; },
+    reset() { prev = null; rejectStreak = null; lastT = null; },
   };
 }
 
