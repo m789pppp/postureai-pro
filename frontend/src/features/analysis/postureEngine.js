@@ -56,6 +56,50 @@ export function gradeScore(s)   { return s >= 85 ? "Excellent" : s >= 70 ? "Good
 export function gradeScoreAr(s) { return s >= 85 ? "ممتاز"     : s >= 70 ? "جيد"  : s >= 50 ? "مقبول" : "ضعيف"; }
 export function scoreColor(s)   { return s >= 75 ? "#10b981"   : s >= 50 ? "#f59e0b" : "#ef4444"; }
 
+// ── Landmark temporal smoothing (EMA) ──────────────────────────────
+// MediaPipe landmarks jitter frame-to-frame even when the person is
+// perfectly still — this caused every downstream metric (neck lean,
+// head tilt, yaw, distance) to flicker and occasionally fire a wrong
+// alert cause. Smoothing the raw (x,y,z) landmarks BEFORE geometry is
+// computed fixes all of those metrics at once, with zero changes to
+// the score formula/thresholds (so backend.py stays in sync).
+//
+// Low-visibility landmarks (occluded ear, turned-away face, etc.) are
+// blended in more slowly so a single bad detection can't yank a
+// metric off — the smoother leans on recent history instead.
+//
+// Usage: const smoother = createLandmarkSmoother(); ...
+//        const lms = smoother.smooth(rawLandmarksFromMediaPipe);
+//        smoother.reset() on camera start/stop/mode change.
+export function createLandmarkSmoother(alpha = 0.4) {
+  let prev = null;
+  return {
+    smooth(lms) {
+      if (!lms || !lms.length) return lms;
+      if (!prev || prev.length !== lms.length) {
+        prev = lms.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility }));
+        return prev;
+      }
+      const out = new Array(lms.length);
+      for (let i = 0; i < lms.length; i++) {
+        const c = lms[i], p = prev[i];
+        const vis = c.visibility ?? 1;
+        // Low-confidence landmark this frame → trust history more, raw value less
+        const a = vis < 0.5 ? alpha * 0.4 : alpha;
+        out[i] = {
+          x: p.x + a * (c.x - p.x),
+          y: p.y + a * (c.y - p.y),
+          z: (c.z != null && p.z != null) ? p.z + a * (c.z - p.z) : c.z,
+          visibility: c.visibility,
+        };
+      }
+      prev = out;
+      return out;
+    },
+    reset() { prev = null; },
+  };
+}
+
 // ── Head yaw estimation (front camera) ───────────────────────────
 // Uses ratio of visible ear widths — if person turns right, left ear shrinks
 // Returns yaw in degrees: + = turned right, - = turned left, 0 = straight
