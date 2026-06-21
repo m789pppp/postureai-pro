@@ -445,7 +445,7 @@ function drawFront(ctx,res,W,H,isAr=false){
 
   // Screen distance
   if(raw?.distCm){
-    const dc=raw.distCm>=raw.lo&&raw.distCm<=raw.hi?"#10b981":raw.distCm>=(raw.lo-15)?"#f59e0b":"#ef4444";
+    const dc=raw.distCm>=raw.idealDistLo&&raw.distCm<=raw.idealDistHi?"#10b981":raw.distCm>=(raw.idealDistLo-15)?"#f59e0b":"#ef4444";
     const[sx,sy]=px(lm.midEar||{x:.5,y:.1});
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(W-62,H-26,58,18);
     ctx.fillStyle=dc; ctx.font="bold 11px system-ui";
