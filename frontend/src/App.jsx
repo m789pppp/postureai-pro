@@ -31,7 +31,7 @@ import { BillingDashboard } from "./BillingDashboard.jsx";
 import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI } from "./services/api.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
-import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP } from "./features/analysis/postureEngine.js";
+import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother } from "./features/analysis/postureEngine.js";
 import { getT } from "./lib/i18n.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
 // ── Phase 12: Enterprise Scale ────────────────────────────────────
@@ -1771,6 +1771,7 @@ export default function App(){
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   const[mode,setMode]=useState(null);
+  useEffect(()=>{ lmSmootherRef.current?.reset(); },[mode]);
   const[tier,setTier]=useState(null);
   const[acctType,setAcctType]=useState(profile?.acct_type||null);
   // Sync acctType when profile loads (e.g. after Google login)
@@ -1960,6 +1961,7 @@ export default function App(){
   const vidRef=useRef();const ovRef=useRef();const canvRef=useRef();
   const streamRef=useRef();const timerRef=useRef();const rafRef=useRef();
   const mpRef=useRef();const badRef=useRef(null);const lastAlRef=useRef(0);
+  const lmSmootherRef=useRef(null);
   const histRef=useRef([]);const goodRef=useRef(0);const totalRef=useRef(0);
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
@@ -2129,14 +2131,23 @@ export default function App(){
       try{
         const mod=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
         const fr=await mod.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
-        const pl=await mod.PoseLandmarker.createFromOptions(fr,{
-          baseOptions:{
-            modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-            delegate:"CPU"
-          },
+        // "full" model: meaningfully more accurate landmarks than "lite",
+        // especially for subtle angles (neck lean, spine lean). GPU
+        // delegate is what makes this affordable in real time — CPU alone
+        // is why "lite" was chosen originally. Falls back to CPU delegate
+        // (still on the "full" model) if GPU isn't available on this device.
+        const MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+        const opts={
           runningMode:"VIDEO",numPoses:1,
-          minPoseDetectionConfidence:.4,minPosePresenceConfidence:.4,minTrackingConfidence:.4
-        });
+          minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5
+        };
+        let pl;
+        try{
+          pl=await mod.PoseLandmarker.createFromOptions(fr,{baseOptions:{modelAssetPath:MODEL,delegate:"GPU"},...opts});
+        }catch(gpuErr){
+          console.warn("GPU delegate unavailable, falling back to CPU:",gpuErr.message);
+          pl=await mod.PoseLandmarker.createFromOptions(fr,{baseOptions:{modelAssetPath:MODEL,delegate:"CPU"},...opts});
+        }
         mpRef.current=pl;window.__mpPose=pl;setMpStatus("ready");
       }catch(err){
         console.warn("MediaPipe CDN failed, using backend fallback:",err.message);
@@ -2144,7 +2155,7 @@ export default function App(){
       }
     };
     load();
-    setTimeout(()=>{if(!mpRef.current&&mpStatus==="loading")setMpStatus("fallback");},12000);
+    setTimeout(()=>{if(!mpRef.current&&mpStatus==="loading")setMpStatus("fallback");},18000);
   // eslint-disable-next-line
   },[]);
 
@@ -2160,7 +2171,8 @@ export default function App(){
       try{
         const det=mpRef.current.detectForVideo(vid,performance.now());
         if(det.landmarks?.length>0){
-          const lms=det.landmarks[0];
+          if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(0.4);
+          const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
           const result=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode);
           if(result){
@@ -2177,16 +2189,19 @@ export default function App(){
             alertIfNeeded(smoothed1||finalResult.overall);
             histRef.current.push(smoothed1||finalResult.overall);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
-            setHistory([...histRef.current]);setAnalysis(result);lastAnalRef.current=result;
+            setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
             if(mode==="side")drawSide(ctx,finalResult,W,H,isAr);else drawFront(ctx,finalResult,W,H,isAr);
             const now=Date.now();
-            if(result.overall<65){
+            const gateScore=smoothed1||finalResult.overall;
+            if(gateScore<65){
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
                 lastAlRef.current=now;acRef.current.total++;
-                const nl=result.metrics?.neck_lean?.value||0,dist=result.distCm||0;
-                const yaw=result.headYaw||0;
-                const[lo,hi]=result.lo&&result.hi?[result.lo,result.hi]:[50,80];
+                const nlMet=finalResult.metrics?.neck_lean, yawMet=finalResult.metrics?.head_yaw;
+                const nl=nlMet?.reliable!==false?(nlMet?.value||0):0;
+                const yaw=yawMet?.reliable!==false?(yawMet?.value||0):0;
+                const dist=finalResult.distCm||0;
+                const[lo,hi]=finalResult.lo&&finalResult.hi?[finalResult.lo,finalResult.hi]:[50,80];
                 let msg="Sustained poor posture — correct position now";
                 let msgAr="وضعية سيئة مستمرة — صحّح وضعيتك الآن";
                 if(nl>14){msg=`Neck lean ${nl}° — raise monitor to eye level`;msgAr=`ميل رقبة ${nl}° — ارفع الشاشة لمستوى عينيك`;acRef.current.neck++;}
@@ -2194,14 +2209,14 @@ export default function App(){
                 else if(dist&&dist<lo){msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;msgAr=`قريب جداً (${dist}سم) — ابتعد إلى ${lo}–${hi}سم`;acRef.current.dist++;}
                 const displayMsg = isAr ? msgAr : msg;
                 setAlertCounts({...acRef.current});
-                alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:result.overall},...alRef.current].slice(0,20);
+                alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:finalResult.overall},...alRef.current].slice(0,20);
                 setAlerts([...alRef.current]);setAlertMsg({text:displayMsg,type:"warn"});
                 if(sound)playBeep();
-                sendDesktopNotif(msg,result.overall);
+                sendDesktopNotif(msg,finalResult.overall);
               }
             }else{
               badRef.current=null;
-              if(now-lastAlRef.current>8000)setAlertMsg({text:`Score ${result.overall}/100 — ${grade(result.overall,t)}`,type:"good"});
+              if(now-lastAlRef.current>8000)setAlertMsg({text:`Score ${finalResult.overall}/100 — ${grade(finalResult.overall,t)}`,type:"good"});
             }
           }
         }
@@ -2270,6 +2285,7 @@ export default function App(){
       }).catch(()=>{});
       if(!vidRef.current){return;}
       setCameraStatus("ready");
+      lmSmootherRef.current?.reset();
       // Request notification permission on first session
       requestNotificationPermission();
       let sid="local_"+Date.now();
@@ -2310,6 +2326,7 @@ export default function App(){
   const[sessionResult,setSessionResult]=useState(null);
 
   async function stopCamera(){
+    lmSmootherRef.current?.reset();
     if(streamRef.current){
       streamRef.current.getTracks().forEach(x=>{x.stop(); x.enabled=false;});
       streamRef.current = null;

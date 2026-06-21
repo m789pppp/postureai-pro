@@ -9,7 +9,7 @@ import {
   getUserProfile, createUserProfile,
   getAuthToken,
 } from "./firebase.js";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
   const [status, setStatus] = useState("loading"); // loading | found | accepted | consent | error
@@ -61,34 +61,27 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
           name:       user.displayName || "",
           company:    invite.company_id || "",
         });
-        p = await getUserProfile(uid);
       }
 
-      // 2. Link user to company
-      await updateDoc(doc(db, "users", uid), {
-        company_id:  invite.company_id,
-        department:  invite.department || "",
-        role:        invite.role       || "employee",
-        updated_at:  serverTimestamp(),
+      // 2 & 3. Link user to company AND mark invite accepted — done together,
+      // server-side, via the backend endpoint. This MUST happen on the backend
+      // (using Firebase Admin SDK) because Firestore security rules correctly
+      // forbid a client from writing company_id to their own user document
+      // directly (that's a privilege-escalation vector) and correctly forbid
+      // rewriting arbitrary fields on someone else's invite document. The
+      // backend validates the invite (exists, belongs to this company_id,
+      // still pending) before performing the linkage with elevated privileges.
+      const tok = await getAuthToken();
+      const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+      const resp = await fetch(`${API}/org/invite/accept`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+        body:    JSON.stringify({ token, company_id: invite.company_id }),
       });
-
-      // 3. Mark invite as accepted
-      await updateDoc(doc(db, "invites", token), {
-        status:      "accepted",
-        accepted_by: uid,
-        accepted_at: serverTimestamp(),
-      });
-
-      // 4. Try backend notification
-      try {
-        const tok = await getAuthToken();
-        const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
-        await fetch(`${API}/org/invite/accept`, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
-          body:    JSON.stringify({ token, uid, company_id: invite.company_id }),
-        });
-      } catch {} // Non-critical
+      const result = await resp.json().catch(() => ({}));
+      if (!resp.ok || !result.ok) {
+        throw new Error(result.error || "Failed to accept invite");
+      }
 
       setStatus("consent"); // Show consent screen before redirecting
     } catch (e) {

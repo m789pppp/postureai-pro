@@ -3,55 +3,91 @@ Corvus — Server-Side Pricing Configuration
 SECURITY: This is the ONLY authoritative source of pricing.
           The frontend MUST NEVER determine payment amounts.
           All amount_cents values are generated here, server-side.
-          
-Prices are in EGP (Egyptian Pounds) × 100 (cents).
+
+⚠️  THIS FILE IS THE ACTUAL SOURCE OF TRUTH — backend.py imports from here.
+    If backend.py also defines _PAYMOB_PRICES/_STRIPE_PRICES locally, those
+    are ONLY a fallback used if this import fails. Always update THIS file
+    first, then keep backend.py's fallback copy in sync as a safety net.
+
+    MUST match (exactly, including cents math):
+      - frontend/src/Billing.jsx        (PLANS + B2B_PLANS)
+      - frontend/src/App.jsx            (TIERS + B2B_TIERS)
+      - frontend/src/PricingPage.jsx    (B2C_PLANS + B2B_PLANS)
+
+Prices are in EGP (Egyptian Pounds) × 100 (cents) for PayMob,
+and USD × 100 (cents) for Stripe.
 """
 
-# ── EGP Pricing (PayMob) ──────────────────────────────────────────
+# ── B2C (Individual) Pricing — EGP via PayMob ─────────────────────
 # Format: (tier, billing_cycle) → amount_cents
 PAYMOB_PRICES_EGP: dict[tuple[str, str], int] = {
-    ("standard",      "monthly"):    19900,   #  199 EGP/mo
-    ("standard",      "yearly"):    199000,   # 1990 EGP/yr (2 months free)
-    ("professional",  "monthly"):   49900,   #  499 EGP/mo
-    ("professional",  "yearly"):   499000,   # 4990 EGP/yr
-    ("elite",         "monthly"):  119900,   # 1199 EGP/mo
-    ("elite",         "yearly"):  1199000,   # 11990 EGP/yr
+    ("basic",         "monthly"):    19900,   #   199 EGP/mo
+    ("basic",         "yearly"):    159000,   # 1,590 EGP/yr  (20% off)
+    ("professional",  "monthly"):   39900,   #   399 EGP/mo
+    ("professional",  "yearly"):   319000,   # 3,190 EGP/yr  (20% off)
+    ("elite",         "monthly"):   69900,   #   699 EGP/mo
+    ("elite",         "yearly"):   559000,   # 5,590 EGP/yr  (20% off)
+    # ── B2B (Company) — flat-rate, NOT per-seat ──
+    ("b2b_starter",    "monthly"):  249900,   # 2,499 EGP/mo
+    ("b2b_starter",    "yearly"):  2399000,   # 23,990 EGP/yr (20% off)
+    ("b2b_growth",     "monthly"):  699900,   # 6,999 EGP/mo
+    ("b2b_growth",     "yearly"):  6719000,   # 67,190 EGP/yr (20% off)
+    # b2b_enterprise intentionally absent — always contact-sales/custom
 }
 
-# ── USD Pricing (Stripe) ──────────────────────────────────────────
+# ── B2C (Individual) + B2B Pricing — USD via Stripe (Gulf/Global) ──
 # Format: (tier, billing_cycle) → amount_cents (USD cents)
 STRIPE_PRICES_USD: dict[tuple[str, str], int] = {
-    ("standard",      "monthly"):    1999,   #  $19.99/mo
-    ("standard",      "yearly"):   19900,   # $199.00/yr
-    ("professional",  "monthly"):   4999,   #  $49.99/mo
-    ("professional",  "yearly"):   49900,   # $499.00/yr
-    ("elite",         "monthly"):  11999,   # $119.99/mo
-    ("elite",         "yearly"):  119900,   # $1199.00/yr
+    ("basic",         "monthly"):     999,   #   $9.99/mo
+    ("basic",         "yearly"):     7999,   #  $79.99/yr
+    ("professional",  "monthly"):    1999,   #  $19.99/mo
+    ("professional",  "yearly"):    15999,   # $159.99/yr
+    ("elite",         "monthly"):    3999,   #  $39.99/mo
+    ("elite",         "yearly"):    29999,   # $299.99/yr
+    # ── B2B (Company) — flat-rate, NOT per-seat ──
+    ("b2b_starter",    "monthly"):    7900,   #  $79/mo
+    ("b2b_starter",    "yearly"):    75800,   # $758/yr
+    ("b2b_growth",     "monthly"):   19900,   # $199/mo
+    ("b2b_growth",     "yearly"):   191000,   # $1,910/yr
+    # b2b_enterprise intentionally absent — always contact-sales, starts at $499/mo
 }
 
 # ── Stripe Price IDs (set in env for live mode) ───────────────────
 import os
 STRIPE_PRICE_IDS: dict[tuple[str, str], str] = {
-    ("standard",     "monthly"): os.getenv("STRIPE_PRICE_STD_MONTHLY", ""),
-    ("standard",     "yearly"):  os.getenv("STRIPE_PRICE_STD_YEARLY",  ""),
-    ("professional", "monthly"): os.getenv("STRIPE_PRICE_PRO_MONTHLY", ""),
-    ("professional", "yearly"):  os.getenv("STRIPE_PRICE_PRO_YEARLY",  ""),
-    ("elite",        "monthly"): os.getenv("STRIPE_PRICE_ELITE_MONTHLY",""),
-    ("elite",        "yearly"):  os.getenv("STRIPE_PRICE_ELITE_YEARLY", ""),
+    ("basic",         "monthly"): os.getenv("VITE_STRIPE_PRICE_BASIC_MONTHLY", ""),
+    ("basic",         "yearly"):  os.getenv("VITE_STRIPE_PRICE_BASIC_YEARLY",  ""),
+    ("professional",  "monthly"): os.getenv("VITE_STRIPE_PRICE_PRO_MONTHLY", ""),
+    ("professional",  "yearly"):  os.getenv("VITE_STRIPE_PRICE_PRO_YEARLY",  ""),
+    ("elite",         "monthly"): os.getenv("VITE_STRIPE_PRICE_ELITE_MONTHLY",""),
+    ("elite",         "yearly"):  os.getenv("VITE_STRIPE_PRICE_ELITE_YEARLY", ""),
+    ("b2b_starter",   "monthly"): os.getenv("VITE_STRIPE_PRICE_B2B_STARTER_MONTHLY", ""),
+    ("b2b_starter",   "yearly"):  os.getenv("VITE_STRIPE_PRICE_B2B_STARTER_YEARLY",  ""),
+    ("b2b_growth",    "monthly"): os.getenv("VITE_STRIPE_PRICE_B2B_GROWTH_MONTHLY", ""),
+    ("b2b_growth",    "yearly"):  os.getenv("VITE_STRIPE_PRICE_B2B_GROWTH_YEARLY",  ""),
 }
 
 # ── Valid tiers (paid) ────────────────────────────────────────────
-PAID_TIERS    = {"standard", "professional", "elite"}
-ALL_TIERS     = {"standard", "professional", "elite", "enterprise"}
-TIER_ORDER    = ["standard", "professional", "elite", "enterprise"]
+# B2C: basic / professional / elite — individual buyers
+# B2B: b2b_starter / b2b_growth / b2b_enterprise — company buyers
+# Distinct ids are deliberate — never let a B2C and B2B tier share an id,
+# that has been the root cause of every pricing regression in this codebase.
+PAID_TIERS    = {"basic", "professional", "elite", "b2b_starter", "b2b_growth"}
+ALL_TIERS     = {"basic", "professional", "elite", "b2b_starter", "b2b_growth", "b2b_enterprise"}
+TIER_ORDER    = ["basic", "professional", "elite"]
+B2B_TIER_ORDER = ["b2b_starter", "b2b_growth", "b2b_enterprise"]
 BILLING_MODES = {"monthly", "yearly"}
 
 # ── Seat limits per plan ──────────────────────────────────────────
+# B2C tiers have no seat concept (-1 = not applicable / single user).
+# B2B tiers have real employee caps.
 SEAT_LIMITS: dict[str, int] = {
-    "standard":     25,
-    "professional": 100,
-    "elite":        -1,   # unlimited
-    "enterprise":   -1,   # unlimited, custom contract
+    "basic":          -1,
+    "professional":   -1,
+    "elite":          -1,
+    "b2b_starter":     30,
+    "b2b_growth":      100,
+    "b2b_enterprise":  -1,   # unlimited, custom contract
 }
 
 def get_paymob_amount(tier: str, billing: str) -> int | None:
@@ -81,8 +117,8 @@ def get_stripe_amount(tier: str, billing: str) -> int | None:
 
 
 def get_seat_limit(tier: str) -> int:
-    """Return seat limit for a tier. -1 means unlimited."""
-    return SEAT_LIMITS.get((tier or "standard").lower(), 25)
+    """Return seat limit for a tier. -1 means unlimited / not applicable."""
+    return SEAT_LIMITS.get((tier or "basic").lower(), -1)
 
 
 def validate_plan_request(tier: str, billing: str) -> tuple[bool, str]:
@@ -96,8 +132,8 @@ def validate_plan_request(tier: str, billing: str) -> tuple[bool, str]:
         return False, "tier is required"
     if tier not in ALL_TIERS:
         return False, f"Invalid tier '{tier}'. Valid: {sorted(ALL_TIERS)}"
-    if tier == "enterprise":
-        return False, "Enterprise plans require a custom quote — contact sales"
+    if tier == "b2b_enterprise" or tier == "enterprise":
+        return False, "Enterprise plans require a custom contract — contact sales@corvus.io"
     if billing not in BILLING_MODES:
         return False, f"Invalid billing '{billing}'. Valid: monthly, yearly"
     return True, ""
