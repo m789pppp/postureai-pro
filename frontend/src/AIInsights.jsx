@@ -5,11 +5,17 @@
  * Uses Gemini AI directly (no backend needed)
  */
 import { useState, useEffect, useCallback } from "react";
-import { geminiChat } from "./gemini.js";
+import { geminiAnalysis } from "./gemini.js";
 
 // ── AI call via Gemini ─────────────────────────────────────────────
-async function callClaude(prompt, systemPrompt, maxTokens = 1000) {
-  return geminiChat(prompt, { systemPrompt, maxTokens });
+// NOTE: previously routed through geminiChat() -> /api/coach/chat, but
+// that endpoint ignores any custom system prompt and always answers as
+// the hardcoded "PostureAI Coach" persona, so the executive-summary /
+// fatigue-analysis prompts below were silently getting answered with
+// the wrong persona. geminiAnalysis() -> /api/ai/analyze actually
+// honors context.system_prompt.
+async function callGemini(prompt, systemPrompt, maxTokens = 1000) {
+  return geminiAnalysis(prompt, { context: { system_prompt: systemPrompt }, maxTokens });
 }
 
 // ── helpers ───────────────────────────────────────────────────────
@@ -204,7 +210,7 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
 You analyze posture data and generate professional, actionable, empathetic insights.
 Always respond in ${lang === "ar" ? "Arabic" : "English"}.
 Keep responses concise, data-driven, and formatted with markdown (** for bold, ## for headers, - for bullets).
-Never mention you're an AI assistant or Claude. Refer to yourself as "Corvus Intelligence".`;
+Never mention you're an AI assistant or which AI model powers you. Refer to yourself as "Corvus Intelligence".`;
 
   const tabPrompts = {
     executive: (ctx) => `Generate an executive summary for ${ctx.name}:
@@ -271,7 +277,7 @@ Be specific and practical. Reference the actual scores. Max 220 words.`,
       const ctx    = buildContext();
       const prompt = tabPrompts[tabKey]?.(ctx);
       if (!prompt) return;
-      const text = await callClaude(prompt, systemPrompt);
+      const text = await callGemini(prompt, systemPrompt);
       setData(text);
     } catch (e) {
       setError(e.message || "Failed to generate insight");
@@ -313,7 +319,7 @@ Be specific and practical. Reference the actual scores. Max 220 words.`,
                   {isAr ? "طبقة الذكاء الاصطناعي" : "AI Intelligence Layer"}
                 </div>
                 <div style={{ fontSize: 10, color: "#0891b2", fontWeight: 600 }}>
-                  {isAr ? "تحليل متقدم — Powered by Claude AI" : "Advanced Analytics — Powered by Claude AI"}
+                  {isAr ? "تحليل متقدم — Powered by Gemini AI" : "Advanced Analytics — Powered by Gemini AI"}
                 </div>
               </div>
             </div>
@@ -501,7 +507,7 @@ function AITextSection({ loading, data, error, onRetry, isAr }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <div style={{ width: 24, height: 24, borderRadius: 7, background: "linear-gradient(135deg,#1a56db,#0891b2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>🧠</div>
         <span style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-          {isAr ? "تحليل Claude AI" : "Claude AI Analysis"}
+          {isAr ? "تحليل Gemini AI" : "Gemini AI Analysis"}
         </span>
         {loading && <span style={{ marginLeft: "auto" }}><LoadingDots /></span>}
       </div>

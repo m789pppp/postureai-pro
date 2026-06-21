@@ -5,6 +5,7 @@
  * Slack · Microsoft Teams · Google Calendar · Jira · Zoom
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import { geminiAnalysis } from "./gemini.js";
 import { db, collection, addDoc, getDocs, query, orderBy, limit,
          where, updateDoc, doc, setDoc, getDoc, serverTimestamp } from "./firebase.js";
 
@@ -825,16 +826,9 @@ function AIAlertsPanel({orgId,profile,sessions=[],allUsers=[],isAr}) {
   const generateAIRule=async()=>{
     setAiLoading(true);
     try {
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",max_tokens:600,
-          system:`You are Corvus's alert rule generator. Generate 3 smart alert rule suggestions for a workforce health platform. Respond in ${isAr?"Arabic":"English"} as a JSON array with fields: name, condition, action, severity, rationale.`,
-          messages:[{role:"user",content:`Generate 3 alert rules for: avg posture score ${Math.round(50+Math.random()*30)}/100, ${sessions.length} sessions, ${allUsers.length} employees. Make them practical and specific.`}],
-        }),
-      });
-      const d=await res.json();
-      const text=d?.content?.find(b=>b.type==="text")?.text||"";
+      const system=`You are Corvus's alert rule generator. Generate 3 smart alert rule suggestions for a workforce health platform. Respond in ${isAr?"Arabic":"English"} as a JSON array with fields: name, condition, action, severity, rationale.`;
+      const prompt=`Generate 3 alert rules for: avg posture score ${Math.round(50+Math.random()*30)}/100, ${sessions.length} sessions, ${allUsers.length} employees. Make them practical and specific.`;
+      const text=await geminiAnalysis(prompt,{lang:isAr?"ar":"en",context:{system_prompt:system},maxTokens:600});
       setAiText(text);
     } catch(e){setAiText(isAr?"⚠️ خطأ في توليد القواعد":"⚠️ Error generating rules");}
     setAiLoading(false);
@@ -848,7 +842,7 @@ function AIAlertsPanel({orgId,profile,sessions=[],allUsers=[],isAr}) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div>
             <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text}}>{isAr?"مولّد قواعد AI":"AI Rule Generator"}</div>
-            <div style={{fontSize:11,color:D.muted,marginTop:2}}>{isAr?"دع Claude AI يقترح قواعد تنبيه مخصصة لبياناتك":"Let Claude AI suggest custom alert rules based on your data"}</div>
+            <div style={{fontSize:11,color:D.muted,marginTop:2}}>{isAr?"دع Gemini AI يقترح قواعد تنبيه مخصصة لبياناتك":"Let Gemini AI suggest custom alert rules based on your data"}</div>
           </div>
           <Btn size="sm" variant="primary" loading={aiLoading} onClick={generateAIRule} icon="🧠">
             {isAr?"توليد قواعد":"Generate Rules"}
@@ -916,7 +910,7 @@ function InAppNotifications({profile,sessions=[],isAr}) {
        body:isAr?"مؤشر الإرهاق وصل 72% — يُنصح بأخذ استراحة":"Fatigue index reached 72% — rest recommended",color:"#ef4444"},
       {type:"achievement",icon:"🏆",title:isAr?"إنجاز جديد!":"New Achievement!",
        body:isAr?"أتممت 7 أيام متتالية 🔥 ممتاز!":"Completed a 7-day streak 🔥 Excellent!",color:"#10b981"},
-      {type:"ai_insight",icon:"🧠",title:isAr?"رؤية Claude AI":"Claude AI Insight",
+      {type:"ai_insight",icon:"🧠",title:isAr?"رؤية Gemini AI":"Gemini AI Insight",
        body:isAr?"وضعيتك تحسّنت 8% هذا الأسبوع — استمر!":"Your posture improved 8% this week — keep it up!",color:"#7c3aed"},
       {type:"weekly_digest",icon:"📊",title:isAr?"ملخصك الأسبوعي":"Your Weekly Digest",
        body:isAr?"79/100 متوسط | 5 جلسات | الأفضل: الأربعاء":"79/100 avg | 5 sessions | Best: Wednesday",color:"#1a56db"},

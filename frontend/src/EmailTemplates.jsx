@@ -95,7 +95,7 @@ export function welcomeEmail({ name, tier = "professional", lang = "en" }) {
     <p>حسابك على <strong>Corvus — منصة ذكاء القوى العاملة بالـ AI</strong> جاهز. لقد انضممت إلى أكثر من 500 شركة تستخدم Corvus لتحويل صحة موظفيها إلى ميزة تنافسية.</p>
     <a href="https://app.corvus.io" class="cta-btn">ابدأ جلستك الأولى ←</a>
     <h2>ما يمكنك فعله الآن:</h2>
-    <div class="feature-row"><div class="feature-icon">🧠</div><div class="feature-text"><div class="feature-title">طبقة الذكاء الاصطناعي</div><div class="feature-desc">ملخصات تنفيذية، تحليل إرهاق، وتوصيات مخصصة — مدعومة بـ Claude AI</div></div></div>
+    <div class="feature-row"><div class="feature-icon">🧠</div><div class="feature-text"><div class="feature-title">طبقة الذكاء الاصطناعي</div><div class="feature-desc">ملخصات تنفيذية، تحليل إرهاق، وتوصيات مخصصة — مدعومة بـ Gemini AI</div></div></div>
     <div class="feature-row"><div class="feature-icon">🔮</div><div class="feature-text"><div class="feature-title">الذكاء التنبؤي</div><div class="feature-desc">التنبؤ بالإرهاق الوظيفي واكتشاف الشذوذات قبل أن تتحول إلى مشاكل</div></div></div>
     <div class="feature-row"><div class="feature-icon">📊</div><div class="feature-text"><div class="feature-title">تقارير تنفيذية</div><div class="feature-desc">تقارير PDF مؤتمتة جاهزة للإدارة العليا ومقارنة الأقسام</div></div></div>
     <div class="feature-row"><div class="feature-icon">💡</div><div class="feature-text"><div class="feature-title">مدرب AI شخصي</div><div class="feature-desc">خطة إرغونومية مخصصة بناءً على بياناتك الفعلية</div></div></div>
@@ -107,7 +107,7 @@ export function welcomeEmail({ name, tier = "professional", lang = "en" }) {
     <p>Your <strong>Corvus — AI Workforce Intelligence Platform</strong> account is active. You've joined 500+ companies using Corvus to turn employee health into a competitive advantage.</p>
     <a href="https://app.corvus.io" class="cta-btn">Start Your First Session →</a>
     <h2>What you can do right now:</h2>
-    <div class="feature-row"><div class="feature-icon">🧠</div><div class="feature-text"><div class="feature-title">AI Intelligence Layer</div><div class="feature-desc">Executive summaries, fatigue analysis, and personalised recommendations — powered by Claude AI</div></div></div>
+    <div class="feature-row"><div class="feature-icon">🧠</div><div class="feature-text"><div class="feature-title">AI Intelligence Layer</div><div class="feature-desc">Executive summaries, fatigue analysis, and personalised recommendations — powered by Gemini AI</div></div></div>
     <div class="feature-row"><div class="feature-icon">🔮</div><div class="feature-text"><div class="feature-title">Predictive Intelligence</div><div class="feature-desc">Burnout prediction and anomaly detection before issues become costly</div></div></div>
     <div class="feature-row"><div class="feature-icon">📊</div><div class="feature-text"><div class="feature-title">Executive Reports</div><div class="feature-desc">Auto-generated PDF reports ready for leadership and department comparisons</div></div></div>
     <div class="feature-row"><div class="feature-icon">💡</div><div class="feature-text"><div class="feature-title">Personal AI Coach</div><div class="feature-desc">A custom ergonomic action plan built from your actual session data</div></div></div>
@@ -130,7 +130,7 @@ export function weeklyReportEmail({ name, avgScore = 0, sessCount = 0, trendPct 
   const content = isAr ? `
     <div class="eyebrow">تقرير الذكاء الأسبوعي</div>
     <h1>تقرير صحة القوى العاملة الأسبوعي — ${firstName}</h1>
-    <p>إليك ملخص أداء وضعيتك هذا الأسبوع، مدعوم بتحليل Claude AI.</p>
+    <p>إليك ملخص أداء وضعيتك هذا الأسبوع، مدعوم بتحليل Gemini AI.</p>
     <div class="kpi-grid">
       <div class="kpi"><div class="kpi-val" style="color:${scoreColor}">${avgScore}</div><div class="kpi-lbl">المتوسط</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#1a56db">${sessCount}</div><div class="kpi-lbl">الجلسات</div></div>
@@ -143,7 +143,7 @@ export function weeklyReportEmail({ name, avgScore = 0, sessCount = 0, trendPct 
   ` : `
     <div class="eyebrow">Weekly Workforce Intelligence Report</div>
     <h1>Your Weekly Workforce Health Report — ${firstName}</h1>
-    <p>Here's your weekly posture performance summary, powered by Claude AI analysis.</p>
+    <p>Here's your weekly posture performance summary, powered by Gemini AI analysis.</p>
     <div class="kpi-grid">
       <div class="kpi"><div class="kpi-val" style="color:${scoreColor}">${avgScore}</div><div class="kpi-lbl">Avg Score</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#1a56db">${sessCount}</div><div class="kpi-lbl">Sessions</div></div>
@@ -287,7 +287,7 @@ export function hrMonthlySummaryEmail({ managerName, orgName, teamAvg = 0, teamS
   const content = isAr ? `
     <div class="eyebrow">تقرير HR الشهري — ${orgName || "مؤسستك"}</div>
     <h1>تقرير صحة القوى العاملة الشهري — ${firstName}</h1>
-    <p>إليك ملخص أداء صحة القوى العاملة لشهر ${new Date().toLocaleDateString("ar-EG", { month: "long", year: "numeric" })}, مدعوم بتحليل Claude AI.</p>
+    <p>إليك ملخص أداء صحة القوى العاملة لشهر ${new Date().toLocaleDateString("ar-EG", { month: "long", year: "numeric" })}, مدعوم بتحليل Gemini AI.</p>
     <div class="kpi-grid">
       <div class="kpi" style="border-color:${avgColor}"><div class="kpi-val" style="color:${avgColor}">${teamAvg}/100</div><div class="kpi-lbl">متوسط الفريق</div></div>
       <div class="kpi" style="border-color:#1a56db"><div class="kpi-val" style="color:#1a56db">${teamSize}</div><div class="kpi-lbl">إجمالي الموظفين</div></div>
@@ -300,7 +300,7 @@ export function hrMonthlySummaryEmail({ managerName, orgName, teamAvg = 0, teamS
   ` : `
     <div class="eyebrow">Monthly HR Report — ${orgName || "Your Organisation"}</div>
     <h1>Monthly Workforce Health Report — ${firstName}</h1>
-    <p>Here's your workforce health performance summary for ${new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}, powered by Claude AI analysis.</p>
+    <p>Here's your workforce health performance summary for ${new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}, powered by Gemini AI analysis.</p>
     <div class="kpi-grid">
       <div class="kpi" style="border-color:${avgColor}"><div class="kpi-val" style="color:${avgColor}">${teamAvg}/100</div><div class="kpi-lbl">Team Avg</div></div>
       <div class="kpi" style="border-color:#1a56db"><div class="kpi-val" style="color:#1a56db">${teamSize}</div><div class="kpi-lbl">Employees</div></div>
