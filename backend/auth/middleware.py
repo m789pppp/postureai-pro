@@ -138,6 +138,32 @@ _profile_lock  = threading.Lock()
 _profile_cache: dict = {}
 PROFILE_TTL    = 120  # 2 minutes
 
+# ── Tier normalization ──────────────────────────────────────────
+# Firestore stores the literal billing plan ID a user is subscribed to
+# (e.g. "b2b_growth" for a company on the Growth plan). Every feature
+# gate across the app — require_tier()/TIER_ORDER below, plus ~10 ad-hoc
+# `tier in (...)` checks in backend.py (validate_frame, pose model
+# selection, AI model selection, eye-strain tracking, seat enforcement,
+# etc.) — was written against the older B2C-only tier vocabulary
+# (standard/professional/elite/basic/pro/premium) and never updated when
+# the B2B plans were renamed to b2b_starter/b2b_growth/b2b_enterprise.
+# Left unmapped, every one of those checks treats a paying B2B customer
+# as tier "0" — validate_frame rejects their analyze requests outright,
+# require_tier denies every gated endpoint, and the rest silently
+# downgrade them to the lowest feature tier despite paying $79-199+/mo.
+# Normalizing once here, at the single point Firestore data enters the
+# request context, fixes all of those call sites at once instead of
+# patching each tuple individually (and prevents the same bug recurring
+# the next time a plan is renamed).
+_TIER_ALIASES = {
+    "b2b_starter":    "standard",
+    "b2b_growth":     "professional",
+    "b2b_enterprise": "elite",
+    "enterprise":     "elite",   # legacy alias used by a couple of older checks
+}
+def _normalize_tier(raw_tier: str) -> str:
+    return _TIER_ALIASES.get(raw_tier, raw_tier)
+
 def _get_user_role(uid: str) -> dict:
     with _profile_lock:
         cached = _profile_cache.get(uid)
@@ -164,7 +190,7 @@ def _get_user_role(uid: str) -> dict:
                 is_hr    = data.get("is_hr", False) or is_admin
 
                 role_data = {
-                    "tier":          data.get("tier", "standard"),
+                    "tier":          _normalize_tier(data.get("tier", "standard")),
                     "role":          data.get("role", "employee"),
                     "is_admin":      is_admin,
                     "is_hr":         is_hr,
