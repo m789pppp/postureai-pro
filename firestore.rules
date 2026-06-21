@@ -171,7 +171,21 @@ service cloud.firestore {
     match /invites/{inviteId} {
       allow read: if isAuthenticated();
       allow create: if isHR();
-      allow update: if isAuthenticated(); // accepting invite
+      // SECURITY: "accepting an invite" must only ever transition status
+      // pending -> accepted, stamped with the accepting user's own uid, and
+      // must NEVER let the caller change company_id, department, role, or any
+      // other field on the invite — those belong to the inviter, not the
+      // accepter. The previous rule (`allow update: if isAuthenticated()`)
+      // let any signed-in user rewrite ANY field on ANY invite document,
+      // including company_id, effectively letting someone reassign an
+      // invite to a different company or re-use/tamper with it freely.
+      allow update: if isAuthenticated()
+                    && resource.data.status == "pending"
+                    && request.resource.data.status == "accepted"
+                    && request.resource.data.accepted_by == request.auth.uid
+                    // every field except status/accepted_by/accepted_at must be unchanged
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(["status", "accepted_by", "accepted_at"]);
       allow delete: if isHR();
     }
 
