@@ -1771,6 +1771,7 @@ export default function App(){
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   const[mode,setMode]=useState(null);
+  const[lowLight,setLowLight]=useState(false);
   useEffect(()=>{ lmSmootherRef.current?.reset(); },[mode]);
   const[tier,setTier]=useState(null);
   const[acctType,setAcctType]=useState(profile?.acct_type||null);
@@ -1847,7 +1848,7 @@ export default function App(){
   useEffect(()=>{ if(savedCalib && !calibData) setCalibData(savedCalib); }, [savedCalib]);
 
   // Score smoothing
-  const { smoothed: smoothedScore, push: pushScore, reset: resetScore } = useScoreSmoothing(5, 0.35);
+  const { smoothed: smoothedScore, push: pushScore, reset: resetScore } = useScoreSmoothing(10000, 3000);
 
   // Break timer
   const { showBreak, dismiss: dismissBreak, snooze: snoozeBreak } = useBreakTimer(30, breakReminder);
@@ -1962,6 +1963,7 @@ export default function App(){
   const streamRef=useRef();const timerRef=useRef();const rafRef=useRef();
   const mpRef=useRef();const badRef=useRef(null);const lastAlRef=useRef(0);
   const lmSmootherRef=useRef(null);
+  const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
   const histRef=useRef([]);const goodRef=useRef(0);const totalRef=useRef(0);
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
@@ -2167,6 +2169,32 @@ export default function App(){
     if(!W||!H){rafRef.current=requestAnimationFrame(runLoop);return;}
     ov.width=W;ov.height=H;
     const ctx=ov.getContext("2d");ctx.clearRect(0,0,W,H);
+
+    // ── Lighting quality check ─────────────────────────────────────
+    // MediaPipe's own landmark "visibility" is the model's internal
+    // confidence, not an objective measure of image quality — in low
+    // light it can still report decent visibility on subtly-wrong
+    // positions. Sample actual frame brightness independently (cheap:
+    // downscaled to 24×18 px, throttled to ~1/sec) and warn the user
+    // directly instead of silently feeding the engine noisy input.
+    const lc=lightCheckRef.current;
+    const nowLight=performance.now();
+    if(nowLight-lc.t>1000){
+      lc.t=nowLight;
+      try{
+        if(!lc.canvas){lc.canvas=document.createElement("canvas");lc.canvas.width=24;lc.canvas.height=18;}
+        const lctx=lc.canvas.getContext("2d",{willReadFrequently:true});
+        lctx.drawImage(vid,0,0,24,18);
+        const data=lctx.getImageData(0,0,24,18).data;
+        let sum=0;
+        for(let i=0;i<data.length;i+=4) sum+=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+        const avgLum=sum/(data.length/4); // 0-255
+        // Hysteresis: turn warning on below 45, off above 65 — avoids flicker right at the edge
+        const nowLow = lc.wasLow ? avgLum<65 : avgLum<45;
+        if(nowLow!==lc.wasLow){ lc.wasLow=nowLow; setLowLight(nowLow); }
+      }catch{}
+    }
+
     if(mpRef.current){
       try{
         const det=mpRef.current.detectForVideo(vid,performance.now());
@@ -2193,7 +2221,15 @@ export default function App(){
             if(mode==="side")drawSide(ctx,finalResult,W,H,isAr);else drawFront(ctx,finalResult,W,H,isAr);
             const now=Date.now();
             const gateScore=smoothed1||finalResult.overall;
-            if(gateScore<65){
+            if(lightCheckRef.current.wasLow){
+              // Don't trust score-based decisions in poor lighting — neither
+              // accumulate nor reset the bad-streak timer, since we can't
+              // tell if it's genuinely bad posture or just a bad frame.
+              if(now-lastAlRef.current>8000){
+                lastAlRef.current=now;
+                setAlertMsg({text:isAr?"الإضاءة ضعيفة جدًا — حسّن الإضاءة لقراءة أدق":"Lighting too low — improve lighting for an accurate reading",type:"warn"});
+              }
+            }else if(gateScore<65){
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
                 lastAlRef.current=now;acRef.current.total++;
@@ -2327,6 +2363,7 @@ export default function App(){
 
   async function stopCamera(){
     lmSmootherRef.current?.reset();
+    lightCheckRef.current={t:0,canvas:lightCheckRef.current.canvas,wasLow:false};setLowLight(false);
     if(streamRef.current){
       streamRef.current.getTracks().forEach(x=>{x.stop(); x.enabled=false;});
       streamRef.current = null;
@@ -3696,6 +3733,14 @@ export default function App(){
             <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:cs.muted}}>
               <span>20cm</span><span style={{color:"#10b981"}}>{M_.optDist[0]}–{M_.optDist[1]}cm ✓</span><span>115cm</span>
             </div>
+          </div>
+        )}
+
+        {/* Lighting warning */}
+        {lowLight && (
+          <div style={{padding:"8px 14px",background:"rgba(245,158,11,.12)",borderBottom:`1px solid ${cs.border}`,
+            display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#f59e0b",fontWeight:600}}>
+            💡 {isAr?"الإضاءة ضعيفة — حسّن الإضاءة لقراءات أدق":"Low lighting — improve lighting for more accurate readings"}
           </div>
         )}
 
