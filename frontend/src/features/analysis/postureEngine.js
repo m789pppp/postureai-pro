@@ -56,6 +56,83 @@ export function gradeScore(s)   { return s >= 85 ? "Excellent" : s >= 70 ? "Good
 export function gradeScoreAr(s) { return s >= 85 ? "ممتاز"     : s >= 70 ? "جيد"  : s >= 50 ? "مقبول" : "ضعيف"; }
 export function scoreColor(s)   { return s >= 75 ? "#10b981"   : s >= 50 ? "#f59e0b" : "#ef4444"; }
 
+// ── Landmark temporal smoothing (EMA) ──────────────────────────────
+// MediaPipe landmarks jitter frame-to-frame even when the person is
+// perfectly still — this caused every downstream metric (neck lean,
+// head tilt, yaw, distance) to flicker and occasionally fire a wrong
+// alert cause. Smoothing the raw (x,y,z) landmarks BEFORE geometry is
+// computed fixes all of those metrics at once, with zero changes to
+// the score formula/thresholds (so backend.py stays in sync).
+//
+// Low-visibility landmarks (occluded ear, turned-away face, etc.) are
+// blended in more slowly so a single bad detection can't yank a
+// metric off — the smoother leans on recent history instead.
+//
+// Outlier rejection: a single-frame jump faster than any plausible
+// human movement (given the actual elapsed time between frames) is
+// treated as a tracking glitch — EMA alone still partially absorbs an
+// outlier into the average, this rejects it outright and holds the
+// previous position instead. If the "implausible" jump persists for
+// several consecutive frames, it's accepted as a real fast movement
+// (e.g. a quick head turn) rather than being ignored forever.
+//
+// Usage: const smoother = createLandmarkSmoother(); ...
+//        const lms = smoother.smooth(rawLandmarksFromMediaPipe);
+//        smoother.reset() on camera start/stop/mode change.
+export function createLandmarkSmoother(alpha = 0.4) {
+  let prev = null;
+  let rejectStreak = null;
+  let lastT = null;
+  const MAX_VEL = 3.0;          // normalized units/sec — generous bound for legit human motion
+  const MAX_REJECT_STREAK = 3;  // accept the jump anyway after this many consecutive flagged frames
+
+  return {
+    smooth(lms) {
+      if (!lms || !lms.length) return lms;
+      const now = (typeof performance !== "undefined") ? performance.now() : Date.now();
+      const dt  = lastT ? Math.min(0.5, Math.max(0.001, (now - lastT) / 1000)) : 1 / 30;
+      lastT = now;
+
+      if (!prev || prev.length !== lms.length) {
+        prev = lms.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility }));
+        rejectStreak = new Array(lms.length).fill(0);
+        return prev;
+      }
+      const maxDist = MAX_VEL * dt;
+      const out = new Array(lms.length);
+      for (let i = 0; i < lms.length; i++) {
+        const c = lms[i], p = prev[i];
+        const dxJump = c.x - p.x, dyJump = c.y - p.y;
+        const jump = Math.sqrt(dxJump * dxJump + dyJump * dyJump);
+
+        if (jump > maxDist && rejectStreak[i] < MAX_REJECT_STREAK) {
+          // Implausible single-frame jump — most likely a detection
+          // glitch. Hold the previous smoothed position this frame
+          // instead of letting a bad read yank the metric off.
+          rejectStreak[i]++;
+          out[i] = { ...p };
+          continue;
+        }
+        // Either a plausible move, or it's persisted long enough to be
+        // a real fast movement (not a glitch) — accept it.
+        rejectStreak[i] = 0;
+        const vis = c.visibility ?? 1;
+        // Low-confidence landmark this frame → trust history more, raw value less
+        const a = vis < 0.5 ? alpha * 0.4 : alpha;
+        out[i] = {
+          x: p.x + a * (c.x - p.x),
+          y: p.y + a * (c.y - p.y),
+          z: (c.z != null && p.z != null) ? p.z + a * (c.z - p.z) : c.z,
+          visibility: c.visibility,
+        };
+      }
+      prev = out;
+      return out;
+    },
+    reset() { prev = null; rejectStreak = null; lastT = null; },
+  };
+}
+
 // ── Head yaw estimation (front camera) ───────────────────────────
 // Uses ratio of visible ear widths — if person turns right, left ear shrinks
 // Returns yaw in degrees: + = turned right, - = turned left, 0 = straight
@@ -101,7 +178,11 @@ function estimateHeadYaw(lms, W, H) {
 // ── Distance estimation v2 (IPD-based, more accurate) ────────────
 // Average adult IPD ≈ 63mm. Focal length calibrated to 720p.
 // Falls back to shoulder width if eyes not visible.
-function estimateDistanceCm(lms, W, H) {
+// yawDeg corrects for foreshortening: when the head is turned, the
+// projected eye-to-eye width shrinks even at constant distance, which
+// previously read as "moved closer" and fired false proximity alerts
+// during normal side glances.
+function estimateDistanceCm(lms, W, H, yawDeg = 0) {
   try {
     const g = idx => lms[idx];
     const lEye = { x: g(PL.L_EYE).x * W };
@@ -110,7 +191,11 @@ function estimateDistanceCm(lms, W, H) {
     const rEyeVis = g(PL.R_EYE)?.visibility || 0;
 
     if (lEyeVis > 0.5 && rEyeVis > 0.5) {
-      const ipdPx = Math.abs(rEye.x - lEye.x);
+      let ipdPx = Math.abs(rEye.x - lEye.x);
+      // Undo foreshortening, clamp correction to avoid blow-up at extreme yaw
+      const yawRad = Math.min(50, Math.abs(yawDeg)) * Math.PI / 180;
+      const cosYaw = Math.max(Math.cos(yawRad), 0.55); // cap ~1.8x correction
+      ipdPx = ipdPx / cosYaw;
       if (ipdPx > 4) {
         // focal_px at 720p ≈ 800; IPD_real ≈ 6.3cm
         const focal = 800 * (W / 1280);
@@ -140,7 +225,7 @@ function estimateDistanceCm(lms, W, H) {
 // Any change here MUST be mirrored in backend.py score_m calls
 const T = {
   // Front analysis (matches backend analyze_front)
-  neckLean:  { ok: 7,  bad: 20 },   // backend: score_m(neck_lean, 0, 7, 20)
+  neckLean:  { ok: 7,  bad: 20 },   // superseded in analyzeMP() by shoulder-width-adjusted neckOkAdj/neckBadAdj; kept as fallback reference
   headTilt:  { ok: 3,  bad: 10 },   // backend: score_m(head_tilt, 0, 3, 10)
   shTilt:    { ok: 3,  bad: 10 },   // backend: score_m(sh_tilt,   0, 3, 10)
   spineLean: { ok: 5,  bad: 15 },   // backend: score_m(spine_lean,0, 5, 15)
@@ -176,7 +261,23 @@ export function analyzeMP(lms, W, H, mode) {
   const midEar = { x: (lEar.x + rEar.x) / 2, y: (lEar.y + rEar.y) / 2 };
   const midHip = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
 
-  const neckLean  = angleVert(midSh, midEar);
+  // ── Neck lean: nose+ear blend (ported from backend.py's fix) ────
+  // Ear-only reference is biased by head yaw: turning the head shifts
+  // the ear sideways relative to the shoulder and reads as "more
+  // forward lean" even with perfect posture. Nose→shoulder measures
+  // true forward head displacement and isn't fooled by yaw. Stays
+  // ear-weighted when the nose itself isn't reliably visible.
+  const noseVis    = g(PL.NOSE)?.visibility ?? 1;
+  const earWeight  = noseVis > 0.7 ? 0.15 : 0.50;
+  const noseWeight = 1 - earWeight;
+  const neckRef = {
+    x: nose.x * noseWeight + midEar.x * earWeight,
+    y: nose.y * noseWeight + midEar.y * earWeight,
+  };
+  const neckLeanRaw    = angleVert(midSh, neckRef);
+  const noseCorrection = 5.0 * noseWeight; // nose sits ~10cm ahead of the ear plane
+  const neckLean = Math.max(0, neckLeanRaw - noseCorrection);
+
   const headTilt  = angleHoriz(lEye, rEye);
   const shTilt    = angleHoriz(lSh, rSh);
   const spineLean = angleVert(midHip, midSh);
@@ -185,58 +286,132 @@ export function analyzeMP(lms, W, H, mode) {
   const headYaw = estimateHeadYaw(lms, W, H);
 
   // Distance (IPD-based)
-  const distCm = estimateDistanceCm(lms, W, H);
+  const distCm = estimateDistanceCm(lms, W, H, headYaw);
   const lo = mode === "laptop" ? 50 : 60;
   const hi = mode === "laptop" ? 80 : 90;
   const distSc = distanceScore(distCm, lo, hi);
 
-  // Scores — strict thresholds
-  const neckSc  = scoreMetric(neckLean,  0, T.neckLean.ok,  T.neckLean.bad);
-  const tiltSc  = scoreMetric(headTilt,  0, T.headTilt.ok,  T.headTilt.bad);
-  const shSc    = scoreMetric(shTilt,    0, T.shTilt.ok,    T.shTilt.bad);
-  const spineSc = scoreMetric(spineLean, 0, T.spineLean.ok, T.spineLean.bad);
+  // ── Neck threshold normalization by apparent shoulder width ─────
+  // A fixed degree threshold is too strict when sitting close to the
+  // camera (shoulders fill more of the frame → angles read larger for
+  // the same real lean) and too loose far away. Matches backend.py.
+  const shWidthPx = Math.abs(rSh.x - lSh.x);
+  const refShFrac = 0.34;
+  const shFrac    = shWidthPx / Math.max(W, 1);
+  const shRatio   = Math.max(0.70, Math.min(1.30, shFrac / refShFrac));
+  const neckOkAdj  = Math.max(5.0, 6.0  * shRatio);
+  const neckBadAdj = Math.max(12.0, 17.0 * shRatio);
+
+  // ── Confidence gating ─────────────────────────────────────────
+  // If the landmarks a metric depends on aren't reliably visible
+  // (occluded ear, bad lighting, extreme angle), trust the geometry
+  // less: fall back to a neutral score instead of computing a metric
+  // off noisy/garbage positions and risking a false "bad posture"
+  // read. Frontend-only robustness layer — does not change score_m()
+  // itself, so backend.py stays in sync for well-tracked frames.
+  const NEUTRAL = 90;
+  const shOK  = vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER);
+  const earOK = vis(PL.L_EAR) && vis(PL.R_EAR);
+  const eyeOK = vis(PL.L_EYE) && vis(PL.R_EYE);
+  const hipOK = vis(PL.L_HIP) && vis(PL.R_HIP);
+  const neckOK  = shOK && earOK;
+  const spineOK = shOK && hipOK;
+
+  // Scores — strict thresholds (neck now uses shoulder-width-adjusted thresholds)
+  const neckSc  = neckOK  ? scoreMetric(neckLean,  0, neckOkAdj,     neckBadAdj)    : NEUTRAL;
+  const tiltSc  = eyeOK   ? scoreMetric(headTilt,  0, T.headTilt.ok, T.headTilt.bad): NEUTRAL;
+  const shSc    = shOK    ? scoreMetric(shTilt,    0, T.shTilt.ok,   T.shTilt.bad)  : NEUTRAL;
 
   // Yaw score: ok ≤ 8°, bad ≥ 20°
-  const yawSc = scoreMetric(Math.abs(headYaw), 0, 8, 20);
+  const yawSc = eyeOK ? scoreMetric(Math.abs(headYaw), 0, 8, 20) : NEUTRAL;
 
-  // Weights — synced with backend.py (must sum ≤ 1.0; remaining filled with baseline)
-  const W_NECK = 0.28, W_TILT = 0.14, W_SH = 0.11, W_SPINE = 0.14, W_DIST = 0.18, W_YAW = 0.08;
-  const wSum   = W_NECK + W_TILT + W_SH + W_SPINE + W_DIST + W_YAW; // 0.93
-  const baseline = 72 * (1.0 - wSum);  // same 72-baseline as backend
+  // ── Forward Head Posture index (cm) — ported from backend.py ────
+  // Converts the ear→shoulder pixel offset to real-world cm using
+  // shoulder width as a reference scale. More clinically readable
+  // than a bare degree number. Informational — not in the weighted
+  // overall score (would double-count with neck_lean above).
+  const shWidthCm   = 42.0;
+  const cmPerPx     = shWidthCm / Math.max(shWidthPx, 1);
+  const fhpCm       = Math.round(Math.abs(midEar.x - midSh.x) * cmPerPx * 10) / 10;
+  const extraLoadKg = Math.round((fhpCm / 2.5) * 4.5 * 10) / 10;
+  const fhpSc       = neckOK ? scoreMetric(fhpCm, 0, 2, 6) : NEUTRAL;
+
+  // ── Rounded shoulders (protraction) via Z-depth — ported from backend.py ──
+  // MediaPipe Z: more negative = closer to camera (in front of body).
+  // Rounded/hunched shoulders push both shoulders forward (toward the
+  // camera) relative to the torso. Uses the Pose landmark Z directly —
+  // no FaceMesh/solvePnP needed. Only needs shoulders (not hips), which
+  // is exactly why this doubles as the spine_lean fallback below: when
+  // leaning in close to a laptop camera, the hips are usually the first
+  // thing to leave the frame, but the shoulders stay visible.
+  const lShZ = g(PL.L_SHOULDER)?.z ?? 0;
+  const rShZ = g(PL.R_SHOULDER)?.z ?? 0;
+  const shZAvg       = (lShZ + rShZ) / 2;
+  const shZAsym      = Math.abs(lShZ - rShZ);
+  const roundedDepth = Math.max(0, -shZAvg * 100);
+  const roundedSc    = shOK ? scoreMetric(roundedDepth, 0, 8, 20) : NEUTRAL;
+
+  // spine_lean: when hips aren't visible (very common when leaning close
+  // to a laptop camera — narrow FOV pushes hips out of frame first), fall
+  // back to the rounded-shoulders Z-depth score instead of a blind
+  // neutral. Leaning + hunching forward toward the screen is exactly the
+  // scenario rounded_shoulders is built to catch, and it only needs
+  // shoulders. Without this, that exact posture used to score as "fine"
+  // the moment the hips dropped out of frame.
+  const spineSc = spineOK ? scoreMetric(spineLean, 0, T.spineLean.ok, T.spineLean.bad)
+                : shOK     ? roundedSc
+                : NEUTRAL;
+
+  // Weights — synced with backend.py for neck/tilt/shoulder/spine/dist/yaw;
+  // rounded_shoulders weight is a frontend-only addition (backend keeps it
+  // informational-only) specifically to catch "leaning in + hunching
+  // toward the screen", which previously didn't move the score at all.
+  const W_NECK = 0.28, W_TILT = 0.10, W_SH = 0.11, W_SPINE = 0.14, W_DIST = 0.18, W_YAW = 0.06, W_ROUNDED = 0.08;
+  const wSum   = W_NECK + W_TILT + W_SH + W_SPINE + W_DIST + W_YAW + W_ROUNDED; // 0.95
+  const baseline = 72 * (1.0 - wSum);  // same 72-baseline approach as backend
 
   const overall = Math.max(0, Math.min(100, Math.round(
-    neckSc  * W_NECK  +
-    tiltSc  * W_TILT  +
-    shSc    * W_SH    +
-    spineSc * W_SPINE +
-    distSc  * W_DIST  +
-    yawSc   * W_YAW   +
+    neckSc    * W_NECK  +
+    tiltSc    * W_TILT  +
+    shSc      * W_SH    +
+    spineSc   * W_SPINE +
+    distSc    * W_DIST  +
+    yawSc     * W_YAW   +
+    roundedSc * W_ROUNDED +
     baseline
   )));
 
   // Alerts — SYNCED with backend.py alert thresholds exactly
+  // (each gated by the same visibility check used for its score, so a
+  // low-confidence read can't fire a misleading alert)
   const alerts = [
-    neckLean > 20   && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`,
-    neckLean > 12 && neckLean <= 20 && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`,
-    headTilt > 10   && `Head tilting ${Math.round(headTilt)}° — check chair height and monitor centering`,
-    shTilt > 10     && `Shoulder imbalance ${Math.round(shTilt)}° — adjust armrests`,
-    spineLean > 18  && `⚠️ Spine lean ${Math.round(spineLean)}° — sit back and use lumbar support`,
-    spineLean > 10 && spineLean <= 18 && `Spine lean ${Math.round(spineLean)}° — engage your core and sit upright`,
-    Math.abs(headYaw) > 18 && `Head turned ${Math.abs(Math.round(headYaw))}° ${headYaw > 0 ? "right" : "left"} — face monitor directly`,
+    neckOK && neckLean > 20   && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`,
+    neckOK && neckLean > 12 && neckLean <= 20 && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`,
+    eyeOK && headTilt > 10   && `Head tilting ${Math.round(headTilt)}° — check chair height and monitor centering`,
+    shOK && shTilt > 10     && `Shoulder imbalance ${Math.round(shTilt)}° — adjust armrests`,
+    spineOK && spineLean > 18  && `⚠️ Spine lean ${Math.round(spineLean)}° — sit back and use lumbar support`,
+    spineOK && spineLean > 10 && spineLean <= 18 && `Spine lean ${Math.round(spineLean)}° — engage your core and sit upright`,
+    eyeOK && Math.abs(headYaw) > 18 && `Head turned ${Math.abs(Math.round(headYaw))}° ${headYaw > 0 ? "right" : "left"} — face monitor directly`,
     distCm < lo - 10 && `⚠️ Very close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
     distCm < lo && distCm >= lo - 10 && `Too close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
     distCm > hi + 15 && `Too far from screen (${distCm}cm) — ideal is ${lo}–${hi}cm`,
+    neckOK && fhpCm > 6 && `⚠️ Forward head posture ${fhpCm}cm (+${extraLoadKg}kg neck load) — critical: raise monitor immediately`,
+    neckOK && fhpCm > 3 && fhpCm <= 6 && `Forward head posture ${fhpCm}cm (+${extraLoadKg}kg neck load) — tuck chin back`,
+    shOK && roundedDepth > 15 && `⚠️ Rounded shoulders detected — pull shoulder blades together and down`,
+    shOK && roundedDepth > 8 && roundedDepth <= 15 && `Shoulders slightly forward — open chest, squeeze shoulder blades gently`,
   ].filter(Boolean);
 
   return {
     score: overall,
     metrics: {
-      neck_lean:       { value: Math.round(neckLean),  score: neckSc,  unit: "°",  label: "Neck lean" },
-      head_tilt:       { value: Math.round(headTilt),  score: tiltSc,  unit: "°",  label: "Head tilt" },
-      shoulder_level:  { value: Math.round(shTilt),    score: shSc,    unit: "°",  label: "Shoulder level" },
-      spine_lean:      { value: Math.round(spineLean), score: spineSc, unit: "°",  label: "Spine lean" },
-      head_yaw:        { value: Math.round(headYaw),   score: yawSc,   unit: "°",  label: "Head turn" },
-      screen_distance: { value: distCm,                score: distSc,  unit: "cm", label: "Screen distance" },
+      neck_lean:        { value: Math.round(neckLean),  score: neckSc,    unit: "°",     label: "Neck lean",                reliable: neckOK },
+      head_tilt:        { value: Math.round(headTilt),  score: tiltSc,    unit: "°",     label: "Head tilt",                reliable: eyeOK },
+      shoulder_level:   { value: Math.round(shTilt),    score: shSc,      unit: "°",     label: "Shoulder level",           reliable: shOK },
+      spine_lean:       { value: Math.round(spineLean), score: spineSc,   unit: "°",     label: "Spine lean",               reliable: spineOK },
+      head_yaw:         { value: Math.round(headYaw),   score: yawSc,     unit: "°",     label: "Head turn",                reliable: eyeOK },
+      screen_distance:  { value: distCm,                score: distSc,   unit: "cm",    label: "Screen distance" },
+      fhp_index:        { value: fhpCm, score: fhpSc, unit: "cm", label: "Forward head posture", extra_load_kg: extraLoadKg, reliable: neckOK },
+      rounded_shoulders:{ value: Math.round(roundedDepth*10)/10, score: roundedSc, unit: "depth", label: "Rounded shoulders", asymmetry: Math.round(shZAsym*1000)/1000, reliable: shOK },
     },
     alerts,
     recommendations: [

@@ -6005,6 +6005,8 @@ def referral_stats():
 
 
 @app.route("/api/referral/track", methods=["POST"])
+@optional_auth
+@limiter.limit("10 per minute")
 def track_referral():
     """Track a new referral signup — called on auth/register."""
     try:
@@ -6016,6 +6018,15 @@ def track_referral():
         if not ref_code or not new_uid:
             return jsonify({"ok":False,"reason":"missing fields"})
 
+        # SECURITY: if the request carries a valid Firebase token, the claimed
+        # new_uid MUST match the authenticated uid — prevents anyone from
+        # crediting a referral to an arbitrary uid they don't own. If no token
+        # is present (e.g. called in the brief window right after signup before
+        # the client has refreshed its token), we allow it through but rely on
+        # the one-referral-per-uid check in Firestore rules / below to limit abuse.
+        if getattr(g, "uid", None) and g.uid != new_uid:
+            return jsonify({"ok": False, "reason": "uid mismatch"}), 403
+
         # Look up referrer
         referrer_uid = ref_code.replace("PAI-","").upper()
         referrer_docs = db.collection("users").where("uid_prefix","==",referrer_uid[:6]).get()
@@ -6023,6 +6034,12 @@ def track_referral():
             return jsonify({"ok":False,"reason":"ref code not found"})
 
         referrer = referrer_docs[0]
+
+        # Prevent duplicate/spam referral claims for the same new_uid
+        existing = db.collection("referrals").where("referred_uid","==",new_uid).limit(1).get()
+        if existing:
+            return jsonify({"ok": False, "reason": "referral already tracked for this user"})
+
         db.collection("referrals").add({
             "referrer_uid":  referrer.id,
             "referred_uid":  new_uid,
@@ -6873,14 +6890,20 @@ def create_announcement():
 def enterprise_contact():
     """Enterprise sales inquiry form — public endpoint."""
     try:
+        import html as _html
         data    = request.get_json(force=True) or {}
-        name    = str(data.get("name", ""))[:100].strip()
-        email   = str(data.get("email", ""))[:200].strip()
-        company = str(data.get("company", ""))[:200].strip()
-        size    = str(data.get("size", ""))[:50].strip()
-        message = str(data.get("message", ""))[:2000].strip()
+        # SECURITY: escape all fields before HTML interpolation — this form is
+        # public and unauthenticated, so untrusted input must never reach the
+        # admin's inbox or the auto-reply email unescaped (XSS / email spoofing risk).
+        name    = _html.escape(str(data.get("name", ""))[:100].strip())
+        email   = _html.escape(str(data.get("email", ""))[:200].strip())
+        company = _html.escape(str(data.get("company", ""))[:200].strip())
+        size    = _html.escape(str(data.get("size", ""))[:50].strip())
+        message = _html.escape(str(data.get("message", ""))[:2000].strip())
 
-        if not email or "@" not in email or not name:
+        # Re-validate raw (unescaped) email for format — escaped "@" is unaffected
+        raw_email = str(data.get("email", ""))[:200].strip()
+        if not raw_email or "@" not in raw_email or not name:
             return jsonify({"error": "name and valid email required"}), 400
 
         # Send to admin
@@ -6902,9 +6925,9 @@ def enterprise_contact():
         <p>In the meantime, <a href="{APP_URL}">explore our platform</a> or reply to this email with any questions.</p>
         <p>— PostureAI Enterprise Team</p>
         """
-        send_email(email, "PostureAI Enterprise — We'll be in touch soon", prospect_html)
+        send_email(raw_email, "PostureAI Enterprise — We'll be in touch soon", prospect_html)
 
-        audit("anonymous", "enterprise_inquiry", "marketing", {"email": email, "company": company})
+        audit("anonymous", "enterprise_inquiry", "marketing", {"email": raw_email, "company": company})
         return jsonify({"ok": True})
     except Exception as e:
         return safe_error(e, "Failed to process inquiry")
@@ -8634,9 +8657,16 @@ def push_streak_reminder():
     Secured by CRON_SECRET env var (not user auth).
     """
     try:
-        # Verify cron secret
-        secret = request.headers.get("X-Cron-Secret", "")
-        if secret != os.getenv("CRON_SECRET", ""):
+        # Verify cron secret — fail CLOSED if not configured, and use constant-time
+        # comparison. Previously this compared against "" when unset, meaning a
+        # request with NO header at all would match "" == "" and pass unauthenticated.
+        import hmac as _hmac
+        cron_secret = os.getenv("CRON_SECRET", "")
+        secret      = request.headers.get("X-Cron-Secret", "")
+        if not cron_secret:
+            print("[cron] ⚠️  CRON_SECRET not set — rejecting all cron requests", file=sys.stderr)
+            return jsonify({"error": "Cron endpoint not configured"}), 503
+        if not secret or not _hmac.compare_digest(secret, cron_secret):
             return jsonify({"error": "Unauthorized"}), 401
 
         data     = request.get_json(force=True) or {}
@@ -10170,6 +10200,49 @@ def paymob_webhook():
                     ref = db.collection("users").document(uid)
                     doc = ref.get()
                     if doc.exists:
+                        # SECURITY: Enterprise tiers must NEVER be granted via automated
+                        # webhook — they require a signed custom contract. This blocks
+                        # the case where a forged/replayed merchant_order_id claims an
+                        # enterprise tier (which has no price, so the mismatch check
+                        # below would otherwise be silently skipped).
+                        if tier in ("b2b_enterprise", "enterprise"):
+                            print(f"🚨 [Webhook] Enterprise tier claimed via automated webhook for uid={uid} — refusing", flush=True)
+                            send_admin_notification({
+                                "user_name": fname, "user_email": email,
+                                "tier": "BLOCKED: enterprise via webhook", "amount": amount/100,
+                                "method": "PayMob", "status": "flagged",
+                            })
+                            return jsonify({"received": True, "warning": "enterprise tier requires manual approval"}), 200
+
+                        # SECURITY: defense in depth — even though amount_cents sent
+                        # to PayMob was server-derived at order creation, verify the
+                        # amount PayMob says it received actually matches what this
+                        # tier/billing combo should cost. Protects against PayMob-side
+                        # bugs, MITM tampering, or a stale/forged webhook payload.
+                        expected_amount = get_paymob_amount(tier, billing_type)
+                        if expected_amount is not None and amount != expected_amount:
+                            print(f"🚨 [Webhook] Amount mismatch: expected={expected_amount} got={amount} "
+                                  f"tier={tier} billing={billing_type} uid={uid} — refusing upgrade", flush=True)
+                            send_admin_notification({
+                                "user_name": fname, "user_email": email,
+                                "tier": f"AMOUNT MISMATCH: {tier}", "amount": amount/100,
+                                "method": "PayMob", "status": "flagged",
+                            })
+                            return jsonify({"received": True, "warning": "amount mismatch — flagged for review"}), 200
+
+                        # SECURITY: idempotency — reject if this exact PayMob order
+                        # was already processed (replay protection). A webhook can
+                        # legitimately be retried by PayMob on transient failures,
+                        # so we check before mutating state rather than rejecting
+                        # the HTTP request outright.
+                        paymob_order_id = order.get("id")
+                        if paymob_order_id:
+                            existing_payment = db.collection("payments").where(
+                                "paymob_order", "==", paymob_order_id).limit(1).get()
+                            if existing_payment:
+                                print(f"[Webhook] Order {paymob_order_id} already processed — skipping duplicate", flush=True)
+                                return jsonify({"received": True, "note": "already processed"}), 200
+
                         months  = 12 if billing_type == "yearly" else 1
                         expires = datetime.utcnow() + timedelta(days=30*months)
                         ref.update({
@@ -10489,17 +10562,42 @@ def monthly_hr_report():
 SEAT_LIMITS = {"starter":25,"standard":25,"growth":100,"professional":100,"business":500,"elite":-1,"enterprise":-1}
 
 @app.route("/api/org/invite/accept", methods=["POST"])
+@require_auth
 @limiter.limit("20 per minute")
 def org_invite_accept():
     """Accept invite token — links user to company in Firestore."""
     try:
         data       = request.get_json(force=True) or {}
         token      = (data.get("token") or "").strip()
-        uid        = (data.get("uid") or "").strip()
+        # SECURITY: the accepting uid comes from the verified Firebase token,
+        # never from the request body — otherwise anyone could accept an
+        # invite on behalf of an arbitrary uid they don't control.
+        uid        = getattr(g, "uid", "")
         company_id = (data.get("company_id") or "").strip()
         if not (token and uid and company_id):
             return jsonify({"error":"token, uid, company_id required"}),400
         db  = firestore.client()
+
+        # SECURITY: the invite document MUST exist, MUST belong to the claimed
+        # company_id, and MUST still be pending. Without these checks anyone
+        # who knows (or guesses) a company_id could call this endpoint with a
+        # random/garbage token and still get linked to that company, because
+        # the previous version only checked `if inv.exists` and silently
+        # continued (returning ok:True) even when the invite did not exist.
+        inv_ref = db.collection("invites").document(token)
+        inv     = inv_ref.get()
+        if not inv.exists:
+            return jsonify({"error": "Invalid or expired invite"}), 404
+        inv_data = inv.to_dict()
+        if inv_data.get("company_id") != company_id:
+            print(f"🚨 [invite] company_id mismatch: invite belongs to {inv_data.get('company_id')}, "
+                  f"request claimed {company_id} — possible spoofing attempt by uid={uid}", flush=True)
+            return jsonify({"error": "Invite does not belong to this company"}), 403
+        if inv_data.get("status") == "accepted":
+            return jsonify({"error": "Invite already accepted"}), 409
+        if inv_data.get("status") not in (None, "pending"):
+            return jsonify({"error": f"Invite is {inv_data.get('status')}, cannot accept"}), 409
+
         # Check seat limit
         company = db.collection("companies").document(company_id).get()
         if company.exists:
@@ -10510,11 +10608,21 @@ def org_invite_accept():
                 members = db.collection("users").where("company_id","==",company_id).get()
                 if len(list(members)) >= limit:
                     return jsonify({"error":f"Seat limit reached ({limit} seats on {plan} plan). Upgrade to add more members."}),403
+
         # Mark invite accepted
-        inv_ref = db.collection("invites").document(token)
-        inv     = inv_ref.get()
-        if inv.exists:
-            inv_ref.update({"status":"accepted","accepted_by":uid,"accepted_at":datetime.utcnow().isoformat()+"Z"})
+        inv_ref.update({"status":"accepted","accepted_by":uid,"accepted_at":datetime.utcnow().isoformat()+"Z"})
+
+        # Link the accepting user to the company — including department/role
+        # from the invite itself, since the frontend used to write these
+        # directly but that path is removed now (see security notes above).
+        db.collection("users").document(uid).update({
+            "company_id": company_id,
+            "department": inv_data.get("department", ""),
+            "role":       inv_data.get("role", "employee"),
+            "updated_at": datetime.utcnow().isoformat()+"Z",
+        })
+
+        audit(uid, "invite_accepted", "org", {"company_id": company_id, "invite_id": token})
         return jsonify({"ok":True,"company_id":company_id})
     except Exception as e:
         return jsonify({"error":str(e)}),500
@@ -13292,6 +13400,12 @@ def stripe_webhook():
                 print(f"[stripe] Invalid plan in metadata: {plan}", file=sys.stderr)
                 return jsonify({"received": True, "warning": "invalid plan"}), 200
 
+            # SECURITY: Enterprise tiers must never be auto-granted by a webhook —
+            # they require a manually negotiated, signed contract.
+            if plan in ("b2b_enterprise", "enterprise"):
+                print(f"🚨 [stripe] Enterprise tier claimed via webhook for uid={uid} — refusing", file=sys.stderr)
+                return jsonify({"received": True, "warning": "enterprise requires manual approval"}), 200
+
             # Update Firestore — this is the critical missing step from v1
             if uid and plan:
                 try:
@@ -13299,6 +13413,18 @@ def stripe_webhook():
                     _ref = _db.collection("users").document(uid)
                     _doc = _ref.get()
                     if _doc.exists:
+                        # SECURITY: idempotency — Stripe can and does retry webhook
+                        # delivery on transient failures. Without this check, a retry
+                        # would extend the subscription period and record a duplicate
+                        # payment for the same checkout session.
+                        _session_id = obj.get("id", "")
+                        if _session_id:
+                            _existing = _db.collection("payments").where(
+                                "stripe_session_id", "==", _session_id).limit(1).get()
+                            if _existing:
+                                print(f"[stripe] Session {_session_id} already processed — skipping duplicate", flush=True)
+                                return jsonify({"received": True, "note": "already processed"}), 200
+
                         months  = 12 if billing == "yearly" else 1
                         expires = datetime.utcnow() + timedelta(days=30 * months)
                         _ref.update({
@@ -13319,7 +13445,7 @@ def stripe_webhook():
                             "amount": (obj.get("amount_total") or 0) // 100,
                             "currency": "USD", "billing": billing,
                             "status": "confirmed",
-                            "stripe_session": obj.get("id"),
+                            "stripe_session_id": obj.get("id"),
                             "email": email,
                             "created_at": datetime.utcnow().isoformat() + "Z",
                         })
