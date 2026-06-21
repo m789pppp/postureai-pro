@@ -418,7 +418,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
     metrics: {
       neck_lean:        { value: Math.round(neckLean),  score: neckSc,    unit: "°",     label: "Neck lean",                reliable: neckOK },
       head_tilt:        { value: Math.round(headTilt),  score: tiltSc,    unit: "°",     label: "Head tilt",                reliable: eyeOK },
-      shoulder_level:   { value: Math.round(shTilt),    score: shSc,      unit: "°",     label: "Shoulder level",           reliable: shOK },
+      shoulder_level:   { value: Math.round(shTilt),    score: shSc,      unit: "°",     label: "Shoulder level",           reliable: shOK, signed: Math.round(((rSh.y-lSh.y)>0?shTilt:-shTilt)*10)/10 },
       spine_lean:       { value: Math.round(spineLean), score: spineSc,   unit: "°",     label: "Spine lean",               reliable: spineOK },
       head_yaw:         { value: Math.round(headYaw),   score: yawSc,     unit: "°",     label: "Head turn",                reliable: eyeOK },
       screen_distance:  { value: distCm,                score: distSc,   unit: "cm",    label: "Screen distance", calibrated: !!(distCalibFactor && distCalibFactor>0) },

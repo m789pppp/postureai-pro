@@ -327,6 +327,112 @@ function _buildSideLmsRefs(lms,W,H){
          ankle:{x:g(si("L_ANKLE")).x,y:g(si("L_ANKLE")).y}};
 }
 
+// ── Session pattern tracking: creep, chronic asymmetry, breathing ──
+// These are session-LEVEL observations, not single-frame thresholds —
+// a fresh tracker is created per camera session (see _newInsightsTracker)
+// and fed one sample per analyzed frame via _trackSessionPatterns,
+// which returns a new insight to surface (or null).
+function _newInsightsTracker(){
+  return {
+    sessionStart: 0,
+    neck: { curMinute:-1, curSum:0, curCount:0, minuteAvgs:[] },
+    shAsym: { curMinute:-1, curSum:0, curCount:0, minuteAvgs:[] },
+    breath: { buf:[], lastPush:0 },
+    lastFire: { creep:0, asym:0, breath:0 },
+  };
+}
+
+function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTiltSigned, shReliable, isAr){
+  if(!tr.sessionStart) tr.sessionStart = now;
+  const insights = [];
+
+  // ── #4 Micro-posture creep: slow drift vs the session's first ~2 min ──
+  if(neckReliable && neckLeanVal!=null){
+    const b = tr.neck;
+    const minuteIdx = Math.floor((now - tr.sessionStart)/60000);
+    if(minuteIdx !== b.curMinute){
+      if(b.curCount>0) b.minuteAvgs.push(b.curSum/b.curCount);
+      b.curMinute=minuteIdx; b.curSum=0; b.curCount=0;
+    }
+    b.curSum += neckLeanVal; b.curCount++;
+    if(b.minuteAvgs.length>=15 && now-tr.lastFire.creep>600000){
+      const baseline = (b.minuteAvgs[0]+b.minuteAvgs[1])/2;
+      const recent = (b.minuteAvgs[b.minuteAvgs.length-1]+b.minuteAvgs[b.minuteAvgs.length-2])/2;
+      const drift = recent - baseline;
+      if(drift > 8){
+        tr.lastFire.creep = now;
+        insights.push({
+          icon:"📉",
+          text:`Posture creep detected: neck lean drifted +${Math.round(drift)}° vs the start of this session — worth a conscious reset, not just a single bad moment`,
+          textAr:`ملاحظة: وضعيتك بتزيد ميلها تدريجيًا — رقبتك زادت ${Math.round(drift)}° عن بداية الجلسة. مش لحظة سيئة واحدة، ده انحدار بطيء يستاهل تصحيح واعي`,
+        });
+      }
+    }
+  }
+
+  // ── #5 Chronic asymmetry: consistent SAME-direction shoulder tilt over the session ──
+  if(shReliable && shTiltSigned!=null){
+    const b = tr.shAsym;
+    const minuteIdx = Math.floor((now - tr.sessionStart)/60000);
+    if(minuteIdx !== b.curMinute){
+      if(b.curCount>0) b.minuteAvgs.push(b.curSum/b.curCount);
+      b.curMinute=minuteIdx; b.curSum=0; b.curCount=0;
+    }
+    b.curSum += shTiltSigned; b.curCount++;
+    if(b.minuteAvgs.length>=20 && now-tr.lastFire.asym>900000){
+      const sameSign = b.minuteAvgs.filter(v=>Math.sign(v)===Math.sign(b.minuteAvgs[0])).length;
+      const consistency = sameSign / b.minuteAvgs.length;
+      const avgMag = Math.abs(b.minuteAvgs.reduce((a,c)=>a+c,0)/b.minuteAvgs.length);
+      if(consistency>0.8 && avgMag>4){
+        tr.lastFire.asym = now;
+        const side = b.minuteAvgs[0]>0 ? (isAr?"الأيمن":"right") : (isAr?"الأيسر":"left");
+        insights.push({
+          icon:"⚖️",
+          text:`Consistent shoulder asymmetry this session: ${side} shoulder lower on average (~${Math.round(avgMag)}°). Could be chair/monitor setup, habit, or worth mentioning to a physiotherapist if it persists across sessions — not a diagnosis`,
+          textAr:`ميل ثابت في الكتف ${side} طول الجلسة (~${Math.round(avgMag)}°). ممكن يكون سبب الكرسي/مكان الشاشة أو عادة، ولو استمر في جلسات كتير يستاهل تتكلم مع أخصائي علاج طبيعي — مش تشخيص`,
+        });
+      }
+    }
+  }
+
+  // ── #6 Breathing rate (EXPERIMENTAL) — shoulder-Y oscillation ──
+  // Webcam-based breathing estimation from shoulder movement is a known
+  // but noisy technique (typing/fidgeting easily swamps it). Kept
+  // intentionally conservative: long window, plausible-range filter,
+  // long cooldown, and the surfaced text says "experimental" outright.
+  if(midShY!=null){
+    const br = tr.breath;
+    if(now - br.lastPush > 150){ // downsample to ~6-7 samples/sec
+      br.lastPush = now;
+      br.buf.push({t:now, y:midShY});
+      const cutoff = now - 45000;
+      while(br.buf.length && br.buf[0].t < cutoff) br.buf.shift();
+    }
+    if(br.buf.length>=120 && now-tr.lastFire.breath>900000){
+      const ys = br.buf.map(s=>s.y);
+      const meanY = ys.reduce((a,b)=>a+b,0)/ys.length;
+      const detrended = ys.map(y=>y-meanY);
+      const amplitude = Math.max(...detrended)-Math.min(...detrended);
+      let crossings=0;
+      for(let i=1;i<detrended.length;i++) if(detrended[i-1]<0 && detrended[i]>=0) crossings++;
+      const durSec = (br.buf[br.buf.length-1].t - br.buf[0].t)/1000;
+      const bpm = durSec>0 ? (crossings/durSec)*60 : 0;
+      // Only surface a fast+shallow reading — normal breathing isn't worth interrupting for,
+      // and the technique is too noisy to confidently call out "normal" anyway.
+      if(bpm>=18 && bpm<=32 && amplitude>0 && amplitude<0.012){
+        tr.lastFire.breath = now;
+        insights.push({
+          icon:"🫁",
+          text:`(Experimental) Breathing pattern looks fast and shallow (~${Math.round(bpm)}/min) — could be a stress/posture signal, could just be webcam noise. Try a few slow deep breaths`,
+          textAr:`(تجريبي) نمط تنفسك بيبان سريع وضحل (~${Math.round(bpm)}/دقيقة) — ممكن يكون إشارة توتر أو وضعية، وممكن يكون مجرد ضوضاء كاميرا. جرب كذا نفس عميق وبطيء`,
+        });
+      }
+    }
+  }
+
+  return insights;
+}
+
 function _riskColor(score){
   if(score==null) return "#94a3b8";
   if(score>=80) return "#10b981";
@@ -1772,6 +1878,7 @@ export default function App(){
   }, []);
   const[mode,setMode]=useState(null);
   const[lowLight,setLowLight]=useState(false);
+  const[sessionInsights,setSessionInsights]=useState([]);
   useEffect(()=>{ lmSmootherRef.current?.reset(); },[mode]);
   const[tier,setTier]=useState(null);
   const[acctType,setAcctType]=useState(profile?.acct_type||null);
@@ -1964,6 +2071,7 @@ export default function App(){
   const mpRef=useRef();const badRef=useRef(null);const lastAlRef=useRef(0);
   const lmSmootherRef=useRef(null);
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
+  const insightsRef=useRef(null);
   const histRef=useRef([]);const goodRef=useRef(0);const totalRef=useRef(0);
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
@@ -2220,6 +2328,26 @@ export default function App(){
             setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
             if(mode==="side")drawSide(ctx,finalResult,W,H,isAr);else drawFront(ctx,finalResult,W,H,isAr);
             const now=Date.now();
+
+            // Session-level pattern tracking (creep, chronic asymmetry, experimental breathing)
+            if(mode!=="side"){
+              if(!insightsRef.current) insightsRef.current=_newInsightsTracker();
+              const midShY=(lms[11]?.y+lms[12]?.y)/2;
+              const neckMet=finalResult.metrics?.neck_lean, shMet=finalResult.metrics?.shoulder_level;
+              const newInsights=_trackSessionPatterns(
+                insightsRef.current, now, midShY,
+                neckMet?.value, neckMet?.reliable!==false,
+                shMet?.signed, shMet?.reliable!==false,
+                isAr
+              );
+              if(newInsights.length){
+                setSessionInsights(prev=>[
+                  ...newInsights.map(ins=>({...ins,time:new Date().toLocaleTimeString()})),
+                  ...prev,
+                ].slice(0,10));
+              }
+            }
+
             const gateScore=smoothed1||finalResult.overall;
             if(lightCheckRef.current.wasLow){
               // Don't trust score-based decisions in poor lighting — neither
@@ -2322,6 +2450,7 @@ export default function App(){
       if(!vidRef.current){return;}
       setCameraStatus("ready");
       lmSmootherRef.current?.reset();
+      insightsRef.current=null;setSessionInsights([]);
       // Request notification permission on first session
       requestNotificationPermission();
       let sid="local_"+Date.now();
@@ -3347,6 +3476,30 @@ export default function App(){
               <div key={i} style={{display:"flex",gap:8,padding:"6px 0",borderBottom:i<analysis.recommendations.length-1?`1px solid ${cs.border}`:"none"}}>
                 <span style={{color:"#6ee7b7",flexShrink:0,fontSize:12}}>✓</span>
                 <span style={{fontSize:12,color:cs.text,lineHeight:1.5}}>{r}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Session Insights — pattern-level observations, distinct from real-time alerts */}
+        {sessionInsights.length>0&&(
+          <div style={{margin:"0 16px 16px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:12,overflow:"hidden"}}>
+            <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:9.5,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".06em"}}>
+                {isAr?"ملاحظات الجلسة":"Session Insights"}
+              </div>
+              <span style={{fontSize:10,fontWeight:700,color:"#6366f1",background:"rgba(99,102,241,.12)",
+                borderRadius:99,padding:"1px 7px"}}>{sessionInsights.length}</span>
+            </div>
+            {sessionInsights.slice(0,5).map((ins,i)=>(
+              <div key={i} style={{display:"flex",gap:8,padding:"10px 14px",
+                borderBottom:i<Math.min(sessionInsights.length,5)-1?`1px solid ${cs.border}`:"none",
+                alignItems:"flex-start", background:i===0?"rgba(99,102,241,.04)":"transparent"}}>
+                <span style={{fontSize:14,flexShrink:0}}>{ins.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:11,color:cs.text,lineHeight:1.5}}>{isAr?ins.textAr:ins.text}</div>
+                  <div style={{fontSize:9,color:cs.muted,fontFamily:"monospace",marginTop:3}}>{ins.time}</div>
+                </div>
               </div>
             ))}
           </div>
