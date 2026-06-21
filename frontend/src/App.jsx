@@ -2131,14 +2131,23 @@ export default function App(){
       try{
         const mod=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
         const fr=await mod.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
-        const pl=await mod.PoseLandmarker.createFromOptions(fr,{
-          baseOptions:{
-            modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-            delegate:"CPU"
-          },
+        // "full" model: meaningfully more accurate landmarks than "lite",
+        // especially for subtle angles (neck lean, spine lean). GPU
+        // delegate is what makes this affordable in real time — CPU alone
+        // is why "lite" was chosen originally. Falls back to CPU delegate
+        // (still on the "full" model) if GPU isn't available on this device.
+        const MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+        const opts={
           runningMode:"VIDEO",numPoses:1,
-          minPoseDetectionConfidence:.4,minPosePresenceConfidence:.4,minTrackingConfidence:.4
-        });
+          minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5
+        };
+        let pl;
+        try{
+          pl=await mod.PoseLandmarker.createFromOptions(fr,{baseOptions:{modelAssetPath:MODEL,delegate:"GPU"},...opts});
+        }catch(gpuErr){
+          console.warn("GPU delegate unavailable, falling back to CPU:",gpuErr.message);
+          pl=await mod.PoseLandmarker.createFromOptions(fr,{baseOptions:{modelAssetPath:MODEL,delegate:"CPU"},...opts});
+        }
         mpRef.current=pl;window.__mpPose=pl;setMpStatus("ready");
       }catch(err){
         console.warn("MediaPipe CDN failed, using backend fallback:",err.message);
@@ -2146,7 +2155,7 @@ export default function App(){
       }
     };
     load();
-    setTimeout(()=>{if(!mpRef.current&&mpStatus==="loading")setMpStatus("fallback");},12000);
+    setTimeout(()=>{if(!mpRef.current&&mpStatus==="loading")setMpStatus("fallback");},18000);
   // eslint-disable-next-line
   },[]);
 
