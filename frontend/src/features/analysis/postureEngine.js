@@ -321,7 +321,6 @@ export function analyzeMP(lms, W, H, mode) {
   const neckSc  = neckOK  ? scoreMetric(neckLean,  0, neckOkAdj,     neckBadAdj)    : NEUTRAL;
   const tiltSc  = eyeOK   ? scoreMetric(headTilt,  0, T.headTilt.ok, T.headTilt.bad): NEUTRAL;
   const shSc    = shOK    ? scoreMetric(shTilt,    0, T.shTilt.ok,   T.shTilt.bad)  : NEUTRAL;
-  const spineSc = spineOK ? scoreMetric(spineLean, 0, T.spineLean.ok,T.spineLean.bad): NEUTRAL;
 
   // Yaw score: ok ≤ 8°, bad ≥ 20°
   const yawSc = eyeOK ? scoreMetric(Math.abs(headYaw), 0, 8, 20) : NEUTRAL;
@@ -341,7 +340,10 @@ export function analyzeMP(lms, W, H, mode) {
   // MediaPipe Z: more negative = closer to camera (in front of body).
   // Rounded/hunched shoulders push both shoulders forward (toward the
   // camera) relative to the torso. Uses the Pose landmark Z directly —
-  // no FaceMesh/solvePnP needed. Informational, not in weighted score.
+  // no FaceMesh/solvePnP needed. Only needs shoulders (not hips), which
+  // is exactly why this doubles as the spine_lean fallback below: when
+  // leaning in close to a laptop camera, the hips are usually the first
+  // thing to leave the frame, but the shoulders stay visible.
   const lShZ = g(PL.L_SHOULDER)?.z ?? 0;
   const rShZ = g(PL.R_SHOULDER)?.z ?? 0;
   const shZAvg       = (lShZ + rShZ) / 2;
@@ -349,18 +351,33 @@ export function analyzeMP(lms, W, H, mode) {
   const roundedDepth = Math.max(0, -shZAvg * 100);
   const roundedSc    = shOK ? scoreMetric(roundedDepth, 0, 8, 20) : NEUTRAL;
 
-  // Weights — synced with backend.py (must sum ≤ 1.0; remaining filled with baseline)
-  const W_NECK = 0.28, W_TILT = 0.14, W_SH = 0.11, W_SPINE = 0.14, W_DIST = 0.18, W_YAW = 0.08;
-  const wSum   = W_NECK + W_TILT + W_SH + W_SPINE + W_DIST + W_YAW; // 0.93
-  const baseline = 72 * (1.0 - wSum);  // same 72-baseline as backend
+  // spine_lean: when hips aren't visible (very common when leaning close
+  // to a laptop camera — narrow FOV pushes hips out of frame first), fall
+  // back to the rounded-shoulders Z-depth score instead of a blind
+  // neutral. Leaning + hunching forward toward the screen is exactly the
+  // scenario rounded_shoulders is built to catch, and it only needs
+  // shoulders. Without this, that exact posture used to score as "fine"
+  // the moment the hips dropped out of frame.
+  const spineSc = spineOK ? scoreMetric(spineLean, 0, T.spineLean.ok, T.spineLean.bad)
+                : shOK     ? roundedSc
+                : NEUTRAL;
+
+  // Weights — synced with backend.py for neck/tilt/shoulder/spine/dist/yaw;
+  // rounded_shoulders weight is a frontend-only addition (backend keeps it
+  // informational-only) specifically to catch "leaning in + hunching
+  // toward the screen", which previously didn't move the score at all.
+  const W_NECK = 0.28, W_TILT = 0.10, W_SH = 0.11, W_SPINE = 0.14, W_DIST = 0.18, W_YAW = 0.06, W_ROUNDED = 0.08;
+  const wSum   = W_NECK + W_TILT + W_SH + W_SPINE + W_DIST + W_YAW + W_ROUNDED; // 0.95
+  const baseline = 72 * (1.0 - wSum);  // same 72-baseline approach as backend
 
   const overall = Math.max(0, Math.min(100, Math.round(
-    neckSc  * W_NECK  +
-    tiltSc  * W_TILT  +
-    shSc    * W_SH    +
-    spineSc * W_SPINE +
-    distSc  * W_DIST  +
-    yawSc   * W_YAW   +
+    neckSc    * W_NECK  +
+    tiltSc    * W_TILT  +
+    shSc      * W_SH    +
+    spineSc   * W_SPINE +
+    distSc    * W_DIST  +
+    yawSc     * W_YAW   +
+    roundedSc * W_ROUNDED +
     baseline
   )));
 
