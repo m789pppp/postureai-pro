@@ -1848,7 +1848,7 @@ export default function App(){
   useEffect(()=>{ if(savedCalib && !calibData) setCalibData(savedCalib); }, [savedCalib]);
 
   // Score smoothing
-  const { smoothed: smoothedScore, push: pushScore, reset: resetScore } = useScoreSmoothing(5, 0.35);
+  const { smoothed: smoothedScore, push: pushScore, reset: resetScore } = useScoreSmoothing(10000, 3000);
 
   // Break timer
   const { showBreak, dismiss: dismissBreak, snooze: snoozeBreak } = useBreakTimer(30, breakReminder);
