@@ -242,14 +242,29 @@ export function analyzeMP(lms, W, H, mode) {
   const hi = mode === "laptop" ? 80 : 90;
   const distSc = distanceScore(distCm, lo, hi);
 
+  // ── Confidence gating ─────────────────────────────────────────
+  // If the landmarks a metric depends on aren't reliably visible
+  // (occluded ear, bad lighting, extreme angle), trust the geometry
+  // less: fall back to a neutral score instead of computing a metric
+  // off noisy/garbage positions and risking a false "bad posture"
+  // read. Frontend-only robustness layer — does not change score_m()
+  // itself, so backend.py stays in sync for well-tracked frames.
+  const NEUTRAL = 90;
+  const shOK  = vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER);
+  const earOK = vis(PL.L_EAR) && vis(PL.R_EAR);
+  const eyeOK = vis(PL.L_EYE) && vis(PL.R_EYE);
+  const hipOK = vis(PL.L_HIP) && vis(PL.R_HIP);
+  const neckOK  = shOK && earOK;
+  const spineOK = shOK && hipOK;
+
   // Scores — strict thresholds
-  const neckSc  = scoreMetric(neckLean,  0, T.neckLean.ok,  T.neckLean.bad);
-  const tiltSc  = scoreMetric(headTilt,  0, T.headTilt.ok,  T.headTilt.bad);
-  const shSc    = scoreMetric(shTilt,    0, T.shTilt.ok,    T.shTilt.bad);
-  const spineSc = scoreMetric(spineLean, 0, T.spineLean.ok, T.spineLean.bad);
+  const neckSc  = neckOK  ? scoreMetric(neckLean,  0, T.neckLean.ok,  T.neckLean.bad) : NEUTRAL;
+  const tiltSc  = eyeOK   ? scoreMetric(headTilt,  0, T.headTilt.ok,  T.headTilt.bad) : NEUTRAL;
+  const shSc    = shOK    ? scoreMetric(shTilt,    0, T.shTilt.ok,    T.shTilt.bad)   : NEUTRAL;
+  const spineSc = spineOK ? scoreMetric(spineLean, 0, T.spineLean.ok, T.spineLean.bad): NEUTRAL;
 
   // Yaw score: ok ≤ 8°, bad ≥ 20°
-  const yawSc = scoreMetric(Math.abs(headYaw), 0, 8, 20);
+  const yawSc = eyeOK ? scoreMetric(Math.abs(headYaw), 0, 8, 20) : NEUTRAL;
 
   // Weights — synced with backend.py (must sum ≤ 1.0; remaining filled with baseline)
   const W_NECK = 0.28, W_TILT = 0.14, W_SH = 0.11, W_SPINE = 0.14, W_DIST = 0.18, W_YAW = 0.08;
@@ -267,14 +282,16 @@ export function analyzeMP(lms, W, H, mode) {
   )));
 
   // Alerts — SYNCED with backend.py alert thresholds exactly
+  // (each gated by the same visibility check used for its score, so a
+  // low-confidence read can't fire a misleading alert)
   const alerts = [
-    neckLean > 20   && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`,
-    neckLean > 12 && neckLean <= 20 && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`,
-    headTilt > 10   && `Head tilting ${Math.round(headTilt)}° — check chair height and monitor centering`,
-    shTilt > 10     && `Shoulder imbalance ${Math.round(shTilt)}° — adjust armrests`,
-    spineLean > 18  && `⚠️ Spine lean ${Math.round(spineLean)}° — sit back and use lumbar support`,
-    spineLean > 10 && spineLean <= 18 && `Spine lean ${Math.round(spineLean)}° — engage your core and sit upright`,
-    Math.abs(headYaw) > 18 && `Head turned ${Math.abs(Math.round(headYaw))}° ${headYaw > 0 ? "right" : "left"} — face monitor directly`,
+    neckOK && neckLean > 20   && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`,
+    neckOK && neckLean > 12 && neckLean <= 20 && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`,
+    eyeOK && headTilt > 10   && `Head tilting ${Math.round(headTilt)}° — check chair height and monitor centering`,
+    shOK && shTilt > 10     && `Shoulder imbalance ${Math.round(shTilt)}° — adjust armrests`,
+    spineOK && spineLean > 18  && `⚠️ Spine lean ${Math.round(spineLean)}° — sit back and use lumbar support`,
+    spineOK && spineLean > 10 && spineLean <= 18 && `Spine lean ${Math.round(spineLean)}° — engage your core and sit upright`,
+    eyeOK && Math.abs(headYaw) > 18 && `Head turned ${Math.abs(Math.round(headYaw))}° ${headYaw > 0 ? "right" : "left"} — face monitor directly`,
     distCm < lo - 10 && `⚠️ Very close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
     distCm < lo && distCm >= lo - 10 && `Too close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
     distCm > hi + 15 && `Too far from screen (${distCm}cm) — ideal is ${lo}–${hi}cm`,
@@ -283,11 +300,11 @@ export function analyzeMP(lms, W, H, mode) {
   return {
     score: overall,
     metrics: {
-      neck_lean:       { value: Math.round(neckLean),  score: neckSc,  unit: "°",  label: "Neck lean" },
-      head_tilt:       { value: Math.round(headTilt),  score: tiltSc,  unit: "°",  label: "Head tilt" },
-      shoulder_level:  { value: Math.round(shTilt),    score: shSc,    unit: "°",  label: "Shoulder level" },
-      spine_lean:      { value: Math.round(spineLean), score: spineSc, unit: "°",  label: "Spine lean" },
-      head_yaw:        { value: Math.round(headYaw),   score: yawSc,   unit: "°",  label: "Head turn" },
+      neck_lean:       { value: Math.round(neckLean),  score: neckSc,  unit: "°",  label: "Neck lean",     reliable: neckOK },
+      head_tilt:       { value: Math.round(headTilt),  score: tiltSc,  unit: "°",  label: "Head tilt",     reliable: eyeOK },
+      shoulder_level:  { value: Math.round(shTilt),    score: shSc,    unit: "°",  label: "Shoulder level",reliable: shOK },
+      spine_lean:      { value: Math.round(spineLean), score: spineSc, unit: "°",  label: "Spine lean",    reliable: spineOK },
+      head_yaw:        { value: Math.round(headYaw),   score: yawSc,   unit: "°",  label: "Head turn",     reliable: eyeOK },
       screen_distance: { value: distCm,                score: distSc,  unit: "cm", label: "Screen distance" },
     },
     alerts,
