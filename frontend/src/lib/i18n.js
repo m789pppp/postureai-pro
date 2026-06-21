@@ -144,7 +144,7 @@ export const translations = {
 
     // ── Sessions ──────────────────────────────────────────────────
     scoreHist:    "Performance history",
-    aiAnalysis:   "Claude AI analysis",
+    aiAnalysis:   "Gemini AI analysis",
     noSessions:   "No sessions yet — start your first intelligence session",
 
     // ── Onboarding ────────────────────────────────────────────────
@@ -349,7 +349,7 @@ export const translations = {
 
     // ── Sessions ──────────────────────────────────────────────────
     scoreHist:    "سجل الأداء",
-    aiAnalysis:   "تحليل Claude AI",
+    aiAnalysis:   "تحليل Gemini AI",
     noSessions:   "لا توجد جلسات بعد — ابدأ جلسة الذكاء الأولى",
 
     // ── Onboarding ────────────────────────────────────────────────

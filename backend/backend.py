@@ -112,13 +112,15 @@ def compute_percentile(score: int) -> int:
                 return min(99, int((below / total) * 100))
     except Exception:
         pass
-    _score_pool.append(score)
-    if len(_score_pool) > 10000:
-        _score_pool = _score_pool[-5000:]
-    if len(_score_pool) < 10:
+    with _score_pool_lock:
+        _score_pool.append(score)
+        if len(_score_pool) > 10000:
+            _score_pool = _score_pool[-5000:]
+        pool_snapshot = list(_score_pool)
+    if len(pool_snapshot) < 10:
         return -1
-    below = sum(1 for s in _score_pool if s < score)
-    return min(99, int((below / len(_score_pool)) * 100))
+    below = sum(1 for s in pool_snapshot if s < score)
+    return min(99, int((below / len(pool_snapshot)) * 100))
 
 
 # ── Arabic alert translations ─────────────────────────────────────
@@ -1395,20 +1397,42 @@ def score_m(v, ideal, ok, bad):
 def cam_mat(w, h):
     """
     Camera intrinsic matrix with aspect-ratio-correct focal length.
-    Assumes ~70° horizontal FOV (typical webcam/phone).
-    fx = w / (2 * tan(hFOV/2)) ≈ w * 0.85 for 70° FOV
+
+    fx = w / (2 * tan(hFOV/2))
+
+    NOTE: the 0.85 constant below corresponds to hFOV ≈ 61°, not 70° as a
+    previous version of this comment claimed — fx = w/(2*tan(35°)) ≈ 0.714*w
+    for a true 70° FOV, while w*0.85 back-solves to tan(θ/2)=0.588 → θ≈61°.
+    Whether 0.85 was empirically tuned against real webcams (typical
+    consumer webcam hFOV is 60-78°, so 61° is plausible) or is simply a
+    leftover guess hasn't been verified here. This feeds solvePnP head
+    pose and the IPD/face-width distance estimate (ipd_distance_face) —
+    worth validating against a few real devices with known FOV before
+    trusting the absolute (not just relative) accuracy of those numbers.
     fy = h / (2 * tan(vFOV/2)) — preserves aspect ratio for portrait cameras
     """
-    fx = w * 0.85          # horizontal focal: ~70° H-FOV
+    fx = w * 0.85          # horizontal focal — see NOTE above re: actual FOV
     fy = h * 0.85          # vertical focal: scales with h, not w
     cx, cy = w / 2, h / 2
     return np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
 
 # ── Blink rate detection using FaceMesh ───────────────────────────
+# These in-memory dicts are the fallback path used only when Redis is
+# unavailable (the primary path elsewhere uses Redis, which is already
+# safe for concurrent access). gunicorn runs with threads=2 per worker
+# (see gunicorn.conf.py), so two requests CAN execute concurrently in
+# the same process when CELERY_ENABLED isn't set — these dicts see
+# compound read-modify-write + iterate-while-deleting patterns that
+# aren't safe under that, hence one RLock per cache (not Lock — RLock
+# tolerates the same thread re-entering, which is safer if any of these
+# functions end up calling each other later without someone re-auditing
+# for that).
 _blink_history = []  # (timestamp, ear_ratio)
 _lm_history     = {}   # {session_id: [lm_array,...]} last 3 frames for jitter reduction
+_lm_history_lock     = threading.RLock()
 _celery_task    = None  # lazy Celery singleton
 _score_pool     = []   # rolling pool of recent scores for percentile (max 10000)
+_score_pool_lock     = threading.RLock()
 
 def compute_gaze(face_lms, w, h):
     """
@@ -1532,6 +1556,7 @@ def compute_ear(face_lms, w, h):
 
 # ── Head velocity tracker ─────────────────────────────────────────
 _head_velocity: dict = {}   # {session_key: [(timestamp, nose_x, nose_y), ...]}
+_head_velocity_lock = threading.RLock()
 
 def compute_head_velocity(nose_x, nose_y, session_key):
     """
@@ -1540,10 +1565,12 @@ def compute_head_velocity(nose_x, nose_y, session_key):
     Returns velocity in deg/sec equivalent and movement pattern.
     """
     now = time.time()
-    buf = _head_velocity.setdefault(session_key, [])
-    buf.append((now, nose_x, nose_y))
-    # Keep 2s window
-    buf[:] = [(t,x,y) for t,x,y in buf if now-t < 2.0]
+    with _head_velocity_lock:
+        buf = _head_velocity.setdefault(session_key, [])
+        buf.append((now, nose_x, nose_y))
+        # Keep 2s window
+        buf[:] = [(t,x,y) for t,x,y in buf if now-t < 2.0]
+        buf = list(buf)  # snapshot — compute below without holding the lock
     if len(buf) < 3:
         return None
 
@@ -1616,6 +1643,11 @@ def kalman_update(state, measurement, visibility, dt=0.033):
 # Per-session blink history — keyed by uid:session to avoid cross-contamination
 _blink_sessions: dict      = {}   # {key: [(timestamp, ear), ...]}
 _ear_baselines:  dict      = {}   # {key: float} — per-user open-eye EAR baseline
+_blink_sessions_lock = threading.RLock()  # guards both dicts above — the
+                                           # periodic cleanup iterates+deletes
+                                           # from _blink_sessions, which can
+                                           # raise RuntimeError if another
+                                           # thread mutates it mid-iteration
 _blink_sessions_last_clean = 0.0
 
 def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
@@ -1641,33 +1673,35 @@ def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
     # ── Per-session in-memory buffer ─────────────────────────────
     # Key: uid + session_id (or uid alone, or anonymous)
     buf_key = f"{uid or 'anon'}:{session_id or 'default'}"
-    buf = _blink_sessions.setdefault(buf_key, [])
-    buf.append((now, ear))
-    # Keep only last 60s
-    _blink_sessions[buf_key] = [(t, e) for t, e in buf if now - t < 60]
-    buf = _blink_sessions[buf_key]
-    if len(buf) > 600: _blink_sessions[buf_key] = buf[-600:]  # hard cap
+    with _blink_sessions_lock:
+        buf = _blink_sessions.setdefault(buf_key, [])
+        buf.append((now, ear))
+        # Keep only last 60s
+        _blink_sessions[buf_key] = [(t, e) for t, e in buf if now - t < 60]
+        buf = _blink_sessions[buf_key]
+        if len(buf) > 600: _blink_sessions[buf_key] = buf[-600:]  # hard cap
 
-    # Periodic cleanup of stale sessions (>90s inactive)
-    if now - _blink_sessions_last_clean > 300:
-        stale = [k for k, v in _blink_sessions.items()
-                 if v and now - v[-1][0] > 90]
-        for k in stale: del _blink_sessions[k]
-        _blink_sessions_last_clean = now
+        # Periodic cleanup of stale sessions (>90s inactive)
+        if now - _blink_sessions_last_clean > 300:
+            stale = [k for k, v in _blink_sessions.items()
+                     if v and now - v[-1][0] > 90]
+            for k in stale: del _blink_sessions[k]
+            _blink_sessions_last_clean = now
 
-    if len(buf) < 5:
-        return None
+        if len(buf) < 5:
+            return None
 
-    # ── Adaptive EAR threshold ───────────────────────────────────
-    # Baseline = average of top-40% EAR values (open-eye moments)
-    # Blink threshold = baseline * 0.60 (eye 40% closed = blink)
-    ear_vals = [e for _, e in buf]
-    if len(ear_vals) >= 10:
-        sorted_ears = sorted(ear_vals, reverse=True)
-        baseline = sum(sorted_ears[:max(1, len(sorted_ears)//3)]) / max(1, len(sorted_ears)//3)
-        _ear_baselines[buf_key] = baseline
-    else:
-        baseline = _ear_baselines.get(buf_key, 0.28)  # default if not enough data yet
+        # ── Adaptive EAR threshold ───────────────────────────────────
+        # Baseline = average of top-40% EAR values (open-eye moments)
+        # Blink threshold = baseline * 0.60 (eye 40% closed = blink)
+        ear_vals = [e for _, e in buf]
+        if len(ear_vals) >= 10:
+            sorted_ears = sorted(ear_vals, reverse=True)
+            baseline = sum(sorted_ears[:max(1, len(sorted_ears)//3)]) / max(1, len(sorted_ears)//3)
+            _ear_baselines[buf_key] = baseline
+        else:
+            baseline = _ear_baselines.get(buf_key, 0.28)  # default if not enough data yet
+        buf = list(buf)  # snapshot — compute below without holding the lock
 
     close_thresh = baseline * 0.60   # blink = eye 40% closed
     open_thresh  = baseline * 0.75   # hysteresis gap
@@ -1702,6 +1736,7 @@ def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
 # ── IPD-based distance ─────────────────────────────────────────────
 # ── Per-session focal calibration store ─────────────────────────────
 _focal_cal: dict = {}  # {session_id: focal_px} — calibrated from face_width
+_focal_cal_lock = threading.RLock()
 
 def _calibrate_focal(face_lms, w, h, session_id: str = "", known_dist_cm: float = 65.0):
     """
@@ -1719,11 +1754,12 @@ def _calibrate_focal(face_lms, w, h, session_id: str = "", known_dist_cm: float 
         # real face width ≈ 14cm (bizygomatic diameter, population mean)
         focal_est = (face_w_px * known_dist_cm) / 14.0
         # Running average: new = 0.1*new + 0.9*old (slow drift)
-        if session_id and session_id in _focal_cal:
-            _focal_cal[session_id] = 0.10 * focal_est + 0.90 * _focal_cal[session_id]
-        elif session_id:
-            _focal_cal[session_id] = focal_est
-        return _focal_cal.get(session_id, focal_est)
+        with _focal_cal_lock:
+            if session_id and session_id in _focal_cal:
+                _focal_cal[session_id] = 0.10 * focal_est + 0.90 * _focal_cal[session_id]
+            elif session_id:
+                _focal_cal[session_id] = focal_est
+            return _focal_cal.get(session_id, focal_est)
     except Exception:
         return None
 
@@ -1735,6 +1771,14 @@ def ipd_distance_face(face_lms, w, h, yaw_deg=0.0, session_id: str = ""):
     Blend: 70% IPD + 30% face-width (when yaw < 20° both are reliable)
            100% IPD when yaw >= 20° (face-width less reliable at angle)
     Focal: calibrated per-session from face-width estimator
+
+    Returns (dist_cm, reliable) — dist_cm is always clamped to [20,150]cm
+    since values outside that range are implausible for a desk posture
+    app (more likely a bad focal estimate than someone actually 3m away).
+    `reliable` is False when the raw, unclamped estimate fell outside
+    that range — i.e. the returned number was truncated rather than
+    measured, so callers can flag it as low-confidence instead of
+    silently treating a clamped 150 as if it meant exactly 150cm.
     """
     try:
         lp = face_lms.landmark[L_PUPIL]
@@ -1742,7 +1786,7 @@ def ipd_distance_face(face_lms, w, h, yaw_deg=0.0, session_id: str = ""):
         lpx, lpy = lp.x * w, lp.y * h
         rpx, rpy = rp.x * w, rp.y * h
         ipd_px = math.sqrt((rpx-lpx)**2 + (rpy-lpy)**2)
-        if ipd_px < 6: return None
+        if ipd_px < 6: return None, False
 
         # Yaw correction
         yaw_rad          = math.radians(abs(yaw_deg))
@@ -1774,9 +1818,10 @@ def ipd_distance_face(face_lms, w, h, yaw_deg=0.0, session_id: str = ""):
         else:
             dist = dist_ipd
 
-        return max(20, min(150, round(dist, 1)))
+        reliable = 20 <= dist <= 150
+        return max(20, min(150, round(dist, 1))), reliable
     except Exception:
-        return None
+        return None, False
 
 # ── solvePnP head pose ─────────────────────────────────────────────
 # Extended 3D model points — anatomically stable FaceMesh landmarks
@@ -1872,9 +1917,11 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     # ── Landmark averaging: reduce ±3° jitter to ±1° ─────────────
     _sid  = session_id or out.get("session_id", "front_default")
     _raw  = pose_result.pose_landmarks.landmark
-    _hist = _lm_history.setdefault(_sid, [])
-    _hist.append(_raw)
-    if len(_hist) > 3: _hist.pop(0)
+    with _lm_history_lock:
+        _hist = _lm_history.setdefault(_sid, [])
+        _hist.append(_raw)
+        if len(_hist) > 3: _hist.pop(0)
+        _hist = list(_hist)  # snapshot — read-only from here on
 
     # ── Kalman + weighted average landmark smoothing ─────────────
     # Step 1: weighted avg over 3 frames (recent=0.6, prev=0.3, old=0.1)
@@ -1884,7 +1931,6 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     _w_norm = [wi / _w_sum for wi in _w]
 
     _k_key   = f"kalman:{_sid}"
-    _kstates = _kalman_states.setdefault(_k_key, {})
 
     class _KalmanLM:
         __slots__ = ("x","y","z","visibility")
@@ -1896,16 +1942,32 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             wy = sum(frames_rev[i][idx].y          * weights[i] for i in range(len(frames_rev)))
             wz = sum(frames_rev[i][idx].z          * weights[i] for i in range(len(frames_rev)))
             wv = sum(frames_rev[i][idx].visibility * weights[i] for i in range(len(frames_rev)))
-            # Kalman refinement on x,y
-            kst = kalman_update(_kstates.get(idx), (wx, wy), wv)
-            _kstates[idx] = kst
+            # Kalman refinement on x,y — locked: _kalman_states is shared
+            # per-session state, and (unlike the pure weighted average
+            # above) a stateful read-modify-write, so two concurrent
+            # requests for the same session could otherwise corrupt it.
+            with _lm_history_lock:
+                _kstates = _kalman_states.setdefault(_k_key, {})
+                kst = kalman_update(_kstates.get(idx), (wx, wy), wv)
+                _kstates[idx] = kst
             self.x          = kst[0]
             self.y          = kst[1]
             self.z          = wz
             self.visibility = wv
 
     class _KalmanLMs:
-        def __getitem__(self, idx): return _KalmanLM(idx)
+        # Memoize per landmark index within this single request. Without
+        # this, repeatedly reading the same landmark (e.g. g(PL.NOSE) is
+        # called 4x elsewhere in this function) re-ran the Kalman update
+        # each time — since Kalman is stateful, that compounded the
+        # filter 4x for frequently-read landmarks vs 1x for rarely-read
+        # ones, producing inconsistent smoothing/lag across landmarks
+        # within the same frame.
+        def __init__(self): self._cache = {}
+        def __getitem__(self, idx):
+            if idx not in self._cache:
+                self._cache[idx] = _KalmanLM(idx)
+            return self._cache[idx]
     lms = _KalmanLMs()
 
     out["detected"]   = True
@@ -2113,13 +2175,14 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
 
     # ── FaceMesh ───────────────────────────────────────────────────
     dist_cm = None
+    dist_reliable = True
     blink_data = None
     if face_result.multi_face_landmarks:
         face_lms = face_result.multi_face_landmarks[0]
         out["head_pose"] = head_pose_from_face(face_lms, w, h)
         # Pass yaw for IPD correction — must compute head_pose first
         _yaw = out["head_pose"]["yaw"] if out["head_pose"] else 0.0
-        dist_cm  = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw, session_id=_sid)
+        dist_cm, dist_reliable = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw, session_id=_sid)
         out["engine"]    = "mediapipe_pose+facemesh"
         # Eye strain — all paid tiers (iris tracking via FaceMesh)
         if tier in ("elite", "premium", "professional", "pro", "business"):
@@ -2134,6 +2197,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         _sh_w_fallback = dist2d(l_sh, r_sh)
         focal   = 600 * (w / 640)
         dist_cm = round((40.0 * focal) / max(_sh_w_fallback, 1), 1)
+        dist_reliable = 20 <= dist_cm <= 150
         dist_cm = max(20, min(150, dist_cm))
 
     lo, hi = (50, 80) if mode == "laptop" else (60, 90)
@@ -2507,12 +2571,13 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     # this point (fallback at the top of this function guarantees it),
     # so these are never actually None in practice; kept defensive anyway.
     out["raw"] = {
-        "distCm":      dist_cm,
-        "idealDistLo": lo if dist_cm else None,
-        "idealDistHi": hi if dist_cm else None,
-        "neckLean":    round(neck_lean, 1)  if neck_lean  is not None else None,
-        "spineLean":   round(spine_lean, 1) if spine_lean is not None else None,
-        "shTilt":      round(sh_tilt, 1)    if sh_tilt    is not None else None,
+        "distCm":       dist_cm,
+        "distReliable": dist_reliable,
+        "idealDistLo":  lo if dist_cm else None,
+        "idealDistHi":  hi if dist_cm else None,
+        "neckLean":     round(neck_lean, 1)  if neck_lean  is not None else None,
+        "spineLean":    round(spine_lean, 1) if spine_lean is not None else None,
+        "shTilt":       round(sh_tilt, 1)    if sh_tilt    is not None else None,
     }
     out["metrics"].update({
         "neck_lean":       {"value": round(neck_lean, 1),  "score": neck_sc,  "unit": "°",  "label": "Neck lean"},
@@ -3280,9 +3345,11 @@ def analyze_side(image, tier="standard", session_id=None):
     _sid  = out.get("session_id", "side_default")
     _raw  = pose_result.pose_landmarks.landmark
     _key  = (session_id or _sid) + "_side"
-    _hist = _lm_history.setdefault(_key, [])
-    _hist.append(_raw)
-    if len(_hist) > 3: _hist.pop(0)
+    with _lm_history_lock:
+        _hist = _lm_history.setdefault(_key, [])
+        _hist.append(_raw)
+        if len(_hist) > 3: _hist.pop(0)
+        _hist = list(_hist)  # snapshot
 
     _w_s = [0.60, 0.30, 0.10][:len(_hist)]
     _w_s_sum  = sum(_w_s)
@@ -9271,6 +9338,11 @@ def ai_analyze():
         prompt  = data.get("prompt", "").strip()
         lang    = data.get("lang", "en")
         context = data.get("context", {})
+        try:
+            max_tokens = int(data.get("max_tokens") or 1200)
+        except (TypeError, ValueError):
+            max_tokens = 1200
+        max_tokens = max(100, min(2000, max_tokens))  # clamp to a safe range
 
         if not prompt:
             return jsonify({"error": "prompt required"}), 400
@@ -9304,7 +9376,7 @@ def ai_analyze():
         import requests as _rq
         _body = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": 1200, "temperature": 0.5},
+            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.5},
         }
         if context.get("system_prompt"):
             _body["systemInstruction"] = {"parts": [{"text": context["system_prompt"]}]}

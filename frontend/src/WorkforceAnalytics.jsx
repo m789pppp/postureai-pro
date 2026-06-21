@@ -3,9 +3,10 @@
  * Phase 7: Advanced Analytics
  * Workforce Analytics: productivity trends · focus · fatigue · engagement · risk heatmaps
  * Executive KPIs: company wellness · dept comparison · productivity index · burnout · monthly insights
- * Powered by Claude AI via Anthropic API
+ * Powered by Gemini AI via backend proxy (no API key on client)
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import { geminiAnalysis } from "./gemini.js";
 
 /* ── helpers ──────────────────────────────────────────────────────── */
 const avg  = arr => arr.length ? Math.round(arr.reduce((a,v) => a+v,0) / arr.length) : 0;
@@ -15,16 +16,6 @@ const pct  = (a,b) => b ? Math.round(((a-b)/b)*100) : 0;
 const fmtDate = d => { try { return new Date(d?.toDate?.() || d).toLocaleDateString("en-GB",{day:"2-digit",month:"short"}); } catch { return "—"; } };
 const SYNE = "'Syne',sans-serif";
 const SPRING = "cubic-bezier(0.16,1,0.3,1)";
-
-/* ── AI call ──────────────────────────────────────────────────────── */
-async function callClaude(prompt, system, maxTokens=900) {
-  const res = await fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:maxTokens, system, messages:[{role:"user",content:prompt}] }),
-  });
-  const d = await res.json();
-  return d?.content?.find(b=>b.type==="text")?.text || "";
-}
 
 /* ── Markdown renderer ────────────────────────────────────────────── */
 function Md({ text }) {
@@ -179,7 +170,7 @@ function AIBlock({loading,data,error,onRetry,accentColor="#1a56db",isAr}) {
       <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}>
         <div style={{width:22,height:22,borderRadius:6,background:`linear-gradient(135deg,${accentColor},#0891b2)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10}}>🧠</div>
         <span style={{fontSize:10,fontWeight:700,color:accentColor,letterSpacing:".05em",textTransform:"uppercase"}}>
-          {isAr?"تحليل Claude AI":"Claude AI Analysis"}
+          {isAr?"تحليل Gemini AI":"Gemini AI Analysis"}
         </span>
         {loading && <span style={{marginLeft:"auto",display:"flex",gap:3}}>
           {[0,1,2].map(i=><span key={i} style={{width:4,height:4,borderRadius:"50%",background:accentColor,display:"inline-block",animation:`waDot 1.2s ${i*.2}s infinite`}}/>)}
@@ -323,7 +314,7 @@ function CompanyScore({data,isAr,loading}) {
             {isAr?"نقاط صحة القوى العاملة":"Company Wellness Score"}
           </div>
           <div style={{fontSize:11,color:"var(--wa-muted)",fontWeight:500}}>
-            {isAr?"ملخص تنفيذي — مدعوم بـ Claude AI":"Executive snapshot — powered by Claude AI"}
+            {isAr?"ملخص تنفيذي — مدعوم بـ Gemini AI":"Executive snapshot — powered by Gemini AI"}
           </div>
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -673,7 +664,7 @@ function BurnoutAlerts({data,isAr,loading}) {
     {level:"low",    color:"#10b981", icon:"🟢", label:isAr?"وضع طبيعي":"Healthy",     score:100-data.burnoutRisk, active:data.burnoutRisk<45, desc:isAr?"مستوى صحي — استمر!":"Healthy level — keep going!"},
   ];
   return (
-    <Sec title={isAr?"تنبيهات الإنهاك الوظيفي":"Burnout Alerts"} sub={isAr?"رصد الوقت الفعلي — Claude AI":"Real-time monitoring — Claude AI"} accent="#ef4444">
+    <Sec title={isAr?"تنبيهات الإنهاك الوظيفي":"Burnout Alerts"} sub={isAr?"رصد الوقت الفعلي — Gemini AI":"Real-time monitoring — Gemini AI"} accent="#ef4444">
       {loading ? <CardSkeleton h={100}/> : (
         <>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
@@ -798,7 +789,7 @@ Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bul
     setAiLoading(p=>({...p,[key]:true}));
     setAiError(p=>({...p,[key]:""}));
     try {
-      const text = await callClaude(AI_PROMPTS[key]?.(), system);
+      const text = await geminiAnalysis(AI_PROMPTS[key]?.(), { lang, context:{ system_prompt: system }, maxTokens:900 });
       setAiData(p=>({...p,[key]:text}));
     } catch(e) { setAiError(p=>({...p,[key]:e.message})); }
     finally { setAiLoading(p=>({...p,[key]:false})); }

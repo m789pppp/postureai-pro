@@ -801,7 +801,7 @@ function StepFinish({ isAr, profile, onComplete }) {
       <div style={{ marginBottom: 28, textAlign: "left" }}>
         <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".09em", color: "#475569", marginBottom: 12 }}>{isAr ? "الخطوات التالية" : "What's Next"}</div>
         {[
-          { icon: "▶", text: isAr ? "ابدأ أول جلسة — سيعطيك Claude AI تحليلاً فورياً" : "Start your first session — Claude AI will give you instant analysis", color: "#1a56db" },
+          { icon: "▶", text: isAr ? "ابدأ أول جلسة — سيعطيك Gemini AI تحليلاً فورياً" : "Start your first session — Gemini AI will give you instant analysis", color: "#1a56db" },
           { icon: "📊", text: isAr ? "بعد 3 جلسات ستُفتح التحليلات المتقدمة" : "After 3 sessions, advanced analytics will unlock", color: "#0891b2" },
           { icon: "🔮", text: isAr ? "بعد أسبوع ستبدأ التنبيهات التنبؤية" : "After a week, predictive burnout alerts will activate", color: "#7c3aed" },
         ].map((item, i) => (

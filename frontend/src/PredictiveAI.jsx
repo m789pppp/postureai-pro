@@ -4,10 +4,15 @@
  * Posture risk scoring · Trend forecasting
  */
 import { useState, useEffect, useCallback } from "react";
-import { geminiChat } from "./gemini.js";
+import { geminiAnalysis } from "./gemini.js";
 
-async function callClaude(prompt, system, maxTokens = 900) {
-  return geminiChat(prompt, { systemPrompt: system, maxTokens });
+// NOTE: previously wrapped geminiChat(), but /api/coach/chat ignores any
+// custom system prompt and always answers as the hardcoded "PostureAI
+// Coach" persona — so burnout/forecast prompts here were silently being
+// answered with the wrong persona. geminiAnalysis() -> /api/ai/analyze
+// actually honors context.system_prompt.
+async function callGemini(prompt, system, maxTokens = 900) {
+  return geminiAnalysis(prompt, { context: { system_prompt: system }, maxTokens });
 }
 
 function MdText({ text }) {
@@ -245,7 +250,7 @@ Generate:
     if (!sessions.length) return;
     setLoading(true); setError(""); setAiText("");
     try {
-      const text = await callClaude(prompts[key]?.() || "", system);
+      const text = await callGemini(prompts[key]?.() || "", system);
       setAiText(text);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }

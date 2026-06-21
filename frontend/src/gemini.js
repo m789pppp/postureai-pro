@@ -51,7 +51,7 @@ export async function geminiChat(prompt, { systemPrompt = "", maxTokens = 1024, 
  * Generic AI analysis — proxies through /api/ai/analyze
  * Used by AIInsights, AIReports, PredictiveAI
  */
-export async function geminiAnalysis(prompt, { lang = "en", context = {} } = {}) {
+export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTokens } = {}) {
   const tok = await getAuthToken();
 
   const res = await fetch(`${API_BASE}/ai/analyze`, {
@@ -60,7 +60,7 @@ export async function geminiAnalysis(prompt, { lang = "en", context = {} } = {})
       "Content-Type": "application/json",
       ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
     },
-    body: JSON.stringify({ prompt, lang, context }),
+    body: JSON.stringify({ prompt, lang, context, ...(maxTokens ? { max_tokens: maxTokens } : {}) }),
   });
 
   if (!res.ok) {
