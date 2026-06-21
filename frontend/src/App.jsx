@@ -2180,16 +2180,17 @@ export default function App(){
             alertIfNeeded(smoothed1||finalResult.overall);
             histRef.current.push(smoothed1||finalResult.overall);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
-            setHistory([...histRef.current]);setAnalysis(result);lastAnalRef.current=result;
+            setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
             if(mode==="side")drawSide(ctx,finalResult,W,H,isAr);else drawFront(ctx,finalResult,W,H,isAr);
             const now=Date.now();
-            if(finalResult.overall<65){
+            const gateScore=smoothed1||finalResult.overall;
+            if(gateScore<65){
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
                 lastAlRef.current=now;acRef.current.total++;
-                const nl=finalResult.metrics?.neck_lean?.value||0,dist=result.distCm||0;
-                const yaw=result.metrics?.head_yaw?.value||0;
-                const[lo,hi]=result.lo&&result.hi?[result.lo,result.hi]:[50,80];
+                const nl=finalResult.metrics?.neck_lean?.value||0,dist=finalResult.distCm||0;
+                const yaw=finalResult.metrics?.head_yaw?.value||0;
+                const[lo,hi]=finalResult.lo&&finalResult.hi?[finalResult.lo,finalResult.hi]:[50,80];
                 let msg="Sustained poor posture — correct position now";
                 let msgAr="وضعية سيئة مستمرة — صحّح وضعيتك الآن";
                 if(nl>14){msg=`Neck lean ${nl}° — raise monitor to eye level`;msgAr=`ميل رقبة ${nl}° — ارفع الشاشة لمستوى عينيك`;acRef.current.neck++;}
@@ -2197,10 +2198,10 @@ export default function App(){
                 else if(dist&&dist<lo){msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;msgAr=`قريب جداً (${dist}سم) — ابتعد إلى ${lo}–${hi}سم`;acRef.current.dist++;}
                 const displayMsg = isAr ? msgAr : msg;
                 setAlertCounts({...acRef.current});
-                alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:result.overall},...alRef.current].slice(0,20);
+                alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:finalResult.overall},...alRef.current].slice(0,20);
                 setAlerts([...alRef.current]);setAlertMsg({text:displayMsg,type:"warn"});
                 if(sound)playBeep();
-                sendDesktopNotif(msg,result.overall);
+                sendDesktopNotif(msg,finalResult.overall);
               }
             }else{
               badRef.current=null;
