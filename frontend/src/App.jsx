@@ -271,10 +271,10 @@ async function initPayMob({amount_egp,tier,user_email,user_name,billing,payment_
 }
 
 // ── Local MediaPipe analysis (adapters for postureEngine result shape) ────
-function analyzeMP(lms,W,H,mode){
+function analyzeMP(lms,W,H,mode,distCalibFactor){
   // postureEngine returns {score, metrics, alerts, recommendations, detected, lms(named), raw}
   // App expects  {overall, distCm, lo, hi, metrics, lms(landmark refs), raw}
-  const eng = _engAnalyzeMP(lms,W,H,mode);
+  const eng = _engAnalyzeMP(lms,W,H,mode,distCalibFactor);
   if(!eng) return null;
   // eng.metrics.screen_distance has the distance data
   const dist = eng.metrics?.screen_distance;
@@ -2202,7 +2202,7 @@ export default function App(){
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(0.4);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
-          const result=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode);
+          const result=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor);
           if(result){
             // Apply personal calibration if available
             let finalResult = result;
