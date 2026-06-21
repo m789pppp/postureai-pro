@@ -2136,14 +2136,22 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         dist_cm = max(20, min(150, dist_cm))
 
     lo, hi = (50, 80) if mode == "laptop" else (60, 90)
+    ideal  = (lo + hi) / 2   # 65cm laptop, 75cm desktop
+
+    # ── Continuous quadratic scoring — no buckets ─────────────────
+    # Perfect: inside lo-hi = 100
+    # Linear decay outside range, quadratic beyond 20cm from edge
     if lo <= dist_cm <= hi:
         dist_sc = 100
-    elif (lo-8) <= dist_cm <= (hi+12):
-        dist_sc = 80
-    elif (lo-16) <= dist_cm <= (hi+20):
-        dist_sc = 55
     else:
-        dist_sc = 30
+        _gap = min(abs(dist_cm - lo), abs(dist_cm - hi))
+        if _gap <= 10:
+            dist_sc = max(60, 100 - _gap * 4)    # 4pts/cm → 60 at 10cm off
+        elif _gap <= 20:
+            dist_sc = max(30, 60 - (_gap-10) * 3)# 3pts/cm → 30 at 20cm off
+        else:
+            dist_sc = max(5,  30 - (_gap-20) * 2) # 2pts/cm → very bad
+    dist_sc = int(dist_sc)
 
     hp = out.get("head_pose")
     pose_sc = 75
@@ -2322,9 +2330,10 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     conf_eye   = 1.0 if (eye_sc is not None) else 0.0
     conf_wrist = 1.0 if (wrist_sc is not None) else 0.0
 
-    BASE_W = {"neck": 0.30, "tilt": 0.12, "sh": 0.08, "spine": 0.20, "dist": 0.15,
-              "eye": 0.05, "wrist": 0.10}
-    # Base weights sum = 1.00 — evidence-based (McGill 2007, Hansraj 2014)
+    BASE_W = {"neck": 0.28, "tilt": 0.10, "sh": 0.08, "spine": 0.18, "dist": 0.22,
+              "eye": 0.05, "wrist": 0.09}
+    # dist boosted to 0.22 — screen distance is #1 preventable risk factor
+    # Refs: AOA 2023 (20-20-20 rule), WHO screen guidelines
 
     eff_w = {
         "neck":  BASE_W["neck"]  * conf_neck,
@@ -2494,12 +2503,22 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         out["alerts"].append(f"Head tilting {round(head_tilt,1)}° — check chair height and monitor centering")
     if sh_tilt > 10:
         out["alerts"].append(f"Shoulder imbalance {round(sh_tilt,1)}° — adjust armrests")
-    if dist_cm < lo - 10:
-        out["alerts"].append(f"⚠️ Very close to screen ({round(dist_cm)}cm) — move back to {lo}–{hi}cm")
+    if dist_cm < lo - 20:
+        out["alerts"].append(f"🔴 DANGER: Screen only {round(dist_cm)}cm away — severe eye & neck strain risk. Move back to {lo}–{hi}cm NOW")
+        if "alerts_ar" not in out: out["alerts_ar"] = []
+        out["alerts_ar"].append(f"🔴 خطر: الشاشة على بُعد {round(dist_cm)}سم فقط — ابتعد فوراً إلى {lo}–{hi}سم")
+    elif dist_cm < lo - 10:
+        out["alerts"].append(f"⚠️ Too close to screen ({round(dist_cm)}cm) — risk of eye strain & neck compression. Move to {lo}–{hi}cm")
+        if "alerts_ar" not in out: out["alerts_ar"] = []
+        out["alerts_ar"].append(f"⚠️ قريب جداً من الشاشة ({round(dist_cm)}سم) — خطر إجهاد عيون وضغط رقبة. ابتعد إلى {lo}–{hi}سم")
     elif dist_cm < lo:
-        out["alerts"].append(f"Too close to screen ({round(dist_cm)}cm) — move back to {lo}–{hi}cm")
+        out["alerts"].append(f"Screen distance {round(dist_cm)}cm — move back slightly to {lo}–{hi}cm")
+        if "alerts_ar" not in out: out["alerts_ar"] = []
+        out["alerts_ar"].append(f"مسافة الشاشة {round(dist_cm)}سم — ابتعد قليلاً إلى {lo}–{hi}سم")
     elif dist_cm > hi + 15:
         out["alerts"].append(f"Too far from screen ({round(dist_cm)}cm) — ideal is {lo}–{hi}cm")
+        if "alerts_ar" not in out: out["alerts_ar"] = []
+        out["alerts_ar"].append(f"بعيد جداً عن الشاشة ({round(dist_cm)}سم) — المثالي {lo}–{hi}سم")
     if spine_lean > 18:
         out["alerts"].append(f"⚠️ Spine lean {round(spine_lean,1)}° — sit back and use lumbar support")
     elif spine_lean > 10:
