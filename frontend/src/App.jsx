@@ -1749,7 +1749,7 @@ export default function App(){
       setAuthChecked(c=>{ if(!c){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
     }, 6000);
     return ()=>clearTimeout(t);
-  },[]); // eslint-disable-line
+  },[]);
   // ── Hash-based routing — fixes back button & enables deep links ──
   const hashToPage = (h) => h.replace(/^#\/?/, "") || "landing";
   const [page, setPageRaw] = useState(() => {
@@ -1775,7 +1775,7 @@ export default function App(){
   const[tier,setTier]=useState(null);
   const[acctType,setAcctType]=useState(profile?.acct_type||null);
   // Sync acctType when profile loads (e.g. after Google login)
-  useEffect(()=>{ if(profile?.acct_type&&!acctType) setAcctType(profile.acct_type); },[profile?.acct_type]);; // "company" | "personal"
+  useEffect(()=>{ if(profile?.acct_type&&!acctType) setAcctType(profile.acct_type); },[profile?.acct_type]); // "company" | "personal"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device

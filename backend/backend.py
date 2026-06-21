@@ -2005,41 +2005,20 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     # At 65cm distance, 10cm = ~8.8° apparent lean → correct by -5° (conservative)
     neck_lean_raw = angle_vert(mid_sh, neck_ref)
 
-    # ── Monitor height estimation ────────────────────────────────
-    # From camera pitch: if head is tilted down, monitor is below eye level
-    # At distance D, pitch P° → monitor is D×tan(P°) cm below eye level
-    try:
-        _pitch_val = out.get("head_pose", {}).get("pitch", 0) if out.get("head_pose") else 0
-        if _pitch_val and dist_cm:
-            import math as _mh
-            _monitor_offset_cm = round(dist_cm * _mh.tan(_mh.radians(abs(_pitch_val))), 1)
-            _monitor_dir = "below" if _pitch_val < 0 else "above"
-            _monitor_sc  = score_m(abs(_pitch_val), 0, 5, 18)
-            out["metrics"]["monitor_height"] = {
-                "value":      _monitor_offset_cm,
-                "score":      _monitor_sc,
-                "unit":       "cm",
-                "label":      "Monitor height offset",
-                "direction":  _monitor_dir,
-                "pitch_deg":  _pitch_val,
-                "adjustment": f"Raise monitor {_monitor_offset_cm}cm" if _monitor_dir == "below" else
-                              f"Lower monitor {_monitor_offset_cm}cm",
-            }
-            if abs(_pitch_val) > 12:
-                out["alerts"].append(
-                    f"⚠️ Monitor ~{_monitor_offset_cm}cm {_monitor_dir} eye level — "
-                    f"{'raise' if _monitor_dir == 'below' else 'lower'} monitor to reduce neck strain")
-    except Exception:
-        pass
 
     # ── Forward Head Posture Index (FHP) ─────────────────────────
     # Clinical measure: horizontal offset of ear ahead of shoulder
     # Converts pixel offset to approximate cm using shoulder width reference
     # Normal: <2cm forward. Each 2.5cm forward = +4-5kg neck load
     try:
+        # NOTE: sh_width_px is recomputed here because the original
+        # definition further below in this function runs AFTER this block —
+        # using it here used to raise UnboundLocalError every time,
+        # silently swallowed below, so fhp_index has never actually fired.
+        _sh_width_px_early = abs(r_sh[0] - l_sh[0])
         _ear_x_offset  = abs(mid_ear[0] - mid_sh[0])   # pixels
         _sh_width_cm   = 42.0   # reference shoulder width in cm
-        _cm_per_px     = _sh_width_cm / max(sh_width_px, 1)
+        _cm_per_px     = _sh_width_cm / max(_sh_width_px_early, 1)
         _fhp_cm        = round(_ear_x_offset * _cm_per_px, 1)
         _extra_weight  = round(_fhp_cm / 2.5 * 4.5, 1)  # kg added to neck
         _fhp_sc        = score_m(_fhp_cm, 0, 2, 6)
@@ -2579,6 +2558,38 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         "spineLean":    round(spine_lean, 1) if spine_lean is not None else None,
         "shTilt":       round(sh_tilt, 1)    if sh_tilt    is not None else None,
     }
+
+    # ── Monitor height estimation ────────────────────────────────
+    # From camera pitch: if head is tilted down, monitor is below eye level
+    # At distance D, pitch P° → monitor is D×tan(P°) cm below eye level
+    # NOTE: was previously placed earlier in this function, before dist_cm
+    # was actually computed — every call raised UnboundLocalError, silently
+    # swallowed by the try/except, so out["metrics"]["monitor_height"] and
+    # its alert have never actually fired. Moved here, after dist_cm exists.
+    try:
+        _pitch_val = out.get("head_pose", {}).get("pitch", 0) if out.get("head_pose") else 0
+        if _pitch_val and dist_cm:
+            import math as _mh
+            _monitor_offset_cm = round(dist_cm * _mh.tan(_mh.radians(abs(_pitch_val))), 1)
+            _monitor_dir = "below" if _pitch_val < 0 else "above"
+            _monitor_sc  = score_m(abs(_pitch_val), 0, 5, 18)
+            out["metrics"]["monitor_height"] = {
+                "value":      _monitor_offset_cm,
+                "score":      _monitor_sc,
+                "unit":       "cm",
+                "label":      "Monitor height offset",
+                "direction":  _monitor_dir,
+                "pitch_deg":  _pitch_val,
+                "adjustment": f"Raise monitor {_monitor_offset_cm}cm" if _monitor_dir == "below" else
+                              f"Lower monitor {_monitor_offset_cm}cm",
+            }
+            if abs(_pitch_val) > 12:
+                out["alerts"].append(
+                    f"⚠️ Monitor ~{_monitor_offset_cm}cm {_monitor_dir} eye level — "
+                    f"{'raise' if _monitor_dir == 'below' else 'lower'} monitor to reduce neck strain")
+    except Exception:
+        pass
+
     out["metrics"].update({
         "neck_lean":       {"value": round(neck_lean, 1),  "score": neck_sc,  "unit": "°",  "label": "Neck lean"},
         "head_tilt":       {"value": round(head_tilt, 1),  "score": tilt_sc,  "unit": "°",  "label": "Head tilt"},
@@ -2875,8 +2886,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
                        "not_recommended")
         # Shoulder — upper arm elevation
         # ≤20° acceptable, 20-60° conditional, >60° not recommended
-        _iso_shoulder = ("acceptable"     if shTilt <= 20 else
-                         "conditional"    if shTilt <= 60 else
+        _iso_shoulder = ("acceptable"     if sh_tilt <= 20 else
+                         "conditional"    if sh_tilt <= 60 else
                          "not_recommended")
         # Overall ISO compliance
         _iso_parts = [_iso_trunk, _iso_head, _iso_shoulder]
@@ -2974,7 +2985,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         _dna_vec = [
             int(neck_lean  / 5) * 5,
             int(spine_lean / 5) * 5,
-            int(shTilt     / 3) * 3,
+            int(sh_tilt    / 3) * 3,
             int(dist_cm    / 10)* 10,
             int(abs(out.get("head_pose",{}).get("yaw",0)   or 0) / 5)*5,
             int(abs(out.get("head_pose",{}).get("pitch",0) or 0) / 5)*5,
@@ -3126,7 +3137,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         _joint_def = {
             "neck":     (neck_lean,  [10, 20, 30],  "cervical spine"),
             "spine":    (spine_lean, [10, 20, 40],  "thoracic/lumbar spine"),
-            "shoulder": (shTilt,     [5,  15, 30],  "shoulder girdle"),
+            "shoulder": (sh_tilt,    [5,  15, 30],  "shoulder girdle"),
         }
         for joint, (angle, (l,m,h), region) in _joint_def.items():
             if angle > h:      risk_level, risk_sc = "high",     20
@@ -3176,7 +3187,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             _pain_regions = []
             if neck_lean > 15:    _pain_regions.append("neck/upper trapezius")
             if spine_lean > 15:   _pain_regions.append("lower back")
-            if shTilt > 8:        _pain_regions.append("shoulder")
+            if sh_tilt > 8:       _pain_regions.append("shoulder")
             if dist_cm < 40:      _pain_regions.append("eyes/neck (screen proximity)")
 
             _urgency = (
