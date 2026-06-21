@@ -182,7 +182,15 @@ function estimateHeadYaw(lms, W, H) {
 // projected eye-to-eye width shrinks even at constant distance, which
 // previously read as "moved closer" and fired false proximity alerts
 // during normal side glances.
-function estimateDistanceCm(lms, W, H, yawDeg = 0) {
+// calibFactor (optional): from a one-time personal calibration —
+// knownDistanceCm * ipdFraction measured while sitting at a known,
+// user-confirmed distance. distCm = calibFactor / currentIpdFraction.
+// This absorbs BOTH the user's actual IPD (varies ~54-72mm across
+// adults — population average 63mm can be off by ±15%) AND this
+// specific camera's actual focal length/FOV into one measured
+// constant, instead of assuming generic population averages for
+// both. Falls back to the generic formula when no calibration exists.
+function estimateDistanceCm(lms, W, H, yawDeg = 0, calibFactor = null) {
   try {
     const g = idx => lms[idx];
     const lEye = { x: g(PL.L_EYE).x * W };
@@ -197,6 +205,10 @@ function estimateDistanceCm(lms, W, H, yawDeg = 0) {
       const cosYaw = Math.max(Math.cos(yawRad), 0.55); // cap ~1.8x correction
       ipdPx = ipdPx / cosYaw;
       if (ipdPx > 4) {
+        if (calibFactor && calibFactor > 0) {
+          const ipdFrac = ipdPx / Math.max(W, 1);
+          return Math.max(20, Math.min(160, Math.round(calibFactor / ipdFrac)));
+        }
         // focal_px at 720p ≈ 800; IPD_real ≈ 6.3cm
         const focal = 800 * (W / 1280);
         const distCm = Math.round((6.3 * focal) / ipdPx);
@@ -245,7 +257,7 @@ function distanceScore(distCm, lo, hi) {
 }
 
 // ── Front-camera analysis ─────────────────────────────────────────
-export function analyzeMP(lms, W, H, mode) {
+export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
   if (!lms || lms.length < 25) return null;
   const g   = idx => lms[idx];
   const px  = idx => ({ x: g(idx).x * W, y: g(idx).y * H });
@@ -286,7 +298,7 @@ export function analyzeMP(lms, W, H, mode) {
   const headYaw = estimateHeadYaw(lms, W, H);
 
   // Distance (IPD-based)
-  const distCm = estimateDistanceCm(lms, W, H, headYaw);
+  const distCm = estimateDistanceCm(lms, W, H, headYaw, distCalibFactor);
   const lo = mode === "laptop" ? 50 : 60;
   const hi = mode === "laptop" ? 80 : 90;
   const distSc = distanceScore(distCm, lo, hi);
@@ -409,7 +421,7 @@ export function analyzeMP(lms, W, H, mode) {
       shoulder_level:   { value: Math.round(shTilt),    score: shSc,      unit: "°",     label: "Shoulder level",           reliable: shOK },
       spine_lean:       { value: Math.round(spineLean), score: spineSc,   unit: "°",     label: "Spine lean",               reliable: spineOK },
       head_yaw:         { value: Math.round(headYaw),   score: yawSc,     unit: "°",     label: "Head turn",                reliable: eyeOK },
-      screen_distance:  { value: distCm,                score: distSc,   unit: "cm",    label: "Screen distance" },
+      screen_distance:  { value: distCm,                score: distSc,   unit: "cm",    label: "Screen distance", calibrated: !!(distCalibFactor && distCalibFactor>0) },
       fhp_index:        { value: fhpCm, score: fhpSc, unit: "cm", label: "Forward head posture", extra_load_kg: extraLoadKg, reliable: neckOK },
       rounded_shoulders:{ value: Math.round(roundedDepth*10)/10, score: roundedSc, unit: "depth", label: "Rounded shoulders", asymmetry: Math.round(shZAsym*1000)/1000, reliable: shOK },
     },
