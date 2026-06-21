@@ -2173,11 +2173,61 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             # Recompute with shoulder-normalized thresholds (not fixed 7/20)
             neck_sc   = score_m(neck_lean, 0, neck_ok_adj, neck_bad_adj)
 
-        # ── Head pose score: pitch + yaw + roll combined ──────────
-        # pitch = forward/back, yaw = left/right, roll = tilt
-        # yaw matters less for ergonomics (looking sideways is ok briefly)
-        pose_combined = abs(pitch) * 0.50 + abs(yaw) * 0.25 + abs(roll) * 0.25
-        pose_sc = score_m(pose_combined, 0, 6, 18)
+        # ── Head pose score: pitch + yaw + roll ─────────────────────
+        # yaw boosted — turning head >20° = serious ergonomic risk (neck rotation)
+        # pitch most important (forward/back neck load)
+        pose_combined = abs(pitch) * 0.45 + abs(yaw) * 0.40 + abs(roll) * 0.15
+
+        # ── Yaw gate: hard penalty for extreme head turns ────────────
+        _yaw_abs = abs(yaw)
+        if _yaw_abs > 40:
+            # Face turned >40° = person looking at 2nd screen or far away
+            pose_sc = max(5, int(100 - _yaw_abs * 2.2))
+            out["alerts"].append(f"⚠️ Head turned {round(_yaw_abs)}° — face your primary screen directly")
+            if "alerts_ar" not in out: out["alerts_ar"] = []
+            out["alerts_ar"].append(f"⚠️ رأسك مائل {round(_yaw_abs)}° — واجه شاشتك الرئيسية مباشرة")
+        elif _yaw_abs > 25:
+            pose_sc = max(25, int(score_m(pose_combined, 0, 8, 20)))
+            out["alerts"].append(f"Head turned {round(_yaw_abs)}° — try to face screen more directly")
+        else:
+            pose_sc = score_m(pose_combined, 0, 8, 22)
+
+        # ── Lying down detection ─────────────────────────────────────
+        # When person lies down: roll ≈ 90°, pitch ≈ 0°, landmarks shift vertically
+        # Also: face aspect ratio changes (wider than tall)
+        _roll_abs = abs(roll)
+        if _roll_abs > 55:
+            out["alerts"].append(f"⚠️ Lying down detected (roll {round(_roll_abs)}°) — PostureAI requires upright seating position")
+            if "alerts_ar" not in out: out["alerts_ar"] = []
+            out["alerts_ar"].append(f"⚠️ تم اكتشاف وضعية استلقاء ({round(_roll_abs)}°) — يتطلب PostureAI الجلوس منتصباً")
+            pose_sc = min(pose_sc, 20)
+            out["posture_valid"] = False   # flag for frontend to show warning
+        elif _roll_abs > 30:
+            out["alerts"].append(f"Head tilted {round(_roll_abs)}° — are you lying down or leaning?")
+            pose_sc = min(pose_sc, 50)
+
+        # ── Proximity gate: too close to camera ─────────────────────
+        # Detect by face size in frame: if face occupies >35% frame width = too close
+        if face_lms:
+            try:
+                _l_cheek = face_lms.landmark[234]
+                _r_cheek = face_lms.landmark[454]
+                _face_width_frac = abs(_r_cheek.x - _l_cheek.x)  # 0-1 fraction of frame
+                if _face_width_frac > 0.45:
+                    _approx_cm = int(14 / _face_width_frac * 0.7)  # rough estimate
+                    out["alerts"].insert(0, f"🔴 Too close to camera ({_face_width_frac:.0%} frame) — move back at least 50cm")
+                    if "alerts_ar" not in out: out["alerts_ar"] = []
+                    out["alerts_ar"].insert(0, f"🔴 قريب جداً من الكاميرا — ابتعد على الأقل 50 سم")
+                    out["proximity_warning"] = True
+                    # Also tank the score when too close
+                    pose_sc = min(pose_sc, 30)
+                elif _face_width_frac > 0.35:
+                    out["alerts"].append(f"⚠️ Move back slightly — you're closer than recommended")
+                    out["proximity_warning"] = True
+                else:
+                    out["proximity_warning"] = False
+            except Exception:
+                pass
 
         out["metrics"]["head_pose_detail"] = {
             "pitch": pitch, "yaw": yaw, "roll": roll,
@@ -2951,6 +3001,30 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
 
     # ── Wrist single-elbow fallback ───────────────────────────────
     # (already computed above — gate loosened to single elbow)
+
+    # ── Posture validity check (lying down from landmarks) ──────────
+    try:
+        _ear_y  = (g(PL.L_EAR).y  + g(PL.R_EAR).y)  / 2
+        _sh_y   = (g(PL.L_SHOULDER).y + g(PL.R_SHOULDER).y) / 2
+        _hip_y  = (g(PL.L_HIP).y  + g(PL.R_HIP).y)  / 2
+        # Normal sitting: ear above shoulder, shoulder above hip
+        # Lying: ear ≈ shoulder height, minimal vertical separation
+        _ear_sh_diff = _sh_y - _ear_y    # positive = normal (shoulder below ear)
+        _sh_hip_diff = _hip_y - _sh_y    # positive = normal (hip below shoulder)
+        if _ear_sh_diff < 0.05 and _sh_hip_diff < 0.05:
+            # Extremely small vertical separation = lying flat
+            if not out.get("posture_valid") == False:  # don't double-flag
+                out["alerts"].insert(0, "⚠️ Lying down detected — sit upright for accurate posture tracking")
+                out["posture_valid"] = False
+                # Invalidate score when lying
+                overall = min(overall, 25)
+        elif _ear_sh_diff < 0.08:
+            # Leaning heavily or reclining
+            out.setdefault("alerts", [])
+            if not any("lying" in a.lower() or "reclining" in a.lower() for a in out["alerts"]):
+                out["alerts"].append("Possible reclining posture — sit upright for best results")
+    except Exception:
+        pass
 
     # ── Sitting duration fatigue model ────────────────────────────
     # If session has been running > 45min, flag fatigue risk
