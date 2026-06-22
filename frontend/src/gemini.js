@@ -15,10 +15,17 @@ async function getAuthToken() {
 
 /**
  * Main chat function — proxies through /api/coach/chat
- * Drop-in replacement for direct Gemini calls
+ * Accepts either:
+ *   - messages: [{role:"user"|"assistant", content:string}]  ← preferred
+ *   - prompt: string  ← converted to single-turn [{role:"user",content:prompt}]
  */
-export async function geminiChat(prompt, { systemPrompt = "", maxTokens = 1024, lang = "en" } = {}) {
+export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxTokens = 1024, lang = "en" } = {}) {
   const tok = await getAuthToken();
+
+  // Normalize: string → single-message array
+  const messages = Array.isArray(messagesOrPrompt)
+    ? messagesOrPrompt
+    : [{ role: "user", content: String(messagesOrPrompt) }];
 
   const res = await fetch(`${API_BASE}/coach/chat`, {
     method: "POST",
@@ -27,8 +34,8 @@ export async function geminiChat(prompt, { systemPrompt = "", maxTokens = 1024, 
       ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
     },
     body: JSON.stringify({
-      messages: [{ role: "user", content: prompt }],
-      context:  { system_prompt: systemPrompt },
+      messages,
+      context:    { system_prompt: systemPrompt },
       lang,
       max_tokens: maxTokens,
     }),

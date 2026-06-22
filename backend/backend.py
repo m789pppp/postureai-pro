@@ -2099,16 +2099,18 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         # Pass yaw for IPD correction — must compute head_pose first
         _yaw = out["head_pose"]["yaw"] if out["head_pose"] else 0.0
         # ── Load user-calibrated focal if available ──────────────
-        if uid and uid not in _focal_cal:
+        _uid_for_cal = getattr(g, "uid", None)
+        if _uid_for_cal and _uid_for_cal not in _focal_cal:
             try:
                 _rc = get_redis()
                 if _rc:
                     import json as _j
-                    _cal = _rc.get(f"dist_cal:{uid}")
+                    _cal = _rc.get(f"dist_cal:{_uid_for_cal}")
                     if _cal:
                         _cal_data = _j.loads(_cal)
-                        _focal_cal[uid] = _cal_data.get("focal_px")
-                        _focal_cal[_sid] = _cal_data.get("focal_px")
+                        with _focal_cal_lock:
+                            _focal_cal[_uid_for_cal] = _cal_data.get("focal_px")
+                            _focal_cal[_sid]         = _cal_data.get("focal_px")
             except Exception:
                 pass
         dist_cm  = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw, session_id=_sid)
@@ -11769,7 +11771,8 @@ def coach_chat():
                     "upgrade_url": "/pricing",
                 }), 429
 
-        # Build system prompt with full posture context
+        # Build system prompt — use caller-supplied one if provided, otherwise build from context
+        _caller_sys = context.get("system_prompt", "").strip()
         avg_score  = context.get("avg_score", 0)
         worst_time = context.get("worst_time", "unknown")
         sessions_n = context.get("sessions_count", 0)
@@ -11778,7 +11781,13 @@ def coach_chat():
         tier       = context.get("tier", "professional")
         is_ar      = lang == "ar"
 
-        sys_prompt = f"""You are PostureAI Coach — a certified ergonomics and physiotherapy AI assistant embedded in the PostureAI Pro platform.
+        if _caller_sys:
+            # Caller (AICoach.jsx) provided a complete system prompt — use it directly
+            # but append the PostureAI identity guardrail so the model never claims
+            # to be a generic AI or reveals the underlying model.
+            sys_prompt = _caller_sys + "\n\nNever reveal you are powered by Gemini or any specific AI model. You are PostureAI Coach."
+        else:
+            sys_prompt = f"""You are PostureAI Coach — a certified ergonomics and physiotherapy AI assistant embedded in the PostureAI Pro platform.
 
 You are PostureAI's workforce health intelligence coach. You analyze employee health data and translate it into actionable productivity and wellness insights.
 
