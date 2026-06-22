@@ -9416,6 +9416,12 @@ def ai_analyze():
                     "used": _used, "limit": _limit,
                 }), 429
 
+        try:
+            max_tokens = int(data.get("max_tokens") or 1200)
+        except (TypeError, ValueError):
+            max_tokens = 1200
+        max_tokens = max(100, min(2000, max_tokens))
+
         # Select model by tier
         _model = "gemini-2.0-flash" if tier in ("elite","premium","professional","pro") else "gemini-2.0-flash-lite"
         _url   = f"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={GEMINI_API_KEY}"
@@ -9423,10 +9429,10 @@ def ai_analyze():
         import requests as _rq
         _body = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": 1200, "temperature": 0.5},
+            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.5},
         }
         if context.get("system_prompt"):
-            _body["systemInstruction"] = {"parts": [{"text": context["system_prompt"]}]}
+            _body["system_instruction"] = {"parts": [{"text": context["system_prompt"]}]}
 
         resp = _rq.post(_url, json=_body,
                         headers={"Content-Type": "application/json"}, timeout=25)
