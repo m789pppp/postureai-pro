@@ -1533,6 +1533,62 @@ def compute_ear(face_lms, w, h):
 # ── Head velocity tracker ─────────────────────────────────────────
 _head_velocity: dict = {}   # {session_key: [(timestamp, nose_x, nose_y), ...]}
 
+# ── Forward head creep buffer ────────────────────────────────────
+_head_creep_buffer: dict = {}  # {sid: [(timestamp, neck_lean)]}
+_HEAD_CREEP_WINDOW_S = 1200    # 20 minutes
+
+def detect_head_creep(sid: str, neck_lean: float, timestamp: float = None) -> dict:
+    """
+    Detect gradual forward head creep over 20 minutes.
+    Creep = slow progressive increase in neck lean (more dangerous than sudden lean).
+    Returns: {"creep_rate": deg/min, "severity": none/mild/moderate/severe, "alert": str}
+    """
+    import time as _t
+    ts = timestamp or _t.time()
+    buf = _head_creep_buffer.setdefault(sid, [])
+    buf.append((ts, neck_lean))
+
+    # Prune old entries
+    cutoff = ts - _HEAD_CREEP_WINDOW_S
+    _head_creep_buffer[sid] = [(t, v) for t, v in buf if t >= cutoff]
+    buf = _head_creep_buffer[sid]
+
+    if len(buf) < 10:   # need at least 10 data points
+        return {"creep_rate": 0.0, "severity": "insufficient_data"}
+
+    # Linear regression to find trend slope (deg/min)
+    n = len(buf)
+    ts_arr  = [(b[0] - buf[0][0]) / 60 for b in buf]  # minutes from start
+    val_arr = [b[1] for b in buf]
+    mean_t  = sum(ts_arr) / n
+    mean_v  = sum(val_arr) / n
+    num     = sum((ts_arr[i] - mean_t) * (val_arr[i] - mean_v) for i in range(n))
+    den     = sum((t - mean_t) ** 2 for t in ts_arr) or 1
+    slope   = num / den  # deg per minute — positive = getting worse
+
+    severity = (
+        "severe"   if slope > 1.5 else
+        "moderate" if slope > 0.8 else
+        "mild"     if slope > 0.3 else
+        "none"
+    )
+
+    alert = None
+    if severity == "severe":
+        alert = f"⚠️ Progressive neck creep {slope:.1f}°/min — your posture is deteriorating rapidly. Take a break now."
+    elif severity == "moderate":
+        alert = f"Neck slowly moving forward ({slope:.1f}°/min over {int((ts-buf[0][0])/60)}min) — adjust position"
+
+    return {
+        "creep_rate":  round(slope, 2),
+        "severity":    severity,
+        "window_min":  round((ts - buf[0][0]) / 60, 1),
+        "start_lean":  round(buf[0][1], 1),
+        "current_lean":round(neck_lean, 1),
+        "total_change":round(neck_lean - buf[0][1], 1),
+        "alert":       alert,
+    }
+
 def compute_head_velocity(nose_x, nose_y, session_key):
     """
     Track head movement velocity and detect sudden movements.
@@ -1584,32 +1640,55 @@ def compute_head_velocity(nose_x, nose_y, session_key):
 # Measurement noise R adapts to landmark visibility
 _kalman_states: dict = {}  # {session_key: {idx: [x,y,vx,vy]}}
 
-def kalman_update(state, measurement, visibility, dt=0.033):
+# ── Adaptive Kalman noise store ──────────────────────────────────
+_kalman_noise: dict = {}   # {uid: {"R_sum": float, "count": int, "R_est": float}}
+
+def kalman_update(state, measurement, visibility, dt=0.033, uid: str = ""):
     """
-    1D Kalman filter per coordinate (applied per axis independently).
-    R (measurement noise) = 1/visibility — low vis = trust prediction more.
-    Q (process noise) = 0.01 — small for slow body movement.
+    ADAPTIVE 1D Kalman filter — learns user-specific noise from residuals.
+    Adapts to users with natural tremor or unstable landmarks.
+    Converges after ~50 frames to user-specific noise level.
     Returns updated [x, y, vx, vy].
     """
     if state is None:
         return [measurement[0], measurement[1], 0.0, 0.0]
 
     x, y, vx, vy = state
-    # Predict
-    x_pred  = x  + vx * dt
-    y_pred  = y  + vy * dt
-    # Measurement noise inversely proportional to visibility
-    R = max(0.001, (1.0 - min(1.0, visibility)) * 0.08 + 0.005)
-    Q = 0.003   # process noise
-    # Kalman gain (simplified scalar, same for x and y)
-    P_pred = Q + 0.01   # predicted error covariance (simplified)
-    K      = P_pred / (P_pred + R)
-    # Update
-    x_upd = x_pred + K * (measurement[0] - x_pred)
-    y_upd = y_pred + K * (measurement[1] - y_pred)
-    # Update velocity estimate
+
+    # ── Adaptive R (measurement noise) ───────────────────────────
+    base_R = max(0.001, (1.0 - min(1.0, visibility)) * 0.08 + 0.005)
+    if uid and uid in _kalman_noise and _kalman_noise[uid]["count"] >= 30:
+        learned_R = _kalman_noise[uid]["R_est"]
+        R = 0.55 * learned_R + 0.45 * base_R   # blend learned + visibility
+    else:
+        R = base_R
+
+    Q = 0.003
+    P_pred = Q + 0.01
+    K = P_pred / (P_pred + R)
+
+    x_pred = x + vx * dt
+    y_pred = y + vy * dt
+
+    innov_x = measurement[0] - x_pred
+    innov_y = measurement[1] - y_pred
+
+    x_upd  = x_pred + K * innov_x
+    y_upd  = y_pred + K * innov_y
     vx_upd = (x_upd - x) / max(dt, 0.001)
     vy_upd = (y_upd - y) / max(dt, 0.001)
+
+    # ── Online R estimation from residuals ────────────────────────
+    if uid and visibility > 0.5:
+        ns = _kalman_noise.setdefault(uid, {"R_sum": 0.0, "count": 0, "R_est": 0.01})
+        residual_sq = (innov_x**2 + innov_y**2) / 2
+        ns["R_sum"] += residual_sq
+        ns["count"] += 1
+        if ns["count"] >= 10:
+            ns["R_est"] = max(0.001, min(0.5, ns["R_sum"] / ns["count"]))
+        if ns["count"] > 500:   # prevent unbounded growth
+            ns["R_sum"] /= 2; ns["count"] //= 2
+
     return [x_upd, y_upd, vx_upd, vy_upd]
 
 
@@ -1702,7 +1781,6 @@ def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
 # ── IPD-based distance ─────────────────────────────────────────────
 # ── Per-session focal calibration store ─────────────────────────────
 _focal_cal: dict = {}  # {session_id: focal_px} — calibrated from face_width
-_focal_cal_lock = threading.RLock()
 
 def _calibrate_focal(face_lms, w, h, session_id: str = "", known_dist_cm: float = 65.0):
     """
@@ -1944,20 +2022,41 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     # At 65cm distance, 10cm = ~8.8° apparent lean → correct by -5° (conservative)
     neck_lean_raw = angle_vert(mid_sh, neck_ref)
 
+    # ── Monitor height estimation ────────────────────────────────
+    # From camera pitch: if head is tilted down, monitor is below eye level
+    # At distance D, pitch P° → monitor is D×tan(P°) cm below eye level
+    try:
+        _pitch_val = out.get("head_pose", {}).get("pitch", 0) if out.get("head_pose") else 0
+        if _pitch_val and dist_cm:
+            import math as _mh
+            _monitor_offset_cm = round(dist_cm * _mh.tan(_mh.radians(abs(_pitch_val))), 1)
+            _monitor_dir = "below" if _pitch_val < 0 else "above"
+            _monitor_sc  = score_m(abs(_pitch_val), 0, 5, 18)
+            out["metrics"]["monitor_height"] = {
+                "value":      _monitor_offset_cm,
+                "score":      _monitor_sc,
+                "unit":       "cm",
+                "label":      "Monitor height offset",
+                "direction":  _monitor_dir,
+                "pitch_deg":  _pitch_val,
+                "adjustment": f"Raise monitor {_monitor_offset_cm}cm" if _monitor_dir == "below" else
+                              f"Lower monitor {_monitor_offset_cm}cm",
+            }
+            if abs(_pitch_val) > 12:
+                out["alerts"].append(
+                    f"⚠️ Monitor ~{_monitor_offset_cm}cm {_monitor_dir} eye level — "
+                    f"{'raise' if _monitor_dir == 'below' else 'lower'} monitor to reduce neck strain")
+    except Exception:
+        pass
 
     # ── Forward Head Posture Index (FHP) ─────────────────────────
     # Clinical measure: horizontal offset of ear ahead of shoulder
     # Converts pixel offset to approximate cm using shoulder width reference
     # Normal: <2cm forward. Each 2.5cm forward = +4-5kg neck load
     try:
-        # NOTE: sh_width_px is recomputed here because the original
-        # definition further below in this function runs AFTER this block —
-        # using it here used to raise UnboundLocalError every time,
-        # silently swallowed below, so fhp_index has never actually fired.
-        _sh_width_px_early = abs(r_sh[0] - l_sh[0])
         _ear_x_offset  = abs(mid_ear[0] - mid_sh[0])   # pixels
         _sh_width_cm   = 42.0   # reference shoulder width in cm
-        _cm_per_px     = _sh_width_cm / max(_sh_width_px_early, 1)
+        _cm_per_px     = _sh_width_cm / max(sh_width_px, 1)
         _fhp_cm        = round(_ear_x_offset * _cm_per_px, 1)
         _extra_weight  = round(_fhp_cm / 2.5 * 4.5, 1)  # kg added to neck
         _fhp_sc        = score_m(_fhp_cm, 0, 2, 6)
@@ -2005,6 +2104,28 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         out["metrics"]["neck_source"] = {"value": "nose_only", "reproj_err": round(_reproj, 2) if _hp_now else None}
 
     neck_sc    = score_m(neck_lean, 0, neck_ok_adj, neck_bad_adj)
+
+    # ── Forward head creep detection ─────────────────────────────
+    try:
+        import time as _ct
+        _creep = detect_head_creep(_sid, neck_lean, _ct.time())
+        out["metrics"]["head_creep"] = {
+            "value":       _creep["creep_rate"],
+            "severity":    _creep["severity"],
+            "window_min":  _creep.get("window_min", 0),
+            "total_change":_creep.get("total_change", 0),
+            "unit":        "°/min",
+            "label":       "Forward head creep rate",
+        }
+        if _creep.get("alert"):
+            out["alerts"].append(_creep["alert"])
+            out.setdefault("alerts_ar", []).append(
+                f"⚠️ زحف الرأس للأمام {_creep['creep_rate']:.1f}°/دقيقة — وضعيتك تتردى تدريجياً. خذ استراحة."
+                if _creep["severity"] == "severe"
+                else f"رقبتك تتحرك للأمام ببطء ({_creep['creep_rate']:.1f}°/دقيقة) — اضبط وضعيتك"
+            )
+    except Exception:
+        pass
     out["metrics"]["shoulder_width_ratio"] = {"value": round(sh_ratio, 2), "unit": "×", "label": "Shoulder width ratio"}
 
     head_tilt  = angle_horiz(l_eye, r_eye)
@@ -2012,6 +2133,36 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
 
     sh_tilt    = angle_horiz(l_sh, r_sh)
     sh_sc      = score_m(sh_tilt, 0, 3, 10)
+
+    # ── Shoulder elevation (shrug/tension) ────────────────────────
+    # Elevated shoulders = trapezius tension / stress posture
+    # Measured: distance from shoulder to ear (Y axis)
+    # Normal: shoulder 15-25% of frame height below ear
+    # Elevated: < 10% = shrugging
+    try:
+        _l_ear_y  = g(PL.L_EAR).y
+        _r_ear_y  = g(PL.R_EAR).y
+        _l_sh_gap = g(PL.L_SHOULDER).y - _l_ear_y   # positive = shoulder below ear (normal)
+        _r_sh_gap = g(PL.R_SHOULDER).y - _r_ear_y
+        _sh_elev  = (_l_sh_gap + _r_sh_gap) / 2      # avg gap (normalized 0-1)
+        _sh_elev_pct = round(_sh_elev * 100, 1)       # % of frame height
+
+        # Score: ideal gap 12-25%, too close = elevated shoulders
+        _sh_elev_sc = score_m(_sh_elev_pct, 18, 8, 4)
+        out["metrics"]["shoulder_elevation"] = {
+            "value":      _sh_elev_pct,
+            "score":      _sh_elev_sc,
+            "unit":       "% frame",
+            "label":      "Shoulder elevation (tension)",
+            "reference":  "Normal: 12-25% gap between ear and shoulder",
+        }
+        if _sh_elev_pct < 6:
+            out["alerts"].append("⚠️ Shoulders elevated/shrugging — relax shoulders down and back")
+            out.setdefault("alerts_ar", []).append("⚠️ الكتفان مرفوعان — أرخِ كتفيك للأسفل والخلف")
+        elif _sh_elev_pct < 10:
+            out["alerts"].append("Shoulders slightly elevated — try to relax trap muscles")
+    except Exception:
+        pass
 
     # ── Rounded shoulders (protraction) — Z depth asymmetry ───────
     # MediaPipe Z: more negative = closer to camera (in front of body)
@@ -2100,18 +2251,16 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         # Pass yaw for IPD correction — must compute head_pose first
         _yaw = out["head_pose"]["yaw"] if out["head_pose"] else 0.0
         # ── Load user-calibrated focal if available ──────────────
-        _uid_for_cal = getattr(g, "uid", None)
-        if _uid_for_cal and _uid_for_cal not in _focal_cal:
+        if uid and uid not in _focal_cal:
             try:
                 _rc = get_redis()
                 if _rc:
                     import json as _j
-                    _cal = _rc.get(f"dist_cal:{_uid_for_cal}")
+                    _cal = _rc.get(f"dist_cal:{uid}")
                     if _cal:
                         _cal_data = _j.loads(_cal)
-                        with _focal_cal_lock:
-                            _focal_cal[_uid_for_cal] = _cal_data.get("focal_px")
-                            _focal_cal[_sid]         = _cal_data.get("focal_px")
+                        _focal_cal[uid] = _cal_data.get("focal_px")
+                        _focal_cal[_sid] = _cal_data.get("focal_px")
             except Exception:
                 pass
         dist_cm  = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw, session_id=_sid)
@@ -2153,19 +2302,11 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     pose_sc = 75
     cam_pitch_correction = 0.0
     hp_reliable = False   # True only if reproj_err is low
-    hp_conf     = 0.0     # continuous confidence 0→1 for smooth pose weight
     if hp:
         pitch = hp["pitch"]; yaw = hp["yaw"]; roll = hp["roll"]
         reproj = hp.get("reproj_err", 0.0)
-        # Continuous confidence: 1.0 at 0px error, 0.0 at ≥8px error.
-        # Replaces the old binary <4px gate which caused a discontinuity:
-        # reproj=3.9px → full weight, reproj=4.1px → half weight (2x cliff).
-        # Now the weight tapers smoothly so marginal estimates still contribute.
-        if reproj <= 0:
-            hp_conf = 1.0   # no error info → assume reliable (backward compat)
-        else:
-            hp_conf = max(0.0, min(1.0, 1.0 - reproj / 8.0))
-        hp_reliable = hp_conf > 0.5  # kept as a convenience flag for other checks
+        # Reprojection error gate: >4px = unreliable pose estimate
+        hp_reliable = reproj < 4.0 if reproj > 0 else True
 
         # ── Camera angle correction ────────────────────────────────
         # If pitch > 0 (camera below eye level looking up), neck_lean
@@ -2360,19 +2501,52 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         except Exception:
             pass
 
-    # ── Eye strain score ───────────────────────────────────────────
+    # ── Eye strain — blink rate + gaze deviation ─────────────────
     eye_sc = None
+
+    # Gaze deviation (iris position relative to eye socket)
+    _gaze_score = 100
+    try:
+        if face_lms:
+            def _iris_offset(iris_idx, inner_idx, outer_idx):
+                iris  = face_lms.landmark[iris_idx]
+                inner = face_lms.landmark[inner_idx]
+                outer = face_lms.landmark[outer_idx]
+                eye_w = abs(outer.x - inner.x)
+                if eye_w < 0.001: return 0.0
+                return abs(iris.x - (inner.x + outer.x) / 2) / eye_w
+            l_gaze = _iris_offset(468, 33,  133)
+            r_gaze = _iris_offset(473, 362, 263)
+            gaze_dev = (l_gaze + r_gaze) / 2
+            _gaze_score = int(score_m(gaze_dev * 100, 0, 15, 40))
+            out["metrics"]["gaze_deviation"] = {
+                "value": round(gaze_dev * 100, 1), "score": _gaze_score,
+                "unit": "%", "label": "Gaze deviation from screen center"
+            }
+            if gaze_dev > 0.35:
+                out["alerts"].append("Eyes not centered on screen — reposition monitor or chair")
+                out.setdefault("alerts_ar", []).append("عيناك لا تنظران للشاشة — اضبط الشاشة أو الكرسي")
+    except Exception:
+        pass
+
     if blink_data:
         br = blink_data["blink_rate_per_min"]
-        eye_sc = score_m(br, 16, 6, 12)  # ideal 16/min, ok ±6, bad ±12
+        blink_sc = score_m(br, 16, 6, 12)
+        # Combined: 60% blink + 40% gaze
+        eye_sc = int(0.60 * blink_sc + 0.40 * _gaze_score)
         out["metrics"]["eye_strain"] = {
-            "value": br, "score": eye_sc,
-            "unit": "blinks/min", "label": "Eye strain (blink rate)"
+            "value":      br,
+            "score":      eye_sc,
+            "blink_sc":   int(blink_sc),
+            "gaze_sc":    _gaze_score,
+            "unit":       "blinks/min",
+            "label":      "Eye strain (blink + gaze)",
         }
         if blink_data["eye_strain_risk"] == "high":
-            out["alerts"].append(f"⚠️ Eye strain risk — only {br} blinks/min (ideal 12-20). Apply 20-20-20 rule.")
+            out["alerts"].append(f"⚠️ Eye strain risk — only {br} blinks/min. Apply 20-20-20 rule.")
+            out.setdefault("alerts_ar", []).append(f"⚠️ خطر إجهاد عيون — {br} رمشة/دقيقة فقط. طبّق قاعدة 20-20-20.")
         elif blink_data["eye_strain_risk"] == "moderate":
-            out["alerts"].append(f"Low blink rate ({br}/min) — remember to blink consciously.")
+            out["alerts"].append(f"Low blink rate ({br}/min) — blink consciously.")
 
     # ── Overall score — confidence-weighted ───────────────────────
     # All weights defined upfront so normalization is correct.
@@ -2384,83 +2558,58 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     conf_eye   = 1.0 if (eye_sc is not None) else 0.0
     conf_wrist = 1.0 if (wrist_sc is not None) else 0.0
 
-    BASE_W = {
-        "neck":  0.28,  # matches frontend W_NECK
-        "tilt":  0.10,  # matches frontend W_TILT
-        "sh":    0.11,  # was 0.08 — synced with frontend W_SH
-        "spine": 0.14,  # was 0.18 — synced with frontend W_SPINE
-        "dist":  0.18,  # was 0.22 — synced with frontend W_DIST
-        "yaw":   0.06,  # added — matches frontend W_YAW (from head_pose yaw component)
-        "rounded": 0.08,# added — matches frontend W_ROUNDED (Z-depth shoulder protraction)
-        # eye (blink rate) removed from posture score — it measures eye strain,
-        # a different dimension from musculoskeletal posture. Including it in the
-        # overall posture score penalised users with low blink rates for reasons
-        # unrelated to their sitting position. Kept as a standalone informational
-        # metric and alert. wrist kept as paid-tier add-on.
-        "wrist": 0.05,  # was 0.09 — reduced since yaw+rounded added
-    }
-    # Total base weight = 1.00 — normalization handles any confidence gaps
+    BASE_W = {"neck": 0.28, "tilt": 0.10, "sh": 0.08, "spine": 0.18, "dist": 0.22,
+              "eye": 0.05, "wrist": 0.09}
+    # dist boosted to 0.22 — screen distance is #1 preventable risk factor
+    # Refs: AOA 2023 (20-20-20 rule), WHO screen guidelines
 
     eff_w = {
-        "neck":    BASE_W["neck"]    * conf_neck,
-        "tilt":    BASE_W["tilt"]    * conf_tilt,
-        "sh":      BASE_W["sh"]      * conf_sh,
-        "spine":   BASE_W["spine"]   * conf_spine,
-        "dist":    BASE_W["dist"],                      # camera-independent — no penalty
-        "wrist":   BASE_W["wrist"]   * conf_wrist,      # paid tiers only
-        # yaw: use solvePnP yaw when available, otherwise landmark-estimated yaw
-        "yaw":     BASE_W["yaw"]     * (1.0 if hp else (1.0 if conf_tilt > 0.4 else 0.0)),
-        # rounded_shoulders: Z-depth from MediaPipe — only when shoulders visible
-        "rounded": BASE_W["rounded"] * conf_sh,
+        "neck":  BASE_W["neck"]  * conf_neck,
+        "tilt":  BASE_W["tilt"]  * conf_tilt,
+        "sh":    BASE_W["sh"]    * conf_sh,
+        "spine": BASE_W["spine"] * conf_spine,
+        "dist":  BASE_W["dist"],                    # camera-independent — no penalty
+        "eye":   BASE_W["eye"]   * conf_eye,        # 0.05 when FaceMesh active, else 0
+        "wrist": BASE_W["wrist"] * conf_wrist,      # 0.08 for paid tiers, else 0
     }
 
     # Lost weight from low-vis metrics → redistributed to dist (stable)
     lost_w = sum(BASE_W.values()) - sum(eff_w.values())
     eff_w["dist"] = min(0.30, eff_w["dist"] + lost_w)
 
-    # ── Standalone yaw + rounded_sc — must be computed BEFORE the scores
-    # dict below (they were previously computed after it, causing NameError
-    # on every call, silently swallowed by the outer try/except — so
-    # yaw and rounded never contributed to the final score until this fix).
-    _yaw_val = hp["yaw"] if hp else 0.0
-    yaw_sc = score_m(abs(_yaw_val), 0, 8, 20)
-    out["metrics"]["head_yaw"] = {
-        "value": round(_yaw_val, 1), "score": yaw_sc, "unit": "°",
-        "label": "Head turn", "reliable": bool(hp and hp_reliable),
-    }
-    _rounded_sc_val = out.get("metrics", {}).get("rounded_shoulders", {}).get("score")
-    rounded_sc = _rounded_sc_val if _rounded_sc_val is not None else 90
-
     # Build score_val from all present metrics
     scores = {
-        "neck":    neck_sc,
-        "tilt":    tilt_sc,
-        "sh":      sh_sc,
-        "spine":   spine_sc,
-        "dist":    dist_sc,
-        "yaw":     yaw_sc,
-        "rounded": rounded_sc,
-        "wrist":   wrist_sc if wrist_sc is not None else 0,
+        "neck":  neck_sc,
+        "tilt":  tilt_sc,
+        "sh":    sh_sc,
+        "spine": spine_sc,
+        "dist":  dist_sc,
+        "eye":   eye_sc   if eye_sc   is not None else 0,
+        "wrist": wrist_sc if wrist_sc is not None else 0,
     }
     score_val = sum(scores[k] * eff_w[k] for k in scores)
     remaining = 1.0 - sum(eff_w.values())
 
-    # head_pose (solvePnP) — most accurate, gets remaining weight scaled by continuous confidence.
-    # hp_conf is 1.0 at 0px reprojection error and 0.0 at ≥8px, so marginal estimates
-    # still contribute something instead of the old binary full/half cliff.
-    if hp and hp_conf > 0.0:
-        pose_weight = min(remaining, 0.15 * hp_conf)
+    # head_pose (solvePnP) — most accurate, gets remaining weight up to 0.15
+    # But only if reprojection error is low (reliable estimate)
+    if hp and hp_reliable:
+        pose_weight = min(remaining, 0.15)
+        score_val  += pose_sc * pose_weight
+        remaining  -= pose_weight
+    elif hp and not hp_reliable:
+        # Low confidence pose — half weight
+        pose_weight = min(remaining, 0.07)
         score_val  += pose_sc * pose_weight
         remaining  -= pose_weight
 
-    # ── No arbitrary baseline — normalize by actual weights used ──────
     # Store confidence breakdown for debugging and frontend display
     out["metrics"]["_confidence"] = {
-        "neck":    round(conf_neck,  2),
-        "tilt":    round(conf_tilt,  2),
-        "sh":      round(conf_sh,    2),
-        "spine":   round(conf_spine, 2),
-        "wrist":   round(conf_wrist, 2),
+        "neck":  round(conf_neck,  2),
+        "tilt":  round(conf_tilt,  2),
+        "sh":    round(conf_sh,    2),
+        "spine": round(conf_spine, 2),
+        "eye":   round(conf_eye,   2),
+        "wrist": round(conf_wrist, 2),
         "eff_weights": {k: round(v, 3) for k, v in eff_w.items()},
         "label": "Per-metric visibility confidence",
     }
@@ -2542,38 +2691,6 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         "spineLean":   round(spine_lean, 1) if spine_lean is not None else None,
         "shTilt":      round(sh_tilt, 1)    if sh_tilt    is not None else None,
     }
-
-    # ── Monitor height estimation ────────────────────────────────
-    # From camera pitch: if head is tilted down, monitor is below eye level
-    # At distance D, pitch P° → monitor is D×tan(P°) cm below eye level
-    # NOTE: was previously placed earlier in this function, before dist_cm
-    # was actually computed — every call raised UnboundLocalError, silently
-    # swallowed by the try/except, so out["metrics"]["monitor_height"] and
-    # its alert have never actually fired. Moved here, after dist_cm exists.
-    try:
-        _pitch_val = out.get("head_pose", {}).get("pitch", 0) if out.get("head_pose") else 0
-        if _pitch_val and dist_cm:
-            import math as _mh
-            _monitor_offset_cm = round(dist_cm * _mh.tan(_mh.radians(abs(_pitch_val))), 1)
-            _monitor_dir = "below" if _pitch_val < 0 else "above"
-            _monitor_sc  = score_m(abs(_pitch_val), 0, 5, 18)
-            out["metrics"]["monitor_height"] = {
-                "value":      _monitor_offset_cm,
-                "score":      _monitor_sc,
-                "unit":       "cm",
-                "label":      "Monitor height offset",
-                "direction":  _monitor_dir,
-                "pitch_deg":  _pitch_val,
-                "adjustment": f"Raise monitor {_monitor_offset_cm}cm" if _monitor_dir == "below" else
-                              f"Lower monitor {_monitor_offset_cm}cm",
-            }
-            if abs(_pitch_val) > 12:
-                out["alerts"].append(
-                    f"⚠️ Monitor ~{_monitor_offset_cm}cm {_monitor_dir} eye level — "
-                    f"{'raise' if _monitor_dir == 'below' else 'lower'} monitor to reduce neck strain")
-    except Exception:
-        pass
-
     out["metrics"].update({
         "neck_lean":       {"value": round(neck_lean, 1),  "score": neck_sc,  "unit": "°",  "label": "Neck lean"},
         "head_tilt":       {"value": round(head_tilt, 1),  "score": tilt_sc,  "unit": "°",  "label": "Head tilt"},
@@ -2870,8 +2987,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
                        "not_recommended")
         # Shoulder — upper arm elevation
         # ≤20° acceptable, 20-60° conditional, >60° not recommended
-        _iso_shoulder = ("acceptable"     if sh_tilt <= 20 else
-                         "conditional"    if sh_tilt <= 60 else
+        _iso_shoulder = ("acceptable"     if shTilt <= 20 else
+                         "conditional"    if shTilt <= 60 else
                          "not_recommended")
         # Overall ISO compliance
         _iso_parts = [_iso_trunk, _iso_head, _iso_shoulder]
@@ -2969,7 +3086,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         _dna_vec = [
             int(neck_lean  / 5) * 5,
             int(spine_lean / 5) * 5,
-            int(sh_tilt    / 3) * 3,
+            int(shTilt     / 3) * 3,
             int(dist_cm    / 10)* 10,
             int(abs(out.get("head_pose",{}).get("yaw",0)   or 0) / 5)*5,
             int(abs(out.get("head_pose",{}).get("pitch",0) or 0) / 5)*5,
@@ -3092,6 +3209,18 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     except Exception:
         pass
 
+    # ── Smart break recommendation ───────────────────────────────
+    try:
+        _session_start = s.get("start", time.time())
+        _break_rec = update_break_profile(uid, overall, _session_start)
+        out["break_recommendation"] = _break_rec
+        if _break_rec.get("message") and _break_rec["urgency"] in ("now", "soon"):
+            # Insert at front of alerts — high priority
+            out["alerts"].insert(0, _break_rec["message"])
+            out.setdefault("alerts_ar", []).insert(0, _break_rec["message_ar"])
+    except Exception:
+        pass
+
     # ── Sitting duration fatigue model ────────────────────────────
     # If session has been running > 45min, flag fatigue risk
     try:
@@ -3121,7 +3250,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         _joint_def = {
             "neck":     (neck_lean,  [10, 20, 30],  "cervical spine"),
             "spine":    (spine_lean, [10, 20, 40],  "thoracic/lumbar spine"),
-            "shoulder": (sh_tilt,    [5,  15, 30],  "shoulder girdle"),
+            "shoulder": (shTilt,     [5,  15, 30],  "shoulder girdle"),
         }
         for joint, (angle, (l,m,h), region) in _joint_def.items():
             if angle > h:      risk_level, risk_sc = "high",     20
@@ -3171,7 +3300,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
             _pain_regions = []
             if neck_lean > 15:    _pain_regions.append("neck/upper trapezius")
             if spine_lean > 15:   _pain_regions.append("lower back")
-            if sh_tilt > 8:       _pain_regions.append("shoulder")
+            if shTilt > 8:        _pain_regions.append("shoulder")
             if dist_cm < 40:      _pain_regions.append("eyes/neck (screen proximity)")
 
             _urgency = (
@@ -3639,19 +3768,16 @@ def analyze_front_cascade(image, mode, out):
     forward_proxy = max(0.0, face_area_pct - 11) * 3
     forward_sc    = score_m(forward_proxy, 0, 5, 18)
 
-    # ── Overall — synced with analyze_front BASE_W (neck+tilt+dist+forward only) ──
-    # Cascade can only estimate a subset of metrics — weight only what's present
-    # and normalize, same as analyze_front does for missing metrics.
-    _casc_scores = {"neck": neck_sc, "tilt": tilt_sc, "dist": dist_sc, "forward": forward_sc}
-    _casc_w      = {"neck": 0.28,    "tilt": 0.10,    "dist": 0.18,    "forward": 0.11}
-    _casc_sv     = sum(_casc_scores[k] * _casc_w[k] for k in _casc_scores)
-    _casc_wused  = sum(_casc_w.values())   # 0.67 — normalize so absent metrics don't deflate
-    overall = max(0, min(100, int(round(_casc_sv / _casc_wused)))) if _casc_wused > 0.01 else 0
+    # ── Overall — SAME weights as analyze_front ───────────────────
+    # neck.28 tilt.14 dist.18 forward.11 → remaining=0.29 → baseline fill
+    score_val  = neck_sc * 0.28 + tilt_sc * 0.14 + dist_sc * 0.18 + forward_sc * 0.11
+    remaining  = 1.0 - (0.28 + 0.14 + 0.18 + 0.11)   # 0.29
+    # Normalize by actual weights used — no arbitrary baseline
+    weight_used = 1.0 - remaining
+    overall = max(0, min(100, int(round(score_val / max(weight_used, 0.01))))) if weight_used > 0.01 else 0
 
-    out["score"]        = overall
-    out["overall"]      = overall
-    out["confidence"]   = 55    # clearly below MediaPipe (82+) to signal fallback quality
-    out["limited_accuracy"] = True   # frontend can show a warning badge
+    out["score"]      = overall
+    out["confidence"] = 68   # lower than MediaPipe (82+) to signal fallback quality
     out["metrics"]    = {
         "head_tilt":       {"value": round(ht, 1),           "score": tilt_sc,    "unit": "°",  "label": "Head tilt"},
         "neck_lean":       {"value": round(neck_proxy, 1),   "score": neck_sc,    "unit": "°",  "label": "Neck lean (est.)"},
@@ -9589,6 +9715,86 @@ def calibrate_distance():
     except Exception as e:
         return safe_error(e)
 
+
+# ══════════════════════════════════════════════════════════════════
+# SMART BREAK RECOMMENDATION ENGINE
+# Learns each user's personal fatigue curve
+# ══════════════════════════════════════════════════════════════════
+
+_break_profiles: dict = {}  # {uid: {"scores": [(ts, score)], "deg_rate": float}}
+
+def update_break_profile(uid: str, score: int, session_start: float) -> dict:
+    """
+    Track score over session time to learn personal degradation rate.
+    Returns break recommendation with personalized timing.
+    """
+    import time as _t
+    now = _t.time()
+    session_min = (now - session_start) / 60
+
+    profile = _break_profiles.setdefault(uid, {
+        "scores": [], "avg_deg_rate": None,
+        "personal_threshold_min": 45,   # default 45min
+        "sessions_analyzed": 0,
+    })
+
+    profile["scores"].append((session_min, score))
+
+    # Keep last 60 data points per session
+    if len(profile["scores"]) > 60:
+        profile["scores"] = profile["scores"][-60:]
+
+    # Only analyze if we have enough data (>5 min of session)
+    if session_min < 5 or len(profile["scores"]) < 5:
+        return {"recommendation": None, "session_min": round(session_min, 1)}
+
+    # Linear regression on score vs time to find degradation rate
+    pts = profile["scores"]
+    n   = len(pts)
+    mean_t = sum(p[0] for p in pts) / n
+    mean_s = sum(p[1] for p in pts) / n
+    num = sum((p[0]-mean_t)*(p[1]-mean_s) for p in pts)
+    den = sum((p[0]-mean_t)**2 for p in pts) or 1
+    slope = num / den  # score points per minute (negative = degrading)
+
+    # Update personal threshold based on observed degradation
+    if slope < -0.8:
+        # Fast degrader — suggest break sooner
+        profile["personal_threshold_min"] = max(20, profile["personal_threshold_min"] - 2)
+    elif slope > -0.2:
+        # Stable — can extend break interval
+        profile["personal_threshold_min"] = min(60, profile["personal_threshold_min"] + 1)
+
+    threshold = profile["personal_threshold_min"]
+    time_to_break = max(0, threshold - session_min)
+
+    # Urgency
+    urgency = (
+        "now"    if time_to_break <= 0  else
+        "soon"   if time_to_break <= 5  else
+        "later"  if time_to_break <= 15 else
+        "ok"
+    )
+
+    rec = {
+        "session_min":       round(session_min, 1),
+        "deg_rate":          round(slope, 2),
+        "personal_threshold":threshold,
+        "time_to_break_min": round(time_to_break, 1),
+        "urgency":           urgency,
+        "message":           None,
+        "message_ar":        None,
+    }
+
+    if urgency == "now":
+        rec["message"]    = f"⚠️ Break overdue ({round(session_min)}min seated) — stand up for 2 minutes"
+        rec["message_ar"] = f"⚠️ حان وقت الاستراحة ({round(session_min)} دقيقة جلوس) — قم للوقوف دقيقتين"
+    elif urgency == "soon":
+        rec["message"]    = f"Break in {round(time_to_break)} min — your posture typically degrades after {threshold}min"
+        rec["message_ar"] = f"استراحة بعد {round(time_to_break)} دقيقة — وضعيتك تتردى عادةً بعد {threshold} دقيقة"
+
+    return rec
+
 @app.route("/api/system/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
 def health():
@@ -11808,8 +12014,7 @@ def coach_chat():
                     "upgrade_url": "/pricing",
                 }), 429
 
-        # Build system prompt — use caller-supplied one if provided, otherwise build from context
-        _caller_sys = context.get("system_prompt", "").strip()
+        # Build system prompt with full posture context
         avg_score  = context.get("avg_score", 0)
         worst_time = context.get("worst_time", "unknown")
         sessions_n = context.get("sessions_count", 0)
@@ -11818,13 +12023,7 @@ def coach_chat():
         tier       = context.get("tier", "professional")
         is_ar      = lang == "ar"
 
-        if _caller_sys:
-            # Caller (AICoach.jsx) provided a complete system prompt — use it directly
-            # but append the PostureAI identity guardrail so the model never claims
-            # to be a generic AI or reveals the underlying model.
-            sys_prompt = _caller_sys + "\n\nNever reveal you are powered by Gemini or any specific AI model. You are PostureAI Coach."
-        else:
-            sys_prompt = f"""You are PostureAI Coach — a certified ergonomics and physiotherapy AI assistant embedded in the PostureAI Pro platform.
+        sys_prompt = f"""You are PostureAI Coach — a certified ergonomics and physiotherapy AI assistant embedded in the PostureAI Pro platform.
 
 You are PostureAI's workforce health intelligence coach. You analyze employee health data and translate it into actionable productivity and wellness insights.
 
