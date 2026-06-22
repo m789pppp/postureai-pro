@@ -1702,6 +1702,7 @@ def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
 # ── IPD-based distance ─────────────────────────────────────────────
 # ── Per-session focal calibration store ─────────────────────────────
 _focal_cal: dict = {}  # {session_id: focal_px} — calibrated from face_width
+_focal_cal_lock = threading.RLock()
 
 def _calibrate_focal(face_lms, w, h, session_id: str = "", known_dist_cm: float = 65.0):
     """
@@ -2417,6 +2418,19 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     lost_w = sum(BASE_W.values()) - sum(eff_w.values())
     eff_w["dist"] = min(0.30, eff_w["dist"] + lost_w)
 
+    # ── Standalone yaw + rounded_sc — must be computed BEFORE the scores
+    # dict below (they were previously computed after it, causing NameError
+    # on every call, silently swallowed by the outer try/except — so
+    # yaw and rounded never contributed to the final score until this fix).
+    _yaw_val = hp["yaw"] if hp else 0.0
+    yaw_sc = score_m(abs(_yaw_val), 0, 8, 20)
+    out["metrics"]["head_yaw"] = {
+        "value": round(_yaw_val, 1), "score": yaw_sc, "unit": "°",
+        "label": "Head turn", "reliable": bool(hp and hp_reliable),
+    }
+    _rounded_sc_val = out.get("metrics", {}).get("rounded_shoulders", {}).get("score")
+    rounded_sc = _rounded_sc_val if _rounded_sc_val is not None else 90
+
     # Build score_val from all present metrics
     scores = {
         "neck":    neck_sc,
@@ -2439,20 +2453,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         score_val  += pose_sc * pose_weight
         remaining  -= pose_weight
 
-    # ── Standalone yaw score (for weight slot) ─────────────────────
-    # When solvePnP is available use its yaw (more accurate), otherwise
-    # fall back to the landmark-estimated yaw already stored in out.
-    _yaw_val = hp["yaw"] if hp else 0.0
-    yaw_sc = score_m(abs(_yaw_val), 0, 8, 20)
-    out["metrics"]["head_yaw"] = {
-        "value": round(_yaw_val, 1), "score": yaw_sc, "unit": "°",
-        "label": "Head turn", "reliable": bool(hp and hp_reliable),
-    }
-
-    # ── Rounded shoulders score (for weight slot) ──────────────────
-    _rounded_sc_val = out.get("metrics", {}).get("rounded_shoulders", {}).get("score")
-    rounded_sc = _rounded_sc_val if _rounded_sc_val is not None else 90  # neutral if not computed
-
+    # ── No arbitrary baseline — normalize by actual weights used ──────
     # Store confidence breakdown for debugging and frontend display
     out["metrics"]["_confidence"] = {
         "neck":    round(conf_neck,  2),
