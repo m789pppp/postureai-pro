@@ -39,7 +39,7 @@ service cloud.firestore {
     }
 
     function isValidTier(tier) {
-      return tier in ['standard', 'professional', 'elite', 'enterprise'];
+      return tier in ['basic', 'professional', 'elite', 'b2b_starter', 'b2b_growth', 'b2b_enterprise'];
     }
 
     // Prevent client from escalating their own privileges
@@ -170,7 +170,17 @@ service cloud.firestore {
     // ── Invites ──────────────────────────────────────────────────
     match /invites/{inviteId} {
       allow read: if isAuthenticated();
-      allow create: if isHR();
+      // SECURITY: isHR() alone only checks is_hr/is_admin — it does NOT verify
+      // the invite being created belongs to the HR's own company. Without the
+      // isSameCompany() check, any HR admin at Company A could create invite
+      // documents with company_id = Company B and effectively recruit/control
+      // another company's roster. Platform admins (is_admin) are exempt since
+      // they legitimately manage invites across companies.
+      allow create: if isAuthenticated() && (
+        getUserData().get('is_admin', false) == true ||
+        (getUserData().get('is_hr', false) == true &&
+         isSameCompany(request.resource.data.company_id))
+      );
       // SECURITY: "accepting an invite" must only ever transition status
       // pending -> accepted, stamped with the accepting user's own uid, and
       // must NEVER let the caller change company_id, department, role, or any
@@ -186,7 +196,13 @@ service cloud.firestore {
                     // every field except status/accepted_by/accepted_at must be unchanged
                     && request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(["status", "accepted_by", "accepted_at"]);
-      allow delete: if isHR();
+      // SECURITY: same company-match requirement as create — an HR admin must
+      // only be able to delete invites belonging to their own company.
+      allow delete: if isAuthenticated() && (
+        getUserData().get('is_admin', false) == true ||
+        (getUserData().get('is_hr', false) == true &&
+         isSameCompany(resource.data.get('company_id', '')))
+      );
     }
 
     // ── Linked Accounts ──────────────────────────────────────────

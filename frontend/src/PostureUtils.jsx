@@ -14,35 +14,39 @@ import { useState, useEffect, useRef, useCallback } from "react";
  *
  * Returns { smoothed, push, reset }
  */
-export function useScoreSmoothing(windowMs = 10000, halfLifeMs = 3000) {
-  const bufferRef  = useRef([]); // [{t, v}]
+export function useScoreSmoothing(windowMs = 15000, halfLifeMs = 6000, sampleIntervalMs = 200) {
+  const bufferRef     = useRef([]);
+  const lastSampleRef = useRef(0);
   const [display, setDisplay] = useState(0);
 
   const push = useCallback((rawScore) => {
     if (rawScore == null || rawScore < 0) return;
-
     const now = Date.now();
+
+    // Downsample: one entry per sampleIntervalMs.
+    // At 30fps analysis, without this the buffer fills with 30 entries/sec —
+    // the most-recent second then dominates the weighted average and
+    // makes the score react at near-frame-rate, defeating the window.
+    if (now - lastSampleRef.current < sampleIntervalMs) return display;
+    lastSampleRef.current = now;
+
     const buf = bufferRef.current;
     buf.push({ t: now, v: rawScore });
     while (buf.length && now - buf[0].t > windowMs) buf.shift();
 
-    // Time-weighted average: a sample halfLifeMs old counts half as
-    // much as a fresh one. Still spans the whole window (so a brief
-    // dip doesn't disappear instantly), but stays responsive enough
-    // to reflect genuinely sustained changes, not just a single frame.
     let wSum = 0, vSum = 0;
     for (const s of buf) {
       const w = Math.pow(0.5, (now - s.t) / halfLifeMs);
       wSum += w; vSum += w * s.v;
     }
     const next = wSum > 0 ? Math.round(vSum / wSum) : Math.round(rawScore);
-
     setDisplay(next);
     return next;
-  }, [windowMs, halfLifeMs]);
+  }, [windowMs, halfLifeMs, sampleIntervalMs, display]);
 
   const reset = useCallback(() => {
-    bufferRef.current  = [];
+    bufferRef.current     = [];
+    lastSampleRef.current = 0;
     setDisplay(0);
   }, []);
 
