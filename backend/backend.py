@@ -2152,11 +2152,19 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     pose_sc = 75
     cam_pitch_correction = 0.0
     hp_reliable = False   # True only if reproj_err is low
+    hp_conf     = 0.0     # continuous confidence 0→1 for smooth pose weight
     if hp:
         pitch = hp["pitch"]; yaw = hp["yaw"]; roll = hp["roll"]
         reproj = hp.get("reproj_err", 0.0)
-        # Reprojection error gate: >4px = unreliable pose estimate
-        hp_reliable = reproj < 4.0 if reproj > 0 else True
+        # Continuous confidence: 1.0 at 0px error, 0.0 at ≥8px error.
+        # Replaces the old binary <4px gate which caused a discontinuity:
+        # reproj=3.9px → full weight, reproj=4.1px → half weight (2x cliff).
+        # Now the weight tapers smoothly so marginal estimates still contribute.
+        if reproj <= 0:
+            hp_conf = 1.0   # no error info → assume reliable (backward compat)
+        else:
+            hp_conf = max(0.0, min(1.0, 1.0 - reproj / 8.0))
+        hp_reliable = hp_conf > 0.5  # kept as a convenience flag for other checks
 
         # ── Camera angle correction ────────────────────────────────
         # If pitch > 0 (camera below eye level looking up), neck_lean
@@ -2375,19 +2383,34 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     conf_eye   = 1.0 if (eye_sc is not None) else 0.0
     conf_wrist = 1.0 if (wrist_sc is not None) else 0.0
 
-    BASE_W = {"neck": 0.28, "tilt": 0.10, "sh": 0.08, "spine": 0.18, "dist": 0.22,
-              "eye": 0.05, "wrist": 0.09}
-    # dist boosted to 0.22 — screen distance is #1 preventable risk factor
-    # Refs: AOA 2023 (20-20-20 rule), WHO screen guidelines
+    BASE_W = {
+        "neck":  0.28,  # matches frontend W_NECK
+        "tilt":  0.10,  # matches frontend W_TILT
+        "sh":    0.11,  # was 0.08 — synced with frontend W_SH
+        "spine": 0.14,  # was 0.18 — synced with frontend W_SPINE
+        "dist":  0.18,  # was 0.22 — synced with frontend W_DIST
+        "yaw":   0.06,  # added — matches frontend W_YAW (from head_pose yaw component)
+        "rounded": 0.08,# added — matches frontend W_ROUNDED (Z-depth shoulder protraction)
+        # eye (blink rate) removed from posture score — it measures eye strain,
+        # a different dimension from musculoskeletal posture. Including it in the
+        # overall posture score penalised users with low blink rates for reasons
+        # unrelated to their sitting position. Kept as a standalone informational
+        # metric and alert. wrist kept as paid-tier add-on.
+        "wrist": 0.05,  # was 0.09 — reduced since yaw+rounded added
+    }
+    # Total base weight = 1.00 — normalization handles any confidence gaps
 
     eff_w = {
-        "neck":  BASE_W["neck"]  * conf_neck,
-        "tilt":  BASE_W["tilt"]  * conf_tilt,
-        "sh":    BASE_W["sh"]    * conf_sh,
-        "spine": BASE_W["spine"] * conf_spine,
-        "dist":  BASE_W["dist"],                    # camera-independent — no penalty
-        "eye":   BASE_W["eye"]   * conf_eye,        # 0.05 when FaceMesh active, else 0
-        "wrist": BASE_W["wrist"] * conf_wrist,      # 0.08 for paid tiers, else 0
+        "neck":    BASE_W["neck"]    * conf_neck,
+        "tilt":    BASE_W["tilt"]    * conf_tilt,
+        "sh":      BASE_W["sh"]      * conf_sh,
+        "spine":   BASE_W["spine"]   * conf_spine,
+        "dist":    BASE_W["dist"],                      # camera-independent — no penalty
+        "wrist":   BASE_W["wrist"]   * conf_wrist,      # paid tiers only
+        # yaw: use solvePnP yaw when available, otherwise landmark-estimated yaw
+        "yaw":     BASE_W["yaw"]     * (1.0 if hp else (1.0 if conf_tilt > 0.4 else 0.0)),
+        # rounded_shoulders: Z-depth from MediaPipe — only when shoulders visible
+        "rounded": BASE_W["rounded"] * conf_sh,
     }
 
     # Lost weight from low-vis metrics → redistributed to dist (stable)
@@ -2396,37 +2419,47 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
 
     # Build score_val from all present metrics
     scores = {
-        "neck":  neck_sc,
-        "tilt":  tilt_sc,
-        "sh":    sh_sc,
-        "spine": spine_sc,
-        "dist":  dist_sc,
-        "eye":   eye_sc   if eye_sc   is not None else 0,
-        "wrist": wrist_sc if wrist_sc is not None else 0,
+        "neck":    neck_sc,
+        "tilt":    tilt_sc,
+        "sh":      sh_sc,
+        "spine":   spine_sc,
+        "dist":    dist_sc,
+        "yaw":     yaw_sc,
+        "rounded": rounded_sc,
+        "wrist":   wrist_sc if wrist_sc is not None else 0,
     }
     score_val = sum(scores[k] * eff_w[k] for k in scores)
     remaining = 1.0 - sum(eff_w.values())
 
-    # head_pose (solvePnP) — most accurate, gets remaining weight up to 0.15
-    # But only if reprojection error is low (reliable estimate)
-    if hp and hp_reliable:
-        pose_weight = min(remaining, 0.15)
-        score_val  += pose_sc * pose_weight
-        remaining  -= pose_weight
-    elif hp and not hp_reliable:
-        # Low confidence pose — half weight
-        pose_weight = min(remaining, 0.07)
+    # head_pose (solvePnP) — most accurate, gets remaining weight scaled by continuous confidence.
+    # hp_conf is 1.0 at 0px reprojection error and 0.0 at ≥8px, so marginal estimates
+    # still contribute something instead of the old binary full/half cliff.
+    if hp and hp_conf > 0.0:
+        pose_weight = min(remaining, 0.15 * hp_conf)
         score_val  += pose_sc * pose_weight
         remaining  -= pose_weight
 
+    # ── Standalone yaw score (for weight slot) ─────────────────────
+    # When solvePnP is available use its yaw (more accurate), otherwise
+    # fall back to the landmark-estimated yaw already stored in out.
+    _yaw_val = hp["yaw"] if hp else 0.0
+    yaw_sc = score_m(abs(_yaw_val), 0, 8, 20)
+    out["metrics"]["head_yaw"] = {
+        "value": round(_yaw_val, 1), "score": yaw_sc, "unit": "°",
+        "label": "Head turn", "reliable": bool(hp and hp_reliable),
+    }
+
+    # ── Rounded shoulders score (for weight slot) ──────────────────
+    _rounded_sc_val = out.get("metrics", {}).get("rounded_shoulders", {}).get("score")
+    rounded_sc = _rounded_sc_val if _rounded_sc_val is not None else 90  # neutral if not computed
+
     # Store confidence breakdown for debugging and frontend display
     out["metrics"]["_confidence"] = {
-        "neck":  round(conf_neck,  2),
-        "tilt":  round(conf_tilt,  2),
-        "sh":    round(conf_sh,    2),
-        "spine": round(conf_spine, 2),
-        "eye":   round(conf_eye,   2),
-        "wrist": round(conf_wrist, 2),
+        "neck":    round(conf_neck,  2),
+        "tilt":    round(conf_tilt,  2),
+        "sh":      round(conf_sh,    2),
+        "spine":   round(conf_spine, 2),
+        "wrist":   round(conf_wrist, 2),
         "eff_weights": {k: round(v, 3) for k, v in eff_w.items()},
         "label": "Per-metric visibility confidence",
     }
@@ -3605,16 +3638,19 @@ def analyze_front_cascade(image, mode, out):
     forward_proxy = max(0.0, face_area_pct - 11) * 3
     forward_sc    = score_m(forward_proxy, 0, 5, 18)
 
-    # ── Overall — SAME weights as analyze_front ───────────────────
-    # neck.28 tilt.14 dist.18 forward.11 → remaining=0.29 → baseline fill
-    score_val  = neck_sc * 0.28 + tilt_sc * 0.14 + dist_sc * 0.18 + forward_sc * 0.11
-    remaining  = 1.0 - (0.28 + 0.14 + 0.18 + 0.11)   # 0.29
-    # Normalize by actual weights used — no arbitrary baseline
-    weight_used = 1.0 - remaining
-    overall = max(0, min(100, int(round(score_val / max(weight_used, 0.01))))) if weight_used > 0.01 else 0
+    # ── Overall — synced with analyze_front BASE_W (neck+tilt+dist+forward only) ──
+    # Cascade can only estimate a subset of metrics — weight only what's present
+    # and normalize, same as analyze_front does for missing metrics.
+    _casc_scores = {"neck": neck_sc, "tilt": tilt_sc, "dist": dist_sc, "forward": forward_sc}
+    _casc_w      = {"neck": 0.28,    "tilt": 0.10,    "dist": 0.18,    "forward": 0.11}
+    _casc_sv     = sum(_casc_scores[k] * _casc_w[k] for k in _casc_scores)
+    _casc_wused  = sum(_casc_w.values())   # 0.67 — normalize so absent metrics don't deflate
+    overall = max(0, min(100, int(round(_casc_sv / _casc_wused)))) if _casc_wused > 0.01 else 0
 
-    out["score"]      = overall
-    out["confidence"] = 68   # lower than MediaPipe (82+) to signal fallback quality
+    out["score"]        = overall
+    out["overall"]      = overall
+    out["confidence"]   = 55    # clearly below MediaPipe (82+) to signal fallback quality
+    out["limited_accuracy"] = True   # frontend can show a warning badge
     out["metrics"]    = {
         "head_tilt":       {"value": round(ht, 1),           "score": tilt_sc,    "unit": "°",  "label": "Head tilt"},
         "neck_lean":       {"value": round(neck_proxy, 1),   "score": neck_sc,    "unit": "°",  "label": "Neck lean (est.)"},
