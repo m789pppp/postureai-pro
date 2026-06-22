@@ -451,95 +451,139 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
 }
 
 // ── Side-camera analysis ──────────────────────────────────────────
+// Brought to full parity with analyzeMP (front camera):
+//   ✅ Confidence gating — noisy/occluded landmarks fall back to NEUTRAL
+//   ✅ Nose+ear blend for neck reference (same formula as front camera)
+//   ✅ Shoulder-width-normalized neck threshold (same distance-correction)
+//   ✅ Outlier rejection: handled upstream by createLandmarkSmoother()
+//      (the same smoother instance is reused for side mode in App.jsx)
+//   ✅ Reliable flag per metric (matches front camera output shape)
 export function analyzeSideMP(lms, W, H) {
   if (!lms || lms.length < 28) return null;
+
   const g   = idx => lms[idx];
   const px  = idx => ({ x: g(idx).x * W, y: g(idx).y * H });
-  const vis = idx => (g(idx)?.visibility || 0) > 0.45;
+  const vis = (idx, thr = 0.45) => (g(idx)?.visibility ?? 0) > thr;
 
-  const lVis = g(PL.L_SHOULDER)?.visibility || 0;
-  const rVis = g(PL.R_SHOULDER)?.visibility || 0;
-  const S    = lVis >= rVis ? "L" : "R";
+  // ── Pick the better-visible side ─────────────────────────────
+  const lVis = g(PL.L_SHOULDER)?.visibility ?? 0;
+  const rVis = g(PL.R_SHOULDER)?.visibility ?? 0;
+  const S = lVis >= rVis ? "L" : "R";
+  const I = {
+    EAR:   S === "L" ? PL.L_EAR    : PL.R_EAR,
+    SH:    S === "L" ? PL.L_SHOULDER: PL.R_SHOULDER,
+    HIP:   S === "L" ? PL.L_HIP    : PL.R_HIP,
+    KNEE:  S === "L" ? PL.L_KNEE   : PL.R_KNEE,
+    ANKLE: S === "L" ? PL.L_ANKLE  : PL.R_ANKLE,
+    EYE:   S === "L" ? PL.L_EYE    : PL.R_EYE,
+  };
 
-  const ear   = px(S === "L" ? PL.L_EAR      : PL.R_EAR);
-  const sh    = px(S === "L" ? PL.L_SHOULDER  : PL.R_SHOULDER);
-  const hip   = px(S === "L" ? PL.L_HIP       : PL.R_HIP);
-  const knee  = px(S === "L" ? PL.L_KNEE      : PL.R_KNEE);
-  const ankle = px(S === "L" ? PL.L_ANKLE     : PL.R_ANKLE);
+  const ear   = px(I.EAR);
+  const sh    = px(I.SH);
+  const hip   = px(I.HIP);
+  const knee  = px(I.KNEE);
+  const ankle = px(I.ANKLE);
+  const nose  = px(PL.NOSE);
 
-  const neckLean  = angleVert(sh, ear);
-  const trunkLean = angleVert(hip, sh);
-  const hipAngle  = angle3pt(sh, hip, knee);
-  const kneeAngle = angle3pt(hip, knee, ankle);
-  const spineAlign = Math.abs(ear.x - ankle.x) / W * 100;
+  // ── Confidence gates ─────────────────────────────────────────
+  const earOK   = vis(I.EAR);
+  const shOK    = vis(I.SH);
+  const hipOK   = vis(I.HIP);
+  const kneeOK  = vis(I.KNEE);
+  const ankleOK = vis(I.ANKLE);
+  const noseOK  = vis(PL.NOSE);
+  const neckOK  = earOK && shOK;
+  const trunkOK = shOK && hipOK;
+  const kneeVis = kneeOK && hipOK;
+  const ankleVis= ankleOK && kneeOK;
+  const NEUTRAL = 90;
 
-  const neckSc  = scoreMetric(neckLean,  0, T.neckLeanSide.ok, T.neckLeanSide.bad);
-  const trunkSc = scoreMetric(trunkLean, 0, T.trunkLean.ok,    T.trunkLean.bad);
-  const hipSc   = scoreMetric(Math.abs(hipAngle  - 90), 0, 12, 30);
-  const kneeSc  = scoreMetric(Math.abs(kneeAngle - 90), 0, 12, 35);
-  const spineSc = scoreMetric(spineAlign, 0, 3, 9);
+  // ── Neck lean (side): nose+ear blend — same as front camera ──
+  // Pure ear-based is biased by yaw: if the person is slightly rotated
+  // the ear shifts relative to the shoulder and reads as false forward
+  // lean. Blending in the nose anchors to true forward head position.
+  const noseVis     = g(PL.NOSE)?.visibility ?? 1;
+  const earWeight   = noseOK && noseVis > 0.7 ? 0.15 : 0.50;
+  const noseWeight  = 1 - earWeight;
+  const neckRef = {
+    x: nose.x * noseWeight + ear.x * earWeight,
+    y: nose.y * noseWeight + ear.y * earWeight,
+  };
+  const neckLeanRaw   = angleVert(sh, neckRef);
+  const noseCorrection = 5.0 * noseWeight;
+  const neckLean      = Math.max(0, neckLeanRaw - noseCorrection);
 
+  // ── Shoulder-width-normalized neck threshold ──────────────────
+  // Matches front camera: a fixed degree threshold is too strict when
+  // close (angles read large) and too loose when far. Use apparent
+  // shoulder WIDTH to normalize — side camera: use ear→shoulder
+  // horizontal span as a proxy (both visible in side view).
+  const refSpanFrac = 0.14;  // typical ear–shoulder span at neutral distance
+  const earShSpan   = Math.abs(ear.x - sh.x);
+  const spanFrac    = earShSpan / Math.max(W, 1);
+  const spanRatio   = Math.max(0.70, Math.min(1.30, spanFrac / refSpanFrac));
+  const neckOkAdj   = Math.max(6.0,  8.0 * spanRatio);
+  const neckBadAdj  = Math.max(14.0, 22.0 * spanRatio);
+
+  const trunkLean = trunkOK ? angleVert(hip, sh)             : 0;
+  const hipAngle  = kneeVis ? angle3pt(sh, hip, knee)        : 90;
+  const kneeAngle = ankleVis? angle3pt(hip, knee, ankle)     : 90;
+  // Plumb-line: ear should be directly above ankle in ideal seated posture
+  const spineAlign = shOK && ankleOK
+    ? Math.abs(ear.x - ankle.x) / Math.max(W, 1) * 100
+    : 0;
+
+  // ── Scores (all gated) ────────────────────────────────────────
+  const neckSc  = neckOK  ? scoreMetric(neckLean,               0, neckOkAdj, neckBadAdj) : NEUTRAL;
+  const trunkSc = trunkOK ? scoreMetric(trunkLean,              0, T.trunkLean.ok, T.trunkLean.bad) : NEUTRAL;
+  const hipSc   = kneeVis ? scoreMetric(Math.abs(hipAngle-90),  0, 12, 30) : NEUTRAL;
+  const kneeSc  = ankleVis? scoreMetric(Math.abs(kneeAngle-90), 0, 12, 35) : NEUTRAL;
+  const spineSc = (shOK && ankleOK) ? scoreMetric(spineAlign,   0, 3, 9) : NEUTRAL;
+
+  const W_NECK=0.30, W_TRUNK=0.28, W_HIP=0.18, W_KNEE=0.12, W_SPINE=0.12;
   const overall = Math.max(0, Math.min(100, Math.round(
-    neckSc  * 0.30 +
-    trunkSc * 0.28 +
-    hipSc   * 0.18 +
-    kneeSc  * 0.12 +
-    spineSc * 0.12
+    neckSc  * W_NECK  +
+    trunkSc * W_TRUNK +
+    hipSc   * W_HIP   +
+    kneeSc  * W_KNEE  +
+    spineSc * W_SPINE
   )));
 
+  // ── Alerts (gated by same visibility checks as scores) ────────
+  const alerts = [
+    neckOK && neckLean > neckBadAdj && `⚠️ Forward head ${Math.round(neckLean)}° — ear must be directly above shoulder`,
+    neckOK && neckLean > (neckOkAdj + neckBadAdj)/2 && neckLean <= neckBadAdj && `Neck lean ${Math.round(neckLean)}° — tuck chin back`,
+    trunkOK && trunkLean > 12 && `Trunk leaning ${Math.round(trunkLean)}° — sit back against lumbar support`,
+    kneeVis && Math.abs(hipAngle  - 90) > 15 && `Hip angle ${Math.round(hipAngle)}° (ideal ~90°) — adjust seat height`,
+    ankleVis&& Math.abs(kneeAngle - 90) > 18 && `Knee angle ${Math.round(kneeAngle)}° (ideal ~90°) — adjust footrest or seat depth`,
+    (shOK && ankleOK) && spineAlign > 9 && `Plumb-line off by ${Math.round(spineAlign)}% — ear should be above ankle`,
+  ].filter(Boolean);
+
+  const sideName = S === "L" ? "left" : "right";
   return {
     score: overall,
     metrics: {
-      neck_lean_side: { value: Math.round(neckLean),   score: neckSc,  unit: "°", label: "Neck lean" },
-      trunk_lean:     { value: Math.round(trunkLean),  score: trunkSc, unit: "°", label: "Trunk lean" },
-      hip_angle:      { value: Math.round(hipAngle),   score: hipSc,   unit: "°", label: "Hip angle" },
-      knee_angle:     { value: Math.round(kneeAngle),  score: kneeSc,  unit: "°", label: "Knee angle" },
-      spine_align:    { value: Math.round(spineAlign), score: spineSc, unit: "%", label: "Spine alignment" },
+      neck_lean_side: { value: Math.round(neckLean),  score: neckSc,  unit: "°", label: "Neck lean (side)",  reliable: neckOK },
+      trunk_lean:     { value: Math.round(trunkLean), score: trunkSc, unit: "°", label: "Trunk lean",        reliable: trunkOK },
+      hip_angle:      { value: Math.round(hipAngle),  score: hipSc,   unit: "°", label: "Hip angle",         reliable: kneeVis },
+      knee_angle:     { value: Math.round(kneeAngle), score: kneeSc,  unit: "°", label: "Knee angle",        reliable: ankleVis },
+      spine_align:    { value: Math.round(spineAlign),score: spineSc, unit: "%", label: "Spine plumb-line",  reliable: shOK && ankleOK },
     },
-    alerts: [
-      neckLean  > 12  && `Forward head ${Math.round(neckLean)}° — align ear above shoulder`,
-      trunkLean > 8   && `Trunk lean ${Math.round(trunkLean)}° — sit back to backrest`,
-      Math.abs(hipAngle  - 90) > 15 && `Hip angle ${Math.round(hipAngle)}° (ideal 90°) — adjust seat height`,
-      Math.abs(kneeAngle - 90) > 18 && `Knee angle ${Math.round(kneeAngle)}° (ideal 90°) — adjust footrest`,
-    ].filter(Boolean),
+    alerts,
     recommendations: [
-      `${gradeScore(overall)} lateral posture — ear→shoulder→hip should align vertically`,
-      `Hip angle ${Math.round(hipAngle)}° — ${Math.abs(hipAngle - 90) < 12 ? "✓ ideal" : "adjust chair height"}`,
-      "Feet flat on floor, lumbar support engaged",
+      `Overall: ${gradeScore(overall)} (${overall}/100) — ${sideName} side view`,
+      "Ear directly above shoulder, shoulder above hip",
+      `Hip angle ${Math.round(hipAngle)}° — ${Math.abs(hipAngle-90)<12 ? "✓ ideal" : "adjust chair height"}`,
+      "Feet flat, lumbar support fully engaged",
     ],
     detected:   true,
-    confidence: Math.min(92, 75 + (Math.max(lVis, rVis) > 0.7 ? 17 : 0)),
+    confidence: Math.min(93,
+      70 +
+      (shOK   ? 10 : 0) +
+      (earOK  ? 8  : 0) +
+      (hipOK  ? 5  : 0)
+    ),
   };
-}
-
-// ── Apply calibration ─────────────────────────────────────────────
-export function applyCalibrationToResult(result, calibration) {
-  if (!calibration?.tolerances || !result?.metrics) return result;
-  const tols = calibration.tolerances;
-  const newMet = { ...result.metrics };
-  const map = {
-    neck_lean:      "neck_angle",
-    head_tilt:      "head_tilt",
-    shoulder_level: "shoulder_tilt",
-    spine_lean:     "spine_angle",
-  };
-  let totalScore = 0, count = 0;
-  Object.entries(map).forEach(([metKey, calibKey]) => {
-    if (newMet[metKey] !== undefined && tols[calibKey]) {
-      const { ideal, ok, bad } = tols[calibKey];
-      const val = newMet[metKey].value;
-      const d = Math.abs(val - ideal);
-      let calibrated;
-      if (d <= ok)       calibrated = Math.max(0, Math.round(100 - (d / Math.max(ok, 0.1)) * 25));
-      else if (d <= bad) calibrated = Math.max(0, Math.round(75 - ((d - ok) / Math.max(bad - ok, 0.1)) * 45));
-      else               calibrated = Math.max(0, Math.round(30 - (d - bad) * 1.2));
-      newMet[metKey] = { ...newMet[metKey], score: calibrated, calibrated: true };
-    }
-    if (newMet[metKey]?.score !== undefined) { totalScore += newMet[metKey].score; count++; }
-  });
-  const calibScore = count ? Math.round(totalScore / count) : result.score;
-  const finalScore = Math.round(result.score * 0.4 + calibScore * 0.6);
-  return { ...result, score: finalScore, metrics: newMet };
 }
 
 // ── Canvas drawing ─────────────────────────────────────────────────
