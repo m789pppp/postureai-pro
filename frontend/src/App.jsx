@@ -2322,7 +2322,7 @@ export default function App(){
             // Apply personal calibration if available
             let finalResult = result;
             if(calibData?.tolerances) {
-              const adjMets = applyCalibration(result.metrics, calibData);
+              const adjMets = applyCalibration(result.metrics, calibData, mode === "side" ? "side" : "front");
               const vals = Object.values(adjMets).map(m=>m.score||0);
               const calibScore = Math.round(vals.reduce((a,b)=>a+b,0)/Math.max(vals.length,1));
               finalResult = {...result, overall: Math.round(result.overall*.4 + calibScore*.6), metrics: adjMets};
@@ -3721,6 +3721,48 @@ export default function App(){
                 borderTop:"1px solid rgba(255,255,255,.06)"}}>
                 <div style={{fontSize:9,color:analysis.pain_bar.color,fontWeight:700}}>
                   {isAr ? analysis.pain_bar.label_ar : analysis.pain_bar.label}
+                </div>
+              </div>
+            )}
+
+            {/* Session baseline comparison — "better/worse than your first sessions" */}
+            {(()=>{
+              const sess = userSessions;
+              if(sess.length < 4) return null;
+              const firstAvg = Math.round(sess.slice(0,3).reduce((a,s)=>a+(s.avg_score||0),0)/3);
+              const lastAvg  = Math.round(sess.slice(-3).reduce((a,s)=>a+(s.avg_score||0),0)/3);
+              const diff = lastAvg - firstAvg;
+              if(Math.abs(diff) < 2) return null; // noise threshold
+              const up = diff > 0;
+              return (
+                <div style={{
+                  marginTop:8, paddingTop:8,
+                  borderTop:"1px solid rgba(255,255,255,.06)",
+                  display:"flex", alignItems:"center", gap:5,
+                }}>
+                  <span style={{fontSize:13}}>{up?"📈":"📉"}</span>
+                  <div style={{fontSize:9, lineHeight:1.35,
+                    color: up ? "#10d9a0" : "#f59e0b", fontWeight:600}}>
+                    {isAr
+                      ? `${up?"أحسن":"أسوأ"} بـ ${Math.abs(diff)} نقطة من أول جلساتك`
+                      : `${Math.abs(diff)} pts ${up?"better":"worse"} than your first sessions`}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Limited accuracy badge — shown when backend used Haar fallback instead of MediaPipe */}
+            {analysis?.limited_accuracy && (
+              <div style={{
+                marginTop:8, paddingTop:8,
+                borderTop:"1px solid rgba(255,255,255,.06)",
+                display:"flex", alignItems:"center", gap:5,
+              }}>
+                <span style={{fontSize:11}}>⚠️</span>
+                <div style={{fontSize:9, color:"#f59e0b", fontWeight:600, lineHeight:1.3}}>
+                  {isAr
+                    ? "دقة محدودة — تحسين الإضاءة"
+                    : "Limited accuracy — improve lighting"}
                 </div>
               </div>
             )}

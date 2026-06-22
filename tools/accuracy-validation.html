@@ -394,7 +394,7 @@ function renderStats(){
     const max=Math.round(Math.max(...errs)*100)/100;
     const row=document.createElement('div');
     row.className='stat-row';
-    row.innerHTML=`<span>${METRIC_LABELS[k]} (n=${errs.length})</span><b>MAE ${mae}${METRIC_UNITS[k]} · max ${max}${METRIC_UNITS[k]}</b>`;
+    row.innerHTML=`<span>${METRIC_LABELS[k]} (عدد القراءات: ${errs.length})</span><b>متوسط الخطأ: ${mae}${METRIC_UNITS[k]} · أقصى خطأ: ${max}${METRIC_UNITS[k]}</b>`;
     statsBox.appendChild(row);
   });
 }
