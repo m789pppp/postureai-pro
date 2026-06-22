@@ -164,6 +164,34 @@ _TIER_ALIASES = {
 def _normalize_tier(raw_tier: str) -> str:
     return _TIER_ALIASES.get(raw_tier, raw_tier)
 
+# ── Domain-based elite auto-elevation ─────────────────────────────
+# Users whose email matches any of these domains are granted elite tier
+# automatically on every auth check, server-side only — no client exposure.
+# Add/remove domains here to manage institutional access.
+# The domain check happens AFTER the normal tier is resolved from Firestore,
+# so it overrides (elevates) whatever tier the user currently has stored.
+# Domains are matched as email suffixes: "@tkh.edu.eg" matches "tkh.edu.eg".
+ELITE_DOMAINS: list[str] = [
+    "tkh.edu.eg",          # The Knowledge Hub — institutional partner
+]
+
+# Specific email addresses that also get elite access (for individual
+# accounts that don't share a domain with a partner institution).
+ELITE_EMAILS: list[str] = [
+    # add individual emails here if needed
+]
+
+def _should_elevate_to_elite(email: str) -> bool:
+    """True if this email qualifies for automatic elite access."""
+    if not email:
+        return False
+    email_lower = email.strip().lower()
+    if email_lower in [e.lower() for e in ELITE_EMAILS]:
+        return True
+    domain = email_lower.split("@")[-1] if "@" in email_lower else ""
+    return any(domain == d.lower() or domain.endswith("." + d.lower()) for d in ELITE_DOMAINS)
+
+
 def _get_user_role(uid: str) -> dict:
     with _profile_lock:
         cached = _profile_cache.get(uid)
@@ -202,6 +230,17 @@ def _get_user_role(uid: str) -> dict:
                     "_exp":          time.time() + PROFILE_TTL,
                     "_uid":          uid,
                 }
+
+                # ── Domain / email auto-elevation ──────────────────────
+                # Elevate to elite if the user's email qualifies.
+                # Uses TIER_ORDER so we only ever go UP, never downgrade
+                # a user who already has elite from Firestore.
+                _email = role_data["email"]
+                if _should_elevate_to_elite(_email):
+                    current_level = TIER_ORDER.get(role_data["tier"], 0)
+                    if current_level < TIER_ORDER.get("elite", 2):
+                        role_data["tier"]     = "elite"
+                        role_data["is_trial"] = False   # not a trial, it's institutional
         except Exception as e:
             print(f"[auth] Firestore role fetch error for {uid}: {e}", file=sys.stderr)
 
