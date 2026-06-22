@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Corvus — اختبار دقة الموديل (Accuracy Validation)</title>
+<title>Corvus — Accuracy Validation / اختبار دقة الموديل</title>
 <style>
   :root{
     --bg:#0b0f17; --panel:#131a26; --panel2:#1a2332; --line:#243042;
@@ -36,6 +36,9 @@
   button.secondary{background:var(--panel2);color:var(--txt);border:1px solid var(--line);}
   button.danger{background:var(--bad);}
   button:disabled{opacity:.5;cursor:not-allowed;}
+  #langBtn{position:fixed;top:14px;left:14px;padding:7px 14px;font-size:13px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;z-index:999;}
+  html[dir="ltr"] #langBtn{left:auto;right:14px;}
   .live-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
   .metric-card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
   .metric-card .lbl{font-size:11px;color:var(--sub);}
@@ -49,6 +52,7 @@
   }
   table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;}
   th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);}
+  html[dir="ltr"] th, html[dir="ltr"] td{text-align:left;}
   th{color:var(--sub);font-weight:600;}
   .stats{margin-top:14px;}
   .stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;}
@@ -62,8 +66,10 @@
 </head>
 <body>
 
-<h1>🎯 Corvus — اختبار دقة الموديل الحقيقي</h1>
-<div class="sub">نفس موديل MediaPipe (full + GPU) ونفس معادلات الزوايا المستخدمة في الإنتاج بالظبط — أداة داخلية، مش جزء من الموقع المنشور.</div>
+<button id="langBtn">EN / عربي</button>
+
+<h1 id="t-title">🎯 Corvus — اختبار دقة الموديل الحقيقي</h1>
+<div class="sub" id="t-sub">نفس موديل MediaPipe (full + GPU) ونفس معادلات الزوايا المستخدمة في الإنتاج بالظبط — أداة داخلية، مش جزء من الموقع المنشور.</div>
 
 <div class="layout">
 
@@ -73,13 +79,12 @@
       <div class="video-wrap">
         <video id="vid" autoplay playsinline muted></video>
         <canvas id="ov"></canvas>
-        <div id="status" class="status loading">جاري تحميل الموديل…</div>
+        <div id="status" class="status loading" data-ar="جاري تحميل الموديل…" data-en="Loading model…">جاري تحميل الموديل…</div>
       </div>
       <div class="controls">
-        <button id="startBtn">ابدأ الكاميرا</button>
-        <button id="stopBtn" class="secondary" disabled>وقف</button>
+        <button id="startBtn" data-ar="ابدأ الكاميرا" data-en="Start Camera">ابدأ الكاميرا</button>
+        <button id="stopBtn" class="secondary" disabled data-ar="وقف" data-en="Stop">وقف</button>
       </div>
-
       <div class="live-grid" id="liveGrid"></div>
     </div>
   </div>
@@ -87,41 +92,40 @@
   <!-- RIGHT: Logging + stats -->
   <div>
     <div class="panel">
-      <h3 style="margin-top:0;">📏 سجّل قراءة بزاوية/مسافة معروفة</h3>
-      <label>الـ Metric</label>
-      <select id="metricSel">
-        <option value="neck_lean">ميل الرقبة (neck_lean) — °</option>
-        <option value="head_tilt">إمالة الراس (head_tilt) — °</option>
-        <option value="shoulder_level">استواء الكتف (shoulder_level) — °</option>
-        <option value="spine_lean">ميل العمود (spine_lean) — °</option>
-        <option value="head_yaw">لفّ الراس (head_yaw) — °</option>
-        <option value="screen_distance">المسافة من الشاشة (screen_distance) — cm</option>
-      </select>
-      <label>القيمة الحقيقية المعروفة الآن (هتقيسها بنفسك: بروتراكتور/تطبيق مستوى/شريط قياس)</label>
-      <input type="number" id="knownVal" step="0.1" placeholder="مثال: 15">
-      <button id="logBtn" style="width:100%;" disabled>سجّل القراءة الآن</button>
-      <div class="instructions" style="margin-top:14px;">
+      <h3 style="margin-top:0;" id="t-log-title">📏 سجّل قراءة بزاوية/مسافة معروفة</h3>
+      <label id="t-metric-label">الـ Metric</label>
+      <select id="metricSel"></select>
+      <label id="t-val-label">القيمة الحقيقية المعروفة الآن (هتقيسها بنفسك: بروتراكتور/تطبيق مستوى/شريط قياس)</label>
+      <input type="number" id="knownVal" step="0.1" placeholder="15">
+      <button id="logBtn" style="width:100%;" disabled data-ar="سجّل القراءة الآن" data-en="Log Reading Now">سجّل القراءة الآن</button>
+      <div class="instructions" style="margin-top:14px;" id="t-instructions">
         <b>طريقة الاستخدام الصح:</b><br>
-        1) اقعد ثابت في الوضع اللي عايز تقيسه (مثلاً: ميل رقبة 15° بالظبط — استخدم تطبيق "Bubble Level/Protractor" على الموبايل أو زاوية ورقة مقاس فعلي).<br>
+        1) اقعد ثابت في الوضع اللي عايز تقيسه — استخدم تطبيق "Bubble Level" أو زاوية مقاس فعلي.<br>
         2) استنى 2-3 ثواني عشان الـ smoothing يثبت على رقم مستقر.<br>
-        3) اختار الـ metric، اكتب الرقم الحقيقي، دوس "سجّل القراءة الآن".<br>
+        3) اختار الـ metric، اكتب الرقم الحقيقي، دوس "سجّل".<br>
         4) كرر لكذا زاوية مختلفة (مثلاً 0°, 10°, 20°, 30°) لكل metric.<br>
-        5) في الآخر هتلاقي تحت متوسط الخطأ (MAE) الحقيقي لكل metric — ده الرقم اللي تقدر تستخدمه فعليًا.
+        5) في الآخر هتلاقي متوسط الخطأ (MAE) الحقيقي لكل metric — ده الرقم الدقيق.
       </div>
     </div>
 
     <div class="panel" style="margin-top:16px;">
-      <h3 style="margin-top:0;">📊 النتائج المسجلة</h3>
+      <h3 style="margin-top:0;" id="t-results-title">📊 النتائج المسجلة</h3>
       <div class="scroll">
         <table id="logTable">
-          <thead><tr><th>الوقت</th><th>Metric</th><th>حقيقي</th><th>مقاس</th><th>خطأ</th></tr></thead>
+          <thead><tr>
+            <th id="t-col-time">الوقت</th>
+            <th id="t-col-metric">Metric</th>
+            <th id="t-col-known">حقيقي</th>
+            <th id="t-col-meas">مقاس</th>
+            <th id="t-col-err">خطأ</th>
+          </tr></thead>
           <tbody></tbody>
         </table>
       </div>
       <div class="stats" id="statsBox"></div>
       <div class="controls">
-        <button id="exportBtn" class="secondary">تصدير CSV</button>
-        <button id="clearBtn" class="danger">مسح الكل</button>
+        <button id="exportBtn" class="secondary" data-ar="تصدير CSV" data-en="Export CSV">تصدير CSV</button>
+        <button id="clearBtn" class="danger" data-ar="مسح الكل" data-en="Clear All">مسح الكل</button>
       </div>
     </div>
   </div>
@@ -129,6 +133,123 @@
 </div>
 
 <script type="module">
+// ── Bilingual translation system ──────────────────────────────
+const T = {
+  ar: {
+    title: "🎯 Corvus — اختبار دقة الموديل الحقيقي",
+    sub: "نفس موديل MediaPipe (full + GPU) ونفس معادلات الزوايا المستخدمة في الإنتاج — أداة داخلية.",
+    logTitle: "📏 سجّل قراءة بزاوية/مسافة معروفة",
+    metricLabel: "الـ Metric",
+    valLabel: "القيمة الحقيقية المعروفة (استخدم بروتراكتور أو تطبيق مستوى أو شريط قياس)",
+    instructions: `<b>طريقة الاستخدام:</b><br>
+      1) اقعد ثابت في الوضع اللي عايز تقيسه — استخدم تطبيق "Bubble Level" أو زاوية مقاس فعلي.<br>
+      2) استنى 2-3 ثواني عشان الـ smoothing يثبت على رقم مستقر.<br>
+      3) اختار الـ metric، اكتب الرقم الحقيقي، دوس "سجّل".<br>
+      4) كرر لكذا زاوية مختلفة (مثلاً 0°, 10°, 20°, 30°) لكل metric.<br>
+      5) في الآخر هتلاقي متوسط الخطأ (MAE) لكل metric — ده الرقم الحقيقي.`,
+    resultsTitle: "📊 النتائج المسجلة",
+    colTime: "الوقت", colMetric: "Metric", colKnown: "حقيقي", colMeas: "مقاس", colErr: "خطأ",
+    reliable: "موثوق", unreliable: "غير موثوق",
+    alertKnown: "اكتب القيمة الحقيقية الأول",
+    alertNoReading: "لسه مفيش قراءة حية لهذا الـ metric",
+    alertNoData: "مفيش بيانات لسه",
+    statsLabel: (name, n) => `${name} (عدد القراءات: ${n})`,
+    statsVal: (mae, max, unit) => `متوسط الخطأ: ${mae}${unit} · أقصى: ${max}${unit}`,
+    modelReady: "الموديل جاهز ✓",
+    modelLoading: "جاري تحميل الموديل…",
+    modelErr: (m) => "فشل تحميل الموديل: " + m,
+    metrics: {
+      neck_lean:      "ميل الرقبة",
+      head_tilt:      "إمالة الراس",
+      shoulder_level: "استواء الكتف",
+      spine_lean:     "ميل العمود",
+      head_yaw:       "لفّ الراس",
+      screen_distance:"المسافة (سم)",
+    },
+  },
+  en: {
+    title: "🎯 Corvus — Live Accuracy Validation",
+    sub: "Same MediaPipe full model + same angle equations used in production — internal tool, not part of the published site.",
+    logTitle: "📏 Log a reading at a known angle/distance",
+    metricLabel: "Metric",
+    valLabel: "True (ground-truth) value — measure with a protractor, level app, or tape measure",
+    instructions: `<b>How to use correctly:</b><br>
+      1) Hold a fixed posture at a known angle — use a phone level app or a physical protractor.<br>
+      2) Wait 2-3 seconds for the smoother to converge on a stable reading.<br>
+      3) Select the metric, enter the true value, click "Log Reading Now".<br>
+      4) Repeat for several angles (e.g. 0°, 10°, 20°, 30°) per metric.<br>
+      5) The table below will show the real Mean Absolute Error (MAE) per metric — the number you can quote.`,
+    resultsTitle: "📊 Logged Readings",
+    colTime: "Time", colMetric: "Metric", colKnown: "True", colMeas: "Measured", colErr: "Error",
+    reliable: "reliable", unreliable: "low confidence",
+    alertKnown: "Enter the true value first",
+    alertNoReading: "No live reading for this metric yet",
+    alertNoData: "No data logged yet",
+    statsLabel: (name, n) => `${name} (${n} readings)`,
+    statsVal: (mae, max, unit) => `MAE: ${mae}${unit} · Max error: ${max}${unit}`,
+    modelReady: "Model ready ✓",
+    modelLoading: "Loading model…",
+    modelErr: (m) => "Model load failed: " + m,
+    metrics: {
+      neck_lean:      "Neck lean",
+      head_tilt:      "Head tilt",
+      shoulder_level: "Shoulder level",
+      spine_lean:     "Spine lean",
+      head_yaw:       "Head yaw",
+      screen_distance:"Screen distance",
+    },
+  },
+};
+
+let lang = "ar";
+
+function applyLang() {
+  const t = T[lang];
+  const html = document.documentElement;
+  html.lang = lang; html.dir = lang === "ar" ? "rtl" : "ltr";
+
+  document.getElementById("t-title").textContent = t.title;
+  document.getElementById("t-sub").textContent = t.sub;
+  document.getElementById("t-log-title").textContent = t.logTitle;
+  document.getElementById("t-metric-label").textContent = t.metricLabel;
+  document.getElementById("t-val-label").textContent = t.valLabel;
+  document.getElementById("t-instructions").innerHTML = t.instructions;
+  document.getElementById("t-results-title").textContent = t.resultsTitle;
+  document.getElementById("t-col-time").textContent = t.colTime;
+  document.getElementById("t-col-metric").textContent = t.colMetric;
+  document.getElementById("t-col-known").textContent = t.colKnown;
+  document.getElementById("t-col-meas").textContent = t.colMeas;
+  document.getElementById("t-col-err").textContent = t.colErr;
+
+  // Translate buttons with data-ar/data-en attributes
+  document.querySelectorAll("[data-ar]").forEach(el => {
+    el.textContent = el.dataset[lang] || el.textContent;
+  });
+
+  // Rebuild metric select in correct language
+  const sel = document.getElementById("metricSel");
+  const prev = sel.value;
+  sel.innerHTML = "";
+  const UNITS = { neck_lean:"°", head_tilt:"°", shoulder_level:"°", spine_lean:"°", head_yaw:"°", screen_distance:"cm" };
+  Object.entries(t.metrics).forEach(([k, label]) => {
+    const o = document.createElement("option");
+    o.value = k; o.textContent = `${label} — ${UNITS[k]}`;
+    sel.appendChild(o);
+  });
+  if (prev) sel.value = prev;
+
+  // Rebuild live metric cards
+  buildMetricCards();
+
+  // Re-render logs in new language
+  renderLogs();
+}
+
+document.getElementById("langBtn").addEventListener("click", () => {
+  lang = lang === "ar" ? "en" : "ar";
+  applyLang();
+});
+
 // ── Same landmark indices/math as frontend/src/features/analysis/postureEngine.js ──
 const PL = {
   NOSE:0, L_EYE:2, R_EYE:5, L_EAR:7, R_EAR:8,
@@ -273,10 +394,6 @@ function analyzeFrame(lms,W,H){
 }
 
 // ── App wiring ──────────────────────────────────────────────────
-const METRIC_LABELS={
-  neck_lean:"ميل الرقبة", head_tilt:"إمالة الراس", shoulder_level:"استواء الكتف",
-  spine_lean:"ميل العمود", head_yaw:"لفّ الراس", screen_distance:"المسافة (سم)",
-};
 const METRIC_UNITS={
   neck_lean:"°",head_tilt:"°",shoulder_level:"°",spine_lean:"°",head_yaw:"°",screen_distance:"cm",
 };
@@ -297,14 +414,18 @@ let pose=null, smoother=createLandmarkSmoother(0.4), rafId=null, stream=null;
 let latest={};
 let logs=[];
 
-Object.keys(METRIC_LABELS).forEach(k=>{
-  const card=document.createElement('div');
-  card.className='metric-card';
-  card.innerHTML=`<div class="lbl">${METRIC_LABELS[k]}</div><div class="val" id="val_${k}">—</div><div class="rel" id="rel_${k}"></div>`;
-  liveGrid.appendChild(card);
-});
+function buildMetricCards(){
+  liveGrid.innerHTML='';
+  Object.entries(T[lang].metrics).forEach(([k,label])=>{
+    const card=document.createElement('div');
+    card.className='metric-card';
+    card.innerHTML=`<div class="lbl">${label}</div><div class="val" id="val_${k}">—</div><div class="rel" id="rel_${k}"></div>`;
+    liveGrid.appendChild(card);
+  });
+}
 
 async function loadModel(){
+  statusEl.textContent=T[lang].modelLoading;
   try{
     const mod=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
     const fr=await mod.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
@@ -315,11 +436,11 @@ async function loadModel(){
     }catch(e){
       pose=await mod.PoseLandmarker.createFromOptions(fr,{baseOptions:{modelAssetPath:MODEL,delegate:"CPU"},...opts});
     }
-    statusEl.textContent="الموديل جاهز ✓";
+    statusEl.textContent=T[lang].modelReady;
     statusEl.className="status ready";
     startBtn.disabled=false;
   }catch(e){
-    statusEl.textContent="فشل تحميل الموديل: "+e.message;
+    statusEl.textContent=T[lang].modelErr(e.message);
     statusEl.className="status err";
   }
 }
@@ -349,7 +470,6 @@ function loop(){
   if(det.landmarks?.length>0){
     const lms=smoother.smooth(det.landmarks[0]);
     latest=analyzeFrame(lms,W,H);
-    // draw simple skeleton dots
     ctx.fillStyle="#3aa0ff";
     [PL.NOSE,PL.L_EYE,PL.R_EYE,PL.L_EAR,PL.R_EAR,PL.L_SHOULDER,PL.R_SHOULDER,PL.L_HIP,PL.R_HIP].forEach(i=>{
       const p=lms[i]; ctx.beginPath(); ctx.arc(p.x*W,p.y*H,5,0,7); ctx.fill();
@@ -358,7 +478,10 @@ function loop(){
       const valEl=document.getElementById('val_'+k);
       const relEl=document.getElementById('rel_'+k);
       if(valEl) valEl.textContent=Math.round(m.value*10)/10+METRIC_UNITS[k];
-      if(relEl){ relEl.textContent=m.reliable?"موثوق":"غير موثوق"; relEl.className="rel "+(m.reliable?"ok":"bad"); }
+      if(relEl){
+        relEl.textContent=m.reliable?T[lang].reliable:T[lang].unreliable;
+        relEl.className="rel "+(m.reliable?"ok":"bad");
+      }
     });
   }
 }
@@ -366,11 +489,14 @@ function loop(){
 function logReading(){
   const metric=metricSel.value;
   const known=parseFloat(knownVal.value);
-  if(isNaN(known)){ alert("اكتب القيمة الحقيقية الأول"); return; }
-  if(!latest[metric]){ alert("لسه مفيش قراءة حية لهذا الـ metric"); return; }
+  if(isNaN(known)){ alert(T[lang].alertKnown); return; }
+  if(!latest[metric]){ alert(T[lang].alertNoReading); return; }
   const measured=Math.round(latest[metric].value*10)/10;
   const error=Math.round(Math.abs(measured-known)*10)/10;
-  const entry={time:new Date().toLocaleTimeString('ar-EG'), metric, known, measured, error};
+  const entry={
+    time: new Date().toLocaleTimeString(lang==="ar"?"ar-EG":"en-GB"),
+    metric, known, measured, error,
+  };
   logs.push(entry);
   renderLogs();
 }
@@ -379,7 +505,8 @@ function renderLogs(){
   logTableBody.innerHTML='';
   logs.slice().reverse().forEach(e=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${e.time}</td><td>${METRIC_LABELS[e.metric]}</td><td>${e.known}</td><td>${e.measured}</td><td>${e.error}</td>`;
+    const label=T[lang].metrics[e.metric]||e.metric;
+    tr.innerHTML=`<td>${e.time}</td><td>${label}</td><td>${e.known}</td><td>${e.measured}</td><td>${e.error}</td>`;
     logTableBody.appendChild(tr);
   });
   renderStats();
@@ -392,15 +519,17 @@ function renderStats(){
   Object.entries(byMetric).forEach(([k,errs])=>{
     const mae=Math.round((errs.reduce((a,b)=>a+b,0)/errs.length)*100)/100;
     const max=Math.round(Math.max(...errs)*100)/100;
+    const name=T[lang].metrics[k]||k;
+    const unit=METRIC_UNITS[k]||"";
     const row=document.createElement('div');
     row.className='stat-row';
-    row.innerHTML=`<span>${METRIC_LABELS[k]} (عدد القراءات: ${errs.length})</span><b>متوسط الخطأ: ${mae}${METRIC_UNITS[k]} · أقصى خطأ: ${max}${METRIC_UNITS[k]}</b>`;
+    row.innerHTML=`<span>${T[lang].statsLabel(name,errs.length)}</span><b>${T[lang].statsVal(mae,max,unit)}</b>`;
     statsBox.appendChild(row);
   });
 }
 
 function exportCSV(){
-  if(!logs.length){ alert("مفيش بيانات لسه"); return; }
+  if(!logs.length){ alert(T[lang].alertNoData); return; }
   const header="time,metric,known,measured,error\n";
   const rows=logs.map(e=>`${e.time},${e.metric},${e.known},${e.measured},${e.error}`).join("\n");
   const blob=new Blob([header+rows],{type:"text/csv"});
@@ -417,6 +546,7 @@ document.getElementById('exportBtn').addEventListener('click',exportCSV);
 document.getElementById('clearBtn').addEventListener('click',()=>{ logs=[]; renderLogs(); });
 
 startBtn.disabled=true;
+applyLang(); // build cards + metric select in default language (AR)
 loadModel();
 </script>
 </body>
