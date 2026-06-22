@@ -46,9 +46,14 @@ export function angle3pt(a, b, c) {
 // Any change here MUST be mirrored in backend.py score_m()
 export function scoreMetric(v, ideal, ok, bad) {
   const d = Math.abs(v - ideal);
-  if (d <= ok)  return Math.max(0, Math.round(100 - (d / Math.max(ok, 0.1)) * 25));
-  if (d <= bad) return Math.max(0, Math.round(75  - ((d - ok) / Math.max(bad - ok, 0.1)) * 45));
-  return Math.max(0, Math.round(30 - (d - bad) * 1.8));
+  if (d <= ok)  return Math.max(0, Math.trunc(100 - (d / Math.max(ok, 0.1)) * 25));
+  if (d <= bad) return Math.max(0, Math.trunc(75  - ((d - ok) / Math.max(bad - ok, 0.1)) * 45));
+  // Beyond bad: quadratic decay → floor 5 (mirrors backend score_m exactly)
+  // Small extra deviations are forgiven; large ones hit 5 fast.
+  // MSK injury risk is non-linear — quadratic reflects that.
+  const excess = d - bad;
+  const decay  = Math.min(25, Math.pow(excess, 1.6) * 0.9);
+  return Math.max(5, Math.trunc(30 - decay));
 }
 
 // ── Grade helpers ─────────────────────────────────────────────────
