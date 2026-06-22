@@ -5,7 +5,7 @@ import {
   updateUserTier, saveSession, recordPayment, confirmPayment,
   rejectPayment, listenToPayment, getAllPayments, getAllUsers,
   isHREmail, isCompanyDomain, isAutoApproveEmail,
-  SUPPORT_EMAIL, PAYMOB_IFRAME_ID,
+  SUPPORT_EMAIL, ADMIN_PHONE, PAYMOB_IFRAME_ID,
   AUTO_APPROVE_DOMAIN, serverTimestamp,
   notifyPaymentPending, notifyPaymentConfirmed,
   getCompany, createCompany, getUserSessions, onUserSessions, updateUserProfile,
@@ -28,7 +28,7 @@ import { OnboardingWizard } from "./OnboardingWizard.jsx";
 import { GamificationPanel } from "./Gamification.jsx";
 import { BillingModal, PLANS } from "./Billing.jsx";
 import { BillingDashboard } from "./BillingDashboard.jsx";
-import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI } from "./services/api.js";
+import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, apiFetch } from "./services/api.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother } from "./features/analysis/postureEngine.js";
@@ -1378,6 +1378,11 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
 }
 
 // ── Pricing Page — Automatic PayMob only ─────────────────────────
+// ⚠️ DEAD CODE — this component is defined but never rendered anywhere in
+// this file (no <Pricing .../> usage exists). The actual pricing UI used in
+// production is PricingPage.jsx (a separate file), reached via page==="pricing".
+// Kept here rather than deleted in case it's intentionally staged for a future
+// flow — but do not assume changes here affect what users see today.
 function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,addToast,lang}){
   const isAr=lang==="ar";
   const[selTier,setSelTier]=useState(initialPlan||"professional");
@@ -1559,8 +1564,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
           {Object.values(TIERS).map(tt=>{
             const sel=selTier===tt.id;
             const mp=billing==="monthly"?tt.price_monthly:tt.price_yearly;
-            const addOn=seatsExtra*(billing==="monthly"?5:50);
-            const total=mp?Math.round((mp+addOn)*(1-disc/100)):null;
+            const total=mp?Math.round(mp*(1-disc/100)):null;
             return <div key={tt.id} onClick={()=>setSelTier(tt.id)}
               style={{background:sel?tt.colorDim:cs.card,border:`${sel?"1.5":"0.5"}px solid ${sel?tt.color+"60":cs.border}`,
                 borderRadius:14,padding:"18px 16px",cursor:"pointer",position:"relative",transition:"all .2s",
@@ -1582,24 +1586,18 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
           })}
         </div>
 
-        {/* Per-seat slider */}
-        <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:12,padding:"16px 18px",marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexDirection:isAr?"row-reverse":"row"}}>
-            <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{isAr?"عدد الموظفين":"Number of employees"}</div>
-            <div style={{fontSize:16,fontWeight:700,color:cs.blue}}>{seats} {isAr?"موظف":"seats"}</div>
+        {/* Seat info — flat-rate pricing, no per-seat addon. Each tier has a
+            fixed employee cap (see tier.seats) included in the base price. */}
+        <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:12,padding:"14px 18px",marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexDirection:isAr?"row-reverse":"row"}}>
+            <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{isAr?"الموظفون المشمولون":"Employees included"}</div>
+            <div style={{fontSize:14,fontWeight:700,color:cs.blue}}>
+              {tier.seats<0?(isAr?"غير محدود":"Unlimited"):`${isAr?"حتى":"Up to"} ${tier.seats}`}
+            </div>
           </div>
-          <input type="range" min={5} max={500} step={5} value={seats}
-            onChange={e=>setSeats(Number(e.target.value))}
-            style={{width:"100%",accentColor:cs.blue}}/>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:cs.muted,marginTop:4}}>
-            <span>5</span>
-            <span style={{color:"#10b981",fontSize:10}}>{isAr?"أول 25 موظف مشمولين في السعر":"First 25 included in base price"}</span>
-            <span>500</span>
+          <div style={{fontSize:10,color:cs.muted,marginTop:4}}>
+            {isAr?"السعر ثابت للباقة بالكامل — بدون رسوم إضافية للمقعد":"Flat price for the whole plan — no per-seat fees"}
           </div>
-          {seatsExtra>0&&<div style={{marginTop:8,fontSize:10,color:cs.muted,background:"rgba(99,102,241,.06)",borderRadius:8,padding:"6px 10px"}}>
-            {isAr?`${seatsExtra} موظف إضافي × ${billing==="monthly"?5:50} EGP = +${seatAddon.toLocaleString()} EGP`
-              :`${seatsExtra} extra seats × ${billing==="monthly"?5:50} EGP = +${seatAddon.toLocaleString()} EGP`}
-          </div>}
         </div>
 
         {/* Coupon */}
@@ -1625,7 +1623,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
         {/* Price summary */}
         {price&&<div style={{background:"rgba(99,102,241,.06)",border:"0.5px solid rgba(99,102,241,.2)",borderRadius:11,padding:"14px 16px",marginBottom:20}}>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:cs.muted,marginBottom:4,flexDirection:isAr?"row-reverse":"row"}}>
-            <span>{tier.name} ({billing}){seats>25?` + ${seatsExtra} extra seats`:""}</span>
+            <span>{tier.name} ({billing})</span>
             <span>{subtotal?.toLocaleString()} EGP</span>
           </div>
           {disc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#10b981",marginBottom:4,flexDirection:isAr?"row-reverse":"row"}}>
@@ -1651,7 +1649,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
       {/* Step: payment method */}
       {step==="method"&&<>
         <div style={{marginBottom:20,fontSize:13,color:cs.muted,textAlign:"center"}}>
-          {tier.name} · {price?.toLocaleString()} EGP/{billing==="monthly"?isAr?"شهر":"mo":isAr?"سنة":"yr"} · {seats} {isAr?"موظف":"seats"}
+          {tier.name} · {price?.toLocaleString()} EGP/{billing==="monthly"?isAr?"شهر":"mo":isAr?"سنة":"yr"} · {tier.seats<0?(isAr?"موظفون غير محدودون":"unlimited employees"):`${isAr?"حتى":"up to"} ${tier.seats} ${isAr?"موظف":"employees"}`}
           <button onClick={()=>setStep("plan")} style={{background:"none",border:"none",color:cs.blue,cursor:"pointer",fontSize:11,marginInlineStart:8}}>{isAr?"تغيير":"Change"}</button>
         </div>
 
@@ -1883,7 +1881,7 @@ export default function App(){
   const[tier,setTier]=useState(null);
   const[acctType,setAcctType]=useState(profile?.acct_type||null);
   // Sync acctType when profile loads (e.g. after Google login)
-  useEffect(()=>{ if(profile?.acct_type&&!acctType) setAcctType(profile.acct_type); },[profile?.acct_type]);; // "company" | "personal"
+  useEffect(()=>{ if(profile?.acct_type&&!acctType) setAcctType(profile.acct_type); },[profile?.acct_type,acctType]); // "company" | "personal"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
@@ -1988,6 +1986,15 @@ export default function App(){
   const[showSecurityCenter,setShowSecurityCenter]=useState(false);
   const[showFeatureFlags,setShowFeatureFlags]=useState(false);
   const[showOnboardingAnalytics,setShowOnboardingAnalytics]=useState(false);
+  const[authToken,setAuthToken]=useState(null);
+  // Lazily fetch the Firebase ID token only when the admin-only Onboarding
+  // Analytics panel is actually opened — avoids an unnecessary token refresh
+  // on every render for a panel most users never see.
+  useEffect(()=>{
+    if(showOnboardingAnalytics&&!authToken){
+      import("./services/api.js").then(({getAuthToken})=>getAuthToken().then(setAuthToken));
+    }
+  },[showOnboardingAnalytics,authToken]);
   const[showLegalCompliance,setShowLegalCompliance]=useState(false);
   const[showAccountActivity,setShowAccountActivity]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
@@ -2781,7 +2788,7 @@ export default function App(){
         onAuth={(u,isNew)=>{
           setUser(u);
           getUserProfile(u.uid).then(p=>{
-            if(p){setProfile(p);if(p.tier&&p.tier!=="standard")setTier(p.tier);if(p.company_id)setCompanyId(p.company_id);}
+            if(p){setProfile(p);if(p.tier&&p.tier!=="standard")setTier(normalizeTier(p.tier));if(p.company_id)setCompanyId(p.company_id);}
             getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
           }).catch(()=>{});
           if(isNew) { setPage("setup"); return; }
@@ -2842,7 +2849,17 @@ export default function App(){
         cs={cs} lang={lang} isAr={isAr} dir={dir}
         profile={profile} darkMode={darkMode}
         onBack={()=>setPage("home")}
-        onSelectPlan={(planId,billing)=>{setTier(planId);setShowBilling(true);setPage("home");}}
+        onSelectPlan={(planId,billing)=>{
+          // SECURITY/CORRECTNESS: do NOT setTier() here. Selecting a plan on the
+          // pricing page must only open the payment flow — the tier is committed
+          // to state only inside BillingModal's onSuccess callback, which fires
+          // after a real payment actually completes. Setting it here would let a
+          // user's UI show "Growth" access immediately, with zero payment made,
+          // until the next profile refresh silently reverted it (a confusing and
+          // exploitable race condition).
+          setShowBilling(true);
+          setPage("home");
+        }}
       />
     </ErrorBoundary>
   );
@@ -3179,7 +3196,7 @@ export default function App(){
                 <button key={n} onClick={async()=>{
                   try {
                     await apiFetch("/nps/submit",{method:"POST",body:{score:n,uid:profile?.uid}});
-                    await updateProfile(profile?.uid,{last_nps_at:new Date().toISOString()});
+                    await updateUserProfile(profile?.uid,{last_nps_at:new Date().toISOString()});
                   } catch(_) {}
                   setShowNPS(false);
                   if(n>=9) toast(lang==="ar"?"شكراً! 🎉":"Thank you! 🎉","success");
