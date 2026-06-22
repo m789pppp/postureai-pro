@@ -168,12 +168,18 @@ def push_score(uid: str, score: int):
     rpush(f"scores:{uid}", str(score), max_len=10)
 
 def get_smoothed_score(uid: str) -> Optional[float]:
-    """Get exponentially smoothed score from buffer."""
-    scores = [int(s) for s in rlist(f"scores:{uid}", 10) if s.isdigit()]
+    """Get exponentially smoothed score from buffer (oldest → newest, recent=higher weight)."""
+    raw = rlist(f"scores:{uid}", 10)
+    scores = [int(s) for s in raw if isinstance(s, (str, bytes)) and str(s).strip().isdigit()]
     if not scores: return None
-    alpha = 0.35
-    smoothed = scores[-1]
-    for s in reversed(scores[:-1]):
+    # Walk oldest → newest: each new reading gets weight alpha, history (1-alpha).
+    # Previously the loop walked newest → oldest (reversed), which gave the oldest
+    # reading the highest weight — so a single stale bad frame could anchor the
+    # smoothed score low for many subsequent good frames.
+    alpha = 0.5  # heavier weight on recent frames; buffer is only 10 samples so
+                 # 0.35 was too slow to recover from a single outlier frame.
+    smoothed = float(scores[0])
+    for s in scores[1:]:
         smoothed = alpha * s + (1 - alpha) * smoothed
     return round(smoothed, 1)
 
