@@ -347,7 +347,7 @@ function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTil
   const insights = [];
 
   // ── #4 Micro-posture creep: slow drift vs the session's first ~2 min ──
-  if(neckReliable && neckLeanVal!=null){
+  if(neckReliable && Number.isFinite(neckLeanVal)){
     const b = tr.neck;
     const minuteIdx = Math.floor((now - tr.sessionStart)/60000);
     if(minuteIdx !== b.curMinute){
@@ -371,7 +371,7 @@ function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTil
   }
 
   // ── #5 Chronic asymmetry: consistent SAME-direction shoulder tilt over the session ──
-  if(shReliable && shTiltSigned!=null){
+  if(shReliable && Number.isFinite(shTiltSigned)){
     const b = tr.shAsym;
     const minuteIdx = Math.floor((now - tr.sessionStart)/60000);
     if(minuteIdx !== b.curMinute){
@@ -400,7 +400,7 @@ function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTil
   // but noisy technique (typing/fidgeting easily swamps it). Kept
   // intentionally conservative: long window, plausible-range filter,
   // long cooldown, and the surfaced text says "experimental" outright.
-  if(midShY!=null){
+  if(Number.isFinite(midShY)){
     const br = tr.breath;
     if(now - br.lastPush > 150){ // downsample to ~6-7 samples/sec
       br.lastPush = now;
