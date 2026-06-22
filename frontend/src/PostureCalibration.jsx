@@ -31,7 +31,21 @@ const angleH_signed = (p1, p2) => {
 
 const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
-const LM = { L_EYE:2, R_EYE:5, L_EAR:7, R_EAR:8, L_SHOULDER:11, R_SHOULDER:12, L_HIP:23, R_HIP:24 };
+// Nose+ear blended reference point for neck_lean — MUST exactly match
+// the formula in postureEngine.js's analyzeMP(). Without this, the
+// calibration baseline ("ideal" neck angle) is measured one way while
+// the live engine measures neck_lean a different way, and the two
+// never line up even when sitting in the exact calibrated posture.
+function neckRefPoint(nose, midEar, noseVis) {
+  const earWeight  = (noseVis ?? 1) > 0.7 ? 0.15 : 0.50;
+  const noseWeight = 1 - earWeight;
+  return {
+    point: { x: nose.x * noseWeight + midEar.x * earWeight, y: nose.y * noseWeight + midEar.y * earWeight },
+    correction: 5.0 * noseWeight,
+  };
+}
+
+const LM = { NOSE:0, L_EYE:2, R_EYE:5, L_EAR:7, R_EAR:8, L_SHOULDER:11, R_SHOULDER:12, L_HIP:23, R_HIP:24 };
 
 // ── CalibrationWizard ─────────────────────────────────────────────
 export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
@@ -234,15 +248,17 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       const lEar = lms[LM.L_EAR],    rEar = lms[LM.R_EAR];
       const lEye = lms[LM.L_EYE],    rEye = lms[LM.R_EYE];
       const lHip = lms[23],           rHip = lms[24];
+      const nose = lms[LM.NOSE];
       const midSh  = { x: (lSh.x + rSh.x) / 2,   y: (lSh.y + rSh.y) / 2 };
       const midEar = { x: (lEar.x + rEar.x) / 2,  y: (lEar.y + rEar.y) / 2 };
       const midHip = { x: (lHip.x + rHip.x) / 2,  y: (lHip.y + rHip.y) / 2 };
-      neckAngles.push(angleV(midSh, midEar));
+      const { point: neckRef, correction: neckCorr } = neckRefPoint(nose, midEar, nose?.visibility);
+      neckAngles.push(Math.max(0, angleV(midSh, neckRef) - neckCorr));
       headTilts.push(angleH(lEye, rEye));
       shoulderTilts.push(angleH(lSh, rSh));
       spineAngles.push(angleV(midHip, midSh));
       // Signed for asymmetric offset detection
-      neckAngles_s.push(angleV_signed(midSh, midEar));
+      neckAngles_s.push(angleV_signed(midSh, neckRef));
       headTilts_s.push(angleH_signed(lEye, rEye));
       shoulderTilts_s.push(angleH_signed(lSh, rSh));
       spineAngles_s.push(angleV_signed(midHip, midSh));
