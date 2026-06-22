@@ -31,7 +31,21 @@ const angleH_signed = (p1, p2) => {
 
 const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
-const LM = { L_EYE:2, R_EYE:5, L_EAR:7, R_EAR:8, L_SHOULDER:11, R_SHOULDER:12, L_HIP:23, R_HIP:24 };
+// Nose+ear blended reference point for neck_lean — MUST exactly match
+// the formula in postureEngine.js's analyzeMP(). Without this, the
+// calibration baseline ("ideal" neck angle) is measured one way while
+// the live engine measures neck_lean a different way, and the two
+// never line up even when sitting in the exact calibrated posture.
+function neckRefPoint(nose, midEar, noseVis) {
+  const earWeight  = (noseVis ?? 1) > 0.7 ? 0.15 : 0.50;
+  const noseWeight = 1 - earWeight;
+  return {
+    point: { x: nose.x * noseWeight + midEar.x * earWeight, y: nose.y * noseWeight + midEar.y * earWeight },
+    correction: 5.0 * noseWeight,
+  };
+}
+
+const LM = { NOSE:0, L_EYE:2, R_EYE:5, L_EAR:7, R_EAR:8, L_SHOULDER:11, R_SHOULDER:12, L_HIP:23, R_HIP:24 };
 
 // ── CalibrationWizard ─────────────────────────────────────────────
 export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
@@ -42,6 +56,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
   const [stream, setStream]       = useState(null);
   const [error, setError]         = useState("");
   const [result, setResult]       = useState(null);
+  const [knownDistanceCm, setKnownDistanceCm] = useState("");
 
   const videoRef  = useRef(null);
   const canvasRef = useRef(null);
@@ -71,6 +86,11 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       spineLabel:   "Spine baseline",
       err_cam:  "Camera access denied. Please allow camera and reload.",
       err_pose: "Could not detect pose. Make sure you're visible in the frame.",
+      distLabel: "Distance from screen right now (cm)",
+      distHint:  "Measure with a ruler/tape for best accuracy — improves distance accuracy from ±15cm to ±3cm",
+      distPlaceholder: "e.g. 55",
+      distErr: "Enter your current distance from the screen to continue",
+      distBadge: "Distance calibrated",
     },
     ar: {
       title:    "معايرة وضعية شخصية",
@@ -93,6 +113,11 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       spineLabel:   "العمود الفقري",
       err_cam:  "تم رفض الوصول للكاميرا. أعط الإذن وأعد التحميل.",
       err_pose: "تعذر رصد الوضعية. تأكد من ظهورك في الإطار.",
+      distLabel: "المسافة من الشاشة دلوقتي (سم)",
+      distHint:  "قيسها بشريط/مسطرة لأفضل دقة — بتحسّن دقة المسافة من ±15سم لـ ±3سم",
+      distPlaceholder: "مثال: 55",
+      distErr: "اكتب مسافتك الحالية من الشاشة عشان تكمل",
+      distBadge: "المسافة معايرة",
     },
   };
   const t = T[lang] || T.en;
@@ -217,23 +242,31 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     // Extract per-frame metrics
     const neckAngles = [], headTilts = [], shoulderTilts = [], spineAngles = [];
     const neckAngles_s = [], headTilts_s = [], shoulderTilts_s = [], spineAngles_s = []; // signed
+    const ipdFracs = []; // for distance calibration
     collected.forEach(lms => {
       const lSh = lms[LM.L_SHOULDER], rSh = lms[LM.R_SHOULDER];
       const lEar = lms[LM.L_EAR],    rEar = lms[LM.R_EAR];
       const lEye = lms[LM.L_EYE],    rEye = lms[LM.R_EYE];
       const lHip = lms[23],           rHip = lms[24];
+      const nose = lms[LM.NOSE];
       const midSh  = { x: (lSh.x + rSh.x) / 2,   y: (lSh.y + rSh.y) / 2 };
       const midEar = { x: (lEar.x + rEar.x) / 2,  y: (lEar.y + rEar.y) / 2 };
       const midHip = { x: (lHip.x + rHip.x) / 2,  y: (lHip.y + rHip.y) / 2 };
-      neckAngles.push(angleV(midSh, midEar));
+      const { point: neckRef, correction: neckCorr } = neckRefPoint(nose, midEar, nose?.visibility);
+      neckAngles.push(Math.max(0, angleV(midSh, neckRef) - neckCorr));
       headTilts.push(angleH(lEye, rEye));
       shoulderTilts.push(angleH(lSh, rSh));
       spineAngles.push(angleV(midHip, midSh));
       // Signed for asymmetric offset detection
-      neckAngles_s.push(angleV_signed(midSh, midEar));
+      neckAngles_s.push(angleV_signed(midSh, neckRef));
       headTilts_s.push(angleH_signed(lEye, rEye));
       shoulderTilts_s.push(angleH_signed(lSh, rSh));
       spineAngles_s.push(angleV_signed(midHip, midSh));
+      // IPD as a fraction of frame width (these landmarks are already
+      // normalized 0-1, so no need to multiply by frame width here)
+      if ((lEye.visibility ?? 1) > 0.5 && (rEye.visibility ?? 1) > 0.5) {
+        ipdFracs.push(Math.abs(rEye.x - lEye.x));
+      }
     });
 
     // Compute personal baseline (with tolerance ±30% wider than default)
@@ -277,6 +310,17 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       asymmetric_correction: true,
     };
 
+    // Distance calibration: distCalibFactor = knownDistanceCm * ipdFraction.
+    // At runtime: distCm = distCalibFactor / currentIpdFraction. This
+    // absorbs both this user's actual IPD and this camera's actual FOV
+    // into one measured constant, instead of guessing population
+    // averages for both (±15cm → ±3cm typical error reduction).
+    const knownDist = parseFloat(knownDistanceCm);
+    if (knownDist > 0 && ipdFracs.length >= 5) {
+      calibData.distance_calibrated_cm = knownDist;
+      calibData.distCalibFactor = Math.round(knownDist * avg(ipdFracs) * 100000) / 100000;
+    }
+
     setResult(calibData);
     stopCamera();
     setStep("done");
@@ -287,7 +331,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     }
     // Also save to localStorage for offline use
     try { localStorage.setItem("posture_calibration", JSON.stringify(calibData)); } catch(e) {}
-  }, [uid, stopCamera, t.err_pose]);
+  }, [uid, stopCamera, t.err_pose, knownDistanceCm]);
 
   const DARK  = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", blue: "#1a56db" };
 
@@ -335,8 +379,24 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
                 </span>
               </div>
             </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: DARK.text, marginBottom: 4 }}>📏 {t.distLabel}</label>
+              <input
+                type="number" inputMode="decimal" min="20" max="150"
+                value={knownDistanceCm}
+                onChange={e => setKnownDistanceCm(e.target.value)}
+                placeholder={t.distPlaceholder}
+                style={{ width: "100%", background: "rgba(148,163,184,.08)", border: `0.5px solid ${DARK.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 14, color: DARK.text }}
+              />
+              <div style={{ fontSize: 11, color: DARK.muted, marginTop: 4, lineHeight: 1.5 }}>{t.distHint}</div>
+            </div>
             {error && <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 10, textAlign: "center" }}>{error}</div>}
-            <button onClick={startCounting} style={{ width: "100%", background: "#1a56db", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 13, fontWeight: 600, color: "white", cursor: "pointer" }}>
+            <button onClick={() => {
+                const d = parseFloat(knownDistanceCm);
+                if (!d || d < 20 || d > 150) { setError(t.distErr); return; }
+                setError("");
+                startCounting();
+              }} style={{ width: "100%", background: "#1a56db", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 13, fontWeight: 600, color: "white", cursor: "pointer" }}>
               ▶ {t.start}
             </button>
           </>
@@ -381,6 +441,15 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
                   </div>
                 ))}
               </div>
+              {result.distCalibFactor && (
+                <div style={{ marginTop: 10, background: "rgba(16,185,129,.06)", borderRadius: 8, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>📏</span>
+                  <div>
+                    <div style={{ fontSize: 10, color: DARK.muted }}>{t.distBadge}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#10b981" }}>{result.distance_calibrated_cm}cm</div>
+                  </div>
+                </div>
+              )}
               <div style={{ fontSize: 11, color: DARK.muted, marginTop: 12 }}>{t.doneSub} ({result.frames_used} frames)</div>
             </div>
             <button onClick={() => onDone(result)} style={{ width: "100%", background: "#10b981", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 13, fontWeight: 600, color: "white", cursor: "pointer" }}>
