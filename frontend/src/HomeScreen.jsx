@@ -584,7 +584,7 @@ export default function HomeScreen(props) {
         </div>
 
         {/* ── LAST 7 DAYS ────────────────────────────────────────── */}
-        {userSessions.length===0&&!loading&&(
+        {userSessions.length===0&&(
           <ZeroDashboard isAr={isAr} onStart={goLive}/>
         )}
         {userSessions.length>0&&(
