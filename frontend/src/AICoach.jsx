@@ -135,16 +135,18 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
     setLoading(true);
 
     try {
-      // Build conversation history as a single prompt
-      const history = newMessages.slice(-8).map(m =>
-        `${m.role === "user" ? "User" : "Coach"}: ${m.content}`
-      ).join("\n\n");
+      // Build proper messages array for geminiChat (backend expects [{role,content}])
+      // Take last 8 messages, map role names to "user"/"assistant"
+      const messagesPayload = newMessages.slice(-8).map(m => ({
+        role:    m.role === "user" ? "user" : "assistant",
+        content: m.content,
+      }));
 
       const systemPrompt = isAr
         ? `أنت مدرب وضعية جسم شخصي ذكي. استخدم البيانات التالية:\n${context}\nكن موجزاً ومفيداً وودوداً. أجب بالعربية.`
         : `You are a personal posture coach. Use this user data:\n${context}\nBe concise, helpful and friendly.`;
 
-      const reply = await geminiChat(history, { systemPrompt, maxTokens: 512 });
+      const reply = await geminiChat(messagesPayload, { systemPrompt, lang: isAr ? "ar" : "en", maxTokens: 512 });
       setMessages(prev => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
     } catch (e) {
       setError(isAr ? "خطأ في الاتصال بـ AI" : "AI connection error — " + (e?.message || "unknown"));
