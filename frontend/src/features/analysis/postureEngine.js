@@ -396,9 +396,13 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
   // Alerts — SYNCED with backend.py alert thresholds exactly
   // (each gated by the same visibility check used for its score, so a
   // low-confidence read can't fire a misleading alert)
+  // Neck alert thresholds use the same shoulder-width-adjusted
+  // neckOkAdj/neckBadAdj as the score, so the alert text severity
+  // actually matches when the score crosses into its bad zone —
+  // previously these were hardcoded 12°/20° regardless of distance.
   const alerts = [
-    neckOK && neckLean > 20   && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`,
-    neckOK && neckLean > 12 && neckLean <= 20 && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`,
+    neckOK && neckLean > neckBadAdj && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`,
+    neckOK && neckLean > (neckOkAdj+neckBadAdj)/2 && neckLean <= neckBadAdj && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`,
     eyeOK && headTilt > 10   && `Head tilting ${Math.round(headTilt)}° — check chair height and monitor centering`,
     shOK && shTilt > 10     && `Shoulder imbalance ${Math.round(shTilt)}° — adjust armrests`,
     spineOK && spineLean > 18  && `⚠️ Spine lean ${Math.round(spineLean)}° — sit back and use lumbar support`,
