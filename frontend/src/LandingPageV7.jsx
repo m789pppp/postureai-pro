@@ -1026,10 +1026,15 @@ function CaseStudies({ lang }) {
 }
 
 // ── Pricing ───────────────────────────────────────────────────────
-function Pricing({ lang, onCTA, mode, isEgypt, setCurrencyOverride }) {
+function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) {
   const ar = lang === "ar";
   const [billing, setBilling] = useState("yearly");
-  const isCompany = mode === "company";
+  const [localMode, setLocalMode] = useState(modeProp || "company");
+
+  // Sync if parent changes mode (e.g. nav toggle)
+  React.useEffect(() => { if (modeProp) setLocalMode(modeProp); }, [modeProp]);
+
+  const isCompany = localMode === "company";
 
   // ── Single source of truth — MUST match App.jsx TIERS/B2B_TIERS,
   //    Billing.jsx PLANS/B2B_PLANS, and PricingPage.jsx exactly ──
@@ -1100,7 +1105,35 @@ function Pricing({ lang, onCTA, mode, isEgypt, setCurrencyOverride }) {
             <p style={{ ...TYPE.body, color:C.sub, marginBottom:30 }}>
               {ar ? "تجربة مجانية 7 أيام · لا بطاقة ائتمان" : "7-day free trial · No credit card required"}
             </p>
-            {/* Toggle */}
+
+            {/* Individual / Company toggle */}
+            <div style={{
+              display:"inline-flex", alignItems:"center", gap:4,
+              background:"rgba(255,255,255,.06)", borderRadius:12,
+              padding:4, border:`1px solid ${C.border}`,
+              marginBottom:20,
+            }}>
+              {[
+                { id:"individual", icon:"👤", en:"Individual", ar:"فرد" },
+                { id:"company",    icon:"🏢", en:"Company / HR", ar:"شركة / HR" },
+              ].map(seg => (
+                <button key={seg.id} onClick={() => setLocalMode(seg.id)} style={{
+                  background: localMode === seg.id
+                    ? (seg.id === "company" ? C.indigo : C.blue)
+                    : "transparent",
+                  color: localMode === seg.id ? "#fff" : C.muted,
+                  border:"none", borderRadius:9,
+                  padding:"9px 22px",
+                  cursor:"pointer", fontWeight:600, fontSize:14,
+                  transition:"background .18s,color .18s",
+                  whiteSpace:"nowrap",
+                }}>
+                  {seg.icon} {ar ? seg.ar : seg.en}
+                </button>
+              ))}
+            </div>
+
+            {/* Monthly / Yearly toggle */}
             <div style={{
               display:"inline-flex", alignItems:"center",
               background:"rgba(255,255,255,.05)", borderRadius:100,
