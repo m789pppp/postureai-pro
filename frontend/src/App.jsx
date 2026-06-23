@@ -42,6 +42,8 @@ import { AuditSystem }         from "./AuditSystem.jsx";
 import { EnterpriseAdminTools }from "./EnterpriseAdminTools.jsx";
 import LandingPageLegacy from "./LandingPage.jsx";
 import LandingPageV7 from "./LandingPageV7.jsx";
+import { DemoWelcome, DemoDashboard, clearDemoOnExit } from "./DemoModeUI.jsx";
+import { saveDemoSession } from "./DemoMode.js";
 const Landing = LandingPageV7; // alias so <Landing> works
 import { AdminDashboard } from "./AdminDashboard.jsx";
 import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
@@ -2574,7 +2576,21 @@ export default function App(){
         setShareCardData({score:result.avg_score,grade:result.grade,streak:0});
       }
 
-    if(user && dur >= 5){ // Save if session lasted at least 5 seconds
+    if(window.__demoMode && dur >= 5){
+      // Demo Mode — same analysis engine, but the result is saved to
+      // localStorage only (see DemoMode.js), never touches Firestore/auth.
+      import("./DemoMode.js").then(({ saveDemoSession }) => {
+        saveDemoSession({
+          mode, avg_score: avg, good_pct: gPct,
+          duration_s: dur, duration_sec: dur,
+          alerts_count: acRef.current?.total || 0,
+          score_history: hist.slice(-20),
+        });
+      });
+      addToast(isAr?"✅ تم حفظ الجلسة (محلياً)":"✅ Session saved (locally)","success");
+    } else if(window.__demoMode && dur < 5){
+      addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
+    } else if(user && dur >= 5){ // Save if session lasted at least 5 seconds
       addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
       saveSession(user.uid,{
         session_id:sessionId, mode, tier, avg_score:avg,
@@ -2791,6 +2807,26 @@ export default function App(){
 
   if(paymentResult)return <PaymentResultScreen result={paymentResult} cs={cs} lang={lang} onContinue={()=>setPaymentResult(null)}/>;
   if(page==="landing")return <ErrorBoundary><Landing {...shared} onStart={()=>setPage(user?"setup":"auth")} lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}/></ErrorBoundary>;
+  // ── Demo Mode — completely isolated, no auth, no Firestore ─────
+  // window.__demoMode flags the live-session save logic to write to
+  // localStorage (via DemoMode.js) instead of calling saveSession()/Firestore.
+  if(page==="demo")return(
+    <ErrorBoundary>
+      <DemoWelcome isAr={isAr}
+        onBack={()=>setPage("landing")}
+        onStart={()=>{ window.__demoMode=true; setPage("demo_dashboard"); }}
+      />
+    </ErrorBoundary>
+  );
+  if(page==="demo_dashboard")return(
+    <ErrorBoundary>
+      <DemoDashboard isAr={isAr}
+        onStartSession={()=>{ window.__demoMode=true; setPage("live"); setTimeout(()=>startCamera(),200); }}
+        onExit={()=>clearDemoOnExit(setPage)}
+        onUpgrade={()=>{ clearDemoOnExit(()=>{}); window.__demoMode=false; setPage("auth"); }}
+      />
+    </ErrorBoundary>
+  );
   if(page==="embed")return <EmbedWidget/>;
   // ── Auth page ────────────────────────────────────────────────────
   if(page==="auth"&&!user) return(
@@ -3325,6 +3361,7 @@ export default function App(){
               <div style={{display:"flex",gap:10}}>
                 <button onClick={()=>{
                     setSessionResult(null);
+                    if(window.__demoMode){ setPage("demo_dashboard"); return; }
                     // Refresh sessions before going home so Sessions tab is up to date
                     if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
                     setPage("home");

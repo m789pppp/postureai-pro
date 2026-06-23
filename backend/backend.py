@@ -3832,6 +3832,96 @@ def analyze_side_cascade(image, out):
     return out
 
 # ── Gemini AI ──────────────────────────────────────────────────────
+def call_gemini_with_retry(prompt, model="gemini-2.0-flash-lite", max_tokens=900,
+                            temperature=0.25, cache_key=None, cache_ttl=90,
+                            fallback_model="gemini-2.0-flash-lite", max_attempts=2,
+                            system_prompt=None):
+    """
+    Centralized Gemini call with retry/backoff/fallback — the ONLY way any
+    endpoint in this file should call Gemini directly. Extracted from the
+    proven logic in analyze_with_gemini() below.
+
+    Why this exists: every other Gemini call site in this file used to call
+    requests.post() directly with zero retry handling — a single transient
+    429 (rate limit) or 503 from Google would surface straight to the user
+    as "AI connection error" with no attempt to recover, even though Gemini's
+    rate limits are usually a few seconds of backpressure, not a hard outage.
+
+    Returns the response text, or None if Gemini isn't configured / all
+    attempts failed / the response was safety-filtered.
+    """
+    if not GEMINI_API_KEY:
+        return None
+
+    if cache_key:
+        _cached = cache_get(f"gemini:{cache_key}")
+        if _cached:
+            return _cached
+
+    # Retryable: timeout, 429 (rate limit), 500/502/503/504 (transient server issues)
+    # Not retryable: 400 (bad request), 401 (bad key), 403 (quota exhausted — won't
+    # recover within this request's lifetime, so retrying just wastes time)
+    RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+    for attempt in range(max_attempts):
+        model_this_attempt  = model if attempt == 0 else fallback_model
+        tokens_this_attempt = max_tokens if attempt == 0 else min(max_tokens, 900)
+
+        if attempt > 0:
+            backoff = 2 ** (attempt - 1)  # 1s, 2s, 4s...
+            time.sleep(backoff)
+            log_event("gemini_retry", meta={
+                "attempt": attempt + 1, "model": model_this_attempt, "backoff_s": backoff,
+            })
+
+        try:
+            url  = f"https://generativelanguage.googleapis.com/v1beta/models/{model_this_attempt}:generateContent?key={GEMINI_API_KEY}"
+            _body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                     "generationConfig": {"maxOutputTokens": tokens_this_attempt, "temperature": temperature}}
+            if system_prompt:
+                _body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
+            resp = req.post(url,
+                            headers={"Content-Type": "application/json"},
+                            json=_body,
+                            timeout=20)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    log_event("gemini_blocked", meta={"reason": data.get("promptFeedback")})
+                    return None
+                text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                if text and cache_key:
+                    cache_set(f"gemini:{cache_key}", text, ttl_s=cache_ttl)
+                log_event("gemini_ok", meta={"attempt": attempt + 1, "model": model_this_attempt, "chars": len(text)})
+                return text or None
+
+            elif resp.status_code in RETRYABLE_STATUS:
+                log_event("gemini_retryable_error", meta={
+                    "status": resp.status_code, "attempt": attempt + 1, "model": model_this_attempt,
+                })
+                continue  # retry
+
+            else:
+                log_event("gemini_fatal_error", meta={"status": resp.status_code, "model": model_this_attempt})
+                return None
+
+        except req.exceptions.Timeout:
+            log_event("gemini_timeout", meta={"attempt": attempt + 1, "model": model_this_attempt})
+            if attempt < max_attempts - 1:
+                continue
+            return None
+
+        except Exception as e:
+            log_event("gemini_exception", meta={"error": str(e)[:120], "attempt": attempt + 1})
+            if attempt < max_attempts - 1:
+                continue
+            return None
+
+    return None  # all attempts exhausted
+
+
 def analyze_with_gemini(result, context="", lang="en"):
     if not GEMINI_API_KEY: return None
     # ── Cache check — avoid duplicate Gemini calls for same posture state ──
@@ -7839,17 +7929,9 @@ Write a 3-sentence {'Arabic' if lang=='ar' else 'English'} clinical comparison:
 
 {"أجب بالعربية." if lang=='ar' else "Be specific, encouraging, and actionable."}"""
 
-                _url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
-                import requests as _rq
-                _resp = _rq.post(_url,
-                    headers={"Content-Type": "application/json"},
-                    json={"contents": [{"parts": [{"text": _cmp_prompt}]}],
-                          "generationConfig": {"maxOutputTokens": 400, "temperature": 0.3}},
-                    timeout=15)
-                if _resp.status_code == 200:
-                    _cands = _resp.json().get("candidates", [])
-                    if _cands:
-                        narrative = _cands[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                narrative = call_gemini_with_retry(
+                    _cmp_prompt, model="gemini-2.0-flash-lite", max_tokens=400, temperature=0.3,
+                )
             except Exception:
                 pass
 
@@ -9549,25 +9631,23 @@ def ai_analyze():
 
         # Select model by tier
         _model = "gemini-2.0-flash" if tier in ("elite","premium","professional","pro") else "gemini-2.0-flash-lite"
-        _url   = f"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={GEMINI_API_KEY}"
 
-        import requests as _rq
-        _body = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.5},
-        }
-        if context.get("system_prompt"):
-            _body["system_instruction"] = {"parts": [{"text": context["system_prompt"]}]}
+        text = call_gemini_with_retry(
+            prompt,
+            model=_model,
+            fallback_model="gemini-2.0-flash-lite",
+            max_tokens=max_tokens,
+            temperature=0.5,
+            system_prompt=context.get("system_prompt"),
+        )
 
-        resp = _rq.post(_url, json=_body,
-                        headers={"Content-Type": "application/json"}, timeout=25)
-
-        if resp.status_code != 200:
-            err = resp.json().get("error", {})
-            return jsonify({"error": err.get("message", f"Gemini error {resp.status_code}"), "text": None}), 502
-
-        cands = resp.json().get("candidates", [])
-        text  = cands[0].get("content",{}).get("parts",[{}])[0].get("text","") if cands else ""
+        if text is None:
+            # All retries exhausted (rate-limited, transient error, or not configured) —
+            # surface a clear, actionable message instead of a generic connection error.
+            return jsonify({
+                "error": "AI is temporarily busy — please try again in a few seconds",
+                "text": None,
+            }), 503
 
         # Increment usage counter
         try:
@@ -11189,19 +11269,12 @@ def gemini_proxy():
 
         def _run_gemini(jid, prompt_text):
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
-                resp = req.post(url,
-                    headers={"Content-Type":"application/json"},
-                    json={"contents":[{"parts":[{"text":prompt_text}]}],
-                          "generationConfig":{"maxOutputTokens":400,"temperature":0.4}},
-                    timeout=15)
-                if resp.status_code == 200:
-                    text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                text = call_gemini_with_retry(prompt_text, model="gemini-2.0-flash-lite",
+                                               max_tokens=400, temperature=0.4)
+                if text is not None:
                     rset(f"gemini_job:{jid}", _json.dumps({"status":"done","text":text,"ts":time.time()}), 120)
                 else:
-                    rset(f"gemini_job:{jid}", _json.dumps({"status":"error","error":f"Gemini HTTP {resp.status_code}","ts":time.time()}), 60)
-            except req.exceptions.Timeout:
-                rset(f"gemini_job:{jid}", _json.dumps({"status":"error","error":"Gemini timeout","ts":time.time()}), 60)
+                    rset(f"gemini_job:{jid}", _json.dumps({"status":"error","error":"Gemini unavailable after retries","ts":time.time()}), 60)
             except Exception as _e:
                 rset(f"gemini_job:{jid}", _json.dumps({"status":"error","error":str(_e),"ts":time.time()}), 60)
 

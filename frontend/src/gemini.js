@@ -1,13 +1,18 @@
 /**
- * gemini.js — AI calls with smart fallback
+ * gemini.js — AI calls with smart fallback + 429 retry logic
  * Primary: backend proxy (/api/coach/chat, /api/ai/analyze)
  * Fallback: direct Gemini API if backend returns 404/5xx or times out
  *   Uses VITE_GEMINI_API_KEY (set in Vercel env vars, never committed)
  */
 
-const API_BASE   = import.meta.env.VITE_API_URL || "/api";
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const API_BASE    = import.meta.env.VITE_API_URL || "/api";
+const GEMINI_KEY  = import.meta.env.VITE_GEMINI_API_KEY || "";
+// Primary model: gemini-2.0-flash (15 req/min free)
+// Fallback model: gemini-1.5-flash-8b (higher free quota, ~1500 req/day)
+const GEMINI_URL    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GEMINI_URL_FB = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent";
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function getAuthToken() {
   try {
@@ -17,9 +22,12 @@ async function getAuthToken() {
   } catch { return ""; }
 }
 
-// Direct Gemini call — fallback when backend isn't available
-async function _directGemini(systemPrompt, userPrompt, maxTokens = 1024) {
-  if (!GEMINI_KEY) throw new Error("AI not configured — contact support");
+// Direct Gemini call with retry + model fallback for 429
+// Strategy: try primary → 3s wait → retry primary → try fallback model → give up
+async function _directGemini(systemPrompt, userPrompt, maxTokens = 600) {
+  if (!GEMINI_KEY) {
+    throw new Error("AI key not configured — contact support");
+  }
   const contents = [
     ...(systemPrompt ? [
       { role: "user",  parts: [{ text: systemPrompt }] },
@@ -27,26 +35,52 @@ async function _directGemini(systemPrompt, userPrompt, maxTokens = 1024) {
     ] : []),
     { role: "user", parts: [{ text: userPrompt }] },
   ];
-  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents,
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
-    }),
+  const body = JSON.stringify({
+    contents,
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
   });
-  if (!res.ok) throw new Error(`Gemini direct ${res.status}`);
-  const d = await res.json();
-  return d?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+  const models = [GEMINI_URL, GEMINI_URL_FB];
+  for (let mi = 0; mi < models.length; mi++) {
+    const url = `${models[mi]}?key=${GEMINI_KEY}`;
+    for (let retry = 0; retry < 2; retry++) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      if (res.ok) {
+        const d = await res.json();
+        const text = d?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (!text) throw new Error("Gemini returned an empty response");
+        return text;
+      }
+
+      if (res.status === 429) {
+        if (retry === 0) {
+          // First 429: wait 3 seconds, retry same model
+          await sleep(3000);
+          continue;
+        }
+        // Second 429 on this model → try fallback model
+        break;
+      }
+
+      // Other errors: parse and throw immediately
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || `Gemini ${res.status}`);
+    }
+  }
+
+  // Both models rate-limited
+  throw new Error("AI is busy right now — wait 30 seconds and try again");
 }
 
 /**
- * Main chat function — backend first, direct Gemini fallback
- * Accepts either:
- *   - messages: [{role:"user"|"assistant", content:string}]  ← preferred
- *   - prompt: string  ← converted to single-turn
+ * Main chat — backend first, direct Gemini fallback
  */
-export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxTokens = 1024, lang = "en" } = {}) {
+export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxTokens = 600, lang = "en" } = {}) {
   const messages = Array.isArray(messagesOrPrompt)
     ? messagesOrPrompt
     : [{ role: "user", content: String(messagesOrPrompt) }];
@@ -74,14 +108,12 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
       throw new Error(err.message || "Monthly AI limit reached — upgrade for more.");
     if (res.status !== 404 && res.status < 500)
       throw new Error(err.error || err.message || `AI error ${res.status}`);
-    // 404 / 5xx → fall through to direct
-    console.warn(`[Gemini] backend ${res.status} — using direct fallback`);
+    console.warn(`[Gemini] backend ${res.status} — direct fallback`);
   } catch (e) {
     if (e.message?.includes("limit_reached") || e.message?.includes("AI error")) throw e;
-    console.warn("[Gemini] backend unreachable — using direct fallback:", e.message);
+    console.warn("[Gemini] backend unreachable:", e.message);
   }
 
-  // Last resort: direct
   const lastPrompt = messages[messages.length - 1]?.content || "";
   return _directGemini(systemPrompt, lastPrompt, maxTokens);
 }
@@ -89,7 +121,7 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
 /**
  * Generic AI analysis — proxies through /api/ai/analyze, falls back to direct
  */
-export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTokens = 1024 } = {}) {
+export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTokens = 600 } = {}) {
   try {
     const tok = await getAuthToken();
     const res = await fetch(`${API_BASE}/ai/analyze`, {
@@ -109,10 +141,10 @@ export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTok
     const err = await res.json().catch(() => ({}));
     if (res.status !== 404 && res.status < 500)
       throw new Error(err.error || `AI error ${res.status}`);
-    console.warn(`[Gemini] /ai/analyze ${res.status} — using direct fallback`);
+    console.warn(`[Gemini] /ai/analyze ${res.status} — direct fallback`);
   } catch (e) {
     if (e.message?.includes("AI error")) throw e;
-    console.warn("[Gemini] backend unreachable — using direct fallback:", e.message);
+    console.warn("[Gemini] backend unreachable:", e.message);
   }
 
   return _directGemini("", prompt, maxTokens);
