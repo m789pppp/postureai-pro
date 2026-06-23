@@ -149,7 +149,12 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
       const reply = await geminiChat(messagesPayload, { systemPrompt, lang: isAr ? "ar" : "en", maxTokens: 512 });
       setMessages(prev => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
     } catch (e) {
-      setError(isAr ? "خطأ في الاتصال بـ AI" : "AI connection error — " + (e?.message || "unknown"));
+      const msg = e?.message || "unknown";
+      const isConfig = msg.includes("not configured") || msg.includes("VITE_GEMINI");
+      setError(isAr
+        ? (isConfig ? "خدمة AI غير مفعّلة حالياً — تواصل مع الدعم" : "خطأ في الاتصال بـ AI: " + msg)
+        : (isConfig ? "AI service not active — contact support" : "AI error: " + msg)
+      );
     } finally {
       setLoading(false);
       inputRef.current?.focus();
