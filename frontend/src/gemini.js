@@ -19,7 +19,10 @@ async function getAuthToken() {
 
 // Direct Gemini call — fallback when backend isn't available
 async function _directGemini(systemPrompt, userPrompt, maxTokens = 1024) {
-  if (!GEMINI_KEY) throw new Error("AI not configured — contact support");
+  if (!GEMINI_KEY) {
+    // Key not set at build time — give a clear actionable error instead of a cryptic one
+    throw new Error("AI key not configured. Ask the admin to set VITE_GEMINI_API_KEY in Vercel.");
+  }
   const contents = [
     ...(systemPrompt ? [
       { role: "user",  parts: [{ text: systemPrompt }] },
@@ -35,9 +38,15 @@ async function _directGemini(systemPrompt, userPrompt, maxTokens = 1024) {
       generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
     }),
   });
-  if (!res.ok) throw new Error(`Gemini direct ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    const msg = errBody?.error?.message || `Gemini ${res.status}`;
+    throw new Error(msg);
+  }
   const d = await res.json();
-  return d?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const text = d?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  if (!text) throw new Error("Gemini returned an empty response");
+  return text;
 }
 
 /**

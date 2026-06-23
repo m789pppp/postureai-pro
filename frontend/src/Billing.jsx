@@ -190,16 +190,6 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   const isAr  = lang === "ar";
   const DARK  = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
 
-  // ── Individual vs Company — drives feature copy + Enterprise checkout flow ──
-  // NOTE: acct_type is set in local UI state during setup but never persisted to
-  // Firestore — the real signal is user_type / is_org_owner / company_id, which
-  // ARE saved. We check those first and fall back to acct_type for safety.
-  const isCompany = profile?.user_type === "hr_admin"
-    || profile?.user_type === "employee"
-    || !!profile?.is_org_owner
-    || !!profile?.company_id
-    || profile?.acct_type === "company";
-
   // Feature lists are tier-identical in price, but worded for who's actually buying.
   // Individuals never see employee counts, HR dashboards, or "Contact sales" —
   // a solo user has no procurement process and should be able to pay immediately.
@@ -233,7 +223,15 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   };
   const t = T[lang] || T.en;
 
-  const isCompanyAccount = profile?.acct_type === "company" || profile?.acct_type === "hr" || !!profile?.company_id;
+  // ── Individual vs Company — drives plan grid, feature copy, Enterprise checkout ──
+  // Single source of truth: checks every field that could indicate a company account.
+  const isCompanyAccount = profile?.user_type === "hr_admin"
+    || profile?.user_type === "employee"
+    || !!profile?.is_org_owner
+    || !!profile?.company_id
+    || profile?.acct_type === "company"
+    || profile?.acct_type === "hr";
+
   const activePlans  = isCompanyAccount ? B2B_PLANS : PLANS;
   const planList     = isCompanyAccount ? B2B_PLAN_LIST : B2C_PLAN_LIST;
 
