@@ -2400,10 +2400,10 @@ export default function App(){
     //  2) Elite tier → snapshots for PDF report + Gemini AI insights
     // Standard/Pro tiers with working local MediaPipe never touch the backend here.
     const needsBackend = mpStatus==="fallback" || tier==="elite" || tier==="premium";
-    if(needsBackend && totalRef.current%30===0 && canvRef.current){
+    if(needsBackend && totalRef.current%45===0 && canvRef.current){
       const c=canvRef.current,v2=vidRef.current;
       if(v2&&v2.readyState>=2){c.width=v2.videoWidth;c.height=v2.videoHeight;c.getContext("2d").drawImage(v2,0,0);}
-      AnalysisAPI.analyze(c.toDataURL("image/jpeg",.72),mode,tier,lang,sessionId,null,calibData)
+      AnalysisAPI.analyze(c.toDataURL("image/jpeg",.88),mode,tier,lang,sessionId,null,calibData)
         .then(d=>{
           // For Elite: send snapshot every ~12 frames for PDF
           if((tier==="elite"||tier==="premium")&&totalRef.current%12===0&&d.overall>0){
@@ -2412,14 +2412,16 @@ export default function App(){
           }
           // Use backend result if local MP not available (fallback mode)
           if(mpStatus==="fallback"&&d.overall>0){
-            const result={...d};
+            const rawScore = d.overall;
+            const smoothed = pushScore(rawScore) || rawScore; // same 15s window as local MP
+            const result={...d, overall: smoothed};
             totalRef.current++;setTotalF(totalRef.current);
-            if(result.overall>=65){goodRef.current++;setGoodF(goodRef.current);}
-            histRef.current.push(result.overall);
+            if(smoothed>=65){goodRef.current++;setGoodF(goodRef.current);}
+            histRef.current.push(smoothed);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             setHistory([...histRef.current]);setAnalysis(result);lastAnalRef.current=result;
             const now=Date.now();
-            if(result.overall<65){
+            if(smoothed<65){
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
                 lastAlRef.current=now;acRef.current.total++;
@@ -2427,14 +2429,14 @@ export default function App(){
                   ? (result.alerts_ar?.[0] || "وضعية سيئة — صحّح وضعيتك")
                   : (result.alerts?.[0] || "Poor posture — correct position");
                 setAlertCounts({...acRef.current});
-                alRef.current=[{time:new Date().toLocaleTimeString(),msg:msgFb,score:result.overall},...alRef.current].slice(0,20);
+                alRef.current=[{time:new Date().toLocaleTimeString(),msg:msgFb,score:smoothed},...alRef.current].slice(0,20);
                 setAlerts([...alRef.current]);setAlertMsg({text:msgFb,type:"warn"});
                 if(sound)playBeep();
-                sendDesktopNotif(msgFb,result.overall);
+                sendDesktopNotif(msgFb,smoothed);
               }
             }else{
               badRef.current=null;
-              if(now-lastAlRef.current>8000)setAlertMsg({text:`Score ${result.overall}/100 — ${grade(result.overall,t)}`,type:"good"});
+              if(now-lastAlRef.current>8000)setAlertMsg({text:`Score ${smoothed}/100 — ${grade(smoothed,t)}`,type:"good"});
             }
           }
           // Always use Gemini from backend for Elite
