@@ -2023,13 +2023,12 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     neck_lean_raw = angle_vert(mid_sh, neck_ref)
 
     # ── Monitor height estimation ────────────────────────────────
-    # From camera pitch: if head is tilted down, monitor is below eye level
-    # At distance D, pitch P° → monitor is D×tan(P°) cm below eye level
     try:
         _pitch_val = out.get("head_pose", {}).get("pitch", 0) if out.get("head_pose") else 0
-        if _pitch_val and dist_cm:
+        _dist_for_monitor = out.get("distCm")  # safe: use top-level key set earlier, not local var
+        if _pitch_val and _dist_for_monitor:
             import math as _mh
-            _monitor_offset_cm = round(dist_cm * _mh.tan(_mh.radians(abs(_pitch_val))), 1)
+            _monitor_offset_cm = round(_dist_for_monitor * _mh.tan(_mh.radians(abs(_pitch_val))), 1)
             _monitor_dir = "below" if _pitch_val < 0 else "above"
             _monitor_sc  = score_m(abs(_pitch_val), 0, 5, 18)
             out["metrics"]["monitor_height"] = {

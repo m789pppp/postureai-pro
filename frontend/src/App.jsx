@@ -2580,8 +2580,14 @@ export default function App(){
         session_id:sessionId, mode, tier, avg_score:avg,
         good_pct:gPct, duration_s:dur, duration_sec:dur,
         alerts_count:acRef.current?.total||0,
-        score_history:hist.slice(-20),
-        metrics:la.metrics||{}
+        score_history:hist.slice(-60),        // more history for better sparkline
+        metrics:la.metrics||{},
+        // AI + insights fields — needed by generateSessionPDF for Elite PDF
+        ai_tip:       la.ai_tip||la.ai_insight||la.claude_analysis||"",
+        improvement_tip: result.improvement_tip||"",
+        pain_summary:    result.pain_summary||null,
+        pain_prediction: la.pain_prediction||null,
+        trend:           result.trend||"stable",
       }).then(()=>{
         addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
       }).catch(e=>{
@@ -2669,6 +2675,14 @@ export default function App(){
       metrics: la.metrics||{},
       tier, mode,
       created_at: new Date(),
+      // AI fields for Elite PDF — populated from last analysis
+      ai_tip:          la.ai_tip||la.ai_insight||la.claude_analysis||"",
+      improvement_tip: la.improvement_tip||"",
+      pain_summary:    la.pain_prediction?.minutes_to_pain < 90
+        ? (isAr?`⚠️ توقع إزعاج خلال ${Math.round(la.pain_prediction.minutes_to_pain)} دقيقة`
+                :`⚠️ Discomfort in ~${Math.round(la.pain_prediction.minutes_to_pain)} min`)
+        : null,
+      pain_prediction: la.pain_prediction||null,
     };
 
     if(!sessionOverride && hist.length===0){
@@ -3323,8 +3337,14 @@ export default function App(){
                   try {
                     const { generateSessionPDF } = await import("./firebase.js");
                     await generateSessionPDF({
-                      session: { ...sessionResult, created_at: new Date(), mode, tier,
-                        session_id: sessionId, score_history: histRef.current||[] },
+                      session: {
+                        ...sessionResult,
+                        created_at: new Date(), mode, tier,
+                        session_id: sessionId,
+                        score_history: histRef.current||[],
+                        metrics: lastAnalRef.current?.metrics||sessionResult.metrics||{},
+                        ai_tip: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||sessionResult.ai_tip||"",
+                      },
                       profile, user, lang,
                       sessionIndex: (userSessions.length||0)+1,
                     });
@@ -3333,8 +3353,8 @@ export default function App(){
                     addToast("PDF error: "+(e?.message||"unknown"),"error");
                   }
                 }}
-                  style={{flex:1,padding:"10px",background:"rgba(99,102,241,.15)",color:"#a5b4fc",border:"1px solid rgba(99,102,241,.3)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                  📄 {isAr?"تنزيل PDF":"Download PDF"}
+                  style={{flex:1,padding:"10px",background:tier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:tier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${tier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  📄 {tier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}
                 </button>
               </div>
             </div>
@@ -3994,9 +4014,19 @@ export default function App(){
               try {
                 const { generateSessionPDF } = await import("./firebase.js");
                 await generateSessionPDF({
-                  session:{ avg_score:sc, duration_s:dur, good_pct:gp,
+                  session:{
+                    avg_score:sc, duration_s:dur, good_pct:gp,
                     alerts_count:acRef.current?.total||0, mode, tier,
-                    score_history:hist.slice(-40), created_at:new Date() },
+                    score_history:hist.slice(-60), created_at:new Date(),
+                    metrics:lastAnalRef.current?.metrics||{},
+                    ai_tip:       lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
+                    improvement_tip: lastAnalRef.current?.improvement_tip||"",
+                    pain_summary: (()=>{
+                      const pm=lastAnalRef.current?.pain_prediction?.minutes_to_pain;
+                      if(!pm||pm>90) return null;
+                      return isAr?`⚠️ توقع إزعاج خلال ${Math.round(pm)} دقيقة`:`⚠️ Discomfort in ~${Math.round(pm)} min`;
+                    })(),
+                  },
                   profile, user, lang,
                   sessionIndex:(userSessions.length||0)+1,
                 });
