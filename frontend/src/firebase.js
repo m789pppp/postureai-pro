@@ -545,133 +545,317 @@ export async function seedDemoUser(uid, type) {
 // ── Client-side PDF Report Generator ─────────────────────────────
 export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex }) {
   const { jsPDF } = await import("jspdf");
-  const isAr = lang === "ar";
-  const doc  = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
-  const W=210, H=297, ml=18, mr=18;
-  let y = 18;
+  const isAr  = lang === "ar";
+  const tier  = session.tier || profile?.tier || "standard";
+  const isElite = tier === "elite" || tier === "premium";
+  const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+  const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
-  const gradeColor = s => s>=80?[16,185,129]:s>=60?[245,158,11]:[239,68,68];
-  const gradeLabel = s => s>=80?(isAr?"ممتاز":"Excellent"):s>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs Work");
-  const fmtDur = s => { if(!s) return "—"; const m=Math.floor(s/60),sec=s%60; return m>0?`${m}m ${sec}s`:`${sec}s`; };
+  // ── helpers ─────────────────────────────────────────────────
+  const gc = s => s>=80?[16,185,129]:s>=60?[245,158,11]:[239,68,68];
+  const gl = s => s>=80?(isAr?"ممتاز":"Excellent"):s>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs Work");
+  const fmtDur = s => { if(!s) return "—"; const m=Math.floor(s/60),sec=s%60; return `${m>0?m+"m ":""}${sec}s`; };
   const fmtDate = ts => {
     if(!ts) return "—";
-    const d = ts?.toDate ? ts.toDate() : new Date(ts);
-    return d.toLocaleString(isAr?"ar-EG":"en-US",{ weekday:"long", year:"numeric", month:"long", day:"numeric", hour:"2-digit", minute:"2-digit" });
+    try {
+      const d = ts?.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleString(isAr?"ar-EG":"en-US",{weekday:"short",year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+    } catch { return "—"; }
   };
 
-  const avg     = session.avg_score || 0;
+  const avg     = Math.round(session.avg_score || 0);
   const dur     = session.duration_s || session.duration_sec || 0;
-  const goodPct = session.good_pct  || 0;
-  const gradeC  = gradeColor(avg);
+  const goodPct = session.good_pct || 0;
+  const gradeC  = gc(avg);
+  const metrics = session.metrics || {};
+  const hist    = session.score_history || [];
+  const aiText  = session.ai_tip || session.ai_insight || session.claude_analysis || "";
+  const painSum = session.pain_summary || "";
+  const impTip  = session.improvement_tip || "";
+  const name    = profile?.name || user?.displayName || user?.email?.split("@")[0] || (isAr?"مستخدم":"User");
+  const email   = user?.email || "";
 
-  // ── Header ────────────────────────────────────────────────────────
-  doc.setFillColor(3,11,20); doc.rect(0,0,W,38,"F");
-  doc.setFontSize(20); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text("Corvus", ml, 16);
+  let y = 0;
+
+  // ══════════════════════════════════════════════════════════════
+  // PAGE 1 — Cover + Score Summary
+  // ══════════════════════════════════════════════════════════════
+
+  // Header bar
+  doc.setFillColor(3,11,20); doc.rect(0,0,W,42,"F");
+
+  // Corvus logo area
+  doc.setFillColor(79,124,249); doc.roundedRect(ml,8,22,22,3,3,"F");
+  doc.setFontSize(18); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+  doc.text("C", ml+11, 23.5, {align:"center"});
+
+  // Title
+  doc.setFontSize(22); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+  doc.text("Corvus", ml+28, 18);
   doc.setFontSize(9); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text(isAr?"تقرير جلسة الوضعية":"Posture Session Report", ml, 24);
-  doc.text(`Generated: ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})}`, ml, 31);
-  // Tier badge
-  doc.setFillColor(26,86,219); doc.roundedRect(W-mr-28,12,28,10,2,2,"F");
-  doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text((session.tier||"standard").toUpperCase(), W-mr-14, 18.5, {align:"center"});
-  y = 48;
+  doc.text(isAr?"تقرير تحليل الوضعية الشخصي":"Personal Posture Analysis Report", ml+28, 26);
+  doc.text(isAr?`تاريخ الإنشاء: ${new Date().toLocaleDateString("ar-EG")}`:`Generated: ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})}`, ml+28, 32.5);
 
-  // ── Session title ─────────────────────────────────────────────────
-  doc.setFontSize(14); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+  // Tier badge
+  const tierColor = isElite ? [16,185,129] : tier==="professional" ? [14,165,233] : [99,102,241];
+  doc.setFillColor(...tierColor); doc.roundedRect(W-mr-30,12,30,10,2,2,"F");
+  doc.setFontSize(7.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+  doc.text(tier.toUpperCase(), W-mr-15, 18.8, {align:"center"});
+
+  y = 52;
+
+  // Session header
+  doc.setFontSize(16); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
   doc.text(isAr?`جلسة رقم ${sessionIndex||""}`:`Session #${sessionIndex||""}`, ml, y); y+=7;
   doc.setFontSize(9); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text(fmtDate(session.created_at), ml, y); y+=14;
+  doc.text(fmtDate(session.created_at), ml, y); y+=12;
 
-  // ── Score card ────────────────────────────────────────────────────
-  doc.setFillColor(248,250,252); doc.roundedRect(ml,y,W-ml-mr,42,4,4,"F");
-  doc.setDrawColor(...gradeC); doc.setLineWidth(0.5); doc.roundedRect(ml,y,W-ml-mr,42,4,4,"S");
-  const cx=ml+26, cy=y+21;
-  doc.setFillColor(...gradeC); doc.circle(cx,cy,15,"F");
-  doc.setFontSize(avg>=100?14:17); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text(String(avg), cx, cy+6, {align:"center"});
-  doc.setFontSize(16); doc.setTextColor(...gradeC); doc.setFont("helvetica","bold");
-  doc.text(gradeLabel(avg), ml+48, y+14);
-  doc.setFontSize(9); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text(isAr?"درجة الوضعية الكلية":"Overall Posture Score", ml+48, y+22);
-  [
-    { label:isAr?"المدة":"Duration",     val:fmtDur(dur) },
-    { label:isAr?"وضعية جيدة":"Good %", val:`${goodPct}%` },
-    { label:isAr?"تنبيهات":"Alerts",    val:String(session.alerts_count||0) },
-  ].forEach((st,i)=>{
-    const sx = W-mr-90+i*31;
-    doc.setFontSize(13); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-    doc.text(st.val, sx, y+20, {align:"center"});
-    doc.setFontSize(7); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-    doc.text(st.label, sx, y+27, {align:"center"});
+  // ── Score card ───────────────────────────────────────────────
+  doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,48,5,5,"F");
+  doc.setDrawColor(...gradeC); doc.setLineWidth(0.6); doc.roundedRect(ml,y,cw,48,5,5,"S");
+  doc.setLineWidth(0.3);
+
+  // Grade circle
+  const cx=ml+30, cy=y+24;
+  doc.setFillColor(...gradeC); doc.circle(cx,cy,18,"F");
+  doc.setFontSize(avg>=100?15:20); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+  doc.text(String(avg), cx, cy+7, {align:"center"});
+  doc.setFontSize(8); doc.text(isAr?"/100":"/100", cx, cy+13, {align:"center"});
+
+  // Grade label
+  doc.setFontSize(20); doc.setTextColor(...gradeC); doc.setFont("helvetica","bold");
+  doc.text(gl(avg), ml+56, y+20);
+  doc.setFontSize(10); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
+  doc.text(isAr?"نقاط الوضعية الكلية":"Overall Posture Score", ml+56, y+30);
+  doc.setFontSize(9); doc.text(isAr?`المدة: ${fmtDur(dur)}`:`Duration: ${fmtDur(dur)}`, ml+56, y+40);
+
+  // 3 mini stats (right side)
+  [[isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`],[isAr?"تنبيهات":"Alerts",String(session.alerts_count||0)],[isAr?"الجلسة":"Session",`#${sessionIndex||1}`]].forEach(([lbl,val],i)=>{
+    const sx = cw - 60 + i*22 + ml;
+    doc.setFontSize(15); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+    doc.text(val, sx, y+22, {align:"center"});
+    doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+    doc.text(lbl, sx, y+30, {align:"center"});
   });
-  y+=52;
+  y += 58;
 
-  // ── Score history sparkline ───────────────────────────────────────
-  const hist = session.score_history||[];
-  if(hist.length>1){
-    doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-    doc.text(isAr?"سجل النقاط":"Score History", ml, y); y+=6;
-    const bw=W-ml-mr, bh=28;
-    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,bw,bh,3,3,"F");
-    const slice=hist.slice(-40);
-    const maxS=Math.max(...slice,1), minS=Math.min(...slice,0);
-    const pts=slice.map((s,i,arr)=>({
-      x: ml+4+(i/Math.max(arr.length-1,1))*(bw-8),
-      y: y+bh-4-((s-minS)/Math.max(maxS-minS,1))*(bh-8),
-    }));
-    doc.setDrawColor(...gradeC); doc.setLineWidth(0.9);
-    pts.forEach((p,i)=>{ if(i>0) doc.line(pts[i-1].x,pts[i-1].y,p.x,p.y); });
-    pts.forEach(p=>{ doc.setFillColor(...gradeC); doc.circle(p.x,p.y,0.9,"F"); });
-    y+=bh+10;
-  }
+  // ── Score sparkline ──────────────────────────────────────────
+  if(hist.length>2){
+    doc.setFontSize(10); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+    doc.text(isAr?"سجل النقاط خلال الجلسة":"Score Timeline", ml, y); y+=5;
 
-  // ── Metrics breakdown ─────────────────────────────────────────────
-  const metrics=session.metrics||{};
-  const entries=Object.entries(metrics);
-  if(entries.length>0){
-    doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-    doc.text(isAr?"تفصيل المقاييس":"Metrics Breakdown", ml, y); y+=7;
-    entries.forEach(([key,val])=>{
-      if(y>H-45){ doc.addPage(); y=20; }
-      const sc  = val?.score ?? (typeof val==="number"?val:0);
-      const col = gradeColor(sc);
-      const lbl = val?.label || key.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-      doc.setFillColor(248,250,252); doc.roundedRect(ml,y,W-ml-mr,13,2,2,"F");
-      doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
-      doc.text(lbl, ml+3, y+8.5);
-      const bx=ml+82, bw2=W-ml-mr-102;
-      doc.setFillColor(226,232,240); doc.roundedRect(bx,y+4.5,bw2,4,1,1,"F");
-      doc.setFillColor(...col); doc.roundedRect(bx,y+4.5,bw2*(sc/100),4,1,1,"F");
-      doc.setFontSize(8); doc.setTextColor(...col); doc.setFont("helvetica","bold");
-      doc.text(`${Math.round(sc)}`, W-mr-2, y+8.5, {align:"right"});
-      y+=16;
+    const bh=28;
+    doc.setFillColor(241,245,249); doc.roundedRect(ml,y,cw,bh,3,3,"F");
+    // Guide lines
+    [50,65,80,95].forEach(v=>{
+      const gy = y+bh-3 - ((v-40)/Math.max(60,1))*(bh-6);
+      doc.setDrawColor(200,210,220); doc.setLineWidth(0.2);
+      doc.line(ml+3,gy,ml+cw-3,gy);
+      doc.setFontSize(5.5); doc.setTextColor(160,174,192);
+      doc.text(String(v), ml+1, gy+1.5, {align:"right"});
     });
-    y+=4;
+    const slice = hist.slice(-60);
+    const maxS = Math.max(...slice,100), minS = Math.min(...slice,0);
+    const range = Math.max(maxS-minS,10);
+    const pts = slice.map((s,i,a)=>({
+      x: ml+5+(i/Math.max(a.length-1,1))*(cw-10),
+      y: y+bh-4-((s-minS)/range)*(bh-8),
+    }));
+    // Gradient fill under line
+    doc.setFillColor(...gradeC.map(c=>Math.min(255,c+120)));
+    // Simple area approximation
+    doc.setDrawColor(...gradeC); doc.setLineWidth(1.2);
+    pts.forEach((p,i)=>{ if(i>0) doc.line(pts[i-1].x,pts[i-1].y,p.x,p.y); });
+    // End points
+    if(pts.length>0){
+      doc.setFillColor(...gradeC); doc.circle(pts[0].x,pts[0].y,1.2,"F");
+      doc.circle(pts[pts.length-1].x,pts[pts.length-1].y,1.8,"F");
+    }
+    y += bh + 10;
   }
 
-  // ── User info footer ──────────────────────────────────────────────
-  if(y>H-40){ doc.addPage(); y=20; }
-  doc.setFillColor(248,250,252); doc.roundedRect(ml,y,W-ml-mr,22,3,3,"F");
-  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  const name  = profile?.name||user?.displayName||user?.email?.split("@")[0]||"User";
-  const email = user?.email||"";
-  doc.text(isAr?`الاسم: ${name}`:`Name: ${name}`, ml+4, y+8);
-  doc.text(isAr?`البريد: ${email}`:`Email: ${email}`, ml+4, y+15);
-  doc.text(isAr?`الشركة: ${profile?.company||"—"}`:`Company: ${profile?.company||"—"}`, W-mr-4, y+8, {align:"right"});
-  doc.text(`ID: ${(session.session_id||session.id||"—").slice(0,12)}`, W-mr-4, y+15, {align:"right"});
+  // ── Pain prediction (if available) ──────────────────────────
+  if(painSum){
+    doc.setFillColor(254,243,199); doc.roundedRect(ml,y,cw,12,2,2,"F");
+    doc.setFontSize(8.5); doc.setTextColor(146,64,14); doc.setFont("helvetica","bold");
+    doc.text(painSum, ml+4, y+8);
+    y += 18;
+  }
 
-  // ── Page numbers ──────────────────────────────────────────────────
-  const pages=doc.internal.getNumberOfPages();
+  // ── Improvement tip ──────────────────────────────────────────
+  if(impTip){
+    doc.setFillColor(220,252,231); doc.roundedRect(ml,y,cw,12,2,2,"F");
+    doc.setFontSize(8.5); doc.setTextColor(20,83,45); doc.setFont("helvetica","bold");
+    doc.text(`💡 ${impTip}`, ml+4, y+8);
+    y += 18;
+  }
+
+  // ── Key metrics summary (top 5 only on page 1) ──────────────
+  const metricEntries = Object.entries(metrics)
+    .filter(([k])=>!k.startsWith("_"))
+    .sort(([,a],[,b])=>((a?.score??100)-(b?.score??100)));
+
+  if(metricEntries.length>0){
+    doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+    doc.text(isAr?"أبرز مقاييس الوضعية":"Key Posture Metrics", ml, y); y+=7;
+
+    const showTop = Math.min(metricEntries.length, 6);
+    metricEntries.slice(0, showTop).forEach(([key,val])=>{
+      if(y > H-50){ return; }
+      const sc  = typeof val==="number" ? val : (val?.score ?? 0);
+      const col = gc(sc);
+      const lbl = val?.label || key.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+      const vlu = val?.value!==undefined ? `${Math.round(val.value*10)/10}${val.unit||""}` : "";
+
+      doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,14,2,2,"F");
+      // Label
+      doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
+      doc.text(lbl, ml+3, y+9.5);
+      // Value
+      if(vlu){ doc.setFontSize(8); doc.setTextColor(...col); doc.setFont("helvetica","bold"); doc.text(vlu, ml+70, y+9.5); }
+      // Bar
+      const bx=ml+82, bw2=cw-84;
+      doc.setFillColor(226,232,240); doc.roundedRect(bx,y+5,bw2,4,1,1,"F");
+      doc.setFillColor(...col); doc.roundedRect(bx,y+5,Math.max(bw2*(sc/100),1),4,1,1,"F");
+      // Score
+      doc.setFontSize(8); doc.setTextColor(...col); doc.setFont("helvetica","bold");
+      doc.text(`${Math.round(sc)}`, W-mr-1, y+9.5, {align:"right"});
+      y += 17;
+    });
+  }
+
+  // ── User info footer strip ───────────────────────────────────
+  const footerY = H-28;
+  doc.setFillColor(241,245,249); doc.rect(0,footerY,W,18,"F");
+  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+  doc.text(isAr?`الاسم: ${name}`:`Name: ${name}`, ml, footerY+8);
+  doc.text(isAr?`البريد: ${email}`:`Email: ${email}`, ml, footerY+14);
+  doc.text(isAr?`الشركة: ${profile?.company||"—"}`:`Company: ${profile?.company||"—"}`, W-mr, footerY+8, {align:"right"});
+  doc.text(`ID: ${(session.session_id||session.id||"—").slice?.(0,14)||"—"}`, W-mr, footerY+14, {align:"right"});
+
+  // ══════════════════════════════════════════════════════════════
+  // PAGE 2 — Full Metrics Breakdown (Elite) OR Prompt to Upgrade
+  // ══════════════════════════════════════════════════════════════
+  if(isElite && metricEntries.length > 0){
+    doc.addPage(); y=18;
+
+    // Header
+    doc.setFillColor(3,11,20); doc.rect(0,0,W,14,"F");
+    doc.setFontSize(9); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+    doc.text("Corvus — " + (isAr?"تقرير مفصّل":"Detailed Metrics Report"), ml, 9.5);
+    doc.setFontSize(8); doc.setTextColor(...tierColor); doc.setFont("helvetica","bold");
+    doc.text(tier.toUpperCase(), W-mr, 9.5, {align:"right"});
+    y = 24;
+
+    doc.setFontSize(14); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+    doc.text(isAr?"تفاصيل كافة مقاييس الوضعية":"Complete Posture Metrics Breakdown", ml, y); y+=10;
+
+    // All metrics
+    metricEntries.forEach(([key,val])=>{
+      if(y > H-45){ doc.addPage(); y=20; }
+      const sc  = typeof val==="number" ? val : (val?.score ?? 0);
+      const col = gc(sc);
+      const lbl = val?.label || key.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+      const vlu = val?.value!==undefined ? `${Math.round(val.value*10)/10}${val.unit||""}` : "";
+
+      // Card
+      doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,20,2,2,"F");
+      doc.setDrawColor(226,232,240); doc.setLineWidth(0.3); doc.roundedRect(ml,y,cw,20,2,2,"S");
+
+      // Score badge
+      doc.setFillColor(...col); doc.roundedRect(ml+1,y+1,18,18,2,2,"F");
+      doc.setFontSize(10); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+      doc.text(String(Math.round(sc)), ml+10, y+12, {align:"center"});
+
+      // Label + value
+      doc.setFontSize(9.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+      doc.text(lbl, ml+22, y+8);
+      if(vlu){ doc.setFontSize(9); doc.setTextColor(...col); doc.text(vlu, ml+22, y+15); }
+
+      // Bar (right side)
+      const bx = ml+80, bw2 = cw-82;
+      doc.setFillColor(226,232,240); doc.roundedRect(bx,y+8,bw2,4,1,1,"F");
+      doc.setFillColor(...col); doc.roundedRect(bx,y+8,Math.max(bw2*(sc/100),2),4,1,1,"F");
+
+      // Grade label
+      const gLabel = sc>=80?( isAr?"ممتاز":"Excellent"):sc>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs Work");
+      doc.setFontSize(7.5); doc.setTextColor(...col); doc.setFont("helvetica","normal");
+      doc.text(gLabel, W-mr-1, y+16, {align:"right"});
+
+      y += 24;
+    });
+
+    // ── AI Narrative section ─────────────────────────────────────
+    if(aiText){
+      if(y > H-60){ doc.addPage(); y=20; }
+      y += 4;
+      doc.setFillColor(...gradeC.map(c=>Math.min(255,c+130)));
+      doc.roundedRect(ml,y,cw,8,2,2,"F");
+      doc.setFontSize(10); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+      doc.text(isAr?"🤖 تحليل الذكاء الاصطناعي (Gemini)":"🤖 AI Analysis (Gemini)", ml+4, y+5.5);
+      y += 12;
+
+      // Wrap AI text properly
+      doc.setFontSize(9); doc.setTextColor(30,41,59); doc.setFont("helvetica","normal");
+      const lines = doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(), cw-6);
+      lines.forEach(line=>{
+        if(y>H-25){ doc.addPage(); y=20; }
+        doc.text(line, ml+3, y);
+        y += 5.5;
+      });
+      y += 4;
+    }
+
+    // ── Session stats summary table ──────────────────────────────
+    if(y < H-60){
+      y += 4;
+      doc.setFontSize(10); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+      doc.text(isAr?"إحصائيات الجلسة":"Session Statistics", ml, y); y+=8;
+
+      const stats = [
+        [isAr?"النقاط الكلية":"Overall Score", `${avg}/100 — ${gl(avg)}`],
+        [isAr?"مدة الجلسة":"Duration", fmtDur(dur)],
+        [isAr?"نسبة الوضعية الجيدة":"Good Posture %", `${goodPct}%`],
+        [isAr?"عدد التنبيهات":"Alert Count", String(session.alerts_count||0)],
+        [isAr?"وضع الكاميرا":"Camera Mode", session.mode||"laptop"],
+        [isAr?"المستوى":"Tier", tier.toUpperCase()],
+      ];
+      stats.forEach(([k,v],i)=>{
+        doc.setFillColor(i%2===0?248:255,i%2===0?250:255,i%2===0?252:255);
+        doc.rect(ml,y,cw,9,"F");
+        doc.setFontSize(8.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+        doc.text(k, ml+3, y+6.5);
+        doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+        doc.text(v, W-mr-3, y+6.5, {align:"right"});
+        y += 9;
+      });
+    }
+  } else if(!isElite) {
+    // Upgrade prompt for non-Elite
+    doc.addPage(); y=80;
+    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,80,8,8,"F");
+    doc.setFontSize(28); doc.setTextColor(99,102,241); doc.setFont("helvetica","bold");
+    doc.text("⭐", W/2, y+25, {align:"center"});
+    doc.setFontSize(16); doc.setTextColor(15,23,42);
+    doc.text(isAr?"ترقية إلى Elite لتفعيل:":"Upgrade to Elite to unlock:", W/2, y+42, {align:"center"});
+    const features = isAr
+      ? ["تحليل Gemini AI المفصّل","تقرير PDF كامل متعدد الصفحات","توقع الألم المهني","مقارنة بخط الأساس الشخصي"]
+      : ["Detailed Gemini AI analysis","Full multi-page PDF report","Professional pain prediction","Personal baseline comparison"];
+    doc.setFontSize(11); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+    features.forEach((f,i)=>{ doc.text(`✓ ${f}`, W/2, y+56+(i*10), {align:"center"}); });
+  }
+
+  // ── Page numbers ────────────────────────────────────────────
+  const pages = doc.internal.getNumberOfPages();
   for(let i=1;i<=pages;i++){
     doc.setPage(i);
-    doc.setFillColor(3,11,20); doc.rect(0,H-10,W,10,"F");
-    doc.setFontSize(7); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-    doc.text("Corvus — Confidential", ml, H-3.5);
-    doc.text(`Page ${i} of ${pages}`, W-mr, H-3.5, {align:"right"});
+    doc.setFillColor(3,11,20); doc.rect(0,H-8,W,8,"F");
+    doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
+    doc.text("Corvus Health Intelligence — Confidential", ml, H-2.5);
+    doc.text(`${i} / ${pages}`, W-mr, H-2.5, {align:"right"});
   }
 
-  const filename=`Corvus_Session${sessionIndex?"_"+sessionIndex:""}_${new Date().toISOString().slice(0,10)}.pdf`;
+  const filename = `Corvus_Session${sessionIndex?"_"+sessionIndex:""}_${new Date().toISOString().slice(0,10)}.pdf`;
   doc.save(filename);
   return filename;
 }
