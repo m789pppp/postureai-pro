@@ -224,11 +224,11 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   const t = T[lang] || T.en;
 
   // ── Individual vs Company — drives plan grid, feature copy, Enterprise checkout ──
-  // Single source of truth: checks every field that could indicate a company account.
+  // Only HR admins and org owners see B2B pricing — they're the decision-makers.
+  // Regular employees (user_type=employee) and individual users with a company_id
+  // still see B2C pricing: they're not the ones purchasing plans.
   const isCompanyAccount = profile?.user_type === "hr_admin"
-    || profile?.user_type === "employee"
     || !!profile?.is_org_owner
-    || !!profile?.company_id
     || profile?.acct_type === "company"
     || profile?.acct_type === "hr";
 
