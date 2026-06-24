@@ -8,9 +8,10 @@
 const API_BASE    = import.meta.env.VITE_API_URL || "/api";
 const GEMINI_KEY  = import.meta.env.VITE_GEMINI_API_KEY || "";
 // Primary model: gemini-2.0-flash (15 req/min free)
-// Fallback model: gemini-1.5-flash-8b (higher free quota, ~1500 req/day)
+// Fallback model: gemini-2.0-flash-lite (higher free quota, lighter)
+// NOTE: gemini-1.5-flash-8b was removed from the API in 2025 — DO NOT use it
 const GEMINI_URL    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-const GEMINI_URL_FB = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent";
+const GEMINI_URL_FB = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
