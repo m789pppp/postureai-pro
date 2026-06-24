@@ -398,13 +398,35 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
     baseline
   )));
 
-  // Alerts — SYNCED with backend.py alert thresholds exactly
-  // (each gated by the same visibility check used for its score, so a
-  // low-confidence read can't fire a misleading alert)
-  // Neck alert thresholds use the same shoulder-width-adjusted
-  // neckOkAdj/neckBadAdj as the score, so the alert text severity
-  // actually matches when the score crosses into its bad zone —
-  // previously these were hardcoded 12°/20° regardless of distance.
+  // ── Elbow ergonomics (RSI indicator) ────────────────────────────
+  // Measures elbow flexion from shoulder→elbow→wrist angle.
+  // Ideal: 90-100° for keyboard use. <70° = too high (shoulder strain).
+  // >120° = too low (reaches down, causes forearm/wrist deviation).
+  // Informational only — not in weighted score (needs visible wrists,
+  // which are outside frame for most laptop setups).
+  const lElbow = px(PL.L_ELBOW), rElbow = px(PL.R_ELBOW);
+  const lWrist = px(PL.L_WRIST), rWrist = px(PL.R_WRIST);
+  const lElbOK = vis(PL.L_ELBOW) && vis(PL.L_WRIST) && vis(PL.L_SHOULDER);
+  const rElbOK = vis(PL.R_ELBOW) && vis(PL.R_WRIST) && vis(PL.R_SHOULDER);
+  let elbowAngle = null, elbowReliable = false;
+  if (lElbOK || rElbOK) {
+    const calcElbow = (sh, el, wr) => {
+      const v1 = { x: sh.x - el.x, y: sh.y - el.y };
+      const v2 = { x: wr.x - el.x, y: wr.y - el.y };
+      const dot = v1.x*v2.x + v1.y*v2.y;
+      const mag = Math.sqrt(v1.x*v1.x+v1.y*v1.y) * Math.sqrt(v2.x*v2.x+v2.y*v2.y);
+      return mag > 0 ? Math.round(Math.acos(Math.min(1,Math.max(-1,dot/mag))) * 180 / Math.PI) : null;
+    };
+    const lAng = lElbOK ? calcElbow(lSh, lElbow, lWrist) : null;
+    const rAng = rElbOK ? calcElbow(rSh, rElbow, rWrist) : null;
+    if (lAng != null && rAng != null) elbowAngle = Math.round((lAng + rAng) / 2);
+    else elbowAngle = lAng ?? rAng;
+    elbowReliable = true;
+  }
+  const elbowSc = elbowAngle != null
+    ? scoreMetric(Math.abs(elbowAngle - 95), 0, 15, 30) // ideal ~95°, ok ±15°, bad ±30°
+    : NEUTRAL;
+
   const alerts = [
     neckOK && neckLean > neckBadAdj && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`,
     neckOK && neckLean > (neckOkAdj+neckBadAdj)/2 && neckLean <= neckBadAdj && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`,
@@ -420,6 +442,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
     neckOK && fhpCm > 3 && fhpCm <= 6 && `Forward head posture ${fhpCm}cm (+${extraLoadKg}kg neck load) — tuck chin back`,
     shOK && roundedDepth > 15 && `⚠️ Rounded shoulders detected — pull shoulder blades together and down`,
     shOK && roundedDepth > 8 && roundedDepth <= 15 && `Shoulders slightly forward — open chest, squeeze shoulder blades gently`,
+    elbowReliable && elbowAngle != null && elbowAngle < 70 && `⚠️ Elbows too high (${elbowAngle}°) — lower keyboard or raise chair`,
+    elbowReliable && elbowAngle != null && elbowAngle > 125 && `Elbows too low (${elbowAngle}°) — raise keyboard or desk height`,
   ].filter(Boolean);
 
   return {
@@ -430,9 +454,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
       shoulder_level:   { value: Math.round(shTilt),    score: shSc,      unit: "°",     label: "Shoulder level",           reliable: shOK, signed: Math.round(((rSh.y-lSh.y)>0?shTilt:-shTilt)*10)/10 },
       spine_lean:       { value: Math.round(spineLean), score: spineSc,   unit: "°",     label: "Spine lean",               reliable: spineOK },
       head_yaw:         { value: Math.round(headYaw),   score: yawSc,     unit: "°",     label: "Head turn",                reliable: eyeOK },
-      screen_distance:  { value: distCm,                score: distSc,   unit: "cm",    label: "Screen distance", calibrated: !!(distCalibFactor && distCalibFactor>0) },
-      fhp_index:        { value: fhpCm, score: fhpSc, unit: "cm", label: "Forward head posture", extra_load_kg: extraLoadKg, reliable: neckOK },
+      screen_distance:  { value: distCm,                score: distSc,    unit: "cm",    label: "Screen distance",          calibrated: !!(distCalibFactor && distCalibFactor>0) },
+      fhp_index:        { value: fhpCm,                 score: fhpSc,     unit: "cm",    label: "Forward head posture",     extra_load_kg: extraLoadKg, reliable: neckOK },
       rounded_shoulders:{ value: Math.round(roundedDepth*10)/10, score: roundedSc, unit: "depth", label: "Rounded shoulders", asymmetry: Math.round(shZAsym*1000)/1000, reliable: shOK },
+      elbow_angle:      { value: elbowAngle,            score: elbowSc,   unit: "°",     label: "Elbow angle",              reliable: elbowReliable },
     },
     alerts,
     recommendations: [

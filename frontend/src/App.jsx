@@ -560,8 +560,86 @@ function drawFront(ctx,res,W,H,isAr=false){
     ctx.fillText(`📏 ${raw.distCm}cm`,W-60,H-12);
   }
 
-  // ── Risk panel (bottom-left) ──────────────────────────────────
-  const panelX=8, panelY=H-92, panelW=148, panelH=86;
+  // ── FHP visual line ───────────────────────────────────────────
+  // Draws a horizontal line from the shoulder midpoint to a projected
+  // "ideal" ear position (directly above shoulder) and shows the gap
+  // in cm with the extra neck load. Makes Forward Head Posture
+  // immediately obvious to the user without explaining angles.
+  const fhpMet = metrics?.fhp_index;
+  if(fhpMet?.reliable!==false && valid(lm.midSh) && valid(lm.midEar)){
+    const[sx,sy]=px(lm.midSh); const[ex,ey]=px(lm.midEar);
+    const fhpCm   = fhpMet?.value ?? 0;
+    const loadKg  = fhpMet?.extra_load_kg ?? 0;
+    const fhpCol  = fhpCm > 6 ? "#ef4444" : fhpCm > 3 ? "#f59e0b" : "#10b981";
+
+    // Ideal ear position (directly above shoulder midpoint)
+    const idealX = sx, idealY = ey;
+
+    // Dashed reference vertical from shoulder up to eye level
+    ctx.save();
+    ctx.globalAlpha = .35;
+    ctx.setLineDash([5, 5]);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#94a3b8";
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, ey); ctx.stroke();
+    ctx.setLineDash([]);
+
+    if(fhpCm > 1.5){
+      // Horizontal displacement arrow
+      ctx.globalAlpha = .85;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = fhpCol;
+      ctx.beginPath(); ctx.moveTo(idealX, idealY); ctx.lineTo(ex, ey); ctx.stroke();
+      // Arrowhead at ear end
+      const dir = ex > idealX ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - dir*8, ey - 4);
+      ctx.lineTo(ex - dir*8, ey + 4);
+      ctx.closePath(); ctx.fillStyle = fhpCol; ctx.fill();
+      // FHP badge (top-right of screen)
+      ctx.globalAlpha = .88;
+      ctx.fillStyle = "rgba(2,8,20,.85)";
+      _roundRect(ctx, W-108, 8, 100, 30, 6); ctx.fill();
+      ctx.fillStyle = fhpCol; ctx.font = "bold 10px system-ui";
+      ctx.fillText(`FHP ${fhpCm}cm`, W-104, 22);
+      ctx.fillStyle = "#94a3b8"; ctx.font = "9px system-ui";
+      ctx.fillText(`+${loadKg}kg load`, W-104, 33);
+    }
+    ctx.restore();
+  }
+
+  // ── Ideal posture arc hint at neck ────────────────────────────
+  // Draws a small arc at the shoulder showing the ideal 0-6° zone
+  if(valid(lm.midSh) && valid(lm.midEar)){
+    const[sx,sy]=px(lm.midSh);
+    const R = 32;
+    // Shade the "ok zone" (0–6° from vertical) as a faint green arc
+    ctx.save();
+    ctx.globalAlpha = .12;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.arc(sx, sy, R, -Math.PI/2 - (6*Math.PI/180), -Math.PI/2 + (6*Math.PI/180));
+    ctx.closePath();
+    ctx.fillStyle = "#10b981"; ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Rounded shoulders badge ───────────────────────────────────
+  const rsMet = metrics?.rounded_shoulders;
+  if(rsMet?.reliable!==false && (rsMet?.value ?? 0) > 5){
+    const rsCol = (rsMet.value??0) > 15 ? "#ef4444" : "#f59e0b";
+    ctx.save();
+    ctx.globalAlpha = .88;
+    ctx.fillStyle = "rgba(2,8,20,.85)";
+    _roundRect(ctx, W-108, 44, 100, 20, 5); ctx.fill();
+    ctx.fillStyle = rsCol; ctx.font = "bold 9px system-ui";
+    ctx.fillText(`⚠ Rounded ${Math.round(rsMet.value??0)}`, W-104, 57);
+    ctx.restore();
+  }
+
+  // ── Risk panel (bottom-left) with values ─────────────────────
+  const panelX=8, panelY=H-110, panelW=160, panelH=104;
   ctx.globalAlpha=.82;
   ctx.fillStyle="rgba(2,8,20,.85)";
   _roundRect(ctx,panelX,panelY,panelW,panelH,8);
@@ -569,26 +647,29 @@ function drawFront(ctx,res,W,H,isAr=false){
   ctx.globalAlpha=1;
 
   const rows=[
-    { label:isAr?"الرقبة":"Neck",     col:neckCol, score:neckScore },
-    { label:isAr?"الكتفين":"Shoulder", col:shCol,   score:shScore  },
-    { label:isAr?"الظهر":"Back",       col:backCol, score:backScore },
+    { label:isAr?"الرقبة":"Neck",     col:neckCol, score:neckScore, val: metrics?.neck_lean?.value, unit:"°" },
+    { label:isAr?"الكتفين":"Shoulder", col:shCol,   score:shScore,   val: metrics?.shoulder_level?.value, unit:"°" },
+    { label:isAr?"الظهر":"Back",       col:backCol, score:backScore, val: metrics?.spine_lean?.value, unit:"°" },
+    { label:isAr?"المسافة":"Dist",     col:raw?.distCm>=raw?.idealDistLo&&raw?.distCm<=raw?.idealDistHi?"#10b981":raw?.distCm>=(raw?.idealDistLo-15)?"#f59e0b":"#ef4444",
+      score: metrics?.screen_distance?.score ?? 90,
+      val: raw?.distCm, unit:"cm" },
   ];
   ctx.font="bold 10px system-ui";
-  rows.forEach(({label,col,score},i)=>{
-    const ry=panelY+14+i*24;
-    // Label
-    ctx.fillStyle="#94a3b8"; ctx.fillText(label,panelX+8,ry);
-    // Risk bar (50px wide)
-    const barX=panelX+60, barW=60, barFill=Math.max(4,(score??0)/100*barW);
+  rows.forEach(({label,col,score,val,unit},i)=>{
+    const ry=panelY+16+i*24;
+    ctx.fillStyle="#94a3b8"; ctx.font="10px system-ui";
+    ctx.fillText(label,panelX+8,ry);
+    // Risk bar
+    const barX=panelX+52, barW=54, barFill=Math.max(4,(score??0)/100*barW);
     ctx.fillStyle="rgba(255,255,255,.08)";
     _roundRect(ctx,barX,ry-9,barW,10,5); ctx.fill();
     ctx.fillStyle=col;
     _roundRect(ctx,barX,ry-9,barFill,10,5); ctx.fill();
-    // Risk text
-    ctx.fillStyle=col;
-    ctx.font="600 9px system-ui";
-    ctx.fillText(_riskLabel(score,isAr),barX+barW+4,ry);
-    ctx.font="bold 10px system-ui";
+    // Value
+    if(val!=null){
+      ctx.fillStyle=col; ctx.font="600 9px system-ui";
+      ctx.fillText(`${val}${unit}`,barX+barW+4,ry);
+    }
   });
 
   ctx.restore();
@@ -645,6 +726,60 @@ function drawSide(ctx,res,W,H,isAr=false){
     ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,.6)"; ctx.stroke();
   });
 
+  // ── Plumb-line (ear → ankle ideal vertical) ───────────────────
+  // In ideal seated posture the ear should be directly above the ankle.
+  // Drawing this vertical reference lets the user see at a glance how
+  // far forward their head has drifted relative to their base of support.
+  if(valid(lm.ear) && valid(lm.ankle)){
+    const[ex,ey]=px(lm.ear),[ax,ay]=px(lm.ankle);
+    ctx.save();
+    // Ideal vertical (dashed)
+    ctx.globalAlpha=.28; ctx.setLineDash([6,5]);
+    ctx.lineWidth=1.5; ctx.strokeStyle="#94a3b8";
+    ctx.beginPath(); ctx.moveTo(ax,ey); ctx.lineTo(ax,ay); ctx.stroke();
+    ctx.setLineDash([]);
+    // Deviation line (ear to ideal vertical)
+    const devPx = Math.abs(ex - ax);
+    const devPct = Math.round(devPx / Math.max(W,1) * 100);
+    if(devPx > 8){
+      const plumbCol = devPct > 9 ? "#ef4444" : devPct > 5 ? "#f59e0b" : "#10b981";
+      ctx.globalAlpha=.7; ctx.lineWidth=1.5; ctx.strokeStyle=plumbCol;
+      ctx.setLineDash([3,4]);
+      ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ax,ey); ctx.stroke();
+      ctx.setLineDash([]);
+      // Label
+      ctx.globalAlpha=.9;
+      ctx.fillStyle="rgba(2,8,20,.75)"; _roundRect(ctx,(ex+ax)/2-20,ey-18,40,14,4); ctx.fill();
+      ctx.fillStyle=plumbCol; ctx.font="bold 9px system-ui";
+      ctx.fillText(`${devPct}% off`,( ex+ax)/2-18,ey-7);
+    }
+    ctx.restore();
+  }
+
+  // ── Angle arcs at hip and knee ────────────────────────────────
+  // Small filled arcs show the joint angle deviation from 90° visually.
+  const drawArc=(center,from,to,col,label)=>{
+    if(!valid(center)||!valid(from)||!valid(to)) return;
+    const[cx,cy]=px(center),[fx,fy]=px(from),[tx,ty]=px(to);
+    const a1=Math.atan2(fy-cy,fx-cx), a2=Math.atan2(ty-cy,tx-cx);
+    const R=20;
+    ctx.save();
+    ctx.globalAlpha=.22; ctx.beginPath();
+    ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a1,a2,false); ctx.closePath();
+    ctx.fillStyle=col; ctx.fill();
+    ctx.globalAlpha=.7; ctx.lineWidth=1.5; ctx.strokeStyle=col;
+    ctx.beginPath(); ctx.arc(cx,cy,R,a1,a2,false); ctx.stroke();
+    ctx.restore();
+  };
+
+  if(valid(lm.sh)&&valid(lm.hip)&&valid(lm.knee)){
+    drawArc(lm.hip,lm.sh,lm.knee,hipCol,"hip");
+  }
+  if(valid(lm.hip)&&valid(lm.knee)&&valid(lm.ankle)){
+    const kneeScore2=metrics?.knee_angle?.score??90;
+    drawArc(lm.knee,lm.hip,lm.ankle,_riskColor(kneeScore2),"knee");
+  }
+
   // ── Angle labels ──────────────────────────────────────────────
   ctx.font="bold 10px system-ui"; ctx.globalAlpha=.95;
 
@@ -676,26 +811,30 @@ function drawSide(ctx,res,W,H,isAr=false){
     }
   }
 
-  // ── Risk panel ────────────────────────────────────────────────
-  const panelX=8,panelY=H-92,panelW=148,panelH=86;
+  // ── Risk panel with values ────────────────────────────────────
+  const panelX=8,panelY=H-110,panelW=162,panelH=104;
   ctx.globalAlpha=.82; ctx.fillStyle="rgba(2,8,20,.85)";
   _roundRect(ctx,panelX,panelY,panelW,panelH,8); ctx.fill();
   ctx.globalAlpha=1;
   const rows=[
-    {label:isAr?"الرقبة":"Neck",  col:neckCol,  score:neckScore},
-    {label:isAr?"الجذع":"Trunk",  col:trunkCol, score:trunkScore},
-    {label:isAr?"الورك":"Hip",    col:hipCol,   score:hipScore},
+    {label:isAr?"الرقبة":"Neck",  col:neckCol,  score:neckScore,  val:metrics?.neck_lean?.value, unit:"°"},
+    {label:isAr?"الجذع":"Trunk",  col:trunkCol, score:trunkScore, val:metrics?.trunk_lean?.value, unit:"°"},
+    {label:isAr?"الورك":"Hip",    col:hipCol,   score:hipScore,   val:metrics?.hip_angle?.value, unit:"°"},
+    {label:isAr?"الركبة":"Knee",  col:_riskColor(metrics?.knee_angle?.score??90), score:metrics?.knee_angle?.score??90, val:metrics?.knee_angle?.value, unit:"°"},
   ];
   ctx.font="bold 10px system-ui";
-  rows.forEach(({label,col,score},i)=>{
-    const ry=panelY+14+i*24;
-    ctx.fillStyle="#94a3b8"; ctx.fillText(label,panelX+8,ry);
-    const barX=panelX+60,barW=60,barFill=Math.max(4,(score??0)/100*barW);
+  rows.forEach(({label,col,score,val,unit},i)=>{
+    const ry=panelY+16+i*24;
+    ctx.fillStyle="#94a3b8"; ctx.font="10px system-ui";
+    ctx.fillText(label,panelX+8,ry);
+    const barX=panelX+52,barW=54,barFill=Math.max(4,(score??0)/100*barW);
     ctx.fillStyle="rgba(255,255,255,.08)";
     _roundRect(ctx,barX,ry-9,barW,10,5); ctx.fill();
     ctx.fillStyle=col; _roundRect(ctx,barX,ry-9,barFill,10,5); ctx.fill();
-    ctx.fillStyle=col; ctx.font="600 9px system-ui";
-    ctx.fillText(_riskLabel(score,isAr),barX+barW+4,ry);
+    if(val!=null){
+      ctx.fillStyle=col; ctx.font="600 9px system-ui";
+      ctx.fillText(`${val}${unit}`,barX+barW+4,ry);
+    }
     ctx.font="bold 10px system-ui";
   });
 
