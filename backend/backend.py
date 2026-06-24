@@ -257,6 +257,60 @@ except ImportError:
 # ── Config ─────────────────────────────────────────────────────────
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
 
+# ── Groq — free cloud LLM fallback (14,400 req/day free tier) ────────
+# Get free key at: console.groq.com → API Keys → Create API Key
+# Set GROQ_API_KEY in Railway env vars — no credit card needed
+GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")  # fast + bilingual
+GROQ_URL            = "https://api.groq.com/openai/v1/chat/completions"
+
+def call_groq(prompt, system_prompt=None, max_tokens=900, temperature=0.25):
+    """
+    Call Groq API (free tier: 14,400 req/day, 30 req/min).
+    Uses llama-3.1-8b-instant by default — fast, bilingual AR+EN.
+    Falls back to mixtral-8x7b-32768 on 429.
+    Returns text string or None on failure.
+    """
+    if not GROQ_API_KEY:
+        return None
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    models_to_try = [GROQ_MODEL, "mixtral-8x7b-32768", "gemma2-9b-it"]
+    for model in models_to_try:
+        try:
+            resp = requests.post(
+                GROQ_URL,
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                },
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                if text:
+                    log_event("groq_ok", meta={"model": model, "chars": len(text)})
+                    return text
+            elif resp.status_code == 429:
+                log_event("groq_rate_limit", meta={"model": model})
+                continue  # try next model
+            else:
+                log_event("groq_error", meta={"status": resp.status_code, "model": model})
+                return None
+        except Exception as e:
+            log_event("groq_exception", meta={"error": str(e)[:80], "model": model})
+    return None
+
 # ── Local LLM (Ollama) — drop-in Gemini replacement ──────────────────
 # Set OLLAMA_URL to your Ollama instance (e.g. http://localhost:11434 or
 # http://192.168.1.x:11434 if backend runs on a different machine).
@@ -4069,6 +4123,15 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
             max_tokens=max_tokens,
             temperature=temperature,
             system_prompt=system_prompt,
+        )
+
+    # ── 3. Groq fallback (free tier — no cost) ───────────────────────
+    if result is None and GROQ_API_KEY:
+        result = call_groq(
+            prompt,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
 
     # ── Cache successful result ──────────────────────────────────────
@@ -12878,12 +12941,34 @@ You can help with:
             except Exception as _ge:
                 log_event("coach_gemini_error", meta={"error": str(_ge)[:80]})
 
+        # ── 3. Groq fallback (free tier — OpenAI-compatible) ──────────
+        if text is None and GROQ_API_KEY:
+            _groq_models = [GROQ_MODEL, "gemma2-9b-it"]
+            for _gm in _groq_models:
+                try:
+                    _resp_groq = req.post(
+                        GROQ_URL,
+                        headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                        json={"model": _gm, "messages": [{"role": "system", "content": sys_prompt}] + ollama_msgs, "max_tokens": 800, "temperature": 0.5},
+                        timeout=15,
+                    )
+                    if _resp_groq.status_code == 200:
+                        text = (_resp_groq.json().get("choices") or [{}])[0].get("message", {}).get("content", "") or None
+                        if text:
+                            log_event("coach_groq_ok", meta={"model": _gm})
+                            break
+                    elif _resp_groq.status_code != 429:
+                        break
+                except Exception as _gre:
+                    log_event("coach_groq_error", meta={"error": str(_gre)[:80]})
+                    break
+
         if text is None:
             return jsonify({"error": "AI unavailable — try again in a few seconds", "ok": False}), 503
 
         # ── Audit + usage tracking ────────────────────────────────────
         _uid = getattr(g, "uid", "unknown")
-        audit(_uid, "ai_coach_query", "local" if OLLAMA_URL else "gemini", {"lang": lang, "turns": len(gemini_contents)})
+        audit(_uid, "ai_coach_query", "local" if OLLAMA_URL else ("groq" if (text and GROQ_API_KEY) else "gemini"), {"lang": lang, "turns": len(gemini_contents)})
         try:
             import redis as _r2
             _rc2 = _r2.from_url(os.getenv("REDIS_URL","redis://localhost:6379/0"))

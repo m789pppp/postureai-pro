@@ -1,17 +1,20 @@
 /**
- * gemini.js — AI calls with smart fallback + 429 retry logic
- * Primary: backend proxy (/api/coach/chat, /api/ai/analyze)
- * Fallback: direct Gemini API if backend returns 404/5xx or times out
- *   Uses VITE_GEMINI_API_KEY (set in Vercel env vars, never committed)
+ * gemini.js — AI calls with smart fallback chain + 429 retry logic
+ * Priority: Backend proxy → Direct Gemini → Direct Groq (free) → Friendly error
  */
 
-const API_BASE    = import.meta.env.VITE_API_URL || "/api";
-const GEMINI_KEY  = import.meta.env.VITE_GEMINI_API_KEY || "";
-// Primary model: gemini-2.0-flash (15 req/min free)
-// Fallback model: gemini-2.0-flash-lite (higher free quota, lighter)
-// NOTE: gemini-1.5-flash-8b was removed from the API in 2025 — DO NOT use it
+const API_BASE   = import.meta.env.VITE_API_URL || "/api";
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY || "";
+
+// Gemini models
 const GEMINI_URL    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 const GEMINI_URL_FB = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent";
+
+// Groq (free tier: 14,400 req/day — no credit card needed)
+// Get key at: console.groq.com → API Keys → Create API Key
+const GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODELS = ["llama-3.1-8b-instant", "gemma2-9b-it"];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -23,12 +26,43 @@ async function getAuthToken() {
   } catch { return ""; }
 }
 
-// Direct Gemini call with retry + model fallback for 429
-// Strategy: try primary → 3s wait → retry primary → try fallback model → give up
-async function _directGemini(systemPrompt, userPrompt, maxTokens = 600) {
-  if (!GEMINI_KEY) {
-    throw new Error("AI key not configured — contact support");
+// ── Direct Groq call (free, no key needed from user) ─────────────────
+async function _directGroq(systemPrompt, userPrompt, maxTokens = 600) {
+  if (!GROQ_KEY) return null; // silently skip if key not set
+
+  const messages = [
+    ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
+    { role: "user", content: userPrompt },
+  ];
+
+  for (const model of GROQ_MODELS) {
+    try {
+      const res = await fetch(GROQ_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_KEY}`,
+        },
+        body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.7 }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const text = d?.choices?.[0]?.message?.content || "";
+        if (text) return text;
+      }
+      if (res.status !== 429) break; // non-429 error → stop trying
+    } catch {
+      break;
+    }
   }
+  return null; // Groq also failed — caller will throw friendly error
+}
+
+// ── Direct Gemini call with retry + model fallback for 429 ───────────
+async function _directGemini(systemPrompt, userPrompt, maxTokens = 600) {
+  if (!GEMINI_KEY) return null;
+
   const contents = [
     ...(systemPrompt ? [
       { role: "user",  parts: [{ text: systemPrompt }] },
@@ -45,48 +79,58 @@ async function _directGemini(systemPrompt, userPrompt, maxTokens = 600) {
   for (let mi = 0; mi < models.length; mi++) {
     const url = `${models[mi]}?key=${GEMINI_KEY}`;
     for (let retry = 0; retry < 2; retry++) {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-      });
-
-      if (res.ok) {
-        const d = await res.json();
-        const text = d?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        if (!text) throw new Error("Gemini returned an empty response");
-        return text;
-      }
-
-      if (res.status === 429) {
-        if (retry === 0) {
-          // First 429: wait 3 seconds, retry same model
-          await sleep(3000);
-          continue;
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+        if (res.ok) {
+          const d = await res.json();
+          const text = d?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          if (text) return text;
         }
-        // Second 429 on this model → try fallback model
-        break;
-      }
-
-      // Other errors: parse and throw immediately
-      const errBody = await res.json().catch(() => ({}));
-      throw new Error(errBody?.error?.message || `Gemini ${res.status}`);
+        if (res.status === 429) {
+          if (retry === 0) { await sleep(3000); continue; }
+          break; // try next model
+        }
+        // Other errors
+        const errBody = await res.json().catch(() => ({}));
+        console.warn("[Gemini] error:", errBody?.error?.message);
+        return null;
+      } catch { return null; }
     }
   }
+  return null; // rate limited on all models
+}
 
-  // Both models rate-limited
-  throw new Error("AI is busy right now — wait 30 seconds and try again");
+// ── Friendly error messages ───────────────────────────────────────────
+function friendlyError(e, lang = "en") {
+  const msg = e?.message || "";
+  if (msg.includes("limit_reached") || msg.includes("coach_limit"))
+    return lang === "ar"
+      ? "وصلت لحد الـ AI للشهر ده — اترقي للـ Elite للرسائل غير المحدودة"
+      : "Monthly AI limit reached — upgrade to Elite for unlimited messages";
+  if (msg.includes("not configured") || msg.includes("VITE_GEMINI"))
+    return lang === "ar" ? "خدمة AI مش مفعّلة — تواصل مع الدعم" : "AI service not active — contact support";
+  if (msg.includes("429") || msg.includes("busy") || msg.includes("rate"))
+    return lang === "ar"
+      ? "الـ AI مشغول دلوقتي — انتظر ثانية وجرب تاني"
+      : "AI is busy right now — wait a moment and try again";
+  if (msg.includes("timeout") || msg.includes("abort"))
+    return lang === "ar" ? "انقطع الاتصال — جرب تاني" : "Connection timed out — please try again";
+  return lang === "ar" ? "حصل خطأ في الـ AI — جرب تاني" : "AI error — please try again";
 }
 
 /**
- * Main chat — backend first, direct Gemini fallback
+ * Main chat — backend → Gemini direct → Groq free → friendly error
  */
 export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxTokens = 600, lang = "en" } = {}) {
   const messages = Array.isArray(messagesOrPrompt)
     ? messagesOrPrompt
     : [{ role: "user", content: String(messagesOrPrompt) }];
 
-  // Try backend
+  // ── 1. Try backend ───────────────────────────────────────────────
   try {
     const tok = await getAuthToken();
     const res = await fetch(`${API_BASE}/coach/chat`, {
@@ -106,23 +150,37 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
 
     const err = await res.json().catch(() => ({}));
     if (err.error === "coach_limit_reached")
-      throw new Error(err.message || "Monthly AI limit reached — upgrade for more.");
+      throw new Error(err.message || "coach_limit_reached");
     if (res.status !== 404 && res.status < 500)
       throw new Error(err.error || err.message || `AI error ${res.status}`);
-    console.warn(`[Gemini] backend ${res.status} — direct fallback`);
+    console.warn(`[AI] backend ${res.status} — trying direct fallback`);
   } catch (e) {
-    if (e.message?.includes("limit_reached") || e.message?.includes("AI error")) throw e;
-    console.warn("[Gemini] backend unreachable:", e.message);
+    if (e.message?.includes("limit_reached") || e.message?.includes("coach_limit")) throw e;
+    console.warn("[AI] backend unreachable:", e.message);
   }
 
   const lastPrompt = messages[messages.length - 1]?.content || "";
-  return _directGemini(systemPrompt, lastPrompt, maxTokens);
+
+  // ── 2. Try Gemini direct ─────────────────────────────────────────
+  const geminiResult = await _directGemini(systemPrompt, lastPrompt, maxTokens);
+  if (geminiResult) return geminiResult;
+
+  // ── 3. Try Groq (free) ───────────────────────────────────────────
+  const groqResult = await _directGroq(systemPrompt, lastPrompt, maxTokens);
+  if (groqResult) return groqResult;
+
+  // ── All failed — friendly error ──────────────────────────────────
+  throw new Error(lang === "ar"
+    ? "الـ AI مش متاح دلوقتي — جرب بعد شوية"
+    : "AI is temporarily unavailable — please try again in a moment"
+  );
 }
 
 /**
- * Generic AI analysis — proxies through /api/ai/analyze, falls back to direct
+ * Generic AI analysis — backend → Gemini → Groq → friendly error
  */
 export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTokens = 600 } = {}) {
+  // ── 1. Try backend ───────────────────────────────────────────────
   try {
     const tok = await getAuthToken();
     const res = await fetch(`${API_BASE}/ai/analyze`, {
@@ -134,7 +192,6 @@ export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTok
       body: JSON.stringify({ prompt, lang, context, max_tokens: maxTokens }),
       signal: AbortSignal.timeout(8000),
     });
-
     if (res.ok) {
       const data = await res.json();
       return data.text || data.response || "";
@@ -142,14 +199,30 @@ export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTok
     const err = await res.json().catch(() => ({}));
     if (res.status !== 404 && res.status < 500)
       throw new Error(err.error || `AI error ${res.status}`);
-    console.warn(`[Gemini] /ai/analyze ${res.status} — direct fallback`);
+    console.warn(`[AI] /ai/analyze ${res.status} — direct fallback`);
   } catch (e) {
     if (e.message?.includes("AI error")) throw e;
-    console.warn("[Gemini] backend unreachable:", e.message);
+    console.warn("[AI] backend unreachable:", e.message);
   }
 
-  return _directGemini("", prompt, maxTokens);
+  const systemCtx = context?.system_prompt || "";
+
+  // ── 2. Try Gemini direct ─────────────────────────────────────────
+  const geminiResult = await _directGemini(systemCtx, prompt, maxTokens);
+  if (geminiResult) return geminiResult;
+
+  // ── 3. Try Groq (free) ───────────────────────────────────────────
+  const groqResult = await _directGroq(systemCtx, prompt, maxTokens);
+  if (groqResult) return groqResult;
+
+  throw new Error(lang === "ar"
+    ? "تحليل الـ AI مش متاح دلوقتي"
+    : "AI analysis temporarily unavailable"
+  );
 }
+
+// Re-export friendly error helper for use in components
+export { friendlyError };
 
 export function buildCoachContext(sessions = [], profile = {}) {
   const avg    = sessions.length ? Math.round(sessions.reduce((a,s) => a + (s.avg_score||0), 0) / sessions.length) : 0;
