@@ -398,28 +398,106 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
     baseline
   )));
 
-  // Alerts — SYNCED with backend.py alert thresholds exactly
-  // (each gated by the same visibility check used for its score, so a
-  // low-confidence read can't fire a misleading alert)
-  // Neck alert thresholds use the same shoulder-width-adjusted
-  // neckOkAdj/neckBadAdj as the score, so the alert text severity
-  // actually matches when the score crosses into its bad zone —
-  // previously these were hardcoded 12°/20° regardless of distance.
+  // ── Elbow ergonomics (RSI indicator) ────────────────────────────
+  // Measures elbow flexion from shoulder→elbow→wrist angle.
+  // Ideal: 90-100° for keyboard use. <70° = too high (shoulder strain).
+  // >120° = too low (reaches down, causes forearm/wrist deviation).
+  // Informational only — not in weighted score (needs visible wrists,
+  // which are outside frame for most laptop setups).
+  const lElbow = px(PL.L_ELBOW), rElbow = px(PL.R_ELBOW);
+  const lWrist = px(PL.L_WRIST), rWrist = px(PL.R_WRIST);
+  const lElbOK = vis(PL.L_ELBOW) && vis(PL.L_WRIST) && vis(PL.L_SHOULDER);
+  const rElbOK = vis(PL.R_ELBOW) && vis(PL.R_WRIST) && vis(PL.R_SHOULDER);
+  let elbowAngle = null, elbowReliable = false;
+  if (lElbOK || rElbOK) {
+    const calcElbow = (sh, el, wr) => {
+      const v1 = { x: sh.x - el.x, y: sh.y - el.y };
+      const v2 = { x: wr.x - el.x, y: wr.y - el.y };
+      const dot = v1.x*v2.x + v1.y*v2.y;
+      const mag = Math.sqrt(v1.x*v1.x+v1.y*v1.y) * Math.sqrt(v2.x*v2.x+v2.y*v2.y);
+      return mag > 0 ? Math.round(Math.acos(Math.min(1,Math.max(-1,dot/mag))) * 180 / Math.PI) : null;
+    };
+    const lAng = lElbOK ? calcElbow(lSh, lElbow, lWrist) : null;
+    const rAng = rElbOK ? calcElbow(rSh, rElbow, rWrist) : null;
+    if (lAng != null && rAng != null) elbowAngle = Math.round((lAng + rAng) / 2);
+    else elbowAngle = lAng ?? rAng;
+    elbowReliable = true;
+  }
+  const elbowSc = elbowAngle != null
+    ? scoreMetric(Math.abs(elbowAngle - 95), 0, 15, 30) // ideal ~95°, ok ±15°, bad ±30°
+    : NEUTRAL;
+
+  // ── #1  Monitor Height Offset ─────────────────────────────────
+  // Estimates whether the monitor is above or below eye level using
+  // the vertical angle from the nose tip to the eye midpoint (head
+  // pitch proxy). No FaceMesh needed — the nose sits ~3-4cm below
+  // the eye axis; when the head tilts down to look at a low monitor,
+  // the nose drops below the eye midpoint by more than its natural
+  // offset. Converts the pitch angle + current distCm to cm offset.
+  let monitorOffsetCm = 0, monitorDir = "ok", monitorSc = NEUTRAL;
+  if (eyeOK) {
+    const eyeMidY  = (lEye.y + rEye.y) / 2;
+    const eyeWidth = Math.abs(rEye.x - lEye.x);
+    // Vertical nose offset as fraction of eye width (normalized, distance-independent)
+    const noseDropFrac = (nose.y - eyeMidY) / Math.max(eyeWidth, 1);
+    // At neutral gaze noseDropFrac ≈ 0.55-0.70. Deviation from that indicates pitch.
+    const NEUTRAL_FRAC = 0.62;
+    const pitchProxy = (noseDropFrac - NEUTRAL_FRAC) * 90; // ~degrees
+    const pitchDeg = Math.round(pitchProxy * 10) / 10;
+    if (Math.abs(pitchDeg) > 2 && distCm > 20) {
+      monitorOffsetCm = Math.round(distCm * Math.tan(Math.abs(pitchDeg) * Math.PI / 180) * 10) / 10;
+      monitorDir = pitchDeg > 0 ? "below" : "above"; // nose drops = looking down = monitor below
+    }
+    monitorSc = scoreMetric(Math.abs(pitchDeg), 0, 5, 18);
+  }
+
+  // ── #3  Session Fatigue Score Adjustment ─────────────────────
+  // After 90+ minutes the body's postural endurance decreases —
+  // a score of 70 at 30 minutes represents different effort than
+  // 70 at 2 hours. Multiply fatigue as an informational field; the
+  // weighted overall score is NOT adjusted (would cause confusion).
+  // Instead, expose this as a separate metric the UI can display.
+  const sessionMinutes = typeof performance !== "undefined"
+    ? Math.round(performance.now() / 60000) : 0;
+  const fatiguePenalty = sessionMinutes > 90 ? Math.min(15, Math.round((sessionMinutes - 90) / 10)) : 0;
+  const fatigueAdjScore = Math.max(0, overall - fatiguePenalty);
+
+  // ── #6  Confidence (expose as metric) ────────────────────────
+  const detectionConfidence = Math.min(94,
+    78 +
+    (vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER) ? 10 : 0) +
+    (vis(PL.L_EAR) ? 3 : 0) +
+    (vis(PL.R_EAR) ? 3 : 0)
+  );
+
+  // ── #7  Alert deduplication — dedupe by cause code ───────────
+  // Same alert can fire from multiple metrics (neck_lean AND fhp_index
+  // both say "raise monitor"). Track by cause key within this frame.
+  const alertsSeen = new Set();
+  const dedupeAlert = (key, text) => {
+    if (!text || alertsSeen.has(key)) return false;
+    alertsSeen.add(key); return text;
+  };
+
   const alerts = [
-    neckOK && neckLean > neckBadAdj && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`,
-    neckOK && neckLean > (neckOkAdj+neckBadAdj)/2 && neckLean <= neckBadAdj && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`,
-    eyeOK && headTilt > 10   && `Head tilting ${Math.round(headTilt)}° — check chair height and monitor centering`,
-    shOK && shTilt > 10     && `Shoulder imbalance ${Math.round(shTilt)}° — adjust armrests`,
-    spineOK && spineLean > 18  && `⚠️ Spine lean ${Math.round(spineLean)}° — sit back and use lumbar support`,
-    spineOK && spineLean > 10 && spineLean <= 18 && `Spine lean ${Math.round(spineLean)}° — engage your core and sit upright`,
-    eyeOK && Math.abs(headYaw) > 18 && `Head turned ${Math.abs(Math.round(headYaw))}° ${headYaw > 0 ? "right" : "left"} — face monitor directly`,
-    distCm < lo - 10 && `⚠️ Very close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
-    distCm < lo && distCm >= lo - 10 && `Too close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`,
-    distCm > hi + 15 && `Too far from screen (${distCm}cm) — ideal is ${lo}–${hi}cm`,
-    neckOK && fhpCm > 6 && `⚠️ Forward head posture ${fhpCm}cm (+${extraLoadKg}kg neck load) — critical: raise monitor immediately`,
-    neckOK && fhpCm > 3 && fhpCm <= 6 && `Forward head posture ${fhpCm}cm (+${extraLoadKg}kg neck load) — tuck chin back`,
-    shOK && roundedDepth > 15 && `⚠️ Rounded shoulders detected — pull shoulder blades together and down`,
-    shOK && roundedDepth > 8 && roundedDepth <= 15 && `Shoulders slightly forward — open chest, squeeze shoulder blades gently`,
+    dedupeAlert("neck_sev",   neckOK && neckLean > neckBadAdj && `⚠️ Severe neck lean ${Math.round(neckLean)}° — raise monitor to eye level immediately`),
+    dedupeAlert("neck_mid",   neckOK && neckLean > (neckOkAdj+neckBadAdj)/2 && neckLean <= neckBadAdj && `Neck lean ${Math.round(neckLean)}° — tuck chin slightly and check monitor height`),
+    dedupeAlert("head_tilt",  eyeOK && headTilt > 10   && `Head tilting ${Math.round(headTilt)}° — check chair height and monitor centering`),
+    dedupeAlert("sh_tilt",    shOK && shTilt > 10     && `Shoulder imbalance ${Math.round(shTilt)}° — adjust armrests`),
+    dedupeAlert("spine_sev",  spineOK && spineLean > 18  && `⚠️ Spine lean ${Math.round(spineLean)}° — sit back and use lumbar support`),
+    dedupeAlert("spine_mid",  spineOK && spineLean > 10 && spineLean <= 18 && `Spine lean ${Math.round(spineLean)}° — engage your core and sit upright`),
+    dedupeAlert("yaw",        eyeOK && Math.abs(headYaw) > 18 && `Head turned ${Math.abs(Math.round(headYaw))}° ${headYaw > 0 ? "right" : "left"} — face monitor directly`),
+    dedupeAlert("dist_close_sev", distCm < lo - 10 && `⚠️ Very close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`),
+    dedupeAlert("dist_close",     distCm < lo && distCm >= lo - 10 && `Too close to screen (${distCm}cm) — move back to ${lo}–${hi}cm`),
+    dedupeAlert("dist_far",       distCm > hi + 15 && `Too far from screen (${distCm}cm) — ideal is ${lo}–${hi}cm`),
+    dedupeAlert("fhp_sev",   neckOK && fhpCm > 6 && `⚠️ Forward head posture ${fhpCm}cm (+${extraLoadKg}kg neck load) — critical: raise monitor immediately`),
+    dedupeAlert("fhp_mid",   neckOK && fhpCm > 3 && fhpCm <= 6 && `Forward head posture ${fhpCm}cm (+${extraLoadKg}kg neck load) — tuck chin back`),
+    dedupeAlert("rounded_sev", shOK && roundedDepth > 15 && `⚠️ Rounded shoulders detected — pull shoulder blades together and down`),
+    dedupeAlert("rounded_mid", shOK && roundedDepth > 8 && roundedDepth <= 15 && `Shoulders slightly forward — open chest, squeeze shoulder blades gently`),
+    dedupeAlert("elbow_hi",  elbowReliable && elbowAngle != null && elbowAngle < 70 && `⚠️ Elbows too high (${elbowAngle}°) — lower keyboard or raise chair`),
+    dedupeAlert("elbow_lo",  elbowReliable && elbowAngle != null && elbowAngle > 125 && `Elbows too low (${elbowAngle}°) — raise keyboard or desk height`),
+    dedupeAlert("monitor_low",  eyeOK && monitorDir === "below" && monitorOffsetCm > 5 && `Monitor ~${monitorOffsetCm}cm below eye level — raise it to reduce neck flexion`),
+    dedupeAlert("monitor_high", eyeOK && monitorDir === "above" && monitorOffsetCm > 5 && `Monitor ~${monitorOffsetCm}cm above eye level — lower it to reduce neck extension`),
   ].filter(Boolean);
 
   return {
@@ -430,9 +508,13 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
       shoulder_level:   { value: Math.round(shTilt),    score: shSc,      unit: "°",     label: "Shoulder level",           reliable: shOK, signed: Math.round(((rSh.y-lSh.y)>0?shTilt:-shTilt)*10)/10 },
       spine_lean:       { value: Math.round(spineLean), score: spineSc,   unit: "°",     label: "Spine lean",               reliable: spineOK },
       head_yaw:         { value: Math.round(headYaw),   score: yawSc,     unit: "°",     label: "Head turn",                reliable: eyeOK },
-      screen_distance:  { value: distCm,                score: distSc,   unit: "cm",    label: "Screen distance", calibrated: !!(distCalibFactor && distCalibFactor>0) },
-      fhp_index:        { value: fhpCm, score: fhpSc, unit: "cm", label: "Forward head posture", extra_load_kg: extraLoadKg, reliable: neckOK },
+      screen_distance:  { value: distCm,                score: distSc,    unit: "cm",    label: "Screen distance",          calibrated: !!(distCalibFactor && distCalibFactor>0) },
+      fhp_index:        { value: fhpCm,                 score: fhpSc,     unit: "cm",    label: "Forward head posture",     extra_load_kg: extraLoadKg, reliable: neckOK },
       rounded_shoulders:{ value: Math.round(roundedDepth*10)/10, score: roundedSc, unit: "depth", label: "Rounded shoulders", asymmetry: Math.round(shZAsym*1000)/1000, reliable: shOK },
+      elbow_angle:      { value: elbowAngle,            score: elbowSc,   unit: "°",     label: "Elbow angle",              reliable: elbowReliable },
+      monitor_height:   { value: monitorOffsetCm,       score: monitorSc, unit: "cm",    label: "Monitor height offset",    direction: monitorDir, reliable: eyeOK },
+      session_fatigue:  { value: fatiguePenalty,        score: fatigueAdjScore, unit: "pts", label: "Fatigue adjustment",  session_min: sessionMinutes },
+      confidence_val:   { value: detectionConfidence,   score: detectionConfidence, unit: "%", label: "Detection confidence" },
     },
     alerts,
     recommendations: [
@@ -446,7 +528,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
     lo, hi,
     headYaw,
     detected:   true,
-    confidence: Math.min(94, 78 + (vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER) ? 10 : 0) + (vis(PL.L_EAR) ? 6 : 0)),
+    confidence: detectionConfidence,
+    fatigue_adjusted_score: fatigueAdjScore,
   };
 }
 
