@@ -1234,9 +1234,14 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                             </span>
                             <span style={{ fontSize:14.5, color:C.muted }}>/{ar ? "شهر" : "mo"}</span>
                           </div>
-                          <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
-                            ≈ {(billing==="monthly" ? p.priceEGP.monthly : Math.round(p.priceEGP.yearly/12)).toLocaleString()} {ar ? "ج.م./شهر" : "EGP/mo"}
-                          </div>
+                          {p.priceEGP.yearly || p.priceEGP.monthly ? (
+                            <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
+                              ≈ {billing==="monthly" || !p.priceEGP.yearly
+                                ? (p.priceEGP.monthly ?? 0).toLocaleString()
+                                : Math.round(p.priceEGP.yearly/12).toLocaleString()
+                              } {ar ? "ج.م./شهر" : "EGP/mo"}
+                            </div>
+                          ) : null}
                         </>
                       )}
                     </div>
