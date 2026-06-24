@@ -165,19 +165,17 @@ def session_delete(session_id: str):
 # ── Posture score buffer (realtime smoothing) ──────────────────────
 def push_score(uid: str, score: int):
     """Push score to per-user buffer for smoothing."""
-    rpush(f"scores:{uid}", str(score), max_len=10)
+    rpush(f"scores:{uid}", str(score), max_len=20)
 
 def get_smoothed_score(uid: str) -> Optional[float]:
     """Get exponentially smoothed score from buffer (oldest → newest, recent=higher weight)."""
-    raw = rlist(f"scores:{uid}", 10)
+    raw = rlist(f"scores:{uid}", 20)
     scores = [int(s) for s in raw if isinstance(s, (str, bytes)) and str(s).strip().isdigit()]
     if not scores: return None
-    # Walk oldest → newest: each new reading gets weight alpha, history (1-alpha).
-    # Previously the loop walked newest → oldest (reversed), which gave the oldest
-    # reading the highest weight — so a single stale bad frame could anchor the
-    # smoothed score low for many subsequent good frames.
-    alpha = 0.5  # heavier weight on recent frames; buffer is only 10 samples so
-                 # 0.35 was too slow to recover from a single outlier frame.
+    # alpha=0.30: each new reading shifts the smoothed score by only 30%.
+    # Backend sends ~every 1.5s, so 20 samples ≈ 30s of history.
+    # With alpha=0.5 on 10 samples (old), a single bad frame shifted by 50% — too jumpy.
+    alpha = 0.30
     smoothed = float(scores[0])
     for s in scores[1:]:
         smoothed = alpha * s + (1 - alpha) * smoothed
