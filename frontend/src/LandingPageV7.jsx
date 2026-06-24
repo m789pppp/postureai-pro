@@ -1171,7 +1171,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
           </div>
         </Reveal>
 
-        <Stagger className="lp-pricing-grid" style={{
+        <Stagger key={localMode} className="lp-pricing-grid" style={{
           display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:22, alignItems:"start" }}>
           {plans.map((p) => (
             <StaggerItem key={p.id}>
