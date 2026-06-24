@@ -788,8 +788,9 @@ function drawSide(ctx,res,W,H,isAr=false){
     const neckAng=metrics?.neck_lean?.value??_angle2pt(lm.ear,lm.sh);
     if(neckAng!=null){
       const[sx,sy]=px(lm.sh);
-      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(sx+8,sy-14,40,16);
-      ctx.fillStyle=neckCol; ctx.fillText(`${neckAng}°`,sx+10,sy-2);
+      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(sx+8,sy-14,52,16);
+      ctx.fillStyle=neckCol;
+      ctx.fillText(`${isAr?"رقبة":"neck"} ${neckAng}°`,sx+10,sy-2);
     }
   }
   // Hip angle
@@ -797,8 +798,9 @@ function drawSide(ctx,res,W,H,isAr=false){
     const hipAng=_angle3pt(lm.sh,lm.hip,lm.knee);
     if(hipAng!=null){
       const[hx,hy]=px(lm.hip);
-      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(hx+8,hy-14,44,16);
-      ctx.fillStyle=hipCol; ctx.fillText(`${hipAng}°`,hx+10,hy-2);
+      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(hx+8,hy-14,52,16);
+      ctx.fillStyle=hipCol;
+      ctx.fillText(`${isAr?"ورك":"hip"} ${hipAng}°`,hx+10,hy-2);
     }
   }
   // Knee angle
@@ -806,8 +808,9 @@ function drawSide(ctx,res,W,H,isAr=false){
     const kneeAng=_angle3pt(lm.hip,lm.knee,lm.ankle);
     if(kneeAng!=null){
       const[kx,ky]=px(lm.knee);
-      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(kx+8,ky-14,44,16);
-      ctx.fillStyle="#6366f1"; ctx.fillText(`${kneeAng}°`,kx+10,ky-2);
+      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(kx+8,ky-14,52,16);
+      ctx.fillStyle="#6366f1";
+      ctx.fillText(`${isAr?"ركبة":"knee"} ${kneeAng}°`,kx+10,ky-2);
     }
   }
 
@@ -2220,6 +2223,7 @@ export default function App(){
   const lmSmootherRef=useRef(null);
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
   const insightsRef=useRef(null);
+  const alertCauseRef=useRef({});
   const histRef=useRef([]);const goodRef=useRef(0);const totalRef=useRef(0);
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
@@ -2514,17 +2518,24 @@ export default function App(){
                 const yaw=yawMet?.reliable!==false?(yawMet?.value||0):0;
                 const dist=finalResult.distCm||0;
                 const[lo,hi]=finalResult.lo&&finalResult.hi?[finalResult.lo,finalResult.hi]:[50,80];
-                let msg="Sustained poor posture — correct position now";
-                let msgAr="وضعية سيئة مستمرة — صحّح وضعيتك الآن";
-                if(nl>14){msg=`Neck lean ${nl}° — raise monitor to eye level`;msgAr=`ميل رقبة ${nl}° — ارفع الشاشة لمستوى عينيك`;acRef.current.neck++;}
-                else if(Math.abs(yaw)>12){msg=`Head turned ${Math.round(Math.abs(yaw))}° — face the monitor`;msgAr=`الرأس مائل ${Math.round(Math.abs(yaw))}° — واجه الشاشة مباشرة`;}
-                else if(dist&&dist<lo){msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;msgAr=`قريب جداً (${dist}سم) — ابتعد إلى ${lo}–${hi}سم`;acRef.current.dist++;}
-                const displayMsg = isAr ? msgAr : msg;
-                setAlertCounts({...acRef.current});
-                alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:finalResult.overall},...alRef.current].slice(0,20);
-                setAlerts([...alRef.current]);setAlertMsg({text:displayMsg,type:"warn"});
-                if(sound)playBeep();
-                sendDesktopNotif(msg,finalResult.overall);
+
+                // Pick the most actionable alert cause
+                let causeKey="posture", msg="Sustained poor posture — correct position now", msgAr="وضعية سيئة مستمرة — صحّح وضعيتك الآن";
+                if(nl>14){causeKey="neck";msg=`Neck lean ${nl}° — raise monitor to eye level`;msgAr=`ميل رقبة ${nl}° — ارفع الشاشة لمستوى عينيك`;acRef.current.neck++;}
+                else if(Math.abs(yaw)>12){causeKey="yaw";msg=`Head turned ${Math.round(Math.abs(yaw))}° — face the monitor`;msgAr=`الرأس مائل ${Math.round(Math.abs(yaw))}° — واجه الشاشة مباشرة`;}
+                else if(dist&&dist<lo){causeKey="dist";msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;msgAr=`قريب جداً (${dist}سم) — ابتعد إلى ${lo}–${hi}سم`;acRef.current.dist++;}
+
+                // Per-cause cooldown (5 min) — don't repeat same cause every 30s
+                const causeCooldown = 5 * 60 * 1000;
+                if(!alertCauseRef.current[causeKey] || now - alertCauseRef.current[causeKey] > causeCooldown){
+                  alertCauseRef.current[causeKey] = now;
+                  const displayMsg = isAr ? msgAr : msg;
+                  setAlertCounts({...acRef.current});
+                  alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:finalResult.overall},...alRef.current].slice(0,20);
+                  setAlerts([...alRef.current]);setAlertMsg({text:displayMsg,type:"warn"});
+                  if(sound)playBeep();
+                  sendDesktopNotif(msg,finalResult.overall);
+                }
               }
             }else{
               badRef.current=null;
@@ -4073,7 +4084,48 @@ export default function App(){
             {isAr?"القياسات المباشرة":"Live Metrics"}
           </div>
           {analysis?.metrics
-            ? Object.entries(analysis.metrics).map(([k,m])=><MetRow key={k} label={m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}/>)
+            ? (() => {
+                // Metrics to show in the main list — exclude purely internal ones
+                const HIDE = new Set(["session_fatigue","confidence_val"]);
+                const mEntries = Object.entries(analysis.metrics).filter(([k,m])=>
+                  !HIDE.has(k) && m.value!=null && m.label
+                );
+                return (
+                  <>
+                    {mEntries.map(([k,m])=>(
+                      <MetRow key={k} label={m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
+                        dim={m.reliable===false}
+                      />
+                    ))}
+                    {/* Confidence + fatigue compact row */}
+                    <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+                      {analysis.confidence!=null&&(
+                        <span style={{fontSize:9.5,padding:"2px 8px",borderRadius:99,
+                          background:`rgba(${analysis.confidence>85?"16,185,129":analysis.confidence>70?"245,158,11":"239,68,68"},.12)`,
+                          color:analysis.confidence>85?"#10b981":analysis.confidence>70?"#f59e0b":"#ef4444",
+                          fontWeight:600}}>
+                          📡 {analysis.confidence}% {isAr?"دقة الرصد":"detection"}
+                        </span>
+                      )}
+                      {analysis.metrics?.session_fatigue?.value>0&&(
+                        <span style={{fontSize:9.5,padding:"2px 8px",borderRadius:99,
+                          background:"rgba(139,92,246,.12)",color:"#8b5cf6",fontWeight:600}}>
+                          🕐 {isAr?`تعب −${analysis.metrics.session_fatigue.value}pt`:`Fatigue −${analysis.metrics.session_fatigue.value}pt`}
+                        </span>
+                      )}
+                      {analysis.metrics?.monitor_height?.value>5&&(
+                        <span style={{fontSize:9.5,padding:"2px 8px",borderRadius:99,
+                          background:"rgba(245,158,11,.12)",color:"#f59e0b",fontWeight:600}}>
+                          🖥 {isAr
+                            ?(analysis.metrics.monitor_height.direction==="below"?`الشاشة أسفل ${analysis.metrics.monitor_height.value}سم`:`الشاشة أعلى ${analysis.metrics.monitor_height.value}سم`)
+                            :(analysis.metrics.monitor_height.direction==="below"?`Monitor ${analysis.metrics.monitor_height.value}cm low`:`Monitor ${analysis.metrics.monitor_height.value}cm high`)
+                          }
+                        </span>
+                      )}
+                    </div>
+                  </>
+                );
+              })()
             : (
               <div>
                 <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0 8px"}}>
