@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { geminiChat, buildCoachContext } from "./gemini.js";
+import { geminiChat, buildCoachContext, friendlyError } from "./gemini.js";
 
 // ── Markdown renderer (lightweight) ──────────────────────────────
 function MdText({ text }) {
@@ -149,12 +149,7 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
       const reply = await geminiChat(messagesPayload, { systemPrompt, lang: isAr ? "ar" : "en", maxTokens: 512 });
       setMessages(prev => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
     } catch (e) {
-      const msg = e?.message || "unknown";
-      const isConfig = msg.includes("not configured") || msg.includes("VITE_GEMINI");
-      setError(isAr
-        ? (isConfig ? "خدمة AI غير مفعّلة حالياً — تواصل مع الدعم" : "خطأ في الاتصال بـ AI: " + msg)
-        : (isConfig ? "AI service not active — contact support" : "AI error: " + msg)
-      );
+      setError(friendlyError(e, isAr ? "ar" : "en"));
     } finally {
       setLoading(false);
       inputRef.current?.focus();
