@@ -2023,12 +2023,13 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     neck_lean_raw = angle_vert(mid_sh, neck_ref)
 
     # ── Monitor height estimation ────────────────────────────────
+    # From camera pitch: if head is tilted down, monitor is below eye level
+    # At distance D, pitch P° → monitor is D×tan(P°) cm below eye level
     try:
         _pitch_val = out.get("head_pose", {}).get("pitch", 0) if out.get("head_pose") else 0
-        _dist_for_monitor = out.get("distCm")  # safe: use top-level key set earlier, not local var
-        if _pitch_val and _dist_for_monitor:
+        if _pitch_val and dist_cm:
             import math as _mh
-            _monitor_offset_cm = round(_dist_for_monitor * _mh.tan(_mh.radians(abs(_pitch_val))), 1)
+            _monitor_offset_cm = round(dist_cm * _mh.tan(_mh.radians(abs(_pitch_val))), 1)
             _monitor_dir = "below" if _pitch_val < 0 else "above"
             _monitor_sc  = score_m(abs(_pitch_val), 0, 5, 18)
             out["metrics"]["monitor_height"] = {
@@ -9623,12 +9624,6 @@ def ai_analyze():
                     "used": _used, "limit": _limit,
                 }), 429
 
-        try:
-            max_tokens = int(data.get("max_tokens") or 1200)
-        except (TypeError, ValueError):
-            max_tokens = 1200
-        max_tokens = max(100, min(2000, max_tokens))
-
         # Select model by tier
         _model = "gemini-2.0-flash" if tier in ("elite","premium","professional","pro") else "gemini-2.0-flash-lite"
 
@@ -9636,7 +9631,7 @@ def ai_analyze():
             prompt,
             model=_model,
             fallback_model="gemini-2.0-flash-lite",
-            max_tokens=max_tokens,
+            max_tokens=1200,
             temperature=0.5,
             system_prompt=context.get("system_prompt"),
         )
@@ -9879,6 +9874,582 @@ def update_break_profile(uid: str, score: int, session_start: float) -> dict:
         rec["message_ar"] = f"استراحة بعد {round(time_to_break)} دقيقة — وضعيتك تتردى عادةً بعد {threshold} دقيقة"
 
     return rec
+
+
+# ══════════════════════════════════════════════════════════════════
+# FEATURE 1: POSTURE SCORE HISTORY GRAPH
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/analytics/score-history", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def score_history():
+    """
+    Return score history for line chart visualization.
+    Query: ?period=7d|30d|90d&granularity=day|session
+    """
+    try:
+        uid         = getattr(g, "uid", "")
+        period      = request.args.get("period", "30d")
+        granularity = request.args.get("granularity", "day")
+        days        = {"7d":7,"30d":30,"90d":90}.get(period, 30)
+        cutoff      = datetime.utcnow() - timedelta(days=days)
+
+        docs = (db.collection("sessions")
+                  .where("uid","==",uid)
+                  .where("created_at",">=",cutoff)
+                  .order_by("created_at").limit(500).stream())
+
+        sessions_list = [d.to_dict() for d in docs]
+        if not sessions_list:
+            return jsonify({"ok":True,"points":[],"summary":{}})
+
+        if granularity == "session":
+            points = []
+            for s in sessions_list:
+                ts = s.get("created_at")
+                sc = s.get("avg_score")
+                if not ts or sc is None: continue
+                points.append({
+                    "ts":       ts.isoformat()+"Z" if hasattr(ts,"isoformat") else str(ts),
+                    "score":    sc,
+                    "grade":    "A" if sc>=85 else "B" if sc>=70 else "C" if sc>=55 else "D",
+                    "duration": s.get("duration_min",0),
+                    "label":    ts.strftime("%b %d %H:%M") if hasattr(ts,"strftime") else str(ts)[:16],
+                })
+        else:
+            # Daily aggregation
+            daily: dict = {}
+            for s in sessions_list:
+                ts = s.get("created_at"); sc = s.get("avg_score")
+                if not ts or sc is None: continue
+                day = ts.strftime("%Y-%m-%d") if hasattr(ts,"strftime") else str(ts)[:10]
+                daily.setdefault(day,[]).append(sc)
+            points = []
+            for day in sorted(daily.keys()):
+                scores = daily[day]
+                avg = round(sum(scores)/len(scores),1)
+                points.append({
+                    "ts":       day,
+                    "score":    avg,
+                    "grade":    "A" if avg>=85 else "B" if avg>=70 else "C" if avg>=55 else "D",
+                    "sessions": len(scores),
+                    "min":      min(scores),
+                    "max":      max(scores),
+                    "label":    day,
+                })
+
+        # Trend line (linear regression)
+        if len(points) >= 3:
+            n = len(points)
+            xs = list(range(n)); ys = [p["score"] for p in points]
+            mx,my = sum(xs)/n, sum(ys)/n
+            num = sum((xs[i]-mx)*(ys[i]-my) for i in range(n))
+            den = sum((x-mx)**2 for x in xs) or 1
+            slope = num/den
+            trend = "improving" if slope>0.3 else "declining" if slope<-0.3 else "stable"
+        else:
+            slope=0; trend="stable"
+
+        all_scores = [p["score"] for p in points]
+        return jsonify({
+            "ok":True, "points":points, "period":period,
+            "summary":{
+                "avg":   round(sum(all_scores)/len(all_scores),1) if all_scores else None,
+                "best":  max(all_scores) if all_scores else None,
+                "worst": min(all_scores) if all_scores else None,
+                "trend": trend,
+                "slope": round(slope,2),
+                "total_points": len(points),
+            }
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# FEATURE 2: PERSONAL RECORDS
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/records", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def personal_records():
+    """Personal bests: best session, longest streak, best day, etc."""
+    try:
+        uid    = getattr(g, "uid", "")
+        cutoff = datetime.utcnow() - timedelta(days=365)
+        docs   = (db.collection("sessions")
+                    .where("uid","==",uid)
+                    .where("created_at",">=",cutoff)
+                    .order_by("created_at",direction="DESCENDING")
+                    .limit(500).stream())
+        sessions_list = [d.to_dict() for d in docs]
+        if not sessions_list:
+            return jsonify({"ok":True,"records":{},"message":"Complete your first session to unlock records!"})
+
+        scores   = [(s.get("avg_score",0), s) for s in sessions_list if s.get("avg_score")]
+        best_s   = max(scores, key=lambda x:x[0]) if scores else (0,{})
+        longest  = max((s.get("duration_min",0) for s in sessions_list), default=0)
+        total    = len(sessions_list)
+        total_min= round(sum(s.get("duration_min",0) or 0 for s in sessions_list),1)
+
+        # Best day (highest daily average)
+        daily: dict = {}
+        for s in sessions_list:
+            ts=s.get("created_at"); sc=s.get("avg_score")
+            if not ts or not sc: continue
+            day = ts.strftime("%Y-%m-%d") if hasattr(ts,"strftime") else str(ts)[:10]
+            daily.setdefault(day,[]).append(sc)
+        best_day = max(daily.items(), key=lambda x:sum(x[1])/len(x[1])) if daily else None
+
+        def _fmt_ts(ts):
+            if not ts: return ""
+            if hasattr(ts,"strftime"): return ts.strftime("%A, %b %d")
+            return str(ts)[:10]
+
+        records = {
+            "best_session":   {"score": best_s[0], "date": _fmt_ts(best_s[1].get("created_at")), "label": "🏆 Best Session"},
+            "longest_session":{"minutes": round(longest,1), "label": "⏱️ Longest Session"},
+            "total_sessions": {"count": total, "label": "📊 Total Sessions"},
+            "total_time_min": {"minutes": total_min, "label": "🕐 Total Time"},
+            "best_day":       {"date": best_day[0] if best_day else None,
+                               "avg": round(sum(best_day[1])/len(best_day[1]),1) if best_day else None,
+                               "label": "⭐ Best Day"},
+        }
+
+        # Recent record broken?
+        recent = sessions_list[0] if sessions_list else {}
+        just_broke = None
+        if recent.get("avg_score",0) >= best_s[0] and len(sessions_list)>1:
+            just_broke = {"message":"🎉 New personal record!", "score": recent.get("avg_score")}
+
+        return jsonify({"ok":True,"records":records,"just_broke":just_broke})
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# FEATURE 3: STREAK FREEZE
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/streak/freeze", methods=["POST"])
+@require_auth
+@limiter.limit("5 per minute")
+def streak_freeze():
+    """
+    Use a streak freeze (protects streak for 1 day).
+    Users get 1 free freeze/month. Pro/Elite: 3/month.
+    """
+    try:
+        uid  = getattr(g, "uid", "")
+        tier = getattr(g,"tier","standard") or "standard"
+        data = request.get_json(force=True) or {}
+
+        # Check freeze allowance
+        max_freezes = 3 if tier in ("professional","elite","premium","pro") else 1
+        month_key   = f"streak_freeze:{uid}:{datetime.utcnow().strftime('%Y-%m')}"
+
+        _rc = get_redis()
+        used_this_month = 0
+        if _rc:
+            used_this_month = int(_rc.get(month_key) or 0)
+
+        if used_this_month >= max_freezes:
+            return jsonify({
+                "ok":    False,
+                "error": "freeze_limit_reached",
+                "message": f"You've used all {max_freezes} streak freezes this month.",
+                "message_ar": f"استخدمت كل {max_freezes} تجميدات هذا الشهر.",
+                "upgrade_url": "/pricing" if max_freezes == 1 else None,
+            }), 429
+
+        # Apply freeze — add today as an "active" day
+        today = datetime.utcnow().date()
+        db.collection("streak_freezes").document(f"{uid}_{today}").set({
+            "uid":        uid,
+            "date":       str(today),
+            "applied_at": datetime.utcnow().isoformat()+"Z",
+            "tier":       tier,
+        })
+
+        # Increment counter
+        if _rc:
+            _rc.incr(month_key)
+            _rc.expire(month_key, 86400*35)
+
+        # Invalidate streak cache
+        if _rc: _rc.delete(f"streak:{uid}")
+
+        log_event("streak_freeze_used", uid, {"date":str(today),"tier":tier})
+        return jsonify({
+            "ok":      True,
+            "date":    str(today),
+            "freezes_used": used_this_month+1,
+            "freezes_max":  max_freezes,
+            "message":      "❄️ Streak freeze applied! Your streak is protected today.",
+            "message_ar":   "❄️ تم تجميد السلسلة! سلسلتك محمية اليوم.",
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# FEATURE 4: SESSION REPLAY TIMELINE
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/session/<sid>/timeline", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def session_timeline(sid):
+    """
+    Return frame-by-frame timeline for session replay.
+    Shows: timestamp, score, neck_lean, key events.
+    """
+    try:
+        uid = getattr(g,"uid","")
+        # Fetch session snapshots from Firestore
+        snaps = (db.collection("session_frames")
+                   .where("session_id","==",sid)
+                   .where("uid","==",uid)
+                   .order_by("timestamp").limit(1000).stream())
+
+        frames = []
+        prev_score = None
+        for snap in snaps:
+            d = snap.to_dict()
+            sc = d.get("score",0)
+            ts = d.get("timestamp")
+            neck = d.get("neck_lean",0)
+            event = None
+            if prev_score is not None:
+                if sc - prev_score <= -15: event = "⚠️ Posture drop"
+                elif sc - prev_score >= 10: event = "✅ Posture improved"
+                elif neck > 20: event = "🔴 High neck lean"
+            frames.append({
+                "ts":    ts.isoformat()+"Z" if hasattr(ts,"isoformat") else str(ts),
+                "score": sc,
+                "neck":  round(neck,1),
+                "spine": round(d.get("spine_lean",0),1),
+                "event": event,
+                "grade": "A" if sc>=85 else "B" if sc>=70 else "C" if sc>=55 else "D",
+            })
+            prev_score = sc
+
+        # Key moments
+        if frames:
+            worst = min(frames, key=lambda f:f["score"])
+            best  = max(frames, key=lambda f:f["score"])
+        else:
+            worst=best=None
+
+        return jsonify({
+            "ok":     True,
+            "sid":    sid,
+            "frames": frames,
+            "total":  len(frames),
+            "key_moments": {
+                "worst": worst,
+                "best":  best,
+            }
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# FEATURE 5: CUSTOM ALERT THRESHOLDS
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/user/alert-thresholds", methods=["GET","PUT"])
+@require_auth
+@limiter.limit("20 per minute")
+def alert_thresholds():
+    """Get or set custom alert thresholds per user."""
+    try:
+        uid = getattr(g,"uid","")
+        if request.method == "GET":
+            doc = db.collection("user_settings").document(uid).get()
+            defaults = {
+                "neck_lean_warn":   15,   # degrees
+                "neck_lean_alert":  20,
+                "spine_lean_warn":  8,
+                "spine_lean_alert": 12,
+                "dist_min_cm":      50,
+                "dist_max_cm":      80,
+                "score_alert":      55,   # alert if score drops below this
+                "break_interval":   45,   # minutes between break reminders
+            }
+            if doc.exists:
+                saved = doc.to_dict().get("alert_thresholds",{})
+                merged = {**defaults, **saved}
+            else:
+                merged = defaults
+            return jsonify({"ok":True,"thresholds":merged,"defaults":defaults})
+
+        data = request.get_json(force=True) or {}
+        thresholds = data.get("thresholds",{})
+
+        # Validate ranges
+        valid = {
+            "neck_lean_warn":   (5,40),   "neck_lean_alert":   (10,50),
+            "spine_lean_warn":  (3,20),   "spine_lean_alert":  (5,30),
+            "dist_min_cm":      (20,80),  "dist_max_cm":       (50,150),
+            "score_alert":      (20,80),  "break_interval":    (15,120),
+        }
+        cleaned = {}
+        for key,(mn,mx) in valid.items():
+            if key in thresholds:
+                val = float(thresholds[key])
+                cleaned[key] = max(mn, min(mx, val))
+
+        db.collection("user_settings").document(uid).set(
+            {"alert_thresholds": cleaned}, merge=True
+        )
+        # Invalidate Redis cache
+        _rc = get_redis()
+        if _rc: _rc.delete(f"user_thresholds:{uid}")
+
+        log_event("thresholds_updated", uid, cleaned)
+        return jsonify({"ok":True,"thresholds":cleaned})
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# FEATURE 6: POSTURE REPORT CARD (weekly auto-email)
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/report/send-weekly", methods=["POST"])
+@limiter.limit("5 per minute")
+def send_weekly_report_card():
+    """
+    Cron endpoint — sends weekly posture report card via email.
+    Call every Monday 09:00 with X-Cron-Secret header.
+    """
+    try:
+        secret = request.headers.get("X-Cron-Secret","")
+        if secret != os.getenv("CRON_SECRET",""):
+            return jsonify({"error":"Unauthorized"}), 401
+
+        # Get all users who opted in for weekly reports
+        users_docs = (db.collection("user_settings")
+                        .where("weekly_report_email","==",True)
+                        .limit(1000).stream())
+        sent=0; failed=0
+
+        for udoc in users_docs:
+            try:
+                uid   = udoc.id
+                prefs = udoc.to_dict()
+                email = prefs.get("email","")
+                lang  = prefs.get("lang","en")
+                is_ar = lang=="ar"
+
+                if not email: continue
+
+                # Get last 7 days sessions
+                cutoff = datetime.utcnow()-timedelta(days=7)
+                sdocs  = (db.collection("sessions")
+                            .where("uid","==",uid)
+                            .where("created_at",">=",cutoff)
+                            .limit(50).stream())
+                sl = [d.to_dict() for d in sdocs]
+                scores = [s.get("avg_score") for s in sl if s.get("avg_score")]
+                if not scores: continue
+
+                avg   = round(sum(scores)/len(scores),1)
+                grade = "A" if avg>=85 else "B" if avg>=70 else "C" if avg>=55 else "D"
+                trend_emoji = "📈" if scores[-1]>scores[0] else "📉" if scores[-1]<scores[0] else "➡️"
+
+                subject = (f"تقرير Corvus الأسبوعي — درجتك {avg}/100 {grade}"
+                           if is_ar else
+                           f"Your Weekly Corvus Report — Score {avg}/100 ({grade})")
+
+                html = f"""
+<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;background:#050D1A;color:#F0F6FF;border-radius:16px;overflow:hidden">
+  <div style="background:linear-gradient(135deg,#0EA5E9,#6366F1);padding:32px;text-align:center">
+    <h1 style="margin:0;font-size:28px;color:#fff">{"تقرير الوضعية الأسبوعي" if is_ar else "Weekly Posture Report"}</h1>
+    <p style="margin:8px 0 0;color:rgba(255,255,255,.7)">{datetime.utcnow().strftime("%B %d, %Y")}</p>
+  </div>
+  <div style="padding:32px">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:64px;font-weight:900;color:#0EA5E9">{avg}</div>
+      <div style="font-size:16px;color:#64748B">{"متوسط الدرجة الأسبوعية" if is_ar else "Weekly Average Score"}</div>
+      <div style="font-size:24px;margin-top:8px">{"الدرجة: " if is_ar else "Grade: "}<strong style="color:#10B981">{grade}</strong></div>
+    </div>
+    <div style="background:#0D1F35;border-radius:12px;padding:20px;margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between">
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:700;color:#0EA5E9">{len(scores)}</div>
+          <div style="font-size:12px;color:#64748B">{"جلسات" if is_ar else "Sessions"}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:700;color:#10B981">{max(scores)}</div>
+          <div style="font-size:12px;color:#64748B">{"أحسن درجة" if is_ar else "Best Score"}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px">{trend_emoji}</div>
+          <div style="font-size:12px;color:#64748B">{"الاتجاه" if is_ar else "Trend"}</div>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:24px">
+      <a href="https://postureai-pro-omega-nine.vercel.app" style="background:#0EA5E9;color:#fff;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:700">
+        {"افتح التطبيق" if is_ar else "Open App"}
+      </a>
+    </div>
+  </div>
+</div>"""
+
+                ok = send_email(email, subject, html)
+                if ok: sent+=1
+                else:  failed+=1
+            except Exception:
+                failed+=1
+
+        log_event("weekly_report_cards_sent", meta={"sent":sent,"failed":failed})
+        return jsonify({"ok":True,"sent":sent,"failed":failed})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/user/weekly-report-opt-in", methods=["PUT"])
+@require_auth
+@limiter.limit("10 per minute")
+def weekly_report_opt_in():
+    """Opt in/out of weekly email report card."""
+    try:
+        uid  = getattr(g,"uid","")
+        data = request.get_json(force=True) or {}
+        opt_in = bool(data.get("opt_in",True))
+        email  = data.get("email","").strip()
+        db.collection("user_settings").document(uid).set({
+            "weekly_report_email": opt_in,
+            "email": email,
+            "lang":  data.get("lang","en"),
+        }, merge=True)
+        return jsonify({"ok":True,"weekly_report_email":opt_in})
+    except Exception as e:
+        return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# FEATURE 7: REFERRAL SYSTEM
+# ══════════════════════════════════════════════════════════════════
+
+@app.route("/api/referral/generate", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def generate_referral():
+    """Generate a unique referral code for the user."""
+    try:
+        uid = getattr(g,"uid","")
+        # Check if code already exists
+        doc = db.collection("referrals").document(uid).get()
+        if doc.exists:
+            return jsonify({"ok":True,"code":doc.to_dict().get("code"),"existing":True})
+
+        import hashlib as _hl
+        code = _hl.md5(uid.encode()).hexdigest()[:8].upper()
+        db.collection("referrals").document(uid).set({
+            "uid":        uid,
+            "code":       code,
+            "uses":       0,
+            "created_at": datetime.utcnow().isoformat()+"Z",
+            "reward_months_earned": 0,
+        })
+        return jsonify({
+            "ok":True, "code":code,
+            "share_url":  f"https://postureai-pro-omega-nine.vercel.app?ref={code}",
+            "message":    f"Share your code {code} — both you and your friend get 1 month free!",
+            "message_ar": f"شارك كودك {code} — إنت وصاحبك هتاخدوا شهر مجاناً!",
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/referral/redeem", methods=["POST"])
+@require_auth
+@limiter.limit("5 per minute")
+def redeem_referral():
+    """Redeem a referral code on signup — gives both users 1 month free."""
+    try:
+        uid  = getattr(g,"uid","")
+        data = request.get_json(force=True) or {}
+        code = data.get("code","").strip().upper()
+        if not code:
+            return jsonify({"error":"code required"}), 400
+
+        # Find referrer
+        refs = db.collection("referrals").where("code","==",code).limit(1).stream()
+        ref_docs = list(refs)
+        if not ref_docs:
+            return jsonify({"error":"Invalid referral code"}), 404
+
+        ref_doc = ref_docs[0]
+        ref_uid = ref_doc.id
+        if ref_uid == uid:
+            return jsonify({"error":"Cannot use your own referral code"}), 400
+
+        # Check not already redeemed
+        already = (db.collection("referral_uses")
+                     .where("new_uid","==",uid).limit(1).stream())
+        if list(already):
+            return jsonify({"error":"You have already used a referral code"}), 409
+
+        # Record use
+        db.collection("referral_uses").add({
+            "ref_uid":    ref_uid,
+            "new_uid":    uid,
+            "code":       code,
+            "redeemed_at":datetime.utcnow().isoformat()+"Z",
+        })
+
+        # Increment referrer's uses
+        ref_doc.reference.update({
+            "uses":                  ref_doc.to_dict().get("uses",0)+1,
+            "reward_months_earned":  ref_doc.to_dict().get("reward_months_earned",0)+1,
+        })
+
+        # Grant 1 month Pro to both users
+        for benefit_uid in [uid, ref_uid]:
+            db.collection("user_benefits").document(benefit_uid).set({
+                "free_months": (db.collection("user_benefits").document(benefit_uid).get().to_dict() or {}).get("free_months",0)+1,
+                "reason":      "referral",
+                "updated_at":  datetime.utcnow().isoformat()+"Z",
+            }, merge=True)
+
+        log_event("referral_redeemed", uid, {"code":code,"ref_uid":ref_uid})
+        return jsonify({
+            "ok":True,
+            "message":    "🎉 Code redeemed! You and your friend both get 1 month free.",
+            "message_ar": "🎉 تم تفعيل الكود! إنت وصاحبك هتاخدوا شهر مجاناً.",
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/referral/status", methods=["GET"])
+@require_auth
+@limiter.limit("20 per minute")
+def referral_status():
+    """Get referral stats for the user."""
+    try:
+        uid = getattr(g,"uid","")
+        doc = db.collection("referrals").document(uid).get()
+        if not doc.exists:
+            return jsonify({"ok":True,"has_code":False,"code":None,"uses":0})
+        d = doc.to_dict()
+        return jsonify({
+            "ok":True, "has_code":True,
+            "code":       d.get("code"),
+            "uses":       d.get("uses",0),
+            "share_url":  f"https://postureai-pro-omega-nine.vercel.app?ref={d.get('code')}",
+            "months_earned":d.get("reward_months_earned",0),
+        })
+    except Exception as e:
+        return safe_error(e)
 
 @app.route("/api/system/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
