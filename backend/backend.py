@@ -1627,6 +1627,8 @@ def detect_head_creep(sid: str, neck_lean: float, timestamp: float = None) -> di
     n = len(buf)
     ts_arr  = [(b[0] - buf[0][0]) / 60 for b in buf]  # minutes from start
     val_arr = [b[1] for b in buf]
+    if n == 0:
+        return None
     mean_t  = sum(ts_arr) / n
     mean_v  = sum(val_arr) / n
     num     = sum((ts_arr[i] - mean_t) * (val_arr[i] - mean_v) for i in range(n))
@@ -1674,14 +1676,14 @@ def compute_head_velocity(nose_x, nose_y, session_key):
     dt  = max(0.001, buf[-1][0] - buf[-3][0])
     dx  = abs(buf[-1][1] - buf[-3][1])   # normalized 0-1
     dy  = abs(buf[-1][2] - buf[-3][2])
-    vel = math.sqrt(dx**2 + dy**2) / dt  # units/sec
+    vel = math.sqrt(dx**2 + dy**2) / dt if dt > 0 else 0.0  # units/sec
 
     # Acceleration: change in velocity
     if len(buf) >= 5:
         dt2 = max(0.001, buf[-3][0] - buf[-5][0])
         dx2 = abs(buf[-3][1] - buf[-5][1])
         dy2 = abs(buf[-3][2] - buf[-5][2])
-        vel2 = math.sqrt(dx2**2 + dy2**2) / dt2
+        vel2 = math.sqrt(dx2**2 + dy2**2) / dt2 if dt2 > 0 else 0.0
         accel = (vel - vel2) / max(dt, 0.001)
     else:
         accel = 0.0
@@ -1829,7 +1831,7 @@ def analyze_blink_rate(face_lms, w, h, uid=None, session_id=None):
 
     # Calibrate to 60s window
     window_s = max(1.0, buf[-1][0] - buf[0][0])
-    blinks_per_min = round(blinks * 60 / window_s)
+    blinks_per_min = round(blinks * 60 / window_s) if window_s > 0 else 0
 
     # Ergonomic risk thresholds (NIOSH guidelines: normal = 12-20/min)
     if blinks_per_min < 6:   risk = "high"
@@ -1902,7 +1904,7 @@ def ipd_distance_face(face_lms, w, h, yaw_deg=0.0, session_id: str = ""):
         focal     = focal_cal if focal_cal else (630 * (w / 640))  # fallback: sensor estimate
 
         # ── IPD estimator ────────────────────────────────────────
-        dist_ipd = round((6.3 * focal) / ipd_px_corrected, 1)
+        dist_ipd = round((6.3 * focal) / ipd_px_corrected, 1) if ipd_px_corrected > 0 else 0.0
 
         # ── Face-width estimator (secondary) ─────────────────────
         dist_fw = None
@@ -2028,7 +2030,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     # Step 2: Kalman filter on top — adapts to visibility (low vis = trust prediction)
     _w = [0.60, 0.30, 0.10][:len(_hist)]
     _w_sum  = sum(_w)
-    _w_norm = [wi / _w_sum for wi in _w]
+    _w_norm = [wi / _w_sum for wi in _w] if _w_sum > 0 else _w
 
     _k_key   = f"kalman:{_sid}"
     _kstates = _kalman_states.setdefault(_k_key, {})
@@ -2149,7 +2151,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
     sh_width_px  = abs(r_sh[0] - l_sh[0])
     ref_sh_frac  = 0.34
     sh_frac      = sh_width_px / max(w, 1)
-    sh_ratio     = sh_frac / ref_sh_frac
+    sh_ratio     = sh_frac / ref_sh_frac if ref_sh_frac > 0 else 1.0
     sh_ratio     = max(0.70, min(1.30, sh_ratio))
     neck_ok_adj  = max(5.0, 6.0  * sh_ratio)
     neck_bad_adj = max(12.0, 17.0 * sh_ratio)
@@ -2925,7 +2927,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
                     elif _y <= _thresh:
                         _in_rise = False
                 _window_s = max(1, _br_buf[-1][0] - _br_buf[0][0])
-                _bpm = round(_peaks * 60 / _window_s)
+                _bpm = round(_peaks * 60 / _window_s) if _window_s > 0 else 0
                 _br_risk = "normal" if 12<=_bpm<=20 else "elevated" if _bpm>20 else "shallow"
                 out["metrics"]["breathing_rate"] = {
                     "value": _bpm, "score": score_m(_bpm, 16, 4, 8),
@@ -3367,7 +3369,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         if _load_factor > 0.1:
             _time_to_pain_min = 15 / max(_load_factor, 0.1)
             _remaining_min = max(0, _time_to_pain_min - _dur_min)
-            _creep_pct = min(100, int((_dur_min / _time_to_pain_min) * 100))
+            _creep_pct = min(100, int((_dur_min / _time_to_pain_min) * 100)) if _time_to_pain_min > 0 else 0
             _pain_regions = []
             if neck_lean > 15:    _pain_regions.append("neck/upper trapezius")
             if spine_lean > 15:   _pain_regions.append("lower back")
@@ -3546,7 +3548,7 @@ def analyze_side(image, tier="standard", session_id=None):
 
     _w_s = [0.60, 0.30, 0.10][:len(_hist)]
     _w_s_sum  = sum(_w_s)
-    _w_s_norm = [wi / _w_s_sum for wi in _w_s]
+    _w_s_norm = [wi / _w_s_sum for wi in _w_s] if _w_s_sum > 0 else _w_s
 
     class _AvgLM:
         __slots__ = ("x","y","z","visibility")
@@ -3649,7 +3651,7 @@ def analyze_side(image, tier="standard", session_id=None):
     spine_sc       = score_m(spine_combined, 0, 5, 14)
 
     # ── Spinal plumb line alignment (ear above ankle) ─────────────
-    spine_align = abs(ear[0] - ankle[0]) / w * 100
+    spine_align = abs(ear[0] - ankle[0]) / w * 100 if w > 0 else 0
     align_sc    = score_m(spine_align, 0, 4, 12)
 
     # ── Hip + knee angles ─────────────────────────────────────────
@@ -10391,8 +10393,9 @@ def send_weekly_report_card():
     Call every Monday 09:00 with X-Cron-Secret header.
     """
     try:
-        secret = request.headers.get("X-Cron-Secret","")
-        if secret != os.getenv("CRON_SECRET",""):
+        secret      = request.headers.get("X-Cron-Secret","")
+        cron_secret = os.getenv("CRON_SECRET","")
+        if not cron_secret or not secret or secret != cron_secret:
             return jsonify({"error":"Unauthorized"}), 401
 
         # Get all users who opted in for weekly reports
@@ -13618,6 +13621,7 @@ def analytics_trend():
 
 
 @app.route("/api/analytics/heatmap", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 @require_tier("professional")
 def compute_heatmap():
