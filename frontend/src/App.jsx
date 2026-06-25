@@ -29,6 +29,7 @@ import { GamificationPanel } from "./Gamification.jsx";
 import { BillingModal, PLANS } from "./Billing.jsx";
 import { BillingDashboard } from "./BillingDashboard.jsx";
 import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, apiFetch } from "./services/api.js";
+import { geminiAnalysis as _groqAnalysis } from "./gemini.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother } from "./features/analysis/postureEngine.js";
@@ -250,8 +251,8 @@ const LM = {NOSE:0,L_EYE:2,R_EYE:5,L_EAR:7,R_EAR:8,L_SHOULDER:11,R_SHOULDER:12,L
 // ── API wrappers (use service layer with auth) ────────────────────
 async function askGemini(prompt){
   try{
-    const d = await import("./services/api.js").then(m => m.AIAPI.geminiAnalysis(prompt));
-    return d?.text || null;
+    const text = await _groqAnalysis(prompt, { maxTokens: 600 });
+    return text || null;
   }catch{return null;}
 }
 
