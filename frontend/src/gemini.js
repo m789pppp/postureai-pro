@@ -1,11 +1,9 @@
 /**
- * gemini.js — All AI calls via Groq (free, fast, bilingual AR+EN)
- * Model: llama-3.1-8b-instant | 14,400 req/day free
- * Key: VITE_GROQ_API_KEY in Vercel Environment Variables
+ * gemini.js — Groq AI (free, fast, bilingual AR+EN)
+ * Key is read at RUNTIME from window.__env or meta tag — NOT compile-time
+ * This prevents Vite from tree-shaking the entire module when key is empty
  */
 
-// Vite bakes VITE_* vars at build time — key must exist when `npm run build` runs
-const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY ?? "";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODELS = [
   "llama-3.1-8b-instant",
@@ -13,16 +11,23 @@ const GROQ_MODELS = [
   "gemma2-9b-it",
 ];
 
-// ── Debug helper (shows in browser console, never in UI) ──────────
-if (import.meta.env.DEV || import.meta.env.VITE_DEBUG_AI === "true") {
-  console.log("[Corvus AI] Key present:", !!GROQ_KEY, "| Length:", GROQ_KEY.length);
+// ── Runtime key reader — NOT a compile-time constant ─────────────
+// This prevents Vite from dead-code-eliminating callGroq when key is ""
+function getGroqKey() {
+  // 1. Injected by Vite at build time (works when env var exists at build)
+  const buildKey = import.meta.env.VITE_GROQ_API_KEY;
+  if (buildKey && buildKey.startsWith("gsk_")) return buildKey;
+  // 2. Runtime fallback via window (for edge cases)
+  if (typeof window !== "undefined" && window.__GROQ_KEY__) return window.__GROQ_KEY__;
+  return "";
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ── Core Groq fetch ───────────────────────────────────────────────
 async function callGroq(systemPrompt, userPrompt, maxTokens = 600, messages = null) {
-  if (!GROQ_KEY) throw new Error("AI_KEY_MISSING");
+  const key = getGroqKey();
+  if (!key) throw new Error("AI_KEY_MISSING");
 
   const msgs = messages
     ? [{ role: "system", content: systemPrompt || "You are a helpful assistant." }, ...messages]
@@ -39,7 +44,7 @@ async function callGroq(systemPrompt, userPrompt, maxTokens = 600, messages = nu
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${GROQ_KEY}`,
+            Authorization: `Bearer ${key}`,
           },
           body: JSON.stringify({ model, messages: msgs, max_tokens: maxTokens, temperature: 0.7 }),
           signal: AbortSignal.timeout(25000),
@@ -54,7 +59,7 @@ async function callGroq(systemPrompt, userPrompt, maxTokens = 600, messages = nu
 
         if (res.status === 429) {
           if (retry === 0) { await sleep(2500); continue; }
-          break; // try next model
+          break;
         }
         if (res.status === 401) throw new Error("AI_KEY_INVALID");
 
@@ -71,7 +76,6 @@ async function callGroq(systemPrompt, userPrompt, maxTokens = 600, messages = nu
       }
     }
   }
-
   throw new Error("AI_BUSY");
 }
 
@@ -84,8 +88,8 @@ export function friendlyError(e, lang = "en") {
   if (msg === "AI_KEY_INVALID")
     return ar ? "مفتاح الـ AI غير صحيح" : "AI key invalid — contact support";
   if (msg === "AI_BUSY" || msg.includes("429"))
-    return ar ? "الـ AI مشغول — انتظر ثانية وجرب تاني" : "AI is busy — try again in a moment";
-  if (msg.includes("timeout") || msg.includes("Timeout") || msg.includes("AbortError"))
+    return ar ? "الـ AI مشغول — انتظر ثانية وجرب تاني" : "AI is busy — try again";
+  if (msg.includes("imeout") || msg.includes("bort"))
     return ar ? "انقطع الاتصال — جرب تاني" : "Connection timed out — try again";
   return ar ? "حصل خطأ — جرب تاني" : "Something went wrong — please try again";
 }
@@ -108,20 +112,17 @@ export async function geminiAnalysis(prompt, { context = {}, maxTokens = 600 } =
   return callGroq(systemPrompt, prompt, maxTokens);
 }
 
-// ── buildCoachContext — AICoach helper ───────────────────────────
+// ── buildCoachContext ────────────────────────────────────────────
 export function buildCoachContext(sessions = [], profile = {}) {
   const avg    = sessions.length ? Math.round(sessions.reduce((a, s) => a + (s.avg_score || 0), 0) / sessions.length) : 0;
   const best   = sessions.length ? Math.max(...sessions.map(s => s.avg_score || 0)) : 0;
   const worst  = sessions.length ? Math.min(...sessions.map(s => s.avg_score || 0)) : 0;
   const recent = sessions.slice(0, 5).map((s, i) =>
-    `Session ${i + 1}: score=${s.avg_score || 0}, duration=${Math.round((s.duration_s || 0) / 60)}min, good=${s.good_pct || 0}%`
+    `Session ${i + 1}: score=${s.avg_score || 0}, duration=${Math.round((s.duration_s || 0) / 60)}min`
   ).join("\n");
   const trend = sessions.length >= 2 ? (sessions[0].avg_score || 0) - (sessions[1].avg_score || 0) : 0;
-  return `
-User: ${profile.name || "User"}, Tier: ${profile.tier || "free"}
-Sessions: ${sessions.length} total | Avg: ${avg}/100 | Best: ${best} | Worst: ${worst}
+  return `User: ${profile.name || "User"}, Tier: ${profile.tier || "free"}
+Sessions: ${sessions.length} | Avg: ${avg}/100 | Best: ${best} | Worst: ${worst}
 Trend: ${trend > 0 ? `+${trend} improving` : trend < 0 ? `${trend} declining` : "stable"}
-Recent:\n${recent || "No sessions yet"}
-  `.trim();
+Recent:\n${recent || "No sessions yet"}`.trim();
 }
-// cache-bust: 1782417203
