@@ -124,3 +124,4 @@ Trend: ${trend > 0 ? `+${trend} improving` : trend < 0 ? `${trend} declining` : 
 Recent:\n${recent || "No sessions yet"}
   `.trim();
 }
+// cache-bust: 1782417203
