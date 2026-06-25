@@ -500,8 +500,8 @@ export async function seedDemoUser(uid, type) {
         addDoc(collection(db,"sessions"), s).catch(()=>{})
       );
     }
-    const scores = sessions.map(s=>s.avg_score);
-    const avg = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+    const scores = sessions.map(s=>s.avg_score||0).filter(n=>n>0);
+    const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
     await import("firebase/firestore").then(({updateDoc,doc:_doc}) =>
       updateDoc(_doc(db,"users",uid), { ...base, avg_score:avg, sessions_count:12, streak_days:5 }).catch(()=>{})
     );
