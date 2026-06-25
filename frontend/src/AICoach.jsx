@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { geminiChat, buildCoachContext } from "./gemini.js";
 
 // ── Markdown renderer (lightweight) ──────────────────────────────
@@ -104,15 +104,51 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
   const isAr = lang === "ar";
 
 
-  // Build analytics context for Gemini
-  const context = {
-    avg_score:       sessions?.length ? Math.round(sessions.reduce((a,s) => a+(s.avg_score||0),0)/sessions.length) : 0,
-    sessions_count:  sessions?.length || 0,
-    worst_time:      "—",
-    top_alerts:      [],
-    has_calibration: !!calibration,
-    tier:            profile?.tier || "professional",
-  };
+  // Build analytics context for backend — must be a plain object (backend reads individual fields)
+  const context = useMemo(() => {
+    const avgScore = sessions?.length
+      ? Math.round(sessions.reduce((a,s) => a + (s.avg_score||0), 0) / sessions.length)
+      : 0;
+
+    // Worst posture time: find the session hour where score was lowest
+    const hourBuckets = {};
+    (sessions || []).forEach(s => {
+      const d = s.created_at?.toDate ? s.created_at.toDate() : s.created_at ? new Date(s.created_at) : null;
+      if (!d) return;
+      const h = d.getHours();
+      if (!hourBuckets[h]) hourBuckets[h] = { total: 0, count: 0 };
+      hourBuckets[h].total += s.avg_score || 0;
+      hourBuckets[h].count += 1;
+    });
+    let worstHour = "—", worstAvg = 999;
+    Object.entries(hourBuckets).forEach(([h, {total, count}]) => {
+      const avg = total / count;
+      if (avg < worstAvg) { worstAvg = avg; worstHour = `${h}:00`; }
+    });
+
+    // Top alerts: most common alert strings across recent sessions
+    const alertCounts = {};
+    (sessions || []).slice(0, 20).forEach(s => {
+      (s.metrics ? Object.values(s.metrics) : []).forEach(m => {
+        if (m?.score < 60 && m?.label) {
+          alertCounts[m.label] = (alertCounts[m.label] || 0) + 1;
+        }
+      });
+    });
+    const topAlerts = Object.entries(alertCounts)
+      .sort((a,b) => b[1]-a[1])
+      .slice(0, 3)
+      .map(([label]) => label);
+
+    return {
+      avg_score:       avgScore,
+      sessions_count:  sessions?.length || 0,
+      worst_time:      worstHour,
+      top_alerts:      topAlerts,
+      has_calibration: !!calibration,
+      tier:            profile?.tier || "standard",
+    };
+  }, [sessions, calibration, profile?.tier]);
 
   // Welcome message — re-run when lang changes so it stays in correct language
   useEffect(() => {
@@ -135,26 +171,35 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
     setLoading(true);
 
     try {
-      // Build proper messages array for geminiChat (backend expects [{role,content}])
-      // Take last 8 messages, map role names to "user"/"assistant"
+      // Build proper messages array — take last 8, strip UI-only ts field
       const messagesPayload = newMessages.slice(-8).map(m => ({
         role:    m.role === "user" ? "user" : "assistant",
         content: m.content,
       }));
 
       const systemPrompt = isAr
-        ? `أنت مدرب وضعية جسم شخصي ذكي. استخدم البيانات التالية:\n${context}\nكن موجزاً ومفيداً وودوداً. أجب بالعربية.`
-        : `You are a personal posture coach. Use this user data:\n${context}\nBe concise, helpful and friendly.`;
+        ? `أنت مدرب وضعية جسم شخصي ذكي للمنصة. استخدم بيانات المستخدم:\n- متوسط النقاط: ${context.avg_score}/100\n- عدد الجلسات: ${context.sessions_count}\n- أسوأ وقت: ${context.worst_time}\n- تنبيهات متكررة: ${context.top_alerts.join(", ")||"لا شيء"}\nكن موجزاً ومفيداً. أجب بالعربية.`
+        : `You are a personal posture coach. User data:\n- Avg score: ${context.avg_score}/100\n- Sessions: ${context.sessions_count}\n- Worst time: ${context.worst_time}\n- Common alerts: ${context.top_alerts.join(", ")||"none"}\nBe concise and helpful.`;
 
-      const reply = await geminiChat(messagesPayload, { systemPrompt, lang: isAr ? "ar" : "en", maxTokens: 512 });
+      const reply = await geminiChat(messagesPayload, {
+        systemPrompt,
+        lang: isAr ? "ar" : "en",
+        maxTokens: 512,
+      });
       setMessages(prev => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
     } catch (e) {
       const msg = e?.message || "unknown";
-      const isConfig = msg.includes("not configured") || msg.includes("VITE_GEMINI");
-      setError(isAr
-        ? (isConfig ? "خدمة AI غير مفعّلة حالياً — تواصل مع الدعم" : "خطأ في الاتصال بـ AI: " + msg)
-        : (isConfig ? "AI service not active — contact support" : "AI error: " + msg)
-      );
+      // Map specific error types to clean user-facing messages
+      if (msg.includes("limit_reached") || msg.includes("Monthly AI")) {
+        setError(isAr ? "وصلت للحد الشهري لرسائل AI — قم بالترقية للحصول على المزيد" : "Monthly AI message limit reached — upgrade for more");
+      } else if (msg.includes("rate-limit") || msg.includes("busy") || msg.includes("429")) {
+        setError(isAr ? "⏳ الـAI مشغول — انتظر لحظة وحاول مرة ثانية" : "⏳ AI is busy — wait a moment and try again");
+      } else if (msg.includes("unreachable") || msg.includes("not configured")) {
+        setError(isAr ? "خدمة AI غير متاحة حالياً" : "AI service unavailable right now");
+      } else {
+        setError(isAr ? "حدث خطأ في الاتصال بـ AI" : "AI connection error — please try again");
+        console.error("[AICoach]", msg);
+      }
     } finally {
       setLoading(false);
       inputRef.current?.focus();
