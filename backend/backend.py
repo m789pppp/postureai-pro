@@ -4112,8 +4112,17 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
 
     result = None
 
-    # ── 1. Local LLM (Ollama) — try first when configured ────────────
-    if OLLAMA_URL:
+    # ── 1. Groq (free, fast, bilingual — primary when no local) ─────
+    if GROQ_API_KEY and not OLLAMA_URL and not PREFER_LOCAL:
+        result = call_groq(
+            prompt,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+
+    # ── 2. Local LLM (Ollama) — zero cost when configured ────────────
+    if result is None and OLLAMA_URL:
         result = call_local_llm(
             prompt,
             system_prompt=system_prompt,
@@ -4121,7 +4130,7 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
             temperature=temperature,
         )
 
-    # ── 2. Gemini fallback ───────────────────────────────────────────
+    # ── 3. Gemini fallback ───────────────────────────────────────────
     if result is None and GEMINI_API_KEY and not PREFER_LOCAL:
         _gem_model = (
             "gemini-2.0-flash"
@@ -4137,7 +4146,7 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
             system_prompt=system_prompt,
         )
 
-    # ── 3. Groq fallback (free tier — no cost) ───────────────────────
+    # ── 4. Groq last resort (if already tried above, skip) ──────────
     if result is None and GROQ_API_KEY:
         result = call_groq(
             prompt,
