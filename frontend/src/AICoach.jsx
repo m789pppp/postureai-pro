@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { geminiChat, buildCoachContext } from "./gemini.js";
+import { geminiChat, buildCoachContext, friendlyError } from "./gemini.js";
 
 // ── Markdown renderer (lightweight) ──────────────────────────────
 function MdText({ text }) {
@@ -188,18 +188,7 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
       });
       setMessages(prev => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
     } catch (e) {
-      const msg = e?.message || "unknown";
-      // Map specific error types to clean user-facing messages
-      if (msg.includes("limit_reached") || msg.includes("Monthly AI")) {
-        setError(isAr ? "وصلت للحد الشهري لرسائل AI — قم بالترقية للحصول على المزيد" : "Monthly AI message limit reached — upgrade for more");
-      } else if (msg.includes("rate-limit") || msg.includes("busy") || msg.includes("429")) {
-        setError(isAr ? "⏳ الـAI مشغول — انتظر لحظة وحاول مرة ثانية" : "⏳ AI is busy — wait a moment and try again");
-      } else if (msg.includes("unreachable") || msg.includes("not configured")) {
-        setError(isAr ? "خدمة AI غير متاحة حالياً" : "AI service unavailable right now");
-      } else {
-        setError(isAr ? "حدث خطأ في الاتصال بـ AI" : "AI connection error — please try again");
-        console.error("[AICoach]", msg);
-      }
+      setError(friendlyError(e, isAr ? "ar" : "en"));
     } finally {
       setLoading(false);
       inputRef.current?.focus();

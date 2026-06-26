@@ -411,7 +411,7 @@ function AIBlock({ loading, data, error, onRetry, isAr, accentColor = "#1a56db" 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <div style={{ width: 24, height: 24, borderRadius: 7, background: `linear-gradient(135deg,${accentColor},#1a56db)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>🧠</div>
         <span style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-          {isAr ? "تحليل AI التنبؤي" : "Predictive AI Analysis"}
+          {isAr ? "تحليل الذكاء التنبؤي" : "Predictive AI Analysis"}
         </span>
         {loading && <span style={{ marginLeft: "auto", display: "flex", gap: 3 }}>
           {[0,1,2].map(i => <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: accentColor, display: "inline-block", animation: `blink 1.2s ${i*.2}s infinite` }} />)}
