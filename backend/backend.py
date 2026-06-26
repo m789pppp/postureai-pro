@@ -9772,8 +9772,8 @@ def ai_analyze():
 
         if not prompt:
             return jsonify({"error": "prompt required"}), 400
-        if not GEMINI_API_KEY:
-            return jsonify({"error": "AI not configured", "text": None}), 503
+        if not GEMINI_API_KEY and not OLLAMA_URL:
+            return jsonify({"error": "AI not configured — set OLLAMA_URL in Railway", "text": None}), 503
         if len(prompt) > 8000:
             return jsonify({"error": "Prompt too long (max 8000 chars)"}), 400
 
