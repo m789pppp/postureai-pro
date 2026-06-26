@@ -634,7 +634,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
               {loading
                 ? <div style={{ width:18,height:18,border:"2px solid rgba(255,255,255,.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite" }}/>
                 : view === "login"
-                  ? (isAr ? "تسجيل الدخول ←" : "Sign In →")
+                  ? (isAr ? "تسجيل الدخول ←" : "Sign In ✓ v2 →")
                   : view === "signup"
                     ? (isAr ? `إنشاء حساب${isAuto?" — Elite مجاناً":""}` : `Create Account${isAuto?" — Elite Free":""}`)
                     : (isAr ? "إرسال رابط إعادة التعيين ←" : "Send Reset Link →")
