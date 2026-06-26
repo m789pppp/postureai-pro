@@ -87,6 +87,16 @@ except ImportError as _pe:
     def get_stripe_amount(tier, billing): return None
     def validate_plan_request(tier, billing): return (True, "")
 
+# ── Tier-based analysis/AI-coach quality (single source of truth) ──
+try:
+    from config.tier_quality import get_coach_quality, get_depth_instruction
+except ImportError as _qe:
+    print(f"⚠️  Tier quality config not loaded: {_qe}", file=_sys.stderr)
+    def get_coach_quality(tier):
+        return {"monthly_limit": 5, "max_tokens": 800, "model": "gemini-2.0-flash-lite", "depth": "brief"}
+    def get_depth_instruction(tier):
+        return ""
+
 # ── Centralized error handler ─────────────────────────────────────
 try:
     from middleware.errors import safe_error, register_error_handlers
@@ -12791,7 +12801,6 @@ def set_user_claims():
 @require_auth
 @app.route("/api/coach/chat", methods=["POST"])
 @limiter.limit("30 per minute")
-@require_auth
 def coach_chat():
     try:
         data     = request.get_json(force=True) or {}
@@ -12804,20 +12813,12 @@ def coach_chat():
         if not OLLAMA_URL and not GEMINI_API_KEY:
             return jsonify({"error": "No AI backend configured (set OLLAMA_URL or GEMINI_API_KEY)", "text": None}), 503
 
-        # ── Tier-based AI Coach limits ─────────────────────────────
-        _uid_coach  = getattr(g, "uid", "")
-        _tier_coach = getattr(g, "tier", "standard") or "standard"
+        # ── Tier-based AI Coach limits + depth (single source of truth) ──
+        _uid_coach    = getattr(g, "uid", "")
+        _tier_coach   = getattr(g, "tier", "standard") or "standard"
+        _quality_coach = get_coach_quality(_tier_coach)
         _month_key  = f"usage:{_uid_coach}:ai_coach:{datetime.utcnow().strftime('%Y-%m')}"
-        _coach_limits = {
-            "standard":     5,    # 5 free messages/month — taste of AI Coach
-            "professional": 50,   # 50/month
-            "elite":        -1,   # unlimited
-            "enterprise":   -1,   # unlimited
-            "premium":      -1,   # unlimited
-            "pro":          30,   # 30/month
-            "basic":        10,   # 10/month
-        }
-        _limit = _coach_limits.get(_tier_coach, 5)
+        _limit = _quality_coach["monthly_limit"]
         if _limit > 0:
             try:
                 import redis as _rc_coach
@@ -12840,7 +12841,7 @@ def coach_chat():
         sessions_n = context.get("sessions_count", 0)
         top_alerts = context.get("top_alerts", [])
         calib      = context.get("has_calibration", False)
-        tier       = context.get("tier", "professional")
+        tier       = _tier_coach  # authoritative — never trust client-sent context.tier
         is_ar      = lang == "ar"
 
         sys_prompt = f"""You are PostureAI Coach — a certified ergonomics and physiotherapy AI assistant embedded in the PostureAI Pro platform.
@@ -12860,9 +12861,9 @@ Your personality:
 - Like a personal trainer who's also a physiotherapist
 - Give specific, actionable advice — never vague
 - Reference their actual data when relevant
-- Keep responses concise (2-4 paragraphs max)
 - Use markdown formatting: **bold**, bullet lists, headers
 {"- Respond ENTIRELY in Arabic. Use professional Arabic medical terminology." if is_ar else "- Respond in English."}
+{get_depth_instruction(_tier_coach)}
 
 You can help with:
 - Explaining their posture problems and pain causes
@@ -12913,7 +12914,7 @@ You can help with:
                     json={
                         "model":       LOCAL_LLM_MODEL,
                         "messages":    ollama_msgs,
-                        "max_tokens":  800,
+                        "max_tokens":  _quality_coach["max_tokens"],
                         "temperature": 0.5,
                         "stream":      False,
                     },
@@ -12927,13 +12928,13 @@ You can help with:
         # ── 2. Gemini fallback (multi-turn via Gemini contents format) ──
         if text is None and GEMINI_API_KEY and not PREFER_LOCAL:
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{_quality_coach['model']}:generateContent?key={GEMINI_API_KEY}"
                 resp_gem = req.post(url,
                     headers={"Content-Type": "application/json"},
                     json={
                         "system_instruction": {"parts": [{"text": sys_prompt}]},
                         "contents": gemini_contents,
-                        "generationConfig": {"maxOutputTokens": 800, "temperature": 0.5},
+                        "generationConfig": {"maxOutputTokens": _quality_coach["max_tokens"], "temperature": 0.5},
                     },
                     timeout=20
                 )
@@ -12952,7 +12953,7 @@ You can help with:
                     _resp_groq = req.post(
                         GROQ_URL,
                         headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-                        json={"model": _gm, "messages": [{"role": "system", "content": sys_prompt}] + ollama_msgs, "max_tokens": 800, "temperature": 0.5},
+                        json={"model": _gm, "messages": [{"role": "system", "content": sys_prompt}] + ollama_msgs, "max_tokens": _quality_coach["max_tokens"], "temperature": 0.5},
                         timeout=15,
                     )
                     if _resp_groq.status_code == 200:

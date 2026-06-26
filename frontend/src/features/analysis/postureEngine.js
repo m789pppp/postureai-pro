@@ -84,12 +84,12 @@ export function scoreColor(s)   { return s >= 75 ? "#10b981"   : s >= 50 ? "#f59
 // Usage: const smoother = createLandmarkSmoother(); ...
 //        const lms = smoother.smooth(rawLandmarksFromMediaPipe);
 //        smoother.reset() on camera start/stop/mode change.
-export function createLandmarkSmoother(alpha = 0.4) {
+export function createLandmarkSmoother(alpha = 0.4, maxRejectStreak = 3) {
   let prev = null;
   let rejectStreak = null;
   let lastT = null;
   const MAX_VEL = 3.0;          // normalized units/sec — generous bound for legit human motion
-  const MAX_REJECT_STREAK = 3;  // accept the jump anyway after this many consecutive flagged frames
+  const MAX_REJECT_STREAK = maxRejectStreak;  // accept the jump anyway after this many consecutive flagged frames
 
   return {
     smooth(lms) {

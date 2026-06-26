@@ -34,6 +34,7 @@ import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother } from "./features/analysis/postureEngine.js";
 import { getT } from "./lib/i18n.js";
+import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
 // ── Phase 12: Enterprise Scale ────────────────────────────────────
 import { APIMarketplace }      from "./APIMarketplace.jsx";
@@ -345,12 +346,13 @@ function _newInsightsTracker(){
   };
 }
 
-function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTiltSigned, shReliable, isAr){
+function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTiltSigned, shReliable, isAr, flags={creep:true,asymmetry:true,breathing:true}){
   if(!tr.sessionStart) tr.sessionStart = now;
   const insights = [];
 
   // ── #4 Micro-posture creep: slow drift vs the session's first ~2 min ──
-  if(neckReliable && Number.isFinite(neckLeanVal)){
+  // Gated to Professional+ (tier quality) — see frontend/src/lib/tierQuality.js
+  if(flags.creep && neckReliable && Number.isFinite(neckLeanVal)){
     const b = tr.neck;
     const minuteIdx = Math.floor((now - tr.sessionStart)/60000);
     if(minuteIdx !== b.curMinute){
@@ -374,7 +376,8 @@ function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTil
   }
 
   // ── #5 Chronic asymmetry: consistent SAME-direction shoulder tilt over the session ──
-  if(shReliable && Number.isFinite(shTiltSigned)){
+  // Gated to Professional+ (tier quality)
+  if(flags.asymmetry && shReliable && Number.isFinite(shTiltSigned)){
     const b = tr.shAsym;
     const minuteIdx = Math.floor((now - tr.sessionStart)/60000);
     if(minuteIdx !== b.curMinute){
@@ -403,7 +406,8 @@ function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTil
   // but noisy technique (typing/fidgeting easily swamps it). Kept
   // intentionally conservative: long window, plausible-range filter,
   // long cooldown, and the surfaced text says "experimental" outright.
-  if(Number.isFinite(midShY)){
+  // Gated to Elite-equivalent only (tier quality).
+  if(flags.breathing && Number.isFinite(midShY)){
     const br = tr.breath;
     if(now - br.lastPush > 150){ // downsample to ~6-7 samples/sec
       br.lastPush = now;
@@ -2298,7 +2302,7 @@ export default function App(){
         }
         setUser(u);
         setProfile(p);
-        if (p?.tier && p.tier !== "standard") setTier(p.tier);
+        if (p?.tier && p.tier !== "standard") setTier(normalizeTier(p.tier));
         if (p?.company_id) setCompanyId(p.company_id);
         getUserSessions(u.uid).then(setUserSessions).catch(() => {});
         setPage("home");
@@ -2481,7 +2485,8 @@ export default function App(){
       try{
         const det=mpRef.current.detectForVideo(vid,performance.now());
         if(det.landmarks?.length>0){
-          if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(0.4);
+          const quality = qualityFor(tier);
+          if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
           const result=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor);
@@ -2512,7 +2517,7 @@ export default function App(){
                 insightsRef.current, now, midShY,
                 neckMet?.value, neckMet?.reliable!==false,
                 shMet?.signed, shMet?.reliable!==false,
-                isAr
+                isAr, quality.sessionInsights
               );
               if(newInsights.length){
                 setSessionInsights(prev=>[
@@ -2569,16 +2574,23 @@ export default function App(){
     }
     // Backend call ONLY when actually needed — not a duplicate of local analysis:
     //  1) Fallback mode (local MediaPipe failed to load) → backend IS the analysis
-    //  2) Elite tier → snapshots for PDF report + Gemini AI insights
-    // Standard/Pro tiers with working local MediaPipe never touch the backend here.
-    const needsBackend = mpStatus==="fallback" || tier==="elite" || tier==="premium";
+    //  2) Elite-equivalent tier (elite/premium/b2b_enterprise) → snapshots for PDF + Gemini AI insights
+    // Standard/Basic/Professional tiers with working local MediaPipe never touch the backend here.
+    const eliteEquivalent = tierAtLeast(tier, "elite");
+    const needsBackend = mpStatus==="fallback" || eliteEquivalent;
     if(needsBackend && totalRef.current%45===0 && canvRef.current){
       const c=canvRef.current,v2=vidRef.current;
       if(v2&&v2.readyState>=2){c.width=v2.videoWidth;c.height=v2.videoHeight;c.getContext("2d").drawImage(v2,0,0);}
-      AnalysisAPI.analyze(c.toDataURL("image/jpeg",.88),mode,tier,lang,sessionId,null,calibData)
+      AnalysisAPI.analyze({
+        frame:        c.toDataURL("image/jpeg",.88),
+        mode,
+        lang,
+        session_id:   sessionId,
+        calibration:  calibData,
+      })
         .then(d=>{
-          // For Elite: send snapshot every ~12 frames for PDF
-          if((tier==="elite"||tier==="premium")&&totalRef.current%12===0&&d.overall>0){
+          // For Elite-equivalent: send snapshot every ~12 frames for PDF
+          if(eliteEquivalent&&totalRef.current%12===0&&d.overall>0){
             AnalysisAPI.addSnapshot(sessionId, c.toDataURL("image/jpeg",.6), d.overall||d.score, new Date().toLocaleTimeString())
               .catch(()=>{});
           }
@@ -2611,8 +2623,8 @@ export default function App(){
               if(now-lastAlRef.current>8000)setAlertMsg({text:`Score ${smoothed}/100 — ${grade(smoothed,t)}`,type:"good"});
             }
           }
-          // Always use Gemini from backend for Elite
-          if(d.claude_analysis&&tier==="elite")setAiInsight(d.claude_analysis);
+          // Always use Gemini from backend for Elite-equivalent tiers
+          if(d.claude_analysis&&eliteEquivalent)setAiInsight(d.claude_analysis);
         }).catch(()=>{});
     }
     rafRef.current=requestAnimationFrame(runLoop);
@@ -2637,7 +2649,7 @@ export default function App(){
       // Request notification permission on first session
       requestNotificationPermission();
       let sid="local_"+Date.now();
-      try{const d=await AnalysisAPI.startSession(mode,tier);sid=d.session_id||sid;}catch(e){}
+      try{const d=await AnalysisAPI.startSession({mode});sid=d.session_id||sid;}catch(e){}
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
       setAlertMsg({text:`${M_?.label} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
       if(user?.uid) completeOnboardingStep(user.uid,"first_session").catch(()=>{});
