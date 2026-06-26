@@ -2302,13 +2302,9 @@ export default function App(){
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
-      // ── Elite promo access ─────────────────────────────────
-      const ELITE_FREE = [
-        "judyayman36@gmail.com",
-        "m789pppp@gmail.com",
-        "khaled.elgeneidy@tkh.edu.eg",
-        "mennatullah.gamal@tkh.edu.eg",
-      ];
+      // ── Elite promo: list lives in Firestore/backend only ──
+      // SECURITY: never expose promo emails in client bundle
+      const ELITE_FREE = []; // managed server-side via ELITE_DOMAINS in auth/middleware.py
       try {
         setUser(u);
         if(u){
@@ -3004,11 +3000,8 @@ export default function App(){
         lang={lang} setLang={setLang}
         initialView={new URLSearchParams(window.location.search).get("mode")==="signup" ? "signup" : "login"}
         onAuth={(u,isNew)=>{
+          // onAuthStateChanged handles profile loading — just route
           setUser(u);
-          getUserProfile(u.uid).then(p=>{
-            if(p){setProfile(p);if(p.tier&&p.tier!=="standard")setTier(normalizeTier(p.tier));if(p.company_id)setCompanyId(p.company_id);}
-            getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
-          }).catch(()=>{});
           if(isNew) { setPage("setup"); return; }
           setPage("home");
         }}
@@ -3041,21 +3034,10 @@ export default function App(){
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
         onAuth={(u,isNew)=>{
+          // onAuthStateChanged handles profile — just route
           setUser(u);
-          getUserProfile(u.uid).then(p=>{
-            if(p){
-              setProfile(p);
-              if(p.tier)setTier(normalizeTier(p.tier));
-              if(p.company_id)setCompanyId(p.company_id);
-            }
-            getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
-          }).catch(()=>{});
           if(isNew){setPage("setup");return;}
-          // FIX 5: also check setup_complete for existing users interrupted mid-setup
-          getUserProfile(u.uid).then(p=>{
-            if(p&&!p.setup_complete) setPage("setup");
-            else setPage("home");
-          }).catch(()=>setPage("home"));
+          setPage("home");
         }}
       />
     </ErrorBoundary>
