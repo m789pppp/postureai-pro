@@ -87,9 +87,12 @@ function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
       const ease = 1 - Math.pow(1 - p, 4);
       setV(ease * n);
       if (p < 1) requestAnimationFrame(tick);
+      else setV(n); // land exactly on target value
     };
     requestAnimationFrame(tick);
   }, [vis, to]);
+  // Reset so counter re-animates if 'to' changes after already played
+  useEffect(() => { started.current = false; setV(0); }, [to]);
   return <span ref={ref}>{prefix}{v.toFixed(decimals)}{suffix}</span>;
 }
 
@@ -319,8 +322,8 @@ function Nav({ lang, setLang, onCTA }) {
               borderRadius:8, fontSize:14.5, fontWeight:500,
               transition:"color .2s",
             }}
-            onMouseEnter={e => e.target.style.color = C.text}
-            onMouseLeave={e => e.target.style.color = C.sub}>{label}</a>
+            onMouseEnter={e => e.currentTarget.style.color = C.text}
+            onMouseLeave={e => e.currentTarget.style.color = C.sub}>{label}</a>
           ))}
         </div>
 
@@ -585,7 +588,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
                   <span style={{ fontSize:11.5, color:C.muted, fontFamily:FONT_MONO,
                     background:"rgba(255,255,255,.04)", padding:"3px 14px", borderRadius:6 }}>
-                    app.corvus.io/dashboard
+                    postureai-pro-omega-nine.vercel.app
                   </span>
                 </div>
               </div>
@@ -804,6 +807,8 @@ function Stats({ lang }) {
 function Features({ lang }) {
   const ar = lang === "ar";
   const [active, setActive] = useState(0);
+  // Reset to first tab on language change — avoids stale index if array length differs
+  useEffect(() => { setActive(0); }, [ar]);
 
   const features = ar ? [
     { icon:"🎯", title:"تحليل دقيق بالذكاء الاصطناعي",
@@ -1171,7 +1176,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
           </div>
         </Reveal>
 
-        <Stagger key={localMode} className="lp-pricing-grid" style={{
+        <Stagger key={`${localMode}-${billing}`} className="lp-pricing-grid" style={{
           display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:22, alignItems:"start" }}>
           {plans.map((p) => (
             <StaggerItem key={p.id}>
@@ -1455,13 +1460,13 @@ function FinalCTA({ lang, onCTA }) {
 function Footer({ lang }) {
   const ar = lang === "ar";
   const sections = ar ? {
-    product: { title:"المنصة", links:[["المميزات","#features"],["الأسعار","#pricing"],["المؤسسات","#enterprise"],["التحديثات","#changelog"]] },
-    company: { title:"الشركة", links:[["عن الشركة","/about"],["المدونة","/blog"],["وظائف","/careers"],["الشركاء","/partners"]] },
-    legal: { title:"قانوني", links:[["الخصوصية","/privacy"],["الشروط","/terms"],["الأمان","/security"],["GDPR","/gdpr"]] },
+    product: { title:"المنصة", links:[["المميزات","#features"],["الأسعار","#pricing"],["المؤسسات","#enterprise"],["التحديثات","#features"]] },
+    company: { title:"الشركة", links:[["عن الشركة","#"],["المدونة","#"],["وظائف","#"],["الشركاء","#"]] },
+    legal: { title:"قانوني", links:[["الخصوصية","#"],["الشروط","#"],["الأمان","#"],["GDPR","#"]] },
   } : {
-    product: { title:"Product", links:[["Features","#features"],["Pricing","#pricing"],["Enterprise","#enterprise"],["Changelog","/changelog"]] },
-    company: { title:"Company", links:[["About","/about"],["Blog","/blog"],["Careers","/careers"],["Partners","/partners"]] },
-    legal: { title:"Legal", links:[["Privacy","/privacy"],["Terms","/terms"],["Security","/security"],["GDPR","/gdpr"]] },
+    product: { title:"Product", links:[["Features","#features"],["Pricing","#pricing"],["Enterprise","#enterprise"],["Changelog","#features"]] },
+    company: { title:"Company", links:[["About","#"],["Blog","#"],["Careers","#"],["Partners","#"]] },
+    legal: { title:"Legal", links:[["Privacy","#"],["Terms","#"],["Security","#"],["GDPR","#"]] },
   };
 
   return (
@@ -1483,7 +1488,7 @@ function Footer({ lang }) {
             </p>
             <div style={{ display:"flex", gap:10 }}>
               {["LinkedIn","Twitter","YouTube"].map(s => (
-                <a key={s} href={`https://${s.toLowerCase()}.com/corvus`}
+                <a key={s} href="#"
                   target="_blank" rel="noopener noreferrer"
                   style={{ color:C.muted, fontSize:12, textDecoration:"none",
                     padding:"7px 11px", border:`1px solid ${C.border}`,
@@ -1507,8 +1512,8 @@ function Footer({ lang }) {
                     color:C.sub, fontSize:14.5, textDecoration:"none",
                     transition:"color .2s",
                   }}
-                  onMouseEnter={e=>e.target.style.color=C.text}
-                  onMouseLeave={e=>e.target.style.color=C.sub}>
+                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                  onMouseLeave={e=>e.currentTarget.style.color=C.sub}>
                     {label}
                   </a>
                 ))}
@@ -1551,7 +1556,7 @@ export default function LandingPage({ onNavigate }) {
 
   const handleCTA = useCallback(e => {
     // Track conversion click
-    if (window.posthog) window.posthog.capture("landing_cta_click", { mode });
+    try { if (window.posthog) window.posthog.capture("landing_cta_click", { mode }); } catch {}
   }, [mode]);
 
   useEffect(() => {
