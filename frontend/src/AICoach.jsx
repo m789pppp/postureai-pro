@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { geminiChat, buildCoachContext, friendlyError } from "./gemini.js";
+import { qualityFor, coachLimitLabel as tierCoachLimitLabel } from "./lib/tierQuality.js";
 
 // ── Markdown renderer (lightweight) ──────────────────────────────
 function MdText({ text }) {
@@ -67,37 +68,30 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
     muted: "#64748b", blue: "#1a56db",
   };
 
-  // ── Coach limits — defined here so T object can reference coachLimitLabel ──
-  const canUseCoach = true;
-  const isElite = true;
-  const TIER_LIMITS = { standard: 5, basic: 10, pro: 30, professional: 50, elite: -1, premium: -1, enterprise: -1 };
-  const coachLimit      = TIER_LIMITS[profile?.tier] ?? 5;
-  const coachLimitLabel = coachLimit === -1
-    ? (lang === "ar" ? "غير محدود" : "Unlimited")
-    : `${coachLimit} ${lang === "ar" ? "رسالة/شهر" : "msgs/month"}`;
+  // ── Coach quality/limits — single source of truth, correctly handles
+  //    B2B plans (b2b_growth/b2b_enterprise) via featureTier() mapping ──
+  const quality        = qualityFor(profile?.tier);
+  const coachLimit      = quality.aiCoach.monthlyLimit;
+  const coachLimitLabel = tierCoachLimitLabel(profile?.tier, lang);
 
   const T = {
     en: {
       title:       "AI Posture Coach",
-      subtitle:    `Powered by Gemini AI — ${coachLimitLabel}`,
+      subtitle:    `AI-powered — ${coachLimitLabel}`,
       placeholder: "Ask me anything about your posture…",
       send:        "Send",
       clear:       "Clear chat",
       thinking:    "Coach is thinking…",
-      elite_only:  "AI Coach is available on the Professional tier and above.",
-      upgrade:     "Upgrade to Professional →",
       welcome:     `Hi ${profile?.name?.split(" ")[0] || "there"}! 👋 I'm your personal posture coach. I can see your analytics — your average score is **${sessions?.length ? Math.round(sessions.reduce((a,s) => a+(s.avg_score||0),0)/sessions.length) : "—"}/100** from ${sessions?.length||0} sessions.\n\nAsk me anything — why you have pain, how to improve, or what your worst posture times are.`,
       welcome_ar:  `أهلاً ${profile?.name?.split(" ")[0] || ""}! 👋 أنا مدربك الشخصي للوضعية. أقدر أشوف بياناتك — متوسط نتيجتك **${sessions?.length ? Math.round(sessions.reduce((a,s) => a+(s.avg_score||0),0)/sessions.length) : "—"}/100** من ${sessions?.length||0} جلسة.\n\nاسألني أي حاجة — عن الألم، التحسين، أو أوقات الوضعية السيئة.`,
     },
     ar: {
       title:       "مدرب الوضعية الذكي",
-      subtitle:    `مدعوم بـ Gemini AI — ${coachLimitLabel}`,
+      subtitle:    `مدعوم بالذكاء الاصطناعي — ${coachLimitLabel}`,
       placeholder: "اسألني أي حاجة عن وضعيتك…",
       send:        "إرسال",
       clear:       "مسح المحادثة",
       thinking:    "المدرب بيفكر…",
-      elite_only:  "مدرب AI متاح لمشتركي Professional وما فوق.",
-      upgrade:     "اشترك في Professional ←",
     },
   };
   const t = T[lang] || T.en;
@@ -184,7 +178,8 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
       const reply = await geminiChat(messagesPayload, {
         systemPrompt,
         lang: isAr ? "ar" : "en",
-        maxTokens: 512,
+        maxTokens: quality.aiCoach.maxTokens,
+        context,
       });
       setMessages(prev => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
     } catch (e) {
@@ -193,26 +188,11 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
       setLoading(false);
       inputRef.current?.focus();
     }
-  }, [input, messages, loading, context, lang, isAr]);
+  }, [input, messages, loading, context, lang, isAr, quality]);
 
   const handleKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
-
-  // ── Non-elite paywall ────────────────────────────────────────────
-  if (!isElite) {
-    return (
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9200, backdropFilter: "blur(8px)" }}>
-        <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 20, padding: 32, maxWidth: 400, width: "92%", textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🤖</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: DARK.text, marginBottom: 8 }}>{t.title}</div>
-          <div style={{ fontSize: 13, color: DARK.muted, marginBottom: 24, lineHeight: 1.6 }}>{t.elite_only}</div>
-          <button onClick={onClose} style={{ background: "#1a56db", border: "none", borderRadius: 9, padding: "12px 28px", fontSize: 13, fontWeight: 600, color: "white", cursor: "pointer", marginRight: isAr ? 0 : 10, marginLeft: isAr ? 10 : 0 }}>{t.upgrade}</button>
-          <button onClick={onClose} style={{ background: "none", border: `0.5px solid ${DARK.border}`, borderRadius: 9, padding: "12px 20px", fontSize: 12, color: DARK.muted, cursor: "pointer" }}>{isAr ? "رجوع" : "Back"}</button>
-        </div>
-      </div>
-    );
-  }
 
   // ── Full coach UI ─────────────────────────────────────────────────
   return (

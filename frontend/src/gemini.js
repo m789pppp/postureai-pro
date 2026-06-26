@@ -103,15 +103,15 @@ export function friendlyError(e, lang = "en") {
     return ar ? "مفتاح الـ AI غير صحيح" : "AI key invalid — contact support";
   if (msg === "AI_BUSY" || msg.includes("429") || msg.includes("busy"))
     return ar ? "⏳ الـ AI مشغول — انتظر ثانية وجرب تاني" : "⏳ AI is busy — try again in a moment";
-  if (msg.includes("limit_reached") || msg.includes("coach_limit") || msg.includes("Monthly"))
-    return ar ? "وصلت لحد الرسائل الشهري — اترقي للـ Elite" : "Monthly AI limit reached — upgrade to Elite";
+  if (e?.code === "coach_limit_reached" || msg.includes("limit_reached") || msg.includes("coach_limit") || msg.includes("Monthly") || msg.includes("messages this month"))
+    return ar ? `وصلت لحد ${e?.limit ?? ""} رسالة الشهر ده — رقّي خطتك لرسائل أكتر` : `You've reached your limit of ${e?.limit ?? ""} messages this month — upgrade for more`;
   if (msg.includes("imeout") || msg.includes("bort"))
     return ar ? "انقطع الاتصال — جرب تاني" : "Connection timed out — try again";
   return ar ? "حصل خطأ — جرب تاني" : "Something went wrong — please try again";
 }
 
 // ── geminiChat — AICoach multi-turn ──────────────────────────────
-export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxTokens = 600, lang = "en" } = {}) {
+export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxTokens = 600, lang = "en", context = {} } = {}) {
   const messages = Array.isArray(messagesOrPrompt)
     ? messagesOrPrompt
     : [{ role: "user", content: String(messagesOrPrompt) }];
@@ -123,15 +123,20 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
     const res = await fetch(`${API_BASE}/coach/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
-      body: JSON.stringify({ messages, context: { system_prompt: systemPrompt }, lang, max_tokens: maxTokens }),
+      body: JSON.stringify({ messages, context, lang, max_tokens: maxTokens }),
       signal: AbortSignal.timeout(22000),
     });
     backendReachable = true;
     if (res.ok) return (await res.json()).text || "";
     const err = await res.json().catch(() => ({}));
     const errMsg = err.error || err.message || "";
-    if (errMsg.includes("limit_reached") || errMsg.includes("coach_limit"))
-      throw new Error(err.message || "coach_limit_reached");
+    if (err.error === "coach_limit_reached" || errMsg.includes("limit_reached") || errMsg.includes("coach_limit")) {
+      const limitErr = new Error(err.message || "coach_limit_reached");
+      limitErr.code = "coach_limit_reached";
+      limitErr.used = err.used;
+      limitErr.limit = err.limit;
+      throw limitErr;
+    }
     if (_isRateLimit(res.status, errMsg)) throw new Error("AI_BUSY");
     if (res.status < 500) throw new Error(errMsg || `AI error ${res.status}`);
     console.warn(`[AI] backend ${res.status} → Groq fallback`);

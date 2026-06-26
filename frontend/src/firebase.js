@@ -9,6 +9,7 @@ import {
   collection, query, where, orderBy, limit, getDocs,
   onSnapshot, serverTimestamp as _serverTimestamp, increment, writeBatch,
 } from "firebase/firestore";
+import { tierAtLeast } from "./lib/tierQuality.js";
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -547,7 +548,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const { jsPDF } = await import("jspdf");
   const isAr  = lang === "ar";
   const tier  = session.tier || profile?.tier || "standard";
-  const isElite = tier === "elite" || tier === "premium";
+  const isElite = tierAtLeast(tier, "elite");
   const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
@@ -597,7 +598,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   doc.text(isAr?`تاريخ الإنشاء: ${new Date().toLocaleDateString("ar-EG")}`:`Generated: ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})}`, ml+28, 32.5);
 
   // Tier badge
-  const tierColor = isElite ? [16,185,129] : tier==="professional" ? [14,165,233] : [99,102,241];
+  const tierColor = isElite ? [16,185,129] : tierAtLeast(tier,"professional") ? [14,165,233] : [99,102,241];
   doc.setFillColor(...tierColor); doc.roundedRect(W-mr-30,12,30,10,2,2,"F");
   doc.setFontSize(7.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
   doc.text(tier.toUpperCase(), W-mr-15, 18.8, {align:"center"});
