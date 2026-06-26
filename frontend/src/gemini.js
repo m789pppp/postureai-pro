@@ -1,7 +1,6 @@
 /**
  * gemini.js — Groq AI (free, fast, bilingual AR+EN)
- * Key is read at RUNTIME from window.__env or meta tag — NOT compile-time
- * This prevents Vite from tree-shaking the entire module when key is empty
+ * Key loaded from /api/config at runtime — bypasses Vite tree-shaking completely
  */
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -11,22 +10,42 @@ const GROQ_MODELS = [
   "gemma2-9b-it",
 ];
 
-// ── Runtime key reader — NOT a compile-time constant ─────────────
-// This prevents Vite from dead-code-eliminating callGroq when key is ""
-function getGroqKey() {
-  // 1. Injected by Vite at build time (works when env var exists at build)
-  const buildKey = import.meta.env.VITE_GROQ_API_KEY;
-  if (buildKey && buildKey.startsWith("gsk_")) return buildKey;
-  // 2. Runtime fallback via window (for edge cases)
-  if (typeof window !== "undefined" && window.__GROQ_KEY__) return window.__GROQ_KEY__;
-  return "";
+// ── Runtime key — fetched once from Vercel Edge Function ─────────
+let _cachedKey = null;
+let _keyPromise = null;
+
+async function getGroqKey() {
+  // Already loaded
+  if (_cachedKey !== null) return _cachedKey;
+  // Already fetching
+  if (_keyPromise) return _keyPromise;
+
+  _keyPromise = (async () => {
+    try {
+      const res = await fetch("/api/config", { cache: "no-store" });
+      if (res.ok) {
+        const d = await res.json();
+        _cachedKey = d.groqKey || "";
+        return _cachedKey;
+      }
+    } catch {}
+    // Fallback: try window (set manually for dev)
+    if (typeof window !== "undefined" && window.__GROQ_KEY__) {
+      _cachedKey = window.__GROQ_KEY__;
+      return _cachedKey;
+    }
+    _cachedKey = "";
+    return "";
+  })();
+
+  return _keyPromise;
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ── Core Groq fetch ───────────────────────────────────────────────
 async function callGroq(systemPrompt, userPrompt, maxTokens = 600, messages = null) {
-  const key = getGroqKey();
+  const key = await getGroqKey();
   if (!key) throw new Error("AI_KEY_MISSING");
 
   const msgs = messages
@@ -61,7 +80,10 @@ async function callGroq(systemPrompt, userPrompt, maxTokens = 600, messages = nu
           if (retry === 0) { await sleep(2500); continue; }
           break;
         }
-        if (res.status === 401) throw new Error("AI_KEY_INVALID");
+        if (res.status === 401) {
+          _cachedKey = null; // reset cache so next call retries
+          throw new Error("AI_KEY_INVALID");
+        }
 
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error?.message || `AI error ${res.status}`);

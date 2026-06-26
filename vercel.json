@@ -5,6 +5,10 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/api/config",
+      "destination": "/api/config.js"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index.py"
     },
@@ -64,6 +68,9 @@
   "functions": {
     "api/index.py": {
       "runtime": "python3.9"
+    },
+    "api/config.js": {
+      "runtime": "edge"
     }
   }
 }
