@@ -19,9 +19,6 @@
     <meta property="og:title"       content="Corvus — منصة ذكاء اصطناعي لصحة القوى العاملة" />
     <meta property="og:description" content="تحليل بيوميكانيكي فوري بـ MediaPipe و Gemini AI. وفّر 40% من تكاليف إجازات العمل. SOC 2 in progress." />
     <meta property="og:image"       content="https://corvus-health.vercel.app/og-image.png" />
-    <meta property="og:image:width"  content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt"    content="Corvus — AI Workforce Health Platform" />
     <meta property="og:locale"      content="ar_EG" />
     <meta property="og:locale:alternate" content="en_US" />
 
@@ -31,7 +28,6 @@
     <meta name="twitter:title"       content="Corvus — AI Workforce Health" />
     <meta name="twitter:description" content="AI-powered posture analysis for Egyptian enterprise teams. Free 7-day trial." />
     <meta name="twitter:image"       content="https://corvus-health.vercel.app/og-image.png" />
-    <meta name="twitter:image:alt"   content="Corvus Dashboard" />
 
     <!-- ═══ Security / Trust ══════════════════════════════════════ -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
@@ -69,26 +65,17 @@
         "name": "Corvus",
         "email": "support@postureai.io",
         "telephone": "+201210271841"
-      },
-      "featureList": [
-        "Real-time posture analysis",
-        "AI coaching with Gemini",
-        "HR dashboard",
-        "SOC 2 compliance in progress",
-        "PayMob Egypt payments"
-      ]
+      }
     }
     </script>
 
     <!-- ═══ Preconnect ════════════════════════════════════════════ -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-    <link rel="preconnect" href="https://storage.googleapis.com" />
-    <link rel="preconnect" href="https://generativelanguage.googleapis.com" />
+    <link rel="preconnect" href="https://api.groq.com" />
     <link rel="preconnect" href="https://firestore.googleapis.com" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
 
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -117,15 +104,11 @@
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: rgba(148,163,184,.2); border-radius: 99px; }
       ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.4); }
-      @supports (padding: env(safe-area-inset-bottom)) {
-        body { padding-bottom: env(safe-area-inset-bottom); }
-      }
-      @media (max-width: 600px) {
-        [data-sb] { grid-template-columns: 1fr !important; }
-      }
     </style>
   </head>
   <body>
+    <!-- Runtime AI config — injected by /api/config endpoint -->
+    <script>window.__GROQ_KEY__="";</script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
