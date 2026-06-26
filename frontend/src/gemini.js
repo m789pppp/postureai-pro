@@ -1,10 +1,7 @@
 /**
- * gemini.js — AI via Ollama (local, open-source, free)
- * All calls go through backend /api/ai/analyze + /api/coach/chat
- * No API keys on frontend. Backend handles Ollama.
- * 
- * Railway setup: OLLAMA_URL=http://YOUR_SERVER:11434
- * Model: ollama pull qwen2.5:3b  (2GB, bilingual AR+EN)
+ * gemini.js — Groq AI (free, no setup, bilingual AR+EN)
+ * Key: GROQ_API_KEY في Railway env vars
+ * Model: llama-3.1-8b-instant
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -15,7 +12,7 @@ export function friendlyError(e, lang = "en") {
   const ar  = lang === "ar";
   if (msg.includes("503") || msg.includes("busy"))
     return ar ? "الـ AI مشغول — انتظر ثانية" : "AI is busy — try again";
-  if (msg.includes("502") || msg.includes("Failed to fetch") || msg.includes("offline"))
+  if (msg.includes("502") || msg.includes("Failed to fetch"))
     return ar ? "خدمة AI غير متاحة حالياً" : "AI service unavailable";
   if (msg.includes("timeout") || msg.includes("AbortError"))
     return ar ? "انقطع الاتصال — جرب تاني" : "Request timed out — try again";
@@ -24,10 +21,10 @@ export function friendlyError(e, lang = "en") {
 
 async function apiFetch(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
-    method:  "POST",
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify(body),
-    signal:  AbortSignal.timeout(TIMEOUT),
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(TIMEOUT),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
