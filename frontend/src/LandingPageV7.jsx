@@ -934,7 +934,7 @@ function HowItWorks({ lang }) {
             position:"absolute", top:0, left:"16.6%", right:"16.6%", height:2,
             background:"linear-gradient(90deg,rgba(79,124,249,.45),rgba(34,211,238,.45),rgba(16,217,160,.45))",
           }}/>
-          <Stagger className="lp-steps-grid" gap={0.12} style={{
+          <Stagger key={String(ar)} className="lp-steps-grid" gap={0.12} style={{
             display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:28, position:"relative" }}>
             {steps.map((s) => (
               <StaggerItem key={s.n}>
@@ -989,7 +989,7 @@ function CaseStudies({ lang }) {
           eyebrowColor={C.green} eyebrowBg="rgba(16,217,160,.08)" eyebrowBorder="rgba(16,217,160,.2)"
           title={ar ? "عملاؤنا يحقّقون نتائج قابلة للقياس" : "Our customers achieve measurable results"}/>
 
-        <Stagger className="lp-cases-grid" style={{
+        <Stagger key={String(ar)} className="lp-cases-grid" style={{
           display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
           {cases.map((c) => (
             <StaggerItem key={c.co}>
@@ -1171,7 +1171,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
           </div>
         </Reveal>
 
-        <Stagger className="lp-pricing-grid" style={{
+        <Stagger key={localMode} className="lp-pricing-grid" style={{
           display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:22, alignItems:"start" }}>
           {plans.map((p) => (
             <StaggerItem key={p.id}>
@@ -1305,7 +1305,7 @@ function Testimonials({ lang }) {
     <section className="lp-section">
       <div className="lp-wrap">
         <SectionHead title={ar ? "ماذا يقول عملاؤنا" : "What our customers say"} />
-        <Stagger className="lp-testi-grid" style={{
+        <Stagger key={String(ar)} className="lp-testi-grid" style={{
           display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
           {testimonials.map((t) => (
             <StaggerItem key={t.name}>

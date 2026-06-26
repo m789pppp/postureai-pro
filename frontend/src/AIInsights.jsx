@@ -319,7 +319,7 @@ Be specific and practical. Reference the actual scores. Max 220 words.`,
                   {isAr ? "طبقة الذكاء الاصطناعي" : "AI Intelligence Layer"}
                 </div>
                 <div style={{ fontSize: 10, color: "#0891b2", fontWeight: 600 }}>
-                  {isAr ? "تحليل متقدم — Powered by Gemini AI" : "Advanced Analytics — Powered by Gemini AI"}
+                  {isAr ? "تحليل متقدم — Powered by Corvus AI" : "Advanced Analytics — Powered by Corvus AI"}
                 </div>
               </div>
             </div>
@@ -507,7 +507,7 @@ function AITextSection({ loading, data, error, onRetry, isAr }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <div style={{ width: 24, height: 24, borderRadius: 7, background: "linear-gradient(135deg,#1a56db,#0891b2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>🧠</div>
         <span style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-          {isAr ? "تحليل Gemini AI" : "Gemini AI Analysis"}
+          {isAr ? "تحليل Corvus AI" : "Corvus AI Analysis"}
         </span>
         {loading && <span style={{ marginLeft: "auto" }}><LoadingDots /></span>}
       </div>

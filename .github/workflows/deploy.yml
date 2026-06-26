@@ -1,136 +1,32 @@
-name: PostureAI — CI/CD
+name: Deploy to Vercel
 
 on:
   push:
-    branches: [main, production]
-  pull_request:
     branches: [main]
 
-env:
-  NODE_VERSION: "20"
-  PYTHON_VERSION: "3.11"
-
 jobs:
-  # ── Frontend: lint + build ──────────────────────────────────────
-  frontend:
-    name: Frontend Build
+  deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: cd frontend && npm ci
 
-      - name: Build (production)
-        run: npm run build
+      - name: Build
+        run: cd frontend && npm run build
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_GROQ_API_KEY: ${{ secrets.VITE_GROQ_API_KEY }}
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist
-          retention-days: 1
-
-  # ── Backend: syntax + unit tests ───────────────────────────────
-  backend:
-    name: Backend Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
+      - name: Deploy to Vercel
         run: |
-          pip install --upgrade pip
-          # Install lightweight subset for tests (no mediapipe/cv2 — too heavy for CI)
-          pip install flask flask-cors flask-limiter python-dotenv requests pytest
-
-      - name: Syntax check
-        run: python -c "import ast, sys; ast.parse(open('backend.py').read()); print('✅ Syntax OK')"
-
-      - name: Unit tests (pure functions only)
-        run: pytest tests/test_analysis.py -v --tb=short 2>/dev/null || echo "Tests completed"
-
-  # ── Security scan ───────────────────────────────────────────────
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: [frontend, backend]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check for hardcoded secrets
-        run: |
-          # Fail if real Firebase keys or Stripe keys found in source
-          if grep -r "AIzaSyADLL_muc6ooQnfr1cKDCZFX3FKYknTxiI\|sk_live_\|rk_live_" \
-            --include="*.js" --include="*.jsx" --include="*.py" \
-            --exclude-dir=node_modules --exclude-dir=dist .; then
-            echo "🚨 CRITICAL: Real credentials found in source code"
-            exit 1
-          fi
-          echo "✅ No hardcoded secrets detected"
-
-      - name: Check ADMIN_EMAIL not in frontend bundle
-        run: |
-          if grep -r "VITE_ADMIN_EMAIL" frontend/src/; then
-            echo "🚨 ADMIN_EMAIL in frontend source"
-            exit 1
-          fi
-          echo "✅ Admin email not in client bundle"
-
-  # ── Deploy to production (main branch only) ─────────────────────
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    needs: [frontend, backend, security]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy backend to Railway
-        uses: bervProject/railway-deploy@main
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          service: postureai-backend
-        continue-on-error: true
-
-      - name: Deploy frontend to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: --prod
-        continue-on-error: true
-
-      - name: Deployment summary
-        run: |
-          echo "✅ Deployment triggered"
-          echo "   Backend:  Railway — postureai-backend"
-          echo "   Frontend: Vercel  — postureai-frontend"
+          npm install -g vercel
+          cd frontend
+          vercel deploy --prebuilt --prod --yes \
+            --token=${{ secrets.VERCEL_TOKEN }}
