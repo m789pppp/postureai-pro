@@ -2209,7 +2209,17 @@ export default function App(){
       // Refresh profile so tier is current
       if(res==="success"&&user) getUserProfile(user.uid).then(setProfile).catch(()=>{});
     }
-    if(p.get("payment")==="success"){ toast(isAr?"✅ تم تفعيل خطتك!":"✅ Your plan is now active!","success"); }
+    if(p.get("payment")==="success"){
+      toast(isAr?"✅ تم تفعيل خطتك!":"✅ Your plan is now active!","success");
+      // Refresh profile — backend webhook may have updated tier already
+      if(user?.uid){
+        setTimeout(()=>{
+          getUserProfile(user.uid).then(p=>{
+            if(p){ setProfile(p); if(p.tier) setTier(normalizeTier(p.tier)); }
+          }).catch(()=>{});
+        }, 2000); // wait 2s for webhook to process
+      }
+    }
     if(p.get("payment")==="cancelled"){ toast(isAr?"تم إلغاء الدفع — لم يتم خصم أي مبلغ":"Payment cancelled — no charge made","info"); }
   },[]);
 
@@ -3219,7 +3229,31 @@ export default function App(){
           }catch(e){ console.warn("skip onboard:",e?.code); }
         }
       }}/>}
-      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
+      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={async(plan)=>{
+        const newTier = normalizeTier(plan);
+        setTier(newTier);
+        setShowBilling(false);
+        addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");
+        // Persist tier to Firestore so it survives refresh
+        if(user?.uid){
+          try{
+            const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");
+            const{db:_db}=await import("./firebase.js");
+            await _u(_d(_db,"users",user.uid),{
+              tier: newTier,
+              tier_updated_at: new Date().toISOString(),
+              updated_at: _s(),
+            });
+            setProfile(p=>p?({...p,tier:newTier}):p);
+          }catch(e){ console.warn("tier update failed",e?.code); }
+        }
+        // Refresh profile from Firestore to get any backend-updated fields
+        if(user?.uid){
+          getUserProfile(user.uid).then(p=>{
+            if(p){ setProfile(p); if(p.tier) setTier(normalizeTier(p.tier)); }
+          }).catch(()=>{});
+        }
+      }}/>}
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
       {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}

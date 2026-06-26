@@ -831,6 +831,38 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
   const [dir, setDir]         = useState("forward");
   const isAr = lang === "ar";
 
+  // ── Persist onboarding step mid-flow (resume if user closes tab) ──
+  useEffect(() => {
+    if (!user?.uid || step === 0) return;
+    import("firebase/firestore").then(({ doc, updateDoc, serverTimestamp }) =>
+      import("./firebase.js").then(({ db }) =>
+        updateDoc(doc(db, "users", user.uid), {
+          onboarding_step:         step,
+          onboarding_step_at:      new Date().toISOString(),
+          // Save partial profile data progressively
+          ...(profile.name  ? { name:  profile.name  } : {}),
+          ...(profile.goals ? { goals: profile.goals } : {}),
+          ...(profile.userType ? { user_type: profile.userType } : {}),
+        }).catch(() => {}) // silent — don't block UI
+      )
+    );
+  }, [step, user?.uid]);
+
+  // ── Resume from saved step on re-mount ───────────────────────────
+  useEffect(() => {
+    if (!user?.uid) return;
+    import("firebase/firestore").then(({ doc, getDoc }) =>
+      import("./firebase.js").then(({ db }) =>
+        getDoc(doc(db, "users", user.uid)).then(snap => {
+          const saved = snap.data()?.onboarding_step;
+          if (saved && saved > 0 && saved < 7) { // don't resume from finish step
+            setStep(saved);
+          }
+        }).catch(() => {})
+      )
+    );
+  }, [user?.uid]);
+
   const STEPS = [
     { id: "welcome",      label: isAr ? "مرحباً"    : "Welcome"     },
     { id: "profile",      label: isAr ? "ملفك"      : "Profile"     },
