@@ -300,6 +300,10 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [pass2,   setPass2]  = useState("");
   const [fname,   setFname]  = useState("");
   const [lname,   setLname]  = useState("");
+  const [country, setCountry]= useState("");
+  const [profession,setProfession]=useState("");
+  const [agreeTerms,setAgreeTerms]=useState(false);
+  const [newsletter,setNewsletter]=useState(true);
   const [showP,   setShowP]  = useState(false);
   const [showP2,  setShowP2] = useState(false);
   const [remember,setRemember]= useState(true);
@@ -331,15 +335,19 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
   const passValid  = pass.length >= 6;
   const pass2Valid = pass === pass2 && pass2.length > 0;
-  const fnameValid = fname.trim().length >= 1;
-  const lnameValid = lname.trim().length >= 1;
+  const fnameValid   = fname.trim().length >= 1;
+  const lnameValid   = lname.trim().length >= 1;
+  const countryValid = country.length > 0;
+  const termsValid   = agreeTerms;
 
   const fieldErr = {
     email:  touched.email  && !emailValid ? (isAr?"أدخل بريداً إلكترونياً صحيحاً":"Enter a valid email address") : "",
     pass:   touched.pass   && !passValid  ? (isAr?"6 أحرف على الأقل":"At least 6 characters") : "",
     pass2:  touched.pass2  && !pass2Valid ? (isAr?"كلمتا المرور غير متطابقتين":"Passwords don't match") : "",
-    fname:  touched.fname  && !fnameValid ? (isAr?"الاسم الأول مطلوب":"First name required") : "",
-    lname:  touched.lname  && !lnameValid ? (isAr?"اسم العائلة مطلوب":"Last name required") : "",
+    fname:   touched.fname    && !fnameValid   ? (isAr?"الاسم الأول مطلوب":"First name required") : "",
+    lname:   touched.lname    && !lnameValid   ? (isAr?"اسم العائلة مطلوب":"Last name required") : "",
+    country: touched.country  && !countryValid ? (isAr?"اختر الدولة":"Select your country") : "",
+    terms:   touched.terms    && !termsValid   ? (isAr?"يجب الموافقة على الشروط":"You must agree to the terms") : "",
   };
 
   // ── Social auth ──────────────────────────────────────────────────
@@ -361,9 +369,9 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     e.preventDefault();
     // Touch all fields
     if (view==="login")  setTouched({email:true,pass:true});
-    if (view==="signup") setTouched({email:true,pass:true,pass2:true,fname:true,lname:true});
+    if (view==="signup") setTouched({email:true,pass:true,pass2:true,fname:true,lname:true,country:true,terms:true});
     if (view==="login"  && (!emailValid||!passValid)) { doShake(); return; }
-    if (view==="signup" && (!emailValid||!passValid||!pass2Valid||!fnameValid||!lnameValid)) { doShake(); return; }
+    if (view==="signup" && (!emailValid||!passValid||!pass2Valid||!fnameValid||!lnameValid||!countryValid||!termsValid)) { doShake(); return; }
     if (!rateOk()) { setErr(isAr?"انتظر دقيقة":"Too many attempts"); return; }
     setErr(""); setLoading(true);
     try {
@@ -372,7 +380,16 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         const c=await signInEmail(email.trim(),pass); onAuth(c.user,false);
       } else {
         const c=await signUpEmail(email.trim(),pass);
-        await createUserProfile(c.user.uid,{email:email.trim(),name:`${fname.trim()} ${lname.trim()}`.trim(),company:""});
+        await createUserProfile(c.user.uid,{
+          email:      email.trim(),
+          name:       `${fname.trim()} ${lname.trim()}`.trim(),
+          first_name: fname.trim(),
+          last_name:  lname.trim(),
+          country:    country,
+          profession: profession.trim(),
+          newsletter: newsletter,
+          company:    "",
+        });
         onAuth(c.user,true);
       }
     } catch(e) { setErr(getErr(e,isAr)); doShake(); }
@@ -671,6 +688,120 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     autoComplete="new-password" required dark={dark} isRtl={isAr}
                     error={fieldErr.pass2} valid={pass2Valid&&touched.pass2}
                     rightEl={eyeBtn(showP2,()=>setShowP2(v=>!v))}/>
+
+                  {/* Country */}
+                  <div style={{marginBottom:fieldErr.country?4:16}}>
+                    <label style={{display:"block",marginBottom:6,fontSize:11.5,fontWeight:600,
+                      color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
+                      {isAr?"الدولة":"Country"} *
+                    </label>
+                    <select value={country} onChange={e=>{setCountry(e.target.value);touch("country");}}
+                      required
+                      style={{width:"100%",padding:"13px 14px",
+                        background:t.card,border:`1.5px solid ${fieldErr.country?"rgba(239,68,68,.5)":t.border}`,
+                        borderRadius:10,fontSize:14.5,color:country?t.text:t.textSub,
+                        outline:"none",fontFamily:"inherit",cursor:"pointer",
+                        boxSizing:"border-box",appearance:"none",
+                        backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+                        backgroundRepeat:"no-repeat",
+                        backgroundPosition:isAr?"12px center":"calc(100% - 12px) center",
+                      }}>
+                      <option value="">{isAr?"اختر الدولة":"Select country"}</option>
+                      {[
+                        ["EG","🇪🇬 مصر / Egypt"],["SA","🇸🇦 السعودية / Saudi Arabia"],
+                        ["AE","🇦🇪 الإمارات / UAE"],["KW","🇰🇼 الكويت / Kuwait"],
+                        ["QA","🇶🇦 قطر / Qatar"],["BH","🇧🇭 البحرين / Bahrain"],
+                        ["OM","🇴🇲 عُمان / Oman"],["JO","🇯🇴 الأردن / Jordan"],
+                        ["LB","🇱🇧 لبنان / Lebanon"],["IQ","🇮🇶 العراق / Iraq"],
+                        ["MA","🇲🇦 المغرب / Morocco"],["DZ","🇩🇿 الجزائر / Algeria"],
+                        ["TN","🇹🇳 تونس / Tunisia"],["LY","🇱🇾 ليبيا / Libya"],
+                        ["SY","🇸🇾 سوريا / Syria"],["YE","🇾🇪 اليمن / Yemen"],
+                        ["SD","🇸🇩 السودان / Sudan"],["US","🇺🇸 United States"],
+                        ["GB","🇬🇧 United Kingdom"],["DE","🇩🇪 Germany"],
+                        ["FR","🇫🇷 France"],["other","🌍 Other"],
+                      ].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                    </select>
+                    {fieldErr.country&&<div style={{fontSize:11.5,color:dark?"#f87171":"#ef4444",marginTop:4,paddingLeft:4}}>{fieldErr.country}</div>}
+                  </div>
+
+                  {/* Profession */}
+                  <div style={{marginBottom:16}}>
+                    <label style={{display:"block",marginBottom:6,fontSize:11.5,fontWeight:600,
+                      color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
+                      {isAr?"المهنة":"Profession"} <span style={{opacity:.5}}>{isAr?"(اختياري)":"(optional)"}</span>
+                    </label>
+                    <select value={profession} onChange={e=>setProfession(e.target.value)}
+                      style={{width:"100%",padding:"13px 14px",
+                        background:t.card,border:`1.5px solid ${t.border}`,
+                        borderRadius:10,fontSize:14.5,color:profession?t.text:t.textSub,
+                        outline:"none",fontFamily:"inherit",cursor:"pointer",
+                        boxSizing:"border-box",appearance:"none",
+                        backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+                        backgroundRepeat:"no-repeat",
+                        backgroundPosition:isAr?"12px center":"calc(100% - 12px) center",
+                      }}>
+                      <option value="">{isAr?"اختر مهنتك":"Select your profession"}</option>
+                      {[
+                        isAr?["software_eng","مهندس برمجيات"]:["software_eng","Software Engineer"],
+                        isAr?["doctor","طبيب"]:["doctor","Doctor / Healthcare"],
+                        isAr?["hr","موارد بشرية"]:["hr","HR Professional"],
+                        isAr?["manager","مدير"]:["manager","Manager / Team Lead"],
+                        isAr?["student","طالب"]:["student","Student"],
+                        isAr?["designer","مصمم"]:["designer","Designer"],
+                        isAr?["accountant","محاسب"]:["accountant","Accountant / Finance"],
+                        isAr?["teacher","معلم"]:["teacher","Teacher / Educator"],
+                        isAr?["other","أخرى"]:["other","Other"],
+                      ].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Terms */}
+                  <div style={{marginBottom:fieldErr.terms?4:14}}>
+                    <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",userSelect:"none"}}>
+                      <div onClick={()=>{setAgreeTerms(v=>!v);touch("terms");}} style={{
+                        width:17,height:17,borderRadius:4,flexShrink:0,marginTop:2,
+                        background:agreeTerms?t.accBtn:"transparent",
+                        border:`1.5px solid ${fieldErr.terms?"rgba(239,68,68,.5)":agreeTerms?t.acc:t.border}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        transition:"all .15s",cursor:"pointer",
+                      }}>
+                        {agreeTerms&&<svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                          <polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>}
+                      </div>
+                      <span style={{fontSize:12.5,color:t.textSub,lineHeight:1.5}}>
+                        {isAr?"أوافق على":"I agree to the"}{" "}
+                        <a href="#" onClick={e=>e.preventDefault()} style={{color:t.acc,textDecoration:"none",fontWeight:500}}>
+                          {isAr?"شروط الاستخدام":"Terms of Service"}
+                        </a>
+                        {" "}{isAr?"و":"and"}{" "}
+                        <a href="#" onClick={e=>e.preventDefault()} style={{color:t.acc,textDecoration:"none",fontWeight:500}}>
+                          {isAr?"سياسة الخصوصية":"Privacy Policy"}
+                        </a>
+                        {" *"}
+                      </span>
+                    </label>
+                    {fieldErr.terms&&<div style={{fontSize:11.5,color:dark?"#f87171":"#ef4444",marginTop:4,paddingLeft:27}}>{fieldErr.terms}</div>}
+                  </div>
+
+                  {/* Newsletter */}
+                  <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none",marginBottom:4}}>
+                    <div onClick={()=>setNewsletter(v=>!v)} style={{
+                      width:17,height:17,borderRadius:4,flexShrink:0,
+                      background:newsletter?t.accBtn:"transparent",
+                      border:`1.5px solid ${newsletter?t.acc:t.border}`,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      transition:"all .15s",cursor:"pointer",
+                    }}>
+                      {newsletter&&<svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                        <polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>}
+                    </div>
+                    <span style={{fontSize:12.5,color:t.textSub,lineHeight:1.5}}>
+                      {isAr?"أريد تلقي النصائح والتحديثات بالبريد الإلكتروني"
+                           :"Send me tips, product updates, and health insights"}
+                    </span>
+                  </label>
                 </>
               )}
 
