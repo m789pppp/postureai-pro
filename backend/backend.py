@@ -12571,8 +12571,8 @@ def coach_chat():
 
         if not messages:
             return jsonify({"error": "messages required"}), 400
-        if not OLLAMA_URL:
-            return jsonify({"error": "No AI backend configured (set OLLAMA_URL)", "text": None}), 503
+        # OLLAMA_URL is optional — if not set, fall through to Gemini directly
+        # (previously returned 503 here, blocking the Gemini path entirely)
 
         # ── Tier-based AI Coach limits + depth (single source of truth) ──
         _uid_coach    = getattr(g, "uid", "")
@@ -12685,6 +12685,43 @@ You can help with:
                     text = (resp_local.json().get("choices") or [{}])[0].get("message",{}).get("content","") or None
             except Exception as _le:
                 log_event("coach_local_llm_error", meta={"error": str(_le)[:80]})
+
+        if text is None:
+            # ── Gemini fallback (backend-side) ────────────────────────────
+            # Used when OLLAMA_URL isn't set (Railway without local LLM) or
+            # when Ollama is unavailable. Uses the backend's own GEMINI_API_KEY
+            # env var, not the frontend's VITE_GEMINI_API_KEY.
+            _gkey = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
+            if _gkey:
+                try:
+                    _gem_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gkey}"
+                    _gem_contents = []
+                    # Inject system prompt as opening user/model exchange
+                    _gem_contents.append({"role": "user", "parts": [{"text": sys_prompt}]})
+                    _gem_contents.append({"role": "model", "parts": [{"text": "Understood. I am PostureAI Coach, ready to help."}]})
+                    _gem_contents.extend(gemini_contents)
+                    _gem_resp = req.post(
+                        _gem_url,
+                        headers={"Content-Type": "application/json"},
+                        json={
+                            "contents": _gem_contents,
+                            "generationConfig": {
+                                "maxOutputTokens": _quality_coach.get("max_tokens", 600),
+                                "temperature": 0.7,
+                            },
+                        },
+                        timeout=20,
+                    )
+                    if _gem_resp.status_code == 200:
+                        _cands = _gem_resp.json().get("candidates", [])
+                        text = (_cands[0].get("content", {}).get("parts", [{}])[0].get("text", "")) if _cands else None
+                    elif _gem_resp.status_code == 429:
+                        # Rate limited — let frontend fallback handle it
+                        return jsonify({"error": "AI rate limit — try again in a moment", "ok": False}), 429
+                    else:
+                        log_event("coach_gemini_error", meta={"status": _gem_resp.status_code})
+                except Exception as _ge:
+                    log_event("coach_gemini_exception", meta={"error": str(_ge)[:80]})
 
         if text is None:
             return jsonify({"error": "AI unavailable — try again in a few seconds", "ok": False}), 503
