@@ -59,8 +59,5 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '3.0.0'),
-    // Explicitly bake VITE_GROQ_API_KEY into bundle at build time
-    // Vercel exposes Project Settings env vars via process.env during build
-    'import.meta.env.VITE_GROQ_API_KEY': JSON.stringify(process.env.VITE_GROQ_API_KEY || ''),
   }
 })

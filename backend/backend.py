@@ -93,7 +93,7 @@ try:
 except ImportError as _qe:
     print(f"⚠️  Tier quality config not loaded: {_qe}", file=_sys.stderr)
     def get_coach_quality(tier):
-        return {"monthly_limit": 5, "max_tokens": 800, "model": "gemini-2.0-flash-lite", "depth": "brief"}
+        return {"monthly_limit": 5, "max_tokens": 800, "depth": "brief"}
     def get_depth_instruction(tier):
         return ""
 
@@ -265,95 +265,15 @@ except ImportError:
     print("⚠️  firebase-admin not installed — Firestore disabled")
 
 # ── Config ─────────────────────────────────────────────────────────
-GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
-
-# ── Groq — free cloud LLM fallback (14,400 req/day free tier) ────────
-# Get free key at: console.groq.com → API Keys → Create API Key
-# Set GROQ_API_KEY in Railway env vars — no credit card needed
-GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")  # fast + bilingual
-GROQ_URL            = "https://api.groq.com/openai/v1/chat/completions"
-
-def call_groq(prompt, system_prompt=None, max_tokens=900, temperature=0.25):
-    """
-    Call Groq API (free tier: 14,400 req/day, 30 req/min).
-    Uses llama-3.1-8b-instant by default — fast, bilingual AR+EN.
-    Falls back to mixtral-8x7b-32768 on 429.
-    Returns text string or None on failure.
-    """
-    if not GROQ_API_KEY:
-        return None
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
-
-    models_to_try = [GROQ_MODEL, "mixtral-8x7b-32768", "gemma2-9b-it"]
-    for model in models_to_try:
-        try:
-            resp = requests.post(
-                GROQ_URL,
-                headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                },
-                timeout=15,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                if text:
-                    log_event("groq_ok", meta={"model": model, "chars": len(text)})
-                    return text
-            elif resp.status_code == 429:
-                log_event("groq_rate_limit", meta={"model": model})
-                continue  # try next model
-            else:
-                log_event("groq_error", meta={"status": resp.status_code, "model": model})
-                return None
-        except Exception as e:
-            log_event("groq_exception", meta={"error": str(e)[:80], "model": model})
-    return None
-
-# ── Local LLM (Ollama) — drop-in Gemini replacement ──────────────────
+# Local-only AI (Ollama) — no cloud API keys, no costs, no exposure risk.
 # Set OLLAMA_URL to your Ollama instance (e.g. http://localhost:11434 or
-# http://192.168.1.x:11434 if backend runs on a different machine).
-# LOCAL_LLM_MODEL: any model pulled with `ollama pull <name>`.
+# a private Railway service URL). LOCAL_LLM_MODEL: any model pulled with
+# `ollama pull <name>`.
 # Recommended for 4-8GB RAM: qwen2.5:3b (bilingual AR+EN, fast, accurate)
 # For 8-16GB RAM: qwen2.5:7b or mistral:7b-instruct
-# When OLLAMA_URL is set, every AI call tries local first and falls back
-# to Gemini only if the local call fails/times out. Set PREFER_LOCAL=true
-# to skip Gemini entirely even when Gemini is configured.
 OLLAMA_URL          = os.getenv("OLLAMA_URL", "")          # e.g. http://localhost:11434
 LOCAL_LLM_MODEL     = os.getenv("LOCAL_LLM_MODEL", "qwen2.5:3b")
-PREFER_LOCAL        = os.getenv("PREFER_LOCAL", "false").lower() == "true"
 
-def _load_gemini_key() -> str:
-    """Load Gemini key: env var first, Firestore fallback."""
-    global GEMINI_API_KEY
-    if GEMINI_API_KEY:
-        return GEMINI_API_KEY
-    try:
-        doc = db.collection("app_config").document("gemini").get()
-        if doc.exists:
-            key = doc.to_dict().get("api_key", "")
-            if key:
-                GEMINI_API_KEY = key
-                return key
-    except Exception:
-        pass
-    return ""
-
-try:
-    _load_gemini_key()
-except Exception:
-    pass
 PAYMOB_SECRET_KEY   = os.getenv("PAYMOB_SECRET_KEY", "")
 PAYMOB_INTEGRATIONS = {
     "card":          os.getenv("PAYMOB_INTEGRATION_CARD", ""),
@@ -3924,10 +3844,11 @@ def call_local_llm(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
     is identical to any OpenAI SDK call — easy to test and debug.
 
     Returns the response text string, or None on any failure (connection
-    refused, timeout, model not pulled, etc.). All failures are silent so
-    the caller can fall back to Gemini without surfacing a confusing error.
+    refused, timeout, model not pulled, etc.). All failures are silent —
+    the caller (call_ai) just returns None and the feature degrades
+    gracefully (no AI text shown) rather than raising.
 
-    Setup (run once on your machine):
+    Setup (run once on your machine / server):
         curl -fsSL https://ollama.com/install.sh | sh
         ollama pull qwen2.5:3b          # ~2 GB, bilingual AR+EN
         ollama serve                    # starts on :11434 by default
@@ -3935,7 +3856,6 @@ def call_local_llm(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
     Then in your .env / Railway vars:
         OLLAMA_URL=http://localhost:11434   (or your server IP)
         LOCAL_LLM_MODEL=qwen2.5:3b
-        PREFER_LOCAL=true                  (optional — skip Gemini entirely)
     """
     if not OLLAMA_URL:
         return None
@@ -3994,115 +3914,20 @@ def call_local_llm(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
         return None
 
 
-def call_gemini_with_retry(prompt, model="gemini-2.0-flash-lite", max_tokens=900,
-                            temperature=0.25, cache_key=None, cache_ttl=90,
-                            fallback_model="gemini-2.0-flash-lite", max_attempts=2,
-                            system_prompt=None):
-    """
-    Centralized Gemini call with retry/backoff/fallback — the ONLY way any
-    endpoint in this file should call Gemini directly. Extracted from the
-    proven logic in analyze_with_gemini() below.
-
-    Why this exists: every other Gemini call site in this file used to call
-    requests.post() directly with zero retry handling — a single transient
-    429 (rate limit) or 503 from Google would surface straight to the user
-    as "AI connection error" with no attempt to recover, even though Gemini's
-    rate limits are usually a few seconds of backpressure, not a hard outage.
-
-    Returns the response text, or None if Gemini isn't configured / all
-    attempts failed / the response was safety-filtered.
-    """
-    if not GEMINI_API_KEY:
-        return None
-
-    if cache_key:
-        _cached = cache_get(f"gemini:{cache_key}")
-        if _cached:
-            return _cached
-
-    # Retryable: timeout, 429 (rate limit), 500/502/503/504 (transient server issues)
-    # Not retryable: 400 (bad request), 401 (bad key), 403 (quota exhausted — won't
-    # recover within this request's lifetime, so retrying just wastes time)
-    RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-
-    for attempt in range(max_attempts):
-        model_this_attempt  = model if attempt == 0 else fallback_model
-        tokens_this_attempt = max_tokens if attempt == 0 else min(max_tokens, 900)
-
-        if attempt > 0:
-            backoff = 2 ** (attempt - 1)  # 1s, 2s, 4s...
-            time.sleep(backoff)
-            log_event("gemini_retry", meta={
-                "attempt": attempt + 1, "model": model_this_attempt, "backoff_s": backoff,
-            })
-
-        try:
-            url  = f"https://generativelanguage.googleapis.com/v1beta/models/{model_this_attempt}:generateContent?key={GEMINI_API_KEY}"
-            _body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                     "generationConfig": {"maxOutputTokens": tokens_this_attempt, "temperature": temperature}}
-            if system_prompt:
-                _body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
-            resp = req.post(url,
-                            headers={"Content-Type": "application/json"},
-                            json=_body,
-                            timeout=20)
-
-            if resp.status_code == 200:
-                data = resp.json()
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    log_event("gemini_blocked", meta={"reason": data.get("promptFeedback")})
-                    return None
-                text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                if text and cache_key:
-                    cache_set(f"gemini:{cache_key}", text, ttl_s=cache_ttl)
-                log_event("gemini_ok", meta={"attempt": attempt + 1, "model": model_this_attempt, "chars": len(text)})
-                return text or None
-
-            elif resp.status_code in RETRYABLE_STATUS:
-                log_event("gemini_retryable_error", meta={
-                    "status": resp.status_code, "attempt": attempt + 1, "model": model_this_attempt,
-                })
-                continue  # retry
-
-            else:
-                log_event("gemini_fatal_error", meta={"status": resp.status_code, "model": model_this_attempt})
-                return None
-
-        except req.exceptions.Timeout:
-            log_event("gemini_timeout", meta={"attempt": attempt + 1, "model": model_this_attempt})
-            if attempt < max_attempts - 1:
-                continue
-            return None
-
-        except Exception as e:
-            log_event("gemini_exception", meta={"error": str(e)[:120], "attempt": attempt + 1})
-            if attempt < max_attempts - 1:
-                continue
-            return None
-
-    return None  # all attempts exhausted
-
-
 def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
             cache_key=None, cache_ttl=90, tier="standard"):
     """
     THE unified AI call entry point for this entire backend.
     Every endpoint that needs AI text generation should call this instead of
-    calling call_local_llm() or call_gemini_with_retry() directly.
+    calling call_local_llm() directly.
 
-    Routing logic:
-    1. Redis cache check (if cache_key provided) — fastest path
-    2. Local Ollama (if OLLAMA_URL set) — zero API cost, no rate limits
-    3. Gemini (if GEMINI_API_KEY set) — cloud fallback
-    4. Returns None if everything is unavailable
+    Local-only: Ollama (LOCAL_LLM_MODEL) is the sole AI backend — no cloud
+    API keys, no per-request cost, no client-exposed secrets. `tier` is
+    accepted for call-site compatibility but no longer changes the model
+    (one local model serves every tier); it still affects token budget at
+    the call site via tier_quality.py.
 
-    Model selection by tier (for Gemini):
-      elite/professional → gemini-2.0-flash (smarter, slower)
-      standard           → gemini-2.0-flash-lite (fast, free tier)
-    Ollama always uses LOCAL_LLM_MODEL (same model for all tiers — it's
-    local so there's no cost difference, but you can override per-call
-    with the underlying functions if needed).
+    Returns None if Ollama is unavailable (OLLAMA_URL unset or unreachable).
     """
     # ── Cache check ──────────────────────────────────────────────────
     if cache_key:
@@ -4111,44 +3936,8 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
             return _cached
 
     result = None
-
-    # ── 1. Groq (free, fast, bilingual — primary when no local) ─────
-    if GROQ_API_KEY and not OLLAMA_URL and not PREFER_LOCAL:
-        result = call_groq(
-            prompt,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-
-    # ── 2. Local LLM (Ollama) — zero cost when configured ────────────
-    if result is None and OLLAMA_URL:
+    if OLLAMA_URL:
         result = call_local_llm(
-            prompt,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-
-    # ── 3. Gemini fallback ───────────────────────────────────────────
-    if result is None and GEMINI_API_KEY and not PREFER_LOCAL:
-        _gem_model = (
-            "gemini-2.0-flash"
-            if tier in ("elite", "premium", "professional", "pro")
-            else "gemini-2.0-flash-lite"
-        )
-        result = call_gemini_with_retry(
-            prompt,
-            model=_gem_model,
-            fallback_model="gemini-2.0-flash-lite",
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system_prompt=system_prompt,
-        )
-
-    # ── 4. Groq last resort (if already tried above, skip) ──────────
-    if result is None and GROQ_API_KEY:
-        result = call_groq(
             prompt,
             system_prompt=system_prompt,
             max_tokens=max_tokens,
@@ -4163,8 +3952,8 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
 
 
 def analyze_with_gemini(result, context="", lang="en"):
-    if not GEMINI_API_KEY and not OLLAMA_URL: return None
-    # ── Cache check — avoid duplicate Gemini calls for same posture state ──
+    if not OLLAMA_URL: return None
+    # ── Cache check — avoid duplicate AI calls for same posture state ──
     import hashlib as _hl
     _cache_key = _hl.md5(
         f"{result.get('score',0):.0f}|{result.get('head_pose','')}|{lang}".encode()
@@ -4270,7 +4059,7 @@ Estimated time to injury onset if unchanged: [X months]
 The single ergonomic adjustment with highest injury-prevention ROI right now.
 
 {"أجب بالعربية الفصحى الطبية." if is_ar else "Use precise anatomical and ergonomic terminology. Be concise and actionable."}"""
-    # ── Call AI (local Ollama first → Gemini fallback) ────────────
+    # ── Call AI (local Ollama only) ────────────────────────────────
     # Max tokens by tier: Elite gets full 1200, others get 900
     _tokens = 1200 if tier in ("elite","premium","professional","pro") else 900
     narrative = call_ai(
@@ -5531,9 +5320,9 @@ def analyze():
                 _s_dirty = True
 
         if (tier in ("elite", "premium", "professional", "pro", "basic") and result["detected"] and
-            result.get("score", 100) < 80 and   # skip Gemini when posture is already good
-            GEMINI_API_KEY and time.time() - s.get("last_ai", 0) > 30):  # 30s cooldown
-            # Fire Gemini in background — don't block the analysis response
+            result.get("score", 100) < 80 and   # skip AI call when posture is already good
+            OLLAMA_URL and time.time() - s.get("last_ai", 0) > 30):  # 30s cooldown
+            # Fire AI narrative in background — don't block the analysis response
             _r, _ctx, _lg, _sid = dict(result), data.get("employee_context",""), lang, sid
             def _bg_gemini(r, ctx, lg, _session_id):
                 try:
@@ -5728,7 +5517,7 @@ def pdf_endpoint():
             "lang":         data.get("lang","en"),
         }
         tier_sd = sd2["tier"]
-        if tier_sd == "elite" and GEMINI_API_KEY and not sd2.get("claude_analysis") and hist:
+        if tier_sd == "elite" and OLLAMA_URL and not sd2.get("claude_analysis") and hist:
             summary_result = {
                 "score": avg, "metrics": la.get("metrics",{}),
                 "alerts": [a.get("msg","") for a in alts[-5:]],
@@ -5736,7 +5525,7 @@ def pdf_endpoint():
             }
             _ctx = f"Session summary: {len(hist)} frames, {dur//60}m {dur%60}s, avg {avg}/100, {gd}% good posture, {len(alts)} alerts"
             _lang = data.get("lang","en")
-            # Run Gemini in thread with 12s timeout to avoid blocking Flask worker
+            # Run AI narrative in thread with 12s timeout to avoid blocking Flask worker
             try:
                 _fut = _ai_executor.submit(analyze_with_gemini, summary_result, _ctx, _lang)
                 sd2["claude_analysis"] = _fut.result(timeout=12)
@@ -8084,9 +7873,9 @@ def compare_sessions():
         most_improved = [{"metric": k, **v} for k, v in sorted_deltas[:3]]        # most negative delta = improved
         most_worsened = [{"metric": k, **v} for k, v in sorted_deltas[-3:][::-1]] # most positive = worsened
 
-        # ── AI narrative (Gemini) ─────────────────────────────────
+        # ── AI narrative ───────────────────────────────────────────
         narrative = None
-        if GEMINI_API_KEY:
+        if OLLAMA_URL:
             try:
                 _imp_txt = "\n".join([f"  ✅ {d['label']}: {d['prev']}{d['unit']} → {d['current']}{d['unit']} ({d['delta']:+.1f})" for d in most_improved]) or "  None"
                 _wrs_txt = "\n".join([f"  ⚠️ {d['label']}: {d['prev']}{d['unit']} → {d['current']}{d['unit']} ({d['delta']:+.1f})" for d in most_worsened]) or "  None"
@@ -9768,8 +9557,9 @@ def user_notif_pref():
 @limiter.limit("20 per minute")
 def ai_analyze():
     """
-    Generic Gemini proxy — replaces direct browser→Gemini calls.
-    All AI calls from frontend go through here (no API key on client).
+    Generic local-AI proxy — replaces direct browser→cloud-AI calls.
+    All AI calls from frontend go through here (no API key on client,
+    no cloud provider at all — Ollama only).
     """
     try:
         uid  = getattr(g, "uid", "")
@@ -9781,8 +9571,8 @@ def ai_analyze():
 
         if not prompt:
             return jsonify({"error": "prompt required"}), 400
-        if not GEMINI_API_KEY and not OLLAMA_URL:
-            return jsonify({"error": "AI not configured — set OLLAMA_URL in Railway", "text": None}), 503
+        if not OLLAMA_URL:
+            return jsonify({"error": "AI not configured", "text": None}), 503
         if len(prompt) > 8000:
             return jsonify({"error": "Prompt too long (max 8000 chars)"}), 400
 
@@ -9810,7 +9600,7 @@ def ai_analyze():
             max_tokens = 1200
         max_tokens = max(100, min(2000, max_tokens))
 
-        # call_ai() handles: local Ollama first → Gemini fallback → None
+        # call_ai() routes through local Ollama only
         text = call_ai(
             prompt,
             system_prompt=context.get("system_prompt"),
@@ -9820,7 +9610,7 @@ def ai_analyze():
         )
 
         if text is None:
-            # All retries exhausted (rate-limited, transient error, or not configured) —
+            # Ollama unreachable, model not pulled, or timed out —
             # surface a clear, actionable message instead of a generic connection error.
             return jsonify({
                 "error": "AI is temporarily busy — please try again in a few seconds",
@@ -9834,38 +9624,9 @@ def ai_analyze():
         except Exception:
             pass
 
-        _backend_used = "local:" + LOCAL_LLM_MODEL if (OLLAMA_URL and text) else ("gemini" if GEMINI_API_KEY else "none")
+        _backend_used = "local:" + LOCAL_LLM_MODEL
         log_event("ai_analyze_ok", uid, {"model": _backend_used, "chars": len(text)})
         return jsonify({"ok": True, "text": text, "model": _backend_used})
-    except Exception as e:
-        return safe_error(e)
-
-
-# ── Admin: set Gemini API key ─────────────────────────────────────
-@app.route("/api/admin/set-gemini-key", methods=["POST"])
-@require_auth
-@limiter.limit("5 per minute")
-def set_gemini_key():
-    """Store Gemini API key in Firestore — called once from browser."""
-    try:
-        uid  = getattr(g, "uid", "")
-        role = getattr(g, "role", {})
-        if role.get("acct_type") not in ("platform_admin","admin") and role.get("tier") != "elite":
-            return jsonify({"error": "Admin only"}), 403
-        data = request.get_json(force=True) or {}
-        key  = data.get("key","").strip()
-        if not key:
-            return jsonify({"error": "key required"}), 400
-        db.collection("app_config").document("gemini").set({
-            "api_key":    key,
-            "updated_at": datetime.utcnow().isoformat() + "Z",
-            "updated_by": uid,
-        })
-        global GEMINI_API_KEY
-        GEMINI_API_KEY = key
-        _load_gemini_key()
-        log_event("gemini_key_updated", uid, {})
-        return jsonify({"ok": True, "message": "Gemini key updated"})
     except Exception as e:
         return safe_error(e)
 
@@ -10640,7 +10401,6 @@ def referral_status():
 @app.route("/api/health", methods=["GET"])
 def health():
     # Fast liveness probe — do NOT call external APIs here
-    gemini_ok = bool(GEMINI_API_KEY)
     local_llm_ok = bool(OLLAMA_URL)
     models_ready = POSE_LITE is not None
     mp_ver  = mp.__version__  if (models_ready and mp)  else "not loaded"
@@ -10650,8 +10410,7 @@ def health():
         "engine": f"MediaPipe {mp_ver} + OpenCV {cv2_ver} + solvePnP",
         "mediapipe": {"pose_lite": "loaded" if models_ready else "pending","pose_full": "loaded" if models_ready else "pending","face_mesh": "loaded" if models_ready else "pending"},
         "integrations": {
-            "local_llm": {"configured": local_llm_ok, "url": OLLAMA_URL or None, "model": LOCAL_LLM_MODEL if local_llm_ok else None, "preferred": PREFER_LOCAL},
-            "gemini":    {"configured": bool(GEMINI_API_KEY), "live": gemini_ok},
+            "local_llm": {"configured": local_llm_ok, "url": OLLAMA_URL or None, "model": LOCAL_LLM_MODEL if local_llm_ok else None},
             "paymob":    {"configured": bool(PAYMOB_SECRET_KEY)},
             "slack":     {"configured": bool(SLACK_WEBHOOK_URL)},
             "teams":     {"configured": bool(TEAMS_WEBHOOK_URL)},
@@ -10764,34 +10523,33 @@ def health_detailed():
         latency_status["error"]  = str(_e)[:120]
     report["analyze_latency"] = latency_status
 
-    # ── 4. Gemini connectivity ────────────────────────────────────
-    gemini_status = {}
+    # ── 4. Local AI (Ollama) connectivity ──────────────────────────
+    ollama_status = {}
     try:
-        if GEMINI_API_KEY:
-            gemini_status["configured"] = True
-            gemini_status["key_prefix"] = GEMINI_API_KEY[:8] + "..."
+        if OLLAMA_URL:
+            ollama_status["configured"] = True
+            ollama_status["model"]      = LOCAL_LLM_MODEL
             # Quick ping — minimal prompt, no analysis
             _t0   = _t.perf_counter()
-            _url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
-            _resp = req.post(_url,
-                json={"contents": [{"parts": [{"text": "Reply with OK only."}]}],
-                      "generationConfig": {"maxOutputTokens": 5}},
+            _resp = req.post(OLLAMA_URL.rstrip("/") + "/v1/chat/completions",
+                json={"model": LOCAL_LLM_MODEL,
+                      "messages": [{"role": "user", "content": "Reply with OK only."}],
+                      "max_tokens": 5},
                 timeout=8)
             ping_ms = round((_t.perf_counter() - _t0) * 1000, 1)
-            gemini_status["ping_ms"] = ping_ms
+            ollama_status["ping_ms"] = ping_ms
             if _resp.status_code == 200:
-                gemini_status["status"] = "ok"
-                gemini_status["model_flash"] = "reachable"
+                ollama_status["status"] = "ok"
             else:
-                gemini_status["status"]      = "degraded"
-                gemini_status["http_status"] = _resp.status_code
+                ollama_status["status"]      = "degraded"
+                ollama_status["http_status"] = _resp.status_code
         else:
-            gemini_status["status"]     = "not_configured"
-            gemini_status["configured"] = False
+            ollama_status["status"]     = "not_configured"
+            ollama_status["configured"] = False
     except Exception as _e:
-        gemini_status["status"] = "error"
-        gemini_status["error"]  = str(_e)[:120]
-    report["gemini"] = gemini_status
+        ollama_status["status"] = "error"
+        ollama_status["error"]  = str(_e)[:120]
+    report["ollama"] = ollama_status
 
     # ── 5. Firebase / Firestore ───────────────────────────────────
     firebase_status = {}
@@ -12020,9 +11778,9 @@ def gemini_proxy():
         data   = request.get_json(force=True) or {}
         prompt = data.get("prompt","")
         if not prompt: return jsonify({"error":"prompt required"}), 400
-        # Block if neither local LLM nor Gemini is configured
-        if not OLLAMA_URL and not GEMINI_API_KEY:
-            return jsonify({"error":"No AI backend configured (set OLLAMA_URL or GEMINI_API_KEY)","text":None}), 503
+        # Block if local LLM isn't configured
+        if not OLLAMA_URL:
+            return jsonify({"error":"No AI backend configured (set OLLAMA_URL)","text":None}), 503
 
         job_id = f"gj_{_uuid_mod.uuid4().hex[:16]}"
         rset(f"gemini_job:{job_id}", _json.dumps({"status":"pending","created":time.time()}), 120)
@@ -12035,7 +11793,7 @@ def gemini_proxy():
                 if text is not None:
                     rset(f"gemini_job:{jid}", _json.dumps({"status":"done","text":text,"ts":time.time()}), 120)
                 else:
-                    rset(f"gemini_job:{jid}", _json.dumps({"status":"error","error":"AI unavailable (no local model or Gemini key configured)","ts":time.time()}), 60)
+                    rset(f"gemini_job:{jid}", _json.dumps({"status":"error","error":"AI unavailable (Ollama not reachable or model not pulled)","ts":time.time()}), 60)
             except Exception as _e:
                 rset(f"gemini_job:{jid}", _json.dumps({"status":"error","error":str(_e),"ts":time.time()}), 60)
 
@@ -12066,7 +11824,7 @@ def gemini_job_status(job_id):
 @limiter.limit("10 per minute")
 def gemini_proxy_sync():
     """
-    Synchronous Gemini for PDF generation only.
+    Synchronous local-AI call for PDF generation only.
     Rate limited to 10/min to prevent worker starvation.
     Use /api/gemini (async) for all interactive calls.
     """
@@ -12074,17 +11832,11 @@ def gemini_proxy_sync():
         data   = request.get_json(force=True) or {}
         prompt = data.get("prompt","")
         if not prompt: return jsonify({"error":"prompt required"}), 400
-        if not GEMINI_API_KEY: return jsonify({"error":"Gemini not configured","text":None}), 503
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
-        resp = req.post(url, headers={"Content-Type":"application/json"},
-                        json={"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"maxOutputTokens":400,"temperature":0.4}},
-                        timeout=15)
-        if resp.status_code == 200:
-            text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-            return jsonify({"text":text})
-        return jsonify({"error":f"Gemini HTTP {resp.status_code}","text":None}), 502
-    except req.exceptions.Timeout:
-        return jsonify({"error":"Gemini timeout","text":None}), 504
+        if not OLLAMA_URL: return jsonify({"error":"AI not configured","text":None}), 503
+        text = call_ai(prompt, max_tokens=400, temperature=0.4, tier=getattr(g, "tier", "standard"))
+        if text is not None:
+            return jsonify({"text": text})
+        return jsonify({"error":"AI unavailable","text":None}), 502
     except Exception as e:
         return jsonify({"error":str(e),"text":None}), 500
 
@@ -12470,14 +12222,14 @@ if __name__ == "__main__":
     print("="*60, flush=True)
     print("  PostureAI Pro Backend v15", flush=True)
     print(f"  MediaPipe {mp.__version__} — Pose + FaceMesh + solvePnP + Blink Detection", flush=True)
-    print(f"  AI:  {'✅ Gemini ready' if GEMINI_API_KEY else '⚠️  Add GEMINI_API_KEY to .env'}", flush=True)
+    print(f"  AI:  {'✅ Ollama ready (' + LOCAL_LLM_MODEL + ')' if OLLAMA_URL else '⚠️  Add OLLAMA_URL to .env — AI features disabled'}", flush=True)
     print(f"  PDF: {'✅ ReportLab ready' if REPORTLAB_OK else '⚠️  pip install reportlab'}", flush=True)
     print(f"  APP_URL: {APP_URL}", flush=True)
     print("  PORT: 5050  →  http://localhost:5050", flush=True)
     if not os.getenv("PAYMOB_HMAC_SECRET",""):
         print("⚠️  WARNING: PAYMOB_HMAC_SECRET not set — webhook verification DISABLED", flush=True)
-    if not GEMINI_API_KEY:
-        print("ℹ️  GEMINI_API_KEY not set — Gemini AI features disabled", flush=True)
+    if not OLLAMA_URL:
+        print("ℹ️  OLLAMA_URL not set — AI Coach / AI Insights disabled", flush=True)
     print("="*60, flush=True)
     sys.stdout.flush()
     app.run(host="0.0.0.0", port=5050, debug=False, threaded=True, use_reloader=False)
@@ -12819,8 +12571,8 @@ def coach_chat():
 
         if not messages:
             return jsonify({"error": "messages required"}), 400
-        if not OLLAMA_URL and not GEMINI_API_KEY:
-            return jsonify({"error": "No AI backend configured (set OLLAMA_URL or GEMINI_API_KEY)", "text": None}), 503
+        if not OLLAMA_URL:
+            return jsonify({"error": "No AI backend configured (set OLLAMA_URL)", "text": None}), 503
 
         # ── Tier-based AI Coach limits + depth (single source of truth) ──
         _uid_coach    = getattr(g, "uid", "")
@@ -12914,7 +12666,7 @@ You can help with:
         final_user_prompt = gemini_contents[-1]["parts"][0]["text"]
         text = None
 
-        # ── 1. Try local Ollama (multi-turn via OpenAI messages format) ──
+        # ── Local Ollama (multi-turn via OpenAI messages format) ─────────
         if OLLAMA_URL:
             try:
                 resp_local = req.post(
@@ -12934,54 +12686,12 @@ You can help with:
             except Exception as _le:
                 log_event("coach_local_llm_error", meta={"error": str(_le)[:80]})
 
-        # ── 2. Gemini fallback (multi-turn via Gemini contents format) ──
-        if text is None and GEMINI_API_KEY and not PREFER_LOCAL:
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{_quality_coach['model']}:generateContent?key={GEMINI_API_KEY}"
-                resp_gem = req.post(url,
-                    headers={"Content-Type": "application/json"},
-                    json={
-                        "system_instruction": {"parts": [{"text": sys_prompt}]},
-                        "contents": gemini_contents,
-                        "generationConfig": {"maxOutputTokens": _quality_coach["max_tokens"], "temperature": 0.5},
-                    },
-                    timeout=20
-                )
-                if resp_gem.status_code == 200:
-                    cands = resp_gem.json().get("candidates", [])
-                    if cands:
-                        text = cands[0]["content"]["parts"][0].get("text","") or None
-            except Exception as _ge:
-                log_event("coach_gemini_error", meta={"error": str(_ge)[:80]})
-
-        # ── 3. Groq fallback (free tier — OpenAI-compatible) ──────────
-        if text is None and GROQ_API_KEY:
-            _groq_models = [GROQ_MODEL, "gemma2-9b-it"]
-            for _gm in _groq_models:
-                try:
-                    _resp_groq = req.post(
-                        GROQ_URL,
-                        headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-                        json={"model": _gm, "messages": [{"role": "system", "content": sys_prompt}] + ollama_msgs, "max_tokens": _quality_coach["max_tokens"], "temperature": 0.5},
-                        timeout=15,
-                    )
-                    if _resp_groq.status_code == 200:
-                        text = (_resp_groq.json().get("choices") or [{}])[0].get("message", {}).get("content", "") or None
-                        if text:
-                            log_event("coach_groq_ok", meta={"model": _gm})
-                            break
-                    elif _resp_groq.status_code != 429:
-                        break
-                except Exception as _gre:
-                    log_event("coach_groq_error", meta={"error": str(_gre)[:80]})
-                    break
-
         if text is None:
             return jsonify({"error": "AI unavailable — try again in a few seconds", "ok": False}), 503
 
         # ── Audit + usage tracking ────────────────────────────────────
         _uid = getattr(g, "uid", "unknown")
-        audit(_uid, "ai_coach_query", "local" if OLLAMA_URL else ("groq" if (text and GROQ_API_KEY) else "gemini"), {"lang": lang, "turns": len(gemini_contents)})
+        audit(_uid, "ai_coach_query", "local:" + LOCAL_LLM_MODEL, {"lang": lang, "turns": len(gemini_contents)})
         try:
             import redis as _r2
             _rc2 = _r2.from_url(os.getenv("REDIS_URL","redis://localhost:6379/0"))
@@ -13675,18 +13385,12 @@ def compute_heatmap():
         if worst_d is not None:
             insights.append(f"{days_n[worst_d]} is your worst posture day — plan extra stretch breaks.")
 
-        # AI insight if Gemini configured
+        # AI insight if local AI configured
         ai_insight = None
-        if GEMINI_API_KEY and insights:
+        if OLLAMA_URL and insights:
             try:
                 prompt = f"Based on this posture data summary: {'; '.join(insights)}. Give one concise ergonomic tip (1 sentence, professional)."
-                resp = req.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}",
-                    json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"maxOutputTokens": 80}},
-                    timeout=8
-                )
-                if resp.status_code == 200:
-                    ai_insight = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                ai_insight = call_ai(prompt, max_tokens=80, temperature=0.4)
             except Exception:
                 pass
 
@@ -13913,8 +13617,8 @@ def posture_insights():
         sessions   = data.get("sessions", [])
         profile    = data.get("profile", {})
         lang       = data.get("lang", "en")
-        if not GEMINI_API_KEY:
-            return jsonify({"insights": [], "summary": "Gemini not configured"}), 503
+        if not OLLAMA_URL:
+            return jsonify({"insights": [], "summary": "AI not configured"}), 503
         if not sessions:
             return jsonify({"insights": [], "summary": "No session data available"})
 
@@ -13936,18 +13640,13 @@ Provide exactly 3 insights in this JSON format (respond with JSON only, no markd
 {{"insights": [{{"title": "string", "body": "string", "priority": "high|medium|low", "icon": "emoji"}}]}}
 {"Respond in Arabic." if lang == "ar" else ""}"""
 
-        resp = req.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}",
-            json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"maxOutputTokens": 400, "temperature": 0.3}},
-            timeout=15
-        )
-        if resp.status_code == 200:
-            raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        raw = call_ai(prompt, max_tokens=400, temperature=0.3)
+        if raw:
             raw = raw.replace("```json", "").replace("```", "").strip()
             import json as _json
             parsed = _json.loads(raw)
             return jsonify(parsed)
-        return jsonify({"insights": [], "summary": f"Gemini error {resp.status_code}"})
+        return jsonify({"insights": [], "summary": "AI unavailable"})
     except Exception as e:
         return jsonify({"error": str(e), "insights": []}), 500
 
@@ -13958,23 +13657,14 @@ Provide exactly 3 insights in this JSON format (respond with JSON only, no markd
 # ══════════════════════════════════════════════════════════════════
 
 def _gemini_json(prompt: str, max_tokens: int = 600, temperature: float = 0.25) -> dict | None:
-    """Helper: call Gemini, parse JSON, return dict or None."""
-    if not GEMINI_API_KEY:
+    """Helper: call local AI, parse JSON, return dict or None."""
+    if not OLLAMA_URL:
         return None
     try:
         import json as _j
-        url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
-        resp = req.post(url,
-            headers={"Content-Type": "application/json"},
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"maxOutputTokens": max_tokens, "temperature": temperature},
-            },
-            timeout=15,
-        )
-        if resp.status_code != 200:
+        raw = call_ai(prompt, max_tokens=max_tokens, temperature=temperature)
+        if not raw:
             return None
-        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         raw = raw.replace("```json","").replace("```","").strip()
         return _j.loads(raw)
     except Exception as _e:
@@ -14195,9 +13885,9 @@ def ai_predictive():
                     "confidence": max(40, 85 - day*5),
                 })
 
-        # AI narrative on predictions (only if Gemini available)
+        # AI narrative on predictions (only if local AI available)
         narrative = None
-        if GEMINI_API_KEY and len(scores) >= 5:
+        if OLLAMA_URL and len(scores) >= 5:
             prompt = f"""Posture analytics prediction request.
 
 Stats: avg={stats['avg_score']}, trend={stats['trend_label']} ({stats['trend_slope']:+.1f}),
@@ -15382,9 +15072,9 @@ def user_report():
         # Productivity estimation (rough correlation)
         productivity_est = min(100, max(0, avg_score * 0.6 + good_pct * 0.4))
 
-        # AI insights (Gemini)
+        # AI insights (local)
         ai_summary = None
-        if GEMINI_API_KEY:
+        if OLLAMA_URL:
             prompt = f"""You are an occupational health specialist. Write a brief clinical summary (3-4 sentences) for:
 
 Employee: {name}
@@ -15395,10 +15085,7 @@ Risk factors: {', '.join(risk_factors) if risk_factors else 'None identified'}
 
 Focus on actionable recommendations. {"Respond in Arabic." if lang=="ar" else "Be professional and concise."}"""
             try:
-                url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
-                resp = req.post(url, json={"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"maxOutputTokens":250,"temperature":0.3}}, timeout=12)
-                if resp.status_code == 200:
-                    ai_summary = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                ai_summary = call_ai(prompt, max_tokens=250, temperature=0.3)
             except Exception:
                 pass
 

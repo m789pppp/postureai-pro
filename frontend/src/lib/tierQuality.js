@@ -65,17 +65,18 @@ export function tierAtLeast(rawTier, minLevel) {
 // Numeric AI Coach monthly limits intentionally match the existing,
 // already-working backend Redis counters in backend.py coach_chat()
 // (standard:5, basic:10, professional:50, elite:-1) — only the
-// *depth* dimensions (tokens/model/persona) are new.
+// *depth* dimensions (tokens/persona) are new. Local-only AI (Ollama):
+// every tier shares the same model, only token budget/persona differ.
 export const QUALITY = {
   standard: {
     label: { en: "Free", ar: "مجاني" },
     smoothingAlpha: 0.5,        // more responsive/raw — less averaging
     outlierMaxConsecutive: 2,
     sessionInsights: { creep: false, asymmetry: false, breathing: false },
-    backendAssist: false,       // no live Gemini-powered backend pass during session
+    backendAssist: false,       // no live AI-powered backend pass during session
     predictiveAI: false,
     pdfDetail: "none",
-    aiCoach: { monthlyLimit: 5, maxTokens: 350, model: "gemini-2.0-flash-lite", depth: "brief" },
+    aiCoach: { monthlyLimit: 5, maxTokens: 350, depth: "brief" },
   },
   basic: {
     label: { en: "Basic", ar: "أساسي" },
@@ -85,7 +86,7 @@ export const QUALITY = {
     backendAssist: false,
     predictiveAI: false,
     pdfDetail: "none",
-    aiCoach: { monthlyLimit: 10, maxTokens: 450, model: "gemini-2.0-flash-lite", depth: "brief" },
+    aiCoach: { monthlyLimit: 10, maxTokens: 450, depth: "brief" },
   },
   professional: {
     label: { en: "Professional", ar: "احترافي" },
@@ -95,17 +96,17 @@ export const QUALITY = {
     backendAssist: false,       // local MediaPipe is already accurate; backend stays Elite-exclusive
     predictiveAI: false,
     pdfDetail: "standard",
-    aiCoach: { monthlyLimit: 50, maxTokens: 700, model: "gemini-2.0-flash-lite", depth: "standard" },
+    aiCoach: { monthlyLimit: 50, maxTokens: 700, depth: "standard" },
   },
   elite: {
     label: { en: "Elite", ar: "إيليت" },
     smoothingAlpha: 0.3,        // steadiest/smoothest premium feel
     outlierMaxConsecutive: 4,
     sessionInsights: { creep: true, asymmetry: true, breathing: true },
-    backendAssist: true,        // live Gemini-powered backend pass + PDF snapshots
+    backendAssist: true,        // live local-AI-powered backend pass + PDF snapshots
     predictiveAI: true,
     pdfDetail: "full",
-    aiCoach: { monthlyLimit: -1, maxTokens: 1100, model: "gemini-2.0-flash", depth: "clinical" },
+    aiCoach: { monthlyLimit: -1, maxTokens: 1100, depth: "clinical" },
   },
 };
 

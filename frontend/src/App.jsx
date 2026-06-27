@@ -29,7 +29,7 @@ import { GamificationPanel } from "./Gamification.jsx";
 import { BillingModal, PLANS } from "./Billing.jsx";
 import { BillingDashboard } from "./BillingDashboard.jsx";
 import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, apiFetch } from "./services/api.js";
-import { geminiAnalysis as _groqAnalysis } from "./gemini.js";
+import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother } from "./features/analysis/postureEngine.js";
@@ -252,7 +252,7 @@ const LM = {NOSE:0,L_EYE:2,R_EYE:5,L_EAR:7,R_EAR:8,L_SHOULDER:11,R_SHOULDER:12,L
 // ── API wrappers (use service layer with auth) ────────────────────
 async function askGemini(prompt){
   try{
-    const text = await _groqAnalysis(prompt, { maxTokens: 600 });
+    const text = await _aiAnalysis(prompt, { maxTokens: 600 });
     return text || null;
   }catch{return null;}
 }
@@ -2035,7 +2035,6 @@ export default function App(){
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
   const[mpStatus,setMpStatus]=useState("loading");
-  const[groqStatus,setGroqStatus]=useState("unknown"); // "unknown"|"ok"|"no_key"|"error"
   const[analysis,setAnalysis]=useState(null);
   const[history,setHistory]=useState([]);
   const[sessionTime,setSessionTime]=useState(0);
@@ -2188,20 +2187,6 @@ export default function App(){
   },[]);
   // Sentry already init in main.jsx; just handle SSO redirect
   useEffect(()=>{ handleSSORedirect().catch(()=>{}); },[]);
-
-  // ── Groq AI connectivity test ─────────────────────────────────
-  useEffect(()=>{
-    const key = import.meta.env.VITE_GROQ_API_KEY || "";
-    if(!key){ setGroqStatus("no_key"); return; }
-    fetch("https://api.groq.com/openai/v1/chat/completions",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${key}`},
-      body:JSON.stringify({model:"llama-3.1-8b-instant",messages:[{role:"user",content:"hi"}],max_tokens:1}),
-      signal:AbortSignal.timeout(10000),
-    })
-    .then(r=>{ setGroqStatus(r.ok||r.status===400?"ok":"error"); })
-    .catch(()=>{ setGroqStatus("error"); });
-  },[]);
   // Handle payment redirect from PayMob/Stripe
   const [paymentResult, setPaymentResult] = useState(null); // null | "success" | "cancelled"
   useEffect(()=>{
@@ -3831,22 +3816,30 @@ export default function App(){
           </div>
         </div>
 
-        {/* AI model status */}
+        {/* Posture model status */}
         <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
           <div style={{
             width:7,height:7,borderRadius:"50%",flexShrink:0,
-            background:groqStatus==="ok"?"#10b981":groqStatus==="no_key"?"#ef4444":"#f59e0b",
-            boxShadow:groqStatus==="ok"?"0 0 6px #10b981":groqStatus==="no_key"?"0 0 6px #ef4444":"0 0 6px #f59e0b",
-            animation:groqStatus==="unknown"?"livePulse 1.2s infinite":"none",
+            background:mpStatus==="ready"?"#10b981":mpStatus==="fallback"?"#f59e0b":mpStatus==="error"?"#ef4444":"#f59e0b",
+            boxShadow:mpStatus==="ready"?"0 0 6px #10b981":mpStatus==="fallback"?"0 0 6px #f59e0b":mpStatus==="error"?"0 0 6px #ef4444":"0 0 6px #f59e0b",
+            animation:mpStatus==="loading"?"livePulse 1.2s infinite":"none",
           }}/>
-          <span style={{fontSize:11,color:groqStatus==="ok"?"#10b981":groqStatus==="no_key"?"#ef4444":"#f59e0b",fontWeight:500}}>
-            {groqStatus==="ok"
-              ?(isAr?"مساعد AI جاهز ✓":"AI Coach ready ✓")
-              :groqStatus==="no_key"
-              ?(isAr?"مفتاح AI مفقود — VITE_GROQ_API_KEY":"AI key missing — check Vercel env")
-              :groqStatus==="error"
-              ?(isAr?"AI غير متاح":"AI unavailable")
-              :(isAr?"جاري فحص AI...":"Checking AI...")}
+          <span style={{fontSize:11,color:mpStatus==="ready"?"#10b981":mpStatus==="fallback"?"#f59e0b":mpStatus==="error"?"#ef4444":"#f59e0b",fontWeight:500}}>
+            {mpStatus==="ready"
+              ?(isAr?"نموذج الوضعية جاهز ✓":"Posture model ready ✓")
+              :mpStatus==="fallback"
+              ?(isAr?"وضع احتياطي (السيرفر)":"Fallback mode (server-assisted)")
+              :mpStatus==="error"
+              ?(isAr?"نموذج الوضعية غير متاح":"Posture model unavailable")
+              :(isAr?"جاري تحميل النموذج...":"Loading model...")}
+          </span>
+        </div>
+
+        {/* AI Coach status */}
+        <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:"#6366f1",boxShadow:"0 0 6px #6366f1"}}/>
+          <span style={{fontSize:11,color:"#6366f1",fontWeight:500}}>
+            {isAr?"AI Coach (محلي ومجاني)":"AI Coach (local, free)"}
           </span>
         </div>
 
