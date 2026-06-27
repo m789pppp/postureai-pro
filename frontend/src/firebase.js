@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import {
-  getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider,
+  getAuth, signInWithPopup, signInWithRedirect, getRedirectResult,
+  GoogleAuthProvider, OAuthProvider,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
   onAuthStateChanged as _onAuthStateChanged, sendPasswordResetEmail,
 } from "firebase/auth";
@@ -48,6 +49,11 @@ gProvider.addScope('email');
 gProvider.addScope('profile');
 gProvider.setCustomParameters({ prompt: 'select_account' });
 
+const msProvider = new OAuthProvider('microsoft.com');
+msProvider.addScope('email');
+msProvider.addScope('profile');
+msProvider.setCustomParameters({ prompt: 'select_account' });
+
 export const signInGoogle = async () => {
   // Try popup first — if blocked/fails, fall back to redirect
   try {
@@ -70,6 +76,25 @@ export const signInGoogle = async () => {
 };
 
 export const getGoogleRedirectResult = () => getRedirectResult(auth);
+
+export const signInMicrosoft = async () => {
+  try {
+    const result = await signInWithPopup(auth, msProvider);
+    return result;
+  } catch (e) {
+    const code = e.code || '';
+    if (
+      code === 'auth/popup-blocked' ||
+      code === 'auth/popup-closed-by-user' ||
+      code === 'auth/cancelled-popup-request' ||
+      code === 'auth/operation-not-supported-in-this-environment'
+    ) {
+      await signInWithRedirect(auth, msProvider);
+      return null;
+    }
+    throw e;
+  }
+};
 export const signInEmail        = (e, p) => signInWithEmailAndPassword(auth, e, p);
 export const signUpEmail        = (e, p) => createUserWithEmailAndPassword(auth, e, p);
 export const logOut             = () => signOut(auth);
