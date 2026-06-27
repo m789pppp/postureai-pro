@@ -31,9 +31,14 @@ function getErr(err, isAr) {
     "popup-blocked":         {en:"Popup blocked — allow popups for this site", ar:"المتصفح حجب النافذة — لازم تسمح بالـ popups"},
     "unauthorized-domain":   {en:"This domain isn't authorized for sign-in — contact support", ar:"الدومين ده غير مُصرّح له بتسجيل الدخول — تواصل مع الدعم"},
     "operation-not-allowed": {en:"This sign-in method isn't enabled — contact support", ar:"طريقة تسجيل الدخول دي غير مفعّلة — تواصل مع الدعم"},
-    "internal-error":        {en:"Auth service error — try again in a moment", ar:"خطأ في خدمة تسجيل الدخول — جرب تاني بعد لحظة"},
+    "internal-error":        {en:"Sign-in error — contact support if this persists", ar:"خطأ في تسجيل الدخول — تواصل مع الدعم لو استمر"},
+    "unauthorized-domain":   {en:"Sign-in domain not authorized — contact support", ar:"الدومين غير مصرّح له — تواصل مع الدعم"},
     "account-exists-with-different-credential":
                              {en:"This email is linked to a different sign-in method", ar:"هذا البريد مرتبط بطريقة دخول مختلفة"},
+    "requires-recent-login": {en:"Please sign in again to continue", ar:"يجب إعادة تسجيل الدخول للمتابعة"},
+    "cancelled-popup-request":{en:"Sign-in was cancelled", ar:"تم إلغاء تسجيل الدخول"},
+    "operation-not-supported-in-this-environment":
+                             {en:"Redirecting to sign in...", ar:"جاري إعادة التوجيه..."},
   };
   const e = map[code]||map[Object.keys(map).find(k=>code.includes(k))||""];
   // Always log full details — internal-error in particular often has more
