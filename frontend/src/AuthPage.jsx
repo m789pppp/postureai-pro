@@ -36,8 +36,11 @@ function getErr(err, isAr) {
                              {en:"This email is linked to a different sign-in method", ar:"هذا البريد مرتبط بطريقة دخول مختلفة"},
   };
   const e = map[code]||map[Object.keys(map).find(k=>code.includes(k))||""];
+  // Always log full details — internal-error in particular often has more
+  // context buried in the full message/customData that's worth checking
+  // in devtools when this fires for every sign-in method uniformly.
+  console.error("[Auth]", { code: code||"(none)", message: msg, customData: err?.customData });
   if (e) return e[isAr?"ar":"en"];
-  if (!e) console.error("[Auth] Unmapped error —", { code: code||"(none)", message: msg });
   return (isAr?"حدث خطأ غير متوقع. حاول مرة أخرى.":"An unexpected error occurred. Please try again.") + (code?` (${code})`:"");
 }
 
