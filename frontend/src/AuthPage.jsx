@@ -11,8 +11,13 @@ import {
 } from "./firebase.js";
 
 // ── Error messages ─────────────────────────────────────────────────
-function getErr(msg, isAr) {
-  const code = (msg||"").match(/\(auth\/([^)]+)\)/)?.[1]||"";
+function getErr(err, isAr) {
+  // err can be the raw Error/FirebaseError object OR a plain message string
+  // (kept for backward compat with older call sites passing e.message).
+  const msg  = typeof err === "string" ? err : (err?.message || "");
+  const code = (typeof err === "object" && err?.code)
+    ? String(err.code).replace(/^auth\//, "")
+    : (msg.match(/\(auth\/([^)]+)\)/)?.[1] || "");
   const map = {
     "wrong-password":        {en:"Incorrect email or password",          ar:"البريد أو كلمة المرور غلط"},
     "invalid-credential":    {en:"Incorrect email or password",          ar:"البريد أو كلمة المرور غلط"},
@@ -23,12 +28,17 @@ function getErr(msg, isAr) {
     "network-request-failed":{en:"Connection error. Check your internet.", ar:"خطأ في الاتصال. تحقق من الإنترنت."},
     "invalid-email":         {en:"Please enter a valid email address",   ar:"أدخل بريداً إلكترونياً صحيحاً"},
     "popup-closed-by-user":  {en:"Sign-in was cancelled",               ar:"تم إلغاء تسجيل الدخول"},
+    "popup-blocked":         {en:"Popup blocked — allow popups for this site", ar:"المتصفح حجب النافذة — لازم تسمح بالـ popups"},
+    "unauthorized-domain":   {en:"This domain isn't authorized for sign-in — contact support", ar:"الدومين ده غير مُصرّح له بتسجيل الدخول — تواصل مع الدعم"},
+    "operation-not-allowed": {en:"This sign-in method isn't enabled — contact support", ar:"طريقة تسجيل الدخول دي غير مفعّلة — تواصل مع الدعم"},
+    "internal-error":        {en:"Auth service error — try again in a moment", ar:"خطأ في خدمة تسجيل الدخول — جرب تاني بعد لحظة"},
     "account-exists-with-different-credential":
                              {en:"This email is linked to a different sign-in method", ar:"هذا البريد مرتبط بطريقة دخول مختلفة"},
   };
   const e = map[code]||map[Object.keys(map).find(k=>code.includes(k))||""];
   if (e) return e[isAr?"ar":"en"];
-  return isAr?"حدث خطأ غير متوقع. حاول مرة أخرى.":"An unexpected error occurred. Please try again.";
+  if (!e) console.error("[Auth] Unmapped error —", { code: code||"(none)", message: msg });
+  return (isAr?"حدث خطأ غير متوقع. حاول مرة أخرى.":"An unexpected error occurred. Please try again.") + (code?` (${code})`:"");
 }
 
 // ── Password strength ──────────────────────────────────────────────
@@ -339,7 +349,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       const p = await getUserProfile(r.user.uid);
       if (!p) await createUserProfile(r.user.uid,{email:r.user.email,name:r.user.displayName||"",company:""});
       onAuth(r.user,!p);
-    } catch(e) { setErr(getErr(e.message,isAr)); doShake(); }
+    } catch(e) { setErr(getErr(e,isAr)); doShake(); }
     finally { setSocial(""); }
   };
 
@@ -362,7 +372,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         await createUserProfile(c.user.uid,{email:email.trim(),name:`${fname.trim()} ${lname.trim()}`.trim(),company:""});
         onAuth(c.user,true);
       }
-    } catch(e) { setErr(getErr(e.message,isAr)); doShake(); }
+    } catch(e) { setErr(getErr(e,isAr)); doShake(); }
     finally { setLoading(false); }
   },[view,email,pass,pass2,fname,lname,emailValid,passValid,pass2Valid,fnameValid,lnameValid,isAr,onAuth]);
 
@@ -484,7 +494,6 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         border:`1px solid ${t.border}`,
         borderRadius:20,
         padding: view==="signup" ? "36px 32px" : "36px 32px",
-        boxShadow:t.shadow,
         backdropFilter:"blur(24px)",
         opacity:mounted?1:0,
         transform:`translateY(${mounted?0:20}px)${shake?" translateX(-4px)":""}`,
