@@ -901,22 +901,32 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
     :["Very weak","Weak","Fair","Strong","Very strong"][Math.min(passStrength,4)];
 
   function humanErr(msg){
-    const code=(msg||"").match(/\(auth\/([^)]+)\)/)?.[1]||msg;
+    // Firebase can return errors as: "Firebase: Error (auth/code)." or just the code
+    const code = (msg||"").match(/\(auth\/([^)]+)\)/)?.[1]
+               || (msg||"").replace(/^auth\//,"")
+               || msg || "";
     const map={
-      "wrong-password":         isAr?"كلمة المرور غلط":"Wrong password",
-      "invalid-credential":     isAr?"البريد أو كلمة المرور غلط":"Invalid email or password",
-      "user-not-found":         isAr?"مفيش حساب — سجّل حساب جديد":"No account found — please sign up",
-      "email-already-in-use":   isAr?"البريد مسجّل — سجّل دخول":"Email in use — please sign in",
-      "weak-password":          isAr?"كلمة المرور ضعيفة — 6 أحرف على الأقل":"Password too weak — 6+ chars",
-      "too-many-requests":      isAr?"محاولات كتيرة — حاول بعد شوية":"Too many attempts — try later",
-      "network-request-failed": isAr?"مشكلة في الإنترنت":"Network error",
-      "popup-blocked":          isAr?"الـ popup اتحجب — جاري إعادة المحاولة...":"Popup blocked — retrying with redirect...",
-      "popup-closed-by-user":   isAr?"أُغلق الـ popup":"Sign-in popup closed",
-      "invalid-email":          isAr?"البريد الإلكتروني غير صحيح":"Invalid email",
-      "user-disabled":          isAr?"الحساب موقوف":"Account disabled — contact support",
-      "auth/internal-error":    isAr?"خطأ داخلي — تأكد من تفعيل Google في Firebase":"Internal error — enable Google in Firebase Console",
+      "wrong-password":                         isAr?"كلمة المرور غلط":"Wrong password",
+      "invalid-credential":                     isAr?"البريد أو كلمة المرور غلط":"Invalid email or password",
+      "user-not-found":                         isAr?"مفيش حساب — سجّل حساب جديد":"No account found — please sign up",
+      "email-already-in-use":                   isAr?"البريد مسجّل — سجّل دخول":"Email already registered — sign in",
+      "weak-password":                          isAr?"كلمة المرور ضعيفة — 6 أحرف على الأقل":"Password too weak — 6+ chars",
+      "too-many-requests":                      isAr?"محاولات كتيرة — حاول بعد شوية":"Too many attempts — try later",
+      "network-request-failed":                 isAr?"مشكلة في الإنترنت":"Network error — check your connection",
+      "popup-blocked":                          isAr?"الـ popup اتحجب — جاري إعادة المحاولة...":"Popup blocked — trying redirect...",
+      "popup-closed-by-user":                   isAr?"أُغلق الـ popup":"Sign-in popup closed",
+      "cancelled-popup-request":                isAr?"أُغلق الـ popup":"Sign-in popup closed",
+      "invalid-email":                          isAr?"البريد الإلكتروني غير صحيح":"Invalid email address",
+      "user-disabled":                          isAr?"الحساب موقوف":"Account disabled — contact support",
+      "internal-error":                         isAr?"خطأ في Firebase — تأكد من الإعدادات":"Firebase error — check your configuration",
+      "operation-not-supported-in-this-environment": isAr?"جاري التوجيه...":"Redirecting to sign in...",
+      "account-exists-with-different-credential": isAr?"هذا البريد مسجّل بطريقة دخول مختلفة":"Account exists with a different sign-in method",
+      "requires-recent-login":                  isAr?"يجب إعادة تسجيل الدخول":"Please sign in again to continue",
+      "credential-already-in-use":              isAr?"هذا الحساب مرتبط بمستخدم آخر":"Credential already linked to another account",
+      "timeout":                                isAr?"انتهى الوقت — حاول تاني":"Timeout — please try again",
     };
-    return map[code]||(isAr?"حدث خطأ، حاول تاني":"Something went wrong, please try again");
+    return map[code] || map[Object.keys(map).find(k => code.includes(k)) || ""]
+      || (isAr?"حدث خطأ — حاول تاني":"Something went wrong — please try again");
   }
 
   async function handleForgotPassword(){
@@ -960,10 +970,9 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
       }
       onAuth(c.user);
     }catch(e2){
-      // Show FULL raw error for debugging
       const raw = e2?.code || e2?.message || String(e2);
       console.error("🔴 Google auth error:", raw, e2);
-      setErr("DEBUG: " + raw);
+      setErr(humanErr(raw));
     }
     setLoading(false);
   }
