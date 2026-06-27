@@ -1,495 +1,791 @@
+/**
+ * Corvus Auth — World-class authentication UI
+ * Inspired by: Stripe, Linear, Vercel, Notion quality
+ * Features: Animated gradient mesh, floating labels, micro-animations,
+ *           dark/light mode, Google + Microsoft, password strength, shake on error
+ */
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   signInGoogle, signInMicrosoft, signInEmail, signUpEmail, resetPassword,
   getUserProfile, createUserProfile, SUPPORT_EMAIL,
 } from "./firebase.js";
 
+// ── Error messages ─────────────────────────────────────────────────
 function getErr(msg, isAr) {
   const code = (msg||"").match(/\(auth\/([^)]+)\)/)?.[1]||"";
   const map = {
-    "wrong-password":        {en:"Wrong password",                    ar:"كلمة المرور غلط"},
-    "invalid-credential":    {en:"Incorrect email or password",       ar:"البريد أو كلمة المرور غلط"},
-    "user-not-found":        {en:"No account — sign up first",        ar:"مفيش حساب — سجّل جديد"},
-    "email-already-in-use":  {en:"Already registered — sign in",      ar:"مسجّل بالفعل — سجّل دخول"},
-    "weak-password":         {en:"Min 6 characters required",         ar:"6 أحرف على الأقل"},
-    "too-many-requests":     {en:"Too many attempts — wait a moment", ar:"محاولات كثيرة — انتظر"},
-    "network-request-failed":{en:"Network error — check connection",  ar:"مشكلة في الإنترنت"},
-    "invalid-email":         {en:"Invalid email address",             ar:"بريد إلكتروني غير صحيح"},
-    "popup-closed-by-user":  {en:"Sign-in cancelled",                 ar:"تم إلغاء تسجيل الدخول"},
+    "wrong-password":        {en:"Incorrect email or password",          ar:"البريد أو كلمة المرور غلط"},
+    "invalid-credential":    {en:"Incorrect email or password",          ar:"البريد أو كلمة المرور غلط"},
+    "user-not-found":        {en:"Incorrect email or password",          ar:"البريد أو كلمة المرور غلط"},
+    "email-already-in-use":  {en:"An account with this email already exists", ar:"البريد مسجّل بالفعل"},
+    "weak-password":         {en:"Password must be at least 6 characters", ar:"كلمة المرور 6 أحرف على الأقل"},
+    "too-many-requests":     {en:"Too many attempts. Try again in a few minutes.", ar:"محاولات كثيرة. انتظر دقائق."},
+    "network-request-failed":{en:"Connection error. Check your internet.", ar:"خطأ في الاتصال. تحقق من الإنترنت."},
+    "invalid-email":         {en:"Please enter a valid email address",   ar:"أدخل بريداً إلكترونياً صحيحاً"},
+    "popup-closed-by-user":  {en:"Sign-in was cancelled",               ar:"تم إلغاء تسجيل الدخول"},
     "account-exists-with-different-credential":
-                             {en:"Account exists with different sign-in method",ar:"الحساب مسجّل بطريقة دخول مختلفة"},
+                             {en:"This email is linked to a different sign-in method", ar:"هذا البريد مرتبط بطريقة دخول مختلفة"},
   };
   const e = map[code]||map[Object.keys(map).find(k=>code.includes(k))||""];
-  return e?e[isAr?"ar":"en"]:(isAr?"حدث خطأ — حاول تاني":"Something went wrong — try again");
+  if (e) return e[isAr?"ar":"en"];
+  return isAr?"حدث خطأ غير متوقع. حاول مرة أخرى.":"An unexpected error occurred. Please try again.";
 }
 
-function pwStrength(p) {
-  if(!p) return 0;
-  let s=0;
-  if(p.length>=6) s++;
-  if(p.length>=10) s++;
-  if(/[A-Z]/.test(p)) s++;
-  if(/[0-9]/.test(p)) s++;
-  if(/[^A-Za-z0-9]/.test(p)) s++;
-  return s;
-}
-
-const _rate={c:0,t:0};
-function rateOk(){
-  const now=Date.now();
-  if(now-_rate.t>60000){_rate.c=0;_rate.t=now;}
-  return ++_rate.c<=8;
-}
-
-// Particle background
-function Particles({dark}){
-  const canvasRef = useRef(null);
-  useEffect(()=>{
-    const canvas = canvasRef.current;
-    if(!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let w = canvas.width  = window.innerWidth;
-    let h = canvas.height = window.innerHeight;
-    const dots = Array.from({length:40},()=>({
-      x:Math.random()*w, y:Math.random()*h,
-      r:Math.random()*1.5+.5,
-      vx:(Math.random()-.5)*.3, vy:(Math.random()-.5)*.3,
-      o:Math.random()*.4+.1,
-    }));
-    let af;
-    const draw = ()=>{
-      ctx.clearRect(0,0,w,h);
-      dots.forEach(d=>{
-        d.x+=d.vx; d.y+=d.vy;
-        if(d.x<0||d.x>w) d.vx*=-1;
-        if(d.y<0||d.y>h) d.vy*=-1;
-        ctx.beginPath();
-        ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
-        ctx.fillStyle = dark?`rgba(99,179,237,${d.o})`:`rgba(26,86,219,${d.o*.5})`;
-        ctx.fill();
-      });
-      // Draw connecting lines
-      dots.forEach((a,i)=>dots.slice(i+1).forEach(b=>{
-        const dist=Math.hypot(a.x-b.x,a.y-b.y);
-        if(dist<100){
-          ctx.beginPath();
-          ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
-          ctx.strokeStyle=dark
-            ?`rgba(99,179,237,${(1-dist/100)*.08})`
-            :`rgba(26,86,219,${(1-dist/100)*.04})`;
-          ctx.lineWidth=.5;
-          ctx.stroke();
-        }
-      }));
-      af=requestAnimationFrame(draw);
-    };
-    draw();
-    const resize=()=>{w=canvas.width=window.innerWidth;h=canvas.height=window.innerHeight;};
-    window.addEventListener('resize',resize);
-    return ()=>{ cancelAnimationFrame(af); window.removeEventListener('resize',resize); };
-  },[dark]);
-  return <canvas ref={canvasRef} style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,opacity:.6}}/>;
-}
-
-export default function AuthPage({darkMode,setDarkMode,lang,setLang,onAuth,initialView}){
-  const isAr   = lang==="ar";
-  const isDark = darkMode;
-
-  const [view,    setView]    = useState(initialView||"login");
-  const [email,   setEmail]   = useState("");
-  const [pass,    setPass]    = useState("");
-  const [name,    setName]    = useState("");
-  const [showP,   setShowP]   = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [social,  setSocial]  = useState(""); // "google"|"microsoft"
-  const [err,     setErr]     = useState("");
-  const [ok,      setOk]      = useState("");
-  const [sent,    setSent]    = useState(false);
-  const [focused, setFocused] = useState("");
-  const [mounted, setMounted] = useState(false);
-  const [shake,   setShake]   = useState(false);
-
-  useEffect(()=>{ const t=setTimeout(()=>setMounted(true),80); return()=>clearTimeout(t); },[]);
-
-  const triggerShake = ()=>{ setShake(true); setTimeout(()=>setShake(false),500); };
-
-  const strength   = pwStrength(pass);
-  const sColors    = ["#ef4444","#f97316","#eab308","#22c55e","#22c55e"];
-  const sLabels    = {en:["Very weak","Weak","Fair","Strong","Very strong"],ar:["ضعيفة جداً","ضعيفة","مقبولة","قوية","قوية جداً"]};
-
-  // Color scheme
-  const c = isDark ? {
-    bg:"#030b14", card:"rgba(255,255,255,.03)", border:"rgba(255,255,255,.08)",
-    text:"#f0f6ff", muted:"rgba(255,255,255,.4)", faint:"rgba(255,255,255,.12)",
-    inp:"rgba(255,255,255,.04)", inpF:"rgba(26,86,219,.08)", inpB:"rgba(255,255,255,.08)", inpBF:"#3b82f6",
-    acc:"#3b82f6", accG:"linear-gradient(135deg,#1a56db,#0891b2)",
-    pill:"rgba(255,255,255,.05)", pillB:"rgba(255,255,255,.07)",
-    subBtn:"rgba(255,255,255,.04)",
-  } : {
-    bg:"#f0f4ff", card:"#ffffff", border:"rgba(0,0,0,.08)",
-    text:"#0f172a", muted:"#64748b", faint:"rgba(0,0,0,.06)",
-    inp:"#f8fafc", inpF:"rgba(26,86,219,.05)", inpB:"rgba(0,0,0,.1)", inpBF:"#1a56db",
-    acc:"#1a56db", accG:"linear-gradient(135deg,#1a56db,#0891b2)",
-    pill:"rgba(0,0,0,.04)", pillB:"rgba(0,0,0,.06)",
-    subBtn:"rgba(0,0,0,.03)",
+// ── Password strength ──────────────────────────────────────────────
+function analyzePw(p) {
+  return {
+    length:   p.length >= 8,
+    upper:    /[A-Z]/.test(p),
+    lower:    /[a-z]/.test(p),
+    number:   /[0-9]/.test(p),
+    special:  /[^A-Za-z0-9]/.test(p),
   };
+}
+function pwScore(p) {
+  if (!p) return 0;
+  const a = analyzePw(p);
+  return Object.values(a).filter(Boolean).length;
+}
 
-  const go = v=>{ setView(v); setErr(""); setOk(""); setSent(false); };
+// ── Rate limiter ───────────────────────────────────────────────────
+const _rl = {c:0,t:0};
+function rateOk() {
+  const now = Date.now();
+  if (now - _rl.t > 60000) { _rl.c=0; _rl.t=now; }
+  return ++_rl.c <= 8;
+}
 
-  const withSocial = async (key, fn)=>{
-    if(!rateOk()){setErr(isAr?"انتظر دقيقة":"Wait a moment");return;}
-    setErr(""); setSocial(key);
-    try{
-      const r = await fn();
-      if(!r) return;
-      const p = await getUserProfile(r.user.uid);
-      if(!p) await createUserProfile(r.user.uid,{email:r.user.email,name:r.user.displayName||"",company:""});
-      onAuth(r.user,!p);
-    }catch(e){ setErr(getErr(e.message,isAr)); triggerShake(); }
-    finally{ setSocial(""); }
+// ── Animated mesh gradient background ─────────────────────────────
+function MeshBg({ dark }) {
+  return (
+    <div style={{position:"fixed",inset:0,overflow:"hidden",pointerEvents:"none",zIndex:0}}>
+      {/* Base gradient */}
+      <div style={{
+        position:"absolute",inset:0,
+        background: dark
+          ? "radial-gradient(ellipse 80% 60% at 20% 10%, rgba(26,86,219,.12) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 80% 90%, rgba(8,145,178,.08) 0%, transparent 60%), #030b14"
+          : "radial-gradient(ellipse 80% 60% at 20% 10%, rgba(219,234,254,.8) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 80% 90%, rgba(186,230,253,.6) 0%, transparent 60%), #f8fafc",
+      }}/>
+      {/* Floating orbs */}
+      {[
+        {w:500,h:500,t:-15,l:-10,c:dark?"rgba(26,86,219,.07)":"rgba(59,130,246,.06)",d:20},
+        {w:400,h:400,t:60,r:-10,c:dark?"rgba(8,145,178,.06)":"rgba(14,165,233,.05)",d:25},
+        {w:350,h:350,b:-10,l:30,c:dark?"rgba(99,102,241,.05)":"rgba(99,102,241,.04)",d:18},
+      ].map((o,i)=>(
+        <div key={i} style={{
+          position:"absolute",
+          width:o.w, height:o.h,
+          top:o.t!==undefined?`${o.t}%`:undefined,
+          bottom:o.b!==undefined?`${o.b}%`:undefined,
+          left:o.l!==undefined?`${o.l}%`:undefined,
+          right:o.r!==undefined?`${o.r}%`:undefined,
+          borderRadius:"50%",
+          background:`radial-gradient(circle, ${o.c} 0%, transparent 70%)`,
+          animation:`orbFloat${i} ${o.d}s ease-in-out infinite`,
+          animationDelay:`${i*3}s`,
+        }}/>
+      ))}
+    </div>
+  );
+}
+
+// ── Floating label input ───────────────────────────────────────────
+function FloatInput({ id, label, type="text", value, onChange, autoComplete,
+  required, disabled, error, valid, rightEl, dark, isRtl, hint }) {
+  const [focused, setFocused] = useState(false);
+  const active = focused || !!value;
+  const c = dark
+    ? { bg:"rgba(255,255,255,.04)", bgF:"rgba(26,86,219,.07)", border:"rgba(255,255,255,.08)",
+        borderF:"#3b82f6", borderE:"rgba(239,68,68,.5)", borderV:"rgba(34,197,94,.5)",
+        label:"rgba(255,255,255,.35)", labelF:"#3b82f6", labelE:"#f87171", labelV:"#4ade80",
+        text:"#f0f6ff", placeholder:"rgba(255,255,255,.15)" }
+    : { bg:"#ffffff", bgF:"rgba(59,130,246,.03)", border:"rgba(0,0,0,.1)",
+        borderF:"#1a56db", borderE:"rgba(239,68,68,.5)", borderV:"rgba(34,197,94,.5)",
+        label:"#94a3b8", labelF:"#1a56db", labelE:"#ef4444", labelV:"#16a34a",
+        text:"#0f172a", placeholder:"rgba(0,0,0,.2)" };
+
+  const borderColor = error ? c.borderE : valid ? c.borderV : focused ? c.borderF : c.border;
+  const labelColor  = error ? c.labelE  : valid ? c.labelV  : focused ? c.labelF  : c.label;
+
+  return (
+    <div style={{position:"relative",marginBottom:error?4:16}}>
+      {/* Floating label */}
+      <label htmlFor={id} style={{
+        position:"absolute",
+        [isRtl?"right":"left"]: 14,
+        top: active ? 7 : "50%",
+        transform: active ? "none" : "translateY(-50%)",
+        fontSize: active ? 10.5 : 14,
+        fontWeight: active ? 600 : 400,
+        color: labelColor,
+        transition:"all .18s cubic-bezier(.4,0,.2,1)",
+        pointerEvents:"none", zIndex:1,
+        letterSpacing: active ? ".04em" : 0,
+        textTransform: active ? "uppercase" : "none",
+      }}>{label}</label>
+
+      {/* Input */}
+      <input
+        id={id} type={type} value={value} required={required} disabled={disabled}
+        autoComplete={autoComplete} aria-invalid={!!error} aria-describedby={error?`${id}-err`:undefined}
+        onChange={e=>onChange(e.target.value)}
+        onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
+        dir={isRtl?"rtl":"ltr"}
+        style={{
+          width:"100%",
+          paddingTop: 22, paddingBottom: 9,
+          paddingLeft: isRtl ? (rightEl?44:14) : 14,
+          paddingRight: isRtl ? 14 : (rightEl?44:14),
+          background: focused ? c.bgF : c.bg,
+          border: `1.5px solid ${borderColor}`,
+          borderRadius: 10, fontSize: 14.5, color: c.text,
+          outline:"none", transition:"all .2s cubic-bezier(.4,0,.2,1)",
+          boxSizing:"border-box", fontFamily:"inherit",
+          boxShadow: focused ? `0 0 0 3px ${dark?"rgba(59,130,246,.12)":"rgba(26,86,219,.08)"}` : "none",
+        }}
+      />
+
+      {/* Right element (show/hide pw) */}
+      {rightEl && (
+        <div style={{
+          position:"absolute", [isRtl?"left":"right"]:12,
+          top:"50%", transform:"translateY(-50%)",
+        }}>{rightEl}</div>
+      )}
+
+      {/* Valid checkmark */}
+      {valid && !error && (
+        <div style={{
+          position:"absolute", [isRtl?"left":"right"]:rightEl?44:12,
+          top:"50%", transform:"translateY(-50%)",
+          color:"#4ade80", fontSize:14, fontWeight:700,
+          animation:"popIn .2s cubic-bezier(.34,1.56,.64,1)",
+        }}>✓</div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div id={`${id}-err`} role="alert" style={{
+          fontSize:11.5, color: dark?"#f87171":"#ef4444",
+          marginTop:4, paddingLeft:isRtl?0:4, paddingRight:isRtl?4:0,
+          animation:"slideDown .15s ease",
+        }}>{error}</div>
+      )}
+      {hint && !error && (
+        <div style={{fontSize:11.5,color:dark?"rgba(255,255,255,.3)":"#94a3b8",marginTop:4,paddingLeft:isRtl?0:4}}>
+          {hint}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Password strength display ──────────────────────────────────────
+function PwStrength({ pass, dark, isAr }) {
+  const score = pwScore(pass);
+  const a     = analyzePw(pass);
+  const bars  = [
+    {min:1,c:"#ef4444"},
+    {min:2,c:"#f97316"},
+    {min:3,c:"#eab308"},
+    {min:4,c:"#22c55e"},
+    {min:5,c:"#16a34a"},
+  ];
+  const labels = {
+    en:["","Weak","Fair","Good","Strong","Excellent"],
+    ar:["","ضعيفة","مقبولة","جيدة","قوية","ممتازة"],
   };
-
-  const handleSubmit = useCallback(async e=>{
-    e.preventDefault();
-    if(!rateOk()){setErr(isAr?"انتظر دقيقة":"Wait a moment");return;}
-    setErr(""); setLoading(true);
-    try{
-      if(view==="login"){
-        const c2=await signInEmail(email.trim(),pass); onAuth(c2.user,false);
-      }else{
-        const c2=await signUpEmail(email.trim(),pass);
-        await createUserProfile(c2.user.uid,{email:email.trim(),name:name.trim(),company:""});
-        onAuth(c2.user,true);
-      }
-    }catch(e){ setErr(getErr(e.message,isAr)); triggerShake(); }
-    finally{ setLoading(false); }
-  },[view,email,pass,name,isAr,onAuth]);
-
-  const handleForgot = useCallback(async e=>{
-    e.preventDefault();
-    if(!rateOk()){setErr(isAr?"انتظر دقيقة":"Wait a moment");return;}
-    setErr(""); setLoading(true);
-    try{
-      await resetPassword(email.trim()); setSent(true);
-      setOk(isAr?`✅ تم إرسال رابط إعادة التعيين إلى ${email} — تحقق من بريدك`:`✅ Reset link sent to ${email} — check your inbox`);
-    }catch(e){
-      const code=(e.message||"").match(/\(auth\/([^)]+)\)/)?.[1]||"";
-      if(code==="user-not-found"){ setSent(true); setOk(isAr?"✅ إذا كان البريد مسجّلاً سيصلك رابط":"✅ If registered, a reset link has been sent"); }
-      else { setErr(getErr(e.message,isAr)); triggerShake(); }
-    }finally{ setLoading(false); }
-  },[email,isAr]);
-
-  const busy = loading || !!social;
-
-  const inp = (id,label,type,val,setV,auto,ph)=>(
-    <div style={{marginBottom:14}}>
-      <label style={{display:"block",marginBottom:6,fontSize:11.5,fontWeight:600,
-        color:focused===id?c.acc:c.muted,letterSpacing:".06em",textTransform:"uppercase",transition:"color .2s"}}>
-        {label}
-      </label>
-      <div style={{position:"relative"}}>
-        <input type={type} value={val} onChange={e=>setV(e.target.value)}
-          onFocus={()=>setFocused(id)} onBlur={()=>setFocused("")}
-          autoComplete={auto} required placeholder={ph||""}
-          style={{
-            width:"100%", padding:"12px 16px",
-            paddingRight:id==="pass"?44:16,
-            background:focused===id?c.inpF:c.inp,
-            border:`1.5px solid ${focused===id?c.inpBF:c.inpB}`,
-            borderRadius:10, fontSize:14.5, color:c.text, outline:"none",
-            transition:"all .2s", boxSizing:"border-box", fontFamily:"inherit",
+  const checks = [
+    {k:"length",  en:"At least 8 characters", ar:"8 أحرف على الأقل"},
+    {k:"upper",   en:"Uppercase letter",       ar:"حرف كبير"},
+    {k:"lower",   en:"Lowercase letter",       ar:"حرف صغير"},
+    {k:"number",  en:"Number",                 ar:"رقم"},
+    {k:"special", en:"Special character",      ar:"رمز خاص"},
+  ];
+  if (!pass) return null;
+  return (
+    <div style={{marginBottom:12,marginTop:-6}}>
+      {/* Bars */}
+      <div style={{display:"flex",gap:3,marginBottom:6}}>
+        {[1,2,3,4,5].map(i=>(
+          <div key={i} style={{
+            flex:1,height:3,borderRadius:99,
+            background:i<=score?(bars[Math.min(score,5)-1]?.c||"#22c55e"):(dark?"rgba(255,255,255,.08)":"rgba(0,0,0,.08)"),
+            transition:`background .3s ease ${i*.05}s`,
           }}/>
-        {id==="pass" && (
-          <button type="button" onClick={()=>setShowP(v=>!v)} tabIndex={-1}
-            style={{position:"absolute",right:13,top:"50%",transform:"translateY(-50%)",
-              background:"none",border:"none",color:c.muted,cursor:"pointer",
-              fontSize:15,padding:0,lineHeight:1,transition:"color .15s"}}
-            onMouseEnter={e=>e.currentTarget.style.color=c.text}
-            onMouseLeave={e=>e.currentTarget.style.color=c.muted}>
-            {showP?"🙈":"👁"}
-          </button>
-        )}
+        ))}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <span style={{fontSize:11.5,fontWeight:600,color:bars[Math.min(score,5)-1]?.c||dark?"rgba(255,255,255,.3)":"#94a3b8"}}>
+          {labels[isAr?"ar":"en"][Math.min(score,5)]}
+        </span>
+      </div>
+      {/* Checklist */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 12px"}}>
+        {checks.map(ch=>(
+          <div key={ch.k} style={{
+            display:"flex",alignItems:"center",gap:5,fontSize:11,
+            color: a[ch.k]
+              ?(dark?"#4ade80":"#16a34a")
+              :(dark?"rgba(255,255,255,.3)":"#94a3b8"),
+            transition:"color .2s",
+          }}>
+            <span style={{
+              width:13,height:13,borderRadius:"50%",flexShrink:0,
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:8,fontWeight:700,
+              background:a[ch.k]?(dark?"rgba(74,222,128,.15)":"rgba(22,163,74,.1)"):"transparent",
+              border:`1px solid ${a[ch.k]?(dark?"rgba(74,222,128,.4)":"rgba(22,163,74,.3)"):(dark?"rgba(255,255,255,.1)":"rgba(0,0,0,.1)")}`,
+              transition:"all .2s",
+            }}>{a[ch.k]?"✓":""}</span>
+            {ch[isAr?"ar":"en"]}
+          </div>
+        ))}
       </div>
     </div>
   );
+}
 
-  return(
+// ── Social button ──────────────────────────────────────────────────
+function SocialBtn({ icon, label, onClick, loading, disabled, dark }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button type="button" onClick={onClick} disabled={disabled||loading}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      aria-label={label}
+      style={{
+        flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+        padding:"11px 12px", fontFamily:"inherit",
+        background: hov
+          ?(dark?"rgba(255,255,255,.07)":"rgba(26,86,219,.05)")
+          :(dark?"rgba(255,255,255,.04)":"#ffffff"),
+        border:`1.5px solid ${hov?(dark?"rgba(255,255,255,.15)":"rgba(26,86,219,.25)"):(dark?"rgba(255,255,255,.08)":"rgba(0,0,0,.1)")}`,
+        borderRadius:10, fontSize:13.5, fontWeight:500,
+        color: dark?"rgba(255,255,255,.8)":"#374151",
+        cursor:(disabled||loading)?"not-allowed":"pointer",
+        transition:"all .2s cubic-bezier(.4,0,.2,1)",
+        transform: hov&&!disabled?"translateY(-1px)":"none",
+        boxShadow: hov&&!disabled?(dark?"0 4px 20px rgba(0,0,0,.3)":"0 4px 16px rgba(26,86,219,.1)"):"none",
+        opacity:(disabled&&!loading)?.5:1,
+      }}>
+      {loading
+        ? <div style={{width:16,height:16,border:`2px solid ${dark?"rgba(255,255,255,.2)":"rgba(0,0,0,.1)"}`,borderTopColor:dark?"#fff":"#1a56db",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+        : icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────
+export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth, initialView }) {
+  const isAr = lang === "ar";
+  const dark = darkMode;
+
+  const [view,    setView]   = useState(initialView||"login");
+  const [email,   setEmail]  = useState("");
+  const [pass,    setPass]   = useState("");
+  const [pass2,   setPass2]  = useState("");
+  const [fname,   setFname]  = useState("");
+  const [lname,   setLname]  = useState("");
+  const [showP,   setShowP]  = useState(false);
+  const [showP2,  setShowP2] = useState(false);
+  const [loading, setLoading]= useState(false);
+  const [social,  setSocial] = useState(""); // "google"|"microsoft"
+  const [err,     setErr]    = useState("");
+  const [ok,      setOk]     = useState("");
+  const [sent,    setSent]   = useState(false);
+  const [touched, setTouched]= useState({});
+  const [mounted, setMounted]= useState(false);
+  const [shake,   setShake]  = useState(false);
+  const [capsLock,setCapsLock]= useState(false);
+
+  useEffect(()=>{ const t=setTimeout(()=>setMounted(true),60); return()=>clearTimeout(t); },[]);
+
+  // Caps lock detection
+  useEffect(()=>{
+    const h = e => setCapsLock(e.getModifierState?.("CapsLock")??false);
+    window.addEventListener("keydown",h);
+    window.addEventListener("keyup",h);
+    return ()=>{ window.removeEventListener("keydown",h); window.removeEventListener("keyup",h); };
+  },[]);
+
+  const doShake = () => { setShake(true); setTimeout(()=>setShake(false),600); };
+  const go = v => { setView(v); setErr(""); setOk(""); setSent(false); setTouched({}); };
+  const touch = k => setTouched(p=>({...p,[k]:true}));
+
+  // ── Validation ───────────────────────────────────────────────────
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  const passValid  = pass.length >= 6;
+  const pass2Valid = pass === pass2 && pass2.length > 0;
+  const fnameValid = fname.trim().length >= 1;
+  const lnameValid = lname.trim().length >= 1;
+
+  const fieldErr = {
+    email:  touched.email  && !emailValid ? (isAr?"أدخل بريداً إلكترونياً صحيحاً":"Enter a valid email address") : "",
+    pass:   touched.pass   && !passValid  ? (isAr?"6 أحرف على الأقل":"At least 6 characters") : "",
+    pass2:  touched.pass2  && !pass2Valid ? (isAr?"كلمتا المرور غير متطابقتين":"Passwords don't match") : "",
+    fname:  touched.fname  && !fnameValid ? (isAr?"الاسم الأول مطلوب":"First name required") : "",
+    lname:  touched.lname  && !lnameValid ? (isAr?"اسم العائلة مطلوب":"Last name required") : "",
+  };
+
+  // ── Social auth ──────────────────────────────────────────────────
+  const withSocial = async (key, fn) => {
+    if (!rateOk()) { setErr(isAr?"انتظر دقيقة":"Too many attempts — wait"); return; }
+    setErr(""); setSocial(key);
+    try {
+      const r = await fn();
+      if (!r) return;
+      const p = await getUserProfile(r.user.uid);
+      if (!p) await createUserProfile(r.user.uid,{email:r.user.email,name:r.user.displayName||"",company:""});
+      onAuth(r.user,!p);
+    } catch(e) { setErr(getErr(e.message,isAr)); doShake(); }
+    finally { setSocial(""); }
+  };
+
+  // ── Email submit ─────────────────────────────────────────────────
+  const handleSubmit = useCallback(async e => {
+    e.preventDefault();
+    // Touch all fields
+    if (view==="login")  setTouched({email:true,pass:true});
+    if (view==="signup") setTouched({email:true,pass:true,pass2:true,fname:true,lname:true});
+    if (view==="login"  && (!emailValid||!passValid)) { doShake(); return; }
+    if (view==="signup" && (!emailValid||!passValid||!pass2Valid||!fnameValid||!lnameValid)) { doShake(); return; }
+    if (!rateOk()) { setErr(isAr?"انتظر دقيقة":"Too many attempts"); return; }
+    setErr(""); setLoading(true);
+    try {
+      if (view==="login") {
+        const c=await signInEmail(email.trim(),pass); onAuth(c.user,false);
+      } else {
+        const c=await signUpEmail(email.trim(),pass);
+        await createUserProfile(c.user.uid,{email:email.trim(),name:`${fname.trim()} ${lname.trim()}`.trim(),company:""});
+        onAuth(c.user,true);
+      }
+    } catch(e) { setErr(getErr(e.message,isAr)); doShake(); }
+    finally { setLoading(false); }
+  },[view,email,pass,pass2,fname,lname,emailValid,passValid,pass2Valid,fnameValid,lnameValid,isAr,onAuth]);
+
+  // ── Forgot password ──────────────────────────────────────────────
+  const handleForgot = useCallback(async e => {
+    e.preventDefault();
+    setTouched({email:true});
+    if (!emailValid) { doShake(); return; }
+    if (!rateOk()) { setErr(isAr?"انتظر دقيقة":"Too many attempts"); return; }
+    setErr(""); setLoading(true);
+    try {
+      await resetPassword(email.trim()); setSent(true);
+      setOk(isAr?`تم إرسال رابط إعادة التعيين إلى ${email}`:`Reset link sent to ${email}`);
+    } catch(e) {
+      const code=(e.message||"").match(/\(auth\/([^)]+)\)/)?.[1]||"";
+      // Don't reveal if email exists
+      setSent(true);
+      setOk(isAr?"إذا كان البريد مسجّلاً، ستتلقى رابط إعادة التعيين قريباً":"If this email is registered, you'll receive a reset link shortly");
+    } finally { setLoading(false); }
+  },[email,emailValid,isAr]);
+
+  const busy = loading||!!social;
+
+  // ── Color tokens ─────────────────────────────────────────────────
+  const t = dark ? {
+    bg:      "#030b14",
+    card:    "rgba(15,23,42,.8)",
+    border:  "rgba(255,255,255,.07)",
+    text:    "#f0f6ff",
+    textSub: "#94a3b8",
+    muted:   "rgba(255,255,255,.3)",
+    faint:   "rgba(255,255,255,.04)",
+    divider: "rgba(255,255,255,.06)",
+    pillBg:  "rgba(255,255,255,.05)",
+    pillBd:  "rgba(255,255,255,.08)",
+    acc:     "#3b82f6",
+    accBtn:  "linear-gradient(135deg,#1d4ed8 0%,#0891b2 100%)",
+    shadow:  "0 24px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(59,130,246,.08), inset 0 1px 0 rgba(255,255,255,.05)",
+    tabAct:  "linear-gradient(135deg,#1d4ed8,#0891b2)",
+    tabActS: "0 3px 14px rgba(29,78,216,.4)",
+  } : {
+    bg:      "#f0f4ff",
+    card:    "rgba(255,255,255,.95)",
+    border:  "rgba(0,0,0,.07)",
+    text:    "#0f172a",
+    textSub: "#64748b",
+    muted:   "#94a3b8",
+    faint:   "rgba(0,0,0,.03)",
+    divider: "rgba(0,0,0,.06)",
+    pillBg:  "rgba(0,0,0,.04)",
+    pillBd:  "rgba(0,0,0,.07)",
+    acc:     "#1a56db",
+    accBtn:  "linear-gradient(135deg,#1a56db 0%,#0891b2 100%)",
+    shadow:  "0 20px 60px rgba(26,86,219,.12), 0 4px 20px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.05)",
+    tabAct:  "linear-gradient(135deg,#1a56db,#0891b2)",
+    tabActS: "0 3px 14px rgba(26,86,219,.3)",
+  };
+
+  const eyeBtn = (show, toggle) => (
+    <button type="button" onClick={toggle} tabIndex={-1}
+      aria-label={show?"Hide password":"Show password"}
+      style={{background:"none",border:"none",color:t.muted,cursor:"pointer",
+        fontSize:15,padding:"2px",lineHeight:1,transition:"color .15s",display:"flex"}}
+      onMouseEnter={e=>e.currentTarget.style.color=t.text}
+      onMouseLeave={e=>e.currentTarget.style.color=t.muted}>
+      {show ? (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+      ) : (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      )}
+    </button>
+  );
+
+  return (
     <div style={{
-      minHeight:"100vh", background:c.bg,
+      minHeight:"100vh", background:t.bg,
       display:"flex", alignItems:"center", justifyContent:"center",
-      fontFamily:"'Inter','IBM Plex Sans Arabic',system-ui,sans-serif",
-      direction:isAr?"rtl":"ltr", padding:"24px 16px", position:"relative",
-      transition:"background .3s",
+      fontFamily:"'Inter','IBM Plex Sans Arabic',system-ui,-apple-system,sans-serif",
+      direction:isAr?"rtl":"ltr",
+      padding:"24px 16px", position:"relative",
+      transition:"background .4s ease",
     }}>
-      <Particles dark={isDark}/>
+      <MeshBg dark={dark}/>
 
       {/* Top controls */}
       <div style={{position:"fixed",top:20,[isAr?"left":"right"]:20,display:"flex",gap:8,zIndex:10}}>
         <button onClick={()=>setLang(isAr?"en":"ar")} style={{
-          background:c.pill, border:`1px solid ${c.pillB}`,
-          borderRadius:8, padding:"6px 12px", fontSize:12, fontWeight:500,
-          color:c.muted, cursor:"pointer", transition:"all .2s",
+          background:t.pillBg, border:`1px solid ${t.pillBd}`,
+          borderRadius:8, padding:"5px 11px", fontSize:12, fontWeight:500,
+          color:t.textSub, cursor:"pointer", transition:"all .2s", fontFamily:"inherit",
+          backdropFilter:"blur(8px)",
         }}
-        onMouseEnter={e=>{e.currentTarget.style.background=`rgba(26,86,219,.15)`;e.currentTarget.style.color=c.text;}}
-        onMouseLeave={e=>{e.currentTarget.style.background=c.pill;e.currentTarget.style.color=c.muted;}}>
-          {isAr?"🇬🇧 EN":"🇪🇬 عربي"}
+        onMouseEnter={e=>{e.currentTarget.style.background=`rgba(26,86,219,.12)`;e.currentTarget.style.color=t.text;}}
+        onMouseLeave={e=>{e.currentTarget.style.background=t.pillBg;e.currentTarget.style.color=t.textSub;}}>
+          {isAr?"🇬🇧 English":"🇪🇬 عربي"}
         </button>
-        <button onClick={()=>setDarkMode(!isDark)} style={{
-          background:c.pill, border:`1px solid ${c.pillB}`,
-          borderRadius:8, padding:"6px 10px", fontSize:14, cursor:"pointer", transition:"all .2s",
-        }}>{isDark?"☀️":"🌙"}</button>
+        <button onClick={()=>setDarkMode(!dark)} style={{
+          background:t.pillBg, border:`1px solid ${t.pillBd}`,
+          borderRadius:8, padding:"5px 10px", fontSize:14,
+          cursor:"pointer", transition:"all .2s", backdropFilter:"blur(8px)",
+        }}
+        onMouseEnter={e=>e.currentTarget.style.background=`rgba(26,86,219,.12)`}
+        onMouseLeave={e=>e.currentTarget.style.background=t.pillBg}>
+          {dark?"☀️":"🌙"}
+        </button>
       </div>
 
-      {/* Card */}
+      {/* Auth Card */}
       <div style={{
-        width:"100%", maxWidth:420, position:"relative", zIndex:1,
-        background:c.card, border:`1px solid ${c.border}`,
-        borderRadius:20, padding:"36px 32px",
-        boxShadow: isDark
-          ?"0 24px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(26,86,219,.08)"
-          :"0 20px 60px rgba(26,86,219,.12), 0 4px 20px rgba(0,0,0,.08)",
+        width:"100%", maxWidth: view==="signup" ? 460 : 420,
+        position:"relative", zIndex:1,
+        background:t.card,
+        border:`1px solid ${t.border}`,
+        borderRadius:20,
+        padding: view==="signup" ? "36px 32px" : "36px 32px",
+        boxShadow:t.shadow,
+        backdropFilter:"blur(24px)",
         opacity:mounted?1:0,
-        transform:`translateY(${mounted?0:24}px) ${shake?"translateX(-4px)":""}`,
-        transition:`opacity .4s ease, transform .4s ease${shake?", transform .05s ease":""}`,
+        transform:`translateY(${mounted?0:20}px)${shake?" translateX(-4px)":""}`,
+        transition:`opacity .4s cubic-bezier(.4,0,.2,1), transform .4s cubic-bezier(.4,0,.2,1)${shake?", box-shadow .05s":""}, max-width .3s ease, box-shadow .05s`,
+        boxShadow: shake
+          ? `0 0 0 2px rgba(239,68,68,.4), ${t.shadow}`
+          : t.shadow,
       }}>
 
         {/* Logo */}
-        <div style={{textAlign:"center",marginBottom:26}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
           <div style={{
-            width:50,height:50,borderRadius:14,margin:"0 auto 12px",
-            background:c.accG,
+            width:48,height:48,borderRadius:13,margin:"0 auto 12px",
+            background:"linear-gradient(135deg,#1a56db 0%,#0891b2 100%)",
             display:"flex",alignItems:"center",justifyContent:"center",
-            fontSize:24,boxShadow:`0 8px 28px rgba(26,86,219,.35)`,
-            animation:"logoFloat 4s ease-in-out infinite",
+            fontSize:22,
+            boxShadow:"0 8px 24px rgba(26,86,219,.3)",
+            animation:"logoAnim 4s ease-in-out infinite",
           }}>◈</div>
-          <div style={{fontSize:20,fontWeight:800,color:c.text,letterSpacing:"-.02em"}}>Corvus</div>
-          <div style={{fontSize:12,color:c.muted,marginTop:2}}>
-            {isAr?"صحة العمل بالذكاء الاصطناعي":"AI Workplace Health"}
+          <div style={{fontSize:19,fontWeight:800,color:t.text,letterSpacing:"-.025em"}}>Corvus</div>
+          <div style={{fontSize:12,color:t.textSub,marginTop:2,letterSpacing:".01em"}}>
+            {isAr?"صحة العمل بالذكاء الاصطناعي":"AI Workplace Health Platform"}
           </div>
         </div>
 
-        {/* Forgot view */}
-        {view==="forgot"?(
+        {/* ── FORGOT VIEW ─────────────────────────────────────────── */}
+        {view==="forgot" && (
           <>
             <button onClick={()=>go("login")} style={{
-              background:"none",border:"none",color:c.muted,cursor:"pointer",
-              fontSize:13,display:"flex",alignItems:"center",gap:6,
-              marginBottom:18,padding:0,fontFamily:"inherit",transition:"color .15s",
+              background:"none",border:"none",color:t.textSub,cursor:"pointer",
+              fontSize:13,display:"flex",alignItems:"center",gap:5,
+              marginBottom:16,padding:0,fontFamily:"inherit",transition:"color .15s",
             }}
-            onMouseEnter={e=>e.currentTarget.style.color=c.text}
-            onMouseLeave={e=>e.currentTarget.style.color=c.muted}>
-              ← {isAr?"رجوع":"Back"}
+            onMouseEnter={e=>e.currentTarget.style.color=t.text}
+            onMouseLeave={e=>e.currentTarget.style.color=t.textSub}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+              {isAr?"رجوع":"Back to sign in"}
             </button>
-            <div style={{fontSize:20,fontWeight:700,color:c.text,marginBottom:6}}>
-              {isAr?"إعادة تعيين كلمة المرور":"Reset your password"}
-            </div>
-            <div style={{fontSize:13.5,color:c.muted,marginBottom:22,lineHeight:1.6}}>
-              {isAr?"أدخل بريدك وسنرسل رابط إعادة التعيين":"Enter your email and we'll send a reset link"}
-            </div>
+
+            {sent ? (
+              /* Success state */
+              <div style={{textAlign:"center",padding:"24px 0"}}>
+                <div style={{
+                  width:56,height:56,borderRadius:"50%",margin:"0 auto 16px",
+                  background:"rgba(34,197,94,.1)",border:"2px solid rgba(34,197,94,.3)",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  animation:"popIn .4s cubic-bezier(.34,1.56,.64,1)",
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </div>
+                <div style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:8}}>
+                  {isAr?"تحقق من بريدك":"Check your email"}
+                </div>
+                <div style={{fontSize:13.5,color:t.textSub,lineHeight:1.6,marginBottom:20}}>
+                  {ok}
+                </div>
+                <button onClick={()=>{setSent(false);setOk("");}} style={{
+                  background:"none",border:`1px solid ${t.border}`,
+                  borderRadius:9,padding:"10px 24px",fontSize:13.5,
+                  fontWeight:500,color:t.textSub,cursor:"pointer",
+                  fontFamily:"inherit",transition:"all .15s",
+                }}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=t.acc}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=t.border}>
+                  {isAr?"إعادة الإرسال":"Resend email"}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{fontSize:19,fontWeight:700,color:t.text,marginBottom:6}}>
+                  {isAr?"نسيت كلمة المرور؟":"Forgot password?"}
+                </div>
+                <div style={{fontSize:13.5,color:t.textSub,marginBottom:22,lineHeight:1.6}}>
+                  {isAr?"أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين"
+                       :"No worries. Enter your email and we'll send you a reset link."}
+                </div>
+                <form onSubmit={handleForgot} noValidate>
+                  <FloatInput id="f-email" label={isAr?"البريد الإلكتروني":"Email address"}
+                    type="email" value={email} onChange={v=>{setEmail(v);touch("email");}}
+                    autoComplete="email" required dark={dark} isRtl={isAr}
+                    error={fieldErr.email} valid={emailValid&&touched.email}/>
+                  {err&&<AlertBox msg={err} dark={dark}/>}
+                  <PrimaryBtn loading={loading} disabled={busy} dark={dark}>
+                    {loading
+                      ? <Spinner dark={dark}/>
+                      : (isAr?"إرسال رابط إعادة التعيين":"Send reset link")}
+                  </PrimaryBtn>
+                </form>
+              </>
+            )}
           </>
-        ):(
+        )}
+
+        {/* ── LOGIN / SIGNUP VIEW ─────────────────────────────────── */}
+        {view!=="forgot" && (
           <>
-            {/* Tabs */}
+            {/* Tab switcher */}
             <div style={{
-              display:"flex",background:c.faint,
-              border:`1px solid ${c.border}`,
+              display:"flex",background:t.faint,
+              border:`1px solid ${t.border}`,
               borderRadius:11,padding:4,marginBottom:24,gap:4,
             }}>
-              {[["login",isAr?"تسجيل الدخول":"Sign In"],["signup",isAr?"حساب جديد":"Sign Up"]].map(([v,l])=>(
+              {[
+                ["login",  isAr?"تسجيل الدخول":"Sign In"],
+                ["signup", isAr?"إنشاء حساب":"Sign Up"],
+              ].map(([v,l])=>(
                 <button key={v} onClick={()=>go(v)} style={{
                   flex:1,padding:"9px 0",fontSize:13.5,fontWeight:600,
-                  color:view===v?"#fff":c.muted,
-                  background:view===v?c.accG:"transparent",
+                  color:view===v?"#fff":t.textSub,
+                  background:view===v?t.tabAct:"transparent",
                   border:"none",borderRadius:8,cursor:"pointer",
-                  transition:"all .25s",fontFamily:"inherit",
-                  boxShadow:view===v?"0 3px 14px rgba(26,86,219,.3)":"none",
+                  transition:"all .25s cubic-bezier(.4,0,.2,1)",
+                  fontFamily:"inherit",
+                  boxShadow:view===v?t.tabActS:"none",
                 }}>{l}</button>
               ))}
             </div>
+
+            {/* Heading */}
             <div style={{marginBottom:20}}>
-              <div style={{fontSize:18,fontWeight:700,color:c.text,letterSpacing:"-.01em"}}>
-                {view==="signup"?(isAr?"إنشاء حساب جديد":"Create your account"):(isAr?"أهلاً بعودتك 👋":"Welcome back 👋")}
-              </div>
-              <div style={{fontSize:13,color:c.muted,marginTop:3}}>
-                {view==="signup"?(isAr?"مجاني — لا بطاقة بنكية":"Free — no credit card needed"):(isAr?"سجّل دخول للمتابعة":"Sign in to continue")}
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Form first */}
-        <form onSubmit={view==="forgot"?handleForgot:handleSubmit} noValidate>
-          {view==="signup"&&inp("name",isAr?"الاسم الكامل":"Full name","text",name,setName,"name",isAr?"محمد أحمد":"John Doe")}
-          {inp("email",isAr?"البريد الإلكتروني":"Email address","email",email,setEmail,"email","you@example.com")}
-          {view!=="forgot"&&inp("pass",isAr?"كلمة المرور":"Password",showP?"text":"password",pass,setPass,view==="login"?"current-password":"new-password","••••••••")}
-
-          {/* Strength */}
-          {view==="signup"&&pass&&(
-            <div style={{marginBottom:14,marginTop:-6}}>
-              <div style={{display:"flex",gap:3,marginBottom:3}}>
-                {[1,2,3,4,5].map(i=>(
-                  <div key={i} style={{flex:1,height:3,borderRadius:99,transition:"background .3s",
-                    background:i<=strength?sColors[Math.min(strength-1,4)]:c.faint}}/>
-                ))}
-              </div>
-              <div style={{fontSize:11,color:sColors[Math.min(strength-1,4)]||c.muted,fontWeight:500}}>
-                {sLabels[isAr?"ar":"en"][Math.min(strength-1,4)]||(isAr?"ضعيفة جداً":"Very weak")}
-              </div>
-            </div>
-          )}
-
-          {/* Forgot link */}
-          {view==="login"&&(
-            <div style={{textAlign:isAr?"left":"right",marginBottom:18,marginTop:-4}}>
-              <button type="button" onClick={()=>go("forgot")} style={{
-                background:"none",border:"none",fontSize:12.5,color:c.acc,
-                cursor:"pointer",padding:0,fontFamily:"inherit",transition:"opacity .15s",
-              }}
-              onMouseEnter={e=>e.currentTarget.style.opacity=".7"}
-              onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-                {isAr?"نسيت كلمة المرور؟":"Forgot password?"}
-              </button>
-            </div>
-          )}
-
-          {/* Error */}
-          {err&&(
-            <div role="alert" style={{
-              background:isDark?"rgba(239,68,68,.08)":"rgba(239,68,68,.06)",
-              border:"1px solid rgba(239,68,68,.2)",
-              borderRadius:9,padding:"11px 14px",marginBottom:14,
-              fontSize:13,color:"#f87171",display:"flex",gap:8,alignItems:"center",
-              animation:"slideDown .25s ease",
-            }}>⚠️ {err}</div>
-          )}
-
-          {/* Success */}
-          {ok&&(
-            <div role="status" style={{
-              background:isDark?"rgba(26,86,219,.08)":"rgba(26,86,219,.05)",
-              border:"1px solid rgba(26,86,219,.2)",
-              borderRadius:9,padding:"11px 14px",marginBottom:14,
-              fontSize:13,color:isDark?"#93c5fd":"#1a56db",lineHeight:1.6,
-              animation:"slideDown .25s ease",
-            }}>{ok}</div>
-          )}
-
-          {/* Submit */}
-          {!sent&&(
-            <button type="submit" disabled={busy} style={{
-              width:"100%",padding:"13px 0",marginBottom:16,
-              background:busy?"rgba(26,86,219,.4)":c.accG,
-              border:"none",borderRadius:10,
-              fontSize:14.5,fontWeight:700,color:"#fff",
-              cursor:busy?"wait":"pointer",
-              boxShadow:busy?"none":"0 6px 24px rgba(26,86,219,.3)",
-              transition:"all .25s",display:"flex",alignItems:"center",
-              justifyContent:"center",gap:8,fontFamily:"inherit",
-              opacity:busy?.7:1,
-            }}
-            onMouseEnter={e=>{if(!busy){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 32px rgba(26,86,219,.4)";}}}
-            onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=busy?"none":"0 6px 24px rgba(26,86,219,.3)";}}>
-              {loading
-                ?<div style={{width:17,height:17,border:"2.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
-                :view==="login"  ?(isAr?"تسجيل الدخول ←":"Sign In →")
-                :view==="signup" ?(isAr?"إنشاء الحساب ←":"Create Account →")
-                :                 (isAr?"إرسال الرابط ←":"Send Reset Link →")
-              }
-            </button>
-          )}
-          {sent&&(
-            <button type="button" onClick={()=>{setSent(false);setOk("");}} style={{
-              width:"100%",padding:"12px 0",marginBottom:16,
-              background:isDark?"rgba(26,86,219,.08)":"rgba(26,86,219,.06)",
-              border:"1px solid rgba(26,86,219,.2)",
-              borderRadius:10,fontSize:14,fontWeight:500,color:c.acc,
-              cursor:"pointer",fontFamily:"inherit",transition:"background .15s",
-            }}
-            onMouseEnter={e=>e.currentTarget.style.background=isDark?"rgba(26,86,219,.15)":"rgba(26,86,219,.1)"}
-            onMouseLeave={e=>e.currentTarget.style.background=isDark?"rgba(26,86,219,.08)":"rgba(26,86,219,.06)"}>
-              {isAr?"إعادة إرسال":"Resend link"}
-            </button>
-          )}
-        </form>
-
-        {/* Social — BELOW form */}
-        {view!=="forgot"&&(
-          <>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-              <div style={{flex:1,height:1,background:c.border}}/>
-              <span style={{fontSize:12,color:c.muted}}>
-                {isAr?"أو الدخول بـ":"or sign in with"}
-              </span>
-              <div style={{flex:1,height:1,background:c.border}}/>
+              <h1 style={{fontSize:19,fontWeight:700,color:t.text,letterSpacing:"-.02em",margin:0,marginBottom:4}}>
+                {view==="signup"
+                  ?(isAr?"إنشاء حساب جديد":"Create your account")
+                  :(isAr?"أهلاً بعودتك 👋":"Welcome back")}
+              </h1>
+              <p style={{fontSize:13,color:t.textSub,margin:0}}>
+                {view==="signup"
+                  ?(isAr?"مجاني تماماً — لا بطاقة بنكية مطلوبة":"Completely free — no credit card required")
+                  :(isAr?"سجّل دخول للمتابعة من حيث توقفت":"Sign in to continue where you left off")}
+              </p>
             </div>
 
-            <div style={{display:"flex",gap:10}}>
-              {/* Google */}
-              {[
-                {
-                  key:"google",
-                  icon:<svg width="18" height="18" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>,
-                  label:"Google",
-                  fn:signInGoogle,
-                },
-                {
-                  key:"microsoft",
-                  icon:<svg width="18" height="18" viewBox="0 0 24 24">
-                    <rect x="1"  y="1"  width="10.5" height="10.5" fill="#f25022"/>
-                    <rect x="12.5" y="1"  width="10.5" height="10.5" fill="#7fba00"/>
-                    <rect x="1"  y="12.5" width="10.5" height="10.5" fill="#00a4ef"/>
-                    <rect x="12.5" y="12.5" width="10.5" height="10.5" fill="#ffb900"/>
-                  </svg>,
-                  label:"Microsoft",
-                  fn:signInMicrosoft,
-                },
-              ].map(({key,icon,label,fn})=>(
-                <button key={key} type="button" disabled={busy}
-                  onClick={()=>withSocial(key,fn)}
-                  style={{
-                    flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-                    padding:"11px 0",
-                    background:c.subBtn,
-                    border:`1px solid ${c.border}`,
-                    borderRadius:10,fontSize:13.5,fontWeight:500,color:c.text,
-                    cursor:busy?"wait":"pointer",transition:"all .2s",fontFamily:"inherit",
-                    opacity:busy?.6:1,
+            {/* Form */}
+            <form onSubmit={handleSubmit} noValidate>
+              {view==="signup" && (
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:0}}>
+                  <FloatInput id="fname" label={isAr?"الاسم الأول":"First name"}
+                    value={fname} onChange={v=>{setFname(v);touch("fname");}}
+                    autoComplete="given-name" required dark={dark} isRtl={isAr}
+                    error={fieldErr.fname} valid={fnameValid&&touched.fname}/>
+                  <FloatInput id="lname" label={isAr?"اسم العائلة":"Last name"}
+                    value={lname} onChange={v=>{setLname(v);touch("lname");}}
+                    autoComplete="family-name" required dark={dark} isRtl={isAr}
+                    error={fieldErr.lname} valid={lnameValid&&touched.lname}/>
+                </div>
+              )}
+
+              <FloatInput id="email" label={isAr?"البريد الإلكتروني":"Email address"}
+                type="email" value={email} onChange={v=>{setEmail(v);touch("email");}}
+                autoComplete="email" required dark={dark} isRtl={isAr}
+                error={fieldErr.email} valid={emailValid&&touched.email}/>
+
+              <FloatInput id="pass" label={isAr?"كلمة المرور":"Password"}
+                type={showP?"text":"password"} value={pass}
+                onChange={v=>{setPass(v);touch("pass");}}
+                autoComplete={view==="login"?"current-password":"new-password"}
+                required dark={dark} isRtl={isAr}
+                error={fieldErr.pass} valid={passValid&&touched.pass}
+                rightEl={eyeBtn(showP,()=>setShowP(v=>!v))}
+                hint={capsLock&&!showP?(isAr?"⚠️ Caps Lock مفعّل":"⚠️ Caps Lock is on"):undefined}/>
+
+              {view==="signup" && (
+                <>
+                  <PwStrength pass={pass} dark={dark} isAr={isAr}/>
+                  <FloatInput id="pass2" label={isAr?"تأكيد كلمة المرور":"Confirm password"}
+                    type={showP2?"text":"password"} value={pass2}
+                    onChange={v=>{setPass2(v);touch("pass2");}}
+                    autoComplete="new-password" required dark={dark} isRtl={isAr}
+                    error={fieldErr.pass2} valid={pass2Valid&&touched.pass2}
+                    rightEl={eyeBtn(showP2,()=>setShowP2(v=>!v))}/>
+                </>
+              )}
+
+              {/* Forgot link */}
+              {view==="login" && (
+                <div style={{textAlign:isAr?"left":"right",marginBottom:16,marginTop:-8}}>
+                  <button type="button" onClick={()=>go("forgot")} style={{
+                    background:"none",border:"none",fontSize:12.5,
+                    color:t.acc,cursor:"pointer",padding:0,
+                    fontFamily:"inherit",transition:"opacity .15s",
                   }}
-                  onMouseEnter={e=>{if(!busy){e.currentTarget.style.background=isDark?"rgba(255,255,255,.07)":"rgba(26,86,219,.06)";e.currentTarget.style.borderColor=isDark?"rgba(255,255,255,.15)":"rgba(26,86,219,.2)";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow=`0 4px 16px rgba(26,86,219,.1)`;}}}
-                  onMouseLeave={e=>{e.currentTarget.style.background=c.subBtn;e.currentTarget.style.borderColor=c.border;e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
-                  {social===key
-                    ?<div style={{width:16,height:16,border:`2px solid ${c.muted}`,borderTopColor:c.acc,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
-                    :icon}
-                  {label}
-                </button>
-              ))}
+                  onMouseEnter={e=>e.currentTarget.style.opacity=".7"}
+                  onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+                    {isAr?"نسيت كلمة المرور؟":"Forgot password?"}
+                  </button>
+                </div>
+              )}
+
+              {err&&<AlertBox msg={err} dark={dark}/>}
+
+              {/* Submit */}
+              <button type="submit" disabled={busy} style={{
+                width:"100%",padding:"13px 0",marginBottom:16,
+                background:busy?"rgba(26,86,219,.4)":t.accBtn,
+                border:"none",borderRadius:10,
+                fontSize:14.5,fontWeight:700,color:"#fff",
+                cursor:busy?"wait":"pointer",
+                boxShadow:busy?"none":"0 6px 24px rgba(26,86,219,.28)",
+                transition:"all .25s cubic-bezier(.4,0,.2,1)",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                fontFamily:"inherit", letterSpacing:".01em",
+              }}
+              onMouseEnter={e=>{if(!busy){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 32px rgba(26,86,219,.38)";}}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=busy?"none":"0 6px 24px rgba(26,86,219,.28)";}}>
+                {loading
+                  ? <div style={{width:17,height:17,border:"2.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+                  : view==="login"
+                    ? (isAr?"تسجيل الدخول →":"Sign In →")
+                    : (isAr?"إنشاء الحساب →":"Create Account →")}
+              </button>
+            </form>
+
+            {/* Divider */}
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+              <div style={{flex:1,height:1,background:t.divider}}/>
+              <span style={{fontSize:12,color:t.muted,whiteSpace:"nowrap"}}>
+                {isAr?"أو المتابعة بـ":"or continue with"}
+              </span>
+              <div style={{flex:1,height:1,background:t.divider}}/>
+            </div>
+
+            {/* Social buttons */}
+            <div style={{display:"flex",gap:10,marginBottom:0}}>
+              <SocialBtn
+                icon={<svg width="17" height="17" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>}
+                label="Google"
+                onClick={()=>withSocial("google",signInGoogle)}
+                loading={social==="google"} disabled={busy} dark={dark}/>
+              <SocialBtn
+                icon={<svg width="17" height="17" viewBox="0 0 24 24">
+                  <rect x="1" y="1" width="10" height="10" fill="#f25022"/>
+                  <rect x="13" y="1" width="10" height="10" fill="#7fba00"/>
+                  <rect x="1" y="13" width="10" height="10" fill="#00a4ef"/>
+                  <rect x="13" y="13" width="10" height="10" fill="#ffb900"/>
+                </svg>}
+                label="Microsoft"
+                onClick={()=>withSocial("microsoft",signInMicrosoft)}
+                loading={social==="microsoft"} disabled={busy} dark={dark}/>
             </div>
           </>
         )}
 
-        <div style={{textAlign:"center",marginTop:18,fontSize:12,color:c.muted}}>
-          {isAr?"للدعم:":"Support:"}{" "}
-          <a href={`mailto:${SUPPORT_EMAIL}`} style={{color:c.acc,textDecoration:"none"}}>{SUPPORT_EMAIL}</a>
+        {/* Footer */}
+        <div style={{textAlign:"center",marginTop:20,fontSize:12,color:t.muted}}>
+          {isAr?"للدعم التقني:":"Need help?"}{" "}
+          <a href={`mailto:${SUPPORT_EMAIL}`} style={{
+            color:t.acc,textDecoration:"none",fontWeight:500,
+            transition:"opacity .15s",
+          }}
+          onMouseEnter={e=>e.currentTarget.style.opacity=".7"}
+          onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+            {SUPPORT_EMAIL}
+          </a>
         </div>
       </div>
 
+      {/* Global styles */}
       <style>{`
-        @keyframes spin      { to{transform:rotate(360deg)} }
-        @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
-        @keyframes logoFloat { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-6px) rotate(3deg)} }
-        input::placeholder   { color:${isDark?"rgba(255,255,255,.2)":"rgba(0,0,0,.25)"}!important }
-        input:-webkit-autofill{
-          -webkit-box-shadow:0 0 0 100px ${isDark?"#0d1829":"#f0f4ff"} inset!important;
-          -webkit-text-fill-color:${c.text}!important;
+        @keyframes spin      { to { transform: rotate(360deg) } }
+        @keyframes slideDown { from { opacity:0; transform:translateY(-6px) } to { opacity:1; transform:none } }
+        @keyframes popIn     { from { opacity:0; transform:scale(.6) } to { opacity:1; transform:scale(1) } }
+        @keyframes logoAnim  { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-5px) rotate(4deg)} }
+        @keyframes orbFloat0 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(40px,30px) scale(1.05)} }
+        @keyframes orbFloat1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-35px,20px) scale(.95)} }
+        @keyframes orbFloat2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(25px,-30px) scale(1.03)} }
+        input::placeholder   { color:${dark?"rgba(255,255,255,.18)":"rgba(0,0,0,.22)"}!important }
+        input:-webkit-autofill {
+          -webkit-box-shadow: 0 0 0 100px ${dark?"#0d1829":"#f0f4ff"} inset !important;
+          -webkit-text-fill-color: ${dark?"#f0f6ff":"#0f172a"} !important;
         }
-        * { box-sizing:border-box }
-        button:focus-visible,input:focus-visible{ outline:2px solid ${c.acc};outline-offset:2px }
+        * { box-sizing:border-box; margin:0; padding:0 }
+        button:focus-visible, input:focus-visible { outline:2px solid ${t.acc}; outline-offset:2px }
+        h1,h2,p { margin:0 }
       `}</style>
     </div>
   );
+}
+
+// ── Small helpers ──────────────────────────────────────────────────
+function AlertBox({msg,dark}){
+  return(
+    <div role="alert" style={{
+      background:dark?"rgba(239,68,68,.08)":"rgba(239,68,68,.05)",
+      border:"1px solid rgba(239,68,68,.2)",
+      borderRadius:9,padding:"11px 14px",marginBottom:14,
+      fontSize:13,color:dark?"#f87171":"#dc2626",
+      display:"flex",gap:8,alignItems:"flex-start",
+      animation:"slideDown .2s ease",
+    }}>
+      <span style={{flexShrink:0,marginTop:1}}>⚠️</span>
+      <span>{msg}</span>
+    </div>
+  );
+}
+function Spinner({dark}){
+  return <div style={{width:17,height:17,border:`2.5px solid rgba(255,255,255,.3)`,borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>;
 }
