@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   signInGoogle, signInMicrosoft, signInEmail, signUpEmail, resetPassword,
-  getUserProfile, createUserProfile, SUPPORT_EMAIL,
+  getUserProfile, createUserProfile, SUPPORT_EMAIL, setRememberMe,
 } from "./firebase.js";
 
 // ── Error messages ─────────────────────────────────────────────────
@@ -289,6 +289,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [lname,   setLname]  = useState("");
   const [showP,   setShowP]  = useState(false);
   const [showP2,  setShowP2] = useState(false);
+  const [remember,setRemember]= useState(true);
   const [loading, setLoading]= useState(false);
   const [social,  setSocial] = useState(""); // "google"|"microsoft"
   const [err,     setErr]    = useState("");
@@ -354,6 +355,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     setErr(""); setLoading(true);
     try {
       if (view==="login") {
+        await setRememberMe(remember).catch(()=>{});
         const c=await signInEmail(email.trim(),pass); onAuth(c.user,false);
       } else {
         const c=await signUpEmail(email.trim(),pass);
@@ -658,6 +660,26 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     error={fieldErr.pass2} valid={pass2Valid&&touched.pass2}
                     rightEl={eyeBtn(showP2,()=>setShowP2(v=>!v))}/>
                 </>
+              )}
+
+              {/* Remember me */}
+              {view==="login" && (
+                <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,cursor:"pointer",userSelect:"none"}}>
+                  <div onClick={()=>setRemember(v=>!v)} style={{
+                    width:16,height:16,borderRadius:4,flexShrink:0,
+                    background:remember?"linear-gradient(135deg,#1a56db,#0891b2)":"transparent",
+                    border:`1.5px solid ${remember?t.acc:t.border}`,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    transition:"all .15s",cursor:"pointer",
+                  }}>
+                    {remember&&<svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                      <polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>}
+                  </div>
+                  <span style={{fontSize:13,color:t.textSub}}>
+                    {isAr?"تذكرني على هذا الجهاز":"Remember me on this device"}
+                  </span>
+                </label>
               )}
 
               {/* Forgot link */}
