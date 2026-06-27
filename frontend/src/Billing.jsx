@@ -113,8 +113,8 @@ export const B2B_PLANS = {
     priceUSD: { monthly: null, yearly: null, startingAt: 499 }, // Starting at $499/mo
     stripePriceId: { monthly: "", yearly: "" }, // Always custom/contact-sales
     color:"#10b981", seats:-1,
-    features:   ["Unlimited employees","Everything in Growth","Gemini AI clinical narrative","SSO/SAML","White-label","API access","Dedicated success manager"],
-    featuresAr: ["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالـ Gemini AI","SSO/SAML","White-label","وصول API","مدير نجاح مخصص"],
+    features:   ["Unlimited employees","Everything in Growth","AI clinical narrative","SSO/SAML","White-label","API access","Dedicated success manager"],
+    featuresAr: ["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالذكاء الاصطناعي","SSO/SAML","White-label","وصول API","مدير نجاح مخصص"],
   },
 };
 
@@ -212,8 +212,8 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       ar: ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي", "تقرير PDF", "دعم أولوية", "معايرة"],
     },
     elite_old: {
-      en: ["Everything in Growth", "Gemini AI clinical narrative", "Predictive burnout AI", "Unlimited session history", "API access", "Dedicated support"],
-      ar: ["كل مزايا جروث", "تحليل سردي بالـ Gemini AI", "AI تنبؤي للإرهاق", "سجل جلسات غير محدود", "وصول API", "دعم مخصص"],
+      en: ["Everything in Growth", "AI clinical narrative", "Predictive burnout AI", "Unlimited session history", "API access", "Dedicated support"],
+      ar: ["كل مزايا جروث", "تحليل سردي بالذكاء الاصطناعي", "AI تنبؤي للإرهاق", "سجل جلسات غير محدود", "وصول API", "دعم مخصص"],
     },
   };
 

@@ -33,7 +33,6 @@ self.addEventListener("fetch", e => {
   if (
     url.hostname.includes("firebase") ||
     url.hostname.includes("googleapis.com") ||
-    url.hostname.includes("groq.com") ||
     url.hostname.includes("stripe.com") ||
     url.hostname.includes("paymob.com")
   ) return;

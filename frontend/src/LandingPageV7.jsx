@@ -818,7 +818,7 @@ function Features({ lang }) {
       desc:"تحليلات فورية لصحة الفريق والمخاطر المهنية",
       detail:"لوحة قيادة متكاملة تعرض مؤشرات الأداء، تنبيهات المخاطر، وتقارير قابلة للتصدير بصيغ PDF وExcel." },
     { icon:"🤖", title:"مدرب AI شخصي",
-      desc:"توصيات مخصصة بتقنية Gemini AI",
+      desc:"توصيات مخصصة بالذكاء الاصطناعي",
       detail:"محادثة AI تفاعلية تحلل بيانات الجلسة وتقدم توصيات علاجية مخصصة لكل موظف." },
     { icon:"🔗", title:"تكاملات المؤسسات",
       desc:"Slack · Teams · Jira · SAP HR · Webhooks",
@@ -834,7 +834,7 @@ function Features({ lang }) {
       desc:"Real-time team health analytics and risk monitoring",
       detail:"Integrated command center showing KPIs, risk alerts, exportable reports in PDF/Excel, and department-level breakdowns." },
     { icon:"🤖", title:"Personal AI Coach",
-      desc:"Personalized recommendations powered by Gemini AI",
+      desc:"Personalized AI-powered recommendations",
       detail:"Interactive AI chat analyzes session data and provides tailored therapeutic recommendations for each employee." },
     { icon:"🔗", title:"Enterprise Integrations",
       desc:"Slack · Teams · Jira · SAP HR · Webhooks",
@@ -1092,8 +1092,8 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
       priceUSD:{ monthly:null, yearly:null, startingAt:499 }, priceEGP:{ monthly:null, yearly:null },
       isEnterprise:true, color:C.green,
       features: ar
-        ? ["موظفون غير محدودون","Gemini AI narrative","SAML SSO / Azure AD","White-label","SLA مخصص","مدير نجاح مخصص"]
-        : ["Unlimited employees","Gemini AI narrative","SAML SSO / Azure AD","White-label","Custom SLA","Dedicated success manager"],
+        ? ["موظفون غير محدودون","AI clinical narrative","SAML SSO / Azure AD","White-label","SLA مخصص","مدير نجاح مخصص"]
+        : ["Unlimited employees","AI clinical narrative","SAML SSO / Azure AD","White-label","Custom SLA","Dedicated success manager"],
     },
   ];
 
