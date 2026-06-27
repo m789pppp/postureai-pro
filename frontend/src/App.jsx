@@ -2244,7 +2244,19 @@ export default function App(){
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
 
-  const T_=tier?(TIERS[normalizeTier(tier)]||null):null;
+  // ── Effective tier — single source of truth ──────────────────
+  // Rules:
+  //   1. tier state (set after billing) takes priority if set
+  //   2. is_trial users experience trial_tier (e.g. professional) not their stored tier (standard)
+  //   3. Fallback to profile.tier then "standard"
+  // This means feature gating throughout the app should use `effectiveTier`
+  // instead of the raw `tier` state (which starts null on load).
+  const effectiveTier = (() => {
+    if (tier && tier !== "standard") return normalizeTier(tier);
+    if (profile?.is_trial && profile?.trial_tier) return normalizeTier(profile.trial_tier);
+    return normalizeTier(tier || profile?.tier || "standard");
+  })();
+  const T_=TIERS[effectiveTier]||TIERS["standard"];
   // Normalize T_ so live dashboard always has .name and .color
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
   const MC={
@@ -2288,7 +2300,7 @@ export default function App(){
         }
         setUser(u);
         setProfile(p);
-        if (p?.tier && p.tier !== "standard") setTier(p.tier);
+        if (p?.tier) setTier(normalizeTier(p.tier));
         if (p?.company_id) setCompanyId(p.company_id);
         getUserSessions(u.uid).then(setUserSessions).catch(() => {});
         setPage("home");
@@ -2302,13 +2314,9 @@ export default function App(){
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
-      // ── Elite promo access ─────────────────────────────────
-      const ELITE_FREE = [
-        "judyayman36@gmail.com",
-        "m789pppp@gmail.com",
-        "khaled.elgeneidy@tkh.edu.eg",
-        "mennatullah.gamal@tkh.edu.eg",
-      ];
+      // NOTE: Elite tier elevation for specific emails/domains is handled
+      // SERVER-SIDE only in backend/auth/middleware.py (ELITE_DOMAINS + ELITE_EMAILS).
+      // Do NOT hardcode email lists here — client JS is visible to anyone in DevTools.
       try {
         setUser(u);
         if(u){
@@ -2327,13 +2335,8 @@ export default function App(){
             try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked) setProfile(checked); }).catch(()=>{}); } catch{}
             try { checkAndSendNurtureEmails(u.uid, p, API).catch(()=>{}); } catch{}
           }
-
-          // Override tier to elite for promo emails
-          if(u.email && ELITE_FREE.includes(u.email.toLowerCase().trim())){
-            if(p) p = {...p, tier:"elite"};
-            // Persist elite tier to Firestore (fire-and-forget)
-            updateUserTier(u.uid,"elite",12).catch(()=>{});
-          }
+          // Note: server-side middleware auto-elevates eligible emails to elite on every API
+          // call via _should_elevate_to_elite() — no client-side overrides needed here.
 
           if(p){
             setProfile(p);
@@ -2761,7 +2764,7 @@ export default function App(){
     } else if(user && dur >= 5){ // Save if session lasted at least 5 seconds
       addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
       saveSession(user.uid,{
-        session_id:sessionId, mode, tier, avg_score:avg,
+        session_id:sessionId, mode, tier:effectiveTier, avg_score:avg,
         good_pct:gPct, duration_s:dur, duration_sec:dur,
         alerts_count:acRef.current?.total||0,
         score_history:hist.slice(-60),        // more history for better sparkline

@@ -39,11 +39,11 @@ async function getGroqKey() {
   return _keyPromise;
 }
 
-async function getAuthToken() {
+async function getAuthToken(forceRefresh = false) {
   try {
     const { getAuth } = await import("firebase/auth");
     const u = getAuth().currentUser;
-    return u ? await u.getIdToken() : "";
+    return u ? await u.getIdToken(forceRefresh) : "";
   } catch { return ""; }
 }
 
@@ -116,28 +116,36 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
     ? messagesOrPrompt
     : [{ role: "user", content: String(messagesOrPrompt) }];
 
-  // 1. Backend proxy
+  // 1. Backend proxy (with 401 auto-retry via force token refresh)
   let backendReachable = false;
-  try {
-    const tok = await getAuthToken();
-    const res = await fetch(`${API_BASE}/coach/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
-      body: JSON.stringify({ messages, context: { system_prompt: systemPrompt }, lang, max_tokens: maxTokens }),
-      signal: AbortSignal.timeout(22000),
-    });
-    backendReachable = true;
-    if (res.ok) return (await res.json()).text || "";
-    const err = await res.json().catch(() => ({}));
-    const errMsg = err.error || err.message || "";
-    if (errMsg.includes("limit_reached") || errMsg.includes("coach_limit"))
-      throw new Error(err.message || "coach_limit_reached");
-    if (_isRateLimit(res.status, errMsg)) throw new Error("AI_BUSY");
-    if (res.status < 500) throw new Error(errMsg || `AI error ${res.status}`);
-    console.warn(`[AI] backend ${res.status} → Groq fallback`);
-  } catch (e) {
-    if (backendReachable) throw e;
-    console.warn("[AI] backend unreachable →", e.message?.slice(0, 60));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const tok = await getAuthToken(attempt > 0); // force refresh on retry
+      const res = await fetch(`${API_BASE}/coach/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+        body: JSON.stringify({ messages, context: { system_prompt: systemPrompt }, lang, max_tokens: maxTokens }),
+        signal: AbortSignal.timeout(22000),
+      });
+      backendReachable = true;
+      if (res.ok) return (await res.json()).text || "";
+
+      // 401: expired token — retry once with force refresh
+      if (res.status === 401 && attempt === 0) continue;
+
+      const err = await res.json().catch(() => ({}));
+      const errMsg = err.error || err.message || "";
+      if (errMsg.includes("limit_reached") || errMsg.includes("coach_limit"))
+        throw new Error(err.message || "coach_limit_reached");
+      if (_isRateLimit(res.status, errMsg)) throw new Error("AI_BUSY");
+      if (res.status < 500) throw new Error(errMsg || `AI error ${res.status}`);
+      console.warn(`[AI] backend ${res.status} → Groq fallback`);
+      break;
+    } catch (e) {
+      if (backendReachable) throw e;
+      console.warn("[AI] backend unreachable →", e.message?.slice(0, 60));
+      break;
+    }
   }
 
   // 2. Groq fallback
