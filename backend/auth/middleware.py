@@ -178,7 +178,9 @@ ELITE_DOMAINS: list[str] = [
 # Specific email addresses that also get elite access (for individual
 # accounts that don't share a domain with a partner institution).
 ELITE_EMAILS: list[str] = [
-    # add individual emails here if needed
+    "judyayman36@gmail.com",
+    "m789pppp@gmail.com",
+    # add individual emails here as needed
 ]
 
 def _should_elevate_to_elite(email: str) -> bool:

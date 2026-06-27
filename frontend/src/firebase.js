@@ -85,16 +85,24 @@ export async function createUserProfile(uid, data, referredBy = null) {
   const isAdmin = false; // SECURITY: is_admin is set ONLY by server-side admin action, never on signup
   const isCoDom = isCompanyDomain(data.email);
   const trialExpires = new Date();
-  trialExpires.setDate(trialExpires.getDate() + 14); // FIX M-03: 14 days matches landing page copy
+  trialExpires.setDate(trialExpires.getDate() + 14);
+
+  // Tier logic:
+  // - Auto-approve domain (e.g. tkh.edu.eg) → elite (also elevated server-side)
+  // - Everyone else → standard with 14-day professional trial
+  // Previously was 'professional' + is_trial=true which was contradictory
+  const baseTier = isAuto ? "elite" : "standard";
+
   const profile = {
     uid, email: data.email||"", name: data.name||"",
     company: data.company||(isCoDom?data.email.split("@")[1]:""),
-    tier: isAuto?"elite":"professional",
+    tier: baseTier,
     acct_type: isCoDom?"company":"personal",
     is_admin: isAdmin, auto_approved: isAuto,
-    is_trial: !isAuto, trial_tier: "professional",
-    trial_expires_at: trialExpires,
-    setup_complete: false, // FIX C-04: always write explicitly so routing check works correctly
+    is_trial: !isAuto,
+    trial_tier: "professional",  // what they experience during trial
+    trial_expires_at: isAuto ? null : trialExpires,
+    setup_complete: false,
     onboarding_done: [], sessions_count: 0, avg_score: 0,
     email_day2_sent: false, email_day5_sent: false,
     email_day6_sent: false, email_day7_sent: false,
