@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession } from "./firebase.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
+import { tierAtLeast } from "./lib/tierQuality.js";
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -18,10 +19,11 @@ function role(profile, isAdmin, isHRAdmin) {
 }
 
 // ─── Tier helpers ──────────────────────────────────────────────────
-const PRO_TIERS  = ["professional","elite","business"];
-const ELITE_TIERS= ["elite","business"];
-function isPro(tier)   { return PRO_TIERS.includes(tier);   }
-function isElite(tier) { return ELITE_TIERS.includes(tier); }
+// Delegates to the canonical feature-tier ladder (frontend/src/lib/tierQuality.js)
+// so B2B plans (b2b_growth/b2b_enterprise) correctly count as Pro/Elite here too —
+// previously these only matched literal "professional"/"elite"/"business" strings.
+function isPro(tier)   { return tierAtLeast(tier, "professional"); }
+function isElite(tier) { return tierAtLeast(tier, "elite"); }
 
 // ─── Avatar (photo or initial + color) ────────────────────────────
 function Avatar({ name, photo, size = 36, style = {} }) {
@@ -1887,8 +1889,7 @@ export default function HomePage({
   const handleTrend = useCallback(()=>setShowTrendChart?.(true),[setShowTrendChart]);
 
   // ── Tools (for sidebar + mobile nav) ─────────────────────────────
-  const isPro_   = ["professional","elite","pro","premium","business"].includes(tier);
-  const isElite_ = ["elite","premium"].includes(tier);
+  const isPro_   = tierAtLeast(tier, "professional");
   const tools = [
     { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم",
       onClick:()=>setShowGamification?.(true) },

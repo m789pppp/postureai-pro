@@ -29,11 +29,12 @@ import { GamificationPanel } from "./Gamification.jsx";
 import { BillingModal, PLANS } from "./Billing.jsx";
 import { BillingDashboard } from "./BillingDashboard.jsx";
 import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, apiFetch } from "./services/api.js";
-import { geminiAnalysis as _groqAnalysis } from "./gemini.js";
+import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother } from "./features/analysis/postureEngine.js";
 import { getT } from "./lib/i18n.js";
+import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
 // ── Phase 12: Enterprise Scale ────────────────────────────────────
 import { APIMarketplace }      from "./APIMarketplace.jsx";
@@ -251,7 +252,7 @@ const LM = {NOSE:0,L_EYE:2,R_EYE:5,L_EAR:7,R_EAR:8,L_SHOULDER:11,R_SHOULDER:12,L
 // ── API wrappers (use service layer with auth) ────────────────────
 async function askGemini(prompt){
   try{
-    const text = await _groqAnalysis(prompt, { maxTokens: 600 });
+    const text = await _aiAnalysis(prompt, { maxTokens: 600 });
     return text || null;
   }catch{return null;}
 }
@@ -345,12 +346,13 @@ function _newInsightsTracker(){
   };
 }
 
-function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTiltSigned, shReliable, isAr){
+function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTiltSigned, shReliable, isAr, flags={creep:true,asymmetry:true,breathing:true}){
   if(!tr.sessionStart) tr.sessionStart = now;
   const insights = [];
 
   // ── #4 Micro-posture creep: slow drift vs the session's first ~2 min ──
-  if(neckReliable && Number.isFinite(neckLeanVal)){
+  // Gated to Professional+ (tier quality) — see frontend/src/lib/tierQuality.js
+  if(flags.creep && neckReliable && Number.isFinite(neckLeanVal)){
     const b = tr.neck;
     const minuteIdx = Math.floor((now - tr.sessionStart)/60000);
     if(minuteIdx !== b.curMinute){
@@ -374,7 +376,8 @@ function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTil
   }
 
   // ── #5 Chronic asymmetry: consistent SAME-direction shoulder tilt over the session ──
-  if(shReliable && Number.isFinite(shTiltSigned)){
+  // Gated to Professional+ (tier quality)
+  if(flags.asymmetry && shReliable && Number.isFinite(shTiltSigned)){
     const b = tr.shAsym;
     const minuteIdx = Math.floor((now - tr.sessionStart)/60000);
     if(minuteIdx !== b.curMinute){
@@ -403,7 +406,8 @@ function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTil
   // but noisy technique (typing/fidgeting easily swamps it). Kept
   // intentionally conservative: long window, plausible-range filter,
   // long cooldown, and the surfaced text says "experimental" outright.
-  if(Number.isFinite(midShY)){
+  // Gated to Elite-equivalent only (tier quality).
+  if(flags.breathing && Number.isFinite(midShY)){
     const br = tr.breath;
     if(now - br.lastPush > 150){ // downsample to ~6-7 samples/sec
       br.lastPush = now;
@@ -2005,6 +2009,11 @@ export default function App(){
     const h = window.location.hash;
     return h ? hashToPage(h) : "landing";
   });
+  // Firebase action URLs (password reset / email verify from email links)
+  const _fbp = new URLSearchParams(window.location.search);
+  const [fbMode]    = useState(_fbp.get("mode")    || null);
+  const [fbOobCode] = useState(_fbp.get("oobCode") || null);
+  const [showEmailVerify, setShowEmailVerify] = useState(false);
   const setPage = (p) => {
     if (p === "live" || p === "setup") {
       window.history.replaceState({}, "", "#" + p);
@@ -2031,7 +2040,6 @@ export default function App(){
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
   const[mpStatus,setMpStatus]=useState("loading");
-  const[groqStatus,setGroqStatus]=useState("unknown"); // "unknown"|"ok"|"no_key"|"error"
   const[analysis,setAnalysis]=useState(null);
   const[history,setHistory]=useState([]);
   const[sessionTime,setSessionTime]=useState(0);
@@ -2184,20 +2192,6 @@ export default function App(){
   },[]);
   // Sentry already init in main.jsx; just handle SSO redirect
   useEffect(()=>{ handleSSORedirect().catch(()=>{}); },[]);
-
-  // ── Groq AI connectivity test ─────────────────────────────────
-  useEffect(()=>{
-    const key = import.meta.env.VITE_GROQ_API_KEY || "";
-    if(!key){ setGroqStatus("no_key"); return; }
-    fetch("https://api.groq.com/openai/v1/chat/completions",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${key}`},
-      body:JSON.stringify({model:"llama-3.1-8b-instant",messages:[{role:"user",content:"hi"}],max_tokens:1}),
-      signal:AbortSignal.timeout(10000),
-    })
-    .then(r=>{ setGroqStatus(r.ok||r.status===400?"ok":"error"); })
-    .catch(()=>{ setGroqStatus("error"); });
-  },[]);
   // Handle payment redirect from PayMob/Stripe
   const [paymentResult, setPaymentResult] = useState(null); // null | "success" | "cancelled"
   useEffect(()=>{
@@ -2209,7 +2203,17 @@ export default function App(){
       // Refresh profile so tier is current
       if(res==="success"&&user) getUserProfile(user.uid).then(setProfile).catch(()=>{});
     }
-    if(p.get("payment")==="success"){ toast(isAr?"✅ تم تفعيل خطتك!":"✅ Your plan is now active!","success"); }
+    if(p.get("payment")==="success"){
+      toast(isAr?"✅ تم تفعيل خطتك!":"✅ Your plan is now active!","success");
+      // Refresh profile — backend webhook may have updated tier already
+      if(user?.uid){
+        setTimeout(()=>{
+          getUserProfile(user.uid).then(p=>{
+            if(p){ setProfile(p); if(p.tier) setTier(normalizeTier(p.tier)); }
+          }).catch(()=>{});
+        }, 2000); // wait 2s for webhook to process
+      }
+    }
     if(p.get("payment")==="cancelled"){ toast(isAr?"تم إلغاء الدفع — لم يتم خصم أي مبلغ":"Payment cancelled — no charge made","info"); }
   },[]);
 
@@ -2314,9 +2318,9 @@ export default function App(){
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
-      // NOTE: Elite tier elevation for specific emails/domains is handled
-      // SERVER-SIDE only in backend/auth/middleware.py (ELITE_DOMAINS + ELITE_EMAILS).
-      // Do NOT hardcode email lists here — client JS is visible to anyone in DevTools.
+      // NOTE: Elite tier elevation is handled SERVER-SIDE only in
+      // backend/auth/middleware.py (ELITE_DOMAINS + ELITE_EMAILS).
+      // Do NOT add email lists here — client JS is visible in DevTools.
       try {
         setUser(u);
         if(u){
@@ -2478,7 +2482,8 @@ export default function App(){
       try{
         const det=mpRef.current.detectForVideo(vid,performance.now());
         if(det.landmarks?.length>0){
-          if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(0.4);
+          const quality = qualityFor(tier);
+          if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
           const result=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor);
@@ -2509,7 +2514,7 @@ export default function App(){
                 insightsRef.current, now, midShY,
                 neckMet?.value, neckMet?.reliable!==false,
                 shMet?.signed, shMet?.reliable!==false,
-                isAr
+                isAr, quality.sessionInsights
               );
               if(newInsights.length){
                 setSessionInsights(prev=>[
@@ -2566,16 +2571,23 @@ export default function App(){
     }
     // Backend call ONLY when actually needed — not a duplicate of local analysis:
     //  1) Fallback mode (local MediaPipe failed to load) → backend IS the analysis
-    //  2) Elite tier → snapshots for PDF report + Gemini AI insights
-    // Standard/Pro tiers with working local MediaPipe never touch the backend here.
-    const needsBackend = mpStatus==="fallback" || tier==="elite" || tier==="premium";
+    //  2) Elite-equivalent tier (elite/premium/b2b_enterprise) → snapshots for PDF + Gemini AI insights
+    // Standard/Basic/Professional tiers with working local MediaPipe never touch the backend here.
+    const eliteEquivalent = tierAtLeast(tier, "elite");
+    const needsBackend = mpStatus==="fallback" || eliteEquivalent;
     if(needsBackend && totalRef.current%45===0 && canvRef.current){
       const c=canvRef.current,v2=vidRef.current;
       if(v2&&v2.readyState>=2){c.width=v2.videoWidth;c.height=v2.videoHeight;c.getContext("2d").drawImage(v2,0,0);}
-      AnalysisAPI.analyze(c.toDataURL("image/jpeg",.88),mode,tier,lang,sessionId,null,calibData)
+      AnalysisAPI.analyze({
+        frame:        c.toDataURL("image/jpeg",.88),
+        mode,
+        lang,
+        session_id:   sessionId,
+        calibration:  calibData,
+      })
         .then(d=>{
-          // For Elite: send snapshot every ~12 frames for PDF
-          if((tier==="elite"||tier==="premium")&&totalRef.current%12===0&&d.overall>0){
+          // For Elite-equivalent: send snapshot every ~12 frames for PDF
+          if(eliteEquivalent&&totalRef.current%12===0&&d.overall>0){
             AnalysisAPI.addSnapshot(sessionId, c.toDataURL("image/jpeg",.6), d.overall||d.score, new Date().toLocaleTimeString())
               .catch(()=>{});
           }
@@ -2608,8 +2620,8 @@ export default function App(){
               if(now-lastAlRef.current>8000)setAlertMsg({text:`Score ${smoothed}/100 — ${grade(smoothed,t)}`,type:"good"});
             }
           }
-          // Always use Gemini from backend for Elite
-          if(d.claude_analysis&&tier==="elite")setAiInsight(d.claude_analysis);
+          // Always use Gemini from backend for Elite-equivalent tiers
+          if(d.claude_analysis&&eliteEquivalent)setAiInsight(d.claude_analysis);
         }).catch(()=>{});
     }
     rafRef.current=requestAnimationFrame(runLoop);
@@ -2634,7 +2646,7 @@ export default function App(){
       // Request notification permission on first session
       requestNotificationPermission();
       let sid="local_"+Date.now();
-      try{const d=await AnalysisAPI.startSession(mode,tier);sid=d.session_id||sid;}catch(e){}
+      try{const d=await AnalysisAPI.startSession({mode});sid=d.session_id||sid;}catch(e){}
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
       setAlertMsg({text:`${M_?.label} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
       if(user?.uid) completeOnboardingStep(user.uid,"first_session").catch(()=>{});
@@ -2999,6 +3011,43 @@ export default function App(){
     </ErrorBoundary>
   );
   if(page==="embed")return <EmbedWidget/>;
+
+  // ── Firebase action URL: password reset from email link ──────────
+  if(fbMode==="resetPassword" && fbOobCode) return(
+    <ErrorBoundary>
+      <ResetPasswordPage
+        oobCode={fbOobCode} darkMode={darkMode} lang={lang}
+        onDone={()=>{
+          // Clear URL params and go to auth
+          window.history.replaceState({},""," /");
+          window.location.href="/?mode=resetDone";
+        }}
+      />
+    </ErrorBoundary>
+  );
+
+  // ── Firebase action URL: email verification from email link ──────
+  if(fbMode==="verifyEmail" && fbOobCode) return(
+    <ErrorBoundary>
+      <EmailVerificationPage
+        oobCode={fbOobCode} darkMode={darkMode} lang={lang}
+        onVerified={()=>{ window.history.replaceState({},""," /"); setPage("home"); }}
+        onSkip={()=>{ window.history.replaceState({},""," /"); setPage("home"); }}
+      />
+    </ErrorBoundary>
+  );
+
+  // ── Email verification after signup ──────────────────────────────
+  if(showEmailVerify && user && !user.emailVerified) return(
+    <ErrorBoundary>
+      <EmailVerificationPage
+        user={user} darkMode={darkMode} lang={lang}
+        onVerified={()=>setShowEmailVerify(false)}
+        onSkip={()=>setShowEmailVerify(false)}
+      />
+    </ErrorBoundary>
+  );
+
   // ── Auth page ────────────────────────────────────────────────────
   if(page==="auth"&&!user) return(
     <ErrorBoundary>
@@ -3008,11 +3057,15 @@ export default function App(){
         initialView={new URLSearchParams(window.location.search).get("mode")==="signup" ? "signup" : "login"}
         onAuth={(u,isNew)=>{
           setUser(u);
-          getUserProfile(u.uid).then(p=>{
-            if(p){setProfile(p);if(p.tier&&p.tier!=="standard")setTier(normalizeTier(p.tier));if(p.company_id)setCompanyId(p.company_id);}
-            getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
-          }).catch(()=>{});
-          if(isNew) { setPage("setup"); return; }
+          if(isNew) {
+            // Send verification email for new signups (fire & forget)
+            import("./firebase.js").then(({sendVerificationEmail})=>{
+              sendVerificationEmail(u).catch(()=>{});
+            });
+            setShowEmailVerify(true);
+            setPage("setup");
+            return;
+          }
           setPage("home");
         }}
       />
@@ -3044,21 +3097,10 @@ export default function App(){
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
         onAuth={(u,isNew)=>{
+          // onAuthStateChanged handles profile — just route
           setUser(u);
-          getUserProfile(u.uid).then(p=>{
-            if(p){
-              setProfile(p);
-              if(p.tier)setTier(normalizeTier(p.tier));
-              if(p.company_id)setCompanyId(p.company_id);
-            }
-            getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
-          }).catch(()=>{});
           if(isNew){setPage("setup");return;}
-          // FIX 5: also check setup_complete for existing users interrupted mid-setup
-          getUserProfile(u.uid).then(p=>{
-            if(p&&!p.setup_complete) setPage("setup");
-            else setPage("home");
-          }).catch(()=>setPage("home"));
+          setPage("home");
         }}
       />
     </ErrorBoundary>
@@ -3240,7 +3282,31 @@ export default function App(){
           }catch(e){ console.warn("skip onboard:",e?.code); }
         }
       }}/>}
-      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={(plan)=>{setTier(normalizeTier(plan));setShowBilling(false);addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");}}/>}
+      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={async(plan)=>{
+        const newTier = normalizeTier(plan);
+        setTier(newTier);
+        setShowBilling(false);
+        addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");
+        // Persist tier to Firestore so it survives refresh
+        if(user?.uid){
+          try{
+            const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");
+            const{db:_db}=await import("./firebase.js");
+            await _u(_d(_db,"users",user.uid),{
+              tier: newTier,
+              tier_updated_at: new Date().toISOString(),
+              updated_at: _s(),
+            });
+            setProfile(p=>p?({...p,tier:newTier}):p);
+          }catch(e){ console.warn("tier update failed",e?.code); }
+        }
+        // Refresh profile from Firestore to get any backend-updated fields
+        if(user?.uid){
+          getUserProfile(user.uid).then(p=>{
+            if(p){ setProfile(p); if(p.tier) setTier(normalizeTier(p.tier)); }
+          }).catch(()=>{});
+        }
+      }}/>}
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
       {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onClose={()=>setShowCoach(false)}/>}
@@ -3806,22 +3872,30 @@ export default function App(){
           </div>
         </div>
 
-        {/* AI model status */}
+        {/* Posture model status */}
         <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
           <div style={{
             width:7,height:7,borderRadius:"50%",flexShrink:0,
-            background:groqStatus==="ok"?"#10b981":groqStatus==="no_key"?"#ef4444":"#f59e0b",
-            boxShadow:groqStatus==="ok"?"0 0 6px #10b981":groqStatus==="no_key"?"0 0 6px #ef4444":"0 0 6px #f59e0b",
-            animation:groqStatus==="unknown"?"livePulse 1.2s infinite":"none",
+            background:mpStatus==="ready"?"#10b981":mpStatus==="fallback"?"#f59e0b":mpStatus==="error"?"#ef4444":"#f59e0b",
+            boxShadow:mpStatus==="ready"?"0 0 6px #10b981":mpStatus==="fallback"?"0 0 6px #f59e0b":mpStatus==="error"?"0 0 6px #ef4444":"0 0 6px #f59e0b",
+            animation:mpStatus==="loading"?"livePulse 1.2s infinite":"none",
           }}/>
-          <span style={{fontSize:11,color:groqStatus==="ok"?"#10b981":groqStatus==="no_key"?"#ef4444":"#f59e0b",fontWeight:500}}>
-            {groqStatus==="ok"
-              ?(isAr?"مساعد AI جاهز ✓":"AI Coach ready ✓")
-              :groqStatus==="no_key"
-              ?(isAr?"مفتاح AI مفقود — VITE_GROQ_API_KEY":"AI key missing — check Vercel env")
-              :groqStatus==="error"
-              ?(isAr?"AI غير متاح":"AI unavailable")
-              :(isAr?"جاري فحص AI...":"Checking AI...")}
+          <span style={{fontSize:11,color:mpStatus==="ready"?"#10b981":mpStatus==="fallback"?"#f59e0b":mpStatus==="error"?"#ef4444":"#f59e0b",fontWeight:500}}>
+            {mpStatus==="ready"
+              ?(isAr?"نموذج الوضعية جاهز ✓":"Posture model ready ✓")
+              :mpStatus==="fallback"
+              ?(isAr?"وضع احتياطي (السيرفر)":"Fallback mode (server-assisted)")
+              :mpStatus==="error"
+              ?(isAr?"نموذج الوضعية غير متاح":"Posture model unavailable")
+              :(isAr?"جاري تحميل النموذج...":"Loading model...")}
+          </span>
+        </div>
+
+        {/* AI Coach status */}
+        <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:"#6366f1",boxShadow:"0 0 6px #6366f1"}}/>
+          <span style={{fontSize:11,color:"#6366f1",fontWeight:500}}>
+            {isAr?"AI Coach (محلي ومجاني)":"AI Coach (local, free)"}
           </span>
         </div>
 

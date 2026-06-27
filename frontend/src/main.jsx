@@ -20,17 +20,24 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js")
       .then(reg => {
+        // Check for updates immediately on load
+        reg.update().catch(() => {});
         reg.addEventListener("updatefound", () => {
           const worker = reg.installing;
           worker?.addEventListener("statechange", () => {
-            if (worker.state === "installed" && navigator.serviceWorker.controller) {
-              // Show in-app update banner — dispatched to App.jsx
+            if (worker.state === "installed") {
+              // New SW ready — force activate immediately (skip waiting)
+              worker.postMessage({ type: "SKIP_WAITING" });
               window.dispatchEvent(new CustomEvent("sw-update-available"));
             }
           });
         });
       })
-      .catch(() => {}); // Silent fail — app works without SW
+      .catch(() => {});
+    // Reload when new SW takes control
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      window.location.reload();
+    });
   });
 }
 

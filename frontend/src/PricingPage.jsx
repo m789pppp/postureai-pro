@@ -94,8 +94,8 @@ const B2B_PAID_PLANS = [
     color:   "#10b981", badge: { en: "Custom",       ar: "مخصص" },
     price: null, startingAtUsd: 499,  // Custom pricing — starting at $499/mo
     features: {
-      en: ["Unlimited employees", "Everything in Growth", "Gemini AI clinical narrative", "SSO/SAML/Azure AD/Okta", "White-label branding", "API access", "Dedicated success manager"],
-      ar: ["موظفون غير محدودون", "كل مزايا جروث", "تحليل سردي بالـ Gemini AI", "SSO/SAML/Azure AD/Okta", "علامة تجارية White-label", "وصول API", "مدير نجاح مخصص"],
+      en: ["Unlimited employees", "Everything in Growth", "AI clinical narrative", "SSO/SAML/Azure AD/Okta", "White-label branding", "API access", "Dedicated success manager"],
+      ar: ["موظفون غير محدودون", "كل مزايا جروث", "تحليل سردي بالذكاء الاصطناعي", "SSO/SAML/Azure AD/Okta", "علامة تجارية White-label", "وصول API", "مدير نجاح مخصص"],
     },
   },
 ];

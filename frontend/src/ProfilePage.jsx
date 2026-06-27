@@ -8,6 +8,7 @@ import {
   getAuthToken,
 } from "./firebase.js";
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider, getAuth } from "firebase/auth";
+import { tierAtLeast } from "./lib/tierQuality.js";
 
 const sc = v => v>=75?"#10b981":v>=50?"#f59e0b":"#ef4444";
 const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
@@ -113,7 +114,7 @@ export default function ProfilePage({ user, profile, sessions=[], cs, lang="en",
     setCancelling(false);
   }
 
-  const tierColor = profile?.tier==="elite"?"#f59e0b":profile?.tier==="professional"?"#0ea5e9":"#6366f1";
+  const tierColor = tierAtLeast(profile?.tier,"elite")?"#f59e0b":tierAtLeast(profile?.tier,"professional")?"#0ea5e9":"#6366f1";
 
   const tabs = [
     ["profile",  isAr?"الملف الشخصي":"Profile",   "👤"],
@@ -243,7 +244,7 @@ export default function ProfilePage({ user, profile, sessions=[], cs, lang="en",
                 </div>
                 <button onClick={()=>setPage("pricing")}
                   style={{ background:"#1a56db",border:"none",borderRadius:9,padding:"9px 18px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer" }}>
-                  {profile?.tier==="elite"?(isAr?"إدارة الخطة":"Manage Plan"):(isAr?"ترقية ←":"Upgrade →")}
+                  {tierAtLeast(profile?.tier,"elite")?(isAr?"إدارة الخطة":"Manage Plan"):(isAr?"ترقية ←":"Upgrade →")}
                 </button>
               </div>
               <Row label={isAr?"طريقة الفوترة":"Billing"} value={profile?.subscription_billing==="yearly"?(isAr?"سنوي":"Yearly"):(isAr?"شهري":"Monthly")}/>

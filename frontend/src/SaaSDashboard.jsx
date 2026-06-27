@@ -177,13 +177,15 @@ function Sidebar({ active, setActive, user, lang }) {
 // ── Overview panel ────────────────────────────────────────────────
 function Overview({ data, lang }) {
   const ar = lang === "ar";
-  const sparkBase = () => Array.from({length:14}, (_,i) => 50 + Math.sin(i*.7)*20 + Math.random()*15);
+  // Deterministic "realistic" data — no Math.random() (causes re-render flicker)
+  const sparkBase = (seed=0) => Array.from({length:14}, (_,i) => 
+    Math.round(50 + Math.sin((i+seed)*.7)*20 + Math.cos((i+seed)*.3)*8));
 
   const metrics = ar ? [
-    { icon:"🎯", label:"متوسط درجة الوضعية اليوم", value:`${data?.avgScore || 78}`, sub:`↑ من ${(data?.avgScore || 78) - 3} أمس`, trend:"+4%", color:C.green, sparkData:sparkBase() },
-    { icon:"👥", label:"المستخدمون النشطون", value:`${data?.activeUsers || 124}`, sub:"من أصل 150 موظف", trend:"+12", color:C.blue, sparkData:sparkBase() },
-    { icon:"⏱️", label:"ساعات التتبع اليوم", value:`${data?.hoursTracked || 342}`, sub:"متوسط 2.8 ساعة/موظف", trend:"+8%", color:C.sky, sparkData:sparkBase() },
-    { icon:"⚠️", label:"تنبيهات المخاطر المرسلة", value:`${data?.alerts || 23}`, sub:"14 درجة عالية · 9 متوسطة", trend:"-15%", color:C.amber, sparkData:sparkBase() },
+    { icon:"🎯", label:"متوسط درجة الوضعية اليوم", value:`${data?.avgScore || 78}`, sub:`↑ من ${(data?.avgScore || 78) - 3} أمس`, trend:"+4%", color:C.green, sparkData:sparkBase(0) },
+    { icon:"👥", label:"المستخدمون النشطون", value:`${data?.activeUsers || 124}`, sub:"من أصل 150 موظف", trend:"+12", color:C.blue, sparkData:sparkBase(1) },
+    { icon:"⏱️", label:"ساعات التتبع اليوم", value:`${data?.hoursTracked || 342}`, sub:"متوسط 2.8 ساعة/موظف", trend:"+8%", color:C.sky, sparkData:sparkBase(2) },
+    { icon:"⚠️", label:"تنبيهات المخاطر المرسلة", value:`${data?.alerts || 23}`, sub:"14 درجة عالية · 9 متوسطة", trend:"-15%", color:C.amber, sparkData:sparkBase(3) },
   ] : [
     { icon:"🎯", label:"Avg posture score today", value:`${data?.avgScore || 78}`, sub:`↑ from ${(data?.avgScore || 78) - 3} yesterday`, trend:"+4%", color:C.green, sparkData:sparkBase() },
     { icon:"👥", label:"Active users today", value:`${data?.activeUsers || 124}`, sub:"out of 150 employees", trend:"+12", color:C.blue, sparkData:sparkBase() },
@@ -234,7 +236,7 @@ function Overview({ data, lang }) {
           {/* Simple bar chart */}
           <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:120 }}>
             {Array.from({length:14}, (_,i) => {
-              const v = 55 + Math.sin(i*.6)*20 + Math.random()*15;
+              const v = Math.round(55 + Math.sin(i*.6)*20 + Math.cos(i*.4)*10);
               const color = v >= 80 ? C.green : v >= 65 ? C.amber : C.red;
               return (
                 <div key={i} style={{ flex:1, display:"flex", flexDirection:"column",
@@ -529,11 +531,18 @@ function SettingsPanel({ user, lang }) {
 }
 
 // ── Main Dashboard ────────────────────────────────────────────────
-export default function Dashboard({ user, onNavigate, lang = "en" }) {
+export default function Dashboard({ user, sessions = [], profile, onNavigate, lang = "en" }) {
   const [activeTab, setActiveTab] = useState("overview");
-  const [dashData] = useState({
-    avgScore: 78, activeUsers: 124, hoursTracked: 342, alerts: 23,
-  });
+
+  // Real data from passed sessions prop
+  const dashData = React.useMemo(() => {
+    if (!sessions.length) return { avgScore: 0, activeUsers: 1, hoursTracked: 0, alerts: 0 };
+    const scores = sessions.map(s => s.avg_score || 0).filter(Boolean);
+    const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
+    const totalSecs = sessions.reduce((a,s)=>a+(s.duration_s||0),0);
+    const alerts = sessions.reduce((a,s)=>a+(s.alerts_count||0),0);
+    return { avgScore, activeUsers: 1, hoursTracked: Math.round(totalSecs/3600), alerts };
+  }, [sessions]);
 
   const renderPanel = () => {
     switch (activeTab) {
