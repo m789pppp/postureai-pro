@@ -2009,6 +2009,11 @@ export default function App(){
     const h = window.location.hash;
     return h ? hashToPage(h) : "landing";
   });
+  // Firebase action URLs (password reset / email verify from email links)
+  const _fbp = new URLSearchParams(window.location.search);
+  const [fbMode]    = useState(_fbp.get("mode")    || null);
+  const [fbOobCode] = useState(_fbp.get("oobCode") || null);
+  const [showEmailVerify, setShowEmailVerify] = useState(false);
   const setPage = (p) => {
     if (p === "live" || p === "setup") {
       window.history.replaceState({}, "", "#" + p);
@@ -2999,6 +3004,43 @@ export default function App(){
     </ErrorBoundary>
   );
   if(page==="embed")return <EmbedWidget/>;
+
+  // ── Firebase action URL: password reset from email link ──────────
+  if(fbMode==="resetPassword" && fbOobCode) return(
+    <ErrorBoundary>
+      <ResetPasswordPage
+        oobCode={fbOobCode} darkMode={darkMode} lang={lang}
+        onDone={()=>{
+          // Clear URL params and go to auth
+          window.history.replaceState({},""," /");
+          window.location.href="/?mode=resetDone";
+        }}
+      />
+    </ErrorBoundary>
+  );
+
+  // ── Firebase action URL: email verification from email link ──────
+  if(fbMode==="verifyEmail" && fbOobCode) return(
+    <ErrorBoundary>
+      <EmailVerificationPage
+        oobCode={fbOobCode} darkMode={darkMode} lang={lang}
+        onVerified={()=>{ window.history.replaceState({},""," /"); setPage("home"); }}
+        onSkip={()=>{ window.history.replaceState({},""," /"); setPage("home"); }}
+      />
+    </ErrorBoundary>
+  );
+
+  // ── Email verification after signup ──────────────────────────────
+  if(showEmailVerify && user && !user.emailVerified) return(
+    <ErrorBoundary>
+      <EmailVerificationPage
+        user={user} darkMode={darkMode} lang={lang}
+        onVerified={()=>setShowEmailVerify(false)}
+        onSkip={()=>setShowEmailVerify(false)}
+      />
+    </ErrorBoundary>
+  );
+
   // ── Auth page ────────────────────────────────────────────────────
   if(page==="auth"&&!user) return(
     <ErrorBoundary>
@@ -3007,9 +3049,16 @@ export default function App(){
         lang={lang} setLang={setLang}
         initialView={new URLSearchParams(window.location.search).get("mode")==="signup" ? "signup" : "login"}
         onAuth={(u,isNew)=>{
-          // onAuthStateChanged handles profile loading — just route
           setUser(u);
-          if(isNew) { setPage("setup"); return; }
+          if(isNew) {
+            // Send verification email for new signups (fire & forget)
+            import("./firebase.js").then(({sendVerificationEmail})=>{
+              sendVerificationEmail(u).catch(()=>{});
+            });
+            setShowEmailVerify(true);
+            setPage("setup");
+            return;
+          }
           setPage("home");
         }}
       />

@@ -3,7 +3,11 @@ import {
   getAuth, signInWithPopup, signInWithRedirect, getRedirectResult,
   GoogleAuthProvider, OAuthProvider,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
-  onAuthStateChanged as _onAuthStateChanged, sendPasswordResetEmail,
+  onAuthStateChanged as _onAuthStateChanged,
+  sendPasswordResetEmail, sendEmailVerification,
+  confirmPasswordReset, verifyPasswordResetCode, applyActionCode,
+  updatePassword, reauthenticateWithCredential, EmailAuthProvider,
+  browserLocalPersistence, browserSessionPersistence, setPersistence,
 } from "firebase/auth";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
@@ -98,7 +102,37 @@ export const signInMicrosoft = async () => {
 export const signInEmail        = (e, p) => signInWithEmailAndPassword(auth, e, p);
 export const signUpEmail        = (e, p) => createUserWithEmailAndPassword(auth, e, p);
 export const logOut             = () => signOut(auth);
-export const resetPassword      = (e) => sendPasswordResetEmail(auth, e);
+const APP_URL = window.location.origin;
+
+export const resetPassword = (email) =>
+  sendPasswordResetEmail(auth, email, {
+    url: `${APP_URL}/?action=resetPassword`,
+    handleCodeInApp: false,
+  });
+
+export const sendVerificationEmail = (user) =>
+  sendEmailVerification(user || auth.currentUser, {
+    url: `${APP_URL}/?action=verified`,
+    handleCodeInApp: false,
+  });
+
+// Called when user arrives from reset-password email link
+export const verifyResetCode  = (oobCode) => verifyPasswordResetCode(auth, oobCode);
+export const confirmReset     = (oobCode, newPass) => confirmPasswordReset(auth, oobCode, newPass);
+export const applyAction      = (oobCode) => applyActionCode(auth, oobCode);
+
+// Change password for logged-in user (requires re-auth)
+export const changePassword = async (currentPass, newPass) => {
+  const user = auth.currentUser;
+  if (!user || !user.email) throw new Error("Not authenticated");
+  const cred = EmailAuthProvider.credential(user.email, currentPass);
+  await reauthenticateWithCredential(user, cred);
+  await updatePassword(user, newPass);
+};
+
+// Persistence — remember me
+export const setRememberMe = (remember) =>
+  setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
 export const onAuthStateChanged = (cb) => _onAuthStateChanged(auth, cb);
 
 export const COMPANY_DOMAINS = AUTO_APPROVE_DOMAIN ? [AUTO_APPROVE_DOMAIN] : [];
