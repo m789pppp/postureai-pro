@@ -1,22 +1,29 @@
 import { initializeApp } from "firebase/app";
 import {
-  getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider,
+  getAuth, signInWithPopup, signInWithRedirect, getRedirectResult,
+  GoogleAuthProvider, OAuthProvider,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
-  onAuthStateChanged as _onAuthStateChanged, sendPasswordResetEmail,
+  onAuthStateChanged as _onAuthStateChanged,
+  sendPasswordResetEmail, sendEmailVerification,
+  confirmPasswordReset, verifyPasswordResetCode, applyActionCode,
+  updatePassword, reauthenticateWithCredential, EmailAuthProvider,
+  browserLocalPersistence, browserSessionPersistence, setPersistence,
 } from "firebase/auth";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
   collection, query, where, orderBy, limit, getDocs,
   onSnapshot, serverTimestamp as _serverTimestamp, increment, writeBatch,
 } from "firebase/firestore";
+import { tierAtLeast } from "./lib/tierQuality.js";
 
 const firebaseConfig = {
-  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY            || "AIzaSyADLL_muc6ooQnfr1cKDCZFX3FKYknTxiI",
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN        || "postureai-prod.firebaseapp.com",
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID         || "postureai-prod",
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET     || "postureai-prod.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID|| "1055930005121",
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID             || "1:1055930005121:web:0964a6e53cd590988a3f80",
+  measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID     || "G-2R7SKP0V95",
 };
 if (!firebaseConfig.apiKey) console.error("❌ Firebase config missing — check .env.local");
 
@@ -46,6 +53,11 @@ gProvider.addScope('email');
 gProvider.addScope('profile');
 gProvider.setCustomParameters({ prompt: 'select_account' });
 
+const msProvider = new OAuthProvider('microsoft.com');
+msProvider.addScope('email');
+msProvider.addScope('profile');
+msProvider.setCustomParameters({ prompt: 'select_account' });
+
 export const signInGoogle = async () => {
   // Try popup first — if blocked/fails, fall back to redirect
   try {
@@ -68,10 +80,59 @@ export const signInGoogle = async () => {
 };
 
 export const getGoogleRedirectResult = () => getRedirectResult(auth);
+
+export const signInMicrosoft = async () => {
+  try {
+    const result = await signInWithPopup(auth, msProvider);
+    return result;
+  } catch (e) {
+    const code = e.code || '';
+    if (
+      code === 'auth/popup-blocked' ||
+      code === 'auth/popup-closed-by-user' ||
+      code === 'auth/cancelled-popup-request' ||
+      code === 'auth/operation-not-supported-in-this-environment'
+    ) {
+      await signInWithRedirect(auth, msProvider);
+      return null;
+    }
+    throw e;
+  }
+};
 export const signInEmail        = (e, p) => signInWithEmailAndPassword(auth, e, p);
 export const signUpEmail        = (e, p) => createUserWithEmailAndPassword(auth, e, p);
 export const logOut             = () => signOut(auth);
-export const resetPassword      = (e) => sendPasswordResetEmail(auth, e);
+const APP_URL = window.location.origin;
+
+export const resetPassword = (email) =>
+  sendPasswordResetEmail(auth, email, {
+    url: `${APP_URL}/?action=resetPassword`,
+    handleCodeInApp: false,
+  });
+
+export const sendVerificationEmail = (user) =>
+  sendEmailVerification(user || auth.currentUser, {
+    url: `${APP_URL}/?action=verified`,
+    handleCodeInApp: false,
+  });
+
+// Called when user arrives from reset-password email link
+export const verifyResetCode  = (oobCode) => verifyPasswordResetCode(auth, oobCode);
+export const confirmReset     = (oobCode, newPass) => confirmPasswordReset(auth, oobCode, newPass);
+export const applyAction      = (oobCode) => applyActionCode(auth, oobCode);
+
+// Change password for logged-in user (requires re-auth)
+export const changePassword = async (currentPass, newPass) => {
+  const user = auth.currentUser;
+  if (!user || !user.email) throw new Error("Not authenticated");
+  const cred = EmailAuthProvider.credential(user.email, currentPass);
+  await reauthenticateWithCredential(user, cred);
+  await updatePassword(user, newPass);
+};
+
+// Persistence — remember me
+export const setRememberMe = (remember) =>
+  setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
 export const onAuthStateChanged = (cb) => _onAuthStateChanged(auth, cb);
 
 export const COMPANY_DOMAINS = AUTO_APPROVE_DOMAIN ? [AUTO_APPROVE_DOMAIN] : [];
@@ -555,7 +616,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const { jsPDF } = await import("jspdf");
   const isAr  = lang === "ar";
   const tier  = session.tier || profile?.tier || "standard";
-  const isElite = tier === "elite" || tier === "premium";
+  const isElite = tierAtLeast(tier, "elite");
   const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
@@ -605,7 +666,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   doc.text(isAr?`تاريخ الإنشاء: ${new Date().toLocaleDateString("ar-EG")}`:`Generated: ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})}`, ml+28, 32.5);
 
   // Tier badge
-  const tierColor = isElite ? [16,185,129] : tier==="professional" ? [14,165,233] : [99,102,241];
+  const tierColor = isElite ? [16,185,129] : tierAtLeast(tier,"professional") ? [14,165,233] : [99,102,241];
   doc.setFillColor(...tierColor); doc.roundedRect(W-mr-30,12,30,10,2,2,"F");
   doc.setFontSize(7.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
   doc.text(tier.toUpperCase(), W-mr-15, 18.8, {align:"center"});

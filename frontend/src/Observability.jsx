@@ -30,7 +30,6 @@ export async function initSentry() {
       integrations: [],
     });
     window.__sentry = Sentry;
-    console.log("✅ Sentry initialized");
   } catch {}
 }
 

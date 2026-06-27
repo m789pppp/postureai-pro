@@ -71,7 +71,6 @@
 
     <!-- ═══ Preconnect ════════════════════════════════════════════ -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-    <link rel="preconnect" href="https://api.groq.com" />
     <link rel="preconnect" href="https://firestore.googleapis.com" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -105,10 +104,29 @@
       ::-webkit-scrollbar-thumb { background: rgba(148,163,184,.2); border-radius: 99px; }
       ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.4); }
     </style>
+      <!-- Auto cache-clear on new deploy -->
+    <script>
+      (function(){
+        var DEPLOY = "v583b5e9"; // updated each deploy
+        var stored = localStorage.getItem("__corvus_deploy__");
+        if(stored !== DEPLOY){
+          localStorage.setItem("__corvus_deploy__", DEPLOY);
+          if("serviceWorker" in navigator){
+            navigator.serviceWorker.getRegistrations().then(function(regs){
+              return Promise.all(regs.map(function(r){ return r.unregister(); }));
+            }).then(function(){
+              return caches.keys();
+            }).then(function(keys){
+              return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+            }).then(function(){
+              if(stored !== null) window.location.reload(true); // only reload if was previously cached
+            }).catch(function(){});
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
-    <!-- Runtime AI config — injected by /api/config endpoint -->
-    <script>window.__GROQ_KEY__="";</script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
