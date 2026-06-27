@@ -51,7 +51,10 @@ import { AdminDashboard } from "./AdminDashboard.jsx";
 import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
 import { handleSSORedirect } from "./EnterpriseSSO.jsx";
 // initSentry moved to sentry.js (V12)
-import AuthPage from "./AuthPage.jsx";
+import AuthPage            from "./AuthPage.jsx";
+import ResetPasswordPage    from "./ResetPasswordPage.jsx";
+import EmailVerificationPage from "./EmailVerificationPage.jsx";
+import ChangePasswordPage    from "./ChangePasswordPage.jsx";
 import HomePage from "./HomePage.jsx";
 import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
@@ -3385,6 +3388,7 @@ export default function App(){
         lang={lang} cs={cs} onClose={()=>setShowShareCard(false)}/>
     )}
     {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
+      {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}
       {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
