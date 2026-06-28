@@ -2001,6 +2001,15 @@ function DeviceSelect({cs,t,lang,onSelect}){
 // ══════════════════════════════════════════════════════════════════
 // MAIN APP COMPONENT
 // ══════════════════════════════════════════════════════════════════
+// Detect OAuth redirect BEFORE React renders
+let _oauthInProgress = (function() {
+  try {
+    if (sessionStorage.getItem("__pendingOAuth") === "1") return true;
+    const ref = document.referrer || "";
+    return ref.includes("accounts.google.com") || ref.includes("login.microsoftonline.com");
+  } catch { return false; }
+})();
+
 export default function App(){
   const[user,setUser]=useState(null);
   const[backendDown,setBackendDown]=useState(false);
@@ -2011,7 +2020,7 @@ export default function App(){
   // ── ABSOLUTE SAFETY NET — app MUST unblock within 6s no matter what ──
   useEffect(()=>{
     const t = setTimeout(()=>{
-      setAuthChecked(c=>{ if(!c && !_oauthRedirect?.current){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
+      setAuthChecked(c=>{ if(!c && !_oauthInProgress){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
     }, 6000);
     return ()=>clearTimeout(t);
   },[]);
@@ -2312,6 +2321,8 @@ export default function App(){
     getGoogleRedirectResult().then(async result => {
       if (result?.user) {
         _oauthRedirect.current = true;
+        _oauthInProgress = false;
+        try { sessionStorage.removeItem("__pendingOAuth"); } catch {}
         const u = result.user;
         let p = null;
         try { p = await getUserProfile(u.uid); } catch{}
@@ -2339,7 +2350,7 @@ export default function App(){
 
     const authTimeout=setTimeout(()=>{
       // Don't redirect to landing if we know we're processing an OAuth redirect
-      if (_oauthRedirect.current) return;
+      if (_oauthRedirect.current || _oauthInProgress) return;
       setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
     }, 8000);
 
@@ -2407,7 +2418,7 @@ export default function App(){
         } else {
           // u===null: user signed out OR Firebase is still processing OAuth redirect
           // Don't go to landing if we know we're in the middle of an OAuth redirect
-          if (_oauthRedirect.current) {
+          if (_oauthRedirect.current || _oauthInProgress) {
             // Still waiting for getGoogleRedirectResult to resolve — do nothing
             return;
           }
@@ -2419,7 +2430,7 @@ export default function App(){
         }
       } catch(e) {
         console.error("[Auth] fatal:", e);
-        if (!_oauthRedirect.current) setPage("landing");
+        if (!_oauthRedirect.current && !_oauthInProgress) setPage("landing");
       } finally {
         setAuthChecked(true);
       }
