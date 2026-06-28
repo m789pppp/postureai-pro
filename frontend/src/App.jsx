@@ -2304,7 +2304,15 @@ export default function App(){
 
   // Auth state listener
   useEffect(()=>{
-    // Safety net: if Firebase never fires (bad config / offline), unblock the UI after 10s
+    // If returning from Google/Microsoft OAuth redirect, mark auth as pending immediately
+    // so the 5s safety timeout doesn't fire and redirect to landing
+    const urlParams = new URLSearchParams(window.location.search);
+    if (document.referrer.includes('accounts.google.com') ||
+        document.referrer.includes('login.microsoftonline.com') ||
+        urlParams.has('code') || urlParams.has('state')) {
+      setAuthChecked(false); // keep loading spinner, don't time out
+    }
+
     // Handle Google redirect result (when popup is blocked)
     getGoogleRedirectResult().then(async result => {
       if (result?.user) {
@@ -2333,7 +2341,7 @@ export default function App(){
 
     const authTimeout=setTimeout(()=>{
       setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
-    }, 5000);
+    }, 12000); // 12s — gives OAuth redirect enough time to process
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
@@ -2389,8 +2397,12 @@ export default function App(){
             const pendingInvite=sessionStorage.getItem("pending_invite");
             if(pendingInvite){ window.__invite_token=pendingInvite; setPage("invite"); }
             else if(p && !p.setup_complete) setPage("setup");
-            else setPage(params.get("plan")&&TIERS[params.get("plan")]?"pricing":"home");
+            else {
+              const planParam = params.get("plan");
+              setPage(planParam && TIERS[planParam] ? "pricing" : "home");
+            }
           } catch{ setPage("home"); }
+          setAuthChecked(true); // always mark checked when user is logged in
 
         } else {
           try { if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; } } catch{}
