@@ -1,5 +1,5 @@
 // Posmoz — Service Worker v5 — Network First for HTML (fixes stale deploy issue)
-const CACHE_VER = "posmoz-v5-__DEPLOY_TIME__";
+const CACHE_VER = "posmoz-v6";
 const MP_CACHE  = "mediapipe-v3";
 
 const MP_ASSETS = [
