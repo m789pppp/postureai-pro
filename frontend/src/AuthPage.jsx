@@ -956,6 +956,30 @@ function AlertBox({msg,dark}){
     </div>
   );
 }
-function Spinner({dark}){
-  return <div style={{width:17,height:17,border:`2.5px solid rgba(255,255,255,.3)`,borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>;
+function Spinner(){
+  return <div style={{width:17,height:17,border:"2.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>;
+}
+function PrimaryBtn({children,loading,disabled,dark,onClick,type="submit"}){
+  const [hov,setHov]=useState(false);
+  return(
+    <button type={type} onClick={onClick} disabled={disabled||loading}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{
+        width:"100%",padding:"13px 0",marginBottom:16,
+        background:(disabled||loading)?"rgba(26,86,219,.4)":
+          hov?"linear-gradient(135deg,#1e40af 0%,#0369a1 100%)":
+          "linear-gradient(135deg,#1d4ed8 0%,#0891b2 100%)",
+        border:"none",borderRadius:10,
+        fontSize:14.5,fontWeight:700,color:"#fff",
+        cursor:(disabled||loading)?"wait":"pointer",
+        boxShadow:(disabled||loading)?"none":
+          hov?"0 10px 32px rgba(26,86,219,.38)":"0 6px 24px rgba(26,86,219,.28)",
+        transition:"all .25s cubic-bezier(.4,0,.2,1)",
+        display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+        fontFamily:"inherit",letterSpacing:".01em",
+        transform:hov&&!(disabled||loading)?"translateY(-1px)":"none",
+      }}>
+      {loading ? <Spinner/> : children}
+    </button>
+  );
 }
