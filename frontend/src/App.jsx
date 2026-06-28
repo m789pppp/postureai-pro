@@ -2001,13 +2001,9 @@ function DeviceSelect({cs,t,lang,onSelect}){
 // ══════════════════════════════════════════════════════════════════
 // MAIN APP COMPONENT
 // ══════════════════════════════════════════════════════════════════
-// Detect OAuth redirect BEFORE React renders
-let _oauthInProgress = (function() {
-  try {
-    if (sessionStorage.getItem("__pendingOAuth") === "1") return true;
-    const ref = document.referrer || "";
-    return ref.includes("accounts.google.com") || ref.includes("login.microsoftonline.com");
-  } catch { return false; }
+// OAuth redirect detection — persists across page reload
+const _oauthInProgress = !!(function() {
+  try { return sessionStorage.getItem("__pendingOAuth") === "1"; } catch { return false; }
 })();
 
 export default function App(){
@@ -2356,6 +2352,9 @@ export default function App(){
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
+      // onAuthStateChanged is the SINGLE source of truth for routing
+      // Clear OAuth pending flag — we now have definitive auth state
+      try { if(u) sessionStorage.removeItem("__pendingOAuth"); } catch{}
       // NOTE: Elite tier elevation is handled SERVER-SIDE only in
       // backend/auth/middleware.py (ELITE_DOMAINS + ELITE_EMAILS).
       // Do NOT add email lists here — client JS is visible in DevTools.
