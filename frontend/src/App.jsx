@@ -2325,7 +2325,7 @@ export default function App(){
         const isNew = !p;
         if (!p) {
           try {
-            await createUserProfile(u.uid, { email: u.email, name: u.displayName||"", company:"" });
+            await createUserProfile(u.uid, { email: u.email, name: u.displayName||"", company:"", setup_complete: false });
             p = await getUserProfile(u.uid);
           } catch{}
         }
@@ -2406,7 +2406,7 @@ export default function App(){
             const params=new URLSearchParams(window.location.search);
             const pendingInvite=sessionStorage.getItem("pending_invite");
             if(pendingInvite){ window.__invite_token=pendingInvite; setPage("invite"); }
-            else if(p && !p.setup_complete) setPage("setup");
+            else if(!p || !p.setup_complete) setPage("setup");
             else {
               const planParam = params.get("plan");
               setPage(planParam && TIERS[planParam] ? "pricing" : "home");
