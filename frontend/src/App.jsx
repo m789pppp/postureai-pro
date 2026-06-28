@@ -2310,17 +2310,24 @@ export default function App(){
       if (result?.user) {
         const u = result.user;
         let p = await getUserProfile(u.uid);
+        const isNew = !p;
         if (!p) {
           await createUserProfile(u.uid, { email: u.email, name: u.displayName || "", company: "" });
           p = await getUserProfile(u.uid);
         }
         setUser(u);
-        setProfile(p);
+        setProfile(p || {});
         if (p?.tier) setTier(normalizeTier(p.tier));
         if (p?.company_id) setCompanyId(p.company_id);
         getUserSessions(u.uid).then(setUserSessions).catch(() => {});
-        setPage("home");
         setAuthChecked(true);
+        // Force navigation — don't wait for onAuthStateChanged
+        if (isNew) setPage("setup");
+        else setPage("home");
+        // Clear URL params from redirect
+        if (window.location.search) {
+          window.history.replaceState({}, "", window.location.pathname + window.location.hash);
+        }
       }
     }).catch(() => {});
 
