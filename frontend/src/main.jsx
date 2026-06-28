@@ -16,6 +16,16 @@ import { initSentry } from "./Observability.jsx";
 initSentry().catch(() => {});
 
 // ── PWA: Service Worker ───────────────────────────────────────────
+// Force clear old SW + caches when CSP or SW version changes
+(async function clearOldAssets() {
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  } catch {}
+})();
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js")
