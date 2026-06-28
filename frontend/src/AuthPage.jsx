@@ -361,10 +361,18 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     setErr(""); setSocial(key);
     try {
       const r = await fn();
-      if (!r) return;
-      const p = await getUserProfile(r.user.uid);
-      if (!p) await createUserProfile(r.user.uid,{email:r.user.email,name:r.user.displayName||"",company:""});
-      onAuth(r.user,!p);
+      if (!r) return; // redirect in progress — page will reload
+      // Profile read/create is best-effort — don't let Firestore errors
+      // surface as auth errors. onAuthStateChanged will load profile anyway.
+      try {
+        const p = await getUserProfile(r.user.uid);
+        if (!p) await createUserProfile(r.user.uid, {
+          email: r.user.email, name: r.user.displayName||"", company: ""
+        });
+      } catch (profileErr) {
+        console.warn("[Auth] profile setup error (non-fatal):", profileErr?.code || profileErr?.message);
+      }
+      onAuth(r.user, false);
     } catch(e) { setErr(getErr(e,isAr)); doShake(); }
     finally { setSocial(""); }
   };
@@ -382,16 +390,20 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     try {
       if (view==="login") {
         await setRememberMe(remember).catch(()=>{});
-        const c=await signInEmail(email.trim(),pass); onAuth(c.user,false);
+        const c = await signInEmail(email.trim(), pass);
+        onAuth(c.user, false);
       } else {
-        const c=await signUpEmail(email.trim(),pass);
-        await createUserProfile(c.user.uid,{
-          email:      email.trim(),
-          name:       `${fname.trim()} ${lname.trim()}`.trim(),
-          first_name: fname.trim(),
-          last_name:  lname.trim(),
-          country:    country,
-          profession: profession.trim(),
+        const c = await signUpEmail(email.trim(), pass);
+        // Profile creation is best-effort — Firestore rules or network issues
+        // should NOT block the user from entering the app after account creation.
+        try {
+          await createUserProfile(c.user.uid, {
+            email:      email.trim(),
+            name:       `${fname.trim()} ${lname.trim()}`.trim(),
+            first_name: fname.trim(),
+            last_name:  lname.trim(),
+            country:    country,
+            profession: profession.trim(),
           newsletter: newsletter,
           company:    "",
         });
