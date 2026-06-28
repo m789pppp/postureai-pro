@@ -2026,6 +2026,7 @@ export default function App(){
   const [fbMode]    = useState(_fbp.get("mode")    || null);
   const [fbOobCode] = useState(_fbp.get("oobCode") || null);
   const [showEmailVerify, setShowEmailVerify] = useState(false);
+  const [showChangePw,    setShowChangePw]    = useState(false);
   const setPage = (p) => {
     if (p === "live" || p === "setup") {
       window.history.replaceState({}, "", "#" + p);
@@ -2303,45 +2304,44 @@ export default function App(){
   },[]);
 
   // Auth state listener
-  useEffect(()=>{
-    // If returning from Google/Microsoft OAuth redirect, mark auth as pending immediately
-    // so the 5s safety timeout doesn't fire and redirect to landing
-    const urlParams = new URLSearchParams(window.location.search);
-    if (document.referrer.includes('accounts.google.com') ||
-        document.referrer.includes('login.microsoftonline.com') ||
-        urlParams.has('code') || urlParams.has('state')) {
-      setAuthChecked(false); // keep loading spinner, don't time out
-    }
+  // Track if auth came from OAuth redirect — prevents timeout from firing
+  const _oauthRedirect = useRef(false);
 
-    // Handle Google redirect result (when popup is blocked)
+  useEffect(()=>{
+    // Handle Google/Microsoft OAuth redirect result
     getGoogleRedirectResult().then(async result => {
       if (result?.user) {
+        _oauthRedirect.current = true;
         const u = result.user;
-        let p = await getUserProfile(u.uid);
+        let p = null;
+        try { p = await getUserProfile(u.uid); } catch{}
         const isNew = !p;
         if (!p) {
-          await createUserProfile(u.uid, { email: u.email, name: u.displayName || "", company: "" });
-          p = await getUserProfile(u.uid);
+          try {
+            await createUserProfile(u.uid, { email: u.email, name: u.displayName||"", company:"" });
+            p = await getUserProfile(u.uid);
+          } catch{}
         }
         setUser(u);
-        setProfile(p || {});
-        if (p?.tier) setTier(normalizeTier(p.tier));
-        if (p?.company_id) setCompanyId(p.company_id);
-        getUserSessions(u.uid).then(setUserSessions).catch(() => {});
+        if(p) {
+          setProfile(p);
+          if(p.tier) setTier(normalizeTier(p.tier));
+          if(p.company_id) setCompanyId(p.company_id);
+        }
+        getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
         setAuthChecked(true);
-        // Force navigation — don't wait for onAuthStateChanged
         if (isNew) setPage("setup");
         else setPage("home");
-        // Clear URL params from redirect
-        if (window.location.search) {
+        if (window.location.search)
           window.history.replaceState({}, "", window.location.pathname + window.location.hash);
-        }
       }
-    }).catch(() => {});
+    }).catch(()=>{});
 
     const authTimeout=setTimeout(()=>{
+      // Don't redirect to landing if we know we're processing an OAuth redirect
+      if (_oauthRedirect.current) return;
       setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
-    }, 12000); // 12s — gives OAuth redirect enough time to process
+    }, 8000);
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
