@@ -59,21 +59,24 @@ msProvider.addScope('profile');
 msProvider.setCustomParameters({ prompt: 'select_account' });
 
 export const signInGoogle = async () => {
-  // Try popup first — if blocked/fails, fall back to redirect
   try {
     const result = await signInWithPopup(auth, gProvider);
     return result;
   } catch (e) {
     const code = e.code || '';
-    // Popup blocked or not allowed → use redirect
+    // All cases where redirect is better than showing an error
     if (
       code === 'auth/popup-blocked' ||
       code === 'auth/popup-closed-by-user' ||
       code === 'auth/cancelled-popup-request' ||
-      code === 'auth/operation-not-supported-in-this-environment'
+      code === 'auth/operation-not-supported-in-this-environment' ||
+      code === 'auth/internal-error' ||
+      code === 'auth/network-request-failed'
     ) {
-      await signInWithRedirect(auth, gProvider);
-      return null; // page will redirect
+      try {
+        await signInWithRedirect(auth, gProvider);
+      } catch {}
+      return null;
     }
     throw e;
   }
@@ -91,9 +94,13 @@ export const signInMicrosoft = async () => {
       code === 'auth/popup-blocked' ||
       code === 'auth/popup-closed-by-user' ||
       code === 'auth/cancelled-popup-request' ||
-      code === 'auth/operation-not-supported-in-this-environment'
+      code === 'auth/operation-not-supported-in-this-environment' ||
+      code === 'auth/internal-error' ||
+      code === 'auth/network-request-failed'
     ) {
-      await signInWithRedirect(auth, msProvider);
+      try {
+        await signInWithRedirect(auth, msProvider);
+      } catch {}
       return null;
     }
     throw e;
