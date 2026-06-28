@@ -2011,7 +2011,7 @@ export default function App(){
   // ── ABSOLUTE SAFETY NET — app MUST unblock within 6s no matter what ──
   useEffect(()=>{
     const t = setTimeout(()=>{
-      setAuthChecked(c=>{ if(!c){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
+      setAuthChecked(c=>{ if(!c && !_oauthRedirect?.current){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
     }, 6000);
     return ()=>clearTimeout(t);
   },[]);
@@ -2405,13 +2405,21 @@ export default function App(){
           setAuthChecked(true); // always mark checked when user is logged in
 
         } else {
+          // u===null: user signed out OR Firebase is still processing OAuth redirect
+          // Don't go to landing if we know we're in the middle of an OAuth redirect
+          if (_oauthRedirect.current) {
+            // Still waiting for getGoogleRedirectResult to resolve — do nothing
+            return;
+          }
           try { if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; } } catch{}
+          setUser(null);
+          setProfile(null);
           setUserSessions([]);
           setPage("landing");
         }
       } catch(e) {
         console.error("[Auth] fatal:", e);
-        setPage("landing");
+        if (!_oauthRedirect.current) setPage("landing");
       } finally {
         setAuthChecked(true);
       }
