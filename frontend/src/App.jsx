@@ -3141,13 +3141,34 @@ export default function App(){
     </ErrorBoundary>
   );
 
+  // During OAuth redirect: user is temporarily null — show spinner NOT auth page
+  if(!user && (_oauthInProgress || _oauthRedirect?.current)) return(
+    <div style={{
+      minHeight:"100vh",background:"#030b14",
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+      gap:16,fontFamily:"'Inter',system-ui,sans-serif",
+    }}>
+      <div style={{
+        width:48,height:48,borderRadius:13,
+        background:"linear-gradient(135deg,#1a56db,#0891b2)",
+        display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,
+        boxShadow:"0 8px 24px rgba(26,86,219,.3)",marginBottom:8,
+      }}>◈</div>
+      <div style={{width:32,height:32,border:"3px solid rgba(26,86,219,.2)",borderTopColor:"#1a56db",
+        borderRadius:"50%",animation:"authSpin 1s linear infinite"}}/>
+      <div style={{color:"rgba(255,255,255,.5)",fontSize:14}}>
+        {lang==="ar"?"جاري تسجيل الدخول…":"Signing you in…"}
+      </div>
+      <style>{"@keyframes authSpin{to{transform:rotate(360deg)}}"}</style>
+    </div>
+  );
+
   if(!user)return(
     <ErrorBoundary>
       <AuthPage
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
         onAuth={(u,isNew)=>{
-          // onAuthStateChanged handles profile — just route
           setUser(u);
           if(isNew){setPage("setup");return;}
           setPage("home");
