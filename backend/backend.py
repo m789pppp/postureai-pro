@@ -15,7 +15,7 @@ _ai_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gemini")
 _coupon_lock = threading.Lock()   # ← thread-safe coupon counter
 from datetime import datetime, timedelta
 import traceback
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, g
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -264,15 +264,70 @@ except ImportError:
     firestore = _FSStub()
     print("⚠️  firebase-admin not installed — Firestore disabled")
 
+# Module-level Firestore client — firebase_admin.initialize_app() already
+# ran via the auth.middleware import above. Individual functions that
+# need a guaranteed-fresh client still do their own `db = firestore.client()`
+# locally (that local assignment correctly shadows this one); this global
+# exists so the many call sites that never did that — and were silently
+# throwing NameError — actually work.
+try:
+    db = firestore.client()
+except Exception as _db_init_err:
+    db = None
+    print(f"⚠️  Firestore client init failed: {_db_init_err}", file=sys.stderr)
+
+# Module-level Firebase Auth admin handle + readiness flag — same story:
+# referenced under three different undefined names (_fb_auth, firebase_auth,
+# _firebase_ok) across user-onboarding, session-revocation, and SCIM
+# provisioning routes, none of which were ever actually defined.
+try:
+    from firebase_admin import auth as _fb_auth
+    firebase_auth = _fb_auth      # codebase uses both names — alias both
+    _firebase_ok  = db is not None
+except Exception:
+    _fb_auth = None
+    firebase_auth = None
+    _firebase_ok = False
+
 # ── Config ─────────────────────────────────────────────────────────
-# Local-only AI (Ollama) — no cloud API keys, no costs, no exposure risk.
-# Set OLLAMA_URL to your Ollama instance (e.g. http://localhost:11434 or
-# a private Railway service URL). LOCAL_LLM_MODEL: any model pulled with
-# `ollama pull <name>`.
-# Recommended for 4-8GB RAM: qwen2.5:3b (bilingual AR+EN, fast, accurate)
-# For 8-16GB RAM: qwen2.5:7b or mistral:7b-instruct
+# AI backend — server-side ONLY, never exposed to the client.
+# Two options, tried in this order, first one configured wins:
+#   1. Ollama (OLLAMA_URL set) — fully local/self-hosted, zero per-request
+#      cost, but YOU must run the Ollama server yourself.
+#   2. Groq (GROQ_API_KEY set) — free tier (14,400 requests/day, no credit
+#      card), zero infrastructure to run — just sign up at console.groq.com
+#      → API Keys → Create API Key, and set GROQ_API_KEY in Railway.
+# Either way: the key/URL never leaves the backend. The browser never
+# talks to an AI provider directly.
 OLLAMA_URL          = os.getenv("OLLAMA_URL", "")          # e.g. http://localhost:11434
 LOCAL_LLM_MODEL     = os.getenv("LOCAL_LLM_MODEL", "qwen2.5:3b")
+GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")  # free, fast, bilingual AR+EN
+GROQ_URL            = "https://api.groq.com/openai/v1/chat/completions"
+AI_CONFIGURED       = bool(OLLAMA_URL or GROQ_API_KEY)
+
+def call_groq(prompt, system_prompt=None, max_tokens=900, temperature=0.25):
+    """Free Groq cloud LLM — server-side only, never exposed to the client."""
+    if not GROQ_API_KEY:
+        return None
+    messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [{"role": "user", "content": prompt}]
+    for model in (GROQ_MODEL, "llama-3.1-8b-instant", "gemma2-9b-it"):
+        try:
+            resp = requests.post(GROQ_URL,
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
+                timeout=15)
+            if resp.status_code == 200:
+                text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+                if text:
+                    return text
+            elif resp.status_code == 429:
+                continue  # rate-limited on this model — try the next one
+            else:
+                return None
+        except Exception as e:
+            log_event("groq_exception", meta={"error": str(e)[:80], "model": model})
+    return None
 
 PAYMOB_SECRET_KEY   = os.getenv("PAYMOB_SECRET_KEY", "")
 PAYMOB_INTEGRATIONS = {
@@ -3919,15 +3974,16 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
     """
     THE unified AI call entry point for this entire backend.
     Every endpoint that needs AI text generation should call this instead of
-    calling call_local_llm() directly.
+    calling call_local_llm()/call_groq() directly.
 
-    Local-only: Ollama (LOCAL_LLM_MODEL) is the sole AI backend — no cloud
-    API keys, no per-request cost, no client-exposed secrets. `tier` is
-    accepted for call-site compatibility but no longer changes the model
-    (one local model serves every tier); it still affects token budget at
-    the call site via tier_quality.py.
+    Server-side only — no AI provider credential is ever sent to the
+    client. Tries Ollama first (if OLLAMA_URL is set — free, self-hosted,
+    zero per-request cost), then Groq (if GROQ_API_KEY is set — free tier,
+    zero infrastructure, just an API key). `tier` is accepted for
+    call-site compatibility; token budget is set by the caller via
+    tier_quality.py, not by this function.
 
-    Returns None if Ollama is unavailable (OLLAMA_URL unset or unreachable).
+    Returns None if no AI backend is configured / both are unreachable.
     """
     # ── Cache check ──────────────────────────────────────────────────
     if cache_key:
@@ -3937,12 +3993,9 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
 
     result = None
     if OLLAMA_URL:
-        result = call_local_llm(
-            prompt,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        result = call_local_llm(prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature)
+    if result is None and GROQ_API_KEY:
+        result = call_groq(prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature)
 
     # ── Cache successful result ──────────────────────────────────────
     if result and cache_key:
@@ -3952,7 +4005,7 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
 
 
 def analyze_with_gemini(result, context="", lang="en"):
-    if not OLLAMA_URL: return None
+    if not AI_CONFIGURED: return None
     # ── Cache check — avoid duplicate AI calls for same posture state ──
     import hashlib as _hl
     _cache_key = _hl.md5(
@@ -4843,7 +4896,7 @@ def _get_snapshots(sid):
     """Get snapshots from Redis (if available) or local dict."""
     if REDIS_READY:
         try:
-            raw = _redis.get(_snapshot_key(sid))
+            raw = rget(_snapshot_key(sid))
             if raw:
                 import json as _j
                 return _j.loads(raw)
@@ -4857,7 +4910,7 @@ def _set_snapshots(sid, snaps):
     if REDIS_READY:
         try:
             import json as _j
-            _redis.setex(_snapshot_key(sid), 7200, _j.dumps(snaps))
+            rset(_snapshot_key(sid), _j.dumps(snaps), ttl_s=7200)
         except Exception:
             pass
 
@@ -5321,7 +5374,7 @@ def analyze():
 
         if (tier in ("elite", "premium", "professional", "pro", "basic") and result["detected"] and
             result.get("score", 100) < 80 and   # skip AI call when posture is already good
-            OLLAMA_URL and time.time() - s.get("last_ai", 0) > 30):  # 30s cooldown
+            AI_CONFIGURED and time.time() - s.get("last_ai", 0) > 30):  # 30s cooldown
             # Fire AI narrative in background — don't block the analysis response
             _r, _ctx, _lg, _sid = dict(result), data.get("employee_context",""), lang, sid
             def _bg_gemini(r, ctx, lg, _session_id):
@@ -5517,7 +5570,7 @@ def pdf_endpoint():
             "lang":         data.get("lang","en"),
         }
         tier_sd = sd2["tier"]
-        if tier_sd == "elite" and OLLAMA_URL and not sd2.get("claude_analysis") and hist:
+        if tier_sd == "elite" and AI_CONFIGURED and not sd2.get("claude_analysis") and hist:
             summary_result = {
                 "score": avg, "metrics": la.get("metrics",{}),
                 "alerts": [a.get("msg","") for a in alts[-5:]],
@@ -5724,8 +5777,8 @@ def mfa_totp_setup():
         secret = generate_totp_secret()
         uri    = get_totp_uri(secret, email)
         # Store pending secret in Redis (expires in 10 min)
-        if redis_client:
-            redis_client.setex(f"mfa:totp:pending:{uid}", 600, secret)
+        if REDIS_READY:
+            rset(f"mfa:totp:pending:{uid}", secret, ttl_s=600)
         return jsonify({"secret": secret, "uri": uri, "email": email})
     except Exception as e:
         return safe_error(e, "MFA setup failed")
@@ -5745,8 +5798,8 @@ def mfa_totp_verify():
         uid  = g.uid
         # Get pending secret from Redis
         secret = None
-        if redis_client:
-            raw = redis_client.get(f"mfa:totp:pending:{uid}")
+        if REDIS_READY:
+            raw = rget(f"mfa:totp:pending:{uid}")
             if raw:
                 secret = raw.decode() if isinstance(raw, bytes) else raw
         if not secret:
@@ -5757,15 +5810,15 @@ def mfa_totp_verify():
         codes        = generate_backup_codes(8)
         hashed_codes = [hash_backup_code(c) for c in codes]
         # Save to Firestore
-        if firestore_db:
-            firestore_db.collection("users").document(uid).update({
+        if db:
+            db.collection("users").document(uid).update({
                 "mfa_enabled":     True,
                 "mfa_totp_secret": secret,   # In production: encrypt with MFA_ENCRYPTION_KEY
                 "mfa_backup_codes": hashed_codes,
                 "mfa_enabled_at":  datetime.utcnow().isoformat(),
             })
-        if redis_client:
-            redis_client.delete(f"mfa:totp:pending:{uid}")
+        if REDIS_READY:
+            rdel(f"mfa:totp:pending:{uid}")
         invalidate_user_cache(uid)
         return jsonify({"success": True, "backup_codes": codes})
     except Exception as e:
@@ -5808,8 +5861,8 @@ def mfa_sms_verify():
             return jsonify({"error": "Invalid or expired code"}), 400
         codes        = generate_backup_codes(8)
         hashed_codes = [hash_backup_code(c) for c in codes]
-        if firestore_db:
-            firestore_db.collection("users").document(uid).update({
+        if db:
+            db.collection("users").document(uid).update({
                 "mfa_enabled":     True,
                 "mfa_method":      "sms",
                 "mfa_phone":       phone,
@@ -5829,8 +5882,8 @@ def mfa_disable():
     """Disable MFA. Requires re-confirmation of UID (frontend confirms via Firebase re-auth)."""
     try:
         uid = g.uid
-        if firestore_db:
-            firestore_db.collection("users").document(uid).update({
+        if db:
+            db.collection("users").document(uid).update({
                 "mfa_enabled":     False,
                 "mfa_totp_secret": None,
                 "mfa_method":      None,
@@ -5853,8 +5906,8 @@ def mfa_backup_codes_regen():
         uid          = g.uid
         codes        = generate_backup_codes(8)
         hashed_codes = [hash_backup_code(c) for c in codes]
-        if firestore_db:
-            firestore_db.collection("users").document(uid).update({
+        if db:
+            db.collection("users").document(uid).update({
                 "mfa_backup_codes": hashed_codes,
                 "mfa_backup_regen_at": datetime.utcnow().isoformat(),
             })
@@ -6916,8 +6969,8 @@ def security_overview():
         uid  = g.uid
         role = g.role
         profile = {}
-        if firestore_db:
-            snap = firestore_db.collection("users").document(uid).get()
+        if db:
+            snap = db.collection("users").document(uid).get()
             if snap.exists:
                 profile = snap.to_dict() or {}
 
@@ -6932,8 +6985,8 @@ def security_overview():
         }
 
         # Count active API keys
-        if firestore_db:
-            keys_snap = firestore_db.collection("api_keys")                .where("uid", "==", uid)                .where("revoked", "==", False).get()
+        if db:
+            keys_snap = db.collection("api_keys")                .where("uid", "==", uid)                .where("revoked", "==", False).get()
             checks["api_keys_active"] = len(keys_snap)
 
         score = sum([
@@ -7008,9 +7061,9 @@ def admin_onboarding_analytics():
     try:
         steps = ["welcome", "calibration", "first_session", "invite_team", "billing"]
         funnel = []
-        if firestore_db:
+        if db:
             for step in steps:
-                snap = firestore_db.collection("onboarding_events")                    .where("step", "==", step)                    .where("completed", "==", True).get()
+                snap = db.collection("onboarding_events")                    .where("step", "==", step)                    .where("completed", "==", True).get()
                 funnel.append({"step": step, "completions": len(snap)})
         else:
             for step in steps:
@@ -7875,7 +7928,7 @@ def compare_sessions():
 
         # ── AI narrative ───────────────────────────────────────────
         narrative = None
-        if OLLAMA_URL:
+        if AI_CONFIGURED:
             try:
                 _imp_txt = "\n".join([f"  ✅ {d['label']}: {d['prev']}{d['unit']} → {d['current']}{d['unit']} ({d['delta']:+.1f})" for d in most_improved]) or "  None"
                 _wrs_txt = "\n".join([f"  ⚠️ {d['label']}: {d['prev']}{d['unit']} → {d['current']}{d['unit']} ({d['delta']:+.1f})" for d in most_worsened]) or "  None"
@@ -9571,7 +9624,7 @@ def ai_analyze():
 
         if not prompt:
             return jsonify({"error": "prompt required"}), 400
-        if not OLLAMA_URL:
+        if not AI_CONFIGURED:
             return jsonify({"error": "AI not configured", "text": None}), 503
         if len(prompt) > 8000:
             return jsonify({"error": "Prompt too long (max 8000 chars)"}), 400
@@ -10402,6 +10455,7 @@ def referral_status():
 def health():
     # Fast liveness probe — do NOT call external APIs here
     local_llm_ok = bool(OLLAMA_URL)
+    groq_ok = bool(GROQ_API_KEY)
     models_ready = POSE_LITE is not None
     mp_ver  = mp.__version__  if (models_ready and mp)  else "not loaded"
     cv2_ver = cv2.__version__ if (models_ready and cv2) else "not loaded"
@@ -10411,6 +10465,7 @@ def health():
         "mediapipe": {"pose_lite": "loaded" if models_ready else "pending","pose_full": "loaded" if models_ready else "pending","face_mesh": "loaded" if models_ready else "pending"},
         "integrations": {
             "local_llm": {"configured": local_llm_ok, "url": OLLAMA_URL or None, "model": LOCAL_LLM_MODEL if local_llm_ok else None},
+            "groq":      {"configured": groq_ok, "model": GROQ_MODEL if groq_ok else None},
             "paymob":    {"configured": bool(PAYMOB_SECRET_KEY)},
             "slack":     {"configured": bool(SLACK_WEBHOOK_URL)},
             "teams":     {"configured": bool(TEAMS_WEBHOOK_URL)},
@@ -10550,6 +10605,33 @@ def health_detailed():
         ollama_status["status"] = "error"
         ollama_status["error"]  = str(_e)[:120]
     report["ollama"] = ollama_status
+
+    # ── 4b. Groq connectivity ────────────────────────────────────
+    groq_status = {}
+    try:
+        if GROQ_API_KEY:
+            groq_status["configured"] = True
+            groq_status["model"]      = GROQ_MODEL
+            _t0   = _t.perf_counter()
+            _resp = req.post(GROQ_URL,
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={"model": GROQ_MODEL,
+                      "messages": [{"role": "user", "content": "Reply with OK only."}],
+                      "max_tokens": 5},
+                timeout=8)
+            groq_status["ping_ms"] = round((_t.perf_counter() - _t0) * 1000, 1)
+            if _resp.status_code == 200:
+                groq_status["status"] = "ok"
+            else:
+                groq_status["status"]      = "degraded"
+                groq_status["http_status"] = _resp.status_code
+        else:
+            groq_status["status"]     = "not_configured"
+            groq_status["configured"] = False
+    except Exception as _e:
+        groq_status["status"] = "error"
+        groq_status["error"]  = str(_e)[:120]
+    report["groq"] = groq_status
 
     # ── 5. Firebase / Firestore ───────────────────────────────────
     firebase_status = {}
@@ -11778,9 +11860,9 @@ def gemini_proxy():
         data   = request.get_json(force=True) or {}
         prompt = data.get("prompt","")
         if not prompt: return jsonify({"error":"prompt required"}), 400
-        # Block if local LLM isn't configured
-        if not OLLAMA_URL:
-            return jsonify({"error":"No AI backend configured (set OLLAMA_URL)","text":None}), 503
+        # Block if no AI backend is configured
+        if not AI_CONFIGURED:
+            return jsonify({"error":"No AI backend configured (set OLLAMA_URL or GROQ_API_KEY)","text":None}), 503
 
         job_id = f"gj_{_uuid_mod.uuid4().hex[:16]}"
         rset(f"gemini_job:{job_id}", _json.dumps({"status":"pending","created":time.time()}), 120)
@@ -11832,7 +11914,7 @@ def gemini_proxy_sync():
         data   = request.get_json(force=True) or {}
         prompt = data.get("prompt","")
         if not prompt: return jsonify({"error":"prompt required"}), 400
-        if not OLLAMA_URL: return jsonify({"error":"AI not configured","text":None}), 503
+        if not AI_CONFIGURED: return jsonify({"error":"AI not configured","text":None}), 503
         text = call_ai(prompt, max_tokens=400, temperature=0.4, tier=getattr(g, "tier", "standard"))
         if text is not None:
             return jsonify({"text": text})
@@ -12222,14 +12304,15 @@ if __name__ == "__main__":
     print("="*60, flush=True)
     print("  PostureAI Pro Backend v15", flush=True)
     print(f"  MediaPipe {mp.__version__} — Pose + FaceMesh + solvePnP + Blink Detection", flush=True)
-    print(f"  AI:  {'✅ Ollama ready (' + LOCAL_LLM_MODEL + ')' if OLLAMA_URL else '⚠️  Add OLLAMA_URL to .env — AI features disabled'}", flush=True)
+    _ai_label = ('✅ Ollama (' + LOCAL_LLM_MODEL + ')') if OLLAMA_URL else (('✅ Groq (' + GROQ_MODEL + ', free tier)') if GROQ_API_KEY else '⚠️  No AI backend — set OLLAMA_URL or GROQ_API_KEY')
+    print(f"  AI:  {_ai_label}", flush=True)
     print(f"  PDF: {'✅ ReportLab ready' if REPORTLAB_OK else '⚠️  pip install reportlab'}", flush=True)
     print(f"  APP_URL: {APP_URL}", flush=True)
     print("  PORT: 5050  →  http://localhost:5050", flush=True)
     if not os.getenv("PAYMOB_HMAC_SECRET",""):
         print("⚠️  WARNING: PAYMOB_HMAC_SECRET not set — webhook verification DISABLED", flush=True)
-    if not OLLAMA_URL:
-        print("ℹ️  OLLAMA_URL not set — AI Coach / AI Insights disabled", flush=True)
+    if not AI_CONFIGURED:
+        print("ℹ️  No AI backend configured — AI Coach / AI Insights disabled. Easiest fix: console.groq.com → API Keys → set GROQ_API_KEY in Railway.", flush=True)
     print("="*60, flush=True)
     sys.stdout.flush()
     app.run(host="0.0.0.0", port=5050, debug=False, threaded=True, use_reloader=False)
@@ -12571,8 +12654,7 @@ def coach_chat():
 
         if not messages:
             return jsonify({"error": "messages required"}), 400
-        # OLLAMA_URL is optional — if not set, fall through to Gemini directly
-        # (previously returned 503 here, blocking the Gemini path entirely)
+        # OLLAMA_URL is optional — if not set, falls through to Groq directly
 
         # ── Tier-based AI Coach limits + depth (single source of truth) ──
         _uid_coach    = getattr(g, "uid", "")
@@ -12686,49 +12768,34 @@ You can help with:
             except Exception as _le:
                 log_event("coach_local_llm_error", meta={"error": str(_le)[:80]})
 
-        if text is None:
-            # ── Gemini fallback (backend-side) ────────────────────────────
-            # Used when OLLAMA_URL isn't set (Railway without local LLM) or
-            # when Ollama is unavailable. Uses the backend's own GEMINI_API_KEY
-            # env var, not the frontend's VITE_GEMINI_API_KEY.
-            _gkey = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
-            if _gkey:
-                try:
-                    _gem_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gkey}"
-                    _gem_contents = []
-                    # Inject system prompt as opening user/model exchange
-                    _gem_contents.append({"role": "user", "parts": [{"text": sys_prompt}]})
-                    _gem_contents.append({"role": "model", "parts": [{"text": "Understood. I am PostureAI Coach, ready to help."}]})
-                    _gem_contents.extend(gemini_contents)
-                    _gem_resp = req.post(
-                        _gem_url,
-                        headers={"Content-Type": "application/json"},
-                        json={
-                            "contents": _gem_contents,
-                            "generationConfig": {
-                                "maxOutputTokens": _quality_coach.get("max_tokens", 600),
-                                "temperature": 0.7,
-                            },
-                        },
-                        timeout=20,
-                    )
-                    if _gem_resp.status_code == 200:
-                        _cands = _gem_resp.json().get("candidates", [])
-                        text = (_cands[0].get("content", {}).get("parts", [{}])[0].get("text", "")) if _cands else None
-                    elif _gem_resp.status_code == 429:
-                        # Rate limited — let frontend fallback handle it
-                        return jsonify({"error": "AI rate limit — try again in a moment", "ok": False}), 429
-                    else:
-                        log_event("coach_gemini_error", meta={"status": _gem_resp.status_code})
-                except Exception as _ge:
-                    log_event("coach_gemini_exception", meta={"error": str(_ge)[:80]})
+        if text is None and GROQ_API_KEY:
+            # ── Groq fallback (free tier, server-side only) ───────────────
+            try:
+                _groq_resp = req.post(GROQ_URL,
+                    headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                    json={
+                        "model":       GROQ_MODEL,
+                        "messages":    ollama_msgs,  # OpenAI-compatible format — Groq uses the same shape as Ollama
+                        "max_tokens":  _quality_coach["max_tokens"],
+                        "temperature": 0.5,
+                    },
+                    timeout=20,
+                )
+                if _groq_resp.status_code == 200:
+                    text = (_groq_resp.json().get("choices") or [{}])[0].get("message", {}).get("content", "") or None
+                elif _groq_resp.status_code == 429:
+                    return jsonify({"error": "AI rate limit — try again in a moment", "ok": False}), 429
+                else:
+                    log_event("coach_groq_error", meta={"status": _groq_resp.status_code})
+            except Exception as _ge:
+                log_event("coach_groq_exception", meta={"error": str(_ge)[:80]})
 
         if text is None:
             return jsonify({"error": "AI unavailable — try again in a few seconds", "ok": False}), 503
 
         # ── Audit + usage tracking ────────────────────────────────────
         _uid = getattr(g, "uid", "unknown")
-        audit(_uid, "ai_coach_query", "local:" + LOCAL_LLM_MODEL, {"lang": lang, "turns": len(gemini_contents)})
+        audit(_uid, "ai_coach_query", "local:" + LOCAL_LLM_MODEL if OLLAMA_URL else "groq", {"lang": lang, "turns": len(gemini_contents)})
         try:
             import redis as _r2
             _rc2 = _r2.from_url(os.getenv("REDIS_URL","redis://localhost:6379/0"))
@@ -13424,7 +13491,7 @@ def compute_heatmap():
 
         # AI insight if local AI configured
         ai_insight = None
-        if OLLAMA_URL and insights:
+        if AI_CONFIGURED and insights:
             try:
                 prompt = f"Based on this posture data summary: {'; '.join(insights)}. Give one concise ergonomic tip (1 sentence, professional)."
                 ai_insight = call_ai(prompt, max_tokens=80, temperature=0.4)
@@ -13654,7 +13721,7 @@ def posture_insights():
         sessions   = data.get("sessions", [])
         profile    = data.get("profile", {})
         lang       = data.get("lang", "en")
-        if not OLLAMA_URL:
+        if not AI_CONFIGURED:
             return jsonify({"insights": [], "summary": "AI not configured"}), 503
         if not sessions:
             return jsonify({"insights": [], "summary": "No session data available"})
@@ -13695,7 +13762,7 @@ Provide exactly 3 insights in this JSON format (respond with JSON only, no markd
 
 def _gemini_json(prompt: str, max_tokens: int = 600, temperature: float = 0.25) -> dict | None:
     """Helper: call local AI, parse JSON, return dict or None."""
-    if not OLLAMA_URL:
+    if not AI_CONFIGURED:
         return None
     try:
         import json as _j
@@ -13924,7 +13991,7 @@ def ai_predictive():
 
         # AI narrative on predictions (only if local AI available)
         narrative = None
-        if OLLAMA_URL and len(scores) >= 5:
+        if AI_CONFIGURED and len(scores) >= 5:
             prompt = f"""Posture analytics prediction request.
 
 Stats: avg={stats['avg_score']}, trend={stats['trend_label']} ({stats['trend_slope']:+.1f}),
@@ -15111,7 +15178,7 @@ def user_report():
 
         # AI insights (local)
         ai_summary = None
-        if OLLAMA_URL:
+        if AI_CONFIGURED:
             prompt = f"""You are an occupational health specialist. Write a brief clinical summary (3-4 sentences) for:
 
 Employee: {name}
