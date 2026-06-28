@@ -394,24 +394,24 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         onAuth(c.user, false);
       } else {
         const c = await signUpEmail(email.trim(), pass);
-        // Profile creation is best-effort — Firestore rules or network issues
-        // should NOT block the user from entering the app after account creation.
+        // Profile creation is best-effort
         try {
           await createUserProfile(c.user.uid, {
             email:      email.trim(),
             name:       `${fname.trim()} ${lname.trim()}`.trim(),
             first_name: fname.trim(),
             last_name:  lname.trim(),
-            country:    country,
+            country,
             profession: profession.trim(),
-          newsletter: newsletter,
-          company:    "",
-        });
-        onAuth(c.user,true);
+            newsletter,
+            company:    "",
+          });
+        } catch {}
+        onAuth(c.user, true);
       }
     } catch(e) { setErr(getErr(e,isAr)); doShake(); }
     finally { setLoading(false); }
-  },[view,email,pass,pass2,fname,lname,emailValid,passValid,pass2Valid,fnameValid,lnameValid,isAr,onAuth]);
+  },[view,email,pass,pass2,fname,lname,emailValid,passValid,pass2Valid,fnameValid,lnameValid,countryValid,termsValid,isAr,onAuth]);
 
   // ── Forgot password ──────────────────────────────────────────────
   const handleForgot = useCallback(async e => {
