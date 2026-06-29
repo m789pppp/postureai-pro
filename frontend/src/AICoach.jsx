@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { geminiChat, buildCoachContext, friendlyError } from "./gemini.js";
+import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { qualityFor, coachLimitLabel as tierCoachLimitLabel } from "./lib/tierQuality.js";
 
 // ── Markdown renderer (lightweight) ──────────────────────────────
