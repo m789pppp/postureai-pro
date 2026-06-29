@@ -91,6 +91,26 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
   throw new Error(errMsg || `AI error ${res.status}`);
 }
 
+// ── Local AI fallback (WebLLM — runs in browser, no API key) ─────
+// Called automatically when backend is unavailable
+export async function localFallbackChat(messages, opts = {}) {
+  try {
+    const { localChat } = await import("./localAI.js");
+    return await localChat(messages, opts);
+  } catch(e) {
+    throw new Error("AI temporarily unavailable — please try again");
+  }
+}
+
+export async function localFallbackAnalysis(prompt, opts = {}) {
+  try {
+    const { localAnalysis } = await import("./localAI.js");
+    return await localAnalysis(prompt, opts);
+  } catch(e) {
+    throw new Error("AI temporarily unavailable — please try again");
+  }
+}
+
 /**
  * geminiAnalysis — single-shot analysis via /api/ai/analyze (local AI).
  * Used by AIInsights, PredictiveAI, AIReports, NotificationsHub.

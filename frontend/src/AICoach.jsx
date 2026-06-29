@@ -57,8 +57,14 @@ const SUGGESTIONS = {
 export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClose }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const [loading,      setLoading]     = useState(false);
+  const [error,        setError]       = useState("");
+  const [localAIReady, setLocalAIReady]= useState(getLocalAIStatus().ready);
+
+  useEffect(() => {
+    const unsub = onLocalAIStatus(s => setLocalAIReady(s.ready));
+    return unsub;
+  }, []);
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
