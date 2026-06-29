@@ -155,7 +155,7 @@ export async function createUserProfile(uid, data, referredBy = null) {
   const isAdmin = false; // SECURITY: is_admin is set ONLY by server-side admin action, never on signup
   const isCoDom = isCompanyDomain(data.email);
   const trialExpires = new Date();
-  trialExpires.setDate(trialExpires.getDate() + 14);
+  trialExpires.setDate(trialExpires.getDate() + 7); // 7-day trial
 
   // Tier logic:
   // - Auto-approve domain (e.g. tkh.edu.eg) → elite (also elevated server-side)

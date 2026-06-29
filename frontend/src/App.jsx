@@ -55,6 +55,7 @@ import AuthPage            from "./AuthPage.jsx";
 import ResetPasswordPage    from "./ResetPasswordPage.jsx";
 import EmailVerificationPage from "./EmailVerificationPage.jsx";
 import ChangePasswordPage    from "./ChangePasswordPage.jsx";
+import TrialExpiredPage      from "./TrialExpiredPage.jsx";
 import HomePage from "./HomePage.jsx";
 import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
@@ -1859,6 +1860,11 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
   const initial=(profile?.name||user?.email||"U")[0].toUpperCase();
   const tierColor=profile?.tier==="elite"?"#10b981":profile?.tier==="professional"?"#0ea5e9":"#6366f1";
 
+  // Trial days remaining
+  const trialDaysLeft = profile?.is_trial && profile?.trial_expires_at
+    ? Math.max(0, Math.ceil((profile.trial_expires_at.toDate?.()?.getTime?.() || 0 - Date.now()) / 86400000))
+    : null;
+
   useEffect(()=>{
     const fn=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
     document.addEventListener("mousedown",fn);
@@ -1900,6 +1906,11 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
             <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}</div>
             <div style={{fontSize:10,color:cs.muted,marginTop:2}}>{user?.email}</div>
             {profile?.tier&&<div style={{display:"inline-block",marginTop:5,background:`${tierColor}18`,border:`0.5px solid ${tierColor}40`,borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700,color:tierColor}}>{profile.tier.toUpperCase()}{profile.is_trial?" ⏱":""}</div>}
+            {profile?.is_trial&&trialDaysLeft!==null&&(
+              <div style={{marginTop:4,fontSize:9.5,color:"#f59e0b",fontWeight:600}}>
+                {isAr?`${trialDaysLeft} يوم متبقي`:`${trialDaysLeft} days left`}
+              </div>
+            )}
           </div>
           {items.map((item,i)=>(
             <button key={i} onClick={item.onClick} style={{
@@ -3060,6 +3071,37 @@ export default function App(){
     </ErrorBoundary>
   );
   if(page==="embed")return <EmbedWidget/>;
+
+  // ── Trial expired gate ──────────────────────────────────────────────
+  const trialExpired = user && profile && !profile.is_trial &&
+    profile.tier === "standard" &&
+    profile.created_at &&
+    !profile.is_admin;
+
+  // Check if user ever had a trial (created_at exists = they went through signup)
+  const hadTrial = profile?.email_day2_sent !== undefined ||
+    (profile?.created_at && profile?.sessions_count >= 0);
+
+  if (trialExpired && hadTrial && page === "home") return (
+    <ErrorBoundary>
+      <TrialExpiredPage
+        profile={profile}
+        darkMode={darkMode}
+        lang={lang}
+        cs={cs}
+        onUpgrade={(planId)=>{
+          setDeepPlan(planId);
+          setShowBilling(true);
+        }}
+        onLogout={async()=>{
+          await logOut();
+          setUser(null);
+          setProfile(null);
+          setPage("landing");
+        }}
+      />
+    </ErrorBoundary>
+  );
 
   // ── Firebase action URL: password reset from email link ──────────
   if(fbMode==="resetPassword" && fbOobCode) return(
