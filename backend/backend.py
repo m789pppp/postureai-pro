@@ -15,7 +15,7 @@ _ai_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gemini")
 _coupon_lock = threading.Lock()   # ← thread-safe coupon counter
 from datetime import datetime, timedelta
 import traceback
-from flask import Flask, request, jsonify, send_file, g
+from flask import Flask, request, jsonify, send_file, g, make_response
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -236,17 +236,6 @@ def safe_error(e, msg="Internal server error", status=500):
         return _j({"error": str(e), "trace": traceback.format_exc()}), status
 def register_error_handlers(app): pass
 
-# ── Optional WebSocket / Socket.IO (enable with SOCKETIO_ENABLED=true) ────────
-if os.getenv("SOCKETIO_ENABLED", "false").lower() == "true":
-    try:
-        from services.websocket_server import init_socketio
-        socketio = init_socketio(app)
-        print("✅ WebSocket server initialized (Socket.IO)", flush=True)
-    except ImportError as _ws_err:
-        print(f"⚠️  WebSocket init skipped: {_ws_err} — pip install flask-socketio gevent", file=sys.stderr)
-    except Exception as _ws_err2:
-        print(f"⚠️  WebSocket init error: {_ws_err2}", file=sys.stderr)
-
 
 # ── Firebase Firestore (lazy import) ─────────────────────────────
 try:
@@ -313,7 +302,7 @@ def call_groq(prompt, system_prompt=None, max_tokens=900, temperature=0.25):
     messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [{"role": "user", "content": prompt}]
     for model in (GROQ_MODEL, "llama-3.1-8b-instant", "gemma2-9b-it"):
         try:
-            resp = requests.post(GROQ_URL,
+            resp = req.post(GROQ_URL,
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
                 json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
                 timeout=15)
@@ -426,58 +415,6 @@ def validate_plan_request(tier: str, billing: str) -> tuple[bool, str]:
         return False, f"Unknown billing: {billing}. Valid: monthly, yearly"
     return True, ""
 
-@app.route("/api/pricing", methods=["GET"])
-@limiter.limit("60 per minute")
-def get_pricing():
-    """Public endpoint — return pricing for Egypt and Gulf markets."""
-    region = request.args.get("region", "gulf").lower()
-    lang   = request.args.get("lang", "en")
-    is_ar  = lang == "ar"
-
-    plans = [
-        {
-            "id":    "basic",
-            "name":  "Basic" if not is_ar else "أساسي",
-            "color": "#3b82f6",
-            "features": {
-                "en": ["Unlimited sessions", "AI Coach (10 msgs/month)", "Streak tracking", "Goals"],
-                "ar": ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "تتبع السلسلة", "الأهداف"],
-            },
-            "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("basic", {}),
-            "cta": "ابدأ الآن" if is_ar else "Get Started",
-        },
-        {
-            "id":    "professional",
-            "name":  "Pro" if not is_ar else "احترافي",
-            "color": "#8b5cf6",
-            "popular": True,
-            "features": {
-                "en": ["Everything in Basic", "AI Insights", "Reports", "Compare sessions", "Pain prediction"],
-                "ar": ["كل Basic", "رؤى AI", "تقارير", "مقارنة الجلسات", "توقع الألم"],
-            },
-            "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("professional", {}),
-            "cta": "الأكثر شعبية" if is_ar else "Most Popular",
-        },
-        {
-            "id":    "elite",
-            "name":  "Elite",
-            "color": "#f59e0b",
-            "features": {
-                "en": ["Everything in Pro", "AI Coach unlimited", "Predictive AI", "PDF report", "Priority support"],
-                "ar": ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي", "تقرير PDF", "دعم أولوية"],
-            },
-            "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("elite", {}),
-            "cta": "الأفضل" if is_ar else "Best Value",
-        },
-    ]
-
-    return jsonify({
-        "ok":     True,
-        "region": region,
-        "currency": "EGP" if region == "egypt" else "USD",
-        "gateway": "paymob" if region == "egypt" else "stripe",
-        "plans":  plans,
-    })
 APP_URL        = os.getenv("APP_URL", "https://postureai.vercel.app")
 SUPPORT_EMAIL  = os.getenv("SUPPORT_EMAIL", "support@postureai.io")
 ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@postureai.io")
@@ -626,6 +563,17 @@ if _extra:
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2MB max request — prevents OOM on large frames
 
+# ── Optional WebSocket / Socket.IO (enable with SOCKETIO_ENABLED=true) ────────
+if os.getenv("SOCKETIO_ENABLED", "false").lower() == "true":
+    try:
+        from services.websocket_server import init_socketio
+        socketio = init_socketio(app)
+        print("✅ WebSocket server initialized (Socket.IO)", flush=True)
+    except ImportError as _ws_err:
+        print(f"⚠️  WebSocket init skipped: {_ws_err} — pip install flask-socketio gevent", file=sys.stderr)
+    except Exception as _ws_err2:
+        print(f"⚠️  WebSocket init error: {_ws_err2}", file=sys.stderr)
+
 @app.errorhandler(413)
 def too_large(e):
     return jsonify({"error": "Request too large — max 2MB"}), 413
@@ -680,22 +628,6 @@ try:
     print("✅ Health blueprint registered")
 except Exception as _e:
     print(f"⚠️  Health blueprint skipped: {_e}")
-
-# ── Merged from v13: WorkOS SSO + Custom Domains ───────────────────
-try:
-    from services.workos_sso import register_workos_routes
-    register_workos_routes(app, require_auth, require_admin, firestore, audit, print)
-    print("✅ WorkOS SSO routes registered")
-except Exception as _e:
-    print(f"⚠️  WorkOS SSO skipped: {_e}")
-
-try:
-    from services.custom_domains import register_domain_routes
-    _fs_client = firestore.client()
-    register_domain_routes(app, require_auth, require_admin, _fs_client, audit)
-    print("✅ Custom domain routes registered")
-except Exception as _e:
-    print(f"⚠️  Custom domain routes skipped: {_e}")
 
 # ── Rate Limiting ──────────────────────────────────────────────────
 # IMPORTANT: storage_uri MUST point to Redis in production.
@@ -768,6 +700,59 @@ limiter = Limiter(
     default_limits=["200 per minute", "2000 per hour"],
     storage_uri=_limiter_storage
 )
+
+@app.route("/api/pricing", methods=["GET"])
+@limiter.limit("60 per minute")
+def get_pricing():
+    """Public endpoint — return pricing for Egypt and Gulf markets."""
+    region = request.args.get("region", "gulf").lower()
+    lang   = request.args.get("lang", "en")
+    is_ar  = lang == "ar"
+
+    plans = [
+        {
+            "id":    "basic",
+            "name":  "Basic" if not is_ar else "أساسي",
+            "color": "#3b82f6",
+            "features": {
+                "en": ["Unlimited sessions", "AI Coach (10 msgs/month)", "Streak tracking", "Goals"],
+                "ar": ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "تتبع السلسلة", "الأهداف"],
+            },
+            "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("basic", {}),
+            "cta": "ابدأ الآن" if is_ar else "Get Started",
+        },
+        {
+            "id":    "professional",
+            "name":  "Pro" if not is_ar else "احترافي",
+            "color": "#8b5cf6",
+            "popular": True,
+            "features": {
+                "en": ["Everything in Basic", "AI Insights", "Reports", "Compare sessions", "Pain prediction"],
+                "ar": ["كل Basic", "رؤى AI", "تقارير", "مقارنة الجلسات", "توقع الألم"],
+            },
+            "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("professional", {}),
+            "cta": "الأكثر شعبية" if is_ar else "Most Popular",
+        },
+        {
+            "id":    "elite",
+            "name":  "Elite",
+            "color": "#f59e0b",
+            "features": {
+                "en": ["Everything in Pro", "AI Coach unlimited", "Predictive AI", "PDF report", "Priority support"],
+                "ar": ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي", "تقرير PDF", "دعم أولوية"],
+            },
+            "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("elite", {}),
+            "cta": "الأفضل" if is_ar else "Best Value",
+        },
+    ]
+
+    return jsonify({
+        "ok":     True,
+        "region": region,
+        "currency": "EGP" if region == "egypt" else "USD",
+        "gateway": "paymob" if region == "egypt" else "stripe",
+        "plans":  plans,
+    })
 
 # ── Input validation ───────────────────────────────────────────────
 def validate_frame(data):
@@ -1371,8 +1356,8 @@ try:
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
-        Table, TableStyle, HRFlowable)
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        Table, TableStyle, HRFlowable, PageBreak)
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
     from reportlab.graphics.shapes import Drawing, Rect, Line, String
     REPORTLAB_OK = True
 except ImportError:
@@ -7084,6 +7069,10 @@ def admin_onboarding_analytics():
 # ── API Usage Dashboard ────────────────────────────────────────────
 
 
+# In-memory system announcements (e.g. "Scheduled maintenance Friday 2am").
+# Empty by default — populate via a future admin endpoint if needed.
+_announcements = []
+
 @app.route("/api/announcements", methods=["GET"])
 @require_auth
 @limiter.limit("60 per minute")
@@ -10457,7 +10446,7 @@ def health():
     local_llm_ok = bool(OLLAMA_URL)
     groq_ok = bool(GROQ_API_KEY)
     models_ready = POSE_LITE is not None
-    mp_ver  = mp.__version__  if (models_ready and mp)  else "not loaded"
+    mp_ver  = _mp.__version__  if (models_ready and _mp)  else "not loaded"
     cv2_ver = cv2.__version__ if (models_ready and cv2) else "not loaded"
     return jsonify({
         "status": "ok", "version": "17.0",
@@ -10503,7 +10492,7 @@ def health_detailed():
     mp_status = {}
     models_ready = POSE_LITE is not None
     try:
-        mp_status["mediapipe_version"] = mp.__version__ if mp else "not imported"
+        mp_status["mediapipe_version"] = _mp.__version__ if _mp else "not imported"
         mp_status["opencv_version"]    = cv2.__version__ if cv2 else "not imported"
         mp_status["pose_lite"]         = "loaded" if POSE_LITE is not None else "not loaded"
         mp_status["pose_full"]         = "loaded" if POSE_FULL is not None else "not loaded"
@@ -10652,11 +10641,14 @@ def health_detailed():
     report["firebase"] = firebase_status
 
     # ── 6. Overall status ─────────────────────────────────────────
+    ai_status = "ok" if (ollama_status.get("status") == "ok" or groq_status.get("status") == "ok") else (
+        "not_configured" if (ollama_status.get("status") == "not_configured" and groq_status.get("status") == "not_configured") else "degraded"
+    )
     subsystems = [
         mp_status.get("status"),
         redis_status.get("status"),
         latency_status.get("status"),
-        gemini_status.get("status"),
+        ai_status,
         firebase_status.get("status"),
     ]
     if any(s == "error" for s in subsystems):
@@ -12303,7 +12295,7 @@ if __name__ == "__main__":
     os.makedirs("reports", exist_ok=True)
     print("="*60, flush=True)
     print("  PostureAI Pro Backend v15", flush=True)
-    print(f"  MediaPipe {mp.__version__} — Pose + FaceMesh + solvePnP + Blink Detection", flush=True)
+    print(f"  MediaPipe {_mp.__version__ if _mp else '(lazy-loaded on first request)'} — Pose + FaceMesh + solvePnP + Blink Detection", flush=True)
     _ai_label = ('✅ Ollama (' + LOCAL_LLM_MODEL + ')') if OLLAMA_URL else (('✅ Groq (' + GROQ_MODEL + ', free tier)') if GROQ_API_KEY else '⚠️  No AI backend — set OLLAMA_URL or GROQ_API_KEY')
     print(f"  AI:  {_ai_label}", flush=True)
     print(f"  PDF: {'✅ ReportLab ready' if REPORTLAB_OK else '⚠️  pip install reportlab'}", flush=True)
@@ -12563,6 +12555,22 @@ def audit(uid: str, action: str, resource: str = "", meta: dict = None, ip: str 
     except Exception:
         pass  # Redis unavailable — memory-only is acceptable fallback
 
+# ── Merged from v13: WorkOS SSO + Custom Domains ───────────────────
+try:
+    from services.workos_sso import register_workos_routes
+    register_workos_routes(app, require_auth, require_admin, firestore, audit, print)
+    print("✅ WorkOS SSO routes registered")
+except Exception as _e:
+    print(f"⚠️  WorkOS SSO skipped: {_e}")
+
+try:
+    from services.custom_domains import register_domain_routes
+    _fs_client = firestore.client()
+    register_domain_routes(app, require_auth, require_admin, _fs_client, audit)
+    print("✅ Custom domain routes registered")
+except Exception as _e:
+    print(f"⚠️  Custom domain routes skipped: {_e}")
+
 @require_auth
 @app.route("/api/audit/log", methods=["POST"])
 @limiter.limit("200 per minute")
@@ -12634,7 +12642,7 @@ def set_user_claims():
         if "hr"    in data: claims["hr"]    = bool(data["hr"])
         fb_auth_mod.set_custom_user_claims(target_uid, claims)
         invalidate_user_cache(target_uid)
-        _log_audit(g.uid, "set_claims", {"target": target_uid, "claims": claims})
+        audit(g.uid, "set_claims", meta={"target": target_uid, "claims": claims})
         return jsonify({"ok":True,"target_uid":target_uid,"claims":claims})
     except Exception as e:
         return safe_error(e)
@@ -15201,7 +15209,7 @@ Focus on actionable recommendations. {"Respond in Arabic." if lang=="ar" else "B
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
         from reportlab.lib.units import mm
-        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 
         NAVY=colors.HexColor("#05101f"); BLUE=colors.HexColor("#1a56db")
         GREEN=colors.HexColor("#059669"); AMBER=colors.HexColor("#d97706")
