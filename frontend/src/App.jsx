@@ -1276,7 +1276,7 @@ function CancelSubscriptionCard({profile,user,cs,addToast,isAr}){
     setLoading(true);
     try{
       await EmailAPI.invoice({email:user.email,name:profile.name,tier:profile.tier,amount:0,billing:"cancelled",seats:25,ref:"CANCEL-"+Date.now()});
-    }catch{}
+    }catch(e){ console.warn("[cancel] email failed:",e?.code||e?.message); }
     addToast(t.done,"info");
     setStep(2);
     setLoading(false);
@@ -2403,8 +2403,8 @@ export default function App(){
 
           if(p){
             setProfile(p);
-            try { if(p.tier) setTier(normalizeTier(p.tier)); } catch{}
-            try { if(p.company_id) setCompanyId(p.company_id); } catch{}
+            if(p.tier)       setTier(normalizeTier(p.tier));
+            if(p.company_id) setCompanyId(p.company_id);
           }
 
           // Real-time sessions listener
@@ -2578,9 +2578,11 @@ export default function App(){
               finalResult = {...result, overall: Math.round(result.overall*.4 + calibScore*.6), metrics: adjMets};
             }
             if(finalResult.overall>=65){goodRef.current++;setGoodF(goodRef.current);}
+            // Score pipeline: buffer(60frames) → calibration → EMA smoother → UI
             const smoothed1=pushScore(finalResult.overall);
-            alertIfNeeded(smoothed1||finalResult.overall);
-            histRef.current.push(smoothed1||finalResult.overall);
+            const displayScore = smoothed1 ?? finalResult.overall;
+            alertIfNeeded(displayScore);
+            histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
             if(mode==="side")drawSide(ctx,finalResult,W,H,isAr);else drawFront(ctx,finalResult,W,H,isAr);
@@ -2723,6 +2725,7 @@ export default function App(){
       if(!vidRef.current){return;}
       setCameraStatus("ready");
       lmSmootherRef.current?.reset();
+      frameBufferRef.current?.clear();
       insightsRef.current=null;setSessionInsights([]);
       // Request notification permission on first session
       requestNotificationPermission();
@@ -2765,6 +2768,7 @@ export default function App(){
 
   async function stopCamera(){
     lmSmootherRef.current?.reset();
+    frameBufferRef.current?.clear();
     lightCheckRef.current={t:0,canvas:lightCheckRef.current.canvas,wasLow:false};setLowLight(false);
     if(streamRef.current){
       streamRef.current.getTracks().forEach(x=>{x.stop(); x.enabled=false;});
