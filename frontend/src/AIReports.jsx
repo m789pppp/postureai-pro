@@ -4,7 +4,8 @@
  * Manager insights · Department comparisons
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { geminiAnalysis } from "./gemini.js";
+import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
+import { getLocalAIStatus } from "./localAI.js";
 
 // ── helpers ───────────────────────────────────────────────────────
 const avg  = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
@@ -14,7 +15,12 @@ const pct  = (a, b) => b ? `${a >= b ? "+" : ""}${Math.round(((a - b) / b) * 100
 const fmt  = d => { try { return new Date(d?.toDate?.() || d).toLocaleDateString(); } catch { return "—"; } };
 
 async function callGemini(prompt, system, maxTokens = 1200) {
-  return geminiAnalysis(prompt, { context: { system_prompt: system }, maxTokens });
+  try {
+    return await geminiAnalysis(prompt, { context: { system_prompt: system }, maxTokens });
+  } catch (e) {
+    if (getLocalAIStatus().ready) return await localFallbackAnalysis(prompt, { systemPrompt: system, maxTokens });
+    throw e;
+  }
 }
 
 function MdText({ text }) {

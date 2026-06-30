@@ -4,7 +4,8 @@
  * Posture risk scoring · Trend forecasting
  */
 import { useState, useEffect, useCallback } from "react";
-import { geminiAnalysis } from "./gemini.js";
+import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
+import { getLocalAIStatus } from "./localAI.js";
 
 // NOTE: previously wrapped geminiChat(), but /api/coach/chat ignores any
 // custom system prompt and always answers as the hardcoded "PostureAI
@@ -12,7 +13,12 @@ import { geminiAnalysis } from "./gemini.js";
 // answered with the wrong persona. geminiAnalysis() -> /api/ai/analyze
 // actually honors context.system_prompt.
 async function callGemini(prompt, system, maxTokens = 900) {
-  return geminiAnalysis(prompt, { context: { system_prompt: system }, maxTokens });
+  try {
+    return await geminiAnalysis(prompt, { context: { system_prompt: system }, maxTokens });
+  } catch (e) {
+    if (getLocalAIStatus().ready) return await localFallbackAnalysis(prompt, { systemPrompt: system, maxTokens });
+    throw e;
+  }
 }
 
 function MdText({ text }) {
