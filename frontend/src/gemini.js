@@ -1,38 +1,25 @@
 /**
- * gemini.js — AI calls, routed through the backend proxy only.
+ * gemini.js — AI calls, 100% client-side, no server, no API keys.
  *
- * The backend's only AI provider is a local, free, open-source LLM
- * (Ollama — see OLLAMA_URL/LOCAL_LLM_MODEL in backend.py). No cloud
- * API keys (Gemini, Groq) are used anywhere, on either side:
- *   - No client-exposed secrets, no per-request cost, no rate limits
- *     from a third party, no data leaving the server.
- *   - There is intentionally NO client-side direct-provider fallback.
- *     A local model isn't reachable from the browser anyway, and a
- *     "fallback" that calls a cloud provider directly from the client
- *     would re-introduce the exact problems we removed (exposed keys,
- *     bypassed tier limits) for a rare edge case. If the backend is
- *     down, the user sees a clear "AI unavailable" message instead.
+ * Engine: WebLLM (@mlc-ai/web-llm, open-source, MIT) running
+ * Qwen2.5-0.5B-Instruct entirely inside the user's browser via WebGPU.
+ *   - Nothing to install — the model downloads once on first use and
+ *     is cached by the browser (IndexedDB), then works instantly,
+ *     completely free, with zero backend involvement.
+ *   - No cloud API keys (no Gemini, no Groq), no per-request cost,
+ *     no rate limits, no data ever leaves the user's device.
+ *   - Every user who opens the site gets their own private AI — no
+ *     shared quota, no "AI not configured" errors.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
-
-async function getAuthToken(forceRefresh = false) {
-  try {
-    const { getAuth } = await import("firebase/auth");
-    const u = getAuth().currentUser;
-    return u ? await u.getIdToken(forceRefresh) : "";
-  } catch { return ""; }
-}
-
-function _isRateLimit(status, msg = "") {
-  return status === 429 || status === 503 || status === 502 ||
-    msg.includes("rate") || msg.includes("quota") || msg.includes("busy");
-}
+function _isRateLimit() { return false; } // kept for API compatibility, unused locally
 
 // ── Friendly error messages ───────────────────────────────────────
 export function friendlyError(e, lang = "en") {
   const msg = e?.message || "";
   const ar  = lang === "ar";
+  if (msg === "AI_NO_WEBGPU")
+    return ar ? "🧠 المتصفح ده مش بيدعم الـ AI المحلي — جرب Chrome أو Edge أحدث إصدار" : "🧠 This browser doesn't support local AI — try the latest Chrome or Edge";
   if (msg === "AI_BUSY" || msg.includes("429") || msg.includes("busy"))
     return ar ? "⏳ الـ AI مشغول — انتظر ثانية وجرب تاني" : "⏳ AI is busy — try again in a moment";
   if (e?.code === "coach_limit_reached" || e?.code === "ai_limit_reached" || msg.includes("limit_reached") || msg.includes("coach_limit") || msg.includes("Monthly") || msg.includes("messages this month"))
@@ -45,104 +32,64 @@ export function friendlyError(e, lang = "en") {
 }
 
 /**
- * geminiChat — multi-turn conversation via /api/coach/chat (local AI).
+ * geminiChat — multi-turn conversation, fully local (WebLLM in-browser).
  * context: structured analytics object {avg_score, sessions_count,
- * worst_time, top_alerts, has_calibration} — tier itself is taken
- * from the authenticated session server-side, never from the client.
+ * worst_time, top_alerts, has_calibration} — folded into the system
+ * prompt since there is no server-side session/tier to read it from.
  */
 export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxTokens = 600, lang = "en", context = {} } = {}) {
   const messages = Array.isArray(messagesOrPrompt)
     ? messagesOrPrompt
     : [{ role: "user", content: String(messagesOrPrompt) }];
 
-  // Backend proxy (with 401 auto-retry via force token refresh)
-  let backendReachable = false;
-  let res;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const tok = await getAuthToken(attempt > 0);
-      res = await fetch(`${API_BASE}/coach/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
-        body: JSON.stringify({ messages, context: { ...context, system_prompt: systemPrompt }, lang, max_tokens: maxTokens }),
-        signal: AbortSignal.timeout(22000),
-      });
-      backendReachable = true;
-      if (res.status === 401 && attempt === 0) { res = null; continue; }
-      break;
-    } catch (e) {
-      if (backendReachable) throw e;
-      const isTimeout = e?.name === "TimeoutError" || e?.name === "AbortError";
-      throw new Error(isTimeout ? "Connection timed out — please try again" : "AI temporarily unavailable — please try again");
-    }
-  }
+  const { localChat } = await import("./localAI.js");
 
-  if (res.ok) return (await res.json()).text || "";
-  const err = await res.json().catch(() => ({}));
-  const errMsg = err.error || err.message || "";
-  if (err.error === "coach_limit_reached") {
-    const limitErr = new Error(err.message || "coach_limit_reached");
-    limitErr.code = "coach_limit_reached";
-    limitErr.used = err.used;
-    limitErr.limit = err.limit;
-    throw limitErr;
+  const fullSystemPrompt = [
+    systemPrompt,
+    Object.keys(context).length ? `Context: ${JSON.stringify(context)}` : "",
+    lang === "ar" ? "Respond in Egyptian Arabic." : "Respond in English.",
+  ].filter(Boolean).join("\n\n");
+
+  try {
+    return await localChat(messages, { systemPrompt: fullSystemPrompt, maxTokens });
+  } catch (e) {
+    throw new Error(e?.message?.includes("WebGPU") || e?.message?.includes("gpu")
+      ? "AI_NO_WEBGPU"
+      : "AI temporarily unavailable — please try again");
   }
-  if (_isRateLimit(res.status, errMsg)) throw new Error("AI_BUSY");
-  throw new Error(errMsg || `AI error ${res.status}`);
 }
 
-// ── Local AI fallback (WebLLM — runs in browser, no API key) ─────
-// Called automatically when backend is unavailable
+// ── Direct local-AI wrappers (used by components that check
+// getLocalAIStatus().ready themselves before calling) ───────────────
 export async function localFallbackChat(messages, opts = {}) {
-  try {
-    const { localChat } = await import("./localAI.js");
-    return await localChat(messages, opts);
-  } catch(e) {
-    throw new Error("AI temporarily unavailable — please try again");
-  }
+  const { localChat } = await import("./localAI.js");
+  return await localChat(messages, opts);
 }
 
 export async function localFallbackAnalysis(prompt, opts = {}) {
-  try {
-    const { localAnalysis } = await import("./localAI.js");
-    return await localAnalysis(prompt, opts);
-  } catch(e) {
-    throw new Error("AI temporarily unavailable — please try again");
-  }
+  const { localAnalysis } = await import("./localAI.js");
+  return await localAnalysis(prompt, opts);
 }
 
 /**
- * geminiAnalysis — single-shot analysis via /api/ai/analyze (local AI).
+ * geminiAnalysis — single-shot analysis, fully local (WebLLM in-browser).
  * Used by AIInsights, PredictiveAI, AIReports, NotificationsHub.
  */
 export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTokens = 600 } = {}) {
-  const tok = await getAuthToken();
-  let res;
+  const { localAnalysis } = await import("./localAI.js");
+
+  const systemPrompt = [
+    Object.keys(context).length ? `Context: ${JSON.stringify(context)}` : "",
+    lang === "ar" ? "Respond in Egyptian Arabic." : "Respond in English.",
+  ].filter(Boolean).join("\n\n");
+
   try {
-    res = await fetch(`${API_BASE}/ai/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
-      body: JSON.stringify({ prompt, lang, context, max_tokens: maxTokens }),
-      signal: AbortSignal.timeout(30000),
-    });
+    return await localAnalysis(prompt, { systemPrompt, maxTokens });
   } catch (e) {
-    throw new Error(e?.name === "TimeoutError" || e?.name === "AbortError"
-      ? "Connection timed out — please try again"
+    throw new Error(e?.message?.includes("WebGPU") || e?.message?.includes("gpu")
+      ? "AI_NO_WEBGPU"
       : "AI temporarily unavailable — please try again");
   }
-
-  if (res.ok) return (await res.json()).text || "";
-  const err = await res.json().catch(() => ({}));
-  const errMsg = err.error || err.message || "";
-  if (err.error === "ai_limit_reached") {
-    const limitErr = new Error(err.message || "ai_limit_reached");
-    limitErr.code = "ai_limit_reached";
-    limitErr.used = err.used;
-    limitErr.limit = err.limit;
-    throw limitErr;
-  }
-  if (_isRateLimit(res.status, errMsg)) throw new Error("AI_BUSY");
-  throw new Error(errMsg || `AI error ${res.status}`);
 }
 
 // ── buildCoachContext — readable text summary for direct-prompt use ──
