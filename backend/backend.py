@@ -280,43 +280,14 @@ except Exception:
 
 # ── Config ─────────────────────────────────────────────────────────
 # AI backend — server-side ONLY, never exposed to the client.
-# Two options, tried in this order, first one configured wins:
-#   1. Ollama (OLLAMA_URL set) — fully local/self-hosted, zero per-request
-#      cost, but YOU must run the Ollama server yourself.
-#   2. Groq (GROQ_API_KEY set) — free tier (14,400 requests/day, no credit
-#      card), zero infrastructure to run — just sign up at console.groq.com
-#      → API Keys → Create API Key, and set GROQ_API_KEY in Railway.
-# Either way: the key/URL never leaves the backend. The browser never
-# talks to an AI provider directly.
+# Optional: Ollama (OLLAMA_URL set) — fully local/self-hosted AI, zero
+# per-request cost, but YOU must run the Ollama server yourself.
+# Note: the frontend no longer depends on this at all — it runs its
+# own free, open-source AI (WebLLM) entirely in the browser. This is
+# kept only as an optional server-side path for future use.
 OLLAMA_URL          = os.getenv("OLLAMA_URL", "")          # e.g. http://localhost:11434
 LOCAL_LLM_MODEL     = os.getenv("LOCAL_LLM_MODEL", "qwen2.5:3b")
-GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")  # free, fast, bilingual AR+EN
-GROQ_URL            = "https://api.groq.com/openai/v1/chat/completions"
-AI_CONFIGURED       = bool(OLLAMA_URL or GROQ_API_KEY)
-
-def call_groq(prompt, system_prompt=None, max_tokens=900, temperature=0.25):
-    """Free Groq cloud LLM — server-side only, never exposed to the client."""
-    if not GROQ_API_KEY:
-        return None
-    messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [{"role": "user", "content": prompt}]
-    for model in (GROQ_MODEL, "llama-3.1-8b-instant", "gemma2-9b-it"):
-        try:
-            resp = req.post(GROQ_URL,
-                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-                json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
-                timeout=15)
-            if resp.status_code == 200:
-                text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-                if text:
-                    return text
-            elif resp.status_code == 429:
-                continue  # rate-limited on this model — try the next one
-            else:
-                return None
-        except Exception as e:
-            log_event("groq_exception", meta={"error": str(e)[:80], "model": model})
-    return None
+AI_CONFIGURED       = bool(OLLAMA_URL)
 
 PAYMOB_SECRET_KEY   = os.getenv("PAYMOB_SECRET_KEY", "")
 PAYMOB_INTEGRATIONS = {
@@ -3959,16 +3930,15 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
     """
     THE unified AI call entry point for this entire backend.
     Every endpoint that needs AI text generation should call this instead of
-    calling call_local_llm()/call_groq() directly.
+    calling call_local_llm() directly.
 
     Server-side only — no AI provider credential is ever sent to the
-    client. Tries Ollama first (if OLLAMA_URL is set — free, self-hosted,
-    zero per-request cost), then Groq (if GROQ_API_KEY is set — free tier,
-    zero infrastructure, just an API key). `tier` is accepted for
-    call-site compatibility; token budget is set by the caller via
+    client. Uses Ollama (if OLLAMA_URL is set — free, self-hosted,
+    zero per-request cost). `tier` is accepted for call-site
+    compatibility; token budget is set by the caller via
     tier_quality.py, not by this function.
 
-    Returns None if no AI backend is configured / both are unreachable.
+    Returns None if no AI backend is configured / unreachable.
     """
     # ── Cache check ──────────────────────────────────────────────────
     if cache_key:
@@ -3979,8 +3949,6 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
     result = None
     if OLLAMA_URL:
         result = call_local_llm(prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature)
-    if result is None and GROQ_API_KEY:
-        result = call_groq(prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature)
 
     # ── Cache successful result ──────────────────────────────────────
     if result and cache_key:
@@ -3989,14 +3957,14 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
     return result
 
 
-def analyze_with_gemini(result, context="", lang="en"):
+def analyze_with_local_ai(result, context="", lang="en"):
     if not AI_CONFIGURED: return None
     # ── Cache check — avoid duplicate AI calls for same posture state ──
     import hashlib as _hl
     _cache_key = _hl.md5(
         f"{result.get('score',0):.0f}|{result.get('head_pose','')}|{lang}".encode()
     ).hexdigest()[:16]
-    _cached = cache_get(f"gemini:{_cache_key}")
+    _cached = cache_get(f"ai_local:{_cache_key}")
     if _cached:
         return _cached
     s     = result.get("score", 0)
@@ -5364,7 +5332,7 @@ def analyze():
             _r, _ctx, _lg, _sid = dict(result), data.get("employee_context",""), lang, sid
             def _bg_gemini(r, ctx, lg, _session_id):
                 try:
-                    txt = analyze_with_gemini(r, ctx, lg)
+                    txt = analyze_with_local_ai(r, ctx, lg)
                     if txt:
                         # Read-modify-write back to Redis-backed store
                         _s = sessions.get(_session_id, {})
@@ -5565,7 +5533,7 @@ def pdf_endpoint():
             _lang = data.get("lang","en")
             # Run AI narrative in thread with 12s timeout to avoid blocking Flask worker
             try:
-                _fut = _ai_executor.submit(analyze_with_gemini, summary_result, _ctx, _lang)
+                _fut = _ai_executor.submit(analyze_with_local_ai, summary_result, _ctx, _lang)
                 sd2["claude_analysis"] = _fut.result(timeout=12)
             except (FuturesTimeoutError, Exception) as _ai_err:
                 print(f"⚠️  Gemini PDF analysis skipped: {_ai_err}")
@@ -10444,7 +10412,6 @@ def referral_status():
 def health():
     # Fast liveness probe — do NOT call external APIs here
     local_llm_ok = bool(OLLAMA_URL)
-    groq_ok = bool(GROQ_API_KEY)
     models_ready = POSE_LITE is not None
     mp_ver  = _mp.__version__  if (models_ready and _mp)  else "not loaded"
     cv2_ver = cv2.__version__ if (models_ready and cv2) else "not loaded"
@@ -10454,7 +10421,7 @@ def health():
         "mediapipe": {"pose_lite": "loaded" if models_ready else "pending","pose_full": "loaded" if models_ready else "pending","face_mesh": "loaded" if models_ready else "pending"},
         "integrations": {
             "local_llm": {"configured": local_llm_ok, "url": OLLAMA_URL or None, "model": LOCAL_LLM_MODEL if local_llm_ok else None},
-            "groq":      {"configured": groq_ok, "model": GROQ_MODEL if groq_ok else None},
+            "client_ai": {"configured": True, "engine": "WebLLM (browser, free, open-source)"},
             "paymob":    {"configured": bool(PAYMOB_SECRET_KEY)},
             "slack":     {"configured": bool(SLACK_WEBHOOK_URL)},
             "teams":     {"configured": bool(TEAMS_WEBHOOK_URL)},
@@ -10595,32 +10562,9 @@ def health_detailed():
         ollama_status["error"]  = str(_e)[:120]
     report["ollama"] = ollama_status
 
-    # ── 4b. Groq connectivity ────────────────────────────────────
-    groq_status = {}
-    try:
-        if GROQ_API_KEY:
-            groq_status["configured"] = True
-            groq_status["model"]      = GROQ_MODEL
-            _t0   = _t.perf_counter()
-            _resp = req.post(GROQ_URL,
-                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-                json={"model": GROQ_MODEL,
-                      "messages": [{"role": "user", "content": "Reply with OK only."}],
-                      "max_tokens": 5},
-                timeout=8)
-            groq_status["ping_ms"] = round((_t.perf_counter() - _t0) * 1000, 1)
-            if _resp.status_code == 200:
-                groq_status["status"] = "ok"
-            else:
-                groq_status["status"]      = "degraded"
-                groq_status["http_status"] = _resp.status_code
-        else:
-            groq_status["status"]     = "not_configured"
-            groq_status["configured"] = False
-    except Exception as _e:
-        groq_status["status"] = "error"
-        groq_status["error"]  = str(_e)[:120]
-    report["groq"] = groq_status
+    # ── 4b. Client-side AI (WebLLM, runs in browser — nothing to check) ──
+    report["client_ai"] = {"status": "n/a", "note": "AI runs locally in the browser (WebLLM) — no server-side provider"}
+
 
     # ── 5. Firebase / Firestore ───────────────────────────────────
     firebase_status = {}
@@ -10641,8 +10585,8 @@ def health_detailed():
     report["firebase"] = firebase_status
 
     # ── 6. Overall status ─────────────────────────────────────────
-    ai_status = "ok" if (ollama_status.get("status") == "ok" or groq_status.get("status") == "ok") else (
-        "not_configured" if (ollama_status.get("status") == "not_configured" and groq_status.get("status") == "not_configured") else "degraded"
+    ai_status = "ok" if (ollama_status.get("status") == "ok") else (
+        "not_configured" if (ollama_status.get("status") == "not_configured") else "degraded"
     )
     subsystems = [
         mp_status.get("status"),
@@ -11854,7 +11798,7 @@ def gemini_proxy():
         if not prompt: return jsonify({"error":"prompt required"}), 400
         # Block if no AI backend is configured
         if not AI_CONFIGURED:
-            return jsonify({"error":"No AI backend configured (set OLLAMA_URL or GROQ_API_KEY)","text":None}), 503
+            return jsonify({"error":"No AI backend configured (set OLLAMA_URL)","text":None}), 503
 
         job_id = f"gj_{_uuid_mod.uuid4().hex[:16]}"
         rset(f"gemini_job:{job_id}", _json.dumps({"status":"pending","created":time.time()}), 120)
@@ -12296,7 +12240,7 @@ if __name__ == "__main__":
     print("="*60, flush=True)
     print("  PostureAI Pro Backend v15", flush=True)
     print(f"  MediaPipe {_mp.__version__ if _mp else '(lazy-loaded on first request)'} — Pose + FaceMesh + solvePnP + Blink Detection", flush=True)
-    _ai_label = ('✅ Ollama (' + LOCAL_LLM_MODEL + ')') if OLLAMA_URL else (('✅ Groq (' + GROQ_MODEL + ', free tier)') if GROQ_API_KEY else '⚠️  No AI backend — set OLLAMA_URL or GROQ_API_KEY')
+    _ai_label = ('✅ Ollama (' + LOCAL_LLM_MODEL + ')') if OLLAMA_URL else '⚠️  No server AI backend (set OLLAMA_URL) — note: client uses local WebLLM regardless'
     print(f"  AI:  {_ai_label}", flush=True)
     print(f"  PDF: {'✅ ReportLab ready' if REPORTLAB_OK else '⚠️  pip install reportlab'}", flush=True)
     print(f"  APP_URL: {APP_URL}", flush=True)
@@ -12304,7 +12248,7 @@ if __name__ == "__main__":
     if not os.getenv("PAYMOB_HMAC_SECRET",""):
         print("⚠️  WARNING: PAYMOB_HMAC_SECRET not set — webhook verification DISABLED", flush=True)
     if not AI_CONFIGURED:
-        print("ℹ️  No AI backend configured — AI Coach / AI Insights disabled. Easiest fix: console.groq.com → API Keys → set GROQ_API_KEY in Railway.", flush=True)
+        print("ℹ️  No server-side AI backend configured — server AI endpoints disabled (client uses local WebLLM regardless).", flush=True)
     print("="*60, flush=True)
     sys.stdout.flush()
     app.run(host="0.0.0.0", port=5050, debug=False, threaded=True, use_reloader=False)
@@ -12662,7 +12606,7 @@ def coach_chat():
 
         if not messages:
             return jsonify({"error": "messages required"}), 400
-        # OLLAMA_URL is optional — if not set, falls through to Groq directly
+        # OLLAMA_URL is optional — if unset, server-side AI Coach is disabled
 
         # ── Tier-based AI Coach limits + depth (single source of truth) ──
         _uid_coach    = getattr(g, "uid", "")
@@ -12776,34 +12720,12 @@ You can help with:
             except Exception as _le:
                 log_event("coach_local_llm_error", meta={"error": str(_le)[:80]})
 
-        if text is None and GROQ_API_KEY:
-            # ── Groq fallback (free tier, server-side only) ───────────────
-            try:
-                _groq_resp = req.post(GROQ_URL,
-                    headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-                    json={
-                        "model":       GROQ_MODEL,
-                        "messages":    ollama_msgs,  # OpenAI-compatible format — Groq uses the same shape as Ollama
-                        "max_tokens":  _quality_coach["max_tokens"],
-                        "temperature": 0.5,
-                    },
-                    timeout=20,
-                )
-                if _groq_resp.status_code == 200:
-                    text = (_groq_resp.json().get("choices") or [{}])[0].get("message", {}).get("content", "") or None
-                elif _groq_resp.status_code == 429:
-                    return jsonify({"error": "AI rate limit — try again in a moment", "ok": False}), 429
-                else:
-                    log_event("coach_groq_error", meta={"status": _groq_resp.status_code})
-            except Exception as _ge:
-                log_event("coach_groq_exception", meta={"error": str(_ge)[:80]})
-
         if text is None:
             return jsonify({"error": "AI unavailable — try again in a few seconds", "ok": False}), 503
 
         # ── Audit + usage tracking ────────────────────────────────────
         _uid = getattr(g, "uid", "unknown")
-        audit(_uid, "ai_coach_query", "local:" + LOCAL_LLM_MODEL if OLLAMA_URL else "groq", {"lang": lang, "turns": len(gemini_contents)})
+        audit(_uid, "ai_coach_query", "local:" + LOCAL_LLM_MODEL if OLLAMA_URL else "none", {"lang": lang, "turns": len(gemini_contents)})
         try:
             import redis as _r2
             _rc2 = _r2.from_url(os.getenv("REDIS_URL","redis://localhost:6379/0"))

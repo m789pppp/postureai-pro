@@ -59,8 +59,8 @@ const FAQ = [
     category: "ai",          category_ar: "الذكاء الاصطناعي",
     q_en: "What is the AI Coach?",
     q_ar: "ما هو مدرب الذكاء الاصطناعي؟",
-    a_en: "The AI Coach is a Gemini-powered conversational assistant that analyzes your posture data and provides personalized recommendations, exercise tips, and ergonomic advice. Available on Professional and Elite plans.",
-    a_ar: "مدرب الذكاء الاصطناعي هو مساعد محادثة مدعوم بـ Gemini يحلل بيانات وضعيتك ويقدم توصيات شخصية ونصائح تمارين وإرشادات إرغونومية. متاح في الخطط الاحترافية والمتميزة.",
+    a_en: "The AI Coach is a Corvus AI-powered conversational assistant that analyzes your posture data and provides personalized recommendations, exercise tips, and ergonomic advice. Available on Professional and Elite plans.",
+    a_ar: "مدرب الذكاء الاصطناعي هو مساعد محادثة مدعوم بالذكاء الاصطناعي يحلل بيانات وضعيتك ويقدم توصيات شخصية ونصائح تمارين وإرشادات إرغونومية. متاح في الخطط الاحترافية والمتميزة.",
   },
 ];
 

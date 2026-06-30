@@ -33,7 +33,7 @@ const SERVICES_STATUS = [
   { name:"Billing",            status:"operational" },
   { name:"Email Delivery",     status:"degraded"    },
   { name:"Webhooks",           status:"operational" },
-  { name:"AI (Gemini Proxy)",  status:"operational" },
+  { name:"AI (Local AI)",  status:"operational" },
 ];
 
 const AFFILIATES = [

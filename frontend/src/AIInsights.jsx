@@ -2,13 +2,13 @@
  * Corvus — AI Insights Panel v1.0
  * Executive summaries · Posture trends · Fatigue analysis
  * Weekly insights · Smart recommendations
- * Uses Gemini AI directly (no backend needed)
+ * Uses local WebLLM AI directly (no backend needed)
  */
 import { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
 import { getLocalAIStatus } from "./localAI.js";
 
-// ── AI call via Gemini ─────────────────────────────────────────────
+// ── AI call via local WebLLM ────────────────────────────────────────
 // NOTE: previously routed through geminiChat() -> /api/coach/chat, but
 // that endpoint ignores any custom system prompt and always answers as
 // the hardcoded "PostureAI Coach" persona, so the executive-summary /

@@ -32,7 +32,7 @@ const TOUR_STEPS = [
   {
     id: "ai-coach",
     title: "AI Coach 🤖",
-    body: "Your personal AI coach gives real-time feedback and personalised tips based on your posture patterns — powered by Gemini.",
+    body: "Your personal AI coach gives real-time feedback and personalised tips based on your posture patterns — powered by Corvus AI, running free and local in your browser.",
     target: "ai-coach-btn",
     position: "bottom",
     icon: "🤖",

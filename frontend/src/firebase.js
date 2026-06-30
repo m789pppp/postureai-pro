@@ -870,7 +870,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       doc.setFillColor(...gradeC.map(c=>Math.min(255,c+130)));
       doc.roundedRect(ml,y,cw,8,2,2,"F");
       doc.setFontSize(10); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-      doc.text(isAr?"🤖 تحليل الذكاء الاصطناعي (Gemini)":"🤖 AI Analysis (Gemini)", ml+4, y+5.5);
+      doc.text(isAr?"🤖 تحليل الذكاء الاصطناعي":"🤖 AI Analysis", ml+4, y+5.5);
       y += 12;
 
       // Wrap AI text properly
@@ -917,8 +917,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.setFontSize(16); doc.setTextColor(15,23,42);
     doc.text(isAr?"ترقية إلى Elite لتفعيل:":"Upgrade to Elite to unlock:", W/2, y+42, {align:"center"});
     const features = isAr
-      ? ["تحليل Gemini AI المفصّل","تقرير PDF كامل متعدد الصفحات","توقع الألم المهني","مقارنة بخط الأساس الشخصي"]
-      : ["Detailed Gemini AI analysis","Full multi-page PDF report","Professional pain prediction","Personal baseline comparison"];
+      ? ["تحليل Corvus AI المفصّل","تقرير PDF كامل متعدد الصفحات","توقع الألم المهني","مقارنة بخط الأساس الشخصي"]
+      : ["Detailed Corvus AI analysis","Full multi-page PDF report","Professional pain prediction","Personal baseline comparison"];
     doc.setFontSize(11); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
     features.forEach((f,i)=>{ doc.text(`✓ ${f}`, W/2, y+56+(i*10), {align:"center"}); });
   }

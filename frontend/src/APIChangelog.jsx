@@ -60,7 +60,7 @@ const CHANGELOG = [
     items: [
       { type: "new",        text: "POST /api/org/members/invite — Team invitation" },
       { type: "new",        text: "GET  /api/leaderboard — Team leaderboard" },
-      { type: "new",        text: "POST /api/reports/ai — Gemini AI narrative report" },
+      { type: "new",        text: "POST /api/reports/ai — Corvus AI narrative report" },
       { type: "improved",   text: "Analysis: low-light enhancement auto-applied" },
       { type: "improved",   text: "Scoring: exponential smoothing over last 10 frames" },
     ],

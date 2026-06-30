@@ -285,7 +285,7 @@ function FeatureFlagsPanel({ flags, onToggle, onUpdateRollout }) {
 }
 
 const defaultFlags = [
-  { key:"gemini_ai",         description:"Gemini AI posture narrative",          enabled:true,  rollout_pct:100 },
+  { key:"local_ai",          description:"Local AI posture narrative (WebLLM)",   enabled:true,  rollout_pct:100 },
   { key:"ai_coach_chat",     description:"AI Coach chat interface",              enabled:true,  rollout_pct:100 },
   { key:"heatmaps",          description:"Posture heatmap visualization",        enabled:true,  rollout_pct:100 },
   { key:"gamification",      description:"XP/streaks/achievements system",       enabled:true,  rollout_pct:100 },

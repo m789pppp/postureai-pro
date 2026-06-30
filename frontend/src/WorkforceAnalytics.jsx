@@ -3,7 +3,7 @@
  * Phase 7: Advanced Analytics
  * Workforce Analytics: productivity trends · focus · fatigue · engagement · risk heatmaps
  * Executive KPIs: company wellness · dept comparison · productivity index · burnout · monthly insights
- * Powered by Gemini AI via backend proxy (no API key on client)
+ * Powered by Corvus AI — runs locally in the browser, free, no API key
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
@@ -170,7 +170,7 @@ function AIBlock({loading,data,error,onRetry,accentColor="#1a56db",isAr}) {
       <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}>
         <div style={{width:22,height:22,borderRadius:6,background:`linear-gradient(135deg,${accentColor},#0891b2)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10}}>🧠</div>
         <span style={{fontSize:10,fontWeight:700,color:accentColor,letterSpacing:".05em",textTransform:"uppercase"}}>
-          {isAr?"تحليل Gemini AI":"Gemini AI Analysis"}
+          {isAr?"تحليل Corvus AI":"Corvus AI Analysis"}
         </span>
         {loading && <span style={{marginLeft:"auto",display:"flex",gap:3}}>
           {[0,1,2].map(i=><span key={i} style={{width:4,height:4,borderRadius:"50%",background:accentColor,display:"inline-block",animation:`waDot 1.2s ${i*.2}s infinite`}}/>)}
@@ -314,7 +314,7 @@ function CompanyScore({data,isAr,loading}) {
             {isAr?"نقاط صحة القوى العاملة":"Company Wellness Score"}
           </div>
           <div style={{fontSize:11,color:"var(--wa-muted)",fontWeight:500}}>
-            {isAr?"ملخص تنفيذي — مدعوم بـ Gemini AI":"Executive snapshot — powered by Gemini AI"}
+            {isAr?"ملخص تنفيذي — مدعوم بـ Corvus AI":"Executive snapshot — powered by Corvus AI"}
           </div>
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -664,7 +664,7 @@ function BurnoutAlerts({data,isAr,loading}) {
     {level:"low",    color:"#10b981", icon:"🟢", label:isAr?"وضع طبيعي":"Healthy",     score:100-data.burnoutRisk, active:data.burnoutRisk<45, desc:isAr?"مستوى صحي — استمر!":"Healthy level — keep going!"},
   ];
   return (
-    <Sec title={isAr?"تنبيهات الإنهاك الوظيفي":"Burnout Alerts"} sub={isAr?"رصد الوقت الفعلي — Gemini AI":"Real-time monitoring — Gemini AI"} accent="#ef4444">
+    <Sec title={isAr?"تنبيهات الإنهاك الوظيفي":"Burnout Alerts"} sub={isAr?"رصد الوقت الفعلي — Corvus AI":"Real-time monitoring — Corvus AI"} accent="#ef4444">
       {loading ? <CardSkeleton h={100}/> : (
         <>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>

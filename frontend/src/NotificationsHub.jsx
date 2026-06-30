@@ -847,7 +847,7 @@ function AIAlertsPanel({orgId,profile,sessions=[],allUsers=[],isAr}) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div>
             <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text}}>{isAr?"مولّد قواعد AI":"AI Rule Generator"}</div>
-            <div style={{fontSize:11,color:D.muted,marginTop:2}}>{isAr?"دع Gemini AI يقترح قواعد تنبيه مخصصة لبياناتك":"Let Gemini AI suggest custom alert rules based on your data"}</div>
+            <div style={{fontSize:11,color:D.muted,marginTop:2}}>{isAr?"دع Corvus AI يقترح قواعد تنبيه مخصصة لبياناتك":"Let Corvus AI suggest custom alert rules based on your data"}</div>
           </div>
           <Btn size="sm" variant="primary" loading={aiLoading} onClick={generateAIRule} icon="🧠">
             {isAr?"توليد قواعد":"Generate Rules"}
@@ -915,7 +915,7 @@ function InAppNotifications({profile,sessions=[],isAr}) {
        body:isAr?"مؤشر الإرهاق وصل 72% — يُنصح بأخذ استراحة":"Fatigue index reached 72% — rest recommended",color:"#ef4444"},
       {type:"achievement",icon:"🏆",title:isAr?"إنجاز جديد!":"New Achievement!",
        body:isAr?"أتممت 7 أيام متتالية 🔥 ممتاز!":"Completed a 7-day streak 🔥 Excellent!",color:"#10b981"},
-      {type:"ai_insight",icon:"🧠",title:isAr?"رؤية Gemini AI":"Gemini AI Insight",
+      {type:"ai_insight",icon:"🧠",title:isAr?"رؤية Corvus AI":"Corvus AI Insight",
        body:isAr?"وضعيتك تحسّنت 8% هذا الأسبوع — استمر!":"Your posture improved 8% this week — keep it up!",color:"#7c3aed"},
       {type:"weekly_digest",icon:"📊",title:isAr?"ملخصك الأسبوعي":"Your Weekly Digest",
        body:isAr?"79/100 متوسط | 5 جلسات | الأفضل: الأربعاء":"79/100 avg | 5 sessions | Best: Wednesday",color:"#1a56db"},

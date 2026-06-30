@@ -179,8 +179,8 @@ const B2B_TIERS = {
     price_egp_monthly:null, price_egp_yearly:null,    // Custom — contact sales
     price_usd_monthly:null, price_usd_yearly:null, price_usd_starting_at:499, // Starting at $499/mo
     seats:-1,
-    features:["Unlimited employees","Everything in Growth","Gemini AI clinical narrative","SSO / SAML / Azure AD / Okta","White-label branding","API + Webhooks access","Dedicated success manager","Custom SLA guarantee"],
-    featuresAr:["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالـ Gemini AI","SSO / SAML / Azure AD / Okta","علامة تجارية White-label","وصول API + Webhooks","مدير نجاح مخصص","ضمان SLA مخصص"],
+    features:["Unlimited employees","Everything in Growth","Corvus AI clinical narrative","SSO / SAML / Azure AD / Okta","White-label branding","API + Webhooks access","Dedicated success manager","Custom SLA guarantee"],
+    featuresAr:["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالذكاء الاصطناعي","SSO / SAML / Azure AD / Okta","علامة تجارية White-label","وصول API + Webhooks","مدير نجاح مخصص","ضمان SLA مخصص"],
     badge:"Custom",
   },
 };
@@ -2657,7 +2657,7 @@ export default function App(){
     }
     // Backend call ONLY when actually needed — not a duplicate of local analysis:
     //  1) Fallback mode (local MediaPipe failed to load) → backend IS the analysis
-    //  2) Elite-equivalent tier (elite/premium/b2b_enterprise) → snapshots for PDF + Gemini AI insights
+    //  2) Elite-equivalent tier (elite/premium/b2b_enterprise) → snapshots for PDF + Corvus AI insights
     // Standard/Basic/Professional tiers with working local MediaPipe never touch the backend here.
     const eliteEquivalent = tierAtLeast(tier, "elite");
     const needsBackend = mpStatus==="fallback" || eliteEquivalent;
@@ -2706,7 +2706,7 @@ export default function App(){
               if(now-lastAlRef.current>8000)setAlertMsg({text:`Score ${smoothed}/100 — ${grade(smoothed,t)}`,type:"good"});
             }
           }
-          // Always use Gemini from backend for Elite-equivalent tiers
+          // Always use local Corvus AI for Elite-equivalent tiers
           if(d.claude_analysis&&eliteEquivalent)setAiInsight(d.claude_analysis);
         }).catch(()=>{});
     }

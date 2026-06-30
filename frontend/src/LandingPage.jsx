@@ -177,7 +177,7 @@ const COPY = {
       features: [
         { icon:"🎯", title:"Real-Time Body Intelligence",       desc:"33 body landmarks tracked at 10× per second — head, neck, shoulders, spine, fatigue signals.", accent:"#6366f1" },
         { icon:"📱", title:"3 Smart Camera Modes",             desc:"Laptop front-facing, phone side mount, or full-profile — adapts to any workspace setup.", accent:"#0891b2" },
-        { icon:"💡", title:"Gemini AI Coach",                  desc:"Personalized clinical insights: what to fix, why it matters, and what injury risk you carry.", accent:"#10b981" },
+        { icon:"💡", title:"Corvus AI Coach",                  desc:"Personalized clinical insights: what to fix, why it matters, and what injury risk you carry.", accent:"#10b981" },
         { icon:"📈", title:"Performance Trend Analytics",      desc:"Daily wellness scores, 7-day charts, streak systems, and AI-forecasted posture trajectory.", accent:"#f59e0b" },
         { icon:"🔔", title:"Smart Recovery Scheduling",        desc:"Adaptive break reminders calibrated to your session intensity and fatigue pattern.", accent:"#a78bfa" },
         { icon:"📄", title:"Clinical-Grade PDF Export",        desc:"Physician-shareable posture report with metrics, risk assessment, and AI recommendations.", accent:"#ef4444" },
@@ -326,7 +326,7 @@ const COPY = {
       features: [
         { icon:"🎯", title:"ذكاء الجسم الفوري",            desc:"33 نقطة تُتابَع بمعدل 10 مرات في الثانية — رأس، رقبة، كتفان، عمود فقري، إشارات الإجهاد.", accent:"#6366f1" },
         { icon:"📱", title:"3 أوضاع كاميرا ذكية",          desc:"اللابتوب من الأمام، تركيب الموبايل من الجانب، أو العرض الكامل — يتكيف مع مساحة عملك.", accent:"#0891b2" },
-        { icon:"💡", title:"مدرب Gemini AI",                desc:"رؤى سريرية شخصية: ماذا تُصلح، ولماذا يهم، وما مخاطر الإصابة التي تحملها.", accent:"#10b981" },
+        { icon:"💡", title:"مدرب Corvus AI",                desc:"رؤى سريرية شخصية: ماذا تُصلح، ولماذا يهم، وما مخاطر الإصابة التي تحملها.", accent:"#10b981" },
         { icon:"📈", title:"تحليلات أداء الاتجاه",          desc:"نقاط صحة يومية، مخططات 7 أيام، أنظمة إنجازات، وتوقع مسار وضعيتك.", accent:"#f59e0b" },
         { icon:"🔔", title:"جدولة التعافي الذكي",           desc:"تذكيرات استراحة تكيفية معايَرة حسب مستوى الإجهاد ونمط التعب في جلستك.", accent:"#a78bfa" },
         { icon:"📄", title:"تصدير PDF السريري",             desc:"تقرير قابل للمشاركة مع الطبيب يتضمن مقاييس، تقييم المخاطر، وتوصيات الذكاء الاصطناعي.", accent:"#ef4444" },
@@ -1470,7 +1470,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                 icon:"🤖",
                 en_title:"AI Calibrates to You",
                 ar_title:"الذكاء الاصطناعي يعمل",
-                en_desc:"33 body landmarks tracked in real time. Our MediaPipe + Gemini pipeline analyzes posture, head angle, blink rate, and fatigue in milliseconds.",
+                en_desc:"33 body landmarks tracked in real time. Our MediaPipe + Corvus AI pipeline analyzes posture, head angle, blink rate, and fatigue in milliseconds.",
                 ar_desc:"تتبع 33 نقطة في الجسم بشكل فوري. يحلل خط الكتف، زاوية الرأس، معدل الرمش، والتعب.",
                 color:"#0891b2",
               },

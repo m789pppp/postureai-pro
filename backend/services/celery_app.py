@@ -65,7 +65,7 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
         from backend import (
             analyze_front, analyze_side, analyze_blink_rate,
             analyze_front_cascade, analyze_side_cascade,
-            analyze_with_gemini,
+            analyze_with_local_ai,
         )
         import base64
         import numpy as np
@@ -74,7 +74,7 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
         image_b64 = frame_data.get("image", "")
         mode      = frame_data.get("mode", "laptop")
         lang      = frame_data.get("lang", "en")
-        use_gemini = frame_data.get("use_gemini", False)
+        use_ai_narrative = frame_data.get("use_ai_narrative", False)
 
         # Decode base64 image
         if "," in image_b64:
@@ -100,9 +100,9 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
             if blink:
                 out.update(blink)
 
-        # Optional Gemini narrative (only if explicitly requested + tier allows)
-        if use_gemini and tier in ("professional", "elite", "enterprise"):
-            narrative = analyze_with_gemini(out, lang=lang)
+        # Optional AI narrative (only if explicitly requested + tier allows)
+        if use_ai_narrative and tier in ("professional", "elite", "enterprise"):
+            narrative = analyze_with_local_ai(out, lang=lang)
             if narrative:
                 out["ai_narrative"] = narrative
 
@@ -204,7 +204,7 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
         from backend import (
             analyze_front, analyze_side, analyze_blink_rate,
             analyze_front_cascade, analyze_side_cascade,
-            analyze_with_gemini,
+            analyze_with_local_ai,
         )
         import base64
         import numpy as np
@@ -213,7 +213,7 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
         image_b64 = frame_data.get("image", "")
         mode      = frame_data.get("mode", "laptop")
         lang      = frame_data.get("lang", "en")
-        use_gemini = frame_data.get("use_gemini", False)
+        use_ai_narrative = frame_data.get("use_ai_narrative", False)
 
         # Decode base64 image
         if "," in image_b64:
@@ -239,9 +239,9 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
             if blink:
                 out.update(blink)
 
-        # Optional Gemini narrative (only if explicitly requested + tier allows)
-        if use_gemini and tier in ("professional", "elite", "enterprise"):
-            narrative = analyze_with_gemini(out, lang=lang)
+        # Optional AI narrative (only if explicitly requested + tier allows)
+        if use_ai_narrative and tier in ("professional", "elite", "enterprise"):
+            narrative = analyze_with_local_ai(out, lang=lang)
             if narrative:
                 out["ai_narrative"] = narrative
 

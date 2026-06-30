@@ -12,7 +12,7 @@ const FEATURE_FLAGS = [
   { id:"ff_white_label",       label:"White-Label Mode",     desc:"Custom branding for enterprise orgs",         enabled:true,  rollout:100, env:"enterprise" },
   { id:"ff_multi_tenant",      label:"Multi-Tenant Manager", desc:"Super-admin multi-org panel",                 enabled:true,  rollout:100, env:"internal" },
   { id:"ff_audit_system",      label:"Audit System",         desc:"Full compliance audit trail",                 enabled:true,  rollout:100, env:"enterprise" },
-  { id:"ff_gemini_v15",        label:"Gemini 1.5 Flash",     desc:"Use Gemini 1.5 Flash for AI analysis",        enabled:false, rollout:0,   env:"beta" },
+  
   { id:"ff_3d_posture",        label:"3D Posture Model",     desc:"Three.js 3D avatar posture visualization",    enabled:false, rollout:0,   env:"beta" },
   { id:"ff_mobile_app",        label:"Mobile App Mode",      desc:"Responsive mobile-first layout",              enabled:true,  rollout:100, env:"all" },
   { id:"ff_new_onboarding",    label:"New Onboarding v2",    desc:"Redesigned onboarding wizard",                enabled:true,  rollout:30,  env:"all" },
@@ -23,7 +23,7 @@ const MOCK_HEALTH = {
   services: [
     { name:"API Gateway",        status:"healthy", latency:38,  uptime:99.98, load:42 },
     { name:"Analysis Engine",    status:"healthy", latency:142, uptime:99.95, load:61 },
-    { name:"Gemini AI Proxy",    status:"healthy", latency:890, uptime:99.80, load:35 },
+    { name:"Local AI Engine",    status:"healthy", latency:890, uptime:99.80, load:35 },
     { name:"Firebase Firestore", status:"healthy", latency:22,  uptime:99.99, load:28 },
     { name:"Redis Cache",        status:"healthy", latency:4,   uptime:100,   load:19 },
     { name:"Stripe Payments",    status:"healthy", latency:210, uptime:99.99, load:8 },

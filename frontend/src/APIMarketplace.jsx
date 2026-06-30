@@ -18,7 +18,7 @@ const ENDPOINTS = [
   { method:"GET",  path:"/v1/sessions",         desc:"List user sessions",                   tier:"starter",    latency:"~60ms" },
   { method:"GET",  path:"/v1/sessions/:id",     desc:"Get single session detail",            tier:"starter",    latency:"~45ms" },
   { method:"POST", path:"/v1/report/pdf",       desc:"Generate PDF health report",           tier:"starter",    latency:"~2.1s" },
-  { method:"POST", path:"/v1/report/ai",        desc:"AI narrative report (Gemini)",         tier:"growth",     latency:"~3.5s" },
+  { method:"POST", path:"/v1/report/ai",        desc:"AI narrative report (local, free)",         tier:"growth",     latency:"~3.5s" },
   { method:"GET",  path:"/v1/users/:id/score",  desc:"Current posture score for a user",     tier:"starter",    latency:"~35ms" },
   { method:"GET",  path:"/v1/org/:id/analytics","desc":"Org-wide analytics aggregation",     tier:"scale",      latency:"~220ms" },
   { method:"POST", path:"/v1/webhooks",         desc:"Register a webhook endpoint",          tier:"starter",    latency:"~50ms" },
@@ -184,7 +184,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
               {/* Status */}
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:12, fontSize:15 }}>🟢 System Status</div>
-                {["API Gateway","Analysis Engine","Gemini AI Proxy","Webhook Delivery","PDF Generation","Redis Cache"].map(s=>(
+                {["API Gateway","Analysis Engine","Local AI Engine","Webhook Delivery","PDF Generation","Redis Cache"].map(s=>(
                   <div key={s} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${cs.border}` }}>
                     <span style={{ color:cs.text, fontSize:13 }}>{s}</span>
                     <span style={{ color:"#10b981", fontSize:12, fontWeight:600, background:"rgba(16,185,129,0.1)", padding:"2px 10px", borderRadius:20 }}>Operational</span>

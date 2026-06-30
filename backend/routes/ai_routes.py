@@ -1,6 +1,6 @@
 """
 Corvus — AI Routes Blueprint  
-Handles: Gemini proxy, AI analytics, coach chat, predictive, heatmaps
+Handles: AI analytics, coach chat, predictive, heatmaps
 """
 from flask import Blueprint, request, jsonify, g
 import os, sys
