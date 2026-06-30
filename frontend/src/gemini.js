@@ -18,17 +18,21 @@ function _isRateLimit() { return false; } // kept for API compatibility, unused 
 export function friendlyError(e, lang = "en") {
   const msg = e?.message || "";
   const ar  = lang === "ar";
-  if (msg === "AI_NO_WEBGPU")
-    return ar ? "🧠 المتصفح ده مش بيدعم الـ AI المحلي — جرب Chrome أو Edge أحدث إصدار" : "🧠 This browser doesn't support local AI — try the latest Chrome or Edge";
+  if (msg === "AI_NO_WEBGPU" || msg.toLowerCase().includes("webgpu") || msg.toLowerCase().includes("gpu"))
+    return ar ? "🧠 المتصفح ده مش بيدعم الـ AI المحلي — جرب Chrome أو Edge (أحدث إصدار)" : "🧠 Your browser doesn't support local AI — try the latest Chrome or Edge";
+  if (msg === "AI_NETWORK" || msg.includes("fetch") || msg.includes("network"))
+    return ar ? "🌐 فشل تحميل AI — تأكد من الاتصال بالإنترنت وجرب تاني" : "🌐 Failed to download AI — check your connection and retry";
+  if (msg === "AI_TIMEOUT")
+    return ar ? "⏳ تحميل AI استغرق وقتًا طويلاً — جرب تاني" : "⏳ AI download timed out — please try again";
+  if (msg === "AI_LOAD_FAILED" || msg.includes("load") || msg.includes("initialize"))
+    return ar ? "⚠️ فشل تحميل AI — جرب تحديث الصفحة" : "⚠️ Failed to load AI — try refreshing the page";
   if (msg === "AI_BUSY" || msg.includes("429") || msg.includes("busy"))
     return ar ? "⏳ الـ AI مشغول — انتظر ثانية وجرب تاني" : "⏳ AI is busy — try again in a moment";
-  if (e?.code === "coach_limit_reached" || e?.code === "ai_limit_reached" || msg.includes("limit_reached") || msg.includes("coach_limit") || msg.includes("Monthly") || msg.includes("messages this month"))
-    return ar ? `وصلت لحد ${e?.limit ?? ""} رسالة الشهر ده — رقّي خطتك لرسائل أكتر` : `You've reached your limit of ${e?.limit ?? ""} messages this month — upgrade for more`;
-  if (msg.includes("not configured"))
-    return ar ? "خدمة AI غير مفعّلة حالياً — تواصل مع الدعم" : "AI service not active — contact support";
+  if (e?.code === "coach_limit_reached" || e?.code === "ai_limit_reached" || msg.includes("limit_reached"))
+    return ar ? `وصلت لحد الرسائل الشهري — رقّي خطتك` : `You've reached your monthly message limit — upgrade for more`;
   if (msg.includes("imeout") || msg.includes("bort"))
     return ar ? "انقطع الاتصال — جرب تاني" : "Connection timed out — try again";
-  return ar ? "حصل خطأ — جرب تاني" : "Something went wrong — please try again";
+  return ar ? "حصل خطأ — جرب تاني أو حدّث الصفحة" : "Something went wrong — try again or refresh the page";
 }
 
 /**
@@ -53,9 +57,8 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
   try {
     return await localChat(messages, { systemPrompt: fullSystemPrompt, maxTokens });
   } catch (e) {
-    throw new Error(e?.message?.includes("WebGPU") || e?.message?.includes("gpu")
-      ? "AI_NO_WEBGPU"
-      : "AI temporarily unavailable — please try again");
+    // Pass the classified error code through (AI_NO_WEBGPU, AI_NETWORK, etc.)
+    throw e;
   }
 }
 
@@ -86,9 +89,7 @@ export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTok
   try {
     return await localAnalysis(prompt, { systemPrompt, maxTokens });
   } catch (e) {
-    throw new Error(e?.message?.includes("WebGPU") || e?.message?.includes("gpu")
-      ? "AI_NO_WEBGPU"
-      : "AI temporarily unavailable — please try again");
+    throw e;
   }
 }
 
