@@ -4,8 +4,7 @@
  * Manager insights · Department comparisons
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
-import { getLocalAIStatus } from "./localAI.js";
+import { geminiAnalysis } from "./gemini.js";
 
 // ── helpers ───────────────────────────────────────────────────────
 const avg  = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
