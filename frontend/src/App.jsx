@@ -279,10 +279,10 @@ async function initPayMob({amount_egp,tier,user_email,user_name,billing,payment_
 }
 
 // ── Local MediaPipe analysis (adapters for postureEngine result shape) ────
-function analyzeMP(lms,W,H,mode,distCalibFactor){
+function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs){
   // postureEngine returns {score, metrics, alerts, recommendations, detected, lms(named), raw}
   // App expects  {overall, distCm, lo, hi, metrics, lms(landmark refs), raw}
-  const eng = _engAnalyzeMP(lms,W,H,mode,distCalibFactor);
+  const eng = _engAnalyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs);
   if(!eng) return null;
   const dist = eng.metrics?.screen_distance;
   // lo/hi come from engine (no duplication)
@@ -2558,11 +2558,14 @@ export default function App(){
           if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(60);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
-          const rawResult=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor);
+          const rawResult=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current);
           // Push raw metrics into buffer — use trimmed mean score after 10+ frames
+          // NOTE: analyzeMP/analyzeSideMP wrappers above return field `overall`,
+          // NOT `score` (the engine's raw field name) — must read `overall` here
+          // or this entire 60-frame trimmed-mean pipeline silently never fires.
           let result = rawResult;
-          if(rawResult?.score != null && frameBufferRef.current){
-            frameBufferRef.current.push({score: rawResult.score});
+          if(rawResult?.overall != null && frameBufferRef.current){
+            frameBufferRef.current.push({score: rawResult.overall});
             const buffered = frameBufferRef.current.trimmedMean("score");
             if(buffered != null){
               result = {...rawResult, overall: Math.round(buffered), score: Math.round(buffered)};
