@@ -12,6 +12,16 @@
  * - Independent body module analyzers with severity classification
  * - Dead code removed (drawFrontOverlay, drawSideOverlay unused)
  * - distanceScore asymmetry fixed and documented
+ *
+ * KNOWN DIVERGENCE FROM backend.py (intentional, not a bug):
+ * - Threshold constants below (THR) are kept numerically in sync with
+ *   backend.py's score_m() calls — verify both whenever either changes.
+ * - The NECK LEAN *algorithm* is NOT identical: backend.py's analyze_front()
+ *   blends solvePnP head-pose pitch (80%, requires FaceMesh + OpenCV,
+ *   geometrically exact) with a nose-offset proxy (20%). This client-side
+ *   engine has no FaceMesh/solvePnP access and uses a pure nose+ear 2D
+ *   blend instead. Expect the two neck-lean readings to differ by a few
+ *   degrees for the same pose — this is expected, not a sync bug.
  */
 
 // ═══════════════════════════════════════════════════════════════════
@@ -56,7 +66,7 @@ const THR = {
   // Front camera
   HEAD_TILT:   { ok: 3,  bad: 10  },  // backend: score_m(head_tilt, 0, 3, 10)
   SH_TILT:     { ok: 3,  bad: 10  },  // backend: score_m(sh_tilt,   0, 3, 10)
-  SPINE_LEAN:  { ok: 5,  bad: 15  },  // backend: score_m(spine_lean,0, 5, 15)
+  SPINE_LEAN:  { ok: 4,  bad: 12  },  // backend: score_m(spine_lean,0, 4, 12)
   HEAD_YAW:    { ok: 8,  bad: 20  },
   FHP_CM:      { ok: 2,  bad: 6   },  // forward head posture in cm
   ROUNDED:     { ok: 8,  bad: 20  },  // rounded shoulders Z-depth
@@ -65,13 +75,17 @@ const THR = {
 
   // Side camera
   NECK_SIDE:   { ok: 8,  bad: 22  },
-  TRUNK_LEAN:  { ok: 5,  bad: 16  },
+  TRUNK_LEAN:  { ok: 6,  bad: 16  },  // backend: score_m(trunk_lean, 0, 6, 16)
   HIP_ANGLE:   { ok: 12, bad: 30  },  // deviation from 90°
   KNEE_ANGLE:  { ok: 12, bad: 35  },  // deviation from 90°
-  SPINE_ALIGN: { ok: 3,  bad: 9   },  // % of frame width off plumb
+  SPINE_ALIGN: { ok: 4,  bad: 12  },  // backend: score_m(spine_align, 0, 4, 12)
 };
 
 // ─── Weighted scoring (front camera) ───────────────────────────────
+// NOTE: fhp, elbow, and monitor-height are intentionally NOT weighted
+// into the overall score (mirrors backend.py) — they surface as
+// informational metrics/alerts only, since they're more
+// setup/ergonomics signals than posture-quality signals.
 const WEIGHTS_FRONT = {
   neck:     0.28,
   tilt:     0.10,
@@ -240,10 +254,11 @@ export function scoreColor(s)   { return s >= 75 ? "#10b981"   : s >= 50 ? "#f59
  *   const stable   = smoother.smooth(rawMediaPipeLandmarks);
  *   smoother.reset(); // on camera start/stop/mode change
  */
-export function createLandmarkSmoother(alpha = 0.4) {
+export function createLandmarkSmoother(alpha = 0.4, maxRejectStreak = MAX_REJECT_STREAK) {
   let prev         = null;
   let rejectStreak = null;
   let lastT        = null;
+  const REJECT_LIMIT = maxRejectStreak ?? MAX_REJECT_STREAK;
 
   return {
     smooth(lms) {
@@ -266,7 +281,7 @@ export function createLandmarkSmoother(alpha = 0.4) {
         const c = lms[i], p = prev[i];
         const jump = Math.hypot(c.x - p.x, c.y - p.y);
 
-        if (jump > maxDist && rejectStreak[i] < MAX_REJECT_STREAK) {
+        if (jump > maxDist && rejectStreak[i] < REJECT_LIMIT) {
           // Implausible single-frame jump — hold previous position
           rejectStreak[i]++;
           out[i] = { ...p };
@@ -746,7 +761,7 @@ function buildAlerts(modules, distCm, lo, hi) {
 // MAIN FRONT-CAMERA ANALYSIS
 // ═══════════════════════════════════════════════════════════════════
 
-export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
+export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartMs = null) {
   if (!lms || lms.length < 25) return null;
 
   // Quality gate
@@ -760,8 +775,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
 
   // Head yaw & distance
   const headYaw = estimateHeadYaw(lms, W, H);
-  const lo      = mode === "laptop" ? 50 : 60;
-  const hi      = mode === "laptop" ? 80 : 90;
+  // Read ideal distance range from MODES (single source of truth) instead
+  // of duplicating it with a hardcoded if/else that silently drifts if
+  // MODES is ever edited elsewhere.
+  const [lo, hi] = MODES[mode]?.distRange || MODES.laptop.distRange;
   const distCm  = estimateDistanceCm(lms, W, H, headYaw, distCalibFactor);
   const distSc  = distanceScore(distCm, lo, hi);
 
@@ -801,7 +818,14 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
   );
 
   // Fatigue adjustment (informational only)
-  const sessionMin     = typeof performance !== "undefined" ? Math.round(performance.now() / 60000) : 0;
+  // Uses real session-start wall-clock time when provided by the caller
+  // (App.jsx passes the camera-session start timestamp). Falls back to
+  // performance.now()/60000 (time since PAGE LOAD, not session start —
+  // inflates fatigue if the page was open a while before the camera
+  // started) only when the caller doesn't supply sessionStartMs.
+  const sessionMin     = sessionStartMs
+    ? Math.max(0, Math.round((Date.now() - sessionStartMs) / 60000))
+    : (typeof performance !== "undefined" ? Math.round(performance.now() / 60000) : 0);
   const fatiguePenalty = sessionMin > 90 ? Math.min(15, Math.round((sessionMin - 90) / 10)) : 0;
 
   // Alerts
@@ -826,7 +850,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null) {
 
     detectedConditions: [
       neck.severity     !== "normal" && { name: "Neck Lean",          severity: neck.severity,     value: `${neck.angle}°` },
-      fhp.reliability   !== false   && fhp.severity !== "normal"    && { name: "Forward Head",       severity: fhp.severity,      value: `${fhp.distCm}cm` },
+      fhp.reliable      !== false   && fhp.severity !== "normal"    && { name: "Forward Head",       severity: fhp.severity,      value: `${fhp.distCm}cm` },
       headTilt.severity !== "normal" && { name: "Head Tilt",          severity: headTilt.severity, value: `${headTilt.angle}°` },
       shoulder.severity !== "normal" && { name: "Shoulder Imbalance", severity: shoulder.severity, value: `${shoulder.angle}°` },
       rounded.severity  !== "normal" && { name: "Rounded Shoulders",  severity: rounded.severity,  value: rounded.depth },
@@ -922,14 +946,21 @@ export function analyzeSideMP(lms, W, H) {
   const earShSpan = Math.abs(ear.x - sh.x);
   const spanFrac  = earShSpan / Math.max(W, 1);
   const spanRatio = Math.max(0.70, Math.min(1.30, spanFrac / 0.14));
-  const neckOkAdj  = Math.max(6.0,  8.0  * spanRatio);
-  const neckBadAdj = Math.max(14.0, 22.0 * spanRatio);
+  const neckOkAdj  = Math.max(5.0,  8.0  * spanRatio);  // backend: neck_ok = max(5.0, 8.0*ratio)
+  const neckBadAdj = Math.max(16.0, 22.0 * spanRatio);  // backend: neck_bad = max(16.0, 22.0*ratio)
 
   const trunkLean = shOK && hipOK  ? angleVert(hip, sh)          : 0;
   const hipAngle  = hipOK && kneeOK ? angle3pt(sh, hip, knee)     : 90;
   const kneeAngle = kneeOK && ankleOK ? angle3pt(hip, knee, ankle) : 90;
   const spineAlign = shOK && ankleOK
     ? Math.abs(ear.x - ankle.x) / Math.max(W, 1) * 100 : 0;
+
+  // ── Forward head posture (side view) — horizontal ear-to-shoulder offset in cm ──
+  // Mirrors backend.py analyze_side(): _fhp_side_cm = |ear.x - sh.x| * cm_per_px
+  const shWidthPx  = earOK && shOK ? Math.abs(g(PL.L_SHOULDER).x * W - g(PL.R_SHOULDER).x * W) : 0;
+  const cmPerPxSide = SHOULDER_WIDTH_CM / Math.max(shWidthPx, 1);
+  const fhpSideCm   = earOK && shOK ? Math.round(Math.abs(ear.x - sh.x) * cmPerPxSide * 10) / 10 : 0;
+  const fhpSideSc   = earOK && shOK ? scoreMetric(fhpSideCm, 0, 2.5, 7) : NEUTRAL;
 
   const neckSc  = neckOK  ? scoreMetric(neckLean,               0, neckOkAdj, neckBadAdj) : NEUTRAL;
   const trunkSc = shOK && hipOK  ? scoreMetric(trunkLean,       0, THR.TRUNK_LEAN.ok, THR.TRUNK_LEAN.bad) : NEUTRAL;
@@ -948,6 +979,7 @@ export function analyzeSideMP(lms, W, H) {
   const alerts = [
     neckOK && neckLean > neckBadAdj               && `⚠️ Forward head ${Math.round(neckLean)}° — ear must be above shoulder`,
     neckOK && neckLean > (neckOkAdj+neckBadAdj)/2 && neckLean <= neckBadAdj && `Neck lean ${Math.round(neckLean)}° — tuck chin back`,
+    earOK && shOK && fhpSideCm > 5                && `⚠️ Forward head posture ${fhpSideCm}cm (side view) — tuck chin, pull head back over shoulders`,
     shOK && hipOK && trunkLean > 12               && `Trunk leaning ${Math.round(trunkLean)}° — sit back with lumbar support`,
     hipOK && kneeOK && Math.abs(hipAngle-90) > 15  && `Hip angle ${Math.round(hipAngle)}° (ideal ~90°) — adjust seat height`,
     kneeOK && ankleOK && Math.abs(kneeAngle-90) > 18 && `Knee angle ${Math.round(kneeAngle)}° (ideal ~90°) — adjust footrest`,
@@ -959,6 +991,7 @@ export function analyzeSideMP(lms, W, H) {
     confidence: Math.min(93, 70 + (shOK?10:0) + (earOK?8:0) + (hipOK?5:0)),
     metrics: {
       neck_lean_side: { value: Math.round(neckLean),  score: neckSc,  unit: "°",  label: "Neck lean (side)",  reliable: neckOK },
+      fhp_side:       { value: fhpSideCm,             score: fhpSideSc, unit: "cm", label: "Forward head posture", reliable: earOK && shOK },
       trunk_lean:     { value: Math.round(trunkLean), score: trunkSc, unit: "°",  label: "Trunk lean",        reliable: shOK && hipOK },
       hip_angle:      { value: Math.round(hipAngle),  score: hipSc,   unit: "°",  label: "Hip angle",         reliable: hipOK && kneeOK },
       knee_angle:     { value: Math.round(kneeAngle), score: kneeSc,  unit: "°",  label: "Knee angle",        reliable: kneeOK && ankleOK },
