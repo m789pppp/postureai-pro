@@ -4,8 +4,7 @@
  * Posture risk scoring · Trend forecasting
  */
 import { useState, useEffect, useCallback } from "react";
-import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
-import { getLocalAIStatus } from "./localAI.js";
+import { geminiAnalysis } from "./gemini.js";
 
 // NOTE: previously wrapped geminiChat(), but /api/coach/chat ignores any
 // custom system prompt and always answers as the hardcoded "PostureAI

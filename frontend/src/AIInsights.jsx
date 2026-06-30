@@ -5,8 +5,7 @@
  * Uses local WebLLM AI directly (no backend needed)
  */
 import { useState, useEffect, useCallback } from "react";
-import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
-import { getLocalAIStatus } from "./localAI.js";
+import { geminiAnalysis } from "./gemini.js";
 
 // ── AI call via local WebLLM ────────────────────────────────────────
 // NOTE: previously routed through geminiChat() -> /api/coach/chat, but
@@ -16,12 +15,9 @@ import { getLocalAIStatus } from "./localAI.js";
 // the wrong persona. geminiAnalysis() -> /api/ai/analyze actually
 // honors context.system_prompt.
 async function callGemini(prompt, systemPrompt, maxTokens = 1000) {
-  try {
-    return await geminiAnalysis(prompt, { context: { system_prompt: systemPrompt }, maxTokens });
-  } catch (e) {
-    if (getLocalAIStatus().ready) return await localFallbackAnalysis(prompt, { systemPrompt, maxTokens });
-    throw e;
-  }
+  // geminiAnalysis() now runs fully local (WebLLM) — no backend needed.
+  // initLocalAI() blocks until the model is ready (downloads on first call).
+  return await geminiAnalysis(prompt, { systemPrompt, maxTokens });
 }
 
 // ── helpers ───────────────────────────────────────────────────────
@@ -280,6 +276,9 @@ Be specific and practical. Reference the actual scores. Max 220 words.`,
     setError("");
     setData(null);
     try {
+      // Ensure local AI is ready (downloads on first use, instant after)
+      const { initLocalAI } = await import("./localAI.js");
+      await initLocalAI();
       const ctx    = buildContext();
       const prompt = tabPrompts[tabKey]?.(ctx);
       if (!prompt) return;
@@ -507,6 +506,31 @@ Be specific and practical. Reference the actual scores. Max 220 words.`,
 }
 
 // ── AI Text block (shared across tabs) ───────────────────────────
+// ── Mini progress bar shown only while WebLLM is downloading ────────
+function _LocalAIProgress({ isAr }) {
+  const [status, setStatus] = React.useState({ loading: false, progress: 0, ready: false });
+  React.useEffect(() => {
+    let unsub;
+    import("./localAI.js").then(({ getLocalAIStatus, onLocalAIStatus }) => {
+      setStatus(getLocalAIStatus());
+      unsub = onLocalAIStatus(setStatus);
+    });
+    return () => { if (unsub) unsub(); };
+  }, []);
+  if (status.ready || !status.loading) return null;
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#64748b", marginBottom: 4 }}>
+        <span>🧠 {isAr ? "بيتحمّل AI (مرة واحدة)" : "Downloading AI (one-time)"}</span>
+        <span style={{ color: "#93c5fd", fontWeight: 700 }}>{status.progress}%</span>
+      </div>
+      <div style={{ background: "rgba(148,163,184,.12)", borderRadius: 99, height: 4 }}>
+        <div style={{ height: "100%", width: `${status.progress}%`, background: "linear-gradient(90deg,#1a56db,#0891b2)", borderRadius: 99, transition: "width .3s ease" }} />
+      </div>
+    </div>
+  );
+}
+
 function AITextSection({ loading, data, error, onRetry, isAr }) {
   return (
     <div style={{ background: "linear-gradient(135deg,rgba(26,86,219,.06),rgba(8,145,178,.04))", border: "1px solid rgba(26,86,219,.14)", borderRadius: 14, padding: 16 }}>
@@ -524,6 +548,7 @@ function AITextSection({ loading, data, error, onRetry, isAr }) {
             <div key={i} style={{ height: 12, borderRadius: 6, width: `${w}%`, background: "linear-gradient(90deg,rgba(255,255,255,.06) 25%,rgba(255,255,255,.1) 50%,rgba(255,255,255,.06) 75%)", backgroundSize: "400% 100%", animation: `shimmer 1.6s ease ${i*80}ms infinite` }} />
           ))}
           <style>{`@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}`}</style>
+          <_LocalAIProgress isAr={isAr} />
         </div>
       )}
 
