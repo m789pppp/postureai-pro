@@ -32,7 +32,6 @@ function getErr(err, isAr) {
     "unauthorized-domain":   {en:"This domain isn't authorized for sign-in — contact support", ar:"الدومين ده غير مُصرّح له بتسجيل الدخول — تواصل مع الدعم"},
     "operation-not-allowed": {en:"This sign-in method isn't enabled — contact support", ar:"طريقة تسجيل الدخول دي غير مفعّلة — تواصل مع الدعم"},
     "internal-error":        {en:"Sign-in error — contact support if this persists", ar:"خطأ في تسجيل الدخول — تواصل مع الدعم لو استمر"},
-    "unauthorized-domain":   {en:"Sign-in domain not authorized — contact support", ar:"الدومين غير مصرّح له — تواصل مع الدعم"},
     "account-exists-with-different-credential":
                              {en:"This email is linked to a different sign-in method", ar:"هذا البريد مرتبط بطريقة دخول مختلفة"},
     "requires-recent-login": {en:"Please sign in again to continue", ar:"يجب إعادة تسجيل الدخول للمتابعة"},

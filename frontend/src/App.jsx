@@ -2023,7 +2023,7 @@ function DeviceSelect({cs,t,lang,onSelect}){
 // MAIN APP COMPONENT
 // ══════════════════════════════════════════════════════════════════
 // OAuth redirect detection — persists across page reload
-const _oauthInProgress = !!(function() {
+let _oauthInProgress = !!(function() {
   try { return sessionStorage.getItem("__pendingOAuth") === "1"; } catch { return false; }
 })();
 
