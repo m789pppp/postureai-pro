@@ -115,7 +115,7 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang }) {
   </div>
 </div>
 
-<h2>${isAr ? "🧠 التحليل الذكي — Gemini AI" : "🧠 AI Analysis — Posmoz AI"}</h2>
+<h2>${isAr ? "🧠 التحليل الذكي — Posmoz AI" : "🧠 AI Analysis — Posmoz AI"}</h2>
 <div class="ai-box">
   <div class="ai-label">🧠 ${isAr ? "Posmoz Intelligence" : "Posmoz Intelligence"}</div>
   <div style="font-size:13px;color:#334d6e;line-height:1.75;">${(summaryText || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br/>")}</div>

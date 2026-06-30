@@ -9,7 +9,7 @@ Module map:
   middleware/errors.py     → Centralized error handling
   routes/analysis.py       → /api/analyze, /api/session/*
   routes/billing.py        → /api/paymob/*, /api/stripe/*, /api/billing/*
-  routes/ai_routes.py      → /api/gemini, /api/ai/*, /api/coach/*
+  routes/ai_routes.py      → /api/ai/*, /api/coach/*
   routes/admin.py          → /api/admin/*
   routes/enterprise.py     → /api/hr/*, /api/org/*, /api/audit/*
   routes/analytics.py      → /api/analytics/*, /api/reports/*

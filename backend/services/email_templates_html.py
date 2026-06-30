@@ -137,7 +137,7 @@ def day14_upsell(first_name: str, avg_score: int = 75,
       <p>Your average score is <b>{avg_score}/100</b>. Users who upgrade to Professional at this stage improve <b>2.3× faster</b>.</p>
       <p>With Professional you get:</p>
       <ul style="color:#475569;line-height:2.2;padding-left:20px">
-        <li>🤖 Gemini AI coaching — personalized narrative each session</li>
+        <li>🤖 AI coaching — personalized narrative each session</li>
         <li>📄 Unlimited PDF health reports</li>
         <li>📊 Advanced analytics + trend detection</li>
         <li>👥 Team leaderboard</li>

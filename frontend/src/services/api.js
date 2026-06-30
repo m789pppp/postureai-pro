@@ -3,7 +3,7 @@
  * - Automatic token injection on every request
  * - 401 auto-refresh
  * - Timeout + AbortController
- * - Async Gemini with job_id polling
+
  * - Complete PaymentAPI + AIAPI surface
  */
 import { auth } from "../firebase.js";
@@ -125,13 +125,11 @@ export const ReportAPI = {
   getMonthlyReport: (data) => apiFetch("/hr/monthly-report", { method: "POST", body: data, timeout: 60000 }),
 };
 
-// ── AI API — async Gemini with polling ────────────────────────────
-//
-// geminiAnalysis(prompt) → submits job → polls until done → resolves {text}
-// Replaces the old synchronous call that blocked Gunicorn workers for 18s.
-//
-const POLL_INTERVAL_MS = 800;   // poll every 800ms
-const POLL_MAX_TRIES   = 25;    // 20s total before giving up
+// ── AI API ──────────────────────────────────────────────────────
+// NOTE: AI chat/analysis itself runs 100% client-side now (WebLLM,
+// see gemini.js) — no server calls, no API keys. These endpoints
+// remain only for analytics-style server processing (KPIs, risk
+// scoring) that needs access to stored session data.
 
 export const AIAPI = {
   // ── Phase 4: AI Intelligence Layer ───────────────────────────
@@ -146,30 +144,6 @@ export const AIAPI = {
   /** Fatigue analysis: hourly breakdown + break schedule */
   fatigueAnalysis:   (data) => apiFetch("/ai/fatigue-analysis",  { method:"POST", body:data, timeout:20000 }),
   // ─────────────────────────────────────────────────────────────
-  /**
-   * Submit a Gemini prompt asynchronously and wait for the result.
-   * Returns { text } on success, throws on error.
-   */
-  geminiAnalysis: async (prompt) => {
-    // 1. Submit job
-    const { job_id } = await apiFetch("/gemini", { method: "POST", body: { prompt }, timeout: 10000 });
-    if (!job_id) throw new Error("No job_id returned from /api/gemini");
-
-    // 2. Poll for result
-    for (let i = 0; i < POLL_MAX_TRIES; i++) {
-      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-      const result = await apiFetch(`/gemini/job/${job_id}`, { timeout: 5000 });
-      if (result.status === "done")    return { text: result.text };
-      if (result.status === "error")   throw new Error(result.error || "Gemini error");
-      if (result.status === "expired") throw new Error("Gemini job expired");
-      // status === "pending" → keep polling
-    }
-    throw new Error("Gemini analysis timed out after 20s");
-  },
-
-  /** Synchronous Gemini for PDF generation (rate-limited 10/min). */
-  geminiSync: (prompt) => apiFetch("/gemini/sync", { method: "POST", body: { prompt }, timeout: 20000 }),
-
   coach:   (data) => apiFetch("/coach/chat",  { method: "POST", body: data, timeout: 30000 }),
   insight: (data) => apiFetch("/ai/insight",  { method: "POST", body: data, timeout: 30000 }),
 };

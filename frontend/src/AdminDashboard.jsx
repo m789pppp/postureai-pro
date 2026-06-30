@@ -633,7 +633,7 @@ function OverviewTab({ users, payments, health, totalRevenue, pendingPayments, a
           <div style={{ padding:"16px", display:"flex", flexDirection:"column", gap:8 }}>
             {health ? [
               { label:"Backend API", ok: health.status === "ok", sub: `v${health.version}` },
-              { label:"Gemini AI",   ok: health.integrations?.gemini?.configured, sub: health.integrations?.gemini?.live ? "Live" : "Configured" },
+              { label:"Local AI (WebLLM)", ok: true, sub: "Runs in browser" },
               { label:"PayMob",      ok: health.integrations?.paymob?.configured, sub: "Billing" },
               { label:"PDF Engine",  ok: health.pdf_available, sub: "ReportLab" },
               { label:"Redis",       ok: health.redis?.status === "ok", sub: "Cache & sessions" },
