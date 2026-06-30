@@ -245,15 +245,16 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
           ))}
         </div>
 
-        {/* Local AI download progress (first use only) */}
+        {/* AI connecting indicator (first use) */}
         {!localAIReady && localAIStatus.loading && (
           <div style={{ padding: "10px 20px", background: "rgba(26,86,219,.06)", borderBottom: `0.5px solid ${DARK.border}`, flexShrink: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: DARK.muted, marginBottom: 6 }}>
-              <span>🧠 {isAr ? "بيتحمّل AI مجاني (مرة واحدة، بعدها فوري)" : "Downloading free AI (one-time, instant after)"}</span>
-              <span style={{ color: "#93c5fd", fontWeight: 700 }}>{localAIStatus.progress}%</span>
+              <span>🧠 {isAr ? "جاري الاتصال بـ AI…" : "Connecting to AI…"}</span>
+              <span style={{ color: "#93c5fd", fontWeight: 700 }}>●</span>
             </div>
             <div style={{ background: "rgba(148,163,184,.15)", borderRadius: 99, height: 5, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${localAIStatus.progress}%`, background: "linear-gradient(90deg,#1a56db,#0891b2)", borderRadius: 99, transition: "width .3s ease" }} />
+              <div style={{ height: "100%", width: "60%", background: "linear-gradient(90deg,#1a56db,#0891b2)", borderRadius: 99, animation: "pulse-bar 1.4s ease-in-out infinite" }} />
+              <style>{`@keyframes pulse-bar{0%,100%{opacity:.5;width:30%}50%{opacity:1;width:90%}}`}</style>
             </div>
           </div>
         )}
