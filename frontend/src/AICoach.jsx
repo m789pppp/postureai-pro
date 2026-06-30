@@ -61,9 +61,10 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
   const [loading,      setLoading]     = useState(false);
   const [error,        setError]       = useState("");
   const [localAIReady, setLocalAIReady]= useState(getLocalAIStatus().ready);
+  const [localAIStatus,setLocalAIStatus]=useState(getLocalAIStatus());
 
   useEffect(() => {
-    const unsub = onLocalAIStatus(s => setLocalAIReady(s.ready));
+    const unsub = onLocalAIStatus(s => { setLocalAIReady(s.ready); setLocalAIStatus(s); });
     return unsub;
   }, []);
   const bottomRef = useRef(null);
@@ -238,6 +239,19 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
             </div>
           ))}
         </div>
+
+        {/* Local AI download progress (first use only) */}
+        {!localAIReady && localAIStatus.loading && (
+          <div style={{ padding: "10px 20px", background: "rgba(26,86,219,.06)", borderBottom: `0.5px solid ${DARK.border}`, flexShrink: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: DARK.muted, marginBottom: 6 }}>
+              <span>🧠 {isAr ? "بيتحمّل AI مجاني (مرة واحدة، بعدها فوري)" : "Downloading free AI (one-time, instant after)"}</span>
+              <span style={{ color: "#93c5fd", fontWeight: 700 }}>{localAIStatus.progress}%</span>
+            </div>
+            <div style={{ background: "rgba(148,163,184,.15)", borderRadius: 99, height: 5, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${localAIStatus.progress}%`, background: "linear-gradient(90deg,#1a56db,#0891b2)", borderRadius: 99, transition: "width .3s ease" }} />
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
