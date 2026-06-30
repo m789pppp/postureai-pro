@@ -291,14 +291,18 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
             </div>
           )}
           {error && (
-            <div style={{ fontSize: 11, color: "#ef4444", textAlign: "center", padding: "8px 14px", background: "rgba(239,68,68,.08)", borderRadius: 8 }}>
-              {error}
+            <div style={{ fontSize: 11, color: "#ef4444", textAlign: "center", padding: "10px 14px", background: "rgba(239,68,68,.08)", borderRadius: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              <span>{error}</span>
               {error.includes("limit") && (
-                <div style={{ marginTop: 6 }}>
-                  <a href="/pricing" style={{ color: "#93c5fd", fontSize: 11, fontWeight: 600 }}>
-                    {isAr ? "⬆ ترقية للمزيد ←" : "⬆ Upgrade for more →"}
-                  </a>
-                </div>
+                <a href="/pricing" style={{ color: "#93c5fd", fontSize: 11, fontWeight: 600 }}>
+                  {isAr ? "⬆ ترقية للمزيد ←" : "⬆ Upgrade for more →"}
+                </a>
+              )}
+              {!error.includes("WebGPU") && !error.includes("browser") && !error.includes("المتصفح") && (
+                <button onClick={() => { setError(""); sendMessage(messages[messages.length - 2]?.content || ""); }}
+                  style={{ background: "rgba(26,86,219,.2)", border: "1px solid rgba(26,86,219,.4)", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 700, color: "#93c5fd", cursor: "pointer", alignSelf: "center" }}>
+                  {isAr ? "⟳ أعد المحاولة" : "⟳ Retry"}
+                </button>
               )}
             </div>
           )}
