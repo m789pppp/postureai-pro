@@ -65,6 +65,8 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
 
   useEffect(() => {
     const unsub = onLocalAIStatus(s => { setLocalAIReady(s.ready); setLocalAIStatus(s); });
+    // Auto-start download immediately when coach opens (don't wait for first message)
+    import("./localAI.js").then(({ initLocalAI }) => initLocalAI()).catch(() => {});
     return unsub;
   }, []);
   const bottomRef = useRef(null);
@@ -191,7 +193,10 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
       });
       setMessages(prev => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
     } catch (e) {
-      setError(friendlyError(e, isAr ? "ar" : "en"));
+      // Don't show error if AI is still downloading — just wait
+      if (!getLocalAIStatus().loading) {
+        setError(friendlyError(e, isAr ? "ar" : "en"));
+      }
     } finally {
       setLoading(false);
       inputRef.current?.focus();
@@ -320,7 +325,10 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder={t.placeholder}
+            placeholder={!localAIReady && localAIStatus.loading
+              ? (isAr ? "بيتحمّل AI… لحظة" : "Downloading AI… please wait")
+              : t.placeholder}
+            disabled={loading || (!localAIReady && localAIStatus.loading)}
             rows={1}
             style={{
               flex: 1, background: "rgba(148,163,184,.06)",
@@ -332,7 +340,7 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
           />
           <button
             onClick={() => sendMessage()}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || (!localAIReady && localAIStatus.loading)}
             style={{
               background: loading || !input.trim() ? "rgba(26,86,219,.3)" : "#1a56db",
               border: "none", borderRadius: 10, padding: "0 18px",
