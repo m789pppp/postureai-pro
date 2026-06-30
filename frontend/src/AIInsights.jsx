@@ -5,7 +5,8 @@
  * Uses Gemini AI directly (no backend needed)
  */
 import { useState, useEffect, useCallback } from "react";
-import { geminiAnalysis } from "./gemini.js";
+import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
+import { getLocalAIStatus } from "./localAI.js";
 
 // ── AI call via Gemini ─────────────────────────────────────────────
 // NOTE: previously routed through geminiChat() -> /api/coach/chat, but
@@ -15,7 +16,12 @@ import { geminiAnalysis } from "./gemini.js";
 // the wrong persona. geminiAnalysis() -> /api/ai/analyze actually
 // honors context.system_prompt.
 async function callGemini(prompt, systemPrompt, maxTokens = 1000) {
-  return geminiAnalysis(prompt, { context: { system_prompt: systemPrompt }, maxTokens });
+  try {
+    return await geminiAnalysis(prompt, { context: { system_prompt: systemPrompt }, maxTokens });
+  } catch (e) {
+    if (getLocalAIStatus().ready) return await localFallbackAnalysis(prompt, { systemPrompt, maxTokens });
+    throw e;
+  }
 }
 
 // ── helpers ───────────────────────────────────────────────────────
