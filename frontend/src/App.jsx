@@ -32,7 +32,7 @@ import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, Payme
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
-import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother } from "./features/analysis/postureEngine.js";
+import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer } from "./features/analysis/postureEngine.js";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
@@ -284,20 +284,27 @@ function analyzeMP(lms,W,H,mode,distCalibFactor){
   // App expects  {overall, distCm, lo, hi, metrics, lms(landmark refs), raw}
   const eng = _engAnalyzeMP(lms,W,H,mode,distCalibFactor);
   if(!eng) return null;
-  // eng.metrics.screen_distance has the distance data
   const dist = eng.metrics?.screen_distance;
-  const[lo,hi]=mode==="phone"?[60,90]:[50,80];
+  // lo/hi come from engine (no duplication)
   return{
     overall: eng.score,
-    distCm:  dist?.value||null,
-    lo, hi,
-    metrics: eng.metrics,
-    alerts:  eng.alerts,
-    // Rebuild lms refs from raw landmarks for drawFront
+    distCm:  dist?.value || eng.distCm || null,
+    lo:      eng.lo,
+    hi:      eng.hi,
+    metrics:            eng.metrics,
+    alerts:             eng.alerts,
+    bodyModules:        eng.bodyModules,
+    detectedConditions: eng.detectedConditions,
+    qualityScore:       eng.qualityScore,
+    qualityReason:      eng.qualityReason,
+    confidence:         eng.confidence,
+    calibrationStatus:  eng.calibrationStatus,
+    fatigue_adjusted_score: eng.fatigue_adjusted_score,
+    // Rebuild lms refs for drawFront overlay
     lms: _buildLmsRefs(lms,W,H),
-    raw: {neckLean:eng.metrics?.neck_lean?.value,headTilt:eng.metrics?.head_tilt?.value,
-          shTilt:eng.metrics?.shoulder_level?.value,spineLean:eng.metrics?.spine_lean?.value,
-          distCm:dist?.value,lo,hi},
+    raw: {neckLean:eng.metrics?.neck_lean?.value, headTilt:eng.metrics?.head_tilt?.value,
+          shTilt:eng.metrics?.shoulder_level?.value, spineLean:eng.metrics?.spine_lean?.value,
+          distCm:eng.distCm, lo:eng.lo, hi:eng.hi},
   };
 }
 
@@ -305,12 +312,15 @@ function analyzeSideMP(lms,W,H){
   const eng = _engAnalyzeSideMP(lms,W,H);
   if(!eng) return null;
   return{
-    overall: eng.score,
-    metrics: eng.metrics,
-    alerts:  eng.alerts,
+    overall:            eng.score,
+    metrics:            eng.metrics,
+    alerts:             eng.alerts,
+    bodyModules:        eng.bodyModules,
+    detectedConditions: eng.detectedConditions,
+    confidence:         eng.confidence,
     lms: _buildSideLmsRefs(lms,W,H),
-    raw: {neckLean:eng.metrics?.neck_lean_side?.value,trunkLean:eng.metrics?.trunk_lean?.value,
-          hipA:eng.metrics?.hip_angle?.value,kneeA:eng.metrics?.knee_angle?.value,
+    raw: {neckLean:eng.metrics?.neck_lean_side?.value, trunkLean:eng.metrics?.trunk_lean?.value,
+          hipA:eng.metrics?.hip_angle?.value, kneeA:eng.metrics?.knee_angle?.value,
           spineAlign:eng.metrics?.spine_align?.value},
   };
 }
@@ -2060,7 +2070,7 @@ export default function App(){
   const[mode,setMode]=useState(null);
   const[lowLight,setLowLight]=useState(false);
   const[sessionInsights,setSessionInsights]=useState([]);
-  useEffect(()=>{ lmSmootherRef.current?.reset(); },[mode]);
+  useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); },[mode]);
   const[tier,setTier]=useState(null);
   const[acctType,setAcctType]=useState(profile?.acct_type||null);
   // Sync acctType when profile loads (e.g. after Google login)
@@ -2269,7 +2279,8 @@ export default function App(){
   const vidRef=useRef();const ovRef=useRef();const canvRef=useRef();
   const streamRef=useRef();const timerRef=useRef();const rafRef=useRef();
   const mpRef=useRef();const badRef=useRef(null);const lastAlRef=useRef(0);
-  const lmSmootherRef=useRef(null);
+  const lmSmootherRef   = useRef(null);
+  const frameBufferRef  = useRef(null); // 60-frame aggregation buffer
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
   const insightsRef=useRef(null);
   const alertCauseRef=useRef({});
@@ -2544,9 +2555,19 @@ export default function App(){
         if(det.landmarks?.length>0){
           const quality = qualityFor(tier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
+          if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(60);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
-          const result=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor);
+          const rawResult=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor);
+          // Push raw metrics into buffer — use trimmed mean score after 10+ frames
+          let result = rawResult;
+          if(rawResult?.score != null && frameBufferRef.current){
+            frameBufferRef.current.push({score: rawResult.score});
+            const buffered = frameBufferRef.current.trimmedMean("score");
+            if(buffered != null){
+              result = {...rawResult, overall: Math.round(buffered), score: Math.round(buffered)};
+            }
+          }
           if(result){
             // Apply personal calibration if available
             let finalResult = result;
@@ -4309,6 +4330,65 @@ export default function App(){
                         dim={m.reliable===false}
                       />
                     ))}
+                    {/* ── Detected conditions with severity badges ── */}
+                    {analysis.detectedConditions?.length > 0 && (
+                      <div style={{marginTop:10,marginBottom:4}}>
+                        <div style={{fontSize:9,fontWeight:700,color:cs.muted,textTransform:"uppercase",
+                          letterSpacing:".07em",marginBottom:6}}>
+                          {isAr?"الحالات المرصودة":"Detected Conditions"}
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                          {analysis.detectedConditions.map((cond,i)=>{
+                            const sevColor = cond.severity==="severe"?"#ef4444"
+                              :cond.severity==="moderate"?"#f97316"
+                              :cond.severity==="mild"?"#f59e0b":"#10b981";
+                            const sevLabel = cond.severity==="severe"
+                              ?(isAr?"شديد":"Severe")
+                              :cond.severity==="moderate"
+                              ?(isAr?"متوسط":"Moderate")
+                              :cond.severity==="mild"
+                              ?(isAr?"خفيف":"Mild")
+                              :(isAr?"طبيعي":"Normal");
+                            return(
+                              <div key={i} style={{display:"flex",alignItems:"center",
+                                justifyContent:"space-between",gap:6,
+                                padding:"4px 8px",borderRadius:7,
+                                background:`${sevColor}10`,
+                                border:`1px solid ${sevColor}25`,
+                              }}>
+                                <span style={{fontSize:10.5,color:cs.text,fontWeight:500}}>
+                                  {cond.name}
+                                </span>
+                                <div style={{display:"flex",alignItems:"center",gap:5}}>
+                                  <span style={{fontSize:9.5,color:cs.muted}}>{cond.value}</span>
+                                  <span style={{fontSize:9,fontWeight:700,color:sevColor,
+                                    padding:"1px 6px",borderRadius:99,
+                                    background:`${sevColor}20`,
+                                    textTransform:"uppercase",letterSpacing:".04em",
+                                  }}>{sevLabel}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Quality score indicator ── */}
+                    {analysis.qualityScore != null && analysis.qualityScore < 100 && (
+                      <div style={{fontSize:9.5,padding:"3px 8px",borderRadius:99,
+                        background:"rgba(239,68,68,.1)",color:"#f87171",
+                        fontWeight:600,marginBottom:4,display:"inline-flex",alignItems:"center",gap:4}}>
+                        ⚠️ {analysis.qualityReason === "body_cropped"
+                          ? (isAr?"الجسم مقطوع":"Body partially visible")
+                          : analysis.qualityReason === "too_close"
+                          ? (isAr?"قريب جداً":"Too close to camera")
+                          : analysis.qualityReason === "too_far"
+                          ? (isAr?"بعيد جداً":"Too far from camera")
+                          : (isAr?"جودة منخفضة":"Low quality frame")}
+                      </div>
+                    )}
+
                     {/* Confidence + fatigue compact row */}
                     <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
                       {analysis.confidence!=null&&(
