@@ -1,20 +1,26 @@
 /**
- * localAI.js — Browser-based AI using WebLLM (@mlc-ai/web-llm)
- * Model: Qwen2.5-0.5B-Instruct (~500MB, cached after first load)
- * Runs 100% in browser via WebGPU — no API keys, no backend, no cost
+ * localAI.js — Free AI via Pollinations.ai
+ *
+ * No downloads, no API keys, no WebGPU, no backend.
+ * Pollinations.ai is a free, open-source AI service that runs
+ * open-source models (openai-compatible) in the cloud.
+ * Works from any browser, any device, instantly.
+ *
+ * API: https://text.pollinations.ai/openai (OpenAI-compatible, no key)
  */
 
-let _engine    = null;
+const POLLINATIONS_URL = "https://text.pollinations.ai/openai";
+const MODEL            = "openai-large"; // best free model on Pollinations
+
+// ── State (kept for API compatibility with components) ─────────────
+let _ready     = false;
 let _loading   = false;
 let _progress  = 0;
 let _error     = null;
 let _listeners = new Set();
 
-const MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
-
-// ── Status ─────────────────────────────────────────────────────────
 export function getLocalAIStatus() {
-  return { ready: !!_engine, loading: _loading, progress: _progress, error: _error };
+  return { ready: _ready, loading: _loading, progress: _progress, error: _error };
 }
 export function onLocalAIStatus(cb) {
   _listeners.add(cb);
@@ -25,103 +31,83 @@ function _notify() {
   _listeners.forEach(cb => { try { cb(s); } catch {} });
 }
 
-// ── WebGPU check ───────────────────────────────────────────────────
-export async function checkWebGPU() {
-  if (typeof navigator === "undefined") return false;
-  if (!navigator.gpu) return false;
-  try {
-    const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) return false;
-    const device = await adapter.requestDevice();
-    device.destroy();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ── Initialize ─────────────────────────────────────────────────────
-export async function initLocalAI(onProgress) {
-  if (_engine) return _engine;
-
-  // Already loading — wait for it
+// ── "Init" — just a connectivity ping (fast, ~300ms) ─────────────
+export async function initLocalAI() {
+  if (_ready) return true;
   if (_loading) {
     return new Promise((resolve, reject) => {
       const check = setInterval(() => {
-        if (_engine)  { clearInterval(check); resolve(_engine); }
-        if (_error)   { clearInterval(check); reject(new Error(_error)); }
-      }, 500);
-      // Timeout after 3 minutes
-      setTimeout(() => { clearInterval(check); reject(new Error("AI_TIMEOUT")); }, 180000);
+        if (_ready)  { clearInterval(check); resolve(true); }
+        if (_error)  { clearInterval(check); reject(new Error(_error)); }
+      }, 300);
+      setTimeout(() => { clearInterval(check); reject(new Error("AI_TIMEOUT")); }, 15000);
     });
   }
 
-  // Check WebGPU first
-  const gpuOk = await checkWebGPU().catch(() => false);
-  if (!gpuOk) {
-    _error = "AI_NO_WEBGPU";
-    _notify();
-    throw new Error("AI_NO_WEBGPU");
-  }
-
-  _loading = true; _error = null; _progress = 0;
+  _loading = true; _error = null; _progress = 50;
   _notify();
 
   try {
-    const { CreateMLCEngine } = await import("@mlc-ai/web-llm");
-
-    _engine = await CreateMLCEngine(MODEL, {
-      initProgressCallback: (report) => {
-        _progress = Math.round((report.progress || 0) * 100);
-        if (onProgress) onProgress(_progress, report.text);
-        _notify();
-      },
+    const res = await fetch(POLLINATIONS_URL, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        model:      MODEL,
+        messages:   [{ role: "user", content: "Hi" }],
+        max_tokens: 5,
+        seed:       1,
+      }),
+      signal: AbortSignal.timeout(12000),
     });
-
-    _loading = false; _progress = 100; _error = null;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    _ready = true; _loading = false; _progress = 100; _error = null;
     _notify();
-    return _engine;
-
+    return true;
   } catch (e) {
-    _loading = false; _engine = null;
+    _loading = false; _ready = false;
     const msg = e?.message || "";
-    // Classify the error
-    if (msg.toLowerCase().includes("webgpu") || msg.toLowerCase().includes("gpu") || msg.includes("GPUDevice")) {
-      _error = "AI_NO_WEBGPU";
-    } else if (msg.includes("fetch") || msg.includes("network") || msg.includes("Failed to fetch")) {
-      _error = "AI_NETWORK";
-    } else {
-      _error = msg || "AI_LOAD_FAILED";
-    }
+    _error = msg.includes("timeout") || msg.includes("Timeout") || msg.includes("abort")
+      ? "AI_TIMEOUT"
+      : "AI_NETWORK";
     _notify();
     throw new Error(_error);
   }
 }
 
+// ── Core request ───────────────────────────────────────────────────
+async function _call(messages, maxTokens = 500) {
+  const res = await fetch(POLLINATIONS_URL, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ model: MODEL, messages, max_tokens: maxTokens, seed: 42 }),
+    signal:  AbortSignal.timeout(30000),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(res.status === 429 ? "AI_BUSY" : `AI_NETWORK`);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content?.trim() || "";
+}
+
 // ── Chat ───────────────────────────────────────────────────────────
-export async function localChat(messages, { systemPrompt = "", maxTokens = 400 } = {}) {
-  const engine = _engine || await initLocalAI();
+export async function localChat(messages, { systemPrompt = "", maxTokens = 500 } = {}) {
   const msgs = [
     ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
     ...messages.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
   ];
-  const reply = await engine.chat.completions.create({
-    messages: msgs,
-    max_tokens: maxTokens,
-    temperature: 0.7,
-    stream: false,
-  });
-  return reply.choices[0]?.message?.content?.trim() || "";
+  return _call(msgs, maxTokens);
 }
 
 // ── Analysis ───────────────────────────────────────────────────────
-export async function localAnalysis(prompt, { systemPrompt = "", maxTokens = 400 } = {}) {
+export async function localAnalysis(prompt, { systemPrompt = "", maxTokens = 500 } = {}) {
   return localChat([{ role: "user", content: prompt }], { systemPrompt, maxTokens });
 }
 
-// ── Unload ─────────────────────────────────────────────────────────
+// ── Unload (no-op for cloud AI) ────────────────────────────────────
 export async function unloadLocalAI() {
-  if (_engine) { try { await _engine.unload(); } catch {} }
-  _engine = null; _loading = false; _progress = 0; _error = null;
+  _ready = false; _loading = false; _progress = 0; _error = null;
   _notify();
 }
+
+export async function checkWebGPU() { return true; } // not needed anymore
