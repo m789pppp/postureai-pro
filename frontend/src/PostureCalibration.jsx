@@ -146,70 +146,85 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
-  // Load MediaPipe pose
+  // Load MediaPipe pose — tasks-vision@0.10.14 (same as main engine, not old window.Pose)
   useEffect(() => {
-    if (step === "align" || step === "counting") {
-      startCamera();
-      if (window.Pose) {
-        mpRef.current = new window.Pose({
-          locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`,
-        });
-        mpRef.current.setOptions({
-          modelComplexity: 1, smoothLandmarks: true,
-          minDetectionConfidence: 0.5, minTrackingConfidence: 0.5,
-        });
-        mpRef.current.onResults(res => {
-          if (res.poseLandmarks && step === "counting") {
-            frameRef.current.push(res.poseLandmarks);
-          }
-          // Draw overlay on canvas
-          if (canvasRef.current && videoRef.current) {
-            const ctx = canvasRef.current.getContext("2d");
-            const { videoWidth: W, videoHeight: H } = videoRef.current;
-            canvasRef.current.width  = W || 640;
-            canvasRef.current.height = H || 480;
-            ctx.clearRect(0, 0, W, H);
-            // Draw alignment guide
-            ctx.strokeStyle = res.poseLandmarks ? "#10b981" : "rgba(245,158,11,.7)";
-            ctx.lineWidth = 2;
-            ctx.setLineDash([6, 4]);
-            const cx = W / 2, cy = H / 2;
-            ctx.beginPath(); ctx.ellipse(cx, cy * .55, W * .18, H * .22, 0, 0, Math.PI * 2); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(cx - W * .3, H * .35); ctx.lineTo(cx + W * .3, H * .35); ctx.stroke();
-            ctx.setLineDash([]);
-            if (res.poseLandmarks) {
-              const lms = res.poseLandmarks;
-              ctx.fillStyle = "#10b981";
-              [LM.L_SHOULDER, LM.R_SHOULDER, LM.L_EAR, LM.R_EAR, LM.L_EYE, LM.R_EYE].forEach(i => {
-                const lm = lms[i];
-                ctx.beginPath(); ctx.arc(lm.x * W, lm.y * H, 5, 0, Math.PI * 2); ctx.fill();
-              });
-              ctx.strokeStyle = "#10b981"; ctx.lineWidth = 2.5; ctx.globalAlpha = .8;
-              [[LM.L_SHOULDER, LM.R_SHOULDER], [LM.L_EAR, LM.R_EAR],
-               [LM.L_EAR, LM.L_SHOULDER], [LM.R_EAR, LM.R_SHOULDER]].forEach(([a, b]) => {
-                ctx.beginPath(); ctx.moveTo(lms[a].x * W, lms[a].y * H);
-                ctx.lineTo(lms[b].x * W, lms[b].y * H); ctx.stroke();
-              });
-              ctx.globalAlpha = 1;
-            }
-          }
-        });
-      }
-    }
-  }, [step]);
+    if (step !== "align" && step !== "counting") return;
+    startCamera();
+    let pl = null;
+    let rafId = null;
+    let destroyed = false;
 
-  // Send frames to MediaPipe
-  useEffect(() => {
-    if ((step === "align" || step === "counting") && mpRef.current && videoRef.current) {
-      const tick = async () => {
-        if (videoRef.current && !videoRef.current.paused && mpRef.current) {
-          try { await mpRef.current.send({ image: videoRef.current }); } catch {}
-        }
-      };
-      const interval = setInterval(tick, 100);
-      return () => clearInterval(interval);
-    }
-  }, [step]);
+    const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+    const CDN   = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+
+    const drawFrame = (lms) => {
+      if (!canvasRef.current || !videoRef.current) return;
+      const ctx = canvasRef.current.getContext("2d");
+      const { videoWidth: W, videoHeight: H } = videoRef.current;
+      canvasRef.current.width  = W || 640;
+      canvasRef.current.height = H || 480;
+      ctx.clearRect(0, 0, W, H);
+      // Alignment guide
+      ctx.strokeStyle = lms ? "#10b981" : "rgba(245,158,11,.7)";
+      ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+      const cx = W / 2, cy = H / 2;
+      ctx.beginPath(); ctx.ellipse(cx, cy * .55, W * .18, H * .22, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - W * .3, H * .35); ctx.lineTo(cx + W * .3, H * .35); ctx.stroke();
+      ctx.setLineDash([]);
+      if (lms) {
+        ctx.fillStyle = "#10b981";
+        [LM.L_SHOULDER, LM.R_SHOULDER, LM.L_EAR, LM.R_EAR, LM.L_EYE, LM.R_EYE].forEach(i => {
+          const lm = lms[i];
+          if (!lm) return;
+          ctx.beginPath(); ctx.arc(lm.x * W, lm.y * H, 5, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.strokeStyle = "#10b981"; ctx.lineWidth = 2.5; ctx.globalAlpha = .8;
+        [[LM.L_SHOULDER, LM.R_SHOULDER], [LM.L_EAR, LM.R_EAR],
+         [LM.L_EAR, LM.L_SHOULDER], [LM.R_EAR, LM.R_SHOULDER]].forEach(([a, b]) => {
+          if (!lms[a] || !lms[b]) return;
+          ctx.beginPath(); ctx.moveTo(lms[a].x * W, lms[a].y * H);
+          ctx.lineTo(lms[b].x * W, lms[b].y * H); ctx.stroke();
+        });
+        ctx.globalAlpha = 1;
+      }
+    };
+
+    import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs")
+      .then(async mod => {
+        if (destroyed) return;
+        const fr = await mod.FilesetResolver.forVisionTasks(CDN);
+        pl = await mod.PoseLandmarker.createFromOptions(fr, {
+          baseOptions: { modelAssetPath: MODEL, delegate: "GPU" },
+          runningMode: "VIDEO", numPoses: 1,
+          minPoseDetectionConfidence: 0.5,
+          minPosePresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+        mpRef.current = pl;
+        // RAF loop — tasks-vision requires VIDEO mode + timestamp
+        const tick = () => {
+          if (destroyed) return;
+          if (videoRef.current && videoRef.current.readyState >= 2 && pl) {
+            try {
+              const res = pl.detectForVideo(videoRef.current, performance.now());
+              const lms = res.landmarks?.[0] || null;
+              if (lms && step === "counting") frameRef.current.push(lms);
+              drawFrame(lms);
+            } catch {}
+          }
+          rafId = requestAnimationFrame(tick);
+        };
+        rafId = requestAnimationFrame(tick);
+      })
+      .catch(() => {});
+
+    return () => {
+      destroyed = true;
+      if (rafId) cancelAnimationFrame(rafId);
+      if (pl) { try { pl.close(); } catch {} }
+      mpRef.current = null;
+    };
+  }, [step, startCamera]);
 
   // Countdown
   const startCounting = useCallback(() => {
@@ -389,6 +404,14 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
                 style={{ width: "100%", background: "rgba(148,163,184,.08)", border: `0.5px solid ${DARK.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 14, color: DARK.text }}
               />
               <div style={{ fontSize: 11, color: DARK.muted, marginTop: 4, lineHeight: 1.5 }}>{t.distHint}</div>
+              {/* "I'm not sure" fallback */}
+              <button onClick={() => setKnownDistanceCm("60")} style={{
+                marginTop: 6, background: "none", border: `0.5px solid ${DARK.border}`,
+                borderRadius: 6, padding: "5px 10px", fontSize: 11, color: DARK.muted,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+              }}>
+                🤷 {t.distNotSure || "I'm not sure — use 60cm estimate"}
+              </button>
             </div>
             {error && <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 10, textAlign: "center" }}>{error}</div>}
             <button onClick={() => {
@@ -430,16 +453,28 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
               <div style={{ fontSize: 13, fontWeight: 600, color: "#10b981", marginBottom: 14 }}>{t.done}</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {[
-                  [t.neckLabel,     result.neck_angle,    "°"],
-                  [t.tiltLabel,     result.head_tilt,     "°"],
-                  [t.shoulderLabel, result.shoulder_tilt, "°"],
-                  [t.spineLabel,    result.spine_angle,   "°"],
-                ].map(([label, val, unit]) => (
-                  <div key={label} style={{ background: "rgba(16,185,129,.06)", borderRadius: 8, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 10, color: DARK.muted, marginBottom: 3 }}>{label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "#10b981" }}>{val}{unit}</div>
-                  </div>
-                ))}
+                  [t.neckLabel,     result.neck_angle,    "°", 5, 12],
+                  [t.tiltLabel,     result.head_tilt,     "°", 3, 8],
+                  [t.shoulderLabel, result.shoulder_tilt, "°", 3, 8],
+                  [t.spineLabel,    result.spine_angle,   "°", 5, 12],
+                ].map(([label, val, unit, okThresh, warnThresh]) => {
+                  const abs = Math.abs(val||0);
+                  const status = abs <= okThresh ? "ideal" : abs <= warnThresh ? "slight" : "attention";
+                  const statusColor = status==="ideal"?"#10b981":status==="slight"?"#f59e0b":"#ef4444";
+                  const statusIcon  = status==="ideal"?"✅":status==="slight"?"⚠️":"🔴";
+                  const statusLabel = status==="ideal"
+                    ? (t.statusIdeal||"Ideal")
+                    : status==="slight"
+                    ? (t.statusSlight||"Slight lean")
+                    : (t.statusAttention||"Needs attention");
+                  return (
+                    <div key={label} style={{ background: `${statusColor}10`, border: `1px solid ${statusColor}30`, borderRadius: 8, padding: "10px 12px" }}>
+                      <div style={{ fontSize: 10, color: DARK.muted, marginBottom: 3 }}>{label}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: statusColor }}>{statusIcon} {statusLabel}</div>
+                      <div style={{ fontSize: 10, color: DARK.muted, marginTop: 2 }}>{val}{unit} baseline</div>
+                    </div>
+                  );
+                })}
               </div>
               {result.distCalibFactor && (
                 <div style={{ marginTop: 10, background: "rgba(16,185,129,.06)", borderRadius: 8, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
