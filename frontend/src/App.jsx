@@ -2708,14 +2708,18 @@ export default function App(){
     if(needsBackend && totalRef.current%45===0 && canvRef.current){
       const c=canvRef.current,v2=vidRef.current;
       if(v2&&v2.readyState>=2){c.width=v2.videoWidth;c.height=v2.videoHeight;c.getContext("2d").drawImage(v2,0,0);}
+      // Non-blocking fire-and-forget with 4s timeout — never stalls local analysis
+      const _ctrl = new AbortController();
+      const _tmr  = setTimeout(() => _ctrl.abort(), 4000);
       AnalysisAPI.analyze({
         frame:        c.toDataURL("image/jpeg",.88),
         mode,
         lang,
         session_id:   sessionId,
         calibration:  calibData,
-      })
-        .then(d=>{
+        signal:       _ctrl.signal,
+      }).then(d=>{
+        clearTimeout(_tmr);
           // For Elite-equivalent: send snapshot every ~12 frames for PDF
           if(eliteEquivalent&&totalRef.current%12===0&&d.overall>0){
             AnalysisAPI.addSnapshot(sessionId, c.toDataURL("image/jpeg",.6), d.overall||d.score, new Date().toLocaleTimeString())
@@ -2752,7 +2756,7 @@ export default function App(){
           }
           // Always use local Corvus AI for Elite-equivalent tiers
           if(d.claude_analysis&&eliteEquivalent)setAiInsight(d.claude_analysis);
-        }).catch(()=>{});
+        }).catch(e=>{ clearTimeout(_tmr); /* silent fail — local analysis continues */ });
     }
     rafRef.current=requestAnimationFrame(runLoop);
   },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus]);
@@ -2883,28 +2887,36 @@ export default function App(){
         const diff=late-early;
         return diff>5?"improving":diff<-5?"declining":"stable";
       })(),
-      // Improvement tip for worst metric
+      // Improvement tip for worst metric — specific with actual angles/values
       improvement_tip: (()=>{
-        const tips={
-          neck_lean:"Raise your monitor to eye level to reduce neck flexion.",
-          spine_lean:"Sit back fully in your chair and use lumbar support.",
-          screen_distance:"Move your screen to 50–70cm from your eyes.",
-          head_tilt:"Keep your head level — avoid tilting to one side.",
-          shoulder_level:"Relax your shoulders down and back, away from your ears.",
-          wrist:"Keep wrists straight and elbows at 90° when typing.",
-        };
-        const tipAr={
-          neck_lean:"ارفع الشاشة لمستوى عينيك لتقليل ميل الرقبة.",
-          spine_lean:"اجلس للخلف واستخدم دعم أسفل الظهر.",
-          screen_distance:"ضع الشاشة على بُعد 50–70 سم من عينيك.",
-          head_tilt:"حافظ على استقامة رأسك — تجنب الميل لأحد الجانبين.",
-          shoulder_level:"أرخِ كتفيك للأسفل والخلف.",
-          wrist:"حافظ على استقامة معصميك وزاوية 90° للكوعين.",
-        };
         if(!la.metrics) return isAr?"خذ استراحة وضعية كل 30 دقيقة.":"Take a posture break every 30 minutes.";
         const worst=Object.entries(la.metrics).filter(([,v])=>v.score<75).sort(([,a],[,b])=>a.score-b.score)[0];
         if(!worst) return isAr?"وضعيتك ممتازة! استمر.":"Great posture! Keep it up.";
-        return (isAr?tipAr:tips)[worst[0]] || (isAr?"خذ استراحة كل 30 دقيقة.":"Take a break every 30 minutes.");
+        const [key, m] = worst;
+        const val = m.value != null ? Math.round(m.value*10)/10 : null;
+        const unit = m.unit || "";
+        // Build specific, values-based tip
+        const specific = {
+          neck_lean:       { en: val!=null?`Neck lean ${val}${unit} — raise monitor ${Math.round(Math.max(5,val*1.5))}cm to bring it to eye level`:"Raise your monitor to eye level",
+                             ar: val!=null?`ميل الرقبة ${val}${unit} — ارفع الشاشة ${Math.round(Math.max(5,val*1.5))} سم لمستوى العين`:"ارفع الشاشة لمستوى العين" },
+          spine_lean:      { en: val!=null?`Trunk lean ${val}${unit} — push hips to back of chair, engage lumbar support`:"Sit fully back with lumbar support",
+                             ar: val!=null?`ميل الجذع ${val}${unit} — ادفع الوركين للخلف في الكرسي واستخدم الدعم القطني`:"اجلس للخلف مع دعم قطني" },
+          screen_distance: { en: val!=null?`Screen is ${val}cm — ideal is 50–70cm (${val<50?"move screen further":"move closer"})`:"Move screen to 50–70cm",
+                             ar: val!=null?`المسافة ${val}سم — المثالي 50–70 سم (${val<50?"أبعد الشاشة":"اقترب أكثر"})`:"اضبط مسافة الشاشة 50–70 سم" },
+          head_tilt:       { en: val!=null?`Head tilting ${val}${unit} — imagine a plumb line through your ear and drop shoulders evenly`:"Level your head — equal weight on both sitting bones",
+                             ar: val!=null?`رأسك مائل ${val}${unit} — تخيّل خط رأسي يمر بأذنك وسوّ كتفيك`:"سوّي رأسك وحافظ على التوازن" },
+          shoulder_level:  { en: val!=null?`Shoulder imbalance ${val}${unit} — drop the higher shoulder, check armrest height`:"Level armrests so both shoulders sit evenly",
+                             ar: val!=null?`عدم توازن الكتفين ${val}${unit} — انزّل الكتف الأعلى واضبط ارتفاع مسند الذراع`:"اضبط مسند الذراع لتسوية الكتفين" },
+          rounded_shoulders:{ en: val!=null?`Shoulders rounded ${val}${unit} — pull shoulder blades together and down (retract + depress)`:"Pull shoulder blades together and down",
+                              ar: val!=null?`كتفان مدوّران ${val}${unit} — اسحب لوحَي الكتف للداخل وللأسفل`:"اسحب كتفيك للداخل وللأسفل" },
+          head_yaw:        { en: val!=null?`Head turned ${val}${unit} — reposition monitor or keyboard to face you directly`:"Face your monitor directly — avoid turning head",
+                             ar: val!=null?`رأسك مدار ${val}${unit} — حرّك الشاشة أو الكيبورد ليكونا أمامك مباشرة`:"اجعل الشاشة أمامك مباشرة" },
+          fhp:             { en: val!=null?`Forward head ${val}cm (+${Math.round((4.5/Math.cos(Math.atan2(val,15))-4.5)*10)/10}kg neck load) — tuck chin, pull head directly above shoulders`:"Tuck chin — ear should be above shoulder",
+                             ar: val!=null?`الرأس متقدم ${val}سم — أدخل ذقنك للداخل حتى تكون الأذن فوق الكتف مباشرة`:"أدخل ذقنك — الأذن فوق الكتف" },
+        };
+        const tipObj = specific[key];
+        if(tipObj) return isAr ? tipObj.ar : tipObj.en;
+        return isAr?"خذ استراحة كل 30 دقيقة.":"Take a break every 30 minutes.";
       })(),
       // Pain prediction
       pain_summary: (()=>{
