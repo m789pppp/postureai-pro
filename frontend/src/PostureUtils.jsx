@@ -14,20 +14,33 @@ import { useState, useEffect, useRef, useCallback } from "react";
  *
  * Returns { smoothed, push, reset }
  */
-export function useScoreSmoothing(windowMs = 15000, halfLifeMs = 6000, sampleIntervalMs = 200) {
+/**
+ * useScoreSmoothing — time-windowed, time-weighted average
+ *
+ * Fixes applied:
+ * - windowMs: 10s → 20s  (wider window = less frame-to-frame jitter)
+ * - halfLifeMs: 6s → 12s (slower decay = recent scores don't dominate)
+ * - sampleIntervalMs: 200ms → 500ms (2 samples/sec instead of 5 — each
+ *   sample is already the postureEngine's trimmedMean over 60 frames,
+ *   so more samples just add noise, not accuracy)
+ * - Jump guard: displayed score can only change ±3 pts per sample,
+ *   so a single bad frame can never move the UI by 10+ points.
+ */
+export function useScoreSmoothing(
+  windowMs        = 20000,
+  halfLifeMs      = 12000,
+  sampleIntervalMs = 500,
+) {
   const bufferRef     = useRef([]);
   const lastSampleRef = useRef(0);
+  const displayRef    = useRef(0);
   const [display, setDisplay] = useState(0);
 
   const push = useCallback((rawScore) => {
-    if (rawScore == null || rawScore < 0) return;
+    if (rawScore == null || rawScore < 0) return displayRef.current;
     const now = Date.now();
 
-    // Downsample: one entry per sampleIntervalMs.
-    // At 30fps analysis, without this the buffer fills with 30 entries/sec —
-    // the most-recent second then dominates the weighted average and
-    // makes the score react at near-frame-rate, defeating the window.
-    if (now - lastSampleRef.current < sampleIntervalMs) return display;
+    if (now - lastSampleRef.current < sampleIntervalMs) return displayRef.current;
     lastSampleRef.current = now;
 
     const buf = bufferRef.current;
@@ -39,14 +52,20 @@ export function useScoreSmoothing(windowMs = 15000, halfLifeMs = 6000, sampleInt
       const w = Math.pow(0.5, (now - s.t) / halfLifeMs);
       wSum += w; vSum += w * s.v;
     }
-    const next = wSum > 0 ? Math.round(vSum / wSum) : Math.round(rawScore);
+    const target = wSum > 0 ? Math.round(vSum / wSum) : Math.round(rawScore);
+
+    // Jump guard: cap per-sample display change at ±3 pts
+    const prev = displayRef.current;
+    const next = prev === 0 ? target : Math.max(prev - 3, Math.min(prev + 3, target));
+    displayRef.current = next;
     setDisplay(next);
     return next;
-  }, [windowMs, halfLifeMs, sampleIntervalMs, display]);
+  }, [windowMs, halfLifeMs, sampleIntervalMs]);
 
   const reset = useCallback(() => {
     bufferRef.current     = [];
     lastSampleRef.current = 0;
+    displayRef.current    = 0;
     setDisplay(0);
   }, []);
 

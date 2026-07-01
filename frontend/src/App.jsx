@@ -33,7 +33,7 @@ import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
-import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer } from "./features/analysis/postureEngine.js";
+import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
@@ -2071,7 +2071,7 @@ export default function App(){
   const[mode,setMode]=useState(null);
   const[lowLight,setLowLight]=useState(false);
   const[sessionInsights,setSessionInsights]=useState([]);
-  useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); },[mode]);
+  useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); distSmootherRef.current?.reset(); resetProportions(); },[mode]);
   const[tier,setTier]=useState(null);
   const[acctType,setAcctType]=useState(profile?.acct_type||null);
   // Sync acctType when profile loads (e.g. after Google login)
@@ -2296,6 +2296,7 @@ export default function App(){
   const mpRef=useRef();const badRef=useRef(null);const lastAlRef=useRef(0);
   const lmSmootherRef   = useRef(null);
   const frameBufferRef  = useRef(null); // 60-frame aggregation buffer
+  const distSmootherRef = useRef(null); // sliding-median distance smoother
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
   const insightsRef=useRef(null);
   const alertCauseRef=useRef({});
@@ -2571,9 +2572,16 @@ export default function App(){
           const quality = qualityFor(tier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(60);
+          if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
           const rawResult=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current);
+          // Stabilize distance via sliding median — fixes ±10pt IPD jitter
+          if(rawResult?.distCm && distSmootherRef.current){
+            const stableDistCm=distSmootherRef.current.push(rawResult.distCm);
+            rawResult.distCm=stableDistCm;
+            if(rawResult.metrics?.screen_distance) rawResult.metrics.screen_distance.value=stableDistCm;
+          }
           // Push raw metrics into buffer — use trimmed mean score after 10+ frames
           // NOTE: analyzeMP/analyzeSideMP wrappers above return field `overall`,
           // NOT `score` (the engine's raw field name) — must read `overall` here
@@ -2755,6 +2763,8 @@ export default function App(){
       setCameraStatus("ready");
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
+      distSmootherRef.current?.reset();
+      resetProportions();
       insightsRef.current=null;setSessionInsights([]);
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
@@ -2814,6 +2824,8 @@ export default function App(){
   async function stopCamera(){
     lmSmootherRef.current?.reset();
     frameBufferRef.current?.clear();
+    distSmootherRef.current?.reset();
+    resetProportions();
     lightCheckRef.current={t:0,canvas:lightCheckRef.current.canvas,wasLow:false};setLowLight(false);
     if(streamRef.current){
       streamRef.current.getTracks().forEach(x=>{x.stop(); x.enabled=false;});
