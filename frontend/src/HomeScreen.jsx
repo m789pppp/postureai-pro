@@ -5,6 +5,7 @@
  * All variables (user, profile, cs, t, etc.) are in parent scope.
  */
 import { useState, useEffect, useCallback } from "react";
+import { qualityFor } from "./lib/tierQuality.js";
 import { COLORS as C, TYPE as TY, SPACE as SP, RADIUS as R, SHADOW as SH,
          GLOBAL_CSS, scoreColor, scoreGrade, tierMeta, COMP } from "./DesignSystem.js";
 import { getUserSessions, getAllUsers, completeOnboardingStep,
@@ -503,7 +504,7 @@ export default function HomeScreen(props) {
               )}
 
               {/* Tier badge */}
-              <Chip label={(profile?.tier||"standard").toUpperCase()}
+              <Chip label={qualityFor(profile?.tier).label[isAr?"ar":"en"].toUpperCase()}
                 color={tm.color} bg={tm.bg} border={tm.border}/>
             </div>
 

@@ -1294,8 +1294,20 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           {!isPro(tier)&&(
             <>
               {/* ── Upgrade Plans ── */}
-              <div style={{ fontSize:12, color:cs.muted, marginBottom:12 }}>
-                {isAr?"اختر خطتك:":"Choose your plan:"}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                <div style={{ fontSize:12, color:cs.muted }}>
+                  {isAr?"اختر خطتك:":"Choose your plan:"}
+                </div>
+                <div style={{ display:"flex", border:`1px solid ${cs.border}`, borderRadius:8, overflow:"hidden" }}>
+                  {["EGP","USD"].map(c=>(
+                    <button key={c} onClick={()=>setCurrency(c)}
+                      style={{ background: currency===c ? "#1a56db" : "transparent", border:"none",
+                        padding:"4px 10px", fontSize:10, fontWeight:700,
+                        color: currency===c ? "#fff" : cs.muted, cursor:"pointer" }}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
               </div>
               {[
                 {
@@ -1339,10 +1351,9 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                     </div>
                     <div style={{ textAlign:"right" }}>
                       <span style={{ fontSize:15, fontWeight:900, color:"#f0f6ff" }}>
-                        {plan.priceEGP} EGP
+                        {currency==="EGP" ? `${plan.priceEGP} EGP` : `$${plan.priceUSD}`}
                       </span>
                       <span style={{ fontSize:10, color:cs.muted }}> /{isAr?"شهر":"mo"}</span>
-                      <div style={{ fontSize:9, color:cs.muted }}>${plan.priceUSD}/{isAr?"شهر":"mo"}</div>
                     </div>
                   </div>
                   <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
@@ -1862,6 +1873,14 @@ export default function HomePage({
 }) {
   const [tab,    setTab]    = useState("home");
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
+  // Default currency by timezone — Egypt → EGP (PayMob), everyone else → USD (Stripe).
+  // Matches the same Egypt/Gulf split documented in Billing.jsx. User can still toggle.
+  const [currency, setCurrency] = useState(()=>{
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return tz === "Africa/Cairo" ? "EGP" : "USD";
+    } catch { return "EGP"; }
+  });
 
   useEffect(()=>{
     const fn=()=>setMobile(window.innerWidth<1024);

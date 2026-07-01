@@ -44,6 +44,12 @@ const FEATURE_LEVEL = {
   starter: "basic",
   growth: "professional",
   enterprise: "elite",
+  // Legacy "business" tier — still actively used in backend.py (pose model
+  // selection, SEAT_LIMITS, etc.) but was missing here, so featureTier()
+  // silently collapsed it to "standard" (lowest level) for any user still
+  // on this plan. Mirrors how it's treated in backend.py (full pose model,
+  // same bracket as professional/elite).
+  business: "elite",
   // B2B — company plans collapse onto the equivalent individual feature
   // level (mirrors backend/auth/middleware.py _TIER_ALIASES exactly)
   b2b_starter: "standard",

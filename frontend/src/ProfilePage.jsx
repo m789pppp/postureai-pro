@@ -8,7 +8,7 @@ import {
   getAuthToken,
 } from "./firebase.js";
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider, getAuth } from "firebase/auth";
-import { tierAtLeast } from "./lib/tierQuality.js";
+import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 
 const sc = v => v>=75?"#10b981":v>=50?"#f59e0b":"#ef4444";
 const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
@@ -158,7 +158,7 @@ export default function ProfilePage({ user, profile, sessions=[], cs, lang="en",
             <div style={{ fontSize:11.5,color:"#64748b",marginTop:2 }}>{user.email}</div>
             <div style={{ display:"inline-flex",alignItems:"center",gap:5,marginTop:6,background:`${tierColor}15`,border:`1px solid ${tierColor}30`,borderRadius:99,padding:"2px 10px" }}>
               <div style={{ width:6,height:6,borderRadius:"50%",background:tierColor }}/>
-              <span style={{ fontSize:10,fontWeight:700,color:tierColor,textTransform:"uppercase" }}>{profile?.tier||"standard"}</span>
+              <span style={{ fontSize:10,fontWeight:700,color:tierColor,textTransform:"uppercase" }}>{qualityFor(profile?.tier).label[isAr?"ar":"en"]}</span>
             </div>
           </div>
           {avg>0&&<div style={{ textAlign:"center",flexShrink:0 }}>
