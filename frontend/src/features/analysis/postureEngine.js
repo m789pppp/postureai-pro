@@ -433,15 +433,17 @@ function estimateHeadYaw(lms, W, H) {
     const noseOffset = (nose.x - eyeMidX) / eyeWidth;
     const yaw        = Math.max(-45, Math.min(45, Math.round(noseOffset * 60)));
 
-    // Cross-check with ear geometry when both ears visible
+    // Cross-check with ear geometry when both ears visible.
+    // lToNose / rToNose > 1 → nose closer to RIGHT ear → turned RIGHT (+)
+    // lToNose / rToNose < 1 → nose closer to LEFT ear  → turned LEFT  (-)
     if (vis(PL.L_EAR) && vis(PL.R_EAR)) {
       const lEarX = g(PL.L_EAR).x * W;
       const rEarX = g(PL.R_EAR).x * W;
       const lToNose = Math.abs(nose.x - lEarX);
       const rToNose = Math.abs(nose.x - rEarX);
       const ratio = lToNose / Math.max(rToNose, 1);
-      if (ratio > 1.3) return  Math.min(45, Math.abs(yaw));
-      if (ratio < 0.7) return -Math.min(45, Math.abs(yaw));
+      if (ratio > 1.3) return -Math.min(45, Math.abs(yaw)); // nose far from left ear → turned left
+      if (ratio < 0.7) return  Math.min(45, Math.abs(yaw)); // nose close to left ear → turned right
     }
     return yaw;
   } catch { return 0; }
@@ -601,10 +603,15 @@ function analyzeNeckLean(lms, W, H, prop) {
     y: nose.y * noseWeight + midEar.y * earWeight,
   };
 
-  const rawAngle     = angleVert(prop.midSh, neckRef);
-  // Nose sits ~5cm ahead of ear plane — subtract the apparent angle from that offset
-  const correction   = NOSE_AHEAD_CM * noseWeight * (prop.shRatio / 10);
-  const angle        = Math.max(0, rawAngle - correction);
+  const rawAngle   = angleVert(prop.midSh, neckRef);
+  // Correct for nose being ~5cm anterior to ear plane.
+  // Correction scales with camera distance (further = less apparent offset).
+  // Uses prop.cmPerPx (derived from shoulder width) to estimate distance.
+  const approxDistCm = SHOULDER_WIDTH_CM / Math.max(prop.shWidthFrac, 0.01) * 0.5;
+  const correctionDeg = approxDistCm > 0
+    ? Math.atan2(NOSE_AHEAD_CM * noseWeight, Math.max(approxDistCm, 30)) * 180 / Math.PI
+    : 0;
+  const angle = Math.max(0, rawAngle - correctionDeg);
 
   // Normalize thresholds by distance (shoulder-width ratio)
   const okAdj  = Math.max(5.0,  6.0  * prop.shRatio);
@@ -650,9 +657,10 @@ function analyzeSpineLean(lms, W, H, prop, roundedScore) {
   const hipOK = vis(PL.L_HIP) && vis(PL.R_HIP);
 
   if (!hipOK) {
-    // Fallback to rounded-shoulders score when hips out of frame
-    return { angle: 0, score: prop.shOK ? roundedScore : 90, severity: "normal",
-             confidence: prop.shOK ? 50 : 0, reliable: false, usedFallback: true };
+    // Hips out of frame — return neutral rather than re-using rounded-shoulder
+    // score (which measures a completely different body region).
+    return { angle: 0, score: 90, severity: "normal",
+             confidence: 0, reliable: false, usedFallback: true };
   }
 
   const lHip = { x: g(PL.L_HIP).x * W, y: g(PL.L_HIP).y * H };
@@ -710,18 +718,28 @@ function analyzeFHP(lms, W, H, prop) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
   const earOK = vis(PL.L_EAR) && vis(PL.R_EAR);
-  if (!prop.shOK || !earOK) return { distCm: 0, extraLoadKg: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+  if (!prop.shOK || !earOK) return { distCm: 0, extraLoadKg: 0, neckAngleDeg: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
   const lEar = { x: g(PL.L_EAR).x * W };
   const rEar = { x: g(PL.R_EAR).x * W };
   const midEarX = (lEar.x + rEar.x) / 2;
 
   // Horizontal offset of ear midpoint from shoulder midpoint in cm
-  const distCm      = Math.round(Math.abs(midEarX - prop.midSh.x) * prop.cmPerPx * 10) / 10;
-  const extraLoadKg = Math.round((distCm / 2.5) * 4.5 * 10) / 10;
-  const score       = scoreMetric(distCm, 0, THR.FHP_CM.ok, THR.FHP_CM.bad);
-  const severity    = classify(distCm, SEV.FHP);
-  return { distCm, extraLoadKg, score, severity, confidence: 82, reliable: true };
+  const distCm = Math.round(Math.abs(midEarX - prop.midSh.x) * prop.cmPerPx * 10) / 10;
+
+  // Clinically correct extra neck load — Hansraj (2014) Surgical Technology International
+  // At 0cm FHP: head weight = 4.5kg at 0°.
+  // FHP distance maps to forward pitch angle via arctan(distCm / 15cm cervical height)
+  // Load = head_weight / cos(pitch) — exponential, not linear.
+  const HEAD_WEIGHT_KG   = 4.5;
+  const CERVICAL_HEIGHT  = 15; // cm — approximate C1-to-head-centre distance
+  const pitchRad         = Math.atan2(Math.max(0, distCm), CERVICAL_HEIGHT);
+  const pitchDeg         = pitchRad * 180 / Math.PI;
+  const extraLoadKg      = Math.round(Math.max(0, (HEAD_WEIGHT_KG / Math.max(Math.cos(pitchRad), 0.35)) - HEAD_WEIGHT_KG) * 10) / 10;
+
+  const score    = scoreMetric(distCm, 0, THR.FHP_CM.ok, THR.FHP_CM.bad);
+  const severity = classify(distCm, SEV.FHP);
+  return { distCm, extraLoadKg, neckAngleDeg: Math.round(pitchDeg), score, severity, confidence: 82, reliable: true };
 }
 
 function analyzeHeadYawModule(lms, W, H) {
@@ -752,9 +770,13 @@ function analyzeElbow(lms, W, H) {
   const rAng = rOK ? calcAngle(PL.R_SHOULDER, PL.R_ELBOW, PL.R_WRIST) : null;
   const avg  = lAng != null && rAng != null ? Math.round((lAng + rAng) / 2) : (lAng ?? rAng);
 
-  const score    = scoreMetric(Math.abs(avg - 95), 0, THR.ELBOW.ok, THR.ELBOW.bad);
-  const severity = classify(Math.abs(avg - 95), { mild: 10, moderate: 20, severe: 30 });
-  return { angle: avg, score, severity, confidence: 80, reliable: true };
+  // OSHA/NIOSH: acceptable elbow range 90-120°, ideal 100-110°
+  // Use midpoint 105° as ideal, tolerance ±15° before penalty
+  const elbowIdeal = 105;
+  const elbowDev   = avg != null ? Math.max(0, Math.abs(avg - elbowIdeal) - 15) : 0;
+  const score    = scoreMetric(elbowDev, 0, THR.ELBOW.ok, THR.ELBOW.bad);
+  const severity = classify(elbowDev, { mild: 10, moderate: 20, severe: 30 });
+  return { angle: avg, idealMin: 90, idealMax: 120, score, severity, confidence: 80, reliable: true };
 }
 
 function analyzeMonitorHeight(lms, W, H, distCm) {
@@ -801,8 +823,8 @@ function buildAlerts(modules, distCm, lo, hi) {
   return [
     add("neck_sev",  neck.angle > neck.badAdj,                    `⚠️ Severe neck lean ${neck.angle}° — raise monitor to eye level immediately`),
     add("neck_mid",  neck.angle > (neck.okAdj + neck.badAdj) / 2 && neck.angle <= neck.badAdj, `Neck lean ${neck.angle}° — tuck chin slightly`),
-    add("fhp_sev",   fhp.reliable && fhp.distCm > 6,             `⚠️ Forward head ${fhp.distCm}cm (+${fhp.extraLoadKg}kg neck load) — raise monitor`),
-    add("fhp_mid",   fhp.reliable && fhp.distCm > 3 && fhp.distCm <= 6, `Forward head ${fhp.distCm}cm — tuck chin back`),
+    add("fhp_sev",   fhp.reliable && fhp.distCm > 6,             `⚠️ Forward head ${fhp.distCm}cm (~${fhp.neckAngleDeg}° pitch, +${fhp.extraLoadKg}kg neck load) — raise monitor`),
+    add("fhp_mid",   fhp.reliable && fhp.distCm > 3 && fhp.distCm <= 6, `Forward head ${fhp.distCm}cm (+${fhp.extraLoadKg}kg) — tuck chin back`),
     add("tilt",      headTilt.reliable && headTilt.angle > 10,    `Head tilting ${headTilt.angle}° — check chair height`),
     add("sh",        shoulder.reliable && shoulder.angle > 10,    `Shoulder imbalance ${shoulder.angle}° — adjust armrests`),
     add("spine_sev", spine.reliable && spine.angle > 18,          `⚠️ Spine lean ${spine.angle}° — sit back with lumbar support`),
@@ -856,17 +878,30 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const elbow    = analyzeElbow(lms, W, H);
   const monitor  = analyzeMonitorHeight(lms, W, H, distCm);
 
-  // Weighted overall score
-  const W_SUM = Object.values(WEIGHTS_FRONT).reduce((a, b) => a + b, 0);
-  const baseline = 72 * (1 - W_SUM);
-  const overall  = Math.max(0, Math.min(100, Math.round(
-    neck.score     * WEIGHTS_FRONT.neck     +
-    headTilt.score * WEIGHTS_FRONT.tilt     +
-    shoulder.score * WEIGHTS_FRONT.shoulder +
-    spine.score    * WEIGHTS_FRONT.spine    +
-    distSc         * WEIGHTS_FRONT.distance +
-    yaw.score      * WEIGHTS_FRONT.yaw      +
-    rounded.score  * WEIGHTS_FRONT.rounded  +
+  // ── Confidence-weighted overall score ──────────────────────────────
+  // Modules with reliable=false contribute at reduced weight (30%)
+  // so unmeasured landmarks don't inflate the score with placeholder 90s.
+  const confWeight = (mod, w) => mod.reliable === false ? w * 0.30 : w;
+
+  const W_neck     = confWeight(neck,     WEIGHTS_FRONT.neck);
+  const W_tilt     = confWeight(headTilt, WEIGHTS_FRONT.tilt);
+  const W_shoulder = confWeight(shoulder, WEIGHTS_FRONT.shoulder);
+  const W_spine    = confWeight(spine,    WEIGHTS_FRONT.spine);
+  const W_yaw      = confWeight(yaw,      WEIGHTS_FRONT.yaw);
+  const W_rounded  = confWeight(rounded,  WEIGHTS_FRONT.rounded);
+  const W_dist     = WEIGHTS_FRONT.distance; // distance is always measured
+
+  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded;
+  const baseline = 72 * Math.max(0, 1 - W_ACTUAL);
+
+  const overall = Math.max(0, Math.min(100, Math.round(
+    neck.score     * W_neck     +
+    headTilt.score * W_tilt     +
+    shoulder.score * W_shoulder +
+    spine.score    * W_spine    +
+    distSc         * W_dist     +
+    yaw.score      * W_yaw      +
+    rounded.score  * W_rounded  +
     baseline
   )));
 
@@ -880,16 +915,18 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     (vis(PL.R_EAR) ? 3 : 0)
   );
 
-  // Fatigue adjustment (informational only)
-  // Uses real session-start wall-clock time when provided by the caller
-  // (App.jsx passes the camera-session start timestamp). Falls back to
-  // performance.now()/60000 (time since PAGE LOAD, not session start —
-  // inflates fatigue if the page was open a while before the camera
-  // started) only when the caller doesn't supply sessionStartMs.
-  const sessionMin     = sessionStartMs
+  // ── Fatigue penalty — evidence-based non-linear model ─────────────
+  // Richter et al. (2011): muscle fatigue onset at ~20-30 min sustained
+  // sedentary work, with non-linear accumulation thereafter.
+  // Penalty is informational only — does NOT reduce overall score.
+  const sessionMin = sessionStartMs
     ? Math.max(0, Math.round((Date.now() - sessionStartMs) / 60000))
     : (typeof performance !== "undefined" ? Math.round(performance.now() / 60000) : 0);
-  const fatiguePenalty = sessionMin > 90 ? Math.min(15, Math.round((sessionMin - 90) / 10)) : 0;
+  // Non-linear fatigue: 0-20min=none, 20-60min=mild (0-8pts), 60-120min=moderate (8-15pts), 120min+=severe
+  let fatiguePenalty = 0;
+  if (sessionMin > 120) fatiguePenalty = Math.min(20, 15 + Math.round((sessionMin - 120) / 15));
+  else if (sessionMin > 60) fatiguePenalty = Math.round(8 + ((sessionMin - 60) / 60) * 7);
+  else if (sessionMin > 20) fatiguePenalty = Math.round(((sessionMin - 20) / 40) * 8);
 
   // Alerts
   const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor }, distCm, lo, hi);
