@@ -122,7 +122,7 @@ export const B2B_PLANS = {
 export function getActivePlans(isCompany = false) {
   return isCompany ? B2B_PLANS : PLANS;
 }
-export const B2C_PLAN_LIST = ["basic", "professional", "elite"];
+export const B2C_PLAN_LIST = ["standard", "basic", "professional", "elite"];
 export const B2B_PLAN_LIST = ["b2b_starter", "b2b_growth", "b2b_enterprise"];
 
 // ── Stripe Checkout ───────────────────────────────────────────────
@@ -136,7 +136,7 @@ export async function createStripeCheckout({ planId, billing, userEmail, userId,
   if (!priceId) {
     // Enterprise (company tier) is contact-sales / custom-priced — doesn't go through Stripe checkout
     if (planId === "b2b_enterprise") {
-      throw new Error("Enterprise plan requires a custom contract — contact sales@corvus.io");
+      throw new Error("Enterprise plan requires a custom contract — contact support@corvus.io");
     }
     throw new Error(
       `Stripe price ID not configured for ${planId}/${billing}. ` +
@@ -395,7 +395,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                     {isAr ? "الاستمرار مجاناً" : "Continue free"}
                   </button>
                 ) : isEntCustom ? (
-                  <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL || "sales@corvus.io"}?subject=Enterprise%20Inquiry`} style={{ display: "block", width: "100%", background: col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
+                  <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL || "support@corvus.io"}?subject=Enterprise%20Inquiry`} style={{ display: "block", width: "100%", background: col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
                     {t.contact}
                   </a>
                 ) : isCurr ? (
@@ -404,10 +404,14 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                   </button>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {/* Stripe button */}
-                    {STRIPE_KEY && (
+                    {/* Stripe button — shown as "coming soon" if not configured */}
+                    {STRIPE_KEY ? (
                       <button onClick={() => handleStripe(planId)} disabled={loading === planId} style={{ width: "100%", background: loading === planId ? `${col}60` : col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: loading === planId ? "wait" : "pointer" }}>
                         {loading === planId ? "..." : `${t.upgrade} — Stripe 💳`}
+                      </button>
+                    ) : (
+                      <button disabled style={{ width: "100%", background: "rgba(148,163,184,.06)", border: `1px dashed ${DARK.border}`, borderRadius: 9, padding: "10px 0", fontSize: 11, color: DARK.muted, cursor: "not-allowed" }}>
+                        💳 {isAr ? "بطاقة ائتمان — قريباً" : "Credit Card — Coming Soon"}
                       </button>
                     )}
                     {/* PayMob button */}
