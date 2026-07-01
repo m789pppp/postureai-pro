@@ -1,8 +1,7 @@
 /**
  * gemini.js — AI calls, 100% client-side, no server, no API keys.
  *
- * Engine: WebLLM (@mlc-ai/web-llm, open-source, MIT) running
- * Qwen2.5-0.5B-Instruct entirely inside the user's browser via WebGPU.
+ * Engine: Offline rule-based AI — zero downloads, zero API calls, works on all browsers.
  *   - Nothing to install — the model downloads once on first use and
  *     is cached by the browser (IndexedDB), then works instantly,
  *     completely free, with zero backend involvement.
@@ -36,7 +35,7 @@ export function friendlyError(e, lang = "en") {
 }
 
 /**
- * geminiChat — multi-turn conversation, fully local (WebLLM in-browser).
+ * geminiChat — multi-turn conversation, fully offline (rule-based engine).
  * context: structured analytics object {avg_score, sessions_count,
  * worst_time, top_alerts, has_calibration} — folded into the system
  * prompt since there is no server-side session/tier to read it from.
@@ -75,7 +74,7 @@ export async function localFallbackAnalysis(prompt, opts = {}) {
 }
 
 /**
- * geminiAnalysis — single-shot analysis, fully local (WebLLM in-browser).
+ * geminiAnalysis — single-shot analysis, fully offline (rule-based engine).
  * Used by AIInsights, PredictiveAI, AIReports, NotificationsHub.
  */
 export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTokens = 600 } = {}) {
