@@ -3055,7 +3055,7 @@ export default function App(){
     }
   }
 
-async function downloadPDF(sessionOverride){
+async function downloadPDF(sessionOverride, isClinical=false){
     // Gated by canonical pdfDetail (tierQuality.js) — standard/basic have
     // pdfDetail:"none" and must not get a PDF, same rule enforced in
     // AIReports.jsx's exportPDF(). This was previously ungated here.
@@ -3085,30 +3085,34 @@ async function downloadPDF(sessionOverride){
       return;
     }
 
-    if(!sessionOverride && hist.length===0){
+    if(!sessionOverride && hist.length===0 && !userSessions?.length){
       addToast(isAr?"ابدأ جلسة أولاً لتنزيل PDF":"No session data yet","warn"); return;
     }
 
-    // For Elite — auto-generate AI tip if not already present
+    // For Elite — generate AI tip in background (non-blocking for PDF)
     let aiTip = la.ai_tip||la.ai_insight||la.claude_analysis||"";
     if (isEliteTier && !sessionOverride && !aiTip && avg>0) {
-      try {
-        addToast(isAr?"🤖 Corvus AI يحلل جلستك...":"🤖 AI analysing your session...","info");
-        const { geminiAnalysis } = await import("./gemini.js");
-        const topMetrics = Object.entries(la.metrics||{})
-          .filter(([,v])=>v?.score!==undefined)
-          .sort(([,a],[,b])=>(a.score??100)-(b.score??100))
-          .slice(0,3)
-          .map(([k,v])=>`${k}: score ${Math.round(v.score)}, value ${v.value}${v.unit||""}`)
-          .join("; ");
-        aiTip = await geminiAnalysis(
-          `Posture session: score ${avg}/100, duration ${Math.round(durS/60)}min, ` +
-          `good posture ${gPctPDF}%, alerts ${alRef.current?.length||0}. ` +
-          `Worst metrics: ${topMetrics}. ` +
-          `Write a 2-3 sentence clinical-style posture analysis and personalised recommendation. ` +
-          `Be specific, professional, and actionable. No bullet points.`
-        );
-      } catch(e){ aiTip=""; }
+      // Fire and forget — PDF generates immediately, AI tip added if it arrives fast enough
+      const aiPromise = (async()=>{
+        try {
+          const { geminiAnalysis } = await import("./gemini.js");
+          const topMetrics = Object.entries(la.metrics||{})
+            .filter(([,v])=>v?.score!==undefined)
+            .sort(([,a],[,b])=>(a.score??100)-(b.score??100))
+            .slice(0,3)
+            .map(([k,v])=>`${k}: score ${Math.round(v.score)}, value ${v.value}${v.unit||""}`)
+            .join("; ");
+          return await geminiAnalysis(
+            `Posture session: score ${avg}/100, duration ${Math.round(durS/60)}min, ` +
+            `good posture ${gPctPDF}%, alerts ${alRef.current?.length||0}. ` +
+            `Worst metrics: ${topMetrics}. ` +
+            `Write a 2-3 sentence clinical-style posture analysis and personalised recommendation. ` +
+            `Be specific, professional, and actionable. No bullet points.`
+          );
+        } catch { return ""; }
+      })();
+      // Wait max 4s for AI tip — then proceed without it
+      aiTip = await Promise.race([aiPromise, new Promise(r=>setTimeout(()=>r(""),4000))]);
     }
 
     const sessionData = sessionOverride || {
