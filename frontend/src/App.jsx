@@ -2495,6 +2495,16 @@ export default function App(){
     return () => window.removeEventListener('spa:navigate', handler);
   }, []);
 
+  // Cleanup on unmount — stop camera, cancel animation loop, release stream
+  useEffect(() => {
+    return () => {
+      if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; }
+      if(streamRef.current){ streamRef.current.getTracks().forEach(t=>{t.stop();t.enabled=false;}); streamRef.current=null; }
+      if(vidRef.current && vidRef.current.srcObject){ vidRef.current.srcObject=null; }
+      if(timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
   // MediaPipe loader — tries CDN, falls back to backend-only mode
   useEffect(()=>{
     if(mpRef.current||window.__mpLoading)return;
@@ -2827,13 +2837,22 @@ export default function App(){
     distSmootherRef.current?.reset();
     resetProportions();
     lightCheckRef.current={t:0,canvas:lightCheckRef.current.canvas,wasLow:false};setLowLight(false);
+    // Stop camera stream tracks
     if(streamRef.current){
       streamRef.current.getTracks().forEach(x=>{x.stop(); x.enabled=false;});
       streamRef.current = null;
     }
+    // Detach srcObject from video element (releases camera indicator light)
+    if(vidRef.current && vidRef.current.srcObject){
+      vidRef.current.srcObject = null;
+    }
+    // Cancel animation loop
     if(timerRef.current)clearInterval(timerRef.current);
-    if(rafRef.current){cancelAnimationFrame(rafRef.current);rafRef.current=null;}
+    if(rafRef.current){cancelAnimationFrame(rafRef.current); rafRef.current=null;}
+    // Clear overlay canvas
     if(ovRef.current)ovRef.current.getContext("2d").clearRect(0,0,ovRef.current.width||0,ovRef.current.height||0);
+    // Close PoseLandmarker only if it was created locally (not the shared window.__mpPose)
+    // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
 
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)

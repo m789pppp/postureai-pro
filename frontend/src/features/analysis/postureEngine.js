@@ -1042,7 +1042,9 @@ export function analyzeSideMP(lms, W, H) {
     y: nose.y * noseWeight + ear.y * earWeight,
   };
   const neckLeanRaw  = earOK && shOK ? angleVert(sh, neckRef) : 0;
-  const neckCorrect  = NOSE_AHEAD_CM * noseWeight * 0.5; // side view correction
+  // Nose ~5cm anterior to ear — correction scales with camera distance (same formula as front)
+  const approxDistCmSide = shWidthPx > 0 ? (SHOULDER_WIDTH_CM / Math.max(shWidthPx / W, 0.01)) * 0.5 : 65;
+  const neckCorrect  = Math.atan2(NOSE_AHEAD_CM * noseWeight, Math.max(approxDistCmSide, 30)) * 180 / Math.PI;
   const neckLean     = Math.max(0, neckLeanRaw - neckCorrect);
   const neckOK       = earOK && shOK;
 
@@ -1056,8 +1058,17 @@ export function analyzeSideMP(lms, W, H) {
   const trunkLean = shOK && hipOK  ? angleVert(hip, sh)          : 0;
   const hipAngle  = hipOK && kneeOK ? angle3pt(sh, hip, knee)     : 90;
   const kneeAngle = kneeOK && ankleOK ? angle3pt(hip, knee, ankle) : 90;
-  const spineAlign = shOK && ankleOK
-    ? Math.abs(ear.x - ankle.x) / Math.max(W, 1) * 100 : 0;
+  // ── Spine alignment (side view) ────────────────────────────────────
+  // Proper measure: deviation of shoulder from ear-to-hip line.
+  // A straight spine has shoulder on the ear→hip vector.
+  // Using horizontal offset of ear vs ankle was measuring lean, not curvature.
+  let spineAlign = 0;
+  if (shOK && hipOK && earOK) {
+    // Angle at shoulder between ear-shoulder and shoulder-hip vectors
+    spineAlign = angle3pt(ear, sh, hip);
+    // Ideal = 180° (straight line); deviation = |180 - angle|
+    spineAlign = Math.abs(180 - spineAlign);
+  }
 
   // ── Forward head posture (side view) — horizontal ear-to-shoulder offset in cm ──
   // Mirrors backend.py analyze_side(): _fhp_side_cm = |ear.x - sh.x| * cm_per_px
@@ -1070,14 +1081,25 @@ export function analyzeSideMP(lms, W, H) {
   const trunkSc = shOK && hipOK  ? scoreMetric(trunkLean,       0, THR.TRUNK_LEAN.ok, THR.TRUNK_LEAN.bad) : NEUTRAL;
   const hipSc   = hipOK && kneeOK ? scoreMetric(Math.abs(hipAngle-90),  0, THR.HIP_ANGLE.ok,  THR.HIP_ANGLE.bad)  : NEUTRAL;
   const kneeSc  = kneeOK && ankleOK ? scoreMetric(Math.abs(kneeAngle-90),0, THR.KNEE_ANGLE.ok, THR.KNEE_ANGLE.bad) : NEUTRAL;
-  const spineSc = shOK && ankleOK ? scoreMetric(spineAlign,     0, THR.SPINE_ALIGN.ok, THR.SPINE_ALIGN.bad) : NEUTRAL;
+  const spineSc = shOK && hipOK && earOK ? scoreMetric(spineAlign, 0, THR.SPINE_ALIGN.ok, THR.SPINE_ALIGN.bad) : NEUTRAL;
+
+  // Confidence-weighted overall (same principle as front camera)
+  const cw = (ok, w) => ok ? w : w * 0.30;
+  const wN = cw(neckOK,           WEIGHTS_SIDE.neck);
+  const wT = cw(shOK && hipOK,    WEIGHTS_SIDE.trunk);
+  const wH = cw(hipOK && kneeOK,  WEIGHTS_SIDE.hip);
+  const wK = cw(kneeOK && ankleOK,WEIGHTS_SIDE.knee);
+  const wS = cw(shOK && hipOK && earOK, WEIGHTS_SIDE.spine);
+  const wSum = wN + wT + wH + wK + wS;
+  const sideBase = 72 * Math.max(0, 1 - wSum);
 
   const overall = Math.max(0, Math.min(100, Math.round(
-    neckSc  * WEIGHTS_SIDE.neck  +
-    trunkSc * WEIGHTS_SIDE.trunk +
-    hipSc   * WEIGHTS_SIDE.hip   +
-    kneeSc  * WEIGHTS_SIDE.knee  +
-    spineSc * WEIGHTS_SIDE.spine
+    neckSc  * wN +
+    trunkSc * wT +
+    hipSc   * wH +
+    kneeSc  * wK +
+    spineSc * wS +
+    sideBase
   )));
 
   const alerts = [
@@ -1087,7 +1109,7 @@ export function analyzeSideMP(lms, W, H) {
     shOK && hipOK && trunkLean > 12               && `Trunk leaning ${Math.round(trunkLean)}° — sit back with lumbar support`,
     hipOK && kneeOK && Math.abs(hipAngle-90) > 15  && `Hip angle ${Math.round(hipAngle)}° (ideal ~90°) — adjust seat height`,
     kneeOK && ankleOK && Math.abs(kneeAngle-90) > 18 && `Knee angle ${Math.round(kneeAngle)}° (ideal ~90°) — adjust footrest`,
-    shOK && ankleOK && spineAlign > 9              && `Plumb-line off ${Math.round(spineAlign)}% — ear should be above ankle`,
+    shOK && hipOK && earOK && spineAlign > 12       && `Spine curvature ${Math.round(spineAlign)}° — maintain neutral spine, lumbar support`,
   ].filter(Boolean);
 
   return {
