@@ -303,7 +303,7 @@ function Nav({ lang, setLang, onCTA }) {
       <div className="lp-wrap" style={{ height: 72,
         display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         {/* Logo */}
-        <a href="#" style={{ display:"flex", alignItems:"center", gap:10,
+        <a href="#" onClick={e=>e.preventDefault()} style={{ display:"flex", alignItems:"center", gap:10,
           textDecoration:"none", color:C.text, flexShrink:0 }}>
           <div style={{ width:38, height:38, borderRadius:11,
             background: C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
