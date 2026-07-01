@@ -165,7 +165,7 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
   }, [messages, loading]);
 
   const sendMessage = useCallback(async (text) => {
-    const userMsg = text.trim() || input.trim();
+    const userMsg = (typeof text === "string" ? text : input).trim();
     if (!userMsg || loading) return;
     setInput("");
     setError("");
