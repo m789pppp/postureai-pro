@@ -9,10 +9,13 @@ backend/.venv/
 
 # Environment files - NEVER commit these
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 backend/.env
-frontend/.env.local
+backend/.env.*
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 firebase-service-account.json
 
 # Build outputs

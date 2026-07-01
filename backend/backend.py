@@ -13737,7 +13737,7 @@ def _gemini_json(prompt: str, max_tokens: int = 600, temperature: float = 0.25) 
         raw = raw.replace("```json","").replace("```","").strip()
         return _j.loads(raw)
     except Exception as _e:
-        print(f"[AI] _gemini_json error: {_e}")
+        # DEBUG print(f"[AI] _gemini_json error: {_e}")
         return None
 
 
