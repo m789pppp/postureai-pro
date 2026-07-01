@@ -126,8 +126,8 @@ export const ReportAPI = {
 };
 
 // ── AI API ──────────────────────────────────────────────────────
-// NOTE: AI chat/analysis itself runs 100% client-side now (WebLLM,
-// see gemini.js) — no server calls, no API keys. These endpoints
+// NOTE: AI chat/analysis runs offline (rule-based engine in localAI.js) —
+// no server calls, no API keys, no downloads. These endpoints
 // remain only for analytics-style server processing (KPIs, risk
 // scoring) that needs access to stored session data.
 
