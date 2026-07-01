@@ -4,7 +4,9 @@
  * Manager insights · Department comparisons
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { geminiAnalysis } from "./gemini.js";
+import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
+import { getLocalAIStatus } from "./localAI.js";
+import { featureTier, qualityFor } from "./lib/tierQuality.js";
 
 // ── helpers ───────────────────────────────────────────────────────
 const avg  = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
@@ -12,6 +14,11 @@ const sc   = v => v >= 75 ? "#10b981" : v >= 50 ? "#f59e0b" : "#ef4444";
 const grade = (v, ar) => v >= 85 ? (ar ? "ممتاز" : "Excellent") : v >= 70 ? (ar ? "جيد" : "Good") : v >= 50 ? (ar ? "مقبول" : "Fair") : (ar ? "ضعيف" : "Poor");
 const pct  = (a, b) => b ? `${a >= b ? "+" : ""}${Math.round(((a - b) / b) * 100)}%` : "—";
 const fmt  = d => { try { return new Date(d?.toDate?.() || d).toLocaleDateString(); } catch { return "—"; } };
+// Escapes any string before it's interpolated into the report HTML
+// (profile names, AI-generated text, session fields are all untrusted).
+const escapeHtml = (str) => String(str ?? "").replace(/[&<>"']/g, c => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[c]));
 
 async function callGemini(prompt, system, maxTokens = 1200) {
   try {
@@ -35,14 +42,28 @@ function MdText({ text }) {
 }
 
 // ── PDF generator (pure HTML → print) ────────────────────────────
-function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang }) {
+// pdfDetail: "standard" (Professional tier — last 5 sessions, no extra
+// stats) or "full" (Elite tier — last 10 sessions + footer detail note).
+// Callers must check qualityFor(tier).pdfDetail !== "none" before calling
+// this — "none" tiers (standard/basic) are gated out in exportPDF().
+function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDetail = "standard" }) {
   const isAr = lang === "ar";
+  const isFull = pdfDetail === "full";
   const allScores = sessions.map(s => s.avg_score || 0).filter(Boolean);
   const avgScore  = avg(allScores);
   const thisWeek  = sessions.filter(s => (Date.now() - (s.created_at?.toDate?.() || new Date(s.created_at || 0))) < 7 * 86400000);
   const weekAvg   = avg(thisWeek.map(s => s.avg_score || 0));
   const color     = avgScore >= 75 ? "#10b981" : avgScore >= 50 ? "#f59e0b" : "#ef4444";
   const now       = new Date().toLocaleDateString(isAr ? "ar-EG" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+  const safeName  = escapeHtml(profile?.name || (isAr ? "المستخدم" : "User"));
+  const safeTitle = escapeHtml(reportTitle);
+  const planLabel = escapeHtml(qualityFor(profile?.tier).label[isAr ? "ar" : "en"]);
+  // summaryText comes from the AI provider (Groq) and is untrusted —
+  // escape first, THEN apply the markdown→HTML transform on the escaped text.
+  const safeSummaryHtml = escapeHtml(summaryText || "")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n/g, "<br/>");
+  const rowLimit = isFull ? 10 : 5;
 
   return `<!DOCTYPE html>
 <html dir="${isAr ? "rtl" : "ltr"}" lang="${lang}">
@@ -82,14 +103,14 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang }) {
     <div style="font-size:11px;color:#7890b0;margin-top:4px;">${isAr ? "تقرير الأداء التنفيذي" : "Executive Performance Report"}</div>
   </div>
   <div class="meta">
-    <strong>${profile?.name || (isAr ? "المستخدم" : "User")}</strong><br/>
+    <strong>${safeName}</strong><br/>
     ${isAr ? "التاريخ:" : "Date:"} ${now}<br/>
-    ${isAr ? "الخطة:" : "Plan:"} ${profile?.tier || "professional"}<br/>
+    ${isAr ? "الخطة:" : "Plan:"} ${planLabel}<br/>
     ${isAr ? "إجمالي الجلسات:" : "Total sessions:"} ${sessions.length}
   </div>
 </div>
 
-<h1>${reportTitle}</h1>
+<h1>${safeTitle}</h1>
 
 <div class="kpi-grid">
   <div class="kpi" style="border-color:${color}">
@@ -117,10 +138,10 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang }) {
 <h2>${isAr ? "🧠 التحليل الذكي — Corvus AI" : "🧠 AI Analysis — Corvus AI"}</h2>
 <div class="ai-box">
   <div class="ai-label">🧠 ${isAr ? "Corvus Intelligence" : "Corvus Intelligence"}</div>
-  <div style="font-size:13px;color:#334d6e;line-height:1.75;">${(summaryText || "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br/>")}</div>
+  <div style="font-size:13px;color:#334d6e;line-height:1.75;">${safeSummaryHtml}</div>
 </div>
 
-<h2>${isAr ? "📅 آخر 10 جلسات" : "📅 Last 10 Sessions"}</h2>
+<h2>${isAr ? `📅 آخر ${rowLimit} جلسات` : `📅 Last ${rowLimit} Sessions`}</h2>
 <table class="session-table">
   <thead><tr>
     <th>#</th>
@@ -130,22 +151,23 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang }) {
     <th>${isAr ? "التقييم" : "Grade"}</th>
   </tr></thead>
   <tbody>
-    ${sessions.slice(0, 10).map((s, i) => {
-      const sc_ = s.avg_score || 0;
-      const col = sc_(sc_);
+    ${sessions.slice(0, rowLimit).map((s, i) => {
+      const scoreVal = s.avg_score || 0;
+      const col = sc(scoreVal); // was sc_(sc_) — sc_ held a number, not a function; crashed export every time
+      const durationSafe = s.duration_min ? `${escapeHtml(s.duration_min)} ${isAr ? "د" : "min"}` : "—";
       return `<tr>
         <td>${i + 1}</td>
-        <td>${fmt(s.created_at)}</td>
-        <td>${s.duration_min ? `${s.duration_min} ${isAr ? "د" : "min"}` : "—"}</td>
-        <td><span class="score-pill" style="background:${sc_}22;color:${sc_}">${sc_}/100</span></td>
-        <td>${grade(sc_, isAr)}</td>
+        <td>${escapeHtml(fmt(s.created_at))}</td>
+        <td>${durationSafe}</td>
+        <td><span class="score-pill" style="background:${col}22;color:${col}">${scoreVal}/100</span></td>
+        <td>${grade(scoreVal, isAr)}</td>
       </tr>`;
     }).join("")}
   </tbody>
 </table>
 
 <div class="footer">
-  <span>Corvus — ${isAr ? "تقرير سري" : "Confidential Report"}</span>
+  <span>Corvus — ${isAr ? "تقرير سري" : "Confidential Report"}${isFull ? (isAr ? " · تفصيل كامل (Elite)" : " · Full Detail (Elite)") : ""}</span>
   <span>${isAr ? "أُنشئ بواسطة Corvus AI" : "Generated by Corvus AI"} · ${now}</span>
 </div>
 </body>
@@ -217,6 +239,12 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   const [exported, setExported] = useState(false);
   const isAr = lang === "ar";
 
+  // Canonical tier gating — single source of truth is tierQuality.js.
+  // standard/basic → pdfDetail "none" (no export); professional → "standard";
+  // elite → "full". Keep in sync with backend/config/tier_quality.py.
+  const pdfDetail = qualityFor(profile?.tier).pdfDetail;
+  const canExportPdf = pdfDetail !== "none";
+
   // Individual vs Company — same detection pattern used everywhere else.
   // Manager Insights and Department comparisons are company-only concepts —
   // an individual has no department or manager to compare against.
@@ -281,6 +309,12 @@ This user score: ${avgScore}/100
   useEffect(() => { loadReport(tab); }, [tab]);
 
   const exportPDF = async () => {
+    if (!canExportPdf) {
+      setError(isAr
+        ? "تصدير PDF متاح فقط لخطط Professional و Elite. قم بترقية خطتك."
+        : "PDF export is only available on Professional and Elite plans. Please upgrade your plan.");
+      return;
+    }
     setPdfLoading(true);
     // Get or generate summary text for PDF
     let summary = aiText["summary"];
@@ -290,14 +324,19 @@ This user score: ${avgScore}/100
     }
     const html = buildPDFHTML({
       reportTitle: isAr ? `تقرير الأداء — ${profile?.name || ""}` : `Performance Report — ${profile?.name || "User"}`,
-      profile, sessions, summaryText: summary, lang,
+      profile, sessions, summaryText: summary, lang, pdfDetail,
     });
     const w = window.open("", "_blank");
     if (w) {
       w.document.write(html);
       w.document.close();
       setTimeout(() => { w.print(); setPdfLoading(false); setExported(true); setTimeout(() => setExported(false), 3000); }, 600);
-    } else { setPdfLoading(false); }
+    } else {
+      setPdfLoading(false);
+      setError(isAr
+        ? "المتصفح منع فتح نافذة جديدة. اسمح بالنوافذ المنبثقة لهذا الموقع وحاول مرة أخرى."
+        : "Your browser blocked the popup window. Please allow popups for this site and try again.");
+    }
   };
 
   const TABS = [
@@ -341,9 +380,19 @@ This user score: ${avgScore}/100
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {/* PDF Export */}
-              <button onClick={exportPDF} disabled={pdfLoading || !sessions.length} style={{ background: exported ? "rgba(16,185,129,.15)" : "rgba(5,150,105,.15)", border: `1px solid ${exported ? "rgba(16,185,129,.35)" : "rgba(5,150,105,.3)"}`, borderRadius: 9, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: exported ? "#34d399" : "#34d399", cursor: pdfLoading || !sessions.length ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, opacity: !sessions.length ? 0.4 : 1, transition: "all 200ms" }}>
-                {pdfLoading ? <><span style={{ animation: "spin 700ms linear infinite", display: "inline-block" }}>⟳</span> {isAr ? "جارٍ..." : "Generating..."}</> : exported ? `✓ ${isAr ? "تم التصدير" : "Exported!"}` : `⬇ ${isAr ? "تصدير PDF" : "Export PDF"}`}
+              {/* PDF Export — gated by canExportPdf (standard/basic plans don't get PDF export) */}
+              <button
+                onClick={exportPDF}
+                disabled={pdfLoading || !sessions.length || !canExportPdf}
+                title={!canExportPdf ? (isAr ? "متاح من خطة Professional فأعلى" : "Available on Professional plan and above") : undefined}
+                style={{ background: !canExportPdf ? "rgba(255,255,255,.05)" : exported ? "rgba(16,185,129,.15)" : "rgba(5,150,105,.15)", border: `1px solid ${!canExportPdf ? "rgba(255,255,255,.1)" : exported ? "rgba(16,185,129,.35)" : "rgba(5,150,105,.3)"}`, borderRadius: 9, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: !canExportPdf ? "#6b82a6" : exported ? "#34d399" : "#34d399", cursor: pdfLoading || !sessions.length || !canExportPdf ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, opacity: !sessions.length ? 0.4 : 1, transition: "all 200ms" }}>
+                {pdfLoading
+                  ? <><span style={{ animation: "spin 700ms linear infinite", display: "inline-block" }}>⟳</span> {isAr ? "جارٍ..." : "Generating..."}</>
+                  : exported
+                  ? `✓ ${isAr ? "تم التصدير" : "Exported!"}`
+                  : !canExportPdf
+                  ? `🔒 ${isAr ? "تصدير PDF (Pro+)" : "Export PDF (Pro+)"}`
+                  : `⬇ ${isAr ? "تصدير PDF" : "Export PDF"}`}
               </button>
               <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", color: "#6b82a6", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
             </div>

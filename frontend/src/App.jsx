@@ -30,6 +30,7 @@ import { BillingModal, PLANS } from "./Billing.jsx";
 import { BillingDashboard } from "./BillingDashboard.jsx";
 import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, apiFetch } from "./services/api.js";
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
+import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer } from "./features/analysis/postureEngine.js";
@@ -1175,7 +1176,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
         </div>
         <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20}}>
           <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:14}}>{t.profileStats||"Statistics"}</div>
-          {[[t.totalSess,sessions.length],[t.avgScore,avgScore+"/100"],[t.planLabel||"Plan",(profile?.tier||"standard").toUpperCase()],[t.memberSince,profile?.created_at?.toDate?.()?.toLocaleDateString?.()||"—"]].map(([k,v])=>(
+          {[[t.totalSess,sessions.length],[t.avgScore,avgScore+"/100"],[t.planLabel||"Plan",qualityFor(profile?.tier).label[isAr?"ar":"en"]],[t.memberSince,profile?.created_at?.toDate?.()?.toLocaleDateString?.()||"—"]].map(([k,v])=>(
             <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`0.5px solid ${cs.border}`}}>
               <span style={{fontSize:12,color:cs.muted}}>{k}</span><span style={{fontSize:12,fontWeight:600,color:cs.text}}>{v}</span>
             </div>
@@ -2079,6 +2080,14 @@ export default function App(){
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
   const[mpStatus,setMpStatus]=useState("loading");
+  // AI Coach status — previously the sidebar dot was hardcoded to always show
+  // "AI Coach (local, free)" regardless of whether WebLLM had actually loaded.
+  // Now wired to the real localAI.js state via its subscription API.
+  const[aiCoachStatus,setAiCoachStatus]=useState(()=>getLocalAIStatus());
+  useEffect(()=>{
+    setAiCoachStatus(getLocalAIStatus());
+    return onLocalAIStatus(setAiCoachStatus);
+  },[]);
   const[analysis,setAnalysis]=useState(null);
   const[history,setHistory]=useState([]);
   const[sessionTime,setSessionTime]=useState(0);
@@ -2749,7 +2758,24 @@ export default function App(){
       insightsRef.current=null;setSessionInsights([]);
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
-      try{const d=await AnalysisAPI.startSession({mode});sid=d.session_id||sid;}catch(e){}
+      try{
+        const d=await AnalysisAPI.startSession({mode});
+        sid=d.session_id||sid;
+      }catch(e){
+        // session_limit_reached (Free plan cap) must actually block the
+        // session — previously this catch silently swallowed the error
+        // and fell back to a local-only session id, so the limit never
+        // had any real effect on the client.
+        if(e?.status===403 && e?.upgrade){
+          setCameraStatus("idle");
+          streamRef.current?.getTracks?.().forEach(t=>t.stop());
+          addToast(isAr?"وصلت لحد جلسات الخطة المجانية. قم بالترقية للمتابعة":"You've reached the Free plan session limit. Upgrade to continue","warn");
+          setShowUpgrade?.(true); setUpgradeReason?.(isAr?"حد الجلسات الشهري":"Monthly session limit");
+          return;
+        }
+        // Any other error (network, backend down, etc.) — fall back to
+        // local-only session so the user isn't blocked by infra issues.
+      }
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
       setAlertMsg({text:`${M_?.label} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
       if(user?.uid) completeOnboardingStep(user.uid,"first_session").catch(()=>{});
@@ -2987,6 +3013,14 @@ export default function App(){
   }
 
   async function downloadPDF(sessionOverride){
+    // Gated by canonical pdfDetail (tierQuality.js) — standard/basic have
+    // pdfDetail:"none" and must not get a PDF, same rule enforced in
+    // AIReports.jsx's exportPDF(). This was previously ungated here.
+    if(qualityFor(tier).pdfDetail === "none"){
+      addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
+      setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
+      return;
+    }
     const la=lastAnalRef.current||{};
     const hist=histRef.current||[];
     const avg=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
@@ -3573,6 +3607,40 @@ export default function App(){
         onSwitchAccount={handleSwitchAccount}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
+      {/* Moved here from the live-analysis render branch — modals must render on the
+          home page only, never over the live camera/analysis screen (interrupts the Stop button). */}
+      {showAnnualUpsell && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center"}}
+          onClick={()=>setShowAnnualUpsell(false)}>
+          <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",border:"1px solid rgba(99,102,241,.3)",borderRadius:20,padding:"36px 32px",maxWidth:420,width:"90%",textAlign:"center"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:12,fontWeight:700,letterSpacing:".1em",color:"#6366f1",textTransform:"uppercase",marginBottom:12}}>
+              {lang==="ar"?"توفير حصري":"EXCLUSIVE SAVING"}
+            </div>
+            <h3 style={{fontSize:22,fontWeight:700,color:"#eef2ff",margin:"0 0 8px"}}>
+              {lang==="ar"?"وفّر شهرين مجاناً 🎉":"Save 2 months free 🎉"}
+            </h3>
+            <p style={{fontSize:14,color:"#94a3b8",margin:"0 0 20px",lineHeight:1.6}}>
+              {lang==="ar"?"حوّل اشتراكك لخطة سنوية واستمتع بتوفير 20٪":"Switch to annual and save 20% — that's 2 months free."}
+            </p>
+            <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"16px",marginBottom:20}}>
+              <p style={{margin:0,color:"#a5b4fc",fontSize:13}}>
+                {lang==="ar"
+                  ? `${qualityFor(profile?.tier).label.ar} · سنوي · وفّر 17٪`
+                  : `${qualityFor(profile?.tier).label.en} · Annual · 17% off`}
+              </p>
+            </div>
+            <button onClick={()=>{ setShowAnnualUpsell(false); setPage("billing"); }}
+              style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#6366f1,#0891b2)",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",marginBottom:10}}>
+              {lang==="ar"?"احصل على الخصم السنوي →":"Get annual discount →"}
+            </button>
+            <button onClick={()=>setShowAnnualUpsell(false)}
+              style={{fontSize:12,color:"#475569",background:"none",border:"none",cursor:"pointer"}}>
+              {lang==="ar"?"الاستمرار شهرياً":"Keep monthly plan"}
+            </button>
+          </div>
+        </div>
+      )}
       {showShareCard&&shareCardData&&(
       <ShareCard score={shareCardData.score} grade={shareCardData.grade}
         streak={shareCardData.streak||0} percentile={null}
@@ -3623,6 +3691,7 @@ export default function App(){
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
       @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       @keyframes spin{to{transform:rotate(360deg)}}
+      @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
     `}</style>
     <div dir={dir} style={{
       display:"grid",
@@ -3638,38 +3707,6 @@ export default function App(){
       
 
       {/* OLD DUPLICATE MODALS REMOVED — see GlobalModals block above */}
-                  {showAnnualUpsell && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center"}}
-          onClick={()=>setShowAnnualUpsell(false)}>
-          <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",border:"1px solid rgba(99,102,241,.3)",borderRadius:20,padding:"36px 32px",maxWidth:420,width:"90%",textAlign:"center"}}
-            onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:12,fontWeight:700,letterSpacing:".1em",color:"#6366f1",textTransform:"uppercase",marginBottom:12}}>
-              {lang==="ar"?"توفير حصري":"EXCLUSIVE SAVING"}
-            </div>
-            <h3 style={{fontSize:22,fontWeight:700,color:"#eef2ff",margin:"0 0 8px"}}>
-              {lang==="ar"?"وفّر شهرين مجاناً 🎉":"Save 2 months free 🎉"}
-            </h3>
-            <p style={{fontSize:14,color:"#94a3b8",margin:"0 0 20px",lineHeight:1.6}}>
-              {lang==="ar"?"حوّل اشتراكك لخطة سنوية واستمتع بتوفير 20٪":"Switch to annual and save 20% — that's 2 months free."}
-            </p>
-            <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"16px",marginBottom:20}}>
-              <p style={{margin:0,color:"#a5b4fc",fontSize:13}}>
-                {lang==="ar"
-                  ? `${(profile?.tier||"standard")} · سنوي · وفّر 17٪`
-                  : `${(profile?.tier||"standard").charAt(0).toUpperCase()+(profile?.tier||"standard").slice(1)} · Annual · 17% off`}
-              </p>
-            </div>
-            <button onClick={()=>{ setShowAnnualUpsell(false); setPage("billing"); }}
-              style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#6366f1,#0891b2)",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",marginBottom:10}}>
-              {lang==="ar"?"احصل على الخصم السنوي →":"Get annual discount →"}
-            </button>
-            <button onClick={()=>setShowAnnualUpsell(false)}
-              style={{fontSize:12,color:"#475569",background:"none",border:"none",cursor:"pointer"}}>
-              {lang==="ar"?"الاستمرار شهرياً":"Keep monthly plan"}
-            </button>
-          </div>
-        </div>
-      )}
       {showNPS && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>setShowNPS(false)}>
@@ -3811,6 +3848,13 @@ export default function App(){
                   {isAr?"لوحة التحكم":"Dashboard"}
                 </button>
                 <button onClick={async ()=>{
+                  // Same canonical gate as downloadPDF() — this button bypassed it
+                  // entirely by calling generateSessionPDF() directly.
+                  if(qualityFor(tier).pdfDetail === "none"){
+                    addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
+                    setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
+                    return;
+                  }
                   addToast(isAr?"جاري إنشاء PDF...":"Generating PDF...","info");
                   try {
                     const { generateSessionPDF } = await import("./firebase.js");
@@ -3831,8 +3875,8 @@ export default function App(){
                     addToast("PDF error: "+(e?.message||"unknown"),"error");
                   }
                 }}
-                  style={{flex:1,padding:"10px",background:tier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:tier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${tier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                  📄 {tier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}
+                  style={{flex:1,padding:"10px",background:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.05)":tier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.4)":tier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.1)":tier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  {qualityFor(tier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${tier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
                 </button>
               </div>
             </div>
@@ -3840,11 +3884,19 @@ export default function App(){
         </div>
       )}
 
-      {/* ── LEFT PANEL — stats & history ── */}
+      {/* ── LEFT PANEL — stats & history ──
+          On mobile, order is decoupled from language: this panel (deeper
+          history/back-button/detailed stats) always renders SECOND so users
+          land on the camera + Start button first, not a wall of empty stats.
+          Previously order was isAr-only, which meant Arabic (this app's
+          default language) mobile users saw the camera full-width first
+          anyway but with no way back except scrolling past it; English
+          mobile users saw the opposite (stats first, camera unreachable
+          without scrolling) — inconsistent either way. */}
       <div style={{
         display:"flex", flexDirection:"column",
         overflowY:"auto", background:cs.bg,
-        order: isAr ? 1 : 0,
+        order: isMobile ? 1 : (isAr ? 1 : 0),
         borderRight: isAr ? "none" : `1px solid ${cs.border}`,
         borderLeft:  isAr ? `1px solid ${cs.border}` : "none",
       }}>
@@ -3921,7 +3973,9 @@ export default function App(){
           {[
             {label:isAr?"تنبيهات الرقبة":"Neck Alerts",  value:alertCounts.neck, color:"#ef4444"},
             {label:isAr?"تنبيهات المسافة":"Dist Alerts",  value:alertCounts.dist, color:"#f59e0b"},
-            {label:"Session ID",                            value:sessionId?.slice(-6)||"—", color:cs.muted},
+            {label:isAr?"التقييم":"Grade",
+              value: avg>=85?(isAr?"ممتاز":"Excellent"):avg>=70?(isAr?"جيد":"Good"):avg>=50?(isAr?"مقبول":"Fair"):avg>0?(isAr?"ضعيف":"Poor"):"—",
+              color: avg>=85?"#10b981":avg>=70?"#22c55e":avg>=50?"#f59e0b":avg>0?"#ef4444":cs.muted},
           ].map(s=>(
             <div key={s.label} style={{background:cs.card,border:`1px solid ${cs.border}`,borderRadius:10,padding:"10px 12px"}}>
               <div style={{fontSize:9,color:cs.muted,marginBottom:4}}>{s.label}</div>
@@ -4103,7 +4157,7 @@ export default function App(){
         display:"flex", flexDirection:"column",
         maxHeight: isMobile ? "auto" : "100vh",
         overflowY:"auto",
-        order: isAr ? 0 : 1,
+        order: isMobile ? 0 : (isAr ? 0 : 1),
         position: isMobile ? "static" : "sticky",
         top: 0,
       }}>
@@ -4114,6 +4168,16 @@ export default function App(){
           display:"flex",alignItems:"center",justifyContent:"space-between",
         }}>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
+            {/* Mobile-only back button — LEFT PANEL's back button is now
+                below the fold on mobile (camera renders first), so this
+                sidebar needs its own way back to Home. */}
+            {isMobile && (
+              <button
+                onClick={()=>{stopCamera();if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});setPage("home");setCamActive(false);}}
+                style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",fontSize:12,color:cs.muted,cursor:"pointer",display:"flex",alignItems:"center",marginRight:isAr?0:2,marginLeft:isAr?2:0}}>
+                {isAr ? "→" : "←"}
+              </button>
+            )}
             <div style={{width:22,height:22,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>◈</div>
             <span style={{fontSize:12,fontWeight:700,color:cs.text}}>Corvus</span>
           </div>
@@ -4142,11 +4206,22 @@ export default function App(){
           </span>
         </div>
 
-        {/* AI Coach status */}
+        {/* AI Coach status — reflects real WebLLM load state (see aiCoachStatus above) */}
         <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:"#6366f1",boxShadow:"0 0 6px #6366f1"}}/>
-          <span style={{fontSize:11,color:"#6366f1",fontWeight:500}}>
-            {isAr?"AI Coach (محلي ومجاني)":"AI Coach (local, free)"}
+          <div style={{
+            width:7,height:7,borderRadius:"50%",flexShrink:0,
+            background: aiCoachStatus.error ? "#ef4444" : aiCoachStatus.ready ? "#6366f1" : "#f59e0b",
+            boxShadow: aiCoachStatus.error ? "0 0 6px #ef4444" : aiCoachStatus.ready ? "0 0 6px #6366f1" : "0 0 6px #f59e0b",
+            animation: (!aiCoachStatus.ready && !aiCoachStatus.error) ? "livePulse 1.2s infinite" : "none",
+          }}/>
+          <span style={{fontSize:11,color: aiCoachStatus.error ? "#ef4444" : aiCoachStatus.ready ? "#6366f1" : "#f59e0b",fontWeight:500}}>
+            {aiCoachStatus.error
+              ? (isAr?"مدرب AI غير متاح":"AI Coach unavailable")
+              : aiCoachStatus.ready
+              ? (isAr?"مدرب AI (محلي ومجاني)":"AI Coach (local, free)")
+              : aiCoachStatus.loading
+              ? (isAr?`جاري تحميل مدرب AI... ${aiCoachStatus.progress}%`:`Loading AI Coach... ${aiCoachStatus.progress}%`)
+              : (isAr?"مدرب AI (يبدأ عند الفتح)":"AI Coach (loads on open)")}
           </span>
         </div>
 
@@ -4175,6 +4250,24 @@ export default function App(){
             style={{width:"100%",height:"100%",objectFit:"cover",transform:"scaleX(-1)",display:"block"}}/>
           <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)"}}/>
           <canvas ref={canvRef} style={{display:"none"}}/>
+
+          {/* Idle-state visual cue — previously the camera area was just a black box
+              with no indication a click was needed. First-time users had no way to
+              know to press "Start Analysis" below. */}
+          {!camActive && cameraStatus!=="requesting" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"center",gap:10,
+              background:"rgba(2,8,16,.55)",backdropFilter:"blur(2px)",
+              pointerEvents:"none",
+            }}>
+              <div style={{fontSize:34}}>📷</div>
+              <div style={{fontSize:12.5,fontWeight:700,color:"#e2e8f0",textAlign:"center",padding:"0 24px"}}>
+                {isAr?"اضغط \"ابدأ التحليل\" أدناه للبدء":"Tap \"Start Analysis\" below to begin"}
+              </div>
+              <div style={{fontSize:20,color:TN?.color||"#1a56db",animation:"bounceDown 1.4s infinite"}}>↓</div>
+            </div>
+          )}
 
           {/* Camera status pill */}
           <div style={{position:"absolute",top:8,left:isAr?"auto":8,right:isAr?8:"auto"}}>
@@ -4658,6 +4751,12 @@ export default function App(){
           }
           {histRef.current?.length>0&&(
             <button onClick={async ()=>{
+              // Same canonical gate — third direct generateSessionPDF() call that bypassed it.
+              if(qualityFor(tier).pdfDetail === "none"){
+                addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
+                setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
+                return;
+              }
               const hist=histRef.current||[];
               const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
               const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
@@ -4683,11 +4782,12 @@ export default function App(){
                 });
               } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
             }} style={{
-              background:"rgba(59,130,246,.08)",color:"#93c5fd",
-              border:"1px solid rgba(59,130,246,.2)",borderRadius:10,
+              background:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.04)":"rgba(59,130,246,.08)",
+              color:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.35)":"#93c5fd",
+              border:`1px solid ${qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.08)":"rgba(59,130,246,.2)"}`,borderRadius:10,
               padding:"10px 0",fontSize:12,fontWeight:600,cursor:"pointer",
             }}>
-              {isAr?"📄 تنزيل PDF":"📄 Download PDF"}
+              {qualityFor(tier).pdfDetail==="none" ? (isAr?"🔒 تنزيل PDF (Pro+)":"🔒 Download PDF (Pro+)") : (isAr?"📄 تنزيل PDF":"📄 Download PDF")}
             </button>
           )}
           <button onClick={()=>setMuted(v=>!v)} style={{
@@ -4802,7 +4902,7 @@ export default function App(){
         )}
 
         <div style={{padding:"10px 14px",fontSize:9.5,color:cs.muted,textAlign:"center"}}>
-          Firebase synced · Local AI
+          {isAr ? "☁ تم الحفظ · ⚡ مدعوم بالذكاء الاصطناعي" : "☁ Data saved · ⚡ AI powered"}
         </div>
       </div>
     </div>

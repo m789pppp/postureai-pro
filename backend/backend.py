@@ -47,7 +47,7 @@ try:
         rset, rget, rdel, rpush, rlist, cache_get, cache_set,
         push_score, get_smoothed_score, check_rate_limit,
         set_risk_start, clear_risk, get_risk_duration,
-        redis_health, queue_job,
+        redis_health, queue_job, rincr,
     )
     REDIS_READY = True
     print("✅ Redis service loaded")
@@ -68,6 +68,7 @@ except ImportError:
     def queue_job(*a,**k): pass
     def rpush(key, value, max_len=5000): pass
     def rlist(key, count=1000): return []
+    def rincr(key, ttl_s=0): return 1
     def push_blink(*a,**k): pass
     def get_blink_rate(*a,**k): return None
 
@@ -5554,6 +5555,34 @@ def start_session():
         data    = request.get_json(force=True) or {}
         role    = getattr(g, "role", {})
         tier    = role.get("tier", "standard")
+        uid     = getattr(g, "uid", "")
+
+        # ── Free plan session cap ────────────────────────────────────
+        # The "standard" (Free) plan is marketed as limited sessions
+        # (see TIERS.standard.features in App.jsx) but had zero server-side
+        # enforcement — any Free user could run unlimited sessions. basic/
+        # professional/elite/business/b2b plans all promise unlimited
+        # sessions already, so this only applies to literal "standard".
+        if tier == "standard":
+            month_key = f"usage:{uid}:sessions:{datetime.utcnow().strftime('%Y-%m')}"
+            day_key   = f"usage:{uid}:sessions:{datetime.utcnow().strftime('%Y-%m-%d')}"
+            try:
+                month_count = int(rget(month_key) or 0)
+                day_count   = int(rget(day_key) or 0)
+            except Exception:
+                month_count = day_count = 0
+            FREE_MONTHLY_LIMIT = 5
+            FREE_DAILY_LIMIT   = 3
+            if month_count >= FREE_MONTHLY_LIMIT or day_count >= FREE_DAILY_LIMIT:
+                return jsonify({
+                    "error":   "session_limit_reached",
+                    "message": "Free plan session limit reached. Upgrade to continue.",
+                    "limit_monthly": FREE_MONTHLY_LIMIT,
+                    "limit_daily":   FREE_DAILY_LIMIT,
+                    "used_monthly":  month_count,
+                    "used_daily":    day_count,
+                    "upgrade": True,
+                }), 403
 
         # ── Seat enforcement for company plans ──────────────────────
         # enterprise customers have a seats field — enforce it server-side
@@ -5585,6 +5614,12 @@ def start_session():
             "uid":           g.uid,
             "company_id":    company_id,
         }
+        if tier == "standard":
+            try:
+                rincr(f"usage:{uid}:sessions:{datetime.utcnow().strftime('%Y-%m')}", ttl_s=86400 * 35)
+                rincr(f"usage:{uid}:sessions:{datetime.utcnow().strftime('%Y-%m-%d')}", ttl_s=86400 * 2)
+            except Exception:
+                pass
         return jsonify({"session_id": sid, "started": datetime.now().isoformat()})
     except Exception as e:
         return safe_error(e)
@@ -14638,9 +14673,17 @@ def billing_usage():
         tier  = getattr(g, "tier", "standard")
 
         LIMITS = {
-            "standard":     {"sessions_per_day": 3,   "sessions_per_month": 30,  "ai_coach": 0,   "pdf_exports": 1,  "employees": 5    },
+            # standard (Free): kept in sync with the enforced cap in
+            # /api/session/start (FREE_MONTHLY_LIMIT/FREE_DAILY_LIMIT) and
+            # the "5 sessions/month" marketing copy in App.jsx TIERS.standard.
+            "standard":     {"sessions_per_day": 3,   "sessions_per_month": 5,   "ai_coach": 0,   "pdf_exports": 0,  "employees": 1    },
+            # basic: TIERS.basic.features explicitly promises "Unlimited
+            # sessions" — was previously missing here and silently falling
+            # back to the standard (Free) limits above.
+            "basic":        {"sessions_per_day": -1,  "sessions_per_month": -1,  "ai_coach": 10,  "pdf_exports": 0,  "employees": 1    },
             "professional": {"sessions_per_day": -1,  "sessions_per_month": -1,  "ai_coach": 50,  "pdf_exports": -1, "employees": 25   },
             "elite":        {"sessions_per_day": -1,  "sessions_per_month": -1,  "ai_coach": -1,  "pdf_exports": -1, "employees": -1   },
+            "business":     {"sessions_per_day": -1,  "sessions_per_month": -1,  "ai_coach": -1,  "pdf_exports": -1, "employees": 500  },
             "enterprise":   {"sessions_per_day": -1,  "sessions_per_month": -1,  "ai_coach": -1,  "pdf_exports": -1, "employees": -1   },
         }
         limits = LIMITS.get(tier, LIMITS["standard"])
