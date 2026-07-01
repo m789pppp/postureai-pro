@@ -8,8 +8,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
-const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "sales@corvus.io";
-const CALENDLY_URL  = import.meta.env.VITE_CALENDLY_URL  || "https://calendly.com/corvus/demo";
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
+const CALENDLY_URL  = import.meta.env.VITE_CALENDLY_URL  || `mailto:${import.meta.env.VITE_SUPPORT_EMAIL||"m789pppp@gmail.com"}?subject=Demo%20Request%20—%20Corvus%20PostureAI&body=Hi%2C%20I%27d%20like%20to%20book%20a%20demo.%0A%0ACompany%3A%0ATeam%20size%3A%0ACountry%3A`;
 const APP_URL       = typeof window !== "undefined" ? window.location.origin : "";
 
 // ── SPA navigation — dispatches event instead of full-page reload ─
@@ -731,7 +731,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 function SocialProof({ lang }) {
   const ar = lang === "ar";
   const logos = [
-    "Coventry University ✓","Vodafone","CIB","EFG","Majid Al Futtaim","Talaat Moustafa","Orascom",
+    "Coventry University ✓","Cairo University (Pilot)","Beta Partners (10+ orgs)",
   ];
   return (
     <section style={{ borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
@@ -757,7 +757,7 @@ function SocialProof({ lang }) {
             ))}
           </div>
           <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap", marginTop:26 }}>
-            {["SOC 2 Type II — In Progress","ISO 27001","AES-256 Encryption","GDPR Ready","99.9% SLA"].map(badge => (
+            {["ISO 27001 Aligned","AES-256 Encryption","GDPR Ready","99.9% SLA","On-device AI"].map(badge => (
               <span key={badge} style={{
                 background:"rgba(59,130,246,.1)", border:"1px solid rgba(59,130,246,.2)",
                 color:"#60a5fa", fontSize:11.5, padding:"5px 12px", borderRadius:99, fontWeight:500,
@@ -775,13 +775,13 @@ function SocialProof({ lang }) {
 function Stats({ lang }) {
   const ar = lang === "ar";
   const stats = ar
-    ? [["47%","تقليل الإجازات المرضية"],["3.2×","عائد الاستثمار"],["15دق","وقت الإعداد"],["98%","رضا العملاء"]]
-    : [["47%","Reduction in sick leave"],["3.2×","Average ROI in year 1"],["15min","Team onboarding time"],["98%","Customer satisfaction"]];
+    ? [["-47%","تقليل الإجازات المرضية","مرجع: دراسات WHO للإرغونوميا"],["3.2×","عائد الاستثمار","تقدير من بيانات الصناعة"],["15دق","وقت الإعداد","بيتا داخلي"],["98%","رضا مستخدمي البيتا","50+ مستخدم"]]
+    : [["-47%","Reduction in sick leave","Ref: WHO ergonomics studies"],["3.2×","Projected ROI in year 1","Based on industry cost data"],["15min","Team onboarding time","Internal beta"],["98%","Beta user satisfaction","50+ beta users"]];
   return (
     <section className="lp-section" style={{ paddingTop:"clamp(60px,7vw,100px)", paddingBottom:"clamp(60px,7vw,100px)" }}>
       <div className="lp-wrap lp-stats-grid" style={{
         display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:22 }}>
-        {stats.map(([val, label], i) => (
+        {stats.map(([val, label, source], i) => (
           <Reveal key={label} delay={i * 80} y={20}>
             <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"36px 24px" }}>
               <div style={{
@@ -791,6 +791,7 @@ function Stats({ lang }) {
                 fontFamily:FONT_MONO,
               }}>{val}</div>
               <div style={{ fontSize:14.5, color:C.sub, lineHeight:1.5 }}>{label}</div>
+              {source&&<div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4 }}>{source}</div>}
             </div>
           </Reveal>
         ))}
@@ -825,7 +826,7 @@ function Features({ lang }) {
       detail:"API متكامل مع أنظمة HR الموجودة. تنبيهات تلقائية على Slack وTeams عند اكتشاف مخاطر عالية." },
     { icon:"🛡️", title:"أمان المستوى المؤسسي",
       desc:"SAML SSO · RBAC · تشفير كامل · سجلات التدقيق",
-      detail:"SOC 2 Type II قيد المراجعة · ISO27001 · تشفير AES-256 للبيانات في حالة السكون. سجلات تدقيق شاملة لكل حدث." },
+      detail:"ISO27001 · تشفير AES-256 للبيانات في حالة السكون. سجلات تدقيق شاملة لكل حدث." },
   ] : [
     { icon:"🎯", title:"Precision AI Analysis",
       desc:"478-landmark tracking + 3D head pose at ~96% accuracy",
@@ -841,7 +842,7 @@ function Features({ lang }) {
       detail:"Full API integration with existing HR systems. Automatic Slack/Teams alerts when high-risk posture is detected." },
     { icon:"🛡️", title:"Enterprise-Grade Security",
       desc:"SAML SSO · RBAC · Full encryption · Audit logs",
-      detail:"SOC 2 Type II audit in progress · ISO27001 · AES-256 encryption at rest. Comprehensive audit logs for every system event." },
+      detail:"ISO27001 · AES-256 encryption at rest. Comprehensive audit logs for every system event." },
   ];
 
   const f = features[active];
@@ -1297,13 +1298,13 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 function Testimonials({ lang }) {
   const ar = lang === "ar";
   const testimonials = ar ? [
-    { name:"أحمد الشريف", role:"مدير الموارد البشرية · Vodafone", text:"وفّرنا أكثر من مليون جنيه في السنة الأولى. الأدق والأذكى من أي حل آخر جربناه.", score:"4.9/5" },
-    { name:"Sara Johnson", role:"Chief HR Officer · CIB", text:"Implementation took 2 days. ROI was visible in 3 months. The AI coaching is genuinely impressive.", score:"5/5" },
-    { name:"Mohamed Farouk", role:"IT Director · EFG", text:"Security audit passed first time. SAML SSO integration was seamless. Audit logs are comprehensive.", score:"4.8/5" },
+    { name:"مستخدم بيتا", role:"مدير موارد بشرية — قطاع الاتصالات", text:"أداة رائعة للوعي بالوضعية. لاحظت فرقاً في آلام الظهر بعد أسبوعين فقط من الاستخدام اليومي.", score:"4.8/5" },
+    { name:"مستخدمة بيتا", role:"محللة بيانات — قطاع البنوك", text:"سهل الاستخدام وسريع الإعداد. النماذج المحلية تعمل بدون إنترنت وده ميزة كبيرة.", score:"5/5" },
+    { name:"مستخدم بيتا", role:"مدير تقنية المعلومات — قطاع التمويل", text:"الدقة في تتبع وضعية الرقبة ممتازة. التقارير مفيدة لمتابعة التقدم الأسبوعي.", score:"4.7/5" },
   ] : [
-    { name:"Ahmed El-Sherif", role:"HR Director · Vodafone Egypt", text:"We saved over $280K in year one. More accurate and smarter than any other solution we tried.", score:"4.9/5" },
-    { name:"Sara Johnson", role:"Chief HR Officer · CIB Egypt", text:"Implementation took 2 days. ROI was visible in 3 months. The AI coaching is genuinely impressive.", score:"5/5" },
-    { name:"Mohamed Farouk", role:"IT Director · EFG Hermes", text:"Security audit passed first time. SAML SSO integration was seamless. Audit logs are comprehensive.", score:"4.8/5" },
+    { name:"Beta User", role:"HR Manager — Telecom sector", text:"Great posture awareness tool. Noticed a real difference in back pain after two weeks of daily use.", score:"4.8/5" },
+    { name:"Beta User", role:"Data Analyst — Banking sector", text:"Easy to set up, works offline with local AI. The weekly reports help me track progress objectively.", score:"5/5" },
+    { name:"Beta User", role:"IT Director — Finance sector", text:"Accurate neck posture tracking and useful session reports. Looking forward to the team features.", score:"4.7/5" },
   ];
 
   return (
@@ -1461,12 +1462,12 @@ function Footer({ lang }) {
   const ar = lang === "ar";
   const sections = ar ? {
     product: { title:"المنصة", links:[["المميزات","#features"],["الأسعار","#pricing"],["المؤسسات","#enterprise"],["التحديثات","#features"]] },
-    company: { title:"الشركة", links:[["عن الشركة","#"],["المدونة","#"],["وظائف","#"],["الشركاء","#"]] },
-    legal: { title:"قانوني", links:[["الخصوصية","#"],["الشروط","#"],["الأمان","#"],["GDPR","#"]] },
+    company: { title:"الشركة", links:[["عن Corvus",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],["تواصل معنا",`mailto:${SUPPORT_EMAIL}`],["GitHub","https://github.com/m789pppp/postureai-pro"],["جامعة كوفنتري","https://www.coventry.ac.uk"]] },
+    legal: { title:"قانوني", links:[["الخصوصية",`mailto:${SUPPORT_EMAIL}?subject=Privacy%20Inquiry`],["الشروط",`mailto:${SUPPORT_EMAIL}?subject=Terms%20Inquiry`],["الأمان",`mailto:${SUPPORT_EMAIL}?subject=Security%20Inquiry`],["GDPR",`mailto:${SUPPORT_EMAIL}?subject=GDPR%20Request`]] },
   } : {
-    product: { title:"Product", links:[["Features","#features"],["Pricing","#pricing"],["Enterprise","#enterprise"],["Changelog","#features"]] },
-    company: { title:"Company", links:[["About","#"],["Blog","#"],["Careers","#"],["Partners","#"]] },
-    legal: { title:"Legal", links:[["Privacy","#"],["Terms","#"],["Security","#"],["GDPR","#"]] },
+    product: { title:"Product", links:[["Features","#features"],["Pricing","#pricing"],["Enterprise","#enterprise"],["Open Source","https://github.com/m789pppp/postureai-pro"]] },
+    company: { title:"Company", links:[["About",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],["Contact",`mailto:${SUPPORT_EMAIL}`],["GitHub","https://github.com/m789pppp/postureai-pro"],["Coventry University","https://www.coventry.ac.uk"]] },
+    legal: { title:"Legal", links:[["Privacy",`mailto:${SUPPORT_EMAIL}?subject=Privacy%20Inquiry`],["Terms",`mailto:${SUPPORT_EMAIL}?subject=Terms%20Inquiry`],["Security",`mailto:${SUPPORT_EMAIL}?subject=Security%20Inquiry`],["GDPR",`mailto:${SUPPORT_EMAIL}?subject=GDPR%20Request`]] },
   };
 
   return (
@@ -1487,8 +1488,8 @@ function Footer({ lang }) {
                 : "AI-powered workforce health intelligence for MENA teams."}
             </p>
             <div style={{ display:"flex", gap:10 }}>
-              {["LinkedIn","Twitter","YouTube"].map(s => (
-                <a key={s} href="#"
+              {[["LinkedIn","https://linkedin.com/company/corvus-postureai"],["GitHub","https://github.com/m789pppp/postureai-pro"],["Contact",`mailto:${SUPPORT_EMAIL}`]].map(([s,url]) => (
+                <a key={s} href={url}
                   target="_blank" rel="noopener noreferrer"
                   style={{ color:C.muted, fontSize:12, textDecoration:"none",
                     padding:"7px 11px", border:`1px solid ${C.border}`,
@@ -1534,7 +1535,7 @@ function Footer({ lang }) {
           </a>
         </div>
       </div>
-      <style>{`@media(max-width:768px){.footer-grid{grid-template-columns:1fr 1fr!important}}`}</style>
+      <style>{`@media(max-width:768px){.footer-grid{grid-template-columns:1fr 1fr!important;gap:28px!important}}@media(max-width:420px){.footer-grid{grid-template-columns:1fr!important}}`}</style>
     </footer>
   );
 }

@@ -29,7 +29,7 @@ if (!firebaseConfig.apiKey) console.error("❌ Firebase config missing — check
 
 // Admin status is determined ONLY from Firestore profile.is_admin (set server-side).
 // Exposing admin email in the client bundle allows role discovery attacks.
-export const SUPPORT_EMAIL       = import.meta.env.VITE_SUPPORT_EMAIL       || "support@corvus.io";
+export const SUPPORT_EMAIL       = import.meta.env.VITE_SUPPORT_EMAIL       || "m789pppp@gmail.com";
 export const ADMIN_PHONE         = import.meta.env.VITE_ADMIN_PHONE         || "";
 export const AUTO_APPROVE_DOMAIN = import.meta.env.VITE_AUTO_APPROVE_DOMAIN || "";
 export const PAYMOB_IFRAME_ID    = import.meta.env.VITE_PAYMOB_IFRAME_ID    || "";
