@@ -1027,22 +1027,31 @@ export const MODES = {
 
 let _lastBeepMs = 0;
 
-export function playBeep(muted = false) {
-  if (muted) return;
+export function playBeep(severity = "mild") {
   const now = Date.now();
   if (now - _lastBeepMs < BEEP_COOLDOWN_MS) return;
   _lastBeepMs = now;
   try {
     const ac = new (window.AudioContext || window.webkitAudioContext)();
-    [[440, 0, 0.08], [360, 0.3, 0.26]].forEach(([freq, delay, stop]) => {
-      const osc = ac.createOscillator(), gain = ac.createGain();
-      osc.connect(gain); gain.connect(ac.destination);
-      osc.frequency.value = freq; osc.type = "sine";
-      gain.gain.setValueAtTime(0, ac.currentTime + delay);
-      gain.gain.linearRampToValueAtTime(0.18, ac.currentTime + delay + 0.06);
-      gain.gain.linearRampToValueAtTime(0, ac.currentTime + delay + stop);
-      osc.start(ac.currentTime + delay);
-      osc.stop(ac.currentTime + delay + stop + 0.05);
+    // severity="severe"  → 3 fast urgent pulses, high freq, louder
+    // severity="moderate"→ 2 medium pulses
+    // severity="mild"    → 1 soft gentle tone
+    const patterns = {
+      severe:   [[520,0,0.06,0.22],[440,0.18,0.06,0.22],[380,0.36,0.06,0.22]],
+      moderate: [[460,0,0.07,0.24],[370,0.28,0.07,0.24]],
+      mild:     [[400,0,0.08,0.32]],
+    };
+    const vol = severity==="severe"?0.22:severity==="moderate"?0.16:0.10;
+    const tones = patterns[severity] || patterns.mild;
+    tones.forEach(([freq,delay,attack,stop])=>{
+      const osc=ac.createOscillator(),gain=ac.createGain();
+      osc.connect(gain);gain.connect(ac.destination);
+      osc.frequency.value=freq;osc.type="sine";
+      gain.gain.setValueAtTime(0,ac.currentTime+delay);
+      gain.gain.linearRampToValueAtTime(vol,ac.currentTime+delay+attack);
+      gain.gain.linearRampToValueAtTime(0,ac.currentTime+delay+stop);
+      osc.start(ac.currentTime+delay);
+      osc.stop(ac.currentTime+delay+stop+0.05);
     });
   } catch {}
 }
