@@ -686,242 +686,387 @@ function _riskColor(v) {
 
 // ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
-// PDF DESIGN SYSTEM — Corvus v2 (2026)
-// Professional dark-header layout, consistent across all tiers
+// ═══════════════════════════════════════════════════════════════════
+// CORVUS PDF DESIGN SYSTEM v3 — Premium Healthcare Report
+// Inspired by: Apple, Stripe, Linear, WHO, top HealthTech startups
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Design tokens ─────────────────────────────────────────────────
-const P = {
-  // Blues (primary)
-  blue900:"#0f172a", blue800:"#1e293b", blue700:"#1a3a6e",
-  blue500:"#3b82f6", blue400:"#60a5fa",
-  // Semantic
-  emerald:[16,185,129], amber:[245,158,11], red:[239,68,68],
-  // Grays
-  ink:[15,23,42], sub:[71,85,105], muted:[100,116,139],
-  bg:[248,250,252], white:[255,255,255],
-  border:[226,232,240], borderLight:[241,245,249],
+// ── Design Tokens ──────────────────────────────────────────────────
+const T = {
+  // Primary palette
+  primary:    [37,99,235],    // #2563EB
+  primaryDk:  [30,64,175],   // #1E40AF
+  success:    [34,197,94],   // #22C55E
+  successDk:  [21,128,61],
+  warning:    [245,158,11],  // #F59E0B
+  warningDk:  [180,83,9],
+  danger:     [239,68,68],   // #EF4444
+  dangerDk:   [185,28,28],
+  // Neutral
+  ink:        [17,24,39],    // #111827
+  sub:        [55,65,81],    // #374151
+  muted:      [107,114,128], // #6B7280
+  light:      [156,163,175], // #9CA3AF
+  // Surfaces
+  bg:         [248,250,252], // #F8FAFC
+  card:       [255,255,255],
+  border:     [229,231,235], // #E5E7EB
+  borderSoft: [243,244,246], // #F3F4F6
+  // Accents
+  indigo:     [99,102,241],
+  purple:     [168,85,247],
+  cyan:       [6,182,212],
+  teal:       [20,184,166],
 };
 
-// ── Color helpers ─────────────────────────────────────────────────
-function _gc(s) { return s>=80?P.emerald:s>=60?P.amber:P.red; }
-function _gl(s, isAr) {
-  return s>=80?(isAr?"ممتاز":"Excellent"):s>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs Work");
+// ── Spacing system ─────────────────────────────────────────────────
+const S = { xs:3, sm:6, md:10, lg:16, xl:24, xxl:36 };
+
+// ── Typography ─────────────────────────────────────────────────────
+const F = {
+  display: 28, h1:18, h2:14, h3:11, body:9, small:7.5, micro:6.5,
+};
+
+// ── Helpers ────────────────────────────────────────────────────────
+function _scoreColor(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
+function _scoreLabel(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Improvement"); }
+function _fmtDur(s){ if(!s)return"—"; const m=Math.floor(s/60),sec=s%60; return`${m>0?m+"m ":""}${sec}s`; }
+function _fmtDate(ts,ar){
+  if(!ts)return"—";
+  try{ const d=ts?.toDate?ts.toDate():new Date(ts);
+    return d.toLocaleDateString(ar?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"}); }
+  catch{return"—";}
 }
-function _fmtDur(s) {
-  if (!s) return "—";
-  const m=Math.floor(s/60), sec=s%60;
-  return `${m>0?m+"m ":""}${sec}s`;
-}
-function _fmtDate(ts, isAr) {
-  if (!ts) return "—";
-  try {
-    const d = ts?.toDate ? ts.toDate() : new Date(ts);
-    return d.toLocaleString(isAr?"ar-EG":"en-US",{weekday:"short",year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
-  } catch { return "—"; }
+function _clamp(v,min,max){return Math.min(max,Math.max(min,v));}
+function _rgb(arr){return arr;}
+
+// ── Low-level draw helpers ─────────────────────────────────────────
+function dc(doc,...c){doc.setDrawColor(...c);}
+function fc(doc,...c){doc.setFillColor(...c);}
+function tc(doc,...c){doc.setTextColor(...c);}
+function lw(doc,w){doc.setLineWidth(w);}
+function font(doc,size,style="normal",face="helvetica"){
+  doc.setFont(face,style);doc.setFontSize(size);
 }
 
-// ── Corvus logo — navy rounded rect + ◈ glyph ─────────────────────
-function _drawLogo(doc, x, y, size=22) {
-  doc.setFillColor(26,86,219);
-  doc.roundedRect(x, y, size, size, size*0.14, size*0.14, "F");
-  doc.setFontSize(Math.round(size*0.65));
-  doc.setTextColor(255,255,255);
-  doc.setFont("helvetica","bold");
-  doc.text("◈", x+size/2, y+size*0.72, { align:"center" });
+// ── Rounded filled rect helper ─────────────────────────────────────
+function rr(doc,x,y,w,h,r=3,mode="F"){
+  doc.roundedRect(x,y,w,h,r,r,mode);
 }
 
-// ── Horizontal rule ───────────────────────────────────────────────
-function _hr(doc, x, y, w, r=180, g=180, b=195) {
-  doc.setDrawColor(r,g,b); doc.setLineWidth(0.25); doc.line(x,y,x+w,y); doc.setLineWidth(0.3);
+// ── Divider ────────────────────────────────────────────────────────
+function divider(doc,x,y,w,col=T.border){
+  dc(doc,...col);lw(doc,0.2);doc.line(x,y,x+w,y);lw(doc,0.3);
 }
 
-// ── Page cover header (dark, used on page 1) ──────────────────────
-function _coverHeader(doc, W, ml, mr, tier, tierColor, isAr, name, sessionNum, dateStr) {
-  // Full-bleed gradient feel — dark slate
-  doc.setFillColor(15,23,42); doc.rect(0,0,W,52,"F");
-  // Subtle accent stripe
-  doc.setFillColor(...tierColor); doc.rect(0,51,W,1.5,"F");
-  // Logo
-  _drawLogo(doc, ml, 12, 26);
+// ── Logo mark ─────────────────────────────────────────────────────
+function _logo(doc,x,y,sz=20){
+  fc(doc,...T.primary);rr(doc,x,y,sz,sz,sz*0.18,"F");
+  // Inner diamond
+  fc(doc,...T.card);
+  const cx=x+sz/2,cy=y+sz/2,hs=sz*0.26;
+  doc.lines([[hs,hs],[-hs,hs],[-hs,-hs],[hs,-hs]],cx,cy-hs,[1,1],"F",true);
+  // Center dot
+  fc(doc,...T.primary);doc.circle(cx,cy,sz*0.1,"F");
+}
+
+// ── Page header (inner pages) ──────────────────────────────────────
+function _hdr(doc,W,ml,mr,pageLabel){
+  fc(doc,...T.card);doc.rect(0,0,W,14,"F");
+  fc(doc,...T.primary);doc.rect(0,14,W,0.5,"F");
+  // Mini logo
+  fc(doc,...T.primary);rr(doc,ml,3.5,8,8,1.5,"F");
+  fc(doc,...T.card);font(doc,5.5,"bold");
+  doc.text("◈",ml+4,9.2,{align:"center"});
   // Brand
-  doc.setFontSize(16); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text("Corvus", ml+32, 22);
-  doc.setFontSize(8); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
-  doc.text(isAr?"تقرير تحليل الوضعية":"Posture Analysis Report", ml+32, 30);
-  doc.text(dateStr, ml+32, 37);
-  // Tier badge — pill shape
-  const tierStr = tier.toUpperCase();
-  const bw = tierStr.length*2.2+12;
-  doc.setFillColor(...tierColor); doc.roundedRect(W-mr-bw, 14, bw, 11, 3, 3, "F");
-  doc.setFontSize(7.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text(tierStr, W-mr-bw/2, 21, {align:"center"});
+  font(doc,7,"bold");tc(doc,...T.ink);
+  doc.text("Corvus Health",ml+11,9.2);
+  font(doc,7,"normal");tc(doc,...T.muted);
+  doc.text("Posture Intelligence Platform",ml+45,9.2);
+  // Right label
+  font(doc,6.5,"bold");tc(doc,...T.primary);
+  doc.text(pageLabel,W-mr,9.2,{align:"right"});
 }
 
-// ── Inner page header strip (page 2+) ─────────────────────────────
-function _pageHeader(doc, W, ml, mr, tier, tierColor, isAr) {
-  doc.setFillColor(15,23,42); doc.rect(0,0,W,14,"F");
-  doc.setFillColor(...tierColor); doc.rect(0,13,W,1,"F");
-  // Logo tiny
-  doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text("◈ Corvus", ml, 9.5);
-  doc.setFontSize(7); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
-  doc.text(isAr?"تقرير الوضعية":"Posture Report", ml+18, 9.5);
-  doc.setFontSize(7); doc.setTextColor(...tierColor); doc.setFont("helvetica","bold");
-  doc.text(tier.toUpperCase(), W-mr, 9.5, {align:"right"});
+// ── Page footer ────────────────────────────────────────────────────
+function _ftr(doc,W,ml,mr,H,pg,total,name){
+  divider(doc,0,H-10,W);
+  fc(doc,...T.borderSoft);doc.rect(0,H-9.5,W,9.5,"F");
+  font(doc,6.5,"normal");tc(doc,...T.light);
+  doc.text(`Corvus Health Intelligence · corvus.ai`,ml,H-3.5);
+  font(doc,6.5,"bold");tc(doc,...T.muted);
+  doc.text(name,W/2,H-3.5,{align:"center"});
+  doc.text(`${pg} / ${total}`,W-mr,H-3.5,{align:"right"});
 }
 
-// ── Page footer with page number ──────────────────────────────────
-function _pageFooter(doc, W, ml, mr, H, pageNum, totalPages, name) {
-  doc.setFillColor(15,23,42); doc.rect(0,H-10,W,10,"F");
-  doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Corvus Health Intelligence — Confidential", ml, H-3.5);
-  doc.text(name, W/2, H-3.5, {align:"center"});
-  doc.text(`${pageNum} / ${totalPages}`, W-mr, H-3.5, {align:"right"});
+// ── Cover header gradient (page 1) ────────────────────────────────
+function _coverHdr(doc,W,ml,H,tier,tierCol,name,sessionNum,dateStr){
+  // Dark gradient-feel background
+  fc(doc,...T.ink);doc.rect(0,0,W,72,"F");
+  // Accent overlay band
+  fc(doc,...tierCol);
+  doc.lines([[0,0],[W*0.6,0],[W*0.4,72],[0,72]],0,0,[1,1],"F",false);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
+  fc(doc,...T.card);doc.rect(0,0,W,72,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  // Geometric accent
+  fc(doc,...tierCol);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.15}));
+  doc.circle(W*0.82,36,40,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
+  doc.circle(W*0.82,36,56,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  // Logo
+  _logo(doc,ml,16,26);
+  // Brand name
+  font(doc,13,"bold");tc(doc,...T.card);
+  doc.text("CORVUS",ml+34,28);
+  font(doc,7,"normal");tc(doc,148,163,184);
+  doc.text("Health Intelligence Platform",ml+34,35);
+  // Report type
+  font(doc,7.5,"bold");
+  const tierStr=tier.toUpperCase();
+  const tw=doc.getTextWidth(tierStr)+10;
+  fc(doc,...tierCol);rr(doc,ml+34,40,tw,9,2,"F");
+  tc(doc,...T.card);doc.text(tierStr,ml+34+tw/2,46,{align:"center"});
+  // Right info
+  font(doc,7,"normal");tc(doc,148,163,184);
+  doc.text(dateStr,W-18,26,{align:"right"});
+  font(doc,7.5,"bold");tc(doc,...T.card);
+  doc.text(`Session #${sessionNum}`,W-18,35,{align:"right"});
+  // Bottom color bar
+  fc(doc,...tierCol);doc.rect(0,71.5,W,0.5,"F");
 }
 
-// ── Score ring (big circular score display) ───────────────────────
-function _scoreRing(doc, cx, cy, r, score, label, isAr) {
-  const col = _gc(score);
-  // Outer ring
-  doc.setDrawColor(...col); doc.setLineWidth(2.5);
-  doc.circle(cx, cy, r, "S");
-  // Inner fill subtle
-  doc.setFillColor(col[0],col[1],col[2]);
-  doc.setGState && doc.setGState(new doc.GState({opacity:0.08}));
-  doc.circle(cx, cy, r-1, "F");
-  doc.setGState && doc.setGState(new doc.GState({opacity:1}));
-  doc.setLineWidth(0.3);
+// ── Section heading with accent bar ───────────────────────────────
+function _secHead(doc,ml,y,title,sub="",col=T.primary){
+  fc(doc,...col);doc.rect(ml,y,2.5,sub?14:10,"F");
+  font(doc,F.h2,"bold");tc(doc,...T.ink);
+  doc.text(title,ml+8,y+(sub?7:7));
+  if(sub){font(doc,F.small,"normal");tc(doc,...T.muted);doc.text(sub,ml+8,y+13);}
+  return y+(sub?20:15);
+}
+
+// ── Score ring ────────────────────────────────────────────────────
+function _ring(doc,cx,cy,r,score,isAr){
+  const col=_scoreColor(score);
+  const lbl=_scoreLabel(score,isAr);
+  // Outer track
+  dc(doc,...T.border);lw(doc,3);doc.circle(cx,cy,r,"S");
+  // Score arc (full circle tinted)
+  dc(doc,...col);lw(doc,3);doc.circle(cx,cy,r,"S");
+  lw(doc,0.3);
+  // Inner fill
+  fc(doc,col[0],col[1],col[2]);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.07}));
+  doc.circle(cx,cy,r-1.5,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   // Score number
-  doc.setFontSize(22); doc.setTextColor(...col); doc.setFont("helvetica","bold");
-  doc.text(String(score), cx, cy+4, {align:"center"});
-  // /100
-  doc.setFontSize(7.5); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-  doc.text("/100", cx, cy+10.5, {align:"center"});
-  // Grade label below ring
-  doc.setFontSize(9); doc.setTextColor(...col); doc.setFont("helvetica","bold");
-  doc.text(label, cx, cy+r+7, {align:"center"});
+  font(doc,20,"bold");tc(doc,...col);
+  doc.text(String(score),cx,cy+3.5,{align:"center"});
+  // /100 small
+  font(doc,6.5,"normal");tc(doc,...T.muted);
+  doc.text("/100",cx,cy+9.5,{align:"center"});
+  // Grade label below
+  font(doc,8.5,"bold");tc(doc,...col);
+  doc.text(lbl,cx,cy+r+7,{align:"center"});
 }
 
-// ── Stat pill ─────────────────────────────────────────────────────
-function _statPill(doc, x, y, w, h, value, label, color) {
-  doc.setFillColor(...P.borderLight); doc.roundedRect(x,y,w,h,3,3,"F");
-  doc.setDrawColor(color[0],color[1],color[2],0.3); doc.setLineWidth(0.25);
-  doc.roundedRect(x,y,w,h,3,3,"S"); doc.setLineWidth(0.3);
-  doc.setFontSize(13); doc.setTextColor(...color); doc.setFont("helvetica","bold");
-  doc.text(value, x+w/2, y+h*0.55, {align:"center"});
-  doc.setFontSize(6.5); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-  doc.text(label, x+w/2, y+h*0.82, {align:"center"});
-}
-
-// ── Section heading with left accent bar ──────────────────────────
-function _sectionHead(doc, x, y, text, color) {
-  doc.setFillColor(...color); doc.rect(x,y-4,2.5,12,"F");
-  doc.setFontSize(10.5); doc.setTextColor(...P.ink); doc.setFont("helvetica","bold");
-  doc.text(text, x+6, y+5);
-  return y+14;
-}
-
-// ── Metric card — redesigned wide card with color left border ──────
-function _metricCard(doc, x, y, w, lbl, value, unit, score, isAr) {
-  const col = _gc(score);
-  const grade = _gl(score, isAr);
+// ── Metric card — premium redesign ────────────────────────────────
+function _metCard(doc,x,y,w,lbl,value,unit,score,isAr){
+  const col=_scoreColor(score);
+  const h=20;
   // Card bg
-  doc.setFillColor(248,250,252); doc.roundedRect(x,y,w,18,2.5,2.5,"F");
-  // Left color bar
-  doc.setFillColor(...col); doc.roundedRect(x,y,3,18,2.5,2.5,"F");
-  doc.rect(x+1.5,y,1.5,18,"F"); // fill notch
+  fc(doc,...T.card);rr(doc,x,y,w,h,3,"F");
+  dc(doc,...T.border);lw(doc,0.2);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
+  // Left accent border
+  fc(doc,...col);doc.rect(x,y,3,h,"F");
+  rr(doc,x,y,3,h,1.5,"F");
   // Score badge
-  doc.setFillColor(...col); doc.roundedRect(x+7,y+3,13,12,2,2,"F");
-  doc.setFontSize(8.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text(String(Math.round(score)), x+13.5, y+10.5, {align:"center"});
+  fc(doc,...col);rr(doc,x+7,y+4,14,12,2,"F");
+  font(doc,8.5,"bold");tc(doc,...T.card);
+  doc.text(String(Math.round(score)),x+14,y+11.5,{align:"center"});
   // Label
-  doc.setFontSize(8.5); doc.setTextColor(...P.ink); doc.setFont("helvetica","bold");
-  doc.text(lbl, x+24, y+7.5);
-  // Value + unit
-  if (value !== undefined && value !== null) {
-    doc.setFontSize(8); doc.setTextColor(...P.sub); doc.setFont("helvetica","normal");
-    doc.text(`${Math.round(value*10)/10}${unit||""}`, x+24, y+14);
+  font(doc,8.5,"bold");tc(doc,...T.ink);
+  doc.text(lbl,x+25,y+8.5);
+  // Value
+  if(value!==undefined&&value!==null){
+    font(doc,7.5,"normal");tc(doc,...T.muted);
+    doc.text(`${Math.round(value*10)/10}${unit||""}`,x+25,y+15);
   }
   // Progress bar (right side)
-  const bx=x+w*0.52, bw2=w*0.44;
-  doc.setFillColor(...P.border); doc.roundedRect(bx,y+6,bw2,5,1.5,1.5,"F");
-  doc.setFillColor(...col); doc.roundedRect(bx,y+6,Math.max(bw2*(score/100),2.5),5,1.5,1.5,"F");
-  // Grade text
-  doc.setFontSize(7); doc.setTextColor(...col); doc.setFont("helvetica","bold");
-  doc.text(grade, x+w-3, y+14, {align:"right"});
+  const bx=x+w*0.53,bw2=w*0.43,bh=4.5;
+  fc(doc,...T.borderSoft);rr(doc,bx,y+7.5,bw2,bh,2,"F");
+  fc(doc,...col);rr(doc,bx,y+7.5,Math.max(bw2*(score/100),3),bh,2,"F");
+  // Grade pill
+  const glbl=_scoreLabel(score,isAr);
+  const gw=doc.getTextWidth(glbl)+6;
+  fc(doc,col[0],col[1],col[2]);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
+  rr(doc,x+w-gw-4,y+13,gw,6,2,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  font(doc,6.5,"bold");tc(doc,...col);
+  doc.text(glbl,x+w-gw/2-4,y+17.5,{align:"center"});
 }
 
-// ── Sparkline — redesigned with area fill + grid ──────────────────
-function _drawSparkline(doc, hist, x, y, w, h, color) {
-  const slice = hist.length>80 ? hist.filter((_,i)=>i%Math.ceil(hist.length/80)===0) : hist;
-  if (slice.length<2) return;
-  const minS = Math.max(0, Math.min(...slice)-5);
-  const maxS = Math.min(100, Math.max(...slice)+5);
-  const rng  = Math.max(maxS-minS, 10);
-  const pts  = slice.map((s,i,a) => ({
-    px: x+(i/Math.max(a.length-1,1))*w,
-    py: y+h-((s-minS)/rng)*(h-4),
+// ── Stat card (for summary row) ───────────────────────────────────
+function _statCard(doc,x,y,w,h,value,label,col,sub=""){
+  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...T.border);lw(doc,0.2);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  // Top accent
+  fc(doc,...col);rr(doc,x,y,w,3,2,"F");doc.rect(x,y+1.5,w,1.5,"F");
+  // Value
+  font(doc,16,"bold");tc(doc,...col);
+  doc.text(String(value),x+w/2,y+h*0.56,{align:"center"});
+  // Label
+  font(doc,7,"bold");tc(doc,...T.muted);
+  doc.text(label,x+w/2,y+h*0.76,{align:"center"});
+  if(sub){font(doc,6.5,"normal");tc(doc,...T.light);doc.text(sub,x+w/2,y+h*0.9,{align:"center"});}
+}
+
+// ── Info row (alternating table) ──────────────────────────────────
+function _infoRow(doc,x,y,w,key,value,even){
+  fc(doc,...(even?T.borderSoft:T.card));doc.rect(x,y,w,8.5,"F");
+  font(doc,7.5,"normal");tc(doc,...T.muted);doc.text(key,x+4,y+5.8);
+  font(doc,7.5,"bold");tc(doc,...T.ink);doc.text(String(value),x+w-4,y+5.8,{align:"right"});
+}
+
+// ── Sparkline (premium) ───────────────────────────────────────────
+function _spark(doc,hist,x,y,w,h,col){
+  const pts=hist.length>80?hist.filter((_,i)=>i%Math.ceil(hist.length/80)===0):hist;
+  if(pts.length<2)return;
+  const lo=Math.max(0,Math.min(...pts)-8),hi=Math.min(100,Math.max(...pts)+8);
+  const rng=Math.max(hi-lo,10);
+  const coords=pts.map((s,i,a)=>({
+    px:x+(i/Math.max(a.length-1,1))*w,
+    py:y+h-((s-lo)/rng)*h,
   }));
-  // Grid lines
-  [50,65,80].forEach(v=>{
-    if (v<minS||v>maxS) return;
-    const gy=y+h-((v-minS)/rng)*(h-4);
-    doc.setDrawColor(210,215,225); doc.setLineWidth(0.15); doc.line(x,gy,x+w,gy);
-    doc.setFontSize(5); doc.setTextColor(180,190,205); doc.setFont("helvetica","normal");
-    doc.text(String(v),x-1,gy+1.5,{align:"right"});
+  // Grid
+  [40,60,75,90].forEach(v=>{
+    if(v<lo||v>hi)return;
+    const gy=y+h-((v-lo)/rng)*h;
+    dc(doc,...T.border);lw(doc,0.15);doc.line(x,gy,x+w,gy);
+    font(doc,5,"normal");tc(doc,...T.light);
+    doc.text(String(v),x-2,gy+1.5,{align:"right"});
   });
-  doc.setLineWidth(0.3);
+  lw(doc,0.3);
   // Area fill
-  try {
-    const poly=[[pts[0].px,pts[0].py],...pts.map(p=>[p.px,p.py]),[pts[pts.length-1].px,y+h],[pts[0].px,y+h]];
-    doc.setFillColor(...color);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
-    doc.lines(poly.slice(1).map(([px,py],i)=>[px-poly[i][0],py-poly[i][1]]),poly[0][0],poly[0][1],[1,1],"F",true);
+  try{
+    const poly=[coords[0].px,coords[0].py,...coords.flatMap(p=>[p.px,p.py]),coords[coords.length-1].px,y+h,coords[0].px,y+h];
+    fc(doc,...col);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:0.1}));
+    const segs=coords.slice(1).map((p,i)=>[p.px-coords[i].px,p.py-coords[i].py]);
+    doc.lines(segs,coords[0].px,coords[0].py,[1,1],"F",false);
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  } catch {}
+  }catch{}
   // Line
-  doc.setDrawColor(...color); doc.setLineWidth(1.2);
-  pts.forEach((p,i)=>{if(i>0)doc.line(pts[i-1].px,pts[i-1].py,p.px,p.py);});
-  // Dots at start/end
-  doc.setFillColor(...color);
-  doc.circle(pts[0].px,pts[0].py,1.5,"F");
-  doc.circle(pts[pts.length-1].px,pts[pts.length-1].py,2,"F");
+  dc(doc,...col);lw(doc,1.5);
+  coords.forEach((p,i)=>{if(i>0)doc.line(coords[i-1].px,coords[i-1].py,p.px,p.py);});
+  // Endpoints
+  fc(doc,...T.card);doc.circle(coords[0].px,coords[0].py,2,"F");
+  dc(doc,...col);lw(doc,1);doc.circle(coords[0].px,coords[0].py,2,"S");
+  fc(doc,...col);doc.circle(coords[coords.length-1].px,coords[coords.length-1].py,2.5,"F");
   // Labels
-  doc.setFontSize(6.5); doc.setTextColor(...color); doc.setFont("helvetica","bold");
-  doc.text(String(slice[0]),pts[0].px,pts[0].py-3,{align:"center"});
-  doc.text(String(slice[slice.length-1]),pts[pts.length-1].px,pts[pts.length-1].py-3,{align:"center"});
+  font(doc,6.5,"bold");tc(doc,...col);
+  doc.text(String(pts[0]),coords[0].px,coords[0].py-4,{align:"center"});
+  doc.text(String(pts[pts.length-1]),coords[coords.length-1].px,coords[coords.length-1].py-4,{align:"center"});
 }
 
-// ── Info row (key: value alternating table) ───────────────────────
-function _infoRow(doc, x, y, w, key, value, even) {
-  doc.setFillColor(even?241:248, even?245:250, even?249:252);
-  doc.rect(x,y,w,8.5,"F");
-  doc.setFontSize(8); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-  doc.text(key, x+4, y+5.8);
-  doc.setTextColor(...P.ink); doc.setFont("helvetica","bold");
-  doc.text(String(value), x+w-4, y+5.8, {align:"right"});
+// ── Callout box ───────────────────────────────────────────────────
+function _callout(doc,x,y,w,text,type="info"){
+  const cols={info:T.primary,success:T.success,warning:T.warning,danger:T.danger};
+  const col=cols[type]||T.primary;
+  const lines=doc.splitTextToSize(text,w-16);
+  const h=Math.max(14,lines.length*5.5+8);
+  fc(doc,col[0],col[1],col[2]);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
+  rr(doc,x,y,w,h,3,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  dc(doc,...col);lw(doc,0.25);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
+  doc.rect(x,y,3,h,"F");rr(doc,x,y,3,h,1.5,"F");
+  font(doc,8,"normal");tc(doc,...T.sub);
+  lines.forEach((l,i)=>doc.text(l,x+8,y+7+(i*5.5)));
+  return y+h+6;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// SESSION PDF — v2 Professional Redesign
-// Elite: full multi-page report | Non-elite: preview + upsell
-// ─────────────────────────────────────────────────────────────────
+// ── Zone risk card ────────────────────────────────────────────────
+function _zoneCard(doc,x,y,w,title,region,risk,desc,mlist,isAr){
+  const col=_riskColor(risk);
+  const lines=doc.splitTextToSize(desc,w-44);
+  const h=Math.max(52,lines.length*5+36);
+  // Card
+  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...col);lw(doc,0.3);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  // Left accent
+  fc(doc,...col);doc.rect(x,y,3,h,"F");rr(doc,x,y,3,h,1.5,"F");
+  // Risk badge circle
+  fc(doc,...col);doc.circle(x+18,y+18,12,"F");
+  font(doc,10,"bold");tc(doc,...T.card);
+  doc.text(`${risk}%`,x+18,y+21,{align:"center"});
+  // Title
+  font(doc,10,"bold");tc(doc,...T.ink);doc.text(title,x+36,y+13);
+  font(doc,7.5,"bold");tc(doc,...T.primary);doc.text(region,x+36,y+20);
+  // Risk bar
+  const bx=x+36,bw2=w*0.55;
+  fc(doc,...T.borderSoft);rr(doc,bx,y+24,bw2,4,2,"F");
+  fc(doc,...col);rr(doc,bx,y+24,Math.max(bw2*(risk/100),3),4,2,"F");
+  font(doc,7,"bold");tc(doc,...col);
+  doc.text(_riskLabel(risk,isAr),x+36+bw2+3,y+27.5);
+  // Description
+  font(doc,7.5,"normal");tc(doc,...T.sub);
+  lines.forEach((l,i)=>doc.text(l,x+7,y+34+(i*5)));
+  // Metrics source
+  font(doc,6.5,"bold");tc(doc,...T.light);
+  doc.text(`Metrics: ${mlist}`,x+7,h+y-4);
+  return y+h+8;
+}
+
+// ── Next step card ────────────────────────────────────────────────
+function _stepCard(doc,x,y,w,idx,title,score,steps,isAr){
+  const col=_scoreColor(score);
+  const h=44;
+  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...T.border);lw(doc,0.2);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  fc(doc,...col);doc.rect(x,y,3,h,"F");rr(doc,x,y,3,h,1.5,"F");
+  // Number circle
+  fc(doc,...col);doc.circle(x+14,y+14,8,"F");
+  font(doc,9,"bold");tc(doc,...T.card);doc.text(String(idx),x+14,y+17.5,{align:"center"});
+  // Title + score badge
+  font(doc,9.5,"bold");tc(doc,...T.ink);doc.text(title,x+28,y+11);
+  const sbadge=`Score ${Math.round(score)}`;
+  const sw=doc.getTextWidth(sbadge)+6;
+  fc(doc,col[0],col[1],col[2]);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
+  rr(doc,x+w-sw-4,y+5,sw,8,2,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  font(doc,6.5,"bold");tc(doc,...col);doc.text(sbadge,x+w-sw/2-4,y+10.5,{align:"center"});
+  // Steps
+  font(doc,7.5,"normal");tc(doc,...T.sub);
+  steps.slice(0,3).forEach((s,i)=>{
+    doc.text(`${i+1}.`,x+28,y+21+(i*7));
+    doc.text(s,x+34,y+21+(i*7));
+  });
+  return y+h+8;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SESSION PDF v3 — Elite: full premium report | Non-Elite: preview
+// ═══════════════════════════════════════════════════════════════════
 export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[] }) {
   const { jsPDF } = await import("jspdf");
   const isAr  = lang==="ar";
-  const tier  = profile?.tier||session.tier||"standard";
+  const tier  = profile?.tier||session?.tier||"standard";
   const isElite = tierAtLeast(tier,"elite");
   const isPro   = !isElite && tierAtLeast(tier,"professional");
   const doc   = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
-  const tierColor = isElite?P.emerald:isPro?[14,165,233]:[99,102,241];
+  const tierCol = isElite?T.success:isPro?T.cyan:T.indigo;
   const avg     = Math.round(session.avg_score||0);
   const dur     = session.duration_s||session.duration_sec||0;
-  const goodPct = session.good_pct||0;
-  const gradeC  = _gc(avg);
-  const gradeL  = _gl(avg,isAr);
+  const goodPct = Math.round(session.good_pct||0);
+  const gradeC  = _scoreColor(avg);
+  const gradeL  = _scoreLabel(avg,isAr);
   const metrics = session.metrics||{};
   const hist    = session.score_history||[];
   const aiText  = session.ai_tip||session.ai_insight||session.claude_analysis||"";
@@ -929,11 +1074,11 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const impTip  = session.improvement_tip||"";
   const name    = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
   const email   = user?.email||"";
-  const dateStr = new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});
+  const dateStr = _fmtDate(session.created_at||new Date(),isAr);
 
   const realIndex = (()=>{
     if(sessionIndex) return sessionIndex;
-    if(allSessions.length){const idx=allSessions.findIndex(s=>(s.id||s.session_id)===(session.id||session.session_id));if(idx>=0)return allSessions.length-idx;}
+    if(allSessions.length){const i=allSessions.findIndex(s=>(s.id||s.session_id)===(session.id||session.session_id));if(i>=0)return allSessions.length-i;}
     return 1;
   })();
 
@@ -942,294 +1087,224 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     .map(([k,v])=>{
       const sc=typeof v==="number"?v:(v?.score??100);
       const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||v?.label||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-      return {key:k,sc,lbl,value:v?.value,unit:v?.unit||""};
+      return{key:k,sc,lbl,value:v?.value,unit:v?.unit||""};
     }).sort((a,b)=>a.sc-b.sc);
 
-  // ── NON-ELITE: 2-page locked preview + upsell ─────────────────
-  if (!isElite) {
-    // PAGE 1 — Preview
-    _coverHeader(doc,W,ml,mr,tier,tierColor,isAr,name,realIndex,dateStr);
-    let y=62;
+  // ── NON-ELITE: Premium preview + upsell ───────────────────────
+  if(!isElite){
+    // COVER
+    _coverHdr(doc,W,ml,H,tier,tierCol,name,realIndex,dateStr);
+    let y=80;
 
-    // Session title row
-    doc.setFontSize(14); doc.setTextColor(...P.ink); doc.setFont("helvetica","bold");
-    doc.text(isAr?`جلسة رقم ${realIndex}`:`Session #${realIndex}`, ml, y);
-    doc.setFontSize(8.5); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-    doc.text(_fmtDate(session.created_at,isAr), W-mr, y, {align:"right"});
-    y+=10; _hr(doc,ml,y,cw); y+=8;
+    // Title block
+    font(doc,F.h1,"bold");tc(doc,...T.ink);
+    doc.text(isAr?"تقرير تحليل الوضعية":"Posture Analysis Report",ml,y);
+    font(doc,F.body,"normal");tc(doc,...T.muted);
+    doc.text(isAr?`${name} · ${dateStr}`:`${name} · ${dateStr}`,ml,y+8); y+=18;
+    divider(doc,ml,y,cw); y+=12;
 
-    // Score ring + stat pills row
-    const ringCX=ml+22, ringCY=y+22, ringR=18;
-    _scoreRing(doc,ringCX,ringCY,ringR,avg,gradeL,isAr);
-    // Stat pills
-    const pills=[[`${goodPct}%`,isAr?"وضعية جيدة":"Good posture",P.emerald],[String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",P.amber],[_fmtDur(dur),isAr?"المدة":"Duration",P.blue500||[59,130,246]]];
-    pills.forEach(([v,l,col],i)=>{
-      _statPill(doc,ml+50+i*46,y+8,42,26,v,l,col);
-    });
-    y+=54; _hr(doc,ml,y,cw); y+=10;
+    // Score ring + stat cards row
+    _ring(doc,ml+22,y+22,18,avg,isAr);
+    [[`${goodPct}%`,isAr?"جيدة":"Good",T.success],[String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",T.warning],[_fmtDur(dur),isAr?"المدة":"Duration",T.primary]]
+      .forEach(([v,l,col],i)=>_statCard(doc,ml+54+i*50,y+2,44,32,v,l,col));
+    y+=56; divider(doc,ml,y,cw); y+=12;
 
     // Sparkline
     if(hist.length>2){
-      y=_sectionHead(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",gradeC);
-      doc.setFillColor(245,248,252); doc.roundedRect(ml,y,cw,32,3,3,"F");
-      _drawSparkline(doc,hist,ml+8,y+3,cw-16,26,gradeC);
-      y+=38;
+      y=_secHead(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"خلال الجلسة":"During session",gradeC);
+      fc(doc,...T.bg);rr(doc,ml,y,cw,36,4,"F");dc(doc,...T.border);lw(doc,0.2);rr(doc,ml,y,cw,36,4,"S");lw(doc,0.3);
+      _spark(doc,hist,ml+10,y+5,cw-20,26,gradeC);
+      y+=44;
     }
 
-    // Top 3 metrics (preview)
-    if(metricEntries.length>0){
-      y=_sectionHead(doc,ml,y,isAr?"أبرز مقاييس الوضعية":"Key Metrics",gradeC);
-      metricEntries.slice(0,3).forEach(({lbl,value,unit,sc})=>{
-        if(y>H-55) return;
-        _metricCard(doc,ml,y,cw,lbl,value,unit,sc,isAr); y+=22;
-      });
-      if(metricEntries.length>3){
-        doc.setFillColor(241,245,249); doc.roundedRect(ml,y,cw,12,2,2,"F");
-        doc.setFontSize(8.5); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-        doc.text(`+ ${metricEntries.length-3} ${isAr?"مقاييس أخرى — ترقّي للـ Elite للتفاصيل الكاملة":"more metrics — upgrade to Elite for full breakdown"}`, ml+cw/2,y+8,{align:"center"});
-        y+=16;
-      }
+    // Top 3 metrics
+    y=_secHead(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"الأسوأ أداءً":"Worst performing",gradeC);
+    metricEntries.slice(0,3).forEach(({lbl,value,unit,sc})=>{
+      if(y>H-55)return;
+      _metCard(doc,ml,y,cw,lbl,value,unit,sc,isAr);y+=24;
+    });
+    if(metricEntries.length>3){
+      fc(doc,...T.bg);rr(doc,ml,y,cw,12,2,"F");
+      font(doc,7.5,"normal");tc(doc,...T.muted);
+      doc.text(`+ ${metricEntries.length-3} ${isAr?"مقاييس أخرى":"more metrics"} — ${isAr?"رقّي لـ Elite":"upgrade to Elite"}`,ml+cw/2,y+8,{align:"center"});
+      y+=16;
     }
 
-    // Footer row
-    doc.setFillColor(241,245,249); doc.rect(0,H-18,W,18,"F");
-    _hr(doc,0,H-18,W,200,210,220);
-    doc.setFontSize(7.5); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-    doc.text(`${name} · ${email}`, ml, H-9);
-    doc.text(`Session ID: ${(session.session_id||session.id||"—").slice(0,16)}`, W-mr, H-9, {align:"right"});
-
-    // PAGE 2 — Elite upsell
+    // PAGE 2 — Dark premium upsell
     doc.addPage();
-    doc.setFillColor(15,23,42); doc.rect(0,0,W,H,"F");
-    // Gradient accent at top
-    doc.setFillColor(16,185,129); doc.rect(0,0,W,4,"F");
-    _drawLogo(doc,W/2-14,52,28);
-    doc.setFontSize(24); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-    doc.text(isAr?"افتح تقريرك الكامل":"Unlock Your Full Report", W/2, 98, {align:"center"});
-    doc.setFontSize(10); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
-    doc.text(isAr?"رقّي لـ Elite وشوف:":"Upgrade to Corvus Elite to access:", W/2, 110, {align:"center"});
+    fc(doc,...T.ink);doc.rect(0,0,W,H,"F");
+    fc(doc,...T.primary);doc.rect(0,0,W,3,"F");
+    // Geometric decorations
+    fc(doc,...T.primary);doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
+    doc.circle(W*0.85,H*0.25,70,"F");doc.circle(W*0.1,H*0.75,50,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    _logo(doc,W/2-13,44,26);
+    font(doc,F.display,"bold");tc(doc,...T.card);
+    doc.text(isAr?"افتح تقريرك الكامل":"Unlock Your Full Report",W/2,90,{align:"center"});
+    font(doc,F.body,"normal");tc(doc,148,163,184);
+    doc.text(isAr?"رقّي لـ Elite للوصول لكل المزايا":"Upgrade to Elite for the complete experience",W/2,100,{align:"center"});
+    divider(doc,ml+20,108,cw-40,[55,65,81]);
 
     const feats=[
-      ["📊",isAr?"تفاصيل كل المقاييس":"Complete Metrics Breakdown",isAr?"كل مقاييس الوضعية مع الزوايا والتوجيهات":"All posture metrics with scores, angles & trends"],
-      ["🤖",isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"سرد AI مخصص لجلستك":"Personalised AI-generated narrative for your session"],
-      ["🗺️",isAr?"خريطة مناطق الألم":"Spinal Zone Risk Map",isAr?"تقييم مخاطر الرقبة / الصدر / القطن":"Cervical / Thoracic / Lumbar risk assessment"],
-      ["🎯",isAr?"خطوات عملية":"Prioritised Next Steps",isAr?"3 إجراءات مخصصة من أسوأ مقاييسك":"3 tailored actions from your worst metrics"],
-      ["🩺",isAr?"PDF سريري":"Clinical PDF",isAr?"تقرير جاهز للطبيب الفيزيائي":"Share a physiotherapist-ready report with your doctor"],
+      [T.success,isAr?"تفاصيل كل المقاييس":"Complete Metrics Breakdown",isAr?"كل مقاييس الوضعية بالزوايا والتوصيات":"All posture metrics with angles, trends & recommendations"],
+      [T.primary,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"سرد AI مخصص لجلستك":"Personalised AI-generated clinical narrative"],
+      [T.warning,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"تقييم الرقبة / الصدر / القطن":"Cervical · Thoracic · Lumbar risk assessment"],
+      [T.cyan,isAr?"الخطوات العملية":"Prioritised Next Steps",isAr?"3 إجراءات مخصصة بناءً على بياناتك":"3 tailored actions from your worst metrics"],
+      [T.purple,isAr?"PDF سريري":"Clinical PDF",isAr?"تقرير جاهز للطبيب أو الأخصائي":"Physiotherapist-ready report with medical detail"],
     ];
-    let fy=124;
-    feats.forEach(([icon,title,desc])=>{
-      doc.setFillColor(26,36,56); doc.roundedRect(ml,fy,cw,22,3,3,"F");
-      doc.setDrawColor(45,55,75); doc.setLineWidth(0.3); doc.roundedRect(ml,fy,cw,22,3,3,"S");
-      doc.setFontSize(13); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-      doc.text(icon,ml+8,fy+14.5);
-      doc.setFontSize(9.5); doc.setTextColor(248,250,252); doc.setFont("helvetica","bold");
-      doc.text(title,ml+20,fy+10);
-      doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-      doc.text(desc,ml+20,fy+17);
-      fy+=26;
+    let fy=118;
+    feats.forEach(([col,title,desc])=>{
+      fc(doc,...col);doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
+      rr(doc,ml,fy,6,22,3,"F");
+      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      fc(doc,...col);rr(doc,ml,fy,6,22,3,"F");
+      font(doc,9.5,"bold");tc(doc,...T.card);doc.text(title,ml+12,fy+9);
+      font(doc,7.5,"normal");tc(doc,100,116,139);doc.text(desc,ml+12,fy+17);
+      fy+=28;
     });
-    doc.setFillColor(...P.emerald); doc.roundedRect(ml,fy+6,cw,16,3,3,"F");
-    doc.setFontSize(11); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-    doc.text("postureai-pro-omega-nine.vercel.app → Upgrade Now", W/2, fy+16.5, {align:"center"});
+    // CTA button
+    fy+=4;
+    fc(doc,...T.success);rr(doc,ml,fy,cw,16,4,"F");
+    font(doc,10,"bold");tc(doc,...T.card);
+    doc.text("postureai-pro-omega-nine.vercel.app → Upgrade to Elite",W/2,fy+10.5,{align:"center"});
 
-    const totalPagesN=doc.internal.getNumberOfPages();
-    for(let p=1;p<=totalPagesN;p++){doc.setPage(p);_pageFooter(doc,W,ml,mr,H,p,totalPagesN,name);}
+    const tot=doc.internal.getNumberOfPages();
+    for(let p=1;p<=tot;p++){doc.setPage(p);_ftr(doc,W,ml,mr,H,p,tot,name);}
     const fn=`Corvus_Session${realIndex}_${new Date().toISOString().slice(0,10)}.pdf`;
-    doc.save(fn); return fn;
+    doc.save(fn);return fn;
   }
 
-  // ══════════════════════════════════════════════════════════════
-  // ELITE PDF — Page 1: Cover + Score Summary
-  // ══════════════════════════════════════════════════════════════
-  _coverHeader(doc,W,ml,mr,tier,tierColor,isAr,name,realIndex,dateStr);
-  let y=62;
+  // ═══════════════════════════════════════════════════════════════
+  // ELITE FULL REPORT — Page 1: Cover Summary
+  // ═══════════════════════════════════════════════════════════════
+  _coverHdr(doc,W,ml,H,tier,tierCol,name,realIndex,dateStr);
+  let y=80;
 
-  // Session title
-  doc.setFontSize(15); doc.setTextColor(...P.ink); doc.setFont("helvetica","bold");
-  doc.text(isAr?`جلسة رقم ${realIndex}`:`Session #${realIndex}`, ml, y);
-  doc.setFontSize(8.5); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-  doc.text(_fmtDate(session.created_at,isAr), W-mr, y, {align:"right"});
-  y+=10; _hr(doc,ml,y,cw); y+=9;
+  // Report title
+  font(doc,F.h1,"bold");tc(doc,...T.ink);
+  doc.text(isAr?"تقرير وضعية احترافي":"Professional Posture Report",ml,y);
+  font(doc,F.body,"normal");tc(doc,...T.muted);
+  doc.text(`${name} · ${email||"—"} · ${dateStr}`,ml,y+8); y+=18;
+  divider(doc,ml,y,cw); y+=12;
 
-  // Score ring + stats
-  const ringCX=ml+24, ringCY=y+24, ringR=20;
-  _scoreRing(doc,ringCX,ringCY,ringR,avg,gradeL,isAr);
-  const pills2=[[`${goodPct}%`,isAr?"وضعية جيدة":"Good posture",P.emerald],[String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",P.amber],[_fmtDur(dur),isAr?"المدة":"Duration",[59,130,246]],[`#${realIndex}`,isAr?"الجلسة":"Session",[99,102,241]]];
-  pills2.forEach(([v,l,col],i)=>{ _statPill(doc,ml+56+i*36,y+8,32,24,v,l,col); });
-  y+=62; _hr(doc,ml,y,cw); y+=10;
+  // Score ring + 4 stat cards
+  _ring(doc,ml+22,y+22,19,avg,isAr);
+  [[`${goodPct}%`,isAr?"وضعية جيدة":"Good posture",T.success,""],
+   [String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",T.warning,""],
+   [_fmtDur(dur),isAr?"المدة":"Duration",T.primary,""],
+   [`#${realIndex}`,isAr?"الجلسة":"Session",T.indigo,""]]
+    .forEach(([v,l,col,s],i)=>_statCard(doc,ml+54+i*38,y+2,34,30,v,l,col,s));
+  y+=58; divider(doc,ml,y,cw); y+=12;
 
-  // Sparkline
+  // Sparkline section
   if(hist.length>2){
-    y=_sectionHead(doc,ml,y,isAr?"مسار النقاط خلال الجلسة":"Score Timeline — Full Session",gradeC);
-    doc.setFillColor(245,248,252); doc.roundedRect(ml,y,cw,36,3,3,"F");
-    _drawSparkline(doc,hist,ml+10,y+4,cw-20,28,gradeC);
-    y+=42;
+    y=_secHead(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"الجلسة الكاملة":"Full session recording",gradeC);
+    fc(doc,...T.bg);rr(doc,ml,y,cw,40,4,"F");dc(doc,...T.border);lw(doc,0.2);rr(doc,ml,y,cw,40,4,"S");lw(doc,0.3);
+    _spark(doc,hist,ml+12,y+6,cw-24,28,gradeC);
+    y+=48;
   }
 
-  // Pain/improvement alerts
-  if(painSum){
-    doc.setFillColor(254,243,199); doc.roundedRect(ml,y,cw,12,2,2,"F");
-    doc.setDrawColor(245,158,11); doc.setLineWidth(0.3); doc.roundedRect(ml,y,cw,12,2,2,"S"); doc.setLineWidth(0.3);
-    doc.setFillColor(245,158,11); doc.rect(ml,y,3,12,"F");
-    doc.setFontSize(8.5); doc.setTextColor(120,60,10); doc.setFont("helvetica","bold");
-    doc.text(painSum,ml+6,y+8.5); y+=16;
-  }
-  if(impTip){
-    doc.setFillColor(220,252,231); doc.roundedRect(ml,y,cw,12,2,2,"F");
-    doc.setDrawColor(16,185,129); doc.setLineWidth(0.3); doc.roundedRect(ml,y,cw,12,2,2,"S"); doc.setLineWidth(0.3);
-    doc.setFillColor(16,185,129); doc.rect(ml,y,3,12,"F");
-    doc.setFontSize(8.5); doc.setTextColor(20,83,45); doc.setFont("helvetica","bold");
-    doc.text(impTip,ml+6,y+8.5); y+=16;
-  }
+  // Callouts
+  if(painSum){y=_callout(doc,ml,y,cw,painSum,"warning");}
+  if(impTip) {y=_callout(doc,ml,y,cw,impTip,"success");}
 
-  // Top 4 metrics preview on page 1
+  // Top 4 metrics on page 1
   if(metricEntries.length>0){
-    y=_sectionHead(doc,ml,y,isAr?"أبرز مقاييس الوضعية":"Key Posture Metrics — Worst First",gradeC);
+    y=_secHead(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"مرتبة من الأسوأ":"Sorted worst first",gradeC);
     metricEntries.slice(0,4).forEach(({lbl,value,unit,sc})=>{
-      if(y>H-55) return;
-      _metricCard(doc,ml,y,cw,lbl,value,unit,sc,isAr); y+=22;
+      if(y>H-48)return;
+      _metCard(doc,ml,y,cw,lbl,value,unit,sc,isAr);y+=24;
     });
   }
 
-  // Footer page 1 info strip
-  doc.setFillColor(241,245,249); doc.rect(0,H-18,W,18,"F");
-  _hr(doc,0,H-18,W,200,210,220);
-  doc.setFontSize(7.5); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-  doc.text(`${name} · ${email}`, ml, H-9);
-  doc.text(`Company: ${profile?.company||"—"} · ID: ${(session.session_id||session.id||"—").slice(0,14)}`, W-mr, H-9, {align:"right"});
-
-  // ══════════════════════════════════════════════════════════════
-  // ELITE PAGE 2 — Full Metrics + Zonal Pain Map
-  // ══════════════════════════════════════════════════════════════
-  doc.addPage(); _pageHeader(doc,W,ml,mr,tier,tierColor,isAr); y=22;
-  y=_sectionHead(doc,ml,y,isAr?"تفاصيل كافة مقاييس الوضعية":"Complete Posture Metrics Breakdown",gradeC);
+  // ═══════════════════════════════════════════════════════════════
+  // ELITE PAGE 2 — All Metrics + Zonal Map
+  // ═══════════════════════════════════════════════════════════════
+  doc.addPage();_hdr(doc,W,ml,mr,isAr?"تفاصيل المقاييس":"Metrics Detail");y=22;
+  y=_secHead(doc,ml,y,isAr?"جميع مقاييس الوضعية":"Complete Metrics Breakdown",isAr?"مرتبة من الأسوأ":"All measurements · worst first",gradeC);
 
   metricEntries.forEach(({lbl,value,unit,sc})=>{
-    if(y>H-40){doc.addPage();_pageHeader(doc,W,ml,mr,tier,tierColor,isAr);y=22;}
-    _metricCard(doc,ml,y,cw,lbl,value,unit,sc,isAr); y+=22;
+    if(y>H-38){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued");y=22;}
+    _metCard(doc,ml,y,cw,lbl,value,unit,sc,isAr);y+=24;
   });
 
-  // Zonal Pain Map
-  y+=6; if(y>H-90){doc.addPage();_pageHeader(doc,W,ml,mr,tier,tierColor,isAr);y=22;}
-  y=_sectionHead(doc,ml,y,isAr?"خريطة مناطق الألم الوظيفي":"Spinal Zone Risk Map",P.red);
-  doc.setFontSize(8); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-  doc.text(isAr?"مشتق من مقاييس الجلسة — ليس تشخيصاً طبياً":"Derived from session metrics — not a medical diagnosis",ml,y); y+=10;
-
-  const zones=[
-    {key:"cervical",en:"Cervical (Neck)",ar:"عنق الرحم (الرقبة)",metrics:"Neck lean, FHP, head tilt & yaw"},
-    {key:"thoracic",en:"Thoracic (Upper Back)",ar:"الصدر (أعلى الظهر)",metrics:"Shoulder balance, rounded shoulders, spine lean"},
-    {key:"lumbar",en:"Lumbar (Lower Back)",ar:"القطن (أسفل الظهر)",metrics:"Spine alignment, hip angle, trunk lean"},
-  ];
+  // Zonal map
+  y+=6;if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map");y=22;}
+  y=_secHead(doc,ml,y,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"مشتق من مقاييس الجلسة":"Derived from session metrics — not a diagnosis",T.danger);
   const zonal=_zonalRisk(metrics);
-  zones.forEach(({key,en,ar,metrics:mlist})=>{
-    if(y>H-40){doc.addPage();_pageHeader(doc,W,ml,mr,tier,tierColor,isAr);y=22;}
-    const risk=zonal[key]||0;
-    const rcol=_riskColor(risk);
-    const rlbl=_riskLabel(risk,isAr);
-    // Card
-    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,24,3,3,"F");
-    doc.setFillColor(...rcol); doc.roundedRect(ml,y,3,24,3,3,"F"); doc.rect(ml+1.5,y,1.5,24,"F");
-    // Risk % badge
-    doc.setFillColor(...rcol); doc.roundedRect(ml+6,y+5,18,14,2,2,"F");
-    doc.setFontSize(9.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-    doc.text(`${risk}%`,ml+15,y+14,{align:"center"});
-    // Zone name
-    doc.setFontSize(10); doc.setTextColor(...P.ink); doc.setFont("helvetica","bold");
-    doc.text(isAr?ar:en,ml+28,y+10);
-    doc.setFontSize(7.5); doc.setTextColor(...P.muted); doc.setFont("helvetica","normal");
-    doc.text(mlist,ml+28,y+17.5);
-    // Bar
-    const bx=ml+cw*0.5, bw2=cw*0.46;
-    doc.setFillColor(...P.border); doc.roundedRect(bx,y+9.5,bw2,5,1.5,1.5,"F");
-    doc.setFillColor(...rcol); doc.roundedRect(bx,y+9.5,Math.max(bw2*(risk/100),3),5,1.5,1.5,"F");
-    doc.setFontSize(8); doc.setTextColor(...rcol); doc.setFont("helvetica","bold");
-    doc.text(rlbl,W-mr-3,y+20,{align:"right"});
-    y+=28;
+  [
+    {k:"cervical",en:"Cervical (Neck)",ar:"عنق الرحم",r:"C1–C7",desc:"Head position, neck lean, FHP, and rotational deviation. Risk elevation correlates with cervical disc load and potential tension-type headache.",m:"Neck Lean, FHP, Head Tilt, Head Yaw"},
+    {k:"thoracic",en:"Thoracic (Upper Back)",ar:"الصدر",r:"T1–T12",desc:"Shoulder symmetry, rounded shoulders, and upper spinal curvature. Chronic elevation indicates thoracic kyphosis risk or rotator cuff impingement.",m:"Shoulder Balance, Rounded Shoulders, Spine Lean"},
+    {k:"lumbar",en:"Lumbar (Lower Back)",ar:"القطن",r:"L1–S1",desc:"Sagittal and coronal spinal alignment, hip angle, and pelvic positioning. Elevated risk may indicate lumbar disc load asymmetry or flexion intolerance.",m:"Spine Alignment, Hip Angle, Trunk Lean"},
+  ].forEach(({k,en,ar,r,desc,m})=>{
+    if(y>H-68){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map");y=22;}
+    y=_zoneCard(doc,ml,y,cw,isAr?ar:en,r,zonal[k]||0,desc,m,isAr);
   });
 
-  // ══════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
   // ELITE PAGE 3 — AI Analysis + Next Steps + Session Stats
-  // ══════════════════════════════════════════════════════════════
-  doc.addPage(); _pageHeader(doc,W,ml,mr,tier,tierColor,isAr); y=22;
+  // ═══════════════════════════════════════════════════════════════
+  doc.addPage();_hdr(doc,W,ml,mr,isAr?"تحليل AI":"AI Analysis");y=22;
 
-  // AI Narrative
+  // AI narrative
   if(aiText){
-    y=_sectionHead(doc,ml,y,isAr?"🤖 تحليل Corvus AI":"🤖 Corvus AI Analysis",[59,130,246]);
-    doc.setFillColor(241,245,249); doc.roundedRect(ml,y,cw,8,2,2,"F");
-    // AI text body
-    y+=10;
-    doc.setFontSize(9); doc.setTextColor(...P.sub); doc.setFont("helvetica","normal");
+    y=_secHead(doc,ml,y,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"مولّد خصيصاً لجلستك":"Generated specifically for this session",T.primary);
+    fc(doc,...T.bg);rr(doc,ml,y,cw,8,2,"F");y+=10;
     const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-8);
-    aiLines.forEach(line=>{
-      if(y>H-30){doc.addPage();_pageHeader(doc,W,ml,mr,tier,tierColor,isAr);y=22;}
-      doc.text(line,ml+4,y); y+=5.5;
+    font(doc,F.body,"normal");tc(doc,...T.sub);
+    aiLines.forEach(l=>{
+      if(y>H-30){doc.addPage();_hdr(doc,W,ml,mr,"AI Analysis");y=22;}
+      doc.text(l,ml+4,y);y+=5.5;
     });
-    y+=8;
+    y+=10;
   }
 
-  // Next Steps
-  if(y>H-90){doc.addPage();_pageHeader(doc,W,ml,mr,tier,tierColor,isAr);y=22;}
-  y=_sectionHead(doc,ml,y,isAr?"🎯 الخطوات التالية":"🎯 Prioritised Next Steps",P.emerald);
+  // Next steps
+  if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps");y=22;}
+  y=_secHead(doc,ml,y,isAr?"الخطوات العملية المقترحة":"Prioritised Next Steps",isAr?"بناءً على أسوأ نقاط الأداء":"Based on your worst-performing metrics",T.success);
 
-  const nextStepMap={
-    neck_lean:["Raise your monitor so the top edge is at eye level","Tuck chin slightly — imagine a string pulling the crown of your head up","Set a posture reminder every 20 min"],
-    neck_lean_side:["Ensure screen is directly in front of you","Tuck chin and retract head over shoulders","Use a cervical pillow at night"],
-    head_tilt:["Adjust chair height so feet are flat","Level your monitor or laptop stand","Check for monitor glare causing compensations"],
-    head_yaw:["Position monitor directly in front","Move secondary screen closer to centre","Take a 2-min stretch break every 30 min"],
-    fhp:["Pull head back until ears are over shoulders","Raise monitor 3-5cm","Chin tucks: 10 reps × 3 sets daily"],
-    fhp_side:["Bring ear directly above shoulder","Raise screen to reduce forward lean","Strengthen deep neck flexors"],
-    shoulder:["Adjust armrests to equal height","Check bag carry habits outside work","Shrug and drop shoulders 10 reps"],
-    spine_lean:["Engage lumbar support fully","Sit back — not on the edge of the chair","Core bracing: 30s hold, 5 reps daily"],
-    spine_align:["Align ear, shoulder, hip in one vertical line","Adjust seat depth so knees are at 90°","Walk 5 min every hour"],
-    rounded:["Pull shoulder blades together and down","Doorway chest stretch 2× daily","Reduce forward arm reach at keyboard"],
-    elbow:["Lower keyboard so elbows are at 90-100°","Position keyboard close to body","Take wrist breaks every 45 min"],
-    monitor:["Raise/lower monitor so top is at eye level","Use a laptop stand + external keyboard","Reduce neck flexion by adjusting chair tilt"],
-    distance:["Position screen 50-80cm from eyes","Increase font size to reduce squinting","20-20-20 rule: look 20ft away every 20 min"],
-    trunk_lean:["Engage core, sit back in chair","Use full lumbar support","Avoid leaning forward when typing"],
-    hip_angle:["Adjust seat height so hips are at 90°","Feet flat on floor or use footrest","Stand and walk every 45 min"],
-    knee_angle:["Adjust seat depth: 2-3 fingers between knee and seat edge","Use footrest if feet don't reach floor","Hip flexor stretch 30s each side daily"],
+  const NXT={
+    neck:["Raise monitor so top edge aligns with eye level","Tuck chin gently — ear over shoulder","Set a posture alert every 20 min"],
+    neck_lean:["Raise monitor so top edge aligns with eye level","Tuck chin gently — ear over shoulder","Set a posture alert every 20 min"],
+    yaw:["Centre monitor directly in front","Avoid sustained head rotation to secondary screen","Chin tucks: 10 reps × 3 sets daily"],
+    dist:["Maintain 50–70cm from screen","Increase font size to avoid forward lean","20-20-20: look 20ft away every 20 min"],
+    posture:["Sit back fully against lumbar support","Feet flat, knees at 90°","Take a 2-min stand break every 45 min"],
+    shoulder:["Adjust armrests to equal height","Roll shoulders back 10 reps × 3 sets","Doorway chest stretch 2× daily"],
+    spine:["Align ear, shoulder, hip vertically","Use lumbar roll or support cushion","Core brace hold 30s × 5 reps daily"],
+    rounded:["Retract shoulder blades together and down","Band pull-aparts 15 reps × 3 sets","Pec stretch in doorway 30s × 2 daily"],
+    elbow:["Lower keyboard so elbows rest at 90°","Keep keyboard close to body","Wrist break every 45 min"],
+    monitor:["Top of screen at eye level","Use laptop stand + external keyboard","Reduce neck flexion with tray adjustment"],
+    distance:["Screen 50-80cm from eyes","Larger font = less squinting = less lean","20-20-20 rule every 20 min"],
+    default:["Take 2-min stretch breaks every 30 min","Roll shoulders backward 5 times","Stand and walk 5 min per hour"],
   };
 
   metricEntries.slice(0,3).forEach(({key,lbl,sc},idx)=>{
-    if(y>H-50){doc.addPage();_pageHeader(doc,W,ml,mr,tier,tierColor,isAr);y=22;}
-    const steps=nextStepMap[key]||["Reduce strain on this area","Take regular movement breaks","Consult a physiotherapist if persistent"];
-    const col=_gc(sc);
-    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,36,3,3,"F");
-    doc.setFillColor(...col); doc.roundedRect(ml,y,3,36,3,3,"F"); doc.rect(ml+1.5,y,1.5,36,"F");
-    // Number badge
-    doc.setFillColor(...col); doc.roundedRect(ml+6,y+3,12,12,2,2,"F");
-    doc.setFontSize(9); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-    doc.text(String(idx+1),ml+12,y+11,{align:"center"});
-    // Title
-    doc.setFontSize(9.5); doc.setTextColor(...P.ink); doc.setFont("helvetica","bold");
-    doc.text(`${lbl} — Score: ${Math.round(sc)}`,ml+22,y+10);
-    // Steps
-    doc.setFontSize(8); doc.setTextColor(...P.sub); doc.setFont("helvetica","normal");
-    steps.forEach((s,si)=>{ doc.text(`• ${s}`,ml+22,y+19+(si*7)); });
-    y+=40;
+    if(y>H-52){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps");y=22;}
+    const steps=NXT[key]||NXT.default;
+    y=_stepCard(doc,ml,y,cw,idx+1,lbl,sc,steps,isAr);
   });
 
   // Session stats table
-  if(y<H-70){
-    y+=6; if(y>H-70){doc.addPage();_pageHeader(doc,W,ml,mr,tier,tierColor,isAr);y=22;}
-    y=_sectionHead(doc,ml,y,isAr?"إحصائيات الجلسة":"Session Statistics",P.emerald);
-    [
-      [isAr?"النقاط الكلية":"Overall Score",`${avg}/100 — ${gradeL}`],
-      [isAr?"مدة الجلسة":"Duration",_fmtDur(dur)],
-      [isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`],
-      [isAr?"التنبيهات":"Alerts",String(session.alerts_count||0)],
-      [isAr?"وضع الكاميرا":"Camera Mode",session.mode||"laptop"],
-      [isAr?"المستوى":"Tier",tier.toUpperCase()],
-      [isAr?"تاريخ التقرير":"Report Date",dateStr],
-    ].forEach(([k,v],i)=>{ _infoRow(doc,ml,y,cw,k,v,i%2===0); y+=8.5; });
-  }
+  y+=4;if(y>H-72){doc.addPage();_hdr(doc,W,ml,mr,isAr?"إحصائيات":"Statistics");y=22;}
+  y=_secHead(doc,ml,y,isAr?"إحصائيات الجلسة":"Session Statistics","",gradeC);
+  fc(doc,...T.card);rr(doc,ml,y,cw,metricEntries.length>0?68:60,4,"F");
+  dc(doc,...T.border);lw(doc,0.2);rr(doc,ml,y,cw,68,4,"S");lw(doc,0.3);
+  [
+    [isAr?"النتيجة الكلية":"Overall Score",`${avg}/100 — ${gradeL}`],
+    [isAr?"المدة":"Duration",_fmtDur(dur)],
+    [isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`],
+    [isAr?"التنبيهات":"Alerts",String(session.alerts_count||0)],
+    [isAr?"وضع الكاميرا":"Camera Mode",(session.mode||"laptop").toUpperCase()],
+    [isAr?"المستوى":"Tier",tier.toUpperCase()],
+    [isAr?"تاريخ الجلسة":"Session Date",dateStr],
+    [isAr?"رقم الجلسة":"Session #",String(realIndex)],
+  ].forEach(([k,v],i)=>{_infoRow(doc,ml,y,cw,k,v,i%2===0);y+=8.5;});
 
   // Page numbers
-  const totalPg=doc.internal.getNumberOfPages();
-  for(let p=1;p<=totalPg;p++){doc.setPage(p);_pageFooter(doc,W,ml,mr,H,p,totalPg,name);}
-
-  const filename=`Corvus_Elite_Session${realIndex}_${new Date().toISOString().slice(0,10)}.pdf`;
-  doc.save(filename); return filename;
+  const tot2=doc.internal.getNumberOfPages();
+  for(let p=1;p<=tot2;p++){doc.setPage(p);_ftr(doc,W,ml,mr,H,p,tot2,name);}
+  const fn=`Corvus_Elite_Report_${realIndex}_${new Date().toISOString().slice(0,10)}.pdf`;
+  doc.save(fn);return fn;
 }
 
 
