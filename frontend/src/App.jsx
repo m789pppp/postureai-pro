@@ -3024,7 +3024,7 @@ export default function App(){
     }
   }
 
-  async function downloadPDF(sessionOverride){
+async function downloadPDF(sessionOverride){
     // Gated by canonical pdfDetail (tierQuality.js) — standard/basic have
     // pdfDetail:"none" and must not get a PDF, same rule enforced in
     // AIReports.jsx's exportPDF(). This was previously ungated here.
@@ -3039,6 +3039,47 @@ export default function App(){
     const gPctPDF=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
     const durS=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
 
+    // Tier gate — PDF locked for non-Pro/Elite
+    const isEliteTier = tierAtLeast(tier,"elite");
+    const isProTier   = tierAtLeast(tier,"professional");
+    if (!isProTier && !sessionOverride) {
+      addToast(isAr?"PDF متاح لباقة Pro وElite فقط — قم بالترقية":"PDF available on Pro & Elite — upgrade to download","warn");
+      setShowBilling(true);
+      return;
+    }
+    // Clinical PDF requires Elite
+    if (isClinical && !isEliteTier) {
+      addToast(isAr?"التقرير الطبي متاح لباقة Elite فقط":"Clinical PDF requires Elite tier","warn");
+      setShowBilling(true);
+      return;
+    }
+
+    if(!sessionOverride && hist.length===0){
+      addToast(isAr?"ابدأ جلسة أولاً لتنزيل PDF":"No session data yet","warn"); return;
+    }
+
+    // For Elite — auto-generate AI tip if not already present
+    let aiTip = la.ai_tip||la.ai_insight||la.claude_analysis||"";
+    if (isEliteTier && !sessionOverride && !aiTip && avg>0) {
+      try {
+        addToast(isAr?"🤖 Corvus AI يحلل جلستك...":"🤖 AI analysing your session...","info");
+        const { geminiAnalysis } = await import("./gemini.js");
+        const topMetrics = Object.entries(la.metrics||{})
+          .filter(([,v])=>v?.score!==undefined)
+          .sort(([,a],[,b])=>(a.score??100)-(b.score??100))
+          .slice(0,3)
+          .map(([k,v])=>`${k}: score ${Math.round(v.score)}, value ${v.value}${v.unit||""}`)
+          .join("; ");
+        aiTip = await geminiAnalysis(
+          `Posture session: score ${avg}/100, duration ${Math.round(durS/60)}min, ` +
+          `good posture ${gPctPDF}%, alerts ${alRef.current?.length||0}. ` +
+          `Worst metrics: ${topMetrics}. ` +
+          `Write a 2-3 sentence clinical-style posture analysis and personalised recommendation. ` +
+          `Be specific, professional, and actionable. No bullet points.`
+        );
+      } catch(e){ aiTip=""; }
+    }
+
     const sessionData = sessionOverride || {
       session_id: sessionId,
       avg_score: avg,
@@ -3049,8 +3090,7 @@ export default function App(){
       metrics: la.metrics||{},
       tier, mode,
       created_at: new Date(),
-      // AI fields for Elite PDF — populated from last analysis
-      ai_tip:          la.ai_tip||la.ai_insight||la.claude_analysis||"",
+      ai_tip:          aiTip,
       improvement_tip: la.improvement_tip||"",
       pain_summary:    la.pain_prediction?.minutes_to_pain < 90
         ? (isAr?`⚠️ توقع إزعاج خلال ${Math.round(la.pain_prediction.minutes_to_pain)} دقيقة`
@@ -3059,18 +3099,21 @@ export default function App(){
       pain_prediction: la.pain_prediction||null,
     };
 
-    if(!sessionOverride && hist.length===0){
-      addToast(isAr?"ابدأ جلسة أولاً لتنزيل PDF":"No session data yet","warn"); return;
-    }
+    addToast(isClinical
+      ? (isAr?"جاري إنشاء التقرير الطبي...":"Generating Clinical PDF...")
+      : (isAr?"جاري إنشاء الـ PDF...":"Generating PDF..."), "info");
 
-    addToast(isAr?"جاري إنشاء الـ PDF...":"Generating PDF...","info");
     try{
-      const { generateSessionPDF } = await import("./firebase.js");
-      const idx = sessionOverride
-        ? (userSessions.findIndex(s=>s.id===sessionOverride.id)+1 || userSessions.length)
-        : (userSessions.length + 1);
-      await generateSessionPDF({ session:sessionData, profile, user, lang, sessionIndex:idx });
-      addToast(isAr?"✅ تم تحميل الـ PDF":"✅ PDF downloaded","success");
+      const { generateSessionPDF, generateClinicalPDF } = await import("./firebase.js");
+      const fn = isClinical ? generateClinicalPDF : generateSessionPDF;
+      await fn({
+        session: sessionData,
+        profile, user, lang,
+        allSessions: userSessions,   // pass full list so index is correct
+      });
+      addToast(isClinical
+        ? (isAr?"✅ تم تحميل التقرير الطبي":"✅ Clinical PDF downloaded")
+        : (isAr?"✅ تم تحميل الـ PDF":"✅ PDF downloaded"), "success");
     }catch(err){
       console.error("PDF error:",err);
       addToast(isAr?`خطأ PDF: ${err.message}`:`PDF error: ${err.message}`,"error");
@@ -3615,6 +3658,7 @@ export default function App(){
         CalibrationWizard={CalibrationWizard} setCalibData={setCalibData}
         toast={addToast}
         downloadPDF={downloadPDF}
+        downloadClinicalPDF={(s)=>downloadPDF(s,true)}
         AccountSwitcher={AccountSwitcher}
         onSwitchAccount={handleSwitchAccount}
       />
@@ -3859,7 +3903,7 @@ export default function App(){
                   style={{flex:1,padding:"10px",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {isAr?"لوحة التحكم":"Dashboard"}
                 </button>
-                <button onClick={async ()=>{
+<button onClick={async ()=>{
                   // Same canonical gate as downloadPDF() — this button bypassed it
                   // entirely by calling generateSessionPDF() directly.
                   if(qualityFor(tier).pdfDetail === "none"){
@@ -3878,7 +3922,7 @@ export default function App(){
                         score_history: histRef.current||[],
                         metrics: lastAnalRef.current?.metrics||sessionResult.metrics||{},
                         ai_tip: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||sessionResult.ai_tip||"",
-                      },
+},
                       profile, user, lang,
                       sessionIndex: (userSessions.length||0)+1,
                     });
@@ -4762,7 +4806,7 @@ export default function App(){
               </button>
           }
           {histRef.current?.length>0&&(
-            <button onClick={async ()=>{
+<button onClick={async ()=>{
               // Same canonical gate — third direct generateSessionPDF() call that bypassed it.
               if(qualityFor(tier).pdfDetail === "none"){
                 addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");

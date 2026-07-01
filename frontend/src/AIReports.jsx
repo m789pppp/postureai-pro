@@ -326,17 +326,26 @@ This user score: ${avgScore}/100
       reportTitle: isAr ? `تقرير الأداء — ${profile?.name || ""}` : `Performance Report — ${profile?.name || "User"}`,
       profile, sessions, summaryText: summary, lang, pdfDetail,
     });
-    const w = window.open("", "_blank");
-    if (w) {
-      w.document.write(html);
-      w.document.close();
-      setTimeout(() => { w.print(); setPdfLoading(false); setExported(true); setTimeout(() => setExported(false), 3000); }, 600);
-    } else {
-      setPdfLoading(false);
-      setError(isAr
-        ? "المتصفح منع فتح نافذة جديدة. اسمح بالنوافذ المنبثقة لهذا الموقع وحاول مرة أخرى."
-        : "Your browser blocked the popup window. Please allow popups for this site and try again.");
-    }
+    // Use Blob URL to avoid popup blockers (window.open("","_blank") is blocked
+    // on most browsers unless triggered synchronously from a user gesture;
+    // Blob URL + <a download> works reliably everywhere including iOS Safari).
+    try {
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const blobUrl = URL.createObjectURL(blob);
+      const tab = window.open(blobUrl, "_blank");
+      if (tab) {
+        tab.onload = () => { tab.focus(); tab.print(); };
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+      } else {
+        // Popup blocked — trigger direct HTML download as fallback
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `Corvus_Report_${new Date().toISOString().slice(0,10)}.html`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      }
+      setPdfLoading(false); setExported(true); setTimeout(() => setExported(false), 3000);
+    } catch(e) { console.error("Export error:", e); setPdfLoading(false); }
   };
 
   const TABS = [
