@@ -1,6 +1,6 @@
 import { Component } from "react";
 
-const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "support@corvus.io";
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
 
 export class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }

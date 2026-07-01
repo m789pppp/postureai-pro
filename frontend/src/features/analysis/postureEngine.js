@@ -172,7 +172,9 @@ function angleBetween3D(u, v) {
  * @returns {number} degrees (0 = vertical, 90 = horizontal)
  */
 export function angleVert(p1, p2) {
+  if (!p1 || !p2 || !isFinite(p1.x) || !isFinite(p2.x)) return 0;
   const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  if (!isFinite(dx) || !isFinite(dy)) return 0;
   return Math.abs(Math.atan2(Math.abs(dx), Math.abs(dy))) * 180 / Math.PI;
 }
 
@@ -181,7 +183,9 @@ export function angleVert(p1, p2) {
  * @returns {number} degrees (0 = horizontal, 90 = vertical)
  */
 export function angleHoriz(p1, p2) {
+  if (!p1 || !p2 || !isFinite(p1.x) || !isFinite(p2.x)) return 0;
   const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  if (!isFinite(dx) || !isFinite(dy)) return 0;
   return Math.abs(Math.atan2(Math.abs(dy), Math.abs(dx))) * 180 / Math.PI;
 }
 

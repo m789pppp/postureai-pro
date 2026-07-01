@@ -92,7 +92,8 @@ export async function apiFetch(path, options = {}) {
     return response.json();
   } catch (e) {
     clearTimeout(timerId);
-    if (e.name === "AbortError") throw new Error("Request timed out — is the backend running?");
+    if (e.name === "AbortError") throw Object.assign(new Error("Backend request timed out — analysis will use local engine"), { isBackendDown: true });
+    if (e instanceof TypeError && e.message.includes("fetch")) throw Object.assign(new Error("Backend unreachable — using local posture engine"), { isBackendDown: true });
     throw e;
   }
 }
