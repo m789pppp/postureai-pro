@@ -2832,7 +2832,7 @@ export default function App(){
       streamRef.current = null;
     }
     if(timerRef.current)clearInterval(timerRef.current);
-    if(rafRef.current)cancelAnimationFrame(rafRef.current);
+    if(rafRef.current){cancelAnimationFrame(rafRef.current);rafRef.current=null;}
     if(ovRef.current)ovRef.current.getContext("2d").clearRect(0,0,ovRef.current.width||0,ovRef.current.height||0);
     setCamActive(false);
 
