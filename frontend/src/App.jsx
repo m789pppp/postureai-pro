@@ -444,8 +444,8 @@ function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTil
         tr.lastFire.breath = now;
         insights.push({
           icon:"🫁",
-          text:`(Experimental) Breathing pattern looks fast and shallow (~${Math.round(bpm)}/min) — could be a stress/posture signal, could just be webcam noise. Try a few slow deep breaths`,
-          textAr:`(تجريبي) نمط تنفسك بيبان سريع وضحل (~${Math.round(bpm)}/دقيقة) — ممكن يكون إشارة توتر أو وضعية، وممكن يكون مجرد ضوضاء كاميرا. جرب كذا نفس عميق وبطيء`,
+          text:`Breathing pattern detected as fast & shallow (~${Math.round(bpm)}/min). This often signals tension or forward-head posture compressing your diaphragm. Try 3 slow deep breaths now.`,
+          textAr:`نمط تنفسك سريع وضحل (~${Math.round(bpm)}/دقيقة). ده غالباً بيحصل مع التوتر أو وضعية الرأس للأمام اللي بتضغط على الحجاب الحاجز. جرب 3 أنفاس عميقة وبطيئة دلوقتي.`,
         });
       }
     }
@@ -2087,6 +2087,7 @@ export default function App(){
   const[alertCounts,setAlertCounts]=useState({total:0,neck:0,dist:0});
   const[alerts,setAlerts]=useState([]);
   const[alertMsg,setAlertMsg]=useState({text:"Select mode to begin",type:"info"});
+  const[scoreStatus,setScoreStatus]=useState(null); // silent good-posture score display
   const[sound,setSound]=useState(true);
   const playPostureAlert=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();[440,360].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=f;g.gain.setValueAtTime(0,ac.currentTime+i*.32);g.gain.linearRampToValueAtTime(.14,ac.currentTime+i*.32+.06);g.gain.linearRampToValueAtTime(0,ac.currentTime+i*.32+.3);o.start();o.stop(ac.currentTime+i*.32+.35);});}catch{}}; // local fallback
   const[sessionId,setSessionId]=useState(null);
@@ -2135,6 +2136,7 @@ export default function App(){
   const[showAcctSelect,setShowAcctSelect]=useState(false);
   const[showDeviceSelect,setShowDeviceSelect]=useState(false);
   const[breakReminder,setBreakReminder]=useState(true);
+  const[breakIntervalMin,setBreakIntervalMin]=useState(25);
   const[breakTimerSec,setBreakTimerSec]=useState(0);
   const setBreakTimer = setBreakTimerSec; // alias for legacy references
   const[showDashboard,setShowDashboard]=useState(false);
@@ -2149,7 +2151,7 @@ export default function App(){
   const { smoothed: smoothedScore, push: pushScore, reset: resetScore } = useScoreSmoothing(10000, 6000);
 
   // Break timer
-  const { showBreak, dismiss: dismissBreak, snooze: snoozeBreak } = useBreakTimer(30, breakReminder);
+  const { showBreak, dismiss: dismissBreak, snooze: snoozeBreak } = useBreakTimer(breakIntervalMin, breakReminder);
   const[showBreakAlert,setShowBreakAlert]=useState(false);
 
   // Sound feedback
@@ -2640,16 +2642,22 @@ export default function App(){
                 if(!alertCauseRef.current[causeKey] || now - alertCauseRef.current[causeKey] > causeCooldown){
                   alertCauseRef.current[causeKey] = now;
                   const displayMsg = isAr ? msgAr : msg;
+                  const sev = finalResult.overall<40?"severe":finalResult.overall<55?"moderate":"mild";
                   setAlertCounts({...acRef.current});
-                  alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:finalResult.overall},...alRef.current].slice(0,20);
+                  alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:finalResult.overall,severity:sev,cause:causeKey},...alRef.current].slice(0,30);
                   setAlerts([...alRef.current]);setAlertMsg({text:displayMsg,type:"warn"});
-                  if(sound)playBeep();
+                  if(sound)playBeep(sev);
+                  // Smart permission: request only after first real alert with context
+                  if("Notification" in window && Notification.permission==="default"){
+                    Notification.requestPermission().catch(()=>{});
+                  }
                   sendDesktopNotif(msg,finalResult.overall);
                 }
               }
             }else{
               badRef.current=null;
-              if(now-lastAlRef.current>8000)setAlertMsg({text:`Score ${finalResult.overall}/100 — ${grade(finalResult.overall,t)}`,type:"good"});
+              // Good posture — silent status update only, no alert box noise
+              setScoreStatus({score:finalResult.overall,grade:grade(finalResult.overall,t)});
             }
           }
         }
@@ -2703,7 +2711,7 @@ export default function App(){
               }
             }else{
               badRef.current=null;
-              if(now-lastAlRef.current>8000)setAlertMsg({text:`Score ${smoothed}/100 — ${grade(smoothed,t)}`,type:"good"});
+              setScoreStatus({score:smoothed,grade:grade(smoothed,t)});
             }
           }
           // Always use local Corvus AI for Elite-equivalent tiers
@@ -2730,8 +2738,7 @@ export default function App(){
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       insightsRef.current=null;setSessionInsights([]);
-      // Request notification permission on first session
-      requestNotificationPermission();
+      // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
       try{const d=await AnalysisAPI.startSession({mode});sid=d.session_id||sid;}catch(e){}
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
@@ -3967,16 +3974,25 @@ export default function App(){
               <span style={{fontSize:10,fontWeight:700,color:"#ef4444",background:"rgba(239,68,68,.12)",
                 borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
             </div>
-            {alerts.slice(0,5).map((a,i)=>{
-              const sev = a.score<40?"#ef4444":a.score<60?"#f59e0b":"#10b981";
+            {alerts.slice(0,10).map((a,i)=>{
+              const sev = a.severity==="severe"||a.score<40 ? "severe"
+                        : a.severity==="moderate"||a.score<55 ? "moderate" : "mild";
+              const sevColor = sev==="severe"?"#ef4444":sev==="moderate"?"#f97316":"#f59e0b";
+              const sevIcon  = sev==="severe"?"🔴":sev==="moderate"?"🟠":"🟡";
+              const sevLabel = sev==="severe"?(isAr?"حرج":"Critical"):sev==="moderate"?(isAr?"متوسط":"Moderate"):(isAr?"خفيف":"Mild");
               return (
                 <div key={i} style={{display:"flex",gap:8,padding:"8px 14px",
-                  borderBottom:i<Math.min(alerts.length,5)-1?`1px solid ${cs.border}`:"none",
-                  alignItems:"center", background:i===0?"rgba(239,68,68,.03)":"transparent"}}>
-                  <div style={{width:6,height:6,borderRadius:"50%",background:sev,flexShrink:0}}/>
-                  <span style={{fontSize:9,color:cs.muted,flexShrink:0,fontFamily:"monospace",minWidth:38}}>{a.time}</span>
-                  <span style={{fontSize:11,color:cs.text,flex:1,lineHeight:1.4}}>{a.msg}</span>
-                  <span style={{fontSize:11,fontWeight:800,color:sev,fontFamily:"monospace"}}>{a.score}</span>
+                  borderBottom:i<Math.min(alerts.length,10)-1?`1px solid ${cs.border}`:"none",
+                  alignItems:"flex-start", background:i===0?`${sevColor}08`:"transparent"}}>
+                  <span style={{fontSize:10,flexShrink:0,marginTop:1}}>{sevIcon}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <span style={{fontSize:11,color:cs.text,lineHeight:1.4,display:"block"}}>{a.msg}</span>
+                    <span style={{fontSize:9,color:cs.muted,fontFamily:"monospace"}}>{a.time}</span>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2,flexShrink:0}}>
+                    <span style={{fontSize:9,fontWeight:700,color:sevColor,background:`${sevColor}15`,borderRadius:4,padding:"1px 5px"}}>{sevLabel}</span>
+                    <span style={{fontSize:10,fontWeight:800,color:sevColor,fontFamily:"monospace"}}>{a.score}</span>
+                  </div>
                 </div>
               );
             })}
@@ -4505,10 +4521,22 @@ export default function App(){
           </div>
         )}
 
-        {/* Alert message */}
+        {/* Silent score status — good posture, no alert box noise */}
+        {scoreStatus&&alertMsg.type!=="warn"&&alertMsg.type!=="bad"&&(
+          <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:"#10b981",flexShrink:0,boxShadow:"0 0 6px #10b981"}}/>
+            <span style={{fontSize:11,color:"#6ee7b7",fontWeight:600}}>
+              {isAr?`النتيجة ${scoreStatus.score}/100 — ${scoreStatus.grade}`:`Score ${scoreStatus.score}/100 — ${scoreStatus.grade}`}
+            </span>
+          </div>
+        )}
+
+        {/* Alert message — warn/bad/info only */}
+        {(alertMsg.type==="warn"||alertMsg.type==="bad"||(alertMsg.type==="info"&&!scoreStatus))&&(
         <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <div style={abox(alertMsg.type)}>{alertMsg.text}</div>
         </div>
+        )}
 
         {/* Main controls */}
         <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
@@ -4598,16 +4626,36 @@ export default function App(){
         )}
 
         {/* Break reminder */}
-        {showBreakAlert&&(
+        {showBreak&&(
           <div style={{margin:"10px 14px",background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.3)",borderRadius:12,padding:"12px 14px",textAlign:"center",animation:"fadeUp .3s ease"}}>
             <div style={{fontSize:14,fontWeight:700,color:"#fcd34d",marginBottom:4}}>⏰ {isAr?"وقت استراحة!":"Break time!"}</div>
             <div style={{fontSize:11,color:cs.muted,marginBottom:10}}>
-              {isAr?"25 دقيقة مرت — استرح دقيقتين":"25 min passed — take a 2-min stretch"}
+              {isAr?`${breakIntervalMin} دقيقة مرت — استرح دقيقتين`:`${breakIntervalMin} min passed — take a 2-min stretch`}
             </div>
-            <button onClick={()=>{setShowBreakAlert(false);setBreakTimer(0);}}
-              style={{background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.3)",borderRadius:8,padding:"7px 18px",fontSize:12,fontWeight:600,color:"#fcd34d",cursor:"pointer"}}>
-              {isAr?"تم ✓":"Done! Resume →"}
-            </button>
+            <div style={{display:"flex",gap:6,justifyContent:"center"}}>
+              <button onClick={dismissBreak}
+                style={{background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.3)",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,color:"#fcd34d",cursor:"pointer"}}>
+                {isAr?"تم ✓":"Done ✓"}
+              </button>
+              <button onClick={()=>snoozeBreak(5)}
+                style={{background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:500,color:cs.muted,cursor:"pointer"}}>
+                {isAr?"5 دقايق":"5 min"}
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Break interval selector */}
+        {breakReminder&&!showBreak&&(
+          <div style={{margin:"6px 14px 0",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:10,color:cs.muted,flexShrink:0}}>{isAr?"استراحة كل":"Break every"}</span>
+            {[15,25,45,60,90].map(m=>(
+              <button key={m} onClick={()=>setBreakIntervalMin(m)} style={{
+                fontSize:10,padding:"3px 8px",borderRadius:6,cursor:"pointer",fontWeight:breakIntervalMin===m?700:400,
+                background:breakIntervalMin===m?"rgba(245,158,11,.15)":"rgba(148,163,184,.06)",
+                border:`1px solid ${breakIntervalMin===m?"rgba(245,158,11,.4)":cs.border}`,
+                color:breakIntervalMin===m?"#fcd34d":cs.muted,
+              }}>{m}m</button>
+            ))}
           </div>
         )}
 
