@@ -2088,6 +2088,10 @@ export default function App(){
   const[alerts,setAlerts]=useState([]);
   const[alertMsg,setAlertMsg]=useState({text:"Select mode to begin",type:"info"});
   const[scoreStatus,setScoreStatus]=useState(null); // silent good-posture score display
+  const[fixItOpen,setFixItOpen]=useState(null);     // #8 which alert idx has fix-it open
+  const[streakAlert,setStreakAlert]=useState(false); // #10 streak protection shown
+  const[weeklyPattern,setWeeklyPattern]=useState(null); // #9 computed on session end
+  const[showNotifCard,setShowNotifCard]=useState(false); // contextual notif permission
   const[sound,setSound]=useState(true);
   const playPostureAlert=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();[440,360].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=f;g.gain.setValueAtTime(0,ac.currentTime+i*.32);g.gain.linearRampToValueAtTime(.14,ac.currentTime+i*.32+.06);g.gain.linearRampToValueAtTime(0,ac.currentTime+i*.32+.3);o.start();o.stop(ac.currentTime+i*.32+.35);});}catch{}}; // local fallback
   const[sessionId,setSessionId]=useState(null);
@@ -2645,11 +2649,16 @@ export default function App(){
                   const sev = finalResult.overall<40?"severe":finalResult.overall<55?"moderate":"mild";
                   setAlertCounts({...acRef.current});
                   alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:finalResult.overall,severity:sev,cause:causeKey},...alRef.current].slice(0,30);
+                  // #10 Streak protection — fire once per session if streak at risk
+                  const userStreak = profile?.streak_days||0;
+                  if(userStreak>=5 && !streakAlert && now-badRef.current>120000){
+                    setStreakAlert(true);
+                  }
                   setAlerts([...alRef.current]);setAlertMsg({text:displayMsg,type:"warn"});
                   if(sound)playBeep(sev);
-                  // Smart permission: request only after first real alert with context
+                  // Smart permission: show in-app card after first real alert
                   if("Notification" in window && Notification.permission==="default"){
-                    Notification.requestPermission().catch(()=>{});
+                    setShowNotifCard(true);
                   }
                   sendDesktopNotif(msg,finalResult.overall);
                 }
@@ -2874,9 +2883,9 @@ export default function App(){
         session_id:sessionId, mode, tier:effectiveTier, avg_score:avg,
         good_pct:gPct, duration_s:dur, duration_sec:dur,
         alerts_count:acRef.current?.total||0,
-        score_history:hist.slice(-60),        // more history for better sparkline
+        score_history:hist.slice(-60),
+        alert_causes: alRef.current.map(a=>({cause:a.cause||"posture",hour:a.time?.split(":")?.[0]||"0",severity:a.severity||"mild"})), // #9
         metrics:la.metrics||{},
-        // AI + insights fields — needed by generateSessionPDF for Elite PDF
         ai_tip:       la.ai_tip||la.ai_insight||la.claude_analysis||"",
         improvement_tip: result.improvement_tip||"",
         pain_summary:    result.pain_summary||null,
@@ -2884,6 +2893,31 @@ export default function App(){
         trend:           result.trend||"stable",
       }).then(()=>{
         addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
+        // #9 Compute weekly pattern from this session's alert causes
+        if(alRef.current.length>=3){
+          const causeCounts={};
+          alRef.current.forEach(a=>{const c=a.cause||"posture";causeCounts[c]=(causeCounts[c]||0)+1;});
+          const top=Object.entries(causeCounts).sort(([,a],[,b])=>b-a)[0];
+          if(top){
+            const[topKey,topCount]=top;
+            const pct=Math.round(topCount/alRef.current.length*100);
+            const causeLabel={neck:"neck lean",yaw:"head rotation",dist:"screen distance",posture:"general posture"}[topKey]||topKey;
+            const hourCounts={};
+            alRef.current.filter(a=>(a.cause||"posture")===topKey).forEach(a=>{
+              const h=a.time?.split(":")?.[0]||"?";
+              hourCounts[h]=(hourCounts[h]||0)+1;
+            });
+            const peakHour=Object.entries(hourCounts).sort(([,a],[,b])=>b-a)?.[0]?.[0];
+            setWeeklyPattern({
+              summary:isAr
+                ?`${pct}% من تنبيهات هذه الجلسة كانت ${causeLabel}${peakHour?` — معظمها الساعة ${peakHour}:00`:""}. ده ممكن يكون موضع الشاشة أو تعب.`
+                :`${pct}% of alerts this session were ${causeLabel}${peakHour?` — mostly around ${peakHour}:00`:""}. Likely monitor position or fatigue.`,
+              topCause:causeLabel,
+              pct,
+              tip:isAr?"راجع ارتفاع الشاشة ومسافتها في بداية كل جلسة.":"Check monitor height and distance at the start of each session.",
+            });
+          }
+        }
       }).catch(e=>{
         console.error("saveSession failed:", e?.code, e?.message);
         addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
@@ -3395,6 +3429,28 @@ export default function App(){
 
 
   // Sidebar & card styles
+  // #8 Fix-it tips per cause key
+  const FIX_TIPS={
+    neck:    {icon:"🔼", steps:["Raise monitor so top edge is at eye level","Tuck chin slightly — imagine a string pulling crown of head up","Check chair height — elbows should be at 90°"], img:"↕️"},
+    yaw:     {icon:"↔️", steps:["Center monitor directly in front of you","If using dual screens, put primary screen center","Avoid reading from phone while looking sideways"], img:"↔️"},
+    dist:    {icon:"📏", steps:["Arm's length from screen (50–70 cm)","Increase font size so you don't lean in","Use zoom shortcut: Ctrl/⌘ + to reduce urge to lean forward"], img:"📏"},
+    posture: {icon:"🪑", steps:["Sit back fully — use lumbar support or rolled towel","Feet flat on floor, knees at 90°","Relax shoulders down and back"], img:"🪑"},
+    default: {icon:"✅", steps:["Take a 2-minute stretch break","Roll shoulders backward 5 times","Stand up and walk for 60 seconds"], img:"🚶"},
+  };
+  // #9 Time-ago helper
+  const timeAgo=(timeStr)=>{
+    try{
+      const [h,m]=timeStr.split(":").map(Number);
+      const now=new Date();
+      const then=new Date();then.setHours(h,m,0,0);
+      const diffMin=Math.round((now-then)/60000);
+      if(diffMin<1) return isAr?"الآن":"just now";
+      if(diffMin<60) return isAr?`${diffMin} د`:`${diffMin}m ago`;
+      const diffH=Math.round(diffMin/60);
+      return isAr?`${diffH} س`:`${diffH}h ago`;
+    }catch{return timeStr;}
+  };
+
   const SB={background:cs.card,borderRight:`0.5px solid ${cs.border}`,display:"flex",flexDirection:"column",overflowY:"auto"};
   const SEC={padding:"10px 12px",borderBottom:`0.5px solid ${cs.border}`};
   const LBL={fontSize:8.5,color:cs.muted,textTransform:"uppercase",letterSpacing:".09em",marginBottom:6,fontWeight:500};
@@ -3971,8 +4027,10 @@ export default function App(){
               <div style={{fontSize:9.5,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".06em"}}>
                 {isAr?"سجل التنبيهات":"Alert Log"}
               </div>
-              <span style={{fontSize:10,fontWeight:700,color:"#ef4444",background:"rgba(239,68,68,.12)",
-                borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {alerts.length>0&&<button onClick={()=>setAlerts([])} style={{fontSize:9,color:cs.muted,background:"none",border:"none",cursor:"pointer",padding:"0 4px"}}>✕ {isAr?"مسح":"clear"}</button>}
+                <span style={{fontSize:10,fontWeight:700,color:"#ef4444",background:"rgba(239,68,68,.12)",borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
+              </div>
             </div>
             {alerts.slice(0,10).map((a,i)=>{
               const sev = a.severity==="severe"||a.score<40 ? "severe"
@@ -3980,24 +4038,60 @@ export default function App(){
               const sevColor = sev==="severe"?"#ef4444":sev==="moderate"?"#f97316":"#f59e0b";
               const sevIcon  = sev==="severe"?"🔴":sev==="moderate"?"🟠":"🟡";
               const sevLabel = sev==="severe"?(isAr?"حرج":"Critical"):sev==="moderate"?(isAr?"متوسط":"Moderate"):(isAr?"خفيف":"Mild");
+              const tips = FIX_TIPS[a.cause]||FIX_TIPS.default;
+              const isOpen = fixItOpen===i;
               return (
-                <div key={i} style={{display:"flex",gap:8,padding:"8px 14px",
-                  borderBottom:i<Math.min(alerts.length,10)-1?`1px solid ${cs.border}`:"none",
-                  alignItems:"flex-start", background:i===0?`${sevColor}08`:"transparent"}}>
-                  <span style={{fontSize:10,flexShrink:0,marginTop:1}}>{sevIcon}</span>
-                  <div style={{flex:1,minWidth:0}}>
-                    <span style={{fontSize:11,color:cs.text,lineHeight:1.4,display:"block"}}>{a.msg}</span>
-                    <span style={{fontSize:9,color:cs.muted,fontFamily:"monospace"}}>{a.time}</span>
+                <div key={i} style={{borderBottom:i<Math.min(alerts.length,10)-1?`1px solid ${cs.border}`:"none",background:i===0?`${sevColor}06`:"transparent"}}>
+                  <div style={{display:"flex",gap:8,padding:"8px 14px",alignItems:"flex-start"}}>
+                    <span style={{fontSize:10,flexShrink:0,marginTop:1}}>{sevIcon}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <span style={{fontSize:11,color:cs.text,lineHeight:1.4,display:"block"}}>{a.msg}</span>
+                      <span style={{fontSize:9,color:cs.muted}}>{timeAgo(a.time)}</span>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3,flexShrink:0}}>
+                      <span style={{fontSize:9,fontWeight:700,color:sevColor,background:`${sevColor}15`,borderRadius:4,padding:"1px 5px"}}>{sevLabel}</span>
+                      {/* #8 Fix-it button */}
+                      <button onClick={()=>setFixItOpen(isOpen?null:i)} style={{
+                        fontSize:9,fontWeight:600,color:"#a5b4fc",background:"rgba(99,102,241,.1)",
+                        border:"1px solid rgba(99,102,241,.25)",borderRadius:5,padding:"2px 6px",cursor:"pointer",
+                      }}>{isOpen?(isAr?"✕":"✕"):(isAr?"كيف أصلح؟":"Fix it →")}</button>
+                    </div>
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2,flexShrink:0}}>
-                    <span style={{fontSize:9,fontWeight:700,color:sevColor,background:`${sevColor}15`,borderRadius:4,padding:"1px 5px"}}>{sevLabel}</span>
-                    <span style={{fontSize:10,fontWeight:800,color:sevColor,fontFamily:"monospace"}}>{a.score}</span>
-                  </div>
+                  {/* #8 Fix-it expanded card */}
+                  {isOpen&&(
+                    <div style={{margin:"0 10px 8px",background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.2)",borderRadius:8,padding:"10px 12px"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#a5b4fc",marginBottom:6}}>{tips.icon} {isAr?"الحل:":"How to fix:"}</div>
+                      {tips.steps.map((s,si)=>(
+                        <div key={si} style={{display:"flex",gap:6,marginBottom:4,alignItems:"flex-start"}}>
+                          <span style={{fontSize:10,color:"#a5b4fc",fontWeight:700,flexShrink:0}}>{si+1}.</span>
+                          <span style={{fontSize:10,color:cs.text,lineHeight:1.5}}>{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
+
+        {/* #9 Weekly pattern card */}
+        {weeklyPattern&&(
+          <div style={{margin:"0 16px 16px",background:"rgba(99,102,241,.05)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontSize:9.5,fontWeight:700,color:"#a5b4fc",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>
+              📊 {isAr?"نمط هذا الأسبوع":"This Week's Pattern"}
+            </div>
+            <div style={{fontSize:11,color:cs.text,lineHeight:1.6,marginBottom:6}}>{weeklyPattern.summary}</div>
+            {weeklyPattern.topCause&&(
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
+                <span style={{fontSize:10,color:"#ef4444",fontWeight:700}}>{weeklyPattern.pct}%</span>
+                <span style={{fontSize:10,color:cs.muted}}>{weeklyPattern.topCause}</span>
+              </div>
+            )}
+            <div style={{fontSize:9,color:cs.muted}}>{weeklyPattern.tip}</div>
+          </div>
+        )}
+
         <div style={{height:24}}/>
       </div>
 
@@ -4622,6 +4716,54 @@ export default function App(){
               style={{background:"#10b981",border:"none",borderRadius:7,padding:"4px 10px",fontSize:10,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
               {isAr?"ابدأ":"Start"}
             </button>
+          </div>
+        )}
+
+        {/* #10 Streak protection alert */}
+        {streakAlert&&(
+          <div style={{margin:"10px 14px",background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.35)",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#fcd34d",marginBottom:4}}>
+              ⚡ {isAr?`الـ ${profile?.streak_days}-day streak بتاعتك في خطر!`:`Your ${profile?.streak_days}-day streak is at risk!`}
+            </div>
+            <div style={{fontSize:11,color:cs.muted,marginBottom:10}}>
+              {isAr?"وضعيتك وحشة أكتر من دقيقتين. خذ استراحة صغيرة؟":"Poor posture for 2+ min. Take a quick break to protect it?"}
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>{setStreakAlert(false);}} style={{
+                flex:1,background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.35)",
+                borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
+                {isAr?"استراحة الآن 🧘":"Break now 🧘"}
+              </button>
+              <button onClick={()=>setStreakAlert(false)} style={{
+                background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,
+                borderRadius:8,padding:"7px 12px",fontSize:11,color:cs.muted,cursor:"pointer"}}>
+                {isAr?"تجاهل":"Ignore"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* #4 Contextual notification permission card */}
+        {showNotifCard&&"Notification" in window&&Notification.permission==="default"&&(
+          <div style={{margin:"10px 14px",background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.25)",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#a5b4fc",marginBottom:4}}>
+              🔔 {isAr?"تفعيل التنبيهات؟":"Enable background alerts?"}
+            </div>
+            <div style={{fontSize:10,color:cs.muted,marginBottom:10,lineHeight:1.5}}>
+              {isAr?"نبعتلك تنبيه لو وضعيتك وحشت وانت مش شايف الشاشة — مفيش spam.":"Get notified when posture drops even when the tab is in the background. No spam."}
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>{Notification.requestPermission().catch(()=>{});setShowNotifCard(false);}} style={{
+                flex:1,background:"rgba(99,102,241,.15)",border:"1px solid rgba(99,102,241,.35)",
+                borderRadius:8,padding:"6px 0",fontSize:11,fontWeight:700,color:"#a5b4fc",cursor:"pointer"}}>
+                {isAr?"السماح ✓":"Allow ✓"}
+              </button>
+              <button onClick={()=>setShowNotifCard(false)} style={{
+                background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,
+                borderRadius:8,padding:"6px 10px",fontSize:11,color:cs.muted,cursor:"pointer"}}>
+                {isAr?"مش دلوقتي":"Not now"}
+              </button>
+            </div>
           </div>
         )}
 
