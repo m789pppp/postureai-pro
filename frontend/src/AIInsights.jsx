@@ -4,7 +4,7 @@
  * Weekly insights · Smart recommendations
  * Uses local WebLLM AI directly (no backend needed)
  */
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
 
 // ── AI call via local WebLLM ────────────────────────────────────────
