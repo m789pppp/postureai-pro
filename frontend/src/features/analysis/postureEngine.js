@@ -370,6 +370,9 @@ export function createFrameBuffer(size = FRAME_BUFFER_SIZE) {
  * @param {number} H   - frame height px
  * @returns {object} proportions
  */
+// Stable shRatio — EMA across calls to prevent per-frame jitter
+let _shRatioEMA = null;
+
 function computeProportions(lms, W, H) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
@@ -377,12 +380,16 @@ function computeProportions(lms, W, H) {
   const lSh = { x: g(PL.L_SHOULDER).x * W, y: g(PL.L_SHOULDER).y * H, z: g(PL.L_SHOULDER).z ?? 0 };
   const rSh = { x: g(PL.R_SHOULDER).x * W, y: g(PL.R_SHOULDER).y * H, z: g(PL.R_SHOULDER).z ?? 0 };
 
-  const shWidthPx  = Math.abs(rSh.x - lSh.x);
+  const shWidthPx   = Math.abs(rSh.x - lSh.x);
   const shWidthFrac = shWidthPx / Math.max(W, 1);
-  // Camera-distance ratio: how wide the shoulders look vs reference
-  const shRatio    = Math.max(0.70, Math.min(1.30, shWidthFrac / REF_SH_FRAC));
-  // cm per pixel (using known shoulder width as ruler)
-  const cmPerPx    = SHOULDER_WIDTH_CM / Math.max(shWidthPx, 1);
+  const rawRatio    = Math.max(0.70, Math.min(1.30, shWidthFrac / REF_SH_FRAC));
+
+  // EMA smoothing on shRatio — α=0.05 = very slow drift (stable over seconds)
+  if (_shRatioEMA === null) _shRatioEMA = rawRatio;
+  else _shRatioEMA = _shRatioEMA + 0.05 * (rawRatio - _shRatioEMA);
+  const shRatio = _shRatioEMA;
+
+  const cmPerPx = SHOULDER_WIDTH_CM / Math.max(shWidthPx, 1);
 
   return {
     lSh, rSh,
@@ -394,6 +401,9 @@ function computeProportions(lms, W, H) {
     shOK: vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER),
   };
 }
+
+/** Call on session reset / camera restart to clear proportion memory */
+export function resetProportions() { _shRatioEMA = null; }
 
 // ═══════════════════════════════════════════════════════════════════
 // HEAD YAW ESTIMATION
@@ -479,8 +489,35 @@ function estimateDistanceCm(lms, W, H, yawDeg = 0, calibFactor = null) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// DISTANCE SCORE
+// DISTANCE SMOOTHER — sliding median (immune to single-frame IPD noise)
 // ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Keeps last N raw distance readings and returns the median.
+ * Median is far more stable than mean for IPD-based distance:
+ * a single bad frame (blink, partial occlusion) moves the mean
+ * by several cm but barely shifts the median.
+ */
+export function createDistanceSmoother(size = 30) {
+  const buf = [];
+  return {
+    push(cm) {
+      if (!cm || cm < 20 || cm > 160) return this.get(); // reject implausible
+      buf.push(cm);
+      if (buf.length > size) buf.shift();
+      return this.get();
+    },
+    get() {
+      if (!buf.length) return 65;
+      const s = [...buf].sort((a, b) => a - b);
+      const mid = Math.floor(s.length / 2);
+      return s.length % 2 ? s[mid] : Math.round((s[mid - 1] + s[mid]) / 2);
+    },
+    reset() { buf.length = 0; },
+  };
+}
+
+
 
 /**
  * Score based on screen distance.
@@ -630,17 +667,43 @@ function analyzeSpineLean(lms, W, H, prop, roundedScore) {
 function analyzeRoundedShoulders(lms, prop) {
   if (!prop.shOK) return { depth: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
-  const g    = i => lms[i];
-  const lShZ = g(PL.L_SHOULDER)?.z ?? 0;
-  const rShZ = g(PL.R_SHOULDER)?.z ?? 0;
-  // MediaPipe Z: more negative = closer to camera (shoulders protracted forward)
-  const avgZ    = (lShZ + rShZ) / 2;
-  const asymZ   = Math.abs(lShZ - rShZ);
-  // Convert to a 0-100 depth scale (Z is already normalized by torso size in MediaPipe)
-  const depth   = Math.max(0, -avgZ * 100);
-  const score   = scoreMetric(depth, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
-  const severity = classify(depth, SEV.ROUNDED);
-  return { depth: Math.round(depth * 10) / 10, asymmetry: Math.round(asymZ * 1000) / 1000, score, severity, confidence: 78, reliable: true };
+  const g = i => lms[i];
+  const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
+
+  // Z-based depth is very noisy (MediaPipe Z is approximate).
+  // Instead use shoulder elevation relative to neck/ear midpoint:
+  // rounded shoulders raise the shoulder tops and push the upper
+  // trapezius upward — measurable in 2D Y without relying on Z.
+  const earOK = vis(PL.L_EAR) && vis(PL.R_EAR);
+  if (!earOK) {
+    // Fallback: use Z but clamp aggressively to reduce jitter
+    const lShZ = g(PL.L_SHOULDER)?.z ?? 0;
+    const rShZ = g(PL.R_SHOULDER)?.z ?? 0;
+    const avgZ = (lShZ + rShZ) / 2;
+    // Only trust Z when both values agree (asymmetry < 0.04 = low noise frame)
+    const asymZ = Math.abs(lShZ - rShZ);
+    if (asymZ > 0.04) return { depth: 0, score: 85, severity: "normal", confidence: 30, reliable: false };
+    const depth = Math.max(0, -avgZ * 100);
+    const score = scoreMetric(depth, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
+    return { depth: Math.round(depth * 10) / 10, asymmetry: Math.round(asymZ * 1000) / 1000, score, severity: classify(depth, SEV.ROUNDED), confidence: 45, reliable: false };
+  }
+
+  // Primary 2D method: compare shoulder-Y to ear-midpoint-Y.
+  // Rounded shoulders → shoulders creep upward toward ears (Y decreases in image coords).
+  const lEar = { x: g(PL.L_EAR).x, y: g(PL.L_EAR).y };
+  const rEar = { x: g(PL.R_EAR).x, y: g(PL.R_EAR).y };
+  const midEarY  = (lEar.y + rEar.y) / 2;
+  const midShY   = (g(PL.L_SHOULDER).y + g(PL.R_SHOULDER).y) / 2;
+
+  // Normalized by shoulder width so it's camera-distance-independent
+  const elevFrac = (midShY - midEarY) / Math.max(prop.shWidthFrac, 0.01);
+  // elevFrac ~2.5-3.5 = normal; lower = rounded (shoulders elevated)
+  const NEUTRAL = 2.8;
+  const deviation = Math.max(0, NEUTRAL - elevFrac) * 20; // scale to 0–30 range
+
+  const score    = scoreMetric(deviation, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
+  const severity = classify(deviation, SEV.ROUNDED);
+  return { depth: Math.round(deviation * 10) / 10, asymmetry: 0, score, severity, confidence: 80, reliable: true };
 }
 
 function analyzeFHP(lms, W, H, prop) {
