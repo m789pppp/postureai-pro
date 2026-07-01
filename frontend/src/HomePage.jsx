@@ -744,7 +744,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
-function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDeleteSession, onTrend }) {
+function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onDeleteSession, onTrend, tier="standard" }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
 
@@ -761,9 +761,14 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
   const bestScore = Math.max(...userSessions.map(s=>s.avg_score||0));
   const totalMins = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
 
-  async function handlePDF(s, i) {
-    setPdfLoading(s.id||i);
-    await onDownloadPDF?.(s);
+  const isProTier   = ["professional","elite"].includes(tier);
+  const isEliteTier = tier === "elite";
+
+  async function handlePDF(s, i, clinical=false) {
+    if (!isProTier) { onDownloadPDF?.(null); return; } // triggers billing in App.jsx
+    setPdfLoading((s.id||i)+(clinical?"_c":""));
+    if (clinical) await onDownloadClinicalPDF?.(s);
+    else          await onDownloadPDF?.(s);
     setPdfLoading(null);
   }
 
@@ -794,13 +799,35 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
 
       {/* Action buttons row */}
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-        <button onClick={()=>handlePDF(userSessions[0], totalSessions)}
-          style={{ padding:"9px 14px", background:"rgba(26,86,219,.12)",
-            border:"1px solid rgba(26,86,219,.3)", borderRadius:9,
-            color:"#60a5fa", fontSize:12, fontWeight:600, cursor:"pointer",
-            display:"flex", alignItems:"center", gap:6 }}>
-          📄 {isAr?"تنزيل PDF آخر جلسة":"Download Last Session PDF"}
-        </button>
+        {isProTier ? (
+          <button onClick={()=>handlePDF(userSessions[0], totalSessions)}
+            style={{ padding:"9px 14px",
+              background: isEliteTier?"rgba(16,185,129,.12)":"rgba(26,86,219,.12)",
+              border: `1px solid ${isEliteTier?"rgba(16,185,129,.3)":"rgba(26,86,219,.3)"}`,
+              borderRadius:9,
+              color: isEliteTier?"#6ee7b7":"#60a5fa",
+              fontSize:12, fontWeight:600, cursor:"pointer",
+              display:"flex", alignItems:"center", gap:6 }}>
+            📄 {isEliteTier?(isAr?"تنزيل Elite PDF":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}
+          </button>
+        ) : (
+          <button onClick={()=>handlePDF(null, 0)}
+            style={{ padding:"9px 14px", background:"rgba(99,102,241,.1)",
+              border:"1px solid rgba(99,102,241,.25)", borderRadius:9,
+              color:"#a5b4fc", fontSize:12, fontWeight:600, cursor:"pointer",
+              display:"flex", alignItems:"center", gap:6 }}>
+            🔒 {isAr?"PDF — Pro & Elite فقط":"PDF — Pro & Elite only"}
+          </button>
+        )}
+        {isEliteTier && (
+          <button onClick={()=>handlePDF(userSessions[0], totalSessions, true)}
+            style={{ padding:"9px 14px", background:"rgba(14,165,233,.1)",
+              border:"1px solid rgba(14,165,233,.25)", borderRadius:9,
+              color:"#38bdf8", fontSize:12, fontWeight:600, cursor:"pointer",
+              display:"flex", alignItems:"center", gap:6 }}>
+            🩺 {isAr?"PDF الفيزيوثيرابيست":"Clinical PDF"}
+          </button>
+        )}
         {onTrend && totalSessions>=3 && (
           <button onClick={onTrend}
             style={{ padding:"9px 14px", background:"rgba(168,85,247,.12)",
@@ -852,16 +879,32 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
               <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
                 <span style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:99,
                   background:`${col}18`, color:col }}>{grade(sc,isAr)}</span>
-                {/* PDF button */}
+                {/* PDF button — Pro+ only */}
                 <button onClick={()=>handlePDF(s, totalSessions-i)}
-                  disabled={isLoadingPDF}
-                  title={isAr?"تنزيل PDF":"Download PDF"}
-                  style={{ padding:"6px 10px", background:"rgba(26,86,219,.12)",
-                    border:"1px solid rgba(26,86,219,.25)", borderRadius:7,
-                    color: isLoadingPDF?"#94a3b8":"#60a5fa", fontSize:13, fontWeight:600,
-                    cursor: isLoadingPDF?"wait":"pointer", transition:"all .2s" }}>
-                  {isLoadingPDF ? "⏳" : "📄"}
+                  disabled={isLoadingPDF===((s.id||i))}
+                  title={isProTier?(isAr?"تنزيل PDF":"Download PDF"):(isAr?"PDF — Pro & Elite":"PDF — Pro & Elite")}
+                  style={{ padding:"6px 10px",
+                    background: isProTier?(isEliteTier?"rgba(16,185,129,.1)":"rgba(26,86,219,.12)"):"rgba(99,102,241,.08)",
+                    border:`1px solid ${isProTier?(isEliteTier?"rgba(16,185,129,.25)":"rgba(26,86,219,.25)"):"rgba(99,102,241,.2)"}`,
+                    borderRadius:7,
+                    color: pdfLoading===((s.id||i))?"#94a3b8":(isProTier?(isEliteTier?"#6ee7b7":"#60a5fa"):"#a5b4fc"),
+                    fontSize:13, fontWeight:600,
+                    cursor: pdfLoading===((s.id||i))?"wait":"pointer", transition:"all .2s" }}>
+                  {pdfLoading===((s.id||i)) ? "⏳" : isProTier ? "📄" : "🔒"}
                 </button>
+                {/* Clinical PDF — Elite only */}
+                {isEliteTier && (
+                  <button onClick={()=>handlePDF(s, totalSessions-i, true)}
+                    disabled={pdfLoading===((s.id||i)+"_c")}
+                    title={isAr?"تقرير الفيزيوثيرابيست":"Clinical PDF"}
+                    style={{ padding:"6px 10px", background:"rgba(14,165,233,.08)",
+                      border:"1px solid rgba(14,165,233,.2)", borderRadius:7,
+                      color: pdfLoading===((s.id||i)+"_c")?"#94a3b8":"#38bdf8",
+                      fontSize:13, fontWeight:600,
+                      cursor: pdfLoading===((s.id||i)+"_c")?"wait":"pointer", transition:"all .2s" }}>
+                    {pdfLoading===((s.id||i)+"_c") ? "⏳" : "🩺"}
+                  </button>
+                )}
                 {/* Delete button */}
                 <button onClick={()=>handleDelete(s)}
                   disabled={isLoadingDel}
@@ -1869,6 +1912,7 @@ export default function HomePage({
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,
   downloadPDF,
+  downloadClinicalPDF,
   AccountSwitcher, onSwitchAccount,
 }) {
   const [tab,    setTab]    = useState("home");
@@ -1997,7 +2041,7 @@ export default function HomePage({
       if(tab==="sessions") return (
         <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
           setPage={setPage} startCamera={startCamera}
-          onDownloadPDF={downloadPDF}
+          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={downloadClinicalPDF} tier={tier}
           onDeleteSession={handleDeleteSession}
           onTrend={handleTrend}/>
       );
@@ -2007,7 +2051,7 @@ export default function HomePage({
     if(tab==="sessions") return (
       <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
         setPage={setPage} startCamera={startCamera}
-        onDownloadPDF={downloadPDF}
+        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={downloadClinicalPDF} tier={tier}
         onDeleteSession={handleDeleteSession}
         onTrend={handleTrend}/>
     );
@@ -2017,7 +2061,7 @@ export default function HomePage({
         cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
         onCoach={openCoach} onBilling={openBilling} onAnalytics={openAnalytics}
         onCalib={openCalib} onReports={openReports} addToast={addToast}
-        onDownloadPDF={downloadPDF}
+        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={downloadClinicalPDF} tier={tier}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin}
         setShowGamification={setShowGamification}
         setShowGrowthHub={setShowGrowthHub}
