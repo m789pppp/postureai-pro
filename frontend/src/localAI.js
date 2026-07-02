@@ -35,20 +35,20 @@ function str(text, ...patterns) {
 function parseData(text) {
   const t = text || "";
   return {
-    name:        str(t, /for ([A-Za-zأ-ي][A-Za-zأ-ي ]{1,20})[\n:,]/),
-    avg:         num(t, /[Aa]vg[^:]*:\s*(\d+)/, /average.*?(\d+)\/100/, /Overall avg.*?(\d+)/),
-    weekAvg:     num(t, /[Ww]eek.*?avg[^:]*:\s*(\d+)/, /[Tt]his week.*?(\d+)\/100/),
-    lastWeekAvg: num(t, /[Ll]ast week.*?(\d+)\/100/),
+    name:        str(t, /for ([A-Za-zأ-ي][A-Za-zأ-ي ]{1,20})[\n:,]/, /for ([A-Za-z]{2,20}):/),
+    avg:         num(t, /[Oo]verall avg score:\s*(\d+)/, /[Aa]vg[^:]*:\s*(\d+)/, /average.*?(\d+)\/100/, /Overall avg.*?(\d+)/),
+    weekAvg:     num(t, /[Tt]his week.*?avg.*?:\s*(\d+)/, /[Tt]his week:\s*(\d+)\/100/, /[Ww]eek.*?avg[^:]*:\s*(\d+)/, /[Tt]his week.*?(\d+)\/100/),
+    lastWeekAvg: num(t, /[Ll]ast week avg:\s*(\d+)/, /[Ll]ast week.*?:\s*(\d+)\/100/, /[Ll]ast week.*?(\d+)\/100/),
     best:        num(t, /[Bb]est.*?(\d+)/),
     worst:       num(t, /[Ww]orst.*?(\d+)\/100/, /[Mm]in.*?(\d+)/),
-    sessions:    num(t, /[Ss]essions?:\s*(\d+)/, /[Tt]otal sessions?:\s*(\d+)/),
-    weekSessions:num(t, /[Tt]his week.*?(\d+)\s*session/, /[Ss]essions this week:\s*(\d+)/),
-    streak:      num(t, /[Ss]treak.*?(\d+)/),
-    trendPct:    num(t, /([+-]?\d+)%.*(?:vs|last|week)/),
-    fatigue:     num(t, /[Ff]atigue.*?(\d+)%/, /[Ff]atigue index.*?(\d+)/),
-    burnout:     num(t, /[Bb]urnout.*?(\d+)\/100/, /[Bb]urnout.*?(\d+)%/),
-    neckRisk:    num(t, /[Nn]eck.*?(\d+)%/),
-    riskScore:   num(t, /[Rr]isk score.*?(\d+)/, /[Oo]verall risk.*?(\d+)/),
+    sessions:    num(t, /[Tt]otal sessions?:\s*(\d+)/, /[Ss]essions?:\s*(\d+)/),
+    weekSessions:num(t, /[Tt]his week.*?:\s*(\d+)\s*session/, /[Ss]essions this week:\s*(\d+)/, /[Tt]his week.*?(\d+)\s*session/),
+    streak:      num(t, /[Ss]treak:\s*(\d+)/, /[Ss]treak.*?(\d+)/),
+    trendPct:    num(t, /Trend:\s*([+-]?\d+)%/, /([+-]?\d+)%.*(?:vs|last|week)/),
+    fatigue:     num(t, /[Ff]atigue index:\s*(\d+)%/, /[Ff]atigue.*?:\s*(\d+)%/, /[Ff]atigue.*?(\d+)%/),
+    burnout:     num(t, /[Bb]urnout risk.*?:\s*(\d+)%/, /[Bb]urnout.*?:\s*(\d+)\/100/, /[Bb]urnout.*?(\d+)%/),
+    neckRisk:    num(t, /[Nn]eck risk:\s*(\d+)%/, /[Nn]eck.*?risk.*?:\s*(\d+)%/, /[Nn]eck.*?(\d+)%/),
+    riskScore:   num(t, /[Oo]verall risk:\s*(\d+)/, /[Rr]isk score.*?(\d+)/),
     anomalyCount:num(t, /(\d+)\s*anomal/),
     forecast:    str(t, /[Pp]redicted.*?scores?:\s*([0-9, ]+)/),
     slope:       num(t, /slope.*?([+-]?\d+\.?\d*)/),
@@ -62,19 +62,20 @@ function parseData(text) {
 }
 
 function detectTopic(t) {
-  if (t.match(/executive summary|performance snapshot/i))  return "executive";
-  if (t.match(/trend analysis|trend direction/i))          return "trends";
-  if (t.match(/fatigue.*burnout|burnout.*fatigue/i))       return "fatigue";
-  if (t.match(/recommendation|action plan|ergonomic/i))    return "recommendations";
-  if (t.match(/burnout risk/i))                            return "burnout";
-  if (t.match(/anomal/i))                                  return "anomaly";
-  if (t.match(/risk scor/i))                               return "risk";
-  if (t.match(/forecast|7-day|7 day/i))                   return "forecast";
-  if (t.match(/pain|hurt|ache|ألم|بيوجع/i))               return "pain";
-  if (t.match(/exercise|stretch|تمرين/i))                  return "exercise";
-  if (t.match(/break|schedule|بريك|راحة/i))                return "breaks";
-  if (t.match(/improve|better|تحسن|تحسين/i))              return "improve";
-  if (t.match(/problem|issue|مشكل|أكبر/i))                return "problem";
+  const s = t.replace(/\n/g, " ");
+  if (s.match(/executive summary|performance snapshot/i))                              return "executive";
+  if (s.match(/7-day.*forecast|7-day posture|day posture performance forecast/i))      return "forecast";
+  if (s.match(/analyze burnout risk|burnout risk.*assessment/i))                       return "burnout";
+  if (s.match(/risk scor.*analysis|posture risk scoring|risk profile/i))               return "risk";
+  if (s.match(/\d+.*anomal.*detected|analyze.*anomal/i))                              return "anomaly";
+  if (s.match(/fatigue.*burnout|burnout.*fatigue|fatigue index.*burnout/i))            return "fatigue";
+  if (s.match(/ergonomic recommendations|smart ergonomic|workstation.*adjust/i))       return "recommendations";
+  if (s.match(/posture trends|trend analysis|trend direction|week-over-week change/i)) return "trends";
+  if (s.match(/pain|hurt|ache|ألم|بيوجع/i))                                           return "pain";
+  if (s.match(/exercise|stretch|تمرين/i))                                              return "exercise";
+  if (s.match(/break|schedule|بريك|راحة/i))                                            return "breaks";
+  if (s.match(/improve|better|تحسن|تحسين/i))                                          return "improve";
+  if (s.match(/problem|issue|مشكل|أكبر/i))                                            return "problem";
   return "general";
 }
 
@@ -112,6 +113,7 @@ function genExecutive(d) {
   const se = d.sessions ?? 0;
   const f  = d.fatigue ?? 0;
   const b  = d.burnout ?? 0;
+  const nr = d.neckRisk ?? 0;
 
   if (ar) return `## ملخص تنفيذي — ${n}
 
@@ -146,12 +148,14 @@ ${s < 60 ? "1. Raise monitor to exact eye level\n2. Stand up every hour for 5 mi
 }
 
 function genTrends(d) {
-  const ar = d.lang === "ar";
-  const s  = d.avg ?? 0;
-  const w  = d.weekAvg ?? s;
-  const lw = d.lastWeekAvg ?? s;
-  const t  = d.trendPct ?? Math.round(((w - lw) / Math.max(lw, 1)) * 100);
-  const ws = d.weekSessions ?? 0;
+  const ar  = d.lang === "ar";
+  const s   = d.avg ?? 0;
+  const w   = d.weekAvg ?? s;
+  const lw  = d.lastWeekAvg ?? Math.round(s * 0.9);
+  const t   = d.trendPct ?? Math.round(((w - lw) / Math.max(lw, 1)) * 100);
+  const ws  = d.weekSessions ?? 0;
+  // Trends don't need total sessions — use any data we have
+  const hasData = s > 0 || w > 0;
 
   if (ar) return `## تحليل الاتجاهات
 
