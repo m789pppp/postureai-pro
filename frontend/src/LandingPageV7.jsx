@@ -1666,14 +1666,41 @@ function Footer({ lang }) {
                 {sec.title}
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:11 }}>
-                {sec.links.map(([label, href]) => (
-                  <a key={label} href={href}
-                    style={{ color:C.sub, fontSize:14, textDecoration:"none", transition:"color .18s" }}
-                    onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                    onMouseLeave={e=>e.currentTarget.style.color=C.sub}>
-                    {label}
-                  </a>
-                ))}
+                {sec.links.map(([label, href]) => {
+                  const isPlaceholder = href === "#" || href.startsWith("#privacy") || href.startsWith("#terms") || href.startsWith("#security") || href.startsWith("#gdpr") || href.startsWith("#how");
+                  if (isPlaceholder) {
+                    return (
+                      <button key={label}
+                        onClick={e=>{
+                          e.preventDefault();
+                          // Real section anchors scroll smoothly; pure "#" placeholders do nothing
+                          if (href.length > 1) {
+                            const el = document.querySelector(href);
+                            if (el) el.scrollIntoView({ behavior:"smooth" });
+                          }
+                        }}
+                        style={{
+                          color:C.sub, fontSize:14, textDecoration:"none",
+                          background:"none", border:"none", padding:0, cursor:"pointer",
+                          textAlign: ar ? "right" : "left", transition:"color .18s",
+                        }}
+                        onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                        onMouseLeave={e=>e.currentTarget.style.color=C.sub}>
+                        {label}
+                      </button>
+                    );
+                  }
+                  return (
+                    <a key={label} href={href}
+                      target={href.startsWith("http") ? "_blank" : undefined}
+                      rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
+                      style={{ color:C.sub, fontSize:14, textDecoration:"none", transition:"color .18s" }}
+                      onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                      onMouseLeave={e=>e.currentTarget.style.color=C.sub}>
+                      {label}
+                    </a>
+                  );
+                })}
               </div>
             </div>
           ))}
