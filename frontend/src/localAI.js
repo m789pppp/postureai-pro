@@ -1,170 +1,572 @@
 /**
- * localAI.js — Offline AI Posture Coach
+ * localAI.js — Corvus Offline Intelligence Engine v2
+ *
+ * Parses the actual structured prompts from AICoach, AIInsights,
+ * and PredictiveAI — extracts real numbers — generates data-driven
+ * responses that reference the user's actual scores and metrics.
+ *
  * Zero downloads, zero API calls, zero network dependency.
- * Uses user's real session data to generate personalized responses.
  */
 
-let _ready     = true;   // always ready — no init needed
-let _loading   = false;
-let _progress  = 100;
-let _error     = null;
-let _listeners = new Set();
-
-export function getLocalAIStatus() { return { ready: _ready, loading: false, progress: 100, error: null }; }
-export function onLocalAIStatus(cb) { _listeners.add(cb); return () => _listeners.delete(cb); }
-export async function initLocalAI()  { return true; }
+export function getLocalAIStatus() { return { ready: true, loading: false, progress: 100, error: null }; }
+export function onLocalAIStatus(cb) { return () => {}; }
+export async function initLocalAI()   { return true; }
 export async function unloadLocalAI() {}
-export async function checkWebGPU()  { return true; }
+export async function checkWebGPU()   { return true; }
 
-// ── Response engine ────────────────────────────────────────────────
-function extractContext(systemPrompt) {
-  const ctx = {};
-  const m = (pattern) => { const r = systemPrompt?.match(pattern); return r ? r[1] : null; };
-  ctx.avg     = parseInt(m(/[Aa]vg[^:]*:\s*(\d+)/)) || parseInt(m(/average score[^:]*:\s*(\d+)/i)) || 0;
-  ctx.sessions= parseInt(m(/[Ss]essions?[^:]*:\s*(\d+)/)) || 0;
-  ctx.alerts  = (systemPrompt?.match(/Common alerts[^:]*:(.*?)(?:\n|$)/i)?.[1] || "").split(",").map(s=>s.trim()).filter(Boolean);
-  ctx.worst   = m(/[Ww]orst time[^:]*:\s*([^\n]+)/) || "";
-  ctx.trend   = m(/[Tt]rend[^:]*:\s*([^\n]+)/) || "";
-  ctx.name    = m(/[Uu]ser[^:]*:\s*([^,\n]+)/) || "";
-  ctx.lang    = systemPrompt?.includes("Egyptian Arabic") ? "ar" : "en";
-  return ctx;
+// ── Data extraction ───────────────────────────────────────────────
+
+function num(text, ...patterns) {
+  for (const p of patterns) {
+    const m = text?.match(p);
+    if (m) { const v = parseFloat(m[1]); if (!isNaN(v)) return v; }
+  }
+  return null;
 }
 
-const AR = {
-  greet: (n,s,ses) => `أهلاً ${n||""}! 💪 شايف بياناتك — متوسط درجتك ${s}/100 من ${ses} جلسة.`,
-  nodata: "مفيش بيانات جلسات كفاية لحد دلوقتي — ابدأ جلسة تحليل الوضعية الأول وبعدين رجّعلي.",
-  low:    (s) => `درجة ${s}/100 بتقول إن في مشاكل واضحة في الوضعية محتاج تتعامل معاها.`,
-  mid:    (s) => `درجة ${s}/100 كويسة بس في مجال للتحسين.`,
-  high:   (s) => `درجة ${s}/100 ممتازة! الهدف يبقى فوق 85 باستمرار.`,
-  improve_low:  "🔴 الأولويات دلوقتي:\n1. كل ساعة وقف من الكرسي 5 دقايق\n2. الشاشة على مستوى عيونك بالظبط\n3. وسادة دعم للظهر السفلي\n4. كتفك مش لازم يكونوا مرفوعين — خليهم ريلاكس\n5. اشتري تايمر — كل 20 دقيقة تبص بعيد 20 ثانية",
-  improve_mid:  "🟡 عشان توصل لـ 80+:\n1. راجع ارتفاع الكرسي — ركبتك لازم 90 درجة\n2. كيبورد قريب منك — كوعك مش مرفوع\n3. استريتش كتافك كل ساعتين\n4. شيل الموبايل من على المكتب وانت بتتكلم",
-  improve_high: "🟢 عشان تحافظ على الممتاز:\n1. استمر في البريكات المنتظمة\n2. الرياضة 3x أسبوع (خصوصًا تقوية الظهر)\n3. تاكد إن الإضاءة مش بتخليك تنحني للشاشة",
-  worst:  (w) => w ? `وقت الأسوأ عندك هو ${w} — في الوقت ده تأكد إنك بتاخد بريك كل ساعة.` : "",
-  head:   "📍 رأسك بيميل للأمام كتير — الحل: ارفع الشاشة وافتكر قاعدة 'حنك للداخل' كل ربع ساعة.",
-  shoulder:"📍 كتافك مرفوعين — استرخي وطنّش الكتاف كل ما تفتكر.",
-  back:   "📍 ظهرك بيتقوّس — اتكي للوراء على الكرسي مش للأمام، والكرسي يدعم الظهر السفلي.",
-  neck:   "📍 رقبتك بتتعب — الشاشة لازم تكون على مستوى عينيك، مش نازلة ولا طالعة.",
-  trend_up:   "📈 وضعيتك بتتحسن — كمل على نفس النهج!",
-  trend_down: "📉 لاحظت إن وضعيتك اتراجعت — حاول تعمل بريكات أكتر وراجع وضعية الكرسي.",
-  pain:   "الألم في الظهر والرقبة جاي من الوضعية الغلط. إذا الألم مستمر أكتر من أسبوعين، حلو تستشير فيزيوثيرابيست.",
-  break_sched: "⏰ جدول البريكات المثالي:\n• كل 20 دقيقة: بص بعيد 20 ثانية\n• كل ساعة: وقف وامشي دقيقتين\n• كل ساعتين: استريتش الرقبة والكتاف 5 دقايق",
-  exercise: "💪 تمارين مناسبة لمشاكل الوضعية:\n1. Chin tuck: حنك للداخل 10 مرات × 3\n2. Shoulder rolls: كتافك للخلف 10 مرات\n3. Cat-cow stretch: 10 مرات على الأرض\n4. Wall angels: 10 مرات جنب الحيط",
-  default: "أنا هنا أساعدك تحسّن وضعيتك! اسألني عن:\n• إيه أكبر مشكلة في وضعيتك\n• إزاي تتحسن\n• جدول البريكات\n• التمارين المناسبة",
-};
+function str(text, ...patterns) {
+  for (const p of patterns) {
+    const m = text?.match(p);
+    if (m) return m[1]?.trim();
+  }
+  return null;
+}
 
-const EN = {
-  greet: (n,s,ses) => `Hi ${n||""}! 💪 I can see your data — your average score is ${s}/100 from ${ses} sessions.`,
-  nodata: "No session data yet — start a posture analysis session first, then come back and I can give you personalized advice.",
-  low:    (s) => `Your score of ${s}/100 indicates clear posture issues that need attention.`,
-  mid:    (s) => `Your score of ${s}/100 is decent but there's room to improve.`,
-  high:   (s) => `Your score of ${s}/100 is excellent! Aim to keep it above 85 consistently.`,
-  improve_low:  "🔴 Priority actions right now:\n1. Stand up every hour for 5 minutes\n2. Screen at exact eye level\n3. Lumbar support cushion behind lower back\n4. Shoulders relaxed — not raised\n5. 20-20-20 rule: every 20 min, look 20 feet away for 20 seconds",
-  improve_mid:  "🟡 To reach 80+:\n1. Check chair height — knees at 90°\n2. Keyboard close — elbows not raised\n3. Shoulder stretch every 2 hours\n4. Don't tuck phone under ear when calling",
-  improve_high: "🟢 To maintain excellence:\n1. Keep regular breaks\n2. Exercise 3x/week (especially back strengthening)\n3. Ensure lighting doesn't make you lean toward the screen",
-  worst:  (w) => w ? `Your worst time is ${w} — during those hours make sure to take a break every hour.` : "",
-  head:   "📍 Your head leans too far forward — fix: raise your screen and practice 'chin tuck' every 15 minutes.",
-  shoulder:"📍 Your shoulders are raised — consciously relax and drop your shoulders whenever you notice.",
-  back:   "📍 Your back is rounding — lean back against the chair, not forward, and support your lower back.",
-  neck:   "📍 Neck strain detected — your screen needs to be at eye level, not too low or high.",
-  trend_up:   "📈 Your posture is improving — keep up the good work!",
-  trend_down: "📉 Your posture has declined recently — try more frequent breaks and reassess your chair setup.",
-  pain:   "Back and neck pain often comes from poor posture. If pain persists more than 2 weeks, consider seeing a physiotherapist.",
-  break_sched: "⏰ Optimal break schedule:\n• Every 20 min: look away for 20 seconds\n• Every hour: stand and walk for 2 minutes\n• Every 2 hours: neck and shoulder stretch for 5 minutes",
-  exercise: "💪 Exercises for posture problems:\n1. Chin tuck: pull chin in 10 reps × 3\n2. Shoulder rolls: roll backward 10 times\n3. Cat-cow stretch: 10 reps on all fours\n4. Wall angels: 10 reps against a wall",
-  default: "I'm here to help you improve your posture! Ask me about:\n• Your biggest posture problem\n• How to improve your score\n• Break schedule\n• Recommended exercises",
-};
+function parseData(text) {
+  const t = text || "";
+  return {
+    name:        str(t, /for ([A-Za-zأ-ي][A-Za-zأ-ي ]{1,20})[\n:,]/),
+    avg:         num(t, /[Aa]vg[^:]*:\s*(\d+)/, /average.*?(\d+)\/100/, /Overall avg.*?(\d+)/),
+    weekAvg:     num(t, /[Ww]eek.*?avg[^:]*:\s*(\d+)/, /[Tt]his week.*?(\d+)\/100/),
+    lastWeekAvg: num(t, /[Ll]ast week.*?(\d+)\/100/),
+    best:        num(t, /[Bb]est.*?(\d+)/),
+    worst:       num(t, /[Ww]orst.*?(\d+)\/100/, /[Mm]in.*?(\d+)/),
+    sessions:    num(t, /[Ss]essions?:\s*(\d+)/, /[Tt]otal sessions?:\s*(\d+)/),
+    weekSessions:num(t, /[Tt]his week.*?(\d+)\s*session/, /[Ss]essions this week:\s*(\d+)/),
+    streak:      num(t, /[Ss]treak.*?(\d+)/),
+    trendPct:    num(t, /([+-]?\d+)%.*(?:vs|last|week)/),
+    fatigue:     num(t, /[Ff]atigue.*?(\d+)%/, /[Ff]atigue index.*?(\d+)/),
+    burnout:     num(t, /[Bb]urnout.*?(\d+)\/100/, /[Bb]urnout.*?(\d+)%/),
+    neckRisk:    num(t, /[Nn]eck.*?(\d+)%/),
+    riskScore:   num(t, /[Rr]isk score.*?(\d+)/, /[Oo]verall risk.*?(\d+)/),
+    anomalyCount:num(t, /(\d+)\s*anomal/),
+    forecast:    str(t, /[Pp]redicted.*?scores?:\s*([0-9, ]+)/),
+    slope:       num(t, /slope.*?([+-]?\d+\.?\d*)/),
+    trend:       str(t, /[Tt]rend.*?:\s*(improving|declining|stable|[+-]\d+)/i),
+    worstTime:   str(t, /[Ww]orst time.*?:\s*([^\n]+)/),
+    alerts:      str(t, /[Cc]ommon alerts?.*?:\s*([^\n]+)/),
+    calibrated:  t.includes("Yes") || t.includes("calibrat"),
+    lang:        t.includes("Arabic") || t.includes("بالعربية") ? "ar" : "en",
+    topic:       detectTopic(t),
+  };
+}
 
-function buildReply(userMsg, ctx) {
-  const T       = ctx.lang === "ar" ? AR : EN;
-  const msg     = userMsg.toLowerCase();
-  const score   = ctx.avg;
-  const noData  = !ctx.sessions;
-  const alertsL = ctx.alerts.map(a => a.toLowerCase()).join(" ");
+function detectTopic(t) {
+  if (t.match(/executive summary|performance snapshot/i))  return "executive";
+  if (t.match(/trend analysis|trend direction/i))          return "trends";
+  if (t.match(/fatigue.*burnout|burnout.*fatigue/i))       return "fatigue";
+  if (t.match(/recommendation|action plan|ergonomic/i))    return "recommendations";
+  if (t.match(/burnout risk/i))                            return "burnout";
+  if (t.match(/anomal/i))                                  return "anomaly";
+  if (t.match(/risk scor/i))                               return "risk";
+  if (t.match(/forecast|7-day|7 day/i))                   return "forecast";
+  if (t.match(/pain|hurt|ache|ألم|بيوجع/i))               return "pain";
+  if (t.match(/exercise|stretch|تمرين/i))                  return "exercise";
+  if (t.match(/break|schedule|بريك|راحة/i))                return "breaks";
+  if (t.match(/improve|better|تحسن|تحسين/i))              return "improve";
+  if (t.match(/problem|issue|مشكل|أكبر/i))                return "problem";
+  return "general";
+}
 
-  // Greeting / intro
-  if (msg.match(/^(hi|hello|hey|مرحبا|أهلا|هاي|كيف|how are)/)) {
-    if (noData) return T.nodata;
-    return T.greet(ctx.name, score, ctx.sessions) + "\n\n" +
-      (score < 50 ? T.low(score) : score < 75 ? T.mid(score) : T.high(score));
+// ── Response generators ───────────────────────────────────────────
+
+function scoreLabel(s, lang) {
+  if (!s) return lang === "ar" ? "غير محدد" : "N/A";
+  if (s >= 85) return lang === "ar" ? "ممتاز" : "Excellent";
+  if (s >= 70) return lang === "ar" ? "جيد" : "Good";
+  if (s >= 55) return lang === "ar" ? "متوسط" : "Fair";
+  return lang === "ar" ? "يحتاج تحسين" : "Needs Work";
+}
+
+function riskLabel(r, lang) {
+  if (!r) return "";
+  if (r >= 70) return lang === "ar" ? "🔴 مرتفع" : "🔴 HIGH";
+  if (r >= 40) return lang === "ar" ? "🟡 متوسط" : "🟡 MODERATE";
+  return lang === "ar" ? "🟢 منخفض" : "🟢 LOW";
+}
+
+function trend_dir(pct, lang) {
+  if (pct > 3)  return lang === "ar" ? "📈 تحسّن" : "📈 Improving";
+  if (pct < -3) return lang === "ar" ? "📉 تراجع" : "📉 Declining";
+  return lang === "ar" ? "➡️ ثابت" : "➡️ Stable";
+}
+
+// ── Core topic responses ──────────────────────────────────────────
+
+function genExecutive(d) {
+  const ar = d.lang === "ar";
+  const n  = d.name || (ar ? "المستخدم" : "User");
+  const s  = d.avg ?? 0;
+  const w  = d.weekAvg ?? s;
+  const t  = d.trendPct ?? 0;
+  const se = d.sessions ?? 0;
+  const f  = d.fatigue ?? 0;
+  const b  = d.burnout ?? 0;
+
+  if (ar) return `## ملخص تنفيذي — ${n}
+
+**📊 الأداء الحالي**
+- متوسط النقاط: **${s}/100** (${scoreLabel(s,ar)})
+- هذا الأسبوع: **${w}/100** | التغيير: **${t > 0 ? "+" : ""}${t}%** عن الأسبوع الفائت
+- إجمالي الجلسات: **${se}** | مؤشر الإجهاد: **${f}%**
+
+**⚠️ أبرز المخاطر**
+${b >= 70 ? "- 🔴 خطر إرهاق مرتفع — يحتاج تدخل فوري" : b >= 40 ? "- 🟡 خطر إرهاق متوسط — راقب الوضع" : "- 🟢 خطر إرهاق منخفض — استمر على النهج"}
+${s < 60 ? "- ⚠️ نقاط الوضعية منخفضة — راجع إعداد مكان العمل" : ""}
+${f >= 60 ? "- ⚠️ مؤشر إجهاد مرتفع — خذ فترات راحة أطول" : ""}
+
+**🎯 أولويات هذا الأسبوع**
+${s < 60 ? "1. اضبط ارتفاع الشاشة لمستوى العين\n2. كل ساعة خذ استراحة 5 دقائق\n3. أكمل معايرة الوضعية إن لم تفعل" : s < 80 ? "1. زد عدد الجلسات لـ 5 أسبوعياً\n2. ركّز على وضعية الرقبة\n3. اضبط وسادة الدعم القطني" : "1. حافظ على الانتظام\n2. ضع هدفاً للوصول لـ 90+\n3. شارك النتائج مع فريقك"}`;
+
+  return `## Executive Summary — ${n}
+
+**📊 Performance Snapshot**
+- Overall avg: **${s}/100** (${scoreLabel(s)}) | This week: **${w}/100**
+- Week-over-week: **${t > 0 ? "+" : ""}${t}%** | Total sessions: **${se}**
+- Fatigue index: **${f}%** | Burnout risk: **${b}/100** (${riskLabel(b)})
+
+**⚠️ Key Risk Areas**
+${b >= 70 ? "- 🔴 High burnout risk — immediate intervention needed" : b >= 40 ? "- 🟡 Moderate burnout risk — monitor closely" : "- 🟢 Burnout risk low — maintain current habits"}
+${s < 60 ? "- ⚠️ Below-average posture score — workstation review needed" : ""}
+${f >= 60 ? "- ⚠️ High fatigue index — increase break frequency" : ""}
+
+**🎯 This Week's Priority Actions**
+${s < 60 ? "1. Raise monitor to exact eye level\n2. Stand up every hour for 5 min\n3. Complete posture calibration" : s < 80 ? "1. Aim for 5 sessions this week\n2. Focus on neck position\n3. Add lumbar support to chair" : "1. Maintain consistency — you're doing well\n2. Target 90+ score\n3. Share results with your team"}`;
+}
+
+function genTrends(d) {
+  const ar = d.lang === "ar";
+  const s  = d.avg ?? 0;
+  const w  = d.weekAvg ?? s;
+  const lw = d.lastWeekAvg ?? s;
+  const t  = d.trendPct ?? Math.round(((w - lw) / Math.max(lw, 1)) * 100);
+  const ws = d.weekSessions ?? 0;
+
+  if (ar) return `## تحليل الاتجاهات
+
+**📈 اتجاه الأداء: ${trend_dir(t, true)}**
+- هذا الأسبوع: **${w}/100** | الأسبوع الماضي: **${lw}/100**
+- التغيير: **${t > 0 ? "+" : ""}${t}%** | الجلسات هذا الأسبوع: **${ws}**
+
+**🔍 تفسير البيانات**
+${t > 5 ? "وضعيتك بتتحسن بشكل واضح — استمر في نفس الروتين ولا تغير أي حاجة شغّالة." : t > 0 ? "تحسن بطيء — حاول تزيد تركيزك على فترات الراحة." : t < -5 ? "تراجع ملحوظ — غالباً سببه زيادة الضغط أو تغيير في بيئة العمل." : "الأداء ثابت — يمكن تحسينه بزيادة وتيرة الجلسات."}
+
+**🔮 توقع الأسبوع القادم**
+${t > 0 ? `إذا حافظت على نفس الوتيرة، متوقع الوصول لـ **${Math.min(100, w + Math.round(t * 0.5))}/100** الأسبوع القادم.` : `لتعكس الاتجاه: زد الجلسات لـ ${Math.max(4, ws + 1)} أسبوعياً واضبط إعداد مكان العمل.`}`;
+
+  return `## Trend Analysis
+
+**${trend_dir(t)} — ${Math.abs(t)}% week-over-week**
+- This week: **${w}/100** | Last week: **${lw}/100**
+- Sessions this week: **${ws}**
+
+**🔍 What's Driving This**
+${t > 5 ? "Clear improvement — your current habits are working. Don't change what's working." : t > 0 ? "Slow progress — increase break frequency and check monitor height." : t < -5 ? "Notable decline — likely caused by increased workload or workstation changes." : "Score is stable — increase session frequency to push forward."}
+
+**🔮 Forecast for Next Week**
+${t > 0 ? `At this pace: projected **${Math.min(100, w + Math.round(t * 0.5))}/100** next week.` : `To reverse trend: target ${Math.max(4, ws + 1)} sessions/week and review desk setup.`}`;
+}
+
+function genFatigue(d) {
+  const ar = d.lang === "ar";
+  const f  = d.fatigue ?? 0;
+  const b  = d.burnout ?? 0;
+  const s  = d.avg ?? 0;
+  const ws = d.weekSessions ?? 0;
+
+  if (ar) return `## تقييم الإجهاد والإرهاق
+
+**مؤشر الإجهاد: ${riskLabel(f, true)} (${f}%)**
+**خطر الإرهاق: ${riskLabel(b, true)} (${b}/100)**
+
+**⚠️ علامات تحذيرية**
+${f >= 70 ? "- 🔴 إجهاد بدني مرتفع — جسمك يطلب استراحة" : "- مستوى الإجهاد مقبول حالياً"}
+${b >= 60 ? "- 🔴 خطر إرهاق مهني — قلّل ساعات العمل المتواصل" : ""}
+${s < 55 ? "- ⚠️ وضعية ضعيفة + إجهاد = خطر ألم مزمن" : ""}
+- ${ws < 3 ? "- عدد الجلسات قليل هذا الأسبوع — حاول تزيد المراقبة" : "- وتيرة الجلسات جيدة"}
+
+**💊 توصيات التعافي**
+${f >= 60 ? "1. خذ استراحة 10 دقائق كل ساعة (مش 5 دقائق)\n2. تمارين تنفس عميق 3 مرات يومياً\n3. راجع طبيب إذا استمر الألم" : "1. حافظ على استراحة 5 دقائق كل ساعة\n2. تأكد من النوم 7-8 ساعات\n3. تمارين الاسترخاء قبل النوم"}`;
+
+  return `## Fatigue & Burnout Assessment
+
+**Fatigue Index: ${riskLabel(f)} (${f}%)** | **Burnout Risk: ${riskLabel(b)} (${b}/100)**
+
+**⚠️ Warning Signs**
+${f >= 70 ? "- 🔴 High physical fatigue — your body needs rest" : "- Fatigue at acceptable levels"}
+${b >= 60 ? "- 🔴 High burnout risk — reduce continuous work hours" : ""}
+${s < 55 ? "- ⚠️ Poor posture + high fatigue = chronic pain risk" : ""}
+- ${ws < 3 ? "Session frequency low this week — increase monitoring" : "Good session frequency this week"}
+
+**💊 Recovery Recommendations**
+${f >= 60 ? "1. 10-minute break every hour (increase from 5 min)\n2. Deep breathing exercises 3×/day\n3. Consult a physiotherapist if pain persists" : "1. Maintain 5-minute break every hour\n2. Ensure 7-8 hours of sleep\n3. Stretching routine before bed"}`;
+}
+
+function genRecommendations(d) {
+  const ar  = d.lang === "ar";
+  const s   = d.avg ?? 0;
+  const f   = d.fatigue ?? 0;
+  const nr  = d.neckRisk ?? 0;
+  const cal = d.calibrated;
+
+  if (ar) return `## خطة العمل الشخصية
+
+**🔧 إصلاحات فورية (هذا الأسبوع)**
+${s < 60 ? "- اضبط ارتفاع الشاشة — الجزء العلوي بمستوى العين بالضبط\n- ارتفاع الكرسي — الركبتان بزاوية 90°\n- لوحة المفاتيح — الكوعان ليسا مرفوعين" : "- ✅ إعداد مكان العمل يبدو جيداً — ركّز على العادات"}
+
+**🖥️ تحسينات بيئة العمل**
+${nr >= 50 ? "- 🚨 مخاطر رقبة مرتفعة — ارفع الشاشة 3-5 سم\n- أضف وسادة دعم للرقبة إن احتجت" : "- مستوى الشاشة مناسب — تأكد دورياً"}
+${f >= 50 ? "- أضف مؤقت استراحة (Pomodoro 25/5 أو 50/10)" : ""}
+${!cal ? "- ⚠️ أكمل معايرة الوضعية للحصول على تحليل أدق" : "- ✅ معايرة الوضعية مكتملة"}
+
+**📅 تحسينات عادات العمل**
+1. قاعدة 20-20-20: كل 20 دقيقة، انظر بعيداً 20 ثانية
+2. وقف كل ساعة 2 دقيقة على الأقل
+3. تمارين الرقبة والكتفين مرتين يومياً
+4. اهدف لـ ${Math.min(7, (d.weekSessions ?? 2) + 2)} جلسات مراقبة أسبوعياً`;
+
+  return `## Personalized Action Plan
+
+**🔧 Immediate Fixes (This Week)**
+${s < 60 ? "- Screen height: top of monitor at exact eye level\n- Chair height: knees at 90° with feet flat\n- Keyboard: elbows not raised above desk level" : "- ✅ Workstation setup looks good — focus on habits"}
+
+**🖥️ Workstation Adjustments**
+${nr >= 50 ? "- 🚨 High neck risk — raise monitor 3-5cm\n- Consider a laptop stand + external keyboard" : "- Monitor level looks appropriate — verify periodically"}
+${f >= 50 ? "- Add a break timer (Pomodoro 25/5 or 50/10)" : ""}
+${!cal ? "- ⚠️ Complete posture calibration for personalized thresholds" : "- ✅ Calibration complete — personalized thresholds active"}
+
+**📅 Habit Improvements**
+1. 20-20-20 rule: every 20 min, look 20 ft away for 20 sec
+2. Stand up every hour for at least 2 minutes
+3. Neck + shoulder stretch twice daily
+4. Target ${Math.min(7, (d.weekSessions ?? 2) + 2)} monitoring sessions/week`;
+}
+
+function genBurnout(d) {
+  const ar = d.lang === "ar";
+  const b  = d.burnout ?? 0;
+  const s  = d.avg ?? 0;
+  const ws = d.weekSessions ?? 0;
+
+  if (ar) return `## تحليل خطر الإرهاق
+
+**النتيجة: ${riskLabel(b, true)} — ${b}/100**
+
+**🔍 مؤشرات التقييم**
+${b >= 70 ? "- 🔴 نقاط الإرهاق مرتفعة جداً — يحتاج تدخل فوري" : b >= 40 ? "- 🟡 الإرهاق في حد متوسط — راقب المؤشرات أسبوعياً" : "- 🟢 مستوى الإرهاق آمن — حافظ على النمط الحالي"}
+- وضعية الجسم ${s < 60 ? "ضعيفة — عامل خطر إضافي" : "جيدة — عامل حماية"}
+- الجلسات هذا الأسبوع: ${ws} ${ws < 3 ? "(أقل من المثالي)" : "(جيد)"}
+
+**🛡️ خطة الوقاية**
+${b >= 60 ? "1. قلّل ساعات العمل المتواصل — أقصاه 90 دقيقة بدون راحة\n2. خذ يوم راحة كامل من العمل أسبوعياً\n3. استشر طبيباً إذا استمر الإرهاق 2+ أسبوع" : "1. حافظ على استراحة 5-10 دقائق كل ساعة\n2. حدد وقت للتوقف عن العمل كل يوم\n3. تأكد من 7-8 ساعات نوم يومياً"}`;
+
+  return `## Burnout Risk Analysis
+
+**Score: ${riskLabel(b)} — ${b}/100**
+
+**🔍 Risk Indicators**
+${b >= 70 ? "- 🔴 Very high burnout risk — immediate intervention needed" : b >= 40 ? "- 🟡 Moderate burnout risk — monitor weekly" : "- 🟢 Burnout risk low — current habits are protective"}
+- Posture score ${s < 60 ? "poor — additional risk factor" : "good — protective factor"}
+- Sessions this week: ${ws} ${ws < 3 ? "(below ideal)" : "(good)"}
+
+**🛡️ Prevention Plan**
+${b >= 60 ? "1. Cap continuous work at 90 min max before a break\n2. Take one full rest day per week\n3. Consult a doctor if burnout persists 2+ weeks" : "1. Maintain 5-10 min break every hour\n2. Set a firm end-of-work time daily\n3. Ensure 7-8 hours sleep per night"}`;
+}
+
+function genAnomaly(d) {
+  const ar = d.lang === "ar";
+  const ac = d.anomalyCount ?? 0;
+  const s  = d.avg ?? 0;
+
+  if (ar) return `## تحليل الشواذ في الوضعية
+
+**${ac} شذوذ مكتشف** من متوسط ${s}/100
+
+**📊 ماذا تعني هذه الشواذ**
+${ac === 0 ? "لا شواذ — وضعيتك متسقة بشكل ممتاز!" : ac <= 2 ? "شواذ قليلة — طبيعية جداً، قد تكون بسبب اجتماعات أو ضغط عمل مؤقت" : ac <= 5 ? "عدد متوسط من الشواذ — يستحق المراقبة لمعرفة نمط متكرر" : "عدد مرتفع من الشواذ — ربما مشكلة بيئية ثابتة (كرسي، شاشة، إضاءة)"}
+
+**🔍 الأسباب المحتملة**
+- اجتماعات طويلة أو مكالمات فيديو
+- ضغط عمل مرتفع في أيام معينة
+- إعداد مكان العمل (الكرسي، الشاشة)
+- الإضاءة أو وضع اللابتوب
+
+**📋 خطوات العمل**
+1. راجع أوقات الشواذ — هل تتركز في وقت معين؟
+2. تحقق من إعداد مكان العمل في تلك الأوقات
+3. أضف تذكيرات وضعية إضافية في أوقات الذروة`;
+
+  return `## Posture Anomaly Analysis
+
+**${ac} anomalies detected** from baseline of ${s}/100
+
+**📊 What These Anomalies Mean**
+${ac === 0 ? "No anomalies — excellent posture consistency!" : ac <= 2 ? "Few anomalies — very normal, likely from meetings or temporary stress" : ac <= 5 ? "Moderate anomalies — worth monitoring for recurring pattern" : "High anomaly count — likely a persistent environmental issue (chair, screen, lighting)"}
+
+**🔍 Likely Causes**
+- Extended video calls or meetings
+- High-pressure work periods on specific days
+- Workstation configuration drift
+- Poor lighting forcing you to lean forward
+
+**📋 Action Steps**
+1. Check when anomalies occur — are they clustered at specific times?
+2. Review workstation setup during those sessions
+3. Add extra posture reminders during peak-stress hours`;
+}
+
+function genRisk(d) {
+  const ar = d.lang === "ar";
+  const r  = d.riskScore ?? d.burnout ?? 0;
+  const s  = d.avg ?? 0;
+  const ac = d.anomalyCount ?? 0;
+
+  if (ar) return `## تحليل ملف المخاطر
+
+**الدرجة الإجمالية للمخاطر: ${riskLabel(r, true)} (${r}/100)**
+
+**📊 ملخص المخاطر**
+- وضعية الجسم: ${scoreLabel(s, true)} (${s}/100)
+- الشواذ المكتشفة: ${ac} حادثة
+- المستوى العام: ${r >= 70 ? "يحتاج تدخل فوري" : r >= 40 ? "يستحق المراقبة الأسبوعية" : "مستوى آمن"}
+
+**🎯 أعلى 3 مخاطر**
+${s < 60 ? "1. 🔴 وضعية ضعيفة — خطر ألم مزمن في الرقبة والظهر" : "1. 🟢 وضعية جيدة — استمر"}
+${ac > 3 ? "2. 🟡 تذبذب متكرر — بيئة عمل غير مستقرة" : "2. 🟢 وضعية متسقة"}
+${r >= 50 ? "3. 🟡 خطر إرهاق متوسط — راقب الأعراض" : "3. 🟢 مستوى إرهاق آمن"}
+
+**🛡️ خطة تخفيف المخاطر**
+${r >= 60 ? "1. أعد تقييم إعداد مكان العمل الأسبوع القادم\n2. استشر فيزيوثيرابيست إذا ظهر ألم\n3. ضع هدفاً وصريحاً: 5 جلسات أسبوعياً كحد أدنى" : "1. حافظ على الجلسات المنتظمة\n2. ركّز على الجودة لا الكمية\n3. راقع المؤشرات شهرياً"}`;
+
+  return `## Risk Profile Analysis
+
+**Overall Risk Score: ${riskLabel(r)} (${r}/100)**
+
+**📊 Risk Breakdown**
+- Posture score: ${scoreLabel(s)} (${s}/100)
+- Detected anomalies: ${ac}
+- Risk level: ${r >= 70 ? "Requires immediate action" : r >= 40 ? "Monitor weekly" : "Safe range"}
+
+**🎯 Highest Risk Areas**
+${s < 60 ? "1. 🔴 Poor posture — chronic neck/back pain risk" : "1. 🟢 Good posture — maintain it"}
+${ac > 3 ? "2. 🟡 Frequent variability — unstable work environment" : "2. 🟢 Consistent posture pattern"}
+${r >= 50 ? "3. 🟡 Moderate overall risk — monitor weekly" : "3. 🟢 Risk level safe"}
+
+**🛡️ Risk Mitigation Plan**
+${r >= 60 ? "1. Reassess workstation setup next week\n2. Consult physiotherapist if pain appears\n3. Set minimum 5 sessions/week target" : "1. Maintain regular session frequency\n2. Focus on quality over quantity\n3. Review metrics monthly"}`;
+}
+
+function genForecast(d) {
+  const ar  = d.lang === "ar";
+  const s   = d.avg ?? 0;
+  const t   = d.trendPct ?? 0;
+  const fc  = d.forecast ? d.forecast.split(",").map(x => parseInt(x.trim())).filter(n => !isNaN(n)) : [];
+  const avg7 = fc.length ? Math.round(fc.reduce((a,b) => a+b, 0) / fc.length) : Math.round(s + t * 0.5);
+
+  if (ar) return `## توقعات 7 أيام
+
+**متوسط متوقع: ${avg7}/100**
+${fc.length ? `النقاط اليومية المتوقعة: ${fc.join(" → ")}` : `الاتجاه: ${trend_dir(t, true)}`}
+
+**🔍 المحركات الرئيسية**
+${t > 2 ? "- الزخم الإيجابي الحالي سيستمر إذا حافظت على الجلسات المنتظمة" : t < -2 ? "- الانخفاض الحالي قد يستمر — يحتاج تدخل" : "- الأداء مستقر — يمكن تحسينه بجهد بسيط"}
+- كل جلسة إضافية تحسّن المتوسط بـ ~2-3 نقطة
+- يوم واحد بدون راحات كافية يخفض النقاط 5-8 نقطة
+
+**📈 كيف تحسّن التوقع**
+1. ${avg7 < 75 ? "اضبط ارتفاع الشاشة — أعلى تأثير على النقاط" : "حافظ على الاستراحات المنتظمة"}
+2. أكمل ${Math.max(5, (d.weekSessions ?? 3) + 2)} جلسة هذا الأسبوع
+3. تمارين الرقبة والكتفين يومياً`;
+
+  return `## 7-Day Performance Forecast
+
+**Projected average: ${avg7}/100**
+${fc.length ? `Daily predicted scores: ${fc.join(" → ")}` : `Trend direction: ${trend_dir(t)}`}
+
+**🔍 Key Drivers**
+${t > 2 ? "- Positive momentum — will continue with regular sessions" : t < -2 ? "- Current decline may continue — needs intervention" : "- Performance stable — small effort can push it forward"}
+- Each additional session improves average by ~2-3 points
+- One day without adequate breaks drops score 5-8 points
+
+**📈 How to Improve the Forecast**
+1. ${avg7 < 75 ? "Adjust screen height — highest impact on score" : "Maintain regular break schedule"}
+2. Complete ${Math.max(5, (d.weekSessions ?? 3) + 2)} sessions this week
+3. Daily neck and shoulder stretches`;
+}
+
+// ── Coach conversation ────────────────────────────────────────────
+
+function genCoachReply(msg, d) {
+  const ar  = d.lang === "ar";
+  const s   = d.avg ?? 0;
+  const ses = d.sessions ?? 0;
+  const noData = ses === 0;
+  const m   = msg.toLowerCase();
+
+  const no = ar
+    ? "مفيش بيانات كافية لحد دلوقتي — ابدأ جلسة تحليل الوضعية الأول ثم عود إليّ."
+    : "No session data yet — start a posture analysis session first, then come back.";
+  if (noData && !m.match(/help|مساعدة|hello|مرحبا/)) return no;
+
+  // Pain
+  if (m.match(/pain|hurt|ache|sore|ألم|بيوجع|وجع|مؤلم/)) {
+    if (ar) return `ألم الرقبة والظهر غالباً مرتبط بالوضعية. **درجتك الحالية ${s}/100** ${s < 65 ? "بتأكد إن في مشكلة بتستحق الانتباه" : "كويسة، بس مش معناها مفيش مشكلة"}.\n\n**ما تعمله الآن:**\n- أوقف العمل 5 دقائق واتحرك\n- تمرين Chin Tuck: أدخل ذقنك للداخل 10 مرات\n- ارفع الشاشة لمستوى عينيك\n\n⚠️ إذا الألم مستمر أكثر من أسبوعين، استشر فيزيوثيرابيست.`;
+    return `Neck and back pain is usually posture-related. **Your current score: ${s}/100** ${s < 65 ? "confirms there's something worth addressing" : "is decent, but pain can occur even with okay scores"}.\n\n**Do this now:**\n- Take a 5-min movement break\n- Chin tuck: pull chin back 10 reps\n- Raise monitor to eye level\n\n⚠️ If pain persists 2+ weeks, consult a physiotherapist.`;
   }
 
   // Biggest problem
-  if (msg.match(/problem|issue|wrong|مشكل|غلط|أكبر/)) {
-    if (noData) return T.nodata;
-    const parts = [score < 50 ? T.low(score) : score < 75 ? T.mid(score) : T.high(score)];
-    if (alertsL.includes("head") || alertsL.includes("forward") || alertsL.includes("رأس")) parts.push(T.head);
-    if (alertsL.includes("shoulder") || alertsL.includes("كتف"))   parts.push(T.shoulder);
-    if (alertsL.includes("back") || alertsL.includes("ظهر"))       parts.push(T.back);
-    if (alertsL.includes("neck") || alertsL.includes("رقبة"))      parts.push(T.neck);
-    if (ctx.worst) parts.push(T.worst(ctx.worst));
-    if (parts.length === 1) parts.push(ctx.lang === "ar" ? "مفيش تنبيهات متكررة ظاهرة في بياناتك — كمل على الوضعية الكويسة!" : "No recurring alerts in your data — keep up the good posture!");
+  if (m.match(/problem|issue|wrong|مشكل|أكبر|إيه فيّ|ايه في/)) {
+    if (noData) return no;
+    const al = (d.alerts || "").toLowerCase();
+    const parts = ar
+      ? [`درجتك **${s}/100** — ${s < 60 ? "في مشاكل واضحة محتاجة اهتمام" : s < 80 ? "مستوى متوسط، في مجال تحسين" : "ممتاز!"}`]
+      : [`Your score: **${s}/100** — ${s < 60 ? "clear issues that need attention" : s < 80 ? "decent level with room to improve" : "excellent!"}`];
+    if (al.includes("head") || al.includes("forward") || al.includes("neck"))
+      parts.push(ar ? "📍 **الرأس متقدم للأمام** — ارفع الشاشة وافتكر 'حنك للداخل'" : "📍 **Forward head posture** — raise screen, practice chin tuck");
+    if (al.includes("shoulder") || al.includes("round"))
+      parts.push(ar ? "📍 **كتفان مدوّران** — اسحب الكتفين للخلف وللأسفل" : "📍 **Rounded shoulders** — pull shoulder blades together and down");
+    if (al.includes("back") || al.includes("spine") || al.includes("lean"))
+      parts.push(ar ? "📍 **ميلان الظهر** — اتكئ للخلف واستخدم الدعم القطني" : "📍 **Back lean detected** — sit back with lumbar support");
+    if (parts.length === 1)
+      parts.push(ar ? "✅ مفيش تنبيهات متكررة — كمل على الوضعية الكويسة!" : "✅ No recurring alerts — keep up the good posture!");
+    if (d.worstTime) parts.push(ar ? `⏰ أسوأ وقت: **${d.worstTime}** — ركّز على الراحة في هذا الوقت` : `⏰ Worst time: **${d.worstTime}** — extra breaks during those hours`);
     return parts.join("\n\n");
   }
 
-  // How to improve
-  if (msg.match(/improve|better|higher|score|تحسن|تحسين|أحسن|رفع/)) {
-    if (noData) return T.nodata;
-    return (score < 50 ? T.improve_low : score < 75 ? T.improve_mid : T.improve_high);
-  }
+  // Improve / how to get better
+  if (m.match(/improve|better|higher|score|رفع|تحسن|أحسن|إزاي|ازاي/)) {
+    if (noData) return no;
+    if (ar) return s < 60
+      ? `**لرفع نقاطك من ${s} لـ 70+:**\n\n1. 🖥️ الشاشة على مستوى العين بالضبط (أعلى تأثير)\n2. 🪑 الكرسي — الركبتان 90°، القدمان على الأرض\n3. ⏰ كل ساعة: وقف ومشي دقيقتين\n4. 🧠 قاعدة 20-20-20: كل 20 دقيقة، انظر 20 ثانية بعيداً\n5. 📐 أكمل معايرة الوضعية للحصول على قياسات شخصية`
+      : s < 80
+      ? `**لرفع نقاطك من ${s} لـ 85+:**\n\n1. 🎯 ركّز على وضعية الرقبة — أكبر عامل في النقاط\n2. ⏰ زد الجلسات لـ 5-6 أسبوعياً\n3. 💪 تمارين الرقبة والكتف مرتين يومياً\n4. 🔔 فعّل تنبيهات الوضعية لمساعدتك على التذكر`
+      : `**لتحافظ على ${s}+ والوصول لـ 90:**\n\n1. 🏆 أنت في المستوى الممتاز — حافظ على الانتظام\n2. 💪 أضف رياضة 3 مرات أسبوعياً لتقوية العضلات\n3. 🎯 ضع هدفاً: صفر تنبيهات في جلسة واحدة أسبوعياً`;
 
-  // Pain
-  if (msg.match(/pain|hurt|ache|ألم|بيوجع|وجع/)) {
-    return T.pain + (noData ? "" : "\n\n" + (score < 60 ? (ctx.lang === "ar" ? "\nدرجتك " + score + " بتأكد إن في مشاكل في الوضعية محتاجة اهتمام." : "\nYour score of " + score + " confirms posture issues that need attention.") : ""));
-  }
-
-  // Break schedule
-  if (msg.match(/break|rest|schedule|pause|بريك|راحة|جدول/)) {
-    return T.break_sched + (ctx.worst ? "\n\n" + T.worst(ctx.worst) : "");
+    return s < 60
+      ? `**To raise your score from ${s} to 70+:**\n\n1. 🖥️ Monitor at exact eye level (highest impact)\n2. 🪑 Chair: knees at 90°, feet flat on floor\n3. ⏰ Every hour: stand and walk 2 min\n4. 🧠 20-20-20 rule: every 20 min, look away 20 sec\n5. 📐 Complete posture calibration for personalized thresholds`
+      : s < 80
+      ? `**To raise your score from ${s} to 85+:**\n\n1. 🎯 Focus on neck position — biggest scoring factor\n2. ⏰ Increase to 5-6 sessions/week\n3. 💪 Neck + shoulder exercises twice daily\n4. 🔔 Enable posture alerts to reinforce habits`
+      : `**To maintain ${s}+ and reach 90:**\n\n1. 🏆 Excellent level — maintain consistency\n2. 💪 Add 3×/week exercise for back muscle strength\n3. 🎯 Set goal: zero alerts in one session per week`;
   }
 
   // Exercises
-  if (msg.match(/exercise|stretch|workout|تمرين|استريتش|رياضة/)) {
-    return T.exercise;
+  if (m.match(/exercise|stretch|workout|routine|تمرين|استريتش|رياضة|روتين/)) {
+    if (ar) return `**💪 روتين الوضعية اليومي (10 دقائق):**
+
+**الصباح (5 دقائق):**
+1. **Chin Tuck:** أدخل ذقنك للداخل 10 مرات × 3
+2. **Shoulder Rolls:** كتفيك للخلف 10 مرات
+3. **Chest Opener:** مد ذراعيك للخلف 30 ثانية × 2
+
+**كل ساعتين (5 دقائق):**
+4. **Cat-Cow:** على اليدين والركبتين، 10 مرات
+5. **Wall Angels:** جنب الحيط، 10 مرات
+6. **Neck Stretch:** أمل رأسك لكل جانب 20 ثانية
+
+⚕️ كل هذه التمارين مبنية على بروتوكولات فيزيوثيرابي موثّقة.`;
+
+    return `**💪 Daily Posture Routine (10 minutes):**
+
+**Morning (5 min):**
+1. **Chin Tuck:** pull chin in 10 reps × 3
+2. **Shoulder Rolls:** backward 10 times
+3. **Chest Opener:** arms back, hold 30 sec × 2
+
+**Every 2 hours (5 min):**
+4. **Cat-Cow:** hands and knees, 10 reps
+5. **Wall Angels:** against wall, 10 reps
+6. **Neck Stretch:** tilt each side 20 seconds
+
+⚕️ All exercises based on documented physiotherapy protocols.`;
   }
 
-  // Trend
-  if (msg.match(/trend|progress|getting|تحسن|اتحسن|بيتراجع/)) {
-    if (noData) return T.nodata;
-    const trendLow = ctx.trend?.toLowerCase() || "";
-    return trendLow.includes("improv") || trendLow.includes("تحسن") ? T.trend_up : trendLow.includes("declin") || trendLow.includes("راجع") ? T.trend_down : (ctx.lang === "ar" ? "وضعيتك ثابتة — حاول تحافظ على البريكات المنتظمة." : "Your posture is stable — keep maintaining regular breaks.");
+  // Breaks
+  if (m.match(/break|rest|schedule|pause|timer|بريك|راحة|جدول|تايمر/)) {
+    if (ar) return `**⏰ جدول الاستراحات الأمثل (مبني على أبحاث NIOSH):**
+
+- **كل 20 دقيقة:** انظر بعيداً 20 ثانية (قاعدة 20-20-20)
+- **كل ساعة:** وقف ومشي دقيقتين + تمرين سريع للرقبة
+- **كل ساعتين:** استراحة 5-10 دقائق كاملة + استريتش
+
+${d.worstTime ? `\n⚠️ **أسوأ وقت لديك: ${d.worstTime}** — في هذا الوقت خذ استراحة كل 30 دقيقة بدلاً من ساعة.` : ""}
+
+**💡 تطبيقات مفيدة:** Stretchly (مجاني ومفتوح المصدر) أو مؤقت بسيط على هاتفك`;
+
+    return `**⏰ Optimal Break Schedule (NIOSH-based):**
+
+- **Every 20 min:** look 20 feet away for 20 seconds
+- **Every hour:** stand + walk 2 min + quick neck stretch
+- **Every 2 hours:** full 5-10 min break + stretching
+
+${d.worstTime ? `\n⚠️ **Your worst time: ${d.worstTime}** — during this period, break every 30 min instead of 60.` : ""}
+
+**💡 Useful tools:** Stretchly (free, open-source) or a simple phone timer`;
   }
 
-  // Score question
-  if (msg.match(/score|درجة|كام|what.*my/)) {
-    if (noData) return T.nodata;
-    return T.greet(ctx.name, score, ctx.sessions);
+  // Score / data question
+  if (m.match(/score|درجة|كام|what.*score|نقط|points/)) {
+    if (noData) return no;
+    const n = d.name ? (ar ? `${d.name}، ` : `${d.name}, `) : "";
+    if (ar) return `${n}متوسط درجاتك **${s}/100** من **${ses}** جلسة.\n\n${s >= 85 ? "🏆 ممتاز! أنت في أفضل 20% من المستخدمين." : s >= 70 ? "👍 جيد — مع تحسينات بسيطة تقدر توصل لـ 85+." : s >= 55 ? "📊 متوسط — في مجال تحسين ملموس بتغييرات صغيرة." : "⚠️ أقل من المتوسط — اتبع خطة التحسين أعلاه."}`;
+    return `${n}your average score is **${s}/100** from **${ses}** sessions.\n\n${s >= 85 ? "🏆 Excellent! You're in the top 20% of users." : s >= 70 ? "👍 Good — small improvements can get you to 85+." : s >= 55 ? "📊 Average — significant room to improve with small changes." : "⚠️ Below average — follow the improvement plan above."}`;
   }
 
-  // Worst time
-  if (msg.match(/worst|أسوأ|when/)) {
-    if (noData) return T.nodata;
-    return ctx.worst ? T.worst(ctx.worst) + (ctx.lang === "ar" ? "\n\nركّز على البريكات في الأوقات دي أكتر من غيرها." : "\n\nFocus on breaks especially during those hours.") : (ctx.lang === "ar" ? "مفيش بيانات كافية عن أوقات بعينها لحد دلوقتي." : "Not enough time-specific data yet.");
+  // Greeting
+  if (m.match(/^(hi|hello|hey|مرحبا|أهلاً|أهلا|هاي|السلام)/)) {
+    if (noData) return ar
+      ? "أهلاً! 👋 أنا Corvus، مدرب الوضعية الشخصي. ابدأ جلسة تحليل الوضعية الأول عشان أقدر أديك توصيات مخصصة."
+      : "Hello! 👋 I'm Corvus, your personal posture coach. Start a posture analysis session first so I can give you personalized advice.";
+    const n = d.name ? (ar ? `${d.name}` : d.name) : (ar ? "صديقي" : "there");
+    return ar
+      ? `أهلاً ${n}! 💪 شايف بياناتك — متوسط درجاتك **${s}/100** من **${ses}** جلسة.\n\n${s >= 80 ? "وضعيتك ممتازة! كيف أساعدك اليوم؟" : s >= 65 ? "وضعيتك كويسة مع مجال للتحسين. إيه اللي تحب تعرفه؟" : "في مجال تحسين واضح — إيه أكبر مشكلة حاسسها؟"}`
+      : `Hi ${n}! 💪 I can see your data — average score **${s}/100** from **${ses}** sessions.\n\n${s >= 80 ? "Your posture is excellent! What can I help you with today?" : s >= 65 ? "Good posture with room to improve. What would you like to know?" : "There's clear room to improve — what's your biggest concern?"}`;
   }
 
-  // Default
-  return T.default;
+  // Default — data-aware
+  if (noData) return ar
+    ? "أنا هنا لمساعدتك في تحسين وضعيتك. ابدأ جلسة تحليل أولاً ثم اسألني عن:\n• أكبر مشكلة في وضعيتك\n• إزاي ترفع نقاطك\n• جدول الاستراحات\n• التمارين المناسبة"
+    : "I'm here to help you improve your posture. Start an analysis session first, then ask me about:\n• Your biggest posture problem\n• How to improve your score\n• Break schedule\n• Recommended exercises";
+
+  return ar
+    ? `بناءً على بياناتك (${s}/100 من ${ses} جلسة)، يمكنني مساعدتك في:\n• **تحليل مشاكلك** — "إيه أكبر مشكلة في وضعيتي؟"\n• **خطة التحسين** — "إزاي أرفع نقاطي؟"\n• **التمارين** — "أديني روتين تمارين"\n• **الاستراحات** — "إيه جدول الاستراحات المناسب؟"`
+    : `Based on your data (${s}/100 from ${ses} sessions), I can help with:\n• **Problem analysis** — "What's my biggest posture problem?"\n• **Improvement plan** — "How do I raise my score?"\n• **Exercises** — "Give me an exercise routine"\n• **Breaks** — "What's the optimal break schedule?"`;
 }
 
-// ── Public API ─────────────────────────────────────────────────────
+// ── Public API ────────────────────────────────────────────────────
+
 export async function localChat(messages, { systemPrompt = "", maxTokens = 500 } = {}) {
-  // Simulate a tiny delay so it feels like "thinking" not instant
-  await new Promise(r => setTimeout(r, 400 + Math.random() * 600));
-  const ctx      = extractContext(systemPrompt);
+  await new Promise(r => setTimeout(r, 350 + Math.random() * 450));
+  const d        = parseData(systemPrompt);
   const lastUser = [...messages].reverse().find(m => m.role === "user");
-  return buildReply(lastUser?.content || "", ctx);
+  return genCoachReply(lastUser?.content || "", d);
 }
 
 export async function localAnalysis(prompt, { systemPrompt = "", maxTokens = 500 } = {}) {
-  await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
-  const ctx = extractContext(systemPrompt || prompt);
-  // For analysis prompts, return a structured summary
-  const T   = ctx.lang === "ar" ? AR : EN;
-  const s   = ctx.avg;
-  if (!ctx.sessions) return ctx.lang === "ar" ? "📊 مفيش بيانات كافية لحد دلوقتي." : "📊 Not enough data yet.";
-  const lines = [
-    s < 50 ? T.low(s) : s < 75 ? T.mid(s) : T.high(s),
-    s < 50 ? T.improve_low : s < 75 ? T.improve_mid : T.improve_high,
-  ];
-  if (ctx.worst) lines.push(T.worst(ctx.worst));
-  return lines.join("\n\n");
+  await new Promise(r => setTimeout(r, 400 + Math.random() * 400));
+  const combined = (systemPrompt || "") + "\n" + (prompt || "");
+  const d = parseData(combined);
+
+  switch (d.topic) {
+    case "executive":       return genExecutive(d);
+    case "trends":          return genTrends(d);
+    case "fatigue":         return genFatigue(d);
+    case "recommendations": return genRecommendations(d);
+    case "burnout":         return genBurnout(d);
+    case "anomaly":         return genAnomaly(d);
+    case "risk":            return genRisk(d);
+    case "forecast":        return genForecast(d);
+    default:
+      // Fallback — use coach reply on the full prompt
+      return genCoachReply(prompt, d);
+  }
 }
