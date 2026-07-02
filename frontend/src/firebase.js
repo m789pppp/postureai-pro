@@ -769,6 +769,35 @@ function dc(doc,...c){doc.setDrawColor(...c);}
 function fc(doc,...c){doc.setFillColor(...c);}
 function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
+=======
+// ── Cairo Arabic font loader (call once per jsPDF doc instance) ───
+let _cairoCached = null; // module-level cache — avoid re-fetching on every PDF
+async function _loadCairo(doc) {
+  try {
+    if (!_cairoCached) {
+      const { CAIRO_FONT_B64 } = await import("./lib/cairoFont.js");
+      _cairoCached = CAIRO_FONT_B64;
+    }
+    doc.addFileToVFS("Cairo.ttf", _cairoCached);
+    doc.addFont("Cairo.ttf", "cairo", "normal");
+    doc.addFileToVFS("Cairo-Bold.ttf", _cairoCached);
+    doc.addFont("Cairo-Bold.ttf", "cairo", "bold");
+    return true;
+  } catch(e) {
+    console.warn("Cairo font load failed:", e.message);
+    return false;
+  }
+}
+
+// ── font() — Arabic-aware: uses Cairo when isAr, Helvetica otherwise
+function font(doc, size, style="normal", face="helvetica") {
+  doc.setFont(face, style); doc.setFontSize(size);
+}
+function fontAr(doc, size, style="normal", cairoLoaded=false) {
+  doc.setFont(cairoLoaded ? "cairo" : "helvetica", style);
+  doc.setFontSize(size);
+}
+>>>>>>> 8bd65aa (feat(pdf/phase1): Cairo Arabic font + Corvus PNG logo + AI Reports date-range filter + dynamic tier label — all 4 Phase 1 items complete)
 
 // ── Rounded filled rect helper ─────────────────────────────────────
 function rr(doc,x,y,w,h,r=3,mode="F"){
@@ -780,19 +809,26 @@ function divider(doc,x,y,w,col=T.border){
   dc(doc,...col);lw(doc,0.2);doc.line(x,y,x+w,y);lw(doc,0.3);
 }
 
-// ── Logo mark ─────────────────────────────────────────────────────
-function _logo(doc,x,y,sz=20){
-  fc(doc,...T.primary);rr(doc,x,y,sz,sz,sz*0.18,"F");
-  // Inner diamond
-  fc(doc,...T.card);
-  const cx=x+sz/2,cy=y+sz/2,hs=sz*0.26;
-  doc.lines([[hs,hs],[-hs,hs],[-hs,-hs],[hs,-hs]],cx,cy-hs,[1,1],"F",true);
-  // Center dot
-  fc(doc,...T.primary);doc.circle(cx,cy,sz*0.1,"F");
+// ── Logo mark — real PNG via corvusLogo.js, geometric fallback ─────
+async function _logo(doc,x,y,sz=20){
+  try {
+    const { CORVUS_LOGO_B64 } = await import("./lib/corvusLogo.js");
+    // Scale to requested size preserving 240:64 aspect ratio
+    const logoW = sz * (240/64);
+    const logoH = sz;
+    doc.addImage(CORVUS_LOGO_B64, "PNG", x, y, logoW, logoH);
+  } catch {
+    // Geometric fallback
+    fc(doc,...T.primary);rr(doc,x,y,sz,sz,sz*0.18,"F");
+    fc(doc,...T.card);
+    const cx=x+sz/2,cy=y+sz/2,hs=sz*0.26;
+    doc.lines([[hs,hs],[-hs,hs],[-hs,-hs],[hs,-hs]],cx,cy-hs,[1,1],"F",true);
+    fc(doc,...T.primary);doc.circle(cx,cy,sz*0.1,"F");
+  }
 }
 
 // ── Page header (inner pages) ──────────────────────────────────────
-function _hdr(doc,W,ml,mr,pageLabel){
+async function _hdr(doc,W,ml,mr,pageLabel){
   fc(doc,...T.card);doc.rect(0,0,W,14,"F");
   fc(doc,...T.primary);doc.rect(0,14,W,0.5,"F");
   // Mini logo
@@ -821,7 +857,7 @@ function _ftr(doc,W,ml,mr,H,pg,total,name){
 }
 
 // ── Cover header gradient (page 1) ────────────────────────────────
-function _coverHdr(doc,W,ml,H,tier,tierCol,name,sessionNum,dateStr){
+async function _coverHdr(doc,W,ml,H,tier,tierCol,name,sessionNum,dateStr){
   // Dark gradient-feel background
   fc(doc,...T.ink);doc.rect(0,0,W,72,"F");
   // Accent overlay band
@@ -838,7 +874,7 @@ function _coverHdr(doc,W,ml,H,tier,tierCol,name,sessionNum,dateStr){
   doc.circle(W*0.82,36,56,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   // Logo
-  _logo(doc,ml,16,26);
+  await _logo(doc,ml,16,26);
   // Brand name
   font(doc,13,"bold");tc(doc,...T.card);
   doc.text("CORVUS",ml+34,28);
@@ -1078,6 +1114,10 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   await _ensureCairoFont(doc);
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
+  // Load Cairo for Arabic rendering
+  const cairo = await _loadCairo(doc);
+  const fnt = (size, style="normal") => cairo && isAr ? fontAr(doc,size,style,true) : font(doc,size,style);
+
   const tierCol = isElite?T.success:isPro?T.cyan:T.indigo;
   const avg     = Math.round(session.avg_score||0);
   const dur     = session.duration_s||session.duration_sec||0;
@@ -1110,7 +1150,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // ── NON-ELITE: Premium preview + upsell ───────────────────────
   if(!isElite){
     // COVER
-    _coverHdr(doc,W,ml,H,tier,tierCol,name,realIndex,dateStr);
+    await _coverHdr(doc,W,ml,H,tier,tierCol,name,realIndex,dateStr);
     let y=80;
 
     // Title block
@@ -1155,7 +1195,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     fc(doc,...T.primary);doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
     doc.circle(W*0.85,H*0.25,70,"F");doc.circle(W*0.1,H*0.75,50,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    _logo(doc,W/2-13,44,26);
+    await _logo(doc,W/2-13,44,26);
     font(doc,F.display,"bold");tc(doc,...T.card);
     doc.text(isAr?"افتح تقريرك الكامل":"Unlock Your Full Report",W/2,90,{align:"center"});
     font(doc,F.body,"normal");tc(doc,148,163,184);
@@ -1194,7 +1234,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // ═══════════════════════════════════════════════════════════════
   // ELITE FULL REPORT — Page 1: Cover Summary
   // ═══════════════════════════════════════════════════════════════
-  _coverHdr(doc,W,ml,H,tier,tierCol,name,realIndex,dateStr);
+  await _coverHdr(doc,W,ml,H,tier,tierCol,name,realIndex,dateStr);
   let y=80;
 
   // Report title
@@ -1237,31 +1277,32 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // ═══════════════════════════════════════════════════════════════
   // ELITE PAGE 2 — All Metrics + Zonal Map
   // ═══════════════════════════════════════════════════════════════
+<<<<<<< HEAD
   doc.addPage();_hdr(doc,W,ml,mr,isAr?"تفاصيل المقاييس":"Metrics Detail");y=22;
   y=_secHead(doc,ml,y,isAr?"جميع مقاييس الوضعية":"Complete Metrics Breakdown",isAr?"مرتبة من الأسوأ":"All measurements · worst first",gradeC,isAr);
 
-  metricEntries.forEach(({lbl,value,unit,sc})=>{
-    if(y>H-38){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued");y=22;}
+  for (const {lbl,value,unit,sc} of metricEntries) {
+    if(y>H-38){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"تابع":"Continued");y=22;}
     _metCard(doc,ml,y,cw,lbl,value,unit,sc,isAr);y+=24;
-  });
+  }
 
   // Zonal map
-  y+=6;if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map");y=22;}
+  y+=6;if(y>H-100){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map");y=22;}
   y=_secHead(doc,ml,y,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"مشتق من مقاييس الجلسة":"Derived from session metrics — not a diagnosis",T.danger);
   const zonal=_zonalRisk(metrics);
-  [
+  for (const {k,en,ar,r,desc,m} of [
     {k:"cervical",en:"Cervical (Neck)",ar:"عنق الرحم",r:"C1–C7",desc:"Head position, neck lean, FHP, and rotational deviation. Risk elevation correlates with cervical disc load and potential tension-type headache.",m:"Neck Lean, FHP, Head Tilt, Head Yaw"},
     {k:"thoracic",en:"Thoracic (Upper Back)",ar:"الصدر",r:"T1–T12",desc:"Shoulder symmetry, rounded shoulders, and upper spinal curvature. Chronic elevation indicates thoracic kyphosis risk or rotator cuff impingement.",m:"Shoulder Balance, Rounded Shoulders, Spine Lean"},
     {k:"lumbar",en:"Lumbar (Lower Back)",ar:"القطن",r:"L1–S1",desc:"Sagittal and coronal spinal alignment, hip angle, and pelvic positioning. Elevated risk may indicate lumbar disc load asymmetry or flexion intolerance.",m:"Spine Alignment, Hip Angle, Trunk Lean"},
-  ].forEach(({k,en,ar,r,desc,m})=>{
-    if(y>H-68){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map");y=22;}
+  ]) {
+    if(y>H-68){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map");y=22;}
     y=_zoneCard(doc,ml,y,cw,isAr?ar:en,r,zonal[k]||0,desc,m,isAr);
-  });
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // ELITE PAGE 3 — AI Analysis + Next Steps + Session Stats
   // ═══════════════════════════════════════════════════════════════
-  doc.addPage();_hdr(doc,W,ml,mr,isAr?"تحليل AI":"AI Analysis");y=22;
+  doc.addPage();await _hdr(doc,W,ml,mr,isAr?"تحليل AI":"AI Analysis");y=22;
 
   // AI narrative
   if(aiText){
@@ -1269,15 +1310,16 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     fc(doc,...T.bg);rr(doc,ml,y,cw,8,2,"F");y+=10;
     const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-8);
     font(doc,F.body,"normal");tc(doc,...T.sub);
-    aiLines.forEach(l=>{
-      if(y>H-30){doc.addPage();_hdr(doc,W,ml,mr,"AI Analysis");y=22;}
+    for (const l of aiLines) {
+
+      if(y>H-30){doc.addPage();await _hdr(doc,W,ml,mr,"AI Analysis");y=22;}
       doc.text(l,ml+4,y);y+=5.5;
-    });
+    }
     y+=10;
   }
 
   // Next steps
-  if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps");y=22;}
+  if(y>H-100){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps");y=22;}
   y=_secHead(doc,ml,y,isAr?"الخطوات العملية المقترحة":"Prioritised Next Steps",isAr?"بناءً على أسوأ نقاط الأداء":"Based on your worst-performing metrics",T.success);
 
   const NXT={
@@ -1295,11 +1337,11 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     default:["Take 2-min stretch breaks every 30 min","Roll shoulders backward 5 times","Stand and walk 5 min per hour"],
   };
 
-  metricEntries.slice(0,3).forEach(({key,lbl,sc},idx)=>{
-    if(y>H-52){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps");y=22;}
+  for (const [{key,lbl,sc},idx] of metricEntries.slice(0,3).map((v,i)=>[v,i])) {
+    if(y>H-52){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps");y=22;}
     const steps=NXT[key]||NXT.default;
     y=_stepCard(doc,ml,y,cw,idx+1,lbl,sc,steps,isAr);
-  });
+  }
 
   // Session stats table
   y+=4;if(y>H-72){doc.addPage();_hdr(doc,W,ml,mr,isAr?"إحصائيات":"Statistics");y=22;}
@@ -1333,6 +1375,10 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   const tier    = profile?.tier || session.tier || "standard";
   if (!tierAtLeast(tier,"elite")) throw new Error("Clinical PDF requires Elite tier");
+
+  // Load Cairo for Arabic support
+  const cairo = await _loadCairo(doc);
+  const fnt = (size, style="normal") => cairo && isAr ? fontAr(doc,size,style,true) : font(doc,size,style);
 
   const avg     = Math.round(session.avg_score || 0);
   const dur     = session.duration_s || session.duration_sec || 0;

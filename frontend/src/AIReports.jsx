@@ -51,19 +51,33 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
   const isFull = pdfDetail === "full";
   const allScores = sessions.map(s => s.avg_score || 0).filter(Boolean);
   const avgScore  = avg(allScores);
-  const thisWeek  = sessions.filter(s => (Date.now() - (s.created_at?.toDate?.() || new Date(s.created_at || 0))) < 7 * 86400000);
-  const weekAvg   = avg(thisWeek.map(s => s.avg_score || 0));
-  const color     = avgScore >= 75 ? "#10b981" : avgScore >= 50 ? "#f59e0b" : "#ef4444";
-  const now       = new Date().toLocaleDateString(isAr ? "ar-EG" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  // ── Date-range filter (Fix: was always sessions.slice(0,N) regardless of report type)
+  const now_ms = Date.now();
+  const toMs   = s => s.created_at?.toDate?.()?.getTime?.() || new Date(s.created_at || 0).getTime();
+  const rangeMs = reportType === "monthly" ? 30*86400000 : reportType === "weekly" ? 7*86400000 : null;
+  const filteredSessions = rangeMs ? sessions.filter(s => now_ms - toMs(s) <= rangeMs) : sessions;
+  const rowLimit   = isFull ? 10 : 5;
+  const tableRows  = filteredSessions.slice(0, rowLimit);
+
+  const thisWeek = sessions.filter(s => now_ms - toMs(s) <= 7*86400000);
+  const weekAvg  = avg(thisWeek.map(s => s.avg_score || 0));
+  const color    = avgScore >= 75 ? "#10b981" : avgScore >= 50 ? "#f59e0b" : "#ef4444";
+  const now      = new Date().toLocaleDateString(isAr ? "ar-EG" : "en-US", { year:"numeric", month:"long", day:"numeric" });
   const safeName  = escapeHtml(profile?.name || (isAr ? "المستخدم" : "User"));
   const safeTitle = escapeHtml(reportTitle);
   const planLabel = escapeHtml(qualityFor(profile?.tier).label[isAr ? "ar" : "en"]);
-  // summaryText comes from the AI provider (Groq) and is untrusted —
-  // escape first, THEN apply the markdown→HTML transform on the escaped text.
+
+  // ── Dynamic tier label (Fix: was hardcoded "Pro")
+  const tierLabel = tier === "elite" ? "Elite" : tier === "professional" ? "Pro" : tier === "basic" ? "Basic" : "";
+  const tierColor = tier === "elite" ? "#10b981" : "#0891b2";
+
   const safeSummaryHtml = escapeHtml(summaryText || "")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\n/g, "<br/>");
-  const rowLimit = isFull ? 10 : 5;
+
+  const rangeLabelEn = reportType === "weekly" ? "This Week's Sessions" : reportType === "monthly" ? "This Month's Sessions" : `Last ${rowLimit} Sessions`;
+  const rangeLabelAr = reportType === "weekly" ? "جلسات هذا الأسبوع" : reportType === "monthly" ? "جلسات هذا الشهر" : `آخر ${rowLimit} جلسات`;
 
   return `<!DOCTYPE html>
 <html dir="${isAr ? "rtl" : "ltr"}" lang="${lang}">
@@ -71,29 +85,29 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
 <meta charset="UTF-8"/>
 <title>${reportTitle}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'DM Sans', sans-serif; background: #fff; color: #0d1b35; padding: 48px; font-size: 13px; line-height: 1.6; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1a56db; padding-bottom: 24px; margin-bottom: 32px; }
-  .logo { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: #1a56db; }
-  .logo span { color: #0891b2; }
-  .meta { text-align: ${isAr ? "left" : "right"}; font-size: 11px; color: #7890b0; }
-  .meta strong { color: #334d6e; font-size: 12px; }
-  h1 { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; color: #0d1b35; margin-bottom: 6px; }
-  h2 { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 800; color: #0d1b35; margin: 28px 0 12px; border-${isAr ? "right" : "left"}: 3px solid #1a56db; padding-${isAr ? "right" : "left"}: 12px; }
-  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 24px 0; }
-  .kpi { background: #f0f4fb; border-radius: 12px; padding: 16px; text-align: center; border-top: 3px solid; }
-  .kpi-label { font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #7890b0; margin-bottom: 8px; }
-  .kpi-value { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; line-height: 1; }
-  .kpi-sub { font-size: 10px; color: #7890b0; margin-top: 5px; font-weight: 500; }
-  .ai-box { background: #f8faff; border: 1px solid #dde5f5; border-radius: 12px; padding: 20px; margin: 16px 0; }
-  .ai-label { font-size: 10px; font-weight: 700; color: #1a56db; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-  .session-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-  .session-table th { background: #f0f4fb; padding: 9px 14px; font-size: 10px; font-weight: 700; color: #7890b0; letter-spacing: .06em; text-transform: uppercase; text-align: ${isAr ? "right" : "left"}; border-bottom: 1px solid #dde5f5; }
-  .session-table td { padding: 10px 14px; font-size: 12px; border-bottom: 1px solid #f0f4fb; }
-  .score-pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 10px; font-weight: 700; }
-  .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #dde5f5; display: flex; justify-content: space-between; font-size: 10px; color: #7890b0; }
-  @media print { body { padding: 24px; } @page { margin: 1cm; } }
+  body { font-family: ${isAr ? "'Cairo','DM Sans'" : "'DM Sans'"}, sans-serif; background:#fff; color:#0d1b35; padding:48px; font-size:13px; line-height:1.6; direction:${isAr?"rtl":"ltr"}; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #1a56db; padding-bottom:24px; margin-bottom:32px; }
+  .logo { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:#1a56db; }
+  .logo span { color:${tierColor}; }
+  .meta { text-align:${isAr?"left":"right"}; font-size:11px; color:#7890b0; }
+  .meta strong { color:#334d6e; font-size:12px; }
+  h1 { font-family:${isAr?"'Cairo'":"'Syne'"},sans-serif; font-size:26px; font-weight:800; color:#0d1b35; margin-bottom:6px; }
+  h2 { font-family:${isAr?"'Cairo'":"'Syne'"},sans-serif; font-size:16px; font-weight:700; color:#0d1b35; margin:28px 0 12px; border-${isAr?"right":"left"}:3px solid #1a56db; padding-${isAr?"right":"left"}:12px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:24px 0; }
+  .kpi { background:#f0f4fb; border-radius:12px; padding:16px; text-align:center; border-top:3px solid; }
+  .kpi-label { font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#7890b0; margin-bottom:8px; }
+  .kpi-value { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; line-height:1; }
+  .kpi-sub { font-size:10px; color:#7890b0; margin-top:5px; font-weight:500; }
+  .ai-box { background:#f8faff; border:1px solid #dde5f5; border-radius:12px; padding:20px; margin:16px 0; }
+  .ai-label { font-size:10px; font-weight:700; color:#1a56db; letter-spacing:.08em; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+  .session-table { width:100%; border-collapse:collapse; margin:12px 0; }
+  .session-table th { background:#f0f4fb; padding:9px 14px; font-size:10px; font-weight:700; color:#7890b0; letter-spacing:.06em; text-transform:uppercase; text-align:${isAr?"right":"left"}; border-bottom:1px solid #dde5f5; }
+  .session-table td { padding:10px 14px; font-size:12px; border-bottom:1px solid #f0f4fb; }
+  .score-pill { display:inline-block; padding:3px 10px; border-radius:99px; font-size:10px; font-weight:700; }
+  .footer { margin-top:48px; padding-top:16px; border-top:1px solid #dde5f5; display:flex; justify-content:space-between; font-size:10px; color:#7890b0; }
+  @media print { body { padding:24px; } @page { margin:1cm; } }
 </style>
 </head>
 <body>
@@ -107,6 +121,7 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
     ${isAr ? "التاريخ:" : "Date:"} ${now}<br/>
     ${isAr ? "الخطة:" : "Plan:"} ${planLabel}<br/>
     ${isAr ? "إجمالي الجلسات:" : "Total sessions:"} ${sessions.length}
+    ${rangeMs ? `<br/>${isAr?"نطاق التقرير:":"Range:"} ${reportType === "weekly" ? (isAr?"أسبوع":"1 week") : (isAr?"شهر":"1 month")} (${tableRows.length} ${isAr?"جلسة":"sessions"})` : ""}
   </div>
 </div>
 
@@ -137,11 +152,11 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
 
 <h2>${isAr ? "🧠 التحليل الذكي — Corvus AI" : "🧠 AI Analysis — Corvus AI"}</h2>
 <div class="ai-box">
-  <div class="ai-label">🧠 ${isAr ? "Corvus Intelligence" : "Corvus Intelligence"}</div>
+  <div class="ai-label">🧠 Corvus Intelligence</div>
   <div style="font-size:13px;color:#334d6e;line-height:1.75;">${safeSummaryHtml}</div>
 </div>
 
-<h2>${isAr ? `📅 آخر ${rowLimit} جلسات` : `📅 Last ${rowLimit} Sessions`}</h2>
+<h2>${isAr ? `📅 ${rangeLabelAr}` : `📅 ${rangeLabelEn}`}</h2>
 <table class="session-table">
   <thead><tr>
     <th>#</th>
@@ -151,23 +166,25 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
     <th>${isAr ? "التقييم" : "Grade"}</th>
   </tr></thead>
   <tbody>
-    ${sessions.slice(0, rowLimit).map((s, i) => {
-      const scoreVal = s.avg_score || 0;
-      const col = sc(scoreVal); // was sc_(sc_) — sc_ held a number, not a function; crashed export every time
-      const durationSafe = s.duration_min ? `${escapeHtml(s.duration_min)} ${isAr ? "د" : "min"}` : "—";
-      return `<tr>
-        <td>${i + 1}</td>
-        <td>${escapeHtml(fmt(s.created_at))}</td>
-        <td>${durationSafe}</td>
-        <td><span class="score-pill" style="background:${col}22;color:${col}">${scoreVal}/100</span></td>
-        <td>${grade(scoreVal, isAr)}</td>
-      </tr>`;
-    }).join("")}
+    ${tableRows.length === 0
+      ? `<tr><td colspan="5" style="text-align:center;color:#7890b0;padding:20px;">${isAr?"لا توجد جلسات في هذه الفترة":"No sessions in this date range"}</td></tr>`
+      : tableRows.map((s, i) => {
+        const scoreVal = s.avg_score || 0;
+        const col = sc(scoreVal);
+        const dur = s.duration_min ? `${escapeHtml(String(s.duration_min))} ${isAr ? "د" : "min"}` : "—";
+        return `<tr>
+          <td>${i + 1}</td>
+          <td>${escapeHtml(fmt(s.created_at))}</td>
+          <td>${dur}</td>
+          <td><span class="score-pill" style="background:${col}22;color:${col}">${scoreVal}/100</span></td>
+          <td>${grade(scoreVal, isAr)}</td>
+        </tr>`;
+      }).join("")}
   </tbody>
 </table>
 
 <div class="footer">
-  <span>Corvus — ${isAr ? "تقرير سري" : "Confidential Report"}${isFull ? (isAr ? " · تفصيل كامل (Elite)" : " · Full Detail (Elite)") : ""}</span>
+  <span>Corvus${tierLabel ? " " + tierLabel : ""} — ${isAr ? "تقرير سري" : "Confidential Report"}${isFull ? (isAr ? " · تفصيل كامل (Elite)" : " · Full Detail (Elite)") : ""}</span>
   <span>${isAr ? "أُنشئ بواسطة Corvus AI" : "Generated by Corvus AI"} · ${now}</span>
 </div>
 </body>
