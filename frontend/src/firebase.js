@@ -693,6 +693,10 @@ function _riskColor(v) {
   if (v < 70) return [249, 115, 22];
   return              [239, 68, 68];
 }
+// Score color + label helpers (used throughout session, clinical, comparison, team PDFs)
+function _scoreColor(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
+const _gc = _scoreColor; // alias for legacy clinical PDF code
+function _scoreLabel(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Improvement"); }
 
 // ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
@@ -764,9 +768,7 @@ function dc(doc,...c){doc.setDrawColor(...c);}
 function fc(doc,...c){doc.setFillColor(...c);}
 function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
-=======
 
->>>>>>> 0950283 (feat(pdf/phase2): Comparison PDF + HR Team PDF + Clinical body diagram + exercise prescription + white-label support)
 // ── Cairo Arabic font loader (call once per jsPDF doc instance) ───
 let _cairoCached = null;
 async function _loadCairo(doc) {
@@ -786,7 +788,6 @@ async function _loadCairo(doc) {
   }
 }
 
-<<<<<<< HEAD
 function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
 function hr(doc,x,y,w,col=T.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x+w,y);lw(doc,0.3);}
 
@@ -1329,8 +1330,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
-  const tier    = profile?.tier || session.tier || "standard";
-  if (!tierAtLeast(tier,"elite")) throw new Error("Clinical PDF requires Elite tier");
+  const tier    = profile?.tier || session?.tier || "standard";
+  // Note: tier gate is enforced in App.jsx downloadPDF() before calling here.
+  // We don't re-throw here to avoid silent failures from stale session.tier values.
 
   // Load Cairo for Arabic support
   const cairo = await _loadCairo(doc);
