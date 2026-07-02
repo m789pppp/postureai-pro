@@ -687,89 +687,73 @@ function _riskColor(v) {
 // ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════
-// CORVUS PDF DESIGN SYSTEM v3 — Premium Healthcare Report
-// Inspired by: Apple, Stripe, Linear, WHO, top HealthTech startups
+// ═══════════════════════════════════════════════════════════════════
+// CORVUS PDF DESIGN SYSTEM v4
+// Premium healthcare report — logo from site, refined typography,
+// structured white space, clinical-grade visual hierarchy
 // ═══════════════════════════════════════════════════════════════════
 
 // ── Design Tokens ──────────────────────────────────────────────────
 const T = {
-  // Primary palette
-  primary:    [37,99,235],    // #2563EB
-  primaryDk:  [30,64,175],   // #1E40AF
-  success:    [34,197,94],   // #22C55E
-  successDk:  [21,128,61],
-  warning:    [245,158,11],  // #F59E0B
-  warningDk:  [180,83,9],
-  danger:     [239,68,68],   // #EF4444
-  dangerDk:   [185,28,28],
-  // Neutral
-  ink:        [17,24,39],    // #111827
-  sub:        [55,65,81],    // #374151
-  muted:      [107,114,128], // #6B7280
-  light:      [156,163,175], // #9CA3AF
-  // Surfaces
-  bg:         [248,250,252], // #F8FAFC
-  card:       [255,255,255],
-  border:     [229,231,235], // #E5E7EB
-  borderSoft: [243,244,246], // #F3F4F6
-  // Accents
-  indigo:     [99,102,241],
-  purple:     [168,85,247],
-  cyan:       [6,182,212],
-  teal:       [20,184,166],
+  primary:   [37,99,235],   primaryDk:[30,64,175],
+  success:   [34,197,94],   successDk:[21,128,61],
+  warning:   [245,158,11],  warningDk:[180,83,9],
+  danger:    [239,68,68],   dangerDk:[185,28,28],
+  ink:       [17,24,39],    sub:[55,65,81],
+  muted:     [107,114,128], light:[156,163,175],
+  bg:        [248,250,252], bgAlt:[241,245,249],
+  card:      [255,255,255], border:[229,231,235],
+  borderSoft:[243,244,246], ink2:[30,41,59],
+  indigo:    [99,102,241],  cyan:[6,182,212],
+  slate:     [15,23,42],    slateM:[30,41,59],
 };
+const F = { display:26, h1:16, h2:13, h3:10.5, body:9, small:7.5, micro:6 };
 
-// ── Spacing system ─────────────────────────────────────────────────
-const S = { xs:3, sm:6, md:10, lg:16, xl:24, xxl:36 };
-
-// ── Typography ─────────────────────────────────────────────────────
-const F = {
-  display: 28, h1:18, h2:14, h3:11, body:9, small:7.5, micro:6.5,
-};
-
-// ── Helpers ────────────────────────────────────────────────────────
-function _scoreColor(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
-function _scoreLabel(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Improvement"); }
-function _fmtDur(s){ if(!s)return"—"; const m=Math.floor(s/60),sec=s%60; return`${m>0?m+"m ":""}${sec}s`; }
+// ── Color helpers ──────────────────────────────────────────────────
+function _sc(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
+function _sl(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Work"); }
+function _fmtDur(s){ if(!s)return"—"; const m=Math.floor(s/60),r=s%60; return m>0?`${m}m ${r}s`:`${r}s`; }
 function _fmtDate(ts,ar){
   if(!ts)return"—";
   try{ const d=ts?.toDate?ts.toDate():new Date(ts);
     return d.toLocaleDateString(ar?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"}); }
   catch{return"—";}
 }
-function _clamp(v,min,max){return Math.min(max,Math.max(min,v));}
-function _rgb(arr){return arr;}
 
-// ── Cairo font — loaded lazily for Arabic PDF rendering ───────────
-let _cairoLoaded = false;
-async function _ensureCairoFont(doc) {
-  if (_cairoLoaded) return;
-  try {
-    const { CAIRO_B64 } = await import("./assets/cairoFont.js");
-    // jsPDF addFont: (base64data, fontName, fontStyle, fontWeight?)
-    doc.addFileToVFS("Cairo-Regular.ttf", CAIRO_B64);
-    doc.addFont("Cairo-Regular.ttf", "cairo", "normal");
-    doc.addFileToVFS("Cairo-Bold.ttf", CAIRO_B64);
-    doc.addFont("Cairo-Bold.ttf", "cairo", "bold");
-    _cairoLoaded = true;
-  } catch(e) {
-    console.warn("Cairo font load failed — falling back to helvetica:", e);
-  }
+// ── Cairo font (Arabic) ────────────────────────────────────────────
+let _cairoLoaded=false;
+async function _ensureCairoFont(doc){
+  if(_cairoLoaded)return;
+  try{
+    const{CAIRO_B64}=await import("./assets/cairoFont.js");
+    doc.addFileToVFS("Cairo-Regular.ttf",CAIRO_B64);
+    doc.addFont("Cairo-Regular.ttf","cairo","normal");
+    doc.addFileToVFS("Cairo-Bold.ttf",CAIRO_B64);
+    doc.addFont("Cairo-Bold.ttf","cairo","bold");
+    _cairoLoaded=true;
+  }catch(e){console.warn("Cairo font failed:",e);}
 }
 
-// ── Font setter — uses Cairo for Arabic, helvetica otherwise ───────
-function font(doc, size, style="normal", isAr=false) {
-  const face = isAr && _cairoLoaded ? "cairo" : "helvetica";
-  doc.setFont(face, style);
+// ── Logo image cache ───────────────────────────────────────────────
+let _logoSm=null,_logoMd=null,_logoLg=null;
+async function _ensureLogo(){
+  if(_logoSm)return;
+  try{
+    const{LOGO_SM_B64,LOGO_MD_B64,LOGO_LG_B64}=await import("./assets/corvusLogo.js");
+    _logoSm=LOGO_SM_B64; _logoMd=LOGO_MD_B64; _logoLg=LOGO_LG_B64;
+  }catch(e){console.warn("Logo load failed:",e);}
+}
+
+// ── Font helper ────────────────────────────────────────────────────
+function font(doc,size,style="normal",isAr=false){
+  doc.setFont(isAr&&_cairoLoaded?"cairo":"helvetica",style);
   doc.setFontSize(size);
 }
-
-// ── Low-level draw helpers ─────────────────────────────────────────
+// ── Draw primitives ────────────────────────────────────────────────
 function dc(doc,...c){doc.setDrawColor(...c);}
 function fc(doc,...c){doc.setFillColor(...c);}
 function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
-=======
 // ── Cairo Arabic font loader (call once per jsPDF doc instance) ───
 let _cairoCached = null; // module-level cache — avoid re-fetching on every PDF
 async function _loadCairo(doc) {
@@ -789,320 +773,299 @@ async function _loadCairo(doc) {
   }
 }
 
-// ── font() — Arabic-aware: uses Cairo when isAr, Helvetica otherwise
-function font(doc, size, style="normal", face="helvetica") {
-  doc.setFont(face, style); doc.setFontSize(size);
-}
-function fontAr(doc, size, style="normal", cairoLoaded=false) {
-  doc.setFont(cairoLoaded ? "cairo" : "helvetica", style);
-  doc.setFontSize(size);
-}
->>>>>>> 8bd65aa (feat(pdf/phase1): Cairo Arabic font + Corvus PNG logo + AI Reports date-range filter + dynamic tier label — all 4 Phase 1 items complete)
+function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
+function hr(doc,x,y,w,col=T.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x+w,y);lw(doc,0.3);}
 
-// ── Rounded filled rect helper ─────────────────────────────────────
-function rr(doc,x,y,w,h,r=3,mode="F"){
-  doc.roundedRect(x,y,w,h,r,r,mode);
-}
-
-// ── Divider ────────────────────────────────────────────────────────
-function divider(doc,x,y,w,col=T.border){
-  dc(doc,...col);lw(doc,0.2);doc.line(x,y,x+w,y);lw(doc,0.3);
-}
-
-// ── Logo mark — real PNG via corvusLogo.js, geometric fallback ─────
-async function _logo(doc,x,y,sz=20){
-  try {
-    const { CORVUS_LOGO_B64 } = await import("./lib/corvusLogo.js");
-    // Scale to requested size preserving 240:64 aspect ratio
-    const logoW = sz * (240/64);
-    const logoH = sz;
-    doc.addImage(CORVUS_LOGO_B64, "PNG", x, y, logoW, logoH);
-  } catch {
-    // Geometric fallback
-    fc(doc,...T.primary);rr(doc,x,y,sz,sz,sz*0.18,"F");
-    fc(doc,...T.card);
-    const cx=x+sz/2,cy=y+sz/2,hs=sz*0.26;
-    doc.lines([[hs,hs],[-hs,hs],[-hs,-hs],[hs,-hs]],cx,cy-hs,[1,1],"F",true);
-    fc(doc,...T.primary);doc.circle(cx,cy,sz*0.1,"F");
+// ── Logo draw ──────────────────────────────────────────────────────
+function _logo(doc,x,y,sz,b64){
+  if(b64){
+    try{ doc.addImage(b64,"PNG",x,y,sz,sz); return; }catch{}
   }
+  // Fallback: draw from SVG primitives
+  fc(doc,3,11,20); rr(doc,x,y,sz,sz,sz*0.14,"F");
+  fc(doc,...T.primary); rr(doc,x+sz*.19,y+sz*.19,sz*.62,sz*.62,sz*.12,"F");
+  font(doc,sz*.42,"bold"); tc(doc,...T.card);
+  doc.text("P",x+sz/2,y+sz*.72,{align:"center"});
 }
 
-// ── Page header (inner pages) ──────────────────────────────────────
-async function _hdr(doc,W,ml,mr,pageLabel){
-  fc(doc,...T.card);doc.rect(0,0,W,14,"F");
-  fc(doc,...T.primary);doc.rect(0,14,W,0.5,"F");
-  // Mini logo
-  fc(doc,...T.primary);rr(doc,ml,3.5,8,8,1.5,"F");
-  fc(doc,...T.card);font(doc,5.5,"bold");
-  doc.text("◈",ml+4,9.2,{align:"center"});
-  // Brand
-  font(doc,7,"bold");tc(doc,...T.ink);
-  doc.text("Corvus Health",ml+11,9.2);
-  font(doc,7,"normal");tc(doc,...T.muted);
-  doc.text("Posture Intelligence Platform",ml+45,9.2);
-  // Right label
-  font(doc,6.5,"bold");tc(doc,...T.primary);
-  doc.text(pageLabel,W-mr,9.2,{align:"right"});
+// ── Cover (page 1) ─────────────────────────────────────────────────
+function _cover(doc,W,ml,tier,tierCol,name,sessionNum,dateStr,avg,isAr){
+  // Full-bleed dark header — slate gradient feel
+  fc(doc,...T.slate); doc.rect(0,0,W,68,"F");
+  // Geometric circles for depth
+  fc(doc,...tierCol);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.07}));
+  doc.circle(W*0.88,34,55,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.04}));
+  doc.circle(W*0.88,34,80,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  // Thin top accent
+  fc(doc,...tierCol); doc.rect(0,0,W,2.5,"F");
+
+  // Logo
+  _logo(doc,ml,18,32,_logoMd);
+
+  // Brand + tagline
+  font(doc,14,"bold"); tc(doc,...T.card);
+  doc.text("CORVUS",ml+40,30);
+  font(doc,7,"normal"); tc(doc,148,163,184);
+  doc.text("Health Intelligence Platform",ml+40,38);
+
+  // Tier badge — pill
+  const tl=tier.toUpperCase();
+  font(doc,7,"bold"); tc(doc,...tierCol);
+  const tw=doc.getTextWidth(tl)+10;
+  fc(doc,...tierCol);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
+  rr(doc,ml+40,42,tw,10,3,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  tc(doc,...tierCol); font(doc,7,"bold");
+  doc.text(tl,ml+40+tw/2,49,{align:"center"});
+
+  // Right: date + session number
+  font(doc,7,"normal"); tc(doc,148,163,184);
+  doc.text(dateStr,W-ml,28,{align:"right"});
+  font(doc,8,"bold"); tc(doc,...T.card);
+  doc.text(`Session #${sessionNum}`,W-ml,37,{align:"right"});
+
+  // Bottom accent bar
+  fc(doc,...tierCol); doc.rect(0,65.5,W,2.5,"F");
 }
 
-// ── Page footer ────────────────────────────────────────────────────
+// ── Inner page header ──────────────────────────────────────────────
+function _hdr(doc,W,ml,mr,label,isAr){
+  fc(doc,...T.card); doc.rect(0,0,W,16,"F");
+  fc(doc,...T.primary); doc.rect(0,16,W,0.4,"F");
+  fc(doc,...T.borderSoft); doc.rect(0,0,W,16,"F");
+  _logo(doc,ml,3.5,9,_logoSm);
+  font(doc,7.5,"bold"); tc(doc,...T.ink);
+  doc.text("Corvus",ml+13,10);
+  font(doc,7,"normal"); tc(doc,...T.muted);
+  doc.text("Health Intelligence",ml+29,10);
+  font(doc,7,"bold"); tc(doc,...T.primary);
+  doc.text(label,W-mr,10,{align:"right"});
+}
+
+// ── Footer ─────────────────────────────────────────────────────────
 function _ftr(doc,W,ml,mr,H,pg,total,name){
-  divider(doc,0,H-10,W);
-  fc(doc,...T.borderSoft);doc.rect(0,H-9.5,W,9.5,"F");
-  font(doc,6.5,"normal");tc(doc,...T.light);
-  doc.text(`Corvus Health Intelligence · corvus.ai`,ml,H-3.5);
-  font(doc,6.5,"bold");tc(doc,...T.muted);
+  hr(doc,0,H-10,W,T.border);
+  fc(doc,...T.bg); doc.rect(0,H-9.5,W,9.5,"F");
+  font(doc,F.micro,"normal"); tc(doc,...T.light);
+  doc.text("Corvus Health Intelligence · Confidential",ml,H-3.5);
+  font(doc,F.micro,"bold"); tc(doc,...T.muted);
   doc.text(name,W/2,H-3.5,{align:"center"});
   doc.text(`${pg} / ${total}`,W-mr,H-3.5,{align:"right"});
 }
 
-// ── Cover header gradient (page 1) ────────────────────────────────
-async function _coverHdr(doc,W,ml,H,tier,tierCol,name,sessionNum,dateStr){
-  // Dark gradient-feel background
-  fc(doc,...T.ink);doc.rect(0,0,W,72,"F");
-  // Accent overlay band
-  fc(doc,...tierCol);
-  doc.lines([[0,0],[W*0.6,0],[W*0.4,72],[0,72]],0,0,[1,1],"F",false);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
-  fc(doc,...T.card);doc.rect(0,0,W,72,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Geometric accent
-  fc(doc,...tierCol);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.15}));
-  doc.circle(W*0.82,36,40,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
-  doc.circle(W*0.82,36,56,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Logo
-  await _logo(doc,ml,16,26);
-  // Brand name
-  font(doc,13,"bold");tc(doc,...T.card);
-  doc.text("CORVUS",ml+34,28);
-  font(doc,7,"normal");tc(doc,148,163,184);
-  doc.text("Health Intelligence Platform",ml+34,35);
-  // Report type
-  font(doc,7.5,"bold");
-  const tierStr=tier.toUpperCase();
-  const tw=doc.getTextWidth(tierStr)+10;
-  fc(doc,...tierCol);rr(doc,ml+34,40,tw,9,2,"F");
-  tc(doc,...T.card);doc.text(tierStr,ml+34+tw/2,46,{align:"center"});
-  // Right info
-  font(doc,7,"normal");tc(doc,148,163,184);
-  doc.text(dateStr,W-18,26,{align:"right"});
-  font(doc,7.5,"bold");tc(doc,...T.card);
-  doc.text(`Session #${sessionNum}`,W-18,35,{align:"right"});
-  // Bottom color bar
-  fc(doc,...tierCol);doc.rect(0,71.5,W,0.5,"F");
+// ── Section heading ────────────────────────────────────────────────
+function _sh(doc,ml,y,title,sub="",col=T.primary,isAr=false){
+  fc(doc,...col); doc.rect(ml,y,2,sub?14:10,"F");
+  font(doc,F.h2,"bold",isAr); tc(doc,...T.ink);
+  doc.text(title,ml+7,y+(sub?7:7));
+  if(sub){ font(doc,F.small,"normal",isAr); tc(doc,...T.light); doc.text(sub,ml+7,y+13); }
+  return y+(sub?21:14);
 }
 
-// ── Section heading with accent bar ───────────────────────────────
-function _secHead(doc,ml,y,title,sub="",col=T.primary,isAr=false){
-  fc(doc,...col);doc.rect(ml,y,2.5,sub?14:10,"F");
-  font(doc,F.h2,"bold",isAr);tc(doc,...T.ink);
-  doc.text(title,ml+8,y+(sub?7:7));
-  if(sub){font(doc,F.small,"normal",isAr);tc(doc,...T.muted);doc.text(sub,ml+8,y+13);}
-  return y+(sub?20:15);
-}
-
-// ── Score ring ────────────────────────────────────────────────────
+// ── Score ring ─────────────────────────────────────────────────────
 function _ring(doc,cx,cy,r,score,isAr){
-  const col=_scoreColor(score);
-  const lbl=_scoreLabel(score,isAr);
-  // Outer track
-  dc(doc,...T.border);lw(doc,3);doc.circle(cx,cy,r,"S");
-  // Score arc (full circle tinted)
-  dc(doc,...col);lw(doc,3);doc.circle(cx,cy,r,"S");
-  lw(doc,0.3);
-  // Inner fill
-  fc(doc,col[0],col[1],col[2]);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.07}));
+  const col=_sc(score),lbl=_sl(score,isAr);
+  // BG circle (track)
+  dc(doc,...T.border); lw(doc,2.5); doc.circle(cx,cy,r,"S"); lw(doc,0.3);
+  // Score arc
+  dc(doc,...col); lw(doc,2.5); doc.circle(cx,cy,r,"S"); lw(doc,0.3);
+  // Inner tint
+  fc(doc,...col);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
   doc.circle(cx,cy,r-1.5,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Score number
-  font(doc,20,"bold");tc(doc,...col);
-  doc.text(String(score),cx,cy+3.5,{align:"center"});
-  // /100 small
-  font(doc,6.5,"normal");tc(doc,...T.muted);
-  doc.text("/100",cx,cy+9.5,{align:"center"});
-  // Grade label below
-  font(doc,8.5,"bold");tc(doc,...col);
+  // Number
+  font(doc,18,"bold",false); tc(doc,...col);
+  doc.text(String(score),cx,cy+3,{align:"center"});
+  font(doc,6,"normal",false); tc(doc,...T.muted);
+  doc.text("/100",cx,cy+9,{align:"center"});
+  // Grade below ring
+  font(doc,8,"bold",isAr); tc(doc,...col);
   doc.text(lbl,cx,cy+r+7,{align:"center"});
 }
 
-// ── Metric card — premium redesign ────────────────────────────────
-function _metCard(doc,x,y,w,lbl,value,unit,score,isAr){
-  const col=_scoreColor(score);
-  const h=20;
-  fc(doc,...T.card);rr(doc,x,y,w,h,3,"F");
-  dc(doc,...T.border);lw(doc,0.2);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
-  fc(doc,...col);doc.rect(x,y,3,h,"F");
-  rr(doc,x,y,3,h,1.5,"F");
-  fc(doc,...col);rr(doc,x+7,y+4,14,12,2,"F");
-  font(doc,8.5,"bold",false);tc(doc,...T.card);
-  doc.text(String(Math.round(score)),x+14,y+11.5,{align:"center"});
-  font(doc,8.5,"bold",isAr);tc(doc,...T.ink);
-  doc.text(lbl,x+25,y+8.5);
-  if(value!==undefined&&value!==null){
-    font(doc,7.5,"normal",false);tc(doc,...T.muted);
-    doc.text(`${Math.round(value*10)/10}${unit||""}`,x+25,y+15);
-  }
-  // Progress bar (right side)
-  const bx=x+w*0.53,bw2=w*0.43,bh=4.5;
-  fc(doc,...T.borderSoft);rr(doc,bx,y+7.5,bw2,bh,2,"F");
-  fc(doc,...col);rr(doc,bx,y+7.5,Math.max(bw2*(score/100),3),bh,2,"F");
-  // Grade pill
-  const glbl=_scoreLabel(score,isAr);
-  const gw=doc.getTextWidth(glbl)+6;
-  fc(doc,col[0],col[1],col[2]);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
-  rr(doc,x+w-gw-4,y+13,gw,6,2,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,6.5,"bold");tc(doc,...col);
-  doc.text(glbl,x+w-gw/2-4,y+17.5,{align:"center"});
-}
-
-// ── Stat card (for summary row) ───────────────────────────────────
-function _statCard(doc,x,y,w,h,value,label,col,sub=""){
-  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
-  dc(doc,...T.border);lw(doc,0.2);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
-  // Top accent
-  fc(doc,...col);rr(doc,x,y,w,3,2,"F");doc.rect(x,y+1.5,w,1.5,"F");
+// ── KPI chip (compact square) ──────────────────────────────────────
+function _kpi(doc,x,y,w,h,val,label,col){
+  fc(doc,...T.card); rr(doc,x,y,w,h,3,"F");
+  dc(doc,...T.border); lw(doc,0.15); rr(doc,x,y,w,h,3,"S"); lw(doc,0.3);
+  // Top accent strip
+  fc(doc,...col); rr(doc,x,y,w,2.5,1.5,"F"); doc.rect(x,y+1.5,w,1,"F");
   // Value
-  font(doc,16,"bold");tc(doc,...col);
-  doc.text(String(value),x+w/2,y+h*0.56,{align:"center"});
+  font(doc,13,"bold",false); tc(doc,...col);
+  doc.text(String(val),x+w/2,y+h*0.56,{align:"center"});
   // Label
-  font(doc,7,"bold");tc(doc,...T.muted);
-  doc.text(label,x+w/2,y+h*0.76,{align:"center"});
-  if(sub){font(doc,6.5,"normal");tc(doc,...T.light);doc.text(sub,x+w/2,y+h*0.9,{align:"center"});}
+  font(doc,F.small,"bold",false); tc(doc,...T.muted);
+  doc.text(label,x+w/2,y+h*0.78,{align:"center"});
 }
 
-// ── Info row (alternating table) ──────────────────────────────────
-function _infoRow(doc,x,y,w,key,value,even){
-  fc(doc,...(even?T.borderSoft:T.card));doc.rect(x,y,w,8.5,"F");
-  font(doc,7.5,"normal");tc(doc,...T.muted);doc.text(key,x+4,y+5.8);
-  font(doc,7.5,"bold");tc(doc,...T.ink);doc.text(String(value),x+w-4,y+5.8,{align:"right"});
+// ── Metric row card ────────────────────────────────────────────────
+function _mRow(doc,x,y,w,lbl,value,unit,score,isAr,idx=0){
+  const col=_sc(score); const h=21;
+  // Alternating subtle bg
+  fc(doc,...(idx%2===0?T.card:T.bg)); rr(doc,x,y,w,h,3,"F");
+  dc(doc,...T.border); lw(doc,0.15); rr(doc,x,y,w,h,3,"S"); lw(doc,0.3);
+  // Left accent
+  fc(doc,...col); doc.rect(x,y,2.5,h,"F"); rr(doc,x,y,2.5,h,1.2,"F");
+  // Score badge
+  fc(doc,...col); rr(doc,x+6,y+4.5,15,12,2,"F");
+  font(doc,8.5,"bold",false); tc(doc,...T.card);
+  doc.text(String(Math.round(score)),x+13.5,y+12,{align:"center"});
+  // Label
+  font(doc,9,"bold",isAr); tc(doc,...T.ink);
+  doc.text(lbl,x+26,y+9.5);
+  // Value + unit
+  if(value!==undefined&&value!==null){
+    font(doc,7.5,"normal",false); tc(doc,...T.muted);
+    doc.text(`${Math.round(value*10)/10}${unit||""}`,x+26,y+16);
+  }
+  // Progress bar
+  const bx=x+w*0.52, bw=w*0.44, bh=5;
+  fc(doc,...T.borderSoft); rr(doc,bx,y+8,bw,bh,2,"F");
+  fc(doc,...col); rr(doc,bx,y+8,Math.max(bw*(score/100),3),bh,2,"F");
+  // Grade pill
+  const gl=_sl(score,isAr);
+  const gw=doc.getTextWidth(gl)+8;
+  fc(doc,...col);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.1}));
+  rr(doc,x+w-gw-3,y+14,gw,6,2,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  font(doc,6,"bold",isAr); tc(doc,...col);
+  doc.text(gl,x+w-gw/2-3,y+18.5,{align:"center"});
 }
 
-// ── Sparkline (premium) ───────────────────────────────────────────
+// ── Sparkline ──────────────────────────────────────────────────────
 function _spark(doc,hist,x,y,w,h,col){
   const pts=hist.length>80?hist.filter((_,i)=>i%Math.ceil(hist.length/80)===0):hist;
   if(pts.length<2)return;
-  const lo=Math.max(0,Math.min(...pts)-8),hi=Math.min(100,Math.max(...pts)+8);
+  const lo=Math.max(0,Math.min(...pts)-5),hi=Math.min(100,Math.max(...pts)+5);
   const rng=Math.max(hi-lo,10);
-  const coords=pts.map((s,i,a)=>({
-    px:x+(i/Math.max(a.length-1,1))*w,
-    py:y+h-((s-lo)/rng)*h,
-  }));
-  // Grid
-  [40,60,75,90].forEach(v=>{
+  const co=pts.map((s,i,a)=>({px:x+(i/Math.max(a.length-1,1))*w,py:y+h-((s-lo)/rng)*h}));
+  // Grid lines
+  [50,65,80].forEach(v=>{
     if(v<lo||v>hi)return;
     const gy=y+h-((v-lo)/rng)*h;
-    dc(doc,...T.border);lw(doc,0.15);doc.line(x,gy,x+w,gy);
-    font(doc,5,"normal");tc(doc,...T.light);
+    dc(doc,...T.border); lw(doc,0.12); doc.line(x,gy,x+w,gy);
+    font(doc,5,"normal"); tc(doc,...T.light);
     doc.text(String(v),x-2,gy+1.5,{align:"right"});
-  });
-  lw(doc,0.3);
+  }); lw(doc,0.3);
   // Area fill
   try{
-    const poly=[coords[0].px,coords[0].py,...coords.flatMap(p=>[p.px,p.py]),coords[coords.length-1].px,y+h,coords[0].px,y+h];
+    const segs=co.slice(1).map((p,i)=>[p.px-co[i].px,p.py-co[i].py]);
     fc(doc,...col);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:0.1}));
-    const segs=coords.slice(1).map((p,i)=>[p.px-coords[i].px,p.py-coords[i].py]);
-    doc.lines(segs,coords[0].px,coords[0].py,[1,1],"F",false);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
+    doc.lines([...segs,[0,h],[-(co[co.length-1].px-co[0].px),0]],co[0].px,co[0].py,[1,1],"F",false);
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   }catch{}
   // Line
-  dc(doc,...col);lw(doc,1.5);
-  coords.forEach((p,i)=>{if(i>0)doc.line(coords[i-1].px,coords[i-1].py,p.px,p.py);});
+  dc(doc,...col); lw(doc,1.2);
+  co.forEach((p,i)=>{if(i>0)doc.line(co[i-1].px,co[i-1].py,p.px,p.py);}); lw(doc,0.3);
   // Endpoints
-  fc(doc,...T.card);doc.circle(coords[0].px,coords[0].py,2,"F");
-  dc(doc,...col);lw(doc,1);doc.circle(coords[0].px,coords[0].py,2,"S");
-  fc(doc,...col);doc.circle(coords[coords.length-1].px,coords[coords.length-1].py,2.5,"F");
+  fc(doc,...T.card); doc.circle(co[0].px,co[0].py,2,"F");
+  dc(doc,...col); lw(doc,0.8); doc.circle(co[0].px,co[0].py,2,"S"); lw(doc,0.3);
+  fc(doc,...col); doc.circle(co[co.length-1].px,co[co.length-1].py,2.5,"F");
   // Labels
-  font(doc,6.5,"bold");tc(doc,...col);
-  doc.text(String(pts[0]),coords[0].px,coords[0].py-4,{align:"center"});
-  doc.text(String(pts[pts.length-1]),coords[coords.length-1].px,coords[coords.length-1].py-4,{align:"center"});
+  font(doc,6.5,"bold",false); tc(doc,...col);
+  doc.text(String(pts[0]),co[0].px,co[0].py-4,{align:"center"});
+  doc.text(String(pts[pts.length-1]),co[co.length-1].px,co[co.length-1].py-4,{align:"center"});
 }
 
-// ── Callout box ───────────────────────────────────────────────────
-function _callout(doc,x,y,w,text,type="info"){
+// ── Callout strip ──────────────────────────────────────────────────
+function _callout(doc,x,y,w,text,type="info",isAr=false){
   const cols={info:T.primary,success:T.success,warning:T.warning,danger:T.danger};
   const col=cols[type]||T.primary;
-  const lines=doc.splitTextToSize(text,w-16);
-  const h=Math.max(14,lines.length*5.5+8);
-  fc(doc,col[0],col[1],col[2]);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
+  const lines=doc.splitTextToSize(text.replace(/[#*`]/g,""),w-16);
+  const h=Math.max(14,lines.length*5.2+8);
+  fc(doc,...col);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.07}));
   rr(doc,x,y,w,h,3,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  dc(doc,...col);lw(doc,0.25);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
-  doc.rect(x,y,3,h,"F");rr(doc,x,y,3,h,1.5,"F");
-  font(doc,8,"normal");tc(doc,...T.sub);
-  lines.forEach((l,i)=>doc.text(l,x+8,y+7+(i*5.5)));
+  dc(doc,...col); lw(doc,0.2); rr(doc,x,y,w,h,3,"S"); lw(doc,0.3);
+  fc(doc,...col); doc.rect(x,y,2.5,h,"F"); rr(doc,x,y,2.5,h,1.2,"F");
+  font(doc,F.body,"normal",isAr); tc(doc,...T.sub);
+  lines.forEach((l,i)=>doc.text(l,x+7,y+7+(i*5.2)));
   return y+h+6;
 }
 
-// ── Zone risk card ────────────────────────────────────────────────
-function _zoneCard(doc,x,y,w,title,region,risk,desc,mlist,isAr){
+// ── Zone card ──────────────────────────────────────────────────────
+function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
   const col=_riskColor(risk);
-  const lines=doc.splitTextToSize(desc,w-44);
-  const h=Math.max(52,lines.length*5+36);
-  // Card
-  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
-  dc(doc,...col);lw(doc,0.3);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
-  // Left accent
-  fc(doc,...col);doc.rect(x,y,3,h,"F");rr(doc,x,y,3,h,1.5,"F");
-  // Risk badge circle
-  fc(doc,...col);doc.circle(x+18,y+18,12,"F");
-  font(doc,10,"bold");tc(doc,...T.card);
-  doc.text(`${risk}%`,x+18,y+21,{align:"center"});
+  const lines=doc.splitTextToSize(desc,w-50);
+  const h=Math.max(48,lines.length*5+32);
+  fc(doc,...T.card); rr(doc,x,y,w,h,4,"F");
+  dc(doc,...col); lw(doc,0.25); rr(doc,x,y,w,h,4,"S"); lw(doc,0.3);
+  fc(doc,...col); doc.rect(x,y,2.5,h,"F"); rr(doc,x,y,2.5,h,1.2,"F");
+  // Risk circle
+  fc(doc,...col); doc.circle(x+18,y+h/2,11,"F");
+  font(doc,9,"bold",false); tc(doc,...T.card);
+  doc.text(`${risk}%`,x+18,y+h/2+3.5,{align:"center"});
   // Title
-  font(doc,10,"bold");tc(doc,...T.ink);doc.text(title,x+36,y+13);
-  font(doc,7.5,"bold");tc(doc,...T.primary);doc.text(region,x+36,y+20);
-  // Risk bar
-  const bx=x+36,bw2=w*0.55;
-  fc(doc,...T.borderSoft);rr(doc,bx,y+24,bw2,4,2,"F");
-  fc(doc,...col);rr(doc,bx,y+24,Math.max(bw2*(risk/100),3),4,2,"F");
-  font(doc,7,"bold");tc(doc,...col);
-  doc.text(_riskLabel(risk,isAr),x+36+bw2+3,y+27.5);
-  // Description
-  font(doc,7.5,"normal");tc(doc,...T.sub);
-  lines.forEach((l,i)=>doc.text(l,x+7,y+34+(i*5)));
-  // Metrics source
-  font(doc,6.5,"bold");tc(doc,...T.light);
-  doc.text(`Metrics: ${mlist}`,x+7,h+y-4);
-  return y+h+8;
+  font(doc,10,"bold",isAr); tc(doc,...T.ink); doc.text(name,x+35,y+12);
+  font(doc,7.5,"bold",false); tc(doc,...T.primary); doc.text(region,x+35,y+19);
+  // Bar
+  const bx=x+35,bw=w*0.52;
+  fc(doc,...T.borderSoft); rr(doc,bx,y+23,bw,4,2,"F");
+  fc(doc,...col); rr(doc,bx,y+23,Math.max(bw*(risk/100),3),4,2,"F");
+  font(doc,7,"bold",isAr); tc(doc,...col);
+  doc.text(_riskLabel(risk,isAr),x+35+bw+4,y+26.5);
+  // Desc
+  font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
+  lines.forEach((l,i)=>doc.text(l,x+7,y+32+(i*5)));
+  font(doc,6,"bold",false); tc(doc,...T.light);
+  doc.text(`Sources: ${mlist}`,x+7,y+h-4);
+  return y+h+6;
 }
 
-// ── Next step card ────────────────────────────────────────────────
-function _stepCard(doc,x,y,w,idx,title,score,steps,isAr){
-  const col=_scoreColor(score);
-  const h=44;
-  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
-  dc(doc,...T.border);lw(doc,0.2);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
-  fc(doc,...col);doc.rect(x,y,3,h,"F");rr(doc,x,y,3,h,1.5,"F");
-  // Number circle
-  fc(doc,...col);doc.circle(x+14,y+14,8,"F");
-  font(doc,9,"bold");tc(doc,...T.card);doc.text(String(idx),x+14,y+17.5,{align:"center"});
-  // Title + score badge
-  font(doc,9.5,"bold");tc(doc,...T.ink);doc.text(title,x+28,y+11);
-  const sbadge=`Score ${Math.round(score)}`;
-  const sw=doc.getTextWidth(sbadge)+6;
-  fc(doc,col[0],col[1],col[2]);
+// ── Next step card ─────────────────────────────────────────────────
+function _step(doc,x,y,w,num,title,score,steps,isAr){
+  const col=_sc(score); const h=46;
+  fc(doc,...T.card); rr(doc,x,y,w,h,4,"F");
+  dc(doc,...T.border); lw(doc,0.15); rr(doc,x,y,w,h,4,"S"); lw(doc,0.3);
+  fc(doc,...col); doc.rect(x,y,2.5,h,"F"); rr(doc,x,y,2.5,h,1.2,"F");
+  // Number
+  fc(doc,...col);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.15}));
+  doc.circle(x+15,y+14,9,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  fc(doc,...col); doc.circle(x+15,y+14,9,"S"); // ring
+  dc(doc,...col); lw(doc,1); doc.circle(x+15,y+14,9,"S"); lw(doc,0.3);
+  font(doc,9.5,"bold",false); tc(doc,...col);
+  doc.text(String(num),x+15,y+17.5,{align:"center"});
+  // Title + badge
+  font(doc,10,"bold",isAr); tc(doc,...T.ink); doc.text(title,x+30,y+12);
+  const sb=`${Math.round(score)}/100`;
+  const sw=doc.getTextWidth(sb)+7;
+  fc(doc,...col);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
   rr(doc,x+w-sw-4,y+5,sw,8,2,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,6.5,"bold");tc(doc,...col);doc.text(sbadge,x+w-sw/2-4,y+10.5,{align:"center"});
+  font(doc,6.5,"bold",false); tc(doc,...col);
+  doc.text(sb,x+w-sw/2-4,y+10.5,{align:"center"});
   // Steps
-  font(doc,7.5,"normal");tc(doc,...T.sub);
+  font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
   steps.slice(0,3).forEach((s,i)=>{
-    doc.text(`${i+1}.`,x+28,y+21+(i*7));
-    doc.text(s,x+34,y+21+(i*7));
+    font(doc,7.5,"bold",false); tc(doc,...col);
+    doc.text(`${i+1}.`,x+30,y+22+(i*7));
+    font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
+    const maxW=w-36;
+    const sl=doc.splitTextToSize(s,maxW);
+    doc.text(sl[0],x+36,y+22+(i*7));
   });
-  return y+h+8;
+  return y+h+7;
+}
+
+// ── Info table row ─────────────────────────────────────────────────
+function _iRow(doc,x,y,w,key,val,even,isAr){
+  fc(doc,...(even?T.bg:T.card)); doc.rect(x,y,w,8.5,"F");
+  font(doc,F.small,"normal",isAr); tc(doc,...T.muted); doc.text(key,x+5,y+5.8);
+  font(doc,F.small,"bold",false); tc(doc,...T.ink); doc.text(String(val),x+w-5,y+5.8,{align:"right"});
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SESSION PDF v3 — Elite: full premium report | Non-Elite: preview
+// generateSessionPDF — v4
 // ═══════════════════════════════════════════════════════════════════
 export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[] }) {
   const { jsPDF } = await import("jspdf");
@@ -1111,19 +1074,16 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const isElite = tierAtLeast(tier,"elite");
   const isPro   = !isElite && tierAtLeast(tier,"professional");
   const doc   = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await _ensureCairoFont(doc);
+
+  // Load assets (parallel)
+  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
-
-  // Load Cairo for Arabic rendering
-  const cairo = await _loadCairo(doc);
-  const fnt = (size, style="normal") => cairo && isAr ? fontAr(doc,size,style,true) : font(doc,size,style);
-
   const tierCol = isElite?T.success:isPro?T.cyan:T.indigo;
   const avg     = Math.round(session.avg_score||0);
   const dur     = session.duration_s||session.duration_sec||0;
   const goodPct = Math.round(session.good_pct||0);
-  const gradeC  = _scoreColor(avg);
-  const gradeL  = _scoreLabel(avg,isAr);
+  const gradeC  = _sc(avg);
   const metrics = session.metrics||{};
   const hist    = session.score_history||[];
   const aiText  = session.ai_tip||session.ai_insight||session.claude_analysis||"";
@@ -1131,15 +1091,14 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const impTip  = session.improvement_tip||"";
   const name    = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
   const email   = user?.email||"";
-  const dateStr = _fmtDate(session.created_at||new Date(),isAr);
-
-  const realIndex = (()=>{
-    if(sessionIndex) return sessionIndex;
+  const dateStr = _fmtDate(session.created_at||new Date(), isAr);
+  const realIdx = (()=>{
+    if(sessionIndex)return sessionIndex;
     if(allSessions.length){const i=allSessions.findIndex(s=>(s.id||s.session_id)===(session.id||session.session_id));if(i>=0)return allSessions.length-i;}
     return 1;
   })();
 
-  const metricEntries = Object.entries(metrics)
+  const mEntries = Object.entries(metrics)
     .filter(([k])=>!k.startsWith("_")&&metrics[k])
     .map(([k,v])=>{
       const sc=typeof v==="number"?v:(v?.score??100);
@@ -1147,223 +1106,206 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       return{key:k,sc,lbl,value:v?.value,unit:v?.unit||""};
     }).sort((a,b)=>a.sc-b.sc);
 
-  // ── NON-ELITE: Premium preview + upsell ───────────────────────
+  // ── NON-ELITE: premium preview + upsell ───────────────────────
   if(!isElite){
-    // COVER
-    await _coverHdr(doc,W,ml,H,tier,tierCol,name,realIndex,dateStr);
-    let y=80;
+    _cover(doc,W,ml,tier,tierCol,name,realIdx,dateStr,avg,isAr);
+    let y=76;
 
-    // Title block
-    font(doc,F.h1,"bold");tc(doc,...T.ink);
+    // Report title
+    font(doc,F.h1,"bold",isAr); tc(doc,...T.ink);
     doc.text(isAr?"تقرير تحليل الوضعية":"Posture Analysis Report",ml,y);
-    font(doc,F.body,"normal");tc(doc,...T.muted);
-    doc.text(isAr?`${name} · ${dateStr}`:`${name} · ${dateStr}`,ml,y+8); y+=18;
-    divider(doc,ml,y,cw); y+=12;
+    font(doc,F.body,"normal",isAr); tc(doc,...T.muted);
+    doc.text(`${name} · ${dateStr}`,ml,y+8); y+=20;
+    hr(doc,ml,y,cw); y+=12;
 
-    // Score ring + stat cards row
-    _ring(doc,ml+22,y+22,18,avg,isAr);
-    [[`${goodPct}%`,isAr?"جيدة":"Good",T.success],[String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",T.warning],[_fmtDur(dur),isAr?"المدة":"Duration",T.primary]]
-      .forEach(([v,l,col],i)=>_statCard(doc,ml+54+i*50,y+2,44,32,v,l,col));
-    y+=56; divider(doc,ml,y,cw); y+=12;
+    // Score ring + KPI chips
+    _ring(doc,ml+22,y+24,19,avg,isAr);
+    [[`${goodPct}%`,isAr?"جيدة":"Good",T.success],
+     [String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",T.warning],
+     [_fmtDur(dur),isAr?"المدة":"Duration",T.primary]]
+      .forEach(([v,l,col],i)=>_kpi(doc,ml+54+i*52,y+4,46,30,v,l,col));
+    y+=62; hr(doc,ml,y,cw); y+=12;
 
     // Sparkline
     if(hist.length>2){
-      y=_secHead(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"خلال الجلسة":"During session",gradeC,isAr);
-      fc(doc,...T.bg);rr(doc,ml,y,cw,36,4,"F");dc(doc,...T.border);lw(doc,0.2);rr(doc,ml,y,cw,36,4,"S");lw(doc,0.3);
-      _spark(doc,hist,ml+10,y+5,cw-20,26,gradeC);
-      y+=44;
+      y=_sh(doc,ml,y,isAr?"مسار النقاط":"Score Timeline","",gradeC,isAr);
+      fc(doc,...T.bg); rr(doc,ml,y,cw,40,4,"F");
+      dc(doc,...T.border); lw(doc,0.15); rr(doc,ml,y,cw,40,4,"S"); lw(doc,0.3);
+      _spark(doc,hist,ml+12,y+7,cw-24,26,gradeC);
+      y+=48;
     }
 
     // Top 3 metrics
-    y=_secHead(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"الأسوأ أداءً":"Worst performing",gradeC,isAr);
-    metricEntries.slice(0,3).forEach(({lbl,value,unit,sc})=>{
-      if(y>H-55)return;
-      _metCard(doc,ml,y,cw,lbl,value,unit,sc,isAr);y+=24;
+    y=_sh(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"الأسوأ أداءً":"Worst first",gradeC,isAr);
+    mEntries.slice(0,3).forEach(({lbl,value,unit,sc},i)=>{
+      if(y>H-52)return;
+      _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
     });
-    if(metricEntries.length>3){
-      fc(doc,...T.bg);rr(doc,ml,y,cw,12,2,"F");
-      font(doc,7.5,"normal");tc(doc,...T.muted);
-      doc.text(`+ ${metricEntries.length-3} ${isAr?"مقاييس أخرى":"more metrics"} — ${isAr?"رقّي لـ Elite":"upgrade to Elite"}`,ml+cw/2,y+8,{align:"center"});
+    if(mEntries.length>3){
+      fc(doc,...T.bg); rr(doc,ml,y,cw,12,2,"F");
+      font(doc,F.small,"normal",isAr); tc(doc,...T.muted);
+      doc.text(`+ ${mEntries.length-3} ${isAr?"مقاييس — رقّي لـ Elite":"more metrics — upgrade to Elite"}`,ml+cw/2,y+8,{align:"center"});
       y+=16;
     }
 
-    // PAGE 2 — Dark premium upsell
+    // PAGE 2 — Upsell
     doc.addPage();
-    fc(doc,...T.ink);doc.rect(0,0,W,H,"F");
-    fc(doc,...T.primary);doc.rect(0,0,W,3,"F");
-    // Geometric decorations
-    fc(doc,...T.primary);doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
-    doc.circle(W*0.85,H*0.25,70,"F");doc.circle(W*0.1,H*0.75,50,"F");
+    fc(doc,...T.slate); doc.rect(0,0,W,H,"F");
+    fc(doc,...T.primary);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:0.05}));
+    doc.circle(W*.85,H*.3,90,"F"); doc.circle(W*.1,H*.75,60,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    await _logo(doc,W/2-13,44,26);
-    font(doc,F.display,"bold");tc(doc,...T.card);
-    doc.text(isAr?"افتح تقريرك الكامل":"Unlock Your Full Report",W/2,90,{align:"center"});
-    font(doc,F.body,"normal");tc(doc,148,163,184);
-    doc.text(isAr?"رقّي لـ Elite للوصول لكل المزايا":"Upgrade to Elite for the complete experience",W/2,100,{align:"center"});
-    divider(doc,ml+20,108,cw-40,[55,65,81]);
-
+    fc(doc,...T.primary); doc.rect(0,0,W,3,"F");
+    _logo(doc,W/2-16,42,32,_logoMd);
+    font(doc,F.display,"bold",isAr); tc(doc,...T.card);
+    doc.text(isAr?"افتح تقريرك الكامل":"Unlock Your Full Report",W/2,92,{align:"center"});
+    font(doc,F.body+1,"normal",isAr); tc(doc,148,163,184);
+    doc.text(isAr?"رقّي لـ Elite للوصول لكامل تجربة Corvus":"Upgrade to Corvus Elite for the complete experience",W/2,101,{align:"center"});
+    hr(doc,ml+24,109,cw-48,[55,65,81]);
     const feats=[
-      [T.success,isAr?"تفاصيل كل المقاييس":"Complete Metrics Breakdown",isAr?"كل مقاييس الوضعية بالزوايا والتوصيات":"All posture metrics with angles, trends & recommendations"],
-      [T.primary,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"سرد AI مخصص لجلستك":"Personalised AI-generated clinical narrative"],
-      [T.warning,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"تقييم الرقبة / الصدر / القطن":"Cervical · Thoracic · Lumbar risk assessment"],
-      [T.cyan,isAr?"الخطوات العملية":"Prioritised Next Steps",isAr?"3 إجراءات مخصصة بناءً على بياناتك":"3 tailored actions from your worst metrics"],
-      [T.purple,isAr?"PDF سريري":"Clinical PDF",isAr?"تقرير جاهز للطبيب أو الأخصائي":"Physiotherapist-ready report with medical detail"],
+      [T.success,"Complete Metrics Breakdown","All posture metrics with angles, trends & scores"],
+      [T.primary,"Corvus AI Analysis","Personalised AI-generated clinical narrative"],
+      [T.warning,"Spinal Zone Risk Map","Cervical · Thoracic · Lumbar risk assessment"],
+      [T.cyan,"Prioritised Next Steps","3 tailored action cards from worst metrics"],
+      [T.indigo,"Clinical PDF Report","Physiotherapist-ready report with full clinical detail"],
     ];
-    let fy=118;
+    let fy=117;
     feats.forEach(([col,title,desc])=>{
-      fc(doc,...col);doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
-      rr(doc,ml,fy,6,22,3,"F");
-      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      fc(doc,...col);rr(doc,ml,fy,6,22,3,"F");
-      font(doc,9.5,"bold");tc(doc,...T.card);doc.text(title,ml+12,fy+9);
-      font(doc,7.5,"normal");tc(doc,100,116,139);doc.text(desc,ml+12,fy+17);
-      fy+=28;
+      fc(doc,...col); rr(doc,ml,fy,3,22,1.5,"F");
+      font(doc,9.5,"bold",false); tc(doc,...T.card); doc.text(title,ml+10,fy+10);
+      font(doc,7.5,"normal",false); tc(doc,100,116,139); doc.text(desc,ml+10,fy+17);
+      fy+=27;
     });
-    // CTA button
-    fy+=4;
-    fc(doc,...T.success);rr(doc,ml,fy,cw,16,4,"F");
-    font(doc,10,"bold");tc(doc,...T.card);
-    doc.text("postureai-pro-omega-nine.vercel.app → Upgrade to Elite",W/2,fy+10.5,{align:"center"});
+    fy+=6;
+    fc(doc,...T.success); rr(doc,ml,fy,cw,16,4,"F");
+    font(doc,10,"bold",false); tc(doc,...T.card);
+    doc.text("postureai-pro-omega-nine.vercel.app  →  Upgrade to Elite",W/2,fy+10.5,{align:"center"});
 
     const tot=doc.internal.getNumberOfPages();
     for(let p=1;p<=tot;p++){doc.setPage(p);_ftr(doc,W,ml,mr,H,p,tot,name);}
-    const fn=`Corvus_Session${realIndex}_${new Date().toISOString().slice(0,10)}.pdf`;
-    doc.save(fn);return fn;
+    doc.save(`Corvus_Session${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`); return;
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // ELITE FULL REPORT — Page 1: Cover Summary
+  // ELITE PAGE 1 — Cover + Summary
   // ═══════════════════════════════════════════════════════════════
-  await _coverHdr(doc,W,ml,H,tier,tierCol,name,realIndex,dateStr);
-  let y=80;
+  _cover(doc,W,ml,tier,tierCol,name,realIdx,dateStr,avg,isAr);
+  let y=76;
 
-  // Report title
-  font(doc,F.h1,"bold");tc(doc,...T.ink);
+  font(doc,F.h1,"bold",isAr); tc(doc,...T.ink);
   doc.text(isAr?"تقرير وضعية احترافي":"Professional Posture Report",ml,y);
-  font(doc,F.body,"normal");tc(doc,...T.muted);
-  doc.text(`${name} · ${email||"—"} · ${dateStr}`,ml,y+8); y+=18;
-  divider(doc,ml,y,cw); y+=12;
+  font(doc,F.body,"normal",isAr); tc(doc,...T.muted);
+  doc.text(`${name} · ${email||"—"} · ${dateStr}`,ml,y+8); y+=20;
+  hr(doc,ml,y,cw); y+=12;
 
-  // Score ring + 4 stat cards
-  _ring(doc,ml+22,y+22,19,avg,isAr);
-  [[`${goodPct}%`,isAr?"وضعية جيدة":"Good posture",T.success,""],
-   [String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",T.warning,""],
-   [_fmtDur(dur),isAr?"المدة":"Duration",T.primary,""],
-   [`#${realIndex}`,isAr?"الجلسة":"Session",T.indigo,""]]
-    .forEach(([v,l,col,s],i)=>_statCard(doc,ml+54+i*38,y+2,34,30,v,l,col,s));
-  y+=58; divider(doc,ml,y,cw); y+=12;
+  // Ring + 4 KPI chips
+  _ring(doc,ml+22,y+24,19,avg,isAr);
+  [[`${goodPct}%`,isAr?"جيدة":"Good",T.success],
+   [String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",T.warning],
+   [_fmtDur(dur),isAr?"المدة":"Duration",T.primary],
+   [`#${realIdx}`,isAr?"الجلسة":"Session",T.indigo]]
+    .forEach(([v,l,col],i)=>_kpi(doc,ml+54+i*40,y+4,36,30,v,l,col));
+  y+=62; hr(doc,ml,y,cw); y+=12;
 
-  // Sparkline section
+  // Sparkline
   if(hist.length>2){
-    y=_secHead(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"الجلسة الكاملة":"Full session recording",gradeC,isAr);
-    fc(doc,...T.bg);rr(doc,ml,y,cw,40,4,"F");dc(doc,...T.border);lw(doc,0.2);rr(doc,ml,y,cw,40,4,"S");lw(doc,0.3);
-    _spark(doc,hist,ml+12,y+6,cw-24,28,gradeC);
-    y+=48;
+    y=_sh(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"الجلسة الكاملة":"Full session",gradeC,isAr);
+    fc(doc,...T.bg); rr(doc,ml,y,cw,42,4,"F");
+    dc(doc,...T.border); lw(doc,0.15); rr(doc,ml,y,cw,42,4,"S"); lw(doc,0.3);
+    _spark(doc,hist,ml+12,y+7,cw-24,28,gradeC);
+    y+=50;
   }
 
-  // Callouts
-  if(painSum){y=_callout(doc,ml,y,cw,painSum,"warning");}
-  if(impTip) {y=_callout(doc,ml,y,cw,impTip,"success");}
+  if(painSum){ y=_callout(doc,ml,y,cw,painSum,"warning",isAr); }
+  if(impTip)  { y=_callout(doc,ml,y,cw,impTip,"success",isAr); }
 
-  // Top 4 metrics on page 1
-  if(metricEntries.length>0){
-    y=_secHead(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"مرتبة من الأسوأ":"Sorted worst first",gradeC,isAr);
-    metricEntries.slice(0,4).forEach(({lbl,value,unit,sc})=>{
-      if(y>H-48)return;
-      _metCard(doc,ml,y,cw,lbl,value,unit,sc,isAr);y+=24;
-    });
-  }
+  y=_sh(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"مرتبة من الأسوأ":"Sorted worst first",gradeC,isAr);
+  mEntries.slice(0,4).forEach(({lbl,value,unit,sc},i)=>{
+    if(y>H-46)return;
+    _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
+  });
 
   // ═══════════════════════════════════════════════════════════════
-  // ELITE PAGE 2 — All Metrics + Zonal Map
+  // ELITE PAGE 2 — All metrics + Zonal map
   // ═══════════════════════════════════════════════════════════════
-<<<<<<< HEAD
-  doc.addPage();_hdr(doc,W,ml,mr,isAr?"تفاصيل المقاييس":"Metrics Detail");y=22;
-  y=_secHead(doc,ml,y,isAr?"جميع مقاييس الوضعية":"Complete Metrics Breakdown",isAr?"مرتبة من الأسوأ":"All measurements · worst first",gradeC,isAr);
+  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"تفاصيل المقاييس":"Metrics Detail",isAr); y=24;
+  y=_sh(doc,ml,y,isAr?"جميع مقاييس الوضعية":"Complete Posture Metrics",isAr?"مرتبة من الأسوأ":"Worst to best",gradeC,isAr);
+  mEntries.forEach(({lbl,value,unit,sc},i)=>{
+    if(y>H-38){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued",isAr);y=24;}
+    _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
+  });
 
-  for (const {lbl,value,unit,sc} of metricEntries) {
-    if(y>H-38){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"تابع":"Continued");y=22;}
-    _metCard(doc,ml,y,cw,lbl,value,unit,sc,isAr);y+=24;
-  }
-
-  // Zonal map
-  y+=6;if(y>H-100){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map");y=22;}
-  y=_secHead(doc,ml,y,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"مشتق من مقاييس الجلسة":"Derived from session metrics — not a diagnosis",T.danger);
+  y+=4; if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map",isAr);y=24;}
+  y=_sh(doc,ml,y,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"من بيانات الجلسة — ليس تشخيصاً طبياً":"Derived from session data · not a medical diagnosis",T.danger,isAr);
   const zonal=_zonalRisk(metrics);
-  for (const {k,en,ar,r,desc,m} of [
-    {k:"cervical",en:"Cervical (Neck)",ar:"عنق الرحم",r:"C1–C7",desc:"Head position, neck lean, FHP, and rotational deviation. Risk elevation correlates with cervical disc load and potential tension-type headache.",m:"Neck Lean, FHP, Head Tilt, Head Yaw"},
-    {k:"thoracic",en:"Thoracic (Upper Back)",ar:"الصدر",r:"T1–T12",desc:"Shoulder symmetry, rounded shoulders, and upper spinal curvature. Chronic elevation indicates thoracic kyphosis risk or rotator cuff impingement.",m:"Shoulder Balance, Rounded Shoulders, Spine Lean"},
-    {k:"lumbar",en:"Lumbar (Lower Back)",ar:"القطن",r:"L1–S1",desc:"Sagittal and coronal spinal alignment, hip angle, and pelvic positioning. Elevated risk may indicate lumbar disc load asymmetry or flexion intolerance.",m:"Spine Alignment, Hip Angle, Trunk Lean"},
-  ]) {
-    if(y>H-68){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map");y=22;}
-    y=_zoneCard(doc,ml,y,cw,isAr?ar:en,r,zonal[k]||0,desc,m,isAr);
-  }
+  [{k:"cervical",en:"Cervical (Neck)",ar:"منطقة الرقبة",r:"C1–C7",
+    desc:"Neck lean, FHP, and rotational deviation. Elevation increases cervical disc load and headache risk.",m:"Neck Lean, FHP, Head Tilt/Yaw"},
+   {k:"thoracic",en:"Thoracic (Upper Back)",ar:"الظهر العلوي",r:"T1–T12",
+    desc:"Shoulder symmetry and upper spinal curvature. Sustained elevation indicates kyphosis or rotator cuff risk.",m:"Shoulder Balance, Rounded Shoulders, Spine"},
+   {k:"lumbar",en:"Lumbar (Lower Back)",ar:"أسفل الظهر",r:"L1–S1",
+    desc:"Spinal alignment, hip angle, and pelvic positioning. Risk elevation may indicate disc asymmetry or flexion intolerance.",m:"Spine Alignment, Hip Angle, Trunk Lean"},
+  ].forEach(({k,en,ar,r,desc,m})=>{
+    if(y>H-65){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map",isAr);y=24;}
+    y=_zone(doc,ml,y,cw,isAr?ar:en,r,zonal[k]||0,desc,m,isAr);
+  });
 
   // ═══════════════════════════════════════════════════════════════
-  // ELITE PAGE 3 — AI Analysis + Next Steps + Session Stats
+  // ELITE PAGE 3 — AI + Next Steps + Stats
   // ═══════════════════════════════════════════════════════════════
-  doc.addPage();await _hdr(doc,W,ml,mr,isAr?"تحليل AI":"AI Analysis");y=22;
+  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"التحليل والتوصيات":"Analysis & Recommendations",isAr); y=24;
 
-  // AI narrative
   if(aiText){
-    y=_secHead(doc,ml,y,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"مولّد خصيصاً لجلستك":"Generated specifically for this session",T.primary);
-    fc(doc,...T.bg);rr(doc,ml,y,cw,8,2,"F");y+=10;
-    const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-8);
-    font(doc,F.body,"normal");tc(doc,...T.sub);
-    for (const l of aiLines) {
-
-      if(y>H-30){doc.addPage();await _hdr(doc,W,ml,mr,"AI Analysis");y=22;}
-      doc.text(l,ml+4,y);y+=5.5;
-    }
-    y+=10;
+    y=_sh(doc,ml,y,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"مولّد خصيصاً لجلستك":"Generated specifically for this session",T.primary,isAr);
+    fc(doc,...T.bg); rr(doc,ml,y,cw,6,2,"F"); y+=9;
+    const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-6);
+    font(doc,F.body,"normal",isAr); tc(doc,...T.sub);
+    aiLines.forEach(l=>{
+      if(y>H-28){doc.addPage();_hdr(doc,W,ml,mr,"AI Analysis",isAr);y=24;}
+      doc.text(l,ml+3,y); y+=5.2;
+    });
+    y+=10; hr(doc,ml,y,cw); y+=12;
   }
 
-  // Next steps
-  if(y>H-100){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps");y=22;}
-  y=_secHead(doc,ml,y,isAr?"الخطوات العملية المقترحة":"Prioritised Next Steps",isAr?"بناءً على أسوأ نقاط الأداء":"Based on your worst-performing metrics",T.success);
+  if(y>H-110){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps",isAr);y=24;}
+  y=_sh(doc,ml,y,isAr?"الخطوات العملية المقترحة":"Prioritised Next Steps",isAr?"بناءً على أسوأ المقاييس":"Based on worst-performing metrics",T.success,isAr);
 
   const NXT={
-    neck:["Raise monitor so top edge aligns with eye level","Tuck chin gently — ear over shoulder","Set a posture alert every 20 min"],
-    neck_lean:["Raise monitor so top edge aligns with eye level","Tuck chin gently — ear over shoulder","Set a posture alert every 20 min"],
-    yaw:["Centre monitor directly in front","Avoid sustained head rotation to secondary screen","Chin tucks: 10 reps × 3 sets daily"],
-    dist:["Maintain 50–70cm from screen","Increase font size to avoid forward lean","20-20-20: look 20ft away every 20 min"],
-    posture:["Sit back fully against lumbar support","Feet flat, knees at 90°","Take a 2-min stand break every 45 min"],
-    shoulder:["Adjust armrests to equal height","Roll shoulders back 10 reps × 3 sets","Doorway chest stretch 2× daily"],
-    spine:["Align ear, shoulder, hip vertically","Use lumbar roll or support cushion","Core brace hold 30s × 5 reps daily"],
-    rounded:["Retract shoulder blades together and down","Band pull-aparts 15 reps × 3 sets","Pec stretch in doorway 30s × 2 daily"],
+    neck:["Raise monitor: top edge at eye level","Chin tuck gently — ear over shoulder","Set a posture alert every 20 min"],
+    neck_lean:["Raise monitor: top edge at eye level","Chin tuck gently — ear over shoulder","Cervical retraction: 10 reps × 3 sets daily"],
+    yaw:["Centre monitor directly in front","Avoid sustained head rotation","Chin tucks: 10 reps × 3 sets daily"],
+    dist:["Maintain 50–70cm screen distance","Increase font size to avoid leaning","20-20-20 rule: every 20 min look 20ft away"],
+    posture:["Sit fully back against lumbar support","Feet flat, knees at 90°","Stand 5 min every 45 min"],
+    shoulder:["Level armrests to equal height","Shoulder rolls backward 10 reps × 3","Doorway chest stretch 30s × 2 daily"],
+    spine:["Align ear, shoulder, hip vertically","Use lumbar roll or support cushion","Core brace 30s × 5 reps daily"],
+    rounded:["Retract shoulder blades together","Band pull-aparts 15 reps × 3","Pec doorway stretch 30s × 2 daily"],
     elbow:["Lower keyboard so elbows rest at 90°","Keep keyboard close to body","Wrist break every 45 min"],
     monitor:["Top of screen at eye level","Use laptop stand + external keyboard","Reduce neck flexion with tray adjustment"],
-    distance:["Screen 50-80cm from eyes","Larger font = less squinting = less lean","20-20-20 rule every 20 min"],
-    default:["Take 2-min stretch breaks every 30 min","Roll shoulders backward 5 times","Stand and walk 5 min per hour"],
+    distance:["Screen 50-80cm from eyes","Larger font = less lean","20-20-20 rule every 20 min"],
+    default:["2-min stretch break every 30 min","Roll shoulders backward 5 times","Walk 5 min every hour"],
   };
+  mEntries.slice(0,3).forEach(({key,lbl,sc},i)=>{
+    if(y>H-54){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps",isAr);y=24;}
+    y=_step(doc,ml,y,cw,i+1,lbl,sc,NXT[key]||NXT.default,isAr);
+  });
 
-  for (const [{key,lbl,sc},idx] of metricEntries.slice(0,3).map((v,i)=>[v,i])) {
-    if(y>H-52){doc.addPage();await _hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps");y=22;}
-    const steps=NXT[key]||NXT.default;
-    y=_stepCard(doc,ml,y,cw,idx+1,lbl,sc,steps,isAr);
-  }
-
-  // Session stats table
-  y+=4;if(y>H-72){doc.addPage();_hdr(doc,W,ml,mr,isAr?"إحصائيات":"Statistics");y=22;}
-  y=_secHead(doc,ml,y,isAr?"إحصائيات الجلسة":"Session Statistics","",gradeC,isAr);
-  fc(doc,...T.card);rr(doc,ml,y,cw,metricEntries.length>0?68:60,4,"F");
-  dc(doc,...T.border);lw(doc,0.2);rr(doc,ml,y,cw,68,4,"S");lw(doc,0.3);
+  y+=4; if(y>H-75){doc.addPage();_hdr(doc,W,ml,mr,isAr?"إحصائيات":"Statistics",isAr);y=24;}
+  y=_sh(doc,ml,y,isAr?"إحصائيات الجلسة":"Session Statistics","",gradeC,isAr);
+  fc(doc,...T.card); rr(doc,ml,y,cw,72,4,"F");
+  dc(doc,...T.border); lw(doc,0.15); rr(doc,ml,y,cw,72,4,"S"); lw(doc,0.3);
   [
-    [isAr?"النتيجة الكلية":"Overall Score",`${avg}/100 — ${gradeL}`],
+    [isAr?"النتيجة الكلية":"Overall Score",`${avg}/100 — ${_sl(avg,isAr)}`],
     [isAr?"المدة":"Duration",_fmtDur(dur)],
     [isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`],
     [isAr?"التنبيهات":"Alerts",String(session.alerts_count||0)],
     [isAr?"وضع الكاميرا":"Camera Mode",(session.mode||"laptop").toUpperCase()],
     [isAr?"المستوى":"Tier",tier.toUpperCase()],
-    [isAr?"تاريخ الجلسة":"Session Date",dateStr],
-    [isAr?"رقم الجلسة":"Session #",String(realIndex)],
-  ].forEach(([k,v],i)=>{_infoRow(doc,ml,y,cw,k,v,i%2===0);y+=8.5;});
+    [isAr?"تاريخ الجلسة":"Date",dateStr],
+    [isAr?"رقم الجلسة":"Session #",String(realIdx)],
+  ].forEach(([k,v],i)=>{_iRow(doc,ml,y,cw,k,v,i%2===0,isAr);y+=8.5;});
 
-  // Page numbers
   const tot2=doc.internal.getNumberOfPages();
   for(let p=1;p<=tot2;p++){doc.setPage(p);_ftr(doc,W,ml,mr,H,p,tot2,name);}
-  const fn=`Corvus_Elite_Report_${realIndex}_${new Date().toISOString().slice(0,10)}.pdf`;
-  doc.save(fn);return fn;
+  doc.save(`Corvus_Elite_Report_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
 
