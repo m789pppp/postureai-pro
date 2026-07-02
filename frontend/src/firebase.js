@@ -340,10 +340,20 @@ export async function updateUserTier(uid, tier, months) {
 
 // ── Sessions ──────────────────────────────────────────────────────
 export async function saveSession(uid, data) {
-  const ref = await addDoc(collection(db,"sessions"), { uid, ...data, created_at:_serverTimestamp() });
+  // Compute the true lifetime session number BEFORE creating the doc.
+  // Previously this was computed after creation from userSessions array
+  // (50-doc cap, sorted newest-first) so the most recent session was
+  // labeled "#1" and froze at "#51" for long-time users.
+  let newCount = 1, prof = null;
   try {
-    const prof = await getUserProfile(uid);
-    const newCount = (prof?.sessions_count||0)+1;
+    prof = await getUserProfile(uid);
+    newCount = (prof?.sessions_count||0)+1;
+  } catch(e) { console.warn("saveSession profile read:", e.code||e.message); }
+
+  const ref = await addDoc(collection(db,"sessions"), {
+    uid, ...data, session_number: newCount, created_at:_serverTimestamp(),
+  });
+  try {
     const newAvg   = Math.round(((prof?.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
     const streak   = prof?.last_session_at ? (() => {
       const last = prof.last_session_at.toDate ? prof.last_session_at.toDate() : new Date(prof.last_session_at);

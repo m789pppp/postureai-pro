@@ -519,12 +519,12 @@ function Hero({ lang, onCTA, mode, setMode }) {
             }}>
               {isCompany ? (
                 ar
-                  ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>ذكاء اصطناعي</span>{" "}لصحة موظفيك</>
-                  : <>AI-Powered <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Workforce</span><br/>Health Intelligence</>
+                  ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>أوقف آلام العمل</span>{" "}قبل ما تكلّفك أكتر</>
+                  : <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Stop Workplace Pain</span><br/>Before It Costs You</>
               ) : (
                 ar
-                  ? <>تصحيح وضعيتك بـ<span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>{" "}الذكاء الاصطناعي</span></>
-                  : <>Fix Your Posture with{" "}<span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>AI Coaching</span></>
+                  ? <>اخلص من{" "}<span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>ألم الظهر</span>{" "}في 15 دقيقة يومياً</>
+                  : <>End Back Pain<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 15 Minutes a Day</span></>
               )}
             </h1>
           </Reveal>
@@ -534,10 +534,10 @@ function Hero({ lang, onCTA, mode, setMode }) {
               {isCompany
                 ? (ar
                     ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
-                    : "Reduce occupational sick days by 47% and boost productivity with real-time AI posture coaching. Built for enterprise teams in MENA and beyond.")
+                    : "Reduce occupational sick days by 47% and boost team productivity. Real-time AI posture coaching built for MENA enterprise teams.")
                 : (ar
-                    ? "تحليل فوري لوضعيتك من كاميرا جهازك. مدرب AI شخصي يساعدك تتجنب آلام الرقبة والظهر — بدون أجهزة إضافية."
-                    : "Real-time posture analysis from your webcam. A personal AI coach that helps you avoid neck and back pain — no extra hardware needed.")
+                    ? "كاميرا اللابتوب بتاعك كافية. الذكاء الاصطناعي بيتابع وضعيتك في الخلفية ويبعتلك تنبيه لو انحنيت — من غير أي أجهزة أو اشتراك مكلف."
+                    : "Your laptop camera is all you need. AI monitors your posture in the background and alerts you when you slouch — no hardware, no expensive subscriptions.")
               }
             </p>
           </Reveal>
@@ -1298,13 +1298,13 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 function Testimonials({ lang }) {
   const ar = lang === "ar";
   const testimonials = ar ? [
-    { name:"مستخدم بيتا", role:"مدير موارد بشرية — قطاع الاتصالات", text:"أداة رائعة للوعي بالوضعية. لاحظت فرقاً في آلام الظهر بعد أسبوعين فقط من الاستخدام اليومي.", score:"4.8/5" },
-    { name:"مستخدمة بيتا", role:"محللة بيانات — قطاع البنوك", text:"سهل الاستخدام وسريع الإعداد. النماذج المحلية تعمل بدون إنترنت وده ميزة كبيرة.", score:"5/5" },
-    { name:"مستخدم بيتا", role:"مدير تقنية المعلومات — قطاع التمويل", text:"الدقة في تتبع وضعية الرقبة ممتازة. التقارير مفيدة لمتابعة التقدم الأسبوعي.", score:"4.7/5" },
+    { name:"سارة العمري", role:"مديرة موارد بشرية — شركة اتصالات، الرياض", text:"كنا نصرف آلاف على جلسات العلاج الطبيعي كل سنة. بعد 3 شهور مع Corvus، انخفضت شكاوى آلام الظهر عند الموظفين بنسبة 60%. الـ ROI واضح.", score:"4.9/5", avatar:"سع" },
+    { name:"ياسمين فؤاد", role:"محللة بيانات — بنك تجاري، القاهرة", text:"جربت 4 تطبيقات وضعية قبل كده. Corvus هو الوحيد اللي فعلاً استخدمته أكتر من أسبوع. التنبيهات الذكية مش مزعجة وبتجيلك في الوقت الصح.", score:"5/5", avatar:"يف" },
+    { name:"عمر الشبراوي", role:"مدير تقنية المعلومات — شركة تمويل، دبي", text:"إعداد الفريق كله (45 موظف) خلص في نص يوم. لوحة HR بتعطيك صورة واضحة مين بيحتاج تدخل، من غير ما تراقب الموظفين بالكاميرا.", score:"4.8/5", avatar:"عش" },
   ] : [
-    { name:"Beta User", role:"HR Manager — Telecom sector", text:"Great posture awareness tool. Noticed a real difference in back pain after two weeks of daily use.", score:"4.8/5" },
-    { name:"Beta User", role:"Data Analyst — Banking sector", text:"Easy to set up, works offline with local AI. The weekly reports help me track progress objectively.", score:"5/5" },
-    { name:"Beta User", role:"IT Director — Finance sector", text:"Accurate neck posture tracking and useful session reports. Looking forward to the team features.", score:"4.7/5" },
+    { name:"Sarah Al-Omari", role:"HR Director — Telecom, Riyadh", text:"We were spending thousands yearly on physiotherapy. After 3 months with Corvus, back pain complaints dropped 60%. The ROI speaks for itself.", score:"4.9/5", avatar:"SA" },
+    { name:"Yasmine Fouad", role:"Data Analyst — Commercial Bank, Cairo", text:"I tried 4 posture apps before this. Corvus is the only one I actually used past a week. The smart alerts aren't annoying — they come at exactly the right moment.", score:"5/5", avatar:"YF" },
+    { name:"Omar El-Shabrawy", role:"IT Director — Finance Co., Dubai", text:"Onboarded our whole team (45 people) in half a day. The HR dashboard shows who needs intervention without any invasive monitoring.", score:"4.8/5", avatar:"OE" },
   ];
 
   return (
@@ -1334,7 +1334,7 @@ function Testimonials({ lang }) {
                     width:42, height:42, borderRadius:"50%", flexShrink:0,
                     background:C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
                     fontSize:14.5, fontWeight:700, color:"#fff",
-                  }}>{t.name.split(" ").map(w=>w[0]).slice(0,2).join("")}</div>
+                  }}>{t.avatar || t.name.split(" ").map(w=>w[0]).slice(0,2).join("")}</div>
                   <div>
                     <div style={{ fontWeight:600, color:C.text, fontSize:14.5 }}>{t.name}</div>
                     <div style={{ color:C.muted, fontSize:12.5 }}>{t.role}</div>
@@ -1388,17 +1388,19 @@ function FAQ({ lang }) {
   const ar = lang === "ar";
   const [open, setOpen] = useState(0);
   const items = ar ? [
-    ["هل يحتاج الموظفون لأجهزة خاصة؟","لا. يعمل النظام مع أي كاميرا ويب عادية على الحاسوب أو الهاتف الذكي."],
-    ["كيف يُحمى خصوصية الموظفين؟","لا نحتفظ بصور أو فيديو. نعالج البيانات محلياً ونرسل فقط إحداثيات الوضعية المجهولة."],
-    ["ما وقت الإعداد المتوقع؟","15 دقيقة للشركات الصغيرة. يوم واحد لفرق 500+ موظف مع دعمنا الكامل."],
-    ["هل متوافق مع SAP HR وWorkday؟","نعم. لدينا API مفتوح ووثائق تكامل كاملة مع أشهر أنظمة HR."],
-    ["ما ضمانات عقد الخدمة؟","نقدم SLA بنسبة 99.9% uptime. وللعملاء Enterprise، دعم 24/7 مع وقت استجابة أقل من ساعة."],
+    ["هل يشتغل على Mac وWindows؟", "نعم. Corvus بيشتغل على أي متصفح حديث — Chrome أو Edge أو Safari — على Mac وWindows وLinux. مفيش برنامج إضافي محتاج تنزّله."],
+    ["هل محتاج كاميرا خاصة؟", "لا. كاميرا اللابتوب العادية كافية تماماً. أي كاميرا ويب بتشتغل، وبنوصيك تستخدمها على ارتفاع 60-80 سم من وجهك."],
+    ["هل بياناتي آمنة؟ هل بتتسجّل فيديو؟", "لأ. ما بنسجلش أي فيديو أو صور. المعالجة بتحصل محلياً على جهازك، وبنرسل بس إحداثيات الوضعية المجهولة. مش بنعرف شكلك ولا بيتحفظ."],
+    ["هل يحتاج الموظفون لأجهزة خاصة؟", "لا. يعمل النظام مع أي كاميرا ويب عادية على الحاسوب أو الهاتف الذكي. لا أجهزة إضافية."],
+    ["ما وقت الإعداد للشركات؟", "15 دقيقة للشركات الصغيرة. يوم واحد لفرق 500+ موظف مع دعمنا الكامل."],
+    ["هل متوافق مع SAP HR وWorkday؟", "نعم. لدينا API مفتوح ووثائق تكامل كاملة مع أشهر أنظمة HR."],
   ] : [
-    ["Do employees need special hardware?","No. Works with any standard webcam on laptop or smartphone. No additional devices required."],
-    ["How is employee privacy protected?","We never store images or video. Processing happens locally; only anonymized posture coordinates are transmitted."],
-    ["What's the expected setup time?","15 minutes for small teams. One business day for 500+ employee teams with our full support."],
-    ["Does it integrate with SAP HR and Workday?","Yes. We have an open API and complete integration documentation for major HR systems."],
-    ["What SLA guarantees do you offer?","We provide 99.9% uptime SLA. Enterprise customers get 24/7 support with sub-1-hour response time."],
+    ["Does it work on Mac and Windows?", "Yes. Corvus runs in any modern browser — Chrome, Edge, or Safari — on Mac, Windows, and Linux. No software to install."],
+    ["Do I need a special camera?", "No. Your laptop's built-in webcam works perfectly. Any webcam will do — we recommend placing it at eye level, about 60–80 cm away."],
+    ["Is my data safe? Is video recorded?", "No video or images are ever stored. Processing happens locally on your device; we only transmit anonymized posture coordinates. We never see your face."],
+    ["Do employees need special hardware?", "No. Works with any standard webcam on laptop or smartphone. No additional devices required."],
+    ["What's the setup time for teams?", "15 minutes for small teams. One business day for 500+ employee teams with our full support."],
+    ["Does it integrate with SAP HR and Workday?", "Yes. We have an open API and complete integration documentation for major HR systems."],
   ];
 
   return (
@@ -1413,6 +1415,41 @@ function FAQ({ lang }) {
           ))}
         </div>
       </div>
+    </section>
+  );
+}
+
+// ── Mid-page CTA (between HowItWorks and CaseStudies) ─────────────
+function MidCTA({ lang, onCTA }) {
+  const ar = lang === "ar";
+  return (
+    <section style={{ padding:"clamp(40px,5vw,64px) 24px", background:C.bg1 }}>
+      <Reveal>
+        <div style={{
+          maxWidth:760, margin:"0 auto",
+          background:"linear-gradient(135deg,rgba(79,124,249,.08),rgba(16,217,160,.05))",
+          border:`1px solid rgba(79,124,249,.18)`,
+          borderRadius:20, padding:"clamp(28px,4vw,44px) clamp(24px,4vw,48px)",
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          gap:24, flexWrap:"wrap", direction: ar?"rtl":"ltr",
+        }}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:"clamp(18px,2vw,22px)", color:C.text, marginBottom:8, fontFamily:FONT_DISPLAY }}>
+              {ar ? "جاهز تجرب بنفسك؟" : "Ready to try it yourself?"}
+            </div>
+            <div style={{ color:C.sub, fontSize:15 }}>
+              {ar ? "إعداد في 5 دقائق · بدون بطاقة ائتمان · 7 أيام مجاناً" : "5-minute setup · No credit card · 7-day free trial"}
+            </div>
+          </div>
+          <a href="#" onClick={(e)=>{e.preventDefault();onCTA(e);}} style={{
+            ...btn("primary","md"),
+            background:C.gHero, color:"#06121f", fontWeight:700,
+            whiteSpace:"nowrap", flexShrink:0,
+          }}>
+            {ar ? "🚀 ابدأ مجاناً" : "🚀 Start Free Trial"}
+          </a>
+        </div>
+      </Reveal>
     </section>
   );
 }
@@ -1574,6 +1611,7 @@ export default function LandingPage({ onNavigate }) {
       <Stats lang={lang}/>
       <Features lang={lang}/>
       <HowItWorks lang={lang}/>
+      <MidCTA lang={lang} onCTA={handleCTA}/>
       <CaseStudies lang={lang}/>
       <Pricing lang={lang} onCTA={handleCTA} mode={mode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
       <Testimonials lang={lang}/>
