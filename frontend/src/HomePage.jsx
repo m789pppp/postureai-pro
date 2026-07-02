@@ -744,7 +744,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
-function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onDeleteSession, onTrend, tier="standard" }) {
+function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onDeleteSession, onTrend, tier="standard", isHRAdmin=false }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
 
@@ -835,6 +835,38 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
               color:"#c084fc", fontSize:12, fontWeight:600, cursor:"pointer",
               display:"flex", alignItems:"center", gap:6 }}>
             📈 {isAr?"رسم الاتجاه":"Trend Chart"}
+          </button>
+        )}
+        {/* Comparison PDF — Pro+ with 2+ sessions */}
+        {isProTier && userSessions.length >= 2 && (
+          <button onClick={async ()=>{
+              setPdfLoading("compare");
+              await onComparisonPDF?.(userSessions[0], userSessions[1]);
+              setPdfLoading(null);
+            }}
+            disabled={pdfLoading==="compare"}
+            style={{ padding:"9px 14px", background:"rgba(139,92,246,.1)",
+              border:"1px solid rgba(139,92,246,.25)", borderRadius:9,
+              color: pdfLoading==="compare"?"#94a3b8":"#c4b5fd",
+              fontSize:12, fontWeight:600, cursor: pdfLoading==="compare"?"wait":"pointer",
+              display:"flex", alignItems:"center", gap:6 }}>
+            {pdfLoading==="compare" ? "⏳" : "📊"} {isAr?"مقارنة الجلستين":"Compare Sessions"}
+          </button>
+        )}
+        {/* HR Team PDF — HR admins only */}
+        {isHRAdmin && (
+          <button onClick={async ()=>{
+              setPdfLoading("team");
+              await onTeamPDF?.();
+              setPdfLoading(null);
+            }}
+            disabled={pdfLoading==="team"}
+            style={{ padding:"9px 14px", background:"rgba(16,185,129,.1)",
+              border:"1px solid rgba(16,185,129,.25)", borderRadius:9,
+              color: pdfLoading==="team"?"#94a3b8":"#6ee7b7",
+              fontSize:12, fontWeight:600, cursor: pdfLoading==="team"?"wait":"pointer",
+              display:"flex", alignItems:"center", gap:6 }}>
+            {pdfLoading==="team" ? "⏳" : "🏢"} {isAr?"تقرير الفريق":"Team Report PDF"}
           </button>
         )}
       </div>
@@ -1913,6 +1945,8 @@ export default function HomePage({
   t, logOut, setUser,
   downloadPDF,
   downloadClinicalPDF,
+  downloadComparisonPDF,
+  downloadTeamPDF,
   AccountSwitcher, onSwitchAccount,
 }) {
   const [tab,    setTab]    = useState("home");
@@ -2041,7 +2075,7 @@ export default function HomePage({
       if(tab==="sessions") return (
         <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
           setPage={setPage} startCamera={startCamera}
-          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={downloadClinicalPDF} tier={tier}
+          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} tier={tier} isHRAdmin={isHRAdmin}
           onDeleteSession={handleDeleteSession}
           onTrend={handleTrend}/>
       );
@@ -2051,7 +2085,7 @@ export default function HomePage({
     if(tab==="sessions") return (
       <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
         setPage={setPage} startCamera={startCamera}
-        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={downloadClinicalPDF} tier={tier}
+        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} tier={tier} isHRAdmin={isHRAdmin}
         onDeleteSession={handleDeleteSession}
         onTrend={handleTrend}/>
     );
@@ -2061,7 +2095,7 @@ export default function HomePage({
         cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
         onCoach={openCoach} onBilling={openBilling} onAnalytics={openAnalytics}
         onCalib={openCalib} onReports={openReports} addToast={addToast}
-        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={downloadClinicalPDF} tier={tier}
+        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} tier={tier} isHRAdmin={isHRAdmin}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin}
         setShowGamification={setShowGamification}
         setShowGrowthHub={setShowGrowthHub}
