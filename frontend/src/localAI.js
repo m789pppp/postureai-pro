@@ -137,11 +137,12 @@ ${s < 60 ? "1. اضبط ارتفاع الشاشة لمستوى العين\n2. ك
 
 **⚠️ Key Risk Areas**
 ${b >= 70 ? "- 🔴 High burnout risk — immediate intervention needed" : b >= 40 ? "- 🟡 Moderate burnout risk — monitor closely" : "- 🟢 Burnout risk low — maintain current habits"}
+${nr >= 60 ? `- 🔴 High neck risk (${nr}%) — raise monitor, practice chin tuck daily` : nr >= 40 ? `- 🟡 Moderate neck risk (${nr}%) — monitor neck position` : ""}
 ${s < 60 ? "- ⚠️ Below-average posture score — workstation review needed" : ""}
 ${f >= 60 ? "- ⚠️ High fatigue index — increase break frequency" : ""}
 
 **🎯 This Week's Priority Actions**
-${s < 60 ? "1. Raise monitor to exact eye level\n2. Stand up every hour for 5 min\n3. Complete posture calibration" : s < 80 ? "1. Aim for 5 sessions this week\n2. Focus on neck position\n3. Add lumbar support to chair" : "1. Maintain consistency — you're doing well\n2. Target 90+ score\n3. Share results with your team"}`;
+${s < 60 ? "1. Raise monitor to exact eye level\n2. Stand up every hour for 5 min\n3. Complete posture calibration" : s < 80 ? `1. Aim for 5 sessions this week\n2. Focus on neck position${nr >= 40 ? ` (risk: ${nr}%)` : ""}\n3. Add lumbar support to chair` : "1. Maintain consistency — you're doing well\n2. Target 90+ score\n3. Share results with your team"}`;
 }
 
 function genTrends(d) {
@@ -513,12 +514,28 @@ ${d.worstTime ? `\n⚠️ **Your worst time: ${d.worstTime}** — during this pe
 **💡 Useful tools:** Stretchly (free, open-source) or a simple phone timer`;
   }
 
+  // Monitor height specific question
+  if (m.match(/monitor|screen height|شاشة.*ارتفاع|ارتفاع.*شاشة|monitor height/)) {
+    if (ar) return `**🖥️ ارتفاع الشاشة المثالي:**\n\nالجزء العلوي من الشاشة يكون على مستوى عينيك بالضبط أو أقل بـ 2-3 سم.\n\n**طريقة الضبط:**\n1. اجلس بوضعيتك الطبيعية\n2. انظر مباشرة للأمام — هذا مستوى عينيك\n3. ارفع الشاشة حتى تنظر للنقطة العليا منها بدون إمالة رأسك${nr >= 40 ? `\n\n⚠️ مخاطر رقبتك ${nr}% — ارفع الشاشة أولوية قصوى لك` : ""}`;
+    return `**🖥️ Optimal Monitor Height:**\n\nTop of screen at exact eye level or 2-3cm below.\n\n**How to adjust:**\n1. Sit in your natural working position\n2. Look straight ahead — that's your eye level\n3. Raise monitor until you look at the top of the screen without tilting your head${nr >= 40 ? `\n\n⚠️ Your neck risk is ${nr}% — this adjustment is top priority for you` : ""}`;
+  }
+
+  // Help / what can you do
+  if (m.match(/help|مساعدة|بتعمل ايه|بتعمل إيه|what can|what do/)) {
+    if (ar) return noData
+      ? "أنا **Corvus AI Coach** — مدرب وضعيتك الشخصي! اسألني عن:\n• إيه أكبر مشكلة في وضعيتي؟\n• إزاي أرفع نقاطي؟\n• روتين تمارين 5 دقائق\n• جدول الراحة المناسب\n• ليه رقبتي بتألمني؟"
+      : `أنا **Corvus AI Coach** — عندي بياناتك (**${s}/100** من ${ses} جلسة).\n\nاسألني:\n• "إيه أكبر مشكلة في وضعيتي؟"\n• "إزاي أرفع نقاطي هذا الأسبوع؟"\n• "أديني روتين تمارين"\n• "جدول الاستراحات المناسب لي"\n• "ليه بتألمني رقبتي؟"`;
+    return noData
+      ? "I'm **Corvus AI Coach** — your personal posture coach! Ask me:\n• What's my biggest posture problem?\n• How can I improve my score?\n• Give me a 5-minute stretch routine\n• What's my ideal break schedule?\n• Why does my neck hurt?"
+      : `I'm **Corvus AI Coach** — I have your data (**${s}/100** from ${ses} sessions).\n\nAsk me:\n• "What's my biggest posture problem?"\n• "How can I improve my score this week?"\n• "Give me a 5-minute stretch routine"\n• "What's the optimal break schedule for me?"\n• "Why does my neck hurt?"`;
+  }
+
   // Score / data question
-  if (m.match(/score|درجة|كام|what.*score|نقط|points/)) {
+  if (m.match(/\bscore\b.*\?|what.*\bscore\b|my score|درجتي|درجة.*كام|كام.*درجة|كام.*نقط|نقط|points/)) {
     if (noData) return no;
     const n = d.name ? (ar ? `${d.name}، ` : `${d.name}, `) : "";
-    if (ar) return `${n}متوسط درجاتك **${s}/100** من **${ses}** جلسة.\n\n${s >= 85 ? "🏆 ممتاز! أنت في أفضل 20% من المستخدمين." : s >= 70 ? "👍 جيد — مع تحسينات بسيطة تقدر توصل لـ 85+." : s >= 55 ? "📊 متوسط — في مجال تحسين ملموس بتغييرات صغيرة." : "⚠️ أقل من المتوسط — اتبع خطة التحسين أعلاه."}`;
-    return `${n}your average score is **${s}/100** from **${ses}** sessions.\n\n${s >= 85 ? "🏆 Excellent! You're in the top 20% of users." : s >= 70 ? "👍 Good — small improvements can get you to 85+." : s >= 55 ? "📊 Average — significant room to improve with small changes." : "⚠️ Below average — follow the improvement plan above."}`;
+    if (ar) return `${n}متوسط درجاتك **${s}/100** من **${ses}** جلسة.\n\n${s >= 85 ? "🏆 ممتاز! أنت في أفضل 20% من المستخدمين." : s >= 70 ? "👍 جيد — مع تحسينات بسيطة تقدر توصل لـ 85+." : s >= 55 ? "📊 متوسط — في مجال تحسين ملموس." : "⚠️ أقل من المتوسط — ابدأ بخطة التحسين."}`;
+    return `${n}your average score is **${s}/100** from **${ses}** sessions.\n\n${s >= 85 ? "🏆 Excellent! Top 20% of users." : s >= 70 ? "👍 Good — small tweaks to reach 85+." : s >= 55 ? "📊 Average — clear room to improve." : "⚠️ Below average — follow the improvement plan."}`;
   }
 
   // Greeting
@@ -532,14 +549,25 @@ ${d.worstTime ? `\n⚠️ **Your worst time: ${d.worstTime}** — during this pe
       : `Hi ${n}! 💪 I can see your data — average score **${s}/100** from **${ses}** sessions.\n\n${s >= 80 ? "Your posture is excellent! What can I help you with today?" : s >= 65 ? "Good posture with room to improve. What would you like to know?" : "There's clear room to improve — what's your biggest concern?"}`;
   }
 
-  // Default — data-aware
+  // Default — give a real answer based on their score
   if (noData) return ar
     ? "أنا هنا لمساعدتك في تحسين وضعيتك. ابدأ جلسة تحليل أولاً ثم اسألني عن:\n• أكبر مشكلة في وضعيتك\n• إزاي ترفع نقاطك\n• جدول الاستراحات\n• التمارين المناسبة"
     : "I'm here to help you improve your posture. Start an analysis session first, then ask me about:\n• Your biggest posture problem\n• How to improve your score\n• Break schedule\n• Recommended exercises";
 
-  return ar
-    ? `بناءً على بياناتك (${s}/100 من ${ses} جلسة)، يمكنني مساعدتك في:\n• **تحليل مشاكلك** — "إيه أكبر مشكلة في وضعيتي؟"\n• **خطة التحسين** — "إزاي أرفع نقاطي؟"\n• **التمارين** — "أديني روتين تمارين"\n• **الاستراحات** — "إيه جدول الاستراحات المناسب؟"`
-    : `Based on your data (${s}/100 from ${ses} sessions), I can help with:\n• **Problem analysis** — "What's my biggest posture problem?"\n• **Improvement plan** — "How do I raise my score?"\n• **Exercises** — "Give me an exercise routine"\n• **Breaks** — "What's the optimal break schedule?"`;
+  // Has data — give a real contextual answer
+  const al = (d.alerts || "").toLowerCase();
+  if (ar) {
+    const issues = [];
+    if (al.includes("head") || al.includes("forward") || al.includes("neck")) issues.push("رأسك متقدم للأمام");
+    if (al.includes("shoulder") || al.includes("round")) issues.push("كتفان مدوّران");
+    if (al.includes("back") || al.includes("lean")) issues.push("ميلان الظهر");
+    return `بناءً على بياناتك (**${s}/100** من ${ses} جلسة):\n\n${issues.length ? `**أبرز مشاكلك:** ${issues.join("، ")}\n\n` : ""}${s < 70 ? "**أهم شيء تعمله دلوقتي:** ارفع الشاشة لمستوى عينيك وخذ بريك كل ساعة.\n\n" : ""}اسألني عن: مشاكل الوضعية، التمارين، جدول الراحة، أو كيف ترفع نقاطك.`;
+  }
+  const issues = [];
+  if (al.includes("head") || al.includes("forward") || al.includes("neck")) issues.push("forward head posture");
+  if (al.includes("shoulder") || al.includes("round")) issues.push("rounded shoulders");
+  if (al.includes("back") || al.includes("lean")) issues.push("back lean");
+  return `Based on your data (**${s}/100** from ${ses} sessions):\n\n${issues.length ? `**Your main issues:** ${issues.join(", ")}\n\n` : ""}${s < 70 ? "**Most impactful fix right now:** Raise monitor to eye level and take a break every hour.\n\n" : ""}Ask me about: posture problems, exercises, break schedule, or how to improve your score.`;
 }
 
 // ── Public API ────────────────────────────────────────────────────
