@@ -3055,6 +3055,32 @@ export default function App(){
     }
   }
 
+  async function downloadComparisonPDF(session1, session2) {
+    if (!tierAtLeast(tier,"professional")) {
+      addToast(isAr?"المقارنة متاحة لباقة Pro وElite فقط":"Comparison PDF requires Pro or Elite","warn");
+      setShowBilling(true); return;
+    }
+    addToast(isAr?"جاري إنشاء تقرير المقارنة...":"Generating comparison PDF...","info");
+    try {
+      const { generateComparisonPDF } = await import("./firebase.js");
+      await generateComparisonPDF({ session1, session2, profile, user, lang, allSessions: userSessions });
+      addToast(isAr?"✅ تم تحميل تقرير المقارنة":"✅ Comparison PDF downloaded","success");
+    } catch(e) { addToast(`Comparison PDF error: ${e.message}`,"error"); }
+  }
+
+  async function downloadTeamPDF() {
+    if (!tierAtLeast(tier,"professional")) {
+      addToast(isAr?"تقرير الفريق متاح لـ HR Admin فقط":"Team PDF requires HR Admin + Pro","warn");
+      setShowBilling(true); return;
+    }
+    addToast(isAr?"جاري إنشاء تقرير الفريق...":"Generating team PDF...","info");
+    try {
+      const { generateTeamPDF } = await import("./firebase.js");
+      await generateTeamPDF({ users: allUsers||[], company: profile?.company||"", profile, lang });
+      addToast(isAr?"✅ تم تحميل تقرير الفريق":"✅ Team PDF downloaded","success");
+    } catch(e) { addToast(`Team PDF error: ${e.message}`,"error"); }
+  }
+
 async function downloadPDF(sessionOverride, isClinical=false){
     // Gated by canonical pdfDetail (tierQuality.js) — standard/basic have
     // pdfDetail:"none" and must not get a PDF, same rule enforced in
@@ -3694,6 +3720,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
         toast={addToast}
         downloadPDF={downloadPDF}
         downloadClinicalPDF={(s)=>downloadPDF(s,true)}
+        downloadComparisonPDF={downloadComparisonPDF}
+        downloadTeamPDF={downloadTeamPDF}
         AccountSwitcher={AccountSwitcher}
         onSwitchAccount={handleSwitchAccount}
       />
