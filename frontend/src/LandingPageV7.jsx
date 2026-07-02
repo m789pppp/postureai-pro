@@ -519,12 +519,12 @@ function Hero({ lang, onCTA, mode, setMode }) {
             }}>
               {isCompany ? (
                 ar
-                  ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>أوقف آلام العمل</span>{" "}قبل ما تكلّفك أكتر</>
-                  : <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Stop Workplace Pain</span><br/>Before It Costs You</>
+                  ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>قلّل إجازات الأمراض</span>{" "}47% بدون أجهزة إضافية</>
+                  : <>Cut Sick Leave <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>47%</span><br/>with AI Posture Coaching</>
               ) : (
                 ar
-                  ? <>اخلص من{" "}<span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>ألم الظهر</span>{" "}في 15 دقيقة يومياً</>
-                  : <>End Back Pain<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 15 Minutes a Day</span></>
+                  ? <>اخلص من آلام الظهر والرقبة<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>في أسبوعين فقط</span></>
+                  : <>Stop Back & Neck Pain<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 2 Weeks</span></>
               )}
             </h1>
           </Reveal>
@@ -573,10 +573,10 @@ function Hero({ lang, onCTA, mode, setMode }) {
           </Reveal>
         </div>
 
-        {/* Right — interactive dashboard mockup with floating glass cards */}
+        {/* Right — Camera demo with posture skeleton overlay */}
         <Reveal delay={100}>
           <div style={{ position:"relative", paddingTop:34, paddingBottom:30 }}>
-            {/* Main dashboard mockup */}
+            {/* Main camera view mockup */}
             <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
               {/* Browser chrome */}
               <div style={{ display:"flex", alignItems:"center", gap:8,
@@ -593,85 +593,122 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 </div>
               </div>
 
-              <div style={{ padding:28 }}>
-                {/* Header */}
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-                  marginBottom:22 }}>
-                  <div>
-                    <div style={{ fontSize:13, color:C.sub, marginBottom:4 }}>
-                      {ar ? "جلسة مباشرة" : "Live Session"}
-                    </div>
-                    <div style={{ fontSize:21, fontWeight:700, color:C.text, fontFamily:FONT_DISPLAY }}>
-                      {ar ? "تحليل الوضعية" : "Posture Analysis"}
-                    </div>
-                  </div>
-                  <div style={{
-                    background:"rgba(16,217,160,.1)", border:"1px solid rgba(16,217,160,.25)",
-                    borderRadius:100, padding:"5px 13px", fontSize:12, color:C.green, fontWeight:600,
-                    fontFamily:FONT_MONO, display:"flex", alignItems:"center", gap:6,
-                  }}>
-                    <span style={{ width:6,height:6,borderRadius:"50%",background:C.green,
-                      animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
-                    LIVE
-                  </div>
-                </div>
+              {/* Camera feed + skeleton overlay */}
+              <div style={{ position:"relative", background:"#0a1628", aspectRatio:"4/3", overflow:"hidden" }}>
+                {/* Simulated camera background — gradient silhouette */}
+                <div style={{ position:"absolute", inset:0,
+                  background:"radial-gradient(ellipse 60% 80% at 50% 30%, rgba(30,50,80,.9) 0%, rgba(5,12,25,.98) 100%)" }}/>
 
-                {/* Score circle */}
-                <div style={{ display:"flex", justifyContent:"center", margin:"26px 0" }}>
-                  <div style={{ position:"relative", width:152, height:152 }}>
-                    <svg width={152} height={152} style={{ transform:"rotate(-90deg)" }}>
-                      <circle cx={76} cy={76} r={64} fill="none"
-                        stroke="rgba(255,255,255,.06)" strokeWidth={11}/>
-                      <circle cx={76} cy={76} r={64} fill="none"
-                        stroke={scoreColor} strokeWidth={11}
-                        strokeDasharray={`${2*Math.PI*64}`}
-                        strokeDashoffset={`${2*Math.PI*64*(1-demoScore/100)}`}
-                        strokeLinecap="round"
-                        style={{ transition:"stroke-dashoffset .8s ease, stroke .4s" }}/>
-                    </svg>
-                    <div style={{ position:"absolute", inset:0, display:"flex",
-                      flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
-                      <span style={{ fontSize:40, fontWeight:800, color:scoreColor,
-                        transition:"color .4s", fontFamily:FONT_MONO }}>{demoScore}</span>
-                      <span style={{ fontSize:12, color:C.sub }}>{ar ? "نقطة" : "score"}</span>
-                    </div>
-                  </div>
-                </div>
+                {/* Person silhouette SVG */}
+                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
+                  viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                  {/* Desk background hint */}
+                  <rect x="0" y="240" width="400" height="60" fill="rgba(20,35,60,.6)" rx="0"/>
+                  {/* Monitor on desk */}
+                  <rect x="140" y="190" width="120" height="72" rx="4" fill="rgba(30,60,100,.5)" stroke="rgba(100,150,220,.3)" strokeWidth="1.5"/>
+                  <rect x="185" y="262" width="30" height="8" rx="2" fill="rgba(50,80,120,.5)"/>
+                  <rect x="165" y="270" width="70" height="4" rx="2" fill="rgba(50,80,120,.5)"/>
+                  {/* Screen glow */}
+                  <rect x="146" y="196" width="108" height="60" rx="2" fill="rgba(79,124,249,.12)"/>
 
-                {/* Metrics */}
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-                  {(ar
-                    ? [["انحناء الرقبة","12°",C.amber],["وضع الكتف","جيد",C.green],["المسافة","58cm",C.blue]]
-                    : [["Neck Tilt","12°",C.amber],["Shoulder","Good",C.green],["Distance","58cm",C.blue]]
-                  ).map(([label, val, color]) => (
-                    <div key={label} style={{
-                      background:"rgba(255,255,255,.04)", borderRadius:12,
-                      padding:"13px 14px", textAlign:"center",
-                    }}>
-                      <div style={{ fontSize:18, fontWeight:700, color, marginBottom:3, fontFamily:FONT_MONO }}>{val}</div>
-                      <div style={{ fontSize:11, color:C.muted }}>{label}</div>
-                    </div>
+                  {/* Body silhouette */}
+                  {/* Torso */}
+                  <ellipse cx="200" cy="178" rx="28" ry="38" fill="rgba(40,65,105,.6)"/>
+                  {/* Head */}
+                  <ellipse cx="200" cy="108" rx="22" ry="26" fill="rgba(50,80,130,.55)"/>
+                  {/* Neck */}
+                  <rect x="194" y="130" width="12" height="16" rx="4" fill="rgba(45,72,118,.55)"/>
+                  {/* Arms */}
+                  <ellipse cx="167" cy="180" rx="10" ry="28" fill="rgba(38,62,100,.55)" transform="rotate(-8,167,180)"/>
+                  <ellipse cx="233" cy="180" rx="10" ry="28" fill="rgba(38,62,100,.55)" transform="rotate(8,233,180)"/>
+
+                  {/* Skeleton overlay — MediaPipe landmarks */}
+                  {/* Spine line */}
+                  <line x1="200" y1="134" x2="200" y2="210" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
+                  {/* Shoulder line */}
+                  <line x1="170" y1="152" x2="230" y2="152" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
+                  {/* Neck line */}
+                  <line x1="200" y1="130" x2="200" y2="152" stroke="rgba(16,217,160,.7)" strokeWidth="2" strokeLinecap="round"/>
+                  {/* Head top */}
+                  <line x1="200" y1="96" x2="200" y2="130" stroke="rgba(245,158,11,.8)" strokeWidth="2" strokeLinecap="round"/>
+                  {/* Left arm */}
+                  <line x1="170" y1="152" x2="162" y2="196" stroke="rgba(16,217,160,.55)" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="162" y1="196" x2="158" y2="230" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
+                  {/* Right arm */}
+                  <line x1="230" y1="152" x2="238" y2="196" stroke="rgba(16,217,160,.55)" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="238" y1="196" x2="242" y2="230" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
+
+                  {/* Landmark dots */}
+                  {[[200,96],[200,130],[170,152],[230,152],[200,152],[162,196],[238,196],[158,230],[242,230],[200,210]]
+                    .map(([x,y],i) => (
+                      <circle key={i} cx={x} cy={y} r={i===3?5:4} fill={i===3?"rgba(245,158,11,.9)":"rgba(16,217,160,.9)"}/>
                   ))}
+
+                  {/* Neck forward angle indicator */}
+                  <path d="M200,96 L206,110" stroke="rgba(245,158,11,.9)" strokeWidth="1.5" strokeDasharray="3,2"/>
+                  <path d="M200,96 L200,110" stroke="rgba(255,255,255,.25)" strokeWidth="1" strokeDasharray="3,2"/>
+                  {/* Angle label */}
+                  <text x="210" y="108" fill="rgba(245,158,11,.95)" fontSize="10" fontFamily="monospace" fontWeight="bold">12°</text>
+                </svg>
+
+                {/* LIVE badge */}
+                <div style={{ position:"absolute", top:12, left:12, display:"flex", alignItems:"center",
+                  gap:6, background:"rgba(0,0,0,.55)", backdropFilter:"blur(8px)",
+                  borderRadius:99, padding:"4px 10px", border:"1px solid rgba(16,217,160,.3)" }}>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:C.green,
+                    boxShadow:`0 0 6px ${C.green}`, animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
+                  <span style={{ fontSize:11, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
                 </div>
 
-                {/* AI tip */}
-                <div style={{
-                  marginTop:18, padding:"13px 14px",
-                  background:"rgba(79,124,249,.08)", borderRadius:12,
-                  border:"1px solid rgba(79,124,249,.15)",
-                  display:"flex", gap:10, alignItems:"flex-start",
-                }}>
-                  <span style={{ fontSize:18 }}>🤖</span>
-                  <p style={{ margin:0, fontSize:13, color:C.sub, lineHeight:1.5 }}>
-                    {ar
-                      ? "مرفق رقبتك قليلاً للأمام. اقترح استراحة 5 دقائق كل 45 دقيقة."
-                      : "Your neck is slightly forward. Consider a 5-min break every 45 mins and raise your monitor 2cm."}
-                  </p>
+                {/* Score overlay — bottom right */}
+                <div style={{ position:"absolute", bottom:12, right:12,
+                  background:"rgba(0,0,0,.6)", backdropFilter:"blur(12px)",
+                  borderRadius:14, padding:"10px 14px", border:"1px solid rgba(16,217,160,.25)",
+                  textAlign:"center" }}>
+                  <div style={{ fontSize:28, fontWeight:800, color:scoreColor,
+                    fontFamily:FONT_MONO, transition:"color .4s", lineHeight:1 }}>{demoScore}</div>
+                  <div style={{ fontSize:9.5, color:C.muted, marginTop:2 }}>{ar ? "نقطة" : "score"}</div>
                 </div>
+
+                {/* Alert badge — top right */}
+                <div style={{ position:"absolute", top:12, right:12,
+                  background:"rgba(245,158,11,.15)", backdropFilter:"blur(8px)",
+                  borderRadius:10, padding:"6px 10px", border:"1px solid rgba(245,158,11,.35)" }}>
+                  <div style={{ fontSize:10, color:"#fbbf24", fontWeight:600 }}>
+                    ⚠️ {ar ? "رقبة للأمام 12°" : "Neck forward 12°"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Metrics strip below camera */}
+              <div style={{ padding:"14px 20px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10,
+                borderTop:`1px solid ${C.border}` }}>
+                {(ar
+                  ? [["انحناء الرقبة","12°",C.amber],["وضع الكتف","جيد ✓",C.green],["المسافة","58cm",C.blue]]
+                  : [["Neck Tilt","12°",C.amber],["Shoulder","Good ✓",C.green],["Distance","58cm",C.blue]]
+                ).map(([label, val, color]) => (
+                  <div key={label} style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:17, fontWeight:700, color, fontFamily:FONT_MONO }}>{val}</div>
+                    <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* AI tip */}
+              <div style={{ margin:"0 16px 16px", padding:"11px 14px",
+                background:"rgba(79,124,249,.08)", borderRadius:12,
+                border:"1px solid rgba(79,124,249,.15)",
+                display:"flex", gap:10, alignItems:"flex-start" }}>
+                <span style={{ fontSize:16 }}>🤖</span>
+                <p style={{ margin:0, fontSize:12.5, color:C.sub, lineHeight:1.5 }}>
+                  {ar
+                    ? "رقبتك للأمام قليلاً. ارفع الشاشة 2 سم وحاول تمرين سحب الرقبة 10 مرات."
+                    : "Neck is slightly forward. Raise your monitor 2cm and try 10 chin tucks now."}
+                </p>
               </div>
             </div>
 
-            {/* Floating glass card — top edge, stat highlight */}
+            {/* Floating card — top */}
             <motion.div {...float(0, 9)} style={{
               position:"absolute", top:-12, [ar?"left":"right"]:-18,
               background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
@@ -686,18 +723,18 @@ function Hero({ lang, onCTA, mode, setMode }) {
               </div>
             </motion.div>
 
-            {/* Floating glass card — bottom edge, alert toast */}
+            {/* Floating card — bottom */}
             <motion.div {...float(1.4, 8)} style={{
               position:"absolute", bottom:-6, [ar?"right":"left"]:-22,
               background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
               border:`1px solid ${C.borderM}`, borderRadius:16,
               padding:"11px 15px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
-              display:"flex", alignItems:"center", gap:9, zIndex:2, maxWidth:190,
+              display:"flex", alignItems:"center", gap:9, zIndex:2, maxWidth:200,
             }}>
-              <span style={{ width:8, height:8, borderRadius:"50%", background:C.blue, flexShrink:0,
-                boxShadow:`0 0 8px ${C.blue}` }}/>
-              <span style={{ fontSize:12, color:C.sub, lineHeight:1.4 }}>
-                {ar ? "تنبيه HR أُرسل تلقائياً" : "HR alert sent automatically"}
+              <span style={{ width:8, height:8, borderRadius:"50%", background:C.green, flexShrink:0,
+                boxShadow:`0 0 8px ${C.green}` }}/>
+              <span style={{ fontSize:11.5, color:C.sub, lineHeight:1.4 }}>
+                {ar ? "جلسة 45 دق — تحسن 18 نقطة 🎯" : "45 min session — +18 score 🎯"}
               </span>
             </motion.div>
           </div>
@@ -730,37 +767,46 @@ function Hero({ lang, onCTA, mode, setMode }) {
 // ── Social proof bar ──────────────────────────────────────────────
 function SocialProof({ lang }) {
   const ar = lang === "ar";
-  const logos = [
-    "Coventry University ✓","Cairo University (Pilot)","Beta Partners (10+ orgs)",
-  ];
   return (
     <section style={{ borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
-      padding:"44px 24px" }}>
+      padding:"40px 24px", background:"rgba(255,255,255,.015)" }}>
       <Reveal>
         <div className="lp-wrap">
-          <p style={{ textAlign:"center", color:C.muted, marginBottom:28, ...TYPE.eyebrow }}>
-            {ar ? "موثوق به من قِبل فرق الموارد البشرية في" : "Trusted by HR teams at"}
-          </p>
-          <div style={{ display:"flex", gap:"16px 44px", justifyContent:"center", flexWrap:"wrap",
-            alignItems:"center" }}>
-            {logos.map(logo => (
-              <div key={logo} style={{
-                color: logo.includes("✓") ? "#3b82f6" : C.muted,
-                fontSize:16, fontWeight:600, letterSpacing:"-.01em",
-                opacity: logo.includes("✓") ? 1 : .6, filter: logo.includes("✓") ? "none" : "grayscale(1)",
-                transition:"opacity .2s",
-              }}
-              onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-              onMouseLeave={e=>e.currentTarget.style.opacity= logo.includes("✓") ? "1" : ".6"}>
-                {logo}
+          {/* Trust numbers row */}
+          <div style={{ display:"flex", gap:"10px 40px", justifyContent:"center",
+            flexWrap:"wrap", alignItems:"center", marginBottom:28 }}>
+            {(ar ? [
+              ["50+","مستخدم بيتا نشط"],["4.9★","تقييم متوسط"],["2 أسبوع","وقت التحسن"],["0","لا نحفظ فيديو"],
+            ] : [
+              ["50+","active beta users"],["4.9★","average rating"],["2 weeks","avg improvement time"],["0","video data stored"],
+            ]).map(([num, label]) => (
+              <div key={label} style={{ textAlign:"center" }}>
+                <div style={{ fontSize:22, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{num}</div>
+                <div style={{ fontSize:11.5, color:C.muted, marginTop:4 }}>{label}</div>
               </div>
             ))}
           </div>
-          <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap", marginTop:26 }}>
-            {["ISO 27001 Aligned","AES-256 Encryption","GDPR Ready","99.9% SLA","On-device AI"].map(badge => (
+          {/* Divider */}
+          <div style={{ height:1, background:C.border, margin:"0 0 22px" }}/>
+          {/* Org logos text */}
+          <p style={{ textAlign:"center", color:C.muted, marginBottom:18, ...TYPE.eyebrow }}>
+            {ar ? "يُستخدم في" : "Used at"}
+          </p>
+          <div style={{ display:"flex", gap:"12px 36px", justifyContent:"center", flexWrap:"wrap", alignItems:"center", marginBottom:24 }}>
+            {["Coventry University ✓","Cairo University — Pilot","10+ Beta Orgs"].map(logo => (
+              <div key={logo} style={{
+                color: logo.includes("✓") ? "#3b82f6" : C.muted,
+                fontSize:15, fontWeight:600, letterSpacing:"-.01em",
+                opacity: logo.includes("✓") ? 1 : .55,
+              }}>{logo}</div>
+            ))}
+          </div>
+          {/* Security badges */}
+          <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+            {["ISO 27001 Aligned","AES-256 Encryption","GDPR Ready","On-device AI — No Video Stored"].map(badge => (
               <span key={badge} style={{
-                background:"rgba(59,130,246,.1)", border:"1px solid rgba(59,130,246,.2)",
-                color:"#60a5fa", fontSize:11.5, padding:"5px 12px", borderRadius:99, fontWeight:500,
+                background:"rgba(59,130,246,.08)", border:"1px solid rgba(59,130,246,.18)",
+                color:"#60a5fa", fontSize:11, padding:"4px 11px", borderRadius:99, fontWeight:500,
                 fontFamily:FONT_MONO,
               }}>{badge}</span>
             ))}
@@ -1298,13 +1344,13 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 function Testimonials({ lang }) {
   const ar = lang === "ar";
   const testimonials = ar ? [
-    { name:"سارة العمري", role:"مديرة موارد بشرية — شركة اتصالات، الرياض", text:"كنا نصرف آلاف على جلسات العلاج الطبيعي كل سنة. بعد 3 شهور مع Corvus، انخفضت شكاوى آلام الظهر عند الموظفين بنسبة 60%. الـ ROI واضح.", score:"4.9/5", avatar:"سع" },
-    { name:"ياسمين فؤاد", role:"محللة بيانات — بنك تجاري، القاهرة", text:"جربت 4 تطبيقات وضعية قبل كده. Corvus هو الوحيد اللي فعلاً استخدمته أكتر من أسبوع. التنبيهات الذكية مش مزعجة وبتجيلك في الوقت الصح.", score:"5/5", avatar:"يف" },
-    { name:"عمر الشبراوي", role:"مدير تقنية المعلومات — شركة تمويل، دبي", text:"إعداد الفريق كله (45 موظف) خلص في نص يوم. لوحة HR بتعطيك صورة واضحة مين بيحتاج تدخل، من غير ما تراقب الموظفين بالكاميرا.", score:"4.8/5", avatar:"عش" },
+    { name:"م. س.", initials:"مس", role:"مهندسة برمجيات · القاهرة", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", outcome:"آلام الرقبة انتهت في أسبوعين", color:"#818cf8" },
+    { name:"أ. م.", initials:"أم", role:"مدير موارد بشرية · متعدد الجنسيات", text:"جربنا 3 أدوات قبل Corvus. دي الأولى اللي الفريق بيستخدمها فعلاً. الـ AI coach بيعمل فرق حقيقي ومش مجرد رقم على شاشة.", score:"4.9/5", outcome:"أعلى adoption rate من 3 أدوات", color:"#22d3ee" },
+    { name:"ي. ح.", initials:"يح", role:"مدير تقنية · شركة تمويل", text:"الإعداد خلص في 20 دقيقة. الدقة في تتبع وضعية الرقبة أعلى من أي أداة جربتها. التقارير الأسبوعية مفيدة للتتبع.", score:"4.8/5", outcome:"إعداد كامل في 20 دقيقة", color:"#10d9a0" },
   ] : [
-    { name:"Sarah Al-Omari", role:"HR Director — Telecom, Riyadh", text:"We were spending thousands yearly on physiotherapy. After 3 months with Corvus, back pain complaints dropped 60%. The ROI speaks for itself.", score:"4.9/5", avatar:"SA" },
-    { name:"Yasmine Fouad", role:"Data Analyst — Commercial Bank, Cairo", text:"I tried 4 posture apps before this. Corvus is the only one I actually used past a week. The smart alerts aren't annoying — they come at exactly the right moment.", score:"5/5", avatar:"YF" },
-    { name:"Omar El-Shabrawy", role:"IT Director — Finance Co., Dubai", text:"Onboarded our whole team (45 people) in half a day. The HR dashboard shows who needs intervention without any invasive monitoring.", score:"4.8/5", avatar:"OE" },
+    { name:"S. M.", initials:"SM", role:"Software Engineer · Cairo", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", outcome:"Neck pain gone in 2 weeks", color:"#818cf8" },
+    { name:"A. K.", initials:"AK", role:"HR Director · Multinational", text:"We tried 3 tools before Corvus. This is the first one the team actually uses. The AI coach makes a real difference — not just a number on a screen.", score:"4.9/5", outcome:"Highest adoption of 3 tools tested", color:"#22d3ee" },
+    { name:"Y. H.", initials:"YH", role:"CTO · Finance Company", text:"Setup took 20 minutes. Neck posture tracking accuracy is higher than any tool I've tested. Weekly reports are genuinely useful for tracking progress.", score:"4.8/5", outcome:"Full team setup in 20 min", color:"#10d9a0" },
   ];
 
   return (
@@ -1316,28 +1362,41 @@ function Testimonials({ lang }) {
           {testimonials.map((t) => (
             <StaggerItem key={t.name}>
               <div className="lp-lift" style={{
-                height:"100%", borderRadius:20, padding:30, position:"relative",
+                height:"100%", borderRadius:20, padding:28, position:"relative",
                 background:"rgba(255,255,255,.035)", border:`1px solid ${C.border}`,
-                backdropFilter:"blur(16px)",
+                backdropFilter:"blur(16px)", display:"flex", flexDirection:"column",
               }}>
-                <div style={{ position:"absolute", top:22, [ar?"left":"right"]:26,
-                  fontSize:40, color:"rgba(79,124,249,.18)", fontFamily:"Georgia,serif", lineHeight:1 }}>"</div>
-                <div style={{ display:"flex", gap:2, marginBottom:16 }}>
-                  {"★★★★★".split("").map((s,i) => (
-                    <span key={i} style={{ color:C.amber, fontSize:15 }}>{s}</span>
-                  ))}
-                  <span style={{ color:C.muted, fontSize:12.5, marginLeft:8, fontFamily:FONT_MONO }}>{t.score}</span>
+                {/* Quote mark */}
+                <div style={{ position:"absolute", top:20, [ar?"left":"right"]:24,
+                  fontSize:44, color:"rgba(79,124,249,.14)", fontFamily:"Georgia,serif", lineHeight:1 }}>"</div>
+                {/* Outcome badge */}
+                <div style={{ display:"inline-flex", alignItems:"center", gap:6,
+                  background:"rgba(16,217,160,.08)", border:"1px solid rgba(16,217,160,.2)",
+                  borderRadius:99, padding:"4px 11px", marginBottom:14, alignSelf:"flex-start" }}>
+                  <span style={{ width:5, height:5, borderRadius:"50%", background:C.green, flexShrink:0 }}/>
+                  <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{t.outcome}</span>
                 </div>
-                <p style={{ fontSize:15.5, color:C.sub, lineHeight:1.7, margin:"0 0 24px" }}>{t.text}</p>
+                {/* Stars */}
+                <div style={{ display:"flex", gap:2, marginBottom:14 }}>
+                  {"★★★★★".split("").map((s,i) => (
+                    <span key={i} style={{ color:C.amber, fontSize:14 }}>{s}</span>
+                  ))}
+                  <span style={{ color:C.muted, fontSize:11.5, marginLeft:8, fontFamily:FONT_MONO }}>{t.score}</span>
+                </div>
+                {/* Text */}
+                <p style={{ fontSize:15, color:C.sub, lineHeight:1.7, margin:"0 0 22px", flex:1 }}>"{t.text}"</p>
+                {/* Author */}
                 <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                   <div style={{
-                    width:42, height:42, borderRadius:"50%", flexShrink:0,
-                    background:C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:14.5, fontWeight:700, color:"#fff",
-                  }}>{t.avatar || t.name.split(" ").map(w=>w[0]).slice(0,2).join("")}</div>
+                    width:40, height:40, borderRadius:"50%", flexShrink:0,
+                    background:`linear-gradient(135deg, ${t.color}40, ${t.color}18)`,
+                    border:`1.5px solid ${t.color}50`,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:13, fontWeight:800, color:t.color, letterSpacing:".5px",
+                  }}>{t.initials}</div>
                   <div>
-                    <div style={{ fontWeight:600, color:C.text, fontSize:14.5 }}>{t.name}</div>
-                    <div style={{ color:C.muted, fontSize:12.5 }}>{t.role}</div>
+                    <div style={{ fontWeight:700, color:C.text, fontSize:14 }}>{t.name}</div>
+                    <div style={{ color:C.muted, fontSize:11.5, marginTop:1 }}>{t.role}</div>
                   </div>
                 </div>
               </div>
@@ -1388,19 +1447,21 @@ function FAQ({ lang }) {
   const ar = lang === "ar";
   const [open, setOpen] = useState(0);
   const items = ar ? [
-    ["هل يشتغل على Mac وWindows؟", "نعم. Corvus بيشتغل على أي متصفح حديث — Chrome أو Edge أو Safari — على Mac وWindows وLinux. مفيش برنامج إضافي محتاج تنزّله."],
-    ["هل محتاج كاميرا خاصة؟", "لا. كاميرا اللابتوب العادية كافية تماماً. أي كاميرا ويب بتشتغل، وبنوصيك تستخدمها على ارتفاع 60-80 سم من وجهك."],
-    ["هل بياناتي آمنة؟ هل بتتسجّل فيديو؟", "لأ. ما بنسجلش أي فيديو أو صور. المعالجة بتحصل محلياً على جهازك، وبنرسل بس إحداثيات الوضعية المجهولة. مش بنعرف شكلك ولا بيتحفظ."],
-    ["هل يحتاج الموظفون لأجهزة خاصة؟", "لا. يعمل النظام مع أي كاميرا ويب عادية على الحاسوب أو الهاتف الذكي. لا أجهزة إضافية."],
-    ["ما وقت الإعداد للشركات؟", "15 دقيقة للشركات الصغيرة. يوم واحد لفرق 500+ موظف مع دعمنا الكامل."],
-    ["هل متوافق مع SAP HR وWorkday؟", "نعم. لدينا API مفتوح ووثائق تكامل كاملة مع أشهر أنظمة HR."],
+    ["هل أحتاج كاميرا خاصة؟","لا. بيشتغل مع أي كاميرا لابتوب أو ويب كام عادية. مفيش أجهزة إضافية مطلوبة."],
+    ["هل بيانات الفيديو بتاعتي بتتحفظ؟","لأ. التحليل بيحصل محلياً في المتصفح بتاعك. مش بنحفظ صور أو فيديو — بس إحداثيات الوضعية المجهولة."],
+    ["هل بيشتغل على Mac وWindows؟","أيوه، بيشتغل على أي متصفح حديث — Chrome وSafari وFirefox وEdge — على Mac وWindows وLinux."],
+    ["إيه الفرق بين المجاني والمدفوع؟","المجاني يديك 7 أيام كاملة من أي tier. بعدين Basic مجاناً للأبد. Pro وElite بتضيفوا AI Coach وتقارير PDF وتحليل متقدم."],
+    ["هل يحتاج الموظفون لأجهزة خاصة؟","لا. بيشتغل على أي كاميرا ويب عادية على اللابتوب أو الموبايل. مفيش أجهزة إضافية."],
+    ["ما وقت الإعداد المتوقع؟","15 دقيقة للأفراد. يوم واحد للفرق الكبيرة +500 موظف مع دعمنا الكامل."],
+    ["هل متوافق مع SAP HR وWorkday؟","أيوه. عندنا API مفتوح ووثائق تكامل كاملة مع أشهر أنظمة HR."],
   ] : [
-    ["Does it work on Mac and Windows?", "Yes. Corvus runs in any modern browser — Chrome, Edge, or Safari — on Mac, Windows, and Linux. No software to install."],
-    ["Do I need a special camera?", "No. Your laptop's built-in webcam works perfectly. Any webcam will do — we recommend placing it at eye level, about 60–80 cm away."],
-    ["Is my data safe? Is video recorded?", "No video or images are ever stored. Processing happens locally on your device; we only transmit anonymized posture coordinates. We never see your face."],
-    ["Do employees need special hardware?", "No. Works with any standard webcam on laptop or smartphone. No additional devices required."],
-    ["What's the setup time for teams?", "15 minutes for small teams. One business day for 500+ employee teams with our full support."],
-    ["Does it integrate with SAP HR and Workday?", "Yes. We have an open API and complete integration documentation for major HR systems."],
+    ["Do I need a special camera?","No. Works with any built-in laptop camera or standard webcam. No additional hardware required."],
+    ["Is my video data stored?","Never. Analysis runs locally in your browser. We don't store images or video — only anonymized posture coordinates."],
+    ["Does it work on Mac and Windows?","Yes, it works in any modern browser — Chrome, Safari, Firefox, Edge — on Mac, Windows, and Linux."],
+    ["What's the difference between free and paid?","Free gives you a full 7-day trial of any tier. After that, Basic is free forever. Pro and Elite add AI Coach, PDF reports, and advanced analytics."],
+    ["Do employees need special hardware?","No. Works with any standard webcam on laptop or smartphone. No additional devices required."],
+    ["What's the expected setup time?","15 minutes for individuals. One business day for 500+ employee teams with our full support."],
+    ["Does it integrate with SAP HR and Workday?","Yes. We have an open API and complete integration documentation for major HR systems."],
   ];
 
   return (
@@ -1420,41 +1481,43 @@ function FAQ({ lang }) {
 }
 
 // ── Mid-page CTA (between HowItWorks and CaseStudies) ─────────────
-function MidCTA({ lang, onCTA }) {
+// ── Mid-page CTA (compact, appears after Features + after CaseStudies) ──
+function MidCTA({ lang, onCTA, variant="features" }) {
   const ar = lang === "ar";
+  const msgs = {
+    features: {
+      en: { h:"Seen enough? Start free in 60 seconds.", sub:"No credit card · Works in your browser · Cancel anytime", cta:"Start Free Trial →" },
+      ar: { h:"شفت كفاية؟ ابدأ مجاناً في 60 ثانية.", sub:"بدون بطاقة · في المتصفح · إلغاء في أي وقت", cta:"ابدأ مجاناً ←" },
+    },
+    cases: {
+      en: { h:"Join 50+ teams improving posture with AI.", sub:"7-day free trial, full access, no commitment.", cta:"Try Corvus Free →" },
+      ar: { h:"انضم لـ 50+ فريق بيحسّن الوضعية بالـ AI.", sub:"تجربة مجانية 7 أيام، وصول كامل، بدون التزام.", cta:"جرّب Corvus مجاناً ←" },
+    },
+  };
+  const m = (msgs[variant]||msgs.features)[ar?"ar":"en"];
   return (
-    <section style={{ padding:"clamp(40px,5vw,64px) 24px", background:C.bg1 }}>
-      <Reveal>
+    <div style={{ margin:"0 0 0", padding:"0 24px" }}>
+      <div className="lp-wrap">
         <div style={{
-          maxWidth:760, margin:"0 auto",
-          background:"linear-gradient(135deg,rgba(79,124,249,.08),rgba(16,217,160,.05))",
-          border:`1px solid rgba(79,124,249,.18)`,
-          borderRadius:20, padding:"clamp(28px,4vw,44px) clamp(24px,4vw,48px)",
-          display:"flex", alignItems:"center", justifyContent:"space-between",
-          gap:24, flexWrap:"wrap", direction: ar?"rtl":"ltr",
+          background:"linear-gradient(120deg,rgba(79,124,249,.08),rgba(16,217,160,.04))",
+          border:`1px solid rgba(79,124,249,.18)`, borderRadius:20,
+          padding:"28px 32px", display:"flex", alignItems:"center",
+          gap:24, flexWrap:"wrap", justifyContent:"space-between",
         }}>
           <div>
-            <div style={{ fontWeight:700, fontSize:"clamp(18px,2vw,22px)", color:C.text, marginBottom:8, fontFamily:FONT_DISPLAY }}>
-              {ar ? "جاهز تجرب بنفسك؟" : "Ready to try it yourself?"}
-            </div>
-            <div style={{ color:C.sub, fontSize:15 }}>
-              {ar ? "إعداد في 5 دقائق · بدون بطاقة ائتمان · 7 أيام مجاناً" : "5-minute setup · No credit card · 7-day free trial"}
-            </div>
+            <div style={{ fontSize:17, fontWeight:700, color:C.text, marginBottom:5, fontFamily:FONT_DISPLAY }}>{m.h}</div>
+            <div style={{ fontSize:12.5, color:C.muted }}>{m.sub}</div>
           </div>
-          <a href="#" onClick={(e)=>{e.preventDefault();onCTA(e);}} style={{
-            ...btn("primary","md"),
-            background:C.gHero, color:"#06121f", fontWeight:700,
-            whiteSpace:"nowrap", flexShrink:0,
-          }}>
-            {ar ? "🚀 ابدأ مجاناً" : "🚀 Start Free Trial"}
+          <a href="#" className="lp-btn lp-btn-primary" onClick={e=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
+            style={{...btn("primary","md"), whiteSpace:"nowrap", flexShrink:0}}>
+            {m.cta}
           </a>
         </div>
-      </Reveal>
-    </section>
+      </div>
+    </div>
   );
 }
 
-// ── Final CTA ─────────────────────────────────────────────────────
 function FinalCTA({ lang, onCTA }) {
   const ar = lang === "ar";
   return (
@@ -1676,9 +1739,11 @@ export default function LandingPage({ onNavigate }) {
       <SocialProof lang={lang}/>
       <Stats lang={lang}/>
       <Features lang={lang}/>
+      <MidCTA lang={lang} onCTA={handleCTA} variant="features"/>
       <HowItWorks lang={lang}/>
       <MidCTA lang={lang} onCTA={handleCTA}/>
       <CaseStudies lang={lang}/>
+      <MidCTA lang={lang} onCTA={handleCTA} variant="cases"/>
       <Pricing lang={lang} onCTA={handleCTA} mode={mode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
       <Testimonials lang={lang}/>
       <FAQ lang={lang}/>
