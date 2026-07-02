@@ -1497,61 +1497,117 @@ function FinalCTA({ lang, onCTA }) {
 // ── Footer ────────────────────────────────────────────────────────
 function Footer({ lang }) {
   const ar = lang === "ar";
-  const sections = ar ? {
-    product: { title:"المنصة", links:[["المميزات","#features"],["الأسعار","#pricing"],["المؤسسات","#enterprise"],["التحديثات","#features"]] },
-    company: { title:"الشركة", links:[["عن Corvus",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],["تواصل معنا",`mailto:${SUPPORT_EMAIL}`],["GitHub","https://github.com/m789pppp/postureai-pro"],["جامعة كوفنتري","https://www.coventry.ac.uk"]] },
-    legal: { title:"قانوني", links:[["الخصوصية",`mailto:${SUPPORT_EMAIL}?subject=Privacy%20Inquiry`],["الشروط",`mailto:${SUPPORT_EMAIL}?subject=Terms%20Inquiry`],["الأمان",`mailto:${SUPPORT_EMAIL}?subject=Security%20Inquiry`],["GDPR",`mailto:${SUPPORT_EMAIL}?subject=GDPR%20Request`]] },
-  } : {
-    product: { title:"Product", links:[["Features","#features"],["Pricing","#pricing"],["Enterprise","#enterprise"],["Open Source","https://github.com/m789pppp/postureai-pro"]] },
-    company: { title:"Company", links:[["About",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],["Contact",`mailto:${SUPPORT_EMAIL}`],["GitHub","https://github.com/m789pppp/postureai-pro"],["Coventry University","https://www.coventry.ac.uk"]] },
-    legal: { title:"Legal", links:[["Privacy",`mailto:${SUPPORT_EMAIL}?subject=Privacy%20Inquiry`],["Terms",`mailto:${SUPPORT_EMAIL}?subject=Terms%20Inquiry`],["Security",`mailto:${SUPPORT_EMAIL}?subject=Security%20Inquiry`],["GDPR",`mailto:${SUPPORT_EMAIL}?subject=GDPR%20Request`]] },
-  };
+
+  const sections = ar ? [
+    { title:"المنتج", links:[
+      ["المميزات","#features"],
+      ["الأسعار","#pricing"],
+      ["للمؤسسات","#enterprise"],
+      ["كيف يعمل","#how"],
+    ]},
+    { title:"الشركة", links:[
+      ["من نحن",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],
+      ["تواصل معنا",`mailto:${SUPPORT_EMAIL}`],
+      ["المدوّنة","#"],
+      ["الشركاء","#"],
+    ]},
+    { title:"قانوني", links:[
+      ["سياسة الخصوصية","#privacy"],
+      ["شروط الاستخدام","#terms"],
+      ["الأمان","#security"],
+      ["GDPR","#gdpr"],
+    ]},
+  ] : [
+    { title:"Product", links:[
+      ["Features","#features"],
+      ["Pricing","#pricing"],
+      ["Enterprise","#enterprise"],
+      ["How It Works","#how"],
+    ]},
+    { title:"Company", links:[
+      ["About",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],
+      ["Contact",`mailto:${SUPPORT_EMAIL}`],
+      ["Blog","#"],
+      ["Partners","#"],
+    ]},
+    { title:"Legal", links:[
+      ["Privacy Policy","#privacy"],
+      ["Terms of Service","#terms"],
+      ["Security","#security"],
+      ["GDPR","#gdpr"],
+    ]},
+  ];
+
+  const socials = [
+    { label:"LinkedIn", href:"https://www.linkedin.com/in/mo-postureai" },
+    { label:"Email",    href:`mailto:${SUPPORT_EMAIL}` },
+  ];
 
   return (
-    <footer style={{ borderTop:`1px solid ${C.border}`, padding:"72px 24px 36px", background:C.bg }}>
+    <footer style={{ borderTop:`1px solid ${C.border}`, padding:"64px 24px 36px", background:C.bg }}>
       <div className="lp-wrap">
-        <div className="footer-grid" style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr", gap:44,
-          marginBottom:52 }}>
-          {/* Brand */}
-          <div>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:18 }}>
-              <div style={{ width:34, height:34, borderRadius:9, background:C.gBlue,
-                display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🧘</div>
-              <span style={{ fontWeight:700, color:C.text, fontSize:16.5, fontFamily:FONT_DISPLAY }}>Corvus</span>
+        {/* Main grid — 4 cols desktop, 2 cols tablet, 1 col mobile */}
+        <div style={{
+          display:"grid",
+          gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))",
+          gap:"40px 48px",
+          marginBottom:52,
+        }}>
+          {/* Brand column */}
+          <div style={{ gridColumn:"span 1" }}>
+            {/* Logo mark */}
+            <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:16 }}>
+              <div style={{
+                width:32, height:32, borderRadius:8,
+                background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:16, flexShrink:0,
+              }}>◈</div>
+              <span style={{ fontWeight:800, color:C.text, fontSize:16, fontFamily:FONT_DISPLAY, letterSpacing:"-.02em" }}>
+                Corvus
+              </span>
             </div>
-            <p style={{ fontSize:14, color:C.muted, lineHeight:1.7, maxWidth:280, margin:"0 0 18px" }}>
+
+            <p style={{ fontSize:13.5, color:C.muted, lineHeight:1.75, maxWidth:240, margin:"0 0 20px" }}>
               {ar
-                ? "منصة ذكاء اصطناعي لصحة القوى العاملة لفرق MENA."
-                : "AI-powered workforce health intelligence for MENA teams."}
+                ? "تحليل الوضعية بالذكاء الاصطناعي — للأفراد والفرق في منطقة MENA."
+                : "AI posture analysis for individuals and teams across MENA."}
             </p>
-            <div style={{ display:"flex", gap:10 }}>
-              {[["LinkedIn","https://linkedin.com/company/corvus-postureai"],["GitHub","https://github.com/m789pppp/postureai-pro"],["Contact",`mailto:${SUPPORT_EMAIL}`]].map(([s,url]) => (
-                <a key={s} href={url}
-                  target="_blank" rel="noopener noreferrer"
-                  style={{ color:C.muted, fontSize:12, textDecoration:"none",
-                    padding:"7px 11px", border:`1px solid ${C.border}`,
-                    borderRadius:7, transition:"color .2s,border-color .2s" }}
+
+            {/* Social links */}
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {socials.map(({ label, href }) => (
+                <a key={label} href={href}
+                  target={href.startsWith("http") ? "_blank" : undefined}
+                  rel="noopener noreferrer"
+                  style={{
+                    color:C.muted, fontSize:12.5, textDecoration:"none",
+                    padding:"6px 12px", border:`1px solid ${C.border}`,
+                    borderRadius:7, transition:"color .18s, border-color .18s",
+                  }}
                   onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM}}
                   onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border}}>
-                  {s}
+                  {label}
                 </a>
               ))}
             </div>
           </div>
+
           {/* Link columns */}
-          {Object.values(sections).map(sec => (
+          {sections.map(sec => (
             <div key={sec.title}>
-              <div style={{ ...TYPE.eyebrow, color:C.muted, marginBottom:18 }}>
+              <div style={{
+                fontSize:11, fontWeight:700, letterSpacing:".08em",
+                textTransform:"uppercase", color:C.muted, marginBottom:16,
+              }}>
                 {sec.title}
               </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:11 }}>
                 {sec.links.map(([label, href]) => (
-                  <a key={label} href={href} style={{
-                    color:C.sub, fontSize:14.5, textDecoration:"none",
-                    transition:"color .2s",
-                  }}
-                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                  onMouseLeave={e=>e.currentTarget.style.color=C.sub}>
+                  <a key={label} href={href}
+                    style={{ color:C.sub, fontSize:14, textDecoration:"none", transition:"color .18s" }}
+                    onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                    onMouseLeave={e=>e.currentTarget.style.color=C.sub}>
                     {label}
                   </a>
                 ))}
@@ -1559,20 +1615,30 @@ function Footer({ lang }) {
             </div>
           ))}
         </div>
+
+        {/* Bottom bar */}
         <div style={{
-          borderTop:`1px solid ${C.border}`, paddingTop:26,
+          borderTop:`1px solid ${C.border}`, paddingTop:24,
           display:"flex", justifyContent:"space-between", alignItems:"center",
-          flexWrap:"wrap", gap:12,
+          flexWrap:"wrap", gap:12, direction: ar ? "rtl" : "ltr",
         }}>
-          <span style={{ fontSize:13, color:C.muted }}>
-            © {new Date().getFullYear()} Corvus. {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
+          <span style={{ fontSize:12.5, color:C.muted }}>
+            © {new Date().getFullYear()} Corvus.{" "}
+            {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
           </span>
-          <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color:C.sub, fontSize:13, textDecoration:"none" }}>
-            {SUPPORT_EMAIL}
-          </a>
+          <div style={{ display:"flex", gap:20, alignItems:"center" }}>
+            <span style={{ fontSize:12, color:C.muted, opacity:.7 }}>
+              {ar ? "صُنع بـ ❤ في MENA" : "Made with ❤ in MENA"}
+            </span>
+            <a href={`mailto:${SUPPORT_EMAIL}`}
+              style={{ fontSize:12.5, color:C.sub, textDecoration:"none" }}
+              onMouseEnter={e=>e.currentTarget.style.color=C.text}
+              onMouseLeave={e=>e.currentTarget.style.color=C.sub}>
+              {SUPPORT_EMAIL}
+            </a>
+          </div>
         </div>
       </div>
-      <style>{`@media(max-width:768px){.footer-grid{grid-template-columns:1fr 1fr!important;gap:28px!important}}@media(max-width:420px){.footer-grid{grid-template-columns:1fr!important}}`}</style>
     </footer>
   );
 }
