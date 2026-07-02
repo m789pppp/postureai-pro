@@ -46,7 +46,7 @@ function MdText({ text }) {
 // stats) or "full" (Elite tier — last 10 sessions + footer detail note).
 // Callers must check qualityFor(tier).pdfDetail !== "none" before calling
 // this — "none" tiers (standard/basic) are gated out in exportPDF().
-function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDetail = "standard" }) {
+function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDetail = "standard", tier = "standard" }) {
   const isAr = lang === "ar";
   const isFull = pdfDetail === "full";
   const allScores = sessions.map(s => s.avg_score || 0).filter(Boolean);
@@ -99,7 +99,7 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
 <body>
 <div class="header">
   <div>
-    <div class="logo">Corvus <span>Pro</span></div>
+    <div class="logo">Corvus <span>${{elite:"Elite",professional:"Pro",standard:"",basic:""}[tier]||""}</span></div>
     <div style="font-size:11px;color:#7890b0;margin-top:4px;">${isAr ? "تقرير الأداء التنفيذي" : "Executive Performance Report"}</div>
   </div>
   <div class="meta">
@@ -237,7 +237,19 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError]       = useState("");
   const [exported, setExported] = useState(false);
+  const [dateRange, setDateRange] = useState("week"); // "week" | "month" | "all"
   const isAr = lang === "ar";
+
+  // ── Date range filter ─────────────────────────────────────────
+  const _msAgo = (ms) => (ts) => {
+    const d = ts?.toDate ? ts.toDate() : new Date(ts || 0);
+    return Date.now() - d.getTime() < ms;
+  };
+  const filteredSessions = dateRange === "week"
+    ? sessions.filter(s => _msAgo(7 * 86400000)(s.created_at))
+    : dateRange === "month"
+    ? sessions.filter(s => _msAgo(30 * 86400000)(s.created_at))
+    : sessions;
 
   // Canonical tier gating — single source of truth is tierQuality.js.
   // standard/basic → pdfDetail "none" (no export); professional → "standard";
@@ -324,7 +336,8 @@ This user score: ${avgScore}/100
     }
     const html = buildPDFHTML({
       reportTitle: isAr ? `تقرير الأداء — ${profile?.name || ""}` : `Performance Report — ${profile?.name || "User"}`,
-      profile, sessions, summaryText: summary, lang, pdfDetail,
+      profile, sessions: filteredSessions, summaryText: summary, lang, pdfDetail,
+      tier: profile?.tier || "standard",
     });
     // Use Blob URL to avoid popup blockers (window.open("","_blank") is blocked
     // on most browsers unless triggered synchronously from a user gesture;
@@ -423,6 +436,19 @@ This user score: ${avgScore}/100
           </div>
         </div>
 
+        {/* ── Date Range Selector ── */}
+        <div style={{ display:"flex", gap:6, padding:"8px 16px", borderBottom:"1px solid rgba(255,255,255,.07)", flexShrink:0, alignItems:"center" }}>
+          <span style={{ fontSize:10, color:"#6b82a6", fontWeight:600, marginRight:4 }}>{isAr?"الفترة:":"Range:"}</span>
+          {[["week",isAr?"آخر 7 أيام":"Last 7 days"],["month",isAr?"آخر 30 يوم":"Last 30 days"],["all",isAr?"كل الجلسات":"All sessions"]].map(([r,l])=>(
+            <button key={r} onClick={()=>setDateRange(r)} style={{
+              fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:6, cursor:"pointer",
+              background: dateRange===r?"rgba(5,150,105,.18)":"rgba(255,255,255,.04)",
+              border: `1px solid ${dateRange===r?"#059669":"rgba(255,255,255,.08)"}`,
+              color: dateRange===r?"#34d399":"#6b82a6",
+            }}>{l}{dateRange===r&&<span style={{marginLeft:4,opacity:.7}}>({filteredSessions.length})</span>}</button>
+          ))}
+        </div>
+
         {/* ── Tab Bar ── */}
         <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,.07)", flexShrink: 0 }}>
           {TABS.map(t => (
@@ -436,7 +462,7 @@ This user score: ${avgScore}/100
         {/* ── Content ── */}
         <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
 
-          {sessions.length === 0 && tab !== "department" && (
+          {filteredSessions.length === 0 && tab !== "department" && (
             <div style={{ textAlign: "center", padding: "60px 20px" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
               <div style={{ fontFamily: "Syne,sans-serif", fontSize: 18, fontWeight: 800, color: "#e8f0fe", marginBottom: 8 }}>
@@ -449,13 +475,13 @@ This user score: ${avgScore}/100
           )}
 
           {/* ── Weekly Summary ── */}
-          {tab === "summary" && sessions.length > 0 && (
+          {tab === "summary" && filteredSessions.length > 0 && (
             <div>
               <div style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, padding: 16, marginBottom: 16 }}>
                 <div style={{ fontFamily: "Syne,sans-serif", fontSize: 13, fontWeight: 800, color: "#e8f0fe", marginBottom: 14 }}>
                   {isAr ? "ملخص الأسابيع الأخيرة" : "Recent Weeks Summary"}
                 </div>
-                <WeekSummaryCard sessions={sessions} isAr={isAr} />
+                <WeekSummaryCard sessions={filteredSessions} isAr={isAr} />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
@@ -477,7 +503,7 @@ This user score: ${avgScore}/100
           )}
 
           {/* ── Manager Insights — company only ── */}
-          {tab === "manager" && isCompany && sessions.length > 0 && (
+          {tab === "manager" && isCompany && filteredSessions.length > 0 && (
             <div>
               <div style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, padding: 16, marginBottom: 16 }}>
                 <div style={{ fontFamily: "Syne,sans-serif", fontSize: 13, fontWeight: 800, color: "#e8f0fe", marginBottom: 12 }}>

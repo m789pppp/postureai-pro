@@ -740,14 +740,35 @@ function _fmtDate(ts,ar){
 function _clamp(v,min,max){return Math.min(max,Math.max(min,v));}
 function _rgb(arr){return arr;}
 
+// ── Cairo font — loaded lazily for Arabic PDF rendering ───────────
+let _cairoLoaded = false;
+async function _ensureCairoFont(doc) {
+  if (_cairoLoaded) return;
+  try {
+    const { CAIRO_B64 } = await import("./assets/cairoFont.js");
+    // jsPDF addFont: (base64data, fontName, fontStyle, fontWeight?)
+    doc.addFileToVFS("Cairo-Regular.ttf", CAIRO_B64);
+    doc.addFont("Cairo-Regular.ttf", "cairo", "normal");
+    doc.addFileToVFS("Cairo-Bold.ttf", CAIRO_B64);
+    doc.addFont("Cairo-Bold.ttf", "cairo", "bold");
+    _cairoLoaded = true;
+  } catch(e) {
+    console.warn("Cairo font load failed — falling back to helvetica:", e);
+  }
+}
+
+// ── Font setter — uses Cairo for Arabic, helvetica otherwise ───────
+function font(doc, size, style="normal", isAr=false) {
+  const face = isAr && _cairoLoaded ? "cairo" : "helvetica";
+  doc.setFont(face, style);
+  doc.setFontSize(size);
+}
+
 // ── Low-level draw helpers ─────────────────────────────────────────
 function dc(doc,...c){doc.setDrawColor(...c);}
 function fc(doc,...c){doc.setFillColor(...c);}
 function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
-function font(doc,size,style="normal",face="helvetica"){
-  doc.setFont(face,style);doc.setFontSize(size);
-}
 
 // ── Rounded filled rect helper ─────────────────────────────────────
 function rr(doc,x,y,w,h,r=3,mode="F"){
@@ -839,11 +860,11 @@ function _coverHdr(doc,W,ml,H,tier,tierCol,name,sessionNum,dateStr){
 }
 
 // ── Section heading with accent bar ───────────────────────────────
-function _secHead(doc,ml,y,title,sub="",col=T.primary){
+function _secHead(doc,ml,y,title,sub="",col=T.primary,isAr=false){
   fc(doc,...col);doc.rect(ml,y,2.5,sub?14:10,"F");
-  font(doc,F.h2,"bold");tc(doc,...T.ink);
+  font(doc,F.h2,"bold",isAr);tc(doc,...T.ink);
   doc.text(title,ml+8,y+(sub?7:7));
-  if(sub){font(doc,F.small,"normal");tc(doc,...T.muted);doc.text(sub,ml+8,y+13);}
+  if(sub){font(doc,F.small,"normal",isAr);tc(doc,...T.muted);doc.text(sub,ml+8,y+13);}
   return y+(sub?20:15);
 }
 
@@ -876,22 +897,17 @@ function _ring(doc,cx,cy,r,score,isAr){
 function _metCard(doc,x,y,w,lbl,value,unit,score,isAr){
   const col=_scoreColor(score);
   const h=20;
-  // Card bg
   fc(doc,...T.card);rr(doc,x,y,w,h,3,"F");
   dc(doc,...T.border);lw(doc,0.2);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
-  // Left accent border
   fc(doc,...col);doc.rect(x,y,3,h,"F");
   rr(doc,x,y,3,h,1.5,"F");
-  // Score badge
   fc(doc,...col);rr(doc,x+7,y+4,14,12,2,"F");
-  font(doc,8.5,"bold");tc(doc,...T.card);
+  font(doc,8.5,"bold",false);tc(doc,...T.card);
   doc.text(String(Math.round(score)),x+14,y+11.5,{align:"center"});
-  // Label
-  font(doc,8.5,"bold");tc(doc,...T.ink);
+  font(doc,8.5,"bold",isAr);tc(doc,...T.ink);
   doc.text(lbl,x+25,y+8.5);
-  // Value
   if(value!==undefined&&value!==null){
-    font(doc,7.5,"normal");tc(doc,...T.muted);
+    font(doc,7.5,"normal",false);tc(doc,...T.muted);
     doc.text(`${Math.round(value*10)/10}${unit||""}`,x+25,y+15);
   }
   // Progress bar (right side)
@@ -1059,6 +1075,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const isElite = tierAtLeast(tier,"elite");
   const isPro   = !isElite && tierAtLeast(tier,"professional");
   const doc   = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  await _ensureCairoFont(doc);
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
   const tierCol = isElite?T.success:isPro?T.cyan:T.indigo;
@@ -1111,14 +1128,14 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
     // Sparkline
     if(hist.length>2){
-      y=_secHead(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"خلال الجلسة":"During session",gradeC);
+      y=_secHead(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"خلال الجلسة":"During session",gradeC,isAr);
       fc(doc,...T.bg);rr(doc,ml,y,cw,36,4,"F");dc(doc,...T.border);lw(doc,0.2);rr(doc,ml,y,cw,36,4,"S");lw(doc,0.3);
       _spark(doc,hist,ml+10,y+5,cw-20,26,gradeC);
       y+=44;
     }
 
     // Top 3 metrics
-    y=_secHead(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"الأسوأ أداءً":"Worst performing",gradeC);
+    y=_secHead(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"الأسوأ أداءً":"Worst performing",gradeC,isAr);
     metricEntries.slice(0,3).forEach(({lbl,value,unit,sc})=>{
       if(y>H-55)return;
       _metCard(doc,ml,y,cw,lbl,value,unit,sc,isAr);y+=24;
@@ -1198,7 +1215,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
   // Sparkline section
   if(hist.length>2){
-    y=_secHead(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"الجلسة الكاملة":"Full session recording",gradeC);
+    y=_secHead(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"الجلسة الكاملة":"Full session recording",gradeC,isAr);
     fc(doc,...T.bg);rr(doc,ml,y,cw,40,4,"F");dc(doc,...T.border);lw(doc,0.2);rr(doc,ml,y,cw,40,4,"S");lw(doc,0.3);
     _spark(doc,hist,ml+12,y+6,cw-24,28,gradeC);
     y+=48;
@@ -1210,7 +1227,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
   // Top 4 metrics on page 1
   if(metricEntries.length>0){
-    y=_secHead(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"مرتبة من الأسوأ":"Sorted worst first",gradeC);
+    y=_secHead(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"مرتبة من الأسوأ":"Sorted worst first",gradeC,isAr);
     metricEntries.slice(0,4).forEach(({lbl,value,unit,sc})=>{
       if(y>H-48)return;
       _metCard(doc,ml,y,cw,lbl,value,unit,sc,isAr);y+=24;
@@ -1221,7 +1238,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // ELITE PAGE 2 — All Metrics + Zonal Map
   // ═══════════════════════════════════════════════════════════════
   doc.addPage();_hdr(doc,W,ml,mr,isAr?"تفاصيل المقاييس":"Metrics Detail");y=22;
-  y=_secHead(doc,ml,y,isAr?"جميع مقاييس الوضعية":"Complete Metrics Breakdown",isAr?"مرتبة من الأسوأ":"All measurements · worst first",gradeC);
+  y=_secHead(doc,ml,y,isAr?"جميع مقاييس الوضعية":"Complete Metrics Breakdown",isAr?"مرتبة من الأسوأ":"All measurements · worst first",gradeC,isAr);
 
   metricEntries.forEach(({lbl,value,unit,sc})=>{
     if(y>H-38){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued");y=22;}
@@ -1286,7 +1303,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
   // Session stats table
   y+=4;if(y>H-72){doc.addPage();_hdr(doc,W,ml,mr,isAr?"إحصائيات":"Statistics");y=22;}
-  y=_secHead(doc,ml,y,isAr?"إحصائيات الجلسة":"Session Statistics","",gradeC);
+  y=_secHead(doc,ml,y,isAr?"إحصائيات الجلسة":"Session Statistics","",gradeC,isAr);
   fc(doc,...T.card);rr(doc,ml,y,cw,metricEntries.length>0?68:60,4,"F");
   dc(doc,...T.border);lw(doc,0.2);rr(doc,ml,y,cw,68,4,"S");lw(doc,0.3);
   [
