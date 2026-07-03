@@ -778,8 +778,8 @@ let _cairoCached = null;
 async function _loadCairo(doc) {
   try {
     if (!_cairoCached) {
-      const { CAIRO_FONT_B64 } = await import("./lib/cairoFont.js");
-      _cairoCached = CAIRO_FONT_B64;
+      const { CAIRO_B64 } = await import("./assets/cairoFont.js");
+      _cairoCached = CAIRO_B64;
     }
     doc.addFileToVFS("Cairo.ttf", _cairoCached);
     doc.addFont("Cairo.ttf", "cairo", "normal");
@@ -790,6 +790,12 @@ async function _loadCairo(doc) {
     console.warn("Cairo font load failed:", e.message);
     return false;
   }
+}
+
+// fontAr — used by clinical + AI report PDFs (older codepath)
+function fontAr(doc, size, style="normal", useAr=false) {
+  doc.setFont(useAr ? "cairo" : "helvetica", style);
+  doc.setFontSize(size);
 }
 
 function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
