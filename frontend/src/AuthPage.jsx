@@ -8,6 +8,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import {
   signInGoogle, signInMicrosoft, signInEmail, signUpEmail, resetPassword,
   getUserProfile, createUserProfile, SUPPORT_EMAIL, setRememberMe,
+  deleteAuthUser,
 } from "./firebase.js";
 
 // ── Error messages ─────────────────────────────────────────────────
@@ -393,7 +394,6 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         onAuth(c.user, false);
       } else {
         const c = await signUpEmail(email.trim(), pass);
-        // Profile creation is best-effort
         try {
           await createUserProfile(c.user.uid, {
             email:      email.trim(),
@@ -405,10 +405,23 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
             newsletter,
             company:    "",
           });
-        } catch {}
+        } catch (profileErr) {
+          // Profile creation failed — roll back the Auth user so the
+          // account doesn't exist in a broken half-created state.
+          // The user will see a clear error and can try again.
+          console.error("[Auth] profile creation failed, rolling back auth user:", profileErr?.code || profileErr?.message);
+          try { await deleteAuthUser(); } catch {}
+          throw profileErr; // re-throw so the outer catch shows the error
+        }
         onAuth(c.user, true);
       }
-    } catch(e) { setErr(getErr(e,isAr)); doShake(); }
+    } catch(e) {
+      setErr(getErr(e,isAr));
+      doShake();
+      // Clear passwords after any error — avoids stale password state
+      // being re-submitted and confuses "wrong password" retries.
+      setPass(""); setPass2(""); setShowP(false); setShowP2(false);
+    }
     finally { setLoading(false); }
   },[view,email,pass,pass2,fname,lname,emailValid,passValid,pass2Valid,fnameValid,lnameValid,countryValid,termsValid,isAr,onAuth]);
 
