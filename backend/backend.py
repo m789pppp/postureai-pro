@@ -281,14 +281,34 @@ except Exception:
 
 # ── Config ─────────────────────────────────────────────────────────
 # AI backend — server-side ONLY, never exposed to the client.
-# Optional: Ollama (OLLAMA_URL set) — fully local/self-hosted AI, zero
-# per-request cost, but YOU must run the Ollama server yourself.
-# Note: the frontend no longer depends on this at all — it runs its
-# own free, open-source AI (WebLLM) entirely in the browser. This is
-# kept only as an optional server-side path for future use.
-OLLAMA_URL          = os.getenv("OLLAMA_URL", "")          # e.g. http://localhost:11434
+# Groq (primary): free tier, 14,400 req/day, ~500ms latency.
+#   Sign up at console.groq.com → API Keys → set GROQ_API_KEY in Railway.
+# Ollama (optional fallback): self-hosted, zero cost but needs a server.
+GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")  # best free model
+GROQ_MODEL_FAST     = "llama-3.1-8b-instant"   # fallback if 70b rate-limited
+GROQ_URL            = "https://api.groq.com/openai/v1/chat/completions"
+OLLAMA_URL          = os.getenv("OLLAMA_URL", "")
 LOCAL_LLM_MODEL     = os.getenv("LOCAL_LLM_MODEL", "qwen2.5:3b")
-AI_CONFIGURED       = bool(OLLAMA_URL)
+AI_CONFIGURED       = bool(GROQ_API_KEY or OLLAMA_URL)
+
+def call_groq(messages, max_tokens=600, temperature=0.5):
+    """Call Groq API — free tier (14,400 req/day). Server-side only."""
+    if not GROQ_API_KEY:
+        return None
+    for model in (GROQ_MODEL, GROQ_MODEL_FAST):
+        try:
+            resp = req.post(GROQ_URL,
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
+                timeout=18)
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"].strip()
+            if resp.status_code == 429:
+                continue   # rate-limited on this model, try faster one
+        except Exception:
+            pass
+    return None
 
 PAYMOB_SECRET_KEY   = os.getenv("PAYMOB_SECRET_KEY", "")
 PAYMOB_INTEGRATIONS = {
