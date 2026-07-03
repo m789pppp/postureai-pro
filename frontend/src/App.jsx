@@ -3055,6 +3055,43 @@ export default function App(){
     }
   }
 
+  async function shareReport(sessionData) {
+    if (!tierAtLeast(tier,"elite")) {
+      addToast(isAr?"المشاركة متاحة لباقة Elite فقط":"Shareable reports require Elite tier","warn");
+      setShowBilling(true); return;
+    }
+    addToast(isAr?"جاري إنشاء الرابط...":"Creating share link...","info");
+    try {
+      const { createShareableReport } = await import("./firebase.js");
+      const { url, expiresAt } = await createShareableReport({
+        session: sessionData, profile, user, lang,
+        allSessions: userSessions,
+      });
+      // Copy to clipboard
+      await navigator.clipboard.writeText(url).catch(()=>{});
+      addToast(isAr?`✅ الرابط جاهز — تم النسخ! (صالح 30 يوم)`:`✅ Link ready — copied! (expires in 30 days)`,"success");
+      // Also open the report in a new tab
+      window.open(url,"_blank","noopener");
+    } catch(e) { addToast(`Share error: ${e.message}`,"error"); }
+  }
+
+  async function downloadLongitudinalPDF() {
+    if (!tierAtLeast(tier,"elite")) {
+      addToast(isAr?"التقرير الطولي متاح لباقة Elite فقط":"Longitudinal report requires Elite tier","warn");
+      setShowBilling(true); return;
+    }
+    if (userSessions.length < 5) {
+      addToast(isAr?"محتاج 5 جلسات على الأقل للتقرير الطولي":"Need at least 5 sessions for longitudinal report","warn");
+      return;
+    }
+    addToast(isAr?"جاري إنشاء التقرير الطولي...":"Generating longitudinal report...","info");
+    try {
+      const { generateLongitudinalPDF } = await import("./firebase.js");
+      await generateLongitudinalPDF({ sessions: userSessions, profile, user, lang });
+      addToast(isAr?"✅ تم تحميل التقرير الطولي":"✅ Longitudinal PDF downloaded","success");
+    } catch(e) { addToast(`Longitudinal PDF error: ${e.message}`,"error"); }
+  }
+
   async function downloadComparisonPDF(session1, session2) {
     if (!tierAtLeast(tier,"professional")) {
       addToast(isAr?"المقارنة متاحة لباقة Pro وElite فقط":"Comparison PDF requires Pro or Elite","warn");
@@ -3722,6 +3759,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
         downloadClinicalPDF={(s)=>downloadPDF(s,true)}
         downloadComparisonPDF={downloadComparisonPDF}
         downloadTeamPDF={downloadTeamPDF}
+        downloadLongitudinalPDF={downloadLongitudinalPDF}
+        shareReport={shareReport}
         AccountSwitcher={AccountSwitcher}
         onSwitchAccount={handleSwitchAccount}
       />
@@ -3997,6 +4036,24 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   style={{flex:1,padding:"10px",background:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.05)":tier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.4)":tier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.1)":tier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {qualityFor(tier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${tier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
                 </button>
+                {/* Share button — Elite only */}
+                {tierAtLeast(tier,"elite") && (
+                  <button onClick={()=>shareReport({
+                      avg_score: sessionResult?.avg_score, good_pct: sessionResult?.good_pct,
+                      duration_s: sessionResult?.duration_s, alerts_count: sessionResult?.alerts_count,
+                      mode, tier, session_id: sessionId,
+                      score_history: histRef.current||[],
+                      metrics: lastAnalRef.current?.metrics||{},
+                      ai_tip: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
+                      improvement_tip: lastAnalRef.current?.improvement_tip||"",
+                      created_at: new Date(),
+                    })}
+                    style={{flex:1,padding:"10px",background:"rgba(99,102,241,.12)",
+                      color:"#a5b4fc",border:"1px solid rgba(99,102,241,.3)",
+                      borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                    🔗 {isAr?"شارك التقرير":"Share Report"}
+                  </button>
+                )}
               </div>
             </div>
           </div>

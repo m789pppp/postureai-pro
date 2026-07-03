@@ -2123,3 +2123,374 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 // Nothing additional needed here — the architecture supports it via profile fields.
 // To activate: set profile.companyName + profile.companyLogo (base64 PNG) in Firestore.
 
+
+// ═══════════════════════════════════════════════════════════════════
+// PHASE 3 — FEATURE 1: Shareable Web Report
+// Creates a Firestore snapshot + returns a shareable URL
+// The URL opens SharedReportPage.jsx (public, no login required)
+// Link auto-expires in 30 days
+// ═══════════════════════════════════════════════════════════════════
+export async function createShareableReport({ session, profile, user, lang="en", allSessions=[] }) {
+  const tier = profile?.tier || session?.tier || "standard";
+  if (!tierAtLeast(tier,"elite")) throw new Error("Shareable reports require Elite tier");
+
+  const { collection, addDoc, serverTimestamp } = await import("firebase/firestore");
+  const allKeys = Object.keys(session.metrics || {}).filter(k => !k.startsWith("_"));
+  const metricSnap = {};
+  for (const k of allKeys) {
+    const v = session.metrics[k];
+    metricSnap[k] = typeof v === "number" ? v : {
+      score: v?.score ?? 100,
+      value: v?.value ?? null,
+      unit:  v?.unit  ?? "",
+      label: (METRIC_LABELS[k] || k),
+    };
+  }
+
+  const payload = {
+    // Identity (non-PII — use display name only)
+    owner_uid:    user?.uid || null,
+    display_name: profile?.name || user?.displayName || "User",
+    // Session data snapshot
+    session_id:   session.session_id || session.id || null,
+    avg_score:    Math.round(session.avg_score || 0),
+    good_pct:     session.good_pct || 0,
+    duration_s:   session.duration_s || session.duration_sec || 0,
+    alerts_count: session.alerts_count || 0,
+    mode:         session.mode || "laptop",
+    metrics:      metricSnap,
+    score_history: (session.score_history || []).slice(-120), // max 120 frames
+    ai_tip:       session.ai_tip || session.ai_insight || "",
+    improvement_tip: session.improvement_tip || "",
+    pain_summary: session.pain_summary || "",
+    created_at:   session.created_at || new Date(),
+    session_num:  allSessions.length > 0
+      ? allSessions.length - allSessions.findIndex(s => (s.id||s.session_id) === (session.id||session.session_id))
+      : 1,
+    lang,
+    // Sharing meta
+    shared_at:    serverTimestamp(),
+    expires_at:   new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+    view_count:   0,
+  };
+
+  const docRef = await addDoc(collection(db, "shared_reports"), payload);
+  const shareUrl = `${window.location.origin}/report/${docRef.id}`;
+  return { url: shareUrl, token: docRef.id, expiresAt: payload.expires_at };
+}
+
+export async function getSharedReport(token) {
+  const { doc, getDoc, updateDoc, increment } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, "shared_reports", token));
+  if (!snap.exists()) throw new Error("Report not found or expired");
+  const data = snap.data();
+  // Check expiry
+  const exp = data.expires_at?.toDate?.() || new Date(data.expires_at);
+  if (exp < new Date()) throw new Error("This report link has expired (30-day limit)");
+  // Increment view count (fire-and-forget)
+  updateDoc(doc(db, "shared_reports", token), { view_count: increment(1) }).catch(()=>{});
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PHASE 3 — FEATURE 2: Longitudinal Risk Report PDF
+// 90-day posture trend analysis — requires 10+ sessions
+// Shows trajectory, weekly patterns, time-of-day analysis, AI narrative
+// ═══════════════════════════════════════════════════════════════════
+export async function generateLongitudinalPDF({ sessions=[], profile, user, lang="en" }) {
+  const { jsPDF } = await import("jspdf");
+  if (sessions.length < 5) throw new Error("Longitudinal report requires at least 5 sessions");
+  const isAr  = lang==="ar";
+  const tier  = profile?.tier||"standard";
+  if (!tierAtLeast(tier,"elite")) throw new Error("Longitudinal report requires Elite tier");
+
+  const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
+  const cairo = await _loadCairo(doc);
+  const sf = (sz,st="normal") => cairo&&isAr ? fontAr(doc,sz,st,true) : font(doc,sz,st);
+  const name    = profile?.name||user?.displayName||(isAr?"مستخدم":"User");
+  const now     = new Date();
+  const nowStr  = now.toLocaleDateString(isAr?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"});
+
+  // ── Data preparation ──────────────────────────────────────────
+  const toMs = s => s.created_at?.toDate?.()?.getTime?.() || new Date(s.created_at||0).getTime();
+  const cutoff90 = Date.now() - 90*86400000;
+  const window90 = sessions.filter(s=>toMs(s)>=cutoff90);
+  const allScores = sessions.map(s=>s.avg_score||0).filter(Boolean);
+  const scores90  = window90.map(s=>s.avg_score||0).filter(Boolean);
+
+  const avg90    = scores90.length ? Math.round(scores90.reduce((a,b)=>a+b,0)/scores90.length) : 0;
+  const avgAll   = allScores.length ? Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length) : 0;
+  const first10  = allScores.slice(0,Math.min(10,Math.floor(allScores.length/3)));
+  const last10   = allScores.slice(-Math.min(10,Math.floor(allScores.length/3)));
+  const avgFirst = first10.length ? Math.round(first10.reduce((a,b)=>a+b,0)/first10.length) : 0;
+  const avgLast  = last10.length  ? Math.round(last10.reduce((a,b)=>a+b,0)/last10.length)  : 0;
+  const trendDelta = avgLast - avgFirst;
+  const improved  = trendDelta > 2;
+  const declined  = trendDelta < -2;
+
+  // Weekly pattern (which day is best/worst)
+  const byDay = Array(7).fill(null).map(()=>({scores:[]}));
+  sessions.forEach(s=>{
+    const d=new Date(toMs(s)).getDay();
+    if(s.avg_score) byDay[d].scores.push(s.avg_score);
+  });
+  const dayAvgs  = byDay.map(d=>d.scores.length ? Math.round(d.scores.reduce((a,b)=>a+b,0)/d.scores.length) : null);
+  const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const dayNamesAr=["أحد","اثنين","ثلاثاء","أربعاء","خميس","جمعة","سبت"];
+  const bestDay  = dayAvgs.indexOf(Math.max(...dayAvgs.filter(Boolean)));
+  const worstDay = dayAvgs.indexOf(Math.min(...dayAvgs.filter(Boolean)));
+
+  // Session frequency
+  const weeksSpan = Math.max(1, Math.ceil((Date.now()-toMs(sessions[sessions.length-1]))/(7*86400000)));
+  const freqPerWeek = (sessions.length/weeksSpan).toFixed(1);
+
+  // Aggregate zone risk from all sessions' metrics
+  const allZonal = sessions
+    .filter(s=>s.metrics)
+    .map(s=>_zonalRisk(s.metrics));
+  const avgZonal = {
+    cervical: allZonal.length ? Math.round(allZonal.reduce((a,b)=>a+b.cervical,0)/allZonal.length) : 0,
+    thoracic: allZonal.length ? Math.round(allZonal.reduce((a,b)=>a+b.thoracic,0)/allZonal.length) : 0,
+    lumbar:   allZonal.length ? Math.round(allZonal.reduce((a,b)=>a+b.lumbar,0)/allZonal.length) : 0,
+  };
+
+  // Best and worst sessions
+  const best  = [...sessions].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0))[0];
+  const worst = [...sessions].sort((a,b)=>(a.avg_score||0)-(b.avg_score||0))[0];
+
+  // ── COVER ─────────────────────────────────────────────────────
+  fc(doc,...T.ink); doc.rect(0,0,W,68,"F");
+  await _logo(doc,ml,14,22);
+  sf(8.5,"normal"); tc(doc,...T.muted);
+  doc.text(isAr?"التقرير الطولي لصحة الوضعية":"Longitudinal Posture Health Report",ml+30,22);
+  doc.text(nowStr,ml+30,29);
+  doc.text(`${sessions.length} ${isAr?"جلسة":"sessions"} · ${isAr?`${weeksSpan} أسبوع`:`${weeksSpan} weeks`}`,ml+30,35.5);
+  fc(doc,...T.success); rr(doc,W-mr-36,12,36,12,2,"F");
+  font(doc,7,"bold"); tc(doc,255,255,255);
+  doc.text("✦ ELITE",W-mr-18,19.5,{align:"center"});
+  let y=84;
+
+  sf(17,"bold"); tc(doc,...T.ink);
+  doc.text(isAr?"التقرير الطولي":"Longitudinal Report",ml,y); y+=7;
+  sf(9,"normal"); tc(doc,...T.muted);
+  doc.text(`${name} · ${isAr?"آخر 90 يوم":"Last 90 days"}`,ml,y); y+=16;
+
+  // KPI strip
+  const kpis=[
+    [String(avgAll), isAr?"متوسط الكل":"All-time Avg", _scoreColor(avgAll)],
+    [String(avg90),  isAr?"آخر 90 يوم":"90-day Avg",   _scoreColor(avg90)],
+    [`${trendDelta>0?"+":""}${trendDelta}`, isAr?"الاتجاه":"Trend", trendDelta>0?T.success:trendDelta<0?T.danger:T.muted],
+    [String(sessions.length), isAr?"الجلسات":"Sessions", T.primary],
+    [freqPerWeek, isAr?"جلسة/أسبوع":"Per Week", T.cyan],
+  ];
+  kpis.forEach(([v,l,col],i)=>{
+    const kx=ml+i*(cw/5);
+    fc(doc,...T.bg); rr(doc,kx,y,cw/5-3,28,3,"F");
+    sf(15,"bold"); tc(doc,...col);
+    doc.text(v,kx+(cw/5-3)/2,y+17,{align:"center"});
+    sf(6.5,"normal"); tc(doc,...T.muted);
+    doc.text(l,kx+(cw/5-3)/2,y+24,{align:"center"});
+  });
+  y+=36;
+
+  // Trend interpretation banner
+  const trendMsg = improved
+    ? (isAr?`📈 تحسّن مستمر +${trendDelta} نقطة منذ بداية الاستخدام — أنت على المسار الصحيح`
+            :`📈 Consistent improvement +${trendDelta} pts since start — you're on the right track`)
+    : declined
+    ? (isAr?`📉 انخفاض ${Math.abs(trendDelta)} نقطة — راجع إعداد محطة العمل وعادات الوضعية`
+            :`📉 ${Math.abs(trendDelta)} point decline — review workstation setup and posture habits`)
+    : (isAr?"📊 الوضعية مستقرة — التحسين يتطلب ممارسة أكثر انتظاماً"
+            :"📊 Posture stable — consistent improvement requires more regular practice");
+  fc(doc,...(improved?T.successBg:declined?T.dangerBg:T.bg));
+  rr(doc,ml,y,cw,12,2,"F");
+  sf(8.5,"bold"); tc(doc,...(improved?T.success:declined?T.danger:T.muted));
+  doc.text(trendMsg,ml+cw/2,y+8.5,{align:"center"}); y+=20;
+
+  // ── Score trajectory sparkline ────────────────────────────────
+  sf(10,"bold"); tc(doc,...T.ink);
+  doc.text(isAr?"مسار النقاط — كل الجلسات":"Score Trajectory — All Sessions",ml,y); y+=5;
+  const th=32;
+  fc(doc,...T.bg); rr(doc,ml,y,cw,th,2,"F");
+
+  // Draw session-level sparkline (each point = one session avg)
+  const spts=allScores.map((sc,i)=>({
+    px: ml+3+(i/Math.max(allScores.length-1,1))*(cw-6),
+    py: y+th-3-((sc-40)/60)*(th-6),
+  }));
+  if(spts.length>1){
+    // Trend line (linear regression)
+    const n=spts.length;
+    const sumX=spts.reduce((a,_,i)=>a+i,0), sumY=spts.reduce((a,p)=>a+p.py,0);
+    const sumXY=spts.reduce((a,p,i)=>a+i*p.py,0), sumX2=spts.reduce((a,_,i)=>a+i*i,0);
+    const slope=(n*sumXY-sumX*sumY)/(n*sumX2-sumX*sumX);
+    const b=(sumY-slope*sumX)/n;
+    const trendCol=slope<0?T.success:T.danger; // improving = score going up = py going down
+    dc(doc,...trendCol); lw(doc,0.5); doc.setLineDashPattern([2,2],0);
+    doc.line(spts[0].px, b, spts[n-1].px, b+slope*(n-1));
+    doc.setLineDashPattern([],0);
+    // Session dots
+    dc(doc,...T.primary); lw(doc,0.8);
+    spts.forEach((p,i)=>{
+      if(i>0) doc.line(spts[i-1].px,spts[i-1].py,p.px,p.py);
+    });
+    fc(doc,...T.primary);
+    spts.forEach(p=>doc.circle(p.px,p.py,0.9,"F"));
+    fc(doc,...T.success); doc.circle(spts[spts.length-1].px,spts[spts.length-1].py,2,"F");
+  }
+  // Grid lines
+  [50,65,80].forEach(v=>{
+    const gy=y+th-3-((v-40)/60)*(th-6);
+    dc(doc,40,60,80); lw(doc,0.1); doc.line(ml,gy,ml+cw,gy);
+    font(doc,5,"normal"); tc(doc,80,100,120); doc.text(String(v),ml-1,gy+1.5,{align:"right"});
+  });
+  y+=th+10;
+
+  // ── Weekly day pattern ────────────────────────────────────────
+  if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,"Longitudinal"); y=22;}
+  sf(10,"bold"); tc(doc,...T.ink);
+  doc.text(isAr?"النمط الأسبوعي — متوسط النقاط حسب اليوم":"Weekly Pattern — Avg Score by Day",ml,y); y+=7;
+  const maxDay=Math.max(...dayAvgs.filter(Boolean),80);
+  const barW=(cw-12)/7;
+  dayAvgs.forEach((avg,di)=>{
+    if(!avg) return;
+    const bx=ml+6+di*(barW+2);
+    const bh=Math.max(((avg-40)/60)*28,2);
+    const bc=di===bestDay?T.success:di===worstDay?T.danger:T.primary;
+    fc(doc,...bc); doc.rect(bx,y+28-bh,barW,bh,"F");
+    sf(7,"bold"); tc(doc,...bc);
+    doc.text(String(avg),bx+barW/2,y+26-bh,{align:"center"});
+    sf(6.5,"normal"); tc(doc,...T.muted);
+    doc.text(isAr?dayNamesAr[di]:dayNames[di],bx+barW/2,y+35,{align:"center"});
+  });
+  y+=45;
+
+  // Best/worst day insight
+  if(bestDay>=0 && worstDay>=0){
+    fc(doc,...T.bg); rr(doc,ml,y,cw,11,2,"F");
+    sf(8,"normal"); tc(doc,...T.muted);
+    const bestName=isAr?dayNamesAr[bestDay]:dayNames[bestDay];
+    const worstName=isAr?dayNamesAr[worstDay]:dayNames[worstDay];
+    doc.text(
+      `${isAr?"أفضل يوم":"Best day"}: ${bestName} (${dayAvgs[bestDay]}) · ${isAr?"أسوأ يوم":"Worst day"}: ${worstName} (${dayAvgs[worstDay]})`,
+      ml+cw/2, y+7.5, {align:"center"}
+    );
+    y+=18;
+  }
+
+  // ── PAGE 2: Zonal trend + Best/worst sessions ──────────────────
+  doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"التحليل التفصيلي":"Detailed Analysis"); y=22;
+
+  sf(12,"bold"); tc(doc,...T.ink);
+  doc.text(isAr?"متوسط مخاطر المناطق — كل الجلسات":"Average Zone Risk — All Sessions",ml,y); y+=7;
+
+  const zones=[
+    {k:"cervical",en:"Cervical",ar:"عنق الرحم",region:"C1–C7"},
+    {k:"thoracic",en:"Thoracic",ar:"الصدر",region:"T1–T12"},
+    {k:"lumbar",  en:"Lumbar",  ar:"القطن",region:"L1–S1"},
+  ];
+  for(const {k,en,ar,region} of zones){
+    if(y>H-30){doc.addPage(); y=22;}
+    const risk=avgZonal[k]||0; const rc=_riskColor(risk);
+    fc(doc,...T.bg); rr(doc,ml,y,cw,16,2,"F");
+    fc(doc,...rc); rr(doc,ml,y,10,16,0,"F");
+    sf(9,"bold"); tc(doc,...T.ink);
+    doc.text(isAr?ar:en, ml+14, y+6);
+    sf(7,"normal"); tc(doc,...T.muted); doc.text(region,ml+14,y+12);
+    sf(9,"bold"); tc(doc,...rc);
+    doc.text(`${risk}% — ${_riskLabel(risk,isAr)}`,W-mr-2,y+9.5,{align:"right"});
+    const bx=ml+cw*0.45, bw2=cw*0.48;
+    fc(doc,...T.border); rr(doc,bx,y+5.5,bw2,5,1,"F");
+    fc(doc,...rc); rr(doc,bx,y+5.5,Math.max(bw2*(risk/100),2),5,1,"F");
+    y+=19;
+  }
+
+  // Best / Worst session cards
+  y+=8;
+  if(y>H-70){doc.addPage();y=22;}
+  sf(12,"bold"); tc(doc,...T.ink);
+  doc.text(isAr?"أفضل وأسوأ جلسة":"Best & Worst Session",ml,y); y+=8;
+
+  for(const [label,sess,col] of [
+    [isAr?"🏆 الأفضل":"🏆 Best Session", best, T.success],
+    [isAr?"⚠️ الأسوأ":"⚠️ Worst Session", worst, T.danger],
+  ]){
+    if(!sess) continue;
+    if(y>H-30){doc.addPage();y=22;}
+    fc(doc,...T.bg); rr(doc,ml,y,cw,20,3,"F");
+    dc(doc,...col); lw(doc,0.3); rr(doc,ml,y,cw,20,3,"S"); lw(doc,0.3);
+    sf(8.5,"bold"); tc(doc,...col); doc.text(label,ml+4,y+7);
+    sf(8,"normal"); tc(doc,...T.ink);
+    doc.text(`${isAr?"النتيجة":"Score"}: ${Math.round(sess.avg_score||0)}`,ml+4,y+14);
+    tc(doc,...T.muted); sf(7.5,"normal");
+    doc.text(_fmtDate(sess.created_at,isAr),W-mr-2,y+7,{align:"right"});
+    doc.text(`${isAr?"المدة":"Duration"}: ${_fmtDur(sess.duration_s||sess.duration_sec||0)}`,W-mr-2,y+14,{align:"right"});
+    y+=24;
+  }
+
+  // ── PAGE 3: AI Narrative + Personalised Programme ─────────────
+  doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"التحليل والخطة":"Analysis & Plan"); y=22;
+
+  // Auto AI narrative (rule-based since no live AI call here)
+  const narrative = [
+    improved
+      ? `Over ${sessions.length} sessions, ${name} has shown a consistent upward trend in posture quality (+${trendDelta} points). The trajectory indicates effective habit formation, with the ${isAr?dayNamesAr[bestDay]:dayNames[bestDay]} sessions consistently producing the best results.`
+      : declined
+      ? `Across ${sessions.length} sessions, a gradual decline of ${Math.abs(trendDelta)} points has been observed. This pattern is common when workload increases or ergonomic conditions change. Targeted intervention is recommended.`
+      : `Posture quality has remained stable across ${sessions.length} sessions with an average score of ${avgAll}. While consistency is positive, there is clear potential for improvement through more targeted ergonomic adjustments.`,
+    `The highest-risk spinal zone is ${avgZonal.cervical>=avgZonal.thoracic&&avgZonal.cervical>=avgZonal.lumbar?"cervical (neck)":avgZonal.thoracic>=avgZonal.lumbar?"thoracic (upper back)":"lumbar (lower back)"}, averaging ${Math.max(avgZonal.cervical,avgZonal.thoracic,avgZonal.lumbar)}% risk across all sessions. This is the primary area for targeted intervention.`,
+    `Session frequency averages ${freqPerWeek} sessions per week. ${parseFloat(freqPerWeek)<3?"Increasing to 3-4 sessions per week would accelerate improvement and build stronger postural habits.":"Good consistency — maintaining this frequency will consolidate the gains already achieved."}`,
+  ].join("\n\n");
+
+  fc(doc,...T.bg); rr(doc,ml,y,cw,9,2,"F");
+  sf(9.5,"bold"); tc(doc,...T.ink);
+  doc.text(isAr?"📊 التحليل الطولي":"📊 Longitudinal Analysis",ml+4,y+6.5); y+=13;
+
+  sf(8.5,"normal"); tc(doc,...T.ink);
+  const narLines=doc.splitTextToSize(narrative,cw-6);
+  for(const ln of narLines){
+    if(y>H-30){doc.addPage();y=22;}
+    doc.text(ln,ml+3,y); y+=5.5;
+  }
+  y+=8;
+
+  // 8-week improvement programme
+  if(y>H-80){doc.addPage();y=22;}
+  fc(doc,...T.bg); rr(doc,ml,y,cw,9,2,"F");
+  sf(9.5,"bold"); tc(doc,...T.ink);
+  doc.text(isAr?"برنامج التحسين — 8 أسابيع":"8-Week Improvement Programme",ml+4,y+6.5); y+=13;
+
+  const programme=[
+    {wk:"1-2", goal:isAr?"الوعي بالوضعية":"Posture Awareness", action:isAr?"3 جلسات يومياً × 20 دقيقة — لاحظ التنبيهات بدون تصحيح قسري":"3 sessions/day × 20 min — observe alerts, no forced correction"},
+    {wk:"3-4", goal:isAr?"إعداد محطة العمل":"Workstation Setup",  action:isAr?"اضبط ارتفاع الشاشة والكرسي — استهدف +5 نقاط في المتوسط":"Adjust monitor & chair height — target +5pt improvement in avg"},
+    {wk:"5-6", goal:isAr?"بناء العادة":"Habit Building",          action:isAr?"أضف تمرين chin tuck 3×10 يومياً + تنبيه استراحة كل 30 دقيقة":"Add chin tuck 3×10 daily + break reminder every 30 min"},
+    {wk:"7-8", goal:isAr?"الدمج والقياس":"Consolidation",         action:isAr?"قارن المتوسط مع الأسابيع 1-2 — الهدف: +10 نقاط على الأقل":"Compare avg to week 1-2 baseline — target: +10 points minimum"},
+  ];
+
+  for(const {wk,goal,action} of programme){
+    if(y>H-28){doc.addPage();y=22;}
+    fc(doc,...T.bg); rr(doc,ml,y,cw,18,2,"F");
+    fc(doc,...T.primary); rr(doc,ml,y,1.5,18,0,"F");
+    sf(7.5,"bold"); tc(doc,...T.primary); doc.text(`W${wk}`,ml+4,y+7);
+    sf(8.5,"bold"); tc(doc,...T.ink);    doc.text(goal,ml+18,y+7);
+    sf(7.5,"normal"); tc(doc,...T.muted);
+    const aLines=doc.splitTextToSize(action,cw-22);
+    aLines.slice(0,2).forEach((l,i)=>doc.text(l,ml+18,y+12+(i*4.5)));
+    y+=22;
+  }
+
+  // Page numbers
+  const tp=doc.internal.getNumberOfPages();
+  for(let p=1;p<=tp;p++){
+    doc.setPage(p);
+    fc(doc,...T.ink); doc.rect(0,H-8,W,8,"F");
+    font(doc,6.5,"normal"); tc(doc,100,116,139);
+    doc.text(`Corvus Elite — ${isAr?"التقرير الطولي":"Longitudinal Report"} · ${name} · ${nowStr}`,ml,H-2.5);
+    doc.text(`${p} / ${tp}`,W-mr,H-2.5,{align:"right"});
+  }
+
+  const filename=`Corvus_Longitudinal_${now.toISOString().slice(0,10)}.pdf`;
+  doc.save(filename);
+  return filename;
+}

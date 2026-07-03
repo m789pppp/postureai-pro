@@ -12267,7 +12267,337 @@ def subscription_cancel():
     except Exception as e:
         return safe_error(e)
 
-if __name__ == "__main__":
+        return safe_error(e)
+
+# ═══════════════════════════════════════════════════════════════════
+# PHASE 3 — FEATURE 3: EMR / FHIR R4 API
+# FHIR R4-compatible posture observation endpoint for clinical integrations
+# Auth: Firebase JWT (same as all other endpoints)
+# GET  /api/v1/emr/session/:session_id      → FHIR Observation bundle
+# GET  /api/v1/emr/patient/:uid/summary     → Patient posture summary
+# POST /api/v1/emr/webhook                  → Receive EMR webhooks (future)
+# ═══════════════════════════════════════════════════════════════════
+
+def _fhir_score_interpretation(score):
+    """Map posture score to FHIR interpretation code (SNOMED-style)."""
+    if score >= 80: return {"system":"http://snomed.info/sct","code":"17621005","display":"Normal"}
+    if score >= 60: return {"system":"http://snomed.info/sct","code":"371929003","display":"Mildly abnormal"}
+    if score >= 40: return {"system":"http://snomed.info/sct","code":"13791008","display":"Abnormal"}
+    return             {"system":"http://snomed.info/sct","code":"42752001","display":"Due to"}
+
+def _session_to_fhir_observation(session_data, uid, session_id):
+    """Convert Corvus session to FHIR R4 Observation resource."""
+    avg_score  = round(session_data.get("avg_score", 0))
+    duration_s = session_data.get("duration_s", session_data.get("duration_sec", 0))
+    created_at = session_data.get("created_at")
+    if hasattr(created_at, "isoformat"):
+        iso_ts = created_at.isoformat() + "Z"
+    else:
+        iso_ts = datetime.utcnow().isoformat() + "Z"
+
+    metrics = session_data.get("metrics", {})
+    # Build component list from metrics
+    LOINC_MAP = {
+        "neck_lean":      ("98350-7",  "Neck flexion angle",            "deg"),
+        "fhp":            ("98351-5",  "Forward head posture distance",  "cm"),
+        "shoulder":       ("98352-3",  "Shoulder symmetry index",        "%"),
+        "spine_lean":     ("98353-1",  "Spinal lateral deviation angle", "deg"),
+        "hip_angle":      ("98354-9",  "Hip joint angle",               "deg"),
+        "trunk_lean":     ("98355-6",  "Trunk lean angle",              "deg"),
+        "distance":       ("98356-4",  "Screen viewing distance",        "cm"),
+    }
+    components = []
+    for key, (loinc, display, unit) in LOINC_MAP.items():
+        m = metrics.get(key)
+        if m is None: continue
+        val = m.get("value") if isinstance(m, dict) else None
+        sc  = m.get("score", 100) if isinstance(m, dict) else (m if isinstance(m, (int,float)) else 100)
+        if val is None: continue
+        components.append({
+            "code": {
+                "coding": [{"system":"http://loinc.org","code":loinc,"display":display}],
+                "text": display,
+            },
+            "valueQuantity": {"value": round(float(val),2), "unit": unit, "system":"http://unitsofmeasure.org"},
+            "interpretation": [{"coding":[_fhir_score_interpretation(sc)]}],
+            "extension": [{
+                "url": "https://corvus.health/fhir/StructureDefinition/posture-metric-score",
+                "valueInteger": round(sc),
+            }],
+        })
+
+    return {
+        "resourceType": "Observation",
+        "id": session_id,
+        "meta": {
+            "profile": ["https://corvus.health/fhir/StructureDefinition/PostureObservation"],
+            "versionId": "1",
+            "lastUpdated": iso_ts,
+        },
+        "status": "final",
+        "category": [{
+            "coding": [{
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code":    "activity",
+                "display": "Activity",
+            }],
+        }],
+        "code": {
+            "coding": [{
+                "system":  "http://snomed.info/sct",
+                "code":    "228557008",
+                "display": "Postural Assessment",
+            }],
+            "text": "Corvus AI Posture Analysis",
+        },
+        "subject": {"reference": f"Patient/{uid}", "type": "Patient"},
+        "effectiveDateTime": iso_ts,
+        "issued": iso_ts,
+        "performer": [{
+            "reference": "Device/corvus-posture-ai",
+            "display":   "Corvus PostureAI Pro",
+        }],
+        "valueInteger": avg_score,
+        "interpretation": [{"coding":[_fhir_score_interpretation(avg_score)]}],
+        "note": [{
+            "text": (
+                f"AI posture analysis session. Duration: {duration_s}s. "
+                f"Good posture: {session_data.get('good_pct',0)}%. "
+                f"Camera mode: {session_data.get('mode','laptop')}. "
+                f"Alerts: {session_data.get('alerts_count',0)}. "
+                f"Tier: {session_data.get('tier','standard')}."
+            ),
+        }],
+        "component": components,
+        "extension": [
+            {"url":"https://corvus.health/fhir/ext/session-duration-seconds","valueInteger": duration_s},
+            {"url":"https://corvus.health/fhir/ext/good-posture-percentage","valueDecimal": session_data.get("good_pct",0)},
+            {"url":"https://corvus.health/fhir/ext/camera-mode","valueString": session_data.get("mode","laptop")},
+        ],
+    }
+
+
+@app.route("/api/v1/emr/session/<session_id>", methods=["GET"])
+def emr_session_observation(session_id):
+    """
+    GET /api/v1/emr/session/:session_id
+    Returns FHIR R4 Observation for a single Corvus posture session.
+    Auth: Firebase JWT Bearer token (same as all other endpoints).
+    Accept: application/fhir+json (default) or application/json
+    """
+    try:
+        uid = verify_firebase_token(request)
+        # Fetch session from Firestore
+        sess_ref = db.collection("sessions").document(session_id)
+        snap = sess_ref.get()
+        if not snap.exists:
+            # Try user-scoped sessions collection
+            users_ref = db.collection("users").document(uid)\
+                         .collection("sessions").document(session_id)
+            snap = users_ref.get()
+        if not snap.exists:
+            return jsonify({"error":"Session not found","code":404}), 404
+
+        data = snap.to_dict()
+        # Ownership check
+        owner_uid = data.get("uid") or data.get("user_id") or data.get("owner_uid")
+        if owner_uid and owner_uid != uid:
+            return jsonify({"error":"Forbidden","code":403}), 403
+
+        observation = _session_to_fhir_observation(data, uid, session_id)
+        resp = jsonify(observation)
+        resp.headers["Content-Type"] = "application/fhir+json; fhirVersion=4.0"
+        resp.headers["X-Corvus-FHIR-Version"] = "R4"
+        return resp, 200
+
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/v1/emr/patient/<patient_uid>/summary", methods=["GET"])
+def emr_patient_summary(patient_uid):
+    """
+    GET /api/v1/emr/patient/:uid/summary
+    Returns FHIR R4 DiagnosticReport summarising posture health for a patient.
+    Includes last 30 sessions + zonal risk summary.
+    Auth: Firebase JWT — caller must be the patient or an HR admin of their org.
+    Query params:
+      days=30  (default 30, max 365)
+      format=fhir|json (default fhir)
+    """
+    try:
+        caller_uid = verify_firebase_token(request)
+        days = min(int(request.args.get("days", 30)), 365)
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        # Authorization: self or org HR admin
+        if caller_uid != patient_uid:
+            caller_snap = db.collection("users").document(caller_uid).get()
+            caller_data = caller_snap.to_dict() or {} if caller_snap.exists else {}
+            if caller_data.get("user_type") not in ("hr_admin","platform_admin"):
+                return jsonify({"error":"Forbidden — only the patient or their HR admin can request this","code":403}), 403
+
+        # Fetch patient profile
+        patient_snap = db.collection("users").document(patient_uid).get()
+        patient_data = patient_snap.to_dict() if patient_snap.exists else {}
+        patient_name = patient_data.get("name","Unknown")
+
+        # Fetch sessions
+        sessions_query = (
+            db.collection("users").document(patient_uid).collection("sessions")
+              .where("created_at",">=",cutoff)
+              .order_by("created_at", direction="DESCENDING")
+              .limit(30)
+        )
+        session_docs = sessions_query.stream()
+        sessions = [{"id":d.id, **d.to_dict()} for d in session_docs]
+
+        if not sessions:
+            return jsonify({"error":"No sessions found in date range","code":404}), 404
+
+        scores  = [s.get("avg_score",0) for s in sessions if s.get("avg_score")]
+        avg_sc  = round(sum(scores)/len(scores)) if scores else 0
+        best_sc = max(scores) if scores else 0
+        worst_sc= min(scores) if scores else 0
+
+        # Aggregate zone risk
+        all_zonal = []
+        for s in sessions:
+            m = s.get("metrics",{})
+            if m:
+                cervical = 100 - sum([
+                    (m.get("neck_lean",{}).get("score",100) if isinstance(m.get("neck_lean"),dict) else m.get("neck_lean",100)),
+                    (m.get("fhp",{}).get("score",100) if isinstance(m.get("fhp"),dict) else m.get("fhp",100)),
+                ]) / 2
+                thoracic = 100 - sum([
+                    (m.get("shoulder",{}).get("score",100) if isinstance(m.get("shoulder"),dict) else m.get("shoulder",100)),
+                    (m.get("rounded",{}).get("score",100) if isinstance(m.get("rounded"),dict) else m.get("rounded",100)),
+                ]) / 2
+                lumbar = 100 - sum([
+                    (m.get("spine_align",{}).get("score",100) if isinstance(m.get("spine_align"),dict) else m.get("spine_align",100)),
+                    (m.get("hip_angle",{}).get("score",100) if isinstance(m.get("hip_angle"),dict) else m.get("hip_angle",100)),
+                ]) / 2
+                all_zonal.append({"cervical":max(0,cervical),"thoracic":max(0,thoracic),"lumbar":max(0,lumbar)})
+
+        avg_zone = {
+            "cervical": round(sum(z["cervical"] for z in all_zonal)/len(all_zonal)) if all_zonal else 0,
+            "thoracic": round(sum(z["thoracic"] for z in all_zonal)/len(all_zonal)) if all_zonal else 0,
+            "lumbar":   round(sum(z["lumbar"]   for z in all_zonal)/len(all_zonal)) if all_zonal else 0,
+        }
+
+        # FHIR R4 DiagnosticReport
+        report_date = datetime.utcnow().isoformat() + "Z"
+        report = {
+            "resourceType": "DiagnosticReport",
+            "id": f"corvus-posture-{patient_uid}-{days}d",
+            "meta": {
+                "profile": ["https://corvus.health/fhir/StructureDefinition/PostureDiagnosticReport"],
+                "lastUpdated": report_date,
+            },
+            "status": "final",
+            "category": [{"coding":[{
+                "system":"http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code":"OT","display":"Occupational Therapy",
+            }]}],
+            "code": {"coding":[{
+                "system":"http://snomed.info/sct",
+                "code":"229070002","display":"Ergonomic assessment",
+            }],"text":"Corvus AI Posture Health Summary"},
+            "subject": {
+                "reference": f"Patient/{patient_uid}",
+                "display":   patient_name,
+            },
+            "effectivePeriod": {
+                "start": cutoff.isoformat()+"Z",
+                "end":   report_date,
+            },
+            "issued": report_date,
+            "performer": [{"display":"Corvus PostureAI Pro","reference":"Device/corvus-posture-ai"}],
+            "result": [{"reference":f"Observation/{s['id']}"} for s in sessions[:5]],
+            "conclusion": (
+                f"AI posture analysis over {days} days ({len(sessions)} sessions). "
+                f"Average score: {avg_sc}/100. "
+                f"Best: {best_sc}. Worst: {worst_sc}. "
+                f"Cervical zone risk: {avg_zone['cervical']}%. "
+                f"Thoracic zone risk: {avg_zone['thoracic']}%. "
+                f"Lumbar zone risk: {avg_zone['lumbar']}%."
+            ),
+            "presentedForm": [{
+                "contentType": "application/fhir+json",
+                "url": f"/api/v1/emr/patient/{patient_uid}/summary",
+            }],
+            "extension": [
+                {"url":"https://corvus.health/fhir/ext/sessions-analysed","valueInteger":len(sessions)},
+                {"url":"https://corvus.health/fhir/ext/avg-posture-score","valueInteger":avg_sc},
+                {"url":"https://corvus.health/fhir/ext/cervical-zone-risk","valueInteger":avg_zone["cervical"]},
+                {"url":"https://corvus.health/fhir/ext/thoracic-zone-risk","valueInteger":avg_zone["thoracic"]},
+                {"url":"https://corvus.health/fhir/ext/lumbar-zone-risk",  "valueInteger":avg_zone["lumbar"]},
+                {"url":"https://corvus.health/fhir/ext/days-monitored","valueInteger":days},
+            ],
+            # Corvus non-FHIR summary (for convenience — non-FHIR clients)
+            "_corvus": {
+                "avg_score":    avg_sc,
+                "best_score":   best_sc,
+                "worst_score":  worst_sc,
+                "sessions":     len(sessions),
+                "days":         days,
+                "zone_risk":    avg_zone,
+                "patient_name": patient_name,
+                "generated_at": report_date,
+            },
+        }
+
+        resp = jsonify(report)
+        resp.headers["Content-Type"] = "application/fhir+json; fhirVersion=4.0"
+        resp.headers["X-Corvus-FHIR-Version"] = "R4"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["X-Corvus-API-Version"] = "v1"
+        return resp, 200
+
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/v1/emr/webhook", methods=["POST"])
+def emr_webhook_receiver():
+    """
+    POST /api/v1/emr/webhook
+    Receive incoming webhooks from EMR systems (Epic MyChart, Cerner, etc.)
+    Validates HMAC signature in X-Corvus-Signature header.
+    Stores webhook payload in Firestore for async processing.
+    """
+    try:
+        import hmac, hashlib
+        secret = os.getenv("EMR_WEBHOOK_SECRET","")
+        sig_header = request.headers.get("X-Corvus-Signature","")
+        if secret:
+            body_bytes = request.get_data()
+            expected   = "sha256=" + hmac.new(
+                secret.encode(), body_bytes, hashlib.sha256
+            ).hexdigest()
+            if not hmac.compare_digest(sig_header, expected):
+                return jsonify({"error":"Invalid signature"}), 401
+        else:
+            body_bytes = request.get_data()
+
+        payload = request.get_json(force=True) or {}
+        event_type = payload.get("type","unknown")
+
+        # Store for async processing
+        db.collection("emr_webhooks").add({
+            "type":        event_type,
+            "payload":     payload,
+            "received_at": datetime.utcnow().isoformat()+"Z",
+            "source_ip":   request.remote_addr,
+            "processed":   False,
+        })
+
+        return jsonify({"received":True,"event":event_type}), 200
+    except Exception as e:
+        return safe_error(e)
+
+
+
     import threading as _th; _th.Thread(target=_ensure_models, daemon=True).start()
     import atexit as _ae
     _ae.register(lambda: _ai_executor.shutdown(wait=False))

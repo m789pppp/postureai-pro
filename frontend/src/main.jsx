@@ -59,13 +59,29 @@ if ("Notification" in window && Notification.permission === "default") {
 }
 
 // ── Render ────────────────────────────────────────────────────────
-createRoot(document.getElementById("root")).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>
-);
+// Route /report/:token → SharedReportPage (public, no login)
+// All other paths → normal App
+const isSharedReport = window.location.pathname.startsWith("/report/");
+
+if (isSharedReport) {
+  import("./SharedReportPage.jsx").then(({ default: SharedReportPage }) => {
+    createRoot(document.getElementById("root")).render(
+      <StrictMode>
+        <ErrorBoundary>
+          <SharedReportPage />
+        </ErrorBoundary>
+      </StrictMode>
+    );
+  });
+} else {
+  createRoot(document.getElementById("root")).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </StrictMode>
+  );
+}
 
 // ── PostHog Product Analytics ─────────────────────────────────────
 // Install: npm install posthog-js
