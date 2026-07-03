@@ -744,7 +744,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
-function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onDeleteSession, onTrend, tier="standard", isHRAdmin=false }) {
+function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
 
@@ -853,7 +853,38 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
             {pdfLoading==="compare" ? "⏳" : "📊"} {isAr?"مقارنة الجلستين":"Compare Sessions"}
           </button>
         )}
-        {/* HR Team PDF — HR admins only */}
+        {/* Longitudinal PDF — Elite + 5+ sessions */}
+        {isEliteTier && userSessions.length >= 5 && (
+          <button onClick={async ()=>{
+              setPdfLoading("longitudinal");
+              await onLongitudinalPDF?.();
+              setPdfLoading(null);
+            }}
+            disabled={pdfLoading==="longitudinal"}
+            style={{ padding:"9px 14px", background:"rgba(245,158,11,.1)",
+              border:"1px solid rgba(245,158,11,.25)", borderRadius:9,
+              color: pdfLoading==="longitudinal"?"#94a3b8":"#fcd34d",
+              fontSize:12, fontWeight:600, cursor: pdfLoading==="longitudinal"?"wait":"pointer",
+              display:"flex", alignItems:"center", gap:6 }}>
+            {pdfLoading==="longitudinal" ? "⏳" : "📅"} {isAr?"التقرير الطولي":"Longitudinal PDF"}
+          </button>
+        )}
+        {/* Share Report — Elite + last session */}
+        {isEliteTier && userSessions.length >= 1 && (
+          <button onClick={async ()=>{
+              setPdfLoading("share");
+              await onShareReport?.(userSessions[0]);
+              setPdfLoading(null);
+            }}
+            disabled={pdfLoading==="share"}
+            style={{ padding:"9px 14px", background:"rgba(99,102,241,.1)",
+              border:"1px solid rgba(99,102,241,.25)", borderRadius:9,
+              color: pdfLoading==="share"?"#94a3b8":"#a5b4fc",
+              fontSize:12, fontWeight:600, cursor: pdfLoading==="share"?"wait":"pointer",
+              display:"flex", alignItems:"center", gap:6 }}>
+            {pdfLoading==="share" ? "⏳" : "🔗"} {isAr?"شارك الجلسة":"Share Session"}
+          </button>
+        )}
         {isHRAdmin && (
           <button onClick={async ()=>{
               setPdfLoading("team");
@@ -1947,6 +1978,8 @@ export default function HomePage({
   downloadClinicalPDF,
   downloadComparisonPDF,
   downloadTeamPDF,
+  downloadLongitudinalPDF,
+  shareReport,
   AccountSwitcher, onSwitchAccount,
 }) {
   const [tab,    setTab]    = useState("home");
@@ -2075,7 +2108,7 @@ export default function HomePage({
       if(tab==="sessions") return (
         <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
           setPage={setPage} startCamera={startCamera}
-          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} tier={tier} isHRAdmin={isHRAdmin}
+          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
           onDeleteSession={handleDeleteSession}
           onTrend={handleTrend}/>
       );
@@ -2085,7 +2118,7 @@ export default function HomePage({
     if(tab==="sessions") return (
       <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
         setPage={setPage} startCamera={startCamera}
-        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} tier={tier} isHRAdmin={isHRAdmin}
+        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
         onDeleteSession={handleDeleteSession}
         onTrend={handleTrend}/>
     );
@@ -2095,7 +2128,7 @@ export default function HomePage({
         cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
         onCoach={openCoach} onBilling={openBilling} onAnalytics={openAnalytics}
         onCalib={openCalib} onReports={openReports} addToast={addToast}
-        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} tier={tier} isHRAdmin={isHRAdmin}
+        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin}
         setShowGamification={setShowGamification}
         setShowGrowthHub={setShowGrowthHub}
