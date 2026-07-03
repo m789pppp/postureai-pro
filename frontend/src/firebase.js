@@ -8,6 +8,7 @@ import {
   confirmPasswordReset, verifyPasswordResetCode, applyActionCode,
   updatePassword, reauthenticateWithCredential, EmailAuthProvider,
   browserLocalPersistence, browserSessionPersistence, setPersistence,
+  deleteUser as _deleteAuthUser,
 } from "firebase/auth";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
@@ -110,6 +111,9 @@ export const signInMicrosoft = async () => {
 };
 export const signInEmail        = (e, p) => signInWithEmailAndPassword(auth, e, p);
 export const signUpEmail        = (e, p) => createUserWithEmailAndPassword(auth, e, p);
+// Deletes the currently signed-in Firebase Auth user — used as a rollback
+// when signup succeeds but profile creation in Firestore fails critically.
+export const deleteAuthUser     = () => _deleteAuthUser(auth.currentUser);
 export const logOut             = () => signOut(auth);
 const APP_URL = window.location.origin;
 
