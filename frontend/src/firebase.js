@@ -1337,14 +1337,15 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const { jsPDF } = await import("jspdf");
   const isAr  = lang === "ar";
   const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
   const tier    = profile?.tier || session?.tier || "standard";
   // Note: tier gate is enforced in App.jsx downloadPDF() before calling here.
   // We don't re-throw here to avoid silent failures from stale session.tier values.
 
-  // Load Cairo for Arabic support
-  const cairo = await _loadCairo(doc);
+  // Cairo already loaded via _ensureCairoFont above
+  const cairo = _cairoLoaded;
   const fnt = (size, style="normal") => cairo && isAr ? fontAr(doc,size,style,true) : font(doc,size,style);
 
   const avg     = Math.round(session.avg_score || 0);
@@ -1761,8 +1762,9 @@ export async function generateComparisonPDF({ session1, session2, profile, user,
   if (!tierAtLeast(tier,"professional")) throw new Error("Comparison PDF requires Pro or Elite");
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
-  const cairo = await _loadCairo(doc);
+  const cairo = _cairoLoaded;
   const sf = (sz,st="normal") => cairo&&isAr ? fontAr(doc,sz,st,true) : font(doc,sz,st);
   const tierCol = tierAtLeast(tier,"elite")?T.success:T.cyan;
 
@@ -1783,7 +1785,7 @@ export async function generateComparisonPDF({ session1, session2, profile, user,
 
   // ── COVER ─────────────────────────────────────────────────────
   fc(doc,...T.ink); doc.rect(0,0,W,72,"F");
-  await _logo(doc,ml,14,22);
+  _logo(doc,ml,14,22,_logoMd);
   sf(9,"normal"); tc(doc,...T.muted);
   doc.text(isAr?"تقرير المقارنة بين الجلستين":"Session Comparison Report", ml+30, 22);
   sf(7,"normal"); doc.text(nowStr, ml+30, 29);
@@ -1972,7 +1974,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   // ── COVER ─────────────────────────────────────────────────────
   fc(doc,...T.ink); doc.rect(0,0,W,64,"F");
   fc(doc,...T.primary); doc.rect(0,62,W,2,"F");
-  await _logo(doc,ml,14,22);
+  _logo(doc,ml,14,22,_logoMd);
   sf(9,"normal"); tc(doc,...T.muted);
   doc.text(isAr?"تقرير صحة الوضعية للفريق":"Team Posture Health Report", ml+30,22);
   sf(7,"normal"); doc.text(`${company||profile?.company||"Organisation"} · ${nowStr}`,ml+30,29);
@@ -2214,8 +2216,9 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   if (!tierAtLeast(tier,"elite")) throw new Error("Longitudinal report requires Elite tier");
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
-  const cairo = await _loadCairo(doc);
+  const cairo = _cairoLoaded;
   const sf = (sz,st="normal") => cairo&&isAr ? fontAr(doc,sz,st,true) : font(doc,sz,st);
   const name    = profile?.name||user?.displayName||(isAr?"مستخدم":"User");
   const now     = new Date();
@@ -2270,7 +2273,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
 
   // ── COVER ─────────────────────────────────────────────────────
   fc(doc,...T.ink); doc.rect(0,0,W,68,"F");
-  await _logo(doc,ml,14,22);
+  _logo(doc,ml,14,22,_logoMd);
   sf(8.5,"normal"); tc(doc,...T.muted);
   doc.text(isAr?"التقرير الطولي لصحة الوضعية":"Longitudinal Posture Health Report",ml+30,22);
   doc.text(nowStr,ml+30,29);

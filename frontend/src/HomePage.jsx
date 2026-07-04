@@ -841,7 +841,10 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
         {isProTier && userSessions.length >= 2 && (
           <button onClick={async ()=>{
               setPdfLoading("compare");
-              await onComparisonPDF?.(userSessions[0], userSessions[1]);
+              // Compare latest vs previous session (most meaningful comparison)
+              const s1 = userSessions[1]; // previous (older)
+              const s2 = userSessions[0]; // latest (newer)
+              await onComparisonPDF?.(s1, s2);
               setPdfLoading(null);
             }}
             disabled={pdfLoading==="compare"}
@@ -849,7 +852,8 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
               border:"1px solid rgba(139,92,246,.25)", borderRadius:9,
               color: pdfLoading==="compare"?"#94a3b8":"#c4b5fd",
               fontSize:12, fontWeight:600, cursor: pdfLoading==="compare"?"wait":"pointer",
-              display:"flex", alignItems:"center", gap:6 }}>
+              display:"flex", alignItems:"center", gap:6 }}
+            title={isAr?"مقارنة آخر جلستين":"Compare last 2 sessions"}>
             {pdfLoading==="compare" ? "⏳" : "📊"} {isAr?"مقارنة الجلستين":"Compare Sessions"}
           </button>
         )}
