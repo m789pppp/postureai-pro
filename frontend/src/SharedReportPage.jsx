@@ -114,15 +114,31 @@ export default function SharedReportPage() {
   const [loading, setLoading] = useState(true);
   const [activeZone, setActiveZone] = useState(null);
 
+  // Inject spinner keyframe once
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = `@keyframes spin{to{transform:rotate(360deg)}} @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=DM+Sans:wght@400;600;700;800&display=swap');`;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   useEffect(() => {
     if (!token) { setError("Invalid report link."); setLoading(false); return; }
     getSharedReport(token)
-      .then(d => { setData(d); setLoading(false); })
+      .then(d => {
+        setData(d);
+        setLoading(false);
+        // Apply RTL to document if Arabic
+        if (d?.lang === "ar") {
+          document.documentElement.dir = "rtl";
+          document.documentElement.lang = "ar";
+        }
+      })
       .catch(e => { setError(e.message); setLoading(false); });
   }, [token]);
 
   if (loading) return (
-    <div style={S.page}>
+    <div style={{ ...S.page, direction: isAr ? 'rtl' : 'ltr' }}>
       <div style={S.center}>
         <div style={S.spinner} />
         <p style={{ color:"#94a3b8", marginTop:16 }}>Loading report…</p>
@@ -131,7 +147,7 @@ export default function SharedReportPage() {
   );
 
   if (error) return (
-    <div style={S.page}>
+    <div style={{ ...S.page, direction: isAr ? 'rtl' : 'ltr' }}>
       <div style={S.center}>
         <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
         <h2 style={{ color:"#f1f5f9", marginBottom:8 }}>Report Unavailable</h2>
@@ -148,30 +164,76 @@ export default function SharedReportPage() {
   const hist    = data.score_history || [];
   const metrics = data.metrics || {};
   const zonal   = zonalRisk(metrics);
+  const isAr    = data.lang === "ar";
+  const T = {
+    score:     isAr ? "نقاط الوضعية الكلية" : "Overall Posture Score",
+    good:      isAr ? "وضعية جيدة" : "Good Posture",
+    duration:  isAr ? "المدة" : "Duration",
+    alerts:    isAr ? "تنبيهات" : "Alerts",
+    timeline:  isAr ? "مسار النقاط" : "Score Timeline",
+    aiLabel:   isAr ? "🤖 تحليل Corvus AI" : "🤖 CORVUS AI ANALYSIS",
+    zoneTitle: isAr ? "خريطة مناطق العمود الفقري" : "Spinal Zone Risk Map",
+    zoneNote:  isAr ? "اضغط على المنطقة للتفاصيل. ليس تشخيصاً طبياً." : "Click a zone to see details. Not a medical diagnosis.",
+    metricsTitle: isAr ? "تفاصيل المقاييس" : "Posture Metrics Breakdown",
+    ctaBtn:    isAr ? "جرّب Corvus مجاناً ←" : "Try Corvus Free →",
+    expired:   isAr ? "الرابط غير متاح" : "Report Unavailable",
+    poweredBy: isAr ? "مشغّل بواسطة Corvus Health Intelligence · ليس تشخيصاً طبياً" : "Powered by Corvus Health Intelligence · Not a medical diagnosis",
+    sessionStart: isAr ? "بداية الجلسة" : "Session start",
+    final:     isAr ? "النهاية" : "Final",
+  };
+
+  const METRIC_LABELS_AR = {
+    neck_lean:"ميل الرقبة", neck_lean_side:"ميل الرقبة (جانبي)", head_tilt:"انحناء الرأس",
+    head_yaw:"دوران الرأس", shoulder:"توازن الكتفين", spine_lean:"ميل العمود الفقري",
+    spine_align:"محاذاة العمود الفقري", fhp:"تقدم الرأس للأمام", fhp_side:"تقدم الرأس (جانبي)",
+    rounded:"تقريس الأكتاف", elbow:"زاوية الكوع", monitor:"ارتفاع الشاشة",
+    distance:"مسافة المشاهدة", trunk_lean:"ميل الجذع", hip_angle:"زاوية الورك", knee_angle:"زاوية الركبة",
+  };
+
+  const ZONES_AR = {
+    cervical: {title:"عنق الرحم (الرقبة)", region:"C1–C7", detail:"وضع الرأس، ميل الرقبة، تقدم الرأس والدوران"},
+    thoracic: {title:"الصدر (أعلى الظهر)", region:"T1–T12", detail:"توازن الأكتاف، تقريس الأكتاف، انحناء العمود العلوي"},
+    lumbar:   {title:"القطن (أسفل الظهر)", region:"L1–S1", detail:"محاذاة العمود، زاوية الورك، ميل الجذع"},
+  };
   const metricEntries = Object.entries(metrics)
     .filter(([,v]) => v !== null && v !== undefined)
     .map(([k,v]) => ({
       k,
-      lbl:  METRIC_LABELS[k] || v?.label || k,
+      lbl: isAr ? (METRIC_LABELS_AR[k] || METRIC_LABELS[k] || k) : (METRIC_LABELS[k] || k),
       sc:   typeof v === "number" ? v : (v?.score ?? 100),
       val:  typeof v === "number" ? null : v?.value,
       unit: typeof v === "number" ? "" : (v?.unit || ""),
     }))
     .sort((a,b) => a.sc - b.sc);
 
-  const sharedAt = data.shared_at?.toDate?.() || new Date(data.shared_at || Date.now());
-  const expiresAt = data.expires_at?.toDate?.() || new Date(data.expires_at);
-  const daysLeft = Math.max(0, Math.ceil((expiresAt - new Date()) / 86400000));
-  const fmtDate = (d) => new Date(d).toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
-
   const zones = [
-    { k:"cervical", title:"Cervical (Neck)",       region:"C1–C7",  detail:"Neck lean, forward head posture, head tilt & rotation" },
-    { k:"thoracic", title:"Thoracic (Upper Back)",  region:"T1–T12", detail:"Shoulder balance, rounded shoulders, spine lean" },
-    { k:"lumbar",   title:"Lumbar (Lower Back)",    region:"L1–S1",  detail:"Spine alignment, hip angle, trunk lean" },
+    { k:"cervical",
+      title: isAr ? ZONES_AR.cervical.title : "Cervical (Neck)",
+      region: "C1–C7",
+      detail: isAr ? ZONES_AR.cervical.detail : "Head position, neck lean, FHP & rotation" },
+    { k:"thoracic",
+      title: isAr ? ZONES_AR.thoracic.title : "Thoracic (Upper Back)",
+      region: "T1–T12",
+      detail: isAr ? ZONES_AR.thoracic.detail : "Shoulder balance, rounded shoulders, spine lean" },
+    { k:"lumbar",
+      title: isAr ? ZONES_AR.lumbar.title : "Lumbar (Lower Back)",
+      region: "L1–S1",
+      detail: isAr ? ZONES_AR.lumbar.detail : "Spine alignment, hip angle, trunk lean" },
   ];
 
+  const sharedAt  = data.shared_at?.toDate?.() || new Date(data.shared_at || Date.now());
+  const expiresAt = data.expires_at?.toDate?.() || new Date(data.expires_at);
+  const daysLeft  = Math.max(0, Math.ceil((expiresAt - new Date()) / 86400000));
+  const fmtDate   = (d) => {
+    if (!d) return "—";
+    return new Date(d?.toDate?.() || d).toLocaleDateString(
+      isAr ? "ar-EG" : "en-US",
+      { year:"numeric", month:"long", day:"numeric" }
+    );
+  };
+
   return (
-    <div style={S.page}>
+    <div style={{ ...S.page, direction: isAr ? "rtl" : "ltr", fontFamily: isAr ? "'Cairo', 'DM Sans', system-ui" : "'DM Sans', system-ui" }}>
       {/* Header */}
       <header style={S.header}>
         <div style={S.headerInner}>
@@ -181,8 +243,8 @@ export default function SharedReportPage() {
             <span style={S.logoBadge}>Elite</span>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:"#64748b" }}>Shared Posture Report</div>
-            <div style={{ fontSize:11, color:"#64748b" }}>Expires in {daysLeft} days</div>
+            <div style={{ fontSize:11, color:"#64748b" }}>{isAr ? "تقرير الوضعية المشترك" : "Shared Posture Report"}</div>
+            <div style={{ fontSize:11, color:"#64748b" }}>{isAr ? `ينتهي خلال ${daysLeft} يوم` : `Expires in ${daysLeft} days`}</div>
           </div>
         </div>
       </header>
@@ -213,9 +275,9 @@ export default function SharedReportPage() {
               <div style={{ fontSize:13, color:"#94a3b8", marginTop:4 }}>Overall Posture Score</div>
               <div style={{ display:"flex", gap:20, marginTop:12 }}>
                 {[
-                  [`${data.good_pct||0}%`, "Good Posture"],
-                  [fmtDur(data.duration_s), "Duration"],
-                  [String(data.alerts_count||0), "Alerts"],
+                  [`${data.good_pct||0}%`, T.good],
+                  [fmtDur(data.duration_s), T.duration],
+                  [String(data.alerts_count||0), T.alerts],
                 ].map(([v,l]) => (
                   <div key={l}>
                     <div style={{ fontSize:18, fontWeight:700, color:"#f1f5f9" }}>{v}</div>
@@ -239,7 +301,7 @@ export default function SharedReportPage() {
               </div>
               <Sparkline data={hist} color={col} height={56} />
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
-                <span style={{ fontSize:10, color:"#64748b" }}>Session start → {hist[0]}</span>
+                <span style={{ fontSize:10, color:"#64748b" }}>{isAr ? `بداية → ${hist[0]}` : `Session start → ${hist[0]}`}</span>
                 <span style={{ fontSize:10, color:col, fontWeight:700 }}>
                   Final → {hist[hist.length-1]}
                 </span>

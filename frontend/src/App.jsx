@@ -3119,34 +3119,33 @@ export default function App(){
   }
 
 async function downloadPDF(sessionOverride, isClinical=false){
-    // Gated by canonical pdfDetail (tierQuality.js) — standard/basic have
-    // pdfDetail:"none" and must not get a PDF, same rule enforced in
-    // AIReports.jsx's exportPDF(). This was previously ungated here.
-    if(qualityFor(tier).pdfDetail === "none"){
-      addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
-      setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
-      return;
-    }
-    const la=lastAnalRef.current||{};
-    const hist=histRef.current||[];
-    const avg=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
-    const gPctPDF=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
-    const durS=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
+    // Normalise tier string — Firestore sometimes returns "Elite" or "ELITE"
+    const normTier = (tier||"standard").toLowerCase();
+    const isEliteTier = tierAtLeast(normTier,"elite");
+    const isProTier   = tierAtLeast(normTier,"professional");
 
-    // Tier gate — PDF locked for non-Pro/Elite
-    const isEliteTier = tierAtLeast(tier,"elite");
-    const isProTier   = tierAtLeast(tier,"professional");
-    if (!isProTier && !sessionOverride) {
-      addToast(isAr?"PDF متاح لباقة Pro وElite فقط — قم بالترقية":"PDF available on Pro & Elite — upgrade to download","warn");
-      setShowBilling(true);
-      return;
-    }
-    // Clinical PDF requires Elite
+    // Clinical PDF: Elite only — check first, before pdfDetail gate
     if (isClinical && !isEliteTier) {
       addToast(isAr?"التقرير الطبي متاح لباقة Elite فقط":"Clinical PDF requires Elite tier","warn");
       setShowBilling(true);
       return;
     }
+
+    // pdfDetail gate — standard/basic get no PDF (except clinical already gated above)
+    if(qualityFor(normTier).pdfDetail === "none" && !isClinical){
+      addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
+      setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
+      return;
+    }
+
+    // Non-clinical PDF: Pro+ gate
+    if (!isClinical && !isProTier && !sessionOverride) {
+      addToast(isAr?"PDF متاح لباقة Pro وElite فقط — قم بالترقية":"PDF available on Pro & Elite — upgrade to download","warn");
+      setShowBilling(true);
+      return;
+    }
+
+    const la=lastAnalRef.current||{};
 
     if(!sessionOverride && hist.length===0 && !userSessions?.length){
       addToast(isAr?"ابدأ جلسة أولاً لتنزيل PDF":"No session data yet","warn"); return;
