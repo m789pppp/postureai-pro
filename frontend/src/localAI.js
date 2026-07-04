@@ -772,8 +772,67 @@ function runAnalysis(prompt,sp) {
   }
 }
 
-// ── Public API ────────────────────────────────────────────────────
+// ── Puter.js AI (free, no API key, 400+ models) ───────────────────
+let _puterReady   = null; // null=untested, true=works, false=blocked
+let _puterLoading = false;
+
+async function tryPuter(messages, systemPrompt) {
+  if (typeof window === "undefined") throw new Error("no browser");
+  try {
+    // Load Puter.js dynamically if not loaded
+    if (!window.puter) {
+      if (_puterLoading) {
+        await new Promise(r => setTimeout(r, 3000));
+        if (!window.puter) throw new Error("puter load failed");
+      } else {
+        _puterLoading = true;
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = "https://js.puter.com/v2/";
+          s.onload = () => { _puterLoading = false; resolve(); };
+          s.onerror = () => { _puterLoading = false; reject(new Error("puter load error")); };
+          document.head.appendChild(s);
+          setTimeout(() => { _puterLoading = false; reject(new Error("puter timeout")); }, 8000);
+        });
+      }
+    }
+    if (!window.puter?.ai?.chat) throw new Error("puter.ai.chat not available");
+
+    const msgs = [
+      ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
+      ...messages.map(m => ({ role: m.role, content: m.content })),
+    ];
+
+    const result = await Promise.race([
+      window.puter.ai.chat(msgs, { model: "gpt-4o-mini" }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20000)),
+    ]);
+
+    const text = typeof result === "string" ? result
+      : result?.message?.content || result?.content || result?.text || "";
+    if (!text) throw new Error("empty response");
+    _puterReady = true;
+    return text;
+  } catch (e) {
+    _puterReady = false;
+    throw e;
+  }
+}
+
 export async function localChat(messages, {systemPrompt=""} = {}) {
+  // Try Puter.js first (real AI, free, no API key needed)
+  if (_puterReady !== false) {
+    try {
+      const corvusSP = `You are Corvus AI Coach — a professional posture and ergonomics specialist.
+ONLY answer questions about posture, ergonomics, workstation setup, exercises, and neck/back/shoulder pain.
+For off-topic questions, politely say you specialize in posture only.
+Cite scientific research when relevant (e.g. Hansraj 2014, NIOSH 1997).
+Be concise, warm, and actionable. Max 200 words per response.
+${systemPrompt}`;
+      return await tryPuter(messages, corvusSP);
+    } catch {}
+  }
+  // Fallback: instant rule-based engine
   await new Promise(r=>setTimeout(r, 300+Math.random()*500));
   const d    = parseData(systemPrompt);
   const hist = analyzeHistory(messages);
@@ -783,6 +842,15 @@ export async function localChat(messages, {systemPrompt=""} = {}) {
 }
 
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
+  // Try Puter.js for analysis too
+  if (_puterReady !== false) {
+    try {
+      const sp = `You are a posture analytics AI. Analyze the data provided and give a structured, evidence-based report.
+Use markdown formatting. Be concise and data-driven. Max 250 words.
+${systemPrompt}`;
+      return await tryPuter([{role:"user",content:prompt}], sp);
+    } catch {}
+  }
   await new Promise(r=>setTimeout(r, 300+Math.random()*400));
   return runAnalysis(prompt, systemPrompt);
 }

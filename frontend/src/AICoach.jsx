@@ -245,17 +245,12 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
           ))}
         </div>
 
-        {/* AI connecting indicator (first use) */}
+        {/* AI status indicator */}
         {!localAIReady && localAIStatus.loading && (
-          <div style={{ padding: "10px 20px", background: "rgba(26,86,219,.06)", borderBottom: `0.5px solid ${DARK.border}`, flexShrink: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: DARK.muted, marginBottom: 6 }}>
-              <span>🧠 {isAr ? "جاري الاتصال بـ AI…" : "Connecting to AI…"}</span>
-              <span style={{ color: "#93c5fd", fontWeight: 700 }}>●</span>
-            </div>
-            <div style={{ background: "rgba(148,163,184,.15)", borderRadius: 99, height: 5, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: "60%", background: "linear-gradient(90deg,#1a56db,#0891b2)", borderRadius: 99, animation: "pulse-bar 1.4s ease-in-out infinite" }} />
-              <style>{`@keyframes pulse-bar{0%,100%{opacity:.5;width:30%}50%{opacity:1;width:90%}}`}</style>
-            </div>
+          <div style={{ padding: "8px 20px", background: "rgba(26,86,219,.06)", borderBottom: `0.5px solid ${DARK.border}`, flexShrink: 0, fontSize: 10.5, color: DARK.muted, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#93c5fd", display: "inline-block", animation: "pulse 1.2s ease infinite" }} />
+            {isAr ? "جاري الاتصال بـ AI…" : "Connecting to AI…"}
+            <style>{`@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}`}</style>
           </div>
         )}
 
