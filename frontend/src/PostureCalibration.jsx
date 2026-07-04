@@ -340,6 +340,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     if (knownDist > 0 && ipdFracs.length >= 5) {
       calibData.distance_calibrated_cm = knownDist;
       calibData.distCalibFactor = Math.round(knownDist * avg(ipdFracs) * 100000) / 100000;
+      calibData.knownDistCm     = knownDist; // saved so postureEngine can back-calculate real shoulder width
     }
 
     setResult(calibData);

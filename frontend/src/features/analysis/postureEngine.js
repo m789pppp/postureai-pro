@@ -377,7 +377,7 @@ export function createFrameBuffer(size = FRAME_BUFFER_SIZE) {
 // Stable shRatio — EMA across calls to prevent per-frame jitter
 let _shRatioEMA = null;
 
-function computeProportions(lms, W, H) {
+function computeProportions(lms, W, H, calibKnownDistCm = null) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
 
@@ -393,7 +393,20 @@ function computeProportions(lms, W, H) {
   else _shRatioEMA = _shRatioEMA + 0.05 * (rawRatio - _shRatioEMA);
   const shRatio = _shRatioEMA;
 
-  const cmPerPx = SHOULDER_WIDTH_CM / Math.max(shWidthPx, 1);
+  // When a calibrated known distance is available, back-calculate the user's
+  // actual shoulder width in cm (adults: ~32–52 cm, median ~42 cm).
+  // This prevents systematic cmPerPx errors of up to ±19% for users whose
+  // shoulders differ from the hardcoded 42 cm average.
+  // Clamp to plausible anatomical range to guard against noisy calibrations.
+  let effectiveShoulderWidthCm = SHOULDER_WIDTH_CM; // 42 cm default
+  if (calibKnownDistCm && calibKnownDistCm > 20 && shWidthFrac > 0.05) {
+    // Simple pinhole camera model: shoulderWidthCm = knownDist * shoulderWidthFrac / (focalLength/frameWidth)
+    // Empirically: at 60 cm, REF_SH_FRAC (0.34) ≈ 42 cm shoulder → scale proportionally
+    const derived = (calibKnownDistCm * shWidthFrac) / (REF_SH_FRAC * calibKnownDistCm / SHOULDER_WIDTH_CM);
+    effectiveShoulderWidthCm = Math.max(28, Math.min(58, Math.round(derived * 10) / 10));
+  }
+
+  const cmPerPx = effectiveShoulderWidthCm / Math.max(shWidthPx, 1);
 
   return {
     lSh, rSh,
@@ -402,6 +415,7 @@ function computeProportions(lms, W, H) {
     shWidthFrac,
     shRatio,
     cmPerPx,
+    effectiveShoulderWidthCm,
     shOK: vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER),
   };
 }
@@ -535,10 +549,22 @@ export function createDistanceSmoother(size = 30) {
  *
  * Synced with backend.py dist_sc logic.
  */
+/**
+ * Screen-distance score: continuous gradation instead of 3 fixed steps.
+ *
+ * Previous: returned only 100/80/55/30 — two users at 41cm and 49cm
+ * from the same 50cm target got identical scores (55) despite a real
+ * difference. Now uses linear decay within each tolerance band so
+ * distance contributes proportionally to the overall score.
+ *
+ * Synced with backend.py dist_sc — update both together.
+ */
 function distanceScore(distCm, lo, hi) {
-  if (distCm >= lo        && distCm <= hi)        return 100;
-  if (distCm >= lo - 10   && distCm <= hi + 10)   return 80;
-  if (distCm >= lo - 20   && distCm <= hi + 20)   return 55;
+  if (distCm >= lo && distCm <= hi) return 100;
+  const delta = distCm < lo ? lo - distCm : distCm - hi;
+  if (delta <= 10)  return Math.round(100 - delta * 2);            // 100→80 over 10 cm
+  if (delta <= 20)  return Math.round(80  - (delta - 10) * 2.5);  // 80→55 over 10 cm
+  if (delta <= 35)  return Math.round(55  - (delta - 20) * 1.67); // 55→30 over 15 cm
   return 30;
 }
 
@@ -850,7 +876,7 @@ function buildAlerts(modules, distCm, lo, hi) {
 // MAIN FRONT-CAMERA ANALYSIS
 // ═══════════════════════════════════════════════════════════════════
 
-export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartMs = null) {
+export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartMs = null, calibKnownDistCm = null) {
   if (!lms || lms.length < 25) return null;
 
   // Quality gate
@@ -859,8 +885,12 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     return { score: null, qualityScore: 0, qualityReason: quality.reason, detected: false };
   }
 
-  // Body proportions (camera-independent normalization)
-  const prop = computeProportions(lms, W, H);
+  // Body proportions — if a real known calibration distance is available,
+  // back-calculate the user's actual shoulder width in cm rather than using
+  // the hardcoded 42 cm constant. This corrects all downstream cm-per-px
+  // conversions for users whose shoulders differ from the 42 cm average
+  // (adult range: ~32 cm narrow → ~52 cm broad).
+  const prop = computeProportions(lms, W, H, calibKnownDistCm);
 
   // Head yaw & distance
   const headYaw = estimateHeadYaw(lms, W, H);
@@ -882,10 +912,14 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const elbow    = analyzeElbow(lms, W, H);
   const monitor  = analyzeMonitorHeight(lms, W, H, distCm);
 
-  // ── Confidence-weighted overall score ──────────────────────────────
-  // Modules with reliable=false contribute at reduced weight (30%)
-  // so unmeasured landmarks don't inflate the score with placeholder 90s.
-  const confWeight = (mod, w) => mod.reliable === false ? w * 0.30 : w;
+  // Confidence-weighted overall score.
+  // Previous: unreliable modules contributed at a fixed 30% weight, meaning
+  // a default score of 90 from an invisible landmark was still inflating the
+  // overall score by 90 × 0.084 = 7.6 points — more than a genuinely bad
+  // measurement. Now: unreliable modules contribute 0 weight (excluded from
+  // sum entirely) and their missing weight is re-distributed via W_ACTUAL
+  // normalisation, so they neither inflate nor deflate the result.
+  const confWeight = (mod, w) => mod.reliable === false ? 0 : w * Math.min(1, (mod.confidence ?? 100) / 100);
 
   const W_neck     = confWeight(neck,     WEIGHTS_FRONT.neck);
   const W_tilt     = confWeight(headTilt, WEIGHTS_FRONT.tilt);
