@@ -423,7 +423,15 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
 }
 
 /** Call on session reset / camera restart to clear proportion memory */
-export function resetProportions() { _shRatioEMA = null; }
+export function resetProportions() {
+  _shRatioEMA = null;
+  // Clear expensive-metric cache so next frame recalculates fresh
+  analyzeMP._frameN = 0;
+  analyzeMP._cachedRounded = null;
+  analyzeMP._cachedFhp     = null;
+  analyzeMP._cachedElbow   = null;
+  analyzeMP._cachedMonitor = null;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // HEAD YAW ESTIMATION
@@ -917,6 +925,14 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // (adult range: ~32 cm narrow → ~52 cm broad).
   const prop = computeProportions(lms, W, H, calibKnownDistCm);
 
+  // #17: frame-skip for expensive metrics — FHP, rounded shoulders, elbow,
+  // and monitor angle are geometrically complex and stable over ~100ms.
+  // Run them every 3rd frame only; reuse cached values in between.
+  // Quick metrics (neck lean, head tilt, shoulder level, spine, yaw)
+  // stay per-frame since they need fast feedback for real-time alerts.
+  analyzeMP._frameN = ((analyzeMP._frameN || 0) + 1) % 3;
+  const skipExpensive = analyzeMP._frameN !== 0;
+
   // Head yaw & distance
   const headYaw = estimateHeadYaw(lms, W, H);
   // Read ideal distance range from MODES (single source of truth) instead
@@ -926,16 +942,29 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const distCm  = estimateDistanceCm(lms, W, H, headYaw, distCalibFactor);
   const distSc  = distanceScore(distCm, lo, hi);
 
-  // Body module analysis
-  const rounded  = analyzeRoundedShoulders(lms, prop);
+  // Body module analysis — quick metrics run every frame, expensive every 3rd
   const neck     = analyzeNeckLean(lms, W, H, prop);
   const headTilt = analyzeHeadTilt(lms, W, H);
   const shoulder = analyzeShoulderLevel(lms, W, H, prop);
-  const spine    = analyzeSpineLean(lms, W, H, prop, rounded.score);
-  const fhp      = analyzeFHP(lms, W, H, prop);
+  const spine    = analyzeSpineLean(lms, W, H, prop, analyzeMP._cachedRounded?.score ?? 90);
   const yaw      = analyzeHeadYawModule(lms, W, H);
-  const elbow    = analyzeElbow(lms, W, H);
-  const monitor  = analyzeMonitorHeight(lms, W, H, distCm);
+  // Expensive metrics — cached between frames
+  let rounded, fhp, elbow, monitor;
+  if (!skipExpensive || !analyzeMP._cachedRounded) {
+    rounded = analyzeRoundedShoulders(lms, prop);
+    fhp     = analyzeFHP(lms, W, H, prop);
+    elbow   = analyzeElbow(lms, W, H);
+    monitor = analyzeMonitorHeight(lms, W, H, distCm);
+    analyzeMP._cachedRounded = rounded;
+    analyzeMP._cachedFhp     = fhp;
+    analyzeMP._cachedElbow   = elbow;
+    analyzeMP._cachedMonitor = monitor;
+  } else {
+    rounded = analyzeMP._cachedRounded;
+    fhp     = analyzeMP._cachedFhp;
+    elbow   = analyzeMP._cachedElbow;
+    monitor = analyzeMP._cachedMonitor;
+  }
 
   // Confidence-weighted overall score.
   // Previous: unreliable modules contributed at a fixed 30% weight, meaning

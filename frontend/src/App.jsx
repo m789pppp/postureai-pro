@@ -2607,7 +2607,7 @@ export default function App(){
         if(det.landmarks?.length>0){
           const quality = qualityFor(tier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
-          if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(60);
+          if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(150); // was 60 (2s) → 150 (5s) for smoother score history
           if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
@@ -2680,7 +2680,11 @@ export default function App(){
               }
             }else if(gateScore<65){
               if(!badRef.current)badRef.current=now;
-              else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
+              else if(now-badRef.current>15000){
+                // Severity-aware cooldown: severe=5s, moderate=15s, mild=30s
+                const _sev=finalResult.overall<40?'severe':finalResult.overall<55?'moderate':'mild';
+                const _cool=_sev==='severe'?5000:_sev==='moderate'?15000:30000;
+                if(now-lastAlRef.current>_cool){
                 lastAlRef.current=now;acRef.current.total++;
                 const nlMet=finalResult.metrics?.neck_lean, yawMet=finalResult.metrics?.head_yaw;
                 const nl=nlMet?.reliable!==false?(nlMet?.value||0):0;
@@ -2715,7 +2719,8 @@ export default function App(){
                   }
                   sendDesktopNotif(msg,finalResult.overall);
                 }
-              }
+                } // close if(_cool)
+              } // close else if(badRef>15000)
             }else{
               badRef.current=null;
               // Good posture — silent status update only, no alert box noise
@@ -2767,7 +2772,11 @@ export default function App(){
             const now=Date.now();
             if(smoothed<65){
               if(!badRef.current)badRef.current=now;
-              else if(now-badRef.current>15000&&now-lastAlRef.current>30000){
+              else if(now-badRef.current>15000){
+                // Severity-aware cooldown: severe=5s, moderate=15s, mild=30s
+                const _sev=finalResult.overall<40?'severe':finalResult.overall<55?'moderate':'mild';
+                const _cool=_sev==='severe'?5000:_sev==='moderate'?15000:30000;
+                if(now-lastAlRef.current>_cool){
                 lastAlRef.current=now;acRef.current.total++;
                 const msgFb = isAr
                   ? (result.alerts_ar?.[0] || "وضعية سيئة — صحّح وضعيتك")
@@ -2777,7 +2786,8 @@ export default function App(){
                 setAlerts([...alRef.current]);setAlertMsg({text:msgFb,type:"warn"});
                 if(sound)playBeep();
                 sendDesktopNotif(msgFb,smoothed);
-              }
+                } // close if(_cool)
+              } // close else if(badRef>15000)
             }else{
               badRef.current=null;
               setScoreStatus({score:smoothed,grade:grade(smoothed,t)});
