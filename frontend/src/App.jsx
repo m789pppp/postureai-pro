@@ -484,7 +484,7 @@ function drawFront(ctx,res,W,H,isAr=false){
   if(!res?.lms) return;
   const{lms:lm,raw,overall,metrics}=res;
   const px=p=>p?[p.x*W,p.y*H]:[0,0];
-  const valid=p=>p&&(p.visibility==null||p.visibility>0.3);
+  const valid=p=>p&&(p.visibility==null||p.visibility>0.5); // raised from 0.3 to match engine VIS_MIN
 
   // ── Risk colors per zone ──────────────────────────────────────
   const neckScore = metrics?.neck_lean?.score ?? overall;
@@ -708,7 +708,7 @@ function drawSide(ctx,res,W,H,isAr=false){
   if(!res?.lms) return;
   const{lms:lm,overall,metrics}=res;
   const px=p=>p?[p.x*W,p.y*H]:[0,0];
-  const valid=p=>p&&(p.visibility==null||p.visibility>0.3);
+  const valid=p=>p&&(p.visibility==null||p.visibility>0.5); // raised from 0.3 to match engine VIS_MIN
 
   const neckScore = metrics?.neck_lean?.score  ?? overall;
   const trunkScore= metrics?.trunk_lean?.score ?? overall;
