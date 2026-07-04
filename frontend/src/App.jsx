@@ -4462,7 +4462,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
               );
               if(cameraStatus==="requesting") return pill("#f59e0b",isAr?"جاري الفتح...":"Opening...");
               if(cameraStatus==="denied")     return pill("#ef4444",isAr?"مرفوضة — اضغط سماح":"Denied — Allow camera");
-              if(cameraStatus==="no-device")  return pill("#ef4444",isAr?"لا توجد كاميرا":"No camera found");
+              // #17: no-device pill removed — the Start Analysis button below already
+              // shows "❌ No camera found" clearly; showing it twice was confusing.
               if(cameraStatus==="ready"&&camActive) return pill("#10b981",`${M_?.label||""} · Live · ${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`);
               return pill("#64748b",isAr?"الكاميرا متوقفة":"Camera off");
             })()}
@@ -4618,17 +4619,30 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
             {profile?.photoURL
               ? <img src={profile.photoURL} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
-              : <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,
-                  background:`hsl(${(profile?.name||"U").split("").reduce((a,c)=>a+c.charCodeAt(0),0)%360},50%,30%)`,
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:12,fontWeight:700,color:"#fff"}}>
-                  {(profile?.name||profile?.email||"U")[0].toUpperCase()}
-                </div>
+              : (() => {
+                  // #16: use actual first name for initials — if profile?.name looks
+                  // like an email address/prefix, fall back to "?" not the raw email.
+                  const pName  = profile?.name || "";
+                  const isEmail = pName.includes("@") || pName.includes(".") || /\d{2,}/.test(pName);
+                  const initials = (!pName || isEmail) ? "?" : pName.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();
+                  return (
+                    <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,
+                      background:`hsl(${pName.split("").reduce((a,c)=>a+c.charCodeAt(0),0)%360 || 210},50%,30%)`,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:11,fontWeight:700,color:"#fff"}}>
+                      {initials}
+                    </div>
+                  );
+                })()
             }
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:12,fontWeight:700,color:cs.text,
                 overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                {profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}
+                {(() => {
+                  const n = profile?.name || "";
+                  const isEmail = n.includes("@") || n.includes(".") || /\d{2,}/.test(n);
+                  return (!n || isEmail) ? (isAr ? "المستخدم" : "User") : n;
+                })()}
               </div>
               <div style={{fontSize:9.5,color:cs.muted}}>
                 {isAr?"المسافة المثلى":"Optimal"}: {M_?.optDist[0]}–{M_?.optDist[1]}cm
@@ -4820,7 +4834,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div style={{fontSize:10,color:cs.muted,textAlign:"center",padding:"2px 0"}}>
                   {isAr?"ابدأ الكاميرا للتحليل":"Start camera to see metrics"}
                 </div>
-                <div style={{background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.12)",borderRadius:10,padding:"10px 12px"}}>
+                <div style={{background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.12)",borderRadius:10,padding:"10px 12px",
+                  display: camActive ? "none" : "block" /* #13: hide tips during active session */}}>
                   <div style={{fontSize:9.5,fontWeight:700,color:"#10b981",marginBottom:8,textTransform:"uppercase",letterSpacing:".05em"}}>
                     {isAr?"نصائح الوضعية الصحيحة":"Correct Posture Tips"}
                   </div>
@@ -4903,14 +4918,34 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Main controls */}
         <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
           {!camActive
-            ? <button onClick={startCamera} style={{
-                width:"100%",background:`linear-gradient(135deg,${TN?.color||"#1a56db"},${TN?.colorDim||"#0891b2"})`,
-                border:"none",borderRadius:12,padding:"14px 0",
-                fontSize:14,fontWeight:800,color:"#fff",cursor:"pointer",
-                boxShadow:`0 4px 20px ${TN?.color||"#1a56db"}50`,
-                letterSpacing:"-.01em",
-              }}>
-                {isAr?"▶ ابدأ التحليل":"▶ Start Analysis"}
+            ? <button
+                onClick={cameraStatus==="no-device"||cameraStatus==="denied" ? undefined : startCamera}
+                disabled={cameraStatus==="requesting"}
+                style={{
+                  width:"100%",
+                  background: cameraStatus==="no-device"||cameraStatus==="denied"
+                    ? "rgba(239,68,68,.15)"
+                    : cameraStatus==="requesting"
+                    ? "rgba(148,163,184,.1)"
+                    : `linear-gradient(135deg,${TN?.color||"#1a56db"},${TN?.colorDim||"#0891b2"})`,
+                  border: cameraStatus==="no-device"||cameraStatus==="denied" ? "1px solid rgba(239,68,68,.4)" : "none",
+                  borderRadius:12, padding:"14px 0",
+                  fontSize:14, fontWeight:800,
+                  color: cameraStatus==="no-device"||cameraStatus==="denied" ? "#fca5a5"
+                    : cameraStatus==="requesting" ? cs.muted : "#fff",
+                  cursor: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied" ? "not-allowed" : "pointer",
+                  boxShadow: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied"
+                    ? "none" : `0 4px 20px ${TN?.color||"#1a56db"}50`,
+                  letterSpacing:"-.01em",
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                }}>
+                {cameraStatus==="requesting"
+                  ? <><span style={{animation:"spin 700ms linear infinite",display:"inline-block"}}>⟳</span> {isAr?"جاري الفتح...":"Opening camera..."}</>
+                  : cameraStatus==="denied"
+                  ? (isAr?"❌ الكاميرا محظورة — اسمح من الإعدادات":"❌ Camera blocked — allow in settings")
+                  : cameraStatus==="no-device"
+                  ? (isAr?"❌ لا توجد كاميرا":"❌ No camera found")
+                  : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
               </button>
             : <button onClick={stopCamera} style={{
                 width:"100%",
