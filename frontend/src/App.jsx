@@ -2723,7 +2723,10 @@ export default function App(){
             }
           }
         }
-      }catch(e){}
+      }catch(e){
+        // Analysis loop errors are non-fatal — log for debugging but never crash the RAF
+        if(import.meta.env.DEV) console.warn("[postureEngine]", e?.message||e);
+      }
     }
     // Backend call ONLY when actually needed — not a duplicate of local analysis:
     //  1) Fallback mode (local MediaPipe failed to load) → backend IS the analysis
