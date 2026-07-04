@@ -356,26 +356,33 @@ This user score: ${avgScore}/100
       profile, sessions: filteredSessions, summaryText: summary, lang, pdfDetail,
       tier: profile?.tier || "standard",
     });
-    // Use Blob URL to avoid popup blockers (window.open("","_blank") is blocked
-    // on most browsers unless triggered synchronously from a user gesture;
-    // Blob URL + <a download> works reliably everywhere including iOS Safari).
+
     try {
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const blobUrl = URL.createObjectURL(blob);
+      const filename = `Corvus_Report_${new Date().toISOString().slice(0,10)}.html`;
+
+      // Always use <a download> — most reliable cross-browser method.
+      // tab.onload doesn't fire on Blob URLs in Chrome/Firefox.
+      // Users can print from the opened tab themselves (Ctrl+P / Cmd+P).
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Also try to open in new tab for preview (may be blocked — that's OK)
       const tab = window.open(blobUrl, "_blank");
-      if (tab) {
-        tab.onload = () => { tab.focus(); tab.print(); };
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-      } else {
-        // Popup blocked — trigger direct HTML download as fallback
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = `Corvus_Report_${new Date().toISOString().slice(0,10)}.html`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
-      }
+      if (tab) tab.focus();
+
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
       setPdfLoading(false); setExported(true); setTimeout(() => setExported(false), 3000);
-    } catch(e) { console.error("Export error:", e); setPdfLoading(false); }
+    } catch(e) {
+      console.error("Export error:", e);
+      setPdfLoading(false);
+    }
   };
 
   const TABS = [
