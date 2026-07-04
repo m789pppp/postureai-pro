@@ -776,43 +776,59 @@ function runAnalysis(prompt,sp) {
 let _puterReady   = null; // null=untested, true=works, false=blocked
 let _puterLoading = false;
 
+function extractPuterText(result) {
+  if (!result) return "";
+  if (typeof result === "string") return result;
+  // OpenAI format: result.message.content (string)
+  if (typeof result?.message?.content === "string") return result.message.content;
+  // Claude format: result.message.content = [{type:"text", text:"..."}]
+  if (Array.isArray(result?.message?.content))
+    return result.message.content.map(c => c.text || c.content || "").join("");
+  // Fallbacks
+  if (result?.content && typeof result.content === "string") return result.content;
+  if (result?.text) return result.text;
+  return "";
+}
+
 async function tryPuter(messages, systemPrompt) {
   if (typeof window === "undefined") throw new Error("no browser");
   try {
-    // Load Puter.js dynamically if not loaded
     if (!window.puter) {
       if (_puterLoading) {
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 4000));
         if (!window.puter) throw new Error("puter load failed");
       } else {
         _puterLoading = true;
         await new Promise((resolve, reject) => {
           const s = document.createElement("script");
           s.src = "https://js.puter.com/v2/";
-          s.onload = () => { _puterLoading = false; resolve(); };
-          s.onerror = () => { _puterLoading = false; reject(new Error("puter load error")); };
+          s.onload  = () => { _puterLoading = false; resolve(); };
+          s.onerror = () => { _puterLoading = false; reject(new Error("load error")); };
           document.head.appendChild(s);
-          setTimeout(() => { _puterLoading = false; reject(new Error("puter timeout")); }, 8000);
+          setTimeout(() => { _puterLoading = false; reject(new Error("load timeout")); }, 9000);
         });
       }
     }
-    if (!window.puter?.ai?.chat) throw new Error("puter.ai.chat not available");
+    if (!window.puter?.ai?.chat) throw new Error("puter.ai unavailable");
 
     const msgs = [
       ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
-      ...messages.map(m => ({ role: m.role, content: m.content })),
+      ...messages.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
     ];
 
-    const result = await Promise.race([
-      window.puter.ai.chat(msgs, { model: "gpt-4o-mini" }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20000)),
-    ]);
-
-    const text = typeof result === "string" ? result
-      : result?.message?.content || result?.content || result?.text || "";
-    if (!text) throw new Error("empty response");
-    _puterReady = true;
-    return text;
+    // Try models in order — first success wins
+    const models = ["gpt-4o-mini", "gpt-5.4-nano", "google/gemini-3.5-flash"];
+    for (const model of models) {
+      try {
+        const result = await Promise.race([
+          window.puter.ai.chat(msgs, { model }),
+          new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 22000)),
+        ]);
+        const text = extractPuterText(result);
+        if (text?.trim()) { _puterReady = true; return text.trim(); }
+      } catch { continue; }
+    }
+    throw new Error("all models failed");
   } catch (e) {
     _puterReady = false;
     throw e;
