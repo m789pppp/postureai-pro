@@ -72,29 +72,72 @@ function StatCard({ label, value, sub, color, accentIcon }) {
   );
 }
 
-function WeekBar({ days }) {
+function WeekBar({ days, isAr }) {
+  const [tooltip, setTooltip] = useState(null);
   return (
-    <div style={{ display:"flex", gap:5, height:56, alignItems:"flex-end", direction:"ltr" }}>
-      {days.map((d, i) => {
-        const isToday = i === days.length - 1;
-        const col = d.has ? scoreColor(d.score) : C.faint;
-        const h   = d.has ? Math.max(8, Math.round((d.score / 100) * 48)) : 4;
-        return (
-          <div key={i} style={{ flex:1, display:"flex", flexDirection:"column",
-            alignItems:"center", gap:5 }}>
-            <div style={{
-              width:"100%", borderRadius:"4px 4px 0 0",
-              background: col,
-              height: h,
-              opacity: d.has ? 1 : .25,
-              transition:"height .5s cubic-bezier(.16,1,.3,1)",
-              boxShadow: d.has && d.score >= 75 ? `0 0 8px ${col}50` : "none",
-            }}/>
-            <span style={{ fontSize:9, fontWeight: isToday ? TY.bold : TY.regular,
-              color: isToday ? C.text : C.muted }}>{d.label}</span>
-          </div>
-        );
-      })}
+    <div style={{ position:"relative" }}>
+      {/* Reference lines legend */}
+      <div style={{ display:"flex", gap:12, marginBottom:8, flexWrap:"wrap" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+          <div style={{ width:16, height:2, background:"#10b981", opacity:.6 }}/>
+          <span style={{ fontSize:9.5, color:C.muted }}>80+ {isAr?"ممتاز":"Excellent"}</span>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+          <div style={{ width:16, height:2, background:"#f59e0b", opacity:.6 }}/>
+          <span style={{ fontSize:9.5, color:C.muted }}>60+ {isAr?"جيد":"Good"}</span>
+        </div>
+      </div>
+
+      <div style={{ position:"relative", height:56 }}>
+        {/* Reference lines at 60 and 80 */}
+        <div style={{ position:"absolute", left:0, right:0,
+          top:`${100 - 80}%`, borderTop:"1px dashed rgba(16,185,129,.25)",
+          pointerEvents:"none", zIndex:1 }}/>
+        <div style={{ position:"absolute", left:0, right:0,
+          top:`${100 - 60}%`, borderTop:"1px dashed rgba(245,158,11,.25)",
+          pointerEvents:"none", zIndex:1 }}/>
+
+        <div style={{ display:"flex", gap:5, height:56, alignItems:"flex-end", direction:"ltr", position:"relative", zIndex:2 }}>
+          {days.map((d, i) => {
+            const isToday = i === days.length - 1;
+            const col = d.has ? scoreColor(d.score) : C.faint;
+            const h   = d.has ? Math.max(8, Math.round((d.score / 100) * 48)) : 4;
+            const grade = d.has
+              ? (d.score >= 80 ? (isAr?"ممتاز":"Excellent") : d.score >= 60 ? (isAr?"جيد":"Good") : (isAr?"ضعيف":"Poor"))
+              : (isAr?"لا يوجد":"No data");
+            return (
+              <div key={i} style={{ flex:1, display:"flex", flexDirection:"column",
+                alignItems:"center", gap:5, position:"relative" }}
+                onMouseEnter={()=>setTooltip({i,score:d.score,grade,has:d.has})}
+                onMouseLeave={()=>setTooltip(null)}>
+                <div style={{
+                  width:"100%", borderRadius:"4px 4px 0 0",
+                  background: col, height: h,
+                  opacity: d.has ? 1 : .25,
+                  transition:"height .5s cubic-bezier(.16,1,.3,1)",
+                  boxShadow: d.has && d.score >= 75 ? `0 0 8px ${col}50` : "none",
+                  cursor: d.has ? "pointer" : "default",
+                }}/>
+                {/* Tooltip */}
+                {tooltip?.i===i && d.has && (
+                  <div style={{
+                    position:"absolute", bottom:"100%", left:"50%", transform:"translateX(-50%)",
+                    background:"rgba(2,8,20,.95)", border:`1px solid ${col}40`,
+                    borderRadius:7, padding:"5px 9px", whiteSpace:"nowrap",
+                    fontSize:10.5, color:"#f0f6ff", zIndex:20, marginBottom:6,
+                    boxShadow:"0 4px 12px rgba(0,0,0,.4)",
+                  }}>
+                    <span style={{ color:col, fontWeight:700 }}>{d.score}/100</span>
+                    {" · "}{tooltip.grade}
+                  </div>
+                )}
+                <span style={{ fontSize:9, fontWeight: isToday ? TY.bold : TY.regular,
+                  color: isToday ? C.text : C.muted }}>{d.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -325,7 +368,12 @@ export default function HomeScreen(props) {
   const streak   = profile?.streak_days || (userSessions.length>0?1:0);
   const lastSess = userSessions[0];
   const lastScore= lastSess?.avg_score || 0;
-  const firstName= (profile?.name||user?.email?.split("@")[0]||"").split(" ")[0];
+  // #11 fix: if the stored name looks like an email address or email prefix
+  // (e.g. "ahmed.posture.test88" from profile?.name fallback to email split),
+  // treat it as no-name and show a generic greeting instead.
+  const rawName   = profile?.name || "";
+  const looksLikeEmail = rawName.includes("@") || rawName.includes(".") || /\d{2,}/.test(rawName);
+  const firstName = (!rawName || looksLikeEmail) ? "" : rawName.split(" ")[0];
 
   const lastTime = (() => {
     if (!lastSess) return null;
@@ -607,7 +655,7 @@ export default function HomeScreen(props) {
                 </span>
               )}
             </div>
-            <WeekBar days={last7}/>
+            <WeekBar days={last7} isAr={isAr}/>
           </div>
         )}
 
