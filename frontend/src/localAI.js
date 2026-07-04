@@ -300,12 +300,9 @@ Laptops are ergonomically flawed by design — screen and keyboard are linked, s
 - Screen away from windows and direct side-glare
 - **Corvus rule:** if screen is much brighter than room → your eyes work double adapting${cite("richter")}`,
 
-  neck_pain: (d,ar) => {
-    const nr = d.neckRisk ?? 0;
-    return ar
-      ? `**رقبتك — تحليل:**${nr>0?` خطر **${nr>60?"🔴 مرتفع":nr>40?"🟡 متوسط":"🟢 منخفض"}** (${nr}%)`:""}\n\nأكثر سبب: **Forward Head Posture** — كل سنتيمتر الرأس يتقدم للأمام يضيف ~2.7 كيلو على الرقبة.\n\n**إجراءات فورية:**\n1. Chin Tuck: 10 مرات × 3 (الأفضل علمياً)\n2. ارفع الشاشة لمستوى العين\n3. مسح الكتفين للخلف وللأسفل كل 20 دقيقة\n\n**تحذير:** تنميل في اليد أو الذراع = استشر دكتور${cite("hansraj",ar)}${cite("cagnie",ar)}`
-      : `**Your Neck — Analysis:**${nr>0?` Risk **${nr>60?"🔴 HIGH":nr>40?"🟡 MODERATE":"🟢 LOW"}** (${nr}%)`:""}\n\nMost common cause: **Forward Head Posture** — each cm the head moves forward adds ~2.7kg extra neck load.\n\n**Immediate actions:**\n1. Chin tuck: 10 reps × 3 (most evidence-supported)\n2. Raise monitor to eye level\n3. Roll shoulders back and down every 20 min\n\n**Warning:** numbness in hand or arm → see a doctor${cite("hansraj",ar)}${cite("cagnie",ar)}`;
-  },
+  neck_pain: (d,ar) => ar
+    ? `**رقبتك — تحليل:**${(d.neckRisk??0)>0?` خطر **${(d.neckRisk??0)>60?"🔴 مرتفع":(d.neckRisk??0)>40?"🟡 متوسط":"🟢 منخفض"}** (${d.neckRisk??0}%)`:""}\n\nأكثر سبب: **Forward Head Posture** — كل سنتيمتر الرأس يتقدم للأمام يضيف ~2.7 كيلو على الرقبة.\n\n**إجراءات فورية:**\n1. Chin Tuck: 10 مرات × 3 (الأفضل علمياً)\n2. ارفع الشاشة لمستوى العين\n3. مسح الكتفين للخلف وللأسفل كل 20 دقيقة\n\n**تحذير:** تنميل في اليد أو الذراع = استشر دكتور\n\n📚 *${SCI.hansraj}*\n📚 *${SCI.cagnie}*`
+    : `**Your Neck — Analysis:**${(d.neckRisk??0)>0?` Risk **${(d.neckRisk??0)>60?"🔴 HIGH":(d.neckRisk??0)>40?"🟡 MODERATE":"🟢 LOW"}** (${d.neckRisk??0}%)`:""}\n\nMost common cause: **Forward Head Posture** — each cm the head moves forward adds ~2.7kg extra neck load.\n\n**Immediate actions:**\n1. Chin tuck: 10 reps × 3 (most evidence-supported)\n2. Raise monitor to eye level\n3. Roll shoulders back and down every 20 min\n\n**Warning:** numbness in hand or arm → see a doctor\n\n📚 *${SCI.hansraj}*\n📚 *${SCI.cagnie}*`,
 
   shoulder_pain: ar
     ? `**كتفيك:**\n\nالكتفان المدوّران ناتجان عن إطالة الأربطة الأمامية مع ضعف الإطالة الخلفية (Upper Crossed Syndrome).\n\n**إصلاح:**\n1. Shoulder Roll للخلف 10 مرات\n2. اضغط بين لوحَي الكتف 5 ثوانٍ × 10\n3. Chest Opener: ذراعيك للخلف، صدرك للأمام 30 ثانية\n4. أوقف رفع الكتفين عند الكتابة${cite("van_eerd",true)}`
@@ -382,7 +379,7 @@ function buildResponse(intent, msg, d, hist) {
   if(intent==="lighting")          return kb.lighting;
   if(intent==="monitor")           return kb.monitor_height + followUp("monitor",d,hist,ar);
   if(intent==="chair")             return kb.chair_height + followUp("chair",d,hist,ar);
-  if(intent==="neck_pain")         return (typeof kb.neck_pain==="function"?kb.neck_pain(d,ar):kb.neck_pain) + followUp("neck",d,hist,ar);
+  if(intent==="neck_pain")         return kb.neck_pain(d,ar) + followUp("neck",d,hist,ar);
   if(intent==="shoulder_pain")     return kb.shoulder_pain + followUp("exercise",d,hist,ar);
   if(intent==="back_pain")         return kb.back_pain + followUp("exercise",d,hist,ar);
   if(intent==="wrist_pain")        return kb.wrist_pain;
