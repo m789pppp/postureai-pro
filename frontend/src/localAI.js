@@ -159,6 +159,41 @@ function detectIntent(msg) {
   if(m.match(/calibrat|معايرة/))                                      return "calibration";
   // Prevention
   if(m.match(/prevent|avoid|how to avoid|منع|تجنب|how.*prevent/))    return "prevention";
+  // NEW INTENTS ──────────────────────────────────────────────────────
+  // Specific conditions
+  if(m.match(/sciatica|عرق النسا|sciatic/))                           return "sciatica";
+  if(m.match(/thoracic outlet|tos\b/))                                 return "tos";
+  if(m.match(/piriformis/))                                            return "piriformis";
+  if(m.match(/anterior pelvic tilt|apt\b|pelvic tilt|حوض/))          return "pelvic_tilt";
+  if(m.match(/muscle imbalance|upper crossed|lower crossed/))         return "muscle_imbalance";
+  if(m.match(/proprioception|body awareness/))                        return "proprioception";
+  // Work situations
+  if(m.match(/work.*bed|bed.*work|couch.*work|work.*couch|نوم.*شغل/)) return "work_bed";
+  if(m.match(/gamer|gaming|video game|لعب.*جيمز|جيمنج/))             return "gaming";
+  if(m.match(/programmer|developer|coding|كود|مبرمج/))               return "programmer";
+  if(m.match(/from home|wfh|remote work|شغل.*بيت|home office/))      return "wfh";
+  if(m.match(/meeting|zoom|teams|video call|اجتماع/))                 return "meetings";
+  // Equipment
+  if(m.match(/footrest|foot rest|مسند.*قدم/))                         return "footrest";
+  if(m.match(/lumbar.*roll|lumbar.*support|back.*support|دعم.*قطني/)) return "lumbar_support";
+  if(m.match(/monitor.*arm|monitor.*stand|شاشة.*ذراع/))              return "monitor_arm";
+  if(m.match(/ergonomic.*chair|which chair|best chair|كرسي.*إرجونومي/)) return "chair_guide";
+  if(m.match(/headset|headphone|phone.*hold|سماعة|تليفون.*شغل/))     return "headset";
+  if(m.match(/phone.*posture|mobile.*posture|smartphone|موبايل|تليفون|hold.*phone|how.*phone/)) return "phone";
+  if(m.match(/tablet|ipad|تابلت/))                                    return "tablet";
+  // Lifestyle
+  if(m.match(/stress.*posture|anxiety.*posture|stress|ضغط.*وضعية/))  return "stress";
+  if(m.match(/breath|breathing|تنفس.*وضعية|posture.*breath/))        return "breathing";
+  if(m.match(/diet|nutrition|food|غذاء.*وضعية|أكل.*وضعية/))          return "diet";
+  if(m.match(/pregnant|pregnancy|حامل|حمل.*وضعية/))                  return "pregnancy";
+  if(m.match(/teen|teenager|child|kids|طفل|مراهق|شباب/))             return "youth";
+  if(m.match(/age|aging|older|elderly|كبير.*سن|عمر/))                return "aging";
+  // Exercise methods
+  if(m.match(/mckenzie|mcKenzie method/i))                            return "mckenzie";
+  if(m.match(/yoga.*posture|pilates|يوجا|بيلاتس/))                   return "yoga";
+  if(m.match(/swimming|swim|سباحة.*وضعية/))                          return "swimming";
+  if(m.match(/gym|weight.*train|strength.*train|جيم|أوزان/))         return "gym";
+  if(m.match(/walk.*posture|posture.*walk|المشي.*وضعية/))            return "walking_posture";
   // General tips
   if(m.match(/tip|advice|نصيحة|نصائح/))                              return "tips";
   // Meta
@@ -531,6 +566,124 @@ function buildResponse(intent, msg, d, hist) {
   if(intent==="thanks") return pick(ar
     ?["العفو! 😊 أي سؤال تاني؟","بكل سرور! 💪 روّح وطبّق اللي اتكلمنا فيه!","تسلم! 🙏 أنا هنا لو احتجت."]
     :["You're welcome! 😊 Anything else?","Happy to help! 💪 Go put it into practice!","Of course! 🙏 I'm here whenever you need."]);
+
+  // ── NEW INTENTS ───────────────────────────────────────────────────
+
+  if(intent==="sciatica") return ar
+    ? `**عرق النسا والوضعية:**\n\nعرق النسا هو ألم يمتد من أسفل الظهر للساق بسبب ضغط على العصب الوركي.\n\n**علاقته بالجلوس:**\nالجلوس المطوّل يزيد الضغط على الديسك → يضغط على العصب → ألم في الساق.\n\n**مساعدة فورية:**\n1. وقف ومشي كل 30 دقيقة (مش 45-60)\n2. الكرسي يدعم أسفل الظهر الأول\n3. تجنب الجلوس على محفظتك (يميل الحوض)\n4. تمرين Piriformis Stretch: جلوس، الكعب على الركبة، ميلان للأمام\n\n⚕️ **مهم:** عرق النسا يحتاج تشخيص طبي — هذه نصائح دعم وضعية فقط.`
+    : `**Sciatica & Posture:**\n\nSciatica is pain radiating from lower back to leg, caused by pressure on the sciatic nerve.\n\n**Connection to sitting:**\nProlonged sitting increases disc pressure → compresses nerve → leg pain.\n\n**Immediate help:**\n1. Stand and walk every 30 min (not 45-60)\n2. Chair must support lower back first\n3. Avoid sitting on your wallet (tilts pelvis)\n4. Piriformis stretch: sitting, heel on knee, lean forward gently\n\n⚕️ **Important:** Sciatica needs medical diagnosis — these are posture support tips only.`;
+
+  if(intent==="tos") return ar
+    ? `**Thoracic Outlet Syndrome والوضعية:**\n\nTOS هو ضغط على الأوعية الدموية أو الأعصاب بين الترقوة والضلع الأول.\n\n**الأعراض المرتبطة بالوضعية:**\n- تنميل في الذراع عند رفعها\n- ضعف في قبضة اليد\n- ألم في الكتف والرقبة\n\n**دور Corvus:**\n- مراقبة وضعية الكتفين (Rounded Shoulders سبب رئيسي)\n- تنبيه لو كتفيك مرفوعين\n\n⚕️ TOS يحتاج تشخيص طبي متخصص — استشر دكتور أعصاب أو فيزيوثيرابيست.`
+    : `**Thoracic Outlet Syndrome & Posture:**\n\nTOS is compression of nerves/blood vessels between collarbone and first rib.\n\n**Posture-related symptoms:**\n- Arm numbness when raised\n- Weakened grip\n- Shoulder and neck pain\n\n**Corvus's role:**\n- Monitors shoulder position (Rounded Shoulders is a major cause)\n- Alerts when shoulders are elevated\n\n⚕️ TOS needs specialized medical diagnosis — consult a neurologist or physiotherapist.`;
+
+  if(intent==="pelvic_tilt") return ar
+    ? `**الإمالة الأمامية للحوض (Anterior Pelvic Tilt):**\n\nتحدث عندما تميل عظام الحوض للأمام، مما يجعل الظهر السفلي ينحني بشكل مبالغ.\n\n**الأسباب:**\n- ضعف عضلات البطن والأرداف\n- توتر في عضلات الفخذ الأمامية (Hip Flexors)\n- الجلوس المطوّل\n\n**تمارين الإصلاح:**\n1. **Hip Flexor Stretch:** الركبة على الأرض، ميلان للأمام 30 ثانية × 3\n2. **Glute Bridge:** الاستلقاء، رفع الأرداف 15 × 3\n3. **Dead Bug:** تقوية البطن بدون ضغط على الظهر\n4. **Plank:** 30 ثانية × 3\n\n⏱️ نتائج ملموسة خلال 6-8 أسابيع مع الانتظام.`
+    : `**Anterior Pelvic Tilt (APT):**\n\nOccurs when the hip bones tilt forward, causing excessive lower back arch.\n\n**Causes:**\n- Weak core and glute muscles\n- Tight hip flexors\n- Prolonged sitting\n\n**Corrective exercises:**\n1. **Hip Flexor Stretch:** kneeling lunge, lean forward 30 sec × 3\n2. **Glute Bridge:** lying, raise hips 15 × 3\n3. **Dead Bug:** core strengthening without spinal load\n4. **Plank:** 30 sec × 3\n\n⏱️ Noticeable improvement in 6-8 weeks with consistency.`;
+
+  if(intent==="muscle_imbalance") return ar
+    ? `**خلل التوازن العضلي في وضعية المكتب:**\n\n**Upper Crossed Syndrome (الأشيع في العمل المكتبي):**\n- عضلات مشدودة: الصدر (Pectorals) + رقبة أمامية (Upper Traps)\n- عضلات ضعيفة: بين الكتفين (Rhomboids) + رقبة عميقة (Deep Neck Flexors)\n- النتيجة: كتفان مدوّران + رأس متقدم\n\n**Lower Crossed Syndrome:**\n- عضلات مشدودة: Hip Flexors + ظهر سفلي\n- عضلات ضعيفة: بطن + أرداف\n- النتيجة: إمالة أمامية للحوض\n\n**الحل:**\nإطالة المشدود + تقوية الضعيف — Corvus بيكتشف متى تحصل هذه الأنماط.`
+    : `**Muscle Imbalance in Desk Workers:**\n\n**Upper Crossed Syndrome (most common):**\n- Tight: Pectorals + Upper Trapezius\n- Weak: Rhomboids + Deep Neck Flexors\n- Result: Rounded shoulders + forward head\n\n**Lower Crossed Syndrome:**\n- Tight: Hip Flexors + Lower Back\n- Weak: Abs + Glutes\n- Result: Anterior pelvic tilt\n\n**Solution:**\nStretch what's tight + strengthen what's weak — Corvus detects when these patterns develop.`;
+
+  if(intent==="proprioception") return ar
+    ? `**الحس العميق (Proprioception) والوضعية:**\n\nالحس العميق هو قدرة جسمك على معرفة موضعه في الفضاء بدون النظر.\n\n**علاقته بالوضعية:**\n- وضعية سيئة لفترة طويلة → الجهاز العصبي يُعيد ضبط "الطبيعي" للوضعية الخاطئة\n- يعني جسمك بيحس إن الإنحناء "طبيعي"\n\n**كيف Corvus يساعد:**\nالتنبيهات المنتظمة تُعيد تدريب الحس العميق — كل تنبيه هو إعادة ضبط عصبية صغيرة.\n\n**تمارين تقوية الحس العميق:**\n1. الوقوف على قدم واحدة 30 ثانية × 3\n2. تمارين اتزان على وسادة Foam`
+    : `**Proprioception & Posture:**\n\nProprioception is your body's ability to sense its position in space without looking.\n\n**Connection to posture:**\n- Poor posture maintained long-term → nervous system resets "normal" to the bad position\n- Your body literally feels the slouch as "neutral"\n\n**How Corvus helps:**\nRegular alerts retrain proprioception — each alert is a small neural reset.\n\n**Proprioception training:**\n1. Single-leg standing 30 sec × 3\n2. Balance exercises on foam pad`;
+
+  if(intent==="work_bed") return ar
+    ? `**الشغل من السرير — الحقيقة:**\n\nالشغل من السرير هو **الأسوأ** للوضعية علمياً — الدراسات تُظهر زيادة 40% في ضغط الرقبة مقارنة بالمكتب الصح.\n\n**لماذا؟**\n- الشاشة دايماً منخفضة (رأس للأسفل)\n- الظهر مش داعم\n- لا يوجد وضعية محايدة للمعصمين\n\n**لو مجبور:**\n1. وسادة كبيرة خلف ظهرك (دعم كامل)\n2. وسادة تانية تحت اللابتوب (ارفعه)\n3. حد أقصى: 30 دقيقة ثم انتقل\n4. خذ استراحة وقف كل 20 دقيقة\n\n💡 أي مكان تاني — حتى طاولة المطبخ — أفضل من السرير.\n\n${cite("straker",ar)}`
+    : `**Working from Bed — The Truth:**\n\nWorking from bed is **the worst** for posture scientifically — studies show 40% more neck pressure vs. a proper desk setup.\n\n**Why?**\n- Screen is always too low (head down)\n- No back support\n- No neutral wrist position possible\n\n**If you must:**\n1. Large pillow behind your back (full support)\n2. Another pillow under laptop (raise it)\n3. Maximum 30 min then move\n4. Stand break every 20 min\n\n💡 Anywhere else — even a kitchen table — is better than bed.\n\n${cite("straker")}`;
+
+  if(intent==="gaming") return ar
+    ? `**الوضعية للجيمرز:**\n\nالجلوس 6+ ساعات للجيمنج = نفس مخاطر العمل المكتبي × 1.5 لأن التركيز الشديد بيخلينا نتنسى الوضعية.\n\n**إعداد خاص بالجيمنج:**\n- 🖥️ الشاشة على مستوى العين (نفس القاعدة)\n- 🎮 الكوعان 90° على المكتب\n- 🪑 الظهر يلمس الكرسي — مش الانحناء للأمام\n- ⏰ كل 45 دقيقة: توقف، وقف، امشي 2 دقيقة\n\n**Corvus للجيمرز:**\nشغّل session قبل ما تبدأ اللعب — Corvus هيتنبهك لو وضعيتك اتدهورت.\n\n⚠️ "Gamer's Neck" حقيقي ويؤثر على الأداء — الوضعية الصح بتحسّن ردود الفعل.`
+    : `**Posture for Gamers:**\n\nSitting 6+ hours gaming = office worker risks × 1.5 because intense focus makes us forget posture completely.\n\n**Gaming-specific setup:**\n- 🖥️ Screen at eye level (same rule applies)\n- 🎮 Elbows 90° on desk\n- 🪑 Back touching chair — no forward lean\n- ⏰ Every 45 min: stop, stand, walk 2 min\n\n**Corvus for gamers:**\nStart a session before gaming — Corvus alerts you when posture degrades.\n\n⚠️ "Gamer's Neck" is real and affects performance — proper posture actually improves reaction time.`;
+
+  if(intent==="programmer") return ar
+    ? `**نصائح خاصة للمبرمجين:**\n\nالمبرمجون من أكثر المهن عرضة لمشاكل الوضعية — ساعات طويلة + تركيز عالٍ + شاشات متعددة.\n\n**أكبر المخاطر:**\n1. **شاشات متعددة:** لا تضعها جانباً — ضع الرئيسية أمامك مباشرة\n2. **الكتابة المتواصلة:** معصم مستقيم، كيبورد mechanical أخف ضغطاً\n3. **الـ debugging:** الانحناء للشاشة — ارفع الشاشة مش تنحني أنت\n4. **الـ flow state:** Corvus بينبهك وانت في flow حتى\n\n**روتين مبرمج صحي:**\n- Pomodoro 45/15: 45 دقيقة كود، 15 استراحة + تمارين\n- الشاشة الرئيسية أمامك، الثانوية بزاوية ≤ 30°\n- Split keyboard لو بتحس بتوتر في المعصمين`
+    : `**Tips for Programmers:**\n\nProgrammers are among the highest-risk groups — long hours + high focus + multiple screens.\n\n**Biggest risks:**\n1. **Multiple monitors:** don't place side-by-side — primary directly ahead\n2. **Continuous typing:** straight wrists, mechanical keyboard reduces keystroke force\n3. **Debugging sessions:** don't lean into screen — raise the screen\n4. **Flow state:** Corvus alerts you even when you're deep in flow\n\n**Healthy programmer routine:**\n- Pomodoro 45/15: 45 min code, 15 min break + exercises\n- Primary screen directly ahead, secondary at ≤ 30° angle\n- Split keyboard if you feel wrist tension`;
+
+  if(intent==="wfh") return ar
+    ? `**الشغل من البيت — إعداد مثالي:**\n\nأكبر مشكلة في WFH: مفيش فصل بين العمل والحياة = الجلوس المطوّل أكثر من المكتب.\n\n**أساسيات إعداد WFH:**\n1. 🪑 كرسي مخصص للعمل (مش كرسي الأكل)\n2. 🖥️ شاشة خارجية أو stand للابتوب\n3. ⌨️ كيبورد وماوس خارجيين\n4. 💡 إضاءة أمامك مش خلفك\n5. 🚶 البيت كبير — امشي فيه كل ساعة\n\n**ميزة البيت:**\nقدرة أكبر على الحركة — استغلها! وقوف في المطبخ، مشي في الشرفة، تمارين في الغرفة.`
+    : `**Working from Home — Ideal Setup:**\n\nBiggest WFH problem: no work-life separation = more sitting than in an office.\n\n**WFH setup essentials:**\n1. 🪑 Dedicated work chair (not dining chair)\n2. 🖥️ External monitor or laptop stand\n3. ⌨️ External keyboard and mouse\n4. 💡 Lighting in front, not behind\n5. 🚶 Home is bigger — walk around every hour\n\n**Home advantage:**\nMore freedom to move — use it! Stand in the kitchen, walk on the balcony, exercises in your room.`;
+
+  if(intent==="meetings") return ar
+    ? `**وضعية في الاجتماعات الافتراضية:**\n\nمتوسط الاجتماعات الافتراضية زاد 70% بعد كوفيد — ودي مشكلة وضعية كبيرة.\n\n**المشاكل الشائعة:**\n- الانحناء للأمام لسماع أحد\n- التحديق لأعلى/أسفل بسبب الكاميرا\n- التوتر لأنك "تحت الكاميرا"\n\n**الحلول:**\n1. كاميرا على مستوى العيون (نفس الشاشة)\n2. سماعات بدل ما تقرّب للمايك\n3. في الاجتماعات الطويلة: اطلب break أو وقف وأنت بتسمع (كاميرا off)\n4. بعد كل اجتماع ≥ 30 دقيقة: وقف فوراً`
+    : `**Posture in Virtual Meetings:**\n\nAverage virtual meetings increased 70% post-COVID — a major posture issue.\n\n**Common problems:**\n- Leaning forward to hear someone\n- Looking up/down due to camera position\n- Tension from being "on camera"\n\n**Solutions:**\n1. Camera at eye level (same as monitor)\n2. Headset instead of leaning toward mic\n3. Long meetings: request breaks or stand while listening (camera off)\n4. After any meeting ≥ 30 min: stand immediately`;
+
+  if(intent==="footrest") return ar
+    ? `**هل تحتاج مسند قدم؟**\n\nنعم — لو قدميك مش مسطّحتين على الأرض بشكل مريح.\n\n**متى تحتاجه:**\n- الكرسي مرتفع جداً → قدميك "معلقة"\n- لو قصير القامة (أقل من 170 سم في الغالب)\n- لو تحس بضغط تحت الفخذين\n\n**بديل مجاني:** كتاب سميك أو صندوق صغير تحت قدميك.\n\n**الوضعية الصحيحة:**\nقدمان مسطّحتان، ركبتان 90°، لا ضغط على الجزء الخلفي من الفخذ.`
+    : `**Do You Need a Footrest?**\n\nYes — if your feet aren't comfortably flat on the floor.\n\n**When you need one:**\n- Chair is too high → feet "dangling"\n- Shorter stature (generally under 170cm)\n- Feel pressure under your thighs\n\n**Free alternative:** thick book or small box under feet.\n\n**Correct position:**\nFeet flat, knees 90°, no pressure on back of thighs.`;
+
+  if(intent==="lumbar_support") return ar
+    ? `**الدعم القطني:**\n\nالجزء السفلي من الظهر (الحفرة الطبيعية) يحتاج دعم — لأن معظم الكراسي مش بتوفره بشكل كافٍ.\n\n**الـ Lumbar Roll:**\nوسادة أسطوانية بالقطر 10-15 سم، توضع خلف أسفل ظهرك.\n\n**البديل المجاني:**\nطوي منشفة وحطها خلف أسفل ظهرك — نفس التأثير.\n\n**كيف تعرف إنه صح:**\nالظهر السفلي يلمس الدعم، الكتفان يلمسان ظهر الكرسي، ما فيش توتر.\n\n**العلم:** الدعم القطني يقلل ضغط الديسك بين الفقرات بـ 40%.\n\n${cite("dunk",ar)}`
+    : `**Lumbar Support:**\n\nThe lower back's natural curve needs support — most chairs don't provide enough.\n\n**Lumbar Roll:**\nCylindrical cushion ~10-15cm diameter, placed behind lower back.\n\n**Free alternative:**\nRoll a towel and place it at your lower back — same effect.\n\n**How to know it's right:**\nLower back touches support, shoulders touch backrest, no tension.\n\n**Science:** Lumbar support reduces intervertebral disc pressure by 40%.\n\n${cite("dunk")}`;
+
+  if(intent==="monitor_arm") return ar
+    ? `**ذراع الشاشة (Monitor Arm) — يستحق؟**\n\nنعم، لو عندك مكتب فوضوي أو محتاج تعدّل الشاشة كتير.\n\n**مميزاته:**\n- ضبط دقيق للارتفاع والزاوية\n- تحرير مساحة المكتب\n- سهولة التغيير لوضعية الوقوف\n- ممتاز لشاشتين\n\n**البديل الأرخص:**\nStack of books / laptop stand (5-10% من سعر الذراع بنفس النتيجة تقريباً)\n\n**نصيحة Corvus:** الارتفاع الصح أهم من الـ accessory — أي حل يوصلك لمستوى العين كافٍ.`
+    : `**Monitor Arm — Worth It?**\n\nYes, if you have a cluttered desk or need frequent adjustments.\n\n**Benefits:**\n- Precise height and angle control\n- Frees desk space\n- Easy switching to standing position\n- Great for dual monitor setup\n\n**Cheaper alternative:**\nBook stack / laptop stand (~5-10% of arm cost, similar result)\n\n**Corvus tip:** Correct height matters more than the accessory — any solution that gets screen to eye level works.`;
+
+  if(intent==="chair_guide") return ar
+    ? `**دليل اختيار الكرسي الإرجونومي:**\n\n**أهم الخصائص (بالأولوية):**\n1. **دعم قطني قابل للضبط** — الأهم\n2. **ارتفاع قابل للضبط** — لازم يوصل ركبتيك 90°\n3. **عمق المقعد** — يتناسب مع طول فخذك\n4. **مسند الذراع** — يرتفع لمستوى المكتب\n5. **الظهر** — يتبع انحناء ظهرك\n\n**لا تصدّق الـ marketing:**\n- "Gamer chair" مش بالضرورة إرجونومي\n- السعر ≠ الجودة الإرجونومية دايماً\n\n**نصيحة:** كرسي متوسط مع lumbar roll أفضل من كرسي غالي مش مظبوط.`
+    : `**Ergonomic Chair Buying Guide:**\n\n**Most important features (in order):**\n1. **Adjustable lumbar support** — most critical\n2. **Height adjustable** — must get knees to 90°\n3. **Seat depth** — fits your thigh length\n4. **Armrests** — rise to desk level\n5. **Backrest** — follows your spine curve\n\n**Don't believe the marketing:**\n- "Gamer chair" ≠ ergonomic\n- Price ≠ ergonomic quality\n\n**Tip:** A mid-range chair with a lumbar roll beats an expensive chair that's poorly adjusted.`;
+
+  if(intent==="headset") return ar
+    ? `**السماعات والتليفون في الشغل:**\n\nتربيس التليفون بين الكتف والأذن = **أسوأ** وضعية للرقبة — يمكن تسبب TOS وألم رقبة حاد.\n\n**الحل بالترتيب:**\n1. 🎧 **Headset/سماعات بلوتوث** — الأفضل (الأيدي حرة، الرقبة مستقيمة)\n2. 📱 **Speaker** — لو الخصوصية مش مشكلة\n3. 🎧 **Earbuds** — تمام\n4. ☎️ **تليفون باليد** — قبول\n5. 🚫 **التربيس** — ممنوع خالص\n\n**للاجتماعات الطويلة:** Headset إلزامي.`
+    : `**Headsets & Phone During Work:**\n\nTrapping the phone between shoulder and ear = **worst** neck position — can cause TOS and acute neck pain.\n\n**Solutions in order:**\n1. 🎧 **Bluetooth headset** — best (hands-free, neck straight)\n2. 📱 **Speaker** — if privacy isn't an issue\n3. 🎧 **Earbuds** — fine\n4. ☎️ **Hand-held** — acceptable\n5. 🚫 **Shoulder trap** — never\n\n**For long calls/meetings:** headset is mandatory.`;
+
+  if(intent==="phone") return ar
+    ? `**وضعية الموبايل:**\n\n**"Text Neck"** هو مشكلة الجيل الحالي — رأسك منحنٍ للأسفل بمتوسط 2-4 ساعات يومياً.\n\n**الأرقام العلمية:**\n- رأس مستقيم = 4.5 كيلو\n- 15° انحناء = 12 كيلو\n- 45° انحناء (النظر للموبايل) = 22 كيلو!\n\n**الحل:**\n1. ارفع الموبايل لمستوى عينيك (اليد ترتفع، الرقبة مستقيمة)\n2. استخدم Phone Stand لو بتشوف فيديوهات\n3. كل 20 دقيقة: Chin Tuck 10 مرات\n\n${cite("hansraj",ar)}`
+    : `**Phone Posture:**\n\n**"Text Neck"** is the defining problem of our generation — head bent down an average of 2-4 hours daily.\n\n**The science:**\n- Head upright = 4.5kg\n- 15° bend = 12kg\n- 45° bend (looking at phone) = 22kg!\n\n**Solution:**\n1. Raise phone to eye level (arm up, neck straight)\n2. Use a phone stand for video watching\n3. Every 20 min: chin tuck 10 reps\n\n${cite("hansraj")}`;
+
+  if(intent==="tablet") return ar
+    ? `**إرجونوميكس التابلت:**\n\nالتابلت أسوأ من اللابتوب للوضعية — الشاشة الصغيرة بتخليك تنحني أكتر.\n\n**للاستخدام للقراءة:**\n- Phone/Tablet Stand على مستوى العين\n- العيون على بُعد 35-45 سم من الشاشة\n\n**للكتابة على التابلت:**\n- إضافة كيبورد خارجي + stand إلزامي\n- بدون keyboard: حد أقصى 15 دقيقة\n\n**الأفضل للإنتاجية:** تابلت + keyboard + stand = laptop رخيص لكن بدون إرهاق الوضعية.`
+    : `**Tablet Ergonomics:**\n\nTablets are worse than laptops for posture — smaller screen makes you lean in more.\n\n**For reading:**\n- Phone/Tablet Stand at eye level\n- Eyes 35-45cm from screen\n\n**For typing on tablet:**\n- External keyboard + stand is mandatory\n- Without keyboard: 15-minute maximum\n\n**Best for productivity:** Tablet + keyboard + stand = budget laptop but without posture strain.`;
+
+  if(intent==="stress") return ar
+    ? `**التوتر والوضعية — علاقة ثنائية الاتجاه:**\n\nالعلم يُثبت أن التوتر والوضعية يؤثران على بعضهما:\n\n**التوتر → وضعية:**\n- التوتر يشدّ عضلات الكتفين والرقبة\n- نرفع كتافنا بشكل لا إرادي\n- نمشي وجلوسنا للأمام\n\n**الوضعية → التوتر:**\n- دراسات Harvard: الوقوف منتصباً 2 دقيقة يخفض Cortisol بـ 25%\n- وضعية "Power Pose" ترفع الثقة بالنفس\n\n**Corvus insight:** تنبيهات الوضعية في أوقات ضغط العمل مضاعفة الأهمية.`
+    : `**Stress & Posture — A Two-Way Relationship:**\n\nScience confirms stress and posture affect each other:\n\n**Stress → Posture:**\n- Stress tightens neck and shoulder muscles\n- We involuntarily raise our shoulders\n- We sit and walk more hunched forward\n\n**Posture → Stress:**\n- Harvard studies: standing upright 2 min reduces cortisol by 25%\n- "Power Pose" genuinely increases confidence\n\n**Corvus insight:** Posture alerts during high-stress work periods are doubly important.`;
+
+  if(intent==="breathing") return ar
+    ? `**التنفس والوضعية:**\n\nعلاقة مباشرة وعلمية:\n\n**الوضعية السيئة → تنفس أضعف:**\n- الانحناء للأمام يضغط على الحجاب الحاجز\n- قدرة الرئتين تنخفض حتى 30% عند الانحناء\n- تنفس سطحي → أقل أكسجين → تعب وتركيز أقل\n\n**وضعية صح → تنفس أفضل:**\n- الصدر مفتوح\n- الحجاب الحاجز يتحرك بحرية\n- زيادة الطاقة والتركيز\n\n**تمرين:** خذ نفس عميق الآن — ستلاحظ مدى سهولته أو صعوبته حسب وضعيتك الحالية.\n\n${cite("niosh",ar)}`
+    : `**Breathing & Posture:**\n\nA direct, evidence-based relationship:\n\n**Poor posture → Weaker breathing:**\n- Slouching compresses the diaphragm\n- Lung capacity drops up to 30% when hunched\n- Shallow breathing → less oxygen → fatigue and poor focus\n\n**Good posture → Better breathing:**\n- Open chest\n- Diaphragm moves freely\n- Increased energy and concentration\n\n**Test right now:** Take a deep breath — notice how easy or restricted it feels based on your current position.\n\n${cite("niosh")}`;
+
+  if(intent==="diet") return ar
+    ? `**التغذية والوضعية:**\n\nنعم، ما تأكله يؤثر على وضعيتك عبر 3 مسارات:\n\n**1. صحة العظام:**\n- الكالسيوم + فيتامين D ضروريان للعمود الفقري\n- نقص D شائع جداً في العمال المكتبيين (قليل الشمس)\n\n**2. الالتهاب:**\n- الأكل المعالج والسكر يزيد الالتهاب → ألم مفاصل أكبر\n- Omega-3 يقلل الالتهاب\n\n**3. الوزن:**\n- كل 5 كيلو زيادة = ضغط إضافي على العمود الفقري\n\n**للوضعية الأفضل:**\n- كالسيوم: منتجات الألبان، لوز، بروكلي\n- فيتامين D: شمس + سمك\n- Omega-3: سمك، كتان`
+    : `**Diet & Posture:**\n\nYes, what you eat affects your posture through 3 pathways:\n\n**1. Bone health:**\n- Calcium + Vitamin D essential for spine\n- D deficiency is very common in desk workers (little sun exposure)\n\n**2. Inflammation:**\n- Processed food and sugar increase inflammation → more joint pain\n- Omega-3 reduces inflammation\n\n**3. Weight:**\n- Every 5kg extra = additional spinal load\n\n**For better posture:**\n- Calcium: dairy, almonds, broccoli\n- Vitamin D: sun exposure + fish\n- Omega-3: fish, flaxseed`;
+
+  if(intent==="pregnancy") return ar
+    ? `**الوضعية أثناء الحمل:**\n\nCorvus مصمم للبالغين في بيئة العمل — لكن هذه إرشادات موثقة:\n\n**التغييرات الطبيعية:**\n- مركز الثقل يتحرك للأمام\n- انحناء الظهر السفلي يزيد (Lordosis)\n- الأربطة أكثر مرونة (هرمون Relaxin)\n\n**نصائح الوضعية:**\n1. كرسي مع دعم قطني جيد\n2. قدمان على مسند (footrest) مع تقدم الحمل\n3. النوم على الجانب (اليسار أفضل) مع وسادة بين الركبتين\n4. تمارين تقوية الحوض (Pelvic Floor)\n\n⚕️ استشري طبيبتك أو فيزيوثيرابيست متخصص في الحمل لنصائح مخصصة.`
+    : `**Posture During Pregnancy:**\n\nCorvus is designed for adults in work environments — but here are documented guidelines:\n\n**Natural changes:**\n- Center of gravity shifts forward\n- Lower back curve increases (Lordosis)\n- Ligaments more flexible (Relaxin hormone)\n\n**Posture tips:**\n1. Chair with good lumbar support\n2. Footrest as pregnancy progresses\n3. Sleep on side (left preferred) with pillow between knees\n4. Pelvic floor exercises\n\n⚕️ Consult your doctor or a pregnancy-specialized physiotherapist for personalized guidance.`;
+
+  if(intent==="youth") return ar
+    ? `**وضعية المراهقين والأطفال:**\n\n"Text Neck" يبدأ الآن من سن 10-12 — أصغر بكتير من الجيل السابق.\n\n**المخاوف الرئيسية:**\n- العمود الفقري لا يزال ينمو — الوضعية السيئة تؤثر على شكل الفقرات\n- الحقيبة الثقيلة على كتف واحد = خطر حقيقي\n- ساعات اللعب والدراسة على الشاشة تزيد\n\n**Corvus للشباب:**\nالتطبيق يعمل مع أي عمر — نفس المبادئ تنطبق.\n\n**نصائح خاصة:**\n1. الحقيبة المدرسية: الاثنين كتف، وزن أقل من 10% من وزن الجسم\n2. الموبايل: ارفعه، لا تنحني\n3. المذاكرة: طاولة ودراسة صح مش على السرير`
+    : `**Teen & Youth Posture:**\n\n"Text Neck" now starts at age 10-12 — much younger than previous generations.\n\n**Main concerns:**\n- Spine is still developing — poor posture can affect vertebrae shape\n- Heavy bag on one shoulder = real risk\n- Screen time for gaming and studying is increasing\n\n**Corvus for teens:**\nThe app works for any age — same principles apply.\n\n**Special tips:**\n1. School bag: both shoulders, weight < 10% of body weight\n2. Phone: raise it, don't lean down\n3. Study: proper desk setup, not on bed`;
+
+  if(intent==="aging") return ar
+    ? `**الوضعية مع التقدم في السن:**\n\n**ما يحصل طبيعياً:**\n- الديسك الغضروفي يفقد مرونته\n- الأربطة أقل مطاطية\n- كثافة العظام تقل (خاصة النساء بعد سن اليأس)\n\n**لماذا Corvus مهم أكتر مع العمر:**\nالكشف المبكر عن مشاكل الوضعية يمنع تطورها لأوجاع مزمنة.\n\n**نصائح خاصة:**\n1. تمارين اتزان إضافية (تقلل خطر السقوط)\n2. كالسيوم + فيتامين D بانتظام\n3. تمارين في الماء (Swimming/Aqua) = أقل ضغط على المفاصل\n4. استراحات أقصر وأكثر تكراراً (كل 30 دقيقة)`
+    : `**Posture as You Age:**\n\n**What naturally happens:**\n- Intervertebral discs lose elasticity\n- Ligaments become less flexible\n- Bone density decreases (especially women post-menopause)\n\n**Why Corvus matters more with age:**\nEarly detection of posture issues prevents them developing into chronic pain.\n\n**Special tips:**\n1. Additional balance exercises (reduces fall risk)\n2. Calcium + Vitamin D consistently\n3. Water exercises (Swimming/Aqua) = less joint stress\n4. Shorter, more frequent breaks (every 30 min)`;
+
+  if(intent==="mckenzie") return ar
+    ? `**المنهج McKenzie للوضعية:**\n\nطوّره فيزيوثيرابيست نيوزيلاندي Robin McKenzie في الـ 1950s.\n\n**المبدأ الأساسي:**\nمعظم ألم الظهر والرقبة يمكن تخفيفه بحركات انتصاب وإطالة (Extension) بدل الانحناء (Flexion).\n\n**التمارين الأساسية:**\n1. **Press-Up (للظهر السفلي):** الاستلقاء على البطن، رفع الجذع بالذراعين 10 مرات\n2. **Chin Tuck + Retraction (للرقبة):** أدخل ذقنك + اسحب الرأس للخلف\n3. **Extension في الوقوف:** يدين على الخصر، ميلان للخلف برفق\n\nCorvus يتوافق مع مبادئ McKenzie في الكشف المبكر.`
+    : `**The McKenzie Method:**\n\nDeveloped by New Zealand physiotherapist Robin McKenzie in the 1950s.\n\n**Core principle:**\nMost back and neck pain can be relieved through extension movements (straightening) rather than flexion (bending).\n\n**Key exercises:**\n1. **Press-Up (lower back):** lie on stomach, push upper body up with arms 10 times\n2. **Chin Tuck + Retraction (neck):** pull chin in + retract head backward\n3. **Standing Extension:** hands on hips, gently lean backward\n\nCorvus aligns with McKenzie principles in early detection.`;
+
+  if(intent==="yoga") return ar
+    ? `**اليوجا والبيلاتس للوضعية:**\n\n**اليوجا:**\n- ✅ ممتازة لمرونة العمود الفقري والوعي الجسدي\n- ✅ تقوي عضلات Core\n- ✅ Downward Dog، Cobra، Cat-Cow مثالية\n- ⚠️ بعض أوضاع اليوجا المتقدمة ممكن تؤذي لو فيه مشاكل سابقة\n\n**البيلاتس:**\n- ✅ الأفضل علمياً لمشاكل الظهر\n- ✅ تركيز على Core والعمود الفقري\n- ✅ دراسات تُظهر تحسناً في pain بـ 36%\n\n**التوصية:** بيلاتس إذا عندك ألم، يوجا للصيانة والمرونة.\n\n${cite("van_eerd",ar)}`
+    : `**Yoga & Pilates for Posture:**\n\n**Yoga:**\n- ✅ Excellent for spinal flexibility and body awareness\n- ✅ Strengthens core muscles\n- ✅ Downward Dog, Cobra, Cat-Cow are ideal\n- ⚠️ Advanced poses can injure if pre-existing issues\n\n**Pilates:**\n- ✅ Scientifically strongest evidence for back pain\n- ✅ Focus on core and spinal alignment\n- ✅ Studies show 36% pain improvement\n\n**Recommendation:** Pilates if you have pain, yoga for maintenance and flexibility.\n\n${cite("van_eerd")}`;
+
+  if(intent==="swimming") return ar
+    ? `**السباحة والوضعية:**\n\nالسباحة من أفضل الرياضات للوضعية — خاصة لمن عنده ألم ظهر.\n\n**لماذا؟**\n- الماء يدعم الجسم → أقل ضغط على الفقرات\n- تقوية عضلات الظهر والكور بشكل طبيعي\n- تحسين مرونة الكتفين والرقبة\n\n**أفضل الأنماط:**\n- **Backstroke:** الأفضل للظهر (الرأس في الخلف)\n- **Freestyle:** كويس بس راقب وضعية الرأس\n- **Breaststroke:** ⚠️ ممكن يضغط على الرقبة لو طريقة الرأس مش صح\n\n**تجنب:** الغطس لفترة طويلة برقبة مبسوطة للخلف.`
+    : `**Swimming & Posture:**\n\nSwimming is one of the best sports for posture — especially for back pain sufferers.\n\n**Why?**\n- Water supports body weight → less spinal pressure\n- Naturally strengthens back and core muscles\n- Improves shoulder and neck flexibility\n\n**Best strokes:**\n- **Backstroke:** best for back (head back, spine neutral)\n- **Freestyle:** good but watch head position\n- **Breaststroke:** ⚠️ can strain neck if head technique is wrong\n\n**Avoid:** prolonged diving with neck extended backward.`;
+
+  if(intent==="gym") return ar
+    ? `**الجيم والوضعية:**\n\n**تمارين تُقوّي الوضعية:**\n- ✅ Deadlift (بشكل صح) — يقوي كل عضلات الظهر\n- ✅ Rows (Cable/Seated) — يصلح الكتفين المدوّرين\n- ✅ Face Pulls — يقوي Upper Back\n- ✅ Plank — يقوي الكور\n\n**تمارين تحتاج انتباه:**\n- ⚠️ Bench Press المفرط → يشد الصدر أكثر → يزيد rounded shoulders\n- ⚠️ Shrugs الكتير → يشدّ Upper Traps\n- ⚠️ Crunch التقليدي → ضغط على الرقبة\n\n**القاعدة:** توازن بين تمارين الدفع (Pushing) والسحب (Pulling) — 1:1.5.`
+    : `**Gym & Posture:**\n\n**Exercises that strengthen posture:**\n- ✅ Deadlift (correctly) — strengthens all back muscles\n- ✅ Rows (Cable/Seated) — fixes rounded shoulders\n- ✅ Face Pulls — strengthens upper back\n- ✅ Plank — core strengthening\n\n**Exercises needing attention:**\n- ⚠️ Excessive Bench Press → overtightens chest → worsens rounded shoulders\n- ⚠️ Too many Shrugs → tightens upper traps\n- ⚠️ Traditional Crunches → neck strain\n\n**Rule:** Balance Push vs Pull exercises — 1:1.5 ratio.`;
+
+  if(intent==="walking_posture") return ar
+    ? `**وضعية المشي الصحيحة:**\n\n**5 نقاط:**\n1. 👀 النظر للأمام — مش للأسفل للموبايل\n2. 👂 الأذن فوق الكتف مباشرة\n3. 🫁 الكتفان للخلف وللأسفل\n4. 💪 الذراعان يتحركان بحرية\n5. 🦶 الكعب أولاً ثم أطراف الأصابع\n\n**الأحذية:**\n- كعب مرتفع جداً → يميل الحوض للأمام\n- أحذية بحذاء مسطح تماماً → ضغط على الكعب\n- الأفضل: دعم خفيف للقوس الداخلي`
+    : `**Correct Walking Posture:**\n\n**5 checkpoints:**\n1. 👀 Eyes forward — not down at phone\n2. 👂 Ear directly above shoulder\n3. 🫁 Shoulders back and down\n4. 💪 Arms swinging naturally\n5. 🦶 Heel strike first, then toe-off\n\n**Footwear:**\n- Very high heels → tilts pelvis forward\n- Completely flat shoes → heel impact stress\n- Best: slight medial arch support`;
+
+  if(intent==="piriformis") return ar
+    ? `**عضلة Piriformis والوضعية:**\n\nالـ Piriformis هي عضلة صغيرة في منطقة الأرداف — لو اشتدت، ضغطت على العصب الوركي.\n\n**"Piriformis Syndrome":**\n- شبيه بعرق النسا لكن مختلف المصدر\n- شائع في من يجلسون ساعات طويلة\n- الألم في منطقة الأرداف والفخذ\n\n**Piriformis Stretch:**\n1. اجلس على كرسي\n2. ضع كعب القدم اليمنى على الركبة اليسرى\n3. انحنِ للأمام برفق حتى تحس بشد في الأرداف\n4. امسك 30 ثانية × 3 لكل جانب\n\n⚕️ مستمر أكتر من أسبوعين → استشر دكتور.`
+    : `**Piriformis Muscle & Posture:**\n\nThe Piriformis is a small muscle deep in the buttock — when tight, it compresses the sciatic nerve.\n\n**Piriformis Syndrome:**\n- Similar to sciatica but different source\n- Common in long-term sitters\n- Pain in buttock and thigh area\n\n**Piriformis Stretch:**\n1. Sit on a chair\n2. Place right ankle on left knee\n3. Gently lean forward until you feel a stretch in the buttock\n4. Hold 30 sec × 3 each side\n\n⚕️ Persists beyond 2 weeks → see a doctor.`;
 
   // General fallback — context-aware
   if(noData) return ar
