@@ -1943,17 +1943,36 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
   );
 }
 
-function UpgradePrompt({cs,t,reason,onUpgrade,onDismiss}){
-  return <div style={{background:"rgba(99,102,241,.07)",border:"0.5px solid rgba(99,102,241,.3)",borderRadius:12,padding:"14px 16px",marginBottom:18,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-    <div>
-      <div style={{fontSize:12,fontWeight:700,color:"#a5b4fc",marginBottom:3}}>🚀 {t.upgrade}</div>
-      <div style={{fontSize:11,color:cs.muted}}>{reason||"Unlock advanced features with a higher tier"}</div>
+function UpgradePrompt({cs,t,reason,onUpgrade,onDismiss,onClose,lang}){
+  const close = onDismiss || onClose || (()=>{});
+  const isAr = lang==="ar";
+  // Close on Escape key
+  useEffect(()=>{
+    const h = e => { if(e.key==="Escape") close(); };
+    window.addEventListener("keydown",h);
+    return ()=>window.removeEventListener("keydown",h);
+  },[]);
+  return(
+    <div
+      style={{position:"fixed",inset:0,zIndex:8999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.55)",backdropFilter:"blur(4px)"}}
+      onClick={e=>{ if(e.target===e.currentTarget) close(); }}
+    >
+      <div style={{background:cs.card||"#0f1e2e",border:`1px solid rgba(99,102,241,.4)`,borderRadius:16,padding:"24px 24px 20px",maxWidth:360,width:"calc(100% - 48px)",position:"relative"}}>
+        <button onClick={close} style={{position:"absolute",top:12,right:12,background:"none",border:"none",color:cs.muted||"#64748b",fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
+        <div style={{fontSize:28,marginBottom:12}}>🚀</div>
+        <div style={{fontSize:15,fontWeight:700,color:cs.text||"#f1f5f9",marginBottom:6}}>{isAr?"ترقية للاستمرار":"Upgrade to continue"}</div>
+        <div style={{fontSize:12,color:cs.muted||"#94a3b8",marginBottom:20,lineHeight:1.6}}>{reason||(isAr?"افتح المميزات المتقدمة بخطة أعلى":"Unlock advanced features with a higher tier")}</div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onUpgrade} style={{flex:1,padding:"10px 0",background:"#1a56db",color:"#fff",border:"none",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            {isAr?"ترقية الآن":"Upgrade Now"}
+          </button>
+          <button onClick={close} style={{padding:"10px 14px",background:"none",border:`0.5px solid ${cs.border||"#334155"}`,borderRadius:10,fontSize:12,color:cs.muted||"#94a3b8",cursor:"pointer"}}>
+            {isAr?"لاحقاً":"Later"}
+          </button>
+        </div>
+      </div>
     </div>
-    <div style={{display:"flex",gap:7}}>
-      <Btn cs={cs} onClick={onUpgrade} style={{padding:"7px 14px",fontSize:11}}>{t.upgrade}</Btn>
-      <button onClick={onDismiss} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:8,padding:"7px 12px",fontSize:11,color:cs.muted,cursor:"pointer"}}>✕</button>
-    </div>
-  </div>;
+  );
 }
 
 // ── Account Type + Device Onboarding ─────────────────────────────
@@ -2043,7 +2062,13 @@ export default function App(){
     return ()=>clearTimeout(t);
   },[]);
   // ── Hash-based routing — fixes back button & enables deep links ──
-  const hashToPage = (h) => h.replace(/^#\/?/, "") || "landing";
+  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report"]);
+  const hashToPage = (h) => {
+    const p = h.replace(/^#\/?/, "") || "landing";
+    // Map known aliases
+    const ALIAS = { settings:"home", analytics:"home", dashboard:"home", billing:"home", subscription:"home" };
+    return ALIAS[p] || (VALID_PAGES.has(p) ? p : "home");
+  };
   const [page, setPageRaw] = useState(() => {
     const h = window.location.hash;
     return h ? hashToPage(h) : "landing";
@@ -2068,7 +2093,8 @@ export default function App(){
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  const[mode,setMode]=useState(null);
+  const[mode,_setMode]=useState(()=>{try{return localStorage.getItem("last_mode")||null;}catch{return null;}});
+  const setMode=(m)=>{ _setMode(m); try{localStorage.setItem("last_mode",m);}catch{} };
   const[lowLight,setLowLight]=useState(false);
   const[sessionInsights,setSessionInsights]=useState([]);
   useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); distSmootherRef.current?.reset(); resetProportions(); },[mode]);
@@ -3459,6 +3485,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
     </div>
   );
 
+  // ── Public pages — accessible without login ─────────────────────────
+  // IMPORTANT: these must come BEFORE the !user guard below, otherwise
+  // visitors are always redirected to AuthPage before they can see pricing.
+  if(!user && (page==="pricing" || page==="enterprise" || page==="landing")) {
+    if(page==="pricing") return(
+      <ErrorBoundary>
+        <PricingPage
+          cs={cs} lang={lang} isAr={isAr} dir={dir}
+          profile={null} darkMode={darkMode}
+          onBack={()=>{ window.location.hash=""; setPage("auth"); }}
+          onSelectPlan={()=>{ setPage("auth"); }}
+        />
+      </ErrorBoundary>
+    );
+    // enterprise / landing fall through to AuthPage with hash preserved
+  }
+
   if(!user)return(
     <ErrorBoundary>
       <AuthPage
@@ -3654,7 +3697,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   const modeList=isAr?filteredModes.slice().reverse():filteredModes;
 
   if(page==="home") return(
-    <ErrorBoundary>
+    <ErrorBoundary key="page-home">
       {/* ── ALL MODALS — shown on home page too ────────────────── */}
       {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
       {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={async()=>{

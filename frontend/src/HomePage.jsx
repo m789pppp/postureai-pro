@@ -2153,7 +2153,7 @@ export default function HomePage({
         onCompare={()=>setShowSessionComparison?.(true)} onTrend={()=>setShowTrendChart?.(true)}/>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[tab, userRole, user, profile, userSessions, allUsers, tier, isAr, cs, atRisk, isHRAdmin, isAdmin, downloadPDF, handleDeleteSession, handleTrend, openCoach, openBilling, openAnalytics, openCalib, openReports]);
+  },[tab, userRole, user, profile, userSessions, allUsers, tier, isAr, cs, atRisk, isHRAdmin, isAdmin, downloadPDF, handleDeleteSession, handleTrend, openCoach, openBilling, openAnalytics, openCalib, openReports, currency, setCurrency]);
 
   return (
     <div dir={dir} style={{ display:"flex", minHeight:"100vh",
