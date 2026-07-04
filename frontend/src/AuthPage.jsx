@@ -239,8 +239,13 @@ function PwStrength({ pass, dark, isAr }) {
           }}/>
         ))}
       </div>
-      {/* Checklist — single row compact */}
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <span style={{fontSize:11.5,fontWeight:600,color:score>0?(bars[Math.min(score,5)-1]?.c||"#22c55e"):(dark?"rgba(255,255,255,.3)":"#94a3b8")}}>
+          {labels[isAr?"ar":"en"][Math.min(score,5)]}
+        </span>
+      </div>
+      {/* Checklist */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 12px"}}>
         {checks.map(ch=>(
           <div key={ch.k} style={{
             display:"flex",alignItems:"center",gap:4,fontSize:10.5,
@@ -313,6 +318,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [loading, setLoading]= useState(false);
   const [social,  setSocial] = useState(""); // "google"|"microsoft"
   const [err,     setErr]    = useState("");
+  const errRef = useRef(null);
   const [ok,      setOk]     = useState("");
   const [sent,    setSent]   = useState(false);
   const [touched, setTouched]= useState({});
@@ -321,6 +327,13 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [capsLock,setCapsLock]= useState(false);
 
   useEffect(()=>{ const t=setTimeout(()=>setMounted(true),60); return()=>clearTimeout(t); },[]);
+  // #7: auto-scroll to error message on mobile — window.innerWidth check
+  // avoids disturbing desktop users who can already see the form in full.
+  useEffect(()=>{
+    if(err && errRef.current && window.innerWidth < 768){
+      errRef.current.scrollIntoView({ behavior:"smooth", block:"center" });
+    }
+  },[err]);
 
   // Caps lock detection
   useEffect(()=>{
@@ -626,7 +639,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     type="email" value={email} onChange={v=>{setEmail(v);touch("email");}}
                     autoComplete="email" required dark={dark} isRtl={isAr}
                     error={fieldErr.email} valid={emailValid&&touched.email}/>
-                  {err&&<AlertBox msg={err} dark={dark}/>}
+                  {err&&<div ref={errRef}><AlertBox msg={err} dark={dark}/></div>}
                   <PrimaryBtn loading={loading} disabled={busy} dark={dark}>
                     {loading
                       ? <Spinner dark={dark}/>
@@ -737,7 +750,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                 required dark={dark} isRtl={isAr}
                 error={fieldErr.pass} valid={passValid&&touched.pass}
                 rightEl={eyeBtn(showP,()=>setShowP(v=>!v))}
-                hint={capsLock&&!showP?(isAr?"⚠️ Caps Lock مفعّل":"⚠️ Caps Lock is on"):undefined}/>
+                hint={capsLock?(isAr?"⚠️ Caps Lock مفعّل":"⚠️ Caps Lock is on"):undefined}/>
 
               {view==="signup" && (
                 <>
@@ -815,7 +828,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     </select>
                   </div>
 
-                  {/* Terms */}
+                  {/* Terms — links open mailto instead of void href (#1 fix) */}
                   <div style={{marginBottom:12}}>
                     <label style={{display:"flex",alignItems:"flex-start",gap:11,cursor:"pointer",userSelect:"none",
                       padding:"11px 13px",borderRadius:10,
@@ -836,11 +849,13 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                       </div>
                       <span style={{fontSize:13,color:t.textSub,lineHeight:1.55}}>
                         {isAr?"أوافق على":"I agree to the"}{" "}
-                        <a href="#" onClick={e=>e.preventDefault()} style={{color:t.acc,textDecoration:"none",fontWeight:600}}>
+                        <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Terms of Service")}`}
+                          style={{color:t.acc,textDecoration:"none",fontWeight:600}}>
                           {isAr?"شروط الاستخدام":"Terms of Service"}
                         </a>
                         {" "}{isAr?"و":"and"}{" "}
-                        <a href="#" onClick={e=>e.preventDefault()} style={{color:t.acc,textDecoration:"none",fontWeight:600}}>
+                        <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Privacy Policy")}`}
+                          style={{color:t.acc,textDecoration:"none",fontWeight:600}}>
                           {isAr?"سياسة الخصوصية":"Privacy Policy"}
                         </a>
                         <span style={{color:"#ef4444",marginLeft:2}}>*</span>
@@ -851,41 +866,22 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     </div>}
                   </div>
 
-                  {/* Newsletter */}
+                  {/* Newsletter — #8 fix: full label is clickable */}
                   <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none",marginBottom:4}}>
-                    <div onClick={()=>setNewsletter(v=>!v)} style={{
-                      width:17,height:17,borderRadius:4,flexShrink:0,
-                      background:newsletter?t.accBtn:"transparent",
-                      border:`1.5px solid ${newsletter?t.acc:t.border}`,
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      transition:"all .15s",cursor:"pointer",
-                    }}>
-                      {newsletter&&<svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                        <polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>}
-                    </div>
-                    <span style={{fontSize:12.5,color:t.textSub,lineHeight:1.5}}>
-                      {isAr?"أريد تلقي النصائح والتحديثات بالبريد الإلكتروني"
-                           :"Send me tips, product updates, and health insights"}
+                    <input type="checkbox" checked={newsletter} onChange={e=>setNewsletter(e.target.checked)}
+                      style={{width:17,height:17,accentColor:t.acc,cursor:"pointer",flexShrink:0}}/>
+                    <span style={{fontSize:12.5,color:t.textSub}}>
+                      {isAr?"أريد تلقي نصائح وتحديثات الوضعية":"Send me posture tips and product updates"}
                     </span>
                   </label>
                 </>
               )}
 
-              {/* Remember me */}
+              {/* Remember me — #8 fix: full label clickable via native input */}
               {view==="login" && (
                 <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,cursor:"pointer",userSelect:"none"}}>
-                  <div onClick={()=>setRemember(v=>!v)} style={{
-                    width:16,height:16,borderRadius:4,flexShrink:0,
-                    background:remember?"linear-gradient(135deg,#1a56db,#0891b2)":"transparent",
-                    border:`1.5px solid ${remember?t.acc:t.border}`,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    transition:"all .15s",cursor:"pointer",
-                  }}>
-                    {remember&&<svg width="9" height="9" viewBox="0 0 12 12" fill="none">
-                      <polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>}
-                  </div>
+                  <input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}
+                    style={{width:16,height:16,accentColor:t.acc,cursor:"pointer",flexShrink:0}}/>
                   <span style={{fontSize:13,color:t.textSub}}>
                     {isAr?"تذكرني على هذا الجهاز":"Remember me on this device"}
                   </span>
@@ -907,7 +903,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                 </div>
               )}
 
-              {err&&<AlertBox msg={err} dark={dark}/>}
+              {err&&<div ref={errRef}><AlertBox msg={err} dark={dark}/></div>}
 
               {/* Submit */}
               <button type="submit" disabled={busy} style={{
