@@ -823,16 +823,37 @@ export async function localChat(messages, {systemPrompt=""} = {}) {
   // Try Puter.js first (real AI, free, no API key needed)
   if (_puterReady !== false) {
     try {
-      const corvusSP = `You are Corvus AI Coach — a professional posture and ergonomics specialist.
-ONLY answer questions about posture, ergonomics, workstation setup, exercises, and neck/back/shoulder pain.
-For off-topic questions, politely say you specialize in posture only.
-Cite scientific research when relevant (e.g. Hansraj 2014, NIOSH 1997).
-Be concise, warm, and actionable. Max 200 words per response.
-${systemPrompt}`;
+      const d = parseData(systemPrompt);
+      const userCtx = [
+        d.name        && `User name: ${d.name}`,
+        d.avg         && `Posture score: ${d.avg}/100`,
+        d.sessions    && `Total sessions: ${d.sessions}`,
+        d.weekAvg     && `This week avg: ${d.weekAvg}/100`,
+        d.neckRisk    && `Neck risk: ${d.neckRisk}%`,
+        d.alerts      && `Common alerts: ${d.alerts}`,
+        d.worstTime   && `Worst posture time: ${d.worstTime}`,
+        d.fatigue     && `Fatigue index: ${d.fatigue}%`,
+        d.calibrated  && `Calibrated: Yes`,
+        d.lang==="ar" && `Respond in Egyptian Arabic (friendly, informal).`,
+      ].filter(Boolean).join("\n");
+
+      const corvusSP = `You are Corvus AI Coach — a professional, friendly posture and ergonomics specialist built into the Corvus PostureAI app.
+
+RULES:
+- ONLY answer questions about posture, ergonomics, workstation setup, exercises, body pain, and related health topics.
+- For completely off-topic questions (crypto, weather, politics, etc.): politely redirect to posture.
+- Always be warm, encouraging, and specific — never generic.
+- Cite scientific sources when relevant (e.g., "Hansraj 2014 found that...").
+- Keep responses under 200 words. Use markdown for formatting.
+- If the user has data, reference their actual numbers.
+
+USER DATA:
+${userCtx || "No session data yet — encourage them to start a session."}`;
+
       return await tryPuter(messages, corvusSP);
     } catch {}
   }
-  // Fallback: instant rule-based engine
+  // Fallback: rule-based engine
   await new Promise(r=>setTimeout(r, 300+Math.random()*500));
   const d    = parseData(systemPrompt);
   const hist = analyzeHistory(messages);
@@ -842,11 +863,12 @@ ${systemPrompt}`;
 }
 
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
-  // Try Puter.js for analysis too
   if (_puterReady !== false) {
     try {
-      const sp = `You are a posture analytics AI. Analyze the data provided and give a structured, evidence-based report.
-Use markdown formatting. Be concise and data-driven. Max 250 words.
+      const d = parseData((systemPrompt||"") + " " + prompt);
+      const langNote = d.lang==="ar" ? "Respond in Egyptian Arabic." : "Respond in English.";
+      const sp = `You are Corvus's posture analytics engine. Generate a structured, evidence-based report from the data provided.
+Use markdown (## headers, **bold**, bullet points). Be specific with numbers. Max 250 words. ${langNote}
 ${systemPrompt}`;
       return await tryPuter([{role:"user",content:prompt}], sp);
     } catch {}
