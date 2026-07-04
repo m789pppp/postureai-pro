@@ -219,6 +219,37 @@ service cloud.firestore {
       allow update: if false; // immutable — delete and recreate
     }
 
+    // ── Shared Reports (Phase 3) ──────────────────────────────────
+    // Public read (anyone with token can read) — no login required
+    // Write: owner only (server-side via App or firebase.js)
+    // Expiry enforced client-side + Cloud Function (future)
+    match /shared_reports/{reportId} {
+      // Anyone can read (public shareable link — no auth required)
+      allow read: if true;
+      // Only the authenticated owner can create/update their own report
+      allow create: if isAuthenticated()
+                    && request.resource.data.owner_uid == request.auth.uid
+                    && request.resource.data.expires_at is timestamp;
+      // Allow owner to increment view_count only
+      allow update: if (
+        // Unauthenticated view count increment (fire-and-forget)
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["view_count"])
+      ) || (
+        isAuthenticated() && resource.data.owner_uid == request.auth.uid
+      );
+      allow delete: if isAuthenticated()
+                    && resource.data.owner_uid == request.auth.uid;
+    }
+
+    // ── EMR Webhooks (Phase 3) ────────────────────────────────────
+    // Write-only from backend (no client reads)
+    match /emr_webhooks/{webhookId} {
+      allow read: if isAuthenticated()
+                  && request.auth.token.admin == true;
+      allow create: if false; // backend only via Admin SDK
+      allow update, delete: if false;
+    }
+
     // ── Deny everything else ─────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
