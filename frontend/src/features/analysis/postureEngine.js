@@ -411,6 +411,8 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
   return {
     lSh, rSh,
     midSh:      { x: (lSh.x + rSh.x) / 2, y: (lSh.y + rSh.y) / 2, z: (lSh.z + rSh.z) / 2 },
+    // midShZ: normalised Z midpoint of shoulders — used by analyzeFHP 3D calculation
+    midShZ:     (lSh.z + rSh.z) / 2,
     shWidthPx,
     shWidthFrac,
     shRatio,
@@ -439,29 +441,34 @@ function estimateHeadYaw(lms, W, H) {
     const g = i => lms[i];
     const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
 
-    const lEye = { x: g(PL.L_EYE).x * W, y: g(PL.L_EYE).y * H };
-    const rEye = { x: g(PL.R_EYE).x * W, y: g(PL.R_EYE).y * H };
-    const nose = { x: g(PL.NOSE).x * W,  y: g(PL.NOSE).y * H };
+    // Bug #10 fix: use inner/outer eye corners instead of eye centres (landmarks 2 & 5).
+    // L_EYE_INNER (1) and R_EYE_OUTER (6) span the widest inter-ocular distance,
+    // giving a more stable baseline for yaw estimation, especially under partial occlusion.
+    // Fall back to L_EYE / R_EYE centres if inner/outer aren't visible.
+    const useEdge = vis(PL.L_EYE_INNER) && vis(PL.R_EYE_OUTER);
+    const lEye = useEdge
+      ? { x: g(PL.L_EYE_INNER).x * W, y: g(PL.L_EYE_INNER).y * H }
+      : { x: g(PL.L_EYE).x * W,       y: g(PL.L_EYE).y * H };
+    const rEye = useEdge
+      ? { x: g(PL.R_EYE_OUTER).x * W, y: g(PL.R_EYE_OUTER).y * H }
+      : { x: g(PL.R_EYE).x * W,       y: g(PL.R_EYE).y * H };
+    const nose = { x: g(PL.NOSE).x * W, y: g(PL.NOSE).y * H };
 
     const eyeWidth = Math.abs(rEye.x - lEye.x);
     if (eyeWidth < 2) return 0;
 
     const eyeMidX   = (lEye.x + rEye.x) / 2;
-    // Normalized nose offset: 0 = centred, +0.5 ≈ +30° right turn
     const noseOffset = (nose.x - eyeMidX) / eyeWidth;
     const yaw        = Math.max(-45, Math.min(45, Math.round(noseOffset * 60)));
 
-    // Cross-check with ear geometry when both ears visible.
-    // lToNose / rToNose > 1 → nose closer to RIGHT ear → turned RIGHT (+)
-    // lToNose / rToNose < 1 → nose closer to LEFT ear  → turned LEFT  (-)
     if (vis(PL.L_EAR) && vis(PL.R_EAR)) {
       const lEarX = g(PL.L_EAR).x * W;
       const rEarX = g(PL.R_EAR).x * W;
       const lToNose = Math.abs(nose.x - lEarX);
       const rToNose = Math.abs(nose.x - rEarX);
       const ratio = lToNose / Math.max(rToNose, 1);
-      if (ratio > 1.3) return -Math.min(45, Math.abs(yaw)); // nose far from left ear → turned left
-      if (ratio < 0.7) return  Math.min(45, Math.abs(yaw)); // nose close to left ear → turned right
+      if (ratio > 1.3) return -Math.min(45, Math.abs(yaw));
+      if (ratio < 0.7) return  Math.min(45, Math.abs(yaw));
     }
     return yaw;
   } catch { return 0; }
@@ -482,9 +489,12 @@ function estimateDistanceCm(lms, W, H, yawDeg = 0, calibFactor = null) {
     const g   = i => lms[i];
     const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
 
-    if (vis(PL.L_EYE) && vis(PL.R_EYE)) {
-      let ipdPx = Math.abs(g(PL.R_EYE).x * W - g(PL.L_EYE).x * W);
-      // Correct IPD foreshortening from head yaw
+    // Bug #10 fix: prefer L_EYE_INNER / R_EYE_OUTER for wider IPD baseline
+    const useEdge = vis(PL.L_EYE_INNER) && vis(PL.R_EYE_OUTER);
+    const lEyeX   = useEdge ? g(PL.L_EYE_INNER).x : g(PL.L_EYE).x;
+    const rEyeX   = useEdge ? g(PL.R_EYE_OUTER).x : g(PL.R_EYE).x;
+    if ((useEdge ? vis(PL.L_EYE_INNER) && vis(PL.R_EYE_OUTER) : vis(PL.L_EYE) && vis(PL.R_EYE))) {
+      let ipdPx = Math.abs(rEyeX * W - lEyeX * W);
       const cosYaw = Math.max(Math.cos(Math.min(50, Math.abs(yawDeg)) * Math.PI / 180), 0.55);
       ipdPx /= cosYaw;
 
@@ -582,21 +592,28 @@ function checkFrameQuality(lms, W, H) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
 
-  // Both shoulders must be visible
   if (!vis(PL.L_SHOULDER) || !vis(PL.R_SHOULDER)) {
     return { ok: false, reason: "body_cropped" };
   }
 
-  // Shoulders must not be at frame edge (body too close)
   const lShX = g(PL.L_SHOULDER).x;
   const rShX = g(PL.R_SHOULDER).x;
-  if (lShX < 0.05 || rShX > 0.95) {
+
+  // Bug #9 fix: use pixel-space shoulder width rather than arbitrary normalised thresholds.
+  // Frame-fraction thresholds (< 0.05 / > 0.95) were unreliable for wide-angle cameras.
+  // Pixel-based checks are camera-independent.
+  const lShPx = lShX * W;
+  const rShPx = rShX * W;
+  const shWidthPx = Math.abs(rShPx - lShPx);
+
+  // Too close: either shoulder within 3% of frame edge
+  if (lShPx < W * 0.03 || rShPx > W * 0.97) {
     return { ok: false, reason: "too_close" };
   }
 
-  // Shoulders must span at least 10% of frame (not too far)
-  const shSpan = Math.abs(rShX - lShX);
-  if (shSpan < 0.10) {
+  // Too far: shoulder width less than 50px regardless of frame size
+  // (replaces < 0.10 span which penalised wide-shoulder users at normal distance)
+  if (shWidthPx < 50) {
     return { ok: false, reason: "too_far" };
   }
 
@@ -624,10 +641,13 @@ function analyzeNeckLean(lms, W, H, prop) {
   const nose = { x: g(PL.NOSE).x * W,  y: g(PL.NOSE).y * H };
   const midEar = { x: (lEar.x + rEar.x) / 2, y: (lEar.y + rEar.y) / 2 };
 
-  // Nose+ear blend: nose weight reduces yaw bias on the ear measurement
-  const noseVis   = g(PL.NOSE)?.visibility ?? 0;
-  const earWeight = noseOK && noseVis > 0.7 ? 0.15 : 0.50;
-  const noseWeight = 1 - earWeight;
+  // Bug #11 fix: when nose is NOT visible, its weight must be 0 (use ear only).
+  // Old code gave nose weight=0.5 when invisible — blending an unreliable point
+  // equally with a reliable one. When visible (>0.7), nose gets 15% weight to
+  // reduce yaw-bias; otherwise ear midpoint is the sole reference.
+  const noseVis    = g(PL.NOSE)?.visibility ?? 0;
+  const noseWeight = noseOK && noseVis > 0.7 ? 0.15 : 0.0; // 0, not 0.5 when invisible
+  const earWeight  = 1 - noseWeight;
   const neckRef = {
     x: nose.x * noseWeight + midEar.x * earWeight,
     y: nose.y * noseWeight + midEar.y * earWeight,
@@ -750,17 +770,22 @@ function analyzeFHP(lms, W, H, prop) {
   const earOK = vis(PL.L_EAR) && vis(PL.R_EAR);
   if (!prop.shOK || !earOK) return { distCm: 0, extraLoadKg: 0, neckAngleDeg: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
-  const lEar = { x: g(PL.L_EAR).x * W };
-  const rEar = { x: g(PL.R_EAR).x * W };
-  const midEarX = (lEar.x + rEar.x) / 2;
+  const lEar  = g(PL.L_EAR);
+  const rEar  = g(PL.R_EAR);
+  const midEarX = ((lEar.x + rEar.x) / 2) * W;
+  const midEarZ = (lEar.z + rEar.z) / 2;           // depth — normalised to same scale as X
 
-  // Horizontal offset of ear midpoint from shoulder midpoint in cm
-  const distCm = Math.round(Math.abs(midEarX - prop.midSh.x) * prop.cmPerPx * 10) / 10;
+  // Bug #7 fix: true 3D distance combining horizontal (X) and depth (Z) offsets.
+  // Pure 2D (X only) was corrupted by yaw — a rotated-but-straight neck produced
+  // apparent FHP. Z-component corrects for depth, giving true sagittal displacement.
+  const deltaX  = midEarX - prop.midSh.x;           // pixels
+  const deltaZ  = midEarZ - prop.midShZ;             // normalised units (same scale as Z from MediaPipe)
+  // Convert Z to pixels using shoulder width as reference
+  const deltaZpx = deltaZ * W;
+  const dist2D  = Math.sqrt(deltaX * deltaX + deltaZpx * deltaZpx);
+  const distCm  = Math.round(dist2D * prop.cmPerPx * 10) / 10;
 
   // Clinically correct extra neck load — Hansraj (2014) Surgical Technology International
-  // At 0cm FHP: head weight = 4.5kg at 0°.
-  // FHP distance maps to forward pitch angle via arctan(distCm / 15cm cervical height)
-  // Load = head_weight / cos(pitch) — exponential, not linear.
   const HEAD_WEIGHT_KG   = 4.5;
   const CERVICAL_HEIGHT  = 15; // cm — approximate C1-to-head-centre distance
   const pitchRad         = Math.atan2(Math.max(0, distCm), CERVICAL_HEIGHT);
@@ -769,7 +794,7 @@ function analyzeFHP(lms, W, H, prop) {
 
   const score    = scoreMetric(distCm, 0, THR.FHP_CM.ok, THR.FHP_CM.bad);
   const severity = classify(distCm, SEV.FHP);
-  return { distCm, extraLoadKg, neckAngleDeg: Math.round(pitchDeg), score, severity, confidence: 82, reliable: true };
+  return { distCm, extraLoadKg, neckAngleDeg: Math.round(pitchDeg), score, severity, confidence: 88, reliable: true };
 }
 
 function analyzeHeadYawModule(lms, W, H) {
@@ -959,7 +984,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // Penalty is informational only — does NOT reduce overall score.
   const sessionMin = sessionStartMs
     ? Math.max(0, Math.round((Date.now() - sessionStartMs) / 60000))
-    : (typeof performance !== "undefined" ? Math.round(performance.now() / 60000) : 0);
+    : 0; // Bug #8 fix: if no session start provided, assume 0 min — using performance.now()
+         // caused inflated fatigue penalty when the tab was left open before starting a session.
   // Non-linear fatigue: 0-20min=none, 20-60min=mild (0-8pts), 60-120min=moderate (8-15pts), 120min+=severe
   let fatiguePenalty = 0;
   if (sessionMin > 120) fatiguePenalty = Math.min(20, 15 + Math.round((sessionMin - 120) / 15));

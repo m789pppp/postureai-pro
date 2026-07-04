@@ -76,7 +76,7 @@ export function tierAtLeast(rawTier, minLevel) {
 export const QUALITY = {
   standard: {
     label: { en: "Free", ar: "مجاني" },
-    smoothingAlpha: 0.5,        // more responsive/raw — less averaging
+    smoothingAlpha: 0.85,       // Bug #12 fix: was 0.5 — raw/fast, responsive to posture changes
     outlierMaxConsecutive: 2,
     sessionInsights: { creep: false, asymmetry: false, breathing: false },
     backendAssist: false,       // no live AI-powered backend pass during session
@@ -86,7 +86,7 @@ export const QUALITY = {
   },
   basic: {
     label: { en: "Basic", ar: "أساسي" },
-    smoothingAlpha: 0.45,
+    smoothingAlpha: 0.80,       // Bug #12 fix: was 0.45
     outlierMaxConsecutive: 3,
     sessionInsights: { creep: false, asymmetry: false, breathing: false },
     backendAssist: false,
@@ -96,7 +96,7 @@ export const QUALITY = {
   },
   professional: {
     label: { en: "Professional", ar: "احترافي" },
-    smoothingAlpha: 0.4,        // current existing default — unchanged for paying pros
+    smoothingAlpha: 0.75,       // Bug #12 fix: was 0.4 — smoother than basic
     outlierMaxConsecutive: 3,
     sessionInsights: { creep: true, asymmetry: true, breathing: false },
     backendAssist: false,       // local MediaPipe is already accurate; backend stays Elite-exclusive
@@ -106,7 +106,7 @@ export const QUALITY = {
   },
   elite: {
     label: { en: "Elite", ar: "إيليت" },
-    smoothingAlpha: 0.3,        // steadiest/smoothest premium feel
+    smoothingAlpha: 0.65,       // Bug #12 fix: was 0.3 — steadiest feel with good responsiveness
     outlierMaxConsecutive: 4,
     sessionInsights: { creep: true, asymmetry: true, breathing: true },
     backendAssist: true,        // live local-AI-powered backend pass + PDF snapshots
