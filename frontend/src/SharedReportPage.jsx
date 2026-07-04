@@ -176,6 +176,10 @@ export default function SharedReportPage() {
   const [loading, setLoading] = useState(true);
   const [activeZone, setActiveZone] = useState(null);
 
+  // isAr must be declared BEFORE the early returns that use it
+  // data?.lang is null during loading — defaults to false (LTR) until data loads
+  const isAr = data?.lang === "ar";
+
   // Inject spinner keyframe once
   useEffect(() => {
     const style = document.createElement("style");
@@ -226,7 +230,7 @@ export default function SharedReportPage() {
   const hist    = data.score_history || [];
   const metrics = data.metrics || {};
   const zonal   = zonalRisk(metrics);
-  const isAr    = data.lang === "ar";
+  // isAr already declared above (before early returns)
   const T = {
     score:     isAr ? "نقاط الوضعية الكلية" : "Overall Posture Score",
     good:      isAr ? "وضعية جيدة" : "Good Posture",
