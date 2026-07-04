@@ -192,6 +192,9 @@ export async function createUserProfile(uid, data, referredBy = null) {
 
   // Fire welcome drip sequence — fire-and-forget, never blocks profile creation
   const _API = import.meta.env.VITE_API_URL || "/api";
+
+// Top-level backend URL — single source of truth (used by invite, notify, email functions)
+const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
   try {
     const { getAuth } = await import("firebase/auth");
     const _tok = await getAuth().currentUser?.getIdToken?.();
@@ -487,8 +490,6 @@ export const updateCompany = async (cid,data) => updateDoc(doc(db,"companies",ci
 // ── Invites ───────────────────────────────────────────────────────
 export async function bulkInviteEmployees(employees, companyId, invitedBy) {
   const results = [];
-  const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
-
   for (const emp of employees) {
     try {
       // 1. Create invite record in Firestore
@@ -530,8 +531,6 @@ export async function getAuthToken() {
 }
 
 // ── Backend triggers ──────────────────────────────────────────────
-const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
-
 async function _authHeader() {
   try {
     const token = await auth.currentUser?.getIdToken();
