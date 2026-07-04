@@ -773,104 +773,118 @@ function runAnalysis(prompt,sp) {
 }
 
 // ── Puter.js AI (free, no API key, 400+ models) ───────────────────
-let _puterReady   = null; // null=untested, true=works, false=blocked
+// ── Puter.js AI ───────────────────────────────────────────────────
+// User-Pays model: users cover their own AI costs via Puter account
+// Docs: https://developer.puter.com/tutorials/free-llm-api/
+let _puterReady   = null;   // null=untested, true=working, false=failed
 let _puterLoading = false;
 
 function extractPuterText(result) {
   if (!result) return "";
+  // GPT-5.4 nano & simple models → returns string directly
   if (typeof result === "string") return result;
-  // OpenAI format: result.message.content (string)
+  // OpenAI format → result.message.content (string)
   if (typeof result?.message?.content === "string") return result.message.content;
-  // Claude format: result.message.content = [{type:"text", text:"..."}]
+  // Claude format → result.message.content = [{type:"text", text:"..."}]
   if (Array.isArray(result?.message?.content))
-    return result.message.content.map(c => c.text || c.content || "").join("");
-  // Fallbacks
-  if (result?.content && typeof result.content === "string") return result.content;
+    return result.message.content.map(c => c.text || "").join("");
+  // Gemini format → result.message.content (string or array)
+  if (result?.content) {
+    if (typeof result.content === "string") return result.content;
+    if (Array.isArray(result.content)) return result.content.map(c=>c.text||"").join("");
+  }
   if (result?.text) return result.text;
   return "";
 }
 
 async function tryPuter(messages, systemPrompt) {
   if (typeof window === "undefined") throw new Error("no browser");
-  try {
-    if (!window.puter) {
-      if (_puterLoading) {
-        await new Promise(r => setTimeout(r, 4000));
-        if (!window.puter) throw new Error("puter load failed");
-      } else {
-        _puterLoading = true;
-        await new Promise((resolve, reject) => {
-          const s = document.createElement("script");
-          s.src = "https://js.puter.com/v2/";
-          s.onload  = () => { _puterLoading = false; resolve(); };
-          s.onerror = () => { _puterLoading = false; reject(new Error("load error")); };
-          document.head.appendChild(s);
-          setTimeout(() => { _puterLoading = false; reject(new Error("load timeout")); }, 9000);
-        });
-      }
-    }
-    if (!window.puter?.ai?.chat) throw new Error("puter.ai unavailable");
 
-    const msgs = [
-      ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
-      ...messages.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
-    ];
-
-    // Try models in order — first success wins
-    const models = ["gpt-4o-mini", "gpt-5.4-nano", "google/gemini-3.5-flash"];
-    for (const model of models) {
-      try {
-        const result = await Promise.race([
-          window.puter.ai.chat(msgs, { model }),
-          new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 22000)),
-        ]);
-        const text = extractPuterText(result);
-        if (text?.trim()) { _puterReady = true; return text.trim(); }
-      } catch { continue; }
+  // Load Puter.js script if needed
+  if (!window.puter) {
+    if (_puterLoading) {
+      await new Promise(r => setTimeout(r, 5000));
+      if (!window.puter) throw new Error("puter load failed");
+    } else {
+      _puterLoading = true;
+      await new Promise((resolve, reject) => {
+        // Try npm package first (better for Vite)
+        const s = document.createElement("script");
+        s.src = "https://js.puter.com/v2/";
+        s.onload  = () => { _puterLoading = false; resolve(); };
+        s.onerror = () => { _puterLoading = false; reject(new Error("cdn error")); };
+        document.head.appendChild(s);
+        setTimeout(() => { _puterLoading = false; reject(new Error("timeout")); }, 10000);
+      });
     }
-    throw new Error("all models failed");
-  } catch (e) {
-    _puterReady = false;
-    throw e;
   }
+
+  if (!window.puter?.ai?.chat) throw new Error("puter.ai unavailable");
+
+  const msgs = [
+    ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
+    ...messages.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
+  ];
+
+  // Model chain: fastest → best quality, based on real Puter docs (July 2026)
+  const models = [
+    "openai/gpt-5.4-nano",          // fast, good quality, string response
+    "google/gemini-2.5-flash",      // fast Gemini
+    "anthropic/claude-sonnet-5",    // best quality, array response
+  ];
+
+  for (const model of models) {
+    try {
+      const result = await Promise.race([
+        window.puter.ai.chat(msgs, { model }),
+        new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 25000)),
+      ]);
+      const text = extractPuterText(result);
+      if (text?.trim()) {
+        _puterReady = true;
+        return text.trim();
+      }
+    } catch (e) {
+      // Try next model
+      continue;
+    }
+  }
+
+  throw new Error("all puter models failed");
 }
 
 export async function localChat(messages, {systemPrompt=""} = {}) {
-  // Try Puter.js first (real AI, free, no API key needed)
   if (_puterReady !== false) {
     try {
       const d = parseData(systemPrompt);
       const userCtx = [
-        d.name        && `User name: ${d.name}`,
-        d.avg         && `Posture score: ${d.avg}/100`,
-        d.sessions    && `Total sessions: ${d.sessions}`,
-        d.weekAvg     && `This week avg: ${d.weekAvg}/100`,
-        d.neckRisk    && `Neck risk: ${d.neckRisk}%`,
-        d.alerts      && `Common alerts: ${d.alerts}`,
-        d.worstTime   && `Worst posture time: ${d.worstTime}`,
-        d.fatigue     && `Fatigue index: ${d.fatigue}%`,
-        d.calibrated  && `Calibrated: Yes`,
-        d.lang==="ar" && `Respond in Egyptian Arabic (friendly, informal).`,
+        d.name       && `User: ${d.name}`,
+        d.avg        && `Posture score: ${d.avg}/100`,
+        d.sessions   && `Sessions: ${d.sessions}`,
+        d.neckRisk   && `Neck risk: ${d.neckRisk}%`,
+        d.alerts     && `Recurring alerts: ${d.alerts}`,
+        d.worstTime  && `Worst time: ${d.worstTime}`,
+        d.fatigue    && `Fatigue: ${d.fatigue}%`,
+        d.lang==="ar"&& `IMPORTANT: Respond in Egyptian Arabic (informal, friendly).`,
       ].filter(Boolean).join("\n");
 
-      const corvusSP = `You are Corvus AI Coach — a professional, friendly posture and ergonomics specialist built into the Corvus PostureAI app.
+      const sp = `You are Corvus AI Coach — a friendly, professional posture and ergonomics specialist.
 
 RULES:
-- ONLY answer questions about posture, ergonomics, workstation setup, exercises, body pain, and related health topics.
-- For completely off-topic questions (crypto, weather, politics, etc.): politely redirect to posture.
-- Always be warm, encouraging, and specific — never generic.
-- Cite scientific sources when relevant (e.g., "Hansraj 2014 found that...").
-- Keep responses under 200 words. Use markdown for formatting.
-- If the user has data, reference their actual numbers.
+1. ONLY answer posture, ergonomics, workstation, exercises, and pain topics.
+2. Off-topic (crypto, weather, etc.)? Redirect warmly to posture.
+3. Always reference the user's actual numbers when available.
+4. Cite science when relevant (e.g. "Hansraj 2014 showed...").
+5. Be concise (max 200 words), warm, and give specific action steps.
 
 USER DATA:
-${userCtx || "No session data yet — encourage them to start a session."}`;
+${userCtx || "No session data yet."}`;
 
-      return await tryPuter(messages, corvusSP);
+      return await tryPuter(messages, sp);
     } catch {}
   }
-  // Fallback: rule-based engine
-  await new Promise(r=>setTimeout(r, 300+Math.random()*500));
+  // Instant fallback: rule-based engine
+  await new Promise(r=>setTimeout(r, 250+Math.random()*400));
   const d    = parseData(systemPrompt);
   const hist = analyzeHistory(messages);
   const last = [...messages].reverse().find(m=>m.role==="user");
@@ -881,14 +895,14 @@ ${userCtx || "No session data yet — encourage them to start a session."}`;
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
   if (_puterReady !== false) {
     try {
-      const d = parseData((systemPrompt||"") + " " + prompt);
-      const langNote = d.lang==="ar" ? "Respond in Egyptian Arabic." : "Respond in English.";
-      const sp = `You are Corvus's posture analytics engine. Generate a structured, evidence-based report from the data provided.
-Use markdown (## headers, **bold**, bullet points). Be specific with numbers. Max 250 words. ${langNote}
-${systemPrompt}`;
-      return await tryPuter([{role:"user",content:prompt}], sp);
+      const d = parseData((systemPrompt||"")+" "+prompt);
+      const lang = d.lang==="ar" ? "Respond in Egyptian Arabic." : "Respond in English.";
+      const sp = `You are Corvus's posture analytics engine.
+Generate a structured report using markdown (## headers, **bold**, bullets).
+Be specific with numbers from the data. Max 250 words. ${lang}`;
+      return await tryPuter([{role:"user", content:prompt}], sp);
     } catch {}
   }
-  await new Promise(r=>setTimeout(r, 300+Math.random()*400));
+  await new Promise(r=>setTimeout(r, 250+Math.random()*350));
   return runAnalysis(prompt, systemPrompt);
 }
