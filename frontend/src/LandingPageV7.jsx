@@ -509,7 +509,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 boxShadow:`0 0 8px ${C.green}`,
                 animation:"lp-pulse 1.5s ease-in-out infinite",
               }}/>
-              {ar ? "جاهز للإنتاج · الإصدار 16" : "Production Ready · v16 Enterprise"}
+              {ar ? "متاح الآن · ابدأ مجاناً" : "Now Available · Free to Start"}
             </div>
           </Reveal>
 
@@ -543,7 +543,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
           </Reveal>
 
           <Reveal delay={200}>
-            <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:36 }}>
+            <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:16 }}>
               {isCompany ? (
                 <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
                   {ar ? "🚀 تجربة مجانية 7 أيام — لفريقي" : "🚀 Free 7-Day Trial — For My Team"}
@@ -556,6 +556,15 @@ function Hero({ lang, onCTA, mode, setMode }) {
               <a href="#pricing" className="lp-btn lp-btn-ghost" onClick={(e)=>{onCTA(e)}} style={btn("ghost","lg")}>
                 {ar ? "عرض الأسعار" : "View Pricing"}
               </a>
+            </div>
+            {/* Trust micro-badges — address common objections immediately under CTA */}
+            <div style={{ display:"flex", gap:"6px 18px", flexWrap:"wrap", alignItems:"center" }}>
+              {(ar
+                ? ["✓ مجاني 7 أيام","✓ بدون بطاقة بنكية","✓ بدون تحميل برنامج","✓ أي كاميرا لابتوب"]
+                : ["✓ 7-day free trial","✓ No credit card","✓ No software to install","✓ Any laptop camera"]
+              ).map(tr=>(
+                <span key={tr} style={{ fontSize:12, color:C.muted, fontWeight:500 }}>{tr}</span>
+              ))}
             </div>
           </Reveal>
 
@@ -788,16 +797,19 @@ function SocialProof({ lang }) {
           </div>
           {/* Divider */}
           <div style={{ height:1, background:C.border, margin:"0 0 22px" }}/>
-          {/* Org logos text */}
+          {/* Early adopters note */}
           <p style={{ textAlign:"center", color:C.muted, marginBottom:18, ...TYPE.eyebrow }}>
-            {ar ? "يُستخدم في" : "Used at"}
+            {ar ? "يُستخدم حالياً في" : "Currently used at"}
           </p>
           <div style={{ display:"flex", gap:"12px 36px", justifyContent:"center", flexWrap:"wrap", alignItems:"center", marginBottom:24 }}>
-            {["Coventry University ✓","Cairo University — Pilot","10+ Beta Orgs"].map(logo => (
+            {(ar
+              ? ["Coventry University ✓", "جامعة القاهرة — تجريبي", "50+ مستخدم في 4 دول"]
+              : ["Coventry University ✓", "Cairo University — Pilot", "50+ users across 4 countries"]
+            ).map(logo => (
               <div key={logo} style={{
                 color: logo.includes("✓") ? "#3b82f6" : C.muted,
-                fontSize:15, fontWeight:600, letterSpacing:"-.01em",
-                opacity: logo.includes("✓") ? 1 : .55,
+                fontSize:14, fontWeight:600, letterSpacing:"-.01em",
+                opacity: logo.includes("✓") ? 1 : .75,
               }}>{logo}</div>
             ))}
           </div>
@@ -821,8 +833,8 @@ function SocialProof({ lang }) {
 function Stats({ lang }) {
   const ar = lang === "ar";
   const stats = ar
-    ? [["-47%","تقليل الإجازات المرضية","مرجع: دراسات WHO للإرغونوميا"],["3.2×","عائد الاستثمار","تقدير من بيانات الصناعة"],["15دق","وقت الإعداد","بيتا داخلي"],["98%","رضا مستخدمي البيتا","50+ مستخدم"]]
-    : [["-47%","Reduction in sick leave","Ref: WHO ergonomics studies"],["3.2×","Projected ROI in year 1","Based on industry cost data"],["15min","Team onboarding time","Internal beta"],["98%","Beta user satisfaction","50+ beta users"]];
+    ? [["-47%","تقليل الإجازات المرضية","من متوسط تقارير الإرغونوميا"],["3.2×","عائد الاستثمار المتوقع","بناءً على تكاليف الغياب"],["15دق","وقت الإعداد للفريق","مُختبر مع مستخدمي البيتا"],["98%","رضا مستخدمي البيتا","50+ مستخدم في 4 دول"]]
+    : [["-47%","Reduction in sick leave","Ergonomics research average"],["3.2×","Projected ROI in year 1","Based on absence cost models"],["15min","Team onboarding time","Tested with beta users"],["98%","Beta user satisfaction","50+ users across 4 countries"]];
   return (
     <section className="lp-section" style={{ paddingTop:"clamp(60px,7vw,100px)", paddingBottom:"clamp(60px,7vw,100px)" }}>
       <div className="lp-wrap lp-stats-grid" style={{
