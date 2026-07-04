@@ -15,6 +15,68 @@ const METRIC_LABELS = {
   distance:"Viewing Distance", trunk_lean:"Trunk Lean", hip_angle:"Hip Angle", knee_angle:"Knee Angle",
 };
 
+/* ── Styles ── */
+const S = {
+  page: {
+    minHeight:"100vh", background:"#030b14", color:"#f1f5f9",
+    fontFamily:"'DM Sans', system-ui, sans-serif",
+  },
+  center: {
+    display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+    minHeight:"80vh", padding:24,
+  },
+  spinner: {
+    width:40, height:40, borderRadius:"50%",
+    border:"3px solid #1e293b", borderTopColor:"#3b82f6",
+    animation:"spin 0.8s linear infinite",
+  },
+  header: {
+    background:"#0a1628", borderBottom:"1px solid #1e293b",
+    padding:"0 24px",
+  },
+  headerInner: {
+    maxWidth:720, margin:"0 auto", height:56,
+    display:"flex", alignItems:"center", justifyContent:"space-between",
+  },
+  logo: {
+    display:"flex", alignItems:"center", gap:8,
+  },
+  logoIcon: {
+    width:30, height:30, background:"#1a56db", borderRadius:6,
+    display:"flex", alignItems:"center", justifyContent:"center",
+    fontSize:16, color:"#fff",
+  },
+  logoText: { fontSize:16, fontWeight:800, color:"#f1f5f9" },
+  logoBadge: {
+    fontSize:10, fontWeight:700, background:"#10b981", color:"#fff",
+    padding:"2px 7px", borderRadius:99,
+  },
+  main: { maxWidth:720, margin:"0 auto", padding:"32px 20px" },
+  titleBlock: { marginBottom:24 },
+  title: { fontSize:22, fontWeight:800, color:"#f1f5f9", margin:0 },
+  subtitle: { fontSize:13, color:"#64748b", marginTop:6 },
+  card: {
+    background:"#0f1e2e", border:"1px solid #1e293b",
+    borderRadius:14, padding:"20px 22px",
+  },
+  scoreRing: {
+    width:80, height:80, borderRadius:"50%", flexShrink:0,
+    display:"flex", flexDirection:"column",
+    alignItems:"center", justifyContent:"center",
+  },
+  sectionTitle: {
+    fontSize:15, fontWeight:700, color:"#f1f5f9",
+    marginBottom:12, marginTop:0,
+  },
+  btn: {
+    background:"#1a56db", color:"#fff",
+    padding:"10px 24px", borderRadius:10,
+    fontSize:13, fontWeight:600, border:"none",
+    cursor:"pointer",
+  },
+};
+
+
 function scoreColor(s) {
   if (s >= 80) return "#10b981";
   if (s >= 60) return "#f59e0b";
@@ -455,64 +517,3 @@ export default function SharedReportPage() {
     </div>
   );
 }
-
-/* ── Styles ── */
-const S = {
-  page: {
-    minHeight:"100vh", background:"#030b14", color:"#f1f5f9",
-    fontFamily:"'DM Sans', system-ui, sans-serif",
-  },
-  center: {
-    display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-    minHeight:"80vh", padding:24,
-  },
-  spinner: {
-    width:40, height:40, borderRadius:"50%",
-    border:"3px solid #1e293b", borderTopColor:"#3b82f6",
-    animation:"spin 0.8s linear infinite",
-  },
-  header: {
-    background:"#0a1628", borderBottom:"1px solid #1e293b",
-    padding:"0 24px",
-  },
-  headerInner: {
-    maxWidth:720, margin:"0 auto", height:56,
-    display:"flex", alignItems:"center", justifyContent:"space-between",
-  },
-  logo: {
-    display:"flex", alignItems:"center", gap:8,
-  },
-  logoIcon: {
-    width:30, height:30, background:"#1a56db", borderRadius:6,
-    display:"flex", alignItems:"center", justifyContent:"center",
-    fontSize:16, color:"#fff",
-  },
-  logoText: { fontSize:16, fontWeight:800, color:"#f1f5f9" },
-  logoBadge: {
-    fontSize:10, fontWeight:700, background:"#10b981", color:"#fff",
-    padding:"2px 7px", borderRadius:99,
-  },
-  main: { maxWidth:720, margin:"0 auto", padding:"32px 20px" },
-  titleBlock: { marginBottom:24 },
-  title: { fontSize:22, fontWeight:800, color:"#f1f5f9", margin:0 },
-  subtitle: { fontSize:13, color:"#64748b", marginTop:6 },
-  card: {
-    background:"#0f1e2e", border:"1px solid #1e293b",
-    borderRadius:14, padding:"20px 22px",
-  },
-  scoreRing: {
-    width:80, height:80, borderRadius:"50%", flexShrink:0,
-    display:"flex", flexDirection:"column",
-    alignItems:"center", justifyContent:"center",
-  },
-  sectionTitle: {
-    fontSize:15, fontWeight:700, color:"#f1f5f9",
-    marginBottom:12, marginTop:0,
-  },
-  btn: {
-    background:"#1a56db", color:"#fff",
-    padding:"10px 24px", borderRadius:10,
-    fontSize:13, fontWeight:600, border:"none",
-    cursor:"pointer",
-  },
-};
