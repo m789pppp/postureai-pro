@@ -49,6 +49,12 @@ const LM = { NOSE:0, L_EYE:2, R_EYE:5, L_EAR:7, R_EAR:8, L_SHOULDER:11, R_SHOULD
 
 // ── CalibrationWizard ─────────────────────────────────────────────
 export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
+  // Close on Escape key anywhere
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onSkip?.(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onSkip]);
   const [step, setStep]       = useState("intro");   // intro | align | counting | done
   const [countdown, setCountdown] = useState(CALIB_DURATION);
   const [progress, setProgress]   = useState(0);
@@ -352,7 +358,12 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
 
   // ── Render ────────────────────────────────────────────────────────
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9000, backdropFilter: "blur(8px)" }}>
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9000, backdropFilter: "blur(8px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onSkip?.(); }}
+      onKeyDown={(e) => { if (e.key === "Escape") onSkip?.(); }}
+      tabIndex={-1}
+    >
       <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 20, padding: "32px 28px", maxWidth: 480, width: "94%", position: "relative" }}>
 
         {/* Header */}

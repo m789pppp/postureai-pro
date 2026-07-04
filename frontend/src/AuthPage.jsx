@@ -240,7 +240,7 @@ function PwStrength({ pass, dark, isAr }) {
         ))}
       </div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <span style={{fontSize:11.5,fontWeight:600,color:score>0?(bars[Math.min(score,5)-1]?.c||"#22c55e"):(dark?"rgba(255,255,255,.3)":"#94a3b8")}}>
+        <span style={{fontSize:11.5,fontWeight:600,color:score>0?(col||"#22c55e"):(dark?"rgba(255,255,255,.3)":"#94a3b8")}}>
           {labels[isAr?"ar":"en"][Math.min(score,5)]}
         </span>
       </div>
