@@ -2852,7 +2852,7 @@ export default function App(){
       const errMsg=isDenied
         ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
         :noDevice
-        ?(isAr?"مفيش كاميرا متصلة":"No camera detected — connect one and retry")
+        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
         :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
       setAlertMsg({text:errMsg,type:"bad"});
       addToast(errMsg,"error");
@@ -4633,7 +4633,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div style={{fontSize:9, color:"#f59e0b", fontWeight:600, lineHeight:1.3}}>
                   {isAr
                     ? "دقة محدودة — تحسين الإضاءة"
-                    : "Limited accuracy — improve lighting"}
+                    : isAr?"دقة محدودة — تحسين الإضاءة":"Limited accuracy — improve lighting"}
                 </div>
               </div>
             )}
@@ -5149,7 +5149,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 background:breakIntervalMin===m?"rgba(245,158,11,.15)":"rgba(148,163,184,.06)",
                 border:`1px solid ${breakIntervalMin===m?"rgba(245,158,11,.4)":cs.border}`,
                 color:breakIntervalMin===m?"#fcd34d":cs.muted,
-              }}>{m}m</button>
+              }}>{isAr?`${m} د`:`${m}m`}</button>
             ))}
           </div>
         )}
