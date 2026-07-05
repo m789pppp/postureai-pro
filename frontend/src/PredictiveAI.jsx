@@ -1,42 +1,67 @@
 /**
- * Corvus — Predictive AI Engine v1.0
- * Burnout prediction · Anomaly detection
- * Posture risk scoring · Trend forecasting
+ * Corvus — Predictive AI Engine v2.0
+ * Typography + layout overhaul: consistent font scale, spacing, hierarchy
  */
 import { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
 
-// NOTE: previously wrapped geminiChat(), but /api/coach/chat ignores any
-// custom system prompt and always answers as the hardcoded "PostureAI
-// Coach" persona — so burnout/forecast prompts here were silently being
-// answered with the wrong persona. geminiAnalysis() -> /api/ai/analyze
-// actually honors context.system_prompt.
 async function callGemini(prompt, system, maxTokens = 900) {
   try {
     return await geminiAnalysis(prompt, { context: { system_prompt: system }, maxTokens });
-  } catch (e) {
-    if (getLocalAIStatus().ready) return await localFallbackAnalysis(prompt, { systemPrompt: system, maxTokens });
-    throw e;
-  }
+  } catch (e) { throw e; }
 }
+
+// ── Design tokens (consistent across entire component) ─────────────
+const T = {
+  // Font sizes — strict 3-level hierarchy
+  xs:   9.5,   // metadata, labels, badges
+  sm:   11.5,  // secondary text, hints
+  base: 13.5,  // body text
+  md:   15,    // card values, section titles
+  lg:   20,    // primary numbers
+  xl:   28,    // hero numbers
+
+  // Font weights
+  normal: 400,
+  medium: 500,
+  semibold: 600,
+  bold: 700,
+  black: 800,
+
+  // Spacing (multiples of 4px)
+  sp1: 4, sp2: 8, sp3: 12, sp4: 16, sp5: 20, sp6: 24,
+
+  // Colors — consistent palette
+  text:     "#e2eaf6",      // primary text
+  textSub:  "#94a3b8",      // secondary text
+  textMuted:"#5a7090",      // muted/disabled
+  accent:   "#7c3aed",      // purple accent
+  accentL:  "#a78bfa",      // light purple
+  border:   "rgba(255,255,255,.07)",
+  borderM:  "rgba(255,255,255,.12)",
+  surface:  "rgba(15,28,50,.9)",
+  surfaceL: "rgba(255,255,255,.04)",
+};
+
+const riskColor = v => v >= 70 ? "#ef4444" : v >= 45 ? "#f59e0b" : "#10b981";
 
 function MdText({ text }) {
   const html = (text || "")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g,     "<em>$1</em>")
-    .replace(/^### (.+)$/gm, "<h4 style='margin:9px 0 4px;font-size:13px;font-weight:700;color:#e8f0fe'>$1</h4>")
-    .replace(/^- (.+)$/gm,   "<li style='margin:4px 0'>$1</li>")
-    .replace(/(<li[\s\S]+?<\/li>)/g, "<ul style='padding-left:18px;margin:8px 0'>$1</ul>")
-    .replace(/\n\n/g, "<br/><br/>").replace(/\n/g, "<br/>");
-  return <span dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 1.75 }} />;
+    .replace(/\*\*(.+?)\*\*/g, `<strong style="color:${T.text};font-weight:${T.bold}">$1</strong>`)
+    .replace(/\*(.+?)\*/g,     `<em style="color:${T.textSub}">$1</em>`)
+    .replace(/^### (.+)$/gm,   `<div style="font-size:${T.sm}px;font-weight:${T.bold};color:${T.accentL};text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px">$1</div>`)
+    .replace(/^## (.+)$/gm,    `<div style="font-size:${T.base}px;font-weight:${T.bold};color:${T.text};margin:16px 0 8px">$1</div>`)
+    .replace(/^- (.+)$/gm,     `<div style="display:flex;gap:8px;margin:5px 0"><span style="color:${T.accentL};flex-shrink:0">·</span><span>$1</span></div>`)
+    .replace(/\n\n/g, "<br/>").replace(/\n(?!<)/g, "");
+  return <span dangerouslySetInnerHTML={{ __html: html }}
+    style={{ fontSize: T.base, lineHeight: 1.75, color: T.textSub }} />;
 }
 
 function avg(arr) { return arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0; }
 
-// ── Anomaly detector (simple z-score) ─────────────────────────────
 function detectAnomalies(scores) {
   if (scores.length < 5) return [];
-  const m = avg(scores);
+  const m  = avg(scores);
   const sd = Math.sqrt(scores.reduce((s, v) => s + Math.pow(v - m, 2), 0) / scores.length);
   return scores.map((v, i) => ({
     index: i, value: v,
@@ -46,125 +71,257 @@ function detectAnomalies(scores) {
   })).filter(p => p.isAnomaly);
 }
 
-// ── Linear regression forecast ─────────────────────────────────────
 function forecast(scores, days = 7) {
-  if (scores.length < 3) return null;
+  if (!scores || scores.length < 3) return null;
   const n = scores.length;
-  const xs = scores.map((_, i) => i);
-  const mx = avg(xs), my = avg(scores);
-  const num = xs.reduce((s, x, i) => s + (x - mx) * (scores[i] - my), 0);
-  const den = xs.reduce((s, x) => s + Math.pow(x - mx, 2), 0);
+  const xMean = (n - 1) / 2;
+  const yMean = avg(scores);
+  const num = scores.reduce((s, y, x) => s + (x - xMean) * (y - yMean), 0);
+  const den = scores.reduce((s, _, x) => s + Math.pow(x - xMean, 2), 0);
   const slope = den ? num / den : 0;
-  const intercept = my - slope * mx;
+  const intercept = yMean - slope * xMean;
   const predicted = Array.from({ length: days }, (_, i) =>
     Math.round(Math.max(0, Math.min(100, intercept + slope * (n + i))))
   );
-  return { slope, predicted, trend: slope > 0.5 ? "improving" : slope < -0.5 ? "declining" : "stable" };
+  const trend = slope > 0.3 ? "improving" : slope < -0.3 ? "declining" : "stable";
+  return { slope: Math.round(slope * 100) / 100, predicted, trend };
 }
 
-// ── Risk Card ──────────────────────────────────────────────────────
-function RiskCard({ title, score, icon, desc, color, delay = 0 }) {
-  const w = score;
+// ── Metric chip ─────────────────────────────────────────────────────
+function MetricChip({ label, value, color, raw }) {
   return (
-    <div style={{ background: "rgba(15,30,54,.85)", border: `1px solid ${color}22`, borderRadius: 14, padding: 16, animation: `fadeIn 400ms ${delay}ms both` }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-        <div>
-          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b82a6" }}>{title}</div>
-          <div style={{ fontFamily: "Syne,sans-serif", fontSize: 28, fontWeight: 800, color, lineHeight: 1, marginTop: 4 }}>{score}<span style={{ fontSize: 14, fontWeight: 500, opacity: .6 }}>/100</span></div>
-        </div>
-        <span style={{ fontSize: 26 }}>{icon}</span>
+    <div style={{
+      background: T.surfaceL, border: `1px solid ${T.border}`,
+      borderRadius: 10, padding: `${T.sp2}px ${T.sp3}px`,
+      flex: "1 1 auto", minWidth: 72,
+    }}>
+      <div style={{ fontSize: T.xs, color: T.textMuted, fontWeight: T.bold,
+        letterSpacing: ".07em", textTransform: "uppercase", marginBottom: 5 }}>
+        {label}
       </div>
-      <div style={{ height: 5, borderRadius: 99, background: "rgba(148,163,184,.08)", overflow: "hidden", marginBottom: 8 }}>
-        <div style={{ height: "100%", width: `${w}%`, background: color, borderRadius: 99, transition: "width 800ms cubic-bezier(.4,0,.2,1)" }} />
+      <div style={{ fontSize: T.md, fontWeight: T.black, color, lineHeight: 1 }}>
+        {raw ? value : `${value}/100`}
       </div>
-      <div style={{ fontSize: 11, color: "#b0c4de", lineHeight: 1.5 }}>{desc}</div>
     </div>
   );
 }
 
-// ── Anomaly marker ─────────────────────────────────────────────────
-function AnomalyItem({ anomaly, sessions, isAr }) {
+// ── Risk card ────────────────────────────────────────────────────────
+function RiskCard({ title, score, icon, color, desc }) {
+  const pct = typeof score === "number" ? score : 0;
+  return (
+    <div style={{
+      background: T.surface, border: `1px solid ${T.border}`,
+      borderRadius: 14, padding: T.sp4, display: "flex", flexDirection: "column", gap: T.sp3,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: T.sp2 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <span style={{ fontSize: T.sm, fontWeight: T.bold, color: T.textSub,
+          textTransform: "uppercase", letterSpacing: ".06em" }}>
+          {title}
+        </span>
+      </div>
+      <div style={{ fontSize: T.xl, fontWeight: T.black, color, lineHeight: 1 }}>
+        {pct}
+        <span style={{ fontSize: T.sm, fontWeight: T.medium, color: T.textMuted,
+          marginLeft: 3 }}>/100</span>
+      </div>
+      {/* Progress bar */}
+      <div style={{ height: 4, borderRadius: 99, background: "rgba(255,255,255,.07)", overflow: "hidden" }}>
+        <div style={{
+          height: "100%", width: `${pct}%`, borderRadius: 99,
+          background: color, transition: "width .6s cubic-bezier(.16,1,.3,1)",
+        }} />
+      </div>
+      <div style={{ fontSize: T.sm, color: T.textSub, lineHeight: 1.5 }}>{desc}</div>
+    </div>
+  );
+}
+
+// ── Anomaly row ──────────────────────────────────────────────────────
+function AnomalyRow({ anomaly, sessions, isAr }) {
   const sess = sessions[sessions.length - 1 - anomaly.index];
-  const date = sess ? (sess.created_at?.toDate?.() || new Date(sess.created_at || 0)).toLocaleDateString() : "—";
+  const date = sess
+    ? (sess.created_at?.toDate?.() || new Date(sess.created_at || 0))
+        .toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "short", day: "numeric" })
+    : "—";
   const isHigh = anomaly.direction === "high";
   const color  = isHigh ? "#10b981" : "#ef4444";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
-      <div style={{ width: 34, height: 34, borderRadius: 10, background: `${color}15`, border: `1px solid ${color}25`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
+    <div style={{
+      display: "flex", alignItems: "center", gap: T.sp3,
+      padding: `${T.sp3}px 0`, borderBottom: `1px solid ${T.border}`,
+    }}>
+      <div style={{
+        width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+        background: `${color}18`, border: `1px solid ${color}30`,
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+      }}>
         {isHigh ? "📈" : "📉"}
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#e8f0fe" }}>
+        <div style={{ fontSize: T.base, fontWeight: T.semibold, color: T.text, lineHeight: 1.3 }}>
           {isAr
-            ? `${isHigh ? "أداء استثنائي" : "أداء منخفض"} — ${anomaly.value}/100`
-            : `${isHigh ? "Exceptional performance" : "Below-average drop"} — ${anomaly.value}/100`}
+            ? `${isHigh ? "أداء استثنائي" : "انخفاض ملحوظ"} — ${anomaly.value}/100`
+            : `${isHigh ? "Exceptional session" : "Below-average drop"} — ${anomaly.value}/100`}
         </div>
-        <div style={{ fontSize: 10, color: "#6b82a6", marginTop: 2 }}>{date}</div>
+        <div style={{ fontSize: T.xs, color: T.textMuted, marginTop: 3 }}>
+          {date} · {isAr ? `Z-score: ${anomaly.z.toFixed(1)}` : `z-score ${anomaly.z.toFixed(1)}`}
+        </div>
       </div>
-      <div style={{ background: `${color}15`, border: `1px solid ${color}25`, borderRadius: 99, padding: "3px 9px", fontSize: 9, fontWeight: 700, color, textTransform: "uppercase" }}>
+      <div style={{
+        background: `${color}18`, border: `1px solid ${color}30`,
+        borderRadius: 99, padding: "3px 10px",
+        fontSize: T.xs, fontWeight: T.bold, color,
+        textTransform: "uppercase", letterSpacing: ".05em",
+      }}>
         {isAr ? "شذوذ" : "Anomaly"}
       </div>
     </div>
   );
 }
 
-// ── Forecast chart ─────────────────────────────────────────────────
+// ── Forecast chart ───────────────────────────────────────────────────
 function ForecastChart({ historical, predicted, isAr }) {
   if (!historical?.length || !predicted?.length) return null;
-  const allVals  = [...historical.slice(-14), ...predicted];
-  const maxV     = Math.max(...allVals, 1);
-  const histW    = 60;
-  const predW    = 40;
-  const h        = 70;
-  const histPts  = historical.slice(-14).map((v, i) => {
-    const x = (i / (historical.slice(-14).length - 1)) * histW;
-    const y = ((maxV - v) / maxV) * h;
+  const all   = [...historical.slice(-14), ...predicted];
+  const maxV  = Math.max(...all, 1);
+  const minV  = Math.max(0, Math.min(...all) - 5);
+  const range = maxV - minV || 1;
+  const H = 80, histW = 60, predW = 40;
+
+  const pt = (v, i, total, startX = 0) => {
+    const x = startX + (i / Math.max(total - 1, 1)) * (i < total - 1 || startX === 0 ? (startX === 0 ? histW : predW) : predW);
+    const y = H - ((v - minV) / range) * H;
+    return `${x},${y}`;
+  };
+
+  const hist14 = historical.slice(-14);
+  const histPts = hist14.map((v, i) => pt(v, i, hist14.length, 0)).join(" ");
+  const lastX   = histW;
+  const lastY   = H - ((hist14[hist14.length - 1] - minV) / range) * H;
+  const predPts = predicted.map((v, i) => {
+    const x = histW + (i / Math.max(predicted.length - 1, 1)) * predW;
+    const y = H - ((v - minV) / range) * H;
     return `${x},${y}`;
   }).join(" ");
-  const predPts  = predicted.map((v, i) => {
-    const x = histW + (i / (predicted.length - 1)) * predW;
-    const y = ((maxV - v) / maxV) * h;
-    return `${x},${y}`;
-  }).join(" ");
-  const lastHistX = histW;
-  const lastHistV = historical[historical.length - 1] || 0;
-  const lastHistY = ((maxV - lastHistV) / maxV) * h;
 
   return (
-    <div style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, padding: 14 }}>
-      <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#6b82a6", fontWeight: 600 }}>
-          <div style={{ width: 16, height: 2, background: "#1a56db", borderRadius: 1 }} />
-          {isAr ? "السجل" : "Historical"}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#6b82a6", fontWeight: 600 }}>
-          <div style={{ width: 16, height: 2, borderRadius: 1, borderTop: "2px dashed #0891b2", background: "none" }} />
-          {isAr ? "التوقع" : "Forecast"}
-        </div>
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`,
+      borderRadius: 14, padding: T.sp4 }}>
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: T.sp4, marginBottom: T.sp3 }}>
+        {[
+          { color: "#1a56db", label: isAr ? "السجل" : "Historical", dashed: false },
+          { color: "#0891b2", label: isAr ? "التوقع" : "Forecast",   dashed: true },
+        ].map(({ color, label, dashed }) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: T.sp2 }}>
+            <svg width={20} height={8} viewBox="0 0 20 8">
+              <line x1="0" y1="4" x2="20" y2="4" stroke={color} strokeWidth="2"
+                strokeDasharray={dashed ? "4,3" : "none"} strokeLinecap="round" />
+            </svg>
+            <span style={{ fontSize: T.xs, color: T.textSub, fontWeight: T.semibold }}>{label}</span>
+          </div>
+        ))}
       </div>
-      <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" style={{ width: "100%", height: h, display: "block" }}>
-        <defs>
-          <linearGradient id="histGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#1a56db" stopOpacity=".2" />
-            <stop offset="100%" stopColor="#1a56db" stopOpacity="0" />
-          </linearGradient>
-          <linearGradient id="predGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0891b2" stopOpacity=".15" />
-            <stop offset="100%" stopColor="#0891b2" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polyline points={histPts} fill="none" stroke="#1a56db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <polyline points={`${lastHistX},${lastHistY} ${predPts}`} fill="none" stroke="#0891b2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3,2" />
-        {/* divider */}
-        <line x1={histW} y1="0" x2={histW} y2={h} stroke="rgba(148,163,184,.15)" strokeWidth="1" strokeDasharray="2,2" />
+
+      <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none"
+        style={{ width: "100%", height: H, display: "block" }}>
+        {/* Reference lines */}
+        {[60, 80].map(ref => {
+          const y = H - ((ref - minV) / range) * H;
+          return <line key={ref} x1="0" y1={y} x2="100" y2={y}
+            stroke={ref >= 80 ? "rgba(16,185,129,.18)" : "rgba(245,158,11,.18)"}
+            strokeWidth=".6" strokeDasharray="3,3" />;
+        })}
+        {/* Historical line */}
+        <polyline points={histPts} fill="none" stroke="#1a56db"
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Forecast line */}
+        <polyline points={`${lastX},${lastY} ${predPts}`} fill="none"
+          stroke="#0891b2" strokeWidth="2" strokeLinecap="round"
+          strokeLinejoin="round" strokeDasharray="4,3" />
+        {/* Divider */}
+        <line x1={histW} y1="0" x2={histW} y2={H}
+          stroke="rgba(148,163,184,.2)" strokeWidth=".8" strokeDasharray="3,3" />
       </svg>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-        <span style={{ fontSize: 9, color: "#6b82a6" }}>{isAr ? "14 يوم مضت" : "14 days ago"}</span>
-        <span style={{ fontSize: 9, color: "#0891b2", fontWeight: 700 }}>
-          {isAr ? `توقع: ${predicted[predicted.length - 1]}/100` : `Forecast: ${predicted[predicted.length - 1]}/100`}
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: T.sp2 }}>
+        <span style={{ fontSize: T.xs, color: T.textMuted }}>
+          {isAr ? "14 يوم مضت" : "14 days ago"}
         </span>
-        <span style={{ fontSize: 9, color: "#6b82a6" }}>+7d</span>
+        <span style={{ fontSize: T.xs, color: "#0891b2", fontWeight: T.bold }}>
+          {isAr
+            ? `التوقع بعد 7 أيام: ${predicted[predicted.length - 1]}/100`
+            : `7-day forecast: ${predicted[predicted.length - 1]}/100`}
+        </span>
+        <span style={{ fontSize: T.xs, color: T.textMuted }}>+7d</span>
       </div>
+    </div>
+  );
+}
+
+// ── AI output block ──────────────────────────────────────────────────
+function AIBlock({ loading, data, error, onRetry, isAr }) {
+  return (
+    <div style={{
+      background: "rgba(124,58,237,.05)", border: "1px solid rgba(124,58,237,.18)",
+      borderRadius: 14, padding: T.sp4,
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: T.sp2, marginBottom: T.sp3 }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+          background: "linear-gradient(135deg,#7c3aed,#1a56db)",
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13,
+        }}>🧠</div>
+        <span style={{ fontSize: T.sm, fontWeight: T.bold, color: T.accentL,
+          letterSpacing: ".05em", textTransform: "uppercase" }}>
+          {isAr ? "تحليل الذكاء التنبؤي" : "Predictive AI Analysis"}
+        </span>
+        {loading && (
+          <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+            {[0, 1, 2].map(i => (
+              <span key={i} style={{
+                width: 5, height: 5, borderRadius: "50%",
+                background: T.accent, display: "inline-block",
+                animation: `blink 1.2s ${i * .2}s infinite`,
+              }} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Skeleton */}
+      {loading && (
+        <div style={{ display: "flex", flexDirection: "column", gap: T.sp2 }}>
+          {[100, 82, 65].map((w, i) => (
+            <div key={i} style={{
+              height: 11, borderRadius: 6, width: `${w}%`,
+              background: "rgba(124,58,237,.12)",
+              animation: `pulse 1.5s ${i * .15}s infinite`,
+            }} />
+          ))}
+        </div>
+      )}
+
+      {/* Content */}
+      {!loading && data && <MdText text={data} />}
+
+      {/* Error */}
+      {!loading && error && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: T.sp3 }}>
+          <span style={{ fontSize: T.base, color: "#f87171" }}>⚠ {error}</span>
+          <button onClick={onRetry} style={{
+            background: "rgba(124,58,237,.15)", border: "1px solid rgba(124,58,237,.3)",
+            borderRadius: 8, padding: `${T.sp1}px ${T.sp3}px`,
+            fontSize: T.sm, fontWeight: T.bold, color: T.accentL, cursor: "pointer",
+          }}>
+            {isAr ? "⟳ أعد المحاولة" : "⟳ Retry"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -181,9 +338,10 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   const avgScore  = avg(allScores);
   const recent14  = allScores.slice(-14);
 
-  // ── Risk Models ──────────────────────────────────────────────────
-  const thisWeek  = sessions.filter(s => (Date.now() - (s.created_at?.toDate?.() || new Date(s.created_at || 0))) < 7 * 86400000);
-  const weekAvg   = avg(thisWeek.map(s => s.avg_score || 0));
+  const thisWeek = sessions.filter(s =>
+    (Date.now() - (s.created_at?.toDate?.() || new Date(s.created_at || 0))) < 7 * 86400000
+  );
+  const weekAvg = avg(thisWeek.map(s => s.avg_score || 0));
 
   const burnoutScore = Math.min(100, Math.round(
     (100 - weekAvg) * 0.5 +
@@ -198,246 +356,299 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
 
   const riskScore = Math.min(100, Math.round(
     (100 - avgScore) * 0.6 +
-    (burnoutScore) * 0.3 +
-    (anomalies.filter(a => a.direction === "low").length * 5)
+    burnoutScore * 0.3 +
+    anomalies.filter(a => a.direction === "low").length * 5
   ));
 
-  const system = `You are Corvus's Predictive Intelligence engine. You analyze posture and ergonomics data to generate predictive health insights.
-Respond in ${lang === "ar" ? "Arabic" : "English"}. Use markdown formatting. Be concise, data-driven, and actionable. Max 200 words per response.`;
+  const system = `You are Corvus's Predictive Intelligence engine. Analyze posture and ergonomics data to generate predictive health insights.
+Respond in ${lang === "ar" ? "Arabic" : "English"}. Use markdown formatting (##, ###, - bullets, **bold**). Be concise, data-driven, actionable. Max 200 words.`;
 
   const prompts = {
-    burnout: () => `Analyze burnout risk for this user:
+    burnout: () => `Analyze burnout risk:
 - Burnout risk score: ${burnoutScore}/100
 - Average posture score: ${avgScore}/100
-- This week's average: ${weekAvg}/100
-- Sessions this week: ${thisWeek.length}
-- Total sessions: ${sessions.length}
+- This week average: ${weekAvg}/100
+- Sessions this week: ${thisWeek.length} / Total: ${sessions.length}
+Generate: ## Burnout Risk Assessment\n### Warning Indicators (3 bullets)\n### Prevention Plan (3 bullets)`,
 
-Generate:
-## Burnout Risk Assessment
-## Warning Indicators (3 bullets)
-## Prevention Plan (3 bullets)`,
-
-    anomaly: () => `Analyze ${anomalies.length} posture anomalies detected:
-${anomalies.map(a => `- Session ${a.index + 1}: ${a.value}/100 (${a.direction === "high" ? "unusually high" : "unusually low"}, z-score: ${a.z.toFixed(1)})`).join("\n")}
+    anomaly: () => `Analyze ${anomalies.length} posture anomalies:
+${anomalies.map(a => `- Session ${a.index + 1}: ${a.value}/100 (${a.direction === "high" ? "unusually high" : "unusually low"}, z=${a.z.toFixed(1)})`).join("\n")}
 Overall average: ${avgScore}/100
+Generate: ## What These Mean\n### Likely Causes\n### Action Steps`,
 
-Explain what these anomalies mean and their likely causes:
-## What These Anomalies Mean
-## Likely Causes
-## Action Steps`,
+    risk: () => `Generate posture risk analysis:
+- Overall risk: ${riskScore}/100 / Burnout component: ${burnoutScore}/100
+- Anomalies: ${anomalies.length} / Trend: ${forecastTrend}
+Generate: ## Risk Profile\n### Highest Risk Areas (3 bullets)\n### Mitigation Plan`,
 
-    risk: () => `Generate posture risk scoring analysis:
-- Overall risk score: ${riskScore}/100
-- Posture average: ${avgScore}/100
-- Burnout component: ${burnoutScore}/100
-- Anomaly count: ${anomalies.length} detected
-- Trend: ${forecastTrend}
-
-Generate:
-## Risk Profile Summary
-## Highest Risk Areas (3 bullets)
-## Risk Mitigation Plan`,
-
-    forecast: () => `Generate 7-day posture performance forecast:
-- Recent 14-day average: ${avg(recent14) || avgScore}/100
-- Trend direction: ${forecastTrend}
-- Predicted 7-day scores: ${fore?.predicted?.join(", ") || "insufficient data"}
-- Week-over-week slope: ${fore?.slope?.toFixed(2) || "N/A"}
-
-Generate:
-## 7-Day Forecast
-## Key Drivers
-## How to Improve the Forecast`,
+    forecast: () => `Generate 7-day posture forecast:
+- 14-day average: ${avg(recent14) || avgScore}/100 / Trend: ${forecastTrend}
+- Predicted scores: ${fore?.predicted?.join(", ") || "insufficient data"}
+- Slope: ${fore?.slope?.toFixed(2) || "N/A"}
+Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
   };
 
   const loadAI = useCallback(async (key) => {
     if (!sessions.length) return;
     setLoading(true); setError(""); setAiText("");
-    try {
-      const text = await callGemini(prompts[key]?.() || "", system);
-      setAiText(text);
-    } catch (e) { setError(e.message); }
+    try { setAiText(await callGemini(prompts[key]?.() || "", system)); }
+    catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [sessions, avgScore, burnoutScore, anomalies, riskScore, fore, lang]);
+  }, [sessions.length, avgScore, burnoutScore, riskScore, fore?.trend, lang]);
 
   useEffect(() => { loadAI(tab); }, [tab]);
 
   const TABS = [
-    { id: "burnout",  icon: "🔥", en: "Burnout",   ar: "الإرهاق" },
+    { id: "burnout",  icon: "🔥", en: "Burnout",   ar: "الإرهاق"  },
     { id: "anomaly",  icon: "🔍", en: "Anomalies", ar: "الشذوذات" },
-    { id: "risk",     icon: "⚠️", en: "Risk Score", ar: "الخطر" },
-    { id: "forecast", icon: "🔮", en: "Forecast",  ar: "التوقع" },
+    { id: "risk",     icon: "⚠️", en: "Risk",      ar: "الخطر"    },
+    { id: "forecast", icon: "🔮", en: "Forecast",  ar: "التوقع"   },
   ];
 
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(2,8,20,.9)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", zIndex: 9100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "#0c1528", border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, width: "min(640px,96vw)", height: "min(720px,94vh)", display: "flex", flexDirection: "column", overflow: "hidden", direction: isAr ? "rtl" : "ltr", boxShadow: "0 24px 80px rgba(0,0,0,.6)", animation: "slideUp 350ms cubic-bezier(0.16,1,0.3,1) both" }}>
+  const trendLabel = forecastTrend === "improving"
+    ? (isAr ? "تحسن ▲" : "Improving ▲")
+    : forecastTrend === "declining"
+    ? (isAr ? "تراجع ▼" : "Declining ▼")
+    : (isAr ? "مستقر →" : "Stable →");
+  const trendColor = forecastTrend === "improving" ? "#10b981" : forecastTrend === "declining" ? "#ef4444" : "#60a5fa";
 
-        {/* Header */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#7c3aed,#1a56db)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>🔮</div>
+  return (
+    <div style={{
+      position: "fixed", inset: 0,
+      background: "rgba(2,8,20,.88)", backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)", zIndex: 9100,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+    }}>
+      <div style={{
+        background: "#0b1525", border: `1px solid ${T.border}`,
+        borderRadius: 20, width: "min(660px,96vw)", height: "min(740px,94vh)",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        direction: isAr ? "rtl" : "ltr",
+        boxShadow: "0 32px 80px rgba(0,0,0,.7)",
+        animation: "slideUp 320ms cubic-bezier(0.16,1,0.3,1) both",
+      }}>
+
+        {/* ── Header ─────────────────────────────────────────────── */}
+        <div style={{
+          padding: `${T.sp4}px ${T.sp5}px`, flexShrink: 0,
+          borderBottom: `1px solid ${T.border}`,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: T.sp4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: T.sp3 }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: 11, flexShrink: 0,
+                background: "linear-gradient(135deg,#7c3aed,#1a56db)",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+              }}>🔮</div>
               <div>
-                <div style={{ fontFamily: "Syne,sans-serif", fontSize: 15, fontWeight: 800, color: "#e8f0fe", letterSpacing: "-0.02em" }}>
+                <div style={{ fontSize: T.md, fontWeight: T.black, color: T.text,
+                  letterSpacing: "-.02em", fontFamily: "Syne,sans-serif" }}>
                   {isAr ? "الذكاء التنبؤي" : "Predictive AI Engine"}
                 </div>
-                <div style={{ fontSize: 10, color: "#7c3aed", fontWeight: 600 }}>
-                  {isAr ? "توقعات مبنية على بياناتك" : "Pattern detection & forecasting"}
+                <div style={{ fontSize: T.xs, color: T.accentL, fontWeight: T.semibold, marginTop: 2 }}>
+                  {isAr ? "توقعات مبنية على أنماط بياناتك" : "Pattern detection & performance forecasting"}
                 </div>
               </div>
             </div>
-            <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", color: "#6b82a6", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            <button onClick={onClose} style={{
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              background: T.surfaceL, border: `1px solid ${T.border}`,
+              color: T.textSub, cursor: "pointer", fontSize: 15,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>✕</button>
           </div>
 
-          {/* Top risk strip */}
-          <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-            {[
-              { l: isAr ? "خطر الإرهاق" : "Burnout Risk", v: burnoutScore, c: burnoutScore >= 70 ? "#ef4444" : burnoutScore >= 45 ? "#f59e0b" : "#10b981" },
-              { l: isAr ? "الخطر العام" : "Overall Risk",  v: riskScore,   c: riskScore >= 70 ? "#ef4444" : riskScore >= 45 ? "#f59e0b" : "#10b981" },
-              { l: isAr ? "الاتجاه" : "Trend",             v: forecastTrend === "improving" ? "▲" : forecastTrend === "declining" ? "▼" : "→", c: forecastTrend === "improving" ? "#10b981" : forecastTrend === "declining" ? "#ef4444" : "#60a5fa", raw: true },
-              { l: isAr ? "الشذوذات" : "Anomalies",        v: anomalies.length, c: anomalies.length > 3 ? "#ef4444" : anomalies.length > 0 ? "#f59e0b" : "#10b981" },
-            ].map((m, i) => (
-              <div key={i} style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 8, padding: "6px 12px" }}>
-                <div style={{ fontSize: 9, color: "#6b82a6", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>{m.l}</div>
-                <div style={{ fontFamily: "Syne,sans-serif", fontSize: 15, fontWeight: 800, color: m.c, lineHeight: 1.2 }}>
-                  {m.raw ? m.v : `${m.v}${typeof m.v === "number" ? "/100" : ""}`}
-                </div>
-              </div>
-            ))}
+          {/* Metric chips */}
+          <div style={{ display: "flex", gap: T.sp2, flexWrap: "wrap" }}>
+            <MetricChip label={isAr ? "خطر الإرهاق" : "Burnout Risk"}
+              value={burnoutScore} color={riskColor(burnoutScore)} />
+            <MetricChip label={isAr ? "الخطر العام" : "Overall Risk"}
+              value={riskScore}   color={riskColor(riskScore)} />
+            <MetricChip label={isAr ? "الاتجاه" : "Trend"}
+              value={trendLabel}  color={trendColor} raw />
+            <MetricChip label={isAr ? "الشذوذات" : "Anomalies"}
+              value={anomalies.length}
+              color={anomalies.length > 3 ? "#ef4444" : anomalies.length > 0 ? "#f59e0b" : "#10b981"}
+              raw />
           </div>
         </div>
 
-        {/* Tab Bar */}
-        <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,.07)", flexShrink: 0, overflowX: "auto" }}>
+        {/* ── Tabs ───────────────────────────────────────────────── */}
+        <div style={{
+          display: "flex", borderBottom: `1px solid ${T.border}`,
+          flexShrink: 0, overflowX: "auto",
+        }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: "12px 8px", background: "none", border: "none", borderBottom: `2px solid ${tab === t.id ? "#7c3aed" : "transparent"}`, color: tab === t.id ? "#a78bfa" : "#6b82a6", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, transition: "color 150ms", minWidth: 70 }}>
-              <span style={{ fontSize: 16 }}>{t.icon}</span>
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              flex: 1, padding: `${T.sp3}px ${T.sp2}px`,
+              background: "none", border: "none",
+              borderBottom: `2px solid ${tab === t.id ? T.accent : "transparent"}`,
+              color: tab === t.id ? T.accentL : T.textMuted,
+              fontSize: T.sm, fontWeight: tab === t.id ? T.bold : T.medium,
+              cursor: "pointer", display: "flex", flexDirection: "column",
+              alignItems: "center", gap: T.sp1, transition: "color 150ms",
+              minWidth: 72,
+            }}>
+              <span style={{ fontSize: 17 }}>{t.icon}</span>
               <span>{isAr ? t.ar : t.en}</span>
             </button>
           ))}
         </div>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        {/* ── Content ────────────────────────────────────────────── */}
+        <div style={{ flex: 1, overflowY: "auto", padding: T.sp5 }}>
 
+          {/* Empty state */}
           {sessions.length === 0 && (
             <div style={{ textAlign: "center", padding: "60px 20px" }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>🔮</div>
-              <div style={{ fontFamily: "Syne,sans-serif", fontSize: 18, fontWeight: 800, color: "#e8f0fe", marginBottom: 8 }}>
+              <div style={{ fontSize: 52, marginBottom: T.sp4 }}>🔮</div>
+              <div style={{ fontSize: T.md, fontWeight: T.black, color: T.text,
+                marginBottom: T.sp2, fontFamily: "Syne,sans-serif" }}>
                 {isAr ? "لا توجد بيانات للتنبؤ" : "No data for predictions"}
               </div>
-              <div style={{ fontSize: 13, color: "#6b82a6" }}>
-                {isAr ? "ابدأ جلساتك لتفعيل التنبؤ الذكي" : "Start your sessions to activate predictive AI"}
+              <div style={{ fontSize: T.base, color: T.textSub }}>
+                {isAr ? "أكمل بعض الجلسات لتفعيل الذكاء التنبؤي" : "Complete a few sessions to activate predictive AI"}
               </div>
             </div>
           )}
 
-          {/* Burnout */}
+          {/* Burnout tab */}
           {tab === "burnout" && sessions.length > 0 && (
-            <div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-                <RiskCard title={isAr ? "خطر الإرهاق" : "Burnout Risk"} score={burnoutScore} icon="🔥" color={burnoutScore >= 70 ? "#ef4444" : burnoutScore >= 45 ? "#f59e0b" : "#10b981"} desc={burnoutScore >= 70 ? (isAr ? "مستوى مرتفع — يُنصح بالراحة" : "High level — rest recommended") : burnoutScore >= 45 ? (isAr ? "مستوى متوسط — انتبه" : "Moderate — monitor closely") : (isAr ? "مستوى آمن — استمر" : "Safe zone — keep it up")} delay={0} />
-                <RiskCard title={isAr ? "حصص هذا الأسبوع" : "Weekly Sessions"} score={Math.min(100, thisWeek.length * 14)} icon="📅" color="#60a5fa" desc={`${thisWeek.length} ${isAr ? "جلسة هذا الأسبوع" : "sessions this week"}`} delay={80} />
+            <div style={{ display: "flex", flexDirection: "column", gap: T.sp4 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: T.sp3 }}>
+                <RiskCard
+                  title={isAr ? "خطر الإرهاق" : "Burnout Risk"}
+                  score={burnoutScore} icon="🔥"
+                  color={riskColor(burnoutScore)}
+                  desc={burnoutScore >= 70
+                    ? (isAr ? "مستوى مرتفع — يُنصح بالراحة" : "High — rest recommended")
+                    : burnoutScore >= 45
+                    ? (isAr ? "مستوى متوسط — راقب نفسك" : "Moderate — monitor closely")
+                    : (isAr ? "مستوى آمن — استمر" : "Safe zone — keep it up")} />
+                <RiskCard
+                  title={isAr ? "جلسات الأسبوع" : "Weekly Sessions"}
+                  score={Math.min(100, thisWeek.length * 14)} icon="📅"
+                  color="#60a5fa"
+                  desc={`${thisWeek.length} ${isAr ? "جلسة هذا الأسبوع" : "sessions this week"}`} />
               </div>
-              <AIBlock loading={loading} data={aiText} error={error} onRetry={() => loadAI(tab)} isAr={isAr} accentColor="#7c3aed" />
+              <AIBlock loading={loading} data={aiText} error={error}
+                onRetry={() => loadAI(tab)} isAr={isAr} />
             </div>
           )}
 
-          {/* Anomalies */}
+          {/* Anomalies tab */}
           {tab === "anomaly" && sessions.length > 0 && (
-            <div>
-              <div style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, padding: 16, marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontFamily: "Syne,sans-serif", fontSize: 14, fontWeight: 800, color: "#e8f0fe" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: T.sp4 }}>
+              <div style={{
+                background: T.surface, border: `1px solid ${T.border}`,
+                borderRadius: 14, padding: T.sp4,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between",
+                  alignItems: "center", marginBottom: T.sp3 }}>
+                  <div style={{ fontSize: T.base, fontWeight: T.bold, color: T.text }}>
                     {isAr ? `${anomalies.length} شذوذ مكتشف` : `${anomalies.length} anomalies detected`}
                   </div>
-                  <div style={{ background: anomalies.length > 0 ? "rgba(245,158,11,.12)" : "rgba(16,185,129,.12)", border: `1px solid ${anomalies.length > 0 ? "rgba(245,158,11,.25)" : "rgba(16,185,129,.25)"}`, borderRadius: 99, padding: "3px 10px", fontSize: 9, fontWeight: 700, color: anomalies.length > 0 ? "#fbbf24" : "#34d399", textTransform: "uppercase" }}>
+                  <div style={{
+                    background: anomalies.length > 0 ? "rgba(245,158,11,.12)" : "rgba(16,185,129,.12)",
+                    border: `1px solid ${anomalies.length > 0 ? "rgba(245,158,11,.3)" : "rgba(16,185,129,.3)"}`,
+                    borderRadius: 99, padding: "3px 10px",
+                    fontSize: T.xs, fontWeight: T.bold,
+                    color: anomalies.length > 0 ? "#fbbf24" : "#34d399",
+                    textTransform: "uppercase", letterSpacing: ".05em",
+                  }}>
                     {anomalies.length > 0 ? (isAr ? "يستحق الانتباه" : "Needs attention") : (isAr ? "طبيعي" : "Normal")}
                   </div>
                 </div>
-                {anomalies.length === 0 ? (
-                  <div style={{ fontSize: 12, color: "#6b82a6", textAlign: "center", padding: "20px 0" }}>
-                    {isAr ? "✅ لا توجد شذوذات في بياناتك" : "✅ No anomalies detected in your data"}
-                  </div>
-                ) : (
-                  anomalies.slice(0, 5).map((a, i) => <AnomalyItem key={i} anomaly={a} sessions={sessions} isAr={isAr} />)
-                )}
+                {anomalies.length === 0
+                  ? <div style={{ fontSize: T.base, color: T.textSub, textAlign: "center", padding: "20px 0" }}>
+                      {isAr ? "✅ لا توجد شذوذات في بياناتك" : "✅ No anomalies detected in your data"}
+                    </div>
+                  : anomalies.slice(0, 5).map((a, i) =>
+                      <AnomalyRow key={i} anomaly={a} sessions={sessions} isAr={isAr} />)
+                }
               </div>
-              <AIBlock loading={loading} data={aiText} error={error} onRetry={() => loadAI(tab)} isAr={isAr} accentColor="#7c3aed" />
+              <AIBlock loading={loading} data={aiText} error={error}
+                onRetry={() => loadAI(tab)} isAr={isAr} />
             </div>
           )}
 
-          {/* Risk Score */}
+          {/* Risk tab */}
           {tab === "risk" && sessions.length > 0 && (
-            <div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-                <RiskCard title={isAr ? "الخطر الكلي" : "Overall Risk"} score={riskScore} icon="⚠️" color={riskScore >= 70 ? "#ef4444" : riskScore >= 45 ? "#f59e0b" : "#10b981"} desc={isAr ? "مؤشر مركّب" : "Composite risk indicator"} delay={0} />
-                <RiskCard title={isAr ? "الشذوذات" : "Anomalies"} score={Math.min(100, anomalies.length * 20)} icon="🔍" color={anomalies.length > 3 ? "#ef4444" : anomalies.length > 0 ? "#f59e0b" : "#10b981"} desc={`${anomalies.length} ${isAr ? "نقطة شاذة" : "detected"}`} delay={80} />
+            <div style={{ display: "flex", flexDirection: "column", gap: T.sp4 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: T.sp3 }}>
+                <RiskCard
+                  title={isAr ? "الخطر الكلي" : "Overall Risk"}
+                  score={riskScore} icon="⚠️"
+                  color={riskColor(riskScore)}
+                  desc={isAr ? "مؤشر مركّب من وضعيتك وأنماط بياناتك" : "Composite: posture + burnout + anomalies"} />
+                <RiskCard
+                  title={isAr ? "الشذوذات" : "Anomaly Weight"}
+                  score={Math.min(100, anomalies.length * 20)} icon="🔍"
+                  color={anomalies.length > 3 ? "#ef4444" : anomalies.length > 0 ? "#f59e0b" : "#10b981"}
+                  desc={`${anomalies.length} ${isAr ? "نقطة شاذة مكتشفة" : "anomalous sessions detected"}`} />
               </div>
-              <AIBlock loading={loading} data={aiText} error={error} onRetry={() => loadAI(tab)} isAr={isAr} accentColor="#7c3aed" />
+              <AIBlock loading={loading} data={aiText} error={error}
+                onRetry={() => loadAI(tab)} isAr={isAr} />
             </div>
           )}
 
-          {/* Forecast */}
+          {/* Forecast tab */}
           {tab === "forecast" && sessions.length > 0 && (
-            <div>
-              <div style={{ marginBottom: 16 }}>
-                <ForecastChart historical={recent14.length >= 3 ? recent14 : allScores.slice(-14)} predicted={fore?.predicted || []} isAr={isAr} />
-              </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: T.sp4 }}>
+              <ForecastChart
+                historical={recent14.length >= 3 ? recent14 : allScores.slice(-14)}
+                predicted={fore?.predicted || []} isAr={isAr} />
+
               {fore && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: T.sp2 }}>
                   {[
-                    { l: isAr ? "الاتجاه" : "Trend",      v: forecastTrend === "improving" ? (isAr ? "تحسن" : "Improving") : forecastTrend === "declining" ? (isAr ? "تراجع" : "Declining") : (isAr ? "مستقر" : "Stable"), c: forecastTrend === "improving" ? "#10b981" : forecastTrend === "declining" ? "#ef4444" : "#60a5fa" },
-                    { l: isAr ? "توقع 7 أيام" : "7-Day Est", v: fore.predicted?.[6] ? `${fore.predicted[6]}/100` : "—", c: fore.predicted?.[6] ? (fore.predicted[6] >= 75 ? "#10b981" : fore.predicted[6] >= 50 ? "#f59e0b" : "#ef4444") : "#6b82a6" },
-                    { l: isAr ? "الانحدار" : "Slope",      v: fore.slope >= 0 ? `+${fore.slope.toFixed(1)}` : fore.slope.toFixed(1), c: fore.slope >= 0 ? "#10b981" : "#ef4444" },
+                    {
+                      l: isAr ? "الاتجاه" : "Trend",
+                      v: trendLabel, c: trendColor,
+                    },
+                    {
+                      l: isAr ? "توقع 7 أيام" : "7-Day Est.",
+                      v: fore.predicted?.[6] ? `${fore.predicted[6]}/100` : "—",
+                      c: fore.predicted?.[6]
+                        ? riskColor(100 - fore.predicted[6])
+                        : T.textMuted,
+                    },
+                    {
+                      l: isAr ? "الميل اليومي" : "Daily Slope",
+                      v: fore.slope >= 0 ? `+${fore.slope.toFixed(1)}` : fore.slope.toFixed(1),
+                      c: fore.slope >= 0 ? "#10b981" : "#ef4444",
+                    },
                   ].map((m, i) => (
-                    <div key={i} style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: "12px 14px", textAlign: "center", animation: `fadeIn 300ms ${i * 70}ms both` }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#6b82a6", marginBottom: 6 }}>{m.l}</div>
-                      <div style={{ fontFamily: "Syne,sans-serif", fontSize: 18, fontWeight: 800, color: m.c }}>{m.v}</div>
+                    <div key={i} style={{
+                      background: T.surface, border: `1px solid ${T.border}`,
+                      borderRadius: 12, padding: `${T.sp3}px ${T.sp4}px`,
+                      textAlign: "center",
+                    }}>
+                      <div style={{ fontSize: T.xs, fontWeight: T.bold, color: T.textMuted,
+                        letterSpacing: ".07em", textTransform: "uppercase", marginBottom: T.sp2 }}>
+                        {m.l}
+                      </div>
+                      <div style={{ fontSize: T.lg, fontWeight: T.black, color: m.c,
+                        fontFamily: "Syne,sans-serif" }}>
+                        {m.v}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
-              <AIBlock loading={loading} data={aiText} error={error} onRetry={() => loadAI(tab)} isAr={isAr} accentColor="#7c3aed" />
+
+              <AIBlock loading={loading} data={aiText} error={error}
+                onRetry={() => loadAI(tab)} isAr={isAr} />
             </div>
           )}
         </div>
       </div>
-      <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}} @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
-    </div>
-  );
-}
 
-function AIBlock({ loading, data, error, onRetry, isAr, accentColor = "#1a56db" }) {
-  return (
-    <div style={{ background: `rgba(124,58,237,.06)`, border: "1px solid rgba(124,58,237,.15)", borderRadius: 14, padding: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <div style={{ width: 24, height: 24, borderRadius: 7, background: `linear-gradient(135deg,${accentColor},#1a56db)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>🧠</div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-          {isAr ? "تحليل الذكاء التنبؤي" : "Predictive AI Analysis"}
-        </span>
-        {loading && <span style={{ marginLeft: "auto", display: "flex", gap: 3 }}>
-          {[0,1,2].map(i => <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: accentColor, display: "inline-block", animation: `blink 1.2s ${i*.2}s infinite` }} />)}
-          <style>{`@keyframes blink{0%,80%,100%{opacity:.3}40%{opacity:1}}`}</style>
-        </span>}
-      </div>
-      {loading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {[100,85,70].map((w,i) => <div key={i} style={{ height: 12, borderRadius: 6, width: `${w}%`, background: "rgba(124,58,237,.1)", animation: `pulse 1.5s ${i*.1}s infinite` }} />)}
-          <style>{`@keyframes pulse{0%,100%{opacity:.4}50%{opacity:.9}}`}</style>
-        </div>
-      )}
-      {!loading && data && <div style={{ fontSize: 13, color: "#b0c4de", lineHeight: 1.7 }}><MdText text={data} /></div>}
-      {!loading && error && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <span style={{ fontSize: 12, color: "#f87171" }}>⚠ {error}</span>
-          <button onClick={onRetry} style={{ background: "rgba(124,58,237,.15)", border: "1px solid rgba(124,58,237,.3)", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 700, color: "#a78bfa", cursor: "pointer" }}>
-            {isAr ? "⟳ أعد" : "⟳ Retry"}
-          </button>
-        </div>
-      )}
+      <style>{`
+        @keyframes slideUp  { from { opacity:0; transform:translateY(18px) } to { opacity:1; transform:none } }
+        @keyframes blink    { 0%,80%,100% { opacity:.25 } 40% { opacity:1 } }
+        @keyframes pulse    { 0%,100% { opacity:.35 } 50% { opacity:.8 } }
+      `}</style>
     </div>
   );
 }
