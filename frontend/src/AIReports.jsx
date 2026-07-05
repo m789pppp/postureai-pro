@@ -46,7 +46,7 @@ function MdText({ text }) {
 // stats) or "full" (Elite tier — last 10 sessions + footer detail note).
 // Callers must check qualityFor(tier).pdfDetail !== "none" before calling
 // this — "none" tiers (standard/basic) are gated out in exportPDF().
-function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDetail = "standard", tier = "standard" }) {
+function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDetail = "standard", tier = "standard", reportType = "all" }) {
   const isAr = lang === "ar";
   const isFull = pdfDetail === "full";
   const allScores = sessions.map(s => s.avg_score || 0).filter(Boolean);
@@ -355,6 +355,7 @@ This user score: ${avgScore}/100
       reportTitle: isAr ? `تقرير الأداء — ${profile?.name || ""}` : `Performance Report — ${profile?.name || "User"}`,
       profile, sessions: filteredSessions, summaryText: summary, lang, pdfDetail,
       tier: profile?.tier || "standard",
+      reportType: dateRange, // "week" | "month" | "all"
     });
 
     try {

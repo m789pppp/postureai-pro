@@ -744,17 +744,22 @@ function _fmtDate(ts,ar){
 }
 
 // ── Cairo font (Arabic) ────────────────────────────────────────────
-let _cairoLoaded=false;
+let _cairoLoaded = false;
+let _cairoCachedB64 = null;
 async function _ensureCairoFont(doc){
-  if(_cairoLoaded)return;
   try{
-    const{CAIRO_B64}=await import("./assets/cairoFont.js");
-    doc.addFileToVFS("Cairo-Regular.ttf",CAIRO_B64);
+    // Load b64 once — re-use cached on subsequent calls
+    if(!_cairoCachedB64){
+      const{CAIRO_B64}=await import("./assets/cairoFont.js");
+      _cairoCachedB64=CAIRO_B64;
+    }
+    // Always register with THIS doc instance — each new jsPDF() is a fresh instance
+    doc.addFileToVFS("Cairo-Regular.ttf",_cairoCachedB64);
     doc.addFont("Cairo-Regular.ttf","cairo","normal");
-    doc.addFileToVFS("Cairo-Bold.ttf",CAIRO_B64);
+    doc.addFileToVFS("Cairo-Bold.ttf",_cairoCachedB64);
     doc.addFont("Cairo-Bold.ttf","cairo","bold");
     _cairoLoaded=true;
-  }catch(e){console.warn("Cairo font failed:",e);}
+  }catch(e){console.warn("Cairo font failed:",e?.message||e);}
 }
 
 // ── Logo image cache ───────────────────────────────────────────────
@@ -778,24 +783,9 @@ function fc(doc,...c){doc.setFillColor(...c);}
 function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
 
-// ── Cairo Arabic font loader (call once per jsPDF doc instance) ───
-let _cairoCached = null;
-async function _loadCairo(doc) {
-  try {
-    if (!_cairoCached) {
-      const { CAIRO_B64 } = await import("./assets/cairoFont.js");
-      _cairoCached = CAIRO_B64;
-    }
-    doc.addFileToVFS("Cairo.ttf", _cairoCached);
-    doc.addFont("Cairo.ttf", "cairo", "normal");
-    doc.addFileToVFS("Cairo-Bold.ttf", _cairoCached);
-    doc.addFont("Cairo-Bold.ttf", "cairo", "bold");
-    return true;
-  } catch(e) {
-    console.warn("Cairo font load failed:", e.message);
-    return false;
-  }
-}
+// ── Cairo font loader — unified (replaces old _loadCairo) ─────────
+// _loadCairo kept as alias so clinical/comparison/longitudinal PDFs don't break
+async function _loadCairo(doc) { await _ensureCairoFont(doc); return _cairoLoaded; }
 
 // fontAr — used by clinical + AI report PDFs (older codepath)
 function fontAr(doc, size, style="normal", useAr=false) {
