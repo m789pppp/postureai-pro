@@ -2240,14 +2240,18 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   // Weekly pattern (which day is best/worst)
   const byDay = Array(7).fill(null).map(()=>({scores:[]}));
   sessions.forEach(s=>{
-    const d=new Date(toMs(s)).getDay();
+    const ms = toMs(s);
+    if(!ms || isNaN(ms)) return; // guard: skip sessions with invalid timestamps
+    const d = new Date(ms).getDay();
+    if(d < 0 || d > 6) return; // guard: invalid day index
     if(s.avg_score) byDay[d].scores.push(s.avg_score);
   });
   const dayAvgs  = byDay.map(d=>d.scores.length ? Math.round(d.scores.reduce((a,b)=>a+b,0)/d.scores.length) : null);
   const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const dayNamesAr=["أحد","اثنين","ثلاثاء","أربعاء","خميس","جمعة","سبت"];
-  const bestDay  = dayAvgs.indexOf(Math.max(...dayAvgs.filter(Boolean)));
-  const worstDay = dayAvgs.indexOf(Math.min(...dayAvgs.filter(Boolean)));
+  const validDayAvgs = dayAvgs.filter(Boolean);
+  const bestDay  = validDayAvgs.length ? dayAvgs.indexOf(Math.max(...validDayAvgs)) : -1;
+  const worstDay = validDayAvgs.length ? dayAvgs.indexOf(Math.min(...validDayAvgs)) : -1;
 
   // Session frequency
   const weeksSpan = Math.max(1, Math.ceil((Date.now()-toMs(sessions[sessions.length-1]))/(7*86400000)));
@@ -2359,7 +2363,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,"Longitudinal"); y=22;}
   sf(10,"bold"); tc(doc,...T.ink);
   doc.text(isAr?"النمط الأسبوعي — متوسط النقاط حسب اليوم":"Weekly Pattern — Avg Score by Day",ml,y); y+=7;
-  const maxDay=Math.max(...dayAvgs.filter(Boolean),80);
+  const maxDay=Math.max(...(dayAvgs.filter(Boolean).length ? dayAvgs.filter(Boolean) : [80]),80);
   const barW=(cw-12)/7;
   dayAvgs.forEach((avg,di)=>{
     if(!avg) return;
