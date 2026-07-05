@@ -729,6 +729,11 @@ const T = {
   borderSoft:[243,244,246], ink2:[30,41,59],
   indigo:    [99,102,241],  cyan:[6,182,212],
   slate:     [15,23,42],    slateM:[30,41,59],
+  // Tinted backgrounds (rgba equivalents as light blends with white)
+  successBg: [220,252,231], // rgba(34,197,94,0.12) on white
+  dangerBg:  [254,226,226], // rgba(239,68,68,0.12) on white
+  warningBg: [254,243,199], // rgba(245,158,11,0.12) on white
+  primaryBg: [219,234,254], // rgba(37,99,235,0.12) on white
 };
 const F = { display:26, h1:16, h2:13, h3:10.5, body:9, small:7.5, micro:6 };
 
