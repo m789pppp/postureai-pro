@@ -3128,7 +3128,10 @@ export default function App(){
       const { generateLongitudinalPDF } = await import("./firebase.js");
       await generateLongitudinalPDF({ sessions: userSessions, profile, user, lang });
       addToast(isAr?"✅ تم تحميل التقرير الطولي":"✅ Longitudinal PDF downloaded","success");
-    } catch(e) { addToast(`Longitudinal PDF error: ${e.message}`,"error"); }
+    } catch(e) {
+      console.error("[Longitudinal PDF]", e);
+      addToast(`Longitudinal PDF error: ${e.message || e}`, "error");
+    }
   }
 
   async function downloadComparisonPDF(session1, session2) {
@@ -3136,12 +3139,19 @@ export default function App(){
       addToast(isAr?"المقارنة متاحة لباقة Pro وElite فقط":"Comparison PDF requires Pro or Elite","warn");
       setShowBilling(true); return;
     }
+    if (!session1 || !session2) {
+      addToast(isAr?"محتاج جلستين على الأقل للمقارنة":"Need at least 2 sessions to compare","warn");
+      return;
+    }
     addToast(isAr?"جاري إنشاء تقرير المقارنة...":"Generating comparison PDF...","info");
     try {
       const { generateComparisonPDF } = await import("./firebase.js");
       await generateComparisonPDF({ session1, session2, profile, user, lang, allSessions: userSessions });
       addToast(isAr?"✅ تم تحميل تقرير المقارنة":"✅ Comparison PDF downloaded","success");
-    } catch(e) { addToast(`Comparison PDF error: ${e.message}`,"error"); }
+    } catch(e) {
+      console.error("[Comparison PDF]", e);
+      addToast(`Comparison PDF error: ${e.message || e}`, "error");
+    }
   }
 
   async function downloadTeamPDF() {

@@ -761,8 +761,9 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
   const bestScore = Math.max(...userSessions.map(s=>s.avg_score||0));
   const totalMins = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
 
-  const isProTier   = ["professional","elite"].includes(tier);
-  const isEliteTier = tier === "elite";
+  const normTier    = (tier||"standard").toLowerCase();
+  const isProTier   = ["professional","elite"].includes(normTier);
+  const isEliteTier = normTier === "elite";
 
   async function handlePDF(s, i, clinical=false) {
     if (!isProTier) { onDownloadPDF?.(null); return; } // triggers billing in App.jsx
