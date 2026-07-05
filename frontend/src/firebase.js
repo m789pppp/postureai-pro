@@ -699,6 +699,12 @@ function _riskColor(v) {
 // Score color + label helpers (used throughout session, clinical, comparison, team PDFs)
 function _scoreColor(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
 const _gc = _scoreColor; // alias for legacy clinical PDF code
+const _gl = _scoreLabel; // alias: grade label — "Excellent"/"Good"/"Needs Work"
+
+// _drawSparkline — thin wrapper around _spark for clinical PDF (uses old call signature)
+function _drawSparkline(doc, hist, x, y, w, h, col) {
+  _spark(doc, hist, x, y, w, h, col);
+}
 function _scoreLabel(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Improvement"); }
 
 // ─────────────────────────────────────────────────────────────────
