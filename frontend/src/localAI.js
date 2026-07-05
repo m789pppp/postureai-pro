@@ -773,88 +773,36 @@ function runAnalysis(prompt,sp) {
 }
 
 // ── Puter.js AI (free, no API key, 400+ models) ───────────────────
-// ── Puter.js AI ───────────────────────────────────────────────────
-// User-Pays model: users cover their own AI costs via Puter account
-// Docs: https://developer.puter.com/tutorials/free-llm-api/
-let _puterReady   = null;   // null=untested, true=working, false=failed
-let _puterLoading = false;
+// ── LLM7.io — Anonymous Free AI (no key, no login, no signup) ────
+// Docs: https://docs.llm7.io — api_key = "unused" = anonymous
+const LLM7_URL = "https://api.llm7.io/v1/chat/completions";
+let _llm7Ready = null; // null=untested, true=ok, false=failed
 
-function extractPuterText(result) {
-  if (!result) return "";
-  // GPT-5.4 nano & simple models → returns string directly
-  if (typeof result === "string") return result;
-  // OpenAI format → result.message.content (string)
-  if (typeof result?.message?.content === "string") return result.message.content;
-  // Claude format → result.message.content = [{type:"text", text:"..."}]
-  if (Array.isArray(result?.message?.content))
-    return result.message.content.map(c => c.text || "").join("");
-  // Gemini format → result.message.content (string or array)
-  if (result?.content) {
-    if (typeof result.content === "string") return result.content;
-    if (Array.isArray(result.content)) return result.content.map(c=>c.text||"").join("");
-  }
-  if (result?.text) return result.text;
-  return "";
-}
-
-async function tryPuter(messages, systemPrompt) {
-  if (typeof window === "undefined") throw new Error("no browser");
-
-  // Load Puter.js script if needed
-  if (!window.puter) {
-    if (_puterLoading) {
-      await new Promise(r => setTimeout(r, 5000));
-      if (!window.puter) throw new Error("puter load failed");
-    } else {
-      _puterLoading = true;
-      await new Promise((resolve, reject) => {
-        // Try npm package first (better for Vite)
-        const s = document.createElement("script");
-        s.src = "https://js.puter.com/v2/";
-        s.onload  = () => { _puterLoading = false; resolve(); };
-        s.onerror = () => { _puterLoading = false; reject(new Error("cdn error")); };
-        document.head.appendChild(s);
-        setTimeout(() => { _puterLoading = false; reject(new Error("timeout")); }, 10000);
-      });
-    }
-  }
-
-  if (!window.puter?.ai?.chat) throw new Error("puter.ai unavailable");
-
+async function callLLM7(messages, systemPrompt, maxTokens) {
   const msgs = [
-    ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
-    ...messages.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
+    ...(systemPrompt ? [{role:"system", content:systemPrompt}] : []),
+    ...messages.map(m => ({role: m.role==="assistant"?"assistant":"user", content:m.content})),
   ];
-
-  // Model chain: fastest → best quality, based on real Puter docs (July 2026)
-  const models = [
-    "openai/gpt-5.4-nano",          // fast, good quality, string response
-    "google/gemini-2.5-flash",      // fast Gemini
-    "anthropic/claude-sonnet-5",    // best quality, array response
-  ];
-
+  const models = ["gpt-4o-mini", "deepseek/deepseek-r1", "qwen/qwen3-8b"];
   for (const model of models) {
     try {
-      const result = await Promise.race([
-        window.puter.ai.chat(msgs, { model }),
-        new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 25000)),
-      ]);
-      const text = extractPuterText(result);
-      if (text?.trim()) {
-        _puterReady = true;
-        return text.trim();
-      }
-    } catch (e) {
-      // Try next model
-      continue;
-    }
+      const res = await fetch(LLM7_URL, {
+        method:  "POST",
+        headers: {"Content-Type":"application/json","Authorization":"Bearer unused"},
+        body:    JSON.stringify({model, messages:msgs, max_tokens:maxTokens||400, temperature:0.7}),
+        signal:  AbortSignal.timeout(20000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const text = data?.choices?.[0]?.message?.content?.trim();
+      if (text) { _llm7Ready = true; return text; }
+    } catch { continue; }
   }
-
-  throw new Error("all puter models failed");
+  throw new Error("llm7_failed");
 }
 
 export async function localChat(messages, {systemPrompt=""} = {}) {
-  if (_puterReady !== false) {
+  if (_llm7Ready !== false) {
     try {
       const d = parseData(systemPrompt);
       const userCtx = [
@@ -881,7 +829,7 @@ USER DATA:
 ${userCtx || "No session data yet."}`;
 
       return await tryPuter(messages, sp);
-    } catch {}
+    } catch { _llm7Ready = false; }
   }
   // Instant fallback: rule-based engine
   await new Promise(r=>setTimeout(r, 250+Math.random()*400));
@@ -893,15 +841,15 @@ ${userCtx || "No session data yet."}`;
 }
 
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
-  if (_puterReady !== false) {
+  if (_llm7Ready !== false) {
     try {
       const d = parseData((systemPrompt||"")+" "+prompt);
       const lang = d.lang==="ar" ? "Respond in Egyptian Arabic." : "Respond in English.";
       const sp = `You are Corvus's posture analytics engine.
 Generate a structured report using markdown (## headers, **bold**, bullets).
 Be specific with numbers from the data. Max 250 words. ${lang}`;
-      return await tryPuter([{role:"user", content:prompt}], sp);
-    } catch {}
+      return await callLLM7([{role:"user", content:prompt}], sp, 400);
+    } catch { _llm7Ready = false; }
   }
   await new Promise(r=>setTimeout(r, 250+Math.random()*350));
   return runAnalysis(prompt, systemPrompt);
