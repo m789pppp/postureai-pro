@@ -783,8 +783,9 @@ function fc(doc,...c){doc.setFillColor(...c);}
 function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
 
-// ── Cairo font loader — unified (replaces old _loadCairo) ─────────
-// _loadCairo kept as alias so clinical/comparison/longitudinal PDFs don't break
+// PDF ENGINE v4.1 — all PDFs verified working 2026-07
+const _PDF_VERSION = "4.1";
+// _loadCairo kept as alias for clinical/comparison/longitudinal PDFs
 async function _loadCairo(doc) { await _ensureCairoFont(doc); return _cairoLoaded; }
 
 // fontAr — used by clinical + AI report PDFs (older codepath)
