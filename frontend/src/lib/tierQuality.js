@@ -59,7 +59,10 @@ const FEATURE_LEVEL = {
 
 /** Any raw tier string (B2C, legacy alias, or B2B plan) → one of the 4 feature levels. */
 export function featureTier(rawTier) {
-  return FEATURE_LEVEL[rawTier] || "standard";
+  if (!rawTier) return "standard";
+  // Normalize case — Firestore sometimes stores "Elite", "ELITE", "Professional" etc.
+  const t = String(rawTier).toLowerCase().trim();
+  return FEATURE_LEVEL[t] || "standard";
 }
 
 /** True if rawTier's feature level is >= minLevel (e.g. tierAtLeast("b2b_enterprise","elite") === true). */
