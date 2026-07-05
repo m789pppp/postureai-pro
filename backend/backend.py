@@ -9675,12 +9675,22 @@ def ai_analyze():
         )
 
         if text is None:
-            # Ollama unreachable, model not pulled, or timed out —
-            # surface a clear, actionable message instead of a generic connection error.
-            return jsonify({
-                "error": "AI is temporarily busy — please try again in a few seconds",
-                "text": None,
-            }), 503
+            # ── LLM7.io fallback ─────────────────────────────────────────
+            try:
+                _msgs = []
+                if context.get("system_prompt"):
+                    _msgs.append({"role": "system", "content": context["system_prompt"]})
+                _msgs.append({"role": "user", "content": prompt})
+                _r = req.post(
+                    "https://api.llm7.io/v1/chat/completions",
+                    headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
+                    json={"model": "gpt-4o-mini", "messages": _msgs, "max_tokens": max_tokens, "temperature": 0.5},
+                    timeout=20,
+                )
+                if _r.status_code == 200:
+                    text = (_r.json().get("choices") or [{}])[0].get("message", {}).get("content", "") or None
+            except Exception:
+                pass
 
         # Increment usage counter
         try:
@@ -13106,7 +13116,30 @@ You can help with:
                 log_event("coach_local_llm_error", meta={"error": str(_le)[:80]})
 
         if text is None:
-            return jsonify({"error": "AI unavailable — try again in a few seconds", "ok": False}), 503
+            # ── LLM7.io fallback (anonymous, no key, Railway can reach it) ──
+            try:
+                llm7_resp = req.post(
+                    "https://api.llm7.io/v1/chat/completions",
+                    headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
+                    json={"model": "gpt-4o-mini", "messages": ollama_msgs,
+                          "max_tokens": _quality_coach["max_tokens"], "temperature": 0.5},
+                    timeout=20,
+                )
+                if llm7_resp.status_code == 200:
+                    text = (llm7_resp.json().get("choices") or [{}])[0].get("message", {}).get("content", "") or None
+                elif llm7_resp.status_code == 429:
+                    # Rate limited — try DeepSeek
+                    llm7_resp2 = req.post(
+                        "https://api.llm7.io/v1/chat/completions",
+                        headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
+                        json={"model": "deepseek/deepseek-r1", "messages": ollama_msgs,
+                              "max_tokens": _quality_coach["max_tokens"], "temperature": 0.5},
+                        timeout=20,
+                    )
+                    if llm7_resp2.status_code == 200:
+                        text = (llm7_resp2.json().get("choices") or [{}])[0].get("message", {}).get("content", "") or None
+            except Exception as _le:
+                log_event("coach_llm7_error", meta={"error": str(_le)[:80]})
 
         # ── Audit + usage tracking ────────────────────────────────────
         _uid = getattr(g, "uid", "unknown")

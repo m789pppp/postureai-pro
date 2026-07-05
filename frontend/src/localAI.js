@@ -773,36 +773,64 @@ function runAnalysis(prompt,sp) {
 }
 
 // ── Puter.js AI (free, no API key, 400+ models) ───────────────────
-// ── LLM7.io — Anonymous Free AI (no key, no login, no signup) ────
-// Docs: https://docs.llm7.io — api_key = "unused" = anonymous
-const LLM7_URL = "https://api.llm7.io/v1/chat/completions";
-let _llm7Ready = null; // null=untested, true=ok, false=failed
+// ── Backend AI Proxy ─────────────────────────────────────────────
+// Frontend → Railway backend → LLM7.io (bypasses Egypt ISP block)
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
+let _backendAIReady = null;
 
-async function callLLM7(messages, systemPrompt, maxTokens) {
-  const msgs = [
-    ...(systemPrompt ? [{role:"system", content:systemPrompt}] : []),
-    ...messages.map(m => ({role: m.role==="assistant"?"assistant":"user", content:m.content})),
-  ];
-  const models = ["gpt-4o-mini", "deepseek/deepseek-r1", "qwen/qwen3-8b"];
-  for (const model of models) {
-    try {
-      const res = await fetch(LLM7_URL, {
-        method:  "POST",
-        headers: {"Content-Type":"application/json","Authorization":"Bearer unused"},
-        body:    JSON.stringify({model, messages:msgs, max_tokens:maxTokens||400, temperature:0.7}),
-        signal:  AbortSignal.timeout(20000),
-      });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const text = data?.choices?.[0]?.message?.content?.trim();
-      if (text) { _llm7Ready = true; return text; }
-    } catch { continue; }
-  }
-  throw new Error("llm7_failed");
+async function getAuthToken() {
+  try {
+    const { getAuth } = await import("firebase/auth");
+    const u = getAuth().currentUser;
+    return u ? await u.getIdToken() : "";
+  } catch { return ""; }
+}
+
+async function callBackendAI(messages, systemPrompt, maxTokens) {
+  const tok = await getAuthToken();
+  const last = [...messages].reverse().find(m => m.role === "user");
+  const res = await fetch(`${API_BASE}/coach/chat`, {
+    method:  "POST",
+    headers: {"Content-Type":"application/json", ...(tok?{Authorization:`Bearer ${tok}`}:{})},
+    body:    JSON.stringify({
+      messages,
+      context: { system_prompt: systemPrompt },
+      lang:    systemPrompt?.includes("Arabic") ? "ar" : "en",
+      max_tokens: maxTokens || 400,
+    }),
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!res.ok) throw new Error(`backend ${res.status}`);
+  const data = await res.json();
+  const text = data?.text?.trim();
+  if (!text) throw new Error("empty");
+  _backendAIReady = true;
+  return text;
+}
+
+async function callBackendAnalysis(prompt, systemPrompt, maxTokens) {
+  const tok = await getAuthToken();
+  const res = await fetch(`${API_BASE}/ai/analyze`, {
+    method:  "POST",
+    headers: {"Content-Type":"application/json", ...(tok?{Authorization:`Bearer ${tok}`}:{})},
+    body:    JSON.stringify({
+      prompt,
+      context: { system_prompt: systemPrompt },
+      lang:    systemPrompt?.includes("Arabic") ? "ar" : "en",
+      max_tokens: maxTokens || 400,
+    }),
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!res.ok) throw new Error(`backend ${res.status}`);
+  const data = await res.json();
+  const text = data?.text?.trim();
+  if (!text) throw new Error("empty");
+  _backendAIReady = true;
+  return text;
 }
 
 export async function localChat(messages, {systemPrompt=""} = {}) {
-  if (_llm7Ready !== false) {
+  if (_backendAIReady !== false) {
     try {
       const d = parseData(systemPrompt);
       const userCtx = [
@@ -829,7 +857,7 @@ USER DATA:
 ${userCtx || "No session data yet."}`;
 
       return await tryPuter(messages, sp);
-    } catch { _llm7Ready = false; }
+    } catch { _backendAIReady = false; }
   }
   // Instant fallback: rule-based engine
   await new Promise(r=>setTimeout(r, 250+Math.random()*400));
@@ -841,15 +869,15 @@ ${userCtx || "No session data yet."}`;
 }
 
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
-  if (_llm7Ready !== false) {
+  if (_backendAIReady !== false) {
     try {
       const d = parseData((systemPrompt||"")+" "+prompt);
       const lang = d.lang==="ar" ? "Respond in Egyptian Arabic." : "Respond in English.";
       const sp = `You are Corvus's posture analytics engine.
 Generate a structured report using markdown (## headers, **bold**, bullets).
 Be specific with numbers from the data. Max 250 words. ${lang}`;
-      return await callLLM7([{role:"user", content:prompt}], sp, 400);
-    } catch { _llm7Ready = false; }
+      return await callBackendAnalysis(prompt, sp, 400);
+    } catch { _backendAIReady = false; }
   }
   await new Promise(r=>setTimeout(r, 250+Math.random()*350));
   return runAnalysis(prompt, systemPrompt);
