@@ -56,7 +56,7 @@ const MAX_LM_VELOCITY = 3.0;
 const MAX_REJECT_STREAK = 3;
 
 /** Frame buffer size for aggregation */
-const FRAME_BUFFER_SIZE = 60;
+const FRAME_BUFFER_SIZE = 150; // was 60 (2s) — raised to 150 (5s) for smoother score history
 
 /** Beep cooldown in ms */
 const BEEP_COOLDOWN_MS = 30000;
@@ -946,9 +946,12 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const neck     = analyzeNeckLean(lms, W, H, prop);
   const headTilt = analyzeHeadTilt(lms, W, H);
   const shoulder = analyzeShoulderLevel(lms, W, H, prop);
-  const spine    = analyzeSpineLean(lms, W, H, prop, analyzeMP._cachedRounded?.score ?? 90);
   const yaw      = analyzeHeadYawModule(lms, W, H);
-  // Expensive metrics — cached between frames
+
+  // Expensive metrics — cached between frames.
+  // IMPORTANT: rounded must be computed BEFORE spine because analyzeSpineLean
+  // uses rounded.score as input. On non-skip frames, compute rounded fresh and
+  // pass it directly to spine. On skip frames, use the cached value.
   let rounded, fhp, elbow, monitor;
   if (!skipExpensive || !analyzeMP._cachedRounded) {
     rounded = analyzeRoundedShoulders(lms, prop);
@@ -965,6 +968,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     elbow   = analyzeMP._cachedElbow;
     monitor = analyzeMP._cachedMonitor;
   }
+  // Spine runs every frame (fast) but depends on rounded.score from above
+  const spine = analyzeSpineLean(lms, W, H, prop, rounded.score);
 
   // Confidence-weighted overall score.
   // Previous: unreliable modules contributed at a fixed 30% weight, meaning
@@ -1087,7 +1092,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
 // SIDE CAMERA ANALYSIS
 // ═══════════════════════════════════════════════════════════════════
 
-export function analyzeSideMP(lms, W, H) {
+export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
   if (!lms || lms.length < 28) return null;
 
   const g   = i => lms[i];
@@ -1132,7 +1137,18 @@ export function analyzeSideMP(lms, W, H) {
   };
   const neckLeanRaw  = earOK && shOK ? angleVert(sh, neckRef) : 0;
   // Nose ~5cm anterior to ear — correction scales with camera distance (same formula as front)
-  const approxDistCmSide = shWidthPx > 0 ? (SHOULDER_WIDTH_CM / Math.max(shWidthPx / W, 0.01)) * 0.5 : 65;
+  // Apply calibration-based shoulder width correction (same logic as front mode).
+  // Without this, all cm-based side calculations used the hardcoded 42cm average.
+  let effectiveShoulderWidthCm = SHOULDER_WIDTH_CM;
+  if (calibKnownDistCm && calibKnownDistCm > 20 && shWidthPx > 0) {
+    const shWidthFracSide = shWidthPx / W;
+    if (shWidthFracSide > 0.01) {
+      const derived = (calibKnownDistCm * shWidthFracSide) / (REF_SH_FRAC * calibKnownDistCm / SHOULDER_WIDTH_CM);
+      effectiveShoulderWidthCm = Math.max(28, Math.min(58, Math.round(derived * 10) / 10));
+    }
+  }
+
+  const approxDistCmSide = shWidthPx > 0 ? (effectiveShoulderWidthCm / Math.max(shWidthPx / W, 0.01)) * 0.5 : 65;
   const neckCorrect  = Math.atan2(NOSE_AHEAD_CM * noseWeight, Math.max(approxDistCmSide, 30)) * 180 / Math.PI;
   const neckLean     = Math.max(0, neckLeanRaw - neckCorrect);
   const neckOK       = earOK && shOK;
@@ -1162,7 +1178,7 @@ export function analyzeSideMP(lms, W, H) {
   // ── Forward head posture (side view) — horizontal ear-to-shoulder offset in cm ──
   // Mirrors backend.py analyze_side(): _fhp_side_cm = |ear.x - sh.x| * cm_per_px
   const shWidthPx  = earOK && shOK ? Math.abs(g(PL.L_SHOULDER).x * W - g(PL.R_SHOULDER).x * W) : 0;
-  const cmPerPxSide = SHOULDER_WIDTH_CM / Math.max(shWidthPx, 1);
+  const cmPerPxSide = effectiveShoulderWidthCm / Math.max(shWidthPx, 1);
   const fhpSideCm   = earOK && shOK ? Math.round(Math.abs(ear.x - sh.x) * cmPerPxSide * 10) / 10 : 0;
   const fhpSideSc   = earOK && shOK ? scoreMetric(fhpSideCm, 0, 2.5, 7) : NEUTRAL;
 

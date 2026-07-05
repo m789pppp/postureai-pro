@@ -309,8 +309,8 @@ function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm)
   };
 }
 
-function analyzeSideMP(lms,W,H){
-  const eng = _engAnalyzeSideMP(lms,W,H);
+function analyzeSideMP(lms,W,H,calibKnownDistCm){
+  const eng = _engAnalyzeSideMP(lms,W,H,calibKnownDistCm);
   if(!eng) return null;
   return{
     overall:            eng.score,
@@ -2611,7 +2611,7 @@ export default function App(){
           if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
-          const rawResult=mode==="side"?analyzeSideMP(lms,W,H):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm);
+          const rawResult=mode==="side"?analyzeSideMP(lms,W,H,calibData?.knownDistCm):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm);
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter
           if(rawResult?.distCm && distSmootherRef.current){
             const stableDistCm=distSmootherRef.current.push(rawResult.distCm);
