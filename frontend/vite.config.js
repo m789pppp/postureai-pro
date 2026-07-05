@@ -19,7 +19,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/firebase'))              return 'firebase';
+          if (id.includes('node_modules/firebase'))              return 'firebase-sdk';
           if (id.includes('node_modules/react-dom') ||
               id.includes('node_modules/react/'))                return 'react-vendor';
           if (id.includes('/src/AdminDashboard'))                return 'admin';
