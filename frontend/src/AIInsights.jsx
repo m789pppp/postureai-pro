@@ -151,6 +151,58 @@ function Section({ title, sub, children, action }) {
 // ═══════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════
+// ── LoadingDots ───────────────────────────────────────────────────
+function LoadingDots() {
+  return (
+    <span style={{ display:"inline-flex", gap:3, alignItems:"center" }}>
+      {[0,1,2].map(i=>(
+        <span key={i} style={{ width:5, height:5, borderRadius:"50%", background:"#1a56db", display:"inline-block", animation:`blink 1.2s ease ${i*0.2}s infinite` }}/>
+      ))}
+      <style>{`@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}`}</style>
+    </span>
+  );
+}
+
+// ── AITextSection — AI response area with skeleton + error states ──
+function AITextSection({ loading, data, error, onRetry, isAr, D }) {
+  const T = D?.t || { label:{fontSize:9,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase"}, small:{fontSize:11}, body:{fontSize:13,lineHeight:1.65} };
+  const C = D?.c || { text:"#f0f6ff", sub:"#94a3b8", muted:"#475569", border:"rgba(148,163,184,.08)", danger:"#ef4444" };
+
+  return (
+    <div style={{ background:"linear-gradient(135deg,rgba(26,86,219,.06),rgba(8,145,178,.04))", border:"1px solid rgba(26,86,219,.15)", borderRadius:14, padding:"16px 18px" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+        <div style={{ width:26, height:26, borderRadius:8, background:"linear-gradient(135deg,#1a56db,#0891b2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>🧠</div>
+        <span style={{ ...T.label, color:"#60a5fa", fontSize:10 }}>{isAr?"تحليل Corvus AI":"Corvus AI Analysis"}</span>
+        {loading && <span style={{ marginLeft:"auto" }}><LoadingDots/></span>}
+      </div>
+      {loading && (
+        <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+          <style>{`@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}} @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}} @keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
+          {[100,88,74,58].map((w,i)=>(
+            <div key={i} style={{ height:11, borderRadius:6, width:`${w}%`, background:"linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.05) 75%)", backgroundSize:"400% 100%", animation:`shimmer 1.6s ease ${i*90}ms infinite` }}/>
+          ))}
+        </div>
+      )}
+      {!loading && data && (
+        <div style={{ ...T.body, color:"#b8cce0", animation:"fadeIn 300ms both" }}>
+          <MdText text={data}/>
+        </div>
+      )}
+      {!loading && error && (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+          <span style={{ ...T.small, color:C.danger }}>⚠ {error}</span>
+          <button onClick={onRetry} style={{ background:"rgba(26,86,219,.12)", border:"1px solid rgba(26,86,219,.22)", borderRadius:8, padding:"6px 14px", ...T.label, color:"#60a5fa", cursor:"pointer", fontSize:10, textTransform:"none" }}>
+            {isAr?"⟳ أعد المحاولة":"⟳ Retry"}
+          </button>
+        </div>
+      )}
+      {!loading && !data && !error && (
+        <div style={{ ...T.small, color:C.muted, fontStyle:"italic" }}>{isAr?"جارٍ التحليل...":"Generating analysis..."}</div>
+      )}
+    </div>
+  );
+}
+
 export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose }) {
   const [tab, setTab]               = useState("executive");
   const [loading, setLoading]       = useState(false);
@@ -303,260 +355,238 @@ Be specific and practical. Reference the actual scores. Max 220 words.`,
     { id: "recommendations", icon: "💡", en: "Actions",        ar: "التوصيات" },
   ];
 
+  // ── Design tokens — single source of truth ──────────────────────
+  const D = {
+    // Typography
+    displayFont: "'Syne', 'DM Sans', system-ui, sans-serif",
+    bodyFont:    "'DM Sans', system-ui, sans-serif",
+    // Type scale
+    t: {
+      display: { fontSize:22, fontWeight:800, letterSpacing:"-0.03em", lineHeight:1.15, fontFamily:"'Syne','DM Sans',system-ui" },
+      h1:      { fontSize:17, fontWeight:700, letterSpacing:"-0.02em", lineHeight:1.25 },
+      h2:      { fontSize:14, fontWeight:700, letterSpacing:"-0.01em", lineHeight:1.3  },
+      h3:      { fontSize:12, fontWeight:600, letterSpacing:"0",       lineHeight:1.4  },
+      body:    { fontSize:13, fontWeight:400,                          lineHeight:1.65 },
+      small:   { fontSize:11, fontWeight:400,                          lineHeight:1.55 },
+      label:   { fontSize:9,  fontWeight:700, letterSpacing:"0.07em",  lineHeight:1,   textTransform:"uppercase" },
+      num:     { fontSize:24, fontWeight:800, letterSpacing:"-0.04em", lineHeight:1,   fontFamily:"'Syne','DM Sans',system-ui" },
+      numSm:   { fontSize:15, fontWeight:700, letterSpacing:"-0.02em", lineHeight:1    },
+    },
+    // Colors
+    c: {
+      text:    "#f0f6ff",
+      sub:     "#94a3b8",
+      muted:   "#475569",
+      border:  "rgba(148,163,184,.08)",
+      card:    "rgba(15,28,52,.9)",
+      accent:  "#1a56db",
+      success: "#10b981",
+      warning: "#f59e0b",
+      danger:  "#ef4444",
+      cyan:    "#0891b2",
+    },
+  };
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(2,8,20,.88)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", zIndex: 9100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(2,8,20,.88)", backdropFilter:"blur(10px)", WebkitBackdropFilter:"blur(10px)", zIndex:9100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{
-        background: "#0c1528", border: "1px solid rgba(255,255,255,.08)",
-        borderRadius: 20, width: "min(640px,96vw)", height: "min(720px,94vh)",
-        display: "flex", flexDirection: "column", overflow: "hidden",
+        background:"#0a1628", border:`1px solid ${D.c.border}`,
+        borderRadius:20, width:"min(640px,96vw)", height:"min(720px,94vh)",
+        display:"flex", flexDirection:"column", overflow:"hidden",
         direction: isAr ? "rtl" : "ltr",
-        boxShadow: "0 24px 80px rgba(0,0,0,.6)",
-        animation: "slideUp 350ms cubic-bezier(0.16,1,0.3,1) both",
+        fontFamily: D.bodyFont,
+        boxShadow:"0 24px 80px rgba(0,0,0,.6)",
+        animation:"slideUp 350ms cubic-bezier(0.16,1,0.3,1) both",
       }}>
 
-        {/* ── Header ── */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#1a56db,#0891b2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, boxShadow: "0 4px 16px rgba(26,86,219,.4)" }}>🧠</div>
+        {/* ═══ HEADER ═══════════════════════════════════════════════ */}
+        <div style={{ padding:"18px 22px 14px", borderBottom:`1px solid ${D.c.border}`, flexShrink:0 }}>
+          {/* Title row */}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ width:38, height:38, borderRadius:11, background:"linear-gradient(135deg,#1a56db,#0891b2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0, boxShadow:"0 6px 20px rgba(26,86,219,.35)" }}>🧠</div>
               <div>
-                <div style={{ fontFamily: "Syne,sans-serif", fontSize: 15, fontWeight: 800, color: "#e8f0fe", letterSpacing: "-0.02em" }}>
+                <div style={{ ...D.t.h1, color:D.c.text }}>
                   {isAr ? "طبقة الذكاء الاصطناعي" : "AI Intelligence Layer"}
                 </div>
-                <div style={{ fontSize: 10, color: "#0891b2", fontWeight: 600 }}>
-                  {isAr ? "تحليل متقدم — Powered by Corvus AI" : "Advanced Analytics — Powered by Corvus AI"}
+                <div style={{ ...D.t.small, color:D.c.cyan, marginTop:2 }}>
+                  {isAr ? "تحليل متقدم — Corvus AI" : "Advanced Analytics — Corvus AI"}
                 </div>
               </div>
             </div>
-            <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", color: "#6b82a6", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            <button onClick={onClose} style={{ width:32, height:32, borderRadius:9, background:"rgba(255,255,255,.05)", border:`1px solid ${D.c.border}`, color:D.c.muted, cursor:"pointer", fontSize:15, display:"flex", alignItems:"center", justifyContent:"center", transition:"background .15s" }}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.09)"}
+              onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,.05)"}>✕</button>
           </div>
 
-          {/* Quick metrics strip */}
-          <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+          {/* KPI strip */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
             {[
-              { label: isAr ? "المتوسط" : "Avg Score",   value: `${avgScore}/100`,         color: sc(avgScore) },
-              { label: isAr ? "هذا الأسبوع" : "This Week",   value: weekAvg ? `${weekAvg}/100` : "—",    color: sc(weekAvg) },
-              { label: isAr ? "الاتجاه" : "Trend",       value: weekAvg && lastWeekAvg ? `${trendPct > 0 ? "+" : ""}${trendPct}%` : "—", color: trendPct >= 0 ? "#10b981" : "#ef4444" },
-              { label: isAr ? "الإرهاق" : "Fatigue",    value: `${fatigueScore}%`,         color: fatigueScore >= 70 ? "#ef4444" : fatigueScore >= 45 ? "#f59e0b" : "#10b981" },
-            ].map((m, i) => (
-              <div key={i} style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 8, padding: "6px 12px" }}>
-                <div style={{ fontSize: 9, color: "#6b82a6", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>{m.label}</div>
-                <div style={{ fontFamily: "Syne,sans-serif", fontSize: 14, fontWeight: 800, color: m.color, lineHeight: 1.2 }}>{m.value}</div>
+              { lbl:isAr?"المتوسط":"Avg",   val:`${avgScore}`, unit:"/100", col:sc(avgScore) },
+              { lbl:isAr?"هذا الأسبوع":"Week", val:weekAvg||"—", unit:weekAvg?"/100":"", col:sc(weekAvg||0) },
+              { lbl:isAr?"الاتجاه":"Trend", val:weekAvg&&lastWeekAvg?(trendPct>0?"+":"")+trendPct+"%":"—", unit:"", col:trendPct>=0?D.c.success:D.c.danger },
+              { lbl:isAr?"الإرهاق":"Fatigue", val:`${fatigueScore}`, unit:"%", col:fatigueScore>=70?D.c.danger:fatigueScore>=45?D.c.warning:D.c.success },
+            ].map((m,i)=>(
+              <div key={i} style={{ background:"rgba(255,255,255,.04)", border:`1px solid ${D.c.border}`, borderRadius:10, padding:"8px 10px" }}>
+                <div style={{ ...D.t.label, color:D.c.muted, marginBottom:5 }}>{m.lbl}</div>
+                <div style={{ display:"flex", alignItems:"baseline", gap:2 }}>
+                  <span style={{ ...D.t.numSm, color:m.col }}>{m.val}</span>
+                  {m.unit && <span style={{ ...D.t.small, color:D.c.muted }}>{m.unit}</span>}
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* ── Tab Bar ── */}
-        <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,.07)", flexShrink: 0, overflowX: "auto" }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: 1, padding: "12px 8px", background: "none", border: "none",
-              borderBottom: `2px solid ${tab === t.id ? "#1a56db" : "transparent"}`,
-              color: tab === t.id ? "#60a5fa" : "#6b82a6",
-              fontSize: 11, fontWeight: 700, cursor: "pointer",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-              transition: "color 150ms", whiteSpace: "nowrap",
-              minWidth: 70,
+        {/* ═══ TAB BAR ══════════════════════════════════════════════ */}
+        <div style={{ display:"flex", borderBottom:`1px solid ${D.c.border}`, flexShrink:0, overflowX:"auto" }}>
+          {TABS.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{
+              flex:1, padding:"11px 8px",
+              background:"none", border:"none",
+              borderBottom:`2px solid ${tab===t.id?D.c.accent:"transparent"}`,
+              color:tab===t.id?"#60a5fa":D.c.muted,
+              cursor:"pointer", minWidth:70, whiteSpace:"nowrap",
+              display:"flex", flexDirection:"column", alignItems:"center", gap:4,
+              transition:"color .15s",
             }}>
-              <span style={{ fontSize: 16 }}>{t.icon}</span>
-              <span>{isAr ? t.ar : t.en}</span>
+              <span style={{ fontSize:15 }}>{t.icon}</span>
+              <span style={{ ...D.t.label, letterSpacing:"0.04em", textTransform:"none", fontSize:10 }}>{isAr?t.ar:t.en}</span>
             </button>
           ))}
         </div>
 
-        {/* ── Content ── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+        {/* ═══ CONTENT ══════════════════════════════════════════════ */}
+        <div style={{ flex:1, overflowY:"auto", padding:"22px 22px 28px" }}>
 
-          {/* No sessions state */}
-          {sessions.length === 0 && (
-            <div style={{ textAlign: "center", padding: "60px 20px" }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-              <div style={{ fontFamily: "Syne,sans-serif", fontSize: 18, fontWeight: 800, color: "#e8f0fe", marginBottom: 8 }}>
-                {isAr ? "لا توجد بيانات بعد" : "No data yet"}
-              </div>
-              <div style={{ fontSize: 13, color: "#6b82a6", lineHeight: 1.7 }}>
-                {isAr ? "سجّل 3 جلسات على الأقل لتفعيل التحليل الذكي" : "Complete at least 3 sessions to unlock AI insights"}
+          {/* Empty state */}
+          {sessions.length===0 && (
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100%", textAlign:"center", padding:"40px 20px" }}>
+              <div style={{ fontSize:44, marginBottom:16, opacity:.6 }}>📊</div>
+              <div style={{ ...D.t.h1, color:D.c.text, marginBottom:8 }}>{isAr?"لا توجد بيانات بعد":"No data yet"}</div>
+              <div style={{ ...D.t.body, color:D.c.sub, maxWidth:280, lineHeight:1.7 }}>
+                {isAr?"سجّل 3 جلسات على الأقل لتفعيل التحليل الذكي":"Complete at least 3 sessions to unlock AI insights"}
               </div>
             </div>
           )}
 
-          {/* Tab: Executive */}
-          {tab === "executive" && sessions.length > 0 && (
-            <div>
-              <Section title={isAr ? "مؤشرات الأداء الرئيسية" : "Key Performance Indicators"}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-                  <InsightCard icon="🎯" title={isAr ? "المتوسط الكلي" : "Overall Avg"} value={`${avgScore}/100`} color={sc(avgScore)} sub={avgScore >= 75 ? (isAr ? "ممتاز" : "Excellent") : avgScore >= 50 ? (isAr ? "مقبول" : "Fair") : (isAr ? "يحتاج تحسين" : "Needs work")} delay={0} />
-                  <InsightCard icon="📅" title={isAr ? "جلسات هذا الأسبوع" : "Sessions/Week"} value={thisWeek.length} color="#60a5fa" sub={isAr ? "هذا الأسبوع" : "this week"} delay={60} />
-                  <InsightCard icon="📈" title={isAr ? "التغير الأسبوعي" : "Weekly Change"} value={weekAvg && lastWeekAvg ? `${trendPct > 0 ? "+" : ""}${trendPct}%` : "—"} color={trendPct >= 0 ? "#10b981" : "#ef4444"} sub={isAr ? "مقارنة بالأسبوع الماضي" : "vs last week"} delay={120} />
-                  <InsightCard icon="⚡" title={isAr ? "مؤشر الإرهاق" : "Fatigue Index"} value={`${fatigueScore}%`} color={fatigueScore >= 70 ? "#ef4444" : fatigueScore >= 45 ? "#f59e0b" : "#10b981"} sub={fatigueScore >= 70 ? (isAr ? "مرتفع" : "High") : fatigueScore >= 45 ? (isAr ? "متوسط" : "Moderate") : (isAr ? "منخفض" : "Low")} delay={180} />
-                </div>
-              </Section>
-
-              {last30Scores.length > 1 && (
-                <Section title={isAr ? "مسار 30 يوم" : "30-Day Trend"}>
-                  <div style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, padding: "14px 16px" }}>
-                    <Sparkline scores={last30Scores} color="#1a56db" h={52} />
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                      <span style={{ fontSize: 9, color: "#6b82a6", fontWeight: 600 }}>{isAr ? "30 يوم مضت" : "30 days ago"}</span>
-                      <span style={{ fontSize: 9, color: "#6b82a6", fontWeight: 600 }}>{isAr ? "اليوم" : "Today"}</span>
-                    </div>
-                  </div>
-                </Section>
-              )}
-
-              <AITextSection
-                loading={loading} data={data} error={error}
-                onRetry={() => loadInsight(tab)} isAr={isAr}
-              />
-            </div>
-          )}
-
-          {/* Tab: Trends */}
-          {tab === "trends" && sessions.length > 0 && (
-            <div>
-              <Section title={isAr ? "تحليل الاتجاه" : "Trend Analysis"} sub={isAr ? "آخر 30 جلسة" : "Last 30 sessions"}>
-                <div style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, padding: "14px 16px", marginBottom: 12 }}>
-                  {last30Scores.length > 1
-                    ? <Sparkline scores={last30Scores} color="#1a56db" h={64} />
-                    : <div style={{ height: 64, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#6b82a6" }}>
-                        {isAr ? "تحتاج مزيداً من الجلسات" : "Need more sessions for trend data"}
-                      </div>}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-                  <InsightCard icon="⬆️" title={isAr ? "أفضل أسبوع" : "Best Week"} value={`${Math.max(...(weekScores.length ? weekScores : [avgScore]), 0)}/100`} color="#10b981" delay={0} />
-                  <InsightCard icon="📊" title={isAr ? "هذا الأسبوع" : "This Week"} value={weekAvg ? `${weekAvg}/100` : "—"} color="#60a5fa" delay={60} />
-                  <InsightCard icon="📉" title={isAr ? "التغير" : "Change"} value={weekAvg && lastWeekAvg ? `${trendPct > 0 ? "+" : ""}${trendPct}%` : "—"} color={trendPct >= 0 ? "#10b981" : "#ef4444"} delay={120} />
-                </div>
-              </Section>
-
-              <AITextSection loading={loading} data={data} error={error} onRetry={() => loadInsight(tab)} isAr={isAr} />
-            </div>
-          )}
-
-          {/* Tab: Fatigue */}
-          {tab === "fatigue" && sessions.length > 0 && (
-            <div>
-              <Section title={isAr ? "مؤشرات الإرهاق والخطر" : "Fatigue & Risk Indicators"}>
-                <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap" }}>
-                  <FatigueGauge level={fatigueScore} />
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    <RiskMeter score={neckRisk} label={isAr ? "خطر الرقبة والكتف" : "Neck & Shoulder Risk"} />
-                    <RiskMeter score={burnoutRisk} label={isAr ? "خطر الإرهاق الوظيفي" : "Burnout Risk"} />
-                    <RiskMeter score={overallRisk} label={isAr ? "الخطر الإجمالي" : "Overall Risk Score"} />
-                  </div>
-                </div>
-
-                <div style={{ background: `rgba(${overallRisk >= 70 ? "239,68,68" : overallRisk >= 45 ? "245,158,11" : "16,185,129"},.06)`, border: `1px solid rgba(${overallRisk >= 70 ? "239,68,68" : overallRisk >= 45 ? "245,158,11" : "16,185,129"},.15)`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: overallRisk >= 70 ? "#f87171" : overallRisk >= 45 ? "#fbbf24" : "#34d399", marginBottom: 6 }}>
-                    {overallRisk >= 70
-                      ? (isAr ? "⚠️ مستوى خطر مرتفع — يُنصح بالراحة" : "⚠️ High risk — rest recommended")
-                      : overallRisk >= 45
-                      ? (isAr ? "⚡ خطر متوسط — راقب وضعيتك" : "⚡ Moderate risk — monitor posture")
-                      : (isAr ? "✅ وضعك جيد — استمر" : "✅ Looking good — keep it up")}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#b0c4de", lineHeight: 1.6 }}>
-                    {overallRisk >= 70
-                      ? (isAr ? "نشاطك يُظهر مؤشرات إجهاد. فكر في تقليل ساعات الجلوس وزيادة فترات الراحة." : "Your activity shows strain indicators. Consider reducing sitting hours and increasing break frequency.")
-                      : overallRisk >= 45
-                      ? (isAr ? "وضعيتك في المنتصف. التحسينات البسيطة ستحدث فرقاً كبيراً." : "Your posture is in the middle zone. Small improvements will make a big difference.")
-                      : (isAr ? "وضعيتك ضمن المعدل الصحي. استمر على هذا النهج." : "Your posture is within healthy range. Maintain this approach.")}
-                  </div>
-                </div>
-              </Section>
-
-              <AITextSection loading={loading} data={data} error={error} onRetry={() => loadInsight(tab)} isAr={isAr} />
-            </div>
-          )}
-
-          {/* Tab: Recommendations */}
-          {tab === "recommendations" && sessions.length > 0 && (
-            <div>
-              <Section title={isAr ? "توصيات مخصصة" : "Smart Recommendations"}
-                sub={isAr ? "مبنية على بياناتك الفعلية" : "Based on your actual data"}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+          {/* ── Executive Tab ──────────────────────────────────────── */}
+          {tab==="executive" && sessions.length>0 && (
+            <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+              {/* KPI grid */}
+              <div>
+                <div style={{ ...D.t.label, color:D.c.muted, marginBottom:12 }}>{isAr?"مؤشرات الأداء الرئيسية":"Key Performance Indicators"}</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   {[
-                    { icon: "🖥️", title: isAr ? "ارتفاع الشاشة" : "Monitor Height",  ok: calibration,                   msg: isAr ? "ضبط معايرة الشاشة" : "Set up monitor calibration" },
-                    { icon: "⏰", title: isAr ? "تكرار الراحة" : "Break Frequency",   ok: fatigueScore < 45,             msg: isAr ? "كل 45 دقيقة" : "Every 45 minutes" },
-                    { icon: "🎯", title: isAr ? "هدف النقاط" : "Score Target",        ok: avgScore >= 75,                msg: `${isAr ? "استهدف" : "Target"} ${Math.min(avgScore + 10, 95)}/100` },
-                    { icon: "📅", title: isAr ? "تكرار الجلسات" : "Session Frequency", ok: thisWeek.length >= 4,          msg: isAr ? "4 جلسات/أسبوع" : "4 sessions/week" },
-                  ].map((item, i) => (
-                    <div key={i} style={{ background: "rgba(15,30,54,.85)", border: `1px solid ${item.ok ? "rgba(16,185,129,.2)" : "rgba(245,158,11,.2)"}`, borderRadius: 12, padding: "12px 14px", animation: `fadeIn 300ms ${i * 70}ms both` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                        <span style={{ fontSize: 18 }}>{item.icon}</span>
-                        <span style={{ fontSize: 14 }}>{item.ok ? "✅" : "⚠️"}</span>
+                    { icon:"🎯", lbl:isAr?"المتوسط الكلي":"Overall Avg",     val:`${avgScore}/100`, sub: avgScore>=75?(isAr?"ممتاز":"Excellent"):avgScore>=50?(isAr?"مقبول":"Fair"):(isAr?"يحتاج تحسين":"Needs work"), col:sc(avgScore) },
+                    { icon:"📅", lbl:isAr?"جلسات هذا الأسبوع":"Sessions/Week", val:`${thisWeek.length}`,    sub:isAr?"هذا الأسبوع":"this week", col:"#60a5fa" },
+                    { icon:"📈", lbl:isAr?"التغير الأسبوعي":"Weekly Change",  val:weekAvg&&lastWeekAvg?(trendPct>0?"+":"")+trendPct+"%":"—", sub:isAr?"مقارنة بالأسبوع الماضي":"vs last week", col:trendPct>=0?D.c.success:D.c.danger },
+                    { icon:"⚡", lbl:isAr?"مؤشر الإرهاق":"Fatigue Index",    val:`${fatigueScore}%`, sub:fatigueScore>=70?(isAr?"مرتفع":"High"):fatigueScore>=45?(isAr?"متوسط":"Moderate"):(isAr?"منخفض":"Low"), col:fatigueScore>=70?D.c.danger:fatigueScore>=45?D.c.warning:D.c.success },
+                  ].map((m,i)=>(
+                    <div key={i} style={{ background:D.c.card, border:`1px solid ${D.c.border}`, borderRadius:14, padding:"14px 16px" }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                        <div style={{ ...D.t.label, color:D.c.muted }}>{m.lbl}</div>
+                        <span style={{ fontSize:16 }}>{m.icon}</span>
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#e8f0fe", marginBottom: 3 }}>{item.title}</div>
-                      <div style={{ fontSize: 10, color: item.ok ? "#34d399" : "#fbbf24", fontWeight: 600 }}>{item.msg}</div>
+                      <div style={{ ...D.t.num, color:m.col, marginBottom:4 }}>{m.val}</div>
+                      <div style={{ ...D.t.small, color:D.c.sub }}>{m.sub}</div>
                     </div>
                   ))}
                 </div>
-              </Section>
+              </div>
 
-              <AITextSection loading={loading} data={data} error={error} onRetry={() => loadInsight(tab)} isAr={isAr} />
+              {/* 30-day sparkline */}
+              {last30Scores.length>1 && (
+                <div>
+                  <div style={{ ...D.t.label, color:D.c.muted, marginBottom:12 }}>{isAr?"مسار 30 يوم":"30-Day Trend"}</div>
+                  <div style={{ background:D.c.card, border:`1px solid ${D.c.border}`, borderRadius:14, padding:"16px 18px" }}>
+                    <Sparkline scores={last30Scores} color={D.c.accent} h={52}/>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginTop:10 }}>
+                      <span style={{ ...D.t.label, color:D.c.muted }}>{isAr?"30 يوم مضت":"30 days ago"}</span>
+                      <span style={{ ...D.t.label, color:D.c.muted }}>{isAr?"اليوم":"Today"}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* AI text */}
+              <AITextSection loading={loading} data={data} error={error} onRetry={()=>loadInsight(tab)} isAr={isAr} D={D}/>
+            </div>
+          )}
+
+          {/* ── Trends Tab ─────────────────────────────────────────── */}
+          {tab==="trends" && sessions.length>0 && (
+            <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+              <div>
+                <div style={{ ...D.t.label, color:D.c.muted, marginBottom:12 }}>{isAr?"تحليل الاتجاه — آخر 30 جلسة":"Trend Analysis — Last 30 sessions"}</div>
+                <div style={{ background:D.c.card, border:`1px solid ${D.c.border}`, borderRadius:14, padding:"16px 18px", marginBottom:12 }}>
+                  {last30Scores.length>1
+                    ? <Sparkline scores={last30Scores} color={D.c.accent} h={64}/>
+                    : <div style={{ ...D.t.body, color:D.c.muted, textAlign:"center", padding:"24px 0" }}>{isAr?"بيانات غير كافية":"Not enough data"}</div>
+                  }
+                </div>
+                {/* Week-over-week */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                  {[
+                    { lbl:isAr?"هذا الأسبوع":"This week",  val:weekAvg||"—",     col:sc(weekAvg||0) },
+                    { lbl:isAr?"الأسبوع الماضي":"Last week", val:lastWeekAvg||"—", col:sc(lastWeekAvg||0) },
+                    { lbl:isAr?"التغير":"Change",           val:weekAvg&&lastWeekAvg?(trendPct>0?"+":"")+trendPct+"%":"—", col:trendPct>=0?D.c.success:D.c.danger },
+                  ].map((m,i)=>(
+                    <div key={i} style={{ background:D.c.card, border:`1px solid ${D.c.border}`, borderRadius:12, padding:"12px 14px", textAlign:"center" }}>
+                      <div style={{ ...D.t.label, color:D.c.muted, marginBottom:8 }}>{m.lbl}</div>
+                      <div style={{ ...D.t.numSm, color:m.col }}>{m.val}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <AITextSection loading={loading} data={data} error={error} onRetry={()=>loadInsight(tab)} isAr={isAr} D={D}/>
+            </div>
+          )}
+
+          {/* ── Fatigue Tab ────────────────────────────────────────── */}
+          {tab==="fatigue" && sessions.length>0 && (
+            <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+              <div style={{ display:"flex", justifyContent:"center" }}>
+                <FatigueGauge level={fatigueScore}/>
+              </div>
+              {/* Fatigue breakdown bars */}
+              <div>
+                <div style={{ ...D.t.label, color:D.c.muted, marginBottom:12 }}>{isAr?"توزيع مستويات الأداء":"Performance Distribution"}</div>
+                {[
+                  { lbl:isAr?"ممتاز (80+)":"Excellent (80+)", pct:Math.round(scores.filter(s=>s>=80).length/Math.max(scores.length,1)*100), col:D.c.success },
+                  { lbl:isAr?"جيد (60-79)":"Good (60-79)",    pct:Math.round(scores.filter(s=>s>=60&&s<80).length/Math.max(scores.length,1)*100), col:D.c.accent },
+                  { lbl:isAr?"ضعيف (<60)":"Weak (<60)",      pct:Math.round(scores.filter(s=>s<60).length/Math.max(scores.length,1)*100), col:D.c.danger },
+                ].map((b,i)=>(
+                  <div key={i} style={{ marginBottom:10 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                      <span style={{ ...D.t.small, color:D.c.sub }}>{b.lbl}</span>
+                      <span style={{ ...D.t.small, color:b.col, fontWeight:700 }}>{b.pct}%</span>
+                    </div>
+                    <div style={{ height:5, background:"rgba(255,255,255,.06)", borderRadius:99 }}>
+                      <div style={{ height:"100%", width:`${b.pct}%`, background:b.col, borderRadius:99, transition:"width .5s" }}/>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <AITextSection loading={loading} data={data} error={error} onRetry={()=>loadInsight(tab)} isAr={isAr} D={D}/>
+            </div>
+          )}
+
+          {/* ── Recommendations Tab ────────────────────────────────── */}
+          {tab==="recommendations" && sessions.length>0 && (
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              {overallRisk > 0 && (
+                <div style={{ background:`${overallRisk>=70?D.c.danger:overallRisk>=45?D.c.warning:D.c.success}12`, border:`1px solid ${overallRisk>=70?D.c.danger:overallRisk>=45?D.c.warning:D.c.success}30`, borderRadius:14, padding:"14px 16px" }}>
+                  <div style={{ ...D.t.label, color:overallRisk>=70?D.c.danger:overallRisk>=45?D.c.warning:D.c.success, marginBottom:8 }}>{isAr?"مستوى الخطر الإجمالي":"Overall Risk Level"}</div>
+                  <div style={{ ...D.t.numSm, color:overallRisk>=70?D.c.danger:overallRisk>=45?D.c.warning:D.c.success }}>{overallRisk}% — {overallRisk>=70?(isAr?"مرتفع":"High"):overallRisk>=45?(isAr?"متوسط":"Moderate"):(isAr?"منخفض":"Low")}</div>
+                </div>
+              )}
+              <AITextSection loading={loading} data={data} error={error} onRetry={()=>loadInsight(tab)} isAr={isAr} D={D}/>
             </div>
           )}
 
         </div>
       </div>
-      <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}} @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
     </div>
-  );
-}
-
-// ── AI Text block (shared across tabs) ───────────────────────────
-function AITextSection({ loading, data, error, onRetry, isAr }) {
-  return (
-    <div style={{ background: "linear-gradient(135deg,rgba(26,86,219,.06),rgba(8,145,178,.04))", border: "1px solid rgba(26,86,219,.14)", borderRadius: 14, padding: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <div style={{ width: 24, height: 24, borderRadius: 7, background: "linear-gradient(135deg,#1a56db,#0891b2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>🧠</div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-          {isAr ? "تحليل Corvus AI" : "Corvus AI Analysis"}
-        </span>
-        {loading && <span style={{ marginLeft: "auto" }}><LoadingDots /></span>}
-      </div>
-
-      {loading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {[100, 85, 70, 55].map((w, i) => (
-            <div key={i} style={{ height: 12, borderRadius: 6, width: `${w}%`, background: "linear-gradient(90deg,rgba(255,255,255,.06) 25%,rgba(255,255,255,.1) 50%,rgba(255,255,255,.06) 75%)", backgroundSize: "400% 100%", animation: `shimmer 1.6s ease ${i*80}ms infinite` }} />
-          ))}
-          <style>{`@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}`}</style>
-        </div>
-      )}
-
-      {!loading && data && (
-        <div style={{ fontSize: 13, color: "#b0c4de", lineHeight: 1.7, animation: "fadeIn 300ms both" }}>
-          <MdText text={data} />
-        </div>
-      )}
-
-      {!loading && error && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <span style={{ fontSize: 12, color: "#f87171" }}>⚠ {error}</span>
-          <button onClick={onRetry} style={{ background: "rgba(26,86,219,.15)", border: "1px solid rgba(26,86,219,.25)", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 700, color: "#60a5fa", cursor: "pointer" }}>
-            {isAr ? "⟳ أعد المحاولة" : "⟳ Retry"}
-          </button>
-        </div>
-      )}
-
-      {!loading && !data && !error && (
-        <div style={{ fontSize: 12, color: "#6b82a6", fontStyle: "italic" }}>
-          {isAr ? "جارٍ التحليل..." : "Generating analysis..."}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LoadingDots() {
-  return (
-    <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
-      {[0,1,2].map(i => (
-        <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: "#1a56db", display: "inline-block", animation: `blink 1.2s ease ${i*0.2}s infinite` }} />
-      ))}
-      <style>{`@keyframes blink{0%,80%,100%{opacity:.3}40%{opacity:1}}`}</style>
-    </span>
   );
 }
