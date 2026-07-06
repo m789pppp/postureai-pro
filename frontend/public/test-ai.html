@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head><title>AI Test</title>
+<style>body{background:#0f172a;color:#e2e8f0;font-family:monospace;padding:20px}
+button{background:#1a56db;color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px}
+#out{margin-top:16px;padding:14px;background:#1e293b;border-radius:8px;min-height:80px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h2>🧪 Corvus Backend AI Test</h2>
+<button onclick="testHealth()">1. Test Backend</button>
+<button onclick="testAI()" style="margin-left:10px">2. Test AI Chat</button>
+<div id="out">Click a button to test...</div>
+<script>
+async function testHealth() {
+  const out = document.getElementById("out");
+  out.textContent = "Testing backend...";
+  try {
+    const r = await fetch("/api/health");
+    const d = await r.json();
+    out.textContent = "✅ Backend OK\n" + JSON.stringify(d, null, 2);
+  } catch(e) {
+    out.textContent = "❌ Backend failed: " + e.message;
+  }
+}
+
+async function testAI() {
+  const out = document.getElementById("out");
+  out.textContent = "Testing AI (may take 5-20 seconds)...";
+  try {
+    const r = await fetch("/api/coach/chat", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        messages: [{role:"user", content:"My posture score is 43/100. What is my biggest problem?"}],
+        context: {system_prompt: "You are a posture coach. User score: 43/100, alerts: forward head."},
+        lang: "en", max_tokens: 150
+      })
+    });
+    const d = await r.json();
+    if(d.text) {
+      out.textContent = "✅ AI WORKING!\n\nResponse:\n" + d.text;
+    } else {
+      out.textContent = "❌ No AI text\n\n" + JSON.stringify(d, null, 2);
+    }
+  } catch(e) {
+    out.textContent = "❌ AI failed: " + e.message;
+  }
+}
+</script>
+</body>
+</html>
