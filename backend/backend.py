@@ -13141,7 +13141,8 @@ You can help with:
             except Exception as _le:
                 log_event("coach_llm7_error", meta={"error": str(_le)[:80]})
 
-        # ── Audit + usage tracking ────────────────────────────────────
+        if text is None:
+            return jsonify({"error": "AI unavailable — please try again", "ok": False, "text": None}), 503
         _uid = getattr(g, "uid", "unknown")
         audit(_uid, "ai_coach_query", "local:" + LOCAL_LLM_MODEL if OLLAMA_URL else "none", {"lang": lang, "turns": len(gemini_contents)})
         try:
