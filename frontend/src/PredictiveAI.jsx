@@ -147,6 +147,7 @@ function AnomalyRow({ anomaly, sessions, isAr }) {
     : "—";
   const isHigh = anomaly.direction === "high";
   const color  = isHigh ? "#10b981" : "#ef4444";
+  const T = D?.t || { label:{fontSize:9,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase"}, small:{fontSize:11}, h3:{fontSize:12,fontWeight:600} };
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: T.sp3,
@@ -641,6 +642,7 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
                 onRetry={() => loadAI(tab)} isAr={isAr} />
             </div>
           )}
+
         </div>
       </div>
 
