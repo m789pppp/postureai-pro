@@ -788,7 +788,6 @@ async function getAuthToken() {
 
 async function callBackendAI(messages, systemPrompt, maxTokens) {
   const tok = await getAuthToken();
-  const last = [...messages].reverse().find(m => m.role === "user");
   const res = await fetch(`${API_BASE}/coach/chat`, {
     method:  "POST",
     headers: {"Content-Type":"application/json", ...(tok?{Authorization:`Bearer ${tok}`}:{})},
@@ -798,12 +797,15 @@ async function callBackendAI(messages, systemPrompt, maxTokens) {
       lang:    systemPrompt?.includes("Arabic") ? "ar" : "en",
       max_tokens: maxTokens || 400,
     }),
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(28000),
   });
-  if (!res.ok) throw new Error(`backend ${res.status}`);
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error(err?.error || `backend ${res.status}`);
+  }
   const data = await res.json();
   const text = data?.text?.trim();
-  if (!text) throw new Error("empty");
+  if (!text) throw new Error("backend_empty_response");
   _backendAIReady = true;
   return text;
 }
