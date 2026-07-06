@@ -1115,7 +1115,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const aiText  = session.ai_tip||session.ai_insight||session.claude_analysis||"";
   const painSum = session.pain_summary||"";
   const impTip  = session.improvement_tip||"";
-  const name    = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
+  const _rawName = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
+  const name    = _rawName.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
   const email   = user?.email||"";
   const dateStr = _fmtDate(session.created_at||new Date(), isAr);
   const realIdx = (()=>{
@@ -1368,7 +1369,8 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const goodPct = session.good_pct || 0;
   const metrics = session.metrics || {};
   const hist    = session.score_history || [];
-  const name    = profile?.name || user?.displayName || user?.email?.split("@")[0] || "Patient";
+  const _rawName2 = profile?.name || user?.displayName || user?.email?.split("@")[0] || "Patient";
+  const name    = _rawName2.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
   const email   = user?.email || "";
   const dob     = profile?.dob || "—";
   const gradeC  = _gc(avg);
@@ -1682,7 +1684,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
     doc.text(lbl, ml+3, y+6);
     doc.setTextColor(...col); doc.setFont("helvetica","bold");
-    if(value!==undefined&&value!==null) doc.text(`${Math.round(value*10)/10}${unit}`, ml+cw*0.38, y+6);
+    if(value!==undefined&&value!==null) doc.text(`${Math.round(value*10)/10} ${unit||""}`, ml+cw*0.38, y+6);
     doc.text(String(Math.round(sc)), ml+cw*0.56, y+6);
     doc.setFontSize(7.5); doc.text(_gl(sc,false), ml+cw*0.72, y+6);
     y+=9;
@@ -1795,7 +1797,8 @@ export async function generateComparisonPDF({ session1, session2, profile, user,
   const num1 = idx1>=0 ? allSessions.length-idx1 : 1;
   const num2 = idx2>=0 ? allSessions.length-idx2 : 2;
 
-  const name   = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
+  const _rawName3 = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
+  const name   = _rawName3.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
   const nowStr = new Date().toLocaleDateString(isAr?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"});
 
   // ── COVER ─────────────────────────────────────────────────────
@@ -2258,7 +2261,8 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
   const sf = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
-  const name   = profile?.name||user?.displayName||(isAr?"مستخدم":"User");
+  const _rawName4 = profile?.name||user?.displayName||(isAr?"مستخدم":"User");
+  const name   = _rawName4.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
   const now    = new Date();
   const nowStr = now.toLocaleDateString(isAr?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"});
 
@@ -2364,7 +2368,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   const kpis=[
     [isAr?`${avgAll}`:`${avgAll}`,    isAr?"متوسط الكل":"All-time avg",  _scoreColor(avgAll)],
     [isAr?`${avg90}`:`${avg90}`,      isAr?"آخر 90 يوم":"90-day avg",    _scoreColor(avg90)],
-    [`${trendDelta>0?"+":""}${trendDelta}`, isAr?"التغيّر":"Trend Δ",   trendCol],
+    [`${trendDelta>0?"+":""}${trendDelta}`, isAr?`تغيّر (${avgFirst} - ${avgLast})`:`Trend (${avgFirst} - ${avgLast})`,   trendCol],
     [String(sessions.length),          isAr?"الجلسات":"Sessions",         T.indigo],
     [freqPerWeek,                       isAr?"جلسة/أسبوع":"Per week",     T.cyan],
     [`${avgDurMin}m`,                   isAr?"متوسط المدة":"Avg duration", T.primary],

@@ -62,9 +62,10 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
 
   const thisWeek = sessions.filter(s => now_ms - toMs(s) <= 7*86400000);
   const weekAvg  = avg(thisWeek.map(s => s.avg_score || 0));
-  const color    = avgScore >= 75 ? "#10b981" : avgScore >= 50 ? "#f59e0b" : "#ef4444";
+  const color    = avgScore >= 80 ? "#10b981" : avgScore >= 60 ? "#f59e0b" : "#ef4444";
   const now      = new Date().toLocaleDateString(isAr ? "ar-EG" : "en-US", { year:"numeric", month:"long", day:"numeric" });
-  const safeName  = escapeHtml(profile?.name || (isAr ? "المستخدم" : "User"));
+  const _cleanName = (profile?.name || (isAr ? "المستخدم" : "User")).replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
+  const safeName  = escapeHtml(_cleanName);
   const safeTitle = escapeHtml(reportTitle);
   const planLabel = escapeHtml(qualityFor(profile?.tier).label[isAr ? "ar" : "en"]);
 
@@ -89,8 +90,8 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
   return raw;
 })();
 
-  const rangeLabelEn = reportType === "weekly" ? "This Week's Sessions" : reportType === "monthly" ? "This Month's Sessions" : `Last ${rowLimit} Sessions`;
-  const rangeLabelAr = reportType === "weekly" ? "جلسات هذا الأسبوع" : reportType === "monthly" ? "جلسات هذا الشهر" : `آخر ${rowLimit} جلسات`;
+  const rangeLabelEn = reportType === "weekly" ? "This Week's Sessions" : reportType === "monthly" ? "This Month's Sessions" : `Sessions (showing ${tableRows.length} of ${filteredSessions.length})`;
+  const rangeLabelAr = reportType === "weekly" ? "جلسات هذا الأسبوع" : reportType === "monthly" ? "جلسات هذا الشهر" : `الجلسات (${tableRows.length} من ${filteredSessions.length})`;
 
   return `<!DOCTYPE html>
 <html dir="${isAr ? "rtl" : "ltr"}" lang="${lang}">
@@ -134,6 +135,7 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
     ${isAr ? "التاريخ:" : "Date:"} ${now}<br/>
     ${isAr ? "الخطة:" : "Plan:"} ${planLabel}<br/>
     ${isAr ? "إجمالي الجلسات:" : "Total sessions:"} ${sessions.length}
+    ${filteredSessions.length !== sessions.length ? `<br/>${isAr?"الجلسات في النطاق:":"In range:"} ${filteredSessions.length}` : ""}
     ${rangeMs ? `<br/>${isAr?"نطاق التقرير:":"Range:"} ${reportType === "weekly" ? (isAr?"أسبوع":"1 week") : (isAr?"شهر":"1 month")} (${tableRows.length} ${isAr?"جلسة":"sessions"})` : ""}
   </div>
 </div>
@@ -158,7 +160,7 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
   </div>
   <div class="kpi" style="border-color:#f59e0b">
     <div class="kpi-label">${isAr ? "السلسلة" : "Streak"}</div>
-    <div class="kpi-value" style="color:#f59e0b">${profile?.streak_days || 0}</div>
+    <div class="kpi-value" style="color:#f59e0b">${(() => { const dates = [...new Set(sessions.map(s => { try { const d = s.created_at?.toDate?.() || new Date(s.created_at || 0); return d.toISOString().slice(0,10); } catch { return null; } }).filter(Boolean))].sort(); if (dates.length < 2) return 0; let streak = 1; for (let i = dates.length - 2; i >= 0; i--) { const diff = (new Date(dates[i+1]) - new Date(dates[i])) / 86400000; if (diff <= 1.5) streak++; else break; } return streak; })()}</div>
     <div class="kpi-sub">${isAr ? "يوم" : "days"}</div>
   </div>
 </div>
@@ -184,7 +186,8 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
       : tableRows.map((s, i) => {
         const scoreVal = s.avg_score || 0;
         const col = sc(scoreVal);
-        const dur = s.duration_min ? `${escapeHtml(String(s.duration_min))} ${isAr ? "د" : "min"}` : "—";
+        const durSec = s.duration_s || s.duration_sec || s.duration_min * 60 || 0;
+        const dur = durSec > 0 ? `${Math.floor(durSec/60)}:${String(Math.round(durSec%60)).padStart(2,'0')}` : "—";
         return `<tr>
           <td>${i + 1}</td>
           <td>${escapeHtml(fmt(s.created_at))}</td>
