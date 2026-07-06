@@ -26,16 +26,74 @@ const pct = (a, b) => b ? Math.round(((a - b) / b) * 100) : 0;
 const avg = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
 
 function MdText({ text }) {
-  const html = (text || "")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g,     "<em>$1</em>")
-    .replace(/^### (.+)$/gm,   "<h4 style='margin:10px 0 4px;font-size:13px;font-weight:700;color:#e8f0fe'>$1</h4>")
-    .replace(/^## (.+)$/gm,    "<h3 style='margin:12px 0 5px;font-size:15px;font-weight:800;color:#e8f0fe;font-family:Syne,sans-serif'>$1</h3>")
-    .replace(/^- (.+)$/gm,     "<li style='margin:4px 0;padding-left:4px'>$1</li>")
-    .replace(/(<li[\s\S]+?<\/li>)/g, "<ul style='padding-left:18px;margin:8px 0'>$1</ul>")
-    .replace(/\n\n/g, "<br/><br/>")
-    .replace(/\n/g,   "<br/>");
-  return <span dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 1.75 }} />;
+  if (!text) return null;
+
+  // Process line by line for correct bullet grouping
+  const lines = text.split("\n");
+  const elements = [];
+  let bulletBuffer = [];
+  let key = 0;
+
+  const flushBullets = () => {
+    if (!bulletBuffer.length) return;
+    elements.push(
+      <ul key={key++} style={{
+        paddingLeft: 0, margin: "8px 0",
+        listStyle: "none", display: "flex", flexDirection: "column", gap: 5,
+      }}>
+        {bulletBuffer.map((item, i) => (
+          <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <span style={{ color: "#3b82f6", flexShrink: 0, marginTop: 2, fontSize: 9 }}>●</span>
+            <span style={{ flex: 1, lineHeight: 1.6 }}
+              dangerouslySetInnerHTML={{ __html: item }}/>
+          </li>
+        ))}
+      </ul>
+    );
+    bulletBuffer = [];
+  };
+
+  const inlineFormat = s => s
+    .replace(/\*\*(.+?)\*\*/g, `<strong style="color:#e2eaf6;font-weight:700">$1</strong>`)
+    .replace(/\*(.+?)\*/g, `<em style="color:#94a3b8">$1</em>`);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) { flushBullets(); continue; }
+
+    if (line.startsWith("## ")) {
+      flushBullets();
+      elements.push(
+        <div key={key++} style={{
+          fontSize: 13, fontWeight: 700, color: "#e2eaf6",
+          fontFamily: "Syne,sans-serif", letterSpacing: "-.01em",
+          margin: elements.length > 0 ? "14px 0 5px" : "0 0 5px",
+          paddingBottom: 5, borderBottom: "1px solid rgba(255,255,255,.06)",
+        }} dangerouslySetInnerHTML={{ __html: inlineFormat(line.slice(3)) }} />
+      );
+    } else if (line.startsWith("### ")) {
+      flushBullets();
+      elements.push(
+        <div key={key++} style={{
+          fontSize: 10.5, fontWeight: 700, color: "#60a5fa",
+          textTransform: "uppercase", letterSpacing: ".06em",
+          margin: "10px 0 4px",
+        }} dangerouslySetInnerHTML={{ __html: inlineFormat(line.slice(4)) }} />
+      );
+    } else if (line.startsWith("- ") || line.startsWith("• ")) {
+      bulletBuffer.push(inlineFormat(line.slice(2)));
+    } else {
+      flushBullets();
+      elements.push(
+        <p key={key++} style={{
+          margin: "4px 0", lineHeight: 1.7,
+          color: "#94a3b8", fontSize: 13,
+        }} dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />
+      );
+    }
+  }
+  flushBullets();
+  return <div style={{ display: "flex", flexDirection: "column" }}>{elements}</div>;
 }
 
 // ── Fatigue Gauge ──────────────────────────────────────────────────
@@ -588,5 +646,79 @@ Be specific and practical. Reference the actual scores. Max 220 words.`,
         </div>
       </div>
     </div>
+  );
+}
+
+// ── AI Text block (shared across tabs) ───────────────────────────
+function AITextSection({ loading, data, error, onRetry, isAr }) {
+  return (
+    <div style={{
+      background: "rgba(15,28,50,.95)",
+      border: "1px solid rgba(26,86,219,.18)",
+      borderRadius: 14, padding: "14px 16px",
+      borderTop: "2px solid rgba(26,86,219,.4)",
+    }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: loading || data ? 12 : 0 }}>
+        <div style={{
+          width:22, height:22, borderRadius:6, flexShrink:0,
+          background:"linear-gradient(135deg,#1a56db,#0891b2)",
+          display:"flex", alignItems:"center", justifyContent:"center", fontSize:11,
+        }}>🧠</div>
+        <span style={{ fontSize:10, fontWeight:700, color:"#60a5fa", letterSpacing:".07em", textTransform:"uppercase" }}>
+          {isAr ? "تحليل Corvus AI" : "Corvus AI Analysis"}
+        </span>
+        {loading && <span style={{ marginLeft:"auto" }}><LoadingDots /></span>}
+      </div>
+
+      {loading && (
+        <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+          {[100, 88, 72, 55].map((w, i) => (
+            <div key={i} style={{
+              height:10, borderRadius:5, width:`${w}%`,
+              background:"linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.05) 75%)",
+              backgroundSize:"400% 100%",
+              animation:`shimmer 1.6s ease ${i * 80}ms infinite`,
+            }}/>
+          ))}
+          <style>{`@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}`}</style>
+        </div>
+      )}
+
+      {!loading && data && (
+        <div style={{ animation:"fadeIn 300ms both" }}>
+          <MdText text={data} />
+        </div>
+      )}
+
+      {!loading && error && (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+          <span style={{ fontSize:12, color:"#f87171" }}>⚠ {error}</span>
+          <button onClick={onRetry} style={{
+            background:"rgba(26,86,219,.15)", border:"1px solid rgba(26,86,219,.25)",
+            borderRadius:7, padding:"5px 12px", fontSize:11, fontWeight:700,
+            color:"#60a5fa", cursor:"pointer",
+          }}>
+            {isAr ? "⟳ أعد المحاولة" : "⟳ Retry"}
+          </button>
+        </div>
+      )}
+
+      {!loading && !data && !error && (
+        <div style={{ fontSize:12, color:"#5a7090", fontStyle:"italic" }}>
+          {isAr ? "جارٍ التحليل..." : "Generating analysis..."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LoadingDots() {
+  return (
+    <span style={{ display:"inline-flex", gap:3, alignItems:"center" }}>
+      {[0,1,2].map(i => (
+        <span key={i} style={{ width:5, height:5, borderRadius:"50%", background:"#1a56db", display:"inline-block", animation:`blink 1.2s ease ${i*0.2}s infinite` }} />
+      ))}
+      <style>{`@keyframes blink{0%,80%,100%{opacity:.3}40%{opacity:1}}`}</style>
+    </span>
   );
 }
