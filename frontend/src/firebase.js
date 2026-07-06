@@ -1774,217 +1774,420 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 // ═══════════════════════════════════════════════════════════════════
 export async function generateComparisonPDF({ session1, session2, profile, user, lang="en", allSessions=[] }) {
   const { jsPDF } = await import("jspdf");
-  const isAr  = lang === "ar";
-  const tier  = profile?.tier || "standard";
+  const isAr = lang==="ar";
+  const tier = profile?.tier||"standard";
   if (!tierAtLeast(tier,"professional")) throw new Error("Comparison PDF requires Pro or Elite");
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
-  const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
-  const cairo = _cairoLoaded;
-  const sf = (sz,st="normal") => cairo&&isAr ? fontAr(doc,sz,st,true) : font(doc,sz,st);
-  const tierCol = tierAtLeast(tier,"elite")?T.success:T.cyan;
+  const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
+  const sf  = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
+  const now = new Date();
+  const nowStr = now.toLocaleDateString(isAr?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"});
+  const name   = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
+  const tierCol= tierAtLeast(tier,"elite")?T.success:T.cyan;
+  const tierLbl= tier.charAt(0).toUpperCase()+tier.slice(1);
 
-  const a1 = Math.round(session1.avg_score||0);
-  const a2 = Math.round(session2.avg_score||0);
-  const delta = a2 - a1;
-  const improved = delta > 0;
+  // ── DATA ──────────────────────────────────────────────────────
+  const a1=Math.round(session1.avg_score||0), a2=Math.round(session2.avg_score||0);
+  const delta=a2-a1, improved=delta>0, declined=delta<0;
   const deltaCol = delta>0?T.success:delta<0?T.danger:T.muted;
-  const gradeC1 = _scoreColor(a1), gradeC2 = _scoreColor(a2);
+  const deltaBg  = delta>0?T.successBg:delta<0?T.dangerBg:T.bg;
+  const g1=_scoreColor(a1), g2=_scoreColor(a2);
 
-  const idx1 = allSessions.findIndex(s=>(s.id||s.session_id)===(session1.id||session1.session_id));
-  const idx2 = allSessions.findIndex(s=>(s.id||s.session_id)===(session2.id||session2.session_id));
-  const num1 = idx1>=0 ? allSessions.length-idx1 : 1;
-  const num2 = idx2>=0 ? allSessions.length-idx2 : 2;
+  const idx1=allSessions.findIndex(s=>(s.id||s.session_id)===(session1.id||session1.session_id));
+  const idx2=allSessions.findIndex(s=>(s.id||s.session_id)===(session2.id||session2.session_id));
+  const num1=idx1>=0?allSessions.length-idx1:1;
+  const num2=idx2>=0?allSessions.length-idx2:2;
 
-  const _rawName3 = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
-  const name   = _rawName3.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
-  const nowStr = new Date().toLocaleDateString(isAr?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"});
-
-  // ── COVER ─────────────────────────────────────────────────────
-  fc(doc,...T.ink); doc.rect(0,0,W,72,"F");
-  _logo(doc,ml,14,22,_logoMd);
-  sf(9,"normal"); tc(doc,...T.muted);
-  doc.text(isAr?"تقرير المقارنة بين الجلستين":"Session Comparison Report", ml+30, 22);
-  sf(7,"normal"); doc.text(nowStr, ml+30, 29);
-  fc(doc,...tierCol); rr(doc,W-mr-28,12,28,10,2,"F");
-  font(doc,7,"bold"); tc(doc,255,255,255);
-  doc.text(tier.toUpperCase(), W-mr-14, 19.5,{align:"center"});
-  let y=84;
-
-  // Title
-  sf(18,"bold"); tc(doc,...T.ink);
-  doc.text(isAr?"تقرير المقارنة":"Comparison Report",ml,y); y+=8;
-  sf(9,"normal"); tc(doc,...T.muted);
-  doc.text(isAr?`${name} · ${session1.mode||"laptop"} camera`:`${name} · ${session1.mode||"laptop"} camera`,ml,y); y+=14;
-
-  // Side-by-side score comparison
-  fc(doc,...T.bg); rr(doc,ml,y,cw,56,4,"F");
-  dc(doc,...T.border); lw(doc,0.2); rr(doc,ml,y,cw,56,4,"S"); lw(doc,0.3);
-
-  // Session 1 (left)
-  const half=(cw-6)/2;
-  fc(doc,...gradeC1); rr(doc,ml+4,y+4,half,48,3,"F");
-  fc(doc,...T.ink); doc.circle(ml+4+half/2, y+26, 17,"F");
-  sf(16,"bold"); tc(doc,...gradeC1);
-  doc.text(String(a1), ml+4+half/2, y+32,{align:"center"});
-  sf(7,"bold"); tc(doc,255,255,255);
-  doc.text(`#${num1}`,ml+4+half/2,y+10,{align:"center"});
-  sf(8,"normal"); tc(doc,...T.ink);
-  doc.text(_scoreLabel(a1,isAr), ml+4+half/2, y+44,{align:"center"});
-  sf(7,"normal"); tc(doc,...T.muted);
-  doc.text(_fmtDate(session1.created_at,isAr), ml+4+half/2, y+50.5,{align:"center"});
-
-  // Delta arrow centre
-  const arrowX = ml+4+half+3;
-  sf(14,"bold"); tc(doc,...deltaCol);
-  doc.text(delta===0?"=":(improved?"+":"-"),arrowX+3,y+28,{align:"center"});
-  sf(9,"bold"); tc(doc,...deltaCol);
-  doc.text(`${delta>0?"+":""}${delta}`, arrowX+3, y+37,{align:"center"});
-
-  // Session 2 (right)
-  const rx = arrowX+6;
-  fc(doc,...gradeC2); rr(doc,rx,y+4,half,48,3,"F");
-  fc(doc,...T.ink); doc.circle(rx+half/2, y+26, 17,"F");
-  sf(16,"bold"); tc(doc,...gradeC2);
-  doc.text(String(a2), rx+half/2, y+32,{align:"center"});
-  sf(7,"bold"); tc(doc,255,255,255);
-  doc.text(`#${num2}`,rx+half/2,y+10,{align:"center"});
-  sf(8,"normal"); tc(doc,...T.ink);
-  doc.text(_scoreLabel(a2,isAr), rx+half/2, y+44,{align:"center"});
-  sf(7,"normal"); tc(doc,...T.muted);
-  doc.text(_fmtDate(session2.created_at,isAr), rx+half/2, y+50.5,{align:"center"});
-  y+=64;
-
-  // Insight banner
-  const insightText = improved
-    ? (isAr?`تحسّن ملحوظ +${delta} نقطة — ${_scoreLabel(a2,isAr)} مقارنةً بـ ${_scoreLabel(a1,isAr)}`:`+${delta} point improvement — ${_scoreLabel(a2,isAr)} vs ${_scoreLabel(a1,isAr)}`)
-    : delta<0
-    ? (isAr?`انخفاض ${Math.abs(delta)} نقطة — راجع أسباب التراجع في المقاييس أدناه`:`${Math.abs(delta)} point decline — review metric changes below`)
-    : (isAr?"النتيجة مستقرة بين الجلستين":"Score stable between sessions");
-  fc(doc,...(improved?T.successBg:delta<0?T.dangerBg:T.bg));
-  rr(doc,ml,y,cw,11,2,"F");
-  sf(8.5,"bold"); tc(doc,...(improved?T.success:delta<0?T.danger:T.muted));
-  doc.text(insightText, ml+cw/2, y+7.5,{align:"center"}); y+=17;
-
-  // Metric deltas — show all metrics present in either session
-  const m1 = session1.metrics||{}, m2 = session2.metrics||{};
-  const allKeys = [...new Set([...Object.keys(m1),...Object.keys(m2)])].filter(k=>!k.startsWith("_"));
-  const rows = allKeys.map(k=>{
-    const sc1 = typeof m1[k]==="number"?m1[k]:(m1[k]?.score??100);
-    const sc2 = typeof m2[k]==="number"?m2[k]:(m2[k]?.score??100);
-    const d   = Math.round(sc2-sc1);
-    const lbl = (isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-    return {k,lbl,sc1,sc2,d};
-  }).sort((a,b)=>a.d-b.d); // worst regression first
-
-  y+=2;
-  sf(10,"bold"); tc(doc,...T.ink);
-  doc.text(isAr?"مقارنة المقاييس":"Metric Comparison",ml,y); y+=6;
-
-  // Table header
-  fc(doc,...T.ink); rr(doc,ml,y,cw,9,1,"F");
-  sf(7,"bold"); tc(doc,255,255,255);
-  const cols=[ml+3, ml+cw*0.4, ml+cw*0.56, ml+cw*0.7, ml+cw*0.84];
-  [isAr?"المقياس":"Metric", `#${num1}`, `#${num2}`, isAr?"التغيير":"Δ", isAr?"الاتجاه":"Trend"]
-    .forEach((h,i)=>doc.text(h,cols[i],y+6)); y+=11;
-
-  for (const {lbl,sc1,sc2,d} of rows) {
-    if(y>H-30){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"مقارنة المقاييس":"Metric Comparison"); y=22;}
-    const col1=_scoreColor(sc1), col2=_scoreColor(sc2);
-    const dCol = d>2?T.success:d<-2?T.danger:T.muted;
-    fc(doc,...T.bg); doc.rect(ml,y,cw,9,"F");
-    sf(8,"normal"); tc(doc,...T.ink); doc.text(lbl,cols[0],y+6);
-    sf(8,"bold"); tc(doc,...col1); doc.text(String(Math.round(sc1)),cols[1],y+6);
-    tc(doc,...col2); doc.text(String(Math.round(sc2)),cols[2],y+6);
-    tc(doc,...dCol); doc.text(`${d>0?"+":""}${d}`,cols[3],y+6);
-    const arrow = d>2?"+":d<-2?"-":"=";
-    tc(doc,...dCol); doc.text(arrow,cols[4],y+6);
-    y+=9;
-  }
-
-  // Zonal comparison
-  y+=8;
-  if(y>H-80){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"مقارنة المناطق":"Zone Comparison"); y=22;}
-  sf(10,"bold"); tc(doc,...T.ink);
-  doc.text(isAr?"مقارنة مناطق العمود الفقري":"Spinal Zone Comparison",ml,y); y+=7;
+  const m1=session1.metrics||{}, m2=session2.metrics||{};
+  const allKeys=[...new Set([...Object.keys(m1),...Object.keys(m2)])].filter(k=>!k.startsWith("_"));
+  const metRows=allKeys.map(k=>{
+    const sc1=typeof m1[k]==="number"?m1[k]:(m1[k]?.score??100);
+    const sc2=typeof m2[k]==="number"?m2[k]:(m2[k]?.score??100);
+    const d=Math.round(sc2-sc1);
+    const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+    return{k,lbl,sc1,sc2,d};
+  }).sort((a,b)=>a.d-b.d);
 
   const z1=_zonalRisk(m1), z2=_zonalRisk(m2);
-  const zoneNames={cervical:{en:"Cervical",ar:"عنق الرحم"},thoracic:{en:"Thoracic",ar:"الصدر"},lumbar:{en:"Lumbar",ar:"القطن"}};
-  for (const zk of ["cervical","thoracic","lumbar"]) {
-    if(y>H-30){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"مقارنة المناطق":"Zone Comparison"); y=22;}
-    const r1=z1[zk]||0, r2=z2[zk]||0, dz=r2-r1;
-    const zCol=_riskColor(r2);
-    fc(doc,...T.bg); rr(doc,ml,y,cw,14,2,"F");
-    sf(8.5,"bold"); tc(doc,...T.ink);
-    doc.text(isAr?zoneNames[zk].ar:zoneNames[zk].en, ml+4, y+9.5);
-    sf(8,"normal"); tc(doc,..._riskColor(r1));
-    doc.text(`${r1}%`,ml+cw*0.45,y+9.5,{align:"right"});
-    sf(9,"bold"); tc(doc,...(dz>0?T.danger:T.success));
-    doc.text(`${dz>0?"+":"-"} ${Math.abs(dz)}%`, ml+cw*0.55, y+9.5);
-    tc(doc,...zCol);
-    doc.text(`${r2}%`, ml+cw*0.75, y+9.5);
-    // Mini bar
-    const bx=ml+cw*0.8, bw2=cw*0.18;
-    fc(doc,...T.border); rr(doc,bx,y+4,bw2,5,1,"F");
-    fc(doc,...zCol); rr(doc,bx,y+4,Math.max(bw2*(r2/100),2),5,1,"F");
-    y+=16;
-  }
+  const d1=session1.duration_s||session1.duration_sec||0;
+  const d2=session2.duration_s||session2.duration_sec||0;
+  const gp1=Math.round(session1.good_pct||0), gp2=Math.round(session2.good_pct||0);
+  const al1=session1.alerts_count||0, al2=session2.alerts_count||0;
 
-  // FHP Index summary
-  const fhpS1 = typeof m1.fhp==="number"?m1.fhp:(m1.fhp?.score??null);
-  const fhpS2 = typeof m2.fhp==="number"?m2.fhp:(m2.fhp?.score??null);
-  if(fhpS1!==null || fhpS2!==null){
+  // ══════════════════════════════════════════════════════════════
+  // PAGE 1 — PREMIUM COVER
+  // ══════════════════════════════════════════════════════════════
+
+  // Dark header
+  fc(doc,...T.slate); doc.rect(0,0,W,72,"F");
+  fc(doc,...deltaCol);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
+  doc.circle(W*0.85,36,55,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.03}));
+  doc.circle(W*0.85,36,78,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  fc(doc,...deltaCol); doc.rect(0,0,W,3,"F");
+
+  // Logo + brand
+  _logo(doc,ml,16,26,_logoMd);
+  font(doc,13,"bold"); tc(doc,...T.card); doc.text("CORVUS",ml+34,28);
+  font(doc,7,"normal"); tc(doc,148,163,184); doc.text("Health Intelligence Platform",ml+34,36);
+
+  // Tier badge
+  const tlw=doc.getTextWidth(tierLbl)+12;
+  fc(doc,...tierCol);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
+  rr(doc,ml+34,41,tlw,10,3,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  font(doc,7.5,"bold"); tc(doc,...tierCol);
+  doc.text(tierLbl,ml+34+tlw/2,48,{align:"center"});
+
+  // Date right
+  font(doc,7,"normal"); tc(doc,148,163,184); doc.text(nowStr,W-mr,26,{align:"right"});
+  font(doc,7.5,"bold"); tc(doc,...T.card);
+  doc.text(`Session #${num1} vs #${num2}`,W-mr,36,{align:"right"});
+
+  fc(doc,...deltaCol); doc.rect(0,69.5,W,2.5,"F");
+
+  // Title
+  let y=86;
+  font(doc,20,"bold"); tc(doc,...T.ink);
+  doc.text(isAr?"تقرير المقارنة":"Session Comparison Report",ml,y); y+=9;
+  font(doc,9,"normal"); tc(doc,...T.muted);
+  doc.text(`${name} · ${isAr?"مقارنة جلستين":"Head-to-head session analysis"}`,ml,y); y+=16;
+  hr(doc,ml,y,cw); y+=14;
+
+  // ── HERO SCORE COMPARISON ─────────────────────────────────────
+  const heroH=70, half=(cw-14)/2;
+
+  // Session 1 card
+  fc(doc,...T.card); rr(doc,ml,y,half,heroH,6,"F");
+  dc(doc,...g1); lw(doc,0.3); rr(doc,ml,y,half,heroH,6,"S"); lw(doc,0.3);
+  fc(doc,...g1); doc.rect(ml,y,half,3,"F"); rr(doc,ml,y,half,3,3,"F");
+  // Session number chip
+  const s1lbl=`Session #${num1}`;
+  font(doc,7,"bold"); tc(doc,...T.card);
+  fc(doc,...g1); rr(doc,ml+6,y+8,half-12,10,2,"F");
+  doc.text(s1lbl,ml+6+(half-12)/2,y+14.5,{align:"center"});
+  // Score ring
+  dc(doc,...g1); lw(doc,3); doc.circle(ml+half/2,y+40,16,"S"); lw(doc,0.3);
+  fc(doc,...g1);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
+  doc.circle(ml+half/2,y+40,14.5,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  font(doc,20,"bold"); tc(doc,...g1);
+  doc.text(String(a1),ml+half/2,y+45,{align:"center"});
+  font(doc,7,"normal"); tc(doc,...T.muted);
+  doc.text("/100",ml+half/2,y+52,{align:"center"});
+  font(doc,8.5,"bold"); tc(doc,...g1);
+  doc.text(_scoreLabel(a1,isAr),ml+half/2,y+62,{align:"center"});
+
+  // VS divider + delta
+  const mx=ml+half+7;
+  // Delta circle
+  fc(doc,...deltaBg);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.9}));
+  doc.circle(mx,y+35,10,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  dc(doc,...deltaCol); lw(doc,1); doc.circle(mx,y+35,10,"S"); lw(doc,0.3);
+  font(doc,9,"bold"); tc(doc,...deltaCol);
+  doc.text(delta===0?"=":(improved?"↑":"↓"),mx,y+33.5,{align:"center"});
+  font(doc,7,"bold"); tc(doc,...deltaCol);
+  doc.text(`${delta>0?"+":""}${delta}`,mx,y+41,{align:"center"});
+  // VS label
+  font(doc,6.5,"bold"); tc(doc,...T.muted);
+  doc.text("VS",mx,y+52,{align:"center"});
+
+  // Session 2 card
+  const rx=mx+7;
+  fc(doc,...T.card); rr(doc,rx,y,half,heroH,6,"F");
+  dc(doc,...g2); lw(doc,0.3); rr(doc,rx,y,half,heroH,6,"S"); lw(doc,0.3);
+  fc(doc,...g2); doc.rect(rx,y,half,3,"F"); rr(doc,rx,y,half,3,3,"F");
+  const s2lbl=`Session #${num2}`;
+  font(doc,7,"bold"); tc(doc,...T.card);
+  fc(doc,...g2); rr(doc,rx+6,y+8,half-12,10,2,"F");
+  doc.text(s2lbl,rx+6+(half-12)/2,y+14.5,{align:"center"});
+  // Score ring
+  dc(doc,...g2); lw(doc,3); doc.circle(rx+half/2,y+40,16,"S"); lw(doc,0.3);
+  fc(doc,...g2);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
+  doc.circle(rx+half/2,y+40,14.5,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  font(doc,20,"bold"); tc(doc,...g2);
+  doc.text(String(a2),rx+half/2,y+45,{align:"center"});
+  font(doc,7,"normal"); tc(doc,...T.muted);
+  doc.text("/100",rx+half/2,y+52,{align:"center"});
+  font(doc,8.5,"bold"); tc(doc,...g2);
+  doc.text(_scoreLabel(a2,isAr),rx+half/2,y+62,{align:"center"});
+  y+=heroH+8;
+
+  // ── QUICK STATS STRIP ─────────────────────────────────────────
+  const qStats=[
+    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr),T.primary],
+    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2),T.indigo],
+    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`,T.success],
+    [isAr?"التنبيهات":"Alerts",String(al1),String(al2),T.warning],
+  ];
+  qStats.forEach(([lbl,v1,v2,col],i)=>{
+    const qy=y+i*12;
+    if(i%2===0){fc(doc,...T.bg); doc.rect(ml,qy,cw,12,"F");}
+    font(doc,7.5,"normal",isAr); tc(doc,...T.muted); doc.text(lbl,ml+4,qy+8);
+    font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v1,ml+cw*0.45,qy+8,{align:"right"});
+    font(doc,7.5,"bold",false); tc(doc,...T.muted); doc.text("→",ml+cw*0.5,qy+8,{align:"center"});
+    font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v2,ml+cw*0.98,qy+8,{align:"right"});
+  });
+  y+=qStats.length*12+10;
+
+  // ── INSIGHT BANNER ────────────────────────────────────────────
+  const insText=improved
+    ?(isAr?`📈 تحسّن +${delta} نقطة — ${_scoreLabel(a2,isAr)} مقارنةً بـ ${_scoreLabel(a1,isAr)}`:`📈 +${delta} point improvement — ${_scoreLabel(a2,isAr)} vs ${_scoreLabel(a1,isAr)}`)
+    :declined
+    ?(isAr?`📉 انخفاض ${Math.abs(delta)} نقطة — راجع المقاييس المتراجعة أدناه`:`📉 ${Math.abs(delta)} point decline — review regressed metrics below`)
+    :(isAr?"📊 النتيجة مستقرة بين الجلستين":"📊 Score stable between sessions");
+  fc(doc,...deltaBg); rr(doc,ml,y,cw,14,3,"F");
+  dc(doc,...deltaCol); lw(doc,0.25); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
+  fc(doc,...deltaCol); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
+  font(doc,8.5,"bold"); tc(doc,...deltaCol);
+  doc.text(insText,ml+8,y+9.5);
+  y+=22;
+
+  // ══════════════════════════════════════════════════════════════
+  // PAGE 2 — METRIC COMPARISON TABLE + ZONE MAP
+  // ══════════════════════════════════════════════════════════════
+  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"مقارنة المقاييس":"Metric Comparison",isAr); y=22;
+
+  _sh(doc,ml,y,isAr?"مقارنة مفصّلة للمقاييس":"Detailed Metric Breakdown",
+    isAr?"مرتبة من الأسوأ تراجعاً إلى الأفضل تحسناً":"Sorted worst regression to best improvement",deltaCol,isAr);
+  y+=16;
+
+  // Column headers
+  const colX=[ml+3,ml+cw*0.42,ml+cw*0.56,ml+cw*0.70,ml+cw*0.85];
+  fc(doc,...T.slate); rr(doc,ml,y,cw,10,2,"F");
+  font(doc,7.5,"bold"); tc(doc,...T.card);
+  [isAr?"المقياس":"Metric",`#${num1}`,`#${num2}`,isAr?"Δ":"Δ",isAr?"الاتجاه":"Trend"]
+    .forEach((h,i)=>doc.text(h,colX[i],y+7));
+  y+=12;
+
+  metRows.forEach(({lbl,sc1,sc2,d},idx)=>{
+    if(y>H-28){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued",isAr);y=22;}
+    const dC=d>2?T.success:d<-2?T.danger:T.muted;
+    const rowH=11;
+    fc(doc,...(idx%2===0?T.bg:T.card)); doc.rect(ml,y,cw,rowH,"F");
+    // Left accent for significant changes
+    if(Math.abs(d)>5){ fc(doc,...dC); doc.rect(ml,y,2,rowH,"F"); }
+    font(doc,8,"normal",isAr); tc(doc,...T.ink); doc.text(lbl,colX[0]+2,y+7.5);
+    // Score 1 with mini dot
+    const c1=_scoreColor(sc1),c2=_scoreColor(sc2);
+    fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
+    font(doc,8,"bold"); tc(doc,...c1); doc.text(String(Math.round(sc1)),colX[1]+2,y+7.5);
+    fc(doc,...c2); doc.circle(colX[2]-3,y+5.5,2.5,"F");
+    font(doc,8,"bold"); tc(doc,...c2); doc.text(String(Math.round(sc2)),colX[2]+2,y+7.5);
+    // Delta
+    font(doc,8.5,"bold"); tc(doc,...dC);
+    doc.text(`${d>0?"+":""}${d}`,colX[3],y+7.5);
+    // Trend arrow pill
+    const arrow=d>2?"▲":d<-2?"▼":"–";
+    fc(doc,...dC);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
+    rr(doc,colX[4]-2,y+2,14,7,2,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    font(doc,8.5,"bold"); tc(doc,...dC);
+    doc.text(arrow,colX[4]+5,y+7.5,{align:"center"});
+    y+=rowH;
+  });
+  y+=10;
+
+  // ── SPINAL ZONE COMPARISON ────────────────────────────────────
+  if(y>H-90){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المناطق":"Zone Map",isAr);y=22;}
+  _sh(doc,ml,y,isAr?"مقارنة مناطق العمود الفقري":"Spinal Zone Comparison",
+    isAr?"المخاطرة % — منخفض/متوسط/عالي":"Risk % — low/moderate/high",T.danger,isAr);
+  y+=16;
+
+  const zones=[
+    {k:"cervical",en:"Cervical (Neck)",  ar:"عنق الرحم — الرقبة",  r:"C1–C7"},
+    {k:"thoracic",en:"Thoracic (Upper)", ar:"الصدر — الظهر العلوي", r:"T1–T12"},
+    {k:"lumbar",  en:"Lumbar (Lower)",   ar:"القطن — الظهر السفلي", r:"L1–S1"},
+  ];
+  zones.forEach(({k,en,ar,r})=>{
+    if(y>H-44){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
+    const r1=z1[k]||0, r2=z2[k]||0, dz=r2-r1;
+    const rc1=_riskColor(r1), rc2=_riskColor(r2), dzC=dz>0?T.danger:T.success;
+    const zh=36;
+    fc(doc,...T.card); rr(doc,ml,y,cw,zh,4,"F");
+    dc(doc,...rc2); lw(doc,0.25); rr(doc,ml,y,cw,zh,4,"S"); lw(doc,0.3);
+    fc(doc,...rc2); doc.rect(ml,y,3,zh,"F"); rr(doc,ml,y,3,zh,1.5,"F");
+    // Zone label
+    font(doc,9.5,"bold",isAr); tc(doc,...T.ink); doc.text(isAr?ar:en,ml+9,y+10);
+    font(doc,7,"bold"); tc(doc,...T.primary); doc.text(r,ml+9,y+17);
+    // Two risk bars side by side
+    const bw2=(cw-24)/2, barY=y+22;
+    // Session 1 bar
+    fc(doc,...T.borderSoft); rr(doc,ml+9,barY,bw2,5,2,"F");
+    fc(doc,...rc1); rr(doc,ml+9,barY,Math.max(bw2*(r1/100),3),5,2,"F");
+    font(doc,6.5,"bold"); tc(doc,...rc1);
+    doc.text(`#${num1}: ${r1}%`,ml+9,barY+10);
+    // Session 2 bar
+    fc(doc,...T.borderSoft); rr(doc,ml+9+bw2+4,barY,bw2,5,2,"F");
+    fc(doc,...rc2); rr(doc,ml+9+bw2+4,barY,Math.max(bw2*(r2/100),3),5,2,"F");
+    font(doc,6.5,"bold"); tc(doc,...rc2);
+    doc.text(`#${num2}: ${r2}%`,ml+9+bw2+4,barY+10);
+    // Delta badge top right
+    const dzlbl=`${dz>0?"↑":"↓"} ${Math.abs(dz)}%`;
+    const dzw=doc.getTextWidth(dzlbl)+8;
+    fc(doc,...dzC);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
+    rr(doc,W-mr-dzw-2,y+7,dzw,9,2,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    font(doc,7.5,"bold"); tc(doc,...dzC);
+    doc.text(dzlbl,W-mr-dzw/2-2,y+13,{align:"center"});
+    y+=zh+7;
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // PAGE 3 — REGRESSED METRICS + INSIGHTS + ACTIONS
+  // ══════════════════════════════════════════════════════════════
+  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"التوصيات":"Recommendations",isAr); y=22;
+
+  // Regressed & improved metrics summary
+  const regressed=metRows.filter(r=>r.d<-3).slice(0,5);
+  const improved2=metRows.filter(r=>r.d>3).slice(0,3);
+
+  if(regressed.length>0){
+    _sh(doc,ml,y,isAr?"مقاييس تراجعت — تحتاج اهتماماً":"Regressed Metrics — Needs Attention","",T.danger,isAr);
+    y+=14;
+    regressed.forEach(({lbl,sc1,sc2,d})=>{
+      if(y>H-20){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
+      fc(doc,...T.dangerBg); rr(doc,ml,y,cw,14,3,"F");
+      dc(doc,...T.danger); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
+      fc(doc,...T.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
+      font(doc,8.5,"bold",isAr); tc(doc,...T.danger); doc.text(lbl,ml+7,y+5.5);
+      font(doc,7.5,"normal",false); tc(doc,...T.sub);
+      doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
+      const bw2=cw*0.3;
+      fc(doc,...T.danger);
+      doc.setGState&&doc.setGState(new doc.GState({opacity:0.2}));
+      rr(doc,W-mr-bw2-2,y+3,bw2*(Math.abs(d)/30),8,2,"F");
+      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      y+=18;
+    });
     y+=6;
-    if(y>H-40){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"مؤشر FHP":"FHP Index"); y=22;}
-    sf(10,"bold"); tc(doc,...T.ink);
-    doc.text(isAr?"مؤشر تقدم الرأس للأمام (FHP)":"Forward Head Posture (FHP) Index",ml,y); y+=6;
-    const fhpV1 = typeof m1.fhp==="object"?m1.fhp.value:m1.fhp_side?.value||null;
-    const fhpV2 = typeof m2.fhp==="object"?m2.fhp.value:m2.fhp_side?.value||null;
-    const fhpDelta = (fhpS2||0)-(fhpS1||0);
-    const fhpCol = fhpDelta<-2?T.success:fhpDelta>2?T.danger:T.muted;
-    fc(doc,...T.bg); rr(doc,ml,y,cw,18,3,"F");
-    sf(8.5,"bold"); tc(doc,...T.ink);
-    doc.text(isAr?"الجلسة":"Session",ml+4,y+8);
-    sf(9,"bold"); tc(doc,..._scoreColor(fhpS1||0));
-    doc.text(`${Math.round(fhpS1||0)}/100`,ml+cw*0.35,y+8);
-    sf(9,"bold"); tc(doc,..._scoreColor(fhpS2||0));
-    doc.text(`${Math.round(fhpS2||0)}/100`,ml+cw*0.55,y+8);
-    tc(doc,...fhpCol); sf(9,"bold");
-    doc.text(`${fhpDelta>0?"+":""}${Math.round(fhpDelta)}`,ml+cw*0.75,y+8);
-    sf(7,"normal"); tc(doc,...T.muted);
-    doc.text(isAr?`التغيير: ${fhpDelta>0?"+":""}${Math.round(fhpDelta)} نقطة`:`Change: ${fhpDelta>0?"+":""}${Math.round(fhpDelta)} pts`,ml+4,y+14);
-    y+=22;
-  }
-  y+=6;
-  if(y>H-50){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"Recommendations"); y=22;}
-  const worsened = rows.filter(r=>r.d<-5).slice(0,3);
-  if(worsened.length>0){
-    sf(10,"bold"); tc(doc,...T.ink);
-    doc.text(isAr?"المقاييس المتراجعة — تحتاج اهتماماً":"Regressed Metrics — Needs Attention",ml,y); y+=7;
-    for (const {lbl,sc2,d} of worsened){
-      if(y>H-25){doc.addPage(); y=22;}
-      fc(doc,...T.dangerBg); rr(doc,ml,y,cw,11,2,"F");
-      sf(8.5,"bold"); tc(doc,...T.danger);
-      doc.text(`${lbl} — ${d} ${isAr?"نقطة":"pts"} (${isAr?"النتيجة الآن":"now"} ${Math.round(sc2)})`,ml+4,y+7.5);
-      y+=14;
-    }
   }
 
-  // Page numbers
+  if(improved2.length>0){
+    if(y>H-60){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
+    _sh(doc,ml,y,isAr?"مقاييس تحسّنت — استمر":"Improved Metrics — Keep Going","",T.success,isAr);
+    y+=14;
+    improved2.forEach(({lbl,sc1,sc2,d})=>{
+      if(y>H-20){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
+      fc(doc,...T.successBg); rr(doc,ml,y,cw,14,3,"F");
+      dc(doc,...T.success); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
+      fc(doc,...T.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
+      font(doc,8.5,"bold",isAr); tc(doc,...T.success); doc.text(lbl,ml+7,y+5.5);
+      font(doc,7.5,"normal",false); tc(doc,...T.sub);
+      doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
+      y+=18;
+    });
+    y+=6;
+  }
+
+  // Action plan
+  if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خطة الإجراءات":"Action Plan",isAr);y=22;}
+  _sh(doc,ml,y,isAr?"خطة الإجراءات المقترحة":"Recommended Action Plan",
+    isAr?"بناءً على أبرز التغيرات بين الجلستين":"Based on most significant changes between sessions",T.primary,isAr);
+  y+=16;
+
+  const NXT={
+    neck_lean:["Raise monitor: top edge at eye level","Chin tuck 10 reps × 3 sets daily","Set posture alert every 20 min"],
+    head_tilt:["Level monitor and check seating height","Head levelling exercise 10 reps daily","Ergonomic assessment recommended"],
+    shoulder: ["Level armrests to equal height","Shoulder rolls backward 10 reps × 3","Doorway chest stretch 30s × 2 daily"],
+    spine_align:["Align ear, shoulder, hip vertically","Lumbar support roll or cushion","Core brace 30s × 5 reps daily"],
+    spine_lean:["Check chair tilt and lumbar support","Side stretch 30s each direction × 2","Walk 5 min every 45 min"],
+    distance: ["Screen 50–70cm from eyes","Increase font size to reduce forward lean","20-20-20 rule: every 20 min look 20ft away"],
+    default:  ["2-min stretch break every 30 min","Roll shoulders backward 5 times","Walk 5 min every hour"],
+  };
+
+  const topRegressed=regressed.slice(0,3);
+  if(topRegressed.length===0){
+    // No regressions — general maintenance actions
+    topRegressed.push({k:"default",lbl:isAr?"الصيانة العامة":"General Maintenance",sc2:Math.min(a1,a2)});
+  }
+  topRegressed.forEach(({k,lbl,sc2},idx)=>{
+    if(y>H-42){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
+    const col=_scoreColor(sc2||50);
+    const steps=NXT[k]||NXT.default;
+    const ph=44;
+    fc(doc,...T.card); rr(doc,ml,y,cw,ph,4,"F");
+    dc(doc,...T.border); lw(doc,0.18); rr(doc,ml,y,cw,ph,4,"S"); lw(doc,0.3);
+    fc(doc,...col); doc.rect(ml,y,3,ph,"F"); rr(doc,ml,y,3,ph,1.5,"F");
+    // Number circle
+    fc(doc,...col);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:0.15}));
+    doc.circle(ml+16,y+14,9,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    dc(doc,...col); lw(doc,1); doc.circle(ml+16,y+14,9,"S"); lw(doc,0.3);
+    font(doc,10,"bold"); tc(doc,...col); doc.text(String(idx+1),ml+16,y+17.5,{align:"center"});
+    // Title
+    font(doc,10,"bold",isAr); tc(doc,...T.ink); doc.text(lbl,ml+30,y+12);
+    font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
+    steps.slice(0,3).forEach((s,i)=>{
+      font(doc,7.5,"bold"); tc(doc,...col);
+      doc.text(`${i+1}.`,ml+30,y+22+(i*7));
+      font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
+      doc.text(doc.splitTextToSize(s,cw-38)[0],ml+36,y+22+(i*7));
+    });
+    y+=ph+8;
+  });
+
+  // ── SESSION SUMMARY TABLE ─────────────────────────────────────
+  y+=4; if(y>H-65){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الملخص":"Summary",isAr);y=22;}
+  _sh(doc,ml,y,isAr?"ملخص الجلستين":"Session Summary","",T.indigo,isAr);
+  y+=14;
+
+  const sumRows=[
+    [isAr?"رقم الجلسة":"Session number",`#${num1}`,`#${num2}`],
+    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr)],
+    [isAr?"المجموع":"Score",`${a1}/100`,`${a2}/100`],
+    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`],
+    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2)],
+    [isAr?"التنبيهات":"Alerts",String(al1),String(al2)],
+    [isAr?"التغيّر":"Change","—",`${delta>0?"+":""}${delta} pts`],
+  ];
+  const th3=sumRows.length*9+3;
+  fc(doc,...T.card); rr(doc,ml,y,cw,th3,4,"F");
+  dc(doc,...T.border); lw(doc,0.18); rr(doc,ml,y,cw,th3,4,"S"); lw(doc,0.3);
+  // Header row
+  fc(doc,...T.slate); doc.rect(ml,y,cw,9,"F"); rr(doc,ml,y,cw,9,2,"F"); doc.rect(ml,y+5,cw,4,"F");
+  font(doc,7.5,"bold"); tc(doc,...T.card);
+  doc.text(isAr?"البند":"Item",ml+5,y+6.5);
+  doc.text(`Session #${num1}`,ml+cw*0.42,y+6.5,{align:"center"});
+  doc.text(`Session #${num2}`,ml+cw*0.75,y+6.5,{align:"center"});
+  y+=9;
+  sumRows.forEach(([k,v1,v2],i)=>{
+    if(i%2===0){fc(doc,...T.bg); doc.rect(ml,y,cw,9,"F");}
+    font(doc,7.5,"normal",isAr); tc(doc,...T.muted); doc.text(k,ml+5,y+6.5);
+    font(doc,7.5,"bold",false);
+    tc(doc,...(i===6?deltaCol:T.ink)); doc.text(v1,ml+cw*0.42,y+6.5,{align:"center"});
+    tc(doc,...(i===6?deltaCol:T.ink)); doc.text(v2,ml+cw*0.75,y+6.5,{align:"center"});
+    y+=9;
+  });
+
+  // Footers
   const tp=doc.internal.getNumberOfPages();
   for(let p=1;p<=tp;p++){
     doc.setPage(p);
-    fc(doc,...T.ink); doc.rect(0,H-8,W,8,"F");
-    font(doc,6.5,"normal"); tc(doc,100,116,139);
-    doc.text(`Corvus ${tier.charAt(0).toUpperCase()+tier.slice(1)} — Comparison Report — Confidential`,ml,H-2.5);
-    doc.text(`${p} / ${tp}`,W-mr,H-2.5,{align:"right"});
+    _ftr(doc,W,ml,mr,H,p,tp,name);
   }
 
-  const filename=`Corvus_Comparison_S${num1}_vs_S${num2}_${new Date().toISOString().slice(0,10)}.pdf`;
+  const filename=`Corvus_Comparison_S${num1}_vs_S${num2}_${now.toISOString().slice(0,10)}.pdf`;
   doc.save(filename);
   return filename;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// PHASE 2 — FEATURE 2: HR Team Aggregate PDF
+// ═══════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════
 // PHASE 2 — FEATURE 2: HR Team Aggregate PDF
