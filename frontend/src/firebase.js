@@ -673,92 +673,97 @@ const METRIC_LABELS_AR = {
   knee_angle:     "زاوية الركبة",
 };
 
-// ─────────────────────────────────────────────────────────────────
-// ZONAL PAIN MAP — cervical/thoracic/lumbar risk from metrics
-// ─────────────────────────────────────────────────────────────────
-function _zonalRisk(metrics) {
-  const sc = k => metrics?.[k]?.score ?? 100;
-  return {
-    cervical:  Math.round((100 - (sc("neck_lean") + sc("neck_lean_side") + sc("head_tilt") + sc("head_yaw") + sc("fhp") + sc("fhp_side")) / 6)),
-    thoracic:  Math.round((100 - (sc("shoulder") + sc("rounded") + sc("spine_lean") + sc("trunk_lean")) / 4)),
-    lumbar:    Math.round((100 - (sc("spine_align") + sc("hip_angle") + sc("spine_lean")) / 3)),
-  };
-}
-function _riskLabel(v, isAr) {
-  if (v < 20) return isAr ? "منخفض"   : "Low";
-  if (v < 45) return isAr ? "متوسط"   : "Moderate";
-  if (v < 70) return isAr ? "مرتفع"   : "High";
-  return              isAr ? "مرتفع جداً" : "Very High";
-}
-function _riskColor(v) {
-  if (v < 20) return [16, 185, 129];
-  if (v < 45) return [245, 158, 11];
-  if (v < 70) return [249, 115, 22];
-  return              [239, 68, 68];
-}
-// Score color + label helpers (used throughout session, clinical, comparison, team PDFs)
-function _scoreColor(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
-const _gc = _scoreColor; // alias for legacy clinical PDF code
-const _gl = _scoreLabel; // alias: grade label — "Excellent"/"Good"/"Needs Work"
-
-// _drawSparkline — thin wrapper around _spark for clinical PDF (uses old call signature)
-function _drawSparkline(doc, hist, x, y, w, h, col) {
-  _spark(doc, hist, x, y, w, h, col);
-}
-function _scoreLabel(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Improvement"); }
-
-// ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════
-// CORVUS PDF DESIGN SYSTEM v4
-// Premium healthcare report — logo from site, refined typography,
-// structured white space, clinical-grade visual hierarchy
+// CORVUS PDF DESIGN SYSTEM v5 — World-Class Medical Intelligence
+// Philosophy: Apple Health × Bloomberg Terminal × WHO Medical Reports
+// Every component is purpose-built. Nothing is decorative without meaning.
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Design Tokens ──────────────────────────────────────────────────
+// ── Extended Design Tokens ─────────────────────────────────────────
 const T = {
-  primary:   [37,99,235],   primaryDk:[30,64,175],
-  success:   [34,197,94],   successDk:[21,128,61],
-  warning:   [245,158,11],  warningDk:[180,83,9],
-  danger:    [239,68,68],   dangerDk:[185,28,28],
-  ink:       [17,24,39],    sub:[55,65,81],
-  muted:     [107,114,128], light:[156,163,175],
-  bg:        [248,250,252], bgAlt:[241,245,249],
-  card:      [255,255,255], border:[229,231,235],
-  borderSoft:[243,244,246], ink2:[30,41,59],
-  indigo:    [99,102,241],  cyan:[6,182,212],
-  slate:     [15,23,42],    slateM:[30,41,59],
-  // Tinted backgrounds (rgba equivalents as light blends with white)
-  successBg: [220,252,231], // rgba(34,197,94,0.12) on white
-  dangerBg:  [254,226,226], // rgba(239,68,68,0.12) on white
-  warningBg: [254,243,199], // rgba(245,158,11,0.12) on white
-  primaryBg: [219,234,254], // rgba(37,99,235,0.12) on white
+  // Core brand
+  primary:   [37,99,235],   primaryDk:[30,64,175],  primaryLt:[239,246,255],
+  success:   [34,197,94],   successDk:[21,128,61],  successLt:[240,253,244],
+  warning:   [245,158,11],  warningDk:[180,83,9],   warningLt:[255,251,235],
+  danger:    [239,68,68],   dangerDk:[185,28,28],   dangerLt:[254,242,242],
+  // Neutrals — editorial grade
+  ink:       [11,17,32],    ink2:[24,33,54],   sub:[44,55,82],
+  muted:     [96,108,135],  light:[152,165,190], ghost:[210,218,235],
+  // Surfaces
+  bg:        [247,249,252], bgAlt:[242,245,251], bgDeep:[236,240,248],
+  card:      [255,255,255], cardHover:[252,253,255],
+  border:    [224,229,240], borderSoft:[237,240,248], borderStrong:[196,206,224],
+  // Dark surfaces (cover pages)
+  slate:     [10,17,35],    slateM:[18,28,52],  slateLt:[28,40,70],
+  slateAccent:[38,55,95],
+  // Semantic tints
+  successBg: [220,252,231], dangerBg:[254,226,226], warningBg:[254,243,199], primaryBg:[219,234,254],
+  // Medical spectrum
+  riskLow:   [16,185,129],  riskMed:[245,158,11],  riskHigh:[239,68,68],
+  // Data viz palette
+  indigo:    [99,102,241],  violet:[139,92,246],
+  cyan:      [6,182,212],   teal:[20,184,166],
+  rose:      [244,63,94],   amber:[251,191,36],
+  // Elevation (for layering effect simulation)
+  elev1:     [250,251,255], elev2:[245,247,254], elev3:[240,244,252],
 };
-const F = { display:26, h1:16, h2:13, h3:10.5, body:9, small:7.5, micro:6 };
 
-// ── Color helpers ──────────────────────────────────────────────────
+// ── Typography Scale — 8pt baseline grid ──────────────────────────
+const F = {
+  display:   28,   // Hero numbers, cover title
+  h1:        17,   // Page section title
+  h2:        13,   // Subsection
+  h3:        10.5, // Card title
+  body:       9,   // Body text
+  small:      7.5, // Labels, captions
+  micro:      6,   // Footnotes, page refs
+  data:      11,   // Data numbers (tabular)
+  dataLg:    18,   // Large KPI numbers
+  dataXl:    26,   // Hero scores
+};
+
+// ── Spacing — 8pt grid ────────────────────────────────────────────
+const SP = { xs:2, sm:4, md:8, lg:12, xl:20, xxl:32, page:18 };
+
+
+// ── Core helpers ───────────────────────────────────────────────────
 function _sc(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
+function _scLt(s){ return s>=80?T.successLt:s>=60?T.warningLt:T.dangerLt; }
 function _sl(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Work"); }
+function _riskLabel(v,ar){ return v>=70?(ar?"عالي":"High"):v>=40?(ar?"متوسط":"Moderate"):(ar?"منخفض":"Low"); }
+function _riskColor(v){ return v>=70?T.danger:v>=40?T.warning:T.success; }
 function _fmtDur(s){ if(!s)return"—"; const m=Math.floor(s/60),r=s%60; return m>0?`${m}m ${r}s`:`${r}s`; }
 function _fmtDate(ts,ar){
+  if(!ts)return"—";
+  try{ const d=ts?.toDate?ts.toDate():new Date(ts);
+    return d.toLocaleDateString(ar?"ar-EG":"en-US",{year:"numeric",month:"short",day:"numeric"}); }
+  catch{return"—";}
+}
+function _fmtDateLong(ts,ar){
   if(!ts)return"—";
   try{ const d=ts?.toDate?ts.toDate():new Date(ts);
     return d.toLocaleDateString(ar?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"}); }
   catch{return"—";}
 }
+const _gc = _sc; // legacy alias
+const _gl = _sl; // legacy alias
 
-// ── Cairo font (Arabic) ────────────────────────────────────────────
-let _cairoLoaded = false;
-let _cairoCachedB64 = null;
+// ── Draw primitives ────────────────────────────────────────────────
+function dc(doc,...c){doc.setDrawColor(...c);}
+function fc(doc,...c){doc.setFillColor(...c);}
+function tc(doc,...c){doc.setTextColor(...c);}
+function lw(doc,w){doc.setLineWidth(w);}
+function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
+function hr(doc,x,y,w,col=T.border,thickness=0.18){dc(doc,...col);lw(doc,thickness);doc.line(x,y,x+w,y);lw(doc,0.3);}
+function vl(doc,x,y,h,col=T.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x,y+h);lw(doc,0.3);}
+
+// ── Font helper ────────────────────────────────────────────────────
+let _cairoLoaded=false, _cairoCachedB64=null;
 async function _ensureCairoFont(doc){
   try{
-    // Load b64 once — re-use cached on subsequent calls
-    if(!_cairoCachedB64){
-      const{CAIRO_B64}=await import("./assets/cairoFont.js");
-      _cairoCachedB64=CAIRO_B64;
-    }
-    // Always register with THIS doc instance — each new jsPDF() is a fresh instance
+    if(!_cairoCachedB64){const{CAIRO_B64}=await import("./assets/cairoFont.js");_cairoCachedB64=CAIRO_B64;}
     doc.addFileToVFS("Cairo-Regular.ttf",_cairoCachedB64);
     doc.addFont("Cairo-Regular.ttf","cairo","normal");
     doc.addFileToVFS("Cairo-Bold.ttf",_cairoCachedB64);
@@ -766,204 +771,181 @@ async function _ensureCairoFont(doc){
     _cairoLoaded=true;
   }catch(e){console.warn("Cairo font failed:",e?.message||e);}
 }
+async function _loadCairo(doc){await _ensureCairoFont(doc);return _cairoLoaded;}
 
-// ── Logo image cache ───────────────────────────────────────────────
-let _logoSm=null,_logoMd=null,_logoLg=null;
-async function _ensureLogo(){
-  if(_logoSm)return;
-  try{
-    const{LOGO_SM_B64,LOGO_MD_B64,LOGO_LG_B64}=await import("./assets/corvusLogo.js");
-    _logoSm=LOGO_SM_B64; _logoMd=LOGO_MD_B64; _logoLg=LOGO_LG_B64;
-  }catch(e){console.warn("Logo load failed:",e);}
-}
-
-// ── Font helper ────────────────────────────────────────────────────
 function font(doc,size,style="normal",isAr=false){
   doc.setFont(isAr&&_cairoLoaded?"cairo":"helvetica",style);
   doc.setFontSize(size);
 }
-// ── Draw primitives ────────────────────────────────────────────────
-function dc(doc,...c){doc.setDrawColor(...c);}
-function fc(doc,...c){doc.setFillColor(...c);}
-function tc(doc,...c){doc.setTextColor(...c);}
-function lw(doc,w){doc.setLineWidth(w);}
-
-// PDF ENGINE v4.1 — all PDFs verified working 2026-07
-const _PDF_VERSION = "4.1";
-// _loadCairo kept as alias for clinical/comparison/longitudinal PDFs
-async function _loadCairo(doc) { await _ensureCairoFont(doc); return _cairoLoaded; }
-
-// fontAr — used by clinical + AI report PDFs (older codepath)
-function fontAr(doc, size, style="normal", useAr=false) {
-  doc.setFont(useAr ? "cairo" : "helvetica", style);
+function fontAr(doc,size,style="normal",useAr=false){
+  doc.setFont(useAr&&_cairoLoaded?"cairo":"helvetica",style);
   doc.setFontSize(size);
 }
 
-function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
-function hr(doc,x,y,w,col=T.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x+w,y);lw(doc,0.3);}
-
-// ── Logo draw ──────────────────────────────────────────────────────
+// ── Logo ───────────────────────────────────────────────────────────
+let _logoSm=null,_logoMd=null,_logoLg=null;
+async function _ensureLogo(){
+  if(_logoSm)return;
+  try{const{LOGO_SM_B64,LOGO_MD_B64,LOGO_LG_B64}=await import("./assets/corvusLogo.js");
+    _logoSm=LOGO_SM_B64;_logoMd=LOGO_MD_B64;_logoLg=LOGO_LG_B64;}
+  catch(e){console.warn("Logo load failed:",e);}
+}
 function _logo(doc,x,y,sz,b64){
-  if(b64){
-    try{ doc.addImage(b64,"PNG",x,y,sz,sz); return; }catch{}
-  }
-  // Fallback: draw from SVG primitives
-  fc(doc,3,11,20); rr(doc,x,y,sz,sz,sz*0.14,"F");
-  fc(doc,...T.primary); rr(doc,x+sz*.19,y+sz*.19,sz*.62,sz*.62,sz*.12,"F");
-  font(doc,sz*.42,"bold"); tc(doc,...T.card);
-  doc.text("P",x+sz/2,y+sz*.72,{align:"center"});
+  if(b64){try{doc.addImage(b64,"PNG",x,y,sz,sz);return;}catch{}}
+  fc(doc,3,11,20);rr(doc,x,y,sz,sz,sz*.14,"F");
+  fc(doc,...T.primary);rr(doc,x+sz*.19,y+sz*.19,sz*.62,sz*.62,sz*.12,"F");
+  font(doc,sz*.42,"bold");tc(doc,...T.card);doc.text("P",x+sz/2,y+sz*.72,{align:"center"});
 }
 
-// ── Cover (page 1) ─────────────────────────────────────────────────
-function _cover(doc,W,ml,tier,tierCol,name,sessionNum,dateStr,avg,isAr){
-  // Full-bleed dark header — slate gradient feel
-  fc(doc,...T.slate); doc.rect(0,0,W,68,"F");
-  // Geometric circles for depth
-  fc(doc,...tierCol);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.07}));
-  doc.circle(W*0.88,34,55,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.04}));
-  doc.circle(W*0.88,34,80,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Thin top accent
-  fc(doc,...tierCol); doc.rect(0,0,W,2.5,"F");
+// ── _zonalRisk ─────────────────────────────────────────────────────
+function _zonalRisk(metrics){
+  if(!metrics) return{cervical:0,thoracic:0,lumbar:0};
+  const sc=k=>typeof metrics[k]==="number"?metrics[k]:(metrics[k]?.score??100);
+  return{
+    cervical:Math.round(100-Math.min(100,(sc("neck_lean")+sc("head_tilt")+sc("head_yaw"))/3)),
+    thoracic:Math.round(100-Math.min(100,(sc("shoulder")+sc("rounded_shoulders")+sc("spine_lean"))/3)),
+    lumbar:  Math.round(100-Math.min(100,(sc("spine_align")+sc("hip_angle")+sc("trunk_lean"))/3)),
+  };
+}
 
+// ══════════════════════════════════════════════════════════════════
+// v5 PREMIUM COMPONENTS
+// ══════════════════════════════════════════════════════════════════
+
+// ── COVER HEADER — cinematic dark with brand gradient ─────────────
+function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
+  // Full bleed dark
+  fc(doc,...T.slate);doc.rect(0,0,W,76,"F");
+  // Layered depth circles (brand feel)
+  fc(doc,...tierCol);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.05}));
+  doc.circle(W*.88,38,68,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.03}));
+  doc.circle(W*.88,38,90,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:0.015}));
+  doc.circle(W*.88,38,112,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  // Top accent
+  fc(doc,...tierCol);doc.rect(0,0,W,2.5,"F");
   // Logo
-  _logo(doc,ml,18,32,_logoMd);
-
-  // Brand + tagline
-  font(doc,14,"bold"); tc(doc,...T.card);
-  doc.text("CORVUS",ml+40,30);
-  font(doc,7,"normal"); tc(doc,148,163,184);
-  doc.text("Health Intelligence Platform",ml+40,38);
-
-  // Tier badge — pill
-  const tl=tier.toUpperCase();
-  font(doc,7,"bold"); tc(doc,...tierCol);
-  const tw=doc.getTextWidth(tl)+10;
+  _logo(doc,ml,16,28,_logoMd);
+  // Brand
+  font(doc,13.5,"bold");tc(doc,...T.card);doc.text("CORVUS",ml+36,30);
+  font(doc,6.5,"normal");tc(doc,130,148,180);doc.text("Health Intelligence Platform",ml+36,38);
+  // Tier badge
+  const tw=doc.getTextWidth(tier.toUpperCase())+12;
   fc(doc,...tierCol);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
-  rr(doc,ml+40,42,tw,10,3,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:.16}));
+  rr(doc,ml+36,43,tw,10,3,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  tc(doc,...tierCol); font(doc,7,"bold");
-  doc.text(tl,ml+40+tw/2,49,{align:"center"});
-
-  // Right: date + session number
-  font(doc,7,"normal"); tc(doc,148,163,184);
-  doc.text(dateStr,W-ml,28,{align:"right"});
-  font(doc,8,"bold"); tc(doc,...T.card);
-  doc.text(`Session #${sessionNum}`,W-ml,37,{align:"right"});
-
-  // Bottom accent bar
-  fc(doc,...tierCol); doc.rect(0,65.5,W,2.5,"F");
+  font(doc,7,"bold");tc(doc,...tierCol);
+  doc.text(tier.toUpperCase(),ml+36+tw/2,49.5,{align:"center"});
+  // Right: date + label
+  font(doc,6.5,"normal");tc(doc,130,148,180);doc.text(now,W-ml,27,{align:"right"});
+  font(doc,7.5,"bold");tc(doc,...T.card);doc.text(label,W-ml,37,{align:"right"});
+  if(sub){font(doc,6.5,"normal");tc(doc,130,148,180);doc.text(sub,W-ml,45,{align:"right"});}
+  // Bottom divider
+  fc(doc,...tierCol);doc.rect(0,73.5,W,2.5,"F");
 }
 
-// ── Inner page header ──────────────────────────────────────────────
+// ── INNER PAGE HEADER ──────────────────────────────────────────────
 function _hdr(doc,W,ml,mr,label,isAr){
-  fc(doc,...T.card); doc.rect(0,0,W,16,"F");
-  fc(doc,...T.primary); doc.rect(0,16,W,0.4,"F");
-  fc(doc,...T.borderSoft); doc.rect(0,0,W,16,"F");
-  _logo(doc,ml,3.5,9,_logoSm);
-  font(doc,7.5,"bold"); tc(doc,...T.ink);
-  doc.text("Corvus",ml+13,10);
-  font(doc,7,"normal"); tc(doc,...T.muted);
-  doc.text("Health Intelligence",ml+29,10);
-  font(doc,7,"bold"); tc(doc,...T.primary);
-  doc.text(label,W-mr,10,{align:"right"});
+  fc(doc,...T.bg);doc.rect(0,0,W,15,"F");
+  fc(doc,...T.primary);doc.rect(0,15,W,.35,"F");
+  _logo(doc,ml,3.5,8,_logoSm);
+  font(doc,7.5,"bold");tc(doc,...T.ink2);doc.text("Corvus",ml+12,10);
+  font(doc,6.5,"normal");tc(doc,...T.muted);doc.text("Health Intelligence",ml+28,10);
+  font(doc,7,"bold");tc(doc,...T.primary);doc.text(label,W-mr,10,{align:"right"});
 }
 
-// ── Footer ─────────────────────────────────────────────────────────
-function _ftr(doc,W,ml,mr,H,pg,total,name){
+// ── FOOTER ─────────────────────────────────────────────────────────
+function _ftr(doc,W,ml,mr,H,p,total,name){
   hr(doc,0,H-10,W,T.border);
-  fc(doc,...T.bg); doc.rect(0,H-9.5,W,9.5,"F");
-  font(doc,F.micro,"normal"); tc(doc,...T.light);
-  doc.text("Corvus Health Intelligence · Confidential",ml,H-3.5);
-  font(doc,F.micro,"bold"); tc(doc,...T.muted);
+  fc(doc,...T.bg);doc.rect(0,H-9.5,W,9.5,"F");
+  font(doc,F.micro,"normal");tc(doc,...T.ghost);
+  doc.text("Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-3.5);
+  font(doc,F.micro,"bold");tc(doc,...T.muted);
   doc.text(name,W/2,H-3.5,{align:"center"});
-  doc.text(`${pg} / ${total}`,W-mr,H-3.5,{align:"right"});
+  doc.text(`${p} / ${total}`,W-mr,H-3.5,{align:"right"});
 }
 
-// ── Section heading ────────────────────────────────────────────────
+// ── SECTION HEADING with left accent ─────────────────────────────
 function _sh(doc,ml,y,title,sub="",col=T.primary,isAr=false){
-  fc(doc,...col); doc.rect(ml,y,2,sub?14:10,"F");
-  font(doc,F.h2,"bold",isAr); tc(doc,...T.ink);
-  doc.text(title,ml+7,y+(sub?7:7));
-  if(sub){ font(doc,F.small,"normal",isAr); tc(doc,...T.light); doc.text(sub,ml+7,y+13); }
+  fc(doc,...col);doc.rect(ml,y,2.2,sub?14:9.5,"F");
+  font(doc,F.h2,"bold",isAr);tc(doc,...T.ink);doc.text(title,ml+7,y+(sub?7:7));
+  if(sub){font(doc,F.small,"normal",isAr);tc(doc,...T.light);doc.text(sub,ml+7,y+13);}
   return y+(sub?21:14);
 }
 
-// ── Score ring ─────────────────────────────────────────────────────
-function _ring(doc,cx,cy,r,score,isAr){
+// ── SCORE RING v5 — with inner glow simulation ─────────────────────
+function _ring(doc,cx,cy,r,score,isAr,showGrade=true){
   const col=_sc(score),lbl=_sl(score,isAr);
-  // BG circle (track)
-  dc(doc,...T.border); lw(doc,2.5); doc.circle(cx,cy,r,"S"); lw(doc,0.3);
-  // Score arc
-  dc(doc,...col); lw(doc,2.5); doc.circle(cx,cy,r,"S"); lw(doc,0.3);
+  // Outer track
+  dc(doc,...T.borderSoft);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
   // Inner tint
   fc(doc,...col);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
-  doc.circle(cx,cy,r-1.5,"F");
+  doc.circle(cx,cy,r-2,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  // Score arc
+  dc(doc,...col);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
   // Number
-  font(doc,18,"bold",false); tc(doc,...col);
-  doc.text(String(score),cx,cy+3,{align:"center"});
-  font(doc,6,"normal",false); tc(doc,...T.muted);
-  doc.text("/100",cx,cy+9,{align:"center"});
-  // Grade below ring
-  font(doc,8,"bold",isAr); tc(doc,...col);
-  doc.text(lbl,cx,cy+r+7,{align:"center"});
+  font(doc,F.dataXl,"bold");tc(doc,...col);
+  doc.text(String(score),cx,cy+4,{align:"center"});
+  font(doc,F.micro+.5,"normal");tc(doc,...T.muted);
+  doc.text("/100",cx,cy+10,{align:"center"});
+  if(showGrade){font(doc,F.small+.5,"bold",isAr);tc(doc,...col);doc.text(lbl,cx,cy+r+8,{align:"center"});}
 }
 
-// ── KPI chip (compact square) ──────────────────────────────────────
-function _kpi(doc,x,y,w,h,val,label,col){
-  fc(doc,...T.card); rr(doc,x,y,w,h,3,"F");
-  dc(doc,...T.border); lw(doc,0.15); rr(doc,x,y,w,h,3,"S"); lw(doc,0.3);
-  // Top accent strip
-  fc(doc,...col); rr(doc,x,y,w,2.5,1.5,"F"); doc.rect(x,y+1.5,w,1,"F");
-  // Value
-  font(doc,13,"bold",false); tc(doc,...col);
-  doc.text(String(val),x+w/2,y+h*0.56,{align:"center"});
-  // Label
-  font(doc,F.small,"bold",false); tc(doc,...T.muted);
-  doc.text(label,x+w/2,y+h*0.78,{align:"center"});
-}
-
-// ── Metric row card ────────────────────────────────────────────────
+// ── METRIC ROW v5 ─────────────────────────────────────────────────
 function _mRow(doc,x,y,w,lbl,value,unit,score,isAr,idx=0){
-  const col=_sc(score); const h=21;
-  // Alternating subtle bg
-  fc(doc,...(idx%2===0?T.card:T.bg)); rr(doc,x,y,w,h,3,"F");
-  dc(doc,...T.border); lw(doc,0.15); rr(doc,x,y,w,h,3,"S"); lw(doc,0.3);
+  const col=_sc(score),colLt=_scLt(score),h=22;
+  fc(doc,...(idx%2===0?T.card:T.bg));rr(doc,x,y,w,h,3,"F");
+  dc(doc,...T.borderSoft);lw(doc,0.15);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
   // Left accent
-  fc(doc,...col); doc.rect(x,y,2.5,h,"F"); rr(doc,x,y,2.5,h,1.2,"F");
-  // Score badge
-  fc(doc,...col); rr(doc,x+6,y+4.5,15,12,2,"F");
-  font(doc,8.5,"bold",false); tc(doc,...T.card);
-  doc.text(String(Math.round(score)),x+13.5,y+12,{align:"center"});
+  fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
+  // Score chip
+  fc(doc,...colLt);rr(doc,x+6,y+5,16,12,2,"F");
+  font(doc,8.5,"bold");tc(doc,...col);
+  doc.text(String(Math.round(score)),x+14,y+12.5,{align:"center"});
   // Label
-  font(doc,9,"bold",isAr); tc(doc,...T.ink);
-  doc.text(lbl,x+26,y+9.5);
-  // Value + unit
+  font(doc,9,"bold",isAr);tc(doc,...T.ink);doc.text(lbl,x+27,y+9.5);
+  // Value
   if(value!==undefined&&value!==null){
-    font(doc,7.5,"normal",false); tc(doc,...T.muted);
-    doc.text(`${Math.round(value*10)/10}${unit||""}`,x+26,y+16);
+    font(doc,7.5,"normal");tc(doc,...T.muted);
+    doc.text(`${Math.round(value*10)/10}${unit||""}`,x+27,y+16.5);
   }
   // Progress bar
-  const bx=x+w*0.52, bw=w*0.44, bh=5;
-  fc(doc,...T.borderSoft); rr(doc,bx,y+8,bw,bh,2,"F");
-  fc(doc,...col); rr(doc,bx,y+8,Math.max(bw*(score/100),3),bh,2,"F");
-  // Grade pill
+  const bx=x+w*.52,bw=w*.44,bh=5;
+  fc(doc,...T.borderSoft);rr(doc,bx,y+8.5,bw,bh,2,"F");
+  fc(doc,...col);rr(doc,bx,y+8.5,Math.max(bw*(score/100),3),bh,2,"F");
+  // Grade
   const gl=_sl(score,isAr);
-  const gw=doc.getTextWidth(gl)+8;
+  const gw=doc.getTextWidth(gl)+7;
   fc(doc,...col);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.1}));
-  rr(doc,x+w-gw-3,y+14,gw,6,2,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:.1}));
+  rr(doc,x+w-gw-3,y+14.5,gw,6,2,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,6,"bold",isAr); tc(doc,...col);
+  font(doc,F.micro+.5,"bold",isAr);tc(doc,...col);
   doc.text(gl,x+w-gw/2-3,y+18.5,{align:"center"});
 }
 
-// ── Sparkline ──────────────────────────────────────────────────────
+// ── KPI CHIP v5 — elevated with top accent ─────────────────────────
+function _kpi(doc,x,y,w,h,val,label,col,sub=""){
+  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...T.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  // Top color accent
+  fc(doc,...col);rr(doc,x,y,w,3,2,"F");doc.rect(x,y+1.5,w,1.5,"F");
+  // Value
+  font(doc,F.dataLg,"bold");tc(doc,...col);
+  doc.text(String(val),x+w/2,y+h*.56,{align:"center"});
+  // Label
+  font(doc,F.small,"bold");tc(doc,...T.muted);
+  doc.text(label,x+w/2,y+h*.78,{align:"center"});
+  if(sub){font(doc,F.micro,"normal");tc(doc,...T.light);doc.text(sub,x+w/2,y+h*.9,{align:"center"});}
+}
+
+// ── SPARKLINE v5 ─────────────────────────────────────────────────
 function _spark(doc,hist,x,y,w,h,col){
   const pts=hist.length>80?hist.filter((_,i)=>i%Math.ceil(hist.length/80)===0):hist;
   if(pts.length<2)return;
@@ -974,125 +956,119 @@ function _spark(doc,hist,x,y,w,h,col){
   [50,65,80].forEach(v=>{
     if(v<lo||v>hi)return;
     const gy=y+h-((v-lo)/rng)*h;
-    dc(doc,...T.border); lw(doc,0.12); doc.line(x,gy,x+w,gy);
-    font(doc,5,"normal"); tc(doc,...T.light);
-    doc.text(String(v),x-2,gy+1.5,{align:"right"});
-  }); lw(doc,0.3);
-  // Area fill
+    dc(doc,...T.borderSoft);lw(doc,0.12);doc.line(x,gy,x+w,gy);
+    font(doc,5,"normal");tc(doc,...T.ghost);doc.text(String(v),x-2,gy+1.5,{align:"right"});
+  });lw(doc,0.3);
+  // Area
   try{
     const segs=co.slice(1).map((p,i)=>[p.px-co[i].px,p.py-co[i].py]);
     fc(doc,...col);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
+    doc.setGState&&doc.setGState(new doc.GState({opacity:0.07}));
     doc.lines([...segs,[0,h],[-(co[co.length-1].px-co[0].px),0]],co[0].px,co[0].py,[1,1],"F",false);
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   }catch{}
   // Line
-  dc(doc,...col); lw(doc,1.2);
-  co.forEach((p,i)=>{if(i>0)doc.line(co[i-1].px,co[i-1].py,p.px,p.py);}); lw(doc,0.3);
+  dc(doc,...col);lw(doc,1.4);
+  co.forEach((p,i)=>{if(i>0)doc.line(co[i-1].px,co[i-1].py,p.px,p.py);});lw(doc,0.3);
   // Endpoints
-  fc(doc,...T.card); doc.circle(co[0].px,co[0].py,2,"F");
-  dc(doc,...col); lw(doc,0.8); doc.circle(co[0].px,co[0].py,2,"S"); lw(doc,0.3);
-  fc(doc,...col); doc.circle(co[co.length-1].px,co[co.length-1].py,2.5,"F");
-  // Labels
-  font(doc,6.5,"bold",false); tc(doc,...col);
+  fc(doc,...T.card);doc.circle(co[0].px,co[0].py,2,"F");
+  dc(doc,...col);lw(doc,0.8);doc.circle(co[0].px,co[0].py,2,"S");lw(doc,0.3);
+  fc(doc,...col);doc.circle(co[co.length-1].px,co[co.length-1].py,2.5,"F");
+  font(doc,6.5,"bold");tc(doc,...col);
   doc.text(String(pts[0]),co[0].px,co[0].py-4,{align:"center"});
   doc.text(String(pts[pts.length-1]),co[co.length-1].px,co[co.length-1].py-4,{align:"center"});
 }
 
-// ── Callout strip ──────────────────────────────────────────────────
+// ── CALLOUT STRIP ─────────────────────────────────────────────────
 function _callout(doc,x,y,w,text,type="info",isAr=false){
   const cols={info:T.primary,success:T.success,warning:T.warning,danger:T.danger};
   const col=cols[type]||T.primary;
-  const lines=doc.splitTextToSize(text.replace(/[#*`]/g,""),w-16);
+  const colBg={info:T.primaryBg,success:T.successBg,warning:T.warningBg,danger:T.dangerBg};
+  const lines=doc.splitTextToSize(text.replace(/[#*`]/g,""),w-14);
   const h=Math.max(14,lines.length*5.2+8);
-  fc(doc,...col);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.07}));
-  rr(doc,x,y,w,h,3,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  dc(doc,...col); lw(doc,0.2); rr(doc,x,y,w,h,3,"S"); lw(doc,0.3);
-  fc(doc,...col); doc.rect(x,y,2.5,h,"F"); rr(doc,x,y,2.5,h,1.2,"F");
-  font(doc,F.body,"normal",isAr); tc(doc,...T.sub);
+  fc(doc,...(colBg[type]||T.bg));rr(doc,x,y,w,h,3,"F");
+  dc(doc,...col);lw(doc,0.2);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
+  fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
+  font(doc,F.body,"normal",isAr);tc(doc,...T.sub);
   lines.forEach((l,i)=>doc.text(l,x+7,y+7+(i*5.2)));
   return y+h+6;
 }
 
-// ── Zone card ──────────────────────────────────────────────────────
+// ── STEP CARD v5 ─────────────────────────────────────────────────
+function _step(doc,x,y,w,num,title,score,steps,isAr){
+  const col=_sc(score),colLt=_scLt(score),h=46;
+  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...T.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
+  // Number circle
+  fc(doc,...colLt);doc.circle(x+15,y+14,9,"F");
+  dc(doc,...col);lw(doc,.8);doc.circle(x+15,y+14,9,"S");lw(doc,0.3);
+  font(doc,10,"bold");tc(doc,...col);doc.text(String(num),x+15,y+17.5,{align:"center"});
+  // Title + score
+  font(doc,10,"bold",isAr);tc(doc,...T.ink);doc.text(title,x+30,y+12);
+  const sb=`${Math.round(score)}/100`;const sw=doc.getTextWidth(sb)+7;
+  fc(doc,...col);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:.1}));
+  rr(doc,x+w-sw-4,y+5,sw,8,2,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  font(doc,6.5,"bold");tc(doc,...col);doc.text(sb,x+w-sw/2-4,y+10.5,{align:"center"});
+  // Steps
+  font(doc,7.5,"normal",isAr);tc(doc,...T.sub);
+  steps.slice(0,3).forEach((s,i)=>{
+    font(doc,7.5,"bold");tc(doc,...col);doc.text(`${i+1}.`,x+30,y+22+(i*7));
+    font(doc,7.5,"normal",isAr);tc(doc,...T.sub);
+    doc.text(doc.splitTextToSize(s,w-40)[0],x+36,y+22+(i*7));
+  });
+  return y+h+8;
+}
+
+// ── ZONE CARD v5 ─────────────────────────────────────────────────
 function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
   const col=_riskColor(risk);
   const lines=doc.splitTextToSize(desc,w-50);
-  const h=Math.max(48,lines.length*5+32);
-  fc(doc,...T.card); rr(doc,x,y,w,h,4,"F");
-  dc(doc,...col); lw(doc,0.25); rr(doc,x,y,w,h,4,"S"); lw(doc,0.3);
-  fc(doc,...col); doc.rect(x,y,2.5,h,"F"); rr(doc,x,y,2.5,h,1.2,"F");
-  // Risk circle
-  fc(doc,...col); doc.circle(x+18,y+h/2,11,"F");
-  font(doc,9,"bold",false); tc(doc,...T.card);
-  doc.text(`${risk}%`,x+18,y+h/2+3.5,{align:"center"});
+  const h=Math.max(48,lines.length*5+34);
+  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...col);lw(doc,0.25);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
+  // Risk badge
+  fc(doc,...col);doc.circle(x+18,y+h/2,11,"F");
+  font(doc,9.5,"bold");tc(doc,...T.card);doc.text(`${risk}%`,x+18,y+h/2+3.5,{align:"center"});
   // Title
-  font(doc,10,"bold",isAr); tc(doc,...T.ink); doc.text(name,x+35,y+12);
-  font(doc,7.5,"bold",false); tc(doc,...T.primary); doc.text(region,x+35,y+19);
+  font(doc,10,"bold",isAr);tc(doc,...T.ink);doc.text(name,x+35,y+12);
+  font(doc,7.5,"bold");tc(doc,...T.primary);doc.text(region,x+35,y+19);
+  // Risk label
+  const rlbl=_riskLabel(risk,isAr);
+  const rw=doc.getTextWidth(rlbl)+8;
+  fc(doc,...col);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
+  rr(doc,x+w-rw-4,y+6,rw,9,2,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  font(doc,7.5,"bold",isAr);tc(doc,...col);doc.text(rlbl,x+w-rw/2-4,y+12,{align:"center"});
   // Bar
-  const bx=x+35,bw=w*0.52;
-  fc(doc,...T.borderSoft); rr(doc,bx,y+23,bw,4,2,"F");
-  fc(doc,...col); rr(doc,bx,y+23,Math.max(bw*(risk/100),3),4,2,"F");
-  font(doc,7,"bold",isAr); tc(doc,...col);
-  doc.text(_riskLabel(risk,isAr),x+35+bw+4,y+26.5);
+  const bx=x+35,bw=w*.52;
+  fc(doc,...T.borderSoft);rr(doc,bx,y+23,bw,4.5,2,"F");
+  fc(doc,...col);rr(doc,bx,y+23,Math.max(bw*(risk/100),3),4.5,2,"F");
   // Desc
-  font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
+  font(doc,7.5,"normal",isAr);tc(doc,...T.sub);
   lines.forEach((l,i)=>doc.text(l,x+7,y+32+(i*5)));
-  font(doc,6,"bold",false); tc(doc,...T.light);
+  font(doc,6,"bold");tc(doc,...T.ghost);
   doc.text(`Sources: ${mlist}`,x+7,y+h-4);
   return y+h+6;
 }
 
-// ── Next step card ─────────────────────────────────────────────────
-function _step(doc,x,y,w,num,title,score,steps,isAr){
-  const col=_sc(score); const h=46;
-  fc(doc,...T.card); rr(doc,x,y,w,h,4,"F");
-  dc(doc,...T.border); lw(doc,0.15); rr(doc,x,y,w,h,4,"S"); lw(doc,0.3);
-  fc(doc,...col); doc.rect(x,y,2.5,h,"F"); rr(doc,x,y,2.5,h,1.2,"F");
-  // Number
-  fc(doc,...col);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.15}));
-  doc.circle(x+15,y+14,9,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  fc(doc,...col); doc.circle(x+15,y+14,9,"S"); // ring
-  dc(doc,...col); lw(doc,1); doc.circle(x+15,y+14,9,"S"); lw(doc,0.3);
-  font(doc,9.5,"bold",false); tc(doc,...col);
-  doc.text(String(num),x+15,y+17.5,{align:"center"});
-  // Title + badge
-  font(doc,10,"bold",isAr); tc(doc,...T.ink); doc.text(title,x+30,y+12);
-  const sb=`${Math.round(score)}/100`;
-  const sw=doc.getTextWidth(sb)+7;
-  fc(doc,...col);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
-  rr(doc,x+w-sw-4,y+5,sw,8,2,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,6.5,"bold",false); tc(doc,...col);
-  doc.text(sb,x+w-sw/2-4,y+10.5,{align:"center"});
-  // Steps
-  font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
-  steps.slice(0,3).forEach((s,i)=>{
-    font(doc,7.5,"bold",false); tc(doc,...col);
-    doc.text(`${i+1}.`,x+30,y+22+(i*7));
-    font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
-    const maxW=w-36;
-    const sl=doc.splitTextToSize(s,maxW);
-    doc.text(sl[0],x+36,y+22+(i*7));
-  });
-  return y+h+7;
-}
-
-// ── Info table row ─────────────────────────────────────────────────
+// ── INFO TABLE ROW ────────────────────────────────────────────────
 function _iRow(doc,x,y,w,key,val,even,isAr){
-  fc(doc,...(even?T.bg:T.card)); doc.rect(x,y,w,8.5,"F");
-  font(doc,F.small,"normal",isAr); tc(doc,...T.muted); doc.text(key,x+5,y+5.8);
-  font(doc,F.small,"bold",false); tc(doc,...T.ink); doc.text(String(val),x+w-5,y+5.8,{align:"right"});
+  fc(doc,...(even?T.bg:T.card));doc.rect(x,y,w,8.5,"F");
+  font(doc,F.small,"normal",isAr);tc(doc,...T.muted);doc.text(key,x+5,y+5.8);
+  font(doc,F.small,"bold");tc(doc,...T.ink);doc.text(String(val),x+w-5,y+5.8,{align:"right"});
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// generateSessionPDF — v4
-// ═══════════════════════════════════════════════════════════════════
+// ── _drawSparkline alias ──────────────────────────────────────────
+function _drawSparkline(doc,hist,x,y,w,h,col){_spark(doc,hist,x,y,w,h,col);}
+
+
+
+
 export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[] }) {
   const { jsPDF } = await import("jspdf");
   const isAr  = lang==="ar";
