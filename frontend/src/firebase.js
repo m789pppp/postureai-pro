@@ -1295,23 +1295,36 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   if(y>H-110){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps",isAr);y=24;}
   y=_sh(doc,ml,y,isAr?"الخطوات العملية المقترحة":"Prioritised Next Steps",isAr?"بناءً على أسوأ المقاييس":"Based on worst-performing metrics",T.success,isAr);
 
-  const NXT={
-    neck:["Raise monitor: top edge at eye level","Chin tuck gently — ear over shoulder","Set a posture alert every 20 min"],
-    neck_lean:["Raise monitor: top edge at eye level","Chin tuck gently — ear over shoulder","Cervical retraction: 10 reps × 3 sets daily"],
-    yaw:["Centre monitor directly in front","Avoid sustained head rotation","Chin tucks: 10 reps × 3 sets daily"],
-    dist:["Maintain 50–70cm screen distance","Increase font size to avoid leaning","20-20-20 rule: every 20 min look 20ft away"],
-    posture:["Sit fully back against lumbar support","Feet flat, knees at 90°","Stand 5 min every 45 min"],
-    shoulder:["Level armrests to equal height","Shoulder rolls backward 10 reps × 3","Doorway chest stretch 30s × 2 daily"],
-    spine:["Align ear, shoulder, hip vertically","Use lumbar roll or support cushion","Core brace 30s × 5 reps daily"],
-    rounded:["Retract shoulder blades together","Band pull-aparts 15 reps × 3","Pec doorway stretch 30s × 2 daily"],
-    elbow:["Lower keyboard so elbows rest at 90°","Keep keyboard close to body","Wrist break every 45 min"],
-    monitor:["Top of screen at eye level","Use laptop stand + external keyboard","Reduce neck flexion with tray adjustment"],
-    distance:["Screen 50-80cm from eyes","Larger font = less lean","20-20-20 rule every 20 min"],
-    default:["2-min stretch break every 30 min","Roll shoulders backward 5 times","Walk 5 min every hour"],
-  };
-  mEntries.slice(0,3).forEach(({key,lbl,sc},i)=>{
+  const _dynSteps = (key, val, unit) => {
+  const v = val !== undefined && val !== null ? Math.round(val * 10) / 10 : null;
+  if (key === "neck_lean" || key === "head_tilt" || key === "neck_lean_side") {
+    const deg = v !== null ? `${v}deg` : "current angle";
+    return [`Raise monitor so top edge is at eye level (current: ${deg})`,`Chin tuck gently — bring ear over shoulder (target: <${v !== null && v > 10 ? Math.round(v - 3) : 8}deg)`,`Set posture alert every 20 min — recheck ${deg}`];
+  }
+  if (key === "head_yaw") {
+    return [`Centre monitor directly in front of your body`,`Avoid sustained head rotation to one side`,`Chin tucks 10 reps x 3 sets daily`];
+  }
+  if (key === "distance" || key === "fhp" || key === "fhp_side") {
+    const cm = v !== null ? `${Math.round(v)}cm` : "current distance";
+    return [`Maintain 50-70cm screen distance (current: ${cm})`,`Increase font size to avoid leaning forward`,`20-20-20 rule: every 20 min look 20ft away for 20s`];
+  }
+  if (key === "shoulder" || key === "rounded") {
+    return [`Level armrests to equal height on both sides`,`Shoulder rolls backward 10 reps x 3 daily`,`Doorway chest stretch 30s x 2 daily`];
+  }
+  if (key === "spine_lean" || key === "spine_align" || key === "trunk_lean") {
+    return [`Align ear, shoulder, hip vertically when seated`,`Use lumbar roll or support cushion on chair`,`Core brace holds 30s x 5 reps daily`];
+  }
+  if (key === "elbow") {
+    return [`Lower keyboard so elbows rest at 90 degrees`,`Keep keyboard close to body to avoid reaching`,`Wrist break and elbow stretch every 45 min`];
+  }
+  if (key === "monitor" || key === "hip_angle" || key === "knee_angle") {
+    return [`Top of screen at eye level, arm length away`,`Use laptop stand + external keyboard if needed`,`Adjust chair height so feet flat, knees at 90 deg`];
+  }
+  return [`2-min stretch break every 30 min`,`Roll shoulders backward 5 times each direction`,`Walk 5 min every hour`];
+};
+  mEntries.slice(0,3).forEach(({key,lbl,sc,value,unit},i)=>{
     if(y>H-54){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps",isAr);y=24;}
-    y=_step(doc,ml,y,cw,i+1,lbl,sc,NXT[key]||NXT.default,isAr);
+    y=_step(doc,ml,y,cw,i+1,lbl,sc,_dynSteps(key,value,unit),isAr);
   });
 
   y+=4; if(y>H-75){doc.addPage();_hdr(doc,W,ml,mr,isAr?"إحصائيات":"Statistics",isAr);y=24;}
@@ -1361,7 +1374,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const gradeC  = _gc(avg);
   const zonal   = _zonalRisk(metrics);
   const now     = new Date();
-  const dateStr = now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const dateStr = isAr ? now.toLocaleDateString("ar-EG",{year:"numeric",month:"long",day:"numeric"}) : now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
 
   const realIndex = (() => {
     if (sessionIndex) return sessionIndex;
@@ -1630,7 +1643,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const zonePriority = ["cervical","thoracic","lumbar"]
     .sort((a,b)=>(zonal[b]||0)-(zonal[a]||0));
 
-  for(const zk of zonePriority.slice(0,2)){
+  for(const zk of zonePriority.slice(0,3)){
     if(y>H-55){doc.addPage();y=22;}
     const col = _riskColor(zonal[zk]||0);
     doc.setFillColor(...col); doc.roundedRect(ml,y,cw,9,2,2,"F");
@@ -1685,21 +1698,21 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   doc.text("Suggested focus areas based on session measurements. Please apply clinical judgment.", ml, y); y+=9;
 
   const clinicalRecos = [
-    avg < 60
-      ? "Multiple significant postural deviations recorded. A full postural assessment with manual palpation is recommended to correlate screen findings with physical examination."
-      : avg < 80
-      ? "Moderate postural deviations identified in one or more planes. Targeted manual therapy and corrective exercise programming are likely to yield measurable improvement."
-      : "Posture quality is broadly good during monitored sessions. Reinforce current patterns and provide guidance on ergonomic optimisation for unmonitored work periods.",
-    zonal.cervical > 45
-      ? "Cervical zone shows elevated risk. Assess for upper cervical hypomobility, scalene/SCM tightness, and forward head posture. Chin tuck + deep neck flexor strengthening indicated."
-      : "Cervical zone within acceptable range. Monitor for creep during extended work sessions.",
-    zonal.thoracic > 45
-      ? "Thoracic zone elevated. Assess for thoracic extension restriction and pectoralis minor tightness. Thoracic mobilisation and posterior chain activation recommended."
-      : "Thoracic zone acceptable. Encourage thoracic extension breaks during prolonged sitting.",
-    zonal.lumbar > 45
-      ? "Lumbar zone shows concern. Assess lumbar flexion/extension range, hip flexor length, and lumbar stabiliser activation. Consider ergonomic chair and sit-stand desk assessment."
-      : "Lumbar zone within expected range. Advise on maintaining lumbar lordosis during seated work.",
-  ];
+  avg < 60
+    ? `Overall posture score of ${avg}/100 indicates significant postural deviation across multiple planes. ${zonal.cervical > zonal.thoracic && zonal.cervical > zonal.lumbar ? "Cervical zone is the primary contributor." : zonal.thoracic > zonal.lumbar ? "Thoracic zone shows the most concern." : "Lumbar zone requires the most attention."} Full clinical assessment with manual palpation recommended.`
+    : avg < 80
+    ? `Moderate postural deviations identified (score: ${avg}/100). ${zonal.cervical > 45 ? "Cervical risk at " + zonal.cervical + "% requires targeted intervention. " : ""}${zonal.thoracic > 45 ? "Thoracic risk at " + zonal.thoracic + "% noted. " : ""}Targeted corrective exercise programming is likely to yield measurable improvement within 4-6 weeks.`
+    : `Posture quality is broadly good during monitored sessions (${avg}/100, ${goodPct}% good posture). Reinforce current ergonomic patterns. ${zonal.cervical > zonal.thoracic ? "Monitor cervical zone closely during extended work periods." : "Continue current workstation setup and posture awareness practices."}`,
+  zonal.cervical >= 45
+    ? `Cervical zone risk: ${zonal.cervical}%. Neck lean and head position metrics require attention. Chin tuck exercises (3x10 reps daily) and monitor height adjustment to eye level are indicated. Consider cervicogenic headache screening if symptoms present.`
+    : `Cervical zone within acceptable range (${zonal.cervical}%). Current head and neck positioning is adequate. Maintain 50-70cm screen distance and monitor at eye level.`,
+  zonal.thoracic >= 45
+    ? `Thoracic zone risk: ${zonal.thoracic}%. Shoulder asymmetry and upper spinal curvature detected. Thoracic extension exercises (foam roller at T6-T9, 2x60s) and scapular retraction drills recommended. Workstation ergonomic review advised.`
+    : `Thoracic zone acceptable (${zonal.thoracic}%). Shoulder balance and upper back posture are within normal parameters. Encourage thoracic extension breaks every 45 minutes.`,
+  zonal.lumbar >= 45
+    ? `Lumbar zone risk: ${zonal.lumbar}%. Spinal alignment and hip angle metrics indicate concern. Posterior pelvic tilt exercises (3x10) and hip flexor stretches (3x30s/side) indicated. Lumbar support cushion and sit-stand desk rotation recommended.`
+    : `Lumbar zone within expected range (${zonal.lumbar}%). Current seated posture maintains adequate lumbar support. Continue current chair settings with feet flat and knees at 90 degrees.`,
+];
 
   clinicalRecos.forEach((rec,i)=>{
     if(y>H-35){doc.addPage();y=22;}
@@ -1822,7 +1835,7 @@ export async function generateComparisonPDF({ session1, session2, profile, user,
   // Delta arrow centre
   const arrowX = ml+4+half+3;
   sf(14,"bold"); tc(doc,...deltaCol);
-  doc.text(delta===0?"=":(improved?"↑":"↓"),arrowX+3,y+28,{align:"center"});
+  doc.text(delta===0?"=":(improved?"+":"-"),arrowX+3,y+28,{align:"center"});
   sf(9,"bold"); tc(doc,...deltaCol);
   doc.text(`${delta>0?"+":""}${delta}`, arrowX+3, y+37,{align:"center"});
 
@@ -1882,7 +1895,7 @@ export async function generateComparisonPDF({ session1, session2, profile, user,
     sf(8,"bold"); tc(doc,...col1); doc.text(String(Math.round(sc1)),cols[1],y+6);
     tc(doc,...col2); doc.text(String(Math.round(sc2)),cols[2],y+6);
     tc(doc,...dCol); doc.text(`${d>0?"+":""}${d}`,cols[3],y+6);
-    const arrow = d>2?"▲":d<-2?"▼":"—";
+    const arrow = d>2?"+":d<-2?"-":"=";
     tc(doc,...dCol); doc.text(arrow,cols[4],y+6);
     y+=9;
   }
@@ -1905,7 +1918,7 @@ export async function generateComparisonPDF({ session1, session2, profile, user,
     sf(8,"normal"); tc(doc,..._riskColor(r1));
     doc.text(`${r1}%`,ml+cw*0.45,y+9.5,{align:"right"});
     sf(9,"bold"); tc(doc,...(dz>0?T.danger:T.success));
-    doc.text(`${dz>0?"↑":"↓"} ${Math.abs(dz)}%`, ml+cw*0.55, y+9.5);
+    doc.text(`${dz>0?"+":"-"} ${Math.abs(dz)}%`, ml+cw*0.55, y+9.5);
     tc(doc,...zCol);
     doc.text(`${r2}%`, ml+cw*0.75, y+9.5);
     // Mini bar
@@ -1915,7 +1928,31 @@ export async function generateComparisonPDF({ session1, session2, profile, user,
     y+=16;
   }
 
-  // Recommendations based on delta
+  // FHP Index summary
+  const fhpS1 = typeof m1.fhp==="number"?m1.fhp:(m1.fhp?.score??null);
+  const fhpS2 = typeof m2.fhp==="number"?m2.fhp:(m2.fhp?.score??null);
+  if(fhpS1!==null || fhpS2!==null){
+    y+=6;
+    if(y>H-40){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"مؤشر FHP":"FHP Index"); y=22;}
+    sf(10,"bold"); tc(doc,...T.ink);
+    doc.text(isAr?"مؤشر تقدم الرأس للأمام (FHP)":"Forward Head Posture (FHP) Index",ml,y); y+=6;
+    const fhpV1 = typeof m1.fhp==="object"?m1.fhp.value:m1.fhp_side?.value||null;
+    const fhpV2 = typeof m2.fhp==="object"?m2.fhp.value:m2.fhp_side?.value||null;
+    const fhpDelta = (fhpS2||0)-(fhpS1||0);
+    const fhpCol = fhpDelta<-2?T.success:fhpDelta>2?T.danger:T.muted;
+    fc(doc,...T.bg); rr(doc,ml,y,cw,18,3,"F");
+    sf(8.5,"bold"); tc(doc,...T.ink);
+    doc.text(isAr?"الجلسة":"Session",ml+4,y+8);
+    sf(9,"bold"); tc(doc,..._scoreColor(fhpS1||0));
+    doc.text(`${Math.round(fhpS1||0)}/100`,ml+cw*0.35,y+8);
+    sf(9,"bold"); tc(doc,..._scoreColor(fhpS2||0));
+    doc.text(`${Math.round(fhpS2||0)}/100`,ml+cw*0.55,y+8);
+    tc(doc,...fhpCol); sf(9,"bold");
+    doc.text(`${fhpDelta>0?"+":""}${Math.round(fhpDelta)}`,ml+cw*0.75,y+8);
+    sf(7,"normal"); tc(doc,...T.muted);
+    doc.text(isAr?`التغيير: ${fhpDelta>0?"+":""}${Math.round(fhpDelta)} نقطة`:`Change: ${fhpDelta>0?"+":""}${Math.round(fhpDelta)} pts`,ml+4,y+14);
+    y+=22;
+  }
   y+=6;
   if(y>H-50){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"Recommendations"); y=22;}
   const worsened = rows.filter(r=>r.d<-5).slice(0,3);
@@ -2295,7 +2332,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   doc.text("Health Intelligence Platform",ml+34,38);
 
   // ELITE badge
-  const elbadge="✦ ELITE";
+  const elbadge="* ELITE";
   const elw=doc.getTextWidth(elbadge)+12;
   fc(doc,...T.success);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
@@ -2349,7 +2386,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   y+=kh*2+6*2+12;
 
   // ── TREND BANNER ───────────────────────────────────────────
-  const trendIcon = improved?"📈":declined?"📉":"📊";
+  const trendIcon = improved?"[UP]":declined?"[DOWN]":"[STABLE]";
   const trendText = improved
     ? (isAr?`تحسّن مستمر +${trendDelta} نقطة منذ البداية — أنت على المسار الصحيح`:`Consistent improvement +${trendDelta}pts since start`)
     : declined
@@ -2524,8 +2561,8 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   _sh(doc,ml,y,isAr?"أفضل وأسوأ جلسة":"Best & Worst Sessions","",T.success,isAr);
   y+=14;
 
-  [[isAr?"🏆 الجلسة الأفضل":"🏆 Best Session",best,T.success],
-   [isAr?"⚠️ الجلسة الأسوأ":"⚠️ Worst Session",worst,T.danger]
+  [[isAr?"* الجلسة الأفضل":"* Best Session",best,T.success],
+   [isAr?"! الجلسة الأسوأ":"! Worst Session",worst,T.danger]
   ].forEach(([label,sess,col])=>{
     if(!sess||y>H-36){if(y>H-36){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;} else return;}
     const sh2=28;
@@ -2557,15 +2594,32 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   _sh(doc,ml,y,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"مولّد من بيانات جلساتك":"Generated from your session data",T.primary,isAr);
   y+=16;
 
-  const narrative=[
-    improved
-      ?`Over ${sessions.length} sessions, ${name} has achieved a consistent +${trendDelta} point improvement in posture quality. The upward trajectory confirms effective habit formation. ${validDA.length?`${isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay]} sessions consistently outperform others — schedule important work on this day.`:""}`
-      :declined
-      ?`Across ${sessions.length} sessions, a ${Math.abs(trendDelta)}-point decline has been observed. This pattern typically follows increased workload or ergonomic changes. Targeted intervention in the highest-risk zone will have the most impact.`
-      :`Posture quality has remained stable across ${sessions.length} sessions (avg ${avgAll}/100). While consistency is positive, there is clear potential for a 10-15 point improvement through targeted ergonomic adjustments.`,
-    `The highest-risk spinal zone is ${avgZonal.cervical>=avgZonal.thoracic&&avgZonal.cervical>=avgZonal.lumbar?"Cervical (neck)":avgZonal.thoracic>=avgZonal.lumbar?"Thoracic (upper back)":"Lumbar (lower back)"}, averaging ${Math.max(avgZonal.cervical,avgZonal.thoracic,avgZonal.lumbar)}% risk. This is the primary area for targeted intervention and ergonomic adjustment.`,
-    `Session frequency of ${freqPerWeek}/week with an average duration of ${avgDurMin} minutes. ${parseFloat(freqPerWeek)<3?"Increasing to 3-4 sessions per week would accelerate improvement significantly.":"Good consistency — maintain this frequency to consolidate gains already achieved."}`,
-  ].join("\n\n");
+  const highestRiskAll = Math.max(avgZonal.cervical, avgZonal.thoracic, avgZonal.lumbar);
+const highestRiskName = avgZonal.cervical >= avgZonal.thoracic && avgZonal.cervical >= avgZonal.lumbar
+  ? (isAr ? "Cervical (neck)" : "Cervical (neck)")
+  : avgZonal.thoracic >= avgZonal.lumbar
+    ? (isAr ? "Thoracic (upper back)" : "Thoracic (upper back)")
+    : (isAr ? "Lumbar (lower back)" : "Lumbar (lower back)");
+
+const narrative=[
+  improved
+    ? (isAr
+      ? `عبر ${sessions.length} جلسة، حقق ${name} تحسناً مستمراً +${trendDelta} نقطة في جودة الوضعية. الاتجاه التصاعدي يؤكد تكوين عادات فعالة.${bestDay >= 0 ? ` جلسات يوم ${(isAr ? dayNamesAr[bestDay] : dayNamesEn[bestDay])} تتفوق باستمرار.` : ""} متوسط 90 يوم: ${avg90}/100.`
+      : `Over ${sessions.length} sessions, ${name} achieved a consistent +${trendDelta} point improvement. 90-day average: ${avg90}/100. Upward trajectory confirms effective habit formation.${bestDay >= 0 ? ` ${(isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay])} sessions consistently outperform others.` : ""}`)
+    : declined
+    ? (isAr
+      ? `عبر ${sessions.length} جلسة، لوحظ انخفاض ${Math.abs(trendDelta)} نقطة. هذا النمط يتبع عادةً زيادة في عبء العمل أو تغييرات في الإرغونوميكس. أعلى منطقة خطر: ${highestRiskName} (${highestRiskAll}%).`
+      : `Across ${sessions.length} sessions, a ${Math.abs(trendDelta)}-point decline was observed. This pattern typically follows increased workload or ergonomic changes. Highest-risk zone: ${highestRiskName} (${highestRiskAll}%).`)
+    : (isAr
+      ? `جودة الوضعية ظلت مستقرة عبر ${sessions.length} جلسة (متوسط ${avgAll}/100). الاتساق إيجابي، لكن هناك إمكانية لتحسين 10-15 نقطة. أعلى منطقة خطر: ${highestRiskName} (${highestRiskAll}%).`
+      : `Posture quality remained stable across ${sessions.length} sessions (avg ${avgAll}/100). While consistency is positive, 10-15 point improvement is achievable. Highest-risk zone: ${highestRiskName} (${highestRiskAll}%).`),
+  (isAr
+    ? `مناطق العمود الفقري: Cervical ${avgZonal.cervical}%, Thoracic ${avgZonal.thoracic}%, Lumbar ${avgZonal.lumbar}%. المنطقة الأعلى خطراً: ${highestRiskName}. ${highestRiskAll > 50 ? "يتطلب هذا مستوى الخطر تدخلاً مستهدفاً فورياً." : "المستويات الحالية قابلة للتحسين من خلال تمارين مستهدفة."}`
+    : `Spinal zones: Cervical ${avgZonal.cervical}%, Thoracic ${avgZonal.thoracic}%, Lumbar ${avgZonal.lumbar}%. Primary risk: ${highestRiskName}. ${highestRiskAll > 50 ? "This risk level requires immediate targeted intervention." : "Current levels are improvable through targeted exercises."}`),
+  (isAr
+    ? `معدل التكرار: ${freqPerWeek} جلسة/أسبوع، متوسط المدة: ${avgDurMin} دقيقة. ${parseFloat(freqPerWeek) < 3 ? "زيادة التكرار إلى 3-4 جلسات أسبوعياً ستسرّع التحسين بشكل كبير." : " CONSISTENCY جيدة — حافظ على هذا التكرار لتعزيز المكاسب."} إجمالي التنبيهات: ${totalAlerts} عبر ${sessions.length} جلسة.`
+    : `Session frequency: ${freqPerWeek}/week, average duration: ${avgDurMin} minutes. ${parseFloat(freqPerWeek) < 3 ? "Increasing to 3-4 sessions per week would significantly accelerate improvement." : "Good consistency — maintain this frequency to consolidate gains."} Total alerts: ${totalAlerts} across ${sessions.length} sessions.`),
+].join("\n\n");
 
   const narLines=doc.splitTextToSize(narrative.replace(/[#*`]/g,"").trim(),cw-8);
   fc(doc,...T.bg); rr(doc,ml,y,cw,narLines.length*5.4+12,4,"F");
@@ -2579,19 +2633,30 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   _sh(doc,ml,y,isAr?"برنامج التحسين — 8 أسابيع":"8-Week Improvement Programme",isAr?"خطة مخصصة لنتائجك":"Personalised to your results",T.success,isAr);
   y+=16;
 
-  const programme=[
-    {wk:"1–2",goal:isAr?"الوعي بالوضعية":"Posture Awareness",
-     action:isAr?"3 جلسات يومياً × 20 دقيقة — لاحظ التنبيهات بدون تصحيح قسري"
-                :"3 sessions/day × 20 min — observe alerts without forced correction"},
-    {wk:"3–4",goal:isAr?"إعداد محطة العمل":"Workstation Setup",
-     action:isAr?"اضبط الشاشة والكرسي — استهدف +5 نقاط في المتوسط الأسبوعي"
-                :"Adjust monitor & chair — target +5pt weekly average improvement"},
-    {wk:"5–6",goal:isAr?"بناء العادة":"Habit Building",
-     action:isAr?"تمرين chin tuck 3×10 يومياً + تنبيه استراحة كل 30 دقيقة"
-                :"Chin tucks 3×10 daily + break alert every 30 min"},
-    {wk:"7–8",goal:isAr?"الدمج والقياس":"Consolidation & Measure",
-     action:isAr?"قارن المتوسط مع الأسابيع 1-2 — الهدف: +10 نقاط على الأقل"
-                :"Compare avg to weeks 1-2 baseline — target: +10 points minimum"},
+  const highestRiskZone = avgZonal.cervical >= avgZonal.thoracic && avgZonal.cervical >= avgZonal.lumbar ? "cervical" : avgZonal.thoracic >= avgZonal.lumbar ? "thoracic" : "lumbar";
+const zoneExercises = {
+  cervical: isAr ? "chin tuck 3x10 + cervical rotation 2x10/ji + stretch pectoral 3x30s" : "chin tucks 3x10 + cervical rotation 2x10/side + doorway chest stretch 3x30s",
+  thoracic: isAr ? "thoracic extension (foam roller) 2x60s + W-Y-T raises 3x12 + wall angels 2x10" : "thoracic extension (foam roller) 2x60s + W-Y-T raises 3x12 + wall angels 2x10",
+  lumbar: isAr ? "posterior pelvic tilt 3x10 + bird-dog 3x10/ji + hip flexor stretch 3x30s/ji" : "posterior pelvic tilt 3x10 + bird-dog 3x10/side + hip flexor stretch 3x30s/side",
+};
+const targetZone = highestRiskZone === "cervical" ? (isAr ? "عنق الرقبة" : "neck/cervical") : highestRiskZone === "thoracic" ? (isAr ? "الصدر" : "thoracic/upper back") : (isAr ? "القطن" : "lumbar/lower back");
+const programme=[
+    {wk:"1-2",goal: isAr ? "Posture Awareness" : "Posture Awareness",
+     action: isAr
+       ? `3 sessions x 20 min daily. Focus on self-correction. Current ${targetZone} risk: ${avgZonal[highestRiskZone]}%.`
+       : `3 sessions/day x 20 min. Observe alerts without forced correction. Current ${targetZone} risk: ${avgZonal[highestRiskZone]}%.`},
+    {wk:"3-4",goal: isAr ? "Workstation + Exercises" : "Workstation + Exercises",
+     action: isAr
+       ? `Adjust monitor to eye level + chair height. Start: ${zoneExercises[highestRiskZone]}. Target: +5 pts weekly avg.`
+       : `Adjust monitor to eye level + chair height. Start: ${zoneExercises[highestRiskZone]}. Target: +5pt weekly average.`},
+    {wk:"5-6",goal: isAr ? "Habit Building" : "Habit Building",
+     action: isAr
+       ? `Continue exercises daily. Add break reminder every 30 min. Expected ${targetZone} improvement: 5-10%.`
+       : `Continue exercises daily. Add break reminder every 30 min. Expected ${targetZone} improvement: 5-10%.`},
+    {wk:"7-8",goal: isAr ? "Measure & Adjust" : "Consolidation & Measure",
+     action: isAr
+       ? `Compare avg with weeks 1-2. Target: +10 pts minimum. Reassess ${targetZone} risk zone.`
+       : `Compare avg to weeks 1-2 baseline. Target: +10 points minimum. Reassess ${targetZone} risk zone.`},
   ];
 
   programme.forEach(({wk,goal,action},idx)=>{
