@@ -10,8 +10,8 @@ import { featureTier, qualityFor } from "./lib/tierQuality.js";
 
 // ── helpers ───────────────────────────────────────────────────────
 const avg  = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
-const sc   = v => v >= 75 ? "#10b981" : v >= 50 ? "#f59e0b" : "#ef4444";
-const grade = (v, ar) => v >= 85 ? (ar ? "ممتاز" : "Excellent") : v >= 70 ? (ar ? "جيد" : "Good") : v >= 50 ? (ar ? "مقبول" : "Fair") : (ar ? "ضعيف" : "Poor");
+const sc   = v => v >= 80 ? "#10b981" : v >= 60 ? "#f59e0b" : "#ef4444";
+const grade = (v, ar) => v >= 80 ? (ar ? "ممتاز" : "Excellent") : v >= 60 ? (ar ? "جيد" : "Good") : (ar ? "يحتاج تحسين" : "Needs Improvement");
 const pct  = (a, b) => b ? `${a >= b ? "+" : ""}${Math.round(((a - b) / b) * 100)}%` : "—";
 const fmt  = d => { try { return new Date(d?.toDate?.() || d).toLocaleDateString(); } catch { return "—"; } };
 // Escapes any string before it's interpolated into the report HTML
@@ -72,9 +72,22 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
   const tierLabel = tier === "elite" ? "Elite" : tier === "professional" ? "Pro" : tier === "basic" ? "Basic" : "";
   const tierColor = tier === "elite" ? "#10b981" : "#0891b2";
 
-  const safeSummaryHtml = escapeHtml(summaryText || "")
+  const safeSummaryHtml = (() => {
+  let raw = summaryText || "";
+  // Escape HTML first
+  raw = escapeHtml(raw);
+  // Then parse markdown (safe now since HTML entities are escaped)
+  raw = raw
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/^### (.+)$/gm, "<h4 style='margin:10px 0 4px;font-size:13px;font-weight:700;color:#1a56db'>$1</h4>")
+    .replace(/^## (.+)$/gm, "<h3 style='margin:12px 0 6px;font-size:14px;font-weight:800;color:#1a56db'>$1</h3>")
+    .replace(/^- (.+)$/gm, "<li style='margin:4px 0;line-height:1.6'>$1</li>")
+    .replace(/(<li[\s\S]+?<\/li>)/g, "<ul style='padding-left:18px;margin:8px 0'>$1</ul>")
+    .replace(/\n\n/g, "<br/><br/>")
     .replace(/\n/g, "<br/>");
+  return raw;
+})();
 
   const rangeLabelEn = reportType === "weekly" ? "This Week's Sessions" : reportType === "monthly" ? "This Month's Sessions" : `Last ${rowLimit} Sessions`;
   const rangeLabelAr = reportType === "weekly" ? "جلسات هذا الأسبوع" : reportType === "monthly" ? "جلسات هذا الشهر" : `آخر ${rowLimit} جلسات`;
