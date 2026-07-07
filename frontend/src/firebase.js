@@ -317,7 +317,42 @@ export async function getCalibration(uid) {
 }
 
 // ── User CRUD ─────────────────────────────────────────────────────
-export const getUserProfile   = async (uid) => { const s=await getDoc(doc(db,"users",uid)); return s.exists()?{id:s.id,...s.data()}:null; };
+// ── Elite email/domain elevation — mirrors backend/auth/middleware.py ──
+// Keep in sync with ELITE_EMAILS + ELITE_DOMAINS in middleware.py
+const _ELITE_EMAILS = [
+  "judyayman36@gmail.com",
+  "m789pppp@gmail.com",
+  // add individual emails here as needed
+];
+const _ELITE_DOMAINS = [
+  "coventry.ac.uk", "coventry-university.ac.uk",
+  "city.ac.uk", "tkh.edu.eg",
+];
+function _shouldElevateToElite(email) {
+  if (!email) return false;
+  const em = email.trim().toLowerCase();
+  if (_ELITE_EMAILS.includes(em)) return true;
+  const domain = em.includes("@") ? em.split("@").pop() : "";
+  return _ELITE_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
+}
+
+export const getUserProfile = async (uid) => {
+  const s = await getDoc(doc(db, "users", uid));
+  if (!s.exists()) return null;
+  const data = { id: s.id, ...s.data() };
+  // Client-side elite elevation — mirrors backend middleware
+  // Only elevate UP, never downgrade a paying user
+  const TIER_LEVEL = { standard:0, basic:1, professional:2, elite:3 };
+  const email = data.email || "";
+  if (_shouldElevateToElite(email)) {
+    const current = TIER_LEVEL[String(data.tier||"standard").toLowerCase()] ?? 0;
+    if (current < 3) {
+      data.tier = "elite";
+      data.is_trial = false;
+    }
+  }
+  return data;
+};
 export const updateUserProfile = async (uid, data) => {
   // Strip ALL protected fields that Firestore rules block client from changing
   const { is_admin, tier, is_hr, is_org_owner, user_type, company_id, uid: _uid, email: _email, ...safe } = data;
