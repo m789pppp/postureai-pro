@@ -318,66 +318,115 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
     lang,
   }), [profile, sessions, avgScore, weekAvg, fatigueScore, lang]);
 
-  const systemPrompt = `You are an AI health analytics engine for Corvus — an ergonomic monitoring platform.
-You analyze posture data and generate professional, actionable, empathetic insights.
-Always respond in ${lang === "ar" ? "Arabic" : "English"}.
-Keep responses concise, data-driven, and formatted with markdown (** for bold, ## for headers, - for bullets).
-Never mention you're an AI assistant or which AI model powers you. Refer to yourself as "Corvus Intelligence".`;
+  const systemPrompt = `You are Dr. Corvus — the clinical AI physiotherapist inside Corvus PostureAI Pro.
+
+ROLE: Generate structured, evidence-based clinical posture reports.
+
+CLINICAL KNOWLEDGE:
+- Hansraj (2014): cervical load at 0°=4.5kg, 15°=12kg, 30°=18kg, 45°=22kg, 60°=27kg
+- Nachemson disc pressure model: sitting unsupported=140% vs standing baseline
+- Janda's Upper Crossed Syndrome: tight pecs/upper traps + weak deep neck flexors/rhomboids → FHP + rounded shoulders
+- ISO 11226: acceptable neck flexion <25°, shoulder elevation <60°, trunk inclination <20°
+- NIOSH: continuous sitting >45 min without movement = significantly elevated MSK injury risk
+
+REPORT STANDARDS:
+- Use ## section headers, **bold** clinical terms, numbered protocols
+- Explain WHY each finding matters anatomically — never just state the number
+- Reference the patient's actual numbers in EVERY section — no generic statements
+- Interventions must be precise: sets × reps, hold times, frequency, expected weeks to improvement
+- Flag ⚕️ any findings warranting professional consultation
+- Never say "maintain good posture" — describe the specific correction and target muscle group
+
+${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية مصرية). Use medical terms then immediately explain them simply." : "LANGUAGE: Respond in clear, professional English."}`;
 
   const tabPrompts = {
-    executive: (ctx) => `Generate an executive summary for ${ctx.name}:
-- Overall avg score: ${ctx.avgScore}/100 | This week: ${ctx.weekAvg}/100 | Trend: ${ctx.trendPct > 0 ? "+" : ""}${ctx.trendPct}% vs last week
-- Total sessions: ${ctx.totalSessions} | This week: ${ctx.thisWeekSessions} | Streak: ${ctx.streak} days
-- Fatigue index: ${ctx.fatigueScore}% | Neck risk: ${ctx.neckRisk}% | Burnout risk: ${ctx.burnoutRisk}%
+    executive: (ctx) => `Generate a clinical executive summary for ${ctx.name || "the patient"}.
 
-Write a 3-section executive summary:
+PATIENT DATA:
+- Posture score: ${ctx.avgScore}/100 (${ctx.avgScore >= 85 ? "Excellent" : ctx.avgScore >= 70 ? "Good" : ctx.avgScore >= 55 ? "Fair" : "Needs Attention"}) | This week: ${ctx.weekAvg}/100
+- Trend: ${ctx.trendPct > 0 ? "+" : ""}${ctx.trendPct}% vs last week | Sessions: ${ctx.totalSessions} total (${ctx.thisWeekSessions} this week) | Streak: ${ctx.streak} days
+- Fatigue index: ${ctx.fatigueScore}% (${ctx.fatigueScore >= 70 ? "HIGH" : ctx.fatigueScore >= 45 ? "MODERATE" : "LOW"}) | Cervical risk: ${ctx.neckRisk}% | Burnout risk: ${ctx.burnoutRisk}%
+- Calibration: ${ctx.calibrated ? "complete — personalized thresholds active" : "NOT DONE — generic thresholds only"}
+
+Write these EXACT sections:
+
 ## Performance Snapshot
-## Key Risk Areas  
-## This Week's Priority Actions (3 bullet points max)
+[2-3 sentences. Use the specific numbers. Interpret what the score means physiologically — which structures are under what level of load.]
 
-Be specific, professional, use the numbers. Max 200 words.`,
+## Primary Risk Factors  
+[2-3 bullets with %, anatomical explanation, and consequence if unaddressed. E.g. "Cervical risk at ${ctx.neckRisk}% suggests sustained neck flexion loading the C5-C7 facet joints..."]
 
-    trends: (ctx) => `Analyze posture trends for ${ctx.name}:
+## This Week's Priority Actions
+[3 numbered interventions. Include: what to do, why it targets the identified risk, expected benefit timeline.]
+
+Max 230 words. Be clinically specific.`,
+
+    trends: (ctx) => `Perform a clinical trend analysis for ${ctx.name || "the patient"}.
+
+TREND DATA:
 - 30-day average: ${ctx.avgScore}/100
-- This week avg: ${ctx.weekAvg}/100
-- Last week avg: ${ctx.lastWeekAvg}/100
-- Week-over-week change: ${ctx.trendPct > 0 ? "+" : ""}${ctx.trendPct}%
-- Sessions this week: ${ctx.thisWeekSessions}
+- This week: ${ctx.weekAvg}/100 | Last week: ${ctx.lastWeekAvg}/100
+- Week-over-week delta: ${ctx.trendPct > 0 ? "+" : ""}${ctx.trendPct}% (${ctx.trendPct > 2 ? "improving" : ctx.trendPct < -2 ? "declining" : "stable"})
+- Session frequency this week: ${ctx.thisWeekSessions}
 
-Generate trend analysis covering:
-## Trend Direction
-## What's Driving This
-## Forecast for Next Week
+Generate:
 
-Use specific numbers. Max 180 words.`,
+## Trend Direction & Clinical Significance
+[Interpret the ${ctx.trendPct}% change. A ${Math.abs(ctx.trendPct)}% ${ctx.trendPct >= 0 ? "improvement" : "decline"} in posture score corresponds to what change in musculoskeletal load? What does this trajectory mean long-term?]
 
-    fatigue: (ctx) => `Analyze fatigue and burnout risk for ${ctx.name}:
+## Root Cause Analysis
+[What behavioral or environmental factors likely explain this trend? Be specific — not "poor habits."]
+
+## Evidence-Based Forecast
+[Project next week's outcome based on current trajectory. Give a realistic score range.]
+
+## Course Correction Protocol
+[2-3 specific interventions to improve or sustain the trend this week. Include mechanism.]
+
+Max 210 words.`,
+
+    fatigue: (ctx) => `Perform a clinical fatigue and occupational burnout assessment for ${ctx.name || "the patient"}.
+
+CLINICAL INDICATORS:
 - Fatigue index: ${ctx.fatigueScore}% (${ctx.fatigueScore >= 70 ? "HIGH" : ctx.fatigueScore >= 45 ? "MODERATE" : "LOW"} risk)
-- Posture avg score: ${ctx.avgScore}/100
-- Burnout risk score: ${ctx.burnoutRisk}%
-- Sessions per week: ${ctx.thisWeekSessions}
-- Streak: ${ctx.streak} days
+- Occupational burnout score: ${ctx.burnoutRisk}%
+- Posture average: ${ctx.avgScore}/100
+- Weekly session frequency: ${ctx.thisWeekSessions} sessions | Streak: ${ctx.streak} days
 
-Provide:
-## Fatigue Assessment
-## Warning Signs to Watch (3 bullets)
-## Recovery Recommendations (3 actionable bullets)
+Generate:
 
-Be practical and health-focused. Max 200 words.`,
+## Fatigue Profile Assessment
+[Distinguish acute vs chronic load accumulation. A fatigue index of ${ctx.fatigueScore}% suggests what physiological state? How does it relate to the posture score of ${ctx.avgScore}/100? What MSK structures are most affected?]
 
-    recommendations: (ctx) => `Generate smart ergonomic recommendations for ${ctx.name}:
-- Current posture score: ${ctx.avgScore}/100
-- Calibration done: ${ctx.calibrated ? "Yes" : "No"}
-- Neck risk: ${ctx.neckRisk}%
-- Fatigue: ${ctx.fatigueScore}%
-- Weekly sessions: ${ctx.thisWeekSessions}
+## Occupational Risk Indicators
+[3 specific warning signs derived from this patient's data — link each to a clinical consequence. E.g. fatigue + low session frequency = progressive deconditioning of postural stabilizers.]
 
-Create a personalized action plan:
-## Immediate Fixes (this week)
-## Workstation Adjustments
-## Habit Improvements
+## Evidence-Based Recovery Protocol
+[3 interventions with duration, frequency, and expected improvement timeline. Cite relevant research.]
 
-Be specific and practical. Reference the actual scores. Max 220 words.`,
+Max 230 words.`,
+
+    recommendations: (ctx) => `Generate a personalized clinical ergonomic intervention plan for ${ctx.name || "the patient"}.
+
+PATIENT PROFILE:
+- Posture score: ${ctx.avgScore}/100 | Calibration: ${ctx.calibrated ? "anthropometrically calibrated — precise thresholds" : "UNCALIBRATED — using generic population norms, may under/over-report"}
+- Cervical risk: ${ctx.neckRisk}% | Fatigue: ${ctx.fatigueScore}% | Session frequency: ${ctx.thisWeekSessions}/week
+
+Create a prioritized clinical intervention plan:
+
+## Immediate Clinical Interventions (This Week)
+[Top 2-3 highest-impact corrections. For each: the specific biomechanical deficit, the corrective action with precise parameters, the mechanism of how it helps, expected benefit.]
+
+## Workstation Modification Protocol
+[Specific adjustments with measurements — monitor height relative to eye level, chair seat pan angle, keyboard distance from edge of desk, monitor distance in cm. Base on the patient's calibration status.]
+
+## Neuromuscular Re-education Program
+[4-5 exercises targeting the identified deficits. Each: name, sets × reps or hold time, frequency per day/week, which muscle imbalance it addresses.]
+
+## 30-Day Outcome Milestones
+[Realistic score targets at Week 1, Week 2, Week 4. What symptoms should improve and when.]
+
+Max 280 words.`,
   };
 
   const loadInsight = useCallback(async (tabKey) => {

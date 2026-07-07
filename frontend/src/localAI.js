@@ -831,56 +831,126 @@ async function callBackendAnalysis(prompt, systemPrompt, maxTokens) {
   return text;
 }
 
+// ── Production-grade system prompt builder for all LLM calls ─────
+function buildLLMSystemPrompt(systemPrompt, forAnalysis = false) {
+  const d    = parseData(systemPrompt);
+  const isAr = d.lang === "ar";
+
+  const dataLines = [
+    d.name        && `Patient: ${d.name}`,
+    d.avg         && `Overall posture score: ${d.avg}/100 (${d.avg >= 85 ? "Excellent" : d.avg >= 70 ? "Good" : d.avg >= 55 ? "Fair" : "Needs Attention"})`,
+    d.weekAvg     && `This week average: ${d.weekAvg}/100`,
+    d.trendPct    && `Week-over-week trend: ${d.trendPct > 0 ? "+" : ""}${d.trendPct}% (${d.trendPct > 2 ? "improving" : d.trendPct < -2 ? "declining" : "stable"})`,
+    d.sessions    && `Total sessions logged: ${d.sessions}`,
+    d.weekSessions && `Sessions this week: ${d.weekSessions}`,
+    d.neckRisk    && `Cervical risk score: ${d.neckRisk}% (${d.neckRisk >= 70 ? "HIGH" : d.neckRisk >= 40 ? "MODERATE" : "LOW"})`,
+    d.fatigue     && `Fatigue index: ${d.fatigue}%`,
+    d.burnout     && `Occupational burnout risk: ${d.burnout}/100`,
+    d.worstTime   && `Peak symptom window: ${d.worstTime}`,
+    d.alerts      && `Most frequent postural alerts: ${d.alerts}`,
+    d.calibrated  ? "Anthropometric calibration: COMPLETE — personalized thresholds active"
+                  : "Anthropometric calibration: NOT YET DONE — generic population thresholds in use",
+  ].filter(Boolean).join("\n");
+
+  const langLine = isAr
+    ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية مصرية). Use medical terms then immediately explain them simply."
+    : "LANGUAGE: Respond in clear, professional English.";
+
+  if (forAnalysis) {
+    return `You are Dr. Corvus — the clinical AI physiotherapist inside Corvus PostureAI Pro.
+
+ROLE: Posture analytics engine. Generate structured, evidence-based clinical reports.
+
+CLINICAL KNOWLEDGE:
+- Cervical spine loading: Hansraj (2014) — 0° = 4.5 kg, 15° = 12 kg, 30° = 18 kg, 45° = 22 kg, 60° = 27 kg
+- Disc pressure: Nachemson model — sitting unsupported = 140% vs standing; slouching = 185%
+- Janda's Upper Crossed Syndrome: tight pecs/upper traps + weak deep neck flexors/rhomboids
+- ISO 11226: acceptable neck flexion < 25°; shoulder elevation < 60°; trunk inclination < 20°
+- NIOSH: continuous sitting > 45 min without movement = elevated MSK injury risk
+
+REPORT FORMAT RULES:
+- Use ## section headers, **bold** clinical terms, numbered protocols
+- Always explain WHY a finding matters anatomically — not just what it is
+- Include specific patient numbers in every section — no generic statements
+- Provide interventions with precise parameters: sets × reps, hold time, frequency, expected weeks to improvement
+- Flag ⚕️ any red flags requiring professional consultation
+
+PATIENT CLINICAL DATA:
+${dataLines || "No session data available."}
+
+${langLine}`;
+  }
+
+  return `You are Dr. Corvus — the AI physiotherapist embedded in Corvus PostureAI Pro.
+
+IDENTITY: Certified ergonomics consultant and physiotherapy specialist. Not a generic assistant.
+You are Dr. Corvus — never say "I'm an AI."
+
+CLINICAL EXPERTISE:
+- MSK anatomy: cervical/thoracic/lumbar spine, shoulder girdle, carpal tunnel, hip flexors, pelvis
+- Postural syndromes: Forward Head Posture, Upper/Lower Crossed Syndrome, kyphosis, lordosis, APT, piriformis syndrome
+- Biomechanics: Hansraj cervical load model (2014), Nachemson disc pressure data, moment arm physics
+- Evidence standards: NIOSH 1997, OSHA ergonomics guidelines, ISO 11226, Cornell Human Factors (Hedge)
+- Therapeutic exercise: McKenzie method, muscle energy techniques, neuromuscular re-education
+
+RESPONSE PRINCIPLES:
+1. Reference the patient's ACTUAL DATA in every response — score, risk%, alerts. Never be generic.
+2. For every recommendation: WHAT → WHY (anatomical mechanism) → HOW (precise steps) → BENEFIT → TIMEFRAME.
+3. Never say "maintain good posture" — describe the specific correction and the muscle group it targets.
+4. Cite evidence naturally: "Hansraj (2014) showed that at 45° neck flexion, cervical load reaches 22 kg — nearly 5× neutral..."
+5. Use precise anatomy with plain explanations: "the deep cervical flexors (longus colli/capitis — your spine's inner corset)..."
+6. ⚕️ Flag red flags: radiating pain, numbness/tingling, unilateral weakness → always recommend professional evaluation.
+7. Format: **bold** key terms, numbered steps for protocols, short headers for multi-part answers.
+8. Topic boundary: posture, ergonomics, MSK health, workspace, physiotherapy exercises ONLY. Redirect others warmly.
+9. Conversational responses: 150-220 words. Multi-section reports: up to 350 words.
+
+PATIENT CLINICAL DATA (always reference these numbers):
+${dataLines || "No session data yet. Encourage the patient to run their first analysis."}
+
+${langLine}
+
+CONVERSATION STYLE:
+- Respond to what was actually asked — don't give a template.
+- Pain reports: assess clinically (location, character, radiation, aggravating/relieving factors).
+- End with ONE focused follow-up question when clinically appropriate — not every message.`;
+}
+
 export async function localChat(messages, {systemPrompt=""} = {}) {
+  const d = parseData(systemPrompt);
+
   if (_backendAIReady !== false) {
     try {
-      const d = parseData(systemPrompt);
-      const userCtx = [
-        d.name       && `User: ${d.name}`,
-        d.avg        && `Posture score: ${d.avg}/100`,
-        d.sessions   && `Sessions: ${d.sessions}`,
-        d.neckRisk   && `Neck risk: ${d.neckRisk}%`,
-        d.alerts     && `Recurring alerts: ${d.alerts}`,
-        d.worstTime  && `Worst time: ${d.worstTime}`,
-        d.fatigue    && `Fatigue: ${d.fatigue}%`,
-        d.lang==="ar"&& `IMPORTANT: Respond in Egyptian Arabic (informal, friendly).`,
-      ].filter(Boolean).join("\n");
-
-      const sp = `You are Corvus AI Coach — a friendly, professional posture and ergonomics specialist.
-
-RULES:
-1. ONLY answer posture, ergonomics, workstation, exercises, and pain topics.
-2. Off-topic (crypto, weather, etc.)? Redirect warmly to posture.
-3. Always reference the user's actual numbers when available.
-4. Cite science when relevant (e.g. "Hansraj 2014 showed...").
-5. Be concise (max 200 words), warm, and give specific action steps.
-
-USER DATA:
-${userCtx || "No session data yet."}`;
-
-      return await tryPuter(messages, sp);
-    } catch { _backendAIReady = false; }
+      const sp = buildLLMSystemPrompt(systemPrompt, false);
+      return await callBackendAI(messages, sp, 500);
+    } catch(e) {
+      const msg = String(e?.message || "");
+      if (!msg.includes("timeout") && !msg.includes("network") && !msg.includes("abort")) {
+        _backendAIReady = false;
+      }
+    }
   }
-  // Instant fallback: rule-based engine
-  await new Promise(r=>setTimeout(r, 250+Math.random()*400));
-  const d    = parseData(systemPrompt);
-  const hist = analyzeHistory(messages);
-  const last = [...messages].reverse().find(m=>m.role==="user");
-  const intent = detectIntent(last?.content||"");
-  return buildResponse(intent, last?.content||"", d, hist);
+
+  // Offline fallback: rule-based engine (instant, zero cost)
+  await new Promise(r => setTimeout(r, 200 + Math.random() * 350));
+  const hist   = analyzeHistory(messages);
+  const last   = [...messages].reverse().find(m => m.role === "user");
+  const intent = detectIntent(last?.content || "");
+  return buildResponse(intent, last?.content || "", d, hist);
 }
 
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
   if (_backendAIReady !== false) {
     try {
-      const d = parseData((systemPrompt||"")+" "+prompt);
-      const lang = d.lang==="ar" ? "Respond in Egyptian Arabic." : "Respond in English.";
-      const sp = `You are Corvus's posture analytics engine.
-Generate a structured report using markdown (## headers, **bold**, bullets).
-Be specific with numbers from the data. Max 250 words. ${lang}`;
-      return await callBackendAnalysis(prompt, sp, 400);
-    } catch { _backendAIReady = false; }
+      const combined = (systemPrompt || "") + " " + prompt;
+      const sp = buildLLMSystemPrompt(combined, true);
+      return await callBackendAnalysis(prompt, sp, 500);
+    } catch(e) {
+      const msg = String(e?.message || "");
+      if (!msg.includes("timeout") && !msg.includes("network") && !msg.includes("abort")) {
+        _backendAIReady = false;
+      }
+    }
   }
-  await new Promise(r=>setTimeout(r, 250+Math.random()*350));
+  await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
   return runAnalysis(prompt, systemPrompt);
 }
