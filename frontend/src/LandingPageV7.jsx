@@ -582,11 +582,13 @@ function Hero({ lang, onCTA, mode, setMode }) {
           </Reveal>
         </div>
 
-        {/* Right — Camera demo with posture skeleton overlay */}
+        {/* Right — Camera demo + metrics panel side by side */}
         <Reveal delay={100}>
-          <div style={{ position:"relative", paddingTop:34, paddingBottom:30 }}>
-            {/* Main camera view mockup */}
-            <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
+          <div style={{ position:"relative", paddingTop:20, paddingBottom:20,
+            display:"grid", gridTemplateColumns:"1fr 130px", gap:12, alignItems:"start" }}>
+
+            {/* ── Camera card ── */}
+            <div style={{ ...card(true), padding:0, overflow:"hidden", position:"relative" }}>
               {/* Browser chrome */}
               <div style={{ display:"flex", alignItems:"center", gap:8,
                 padding:"12px 16px", borderBottom:`1px solid ${C.border}`,
@@ -604,59 +606,34 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
               {/* Camera feed + skeleton overlay */}
               <div style={{ position:"relative", background:"#0a1628", aspectRatio:"4/3", overflow:"hidden" }}>
-                {/* Simulated camera background — gradient silhouette */}
                 <div style={{ position:"absolute", inset:0,
                   background:"radial-gradient(ellipse 60% 80% at 50% 30%, rgba(30,50,80,.9) 0%, rgba(5,12,25,.98) 100%)" }}/>
-
-                {/* Person silhouette SVG */}
                 <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
                   viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
-                  {/* Desk background hint */}
                   <rect x="0" y="240" width="400" height="60" fill="rgba(20,35,60,.6)" rx="0"/>
-                  {/* Monitor on desk */}
                   <rect x="140" y="190" width="120" height="72" rx="4" fill="rgba(30,60,100,.5)" stroke="rgba(100,150,220,.3)" strokeWidth="1.5"/>
                   <rect x="185" y="262" width="30" height="8" rx="2" fill="rgba(50,80,120,.5)"/>
                   <rect x="165" y="270" width="70" height="4" rx="2" fill="rgba(50,80,120,.5)"/>
-                  {/* Screen glow */}
                   <rect x="146" y="196" width="108" height="60" rx="2" fill="rgba(79,124,249,.12)"/>
-
-                  {/* Body silhouette */}
-                  {/* Torso */}
                   <ellipse cx="200" cy="178" rx="28" ry="38" fill="rgba(40,65,105,.6)"/>
-                  {/* Head */}
                   <ellipse cx="200" cy="108" rx="22" ry="26" fill="rgba(50,80,130,.55)"/>
-                  {/* Neck */}
                   <rect x="194" y="130" width="12" height="16" rx="4" fill="rgba(45,72,118,.55)"/>
-                  {/* Arms */}
                   <ellipse cx="167" cy="180" rx="10" ry="28" fill="rgba(38,62,100,.55)" transform="rotate(-8,167,180)"/>
                   <ellipse cx="233" cy="180" rx="10" ry="28" fill="rgba(38,62,100,.55)" transform="rotate(8,233,180)"/>
-
-                  {/* Skeleton overlay — MediaPipe landmarks */}
-                  {/* Spine line */}
                   <line x1="200" y1="134" x2="200" y2="210" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
-                  {/* Shoulder line */}
                   <line x1="170" y1="152" x2="230" y2="152" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
-                  {/* Neck line */}
                   <line x1="200" y1="130" x2="200" y2="152" stroke="rgba(16,217,160,.7)" strokeWidth="2" strokeLinecap="round"/>
-                  {/* Head top */}
                   <line x1="200" y1="96" x2="200" y2="130" stroke="rgba(245,158,11,.8)" strokeWidth="2" strokeLinecap="round"/>
-                  {/* Left arm */}
                   <line x1="170" y1="152" x2="162" y2="196" stroke="rgba(16,217,160,.55)" strokeWidth="2" strokeLinecap="round"/>
                   <line x1="162" y1="196" x2="158" y2="230" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
-                  {/* Right arm */}
                   <line x1="230" y1="152" x2="238" y2="196" stroke="rgba(16,217,160,.55)" strokeWidth="2" strokeLinecap="round"/>
                   <line x1="238" y1="196" x2="242" y2="230" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
-
-                  {/* Landmark dots */}
                   {[[200,96],[200,130],[170,152],[230,152],[200,152],[162,196],[238,196],[158,230],[242,230],[200,210]]
                     .map(([x,y],i) => (
                       <circle key={i} cx={x} cy={y} r={i===3?5:4} fill={i===3?"rgba(245,158,11,.9)":"rgba(16,217,160,.9)"}/>
                   ))}
-
-                  {/* Neck forward angle indicator */}
                   <path d="M200,96 L206,110" stroke="rgba(245,158,11,.9)" strokeWidth="1.5" strokeDasharray="3,2"/>
                   <path d="M200,96 L200,110" stroke="rgba(255,255,255,.25)" strokeWidth="1" strokeDasharray="3,2"/>
-                  {/* Angle label */}
                   <text x="210" y="108" fill="rgba(245,158,11,.95)" fontSize="10" fontFamily="monospace" fontWeight="bold">12°</text>
                 </svg>
 
@@ -669,17 +646,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                   <span style={{ fontSize:11, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
                 </div>
 
-                {/* Score overlay — bottom right */}
-                <div style={{ position:"absolute", bottom:12, right:12,
-                  background:"rgba(0,0,0,.6)", backdropFilter:"blur(12px)",
-                  borderRadius:14, padding:"10px 14px", border:"1px solid rgba(16,217,160,.25)",
-                  textAlign:"center" }}>
-                  <div style={{ fontSize:28, fontWeight:800, color:scoreColor,
-                    fontFamily:FONT_MONO, transition:"color .4s", lineHeight:1 }}>{demoScore}</div>
-                  <div style={{ fontSize:9.5, color:C.muted, marginTop:2 }}>{ar ? "نقطة" : "score"}</div>
-                </div>
-
-                {/* Alert badge — top right */}
+                {/* Alert badge */}
                 <div style={{ position:"absolute", top:12, right:12,
                   background:"rgba(245,158,11,.15)", backdropFilter:"blur(8px)",
                   borderRadius:10, padding:"6px 10px", border:"1px solid rgba(245,158,11,.35)" }}>
@@ -689,7 +656,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 </div>
               </div>
 
-              {/* Metrics strip below camera */}
+              {/* Metrics strip */}
               <div style={{ padding:"14px 20px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10,
                 borderTop:`1px solid ${C.border}` }}>
                 {(ar
@@ -717,35 +684,82 @@ function Hero({ lang, onCTA, mode, setMode }) {
               </div>
             </div>
 
-            {/* Floating card — top */}
-            <motion.div {...float(0, 9)} style={{
-              position:"absolute", top:-12, [ar?"left":"right"]:-18,
-              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
-              border:`1px solid ${C.borderM}`, borderRadius:16,
-              padding:"12px 16px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
-              display:"flex", alignItems:"center", gap:10, zIndex:2,
-            }}>
-              <span style={{ fontSize:20 }}>📉</span>
-              <div>
-                <div style={{ fontSize:15, fontWeight:800, color:C.green, fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
-                <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{ar ? "إجازات مرضية" : "sick leave"}</div>
+            {/* ── Right metrics panel ── */}
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {/* Corvus Pro label */}
+              <div style={{
+                background:"rgba(13,31,51,.92)", backdropFilter:"blur(16px)",
+                border:`1px solid ${C.borderM}`, borderRadius:14, padding:"10px 12px",
+              }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                  <div style={{ width:16, height:16, borderRadius:4,
+                    background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                    display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, flexShrink:0 }}>◈</div>
+                  <span style={{ fontSize:10.5, fontWeight:700, color:C.text }}>Corvus Pro</span>
+                </div>
+                <div style={{ fontSize:9, color:C.muted, fontFamily:FONT_MONO }}>
+                  {new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"numeric",year:"2-digit"})}{" "}
+                  {new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}
+                </div>
               </div>
-            </motion.div>
 
-            {/* Floating card — bottom */}
-            <motion.div {...float(1.4, 8)} style={{
-              position:"absolute", bottom:-6, [ar?"right":"left"]:-22,
-              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
-              border:`1px solid ${C.borderM}`, borderRadius:16,
-              padding:"11px 15px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
-              display:"flex", alignItems:"center", gap:9, zIndex:2, maxWidth:200,
-            }}>
-              <span style={{ width:8, height:8, borderRadius:"50%", background:C.green, flexShrink:0,
-                boxShadow:`0 0 8px ${C.green}` }}/>
-              <span style={{ fontSize:11.5, color:C.sub, lineHeight:1.4 }}>
-                {ar ? "جلسة 45 دق — تحسن 18 نقطة 🎯" : "45 min session — +18 score 🎯"}
-              </span>
-            </motion.div>
+              {/* Circular score */}
+              <div style={{
+                background:"rgba(13,31,51,.92)", backdropFilter:"blur(16px)",
+                border:`1px solid ${C.borderM}`, borderRadius:14,
+                padding:"14px 12px", textAlign:"center",
+              }}>
+                <div style={{ position:"relative", width:68, height:68, margin:"0 auto 6px" }}>
+                  <svg width="68" height="68" style={{ transform:"rotate(-90deg)" }}>
+                    <circle cx="34" cy="34" r="27" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="5"/>
+                    <circle cx="34" cy="34" r="27" fill="none"
+                      stroke={demoScore>=80?C.green:demoScore>=60?C.amber:C.red}
+                      strokeWidth="5"
+                      strokeDasharray={`${(demoScore/100)*169.6} 169.6`}
+                      strokeLinecap="round"
+                      style={{ transition:"stroke-dasharray .6s, stroke .4s" }}/>
+                  </svg>
+                  <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <div style={{ fontSize:19, fontWeight:800, color:scoreColor, fontFamily:FONT_MONO,
+                      transition:"color .4s", lineHeight:1 }}>{demoScore}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize:9.5, color:C.muted }}>{ar ? "نقطة" : "score"}</div>
+              </div>
+
+              {/* Trend sparkline */}
+              <div style={{
+                background:"rgba(13,31,51,.92)", backdropFilter:"blur(16px)",
+                border:`1px solid ${C.borderM}`, borderRadius:14, padding:"12px",
+              }}>
+                <svg width="106" height="36" style={{ display:"block" }}>
+                  <defs>
+                    <linearGradient id="heroChartGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.green} stopOpacity="0.3"/>
+                      <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M0,30 L18,26 L36,19 L54,22 L72,12 L90,7 L106,3"
+                    fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M0,30 L18,26 L36,19 L54,22 L72,12 L90,7 L106,3 L106,36 L0,36 Z"
+                    fill="url(#heroChartGrad)"/>
+                </svg>
+              </div>
+
+              {/* -47% floating badge */}
+              <motion.div {...float(0,7)} style={{
+                background:"rgba(13,31,51,.92)", backdropFilter:"blur(16px)",
+                border:`1px solid ${C.borderM}`, borderRadius:14, padding:"10px 12px",
+              }}>
+                <div style={{ fontSize:17, fontWeight:800, color:C.green, fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
+                <div style={{ fontSize:9.5, color:C.muted, marginTop:3 }}>{ar?"إجازات مرضية":"sick leave"}</div>
+                <svg width="70" height="16" style={{ marginTop:4, display:"block" }}>
+                  <polyline points="0,13 12,11 24,8 36,10 48,5 60,3 70,1"
+                    fill="none" stroke={C.green} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.8"/>
+                </svg>
+              </motion.div>
+            </div>
+
           </div>
         </Reveal>
       </div>
@@ -839,9 +853,17 @@ function Stats({ lang }) {
     <section className="lp-section" style={{ paddingTop:"clamp(60px,7vw,100px)", paddingBottom:"clamp(60px,7vw,100px)" }}>
       <div className="lp-wrap lp-stats-grid" style={{
         display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:22 }}>
-        {stats.map(([val, label, source], i) => (
+        {stats.map(([val, label, source], i) => {
+          const sparklines = [
+            "M0,18 L8,16 L16,12 L24,14 L32,8 L40,5 L48,2",
+            "M0,16 L8,14 L16,10 L24,12 L32,6 L40,4 L48,2",
+            "M0,18 L8,15 L16,11 L24,13 L32,7 L40,3 L48,1",
+            "M0,17 L8,15 L16,12 L24,13 L32,8 L40,5 L48,2",
+          ];
+          const sparkColors = [C.green, C.blue, C.indigo, C.green];
+          return (
           <Reveal key={label} delay={i * 80} y={20}>
-            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"36px 24px" }}>
+            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"36px 24px 28px", position:"relative", overflow:"hidden" }}>
               <div style={{
                 fontSize:"clamp(38px,3.2vw,52px)", fontWeight:700, letterSpacing:"-.02em",
                 background:C.gHero, WebkitBackgroundClip:"text",
@@ -850,9 +872,23 @@ function Stats({ lang }) {
               }}>{val}</div>
               <div style={{ fontSize:14.5, color:C.sub, lineHeight:1.5 }}>{label}</div>
               {source&&<div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4 }}>{source}</div>}
+              {/* Sparkline at bottom of card */}
+              <div style={{ marginTop:16, display:"flex", justifyContent:"center" }}>
+                <svg width="80" height="22" viewBox="0 0 48 20" style={{ display:"block", overflow:"visible" }}>
+                  <defs>
+                    <linearGradient id={`spkGrad${i}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={sparkColors[i]} stopOpacity="0.35"/>
+                      <stop offset="100%" stopColor={sparkColors[i]} stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <path d={sparklines[i]} fill="none" stroke={sparkColors[i]} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d={sparklines[i]+" L48,20 L0,20 Z"} fill={`url(#spkGrad${i})`}/>
+                </svg>
+              </div>
             </div>
           </Reveal>
-        ))}
+          );
+        })}
       </div>
       <style>{`
         @media(max-width:860px){.lp-stats-grid{grid-template-columns:1fr 1fr!important}}
@@ -1055,9 +1091,44 @@ function CaseStudies({ lang }) {
 
         <Stagger key={String(ar)} className="lp-cases-grid" style={{
           display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
-          {cases.map((c) => (
-            <StaggerItem key={c.co}>
-              <div className="lp-lift" style={{ ...card(), height:"100%" }}>
+          {cases.map((c, ci) => {
+            // Background SVG scenes matching the image: telecom tower, bank building, tech office
+            const bgScenes = [
+              // Telecom tower
+              <svg key="t" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:.12}} viewBox="0 0 300 200" preserveAspectRatio="xMidYMax meet">
+                <rect x="135" y="30" width="30" height="170" fill="#4f7cf9" rx="3"/>
+                <rect x="125" y="45" width="50" height="8" fill="#4f7cf9" rx="1"/>
+                <rect x="115" y="65" width="70" height="6" fill="#4f7cf9" rx="1"/>
+                <rect x="100" y="85" width="100" height="6" fill="#4f7cf9" rx="1"/>
+                <line x1="150" y1="30" x2="110" y2="55" stroke="#4f7cf9" strokeWidth="1"/>
+                <line x1="150" y1="30" x2="190" y2="55" stroke="#4f7cf9" strokeWidth="1"/>
+                <rect x="60" y="120" width="180" height="80" fill="#4f7cf9" rx="4"/>
+              </svg>,
+              // Bank building
+              <svg key="b" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:.12}} viewBox="0 0 300 200" preserveAspectRatio="xMidYMax meet">
+                <rect x="40" y="80" width="220" height="120" fill="#818cf8" rx="4"/>
+                <rect x="30" y="70" width="240" height="20" fill="#818cf8" rx="3"/>
+                <rect x="90" y="60" width="120" height="20" fill="#818cf8" rx="2"/>
+                <rect x="140" y="45" width="20" height="20" fill="#818cf8"/>
+                {[60,90,120,150,180,210].map(x=><rect key={x} x={x} y={90} width="18" height="110" fill="rgba(255,255,255,.08)" rx="1"/>)}
+                <rect x="120" y="150" width="60" height="50" fill="rgba(255,255,255,.06)" rx="2"/>
+              </svg>,
+              // Tech office
+              <svg key="o" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:.12}} viewBox="0 0 300 200" preserveAspectRatio="xMidYMax meet">
+                <rect x="20" y="20" width="260" height="180" fill="#22d3ee" rx="6"/>
+                {[40,80,120,160,200].map(x=>[0,1,2,3].map(r=><rect key={`${x}-${r}`} x={x} y={40+r*38} width="30" height="26" fill="rgba(255,255,255,.07)" rx="2"/>))}
+                <rect x="60" y="160" width="180" height="30" fill="rgba(255,255,255,.05)" rx="3"/>
+              </svg>,
+            ];
+            return (
+          <StaggerItem key={c.co}>
+            <div className="lp-lift" style={{ ...card(), height:"100%", position:"relative", overflow:"hidden" }}>
+              {/* Background scene illustration */}
+              {bgScenes[ci]}
+              {/* Dark overlay for readability */}
+              <div style={{ position:"absolute", inset:0, background:"linear-gradient(180deg, rgba(10,20,40,.1) 0%, rgba(10,20,40,.7) 60%, rgba(10,20,40,.95) 100%)", pointerEvents:"none" }}/>
+              {/* Content */}
+              <div style={{ position:"relative", zIndex:1 }}>
                 <div style={{
                   background:"rgba(79,124,249,.08)", borderRadius:8,
                   padding:"5px 12px", fontSize:12.5, color:C.indigo,
@@ -1080,8 +1151,10 @@ function CaseStudies({ lang }) {
                   {c.detail}
                 </p>
               </div>
-            </StaggerItem>
-          ))}
+            </div>
+          </StaggerItem>
+            );
+          })}
         </Stagger>
       </div>
       <style>{`@media(max-width:860px){.lp-cases-grid{grid-template-columns:1fr!important}}`}</style>
@@ -1614,8 +1687,10 @@ function Footer({ lang }) {
   ];
 
   const socials = [
-    { label:"LinkedIn", href:"https://www.linkedin.com/in/mo-postureai" },
-    { label:"Email",    href:`mailto:${SUPPORT_EMAIL}` },
+    { label:"in",  icon:"in", href:"https://www.linkedin.com/in/mo-postureai", title:"LinkedIn" },
+    { label:"𝕏",   icon:"𝕏",  href:"https://x.com/corvusposture", title:"X (Twitter)" },
+    { label:"▶",  icon:"▶",  href:"https://youtube.com/@corvusai", title:"YouTube" },
+    { label:"⊕",  icon:"⊕",  href:"https://instagram.com/corvusai", title:"Instagram" },
   ];
 
   return (
@@ -1649,20 +1724,24 @@ function Footer({ lang }) {
                 : "AI posture analysis for individuals and teams across MENA."}
             </p>
 
-            {/* Social links */}
+            {/* Social icon buttons */}
             <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              {socials.map(({ label, href }) => (
+              {socials.map(({ label, icon, href, title }) => (
                 <a key={label} href={href}
-                  target={href.startsWith("http") ? "_blank" : undefined}
+                  target="_blank"
                   rel="noopener noreferrer"
+                  title={title}
                   style={{
-                    color:C.muted, fontSize:12.5, textDecoration:"none",
-                    padding:"6px 12px", border:`1px solid ${C.border}`,
-                    borderRadius:7, transition:"color .18s, border-color .18s",
+                    width:32, height:32, borderRadius:8,
+                    background:"rgba(255,255,255,.06)",
+                    border:`1px solid ${C.border}`,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    color:C.muted, fontSize:13, fontWeight:700,
+                    textDecoration:"none", transition:"color .18s, border-color .18s, background .18s",
                   }}
-                  onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM}}
-                  onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border}}>
-                  {label}
+                  onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM;e.currentTarget.style.background="rgba(255,255,255,.1)"}}
+                  onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background="rgba(255,255,255,.06)"}}>
+                  {icon}
                 </a>
               ))}
             </div>
@@ -1730,7 +1809,7 @@ function Footer({ lang }) {
           </span>
           <div style={{ display:"flex", gap:20, alignItems:"center" }}>
             <span style={{ fontSize:12, color:C.muted, opacity:.7 }}>
-              {ar ? "صُنع بـ ❤ في MENA" : "Made with ❤ in MENA"}
+              {ar ? "صُنع بـ ❤ في مصر" : "Made with ❤ in Egypt"}
             </span>
             <a href={`mailto:${SUPPORT_EMAIL}`}
               style={{ fontSize:12.5, color:C.sub, textDecoration:"none" }}
