@@ -166,6 +166,33 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
     || !!profile?.company_id
     || profile?.acct_type === "company";
 
+  // ── Derived state — MUST be declared before renderTabContent() ────
+  // (renderTabContent is a function declaration inside the component;
+  //  it gets hoisted but references const/let variables below via closure.
+  //  If these consts are declared after renderTabContent, calling it
+  //  before they initialize causes ReferenceError: scores is not defined)
+
+  const filtered = sessions.filter(s => {
+    const ms = s.created_at?.toDate?.()?.getTime() || 0;
+    const age = Date.now() - ms;
+    if (dateRange==="7d")  return age < 7*86400000;
+    if (dateRange==="30d") return age < 30*86400000;
+    return true;
+  });
+
+  const avgScore  = filtered.length ? Math.round(filtered.reduce((a,s)=>a+(s.avg_score||0),0)/filtered.length) : 0;
+  const goodPct   = filtered.length ? Math.round(filtered.reduce((a,s)=>a+(s.good_pct||0),0)/filtered.length) : 0;
+  const totalMin  = Math.round(filtered.reduce((a,s)=>a+(s.duration_s||0),0)/60);
+  const scoreHist = filtered.slice(0,30).reverse().map(s=>s.avg_score||0);
+  const bestScore = filtered.length ? Math.max(...filtered.map(s=>s.avg_score||0)) : 0;
+  const streak    = profile?.streak_days || 0;
+
+  const thisWeek  = filtered.filter(s=>(Date.now()-(s.created_at?.toDate?.()?.getTime()||0))<7*86400000);
+  const lastWeek  = filtered.filter(s=>{const a=Date.now()-(s.created_at?.toDate?.()?.getTime()||0);return a>=7*86400000&&a<14*86400000;});
+  const twAvg     = thisWeek.length  ? Math.round(thisWeek.reduce((a,s)=>a+(s.avg_score||0),0)/thisWeek.length) : 0;
+  const lwAvg     = lastWeek.length  ? Math.round(lastWeek.reduce((a,s)=>a+(s.avg_score||0),0)/lastWeek.length) : 0;
+  const delta     = twAvg - lwAvg;
+
   // ── Tab Content Renderer ──────────────────────────────────────────
   // Extracted from ternary chain to fix esbuild Arabic RTL parse error
   function renderTabContent() {
@@ -395,30 +422,6 @@ function KpiBox({ label, value, sub, color, icon, trend, accent }) {
     }).finally(()=>setLoading(false));
   }, [uid, propSessions]);
   // AI Insights tab removed for individuals — loadAI() and related state removed.
-
-  // Filtered sessions
-  const filtered = sessions.filter(s => {
-    const ms = s.created_at?.toDate?.()?.getTime() || 0;
-    const age = Date.now() - ms;
-    if (dateRange==="7d")  return age < 7*86400000;
-    if (dateRange==="30d") return age < 30*86400000;
-    return true;
-  });
-
-  const avgScore  = filtered.length ? Math.round(filtered.reduce((a,s)=>a+(s.avg_score||0),0)/filtered.length) : 0;
-  const goodPct   = filtered.length ? Math.round(filtered.reduce((a,s)=>a+(s.good_pct||0),0)/filtered.length) : 0;
-  const totalMin  = Math.round(filtered.reduce((a,s)=>a+(s.duration_s||0),0)/60);
-  const scoreHist = filtered.slice(0,30).reverse().map(s=>s.avg_score||0);
-
-  const bestScore = filtered.length ? Math.max(...filtered.map(s=>s.avg_score||0)) : 0;
-  const streak    = profile?.streak_days || 0;
-
-  // Week-over-week
-  const thisWeek  = filtered.filter(s=>(Date.now()-(s.created_at?.toDate?.()?.getTime()||0))<7*86400000);
-  const lastWeek  = filtered.filter(s=>{const a=Date.now()-(s.created_at?.toDate?.()?.getTime()||0);return a>=7*86400000&&a<14*86400000;});
-  const twAvg     = thisWeek.length  ? Math.round(thisWeek.reduce((a,s)=>a+(s.avg_score||0),0)/thisWeek.length) : 0;
-  const lwAvg     = lastWeek.length  ? Math.round(lastWeek.reduce((a,s)=>a+(s.avg_score||0),0)/lastWeek.length) : 0;
-  const delta     = twAvg - lwAvg;
 
   const achievements = [
     { icon:"🎯", label:isAr?"أول جلسة":"First session",      done:sessions.length>=1 },
