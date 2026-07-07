@@ -109,8 +109,8 @@ function followUp(intent, d, hist, ar) {
 // ── Intent detection ──────────────────────────────────────────────
 function detectIntent(msg) {
   const m = msg.toLowerCase();
-  // Off-topic detection first
-  if(m.match(/stock|crypto|bitcoin|invest|football|movie|music|weather|politics|recipe|cooking|travel|language|math|code|program|الطقس|أغنية|طبخ|سياسة/))
+  // Off-topic detection — only truly unrelated (not health/fitness/wellness adjacent)
+  if(m.match(/stock|crypto|bitcoin|invest|football|movie|music|weather|politics|recipe|cooking|travel|math|الطقس|أغنية|طبخ|سياسة|بورصة|كريبتو/) && !m.match(/pain|ألم|hurt|posture|وضعية|back|ظهر|neck|رقبة|shoulder|كتف|health|صحة|exercise|تمرين|stress|weight|وزن/))
     return "offtopic";
   // Corvus/product questions
   if(m.match(/corvus|postureai|app|subscription|plan|price|upgrade|feature|كورفاس|التطبيق|باقة|سعر/))
@@ -388,8 +388,8 @@ Laptops are ergonomically flawed by design — screen and keyboard are linked, s
     : `**About Corvus:**\n\nCorvus PostureAI is an intelligent posture monitoring system using your camera to analyze posture in real-time.\n\n**Key features:**\n- Real-time posture analysis (Neck, Spine, Shoulders, Head)\n- Personal AI Coach — that's me! 🤖\n- Weekly reports and predictions\n- Personal calibration to your body\n\nFor pricing and plan questions → check the Pricing page in the app.`,
 
   offtopic: ar
-    ? `أنا Corvus AI Coach — متخصص في وضعية الجسم والإرجونوميكس بس.\n\n💬 عندك سؤال عن وضعيتك، ألم في الرقبة أو الظهر، إعداد مكان العمل، أو تمارين؟ أنا هنا! 💪`
-    : `I'm Corvus AI Coach — I specialize exclusively in posture and ergonomics.\n\n💬 Do you have a question about your posture, neck or back pain, workstation setup, or exercises? I'm here! 💪`,
+    ? `سؤال ممتاز! كـ Dr. Corvus، تخصصي الأساسي هو الوضعية والإرجونوميكس وصحة الجهاز العضلي الهيكلي.\n\nلو سؤالك عن صحة عامة أو رياضة أو تغذية — أقدر أساعدك بس من زاوية تأثيرها على جسمك وعمودك الفقري.\n\n💬 إيه السؤال بالتحديد؟ أو لو عندك ألم أو مشكلة في وضعيتك — أنا هنا! 💪`
+    : `Great question! As Dr. Corvus, my core specialization is posture, ergonomics, and musculoskeletal health.\n\nFor general health, fitness, or nutrition topics — I can help from the angle of how they affect your spine, posture, and MSK health.\n\n💬 What specifically would you like to know? Or if you have a posture issue or pain — I'm here! 💪`,
 
 }; }
 
