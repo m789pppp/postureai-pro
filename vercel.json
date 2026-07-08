@@ -3,16 +3,6 @@
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "framework": null,
-  "rewrites": [
-    {
-      "source": "/api/(?!ai-chat)(.+)",
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
-  ],
   "headers": [
     {
       "source": "/assets/(.*)",
@@ -52,13 +42,31 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://*.firebaseapp.com https://*.googleapis.com https://js.stripe.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebase.googleapis.com https://api.stripe.com https://accept.paymob.com https://corvus-omega-nine.vercel.app https://corvus-omega.vercel.app https://get.geojs.io https://*.up.railway.app https://cdn.jsdelivr.net https://apis.google.com https://fonts.gstatic.com https://huggingface.co https://*.huggingface.co https://raw.githubusercontent.com https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co https://text.pollinations.ai https://gen.pollinations.ai https://api.llm7.io https://oai.endpoints.kepler.ai.cloud.ovh.net https://aihorde.net https://api.together.xyz https://api.together.ai https://openrouter.ai https://api.openrouter.ai https://js.puter.com https://*.puter.com https://puter.com; frame-src 'self' https://accept.paymob.com https://js.stripe.com https://*.firebaseapp.com https://accounts.google.com; worker-src blob: 'self'; object-src 'none';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://*.firebaseapp.com https://*.googleapis.com https://js.stripe.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://postureai-pro-omega-nine.vercel.app https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebase.googleapis.com https://api.stripe.com https://accept.paymob.com https://corvus-omega-nine.vercel.app https://corvus-omega.vercel.app https://get.geojs.io https://*.up.railway.app https://cdn.jsdelivr.net https://apis.google.com https://fonts.gstatic.com https://huggingface.co https://*.huggingface.co https://raw.githubusercontent.com https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co https://text.pollinations.ai https://gen.pollinations.ai https://api.llm7.io https://oai.endpoints.kepler.ai.cloud.ovh.net https://aihorde.net https://api.together.xyz https://api.together.ai https://openrouter.ai https://api.openrouter.ai https://js.puter.com https://*.puter.com https://puter.com; frame-src 'self' https://accept.paymob.com https://js.stripe.com https://*.firebaseapp.com https://accounts.google.com; worker-src blob: 'self'; object-src 'none';"
         },
         {
           "key": "Cross-Origin-Opener-Policy",
           "value": "same-origin-allow-popups"
         }
       ]
+    }
+  ],
+  "routes": [
+    {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/api/ai-chat",
+      "dest": "/api/ai-chat.js"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
