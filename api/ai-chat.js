@@ -1,96 +1,117 @@
 /**
- * Corvus — Vercel Serverless Function: AI Chat Proxy
- * Route: /ai/chat  (separate from /api/* which goes to Flask)
- * Purpose: proxy LLM7.io from server-side to avoid CORS
- * Cost: FREE — Vercel hobby plan includes 100k invocations/month
- * Latency: ~200ms cold start, then fast
+ * Corvus — Vercel Serverless Function: LLM Proxy
+ * Auto-route: /api/ai-chat  (Vercel serves /api/*.js automatically)
+ * No rewrites needed — just call /api/ai-chat from frontend
  */
 
-export const config = { runtime: "edge" };
+const MODELS = [
+  "gpt-4o-mini",
+  "meta-llama/llama-3.3-70b-instruct",
+  "deepseek/deepseek-r1",
+];
+const LLM7_URL = "https://api.llm7.io/v1/chat/completions";
 
-const MODELS = ["gpt-4o-mini", "deepseek/deepseek-r1", "meta-llama/llama-3.1-8b-instruct"];
-const LLM7   = "https://api.llm7.io/v1/chat/completions";
+function cors() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
+function respond(data, status) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json", ...cors() },
+  });
+}
 
 export default async function handler(req) {
-  // CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders(),
-    });
+    return new Response(null, { status: 204, headers: cors() });
   }
 
   if (req.method !== "POST") {
-    return json({ error: "POST only" }, 405);
+    return respond({ error: "POST only" }, 405);
   }
 
   let body;
   try {
     body = await req.json();
   } catch {
-    return json({ error: "Invalid JSON" }, 400);
+    return respond({ error: "Invalid JSON" }, 400);
   }
 
-  const { messages, system_prompt, max_tokens = 700, temperature = 0.5 } = body;
+  const { messages, system_prompt, max_tokens = 700, temperature = 0.5 } = body || {};
 
-  if (!messages?.length) {
-    return json({ error: "messages required" }, 400);
+  if (!Array.isArray(messages) || !messages.length) {
+    return respond({ error: "messages array required" }, 400);
   }
 
-  // Build OpenAI-format messages
   const llmMessages = [
-    { role: "system", content: system_prompt || "You are Dr. Corvus, a clinical physiotherapy AI." },
-    ...messages.map(m => ({
+    {
+      role: "system",
+      content: system_prompt || "You are Dr. Corvus, a clinical physiotherapy AI specialist.",
+    },
+    ...messages.map((m) => ({
       role: m.role === "assistant" ? "assistant" : "user",
       content: String(m.content || ""),
     })),
   ];
 
-  // Try models in order
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 24000);
+
   for (const model of MODELS) {
     try {
-      const res = await fetch(LLM7, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer unused" },
-        body:    JSON.stringify({ model, messages: llmMessages, max_tokens, temperature }),
-        signal:  AbortSignal.timeout(25000),
+      const res = await fetch(LLM7_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer unused",
+        },
+        body: JSON.stringify({
+          model,
+          messages: llmMessages,
+          max_tokens,
+          temperature,
+        }),
+        signal: controller.signal,
       });
 
-      if (res.status === 429) continue; // rate-limited, try next model
+      if (res.status === 429) {
+        // rate-limited on this model, try next
+        continue;
+      }
 
       if (!res.ok) {
-        const err = await res.text();
-        console.error(`LLM7 ${model} error ${res.status}:`, err.slice(0, 200));
+        console.error(`[ai-chat] ${model} returned ${res.status}`);
         continue;
       }
 
       const data = await res.json();
       const text = data?.choices?.[0]?.message?.content?.trim();
 
-      if (!text) continue;
+      if (!text) {
+        console.error(`[ai-chat] ${model} returned empty text`);
+        continue;
+      }
 
-      return json({ ok: true, text, model }, 200);
+      clearTimeout(timer);
+      return respond({ ok: true, text, model }, 200);
 
     } catch (e) {
-      console.error(`Model ${model} failed:`, e.message);
+      if (e.name === "AbortError") {
+        clearTimeout(timer);
+        return respond({ ok: false, error: "AI response timeout" }, 504);
+      }
+      console.error(`[ai-chat] ${model} error:`, e.message);
       continue;
     }
   }
 
-  return json({ ok: false, error: "All AI models unavailable. Please try again." }, 503);
+  clearTimeout(timer);
+  return respond({ ok: false, error: "All AI models unavailable" }, 503);
 }
 
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin":  "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
-}
-
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json", ...corsHeaders() },
-  });
-}
+export const config = { runtime: "edge" };
