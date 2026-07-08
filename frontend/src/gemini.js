@@ -47,16 +47,22 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
 
   const { localChat } = await import("./localAI.js");
 
-  const fullSystemPrompt = [
-    systemPrompt,
-    Object.keys(context).length ? `Context: ${JSON.stringify(context)}` : "",
-    lang === "ar" ? "Respond in Egyptian Arabic." : "Respond in English.",
-  ].filter(Boolean).join("\n\n");
+  // Pass context as JSON — localAI.js reads it reliably via JSON.parse (not fragile regex)
+  const ctxBlock = Object.keys(context).length
+    ? `Context: ${JSON.stringify(context)}`
+    : "";
+
+  const langLine = lang === "ar"
+    ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (\u0639\u0627\u0645\u064a\u0629 \u0645\u0635\u0631\u064a\u0629)."
+    : "LANGUAGE: Respond in English.";
+
+  const fullSystemPrompt = [systemPrompt, ctxBlock, langLine]
+    .filter(Boolean)
+    .join("\n\n");
 
   try {
     return await localChat(messages, { systemPrompt: fullSystemPrompt, maxTokens });
   } catch (e) {
-    // Pass the classified error code through (AI_NO_WEBGPU, AI_NETWORK, etc.)
     throw e;
   }
 }

@@ -813,23 +813,52 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
 
 // ── Production-grade system prompt builder for all LLM calls ─────
 function buildLLMSystemPrompt(systemPrompt, forAnalysis = false) {
-  const d    = parseData(systemPrompt);
-  const isAr = d.lang === "ar";
+  // Parse structured context — supports both JSON (from geminiChat) and text (legacy)
+  const d = parseData(systemPrompt);
+
+  // Try to extract JSON context object injected by geminiChat as "Context: {...}"
+  let ctx = {};
+  try {
+    const jsonMatch = systemPrompt.match(/Context:\s*(\{[\s\S]*?\})/);
+    if (jsonMatch) ctx = JSON.parse(jsonMatch[1]);
+  } catch(_) {}
+
+  // Merge: JSON ctx takes priority over regex-parsed d
+  const avg       = ctx.avg_score       ?? d.avg       ?? 0;
+  const weekAvg   = ctx.week_avg        ?? d.weekAvg   ?? avg;
+  const trendPct  = ctx.trend_pct       ?? d.trendPct  ?? 0;
+  const sessions  = ctx.sessions_count  ?? d.sessions  ?? 0;
+  const weekSess  = ctx.week_sessions   ?? d.weekSessions ?? 0;
+  const neckRisk  = ctx.neck_risk       ?? d.neckRisk  ?? 0;
+  const fatigue   = ctx.fatigue_score   ?? d.fatigue   ?? 0;
+  const burnout   = ctx.burnout_risk    ?? d.burnout   ?? 0;
+  const worstTime = ctx.worst_time      ?? d.worstTime ?? null;
+  const streak    = ctx.streak_days     ?? 0;
+  const calib     = ctx.has_calibration ?? d.calibrated ?? false;
+  const name      = ctx.user_name       ?? d.name      ?? "";
+  const rawAlerts = ctx.top_alerts      ?? [];
+  const alerts    = Array.isArray(rawAlerts) ? rawAlerts.slice(0,5).join("; ") : (d.alerts ?? "");
+
+  const isAr = d.lang === "ar" || (systemPrompt||"").includes("Egyptian Arabic");
+
+  const scoreLabel = avg >= 85 ? "Excellent" : avg >= 70 ? "Good" : avg >= 55 ? "Fair" : "Needs Attention";
+  const neckLabel  = neckRisk >= 70 ? "HIGH 🔴" : neckRisk >= 40 ? "MODERATE 🟡" : "LOW 🟢";
 
   const dataLines = [
-    d.name        && `Patient: ${d.name}`,
-    d.avg         && `Overall posture score: ${d.avg}/100 (${d.avg >= 85 ? "Excellent" : d.avg >= 70 ? "Good" : d.avg >= 55 ? "Fair" : "Needs Attention"})`,
-    d.weekAvg     && `This week average: ${d.weekAvg}/100`,
-    d.trendPct    && `Week-over-week trend: ${d.trendPct > 0 ? "+" : ""}${d.trendPct}% (${d.trendPct > 2 ? "improving" : d.trendPct < -2 ? "declining" : "stable"})`,
-    d.sessions    && `Total sessions logged: ${d.sessions}`,
-    d.weekSessions && `Sessions this week: ${d.weekSessions}`,
-    d.neckRisk    && `Cervical risk score: ${d.neckRisk}% (${d.neckRisk >= 70 ? "HIGH" : d.neckRisk >= 40 ? "MODERATE" : "LOW"})`,
-    d.fatigue     && `Fatigue index: ${d.fatigue}%`,
-    d.burnout     && `Occupational burnout risk: ${d.burnout}/100`,
-    d.worstTime   && `Peak symptom window: ${d.worstTime}`,
-    d.alerts      && `Most frequent postural alerts: ${d.alerts}`,
-    d.calibrated  ? "Anthropometric calibration: COMPLETE — personalized thresholds active"
-                  : "Anthropometric calibration: NOT YET DONE — generic population thresholds in use",
+    name      && `Patient: ${name}`,
+    avg       && `Overall posture score: ${avg}/100 (${scoreLabel})`,
+    weekAvg   && `This week average: ${weekAvg}/100`,
+    trendPct  && `Week-over-week trend: ${trendPct > 0 ? "+" : ""}${trendPct}% (${trendPct > 2 ? "improving" : trendPct < -2 ? "declining" : "stable"})`,
+    sessions  && `Total sessions logged: ${sessions}`,
+    weekSess  && `Sessions this week: ${weekSess}`,
+    streak    && `Streak: ${streak} days`,
+    neckRisk  && `Cervical risk score: ${neckRisk}% (${neckLabel})`,
+    fatigue   && `Fatigue index: ${fatigue}%`,
+    burnout   && `Occupational burnout risk: ${burnout}%`,
+    worstTime && `Peak symptom window: ${worstTime}`,
+    alerts    && `Most frequent postural alerts: ${alerts}`,
+    calib     ? "Calibration: COMPLETE — personalized thresholds active"
+              : "Calibration: NOT DONE — generic population thresholds",
   ].filter(Boolean).join("\n");
 
   const langLine = isAr
