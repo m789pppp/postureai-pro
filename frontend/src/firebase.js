@@ -1106,258 +1106,702 @@ function _drawSparkline(doc,hist,x,y,w,h,col){_spark(doc,hist,x,y,w,h,col);}
 
 export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[] }) {
   const { jsPDF } = await import("jspdf");
-  const isAr  = lang==="ar";
-  const tier  = profile?.tier||session?.tier||"standard";
-  const isElite = tierAtLeast(tier,"elite");
-  const isPro   = !isElite && tierAtLeast(tier,"professional");
-  const doc   = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-
-  // Load assets (parallel)
+  const isAr   = lang === "ar";
+  const tier   = profile?.tier || session?.tier || "standard";
+  const isElite= tierAtLeast(tier,"elite");
+  const isPro  = !isElite && tierAtLeast(tier,"professional");
+  const doc    = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
 
-  const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
-  const tierCol = isElite?T.success:isPro?T.cyan:T.indigo;
-  const avg     = Math.round(session.avg_score||0);
-  const dur     = session.duration_s||session.duration_sec||0;
-  const goodPct = Math.round(session.good_pct||0);
-  const gradeC  = _sc(avg);
-  const metrics = session.metrics||{};
-  const hist    = session.score_history||[];
-  const aiText  = session.ai_tip||session.ai_insight||session.claude_analysis||"";
-  const painSum = session.pain_summary||"";
-  const impTip  = session.improvement_tip||"";
-  const _rawName = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
-  const name    = _rawName.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
-  const email   = user?.email||"";
-  const dateStr = _fmtDate(session.created_at||new Date(), isAr);
-  const realIdx = (()=>{
-    if(sessionIndex)return sessionIndex;
-    if(allSessions.length){const i=allSessions.findIndex(s=>(s.id||s.session_id)===(session.id||session.session_id));if(i>=0)return allSessions.length-i;}
-    return 1;
-  })();
+  const W=210,H=297,ml=14,mr=14,cw=W-ml-mr;
+  const sf = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
+
+  // ── DATA ──────────────────────────────────────────────────────
+  const avg      = Math.round(session.avg_score||0);
+  const dur      = session.duration_s||session.duration_sec||0;
+  const goodPct  = Math.round(session.good_pct||0);
+  const alerts   = session.alerts_count||0;
+  const hist     = session.score_history||[];
+  const metrics  = session.metrics||{};
+  const aiText   = session.ai_tip||session.ai_insight||session.claude_analysis||"";
+  const painSum  = session.pain_summary||"";
+  const name     = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
+  const email    = user?.email||"";
+  const company  = profile?.company_name||profile?.organization||"—";
+  const dateStr  = _fmtDateLong(session.created_at||new Date(),isAr);
+  const timeStr  = (() => { try { const d=session.created_at?.toDate?session.created_at.toDate():new Date(session.created_at||Date.now()); return d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"}); } catch{return"—";} })();
+  const dayStr   = (() => { try { const d=session.created_at?.toDate?session.created_at.toDate():new Date(session.created_at||Date.now()); return d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"}); } catch{return dateStr;} })();
+  const realIdx  = (()=>{ if(sessionIndex)return sessionIndex; if(allSessions.length){const i=allSessions.findIndex(s=>(s.id||s.session_id)===(session.id||session.session_id));if(i>=0)return allSessions.length-i;} return 1; })();
+  const tierLbl  = isElite?"ELITE":isPro?"PROFESSIONAL":"STARTER";
+  const tierCol  = isElite?[34,197,94]:isPro?[139,92,246]:[99,102,241];
+
+  const gradeC   = avg>=80?[34,197,94]:avg>=60?[245,158,11]:[239,68,68];
+  const gradeL   = avg>=80?(isAr?"ممتاز":"Excellent"):avg>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs Work");
 
   const mEntries = Object.entries(metrics)
     .filter(([k])=>!k.startsWith("_")&&metrics[k])
     .map(([k,v])=>{
       const sc=typeof v==="number"?v:(v?.score??100);
-      const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||v?.label||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-      return{key:k,sc,lbl,value:v?.value,unit:v?.unit||""};
+      const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+      const val=v?.value, unit=v?.unit||"";
+      const pri=sc<40?"High Priority":sc<65?"Medium Priority":"Low Priority";
+      const priC=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
+      return{k,sc,lbl,val,unit,pri,priC};
     }).sort((a,b)=>a.sc-b.sc);
 
-  // ── NON-ELITE: premium preview + upsell ───────────────────────
-  if(!isElite){
-    _cover(doc,W,ml,tier,tierCol,name,realIdx,dateStr,avg,isAr);
-    let y=76;
+  // ── DARK THEME COLORS ─────────────────────────────────────────
+  const BG     = [10,15,30];    // #0a0f1e
+  const BG2    = [16,23,45];    // #10172d
+  const CARD   = [20,28,55];    // #141c37
+  const CARD2  = [26,36,68];    // #1a2444
+  const BORDER = [40,55,95];    // #28375f
+  const TEXT   = [255,255,255];
+  const TEXT2  = [148,163,200]; // #94a3c8
+  const TEXT3  = [80,100,145];  // muted
 
-    // Report title
-    font(doc,F.h1,"bold",isAr); tc(doc,...T.ink);
-    doc.text(isAr?"تقرير تحليل الوضعية":"Posture Analysis Report",ml,y);
-    font(doc,F.body,"normal",isAr); tc(doc,...T.muted);
-    doc.text(`${name} · ${dateStr}`,ml,y+8); y+=20;
-    hr(doc,ml,y,cw); y+=12;
-
-    // Score ring + KPI chips
-    _ring(doc,ml+22,y+24,19,avg,isAr);
-    [[`${goodPct}%`,isAr?"جيدة":"Good",T.success],
-     [String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",T.warning],
-     [_fmtDur(dur),isAr?"المدة":"Duration",T.primary]]
-      .forEach(([v,l,col],i)=>_kpi(doc,ml+54+i*52,y+4,46,30,v,l,col));
-    y+=62; hr(doc,ml,y,cw); y+=12;
-
-    // Sparkline
-    if(hist.length>2){
-      y=_sh(doc,ml,y,isAr?"مسار النقاط":"Score Timeline","",gradeC,isAr);
-      fc(doc,...T.bg); rr(doc,ml,y,cw,40,4,"F");
-      dc(doc,...T.border); lw(doc,0.15); rr(doc,ml,y,cw,40,4,"S"); lw(doc,0.3);
-      _spark(doc,hist,ml+12,y+7,cw-24,26,gradeC);
-      y+=48;
-    }
-
-    // Top 3 metrics
-    y=_sh(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"الأسوأ أداءً":"Worst first",gradeC,isAr);
-    mEntries.slice(0,3).forEach(({lbl,value,unit,sc},i)=>{
-      if(y>H-52)return;
-      _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
-    });
-    if(mEntries.length>3){
-      fc(doc,...T.bg); rr(doc,ml,y,cw,12,2,"F");
-      font(doc,F.small,"normal",isAr); tc(doc,...T.muted);
-      doc.text(`+ ${mEntries.length-3} ${isAr?"مقاييس — رقّي لـ Elite":"more metrics — upgrade to Elite"}`,ml+cw/2,y+8,{align:"center"});
-      y+=16;
-    }
-
-    // PAGE 2 — Upsell
-    doc.addPage();
-    fc(doc,...T.slate); doc.rect(0,0,W,H,"F");
-    fc(doc,...T.primary);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:0.05}));
-    doc.circle(W*.85,H*.3,90,"F"); doc.circle(W*.1,H*.75,60,"F");
+  // ── HELPER: dark rounded card ──────────────────────────────────
+  const dCard = (x,y,w,h,r=6,col=CARD) => {
+    fc(doc,...col); rr(doc,x,y,w,h,r,"F");
+    fc(doc,...BORDER);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
+    rr(doc,x,y,w,h,r,"S");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    fc(doc,...T.primary); doc.rect(0,0,W,3,"F");
-    _logo(doc,W/2-16,42,32,_logoMd);
-    font(doc,F.display,"bold",isAr); tc(doc,...T.card);
-    doc.text(isAr?"افتح تقريرك الكامل":"Unlock Your Full Report",W/2,92,{align:"center"});
-    font(doc,F.body+1,"normal",isAr); tc(doc,148,163,184);
-    doc.text(isAr?"رقّي لـ Elite للوصول لكامل تجربة Corvus":"Upgrade to Corvus Elite for the complete experience",W/2,101,{align:"center"});
-    hr(doc,ml+24,109,cw-48,[55,65,81]);
-    const feats=[
-      [T.success,"Complete Metrics Breakdown","All posture metrics with angles, trends & scores"],
-      [T.primary,"Corvus AI Analysis","Personalised AI-generated clinical narrative"],
-      [T.warning,"Spinal Zone Risk Map","Cervical · Thoracic · Lumbar risk assessment"],
-      [T.cyan,"Prioritised Next Steps","3 tailored action cards from worst metrics"],
-      [T.indigo,"Clinical PDF Report","Physiotherapist-ready report with full clinical detail"],
+    lw(doc,0.3);
+  };
+
+  const fmtDurShort = s => {
+    if(!s)return"0s";
+    const m=Math.floor(s/60),r=s%60;
+    return m>0?`${m}m ${r}s`:`${r}s`;
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // NON-ELITE — premium 2-page preview
+  // ══════════════════════════════════════════════════════════════
+  if(!isElite && !isPro) {
+    // Full dark background
+    fc(doc,...BG); doc.rect(0,0,W,H,"F");
+
+    // ── PAGE 1 HEADER ──────────────────────────────────────────
+    fc(doc,...BG2); doc.rect(0,0,W,22,"F");
+    _logo(doc,ml,5,12,_logoSm);
+    sf(8.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+16,11.5);
+    sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
+    sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?"تقرير تحليل الوضعية الشخصي":"Personal Posture Analysis Report",60,10);
+    sf(6,"normal"); tc(doc,...TEXT3); doc.text("AI-POWERED POSTURE INSIGHTS",60,16);
+    // Tier badge
+    const tbl=tierLbl; const tbw=doc.getTextWidth(tbl)+10;
+    fc(doc,...tierCol);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.18}));
+    rr(doc,W-mr-tbw,4,tbw,14,3,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    dc(doc,...tierCol); lw(doc,.5); rr(doc,W-mr-tbw,4,tbw,14,3,"S"); lw(doc,.3);
+    sf(7,"bold"); tc(doc,...tierCol); doc.text(tbl,W-mr-tbw/2,13,{align:"center"});
+    // Date right
+    sf(6,"normal"); tc(doc,...TEXT3);
+    doc.text(`Generated: ${dateStr}`,W-mr,20,{align:"right"});
+    // Bottom border line
+    fc(doc,...BORDER); doc.rect(0,22,W,.5,"F");
+    let y=28;
+
+    // ── ROW 1: Score ring (left) + KPIs (center) + Info card (right) ──
+    const scoreW=60, kpiW=85, infoW=cw-scoreW-kpiW-8;
+    const row1H=78;
+
+    // Score card
+    dCard(ml,y,scoreW,row1H);
+    sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
+    // Score ring
+    const cx=ml+scoreW/2, cy=y+42, r1=22;
+    dc(doc,...BORDER); lw(doc,5); doc.circle(cx,cy,r1,"S");
+    // Colored arc (simulate with layered circles)
+    dc(doc,...gradeC); lw(doc,5); doc.circle(cx,cy,r1,"S"); lw(doc,.3);
+    fc(doc,...gradeC);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
+    doc.circle(cx,cy,r1-2,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(20,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx,cy+3.5,{align:"center"});
+    sf(6.5,"normal"); tc(doc,...TEXT3); doc.text("/100",cx,cy+10,{align:"center"});
+    sf(9,"bold"); tc(doc,...gradeC); doc.text(gradeL,cx,cy+r1+9,{align:"center"});
+    // Insight
+    if(aiText||painSum){
+      const tip=(painSum||aiText).split('.')[0]+'.';
+      const tipLines=doc.splitTextToSize(tip,scoreW-8);
+      sf(5.5,"normal"); tc(doc,...TEXT2);
+      tipLines.slice(0,2).forEach((l,i)=>doc.text(l,ml+4,y+row1H-12+i*5.5));
+    }
+
+    // KPI chips (2x2 grid)
+    const kx=ml+scoreW+4;
+    const kpis=[
+      [isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`,"✓",[34,197,94]],
+      [isAr?"التنبيهات":"Alerts",String(alerts),"⚠",[245,158,11]],
+      [isAr?"الجلسة":"Session",`#${realIdx}`,"#",[99,102,241]],
+      [isAr?"المدة":"Duration",fmtDurShort(dur),"◷",[6,182,212]],
     ];
-    let fy=117;
-    feats.forEach(([col,title,desc])=>{
-      fc(doc,...col); rr(doc,ml,fy,3,22,1.5,"F");
-      font(doc,9.5,"bold",false); tc(doc,...T.card); doc.text(title,ml+10,fy+10);
-      font(doc,7.5,"normal",false); tc(doc,100,116,139); doc.text(desc,ml+10,fy+17);
-      fy+=27;
+    const kw=(kpiW-4)/2, kh=(row1H-4)/2;
+    kpis.forEach(([label,val,icon,col],i)=>{
+      const kx2=kx+(i%2)*(kw+4), ky2=y+(Math.floor(i/2))*(kh+4);
+      dCard(kx2,ky2,kw,kh,5,CARD2);
+      // Icon circle
+      fc(doc,...col);
+      doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
+      doc.circle(kx2+10,ky2+10,8,"F");
+      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(8,"normal"); tc(doc,...col); doc.text(icon,kx2+10,ky2+13.5,{align:"center"});
+      sf(11,"bold"); tc(doc,...TEXT); doc.text(String(val),kx2+kw/2,ky2+kh*.6,{align:"center"});
+      sf(5.5,"bold"); tc(doc,...TEXT3); doc.text(label,kx2+kw/2,ky2+kh*.82,{align:"center"});
     });
-    fy+=6;
-    fc(doc,...T.success); rr(doc,ml,fy,cw,16,4,"F");
-    font(doc,10,"bold",false); tc(doc,...T.card);
-    doc.text("postureai-pro-omega-nine.vercel.app  →  Upgrade to Elite",W/2,fy+10.5,{align:"center"});
 
-    const tot=doc.internal.getNumberOfPages();
-    for(let p=1;p<=tot;p++){doc.setPage(p);_ftr(doc,W,ml,mr,H,p,tot,name);}
-    doc.save(`Corvus_Session${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`); return;
+    // Info card (right)
+    const ix=kx+kpiW+4;
+    dCard(ix,y,infoW,row1H);
+    sf(6,"bold"); tc(doc,...TEXT3); doc.text("YOUR INFORMATION",ix+4,y+7);
+    [
+      ["👤",isAr?"الاسم":"Name",name],
+      ["✉",isAr?"البريد":"Email",email.length>22?email.slice(0,22)+"…":email],
+      ["🏢",isAr?"الشركة":"Company",company||"—"],
+      ["🔑","ID",`local_${session.id?.slice(-8)||Math.random().toString(36).slice(-8)}`],
+    ].forEach(([icon,lbl,val],i)=>{
+      const ry=y+16+i*14;
+      sf(5.5,"normal"); tc(doc,...TEXT3);
+      doc.text(icon+" "+lbl,ix+4,ry);
+      sf(6,"bold"); tc(doc,...TEXT);
+      doc.text(String(val),ix+4,ry+6.5);
+      if(i<3){ fc(doc,...BORDER); doc.rect(ix+4,ry+9,infoW-8,.3,"F"); }
+    });
+    y+=row1H+5;
+
+    // ── SCORE TIMELINE ─────────────────────────────────────────
+    dCard(ml,y,cw,46);
+    sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("SCORE TIMELINE",ml+4,y+7);
+    if(hist.length>1){
+      const lo=Math.max(0,Math.min(...hist)-5),hi=Math.min(100,Math.max(...hist)+5),rng=hi-lo;
+      const gx=ml+8,gw2=cw-16,gh=28,gy=y+13;
+      // Grid lines
+      [50,65,80,95].forEach(v=>{
+        if(v<lo-5||v>hi+5) return;
+        const ly=gy+gh-((v-lo)/Math.max(rng,1))*gh;
+        fc(doc,...BORDER);
+        doc.setGState&&doc.setGState(new doc.GState({opacity:.3}));
+        doc.rect(gx,ly,gw2,.2,"F");
+        doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+        sf(4.5,"normal"); tc(doc,...TEXT3); doc.text(String(v),gx-2,ly+1.5,{align:"right"});
+      });
+      // Area fill
+      const pts=hist.map((s,i)=>({px:gx+(i/(hist.length-1))*gw2,py:gy+gh-((s-lo)/Math.max(rng,1))*gh}));
+      try {
+        const segs=pts.slice(1).map((p,i)=>[p.px-pts[i].px,p.py-pts[i].py]);
+        fc(doc,37,99,235);
+        doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
+        doc.lines([...segs,[0,gy+gh-pts[pts.length-1].py],[-(pts[pts.length-1].px-pts[0].px),0]],pts[0].px,pts[0].py,[1,1],"F",false);
+        doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      }catch{}
+      // Line
+      dc(doc,37,99,235); lw(doc,1.2);
+      pts.forEach((p,i)=>{if(i>0)doc.line(pts[i-1].px,pts[i-1].py,p.px,p.py);}); lw(doc,.3);
+      // Dots every ~10 points
+      pts.filter((_,i)=>i%(Math.ceil(pts.length/8))===0||i===pts.length-1).forEach(p=>{
+        fc(doc,37,99,235); doc.circle(p.px,p.py,1.5,"F");
+      });
+      // Last score badge
+      const lp=pts[pts.length-1];
+      fc(doc,...gradeC);
+      doc.setGState&&doc.setGState(new doc.GState({opacity:.9}));
+      doc.circle(lp.px,lp.py,4,"F");
+      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(5.5,"bold"); tc(doc,...[10,15,30]); doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
+      // Time labels
+      sf(4.5,"normal"); tc(doc,...TEXT3);
+      ["00:00",`00:${Math.floor(dur/4/60).toString().padStart(2,'0')}`,
+       `00:${Math.floor(dur/2/60).toString().padStart(2,'0')}`,
+       `00:${Math.floor(dur*3/4/60).toString().padStart(2,'0')}`,
+       `${String(Math.floor(dur/60)).padStart(2,'0')}:${String(dur%60).padStart(2,'0')}`
+      ].forEach((t,i)=>doc.text(t,gx+(i/4)*gw2,gy+gh+5,{align:"center"}));
+    }
+    // AI tip
+    if(aiText){
+      const tipLines=doc.splitTextToSize("💡  "+(aiText.split('.')[0]+'.'),cw-12);
+      const tipH=tipLines.length*5+7;
+      dCard(ml,y+47,cw,tipH,4,CARD2);
+      sf(6.5,"normal"); tc(doc,...TEXT2);
+      tipLines.forEach((l,i)=>doc.text(l,ml+5,y+47+6+i*5));
+      y+=47+tipH+5;
+    } else { y+=51; }
+
+    // ── KEY POSTURE METRICS ─────────────────────────────────────
+    sf(7,"bold"); tc(doc,...TEXT);
+    doc.text(isAr?"مقاييس الوضعية الرئيسية":"KEY POSTURE METRICS",ml,y+5);
+    y+=9;
+    const mshow=mEntries.slice(0,3);
+    const mw=(cw-(mshow.length-1)*5)/mshow.length;
+    mshow.forEach(({lbl,sc,val,unit,pri,priC},i)=>{
+      const mx=ml+i*(mw+5);
+      const mh=38;
+      dCard(mx,y,mw,mh,5);
+      // Priority icon
+      const iconC=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
+      fc(doc,...iconC);
+      doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
+      rr(doc,mx+4,y+5,12,12,3,"F");
+      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(7,"bold"); tc(doc,...iconC); doc.text(sc<40?"↑":sc<65?"→":"✓",mx+10,y+13.5,{align:"center"});
+      // Metric name + value
+      sf(8,"bold"); tc(doc,...TEXT); doc.text(lbl,mx+20,y+10);
+      if(val!==undefined){
+        sf(6.5,"normal"); tc(doc,...TEXT2); doc.text(`${Math.round(val*10)/10}${unit}`,mx+20,y+17);
+      }
+      // Priority badge
+      const pw=doc.getTextWidth(pri)+8;
+      fc(doc,...iconC);
+      doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
+      rr(doc,mx+4,y+mh-11,pw,8,2,"F");
+      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(5.5,"bold"); tc(doc,...iconC); doc.text(pri,mx+4+pw/2,y+mh-5.5,{align:"center"});
+      // Score ring (right side)
+      const rind=mx+mw-16, rcy=y+mh/2;
+      dc(doc,...BORDER); lw(doc,3); doc.circle(rind,rcy,10,"S");
+      dc(doc,...iconC); lw(doc,3); doc.circle(rind,rcy,10,"S"); lw(doc,.3);
+      sf(7.5,"bold"); tc(doc,...iconC); doc.text(String(Math.round(sc)),rind,rcy+2.5,{align:"center"});
+      sf(4.5,"normal"); tc(doc,...TEXT3); doc.text("/100",rind,rcy+7.5,{align:"center"});
+    });
+    y+=mEntries.slice(0,3).length>0?45:0;
+
+    // ── FOOTER ────────────────────────────────────────────────
+    fc(doc,...BORDER);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
+    doc.rect(ml,H-9,cw,.3,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(5.5,"normal"); tc(doc,...TEXT3);
+    doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
+    doc.text("1 / 2",W-mr,H-4.5,{align:"right"});
+
+    // ══════════════════════════════════════════════════════════
+    // PAGE 2
+    // ══════════════════════════════════════════════════════════
+    doc.addPage();
+    fc(doc,...BG); doc.rect(0,0,W,H,"F");
+    fc(doc,...BG2); doc.rect(0,0,W,15,"F");
+    _logo(doc,ml,3,9,_logoSm);
+    sf(7.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+13,8);
+    sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+13,13);
+    sf(6,"normal"); tc(doc,...TEXT3);
+    doc.text(`Session #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
+    fc(doc,...BORDER); doc.rect(0,15,W,.5,"F");
+    y=22;
+
+    // Row: Radar chart (left) + Insights (center) + Summary (right)
+    const radarW=60, insW=75, sumW=cw-radarW-insW-8;
+    const rowH=100;
+
+    // Radar chart card (simplified polygon)
+    dCard(ml,y,radarW,rowH);
+    sf(6,"bold"); tc(doc,...TEXT3); doc.text("POSTURE OVERVIEW",ml+4,y+6);
+    const rcx=ml+radarW/2, rcy2=y+rowH/2+6, rad=22;
+    const labels2=["Neck\nAlign.","Shoulder\nPosition","Spine\nAlign.","Sitting\nBalance","Screen\nErgonomics"];
+    const angles=labels2.map((_,i)=>((i/labels2.length)*360-90)*Math.PI/180);
+    // Optimal hexagon
+    fc(doc,37,99,235);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
+    const optPts=angles.map(a=>({x:rcx+Math.cos(a)*rad,y:rcy2+Math.sin(a)*rad}));
+    const optSegs=optPts.slice(1).map((p,i)=>[p.x-optPts[i].x,p.y-optPts[i].y]);
+    try{doc.lines([...optSegs,[optPts[0].x-optPts[optPts.length-1].x,optPts[0].y-optPts[optPts.length-1].y]],optPts[0].x,optPts[0].y,[1,1],"F",false);}catch{}
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    // Grid rings
+    [.33,.66,1].forEach(f=>{
+      dc(doc,...BORDER); lw(doc,.2);
+      const gp=angles.map(a=>({x:rcx+Math.cos(a)*rad*f,y:rcy2+Math.sin(a)*rad*f}));
+      const gs=gp.slice(1).map((p,i)=>[p.x-gp[i].x,p.y-gp[i].y]);
+      try{dc(doc,...BORDER);doc.lines([...gs,[gp[0].x-gp[gp.length-1].x,gp[0].y-gp[gp.length-1].y]],gp[0].x,gp[0].y,[1,1],"S",false);}catch{}
+    });
+    lw(doc,.3);
+    // User data polygon
+    const metKeys=["neck_lean","shoulder","spine_align","hip_angle","distance"];
+    const userScores=metKeys.map(k=>typeof metrics[k]==="number"?metrics[k]:(metrics[k]?.score??70));
+    const uPts=angles.map((a,i)=>({x:rcx+Math.cos(a)*rad*(userScores[i]/100),y:rcy2+Math.sin(a)*rad*(userScores[i]/100)}));
+    fc(doc,37,99,235);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.25}));
+    const uSegs=uPts.slice(1).map((p,i)=>[p.x-uPts[i].x,p.y-uPts[i].y]);
+    try{doc.lines([...uSegs,[uPts[0].x-uPts[uPts.length-1].x,uPts[0].y-uPts[uPts.length-1].y]],uPts[0].x,uPts[0].y,[1,1],"F",false);}catch{}
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    dc(doc,37,99,235); lw(doc,.8);
+    try{doc.lines([...uSegs,[uPts[0].x-uPts[uPts.length-1].x,uPts[0].y-uPts[uPts.length-1].y]],uPts[0].x,uPts[0].y,[1,1],"S",false);}catch{}
+    lw(doc,.3);
+    uPts.forEach(p=>{fc(doc,37,99,235);doc.circle(p.x,p.y,1.5,"F");});
+    // Labels
+    angles.forEach((a,i)=>{
+      const lx=rcx+Math.cos(a)*(rad+7),ly=rcy2+Math.sin(a)*(rad+7);
+      sf(4.5,"normal"); tc(doc,...TEXT3);
+      doc.text(labels2[i].replace('\n',' '),lx,ly,{align:"center"});
+    });
+    // Legend
+    sf(5,"normal"); tc(doc,37,99,235); doc.text("— You",ml+4,y+rowH-7);
+    tc(doc,...TEXT3); doc.text("  - - Optimal Range",ml+4,y+rowH-2.5);
+
+    // Insights card (center)
+    const inx=ml+radarW+4;
+    dCard(inx,y,insW,rowH);
+    sf(6,"bold"); tc(doc,...TEXT3); doc.text("POSTURE INSIGHTS",inx+4,y+6);
+    const insights=mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
+      icon:sc<40?"🔴":sc<65?"🟡":"🟢",
+      text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}${val!==undefined?` ${Math.round(val*10)/10}${unit}`:""}`,
+      detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor and improve.":"Looking good — maintain this.",
+      col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
+    }));
+    insights.forEach(({icon,text,detail,col},i)=>{
+      const iy=y+12+i*28;
+      fc(doc,...col);
+      doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
+      doc.circle(inx+10,iy+7,8,"F");
+      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(9,"normal"); tc(doc,...col); doc.text(icon,inx+10,iy+10.5,{align:"center"});
+      sf(7,"bold"); tc(doc,...TEXT);
+      const tlines=doc.splitTextToSize(text,insW-28);
+      doc.text(tlines[0],inx+21,iy+7);
+      sf(6,"normal"); tc(doc,...TEXT2);
+      doc.text(detail,inx+21,iy+13.5);
+      if(i<2){ fc(doc,...BORDER); doc.rect(inx+4,iy+22,insW-8,.25,"F"); }
+    });
+
+    // Session summary table (right)
+    const sx=inx+insW+4;
+    dCard(sx,y,sumW,rowH);
+    sf(6,"bold"); tc(doc,...TEXT3); doc.text("SESSION SUMMARY",sx+4,y+6);
+    const sumRows=[
+      ["Overall Score",`${avg}/100`,gradeC],
+      ["Good Posture",`${goodPct}%`,[34,197,94]],
+      ["Alerts",String(alerts),[245,158,11]],
+      ["Duration",fmtDurShort(dur),[99,102,241]],
+      ["Session",`#${realIdx}`,[99,102,241]],
+      ["Date",dayStr.split(',')[0],[148,163,200]],
+      ["Time",timeStr,[148,163,200]],
+    ];
+    sumRows.forEach(([k,v,col],i)=>{
+      const ry=y+10+i*12;
+      sf(6,"normal"); tc(doc,...TEXT3); doc.text(k,sx+4,ry+5);
+      sf(6.5,"bold"); tc(doc,...col); doc.text(v,sx+sumW-4,ry+5,{align:"right"});
+      if(i<sumRows.length-1){
+        fc(doc,...BORDER);
+        doc.setGState&&doc.setGState(new doc.GState({opacity:.2}));
+        doc.rect(sx+4,ry+7.5,sumW-8,.2,"F");
+        doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      }
+    });
+    y+=rowH+5;
+
+    // ── UPGRADE CTA ────────────────────────────────────────────
+    dCard(ml,y,cw,52,8,CARD2);
+    fc(doc,...tierCol);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.07}));
+    doc.circle(ml+30,y+26,35,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    // Crown icon area
+    fc(doc,...tierCol);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
+    rr(doc,ml+5,y+8,36,36,10,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(18,"bold"); tc(doc,...tierCol); doc.text("♛",ml+23,y+32,{align:"center"});
+    sf(10,"bold"); tc(doc,...TEXT); doc.text(isAr?"رقّي لـ Elite":"Upgrade to Elite",ml+50,y+18);
+    sf(7,"normal"); tc(doc,...TEXT2); doc.text(isAr?"افتح تحليلات متقدمة وتقارير كاملة":"Unlock advanced insights and reports",ml+50,y+26);
+    // Feature icons
+    const feats=[["📋",isAr?"تحليل AI":"Detailed AI"],["📄","Full PDF"],["🫀",isAr?"توقع الألم":"Pain prediction"],["📊",isAr?"مقارنة":"Baseline"]];
+    feats.forEach(([ic,lb],i)=>{
+      const fx=ml+50+i*34;
+      sf(12,"normal"); tc(doc,...tierCol); doc.text(ic,fx+7,y+38,{align:"center"});
+      sf(5,"normal"); tc(doc,...TEXT2); doc.text(lb,fx+7,y+46,{align:"center"});
+    });
+    // CTA button
+    fc(doc,...tierCol); rr(doc,W/2-30,y+40,60,12,4,"F");
+    sf(7,"bold"); tc(doc,...TEXT); doc.text(isAr?"♛ رقّي الآن":"♛ Upgrade Now",W/2,y+48,{align:"center"});
+    y+=57;
+
+    // Footer
+    fc(doc,...BORDER);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
+    doc.rect(ml,H-9,cw,.3,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(5.5,"normal"); tc(doc,...TEXT3);
+    doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
+    doc.text("2 / 2",W-mr,H-4.5,{align:"right"});
+
+    doc.save(`Corvus_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`);
+    return;
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // ELITE PAGE 1 — Cover + Summary
-  // ═══════════════════════════════════════════════════════════════
-  _cover(doc,W,ml,tier,tierCol,name,realIdx,dateStr,avg,isAr);
-  let y=76;
+  // ══════════════════════════════════════════════════════════════
+  // ELITE/PRO — same premium design, full content, no upsell
+  // ══════════════════════════════════════════════════════════════
+  fc(doc,...BG); doc.rect(0,0,W,H,"F");
 
-  font(doc,F.h1,"bold",isAr); tc(doc,...T.ink);
-  doc.text(isAr?"تقرير وضعية احترافي":"Professional Posture Report",ml,y);
-  font(doc,F.body,"normal",isAr); tc(doc,...T.muted);
-  doc.text(`${name} · ${email||"—"} · ${dateStr}`,ml,y+8); y+=20;
-  hr(doc,ml,y,cw); y+=12;
+  // Header
+  fc(doc,...BG2); doc.rect(0,0,W,22,"F");
+  _logo(doc,ml,5,12,_logoSm);
+  sf(8.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+16,11.5);
+  sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
+  sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?"تقرير تحليل الوضعية الشخصي":"Personal Posture Analysis Report",60,10);
+  sf(6,"normal"); tc(doc,...TEXT3); doc.text("AI-POWERED POSTURE INSIGHTS",60,16);
+  const tbw2=doc.getTextWidth(tierLbl)+10;
+  fc(doc,...tierCol);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:.18}));
+  rr(doc,W-mr-tbw2,4,tbw2,14,3,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  dc(doc,...tierCol); lw(doc,.5); rr(doc,W-mr-tbw2,4,tbw2,14,3,"S"); lw(doc,.3);
+  sf(7,"bold"); tc(doc,...tierCol); doc.text(tierLbl,W-mr-tbw2/2,13,{align:"center"});
+  sf(6,"normal"); tc(doc,...TEXT3); doc.text(`Generated: ${dateStr}`,W-mr,20,{align:"right"});
+  fc(doc,...BORDER); doc.rect(0,22,W,.5,"F");
+  let y=28;
 
-  // Ring + 4 KPI chips
-  _ring(doc,ml+22,y+24,19,avg,isAr);
-  [[`${goodPct}%`,isAr?"جيدة":"Good",T.success],
-   [String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",T.warning],
-   [_fmtDur(dur),isAr?"المدة":"Duration",T.primary],
-   [`#${realIdx}`,isAr?"الجلسة":"Session",T.indigo]]
-    .forEach(([v,l,col],i)=>_kpi(doc,ml+54+i*40,y+4,36,30,v,l,col));
-  y+=62; hr(doc,ml,y,cw); y+=12;
-
-  // Sparkline
-  if(hist.length>2){
-    y=_sh(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"الجلسة الكاملة":"Full session",gradeC,isAr);
-    fc(doc,...T.bg); rr(doc,ml,y,cw,42,4,"F");
-    dc(doc,...T.border); lw(doc,0.15); rr(doc,ml,y,cw,42,4,"S"); lw(doc,0.3);
-    _spark(doc,hist,ml+12,y+7,cw-24,28,gradeC);
-    y+=50;
+  // Score card row
+  const scoreW=60, kpiW=85, infoW=cw-scoreW-kpiW-8, row1H=78;
+  // Score
+  dCard(ml,y,scoreW,row1H);
+  sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
+  const cx2=ml+scoreW/2, cy2=y+42, r2=22;
+  dc(doc,...BORDER); lw(doc,5); doc.circle(cx2,cy2,r2,"S");
+  dc(doc,...gradeC); lw(doc,5); doc.circle(cx2,cy2,r2,"S"); lw(doc,.3);
+  fc(doc,...gradeC);
+  doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
+  doc.circle(cx2,cy2,r2-2,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  sf(20,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx2,cy2+3.5,{align:"center"});
+  sf(6.5,"normal"); tc(doc,...TEXT3); doc.text("/100",cx2,cy2+10,{align:"center"});
+  sf(9,"bold"); tc(doc,...gradeC); doc.text(gradeL,cx2,cy2+r2+9,{align:"center"});
+  if(painSum){
+    const tl2=doc.splitTextToSize(painSum.split('.')[0]+'.',scoreW-8);
+    sf(5.5,"normal"); tc(doc,...TEXT2);
+    tl2.slice(0,2).forEach((l,i)=>doc.text(l,ml+4,y+row1H-12+i*5.5));
   }
-
-  if(painSum){ y=_callout(doc,ml,y,cw,painSum,"warning",isAr); }
-  if(impTip)  { y=_callout(doc,ml,y,cw,impTip,"success",isAr); }
-
-  y=_sh(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"مرتبة من الأسوأ":"Sorted worst first",gradeC,isAr);
-  mEntries.slice(0,4).forEach(({lbl,value,unit,sc},i)=>{
-    if(y>H-46)return;
-    _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
+  // KPIs
+  const kx3=ml+scoreW+4;
+  [[isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`,"✓",[34,197,94]],
+   [isAr?"التنبيهات":"Alerts",String(alerts),"⚠",[245,158,11]],
+   [isAr?"الجلسة":"Session",`#${realIdx}`,"#",[99,102,241]],
+   [isAr?"المدة":"Duration",fmtDurShort(dur),"◷",[6,182,212]]
+  ].forEach(([label,val,icon,col],i)=>{
+    const kw=(kpiW-4)/2, kh=(row1H-4)/2;
+    const kx2b=kx3+(i%2)*(kw+4), ky2=y+(Math.floor(i/2))*(kh+4);
+    dCard(kx2b,ky2,kw,kh,5,CARD2);
+    fc(doc,...col);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
+    doc.circle(kx2b+10,ky2+10,8,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(8,"normal"); tc(doc,...col); doc.text(icon,kx2b+10,ky2+13.5,{align:"center"});
+    sf(11,"bold"); tc(doc,...TEXT); doc.text(String(val),kx2b+kw/2,ky2+kh*.6,{align:"center"});
+    sf(5.5,"bold"); tc(doc,...TEXT3); doc.text(label,kx2b+kw/2,ky2+kh*.82,{align:"center"});
   });
-
-  // ═══════════════════════════════════════════════════════════════
-  // ELITE PAGE 2 — All metrics + Zonal map
-  // ═══════════════════════════════════════════════════════════════
-  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"تفاصيل المقاييس":"Metrics Detail",isAr); y=24;
-  y=_sh(doc,ml,y,isAr?"جميع مقاييس الوضعية":"Complete Posture Metrics",isAr?"مرتبة من الأسوأ":"Worst to best",gradeC,isAr);
-  mEntries.forEach(({lbl,value,unit,sc},i)=>{
-    if(y>H-38){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued",isAr);y=24;}
-    _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
+  // Info
+  const ix2=kx3+kpiW+4;
+  dCard(ix2,y,infoW,row1H);
+  sf(6,"bold"); tc(doc,...TEXT3); doc.text("YOUR INFORMATION",ix2+4,y+7);
+  [["👤",isAr?"الاسم":"Name",name],["✉",isAr?"البريد":"Email",email.length>22?email.slice(0,22)+"…":email],
+   ["🏢",isAr?"الشركة":"Company",company||"—"],["🔑","ID",`local_${session.id?.slice(-8)||"xxxxxxxx"}`]
+  ].forEach(([icon,lbl,val],i)=>{
+    const ry=y+16+i*14;
+    sf(5.5,"normal"); tc(doc,...TEXT3); doc.text(icon+" "+lbl,ix2+4,ry);
+    sf(6,"bold"); tc(doc,...TEXT); doc.text(String(val),ix2+4,ry+6.5);
+    if(i<3){fc(doc,...BORDER);doc.rect(ix2+4,ry+9,infoW-8,.3,"F");}
   });
+  y+=row1H+5;
 
-  y+=4; if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map",isAr);y=24;}
-  y=_sh(doc,ml,y,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"من بيانات الجلسة — ليس تشخيصاً طبياً":"Derived from session data · not a medical diagnosis",T.danger,isAr);
-  const zonal=_zonalRisk(metrics);
-  [{k:"cervical",en:"Cervical (Neck)",ar:"منطقة الرقبة",r:"C1–C7",
-    desc:"Neck lean, FHP, and rotational deviation. Elevation increases cervical disc load and headache risk.",m:"Neck Lean, FHP, Head Tilt/Yaw"},
-   {k:"thoracic",en:"Thoracic (Upper Back)",ar:"الظهر العلوي",r:"T1–T12",
-    desc:"Shoulder symmetry and upper spinal curvature. Sustained elevation indicates kyphosis or rotator cuff risk.",m:"Shoulder Balance, Rounded Shoulders, Spine"},
-   {k:"lumbar",en:"Lumbar (Lower Back)",ar:"أسفل الظهر",r:"L1–S1",
-    desc:"Spinal alignment, hip angle, and pelvic positioning. Risk elevation may indicate disc asymmetry or flexion intolerance.",m:"Spine Alignment, Hip Angle, Trunk Lean"},
-  ].forEach(({k,en,ar,r,desc,m})=>{
-    if(y>H-65){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map",isAr);y=24;}
-    y=_zone(doc,ml,y,cw,isAr?ar:en,r,zonal[k]||0,desc,m,isAr);
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  // ELITE PAGE 3 — AI + Next Steps + Stats
-  // ═══════════════════════════════════════════════════════════════
-  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"التحليل والتوصيات":"Analysis & Recommendations",isAr); y=24;
-
+  // Timeline
+  dCard(ml,y,cw,46);
+  sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("SCORE TIMELINE",ml+4,y+7);
+  if(hist.length>1){
+    const lo=Math.max(0,Math.min(...hist)-5),hi=Math.min(100,Math.max(...hist)+5),rng=hi-lo;
+    const gx=ml+8,gw2=cw-16,gh=28,gy=y+13;
+    [50,65,80,95].forEach(v=>{
+      if(v<lo-5||v>hi+5)return;
+      const ly=gy+gh-((v-lo)/Math.max(rng,1))*gh;
+      fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.3}));
+      doc.rect(gx,ly,gw2,.2,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(4.5,"normal");tc(doc,...TEXT3);doc.text(String(v),gx-2,ly+1.5,{align:"right"});
+    });
+    const pts=hist.map((s,i)=>({px:gx+(i/(hist.length-1))*gw2,py:gy+gh-((s-lo)/Math.max(rng,1))*gh}));
+    try{
+      const segs=pts.slice(1).map((p,i)=>[p.px-pts[i].px,p.py-pts[i].py]);
+      fc(doc,37,99,235);doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
+      doc.lines([...segs,[0,gy+gh-pts[pts.length-1].py],[-(pts[pts.length-1].px-pts[0].px),0]],pts[0].px,pts[0].py,[1,1],"F",false);
+      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    }catch{}
+    dc(doc,37,99,235);lw(doc,1.2);
+    pts.forEach((p,i)=>{if(i>0)doc.line(pts[i-1].px,pts[i-1].py,p.px,p.py);});lw(doc,.3);
+    pts.filter((_,i)=>i%(Math.ceil(pts.length/8))===0||i===pts.length-1).forEach(p=>{fc(doc,37,99,235);doc.circle(p.px,p.py,1.5,"F");});
+    const lp=pts[pts.length-1];
+    fc(doc,...gradeC);doc.setGState&&doc.setGState(new doc.GState({opacity:.9}));
+    doc.circle(lp.px,lp.py,4,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(5.5,"bold");tc(doc,...[10,15,30]);doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
+    sf(4.5,"normal");tc(doc,...TEXT3);
+    ["00:00",`00:${Math.floor(dur/4/60).toString().padStart(2,'0')}`,`00:${Math.floor(dur/2/60).toString().padStart(2,'0')}`,`00:${Math.floor(dur*3/4/60).toString().padStart(2,'0')}`,`${String(Math.floor(dur/60)).padStart(2,'0')}:${String(dur%60).padStart(2,'0')}`]
+      .forEach((t,i)=>doc.text(t,gx+(i/4)*gw2,gy+gh+5,{align:"center"}));
+  }
   if(aiText){
-    y=_sh(doc,ml,y,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"مولّد خصيصاً لجلستك":"Generated specifically for this session",T.primary,isAr);
-    fc(doc,...T.bg); rr(doc,ml,y,cw,6,2,"F"); y+=9;
-    const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-6);
-    font(doc,F.body,"normal",isAr); tc(doc,...T.sub);
-    aiLines.forEach(l=>{
-      if(y>H-28){doc.addPage();_hdr(doc,W,ml,mr,"AI Analysis",isAr);y=24;}
-      doc.text(l,ml+3,y); y+=5.2;
-    });
-    y+=10; hr(doc,ml,y,cw); y+=12;
-  }
+    const tipLines=doc.splitTextToSize("💡  "+(aiText.split('.')[0]+'.'),cw-12);
+    const tipH=tipLines.length*5+7;
+    dCard(ml,y+47,cw,tipH,4,CARD2);
+    sf(6.5,"normal");tc(doc,...TEXT2);tipLines.forEach((l,i)=>doc.text(l,ml+5,y+47+6+i*5));
+    y+=47+tipH+5;
+  } else { y+=51; }
 
-  if(y>H-110){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps",isAr);y=24;}
-  y=_sh(doc,ml,y,isAr?"الخطوات العملية المقترحة":"Prioritised Next Steps",isAr?"بناءً على أسوأ المقاييس":"Based on worst-performing metrics",T.success,isAr);
+  // Metrics
+  sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"مقاييس الوضعية الرئيسية":"KEY POSTURE METRICS",ml,y+5);y+=9;
+  const mshow2=mEntries.slice(0,3);
+  const mw2=(cw-(mshow2.length-1)*5)/Math.max(mshow2.length,1);
+  mshow2.forEach(({lbl,sc,val,unit,pri,priC},i)=>{
+    const mx=ml+i*(mw2+5);const mh=38;
+    dCard(mx,y,mw2,mh,5);
+    const iconC=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
+    fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
+    rr(doc,mx+4,y+5,12,12,3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(7,"bold");tc(doc,...iconC);doc.text(sc<40?"↑":sc<65?"→":"✓",mx+10,y+13.5,{align:"center"});
+    sf(8,"bold");tc(doc,...TEXT);doc.text(lbl,mx+20,y+10);
+    if(val!==undefined){sf(6.5,"normal");tc(doc,...TEXT2);doc.text(`${Math.round(val*10)/10}${unit}`,mx+20,y+17);}
+    const pw=doc.getTextWidth(pri)+8;
+    fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
+    rr(doc,mx+4,y+mh-11,pw,8,2,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(5.5,"bold");tc(doc,...iconC);doc.text(pri,mx+4+pw/2,y+mh-5.5,{align:"center"});
+    const rind=mx+mw2-16,rcy=y+mh/2;
+    dc(doc,...BORDER);lw(doc,3);doc.circle(rind,rcy,10,"S");
+    dc(doc,...iconC);lw(doc,3);doc.circle(rind,rcy,10,"S");lw(doc,.3);
+    sf(7.5,"bold");tc(doc,...iconC);doc.text(String(Math.round(sc)),rind,rcy+2.5,{align:"center"});
+    sf(4.5,"normal");tc(doc,...TEXT3);doc.text("/100",rind,rcy+7.5,{align:"center"});
+  });
+  y+=mshow2.length>0?45:0;
 
-  const _dynSteps = (key, val, unit) => {
-  const v = val !== undefined && val !== null ? Math.round(val * 10) / 10 : null;
-  if (key === "neck_lean" || key === "head_tilt" || key === "neck_lean_side") {
-    const deg = v !== null ? `${v}deg` : "current angle";
-    return [`Raise monitor so top edge is at eye level (current: ${deg})`,`Chin tuck gently — bring ear over shoulder (target: <${v !== null && v > 10 ? Math.round(v - 3) : 8}deg)`,`Set posture alert every 20 min — recheck ${deg}`];
-  }
-  if (key === "head_yaw") {
-    return [`Centre monitor directly in front of your body`,`Avoid sustained head rotation to one side`,`Chin tucks 10 reps x 3 sets daily`];
-  }
-  if (key === "distance" || key === "fhp" || key === "fhp_side") {
-    const cm = v !== null ? `${Math.round(v)}cm` : "current distance";
-    return [`Maintain 50-70cm screen distance (current: ${cm})`,`Increase font size to avoid leaning forward`,`20-20-20 rule: every 20 min look 20ft away for 20s`];
-  }
-  if (key === "shoulder" || key === "rounded") {
-    return [`Level armrests to equal height on both sides`,`Shoulder rolls backward 10 reps x 3 daily`,`Doorway chest stretch 30s x 2 daily`];
-  }
-  if (key === "spine_lean" || key === "spine_align" || key === "trunk_lean") {
-    return [`Align ear, shoulder, hip vertically when seated`,`Use lumbar roll or support cushion on chair`,`Core brace holds 30s x 5 reps daily`];
-  }
-  if (key === "elbow") {
-    return [`Lower keyboard so elbows rest at 90 degrees`,`Keep keyboard close to body to avoid reaching`,`Wrist break and elbow stretch every 45 min`];
-  }
-  if (key === "monitor" || key === "hip_angle" || key === "knee_angle") {
-    return [`Top of screen at eye level, arm length away`,`Use laptop stand + external keyboard if needed`,`Adjust chair height so feet flat, knees at 90 deg`];
-  }
-  return [`2-min stretch break every 30 min`,`Roll shoulders backward 5 times each direction`,`Walk 5 min every hour`];
-};
-  mEntries.slice(0,3).forEach(({key,lbl,sc,value,unit},i)=>{
-    if(y>H-54){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps",isAr);y=24;}
-    y=_step(doc,ml,y,cw,i+1,lbl,sc,_dynSteps(key,value,unit),isAr);
+  // Footer p1
+  fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
+  doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  sf(5.5,"normal");tc(doc,...TEXT3);
+  doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);doc.text("1 / 2",W-mr,H-4.5,{align:"right"});
+
+  // PAGE 2 — full metrics + AI analysis
+  doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
+  fc(doc,...BG2);doc.rect(0,0,W,15,"F");
+  _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("CORVUS",ml+13,8);
+  sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
+  sf(6,"normal");tc(doc,...TEXT3);doc.text(`Session #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
+  fc(doc,...BORDER);doc.rect(0,15,W,.5,"F");
+  y=22;
+
+  // Radar + Insights + Summary
+  const radarW2=60,insW2=75,sumW2=cw-radarW2-insW2-8,rowH2=100;
+  dCard(ml,y,radarW2,rowH2);
+  sf(6,"bold");tc(doc,...TEXT3);doc.text("POSTURE OVERVIEW",ml+4,y+6);
+  const rcx3=ml+radarW2/2,rcy3=y+rowH2/2+6,rad3=22;
+  const lbls3=["Neck\nAlign.","Shoulder\nPosition","Spine\nAlign.","Sitting\nBalance","Screen\nErgonomics"];
+  const ang3=lbls3.map((_,i)=>((i/lbls3.length)*360-90)*Math.PI/180);
+  fc(doc,37,99,235);doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
+  const op3=ang3.map(a=>({x:rcx3+Math.cos(a)*rad3,y:rcy3+Math.sin(a)*rad3}));
+  try{const os3=op3.slice(1).map((p,i)=>[p.px-op3[i].px,p.py-op3[i].py]);
+    doc.lines([...op3.slice(1).map((p,i)=>[p.x-op3[i].x,p.y-op3[i].y],[op3[0].x-op3[op3.length-1].x,op3[0].y-op3[op3.length-1].y])],op3[0].x,op3[0].y,[1,1],"F",false);}catch{}
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  [.33,.66,1].forEach(f=>{
+    const gp=ang3.map(a=>({x:rcx3+Math.cos(a)*rad3*f,y:rcy3+Math.sin(a)*rad3*f}));
+    dc(doc,...BORDER);lw(doc,.2);
+    try{doc.lines([...gp.slice(1).map((p,i)=>[p.x-gp[i].x,p.y-gp[i].y]),[gp[0].x-gp[gp.length-1].x,gp[0].y-gp[gp.length-1].y]],gp[0].x,gp[0].y,[1,1],"S",false);}catch{}
+  });lw(doc,.3);
+  const metK3=["neck_lean","shoulder","spine_align","hip_angle","distance"];
+  const uS3=metK3.map(k=>typeof metrics[k]==="number"?metrics[k]:(metrics[k]?.score??70));
+  const up3=ang3.map((a,i)=>({x:rcx3+Math.cos(a)*rad3*(uS3[i]/100),y:rcy3+Math.sin(a)*rad3*(uS3[i]/100)}));
+  fc(doc,37,99,235);doc.setGState&&doc.setGState(new doc.GState({opacity:.25}));
+  try{doc.lines([...up3.slice(1).map((p,i)=>[p.x-up3[i].x,p.y-up3[i].y]),[up3[0].x-up3[up3.length-1].x,up3[0].y-up3[up3.length-1].y]],up3[0].x,up3[0].y,[1,1],"F",false);}catch{}
+  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  dc(doc,37,99,235);lw(doc,.8);
+  try{doc.lines([...up3.slice(1).map((p,i)=>[p.x-up3[i].x,p.y-up3[i].y]),[up3[0].x-up3[up3.length-1].x,up3[0].y-up3[up3.length-1].y]],up3[0].x,up3[0].y,[1,1],"S",false);}catch{}
+  lw(doc,.3);up3.forEach(p=>{fc(doc,37,99,235);doc.circle(p.x,p.y,1.5,"F");});
+  ang3.forEach((a,i)=>{
+    const lx=rcx3+Math.cos(a)*(rad3+7),ly=rcy3+Math.sin(a)*(rad3+7);
+    sf(4.5,"normal");tc(doc,...TEXT3);doc.text(lbls3[i].replace('\n',' '),lx,ly,{align:"center"});
+  });
+  sf(5,"normal");tc(doc,37,99,235);doc.text("— You",ml+4,y+rowH2-7);
+  tc(doc,...TEXT3);doc.text("  - - Optimal",ml+4,y+rowH2-2.5);
+
+  // Insights
+  const inx3=ml+radarW2+4;
+  dCard(inx3,y,insW2,rowH2);
+  sf(6,"bold");tc(doc,...TEXT3);doc.text("POSTURE INSIGHTS",inx3+4,y+6);
+  mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
+    icon:sc<40?"🔴":sc<65?"🟡":"🟢",
+    text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}`,
+    detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor.":"Looking good.",
+    col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
+  })).forEach(({icon,text,detail,col},i)=>{
+    const iy=y+12+i*28;
+    fc(doc,...col);doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
+    doc.circle(inx3+10,iy+7,8,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(9,"normal");tc(doc,...col);doc.text(icon,inx3+10,iy+10.5,{align:"center"});
+    sf(7,"bold");tc(doc,...TEXT);doc.text(text,inx3+21,iy+7);
+    sf(6,"normal");tc(doc,...TEXT2);doc.text(detail,inx3+21,iy+13.5);
+    if(i<2){fc(doc,...BORDER);doc.rect(inx3+4,iy+22,insW2-8,.25,"F");}
   });
 
-  y+=4; if(y>H-75){doc.addPage();_hdr(doc,W,ml,mr,isAr?"إحصائيات":"Statistics",isAr);y=24;}
-  y=_sh(doc,ml,y,isAr?"إحصائيات الجلسة":"Session Statistics","",gradeC,isAr);
-  fc(doc,...T.card); rr(doc,ml,y,cw,72,4,"F");
-  dc(doc,...T.border); lw(doc,0.15); rr(doc,ml,y,cw,72,4,"S"); lw(doc,0.3);
-  [
-    [isAr?"النتيجة الكلية":"Overall Score",`${avg}/100 — ${_sl(avg,isAr)}`],
-    [isAr?"المدة":"Duration",_fmtDur(dur)],
-    [isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`],
-    [isAr?"التنبيهات":"Alerts",String(session.alerts_count||0)],
-    [isAr?"وضع الكاميرا":"Camera Mode",(session.mode||"laptop").toUpperCase()],
-    [isAr?"المستوى":"Tier",tier.toUpperCase()],
-    [isAr?"تاريخ الجلسة":"Date",dateStr],
-    [isAr?"رقم الجلسة":"Session #",String(realIdx)],
-  ].forEach(([k,v],i)=>{_iRow(doc,ml,y,cw,k,v,i%2===0,isAr);y+=8.5;});
+  // Summary
+  const sx3=inx3+insW2+4;
+  dCard(sx3,y,sumW2,rowH2);
+  sf(6,"bold");tc(doc,...TEXT3);doc.text("SESSION SUMMARY",sx3+4,y+6);
+  [["Overall Score",`${avg}/100`,gradeC],["Good Posture",`${goodPct}%`,[34,197,94]],
+   ["Alerts",String(alerts),[245,158,11]],["Duration",fmtDurShort(dur),[99,102,241]],
+   ["Session",`#${realIdx}`,[99,102,241]],["Date",dayStr.split(',')[0],[148,163,200]],["Time",timeStr,[148,163,200]]
+  ].forEach(([k,v,col],i)=>{
+    const ry=y+10+i*12;
+    sf(6,"normal");tc(doc,...TEXT3);doc.text(k,sx3+4,ry+5);
+    sf(6.5,"bold");tc(doc,...col);doc.text(v,sx3+sumW2-4,ry+5,{align:"right"});
+    if(i<6){fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.2}));
+      doc.rect(sx3+4,ry+7.5,sumW2-8,.2,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));}
+  });
+  y+=rowH2+5;
 
-  const tot2=doc.internal.getNumberOfPages();
-  for(let p=1;p<=tot2;p++){doc.setPage(p);_ftr(doc,W,ml,mr,H,p,tot2,name);}
-  doc.save(`Corvus_Elite_Report_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`);
+  // Full metrics (Elite only)
+  if(mEntries.length>0){
+    sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"جميع المقاييس":"ALL POSTURE METRICS",ml,y+5);y+=9;
+    mEntries.forEach(({lbl,sc,val,unit,pri,priC},i)=>{
+      if(y>H-45){doc.addPage();fc(doc,...BG);doc.rect(0,0,W,H,"F");y=14;}
+      const mh=26;const iconC=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
+      dCard(ml,y,cw,mh,4);
+      fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
+      rr(doc,ml+4,y+4,10,10,2,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(6.5,"bold");tc(doc,...iconC);doc.text(sc<40?"↑":sc<65?"→":"✓",ml+9,y+11,{align:"center"});
+      sf(8.5,"bold");tc(doc,...TEXT);doc.text(lbl,ml+18,y+10);
+      if(val!==undefined){sf(6.5,"normal");tc(doc,...TEXT2);doc.text(`${Math.round(val*10)/10}${unit}`,ml+18,y+17.5);}
+      // Progress bar
+      const bx=ml+70,bw=cw-90;
+      fc(doc,...BORDER);rr(doc,bx,y+9,bw,5,2,"F");
+      fc(doc,...iconC);rr(doc,bx,y+9,Math.max(bw*(sc/100),3),5,2,"F");
+      sf(7.5,"bold");tc(doc,...iconC);doc.text(`${Math.round(sc)}/100`,ml+cw-22,y+13.5,{align:"right"});
+      // Priority
+      const pw2=doc.getTextWidth(pri)+8;
+      fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
+      rr(doc,ml+cw-pw2-24,y+mh-10,pw2,7,2,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(5.5,"bold");tc(doc,...iconC);doc.text(pri,ml+cw-pw2/2-24,y+mh-5,{align:"center"});
+      y+=mh+4;
+    });
+    y+=4;
+  }
+
+  // AI Analysis
+  if(aiText&&y<H-60){
+    dCard(ml,y,cw,Math.min(60,H-y-12),5,CARD2);
+    sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"تحليل Corvus AI":"Corvus AI Analysis",ml+5,y+8);
+    const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-12);
+    sf(7,"normal");tc(doc,...TEXT2);
+    aiLines.slice(0,7).forEach((l,i)=>{if(y+16+i*5.5<H-14)doc.text(l,ml+5,y+16+i*5.5);});
+  }
+
+  // Footer p1
+  fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
+  doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  sf(5.5,"normal");tc(doc,...TEXT3);
+  doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
+  // Page numbers
+  const tot=doc.internal.getNumberOfPages();
+  for(let p=1;p<=tot;p++){
+    doc.setPage(p);
+    sf(5.5,"normal");tc(doc,...TEXT3);doc.text(`${p} / ${tot}`,W-mr,H-4.5,{align:"right"});
+  }
+
+  doc.save(`Corvus_Elite_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`);
 }
+
+
 
 
 export async function generateClinicalPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[] }) {
