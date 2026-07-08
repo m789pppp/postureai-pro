@@ -196,6 +196,8 @@ function detectIntent(msg) {
   if(m.match(/walk.*posture|posture.*walk|المشي.*وضعية/))            return "walking_posture";
   // General tips
   if(m.match(/tip|advice|نصيحة|نصائح/))                              return "tips";
+  if(m.match(/biggest.*problem|worst.*problem|main.*problem|my problem|what.*wrong|problem.*posture|posture.*problem|أكبر.*مشكلة|مشكلة.*وضعية|إيه.*مشكلتي/)) return "problem";
+  if(m.match(/how.*doing|how.*posture|overall.*posture|posture.*overall|summary|وضعيتي.*إيه|إزاي.*وضعيتي|عامل.*إزاي/)) return "score";
   // Meta
   if(m.match(/help|مساعدة|بتعمل ايه|what can|what do/))             return "help";
   if(m.match(/thanks|شكر|ممنون|تسلم/))                               return "thanks";
@@ -691,13 +693,22 @@ function buildResponse(intent, msg, d, hist) {
     : `Start a posture analysis session first! 💪\n\n💬 Any pain or specific question?`;
 
   const al=(d.alerts||"").toLowerCase();
+  const nr = d.neckRisk ?? 0;
   const issues=[];
-  if(al.match(/head|forward/)) issues.push(ar?"الرأس المتقدم":"forward head");
-  if(al.match(/shoulder/))     issues.push(ar?"الكتفان المدوّران":"rounded shoulders");
-  if(al.match(/back/))         issues.push(ar?"ميلان الظهر":"back lean");
+  if(al.match(/head|forward|fhp/)) issues.push(ar?"📍 **رأس متقدم للأمام** — أعلى تأثير على الدرجة":"📍 **Forward head posture** — highest impact on your score");
+  if(al.match(/shoulder|round/))   issues.push(ar?"📍 **كتفان مدوّران** — حمل زائد على العضلة شبه المنحرفة":"📍 **Rounded shoulders** — upper trapezius overload");
+  if(al.match(/back|lean|spine/))  issues.push(ar?"📍 **ميلان للخلف** — ضغط متزايد على ديسك القطن":"📍 **Back lean** — increased lumbar disc load");
+  if(al.match(/tilt/))             issues.push(ar?"📍 **رأس مائل** — عدم تماثل في الرقبة":"📍 **Head tilt** — cervical asymmetry detected");
+  if(nr>=50) issues.push(ar?`📍 **خطر رقبة ${nr}%** — أعلى أولوية`:`📍 **Cervical risk at ${nr}%** — top priority`);
+
+  if(issues.length) {
+    return ar
+      ? `بناءً على **${ses}** جلسة ودرجة **${s}/100**، أهم مشاكل وضعيتك:\n\n${issues.join("\n\n")}\n\n💬 تحب أعرفك إزاي تصلح أي واحدة منهم؟`
+      : `Based on **${ses} sessions** (score: **${s}/100**), your key posture findings:\n\n${issues.join("\n\n")}\n\n💬 Which would you like to tackle first?`;
+  }
   return ar
-    ? `بناءً على بياناتك (**${s}/100** من ${ses} جلسة)${issues.length?`: ${issues.join(" و")}`:""}\n\n💬 إيه اللي تحب تعرفه؟ (ألم، تمارين، إعداد مكتب، جدول راحة)`
-    : `Based on your data (**${s}/100** from ${ses} sessions)${issues.length?`: ${issues.join(", ")}`:""}\n\n💬 What would you like to know? (pain, exercises, desk setup, break schedule)`;
+    ? `درجتك **${s}/100** من **${ses}** جلسة — ${s>=70?"وضعيتك كويسة، خليك ثابت!":"في مجال للتحسن."}\n\n💬 اسألني عن أي حاجة: ألم، تمارين، إعداد المكتب، أو تفاصيل درجتك.`
+    : `Your score: **${s}/100** from **${ses} sessions** — ${s>=70?"posture is generally good!":"there's real room to improve."}\n\n💬 Ask me anything: pain, exercises, desk setup, or what's dragging your score down.`;
 }
 
 // ── Analysis (AIInsights / PredictiveAI) ─────────────────────────
