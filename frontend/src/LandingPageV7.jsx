@@ -272,14 +272,13 @@ function GlobalStyle() {
 function Nav({ lang, setLang, onCTA }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState(null);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", h, { passive: true });
     return () => window.removeEventListener("scroll", h);
   }, []);
-
-  // Close the mobile menu automatically if the viewport grows back to desktop
   useEffect(() => {
     const h = () => { if (window.innerWidth > 860) setMobileOpen(false); };
     window.addEventListener("resize", h);
@@ -287,112 +286,160 @@ function Nav({ lang, setLang, onCTA }) {
   }, []);
 
   const ar = lang === "ar";
-  const links = ar
-    ? [["المنصة","#features"],["الأسعار","#pricing"],["المؤسسات","#enterprise"],["نتائج حقيقية","#casestudies"]]
-    : [["Platform","#features"],["Pricing","#pricing"],["Enterprise","#enterprise"],["Results","#casestudies"]];
+
+  const navItems = ar ? [
+    { label:"المنتج", href:"#features", hasDropdown:true },
+    { label:"الحلول", href:"#casestudies", hasDropdown:true },
+    { label:"الأسعار", href:"#pricing", hasDropdown:false },
+    { label:"الموارد", href:"#", hasDropdown:true },
+    { label:"الشركة", href:"#", hasDropdown:true },
+  ] : [
+    { label:"Product", href:"#features", hasDropdown:true },
+    { label:"Solutions", href:"#casestudies", hasDropdown:true },
+    { label:"Pricing", href:"#pricing", hasDropdown:false },
+    { label:"Resources", href:"#", hasDropdown:true },
+    { label:"Company", href:"#", hasDropdown:true },
+  ];
 
   return (
     <nav style={{
-      position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000,
-      padding: "0 24px",
-      background: scrolled || mobileOpen ? "rgba(3,11,20,.94)" : "transparent",
-      backdropFilter: scrolled || mobileOpen ? "blur(20px)" : "none",
-      borderBottom: scrolled || mobileOpen ? `1px solid ${C.border}` : "none",
-      transition: "background .3s,border-color .3s",
+      position:"fixed", top:0, left:0, right:0, zIndex:1000,
+      padding:"0 32px",
+      background: scrolled || mobileOpen ? "rgba(3,11,20,.95)" : "rgba(3,11,20,.6)",
+      backdropFilter:"blur(20px)",
+      borderBottom:`1px solid ${scrolled ? C.border : "transparent"}`,
+      transition:"background .3s, border-color .3s",
     }}>
-      <div className="lp-wrap" style={{ height: 72,
-        display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        {/* Logo */}
-        <a href="#" onClick={e=>e.preventDefault()} style={{ display:"flex", alignItems:"center", gap:10,
-          textDecoration:"none", color:C.text, flexShrink:0 }}>
-          <div style={{ width:38, height:38, borderRadius:11,
-            background: C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:19, boxShadow:"0 4px 16px rgba(79,124,249,.4)" }}>🧘</div>
-          <span style={{ fontWeight:700, fontSize:18, letterSpacing:"-.02em", fontFamily:FONT_DISPLAY }}>
-            Corvus <span style={{ background:C.gHero, WebkitBackgroundClip:"text",
-              WebkitTextFillColor:"transparent" }}>Pro</span>
-          </span>
+      <div className="lp-wrap" style={{
+        height:68, display:"flex", alignItems:"center",
+        justifyContent:"space-between", gap:24,
+      }}>
+
+        {/* ── Logo ── */}
+        <a href="#" onClick={e=>e.preventDefault()} style={{
+          display:"flex", alignItems:"center", gap:9,
+          textDecoration:"none", flexShrink:0,
+        }}>
+          <div style={{
+            width:34, height:34, borderRadius:9,
+            background:"linear-gradient(135deg,#1a56db,#0891b2)",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:17, boxShadow:"0 4px 14px rgba(79,124,249,.45)",
+          }}>◈</div>
+          <div style={{ lineHeight:1 }}>
+            <div style={{ fontWeight:800, fontSize:15.5, color:C.text,
+              fontFamily:FONT_DISPLAY, letterSpacing:"-.02em" }}>Corvus</div>
+            <div style={{ fontSize:9.5, color:C.muted, fontWeight:500,
+              letterSpacing:".04em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+          </div>
         </a>
 
-        {/* Desktop links */}
-        <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:4 }}>
-          {links.map(([label, href]) => (
-            <a key={href} href={href} style={{
-              color:C.sub, textDecoration:"none", padding:"9px 16px",
-              borderRadius:8, fontSize:14.5, fontWeight:500,
-              transition:"color .2s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = C.text}
-            onMouseLeave={e => e.currentTarget.style.color = C.sub}>{label}</a>
+        {/* ── Center nav links ── */}
+        <div className="lp-nav-links" style={{
+          display:"flex", alignItems:"center", gap:2,
+          flex:1, justifyContent:"center",
+        }}>
+          {navItems.map(item => (
+            <div key={item.label} style={{ position:"relative" }}
+              onMouseEnter={() => item.hasDropdown && setActiveDropdown(item.label)}
+              onMouseLeave={() => setActiveDropdown(null)}>
+              <a href={item.href} style={{
+                display:"flex", alignItems:"center", gap:4,
+                color: activeDropdown===item.label ? C.text : C.sub,
+                textDecoration:"none", padding:"8px 14px",
+                borderRadius:8, fontSize:14, fontWeight:500,
+                transition:"color .18s",
+              }}
+              onMouseEnter={e=>e.currentTarget.style.color=C.text}
+              onMouseLeave={e=>e.currentTarget.style.color= activeDropdown===item.label ? C.text : C.sub}>
+                {item.label}
+                {item.hasDropdown && (
+                  <svg width="11" height="7" viewBox="0 0 11 7" fill="none"
+                    style={{ marginTop:1, transition:"transform .2s",
+                      transform: activeDropdown===item.label ? "rotate(180deg)" : "none" }}>
+                    <path d="M1 1L5.5 5.5L10 1" stroke={C.sub} strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                )}
+              </a>
+            </div>
           ))}
         </div>
 
-        {/* Desktop actions */}
-        <div className="lp-nav-actions" style={{ display:"flex", alignItems:"center", gap:10 }}>
+        {/* ── Right actions ── */}
+        <div className="lp-nav-actions" style={{
+          display:"flex", alignItems:"center", gap:8, flexShrink:0,
+        }}>
           <button onClick={() => setLang(ar ? "en" : "ar")} style={{
             background:"transparent", border:`1px solid ${C.border}`,
-            color:C.sub, padding:"7px 14px", borderRadius:8,
-            cursor:"pointer", fontSize:13, fontWeight:500,
-          }}>{ar ? "EN" : "عربي"}</button>
+            color:C.muted, padding:"6px 12px", borderRadius:7,
+            cursor:"pointer", fontSize:12.5, fontWeight:500,
+            transition:"border-color .18s, color .18s",
+          }}
+          onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM}}
+          onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border}}>
+            {ar ? "EN" : "عربي"}
+          </button>
           <a href="#" onClick={(e)=>{e.preventDefault();navTo("/auth")}} style={{
-            color:C.sub, textDecoration:"none", fontSize:14.5, fontWeight:500,
-            padding:"8px 14px", display:"inline-block",
-          }}>{ar ? "تسجيل دخول" : "Sign in"}</a>
-          <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","sm")}>
-            {ar ? "جرّب مجاناً" : "Start Free Trial"}
+            color:C.sub, textDecoration:"none", fontSize:14, fontWeight:500,
+            padding:"8px 12px", borderRadius:8, transition:"color .18s",
+          }}
+          onMouseEnter={e=>e.currentTarget.style.color=C.text}
+          onMouseLeave={e=>e.currentTarget.style.color=C.sub}>
+            {ar ? "تسجيل دخول" : "Log in"}
+          </a>
+          <a href="#" className="lp-btn lp-btn-primary"
+            onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
+            style={{
+              ...btn("primary","sm"),
+              background:"linear-gradient(135deg,#1a56db,#0891b2)",
+              boxShadow:"0 4px 18px rgba(26,86,219,.4)",
+              borderRadius:10,
+            }}>
+            {ar ? "ابدأ مجاناً" : "Start Free Trial"}
           </a>
         </div>
 
-        {/* Mobile hamburger */}
-        <button aria-label={ar ? "فتح القائمة" : "Open menu"} aria-expanded={mobileOpen}
+        {/* Mobile burger */}
+        <button aria-label="Open menu" aria-expanded={mobileOpen}
           className="lp-nav-burger" onClick={() => setMobileOpen(o => !o)}
           style={{
-            display:"none", width:40, height:40, borderRadius:9, flexShrink:0,
+            display:"none", width:38, height:38, borderRadius:8, flexShrink:0,
             background:"rgba(255,255,255,.06)", border:`1px solid ${C.border}`,
-            cursor:"pointer", alignItems:"center", justifyContent:"center", gap:0,
+            cursor:"pointer", alignItems:"center", justifyContent:"center",
           }}>
-          <div style={{ width:18, height:13, position:"relative" }}>
+          <div style={{ width:17, height:12, position:"relative" }}>
             {[0,1,2].map(i => (
               <span key={i} style={{
-                position:"absolute", left:0, right:0, height:1.6, borderRadius:2,
-                background:C.text, top: i===0 ? 0 : i===1 ? 5.5 : 11,
-                transition:"transform .25s, opacity .2s",
+                position:"absolute", left:0, right:0, height:1.5, borderRadius:2,
+                background:C.text, top: i===0?0:i===1?5:10,
+                transition:"transform .22s, opacity .18s",
                 transform: mobileOpen
-                  ? (i===0 ? "translateY(5.5px) rotate(45deg)" : i===1 ? "scaleX(0)" : "translateY(-5.5px) rotate(-45deg)")
+                  ? (i===0?"translateY(5px) rotate(45deg)":i===1?"scaleX(0)":"translateY(-5px) rotate(-45deg)")
                   : "none",
-                opacity: mobileOpen && i===1 ? 0 : 1,
+                opacity: mobileOpen&&i===1 ? 0 : 1,
               }}/>
             ))}
           </div>
         </button>
       </div>
 
-      {/* Mobile dropdown panel */}
+      {/* Mobile panel */}
       {mobileOpen && (
         <motion.div
           initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }}
-          exit={{ opacity:0, height:0 }} transition={{ duration:.25, ease:[0.22,1,0.36,1] }}
+          transition={{ duration:.22, ease:[0.22,1,0.36,1] }}
           style={{ overflow:"hidden", borderTop:`1px solid ${C.border}` }}>
           <div style={{ padding:"16px 24px 24px", display:"flex", flexDirection:"column", gap:4 }}>
-            {links.map(([label, href]) => (
-              <a key={href} href={href} onClick={() => setMobileOpen(false)} style={{
+            {navItems.map(item => (
+              <a key={item.label} href={item.href} onClick={() => setMobileOpen(false)} style={{
                 color:C.sub, textDecoration:"none", padding:"12px 6px",
-                fontSize:16, fontWeight:500, borderBottom:`1px solid ${C.border}`,
-              }}>{label}</a>
+                fontSize:15, fontWeight:500, borderBottom:`1px solid ${C.border}`,
+              }}>{item.label}</a>
             ))}
-            <div style={{ display:"flex", gap:10, marginTop:16, alignItems:"center" }}>
-              <button onClick={() => setLang(ar ? "en" : "ar")} style={{
-                background:"transparent", border:`1px solid ${C.border}`,
-                color:C.sub, padding:"9px 16px", borderRadius:8,
-                cursor:"pointer", fontSize:13.5, fontWeight:500,
-              }}>{ar ? "EN" : "عربي"}</button>
-              <a href="#" onClick={(e)=>{e.preventDefault();navTo("/auth")}} style={{
-                color:C.sub, textDecoration:"none", fontSize:14.5, fontWeight:500,
-              }}>{ar ? "تسجيل دخول" : "Sign in"}</a>
-            </div>
-            <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
-              style={{ ...btn("primary","lg"), width:"100%", marginTop:14 }}>
-              {ar ? "جرّب مجاناً" : "Start Free Trial"}
+            <a href="#" className="lp-btn lp-btn-primary"
+              onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
+              style={{ ...btn("primary","lg"), width:"100%", marginTop:16 }}>
+              {ar ? "ابدأ مجاناً" : "Start Free Trial"}
             </a>
           </div>
         </motion.div>
@@ -413,388 +460,425 @@ function Hero({ lang, onCTA, mode, setMode }) {
   const ar = lang === "ar";
   const reduce = useReducedMotion();
   const isCompany = mode === "company";
-  const [demoScore, setDemoScore] = useState(82);
+  const [demoScore, setDemoScore] = useState(75);
+  const [neckAngle, setNeckAngle] = useState(12);
   useEffect(() => {
     const iv = setInterval(() => {
       setDemoScore(s => {
-        const n = s + (Math.random() > .5 ? 1 : -1) * Math.floor(Math.random() * 4);
-        return Math.max(55, Math.min(98, n));
+        const n = s + (Math.random() > .5 ? 1 : -1) * Math.floor(Math.random() * 3);
+        return Math.max(60, Math.min(98, n));
       });
-    }, 1400);
+      setNeckAngle(a => {
+        const n = a + (Math.random() > .5 ? 1 : -1);
+        return Math.max(8, Math.min(18, n));
+      });
+    }, 1600);
     return () => clearInterval(iv);
   }, []);
 
   const scoreColor = demoScore >= 80 ? C.green : demoScore >= 60 ? C.amber : C.red;
-  const float = (delay = 0, dist = 10) => reduce ? {} : {
+  const float = (delay = 0, dist = 8) => reduce ? {} : {
     animate: { y: [0, -dist, 0] },
     transition: { duration: 5, repeat: Infinity, ease: "easeInOut", delay },
   };
 
   return (
     <section style={{
-      minHeight: "100vh", display:"flex", alignItems:"center",
-      padding:"132px 24px 90px", position:"relative", overflow:"hidden",
+      minHeight:"100vh", display:"flex", alignItems:"center",
+      padding:"120px 32px 80px", position:"relative", overflow:"hidden",
+      background:C.bg,
     }}>
-      {/* Ambient background */}
-      <div style={{ position:"absolute", inset:0, pointerEvents:"none" }}>
+      {/* ── Ambient background glows (match image) ── */}
+      <div style={{ position:"absolute", inset:0, pointerEvents:"none", overflow:"hidden" }}>
+        {/* Blue glow center-right */}
         <div className="lp-drift-a" style={{
-          position:"absolute", top:"8%", left:"58%",
-          width:680, height:680,
-          background:"radial-gradient(circle,rgba(79,124,249,.16) 0%,transparent 70%)",
+          position:"absolute", top:"10%", left:"55%",
+          width:700, height:700,
+          background:"radial-gradient(circle,rgba(79,124,249,.18) 0%,transparent 65%)",
           borderRadius:"50%", transform:"translate(-50%,-50%)",
         }}/>
+        {/* Green glow bottom-left */}
         <div className="lp-drift-b" style={{
-          position:"absolute", bottom:"12%", left:"14%",
-          width:460, height:460,
-          background:"radial-gradient(circle,rgba(16,217,160,.1) 0%,transparent 70%)",
+          position:"absolute", bottom:"5%", left:"8%",
+          width:500, height:500,
+          background:"radial-gradient(circle,rgba(16,217,160,.12) 0%,transparent 65%)",
           borderRadius:"50%",
         }}/>
+        {/* Cyan glow far right */}
         <div style={{
-          position:"absolute", top:"42%", right:"6%",
-          width:320, height:320,
-          background:"radial-gradient(circle,rgba(34,211,238,.08) 0%,transparent 70%)",
+          position:"absolute", top:"35%", right:"2%",
+          width:350, height:350,
+          background:"radial-gradient(circle,rgba(34,211,238,.09) 0%,transparent 65%)",
           borderRadius:"50%",
         }}/>
-        {/* Grid */}
-        <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.04 }}
+        {/* Subtle dot-grid overlay */}
+        <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.035 }}
           xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M40 0L0 0 0 40" fill="none" stroke={C.text} strokeWidth=".5"/>
+            <pattern id="dotgrid" width="32" height="32" patternUnits="userSpaceOnUse">
+              <circle cx="1" cy="1" r="1" fill={C.sub}/>
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#grid)"/>
+          <rect width="100%" height="100%" fill="url(#dotgrid)"/>
         </svg>
       </div>
 
-      <div className="lp-wrap lp-hero-grid" style={{ width:"100%",
-        display:"grid", gridTemplateColumns:"1.08fr 1fr", gap:"clamp(40px,5vw,80px)", alignItems:"center",
-        direction: ar ? "rtl" : "ltr" }}>
-        {/* Left */}
-        <div>
-          <Reveal>
-            {/* Individual / Company toggle — drives the rest of the page */}
-            <div style={{
-              display:"inline-flex", alignItems:"center", gap:3,
-              background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
-              borderRadius:100, padding:4, marginBottom:24,
-            }}>
-              {[
-                { id:"individual", en:"👤 Individual", ar:"👤 فردي" },
-                { id:"company",    en:"🏢 Company & Teams", ar:"🏢 شركات وفرق" },
-              ].map(m => (
-                <button key={m.id} onClick={()=>setMode(m.id)} style={{
-                  padding:"8px 18px", borderRadius:99, border:"none",
-                  fontSize:13.5, fontWeight:600, cursor:"pointer",
-                  background: mode===m.id ? C.gHero : "transparent",
-                  color: mode===m.id ? "#06121f" : C.sub,
-                  boxShadow: mode===m.id ? "0 2px 12px rgba(34,211,238,.25)" : "none",
-                  transition:"background .25s, color .25s, box-shadow .25s",
-                }}>
-                  {ar ? m.ar : m.en}
-                </button>
-              ))}
-            </div>
-          </Reveal>
+      {/* ── Hero 3-column grid ── */}
+      <div className="lp-wrap" style={{ width:"100%", position:"relative" }}>
+        <div className="lp-hero-grid" style={{
+          display:"grid",
+          gridTemplateColumns:"1fr 1.1fr 220px",
+          gap:"clamp(20px,3vw,36px)",
+          alignItems:"start",
+          direction: ar ? "rtl" : "ltr",
+        }}>
 
-          <Reveal delay={40}>
-            <div style={{
-              display:"inline-flex", alignItems:"center", gap:9,
-              background:"rgba(79,124,249,.1)", border:"1px solid rgba(79,124,249,.25)",
-              borderRadius:100, padding:"7px 16px", marginBottom:28,
-              fontSize:13.5, color:C.indigo, fontWeight:500,
-            }}>
-              <span style={{
-                width:6, height:6, borderRadius:"50%", background:C.green,
-                boxShadow:`0 0 8px ${C.green}`,
-                animation:"lp-pulse 1.5s ease-in-out infinite",
-              }}/>
-              {ar ? "متاح الآن · ابدأ مجاناً" : "Now Available · Free to Start"}
-            </div>
-          </Reveal>
+          {/* ══ COL 1 — Hero copy ══ */}
+          <div style={{ paddingTop:8 }}>
+            {/* "Now Available" pill */}
+            <Reveal>
+              <div style={{
+                display:"inline-flex", alignItems:"center", gap:8,
+                background:"rgba(16,217,160,.08)",
+                border:"1px solid rgba(16,217,160,.2)",
+                borderRadius:100, padding:"6px 14px", marginBottom:22,
+              }}>
+                <span style={{
+                  width:6, height:6, borderRadius:"50%", background:C.green,
+                  boxShadow:`0 0 8px ${C.green}`,
+                  animation:"lp-pulse 1.5s ease-in-out infinite",
+                  flexShrink:0,
+                }}/>
+                <span style={{ fontSize:12.5, color:C.green, fontWeight:600, letterSpacing:".04em" }}>
+                  {ar ? "متاح الآن · ابدأ مجاناً" : "NOW AVAILABLE · FREE TO START"}
+                </span>
+              </div>
+            </Reveal>
 
-          <Reveal delay={80}>
-            <h1 style={{
-              ...TYPE.hero, color:C.text, margin:"0 0 24px", fontFamily:FONT_DISPLAY,
-            }}>
-              {isCompany ? (
-                ar
-                  ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>قلّل إجازات الأمراض</span>{" "}47% بدون أجهزة إضافية</>
-                  : <>Cut Sick Leave <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>47%</span><br/>with AI Posture Coaching</>
-              ) : (
-                ar
-                  ? <>اخلص من آلام الظهر والرقبة<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>في أسبوعين فقط</span></>
-                  : <>Stop Back & Neck Pain<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 2 Weeks</span></>
-              )}
-            </h1>
-          </Reveal>
+            {/* Headline */}
+            <Reveal delay={60}>
+              <h1 style={{
+                fontSize:"clamp(36px,4vw,58px)", fontWeight:800,
+                lineHeight:1.08, letterSpacing:"-.03em",
+                color:C.text, margin:"0 0 20px", fontFamily:FONT_DISPLAY,
+              }}>
+                {isCompany ? (
+                  ar ? (
+                    <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>قلّل إجازات الأمراض</span>{" "}47%{"\n"}مع تدريب الوضعية بالذكاء الاصطناعي</>
+                  ) : (
+                    <>Cut Sick Leave <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>47%</span><br/>with <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>AI Posture Coaching</span></>
+                  )
+                ) : (
+                  ar ? (
+                    <>اخلص من آلام الظهر<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>في أسبوعين فقط</span></>
+                  ) : (
+                    <>Stop Back Pain<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 2 Weeks</span></>
+                  )
+                )}
+              </h1>
+            </Reveal>
 
-          <Reveal delay={140}>
-            <p style={{ ...TYPE.body, color:C.sub, maxWidth:520, margin:"0 0 40px" }}>
-              {isCompany
-                ? (ar
-                    ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
-                    : "Reduce occupational sick days by 47% and boost team productivity. Real-time AI posture coaching built for MENA enterprise teams.")
-                : (ar
-                    ? "كاميرا اللابتوب بتاعك كافية. الذكاء الاصطناعي بيتابع وضعيتك في الخلفية ويبعتلك تنبيه لو انحنيت — من غير أي أجهزة أو اشتراك مكلف."
-                    : "Your laptop camera is all you need. AI monitors your posture in the background and alerts you when you slouch — no hardware, no expensive subscriptions.")
-              }
-            </p>
-          </Reveal>
+            {/* Subtext */}
+            <Reveal delay={120}>
+              <p style={{ fontSize:"clamp(15px,1.2vw,17px)", color:C.sub, lineHeight:1.7, maxWidth:440, margin:"0 0 32px" }}>
+                {isCompany
+                  ? (ar
+                      ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
+                      : "Reduce occupational sick days by 47% and boost team productivity. Real-time AI posture coaching built for MENA enterprise teams.")
+                  : (ar
+                      ? "كاميرا اللابتوب بتاعك كافية. الذكاء الاصطناعي بيتابع وضعيتك في الخلفية ويبعتلك تنبيه لو انحنيت."
+                      : "Your laptop camera is all you need. AI monitors your posture in the background and alerts you when you slouch — no hardware needed.")
+                }
+              </p>
+            </Reveal>
 
-          <Reveal delay={200}>
-            <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:16 }}>
-              {isCompany ? (
-                <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
-                  {ar ? "🚀 تجربة مجانية 7 أيام — لفريقي" : "🚀 Free 7-Day Trial — For My Team"}
+            {/* CTAs */}
+            <Reveal delay={180}>
+              <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:28 }}>
+                <a href="#" className="lp-btn lp-btn-primary"
+                  onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
+                  style={{
+                    ...btn("primary","lg"),
+                    background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                    boxShadow:"0 6px 24px rgba(26,86,219,.45)",
+                    borderRadius:12,
+                  }}>
+                  {isCompany
+                    ? (ar ? "🚀 تجربة مجانية 7 أيام — لفريقي" : "🚀 Free 7-Day Trial — For My Team")
+                    : (ar ? "🚀 تجربة مجانية 7 أيام" : "🚀 Start 7-Day Free Trial")}
                 </a>
-              ) : (
-                <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=personal_pro")}} style={btn("primary","lg")}>
-                  {ar ? "🚀 تجربة مجانية 7 أيام" : "🚀 Start 7-Day Free Trial"}
+                <a href="#pricing" className="lp-btn lp-btn-ghost"
+                  onClick={e=>onCTA(e)}
+                  style={{
+                    ...btn("ghost","lg"),
+                    border:`1px solid ${C.borderM}`,
+                    borderRadius:12,
+                  }}>
+                  {ar ? "عرض الأسعار" : "View Pricing"}
                 </a>
-              )}
-              <a href="#pricing" className="lp-btn lp-btn-ghost" onClick={(e)=>{onCTA(e)}} style={btn("ghost","lg")}>
-                {ar ? "عرض الأسعار" : "View Pricing"}
-              </a>
             </div>
-            {/* Trust micro-badges — address common objections immediately under CTA */}
-            <div style={{ display:"flex", gap:"6px 18px", flexWrap:"wrap", alignItems:"center" }}>
+            {/* Trust badges row — below CTAs, exactly like image */}
+            <div style={{ display:"flex", gap:"4px 20px", flexWrap:"wrap", alignItems:"center" }}>
               {(ar
                 ? ["✓ مجاني 7 أيام","✓ بدون بطاقة بنكية","✓ بدون تحميل برنامج","✓ أي كاميرا لابتوب"]
                 : ["✓ 7-day free trial","✓ No credit card","✓ No software to install","✓ Any laptop camera"]
               ).map(tr=>(
-                <span key={tr} style={{ fontSize:12, color:C.muted, fontWeight:500 }}>{tr}</span>
+                <span key={tr} style={{ fontSize:12.5, color:C.muted, fontWeight:500 }}>{tr}</span>
               ))}
             </div>
           </Reveal>
+        </div>{/* end col 1 */}
 
-          <Reveal delay={260}>
-            <div style={{ display:"flex", gap:"10px 26px", flexWrap:"wrap" }}>
-              {(ar
-                ? ["بدون بطاقة ائتمان","7 أيام مجاناً","إعداد في 5 دقائق"]
-                : ["No credit card","7-day free trial","Setup in 5 min"]
-              ).map(t => (
-                <span key={t} style={{ display:"flex", alignItems:"center", gap:7, color:C.muted, fontSize:14, fontWeight:500 }}>
-                  <span style={{ color:C.green, fontSize:13 }}>✓</span>{t}
-                </span>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-
-        {/* Right — 3-panel layout: camera (center) + metrics panel (right) exactly like image */}
+        {/* ══ COL 2 — Camera feed card ══ */}
         <Reveal delay={100}>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 128px", gap:10, alignItems:"start" }}>
-
-            {/* ── Column 1: Camera mockup card ── */}
-            <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
-              {/* Browser chrome bar */}
-              <div style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 14px",
-                borderBottom:`1px solid ${C.border}`, background:"rgba(255,255,255,.02)" }}>
-                <span style={{ width:8, height:8, borderRadius:"50%", background:"#f87171", flexShrink:0 }}/>
-                <span style={{ width:8, height:8, borderRadius:"50%", background:"#f59e0b", flexShrink:0 }}/>
-                <span style={{ width:8, height:8, borderRadius:"50%", background:"#10d9a0", flexShrink:0 }}/>
-                <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
-                  <span style={{ fontSize:10.5, color:C.muted, fontFamily:FONT_MONO,
-                    background:"rgba(255,255,255,.04)", padding:"2px 12px", borderRadius:5 }}>
-                    corvus-ai • analysis
-                  </span>
-                </div>
-              </div>
-
-              {/* Camera feed area */}
-              <div style={{ position:"relative", background:"#050f1e", overflow:"hidden", aspectRatio:"4/3" }}>
-                {/* Dark vignette bg */}
-                <div style={{ position:"absolute", inset:0,
-                  background:"radial-gradient(ellipse 55% 75% at 50% 28%, rgba(20,40,70,.95) 0%, rgba(3,8,18,1) 100%)" }}/>
-
-                {/* Glowing grid lines in bg */}
-                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.06 }}
-                  viewBox="0 0 400 300">
-                  {[0,50,100,150,200,250,300].map(y=><line key={y} x1="0" y1={y} x2="400" y2={y} stroke="#4f7cf9" strokeWidth=".5"/>)}
-                  {[0,50,100,150,200,250,300,350,400].map(x=><line key={x} x1={x} y1="0" x2={x} y2="300" stroke="#4f7cf9" strokeWidth=".5"/>)}
-                </svg>
-
-                {/* Person + skeleton SVG — side profile like image */}
-                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
-                  viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
-
-                  {/* Desk */}
-                  <rect x="0" y="245" width="400" height="55" fill="rgba(15,28,52,.7)" rx="0"/>
-                  {/* Monitor */}
-                  <rect x="145" y="195" width="115" height="65" rx="3" fill="rgba(25,50,90,.55)" stroke="rgba(79,124,249,.3)" strokeWidth="1.5"/>
-                  <rect x="151" y="200" width="103" height="55" rx="2" fill="rgba(79,124,249,.1)"/>
-                  <rect x="188" y="260" width="28" height="7" rx="2" fill="rgba(40,70,110,.6)"/>
-                  <rect x="168" y="267" width="68" height="3" rx="2" fill="rgba(40,70,110,.5)"/>
-
-                  {/* Body silhouette — slightly forward leaning like image */}
-                  <ellipse cx="202" cy="175" rx="26" ry="36" fill="rgba(35,58,100,.65)"/>
-                  <ellipse cx="202" cy="105" rx="21" ry="25" fill="rgba(45,72,120,.6)"/>
-                  <rect x="196" y="128" width="12" height="14" rx="4" fill="rgba(40,65,108,.6)"/>
-                  <ellipse cx="170" cy="178" rx="9" ry="26" fill="rgba(32,55,92,.6)" transform="rotate(-6,170,178)"/>
-                  <ellipse cx="234" cy="178" rx="9" ry="26" fill="rgba(32,55,92,.6)" transform="rotate(6,234,178)"/>
-
-                  {/* Green skeleton lines — MediaPipe style */}
-                  <line x1="202" y1="132" x2="202" y2="208" stroke={`rgba(16,217,160,.75)`} strokeWidth="2.5" strokeLinecap="round"/>
-                  <line x1="172" y1="150" x2="232" y2="150" stroke={`rgba(16,217,160,.75)`} strokeWidth="2.5" strokeLinecap="round"/>
-                  <line x1="202" y1="128" x2="202" y2="150" stroke={`rgba(16,217,160,.7)`} strokeWidth="2" strokeLinecap="round"/>
-                  {/* Head/neck — amber = issue */}
-                  <line x1="202" y1="93" x2="202" y2="128" stroke="rgba(245,158,11,.85)" strokeWidth="2" strokeLinecap="round"/>
-                  {/* Arms */}
-                  <line x1="172" y1="150" x2="163" y2="193" stroke={`rgba(16,217,160,.55)`} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="163" y1="193" x2="159" y2="226" stroke={`rgba(16,217,160,.4)`} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="232" y1="150" x2="241" y2="193" stroke={`rgba(16,217,160,.55)`} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="241" y1="193" x2="245" y2="226" stroke={`rgba(16,217,160,.4)`} strokeWidth="2" strokeLinecap="round"/>
-
-                  {/* Landmark dots */}
-                  {[[202,93],[202,128],[172,150],[232,150],[202,150],[163,193],[241,193],[159,226],[245,226],[202,208]]
-                    .map(([x,y],i)=><circle key={i} cx={x} cy={y} r={i<=1?4.5:3.5}
-                      fill={i<=1?"rgba(245,158,11,.95)":"rgba(16,217,160,.9)"}/>)}
-
-                  {/* Neck angle arc + label */}
-                  <path d="M202,93 L210,110" stroke="rgba(245,158,11,.9)" strokeWidth="1.5" strokeDasharray="3,2"/>
-                  <path d="M202,93 L202,110" stroke="rgba(255,255,255,.2)" strokeWidth="1" strokeDasharray="3,2"/>
-                  <text x="213" y="108" fill="rgba(245,158,11,.95)" fontSize="10" fontFamily="monospace" fontWeight="bold">12°</text>
-                </svg>
-
-                {/* LIVE pill — top left */}
-                <div style={{ position:"absolute", top:10, left:10,
-                  display:"flex", alignItems:"center", gap:5,
-                  background:"rgba(0,0,0,.6)", backdropFilter:"blur(8px)",
-                  borderRadius:99, padding:"4px 10px", border:"1px solid rgba(16,217,160,.35)" }}>
-                  <span style={{ width:6, height:6, borderRadius:"50%", background:C.green,
-                    boxShadow:`0 0 6px ${C.green}`, animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
-                  <span style={{ fontSize:10.5, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
-                </div>
-
-                {/* Warning badge — top right */}
-                <div style={{ position:"absolute", top:10, right:10,
-                  background:"rgba(245,158,11,.18)", backdropFilter:"blur(8px)",
-                  borderRadius:9, padding:"5px 9px", border:"1px solid rgba(245,158,11,.4)" }}>
-                  <span style={{ fontSize:9.5, color:"#fbbf24", fontWeight:600 }}>
-                    ⚠ {ar ? "رقبة للأمام 12°" : "Neck forward 12°"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 3-metric strip */}
-              <div style={{ padding:"13px 18px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8,
-                borderTop:`1px solid ${C.border}` }}>
-                {(ar
-                  ? [["انحناء الرقبة","12°",C.amber],["وضع الكتف","جيد ✓",C.green],["المسافة","58cm",C.blue]]
-                  : [["Neck Tilt","12°",C.amber],["Shoulder","Good ✓",C.green],["Distance","58cm",C.blue]]
-                ).map(([label, val, color])=>(
-                  <div key={label} style={{ textAlign:"center" }}>
-                    <div style={{ fontSize:15, fontWeight:700, color, fontFamily:FONT_MONO }}>{val}</div>
-                    <div style={{ fontSize:9.5, color:C.muted, marginTop:2 }}>{label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* AI tip row */}
-              <div style={{ margin:"0 14px 14px", padding:"10px 13px",
-                background:"rgba(79,124,249,.07)", borderRadius:11,
-                border:"1px solid rgba(79,124,249,.14)",
-                display:"flex", gap:9, alignItems:"flex-start" }}>
-                <span style={{ fontSize:14, flexShrink:0, marginTop:1 }}>🤖</span>
-                <p style={{ margin:0, fontSize:12, color:C.sub, lineHeight:1.5 }}>
-                  {ar
-                    ? "رقبتك للأمام قليلاً. ارفع الشاشة 2 سم وحاول تمرين سحب الرقبة 10 مرات."
-                    : "Neck is slightly forward. Raise your monitor 2cm and try 10 chin tucks now."}
-                </p>
+          <div style={{
+            background:C.card,
+            border:`1px solid rgba(79,124,249,.28)`,
+            borderRadius:20, overflow:"hidden",
+            boxShadow:"0 0 48px rgba(79,124,249,.1), 0 8px 32px rgba(0,0,0,.4)",
+          }}>
+            {/* Browser chrome */}
+            <div style={{
+              display:"flex", alignItems:"center", gap:6, padding:"10px 14px",
+              borderBottom:`1px solid ${C.border}`,
+              background:"rgba(255,255,255,.02)",
+            }}>
+              <span style={{ width:9, height:9, borderRadius:"50%", background:"#f87171" }}/>
+              <span style={{ width:9, height:9, borderRadius:"50%", background:"#f59e0b" }}/>
+              <span style={{ width:9, height:9, borderRadius:"50%", background:"#10d9a0" }}/>
+              <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
+                <span style={{
+                  fontSize:11, color:C.muted, fontFamily:FONT_MONO,
+                  background:"rgba(255,255,255,.04)", padding:"3px 14px", borderRadius:6,
+                }}>corvus-ai • live analysis</span>
               </div>
             </div>
 
-            {/* ── Column 2: Metrics panel (right column from image) ── */}
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {/* Camera viewport */}
+            <div style={{ position:"relative", background:"#030c18", aspectRatio:"4/3", overflow:"hidden" }}>
+              {/* Deep dark bg */}
+              <div style={{ position:"absolute", inset:0,
+                background:"radial-gradient(ellipse 60% 80% at 50% 25%, rgba(15,35,65,.9) 0%, rgba(2,6,16,1) 100%)" }}/>
 
-              {/* -47% sick leave card */}
-              <motion.div {...float(0,6)} style={{
-                background:C.card, border:`1px solid ${C.border}`,
-                borderRadius:14, padding:"12px 12px 10px",
-                backdropFilter:"blur(12px)",
+              {/* Faint grid */}
+              <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.05 }}
+                viewBox="0 0 400 300">
+                {[0,60,120,180,240,300].map(y=><line key={`h${y}`} x1="0" y1={y} x2="400" y2={y} stroke={C.blue} strokeWidth=".5"/>)}
+                {[0,80,160,240,320,400].map(x=><line key={`v${x}`} x1={x} y1="0" x2={x} y2="300" stroke={C.blue} strokeWidth=".5"/>)}
+              </svg>
+
+              {/* Person + pose skeleton */}
+              <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
+                viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
+                {/* Desk surface */}
+                <rect x="0" y="248" width="400" height="52" fill="rgba(12,24,46,.75)"/>
+                {/* Monitor */}
+                <rect x="148" y="196" width="112" height="62" rx="3" fill="rgba(20,45,85,.6)" stroke="rgba(79,124,249,.28)" strokeWidth="1.5"/>
+                <rect x="153" y="201" width="102" height="52" rx="2" fill="rgba(79,124,249,.08)"/>
+                {/* Screen content lines */}
+                <rect x="162" y="210" width="68" height="3" rx="1" fill="rgba(79,124,249,.35)"/>
+                <rect x="162" y="218" width="48" height="2" rx="1" fill="rgba(79,124,249,.2)"/>
+                <rect x="162" y="224" width="58" height="2" rx="1" fill="rgba(79,124,249,.15)"/>
+                <rect x="188" y="258" width="28" height="6" rx="2" fill="rgba(30,55,95,.6)"/>
+                <rect x="170" y="264" width="64" height="3" rx="2" fill="rgba(30,55,95,.5)"/>
+
+                {/* Body — forward-leaning seated posture */}
+                <ellipse cx="200" cy="178" rx="27" ry="38" fill="rgba(30,52,92,.7)"/>
+                <ellipse cx="200" cy="106" rx="22" ry="27" fill="rgba(40,68,115,.65)"/>
+                <rect x="193" y="131" width="14" height="16" rx="5" fill="rgba(36,60,105,.65)"/>
+                <ellipse cx="168" cy="180" rx="10" ry="28" fill="rgba(28,48,86,.65)" transform="rotate(-5,168,180)"/>
+                <ellipse cx="232" cy="180" rx="10" ry="28" fill="rgba(28,48,86,.65)" transform="rotate(5,232,180)"/>
+
+                {/* Green skeleton — spine, shoulders, arms */}
+                <line x1="200" y1="135" x2="200" y2="212" stroke="rgba(16,217,160,.8)" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="170" y1="153" x2="230" y2="153" stroke="rgba(16,217,160,.8)" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="200" y1="129" x2="200" y2="153" stroke="rgba(16,217,160,.75)" strokeWidth="2" strokeLinecap="round"/>
+                {/* Amber neck — forward tilt */}
+                <line x1="200" y1="94" x2="200" y2="129" stroke="rgba(245,158,11,.9)" strokeWidth="2.2" strokeLinecap="round"/>
+                {/* Left arm */}
+                <line x1="170" y1="153" x2="161" y2="196" stroke="rgba(16,217,160,.6)" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="161" y1="196" x2="157" y2="229" stroke="rgba(16,217,160,.45)" strokeWidth="1.8" strokeLinecap="round"/>
+                {/* Right arm */}
+                <line x1="230" y1="153" x2="241" y2="196" stroke="rgba(16,217,160,.6)" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="241" y1="196" x2="245" y2="229" stroke="rgba(16,217,160,.45)" strokeWidth="1.8" strokeLinecap="round"/>
+
+                {/* Landmark dots */}
+                {[[200,94],[200,129],[170,153],[230,153],[200,153],[161,196],[241,196],[157,229],[245,229],[200,212]]
+                  .map(([x,y],i)=>(
+                    <circle key={i} cx={x} cy={y} r={i<=1?5:3.8}
+                      fill={i<=1?"rgba(245,158,11,.95)":"rgba(16,217,160,.92)"}
+                      style={i<=1?{filter:"drop-shadow(0 0 4px rgba(245,158,11,.7))"}:{}}/>
+                  ))}
+
+                {/* Angle indicator */}
+                <path d={`M200,94 L${200+neckAngle},114`} stroke="rgba(245,158,11,.85)" strokeWidth="1.5" strokeDasharray="3,2"/>
+                <path d="M200,94 L200,114" stroke="rgba(255,255,255,.18)" strokeWidth="1" strokeDasharray="3,2"/>
+                <text x={205+neckAngle} y="110" fill="rgba(245,158,11,.95)" fontSize="11" fontFamily="monospace" fontWeight="bold">{neckAngle}°</text>
+              </svg>
+
+              {/* LIVE badge */}
+              <div style={{
+                position:"absolute", top:10, left:10,
+                display:"flex", alignItems:"center", gap:5,
+                background:"rgba(0,0,0,.65)", backdropFilter:"blur(10px)",
+                borderRadius:99, padding:"4px 10px",
+                border:"1px solid rgba(16,217,160,.3)",
               }}>
-                <div style={{ fontSize:22, fontWeight:800, color:C.green,
-                  fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
-                <div style={{ fontSize:9.5, color:C.muted, marginTop:3, lineHeight:1.3 }}>
-                  {ar ? "إجازات مرضية" : "sick leave"}
-                </div>
-                {/* sparkline */}
-                <svg width="104" height="22" style={{ display:"block", marginTop:6, overflow:"visible" }}>
-                  <defs>
-                    <linearGradient id="spkG1" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.green} stopOpacity=".35"/>
-                      <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
-                    </linearGradient>
-                  </defs>
-                  <path d="M0,18 L17,16 L34,12 L51,14 L68,7 L85,4 L104,1"
-                    fill="none" stroke={C.green} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M0,18 L17,16 L34,12 L51,14 L68,7 L85,4 L104,1 L104,22 L0,22 Z"
-                    fill="url(#spkG1)"/>
-                </svg>
-              </motion.div>
-
-              {/* Corvus Pro label + time */}
-              <div style={{ background:C.card, border:`1px solid ${C.border}`,
-                borderRadius:14, padding:"10px 12px" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                  <div style={{ width:16, height:16, borderRadius:4, flexShrink:0,
-                    background:"linear-gradient(135deg,#1a56db,#0891b2)",
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:8, color:"#fff" }}>◈</div>
-                  <span style={{ fontSize:10.5, fontWeight:700, color:C.text,
-                    fontFamily:FONT_DISPLAY }}>Corvus Pro</span>
-                </div>
-                <div style={{ fontSize:9, color:C.muted, fontFamily:FONT_MONO }}>
-                  {new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"numeric",year:"2-digit"})}
-                  {", "}
-                  {new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}
-                </div>
+                <span style={{
+                  width:6, height:6, borderRadius:"50%", background:C.green,
+                  boxShadow:`0 0 6px ${C.green}`,
+                  animation:"lp-pulse 1.5s ease-in-out infinite",
+                }}/>
+                <span style={{ fontSize:10.5, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
+                <span style={{ fontSize:10, color:C.muted, fontFamily:FONT_MONO, marginLeft:3 }}>
+                  {ar ? "رقبة للأمام" : "Neck forward"} {neckAngle}°
+                </span>
+                <span style={{ fontSize:11, marginLeft:2 }}>⚠️</span>
               </div>
+            </div>
 
-              {/* Score donut */}
-              <div style={{ background:C.card, border:`1px solid ${C.border}`,
-                borderRadius:14, padding:"14px 12px", textAlign:"center" }}>
-                <div style={{ position:"relative", width:72, height:72, margin:"0 auto 6px" }}>
-                  <svg width="72" height="72" style={{ transform:"rotate(-90deg)" }}>
-                    <circle cx="36" cy="36" r="29" fill="none"
-                      stroke="rgba(255,255,255,.05)" strokeWidth="6"/>
-                    <circle cx="36" cy="36" r="29" fill="none"
-                      stroke={scoreColor} strokeWidth="6"
-                      strokeDasharray={`${(demoScore/100)*182.2} 182.2`}
-                      strokeLinecap="round"
-                      style={{ transition:"stroke-dasharray .7s ease, stroke .4s" }}/>
-                  </svg>
-                  <div style={{ position:"absolute", inset:0,
-                    display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    <span style={{ fontSize:20, fontWeight:800, color:scoreColor,
-                      fontFamily:FONT_MONO, lineHeight:1,
-                      transition:"color .4s" }}>{demoScore}</span>
-                  </div>
+            {/* 3-metric strip */}
+            <div style={{
+              padding:"12px 18px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr",
+              gap:8, borderTop:`1px solid ${C.border}`,
+              background:"rgba(255,255,255,.015)",
+            }}>
+              {(ar
+                ? [["انحناء الرقبة",`${neckAngle}°`,C.amber],["وضع الكتف","جيد ✓",C.green],["المسافة","58cm",C.blue]]
+                : [["Neck Tilt",`${neckAngle}°`,C.amber],["Shoulder","Good ✓",C.green],["Distance","58cm",C.blue]]
+              ).map(([label,val,color])=>(
+                <div key={label} style={{ textAlign:"center" }}>
+                  <div style={{ fontSize:16, fontWeight:700, color, fontFamily:FONT_MONO }}>{val}</div>
+                  <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>{label}</div>
                 </div>
-                <div style={{ fontSize:9.5, color:C.muted }}>{ar ? "نقطة" : "score"}</div>
-              </div>
+              ))}
+            </div>
 
-              {/* Trend chart */}
-              <motion.div {...float(1.2,5)} style={{ background:C.card, border:`1px solid ${C.border}`,
-                borderRadius:14, padding:"11px 10px" }}>
-                <svg width="108" height="38" style={{ display:"block" }}>
-                  <defs>
-                    <linearGradient id="trendG" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.green} stopOpacity=".28"/>
-                      <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
-                    </linearGradient>
-                  </defs>
-                  <path d="M0,32 L18,28 L36,21 L54,24 L72,13 L90,7 L108,3"
-                    fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M0,32 L18,28 L36,21 L54,24 L72,13 L90,7 L108,3 L108,38 L0,38 Z"
-                    fill="url(#trendG)"/>
-                </svg>
-              </motion.div>
-
-            </div>{/* end metrics column */}
+            {/* AI tip */}
+            <div style={{
+              margin:"0 14px 14px", padding:"10px 13px",
+              background:"rgba(79,124,249,.07)", borderRadius:12,
+              border:"1px solid rgba(79,124,249,.15)",
+              display:"flex", gap:8, alignItems:"flex-start",
+            }}>
+              <span style={{ fontSize:14, flexShrink:0, marginTop:1 }}>🤖</span>
+              <p style={{ margin:0, fontSize:12, color:C.sub, lineHeight:1.55 }}>
+                {ar
+                  ? "رقبتك للأمام قليلاً. ارفع الشاشة 2 سم وحاول تمرين سحب الرقبة 10 مرات."
+                  : "Neck is slightly forward. Raise your monitor 2cm and try 10 chin tucks now."}
+              </p>
+            </div>
           </div>
         </Reveal>
+
+        {/* ══ COL 3 — Metrics panel ══ */}
+        <div style={{ display:"flex", flexDirection:"column", gap:8, paddingTop:4 }}>
+
+          {/* -47% card */}
+          <motion.div {...float(0,7)} style={{
+            background:C.card, border:`1px solid ${C.border}`,
+            borderRadius:16, padding:"14px 14px 12px",
+            backdropFilter:"blur(12px)",
+          }}>
+            <div style={{ fontSize:26, fontWeight:800, color:C.green,
+              fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
+            <div style={{ fontSize:10, color:C.muted, marginTop:4, lineHeight:1.3 }}>
+              {ar ? "إجازات مرضية" : "sick leave"}
+            </div>
+            <svg width="100%" height="24" viewBox="0 0 120 24" preserveAspectRatio="none"
+              style={{ display:"block", marginTop:8 }}>
+              <defs>
+                <linearGradient id="m47g" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={C.green} stopOpacity=".4"/>
+                  <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,20 L20,17 L40,13 L60,15 L80,8 L100,4 L120,1"
+                fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M0,20 L20,17 L40,13 L60,15 L80,8 L100,4 L120,1 L120,24 L0,24 Z"
+                fill="url(#m47g)"/>
+            </svg>
+          </motion.div>
+
+          {/* Corvus Pro label */}
+          <div style={{
+            background:C.card, border:`1px solid ${C.border}`,
+            borderRadius:16, padding:"12px 14px",
+          }}>
+            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:5 }}>
+              <div style={{
+                width:18, height:18, borderRadius:5, flexShrink:0,
+                background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:10, color:"#fff",
+              }}>◈</div>
+              <span style={{ fontSize:11.5, fontWeight:700, color:C.text, fontFamily:FONT_DISPLAY }}>
+                Corvus Pro
+              </span>
+            </div>
+            <div style={{ fontSize:9.5, color:C.muted, fontFamily:FONT_MONO }}>
+              {new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"numeric",year:"2-digit"})}
+              {", "}
+              {new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}
+            </div>
+          </div>
+
+          {/* Score donut */}
+          <div style={{
+            background:C.card, border:`1px solid ${C.border}`,
+            borderRadius:16, padding:"16px 14px", textAlign:"center",
+          }}>
+            <div style={{ position:"relative", width:78, height:78, margin:"0 auto 8px" }}>
+              <svg width="78" height="78" style={{ transform:"rotate(-90deg)" }}>
+                <circle cx="39" cy="39" r="31" fill="none"
+                  stroke="rgba(255,255,255,.05)" strokeWidth="7"/>
+                <circle cx="39" cy="39" r="31" fill="none"
+                  stroke={scoreColor} strokeWidth="7"
+                  strokeDasharray={`${(demoScore/100)*194.8} 194.8`}
+                  strokeLinecap="round"
+                  style={{ transition:"stroke-dasharray .8s ease, stroke .4s" }}/>
+              </svg>
+              <div style={{
+                position:"absolute", inset:0,
+                display:"flex", alignItems:"center", justifyContent:"center",
+              }}>
+                <span style={{
+                  fontSize:22, fontWeight:800, color:scoreColor,
+                  fontFamily:FONT_MONO, lineHeight:1,
+                  transition:"color .4s",
+                }}>{demoScore}</span>
+              </div>
+            </div>
+            <div style={{ fontSize:10, color:C.muted, letterSpacing:".04em" }}>
+              {ar ? "النقطة" : "score"}
+            </div>
+          </div>
+
+          {/* Trend chart card */}
+          <motion.div {...float(1.5,6)} style={{
+            background:C.card, border:`1px solid ${C.border}`,
+            borderRadius:16, padding:"12px 14px",
+          }}>
+            <svg width="100%" height="42" viewBox="0 0 120 42" preserveAspectRatio="none"
+              style={{ display:"block" }}>
+              <defs>
+                <linearGradient id="trendG2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={C.green} stopOpacity=".3"/>
+                  <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,36 L20,31 L40,23 L60,27 L80,14 L100,8 L120,3"
+                fill="none" stroke={C.green} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M0,36 L20,31 L40,23 L60,27 L80,14 L100,8 L120,3 L120,42 L0,42 Z"
+                fill="url(#trendG2)"/>
+            </svg>
+            <div style={{ fontSize:9.5, color:C.muted, marginTop:4, textAlign:"center" }}>
+              {ar ? "+18 نقطة / 45 دق" : "+18 score / 45 min"}
+            </div>
+          </motion.div>
+
+        </div>{/* end col 3 */}
+      </div>{/* end 3-col grid */}
       </div>
 
       {/* Scroll cue */}
