@@ -786,26 +786,29 @@ function runAnalysis(prompt,sp) {
 // ── Puter.js AI (free, no API key, 400+ models) ───────────────────
 // ── Vercel AI Proxy helpers ──────────────────────────────────────
 
-// ── Vercel AI Proxy (edge function — no CORS issues, no Railway needed) ──
-// Route: /ai/chat → api/ai-chat.js → LLM7.io server-side
+
+// Vercel Edge Function proxy → LLM7.io (server-side, no CORS)
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
-  const res = await fetch("/ai/chat", {
-    method:  "POST",
+  const res = await fetch("/api/ai-chat", {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({
+    body: JSON.stringify({
       messages,
       system_prompt: systemPrompt,
-      max_tokens:    maxTokens || 700,
-      temperature:   0.5,
+      max_tokens: maxTokens || 700,
+      temperature: 0.5,
     }),
-    signal: AbortSignal.timeout(28000),
   });
-  if (!res.ok) throw new Error(`proxy ${res.status}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `proxy ${res.status}`);
+  }
   const data = await res.json();
   const text = data?.text?.trim();
-  if (!text) throw new Error("proxy_empty");
+  if (!text) throw new Error(data?.error || "proxy_empty");
   return text;
 }
+
 
 
 // ── Production-grade system prompt builder for all LLM calls ─────
