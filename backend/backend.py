@@ -13092,20 +13092,18 @@ CONVERSATION STYLE:
         # Gemini-compatible contents list simultaneously:
         # - Ollama: [{role:"system",...},{role:"user",...},{role:"assistant",...}]
         # - Gemini: [{role:"user",...},{role:"model",...}] (no system role in contents)
-        ollama_msgs = [{"role": "system", "content": sys_prompt}]
+        ollama_msgs = [{\"role\": \"system\", \"content\": sys_prompt}]
         gemini_contents = []
         last_role = None
         for i, msg in enumerate(messages):
             role_ui = msg.get("role","user")
             role_gem = "user" if role_ui == "user" else "model"
             role_oll = "user" if role_ui == "user" else "assistant"
-            # Skip consecutive same-role (Gemini rejects; Ollama tolerates but consistent)
             if role_gem == last_role:
                 continue
             text_content = msg.get("content","")
-            # Inject posture context into first user turn only
-            if role_gem == "user" and i == 0:
-                text_content = f"[PostureAI context — avg={avg_score}/100, sessions={sessions_n}, worst_time={worst_time}, calibration={'active' if calib else 'off'}]\n\n{text_content}"
+            # NOTE: Do NOT inject context into user turn — it's already in sys_prompt above.
+            # Double-injection confuses the LLM and produces generic responses.
             ollama_msgs.append({"role": role_oll, "content": text_content})
             gemini_contents.append({"role": role_gem, "parts": [{"text": text_content}]})
             last_role = role_gem
@@ -13119,6 +13117,12 @@ CONVERSATION STYLE:
         final_user_prompt = gemini_contents[-1]["parts"][0]["text"]
         text = None
 
+        # Temperature: lower for clinical/report requests, higher for conversational
+        _last_user_msg = (messages[-1].get("content","") if messages else "").lower()
+        _is_report_req = any(w in _last_user_msg for w in ["report","plan","analyze","تقرير","خطة","تحليل","protocol","exercise","تمارين"])
+        _temperature = 0.3 if _is_report_req else 0.55
+        _max_tok = _quality_coach["max_tokens"]
+
         # ── Local Ollama (multi-turn via OpenAI messages format) ─────────
         if OLLAMA_URL:
             try:
@@ -13128,8 +13132,8 @@ CONVERSATION STYLE:
                     json={
                         "model":       LOCAL_LLM_MODEL,
                         "messages":    ollama_msgs,
-                        "max_tokens":  _quality_coach["max_tokens"],
-                        "temperature": 0.5,
+                        "max_tokens":  _max_tok,
+                        "temperature": _temperature,
                         "stream":      False,
                     },
                     timeout=30,
@@ -13146,7 +13150,7 @@ CONVERSATION STYLE:
                     "https://api.llm7.io/v1/chat/completions",
                     headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
                     json={"model": "gpt-4o-mini", "messages": ollama_msgs,
-                          "max_tokens": _quality_coach["max_tokens"], "temperature": 0.5},
+                          "max_tokens": _max_tok, "temperature": _temperature},
                     timeout=20,
                 )
                 if llm7_resp.status_code == 200:
@@ -13157,7 +13161,7 @@ CONVERSATION STYLE:
                         "https://api.llm7.io/v1/chat/completions",
                         headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
                         json={"model": "deepseek/deepseek-r1", "messages": ollama_msgs,
-                              "max_tokens": _quality_coach["max_tokens"], "temperature": 0.5},
+                              "max_tokens": _max_tok, "temperature": _temperature},
                         timeout=20,
                     )
                     if llm7_resp2.status_code == 200:
