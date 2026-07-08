@@ -241,8 +241,8 @@ function GlobalStyle() {
   return (
     <style>{`
       .lp-wrap{max-width:1200px;margin:0 auto;width:100%}
-      .lp-section{padding:56px 32px}
-      @media(max-width:1024px){.lp-section{padding:44px 24px}}
+      .lp-section{padding:64px 32px}
+      @media(max-width:1024px){.lp-section{padding:48px 24px}}
       @media(max-width:600px){.lp-section{padding:36px 16px}}
 
       .lp-lift{transition:transform .3s cubic-bezier(.16,1,.3,1),border-color .3s}
@@ -908,54 +908,86 @@ function Hero({ lang, onCTA, mode, setMode }) {
 function SocialProof({ lang }) {
   const ar = lang === "ar";
   return (
-    <section style={{ borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
-      padding:"40px 24px", background:"rgba(255,255,255,.015)" }}>
+    <section style={{
+      borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
+      padding:"32px 24px", background:"rgba(255,255,255,.012)",
+    }}>
       <Reveal>
         <div className="lp-wrap">
-          {/* Trust numbers row */}
-          <div style={{ display:"flex", gap:"10px 40px", justifyContent:"center",
-            flexWrap:"wrap", alignItems:"center", marginBottom:28 }}>
+          {/* Row 1 — 4 trust stats */}
+          <div style={{
+            display:"grid", gridTemplateColumns:"repeat(4,1fr)",
+            gap:16, marginBottom:24, textAlign:"center",
+          }}>
             {(ar ? [
-              ["50+","مستخدم بيتا نشط"],["4.9★","تقييم متوسط"],["2 أسبوع","وقت التحسن"],["0","لا نحفظ فيديو"],
+              ["50+","مستخدم بيتا نشط","👥"],
+              ["4.9★","تقييم متوسط","⭐"],
+              ["أسبوعان","وقت التحسن","⏱"],
+              ["0","لا نحفظ فيديو","🛡"],
             ] : [
-              ["50+","active beta users"],["4.9★","average rating"],["2 weeks","avg improvement time"],["0","video data stored"],
-            ]).map(([num, label]) => (
-              <div key={label} style={{ textAlign:"center" }}>
-                <div style={{ fontSize:22, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{num}</div>
-                <div style={{ fontSize:11.5, color:C.muted, marginTop:4 }}>{label}</div>
+              ["50+","active beta users","👥"],
+              ["4.9★","average rating","⭐"],
+              ["2 weeks","avg improvement time","⏱"],
+              ["0","video data stored","🛡"],
+            ]).map(([num, label, icon]) => (
+              <div key={label} style={{
+                background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
+                borderRadius:14, padding:"16px 12px",
+                display:"flex", flexDirection:"column", alignItems:"center", gap:6,
+              }}>
+                <span style={{ fontSize:13 }}>{icon}</span>
+                <div style={{ fontSize:20, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{num}</div>
+                <div style={{ fontSize:11, color:C.muted }}>{label}</div>
               </div>
             ))}
           </div>
-          {/* Divider */}
-          <div style={{ height:1, background:C.border, margin:"0 0 22px" }}/>
-          {/* Early adopters note */}
-          <p style={{ textAlign:"center", color:C.muted, marginBottom:18, ...TYPE.eyebrow }}>
-            {ar ? "يُستخدم حالياً في" : "Currently used at"}
-          </p>
-          <div style={{ display:"flex", gap:"12px 36px", justifyContent:"center", flexWrap:"wrap", alignItems:"center", marginBottom:24 }}>
-            {(ar
-              ? ["Coventry University ✓", "جامعة القاهرة — تجريبي", "50+ مستخدم في 4 دول"]
-              : ["Coventry University ✓", "Cairo University — Pilot", "50+ users across 4 countries"]
-            ).map(logo => (
-              <div key={logo} style={{
-                color: logo.includes("✓") ? "#3b82f6" : C.muted,
-                fontSize:14, fontWeight:600, letterSpacing:"-.01em",
-                opacity: logo.includes("✓") ? 1 : .75,
-              }}>{logo}</div>
-            ))}
-          </div>
-          {/* Security badges */}
-          <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
-            {["ISO 27001 Aligned","AES-256 Encryption","GDPR Ready","On-device AI — No Video Stored"].map(badge => (
-              <span key={badge} style={{
-                background:"rgba(59,130,246,.08)", border:"1px solid rgba(59,130,246,.18)",
-                color:"#60a5fa", fontSize:11, padding:"4px 11px", borderRadius:99, fontWeight:500,
-                fontFamily:FONT_MONO,
-              }}>{badge}</span>
-            ))}
+
+          {/* Row 2 — Used at + security badges */}
+          <div style={{
+            display:"flex", alignItems:"center", justifyContent:"space-between",
+            flexWrap:"wrap", gap:"12px 24px",
+          }}>
+            {/* Left: used at */}
+            <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+              <span style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>
+                {ar ? "يُستخدم في" : "Currently used at"}
+              </span>
+              <div style={{
+                background:"rgba(255,255,255,.04)", border:`1px solid ${C.border}`,
+                borderRadius:10, padding:"7px 16px",
+                fontSize:13.5, fontWeight:700, color:C.text,
+              }}>Coventry University</div>
+              <div style={{ fontSize:12.5, color:C.muted }}>
+                {ar ? "جامعة القاهرة — تجريبي · 50+ مستخدم في 4 دول" : "Cairo University — Pilot · 50+ users across 4 countries"}
+              </div>
+            </div>
+
+            {/* Right: security badges */}
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {[
+                {icon:"🛡", text:"ISO 27001\nAligned"},
+                {icon:"🔒", text:"AES-256\nEncryption"},
+                {icon:"✅", text:"GDPR\nReady"},
+                {icon:"📷", text:"On-device AI\nNo Video Stored"},
+              ].map(b => (
+                <div key={b.text} style={{
+                  display:"flex", alignItems:"center", gap:6,
+                  background:"rgba(59,130,246,.06)", border:"1px solid rgba(59,130,246,.15)",
+                  borderRadius:10, padding:"7px 11px",
+                }}>
+                  <span style={{ fontSize:13 }}>{b.icon}</span>
+                  <span style={{ fontSize:10, color:"#60a5fa", fontWeight:600, lineHeight:1.3,
+                    whiteSpace:"pre-line", fontFamily:FONT_MONO }}>{b.text}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </Reveal>
+      <style>{`@media(max-width:860px){
+        .lp-sp-stats{grid-template-columns:1fr 1fr!important}
+        .lp-sp-row2{flex-direction:column!important}
+      }`}</style>
     </section>
   );
 }
