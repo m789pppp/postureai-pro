@@ -240,10 +240,10 @@ function SectionHead({ eyebrow, eyebrowColor, eyebrowBg, eyebrowBorder, title, s
 function GlobalStyle() {
   return (
     <style>{`
-      .lp-wrap{max-width:1280px;margin:0 auto;width:100%}
-      .lp-section{padding:120px 32px}
-      @media(max-width:1024px){.lp-section{padding:80px 24px}}
-      @media(max-width:600px){.lp-section{padding:60px 16px}}
+      .lp-wrap{max-width:1200px;margin:0 auto;width:100%}
+      .lp-section{padding:56px 32px}
+      @media(max-width:1024px){.lp-section{padding:44px 24px}}
+      @media(max-width:600px){.lp-section{padding:36px 16px}}
 
       .lp-lift{transition:transform .3s cubic-bezier(.16,1,.3,1),border-color .3s}
       .lp-lift:hover{transform:translateY(-6px)}
@@ -485,7 +485,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
   return (
     <section style={{
       minHeight:"100vh", display:"flex", alignItems:"center",
-      padding:"120px 32px 80px", position:"relative", overflow:"hidden",
+      padding:"100px 32px 64px", position:"relative", overflow:"hidden",
       background:C.bg,
     }}>
       {/* ── Ambient background glows (match image) ── */}
@@ -1726,35 +1726,55 @@ function MidCTA({ lang, onCTA, variant="features" }) {
 function FinalCTA({ lang, onCTA }) {
   const ar = lang === "ar";
   return (
-    <section className="lp-section">
-      <div style={{ maxWidth:780, margin:"0 auto", textAlign:"center", padding:"0 24px" }}>
+    <section style={{ padding:"0 24px 0", marginBottom:0 }}>
+      <div className="lp-wrap">
         <Reveal>
-          <div className="lp-glow" style={{
-            background:"linear-gradient(135deg,rgba(79,124,249,.1),rgba(16,217,160,.05))",
-            border:`1px solid rgba(79,124,249,.22)`,
-            borderRadius:28, padding:"clamp(48px,6vw,76px) clamp(28px,5vw,56px)",
+          <div style={{
+            background:"linear-gradient(120deg,rgba(26,86,219,.85),rgba(8,145,178,.75))",
+            borderRadius:20, padding:"28px 36px",
+            display:"flex", alignItems:"center",
+            gap:20, flexWrap:"wrap", justifyContent:"space-between",
+            boxShadow:"0 8px 40px rgba(26,86,219,.3)",
+            position:"relative", overflow:"hidden",
           }}>
+            {/* Glow orb behind */}
             <div style={{
-              width:72, height:72, borderRadius:20, margin:"0 auto 26px",
-              background:C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:34, boxShadow:"0 8px 28px rgba(79,124,249,.45)",
-            }}>🧘</div>
-            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 18px", fontFamily:FONT_DISPLAY }}>
-              {ar ? "ابدأ تحسين صحة فريقك اليوم" : "Start improving your team's health today"}
-            </h2>
-            <p style={{ ...TYPE.body, color:C.sub, maxWidth:480, margin:"0 auto 40px" }}>
-              {ar
-                ? "انضم إلى الشركات التي تستخدم Corvus. تجربة مجانية 7 أيام."
-                : "Join companies reducing workplace pain using AI-powered posture intelligence. 7-day free trial, no credit card required."}
-            </p>
-            <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" }}>
-              <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
-                {ar ? "🚀 ابدأ تجربتك المجانية" : "🚀 Start Free Trial"}
-              </a>
-              <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-ghost" style={btn("ghost","lg")}>
-                {ar ? "احجز عرضاً" : "Book Demo"}
-              </a>
+              position:"absolute", right:-60, top:-60,
+              width:200, height:200,
+              background:"radial-gradient(circle,rgba(255,255,255,.12),transparent 70%)",
+              borderRadius:"50%", pointerEvents:"none",
+            }}/>
+            {/* Icon + text */}
+            <div style={{ display:"flex", alignItems:"center", gap:16, flex:1, minWidth:260 }}>
+              <div style={{
+                width:44, height:44, borderRadius:12, flexShrink:0,
+                background:"rgba(255,255,255,.15)",
+                display:"flex", alignItems:"center", justifyContent:"center", fontSize:20,
+              }}>🏠</div>
+              <div>
+                <div style={{ fontSize:16, fontWeight:700, color:"#fff", lineHeight:1.35 }}>
+                  {ar ? "انضم لـ 50+ فريق يحسّن الوضعية بالذكاء الاصطناعي." : "Join 50+ teams improving posture with AI."}
+                </div>
+                <div style={{ fontSize:12.5, color:"rgba(255,255,255,.7)", marginTop:3 }}>
+                  {ar ? "تجربة مجانية 7 أيام، وصول كامل، بدون التزام." : "7-day free trial, full access, no commitment."}
+                </div>
+              </div>
             </div>
+            {/* CTA button */}
+            <a href="#" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
+              style={{
+                background:"#fff", color:"#1a56db",
+                padding:"12px 26px", borderRadius:12,
+                fontSize:14.5, fontWeight:700,
+                textDecoration:"none", flexShrink:0, whiteSpace:"nowrap",
+                transition:"transform .18s, box-shadow .18s",
+                boxShadow:"0 4px 16px rgba(0,0,0,.2)",
+                display:"flex", alignItems:"center", gap:6,
+              }}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,.3)"}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,.2)"}}>
+              {ar ? "جرّب Corvus مجاناً" : "Try Corvus Free"} →
+            </a>
           </div>
         </Reveal>
       </div>
@@ -1769,40 +1789,52 @@ function Footer({ lang }) {
   const sections = ar ? [
     { title:"المنتج", links:[
       ["المميزات","#features"],
-      ["الأسعار","#pricing"],
-      ["للمؤسسات","#enterprise"],
       ["كيف يعمل","#how"],
+      ["الأسعار","#pricing"],
+      ["التكاملات","#"],
+    ]},
+    { title:"الحلول", links:[
+      ["فرق HR","#casestudies"],
+      ["الصحة المهنية","#features"],
+      ["العمل عن بُعد","#features"],
+      ["للمؤسسات","#enterprise"],
+    ]},
+    { title:"الموارد", links:[
+      ["المدوّنة","#"],
+      ["دراسات الحالة","#casestudies"],
+      ["الأدلة","#"],
+      ["مركز المساعدة",`mailto:${SUPPORT_EMAIL}`],
     ]},
     { title:"الشركة", links:[
       ["من نحن",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],
+      ["الأمان","#"],
+      ["الخصوصية","#"],
       ["تواصل معنا",`mailto:${SUPPORT_EMAIL}`],
-      ["المدوّنة","#"],
-      ["الشركاء","#"],
-    ]},
-    { title:"قانوني", links:[
-      ["سياسة الخصوصية","#privacy"],
-      ["شروط الاستخدام","#terms"],
-      ["الأمان","#security"],
-      ["GDPR","#gdpr"],
     ]},
   ] : [
     { title:"Product", links:[
       ["Features","#features"],
-      ["Pricing","#pricing"],
-      ["Enterprise","#enterprise"],
       ["How It Works","#how"],
+      ["Pricing","#pricing"],
+      ["Integrations","#"],
+    ]},
+    { title:"Solutions", links:[
+      ["HR Teams","#casestudies"],
+      ["Occupational Health","#features"],
+      ["Remote Teams","#features"],
+      ["Enterprise","#enterprise"],
+    ]},
+    { title:"Resources", links:[
+      ["Blog","#"],
+      ["Case Studies","#casestudies"],
+      ["Guides","#"],
+      ["Help Center",`mailto:${SUPPORT_EMAIL}`],
     ]},
     { title:"Company", links:[
       ["About",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],
+      ["Security","#"],
+      ["Privacy Policy","#"],
       ["Contact",`mailto:${SUPPORT_EMAIL}`],
-      ["Blog","#"],
-      ["Partners","#"],
-    ]},
-    { title:"Legal", links:[
-      ["Privacy Policy","#privacy"],
-      ["Terms of Service","#terms"],
-      ["Security","#security"],
-      ["GDPR","#gdpr"],
     ]},
   ];
 
@@ -1819,9 +1851,9 @@ function Footer({ lang }) {
         {/* Main grid — 4 cols desktop, 2 cols tablet, 1 col mobile */}
         <div style={{
           display:"grid",
-          gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))",
-          gap:"40px 48px",
-          marginBottom:52,
+          gridTemplateColumns:"1.4fr 1fr 1fr 1fr 1fr",
+          gap:"40px 32px",
+          marginBottom:48,
         }}>
           {/* Brand column */}
           <div style={{ gridColumn:"span 1" }}>
