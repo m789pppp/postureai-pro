@@ -784,42 +784,7 @@ function runAnalysis(prompt,sp) {
 }
 
 // ── Puter.js AI (free, no API key, 400+ models) ───────────────────
-// ── Backend AI Proxy ─────────────────────────────────────────────
-// Frontend → Railway backend → LLM7.io (bypasses Egypt ISP block)
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
-let _backendAIReady = null;
-
-async function getAuthToken() {
-  try {
-    const { getAuth } = await import("firebase/auth");
-    const u = getAuth().currentUser;
-    return u ? await u.getIdToken() : "";
-  } catch { return ""; }
-}
-
-async function callBackendAI(messages, systemPrompt, maxTokens) {
-  const tok = await getAuthToken();
-  const res = await fetch(`${API_BASE}/coach/chat`, {
-    method:  "POST",
-    headers: {"Content-Type":"application/json", ...(tok?{Authorization:`Bearer ${tok}`}:{})},
-    body:    JSON.stringify({
-      messages,
-      context: { system_prompt: systemPrompt },
-      lang:    systemPrompt?.includes("Arabic") ? "ar" : "en",
-      max_tokens: maxTokens || 400,
-    }),
-    signal: AbortSignal.timeout(28000),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(()=>({}));
-    throw new Error(err?.error || `backend ${res.status}`);
-  }
-  const data = await res.json();
-  const text = data?.text?.trim();
-  if (!text) throw new Error("backend_empty_response");
-  _backendAIReady = true;
-  return text;
-}
+// ── Vercel AI Proxy helpers ──────────────────────────────────────
 
 // ── Vercel AI Proxy (edge function — no CORS issues, no Railway needed) ──
 // Route: /ai/chat → api/ai-chat.js → LLM7.io server-side
@@ -842,26 +807,6 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
   return text;
 }
 
-async function callBackendAnalysis(prompt, systemPrompt, maxTokens) {
-  const tok = await getAuthToken();
-  const res = await fetch(`${API_BASE}/ai/analyze`, {
-    method:  "POST",
-    headers: {"Content-Type":"application/json", ...(tok?{Authorization:`Bearer ${tok}`}:{})},
-    body:    JSON.stringify({
-      prompt,
-      context: { system_prompt: systemPrompt },
-      lang:    systemPrompt?.includes("Arabic") ? "ar" : "en",
-      max_tokens: maxTokens || 400,
-    }),
-    signal: AbortSignal.timeout(25000),
-  });
-  if (!res.ok) throw new Error(`backend ${res.status}`);
-  const data = await res.json();
-  const text = data?.text?.trim();
-  if (!text) throw new Error("empty");
-  _backendAIReady = true;
-  return text;
-}
 
 // ── Production-grade system prompt builder for all LLM calls ─────
 function buildLLMSystemPrompt(systemPrompt, forAnalysis = false) {
@@ -950,29 +895,15 @@ CONVERSATION STYLE:
 export async function localChat(messages, {systemPrompt=""} = {}) {
   const d = parseData(systemPrompt);
 
-  // 1️⃣ Try backend (Railway) — full tier enforcement
-  if (_backendAIReady !== false) {
-    try {
-      const sp = buildLLMSystemPrompt(systemPrompt, false);
-      return await callBackendAI(messages, sp, 500);
-    } catch(e) {
-      const msg = String(e?.message || "");
-      if (!msg.includes("timeout") && !msg.includes("network") && !msg.includes("abort")) {
-        _backendAIReady = false;
-      }
-    }
-  }
-
-  // 2️⃣ Try LLM7.io directly from frontend (no backend needed)
+  // 1️⃣ Vercel Edge Proxy → LLM7 gpt-4o-mini (primary AI)
   try {
     const sp = buildLLMSystemPrompt(systemPrompt, false);
     return await callLLM7Direct(messages, sp, 700);
-  } catch(_e2) {
-    // LLM7 failed too — fall through to rule-based
+  } catch(e) {
+    console.warn("[CorvusAI] Vercel proxy failed:", e.message);
   }
 
-  // 3️⃣ Rule-based KB (instant offline fallback)
-  await new Promise(r => setTimeout(r, 200 + Math.random() * 350));
+  // 2️⃣ Rule-based KB (true offline fallback)
   const hist   = analyzeHistory(messages);
   const last   = [...messages].reverse().find(m => m.role === "user");
   const intent = detectIntent(last?.content || "");
@@ -980,30 +911,15 @@ export async function localChat(messages, {systemPrompt=""} = {}) {
 }
 
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
-  // 1️⃣ Try backend
-  if (_backendAIReady !== false) {
-    try {
-      const combined = (systemPrompt || "") + " " + prompt;
-      const sp = buildLLMSystemPrompt(combined, true);
-      return await callBackendAnalysis(prompt, sp, 500);
-    } catch(e) {
-      const msg = String(e?.message || "");
-      if (!msg.includes("timeout") && !msg.includes("network") && !msg.includes("abort")) {
-        _backendAIReady = false;
-      }
-    }
-  }
-
-  // 2️⃣ Try LLM7.io directly
+  // 1️⃣ Vercel Edge Proxy → LLM7 gpt-4o-mini (primary AI)
   try {
     const combined = (systemPrompt || "") + " " + prompt;
     const sp = buildLLMSystemPrompt(combined, true);
     return await callLLM7Direct([{ role: "user", content: prompt }], sp, 800);
-  } catch(_e2) {
-    // fall through
+  } catch(e) {
+    console.warn("[CorvusAI] Vercel proxy failed (analysis):", e.message);
   }
 
-  // 3️⃣ Rule-based fallback
-  await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+  // 2️⃣ Rule-based fallback
   return runAnalysis(prompt, systemPrompt);
 }
