@@ -5,6 +5,10 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/ai/chat",
+      "destination": "/api/ai-chat.js"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index.py"
     },

@@ -821,27 +821,24 @@ async function callBackendAI(messages, systemPrompt, maxTokens) {
   return text;
 }
 
-// ── Direct LLM7.io call (frontend fallback when backend is offline) ──
+// ── Vercel AI Proxy (edge function — no CORS issues, no Railway needed) ──
+// Route: /ai/chat → api/ai-chat.js → LLM7.io server-side
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
-  const llm7Messages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
-  ];
-  const res = await fetch("https://api.llm7.io/v1/chat/completions", {
+  const res = await fetch("/ai/chat", {
     method:  "POST",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer unused" },
+    headers: { "Content-Type": "application/json" },
     body:    JSON.stringify({
-      model:      "gpt-4o-mini",
-      messages:   llm7Messages,
-      max_tokens: maxTokens || 700,
-      temperature: 0.5,
+      messages,
+      system_prompt: systemPrompt,
+      max_tokens:    maxTokens || 700,
+      temperature:   0.5,
     }),
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(28000),
   });
-  if (!res.ok) throw new Error(`llm7 ${res.status}`);
+  if (!res.ok) throw new Error(`proxy ${res.status}`);
   const data = await res.json();
-  const text = data?.choices?.[0]?.message?.content?.trim();
-  if (!text) throw new Error("llm7_empty");
+  const text = data?.text?.trim();
+  if (!text) throw new Error("proxy_empty");
   return text;
 }
 
