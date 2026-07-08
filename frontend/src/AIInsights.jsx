@@ -15,8 +15,6 @@ import { geminiAnalysis } from "./gemini.js";
 // the wrong persona. geminiAnalysis() -> /api/ai/analyze actually
 // honors context.system_prompt.
 async function callGemini(prompt, systemPrompt, maxTokens = 1000) {
-  // geminiAnalysis() runs offline — no backend, no downloads, no API keys.
-  // initLocalAI() blocks until the model is ready (downloads on first call).
   return await geminiAnalysis(prompt, { systemPrompt, maxTokens });
 }
 
@@ -435,9 +433,6 @@ Max 280 words.`,
     setError("");
     setData(null);
     try {
-      // Ensure local AI is ready (downloads on first use, instant after)
-      const { initLocalAI } = await import("./localAI.js");
-      await initLocalAI();
       const ctx    = buildContext();
       const prompt = tabPrompts[tabKey]?.(ctx);
       if (!prompt) return;
