@@ -582,134 +582,122 @@ function Hero({ lang, onCTA, mode, setMode }) {
           </Reveal>
         </div>
 
-        {/* Right — Camera demo with posture skeleton overlay */}
+        {/* Right — 3-panel layout: camera (center) + metrics panel (right) exactly like image */}
         <Reveal delay={100}>
-          <div style={{ position:"relative", paddingTop:34, paddingBottom:30 }}>
-            {/* Main camera view mockup */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 128px", gap:10, alignItems:"start" }}>
+
+            {/* ── Column 1: Camera mockup card ── */}
             <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
-              {/* Browser chrome */}
-              <div style={{ display:"flex", alignItems:"center", gap:8,
-                padding:"12px 16px", borderBottom:`1px solid ${C.border}`,
-                background:"rgba(255,255,255,.02)" }}>
-                <span style={{ width:9, height:9, borderRadius:"50%", background:"#f87171" }}/>
-                <span style={{ width:9, height:9, borderRadius:"50%", background:"#f59e0b" }}/>
-                <span style={{ width:9, height:9, borderRadius:"50%", background:"#10d9a0" }}/>
+              {/* Browser chrome bar */}
+              <div style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 14px",
+                borderBottom:`1px solid ${C.border}`, background:"rgba(255,255,255,.02)" }}>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:"#f87171", flexShrink:0 }}/>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:"#f59e0b", flexShrink:0 }}/>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:"#10d9a0", flexShrink:0 }}/>
                 <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
-                  <span style={{ fontSize:11.5, color:C.muted, fontFamily:FONT_MONO,
-                    background:"rgba(255,255,255,.04)", padding:"3px 14px", borderRadius:6 }}>
-                    postureai-pro-omega-nine.vercel.app
+                  <span style={{ fontSize:10.5, color:C.muted, fontFamily:FONT_MONO,
+                    background:"rgba(255,255,255,.04)", padding:"2px 12px", borderRadius:5 }}>
+                    corvus-ai • analysis
                   </span>
                 </div>
               </div>
 
-              {/* Camera feed + skeleton overlay */}
-              <div style={{ position:"relative", background:"#0a1628", aspectRatio:"4/3", overflow:"hidden" }}>
-                {/* Simulated camera background — gradient silhouette */}
+              {/* Camera feed area */}
+              <div style={{ position:"relative", background:"#050f1e", overflow:"hidden", aspectRatio:"4/3" }}>
+                {/* Dark vignette bg */}
                 <div style={{ position:"absolute", inset:0,
-                  background:"radial-gradient(ellipse 60% 80% at 50% 30%, rgba(30,50,80,.9) 0%, rgba(5,12,25,.98) 100%)" }}/>
+                  background:"radial-gradient(ellipse 55% 75% at 50% 28%, rgba(20,40,70,.95) 0%, rgba(3,8,18,1) 100%)" }}/>
 
-                {/* Person silhouette SVG */}
-                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
-                  viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
-                  {/* Desk background hint */}
-                  <rect x="0" y="240" width="400" height="60" fill="rgba(20,35,60,.6)" rx="0"/>
-                  {/* Monitor on desk */}
-                  <rect x="140" y="190" width="120" height="72" rx="4" fill="rgba(30,60,100,.5)" stroke="rgba(100,150,220,.3)" strokeWidth="1.5"/>
-                  <rect x="185" y="262" width="30" height="8" rx="2" fill="rgba(50,80,120,.5)"/>
-                  <rect x="165" y="270" width="70" height="4" rx="2" fill="rgba(50,80,120,.5)"/>
-                  {/* Screen glow */}
-                  <rect x="146" y="196" width="108" height="60" rx="2" fill="rgba(79,124,249,.12)"/>
-
-                  {/* Body silhouette */}
-                  {/* Torso */}
-                  <ellipse cx="200" cy="178" rx="28" ry="38" fill="rgba(40,65,105,.6)"/>
-                  {/* Head */}
-                  <ellipse cx="200" cy="108" rx="22" ry="26" fill="rgba(50,80,130,.55)"/>
-                  {/* Neck */}
-                  <rect x="194" y="130" width="12" height="16" rx="4" fill="rgba(45,72,118,.55)"/>
-                  {/* Arms */}
-                  <ellipse cx="167" cy="180" rx="10" ry="28" fill="rgba(38,62,100,.55)" transform="rotate(-8,167,180)"/>
-                  <ellipse cx="233" cy="180" rx="10" ry="28" fill="rgba(38,62,100,.55)" transform="rotate(8,233,180)"/>
-
-                  {/* Skeleton overlay — MediaPipe landmarks */}
-                  {/* Spine line */}
-                  <line x1="200" y1="134" x2="200" y2="210" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
-                  {/* Shoulder line */}
-                  <line x1="170" y1="152" x2="230" y2="152" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
-                  {/* Neck line */}
-                  <line x1="200" y1="130" x2="200" y2="152" stroke="rgba(16,217,160,.7)" strokeWidth="2" strokeLinecap="round"/>
-                  {/* Head top */}
-                  <line x1="200" y1="96" x2="200" y2="130" stroke="rgba(245,158,11,.8)" strokeWidth="2" strokeLinecap="round"/>
-                  {/* Left arm */}
-                  <line x1="170" y1="152" x2="162" y2="196" stroke="rgba(16,217,160,.55)" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="162" y1="196" x2="158" y2="230" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
-                  {/* Right arm */}
-                  <line x1="230" y1="152" x2="238" y2="196" stroke="rgba(16,217,160,.55)" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="238" y1="196" x2="242" y2="230" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
-
-                  {/* Landmark dots */}
-                  {[[200,96],[200,130],[170,152],[230,152],[200,152],[162,196],[238,196],[158,230],[242,230],[200,210]]
-                    .map(([x,y],i) => (
-                      <circle key={i} cx={x} cy={y} r={i===3?5:4} fill={i===3?"rgba(245,158,11,.9)":"rgba(16,217,160,.9)"}/>
-                  ))}
-
-                  {/* Neck forward angle indicator */}
-                  <path d="M200,96 L206,110" stroke="rgba(245,158,11,.9)" strokeWidth="1.5" strokeDasharray="3,2"/>
-                  <path d="M200,96 L200,110" stroke="rgba(255,255,255,.25)" strokeWidth="1" strokeDasharray="3,2"/>
-                  {/* Angle label */}
-                  <text x="210" y="108" fill="rgba(245,158,11,.95)" fontSize="10" fontFamily="monospace" fontWeight="bold">12°</text>
+                {/* Glowing grid lines in bg */}
+                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.06 }}
+                  viewBox="0 0 400 300">
+                  {[0,50,100,150,200,250,300].map(y=><line key={y} x1="0" y1={y} x2="400" y2={y} stroke="#4f7cf9" strokeWidth=".5"/>)}
+                  {[0,50,100,150,200,250,300,350,400].map(x=><line key={x} x1={x} y1="0" x2={x} y2="300" stroke="#4f7cf9" strokeWidth=".5"/>)}
                 </svg>
 
-                {/* LIVE badge */}
-                <div style={{ position:"absolute", top:12, left:12, display:"flex", alignItems:"center",
-                  gap:6, background:"rgba(0,0,0,.55)", backdropFilter:"blur(8px)",
-                  borderRadius:99, padding:"4px 10px", border:"1px solid rgba(16,217,160,.3)" }}>
+                {/* Person + skeleton SVG — side profile like image */}
+                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
+                  viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+
+                  {/* Desk */}
+                  <rect x="0" y="245" width="400" height="55" fill="rgba(15,28,52,.7)" rx="0"/>
+                  {/* Monitor */}
+                  <rect x="145" y="195" width="115" height="65" rx="3" fill="rgba(25,50,90,.55)" stroke="rgba(79,124,249,.3)" strokeWidth="1.5"/>
+                  <rect x="151" y="200" width="103" height="55" rx="2" fill="rgba(79,124,249,.1)"/>
+                  <rect x="188" y="260" width="28" height="7" rx="2" fill="rgba(40,70,110,.6)"/>
+                  <rect x="168" y="267" width="68" height="3" rx="2" fill="rgba(40,70,110,.5)"/>
+
+                  {/* Body silhouette — slightly forward leaning like image */}
+                  <ellipse cx="202" cy="175" rx="26" ry="36" fill="rgba(35,58,100,.65)"/>
+                  <ellipse cx="202" cy="105" rx="21" ry="25" fill="rgba(45,72,120,.6)"/>
+                  <rect x="196" y="128" width="12" height="14" rx="4" fill="rgba(40,65,108,.6)"/>
+                  <ellipse cx="170" cy="178" rx="9" ry="26" fill="rgba(32,55,92,.6)" transform="rotate(-6,170,178)"/>
+                  <ellipse cx="234" cy="178" rx="9" ry="26" fill="rgba(32,55,92,.6)" transform="rotate(6,234,178)"/>
+
+                  {/* Green skeleton lines — MediaPipe style */}
+                  <line x1="202" y1="132" x2="202" y2="208" stroke={`rgba(16,217,160,.75)`} strokeWidth="2.5" strokeLinecap="round"/>
+                  <line x1="172" y1="150" x2="232" y2="150" stroke={`rgba(16,217,160,.75)`} strokeWidth="2.5" strokeLinecap="round"/>
+                  <line x1="202" y1="128" x2="202" y2="150" stroke={`rgba(16,217,160,.7)`} strokeWidth="2" strokeLinecap="round"/>
+                  {/* Head/neck — amber = issue */}
+                  <line x1="202" y1="93" x2="202" y2="128" stroke="rgba(245,158,11,.85)" strokeWidth="2" strokeLinecap="round"/>
+                  {/* Arms */}
+                  <line x1="172" y1="150" x2="163" y2="193" stroke={`rgba(16,217,160,.55)`} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="163" y1="193" x2="159" y2="226" stroke={`rgba(16,217,160,.4)`} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="232" y1="150" x2="241" y2="193" stroke={`rgba(16,217,160,.55)`} strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="241" y1="193" x2="245" y2="226" stroke={`rgba(16,217,160,.4)`} strokeWidth="2" strokeLinecap="round"/>
+
+                  {/* Landmark dots */}
+                  {[[202,93],[202,128],[172,150],[232,150],[202,150],[163,193],[241,193],[159,226],[245,226],[202,208]]
+                    .map(([x,y],i)=><circle key={i} cx={x} cy={y} r={i<=1?4.5:3.5}
+                      fill={i<=1?"rgba(245,158,11,.95)":"rgba(16,217,160,.9)"}/>)}
+
+                  {/* Neck angle arc + label */}
+                  <path d="M202,93 L210,110" stroke="rgba(245,158,11,.9)" strokeWidth="1.5" strokeDasharray="3,2"/>
+                  <path d="M202,93 L202,110" stroke="rgba(255,255,255,.2)" strokeWidth="1" strokeDasharray="3,2"/>
+                  <text x="213" y="108" fill="rgba(245,158,11,.95)" fontSize="10" fontFamily="monospace" fontWeight="bold">12°</text>
+                </svg>
+
+                {/* LIVE pill — top left */}
+                <div style={{ position:"absolute", top:10, left:10,
+                  display:"flex", alignItems:"center", gap:5,
+                  background:"rgba(0,0,0,.6)", backdropFilter:"blur(8px)",
+                  borderRadius:99, padding:"4px 10px", border:"1px solid rgba(16,217,160,.35)" }}>
                   <span style={{ width:6, height:6, borderRadius:"50%", background:C.green,
                     boxShadow:`0 0 6px ${C.green}`, animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
-                  <span style={{ fontSize:11, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
+                  <span style={{ fontSize:10.5, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
                 </div>
 
-                {/* Score overlay — bottom right */}
-                <div style={{ position:"absolute", bottom:12, right:12,
-                  background:"rgba(0,0,0,.6)", backdropFilter:"blur(12px)",
-                  borderRadius:14, padding:"10px 14px", border:"1px solid rgba(16,217,160,.25)",
-                  textAlign:"center" }}>
-                  <div style={{ fontSize:28, fontWeight:800, color:scoreColor,
-                    fontFamily:FONT_MONO, transition:"color .4s", lineHeight:1 }}>{demoScore}</div>
-                  <div style={{ fontSize:9.5, color:C.muted, marginTop:2 }}>{ar ? "نقطة" : "score"}</div>
-                </div>
-
-                {/* Alert badge — top right */}
-                <div style={{ position:"absolute", top:12, right:12,
-                  background:"rgba(245,158,11,.15)", backdropFilter:"blur(8px)",
-                  borderRadius:10, padding:"6px 10px", border:"1px solid rgba(245,158,11,.35)" }}>
-                  <div style={{ fontSize:10, color:"#fbbf24", fontWeight:600 }}>
-                    ⚠️ {ar ? "رقبة للأمام 12°" : "Neck forward 12°"}
-                  </div>
+                {/* Warning badge — top right */}
+                <div style={{ position:"absolute", top:10, right:10,
+                  background:"rgba(245,158,11,.18)", backdropFilter:"blur(8px)",
+                  borderRadius:9, padding:"5px 9px", border:"1px solid rgba(245,158,11,.4)" }}>
+                  <span style={{ fontSize:9.5, color:"#fbbf24", fontWeight:600 }}>
+                    ⚠ {ar ? "رقبة للأمام 12°" : "Neck forward 12°"}
+                  </span>
                 </div>
               </div>
 
-              {/* Metrics strip below camera */}
-              <div style={{ padding:"14px 20px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10,
+              {/* 3-metric strip */}
+              <div style={{ padding:"13px 18px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8,
                 borderTop:`1px solid ${C.border}` }}>
                 {(ar
                   ? [["انحناء الرقبة","12°",C.amber],["وضع الكتف","جيد ✓",C.green],["المسافة","58cm",C.blue]]
                   : [["Neck Tilt","12°",C.amber],["Shoulder","Good ✓",C.green],["Distance","58cm",C.blue]]
-                ).map(([label, val, color]) => (
+                ).map(([label, val, color])=>(
                   <div key={label} style={{ textAlign:"center" }}>
-                    <div style={{ fontSize:17, fontWeight:700, color, fontFamily:FONT_MONO }}>{val}</div>
-                    <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{label}</div>
+                    <div style={{ fontSize:15, fontWeight:700, color, fontFamily:FONT_MONO }}>{val}</div>
+                    <div style={{ fontSize:9.5, color:C.muted, marginTop:2 }}>{label}</div>
                   </div>
                 ))}
               </div>
 
-              {/* AI tip */}
-              <div style={{ margin:"0 16px 16px", padding:"11px 14px",
-                background:"rgba(79,124,249,.08)", borderRadius:12,
-                border:"1px solid rgba(79,124,249,.15)",
-                display:"flex", gap:10, alignItems:"flex-start" }}>
-                <span style={{ fontSize:16 }}>🤖</span>
-                <p style={{ margin:0, fontSize:12.5, color:C.sub, lineHeight:1.5 }}>
+              {/* AI tip row */}
+              <div style={{ margin:"0 14px 14px", padding:"10px 13px",
+                background:"rgba(79,124,249,.07)", borderRadius:11,
+                border:"1px solid rgba(79,124,249,.14)",
+                display:"flex", gap:9, alignItems:"flex-start" }}>
+                <span style={{ fontSize:14, flexShrink:0, marginTop:1 }}>🤖</span>
+                <p style={{ margin:0, fontSize:12, color:C.sub, lineHeight:1.5 }}>
                   {ar
                     ? "رقبتك للأمام قليلاً. ارفع الشاشة 2 سم وحاول تمرين سحب الرقبة 10 مرات."
                     : "Neck is slightly forward. Raise your monitor 2cm and try 10 chin tucks now."}
@@ -717,35 +705,94 @@ function Hero({ lang, onCTA, mode, setMode }) {
               </div>
             </div>
 
-            {/* Floating card — top */}
-            <motion.div {...float(0, 9)} style={{
-              position:"absolute", top:-12, [ar?"left":"right"]:-18,
-              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
-              border:`1px solid ${C.borderM}`, borderRadius:16,
-              padding:"12px 16px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
-              display:"flex", alignItems:"center", gap:10, zIndex:2,
-            }}>
-              <span style={{ fontSize:20 }}>📉</span>
-              <div>
-                <div style={{ fontSize:15, fontWeight:800, color:C.green, fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
-                <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{ar ? "إجازات مرضية" : "sick leave"}</div>
-              </div>
-            </motion.div>
+            {/* ── Column 2: Metrics panel (right column from image) ── */}
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
 
-            {/* Floating card — bottom */}
-            <motion.div {...float(1.4, 8)} style={{
-              position:"absolute", bottom:-6, [ar?"right":"left"]:-22,
-              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
-              border:`1px solid ${C.borderM}`, borderRadius:16,
-              padding:"11px 15px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
-              display:"flex", alignItems:"center", gap:9, zIndex:2, maxWidth:200,
-            }}>
-              <span style={{ width:8, height:8, borderRadius:"50%", background:C.green, flexShrink:0,
-                boxShadow:`0 0 8px ${C.green}` }}/>
-              <span style={{ fontSize:11.5, color:C.sub, lineHeight:1.4 }}>
-                {ar ? "جلسة 45 دق — تحسن 18 نقطة 🎯" : "45 min session — +18 score 🎯"}
-              </span>
-            </motion.div>
+              {/* -47% sick leave card */}
+              <motion.div {...float(0,6)} style={{
+                background:C.card, border:`1px solid ${C.border}`,
+                borderRadius:14, padding:"12px 12px 10px",
+                backdropFilter:"blur(12px)",
+              }}>
+                <div style={{ fontSize:22, fontWeight:800, color:C.green,
+                  fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
+                <div style={{ fontSize:9.5, color:C.muted, marginTop:3, lineHeight:1.3 }}>
+                  {ar ? "إجازات مرضية" : "sick leave"}
+                </div>
+                {/* sparkline */}
+                <svg width="104" height="22" style={{ display:"block", marginTop:6, overflow:"visible" }}>
+                  <defs>
+                    <linearGradient id="spkG1" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.green} stopOpacity=".35"/>
+                      <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M0,18 L17,16 L34,12 L51,14 L68,7 L85,4 L104,1"
+                    fill="none" stroke={C.green} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M0,18 L17,16 L34,12 L51,14 L68,7 L85,4 L104,1 L104,22 L0,22 Z"
+                    fill="url(#spkG1)"/>
+                </svg>
+              </motion.div>
+
+              {/* Corvus Pro label + time */}
+              <div style={{ background:C.card, border:`1px solid ${C.border}`,
+                borderRadius:14, padding:"10px 12px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                  <div style={{ width:16, height:16, borderRadius:4, flexShrink:0,
+                    background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:8, color:"#fff" }}>◈</div>
+                  <span style={{ fontSize:10.5, fontWeight:700, color:C.text,
+                    fontFamily:FONT_DISPLAY }}>Corvus Pro</span>
+                </div>
+                <div style={{ fontSize:9, color:C.muted, fontFamily:FONT_MONO }}>
+                  {new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"numeric",year:"2-digit"})}
+                  {", "}
+                  {new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}
+                </div>
+              </div>
+
+              {/* Score donut */}
+              <div style={{ background:C.card, border:`1px solid ${C.border}`,
+                borderRadius:14, padding:"14px 12px", textAlign:"center" }}>
+                <div style={{ position:"relative", width:72, height:72, margin:"0 auto 6px" }}>
+                  <svg width="72" height="72" style={{ transform:"rotate(-90deg)" }}>
+                    <circle cx="36" cy="36" r="29" fill="none"
+                      stroke="rgba(255,255,255,.05)" strokeWidth="6"/>
+                    <circle cx="36" cy="36" r="29" fill="none"
+                      stroke={scoreColor} strokeWidth="6"
+                      strokeDasharray={`${(demoScore/100)*182.2} 182.2`}
+                      strokeLinecap="round"
+                      style={{ transition:"stroke-dasharray .7s ease, stroke .4s" }}/>
+                  </svg>
+                  <div style={{ position:"absolute", inset:0,
+                    display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <span style={{ fontSize:20, fontWeight:800, color:scoreColor,
+                      fontFamily:FONT_MONO, lineHeight:1,
+                      transition:"color .4s" }}>{demoScore}</span>
+                  </div>
+                </div>
+                <div style={{ fontSize:9.5, color:C.muted }}>{ar ? "نقطة" : "score"}</div>
+              </div>
+
+              {/* Trend chart */}
+              <motion.div {...float(1.2,5)} style={{ background:C.card, border:`1px solid ${C.border}`,
+                borderRadius:14, padding:"11px 10px" }}>
+                <svg width="108" height="38" style={{ display:"block" }}>
+                  <defs>
+                    <linearGradient id="trendG" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.green} stopOpacity=".28"/>
+                      <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M0,32 L18,28 L36,21 L54,24 L72,13 L90,7 L108,3"
+                    fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M0,32 L18,28 L36,21 L54,24 L72,13 L90,7 L108,3 L108,38 L0,38 Z"
+                    fill="url(#trendG)"/>
+                </svg>
+              </motion.div>
+
+            </div>{/* end metrics column */}
           </div>
         </Reveal>
       </div>
@@ -839,9 +886,18 @@ function Stats({ lang }) {
     <section className="lp-section" style={{ paddingTop:"clamp(60px,7vw,100px)", paddingBottom:"clamp(60px,7vw,100px)" }}>
       <div className="lp-wrap lp-stats-grid" style={{
         display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:22 }}>
-        {stats.map(([val, label, source], i) => (
+        {stats.map(([val, label, source], i) => {
+          const spkPaths = [
+            "M0,20 L14,17 L28,12 L42,15 L56,7 L70,4 L84,1",
+            "M0,18 L14,15 L28,10 L42,13 L56,5 L70,3 L84,1",
+            "M0,20 L14,16 L28,11 L42,14 L56,6 L70,3 L84,1",
+            "M0,19 L14,16 L28,12 L42,14 L56,7 L70,4 L84,2",
+          ];
+          const spkColors = [C.green, C.indigo, C.sky, C.green];
+          const sc = spkColors[i];
+          return (
           <Reveal key={label} delay={i * 80} y={20}>
-            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"36px 24px" }}>
+            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"32px 24px 24px" }}>
               <div style={{
                 fontSize:"clamp(38px,3.2vw,52px)", fontWeight:700, letterSpacing:"-.02em",
                 background:C.gHero, WebkitBackgroundClip:"text",
@@ -849,10 +905,24 @@ function Stats({ lang }) {
                 fontFamily:FONT_MONO,
               }}>{val}</div>
               <div style={{ fontSize:14.5, color:C.sub, lineHeight:1.5 }}>{label}</div>
-              {source&&<div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4 }}>{source}</div>}
+              {source && <div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4 }}>{source}</div>}
+              {/* Sparkline */}
+              <div style={{ display:"flex", justifyContent:"center", marginTop:18 }}>
+                <svg width="84" height="22" viewBox="0 0 84 22" style={{ overflow:"visible" }}>
+                  <defs>
+                    <linearGradient id={`sg${i}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={sc} stopOpacity=".35"/>
+                      <stop offset="100%" stopColor={sc} stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <path d={spkPaths[i]} fill="none" stroke={sc} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d={spkPaths[i]+" L84,22 L0,22 Z"} fill={`url(#sg${i})`}/>
+                </svg>
+              </div>
             </div>
           </Reveal>
-        ))}
+          );
+        })}
       </div>
       <style>{`
         @media(max-width:860px){.lp-stats-grid{grid-template-columns:1fr 1fr!important}}
@@ -1055,33 +1125,72 @@ function CaseStudies({ lang }) {
 
         <Stagger key={String(ar)} className="lp-cases-grid" style={{
           display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
-          {cases.map((c) => (
+          {cases.map((c, ci) => {
+            // SVG background scenes: telecom tower / bank building / tech office — like image
+            const bgSvgs = [
+              <svg key="tc" style={{ position:"absolute", inset:0, width:"100%", height:"60%", opacity:.13, pointerEvents:"none" }} viewBox="0 0 260 180" preserveAspectRatio="xMidYMax meet">
+                <rect x="120" y="10" width="20" height="170" fill="#4f7cf9" rx="2"/>
+                <rect x="110" y="25" width="40" height="6" fill="#4f7cf9" rx="1"/>
+                <rect x="100" y="42" width="60" height="5" fill="#4f7cf9" rx="1"/>
+                <rect x="86" y="60" width="88" height="5" fill="#4f7cf9" rx="1"/>
+                <line x1="130" y1="10" x2="86" y2="40" stroke="#4f7cf9" strokeWidth="1"/>
+                <line x1="130" y1="10" x2="174" y2="40" stroke="#4f7cf9" strokeWidth="1"/>
+                <rect x="40" y="120" width="180" height="60" fill="#4f7cf9" rx="3" opacity=".7"/>
+                <rect x="60" y="100" width="140" height="28" fill="#4f7cf9" rx="2" opacity=".5"/>
+              </svg>,
+              <svg key="bk" style={{ position:"absolute", inset:0, width:"100%", height:"60%", opacity:.12, pointerEvents:"none" }} viewBox="0 0 260 180" preserveAspectRatio="xMidYMax meet">
+                <rect x="30" y="75" width="200" height="105" fill="#818cf8" rx="3"/>
+                <rect x="20" y="65" width="220" height="16" fill="#818cf8" rx="2"/>
+                <rect x="80" y="50" width="100" height="20" fill="#818cf8" rx="2"/>
+                <rect x="122" y="34" width="16" height="18" fill="#818cf8"/>
+                {[50,78,106,134,162,190].map(x=><rect key={x} x={x} y={82} width="14" height="98" fill="rgba(255,255,255,.07)" rx="1"/>)}
+                <rect x="102" y="148" width="56" height="32" fill="rgba(255,255,255,.05)" rx="2"/>
+              </svg>,
+              <svg key="of" style={{ position:"absolute", inset:0, width:"100%", height:"60%", opacity:.11, pointerEvents:"none" }} viewBox="0 0 260 180" preserveAspectRatio="xMidYMax meet">
+                <rect x="10" y="10" width="240" height="170" fill="#22d3ee" rx="5"/>
+                {[30,65,100,135,170,205].map(x=>[0,1,2,3].map(r=>(
+                  <rect key={`${x}-${r}`} x={x} y={20+r*40} width="25" height="28" fill="rgba(255,255,255,.07)" rx="2"/>
+                )))}
+                <rect x="40" y="155" width="180" height="18" fill="rgba(255,255,255,.04)" rx="2"/>
+              </svg>,
+            ];
+
+            return (
             <StaggerItem key={c.co}>
-              <div className="lp-lift" style={{ ...card(), height:"100%" }}>
-                <div style={{
-                  background:"rgba(79,124,249,.08)", borderRadius:8,
-                  padding:"5px 12px", fontSize:12.5, color:C.indigo,
-                  fontWeight:500, display:"inline-block", marginBottom:18,
-                }}>{c.industry}</div>
-                <h3 style={{ fontSize:17.5, fontWeight:700, color:C.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
-                  {c.co}
-                </h3>
-                <div style={{ fontSize:13, color:C.muted, marginBottom:22 }}>
-                  {c.employees} {ar ? "موظف" : "employees"} · {c.time}
+              <div className="lp-lift" style={{ ...card(), height:"100%", position:"relative", overflow:"hidden" }}>
+                {/* Background scene */}
+                {bgSvgs[ci]}
+                {/* Gradient overlay for readability */}
+                <div style={{ position:"absolute", inset:0, pointerEvents:"none",
+                  background:"linear-gradient(180deg, rgba(13,31,51,.15) 0%, rgba(13,31,51,.75) 45%, rgba(13,31,51,.97) 100%)" }}/>
+                {/* Content */}
+                <div style={{ position:"relative", zIndex:1 }}>
+                  <div style={{
+                    background:"rgba(79,124,249,.1)", borderRadius:8,
+                    padding:"5px 12px", fontSize:12.5, color:C.indigo,
+                    fontWeight:500, display:"inline-block", marginBottom:18,
+                  }}>{c.industry}</div>
+                  <h3 style={{ fontSize:17.5, fontWeight:700, color:C.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
+                    {c.co}
+                  </h3>
+                  <div style={{ fontSize:13, color:C.muted, marginBottom:22 }}>
+                    {c.employees} {ar ? "موظف" : "employees"} · {c.time}
+                  </div>
+                  <div style={{
+                    fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:C.green, marginBottom:6,
+                    fontFamily:FONT_MONO, lineHeight:1,
+                  }}>{c.result}</div>
+                  <div style={{ fontSize:14.5, color:C.text, fontWeight:600, marginBottom:16 }}>
+                    {c.resultLabel}
+                  </div>
+                  <p style={{ ...TYPE.bodySm, color:C.sub, margin:0, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+                    {c.detail}
+                  </p>
                 </div>
-                <div style={{
-                  fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:C.green, marginBottom:6,
-                  fontFamily:FONT_MONO, lineHeight:1,
-                }}>{c.result}</div>
-                <div style={{ fontSize:14.5, color:C.text, fontWeight:600, marginBottom:16 }}>
-                  {c.resultLabel}
-                </div>
-                <p style={{ ...TYPE.bodySm, color:C.sub, margin:0, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
-                  {c.detail}
-                </p>
               </div>
             </StaggerItem>
-          ))}
+            );
+          })}
         </Stagger>
       </div>
       <style>{`@media(max-width:860px){.lp-cases-grid{grid-template-columns:1fr!important}}`}</style>
@@ -1614,8 +1723,10 @@ function Footer({ lang }) {
   ];
 
   const socials = [
-    { label:"LinkedIn", href:"https://www.linkedin.com/in/mo-postureai" },
-    { label:"Email",    href:`mailto:${SUPPORT_EMAIL}` },
+    { label:"in", title:"LinkedIn",  href:"https://www.linkedin.com/in/mo-postureai" },
+    { label:"𝕏",  title:"X",         href:"https://x.com/corvusposture" },
+    { label:"▶",  title:"YouTube",   href:"https://youtube.com/@corvusai" },
+    { label:"◉",  title:"Instagram", href:"https://instagram.com/corvusai" },
   ];
 
   return (
@@ -1649,19 +1760,30 @@ function Footer({ lang }) {
                 : "AI posture analysis for individuals and teams across MENA."}
             </p>
 
-            {/* Social links */}
-            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              {socials.map(({ label, href }) => (
-                <a key={label} href={href}
-                  target={href.startsWith("http") ? "_blank" : undefined}
-                  rel="noopener noreferrer"
+            {/* Social icon buttons */}
+            <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
+              {socials.map(({ label, title, href }) => (
+                <a key={label} href={href} title={title}
+                  target="_blank" rel="noopener noreferrer"
                   style={{
-                    color:C.muted, fontSize:12.5, textDecoration:"none",
-                    padding:"6px 12px", border:`1px solid ${C.border}`,
-                    borderRadius:7, transition:"color .18s, border-color .18s",
+                    width:34, height:34, borderRadius:9,
+                    background:"rgba(255,255,255,.05)",
+                    border:`1px solid ${C.border}`,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    color:C.muted, fontSize:13, fontWeight:700,
+                    textDecoration:"none",
+                    transition:"color .18s, border-color .18s, background .18s",
                   }}
-                  onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM}}
-                  onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border}}>
+                  onMouseEnter={e=>{
+                    e.currentTarget.style.color=C.text;
+                    e.currentTarget.style.borderColor=C.borderM;
+                    e.currentTarget.style.background="rgba(255,255,255,.09)";
+                  }}
+                  onMouseLeave={e=>{
+                    e.currentTarget.style.color=C.muted;
+                    e.currentTarget.style.borderColor=C.border;
+                    e.currentTarget.style.background="rgba(255,255,255,.05)";
+                  }}>
                   {label}
                 </a>
               ))}
@@ -1730,7 +1852,7 @@ function Footer({ lang }) {
           </span>
           <div style={{ display:"flex", gap:20, alignItems:"center" }}>
             <span style={{ fontSize:12, color:C.muted, opacity:.7 }}>
-              {ar ? "صُنع بـ ❤ في MENA" : "Made with ❤ in MENA"}
+              {ar ? "صُنع بـ ❤ في مصر" : "Made with ❤ in Egypt"}
             </span>
             <a href={`mailto:${SUPPORT_EMAIL}`}
               style={{ fontSize:12.5, color:C.sub, textDecoration:"none" }}
