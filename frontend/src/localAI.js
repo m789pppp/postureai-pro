@@ -810,6 +810,30 @@ async function callBackendAI(messages, systemPrompt, maxTokens) {
   return text;
 }
 
+// ── Direct LLM7.io call (frontend fallback when backend is offline) ──
+async function callLLM7Direct(messages, systemPrompt, maxTokens) {
+  const llm7Messages = [
+    { role: "system", content: systemPrompt },
+    ...messages.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
+  ];
+  const res = await fetch("https://api.llm7.io/v1/chat/completions", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer unused" },
+    body:    JSON.stringify({
+      model:      "gpt-4o-mini",
+      messages:   llm7Messages,
+      max_tokens: maxTokens || 700,
+      temperature: 0.5,
+    }),
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!res.ok) throw new Error(`llm7 ${res.status}`);
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error("llm7_empty");
+  return text;
+}
+
 async function callBackendAnalysis(prompt, systemPrompt, maxTokens) {
   const tok = await getAuthToken();
   const res = await fetch(`${API_BASE}/ai/analyze`, {
@@ -918,6 +942,7 @@ CONVERSATION STYLE:
 export async function localChat(messages, {systemPrompt=""} = {}) {
   const d = parseData(systemPrompt);
 
+  // 1️⃣ Try backend (Railway) — full tier enforcement
   if (_backendAIReady !== false) {
     try {
       const sp = buildLLMSystemPrompt(systemPrompt, false);
@@ -930,7 +955,15 @@ export async function localChat(messages, {systemPrompt=""} = {}) {
     }
   }
 
-  // Offline fallback: rule-based engine (instant, zero cost)
+  // 2️⃣ Try LLM7.io directly from frontend (no backend needed)
+  try {
+    const sp = buildLLMSystemPrompt(systemPrompt, false);
+    return await callLLM7Direct(messages, sp, 700);
+  } catch(_e2) {
+    // LLM7 failed too — fall through to rule-based
+  }
+
+  // 3️⃣ Rule-based KB (instant offline fallback)
   await new Promise(r => setTimeout(r, 200 + Math.random() * 350));
   const hist   = analyzeHistory(messages);
   const last   = [...messages].reverse().find(m => m.role === "user");
@@ -939,6 +972,7 @@ export async function localChat(messages, {systemPrompt=""} = {}) {
 }
 
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
+  // 1️⃣ Try backend
   if (_backendAIReady !== false) {
     try {
       const combined = (systemPrompt || "") + " " + prompt;
@@ -951,6 +985,17 @@ export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
       }
     }
   }
+
+  // 2️⃣ Try LLM7.io directly
+  try {
+    const combined = (systemPrompt || "") + " " + prompt;
+    const sp = buildLLMSystemPrompt(combined, true);
+    return await callLLM7Direct([{ role: "user", content: prompt }], sp, 800);
+  } catch(_e2) {
+    // fall through
+  }
+
+  // 3️⃣ Rule-based fallback
   await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
   return runAnalysis(prompt, systemPrompt);
 }
