@@ -83,16 +83,27 @@ export async function localFallbackAnalysis(prompt, opts = {}) {
  * geminiAnalysis — single-shot analysis, fully offline (rule-based engine).
  * Used by AIInsights, PredictiveAI, AIReports, NotificationsHub.
  */
-export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTokens = 600 } = {}) {
+export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTokens = 600, systemPrompt = "" } = {}) {
   const { localAnalysis } = await import("./localAI.js");
 
-  const systemPrompt = [
-    Object.keys(context).length ? `Context: ${JSON.stringify(context)}` : "",
-    lang === "ar" ? "Respond in Egyptian Arabic." : "Respond in English.",
-  ].filter(Boolean).join("\n\n");
+  // Support both: explicit systemPrompt (from AIInsights) and context object (from PredictiveAI)
+  const ctxBlock = Object.keys(context).length && !context.system_prompt
+    ? `Context: ${JSON.stringify(context)}`
+    : "";
+
+  // If context.system_prompt exists, use it as the base (PredictiveAI pattern)
+  const basePrompt = systemPrompt || context.system_prompt || "";
+
+  const langLine = lang === "ar"
+    ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (\u0639\u0627\u0645\u064a\u0629 \u0645\u0635\u0631\u064a\u0629)."
+    : "LANGUAGE: Respond in clear, professional English.";
+
+  const fullSystemPrompt = [basePrompt, ctxBlock, langLine]
+    .filter(Boolean)
+    .join("\n\n");
 
   try {
-    return await localAnalysis(prompt, { systemPrompt, maxTokens });
+    return await localAnalysis(prompt, { systemPrompt: fullSystemPrompt, maxTokens });
   } catch (e) {
     throw e;
   }

@@ -945,8 +945,11 @@ export async function localChat(messages, {systemPrompt=""} = {}) {
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
   // 1️⃣ Vercel Edge Proxy → LLM7 gpt-4o-mini (primary AI)
   try {
-    const combined = (systemPrompt || "") + " " + prompt;
-    const sp = buildLLMSystemPrompt(combined, true);
+    // If caller provided a full system prompt (AIInsights/PredictiveAI), use it directly.
+    // Otherwise build a clinical system prompt from embedded data.
+    const sp = systemPrompt && systemPrompt.length > 100
+      ? systemPrompt
+      : buildLLMSystemPrompt(systemPrompt + " " + prompt, true);
     return await callLLM7Direct([{ role: "user", content: prompt }], sp, 800);
   } catch(e) {
     console.warn("[CorvusAI] Vercel proxy failed (analysis):", e.message);
