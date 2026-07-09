@@ -302,40 +302,41 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const isAr = lang === "ar";
   const dark = darkMode;
 
-  const [view,    setView]   = useState(initialView||"login");
-  const [email,   setEmail]  = useState("");
-  const [pass,    setPass]   = useState("");
-  const [pass2,   setPass2]  = useState("");
-  const [fname,   setFname]  = useState("");
-  const [lname,   setLname]  = useState("");
-  const [country, setCountry]= useState("");
-  const [profession,setProfession]=useState("");
-  const [agreeTerms,setAgreeTerms]=useState(false);
-  const [newsletter,setNewsletter]=useState(true);
-  const [showP,   setShowP]  = useState(false);
-  const [showP2,  setShowP2] = useState(false);
-  const [remember,setRemember]= useState(true);
-  const [loading, setLoading]= useState(false);
-  const [social,  setSocial] = useState(""); // "google"|"microsoft"
-  const [err,     setErr]    = useState("");
+  const [view,       setView]      = useState(initialView||"login");
+  const [accountType,setAccountType]= useState("individual"); // "individual" | "company"
+  const [email,      setEmail]     = useState("");
+  const [pass,       setPass]      = useState("");
+  const [pass2,      setPass2]     = useState("");
+  const [fname,      setFname]     = useState("");
+  const [lname,      setLname]     = useState("");
+  const [country,    setCountry]   = useState("");
+  const [profession, setProfession]= useState("");
+  const [companyName,setCompanyName]= useState("");
+  const [teamSize,   setTeamSize]  = useState("");
+  const [agreeTerms, setAgreeTerms]= useState(false);
+  const [newsletter, setNewsletter]= useState(true);
+  const [showP,      setShowP]     = useState(false);
+  const [showP2,     setShowP2]    = useState(false);
+  const [remember,   setRemember]  = useState(true);
+  const [loading,    setLoading]   = useState(false);
+  const [social,     setSocial]    = useState("");
+  const [err,        setErr]       = useState("");
   const errRef = useRef(null);
-  const [ok,      setOk]     = useState("");
-  const [sent,    setSent]   = useState(false);
-  const [touched, setTouched]= useState({});
-  const [mounted, setMounted]= useState(false);
-  const [shake,   setShake]  = useState(false);
-  const [capsLock,setCapsLock]= useState(false);
+  const [ok,         setOk]        = useState("");
+  const [sent,       setSent]      = useState(false);
+  const [touched,    setTouched]   = useState({});
+  const [mounted,    setMounted]   = useState(false);
+  const [shake,      setShake]     = useState(false);
+  const [capsLock,   setCapsLock]  = useState(false);
+
+  const isCompany = accountType === "company";
 
   useEffect(()=>{ const t=setTimeout(()=>setMounted(true),60); return()=>clearTimeout(t); },[]);
-  // #7: auto-scroll to error message on mobile — window.innerWidth check
-  // avoids disturbing desktop users who can already see the form in full.
   useEffect(()=>{
     if(err && errRef.current && window.innerWidth < 768){
       errRef.current.scrollIntoView({ behavior:"smooth", block:"center" });
     }
   },[err]);
-
-  // Caps lock detection
   useEffect(()=>{
     const h = e => setCapsLock(e.getModifierState?.("CapsLock")??false);
     window.addEventListener("keydown",h);
@@ -343,27 +344,37 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     return ()=>{ window.removeEventListener("keydown",h); window.removeEventListener("keyup",h); };
   },[]);
 
+  // Reset form on account type change
+  useEffect(()=>{
+    setErr(""); setTouched({});
+    setCompanyName(""); setTeamSize(""); setProfession("");
+  },[accountType]);
+
   const doShake = () => { setShake(true); setTimeout(()=>setShake(false),600); };
   const go = v => { setView(v); setErr(""); setOk(""); setSent(false); setTouched({}); };
   const touch = k => setTouched(p=>({...p,[k]:true}));
 
   // ── Validation ───────────────────────────────────────────────────
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
-  const passValid  = pass.length >= 6;
-  const pass2Valid = pass === pass2 && pass2.length > 0;
-  const fnameValid   = fname.trim().length >= 1;
-  const lnameValid   = lname.trim().length >= 1;
-  const countryValid = country.length > 0;
-  const termsValid   = agreeTerms;
+  const emailValid    = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  const passValid     = pass.length >= 6;
+  const pass2Valid    = pass === pass2 && pass2.length > 0;
+  const fnameValid    = fname.trim().length >= 1;
+  const lnameValid    = lname.trim().length >= 1;
+  const countryValid  = country.length > 0;
+  const termsValid    = agreeTerms;
+  const companyValid  = isCompany ? companyName.trim().length >= 2 : true;
+  const teamSizeValid = isCompany ? teamSize.length > 0 : true;
 
   const fieldErr = {
-    email:  touched.email  && !emailValid ? (isAr?"أدخل بريداً إلكترونياً صحيحاً":"Enter a valid email address") : "",
-    pass:   touched.pass   && !passValid  ? (isAr?"6 أحرف على الأقل":"At least 6 characters") : "",
-    pass2:  touched.pass2  && !pass2Valid ? (isAr?"كلمتا المرور غير متطابقتين":"Passwords don't match") : "",
-    fname:   touched.fname    && !fnameValid   ? (isAr?"الاسم الأول مطلوب":"First name required") : "",
-    lname:   touched.lname    && !lnameValid   ? (isAr?"اسم العائلة مطلوب":"Last name required") : "",
-    country: touched.country  && !countryValid ? (isAr?"اختر الدولة":"Select your country") : "",
-    terms:   touched.terms    && !termsValid   ? (isAr?"يجب الموافقة على الشروط":"You must agree to the terms") : "",
+    email:       touched.email       && !emailValid    ? (isAr?"أدخل بريداً إلكترونياً صحيحاً":"Enter a valid email address") : "",
+    pass:        touched.pass        && !passValid     ? (isAr?"6 أحرف على الأقل":"At least 6 characters") : "",
+    pass2:       touched.pass2       && !pass2Valid    ? (isAr?"كلمتا المرور غير متطابقتين":"Passwords don't match") : "",
+    fname:       touched.fname       && !fnameValid    ? (isAr?"الاسم الأول مطلوب":"First name required") : "",
+    lname:       touched.lname       && !lnameValid    ? (isAr?"اسم العائلة مطلوب":"Last name required") : "",
+    country:     touched.country     && !countryValid  ? (isAr?"اختر الدولة":"Select your country") : "",
+    terms:       touched.terms       && !termsValid    ? (isAr?"يجب الموافقة على الشروط":"You must agree to the terms") : "",
+    companyName: touched.companyName && !companyValid  ? (isAr?"اسم الشركة مطلوب":"Company name required") : "",
+    teamSize:    touched.teamSize    && !teamSizeValid ? (isAr?"اختر حجم الفريق":"Select team size") : "",
   };
 
   // ── Social auth ──────────────────────────────────────────────────
@@ -372,13 +383,12 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     setErr(""); setSocial(key);
     try {
       const r = await fn();
-      if (!r) return; // redirect in progress — page will reload
-      // Profile read/create is best-effort — don't let Firestore errors
-      // surface as auth errors. onAuthStateChanged will load profile anyway.
+      if (!r) return;
       try {
         const p = await getUserProfile(r.user.uid);
         if (!p) await createUserProfile(r.user.uid, {
-          email: r.user.email, name: r.user.displayName||"", company: ""
+          email: r.user.email, name: r.user.displayName||"", company: "",
+          user_type: isCompany ? "hr_admin" : "individual",
         });
       } catch (profileErr) {
         console.warn("[Auth] profile setup error (non-fatal):", profileErr?.code || profileErr?.message);
@@ -391,11 +401,15 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   // ── Email submit ─────────────────────────────────────────────────
   const handleSubmit = useCallback(async e => {
     e.preventDefault();
-    // Touch all fields
     if (view==="login")  setTouched({email:true,pass:true});
-    if (view==="signup") setTouched({email:true,pass:true,pass2:true,fname:true,lname:true,country:true,terms:true});
+    if (view==="signup") {
+      const base = {email:true,pass:true,pass2:true,fname:true,lname:true,country:true,terms:true};
+      setTouched(isCompany ? {...base,companyName:true,teamSize:true} : {...base});
+    }
+    const signupValid = emailValid && passValid && pass2Valid && fnameValid && lnameValid && countryValid && termsValid
+      && (isCompany ? companyValid && teamSizeValid : true);
     if (view==="login"  && (!emailValid||!passValid)) { doShake(); return; }
-    if (view==="signup" && (!emailValid||!passValid||!pass2Valid||!fnameValid||!lnameValid||!countryValid||!termsValid)) { doShake(); return; }
+    if (view==="signup" && !signupValid) { doShake(); return; }
     if (!rateOk()) { setErr(isAr?"انتظر دقيقة":"Too many attempts"); return; }
     setErr(""); setLoading(true);
     try {
@@ -407,34 +421,34 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         const c = await signUpEmail(email.trim(), pass);
         try {
           await createUserProfile(c.user.uid, {
-            email:      email.trim(),
-            name:       `${fname.trim()} ${lname.trim()}`.trim(),
-            first_name: fname.trim(),
-            last_name:  lname.trim(),
+            email:       email.trim(),
+            name:        `${fname.trim()} ${lname.trim()}`.trim(),
+            first_name:  fname.trim(),
+            last_name:   lname.trim(),
             country,
-            profession: profession.trim(),
+            profession:  isCompany ? "hr_admin" : profession.trim(),
             newsletter,
-            company:    "",
+            company:     isCompany ? companyName.trim() : "",
+            team_size:   isCompany ? teamSize : "",
+            user_type:   isCompany ? "hr_admin" : "individual",
+            account_type: accountType,
           });
         } catch (profileErr) {
-          // Profile creation failed — roll back the Auth user so the
-          // account doesn't exist in a broken half-created state.
-          // The user will see a clear error and can try again.
-          console.error("[Auth] profile creation failed, rolling back auth user:", profileErr?.code || profileErr?.message);
+          console.error("[Auth] profile creation failed:", profileErr?.code || profileErr?.message);
           try { await deleteAuthUser(); } catch {}
-          throw profileErr; // re-throw so the outer catch shows the error
+          throw profileErr;
         }
         onAuth(c.user, true);
       }
     } catch(e) {
       setErr(getErr(e,isAr));
       doShake();
-      // Clear passwords after any error — avoids stale password state
-      // being re-submitted and confuses "wrong password" retries.
       setPass(""); setPass2(""); setShowP(false); setShowP2(false);
     }
     finally { setLoading(false); }
-  },[view,email,pass,pass2,fname,lname,emailValid,passValid,pass2Valid,fnameValid,lnameValid,countryValid,termsValid,isAr,onAuth]);
+  },[view,email,pass,pass2,fname,lname,emailValid,passValid,pass2Valid,fnameValid,lnameValid,
+     countryValid,termsValid,companyValid,teamSizeValid,isCompany,accountType,
+     companyName,teamSize,profession,isAr,onAuth,remember,newsletter]);
 
   // ── Forgot password ──────────────────────────────────────────────
   const handleForgot = useCallback(async e => {
