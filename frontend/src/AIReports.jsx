@@ -68,7 +68,7 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
   const _cleanName = (profile?.name || (isAr ? "المستخدم" : "User")).replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
   const safeName  = escapeHtml(_cleanName);
   const safeTitle = escapeHtml(reportTitle);
-  const planLabel = escapeHtml(qualityFor(_tier).label[isAr ? "ar" : "en"]);
+  const planLabel = escapeHtml(qualityFor(tier).label[isAr ? "ar" : "en"]);
 
   // ── Dynamic tier label (Fix: was hardcoded "Pro")
   const tierLabel = tier === "elite" ? "Elite" : tier === "professional" ? "Pro" : tier === "basic" ? "Basic" : "";
