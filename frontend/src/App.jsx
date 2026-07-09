@@ -3127,8 +3127,8 @@ export default function App(){
     }
     addToast(isAr?"جاري إنشاء التقرير الطولي...":"Generating longitudinal report...","info");
     try {
-      const { generateLongitudinalPDF } = await import("./firebase.js");
-      await generateLongitudinalPDF({ sessions: userSessions, profile, user, lang });
+      const { generateLongitudinalPDF } = await import("./lib/pdfReports.js");
+      await generateLongitudinalPDF({ sessions: userSessions, profile, aiSummary: "" });
       addToast(isAr?"✅ تم تحميل التقرير الطولي":"✅ Longitudinal PDF downloaded","success");
     } catch(e) {
       console.error("[Longitudinal PDF]", e);
@@ -3147,8 +3147,8 @@ export default function App(){
     }
     addToast(isAr?"جاري إنشاء تقرير المقارنة...":"Generating comparison PDF...","info");
     try {
-      const { generateComparisonPDF } = await import("./firebase.js");
-      await generateComparisonPDF({ session1, session2, profile, user, lang, allSessions: userSessions });
+      const { generateComparisonPDF } = await import("./lib/pdfReports.js");
+      await generateComparisonPDF({ sessions: userSessions, profile, aiSummary: "" });
       addToast(isAr?"✅ تم تحميل تقرير المقارنة":"✅ Comparison PDF downloaded","success");
     } catch(e) {
       console.error("[Comparison PDF]", e);
@@ -3163,8 +3163,8 @@ export default function App(){
     }
     addToast(isAr?"جاري إنشاء تقرير الفريق...":"Generating team PDF...","info");
     try {
-      const { generateTeamPDF } = await import("./firebase.js");
-      await generateTeamPDF({ users: allUsers||[], company: profile?.company||"", profile, lang });
+      const { generateAIPDF } = await import("./lib/pdfReports.js");
+      await generateAIPDF({ sessions: userSessions, profile, aiSummary: "" });
       addToast(isAr?"✅ تم تحميل تقرير الفريق":"✅ Team PDF downloaded","success");
     } catch(e) { addToast(`Team PDF error: ${e.message}`,"error"); }
   }
@@ -3252,12 +3252,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
       : (isAr?"جاري إنشاء الـ PDF...":"Generating PDF..."), "info");
 
     try{
-      const { generateSessionPDF, generateClinicalPDF } = await import("./firebase.js");
+      const { generateSessionPDF, generateClinicalPDF } = await import("./lib/pdfReports.js");
       const fn = isClinical ? generateClinicalPDF : generateSessionPDF;
       await fn({
         session: sessionData,
-        profile, user, lang,
-        allSessions: userSessions,   // pass full list so index is correct
+        sessions: userSessions,
+        profile,
+        aiSummary: sessionData.ai_tip || "",
       });
       addToast(isClinical
         ? (isAr?"✅ تم تحميل التقرير الطبي":"✅ Clinical PDF downloaded")
@@ -4089,7 +4090,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   }
                   addToast(isAr?"جاري إنشاء PDF...":"Generating PDF...","info");
                   try {
-                    const { generateSessionPDF } = await import("./firebase.js");
+                    const { generateSessionPDF } = await import("./lib/pdfReports.js");
                     await generateSessionPDF({
                       session: {
                         ...sessionResult,
@@ -4097,10 +4098,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         session_id: sessionId,
                         score_history: histRef.current||[],
                         metrics: lastAnalRef.current?.metrics||sessionResult.metrics||{},
-                        ai_tip: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||sessionResult.ai_tip||"",
-},
-                      profile, user, lang,
-                      sessionIndex: (userSessions.length||0)+1,
+                      },
+                      profile,
+                      aiSummary: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||sessionResult.ai_tip||"",
                     });
                     addToast(isAr?"✅ تم تحميل PDF":"✅ PDF downloaded","success");
                   } catch(e) {
@@ -5047,23 +5047,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
               const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
               const gp=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
               try {
-                const { generateSessionPDF } = await import("./firebase.js");
+                const { generateSessionPDF } = await import("./lib/pdfReports.js");
                 await generateSessionPDF({
                   session:{
                     avg_score:sc, duration_s:dur, good_pct:gp,
                     alerts_count:acRef.current?.total||0, mode, tier,
                     score_history:hist.slice(-60), created_at:new Date(),
                     metrics:lastAnalRef.current?.metrics||{},
-                    ai_tip:       lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
-                    improvement_tip: lastAnalRef.current?.improvement_tip||"",
-                    pain_summary: (()=>{
-                      const pm=lastAnalRef.current?.pain_prediction?.minutes_to_pain;
-                      if(!pm||pm>90) return null;
-                      return isAr?`⚠️ توقع إزعاج خلال ${Math.round(pm)} دقيقة`:`⚠️ Discomfort in ~${Math.round(pm)} min`;
-                    })(),
                   },
-                  profile, user, lang,
-                  sessionIndex:(userSessions.length||0)+1,
+                  profile,
+                  aiSummary: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
                 });
               } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
             }} style={{
