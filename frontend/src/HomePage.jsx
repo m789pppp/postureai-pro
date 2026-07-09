@@ -165,7 +165,7 @@ function TierBadge({ tier }) {
 }
 
 // ─── Analytics Inline Section ─────────────────────────────────────
-function AnalyticsInline({ userSessions, cs, isAr, tier, onOpenFull, onCompare, onTrend }) {
+function AnalyticsInline({ userSessions = [], cs, isAr, tier, onOpenFull, onCompare, onTrend }) {
   const hasData = userSessions.length > 0;
 
   // Compute per-day averages for last 14 days
@@ -189,7 +189,7 @@ function AnalyticsInline({ userSessions, cs, isAr, tier, onOpenFull, onCompare, 
   },[userSessions]);
 
   // Best/worst scores
-  const scores = userSessions.map(s=>s.avg_score||0).filter(Boolean);
+  const scores = (userSessions||[]).map(s=>s.avg_score||0).filter(Boolean);
   const best  = scores.length ? Math.max(...scores) : 0;
   const worst = scores.length ? Math.min(...scores) : 0;
   const trend = scores.length>=2 ? scores[0]-scores[1] : 0; // positive = improving

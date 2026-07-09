@@ -68,5 +68,10 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/ai-chat.js": {
+      "runtime": "edge"
+    }
+  }
 }
