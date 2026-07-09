@@ -260,21 +260,16 @@ function GlobalStyle() {
 
       :focus-visible{outline:2px solid ${C.indigo};outline-offset:3px}
 
-      /* ── HERO ── */
+      /* ── HERO — 2 columns ── */
       .lp-hero-grid{
         display:grid;
-        grid-template-columns:1fr 1.1fr 210px;
-        gap:24px;
-        align-items:start;
+        grid-template-columns:1fr 1.05fr;
+        gap:clamp(32px,4vw,64px);
+        align-items:center;
       }
-      @media(max-width:1100px){
-        .lp-hero-grid{grid-template-columns:1fr 1fr;gap:20px}
-        .lp-hero-col3{display:none!important}
-      }
-      @media(max-width:720px){
+      @media(max-width:900px){
         .lp-hero-grid{grid-template-columns:1fr}
-        .lp-hero-col2{display:none!important}
-        .lp-section{padding:52px 16px}
+        .lp-hero-right{display:none!important}
       }
 
       /* ── NAV ── */
@@ -320,13 +315,20 @@ function GlobalStyle() {
       .lp-sp-row2{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
 
       /* ── GENERAL ── */
-      @media(max-width:480px){
+      @media(max-width:1024px){
+        .lp-wrap{padding:0 20px}
+        .lp-section{padding:60px 20px}
+      }
+      @media(max-width:600px){
         .lp-wrap{padding:0 16px}
         .lp-section{padding:44px 16px}
-        h1{font-size:32px!important}
+      }
+      @media(max-width:420px){
+        h1{font-size:30px!important;line-height:1.1!important}
       }
       @media(prefers-reduced-motion:reduce){
-        .lp-drift-a,.lp-drift-b,.lp-lift,.lp-btn{animation:none!important;transition:none!important}
+        .lp-drift-a,.lp-drift-b{animation:none!important}
+        .lp-lift,.lp-btn{transition:none!important}
       }
     `}</style>
   );
@@ -646,7 +648,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
         </div>
 
         {/* Right — Camera demo with posture skeleton overlay */}
-        <Reveal delay={100}>
+        <Reveal delay={100} className="lp-hero-right">
           <div style={{ position:"relative", paddingTop:34, paddingBottom:30 }}>
             {/* Main camera view mockup */}
             <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
