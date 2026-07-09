@@ -58,7 +58,11 @@
     },
     {
       "src": "/api/llm",
-      "dest": "/api/llm.js"
+      "dest": "/frontend/api/llm.js"
+    },
+    {
+      "src": "/api/ai-chat",
+      "dest": "/frontend/api/llm.js"
     },
     {
       "src": "/api/(.*)",
