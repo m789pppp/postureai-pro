@@ -259,7 +259,7 @@ function AITextSection({ loading, data, error, onRetry, isAr, D }) {
   );
 }
 
-export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose }) {
+export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose , effectiveTier}) {
   const [tab, setTab]               = useState("executive");
   const [loading, setLoading]       = useState(false);
   const [data, setData]             = useState(null);   // AI-generated text
@@ -300,7 +300,7 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
   // ── AI summary builder ─────────────────────────────────────────
   const buildContext = useCallback(() => ({
     name:         profile?.name?.split(" ")[0] || "User",
-    tier:         profile?.tier || "professional",
+    tier:         (effectiveTier || profile?.tier || "standard") || "professional",
     avgScore,
     weekAvg,
     lastWeekAvg,

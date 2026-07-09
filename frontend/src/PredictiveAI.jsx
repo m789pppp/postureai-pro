@@ -328,7 +328,7 @@ function AIBlock({ loading, data, error, onRetry, isAr }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose }) {
+export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose , effectiveTier}) {
   const [tab, setTab]         = useState("burnout");
   const [aiText, setAiText]   = useState("");
   const [loading, setLoading] = useState(false);
