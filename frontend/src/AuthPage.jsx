@@ -854,7 +854,52 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     {fieldErr.country&&<div style={{fontSize:11.5,color:dark?"#f87171":"#ef4444",marginTop:4,paddingLeft:4}}>{fieldErr.country}</div>}
                   </div>
 
-                  {/* Profession */}
+                  {/* Company fields — only for Company/HR */}
+                  {isCompany && (
+                    <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16,
+                      padding:"14px 16px",borderRadius:12,
+                      background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.2)"}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#34d399",letterSpacing:".08em",textTransform:"uppercase",marginBottom:2}}>
+                        🏢 {isAr?"بيانات الشركة":"Company Details"}
+                      </div>
+                      <div>
+                        <label style={{display:"block",marginBottom:5,fontSize:11.5,fontWeight:600,
+                          color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
+                          {isAr?"اسم الشركة":"Company Name"} <span style={{color:"#ef4444"}}>*</span>
+                        </label>
+                        <input value={companyName} onChange={e=>{setCompanyName(e.target.value);touch("companyName");}}
+                          placeholder={isAr?"TechCorp Egypt":"Acme Corp"}
+                          style={{width:"100%",padding:"11px 13px",background:t.card,
+                            border:`1.5px solid ${fieldErr.companyName?"rgba(239,68,68,.5)":"rgba(16,185,129,.25)"}`,
+                            borderRadius:9,fontSize:14,color:t.text,outline:"none",
+                            fontFamily:"inherit",boxSizing:"border-box"}}/>
+                        {fieldErr.companyName&&<div style={{fontSize:11,color:"#ef4444",marginTop:4}}>{fieldErr.companyName}</div>}
+                      </div>
+                      <div>
+                        <label style={{display:"block",marginBottom:5,fontSize:11.5,fontWeight:600,
+                          color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
+                          {isAr?"حجم الفريق":"Team Size"} <span style={{color:"#ef4444"}}>*</span>
+                        </label>
+                        <select value={teamSize} onChange={e=>{setTeamSize(e.target.value);touch("teamSize");}}
+                          style={{width:"100%",padding:"11px 13px",background:t.card,
+                            border:`1.5px solid ${fieldErr.teamSize?"rgba(239,68,68,.5)":"rgba(16,185,129,.25)"}`,
+                            borderRadius:9,fontSize:14,color:teamSize?t.text:t.textSub,
+                            outline:"none",fontFamily:"inherit",cursor:"pointer",
+                            boxSizing:"border-box",appearance:"none",
+                            backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+                            backgroundRepeat:"no-repeat",backgroundPosition:"calc(100% - 12px) center"}}>
+                          <option value="">{isAr?"اختر حجم الفريق":"Select team size"}</option>
+                          {[["1-10","1–10"],["11-50","11–50"],["51-200","51–200"],["201-500","201–500"],["500+","500+"]].map(([v,l])=>(
+                            <option key={v} value={v}>{l} {isAr?"موظف":"employees"}</option>
+                          ))}
+                        </select>
+                        {fieldErr.teamSize&&<div style={{fontSize:11,color:"#ef4444",marginTop:4}}>{fieldErr.teamSize}</div>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Profession — only for Individual */}
+                  {!isCompany && (
                   <div style={{marginBottom:16}}>
                     <label style={{display:"block",marginBottom:6,fontSize:11.5,fontWeight:600,
                       color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
@@ -884,6 +929,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                       ].map(([v,l])=><option key={v} value={v}>{l}</option>)}
                     </select>
                   </div>
+                  )}
 
                   {/* Terms — links open mailto instead of void href (#1 fix) */}
                   <div style={{marginBottom:12}}>
