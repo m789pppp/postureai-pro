@@ -1645,52 +1645,55 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const isHR  = userRole==="hr_admin"||userRole==="platform_admin";
   const uid   = user?.uid;
 
-  const tools = [
-    { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم",
-      onClick:()=>setShowGamification?.(true) },
-    ...(isAdmin ? [{ id:"t-growth", icon:"🚀", en:"Growth Hub", ar:"مركز النمو",
-      onClick:()=>setShowGrowthHub?.(true) }] : []),
-    { id:"t-coach",    icon:"🤖", en:"AI Coach",    ar:"AI Coach",
-      locked:!pro, lockLabel:"PRO",
-      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
-    { id:"t-reports",  icon:"📋", en:"Reports",     ar:"التقارير",
+  const tools = isHR ? [
+    // ── Company / HR tools ────────────────────────────────────────
+    { id:"t-workforce", icon:"🏭", en:"Workforce",      ar:"قوى العمل",
+      onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
+    { id:"t-reports",   icon:"📋", en:"Team Reports",   ar:"تقارير الفريق",
       locked:!pro, lockLabel:"PRO",
       onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
-    { id:"t-compare",  icon:"📊", en:"Compare",     ar:"مقارنة الجلسات",
-      locked:!pro, lockLabel:"PRO",
-      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowSessionComparison?.(true); } else setShowBilling?.(true); }},
-    { id:"t-trend",    icon:"📈", en:"Trend",       ar:"مسار التحسن",
-      locked:!pro, lockLabel:"PRO",
-      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowTrendChart?.(true); } else setShowBilling?.(true); }},
-    { id:"t-insights", icon:"🧠", en:"AI Insights", ar:"رؤى AI",
+    { id:"t-insights",  icon:"🧠", en:"AI Insights",    ar:"رؤى AI",
       locked:!elite, lockLabel:"ELITE",
       onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
-    { id:"t-predict",  icon:"🔮", en:"Predictive AI",ar:"AI تنبؤي",
+    { id:"t-predict",   icon:"🔮", en:"Burnout AI",     ar:"AI إرهاق",
       locked:!elite, lockLabel:"ELITE",
       onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
-    // API Market + White-label: B2B only (HR/Admin) — hidden from B2C individuals
-    ...(isHR||isAdmin ? [
-      { id:"t-api", icon:"🔌", en:"API Market",  ar:"سوق API",
-        onClick:()=>setShowAPIMarketplace?.(true) },
-      { id:"t-wl",  icon:"🏷️", en:"White-label", ar:"علامتي التجارية",
-        onClick:()=>setShowWhiteLabel?.(true) },
-    ] : []),
-    ...(isHR||isAdmin ? [
-      { id:"t-workforce", icon:"🏭", en:"Workforce",     ar:"قوى العمل",
-        onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
-      { id:"t-audit",     icon:"📜", en:"Audit Log",     ar:"سجل المراجعة",
-        onClick:()=>setShowAuditSystem?.(true) },
-    ] : []),
+    { id:"t-audit",     icon:"📜", en:"Audit Log",      ar:"سجل المراجعة",
+      onClick:()=>setShowAuditSystem?.(true) },
+    { id:"t-api",       icon:"🔌", en:"API Market",     ar:"سوق API",
+      onClick:()=>setShowAPIMarketplace?.(true) },
+    { id:"t-wl",        icon:"🏷️", en:"White-label",    ar:"علامتي التجارية",
+      onClick:()=>setShowWhiteLabel?.(true) },
     ...(isAdmin ? [
-      { id:"t-success",   icon:"💡", en:"Cust. Success", ar:"نجاح العملاء",
-        onClick:()=>setShowCustomerSuccess?.(true) },
-      { id:"t-churn",     icon:"📉", en:"Churn AI",      ar:"توقع التسرب",
-        onClick:()=>setShowChurnPrediction?.(true) },
+      { id:"t-growth",   icon:"🚀", en:"Growth Hub",    ar:"مركز النمو",    onClick:()=>setShowGrowthHub?.(true) },
+      { id:"t-success",  icon:"💡", en:"Cust. Success", ar:"نجاح العملاء", onClick:()=>setShowCustomerSuccess?.(true) },
+      { id:"t-churn",    icon:"📉", en:"Churn AI",      ar:"توقع التسرب",  onClick:()=>setShowChurnPrediction?.(true) },
+      { id:"t-tenant",   icon:"🏢", en:"Multi-tenant",  ar:"متعدد المستأجرين", onClick:()=>setShowMultiTenant?.(true) },
     ] : []),
-    // Multi-tenant: B2B admin only
+  ] : [
+    // ── Individual / personal tools ───────────────────────────────
+    { id:"t-progress", icon:"🏆", en:"Progress",      ar:"التقدم",
+      onClick:()=>setShowGamification?.(true) },
+    { id:"t-coach",    icon:"🤖", en:"AI Coach",      ar:"AI Coach",
+      locked:!pro, lockLabel:"PRO",
+      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
+    { id:"t-reports",  icon:"📋", en:"AI Reports",    ar:"تقارير AI",
+      locked:!pro, lockLabel:"PRO",
+      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
+    { id:"t-compare",  icon:"📊", en:"Compare",       ar:"مقارنة الجلسات",
+      locked:!pro, lockLabel:"PRO",
+      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowSessionComparison?.(true); } else setShowBilling?.(true); }},
+    { id:"t-trend",    icon:"📈", en:"Trend",         ar:"مسار التحسن",
+      locked:!pro, lockLabel:"PRO",
+      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowTrendChart?.(true); } else setShowBilling?.(true); }},
+    { id:"t-insights", icon:"🧠", en:"AI Insights",   ar:"رؤى AI",
+      locked:!elite, lockLabel:"ELITE",
+      onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
+    { id:"t-predict",  icon:"🔮", en:"Predictive AI", ar:"AI تنبؤي",
+      locked:!elite, lockLabel:"ELITE",
+      onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
     ...(isAdmin ? [
-      { id:"t-tenant", icon:"🏢", en:"Multi-tenant", ar:"متعدد المستأجرين",
-        onClick:()=>setShowMultiTenant?.(true) },
+      { id:"t-growth",  icon:"🚀", en:"Growth Hub",   ar:"مركز النمو", onClick:()=>setShowGrowthHub?.(true) },
     ] : []),
   ];
 
@@ -1716,8 +1719,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
               {tier==="elite"?"Elite ✦":tier==="professional"?"Pro":tier==="business"?"Business":"Free"}
               {" · "}
               {userRole==="platform_admin"?"🛡 Platform Admin":
-               userRole==="hr_admin"?"🏢 HR Admin":
-               userRole==="employee"?"👤 Employee":"Personal"}
+               userRole==="hr_admin"?"🏢 Company HR":
+               userRole==="employee"?"👤 Employee":"🧑‍💻 Individual"}
             </div>
           </div>
         </div>
