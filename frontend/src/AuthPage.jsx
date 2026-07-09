@@ -313,6 +313,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [profession, setProfession]= useState("");
   const [companyName,setCompanyName]= useState("");
   const [teamSize,   setTeamSize]  = useState("");
+  const [companyRole,setCompanyRole]= useState("hr_admin");
   const [agreeTerms, setAgreeTerms]= useState(false);
   const [newsletter, setNewsletter]= useState(true);
   const [showP,      setShowP]     = useState(false);
@@ -387,10 +388,8 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       try {
         const p = await getUserProfile(r.user.uid);
         if (!p) await createUserProfile(r.user.uid, {
-          email: r.user.email, name: r.user.displayName||"", company: isCompany ? companyName.trim() : "",
-          user_type:   isCompany ? "hr_admin" : "individual",
-          acct_type:   isCompany ? "company"  : "individual",
-          is_org_owner: isCompany,
+          email: r.user.email, name: r.user.displayName||"", company: "",
+          user_type: isCompany ? "hr_admin" : "individual",
         });
       } catch (profileErr) {
         console.warn("[Auth] profile setup error (non-fatal):", profileErr?.code || profileErr?.message);
@@ -423,19 +422,19 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         const c = await signUpEmail(email.trim(), pass);
         try {
           await createUserProfile(c.user.uid, {
-            email:       email.trim(),
-            name:        `${fname.trim()} ${lname.trim()}`.trim(),
-            first_name:  fname.trim(),
-            last_name:   lname.trim(),
-            country,
-            profession:   isCompany ? "hr_admin" : profession.trim(),
+            email:        email.trim(),
+            name:         `${fname.trim()} ${lname.trim()}`.trim(),
+            first_name:   fname.trim(),
+            last_name:    lname.trim(),
+            country:      isCompany ? "" : country,
+            profession:   isCompany ? companyRole : profession.trim(),
             newsletter,
             company:      isCompany ? companyName.trim() : "",
             team_size:    isCompany ? teamSize : "",
-            user_type:    isCompany ? "hr_admin" : "individual",
-            acct_type:    isCompany ? "company" : "individual",
+            user_type:    isCompany ? companyRole : "individual",
             account_type: accountType,
-            is_org_owner: isCompany ? true : false,
+            is_org_owner: isCompany && companyRole === "hr_admin",
+            setup_complete: false,
           });
         } catch (profileErr) {
           console.error("[Auth] profile creation failed:", profileErr?.code || profileErr?.message);
@@ -799,7 +798,8 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                 </div>
               )}
 
-              <FloatInput id="email" label={isAr?"البريد الإلكتروني":"Email address"}
+              <FloatInput id="email"
+                label={isAr?"البريد الإلكتروني":(isCompany?"Work email":"Email address")}
                 type="email" value={email} onChange={v=>{setEmail(v);touch("email");}}
                 autoComplete="email" required dark={dark} isRtl={isAr}
                 error={fieldErr.email} valid={emailValid&&touched.email}/>
@@ -813,18 +813,75 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                 rightEl={eyeBtn(showP,()=>setShowP(v=>!v))}
                 hint={capsLock?(isAr?"⚠️ Caps Lock مفعّل":"⚠️ Caps Lock is on"):undefined}/>
 
-              {view==="signup" && (
-                <>
-                  <PwStrength pass={pass} dark={dark} isAr={isAr}/>
-                  <FloatInput id="pass2" label={isAr?"تأكيد كلمة المرور":"Confirm password"}
-                    type={showP2?"text":"password"} value={pass2}
-                    onChange={v=>{setPass2(v);touch("pass2");}}
-                    autoComplete="new-password" required dark={dark} isRtl={isAr}
-                    error={fieldErr.pass2} valid={pass2Valid&&touched.pass2}
-                    rightEl={eyeBtn(showP2,()=>setShowP2(v=>!v))}/>
+              {view==="signup" && (<>
+                <PwStrength pass={pass} dark={dark} isAr={isAr}/>
+                <FloatInput id="pass2" label={isAr?"تأكيد كلمة المرور":"Confirm password"}
+                  type={showP2?"text":"password"} value={pass2}
+                  onChange={v=>{setPass2(v);touch("pass2");}}
+                  autoComplete="new-password" required dark={dark} isRtl={isAr}
+                  error={fieldErr.pass2} valid={pass2Valid&&touched.pass2}
+                  rightEl={eyeBtn(showP2,()=>setShowP2(v=>!v))}/>
 
+                {/* ── COMPANY FIELDS ── */}
+                {isCompany && (<>
+                  <FloatInput id="companyName"
+                    label={isAr?"اسم الشركة":"Company name"}
+                    value={companyName} onChange={v=>{setCompanyName(v);touch("companyName");}}
+                    autoComplete="organization" required dark={dark} isRtl={isAr}
+                    error={fieldErr.companyName} valid={companyValid&&touched.companyName}/>
+
+                  {/* Team size */}
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:"block",marginBottom:6,fontSize:11.5,fontWeight:600,
+                      color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
+                      {isAr?"حجم الفريق":"Team size"} *
+                    </label>
+                    <select value={teamSize} onChange={e=>{setTeamSize(e.target.value);touch("teamSize");}}
+                      style={{width:"100%",padding:"13px 14px",
+                        background:t.card,
+                        border:`1.5px solid ${fieldErr.teamSize?"rgba(239,68,68,.5)":t.border}`,
+                        borderRadius:10,fontSize:14,color:teamSize?t.text:t.textSub,
+                        outline:"none",fontFamily:"inherit",cursor:"pointer",appearance:"none",
+                        backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+                        backgroundRepeat:"no-repeat",backgroundPosition:"calc(100% - 12px) center"}}>
+                      <option value="">{isAr?"اختر حجم الفريق":"Select team size"}</option>
+                      {[["1-10","1–10"],["11-50","11–50"],["51-200","51–200"],["201-500","201–500"],["500+","500+"]].map(([v,l])=><option key={v} value={v}>{l} {isAr?"موظف":"employees"}</option>)}
+                    </select>
+                    {fieldErr.teamSize&&<div style={{fontSize:11.5,color:"#f87171",marginTop:4}}>{fieldErr.teamSize}</div>}
+                  </div>
+
+                  {/* Role — who is signing up */}
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:"block",marginBottom:8,fontSize:11.5,fontWeight:600,
+                      color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
+                      {isAr?"دورك في الشركة":"Your role"}
+                    </label>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      {[
+                        {id:"hr_admin", icon:"👔", en:"HR / Admin", ar:"HR / مسؤول", desc:isAr?"أدير الفريق وأرى التقارير":"Manage team & see reports"},
+                        {id:"employee", icon:"🧑‍💻", en:"Employee", ar:"موظف", desc:isAr?"أستخدم التطبيق شخصياً":"Use the app personally"},
+                      ].map(r=>(
+                        <button key={r.id} type="button"
+                          onClick={()=>setCompanyRole(r.id)}
+                          style={{
+                            padding:"12px 10px", borderRadius:10, border:"none",cursor:"pointer",
+                            background: companyRole===r.id ? "rgba(26,86,219,.12)" : t.faint,
+                            border: `1.5px solid ${companyRole===r.id ? "rgba(26,86,219,.5)" : t.border}`,
+                            textAlign:"center", transition:"all .18s", fontFamily:"inherit",
+                          }}>
+                          <div style={{fontSize:20,marginBottom:4}}>{r.icon}</div>
+                          <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:2}}>{isAr?r.ar:r.en}</div>
+                          <div style={{fontSize:10.5,color:t.textSub,lineHeight:1.3}}>{r.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>)}
+
+                {/* ── INDIVIDUAL FIELDS ── */}
+                {!isCompany && (<>
                   {/* Country */}
-                  <div style={{marginBottom:fieldErr.country?4:16}}>
+                  <div style={{marginBottom:fieldErr.country?4:14}}>
                     <label style={{display:"block",marginBottom:6,fontSize:11.5,fontWeight:600,
                       color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
                       {isAr?"الدولة":"Country"} *
@@ -833,110 +890,37 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                       required
                       style={{width:"100%",padding:"13px 14px",
                         background:t.card,border:`1.5px solid ${fieldErr.country?"rgba(239,68,68,.5)":t.border}`,
-                        borderRadius:10,fontSize:14.5,color:country?t.text:t.textSub,
-                        outline:"none",fontFamily:"inherit",cursor:"pointer",
-                        boxSizing:"border-box",appearance:"none",
+                        borderRadius:10,fontSize:14,color:country?t.text:t.textSub,
+                        outline:"none",fontFamily:"inherit",cursor:"pointer",appearance:"none",
                         backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-                        backgroundRepeat:"no-repeat",
-                        backgroundPosition:isAr?"12px center":"calc(100% - 12px) center",
-                      }}>
+                        backgroundRepeat:"no-repeat",backgroundPosition:isAr?"12px center":"calc(100% - 12px) center"}}>
                       <option value="">{isAr?"اختر الدولة":"Select country"}</option>
-                      {[
-                        ["EG","🇪🇬 مصر / Egypt"],["SA","🇸🇦 السعودية / Saudi Arabia"],
-                        ["AE","🇦🇪 الإمارات / UAE"],["KW","🇰🇼 الكويت / Kuwait"],
-                        ["QA","🇶🇦 قطر / Qatar"],["BH","🇧🇭 البحرين / Bahrain"],
-                        ["OM","🇴🇲 عُمان / Oman"],["JO","🇯🇴 الأردن / Jordan"],
-                        ["LB","🇱🇧 لبنان / Lebanon"],["IQ","🇮🇶 العراق / Iraq"],
-                        ["MA","🇲🇦 المغرب / Morocco"],["DZ","🇩🇿 الجزائر / Algeria"],
-                        ["TN","🇹🇳 تونس / Tunisia"],["LY","🇱🇾 ليبيا / Libya"],
-                        ["SY","🇸🇾 سوريا / Syria"],["YE","🇾🇪 اليمن / Yemen"],
-                        ["SD","🇸🇩 السودان / Sudan"],["US","🇺🇸 United States"],
-                        ["GB","🇬🇧 United Kingdom"],["DE","🇩🇪 Germany"],
-                        ["FR","🇫🇷 France"],["other","🌍 Other"],
-                      ].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                      {[["EG","🇪🇬 مصر / Egypt"],["SA","🇸🇦 السعودية / Saudi Arabia"],["AE","🇦🇪 الإمارات / UAE"],["KW","🇰🇼 الكويت / Kuwait"],["QA","🇶🇦 قطر / Qatar"],["BH","🇧🇭 البحرين / Bahrain"],["OM","🇴🇲 عُمان / Oman"],["JO","🇯🇴 الأردن / Jordan"],["LB","🇱🇧 لبنان / Lebanon"],["IQ","🇮🇶 العراق / Iraq"],["MA","🇲🇦 المغرب / Morocco"],["DZ","🇩🇿 الجزائر / Algeria"],["TN","🇹🇳 تونس / Tunisia"],["US","🇺🇸 United States"],["GB","🇬🇧 United Kingdom"],["other","🌍 Other"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}
                     </select>
-                    {fieldErr.country&&<div style={{fontSize:11.5,color:dark?"#f87171":"#ef4444",marginTop:4,paddingLeft:4}}>{fieldErr.country}</div>}
+                    {fieldErr.country&&<div style={{fontSize:11.5,color:"#f87171",marginTop:4}}>{fieldErr.country}</div>}
                   </div>
 
-                  {/* Company fields — only for Company/HR */}
-                  {isCompany && (
-                    <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16,
-                      padding:"14px 16px",borderRadius:12,
-                      background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.2)"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:"#34d399",letterSpacing:".08em",textTransform:"uppercase",marginBottom:2}}>
-                        🏢 {isAr?"بيانات الشركة":"Company Details"}
-                      </div>
-                      <div>
-                        <label style={{display:"block",marginBottom:5,fontSize:11.5,fontWeight:600,
-                          color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
-                          {isAr?"اسم الشركة":"Company Name"} <span style={{color:"#ef4444"}}>*</span>
-                        </label>
-                        <input value={companyName} onChange={e=>{setCompanyName(e.target.value);touch("companyName");}}
-                          placeholder={isAr?"TechCorp Egypt":"Acme Corp"}
-                          style={{width:"100%",padding:"11px 13px",background:t.card,
-                            border:`1.5px solid ${fieldErr.companyName?"rgba(239,68,68,.5)":"rgba(16,185,129,.25)"}`,
-                            borderRadius:9,fontSize:14,color:t.text,outline:"none",
-                            fontFamily:"inherit",boxSizing:"border-box"}}/>
-                        {fieldErr.companyName&&<div style={{fontSize:11,color:"#ef4444",marginTop:4}}>{fieldErr.companyName}</div>}
-                      </div>
-                      <div>
-                        <label style={{display:"block",marginBottom:5,fontSize:11.5,fontWeight:600,
-                          color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
-                          {isAr?"حجم الفريق":"Team Size"} <span style={{color:"#ef4444"}}>*</span>
-                        </label>
-                        <select value={teamSize} onChange={e=>{setTeamSize(e.target.value);touch("teamSize");}}
-                          style={{width:"100%",padding:"11px 13px",background:t.card,
-                            border:`1.5px solid ${fieldErr.teamSize?"rgba(239,68,68,.5)":"rgba(16,185,129,.25)"}`,
-                            borderRadius:9,fontSize:14,color:teamSize?t.text:t.textSub,
-                            outline:"none",fontFamily:"inherit",cursor:"pointer",
-                            boxSizing:"border-box",appearance:"none",
-                            backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-                            backgroundRepeat:"no-repeat",backgroundPosition:"calc(100% - 12px) center"}}>
-                          <option value="">{isAr?"اختر حجم الفريق":"Select team size"}</option>
-                          {[["1-10","1–10"],["11-50","11–50"],["51-200","51–200"],["201-500","201–500"],["500+","500+"]].map(([v,l])=>(
-                            <option key={v} value={v}>{l} {isAr?"موظف":"employees"}</option>
-                          ))}
-                        </select>
-                        {fieldErr.teamSize&&<div style={{fontSize:11,color:"#ef4444",marginTop:4}}>{fieldErr.teamSize}</div>}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Profession — only for Individual */}
-                  {!isCompany && (
-                  <div style={{marginBottom:16}}>
+                  {/* Profession */}
+                  <div style={{marginBottom:14}}>
                     <label style={{display:"block",marginBottom:6,fontSize:11.5,fontWeight:600,
                       color:t.textSub,letterSpacing:".06em",textTransform:"uppercase"}}>
-                      {isAr?"المهنة":"Profession"} <span style={{opacity:.5}}>{isAr?"(اختياري)":"(optional)"}</span>
+                      {isAr?"المهنة":"Profession"} <span style={{opacity:.4}}>{isAr?"(اختياري)":"(optional)"}</span>
                     </label>
                     <select value={profession} onChange={e=>setProfession(e.target.value)}
                       style={{width:"100%",padding:"13px 14px",
                         background:t.card,border:`1.5px solid ${t.border}`,
-                        borderRadius:10,fontSize:14.5,color:profession?t.text:t.textSub,
-                        outline:"none",fontFamily:"inherit",cursor:"pointer",
-                        boxSizing:"border-box",appearance:"none",
+                        borderRadius:10,fontSize:14,color:profession?t.text:t.textSub,
+                        outline:"none",fontFamily:"inherit",cursor:"pointer",appearance:"none",
                         backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-                        backgroundRepeat:"no-repeat",
-                        backgroundPosition:isAr?"12px center":"calc(100% - 12px) center",
-                      }}>
-                      <option value="">{isAr?"اختر مهنتك":"Select your profession"}</option>
-                      {[
-                        isAr?["software_eng","مهندس برمجيات"]:["software_eng","Software Engineer"],
-                        isAr?["doctor","طبيب"]:["doctor","Doctor / Healthcare"],
-                        isAr?["hr","موارد بشرية"]:["hr","HR Professional"],
-                        isAr?["manager","مدير"]:["manager","Manager / Team Lead"],
-                        isAr?["student","طالب"]:["student","Student"],
-                        isAr?["designer","مصمم"]:["designer","Designer"],
-                        isAr?["accountant","محاسب"]:["accountant","Accountant / Finance"],
-                        isAr?["teacher","معلم"]:["teacher","Teacher / Educator"],
-                        isAr?["other","أخرى"]:["other","Other"],
-                      ].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                        backgroundRepeat:"no-repeat",backgroundPosition:isAr?"12px center":"calc(100% - 12px) center"}}>
+                      <option value="">{isAr?"اختر مهنتك":"Select profession"}</option>
+                      {[["software_eng",isAr?"مهندس برمجيات":"Software Engineer"],["doctor",isAr?"طبيب":"Doctor / Healthcare"],["hr",isAr?"موارد بشرية":"HR Professional"],["manager",isAr?"مدير":"Manager / Team Lead"],["student",isAr?"طالب":"Student"],["designer",isAr?"مصمم":"Designer"],["accountant",isAr?"محاسب":"Accountant"],["teacher",isAr?"معلم":"Teacher"],["other",isAr?"أخرى":"Other"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}
                     </select>
                   </div>
-                  )}
+                </>)}
 
-                  {/* Terms — links open mailto instead of void href (#1 fix) */}
-                  <div style={{marginBottom:12}}>
+                {/* Terms — shown for both individual and company */}
+                <div style={{marginBottom:12}}>
                     <label style={{display:"flex",alignItems:"flex-start",gap:11,cursor:"pointer",userSelect:"none",
                       padding:"11px 13px",borderRadius:10,
                       background:fieldErr.terms?"rgba(239,68,68,.05)":agreeTerms?"rgba(26,86,219,.04)":"transparent",
@@ -971,9 +955,9 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     {fieldErr.terms&&<div style={{fontSize:11.5,color:"#ef4444",marginTop:5,paddingLeft:4,display:"flex",alignItems:"center",gap:4}}>
                       <span>⚠</span>{fieldErr.terms}
                     </div>}
-                  </div>
+                </div>
 
-                  {/* Newsletter — #8 fix: full label is clickable */}
+                  {/* Newsletter */}
                   <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none",marginBottom:4}}>
                     <input type="checkbox" checked={newsletter} onChange={e=>setNewsletter(e.target.checked)}
                       style={{width:17,height:17,accentColor:t.acc,cursor:"pointer",flexShrink:0}}/>
