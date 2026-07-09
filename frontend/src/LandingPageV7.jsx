@@ -240,10 +240,10 @@ function SectionHead({ eyebrow, eyebrowColor, eyebrowBg, eyebrowBorder, title, s
 function GlobalStyle() {
   return (
     <style>{`
-      .lp-wrap{max-width:1200px;margin:0 auto;width:100%}
-      .lp-section{padding:64px 32px}
-      @media(max-width:1024px){.lp-section{padding:48px 24px}}
-      @media(max-width:600px){.lp-section{padding:36px 16px}}
+      .lp-wrap{max-width:1280px;margin:0 auto;width:100%}
+      .lp-section{padding:120px 32px}
+      @media(max-width:1024px){.lp-section{padding:80px 24px}}
+      @media(max-width:600px){.lp-section{padding:60px 16px}}
 
       .lp-lift{transition:transform .3s cubic-bezier(.16,1,.3,1),border-color .3s}
       .lp-lift:hover{transform:translateY(-6px)}
@@ -272,13 +272,14 @@ function GlobalStyle() {
 function Nav({ lang, setLang, onCTA }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState(null);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", h, { passive: true });
     return () => window.removeEventListener("scroll", h);
   }, []);
+
+  // Close the mobile menu automatically if the viewport grows back to desktop
   useEffect(() => {
     const h = () => { if (window.innerWidth > 860) setMobileOpen(false); };
     window.addEventListener("resize", h);
@@ -286,160 +287,112 @@ function Nav({ lang, setLang, onCTA }) {
   }, []);
 
   const ar = lang === "ar";
-
-  const navItems = ar ? [
-    { label:"المنتج", href:"#features", hasDropdown:true },
-    { label:"الحلول", href:"#casestudies", hasDropdown:true },
-    { label:"الأسعار", href:"#pricing", hasDropdown:false },
-    { label:"الموارد", href:"#", hasDropdown:true },
-    { label:"الشركة", href:"#", hasDropdown:true },
-  ] : [
-    { label:"Product", href:"#features", hasDropdown:true },
-    { label:"Solutions", href:"#casestudies", hasDropdown:true },
-    { label:"Pricing", href:"#pricing", hasDropdown:false },
-    { label:"Resources", href:"#", hasDropdown:true },
-    { label:"Company", href:"#", hasDropdown:true },
-  ];
+  const links = ar
+    ? [["المنصة","#features"],["الأسعار","#pricing"],["المؤسسات","#enterprise"],["نتائج حقيقية","#casestudies"]]
+    : [["Platform","#features"],["Pricing","#pricing"],["Enterprise","#enterprise"],["Results","#casestudies"]];
 
   return (
     <nav style={{
-      position:"fixed", top:0, left:0, right:0, zIndex:1000,
-      padding:"0 32px",
-      background: scrolled || mobileOpen ? "rgba(3,11,20,.95)" : "rgba(3,11,20,.6)",
-      backdropFilter:"blur(20px)",
-      borderBottom:`1px solid ${scrolled ? C.border : "transparent"}`,
-      transition:"background .3s, border-color .3s",
+      position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000,
+      padding: "0 24px",
+      background: scrolled || mobileOpen ? "rgba(3,11,20,.94)" : "transparent",
+      backdropFilter: scrolled || mobileOpen ? "blur(20px)" : "none",
+      borderBottom: scrolled || mobileOpen ? `1px solid ${C.border}` : "none",
+      transition: "background .3s,border-color .3s",
     }}>
-      <div className="lp-wrap" style={{
-        height:68, display:"flex", alignItems:"center",
-        justifyContent:"space-between", gap:24,
-      }}>
-
-        {/* ── Logo ── */}
-        <a href="#" onClick={e=>e.preventDefault()} style={{
-          display:"flex", alignItems:"center", gap:9,
-          textDecoration:"none", flexShrink:0,
-        }}>
-          <div style={{
-            width:34, height:34, borderRadius:9,
-            background:"linear-gradient(135deg,#1a56db,#0891b2)",
-            display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:17, boxShadow:"0 4px 14px rgba(79,124,249,.45)",
-          }}>◈</div>
-          <div style={{ lineHeight:1 }}>
-            <div style={{ fontWeight:800, fontSize:15.5, color:C.text,
-              fontFamily:FONT_DISPLAY, letterSpacing:"-.02em" }}>Corvus</div>
-            <div style={{ fontSize:9.5, color:C.muted, fontWeight:500,
-              letterSpacing:".04em", textTransform:"uppercase" }}>AI Posture Coaching</div>
-          </div>
+      <div className="lp-wrap" style={{ height: 72,
+        display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        {/* Logo */}
+        <a href="#" onClick={e=>e.preventDefault()} style={{ display:"flex", alignItems:"center", gap:10,
+          textDecoration:"none", color:C.text, flexShrink:0 }}>
+          <div style={{ width:38, height:38, borderRadius:11,
+            background: C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:19, boxShadow:"0 4px 16px rgba(79,124,249,.4)" }}>🧘</div>
+          <span style={{ fontWeight:700, fontSize:18, letterSpacing:"-.02em", fontFamily:FONT_DISPLAY }}>
+            Corvus <span style={{ background:C.gHero, WebkitBackgroundClip:"text",
+              WebkitTextFillColor:"transparent" }}>Pro</span>
+          </span>
         </a>
 
-        {/* ── Center nav links ── */}
-        <div className="lp-nav-links" style={{
-          display:"flex", alignItems:"center", gap:2,
-          flex:1, justifyContent:"center",
-        }}>
-          {navItems.map(item => (
-            <div key={item.label} style={{ position:"relative" }}
-              onMouseEnter={() => item.hasDropdown && setActiveDropdown(item.label)}
-              onMouseLeave={() => setActiveDropdown(null)}>
-              <a href={item.href} style={{
-                display:"flex", alignItems:"center", gap:4,
-                color: activeDropdown===item.label ? C.text : C.sub,
-                textDecoration:"none", padding:"8px 14px",
-                borderRadius:8, fontSize:14, fontWeight:500,
-                transition:"color .18s",
-              }}
-              onMouseEnter={e=>e.currentTarget.style.color=C.text}
-              onMouseLeave={e=>e.currentTarget.style.color= activeDropdown===item.label ? C.text : C.sub}>
-                {item.label}
-                {item.hasDropdown && (
-                  <svg width="11" height="7" viewBox="0 0 11 7" fill="none"
-                    style={{ marginTop:1, transition:"transform .2s",
-                      transform: activeDropdown===item.label ? "rotate(180deg)" : "none" }}>
-                    <path d="M1 1L5.5 5.5L10 1" stroke={C.sub} strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                )}
-              </a>
-            </div>
+        {/* Desktop links */}
+        <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:4 }}>
+          {links.map(([label, href]) => (
+            <a key={href} href={href} style={{
+              color:C.sub, textDecoration:"none", padding:"9px 16px",
+              borderRadius:8, fontSize:14.5, fontWeight:500,
+              transition:"color .2s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = C.text}
+            onMouseLeave={e => e.currentTarget.style.color = C.sub}>{label}</a>
           ))}
         </div>
 
-        {/* ── Right actions ── */}
-        <div className="lp-nav-actions" style={{
-          display:"flex", alignItems:"center", gap:8, flexShrink:0,
-        }}>
+        {/* Desktop actions */}
+        <div className="lp-nav-actions" style={{ display:"flex", alignItems:"center", gap:10 }}>
           <button onClick={() => setLang(ar ? "en" : "ar")} style={{
             background:"transparent", border:`1px solid ${C.border}`,
-            color:C.muted, padding:"6px 12px", borderRadius:7,
-            cursor:"pointer", fontSize:12.5, fontWeight:500,
-            transition:"border-color .18s, color .18s",
-          }}
-          onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM}}
-          onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border}}>
-            {ar ? "EN" : "عربي"}
-          </button>
+            color:C.sub, padding:"7px 14px", borderRadius:8,
+            cursor:"pointer", fontSize:13, fontWeight:500,
+          }}>{ar ? "EN" : "عربي"}</button>
           <a href="#" onClick={(e)=>{e.preventDefault();navTo("/auth")}} style={{
-            color:C.sub, textDecoration:"none", fontSize:14, fontWeight:500,
-            padding:"8px 12px", borderRadius:8, transition:"color .18s",
-          }}
-          onMouseEnter={e=>e.currentTarget.style.color=C.text}
-          onMouseLeave={e=>e.currentTarget.style.color=C.sub}>
-            {ar ? "تسجيل دخول" : "Log in"}
-          </a>
-          <a href="#" className="lp-btn lp-btn-primary"
-            onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
-            style={{
-              ...btn("primary","sm"),
-              background:"linear-gradient(135deg,#1a56db,#0891b2)",
-              boxShadow:"0 4px 18px rgba(26,86,219,.4)",
-              borderRadius:10,
-            }}>
-            {ar ? "ابدأ مجاناً" : "Start Free Trial"}
+            color:C.sub, textDecoration:"none", fontSize:14.5, fontWeight:500,
+            padding:"8px 14px", display:"inline-block",
+          }}>{ar ? "تسجيل دخول" : "Sign in"}</a>
+          <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","sm")}>
+            {ar ? "جرّب مجاناً" : "Start Free Trial"}
           </a>
         </div>
 
-        {/* Mobile burger */}
-        <button aria-label="Open menu" aria-expanded={mobileOpen}
+        {/* Mobile hamburger */}
+        <button aria-label={ar ? "فتح القائمة" : "Open menu"} aria-expanded={mobileOpen}
           className="lp-nav-burger" onClick={() => setMobileOpen(o => !o)}
           style={{
-            display:"none", width:38, height:38, borderRadius:8, flexShrink:0,
+            display:"none", width:40, height:40, borderRadius:9, flexShrink:0,
             background:"rgba(255,255,255,.06)", border:`1px solid ${C.border}`,
-            cursor:"pointer", alignItems:"center", justifyContent:"center",
+            cursor:"pointer", alignItems:"center", justifyContent:"center", gap:0,
           }}>
-          <div style={{ width:17, height:12, position:"relative" }}>
+          <div style={{ width:18, height:13, position:"relative" }}>
             {[0,1,2].map(i => (
               <span key={i} style={{
-                position:"absolute", left:0, right:0, height:1.5, borderRadius:2,
-                background:C.text, top: i===0?0:i===1?5:10,
-                transition:"transform .22s, opacity .18s",
+                position:"absolute", left:0, right:0, height:1.6, borderRadius:2,
+                background:C.text, top: i===0 ? 0 : i===1 ? 5.5 : 11,
+                transition:"transform .25s, opacity .2s",
                 transform: mobileOpen
-                  ? (i===0?"translateY(5px) rotate(45deg)":i===1?"scaleX(0)":"translateY(-5px) rotate(-45deg)")
+                  ? (i===0 ? "translateY(5.5px) rotate(45deg)" : i===1 ? "scaleX(0)" : "translateY(-5.5px) rotate(-45deg)")
                   : "none",
-                opacity: mobileOpen&&i===1 ? 0 : 1,
+                opacity: mobileOpen && i===1 ? 0 : 1,
               }}/>
             ))}
           </div>
         </button>
       </div>
 
-      {/* Mobile panel */}
+      {/* Mobile dropdown panel */}
       {mobileOpen && (
         <motion.div
           initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }}
-          transition={{ duration:.22, ease:[0.22,1,0.36,1] }}
+          exit={{ opacity:0, height:0 }} transition={{ duration:.25, ease:[0.22,1,0.36,1] }}
           style={{ overflow:"hidden", borderTop:`1px solid ${C.border}` }}>
           <div style={{ padding:"16px 24px 24px", display:"flex", flexDirection:"column", gap:4 }}>
-            {navItems.map(item => (
-              <a key={item.label} href={item.href} onClick={() => setMobileOpen(false)} style={{
+            {links.map(([label, href]) => (
+              <a key={href} href={href} onClick={() => setMobileOpen(false)} style={{
                 color:C.sub, textDecoration:"none", padding:"12px 6px",
-                fontSize:15, fontWeight:500, borderBottom:`1px solid ${C.border}`,
-              }}>{item.label}</a>
+                fontSize:16, fontWeight:500, borderBottom:`1px solid ${C.border}`,
+              }}>{label}</a>
             ))}
-            <a href="#" className="lp-btn lp-btn-primary"
-              onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
-              style={{ ...btn("primary","lg"), width:"100%", marginTop:16 }}>
-              {ar ? "ابدأ مجاناً" : "Start Free Trial"}
+            <div style={{ display:"flex", gap:10, marginTop:16, alignItems:"center" }}>
+              <button onClick={() => setLang(ar ? "en" : "ar")} style={{
+                background:"transparent", border:`1px solid ${C.border}`,
+                color:C.sub, padding:"9px 16px", borderRadius:8,
+                cursor:"pointer", fontSize:13.5, fontWeight:500,
+              }}>{ar ? "EN" : "عربي"}</button>
+              <a href="#" onClick={(e)=>{e.preventDefault();navTo("/auth")}} style={{
+                color:C.sub, textDecoration:"none", fontSize:14.5, fontWeight:500,
+              }}>{ar ? "تسجيل دخول" : "Sign in"}</a>
+            </div>
+            <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
+              style={{ ...btn("primary","lg"), width:"100%", marginTop:14 }}>
+              {ar ? "جرّب مجاناً" : "Start Free Trial"}
             </a>
           </div>
         </motion.div>
@@ -460,495 +413,341 @@ function Hero({ lang, onCTA, mode, setMode }) {
   const ar = lang === "ar";
   const reduce = useReducedMotion();
   const isCompany = mode === "company";
-  const [demoScore, setDemoScore] = useState(89);
-  const [neckAngle, setNeckAngle] = useState(15);
+  const [demoScore, setDemoScore] = useState(82);
   useEffect(() => {
     const iv = setInterval(() => {
       setDemoScore(s => {
-        const n = s + (Math.random() > .5 ? 1 : -1) * Math.floor(Math.random() * 3);
-        return Math.max(60, Math.min(98, n));
+        const n = s + (Math.random() > .5 ? 1 : -1) * Math.floor(Math.random() * 4);
+        return Math.max(55, Math.min(98, n));
       });
-      setNeckAngle(a => {
-        const n = a + (Math.random() > .5 ? 1 : -1);
-        return Math.max(8, Math.min(18, n));
-      });
-    }, 1600);
+    }, 1400);
     return () => clearInterval(iv);
   }, []);
 
   const scoreColor = demoScore >= 80 ? C.green : demoScore >= 60 ? C.amber : C.red;
-  const float = (delay = 0, dist = 8) => reduce ? {} : {
+  const float = (delay = 0, dist = 10) => reduce ? {} : {
     animate: { y: [0, -dist, 0] },
     transition: { duration: 5, repeat: Infinity, ease: "easeInOut", delay },
   };
 
   return (
     <section style={{
-      minHeight:"100vh", display:"flex", alignItems:"center",
-      padding:"100px 32px 64px", position:"relative", overflow:"hidden",
-      background:C.bg,
+      minHeight: "100vh", display:"flex", alignItems:"center",
+      padding:"132px 24px 90px", position:"relative", overflow:"hidden",
     }}>
-      {/* ── Ambient background glows (match image) ── */}
-      <div style={{ position:"absolute", inset:0, pointerEvents:"none", overflow:"hidden" }}>
-        {/* Blue glow center-right */}
+      {/* Ambient background */}
+      <div style={{ position:"absolute", inset:0, pointerEvents:"none" }}>
         <div className="lp-drift-a" style={{
-          position:"absolute", top:"10%", left:"55%",
-          width:700, height:700,
-          background:"radial-gradient(circle,rgba(79,124,249,.18) 0%,transparent 65%)",
+          position:"absolute", top:"8%", left:"58%",
+          width:680, height:680,
+          background:"radial-gradient(circle,rgba(79,124,249,.16) 0%,transparent 70%)",
           borderRadius:"50%", transform:"translate(-50%,-50%)",
         }}/>
-        {/* Green glow bottom-left */}
         <div className="lp-drift-b" style={{
-          position:"absolute", bottom:"5%", left:"8%",
-          width:500, height:500,
-          background:"radial-gradient(circle,rgba(16,217,160,.12) 0%,transparent 65%)",
+          position:"absolute", bottom:"12%", left:"14%",
+          width:460, height:460,
+          background:"radial-gradient(circle,rgba(16,217,160,.1) 0%,transparent 70%)",
           borderRadius:"50%",
         }}/>
-        {/* Cyan glow far right */}
         <div style={{
-          position:"absolute", top:"35%", right:"2%",
-          width:350, height:350,
-          background:"radial-gradient(circle,rgba(34,211,238,.09) 0%,transparent 65%)",
+          position:"absolute", top:"42%", right:"6%",
+          width:320, height:320,
+          background:"radial-gradient(circle,rgba(34,211,238,.08) 0%,transparent 70%)",
           borderRadius:"50%",
         }}/>
-        {/* Subtle dot-grid overlay */}
-        <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.035 }}
+        {/* Grid */}
+        <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.04 }}
           xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <pattern id="dotgrid" width="32" height="32" patternUnits="userSpaceOnUse">
-              <circle cx="1" cy="1" r="1" fill={C.sub}/>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M40 0L0 0 0 40" fill="none" stroke={C.text} strokeWidth=".5"/>
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#dotgrid)"/>
+          <rect width="100%" height="100%" fill="url(#grid)"/>
         </svg>
       </div>
 
-      {/* ── Hero 3-column grid ── */}
-      <div className="lp-wrap" style={{ width:"100%", position:"relative" }}>
-        <div className="lp-hero-grid" style={{
-          display:"grid",
-          gridTemplateColumns:"1fr 1.1fr 220px",
-          gap:"clamp(20px,3vw,36px)",
-          alignItems:"start",
-          direction: ar ? "rtl" : "ltr",
-        }}>
-
-          {/* ══ COL 1 — Hero copy ══ */}
-          <div style={{ paddingTop:8 }}>
-
-            {/* Individual / Company toggle — matches image */}
-            <Reveal>
-              <div style={{
-                display:"inline-flex", alignItems:"center", gap:3,
-                background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
-                borderRadius:100, padding:3, marginBottom:20,
-              }}>
-                {[
-                  { id:"individual", en:"👤 Individual", ar:"👤 فردي" },
-                  { id:"company",    en:"🏢 Company / HR", ar:"🏢 شركات وفرق" },
-                ].map(m => (
-                  <button key={m.id} onClick={()=>setMode(m.id)} style={{
-                    padding:"7px 16px", borderRadius:99, border:"none",
-                    fontSize:13, fontWeight:600, cursor:"pointer",
-                    background: mode===m.id
-                      ? "linear-gradient(135deg,#1a56db,#0891b2)"
-                      : "transparent",
-                    color: mode===m.id ? "#fff" : C.sub,
-                    boxShadow: mode===m.id ? "0 2px 12px rgba(26,86,219,.35)" : "none",
-                    transition:"background .22s, color .22s, box-shadow .22s",
-                  }}>
-                    {ar ? m.ar : m.en}
-                  </button>
-                ))}
-              </div>
-            </Reveal>
-
-            {/* "Now Available" pill */}
-            <Reveal delay={30}>
-              <div style={{
-                display:"inline-flex", alignItems:"center", gap:8,
-                background:"rgba(16,217,160,.08)",
-                border:"1px solid rgba(16,217,160,.2)",
-                borderRadius:100, padding:"6px 14px", marginBottom:22,
-              }}>
-                <span style={{
-                  width:6, height:6, borderRadius:"50%", background:C.green,
-                  boxShadow:`0 0 8px ${C.green}`,
-                  animation:"lp-pulse 1.5s ease-in-out infinite",
-                  flexShrink:0,
-                }}/>
-                <span style={{ fontSize:12.5, color:C.green, fontWeight:600, letterSpacing:".04em" }}>
-                  {ar ? "متاح الآن · ابدأ مجاناً" : "NOW AVAILABLE · FREE TO START"}
-                </span>
-              </div>
-            </Reveal>
-
-            {/* Headline */}
-            <Reveal delay={60}>
-              <h1 style={{
-                fontSize:"clamp(36px,4vw,58px)", fontWeight:800,
-                lineHeight:1.08, letterSpacing:"-.03em",
-                color:C.text, margin:"0 0 20px", fontFamily:FONT_DISPLAY,
-              }}>
-                {isCompany ? (
-                  ar ? (
-                    <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>قلّل إجازات الأمراض</span>{" "}47%{"\n"}مع تدريب الوضعية بالذكاء الاصطناعي</>
-                  ) : (
-                    <>Cut Sick Leave <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>47%</span><br/>with <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>AI Posture Coaching</span></>
-                  )
-                ) : (
-                  ar ? (
-                    <>اخلص من آلام الظهر<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>في أسبوعين فقط</span></>
-                  ) : (
-                    <>Stop Back Pain<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 2 Weeks</span></>
-                  )
-                )}
-              </h1>
-            </Reveal>
-
-            {/* Subtext */}
-            <Reveal delay={120}>
-              <p style={{ fontSize:"clamp(15px,1.2vw,17px)", color:C.sub, lineHeight:1.7, maxWidth:440, margin:"0 0 32px" }}>
-                {isCompany
-                  ? (ar
-                      ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
-                      : "Reduce occupational sick days by 47% and boost team productivity. Real-time AI posture coaching built for MENA enterprise teams.")
-                  : (ar
-                      ? "كاميرا اللابتوب بتاعك كافية. الذكاء الاصطناعي بيتابع وضعيتك في الخلفية ويبعتلك تنبيه لو انحنيت."
-                      : "Your laptop camera is all you need. AI monitors your posture in the background and alerts you when you slouch — no hardware needed.")
-                }
-              </p>
-            </Reveal>
-
-            {/* CTAs */}
-            <Reveal delay={180}>
-              <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:28 }}>
-                <a href="#" className="lp-btn lp-btn-primary"
-                  onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
-                  style={{
-                    ...btn("primary","lg"),
-                    background:"linear-gradient(135deg,#1a56db,#0891b2)",
-                    boxShadow:"0 6px 24px rgba(26,86,219,.45)",
-                    borderRadius:12,
-                  }}>
-                  {isCompany
-                    ? (ar ? "🚀 تجربة مجانية 7 أيام — لفريقي" : "🚀 Free 7-Day Trial — For My Team")
-                    : (ar ? "🚀 تجربة مجانية 7 أيام" : "🚀 Start 7-Day Free Trial")}
-                </a>
-                <a href="#pricing" className="lp-btn lp-btn-ghost"
-                  onClick={e=>onCTA(e)}
-                  style={{
-                    ...btn("ghost","lg"),
-                    border:`1px solid ${C.borderM}`,
-                    borderRadius:12,
-                  }}>
-                  {ar ? "عرض الأسعار" : "View Pricing"}
-                </a>
+      <div className="lp-wrap lp-hero-grid" style={{ width:"100%",
+        display:"grid", gridTemplateColumns:"1.08fr 1fr", gap:"clamp(40px,5vw,80px)", alignItems:"center",
+        direction: ar ? "rtl" : "ltr" }}>
+        {/* Left */}
+        <div>
+          <Reveal>
+            {/* Individual / Company toggle — drives the rest of the page */}
+            <div style={{
+              display:"inline-flex", alignItems:"center", gap:3,
+              background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
+              borderRadius:100, padding:4, marginBottom:24,
+            }}>
+              {[
+                { id:"individual", en:"👤 Individual", ar:"👤 فردي" },
+                { id:"company",    en:"🏢 Company & Teams", ar:"🏢 شركات وفرق" },
+              ].map(m => (
+                <button key={m.id} onClick={()=>setMode(m.id)} style={{
+                  padding:"8px 18px", borderRadius:99, border:"none",
+                  fontSize:13.5, fontWeight:600, cursor:"pointer",
+                  background: mode===m.id ? C.gHero : "transparent",
+                  color: mode===m.id ? "#06121f" : C.sub,
+                  boxShadow: mode===m.id ? "0 2px 12px rgba(34,211,238,.25)" : "none",
+                  transition:"background .25s, color .25s, box-shadow .25s",
+                }}>
+                  {ar ? m.ar : m.en}
+                </button>
+              ))}
             </div>
-            {/* Trust badges row — below CTAs, exactly like image */}
-            <div style={{ display:"flex", gap:"4px 20px", flexWrap:"wrap", alignItems:"center" }}>
+          </Reveal>
+
+          <Reveal delay={40}>
+            <div style={{
+              display:"inline-flex", alignItems:"center", gap:9,
+              background:"rgba(79,124,249,.1)", border:"1px solid rgba(79,124,249,.25)",
+              borderRadius:100, padding:"7px 16px", marginBottom:28,
+              fontSize:13.5, color:C.indigo, fontWeight:500,
+            }}>
+              <span style={{
+                width:6, height:6, borderRadius:"50%", background:C.green,
+                boxShadow:`0 0 8px ${C.green}`,
+                animation:"lp-pulse 1.5s ease-in-out infinite",
+              }}/>
+              {ar ? "متاح الآن · ابدأ مجاناً" : "Now Available · Free to Start"}
+            </div>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <h1 style={{
+              ...TYPE.hero, color:C.text, margin:"0 0 24px", fontFamily:FONT_DISPLAY,
+            }}>
+              {isCompany ? (
+                ar
+                  ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>قلّل إجازات الأمراض</span>{" "}47% بدون أجهزة إضافية</>
+                  : <>Cut Sick Leave <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>47%</span><br/>with AI Posture Coaching</>
+              ) : (
+                ar
+                  ? <>اخلص من آلام الظهر والرقبة<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>في أسبوعين فقط</span></>
+                  : <>Stop Back & Neck Pain<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 2 Weeks</span></>
+              )}
+            </h1>
+          </Reveal>
+
+          <Reveal delay={140}>
+            <p style={{ ...TYPE.body, color:C.sub, maxWidth:520, margin:"0 0 40px" }}>
+              {isCompany
+                ? (ar
+                    ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
+                    : "Reduce occupational sick days by 47% and boost team productivity. Real-time AI posture coaching built for MENA enterprise teams.")
+                : (ar
+                    ? "كاميرا اللابتوب بتاعك كافية. الذكاء الاصطناعي بيتابع وضعيتك في الخلفية ويبعتلك تنبيه لو انحنيت — من غير أي أجهزة أو اشتراك مكلف."
+                    : "Your laptop camera is all you need. AI monitors your posture in the background and alerts you when you slouch — no hardware, no expensive subscriptions.")
+              }
+            </p>
+          </Reveal>
+
+          <Reveal delay={200}>
+            <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:16 }}>
+              {isCompany ? (
+                <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
+                  {ar ? "🚀 تجربة مجانية 7 أيام — لفريقي" : "🚀 Free 7-Day Trial — For My Team"}
+                </a>
+              ) : (
+                <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=personal_pro")}} style={btn("primary","lg")}>
+                  {ar ? "🚀 تجربة مجانية 7 أيام" : "🚀 Start 7-Day Free Trial"}
+                </a>
+              )}
+              <a href="#pricing" className="lp-btn lp-btn-ghost" onClick={(e)=>{onCTA(e)}} style={btn("ghost","lg")}>
+                {ar ? "عرض الأسعار" : "View Pricing"}
+              </a>
+            </div>
+            {/* Trust micro-badges — address common objections immediately under CTA */}
+            <div style={{ display:"flex", gap:"6px 18px", flexWrap:"wrap", alignItems:"center" }}>
               {(ar
                 ? ["✓ مجاني 7 أيام","✓ بدون بطاقة بنكية","✓ بدون تحميل برنامج","✓ أي كاميرا لابتوب"]
                 : ["✓ 7-day free trial","✓ No credit card","✓ No software to install","✓ Any laptop camera"]
               ).map(tr=>(
-                <span key={tr} style={{ fontSize:12.5, color:C.muted, fontWeight:500 }}>{tr}</span>
+                <span key={tr} style={{ fontSize:12, color:C.muted, fontWeight:500 }}>{tr}</span>
               ))}
             </div>
           </Reveal>
-        </div>{/* end col 1 */}
 
-        {/* ══ COL 2 — Camera feed card ══ */}
-        <Reveal delay={100}>
-          <div style={{
-            background:C.card,
-            border:`1px solid rgba(79,124,249,.28)`,
-            borderRadius:20, overflow:"hidden",
-            boxShadow:"0 0 48px rgba(79,124,249,.1), 0 8px 32px rgba(0,0,0,.4)",
-          }}>
-            {/* Browser chrome */}
-            <div style={{
-              display:"flex", alignItems:"center", gap:6, padding:"10px 14px",
-              borderBottom:`1px solid ${C.border}`,
-              background:"rgba(255,255,255,.02)",
-            }}>
-              <span style={{ width:9, height:9, borderRadius:"50%", background:"#f87171" }}/>
-              <span style={{ width:9, height:9, borderRadius:"50%", background:"#f59e0b" }}/>
-              <span style={{ width:9, height:9, borderRadius:"50%", background:"#10d9a0" }}/>
-              <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
-                <span style={{
-                  fontSize:11, color:C.muted, fontFamily:FONT_MONO,
-                  background:"rgba(255,255,255,.04)", padding:"3px 14px", borderRadius:6,
-                }}>corvus-ai • live analysis</span>
-              </div>
-            </div>
-
-            {/* Camera viewport */}
-            <div style={{ position:"relative", background:"#050e1c", aspectRatio:"4/3", overflow:"hidden" }}>
-              {/* Dark radial bg */}
-              <div style={{ position:"absolute", inset:0,
-                background:"radial-gradient(ellipse 70% 85% at 45% 40%, rgba(12,28,58,.95) 0%, rgba(2,5,14,1) 100%)" }}/>
-
-              {/* Seated person + skeleton — matches uploaded image exactly */}
-              <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
-                viewBox="0 0 400 320" preserveAspectRatio="xMidYMid meet">
-
-                {/* ── Desk & chair ── */}
-                {/* Desk surface */}
-                <rect x="60" y="228" width="280" height="8" rx="3" fill="rgba(20,42,80,.85)" stroke="rgba(79,124,249,.2)" strokeWidth="1"/>
-                {/* Desk legs */}
-                <rect x="80" y="236" width="8" height="84" rx="2" fill="rgba(15,32,62,.7)"/>
-                <rect x="312" y="236" width="8" height="84" rx="2" fill="rgba(15,32,62,.7)"/>
-                {/* Chair seat */}
-                <rect x="148" y="235" width="104" height="14" rx="5" fill="rgba(18,36,70,.8)" stroke="rgba(79,124,249,.15)" strokeWidth="1"/>
-                {/* Chair back */}
-                <rect x="165" y="182" width="70" height="58" rx="5" fill="rgba(14,28,56,.7)" stroke="rgba(79,124,249,.12)" strokeWidth="1"/>
-                {/* Chair legs */}
-                <line x1="158" y1="249" x2="148" y2="290" stroke="rgba(18,36,70,.8)" strokeWidth="4" strokeLinecap="round"/>
-                <line x1="242" y1="249" x2="252" y2="290" stroke="rgba(18,36,70,.8)" strokeWidth="4" strokeLinecap="round"/>
-
-                {/* ── Monitor on desk ── */}
-                <rect x="148" y="148" width="104" height="72" rx="4" fill="rgba(16,38,78,.75)" stroke="rgba(79,124,249,.35)" strokeWidth="1.5"/>
-                {/* Screen glow */}
-                <rect x="154" y="154" width="92" height="60" rx="2" fill="rgba(79,124,249,.1)"/>
-                {/* Screen content lines */}
-                <rect x="164" y="163" width="52" height="3" rx="1" fill="rgba(79,124,249,.5)"/>
-                <rect x="164" y="171" width="36" height="2" rx="1" fill="rgba(79,124,249,.3)"/>
-                <rect x="164" y="178" width="44" height="2" rx="1" fill="rgba(79,124,249,.2)"/>
-                <rect x="164" y="185" width="30" height="2" rx="1" fill="rgba(79,124,249,.15)"/>
-                {/* Monitor stand */}
-                <rect x="192" y="220" width="16" height="10" rx="2" fill="rgba(20,42,80,.8)"/>
-                <rect x="178" y="228" width="44" height="4" rx="2" fill="rgba(20,42,80,.7)"/>
-
-                {/* ── Person body (seated silhouette) ── */}
-                {/* Head */}
-                <ellipse cx="200" cy="88" rx="28" ry="32" fill="rgba(28,52,100,.75)" stroke="rgba(79,124,249,.15)" strokeWidth="1"/>
-                {/* Neck */}
-                <rect x="192" y="118" width="16" height="20" rx="5" fill="rgba(24,46,90,.7)"/>
-                {/* Torso */}
-                <ellipse cx="200" cy="168" rx="32" ry="38" fill="rgba(22,44,88,.75)"/>
-                {/* Left arm — bent forward toward desk */}
-                <ellipse cx="162" cy="170" rx="11" ry="30" fill="rgba(20,40,80,.7)" transform="rotate(-8,162,170)"/>
-                <ellipse cx="145" cy="210" rx="10" ry="22" fill="rgba(18,36,70,.65)" transform="rotate(15,145,210)"/>
-                {/* Right arm */}
-                <ellipse cx="238" cy="170" rx="11" ry="30" fill="rgba(20,40,80,.7)" transform="rotate(8,238,170)"/>
-                <ellipse cx="255" cy="210" rx="10" ry="22" fill="rgba(18,36,70,.65)" transform="rotate(-15,255,210)"/>
-
-                {/* ── Green skeleton overlay ── */}
-                {/* Spine */}
-                <line x1="200" y1="136" x2="200" y2="205" stroke="rgba(16,217,160,.85)" strokeWidth="3" strokeLinecap="round"/>
-                {/* Shoulder bar */}
-                <line x1="165" y1="150" x2="235" y2="150" stroke="rgba(16,217,160,.85)" strokeWidth="3" strokeLinecap="round"/>
-                {/* Neck to shoulders */}
-                <line x1="200" y1="136" x2="200" y2="150" stroke="rgba(16,217,160,.8)" strokeWidth="2.5" strokeLinecap="round"/>
-                {/* Left arm */}
-                <line x1="165" y1="150" x2="152" y2="195" stroke="rgba(16,217,160,.65)" strokeWidth="2.5" strokeLinecap="round"/>
-                <line x1="152" y1="195" x2="142" y2="228" stroke="rgba(16,217,160,.5)" strokeWidth="2" strokeLinecap="round"/>
-                {/* Right arm */}
-                <line x1="235" y1="150" x2="248" y2="195" stroke="rgba(16,217,160,.65)" strokeWidth="2.5" strokeLinecap="round"/>
-                <line x1="248" y1="195" x2="258" y2="228" stroke="rgba(16,217,160,.5)" strokeWidth="2" strokeLinecap="round"/>
-                {/* Hip bar */}
-                <line x1="175" y1="205" x2="225" y2="205" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
-
-                {/* Amber neck line — forward tilt */}
-                <line x1="200" y1="86" x2="200" y2="136" stroke="rgba(245,158,11,.9)" strokeWidth="2.5" strokeLinecap="round"/>
-
-                {/* ── Landmark dots ── */}
-                {/* Head top (amber — problem area) */}
-                <circle cx="200" cy="72" r="7" fill="rgba(245,158,11,.95)" style={{filter:"drop-shadow(0 0 6px rgba(245,158,11,.8))"}}/>
-                {/* Neck base (amber) */}
-                <circle cx="200" cy="136" r="6" fill="rgba(245,158,11,.9)" style={{filter:"drop-shadow(0 0 4px rgba(245,158,11,.6))"}}/>
-                {/* Shoulders (green) */}
-                <circle cx="165" cy="150" r="5.5" fill="rgba(16,217,160,.95)" style={{filter:"drop-shadow(0 0 4px rgba(16,217,160,.6))"}}/>
-                <circle cx="235" cy="150" r="5.5" fill="rgba(16,217,160,.95)" style={{filter:"drop-shadow(0 0 4px rgba(16,217,160,.6))"}}/>
-                {/* Spine center */}
-                <circle cx="200" cy="150" r="4.5" fill="rgba(16,217,160,.88)"/>
-                <circle cx="200" cy="180" r="4" fill="rgba(16,217,160,.8)"/>
-                {/* Hips */}
-                <circle cx="175" cy="205" r="4.5" fill="rgba(16,217,160,.85)"/>
-                <circle cx="225" cy="205" r="4.5" fill="rgba(16,217,160,.85)"/>
-                {/* Elbows */}
-                <circle cx="152" cy="195" r="4" fill="rgba(16,217,160,.75)"/>
-                <circle cx="248" cy="195" r="4" fill="rgba(16,217,160,.75)"/>
-                {/* Wrists */}
-                <circle cx="142" cy="228" r="3.5" fill="rgba(16,217,160,.6)"/>
-                <circle cx="258" cy="228" r="3.5" fill="rgba(16,217,160,.6)"/>
-
-                {/* ── Neck angle indicator ── exactly like image */}
-                {/* Vertical reference line */}
-                <line x1="200" y1="72" x2="200" y2="108" stroke="rgba(255,255,255,.2)" strokeWidth="1.2" strokeDasharray="4,3"/>
-                {/* Angle line */}
-                <line x1="200" y1="72" x2={200+neckAngle*1.4} y2="108" stroke="rgba(245,158,11,.9)" strokeWidth="1.5" strokeDasharray="4,3"/>
-                {/* Angle arc */}
-                <path d={`M200,88 Q${204+neckAngle*.6},82 ${200+neckAngle*1.1},76`}
-                  fill="none" stroke="rgba(245,158,11,.5)" strokeWidth="1" strokeDasharray="2,2"/>
-                {/* Angle label */}
-                <text x={208+neckAngle*1.2} y="88" fill="rgba(245,158,11,.95)"
-                  fontSize="13" fontFamily="monospace" fontWeight="bold">{neckAngle}°</text>
-              </svg>
-
-              {/* LIVE + warning — single pill like image */}
-              <div style={{
-                position:"absolute", top:10, left:10,
-                display:"flex", alignItems:"center", gap:6,
-                background:"rgba(0,0,0,.72)", backdropFilter:"blur(12px)",
-                borderRadius:99, padding:"5px 12px",
-                border:"1px solid rgba(16,217,160,.3)",
-              }}>
-                <span style={{
-                  width:7, height:7, borderRadius:"50%", background:C.green,
-                  boxShadow:`0 0 8px ${C.green}`,
-                  animation:"lp-pulse 1.5s ease-in-out infinite", flexShrink:0,
-                }}/>
-                <span style={{ fontSize:11, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
-                <span style={{ fontSize:10.5, color:"rgba(255,255,255,.7)", fontFamily:FONT_MONO }}>
-                  {ar ? "رقبة للأمام" : "Neck forward"} {neckAngle}°
-                </span>
-                <span style={{ fontSize:12 }}>⚠️</span>
-              </div>
-            </div>
-
-            {/* 3-metric strip */}
-            <div style={{
-              padding:"12px 18px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr",
-              gap:8, borderTop:`1px solid ${C.border}`,
-              background:"rgba(255,255,255,.015)",
-            }}>
+          <Reveal delay={260}>
+            <div style={{ display:"flex", gap:"10px 26px", flexWrap:"wrap" }}>
               {(ar
-                ? [["انحناء الرقبة",`${neckAngle}°`,C.amber],["وضع الكتف","جيد ✓",C.green],["المسافة","58cm",C.blue]]
-                : [["Neck Tilt",`${neckAngle}°`,C.amber],["Shoulder","Good ✓",C.green],["Distance","58cm",C.blue]]
-              ).map(([label,val,color])=>(
-                <div key={label} style={{ textAlign:"center" }}>
-                  <div style={{ fontSize:16, fontWeight:700, color, fontFamily:FONT_MONO }}>{val}</div>
-                  <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>{label}</div>
-                </div>
+                ? ["بدون بطاقة ائتمان","7 أيام مجاناً","إعداد في 5 دقائق"]
+                : ["No credit card","7-day free trial","Setup in 5 min"]
+              ).map(t => (
+                <span key={t} style={{ display:"flex", alignItems:"center", gap:7, color:C.muted, fontSize:14, fontWeight:500 }}>
+                  <span style={{ color:C.green, fontSize:13 }}>✓</span>{t}
+                </span>
               ))}
             </div>
+          </Reveal>
+        </div>
 
-            {/* AI tip */}
-            <div style={{
-              margin:"0 14px 14px", padding:"10px 13px",
-              background:"rgba(79,124,249,.07)", borderRadius:12,
-              border:"1px solid rgba(79,124,249,.15)",
-              display:"flex", gap:8, alignItems:"flex-start",
-            }}>
-              <span style={{ fontSize:14, flexShrink:0, marginTop:1 }}>🤖</span>
-              <p style={{ margin:0, fontSize:12, color:C.sub, lineHeight:1.55 }}>
-                {ar
-                  ? "رقبتك للأمام قليلاً. ارفع الشاشة 2 سم وحاول تمرين سحب الرقبة 10 مرات."
-                  : "Neck is slightly forward. Raise your monitor 2cm and try 10 chin tucks now."}
-              </p>
-            </div>
-          </div>
-        </Reveal>
+        {/* Right — Camera demo with posture skeleton overlay */}
+        <Reveal delay={100}>
+          <div style={{ position:"relative", paddingTop:34, paddingBottom:30 }}>
+            {/* Main camera view mockup */}
+            <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
+              {/* Browser chrome */}
+              <div style={{ display:"flex", alignItems:"center", gap:8,
+                padding:"12px 16px", borderBottom:`1px solid ${C.border}`,
+                background:"rgba(255,255,255,.02)" }}>
+                <span style={{ width:9, height:9, borderRadius:"50%", background:"#f87171" }}/>
+                <span style={{ width:9, height:9, borderRadius:"50%", background:"#f59e0b" }}/>
+                <span style={{ width:9, height:9, borderRadius:"50%", background:"#10d9a0" }}/>
+                <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
+                  <span style={{ fontSize:11.5, color:C.muted, fontFamily:FONT_MONO,
+                    background:"rgba(255,255,255,.04)", padding:"3px 14px", borderRadius:6 }}>
+                    postureai-pro-omega-nine.vercel.app
+                  </span>
+                </div>
+              </div>
 
-        {/* ══ COL 3 — Metrics panel ══ */}
-        <div style={{ display:"flex", flexDirection:"column", gap:8, paddingTop:4 }}>
+              {/* Camera feed + skeleton overlay */}
+              <div style={{ position:"relative", background:"#0a1628", aspectRatio:"4/3", overflow:"hidden" }}>
+                {/* Simulated camera background — gradient silhouette */}
+                <div style={{ position:"absolute", inset:0,
+                  background:"radial-gradient(ellipse 60% 80% at 50% 30%, rgba(30,50,80,.9) 0%, rgba(5,12,25,.98) 100%)" }}/>
 
-          {/* -47% card */}
-          <motion.div {...float(0,7)} style={{
-            background:C.card, border:`1px solid ${C.border}`,
-            borderRadius:16, padding:"14px 14px 12px",
-            backdropFilter:"blur(12px)",
-          }}>
-            <div style={{ fontSize:26, fontWeight:800, color:C.green,
-              fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
-            <div style={{ fontSize:10, color:C.muted, marginTop:4, lineHeight:1.3 }}>
-              {ar ? "إجازات مرضية" : "sick leave"}
-            </div>
-            <svg width="100%" height="24" viewBox="0 0 120 24" preserveAspectRatio="none"
-              style={{ display:"block", marginTop:8 }}>
-              <defs>
-                <linearGradient id="m47g" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={C.green} stopOpacity=".4"/>
-                  <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
-                </linearGradient>
-              </defs>
-              <path d="M0,20 L20,17 L40,13 L60,15 L80,8 L100,4 L120,1"
-                fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M0,20 L20,17 L40,13 L60,15 L80,8 L100,4 L120,1 L120,24 L0,24 Z"
-                fill="url(#m47g)"/>
-            </svg>
-          </motion.div>
+                {/* Person silhouette SVG */}
+                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
+                  viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                  {/* Desk background hint */}
+                  <rect x="0" y="240" width="400" height="60" fill="rgba(20,35,60,.6)" rx="0"/>
+                  {/* Monitor on desk */}
+                  <rect x="140" y="190" width="120" height="72" rx="4" fill="rgba(30,60,100,.5)" stroke="rgba(100,150,220,.3)" strokeWidth="1.5"/>
+                  <rect x="185" y="262" width="30" height="8" rx="2" fill="rgba(50,80,120,.5)"/>
+                  <rect x="165" y="270" width="70" height="4" rx="2" fill="rgba(50,80,120,.5)"/>
+                  {/* Screen glow */}
+                  <rect x="146" y="196" width="108" height="60" rx="2" fill="rgba(79,124,249,.12)"/>
 
-          {/* Corvus Pro label */}
-          <div style={{
-            background:C.card, border:`1px solid ${C.border}`,
-            borderRadius:16, padding:"12px 14px",
-          }}>
-            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:5 }}>
-              <div style={{
-                width:18, height:18, borderRadius:5, flexShrink:0,
-                background:"linear-gradient(135deg,#1a56db,#0891b2)",
-                display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:10, color:"#fff",
-              }}>◈</div>
-              <span style={{ fontSize:11.5, fontWeight:700, color:C.text, fontFamily:FONT_DISPLAY }}>
-                Corvus Pro
-              </span>
-            </div>
-            <div style={{ fontSize:9.5, color:C.muted, fontFamily:FONT_MONO }}>
-              {new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"numeric",year:"2-digit"})}
-              {", "}
-              {new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}
-            </div>
-          </div>
+                  {/* Body silhouette */}
+                  {/* Torso */}
+                  <ellipse cx="200" cy="178" rx="28" ry="38" fill="rgba(40,65,105,.6)"/>
+                  {/* Head */}
+                  <ellipse cx="200" cy="108" rx="22" ry="26" fill="rgba(50,80,130,.55)"/>
+                  {/* Neck */}
+                  <rect x="194" y="130" width="12" height="16" rx="4" fill="rgba(45,72,118,.55)"/>
+                  {/* Arms */}
+                  <ellipse cx="167" cy="180" rx="10" ry="28" fill="rgba(38,62,100,.55)" transform="rotate(-8,167,180)"/>
+                  <ellipse cx="233" cy="180" rx="10" ry="28" fill="rgba(38,62,100,.55)" transform="rotate(8,233,180)"/>
 
-          {/* Score donut */}
-          <div style={{
-            background:C.card, border:`1px solid ${C.border}`,
-            borderRadius:16, padding:"16px 14px", textAlign:"center",
-          }}>
-            <div style={{ position:"relative", width:78, height:78, margin:"0 auto 8px" }}>
-              <svg width="78" height="78" style={{ transform:"rotate(-90deg)" }}>
-                <circle cx="39" cy="39" r="31" fill="none"
-                  stroke="rgba(255,255,255,.05)" strokeWidth="7"/>
-                <circle cx="39" cy="39" r="31" fill="none"
-                  stroke={scoreColor} strokeWidth="7"
-                  strokeDasharray={`${(demoScore/100)*194.8} 194.8`}
-                  strokeLinecap="round"
-                  style={{ transition:"stroke-dasharray .8s ease, stroke .4s" }}/>
-              </svg>
-              <div style={{
-                position:"absolute", inset:0,
-                display:"flex", alignItems:"center", justifyContent:"center",
-              }}>
-                <span style={{
-                  fontSize:22, fontWeight:800, color:scoreColor,
-                  fontFamily:FONT_MONO, lineHeight:1,
-                  transition:"color .4s",
-                }}>{demoScore}</span>
+                  {/* Skeleton overlay — MediaPipe landmarks */}
+                  {/* Spine line */}
+                  <line x1="200" y1="134" x2="200" y2="210" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
+                  {/* Shoulder line */}
+                  <line x1="170" y1="152" x2="230" y2="152" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
+                  {/* Neck line */}
+                  <line x1="200" y1="130" x2="200" y2="152" stroke="rgba(16,217,160,.7)" strokeWidth="2" strokeLinecap="round"/>
+                  {/* Head top */}
+                  <line x1="200" y1="96" x2="200" y2="130" stroke="rgba(245,158,11,.8)" strokeWidth="2" strokeLinecap="round"/>
+                  {/* Left arm */}
+                  <line x1="170" y1="152" x2="162" y2="196" stroke="rgba(16,217,160,.55)" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="162" y1="196" x2="158" y2="230" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
+                  {/* Right arm */}
+                  <line x1="230" y1="152" x2="238" y2="196" stroke="rgba(16,217,160,.55)" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="238" y1="196" x2="242" y2="230" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
+
+                  {/* Landmark dots */}
+                  {[[200,96],[200,130],[170,152],[230,152],[200,152],[162,196],[238,196],[158,230],[242,230],[200,210]]
+                    .map(([x,y],i) => (
+                      <circle key={i} cx={x} cy={y} r={i===3?5:4} fill={i===3?"rgba(245,158,11,.9)":"rgba(16,217,160,.9)"}/>
+                  ))}
+
+                  {/* Neck forward angle indicator */}
+                  <path d="M200,96 L206,110" stroke="rgba(245,158,11,.9)" strokeWidth="1.5" strokeDasharray="3,2"/>
+                  <path d="M200,96 L200,110" stroke="rgba(255,255,255,.25)" strokeWidth="1" strokeDasharray="3,2"/>
+                  {/* Angle label */}
+                  <text x="210" y="108" fill="rgba(245,158,11,.95)" fontSize="10" fontFamily="monospace" fontWeight="bold">12°</text>
+                </svg>
+
+                {/* LIVE badge */}
+                <div style={{ position:"absolute", top:12, left:12, display:"flex", alignItems:"center",
+                  gap:6, background:"rgba(0,0,0,.55)", backdropFilter:"blur(8px)",
+                  borderRadius:99, padding:"4px 10px", border:"1px solid rgba(16,217,160,.3)" }}>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:C.green,
+                    boxShadow:`0 0 6px ${C.green}`, animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
+                  <span style={{ fontSize:11, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
+                </div>
+
+                {/* Score overlay — bottom right */}
+                <div style={{ position:"absolute", bottom:12, right:12,
+                  background:"rgba(0,0,0,.6)", backdropFilter:"blur(12px)",
+                  borderRadius:14, padding:"10px 14px", border:"1px solid rgba(16,217,160,.25)",
+                  textAlign:"center" }}>
+                  <div style={{ fontSize:28, fontWeight:800, color:scoreColor,
+                    fontFamily:FONT_MONO, transition:"color .4s", lineHeight:1 }}>{demoScore}</div>
+                  <div style={{ fontSize:9.5, color:C.muted, marginTop:2 }}>{ar ? "نقطة" : "score"}</div>
+                </div>
+
+                {/* Alert badge — top right */}
+                <div style={{ position:"absolute", top:12, right:12,
+                  background:"rgba(245,158,11,.15)", backdropFilter:"blur(8px)",
+                  borderRadius:10, padding:"6px 10px", border:"1px solid rgba(245,158,11,.35)" }}>
+                  <div style={{ fontSize:10, color:"#fbbf24", fontWeight:600 }}>
+                    ⚠️ {ar ? "رقبة للأمام 12°" : "Neck forward 12°"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Metrics strip below camera */}
+              <div style={{ padding:"14px 20px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10,
+                borderTop:`1px solid ${C.border}` }}>
+                {(ar
+                  ? [["انحناء الرقبة","12°",C.amber],["وضع الكتف","جيد ✓",C.green],["المسافة","58cm",C.blue]]
+                  : [["Neck Tilt","12°",C.amber],["Shoulder","Good ✓",C.green],["Distance","58cm",C.blue]]
+                ).map(([label, val, color]) => (
+                  <div key={label} style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:17, fontWeight:700, color, fontFamily:FONT_MONO }}>{val}</div>
+                    <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* AI tip */}
+              <div style={{ margin:"0 16px 16px", padding:"11px 14px",
+                background:"rgba(79,124,249,.08)", borderRadius:12,
+                border:"1px solid rgba(79,124,249,.15)",
+                display:"flex", gap:10, alignItems:"flex-start" }}>
+                <span style={{ fontSize:16 }}>🤖</span>
+                <p style={{ margin:0, fontSize:12.5, color:C.sub, lineHeight:1.5 }}>
+                  {ar
+                    ? "رقبتك للأمام قليلاً. ارفع الشاشة 2 سم وحاول تمرين سحب الرقبة 10 مرات."
+                    : "Neck is slightly forward. Raise your monitor 2cm and try 10 chin tucks now."}
+                </p>
               </div>
             </div>
-            <div style={{ fontSize:10, color:C.muted, letterSpacing:".04em" }}>
-              {ar ? "النقطة" : "score"}
-            </div>
+
+            {/* Floating card — top */}
+            <motion.div {...float(0, 9)} style={{
+              position:"absolute", top:-12, [ar?"left":"right"]:-18,
+              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
+              border:`1px solid ${C.borderM}`, borderRadius:16,
+              padding:"12px 16px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
+              display:"flex", alignItems:"center", gap:10, zIndex:2,
+            }}>
+              <span style={{ fontSize:20 }}>📉</span>
+              <div>
+                <div style={{ fontSize:15, fontWeight:800, color:C.green, fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
+                <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{ar ? "إجازات مرضية" : "sick leave"}</div>
+              </div>
+            </motion.div>
+
+            {/* Floating card — bottom */}
+            <motion.div {...float(1.4, 8)} style={{
+              position:"absolute", bottom:-6, [ar?"right":"left"]:-22,
+              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
+              border:`1px solid ${C.borderM}`, borderRadius:16,
+              padding:"11px 15px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
+              display:"flex", alignItems:"center", gap:9, zIndex:2, maxWidth:200,
+            }}>
+              <span style={{ width:8, height:8, borderRadius:"50%", background:C.green, flexShrink:0,
+                boxShadow:`0 0 8px ${C.green}` }}/>
+              <span style={{ fontSize:11.5, color:C.sub, lineHeight:1.4 }}>
+                {ar ? "جلسة 45 دق — تحسن 18 نقطة 🎯" : "45 min session — +18 score 🎯"}
+              </span>
+            </motion.div>
           </div>
-
-          {/* Trend chart card */}
-          <motion.div {...float(1.5,6)} style={{
-            background:C.card, border:`1px solid ${C.border}`,
-            borderRadius:16, padding:"12px 14px",
-          }}>
-            <svg width="100%" height="42" viewBox="0 0 120 42" preserveAspectRatio="none"
-              style={{ display:"block" }}>
-              <defs>
-                <linearGradient id="trendG2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={C.green} stopOpacity=".3"/>
-                  <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
-                </linearGradient>
-              </defs>
-              <path d="M0,36 L20,31 L40,23 L60,27 L80,14 L100,8 L120,3"
-                fill="none" stroke={C.green} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M0,36 L20,31 L40,23 L60,27 L80,14 L100,8 L120,3 L120,42 L0,42 Z"
-                fill="url(#trendG2)"/>
-            </svg>
-            <div style={{ fontSize:9.5, color:C.muted, marginTop:4, textAlign:"center" }}>
-              {ar ? "+18 نقطة / 45 دق" : "+18 score / 45 min"}
-            </div>
-          </motion.div>
-
-        </div>{/* end col 3 */}
-      </div>{/* end 3-col grid */}
+        </Reveal>
       </div>
 
       {/* Scroll cue */}
@@ -978,86 +777,54 @@ function Hero({ lang, onCTA, mode, setMode }) {
 function SocialProof({ lang }) {
   const ar = lang === "ar";
   return (
-    <section style={{
-      borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
-      padding:"32px 24px", background:"rgba(255,255,255,.012)",
-    }}>
+    <section style={{ borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
+      padding:"40px 24px", background:"rgba(255,255,255,.015)" }}>
       <Reveal>
         <div className="lp-wrap">
-          {/* Row 1 — 4 trust stats */}
-          <div style={{
-            display:"grid", gridTemplateColumns:"repeat(4,1fr)",
-            gap:16, marginBottom:24, textAlign:"center",
-          }}>
+          {/* Trust numbers row */}
+          <div style={{ display:"flex", gap:"10px 40px", justifyContent:"center",
+            flexWrap:"wrap", alignItems:"center", marginBottom:28 }}>
             {(ar ? [
-              ["50+","مستخدم بيتا نشط","👥"],
-              ["4.9★","تقييم متوسط","⭐"],
-              ["أسبوعان","وقت التحسن","⏱"],
-              ["0","لا نحفظ فيديو","🛡"],
+              ["50+","مستخدم بيتا نشط"],["4.9★","تقييم متوسط"],["2 أسبوع","وقت التحسن"],["0","لا نحفظ فيديو"],
             ] : [
-              ["50+","active beta users","👥"],
-              ["4.9★","average rating","⭐"],
-              ["2 weeks","avg improvement time","⏱"],
-              ["0","video data stored","🛡"],
-            ]).map(([num, label, icon]) => (
-              <div key={label} style={{
-                background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
-                borderRadius:14, padding:"16px 12px",
-                display:"flex", flexDirection:"column", alignItems:"center", gap:6,
-              }}>
-                <span style={{ fontSize:13 }}>{icon}</span>
-                <div style={{ fontSize:20, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{num}</div>
-                <div style={{ fontSize:11, color:C.muted }}>{label}</div>
+              ["50+","active beta users"],["4.9★","average rating"],["2 weeks","avg improvement time"],["0","video data stored"],
+            ]).map(([num, label]) => (
+              <div key={label} style={{ textAlign:"center" }}>
+                <div style={{ fontSize:22, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{num}</div>
+                <div style={{ fontSize:11.5, color:C.muted, marginTop:4 }}>{label}</div>
               </div>
             ))}
           </div>
-
-          {/* Row 2 — Used at + security badges */}
-          <div style={{
-            display:"flex", alignItems:"center", justifyContent:"space-between",
-            flexWrap:"wrap", gap:"12px 24px",
-          }}>
-            {/* Left: used at */}
-            <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
-              <span style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>
-                {ar ? "يُستخدم في" : "Currently used at"}
-              </span>
-              <div style={{
-                background:"rgba(255,255,255,.04)", border:`1px solid ${C.border}`,
-                borderRadius:10, padding:"7px 16px",
-                fontSize:13.5, fontWeight:700, color:C.text,
-              }}>Coventry University</div>
-              <div style={{ fontSize:12.5, color:C.muted }}>
-                {ar ? "جامعة القاهرة — تجريبي · 50+ مستخدم في 4 دول" : "Cairo University — Pilot · 50+ users across 4 countries"}
-              </div>
-            </div>
-
-            {/* Right: security badges */}
-            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              {[
-                {icon:"🛡", text:"ISO 27001\nAligned"},
-                {icon:"🔒", text:"AES-256\nEncryption"},
-                {icon:"✅", text:"GDPR\nReady"},
-                {icon:"📷", text:"On-device AI\nNo Video Stored"},
-              ].map(b => (
-                <div key={b.text} style={{
-                  display:"flex", alignItems:"center", gap:6,
-                  background:"rgba(59,130,246,.06)", border:"1px solid rgba(59,130,246,.15)",
-                  borderRadius:10, padding:"7px 11px",
-                }}>
-                  <span style={{ fontSize:13 }}>{b.icon}</span>
-                  <span style={{ fontSize:10, color:"#60a5fa", fontWeight:600, lineHeight:1.3,
-                    whiteSpace:"pre-line", fontFamily:FONT_MONO }}>{b.text}</span>
-                </div>
-              ))}
-            </div>
+          {/* Divider */}
+          <div style={{ height:1, background:C.border, margin:"0 0 22px" }}/>
+          {/* Early adopters note */}
+          <p style={{ textAlign:"center", color:C.muted, marginBottom:18, ...TYPE.eyebrow }}>
+            {ar ? "يُستخدم حالياً في" : "Currently used at"}
+          </p>
+          <div style={{ display:"flex", gap:"12px 36px", justifyContent:"center", flexWrap:"wrap", alignItems:"center", marginBottom:24 }}>
+            {(ar
+              ? ["Coventry University ✓", "جامعة القاهرة — تجريبي", "50+ مستخدم في 4 دول"]
+              : ["Coventry University ✓", "Cairo University — Pilot", "50+ users across 4 countries"]
+            ).map(logo => (
+              <div key={logo} style={{
+                color: logo.includes("✓") ? "#3b82f6" : C.muted,
+                fontSize:14, fontWeight:600, letterSpacing:"-.01em",
+                opacity: logo.includes("✓") ? 1 : .75,
+              }}>{logo}</div>
+            ))}
+          </div>
+          {/* Security badges */}
+          <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+            {["ISO 27001 Aligned","AES-256 Encryption","GDPR Ready","On-device AI — No Video Stored"].map(badge => (
+              <span key={badge} style={{
+                background:"rgba(59,130,246,.08)", border:"1px solid rgba(59,130,246,.18)",
+                color:"#60a5fa", fontSize:11, padding:"4px 11px", borderRadius:99, fontWeight:500,
+                fontFamily:FONT_MONO,
+              }}>{badge}</span>
+            ))}
           </div>
         </div>
       </Reveal>
-      <style>{`@media(max-width:860px){
-        .lp-sp-stats{grid-template-columns:1fr 1fr!important}
-        .lp-sp-row2{flex-direction:column!important}
-      }`}</style>
     </section>
   );
 }
@@ -1072,18 +839,9 @@ function Stats({ lang }) {
     <section className="lp-section" style={{ paddingTop:"clamp(60px,7vw,100px)", paddingBottom:"clamp(60px,7vw,100px)" }}>
       <div className="lp-wrap lp-stats-grid" style={{
         display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:22 }}>
-        {stats.map(([val, label, source], i) => {
-          const spkPaths = [
-            "M0,20 L14,17 L28,12 L42,15 L56,7 L70,4 L84,1",
-            "M0,18 L14,15 L28,10 L42,13 L56,5 L70,3 L84,1",
-            "M0,20 L14,16 L28,11 L42,14 L56,6 L70,3 L84,1",
-            "M0,19 L14,16 L28,12 L42,14 L56,7 L70,4 L84,2",
-          ];
-          const spkColors = [C.green, C.indigo, C.sky, C.green];
-          const sc = spkColors[i];
-          return (
+        {stats.map(([val, label, source], i) => (
           <Reveal key={label} delay={i * 80} y={20}>
-            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"32px 24px 24px" }}>
+            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"36px 24px" }}>
               <div style={{
                 fontSize:"clamp(38px,3.2vw,52px)", fontWeight:700, letterSpacing:"-.02em",
                 background:C.gHero, WebkitBackgroundClip:"text",
@@ -1091,24 +849,10 @@ function Stats({ lang }) {
                 fontFamily:FONT_MONO,
               }}>{val}</div>
               <div style={{ fontSize:14.5, color:C.sub, lineHeight:1.5 }}>{label}</div>
-              {source && <div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4 }}>{source}</div>}
-              {/* Sparkline */}
-              <div style={{ display:"flex", justifyContent:"center", marginTop:18 }}>
-                <svg width="84" height="22" viewBox="0 0 84 22" style={{ overflow:"visible" }}>
-                  <defs>
-                    <linearGradient id={`sg${i}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={sc} stopOpacity=".35"/>
-                      <stop offset="100%" stopColor={sc} stopOpacity="0"/>
-                    </linearGradient>
-                  </defs>
-                  <path d={spkPaths[i]} fill="none" stroke={sc} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d={spkPaths[i]+" L84,22 L0,22 Z"} fill={`url(#sg${i})`}/>
-                </svg>
-              </div>
+              {source&&<div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4 }}>{source}</div>}
             </div>
           </Reveal>
-          );
-        })}
+        ))}
       </div>
       <style>{`
         @media(max-width:860px){.lp-stats-grid{grid-template-columns:1fr 1fr!important}}
@@ -1122,24 +866,25 @@ function Stats({ lang }) {
 function Features({ lang }) {
   const ar = lang === "ar";
   const [active, setActive] = useState(0);
+  // Reset to first tab on language change — avoids stale index if array length differs
   useEffect(() => { setActive(0); }, [ar]);
 
   const features = ar ? [
     { icon:"🎯", title:"تحليل دقيق بالذكاء الاصطناعي",
-      desc:"478 نقطة تتبع + تحليل ثلاثي الأبعاد بدقة ~96%",
-      detail:"تقنية MediaPipe FaceMesh المتقدمة تتتبع 478 نقطة معلم لتقييم الوضعية بدقة طبية." },
+      desc:"478 نقطة تتبع + تحليل ثلاثي الأبعاد لوضع الرأس بدقة ~96%",
+      detail:"تقنية MediaPipe FaceMesh المتقدمة تتتبع 478 نقطة معلم على الوجه والجسم لتقييم الوضعية بدقة لم تكن ممكنة من قبل." },
     { icon:"📊", title:"لوحة HR الذكية",
       desc:"تحليلات فورية لصحة الفريق والمخاطر المهنية",
-      detail:"لوحة قيادة متكاملة تعرض مؤشرات الأداء، تنبيهات المخاطر، وتقارير PDF." },
+      detail:"لوحة قيادة متكاملة تعرض مؤشرات الأداء، تنبيهات المخاطر، وتقارير قابلة للتصدير بصيغ PDF وExcel." },
     { icon:"🤖", title:"مدرب AI شخصي",
       desc:"توصيات مخصصة بالذكاء الاصطناعي",
-      detail:"محادثة AI تفاعلية تحلل بيانات الجلسة وتقدم توصيات علاجية مخصصة." },
+      detail:"محادثة AI تفاعلية تحلل بيانات الجلسة وتقدم توصيات علاجية مخصصة لكل موظف." },
     { icon:"🔗", title:"تكاملات المؤسسات",
-      desc:"Slack · Teams · Jira · SAP HR",
-      detail:"API متكامل مع أنظمة HR الموجودة. تنبيهات تلقائية على Slack وTeams." },
+      desc:"Slack · Teams · Jira · SAP HR · Webhooks",
+      detail:"API متكامل مع أنظمة HR الموجودة. تنبيهات تلقائية على Slack وTeams عند اكتشاف مخاطر عالية." },
     { icon:"🛡️", title:"أمان المستوى المؤسسي",
-      desc:"SAML SSO · RBAC · تشفير كامل",
-      detail:"ISO27001 · تشفير AES-256 · سجلات تدقيق شاملة." },
+      desc:"SAML SSO · RBAC · تشفير كامل · سجلات التدقيق",
+      detail:"ISO27001 · تشفير AES-256 للبيانات في حالة السكون. سجلات تدقيق شاملة لكل حدث." },
   ] : [
     { icon:"🎯", title:"Precision AI Analysis",
       desc:"478-landmark tracking + 3D head pose at ~96% accuracy",
@@ -1164,161 +909,64 @@ function Features({ lang }) {
     <section id="features" className="lp-section">
       <div className="lp-wrap">
         <SectionHead eyebrow={ar ? "المنصة" : "Platform"}
-          title={ar ? "كل ما يحتاجه برنامج صحة موظفيك" : "Everything your workforce health program needs"}
+          title={ar ? "كل ما تحتاجه لصحة موظفيك" : "Everything your workforce health program needs"}
           sub={ar ? "من التحليل الفوري إلى الرؤى المؤسسية — كل شيء في مكان واحد"
                   : "From real-time analysis to enterprise insights — everything in one platform"}/>
 
-        <div style={{
-          display:"grid", gridTemplateColumns:"1fr 1fr", gap:32, alignItems:"start",
-        }} className="lp-features-wrap">
-
-          {/* Left — Human body illustration + feature tabs */}
-          <div>
-            {/* SVG Human body with pose landmarks */}
-            <div style={{
-              background:"rgba(255,255,255,.025)", border:`1px solid ${C.border}`,
-              borderRadius:20, padding:"28px 24px", marginBottom:20, textAlign:"center",
-              position:"relative", overflow:"hidden",
-            }}>
-              {/* Glow behind figure */}
-              <div style={{
-                position:"absolute", top:"30%", left:"50%", transform:"translate(-50%,-50%)",
-                width:280, height:280,
-                background:"radial-gradient(circle,rgba(79,124,249,.14) 0%,transparent 70%)",
-                borderRadius:"50%", pointerEvents:"none",
-              }}/>
-              <svg viewBox="0 0 220 340" width="180" height="280" style={{ display:"block", margin:"0 auto", position:"relative" }}>
-                {/* Body glow */}
-                <ellipse cx="110" cy="170" rx="60" ry="100" fill="rgba(79,124,249,.06)"/>
-
-                {/* Body skeleton — standing pose */}
-                {/* Head */}
-                <circle cx="110" cy="42" r="26" fill="rgba(40,68,115,.7)" stroke="rgba(79,124,249,.3)" strokeWidth="1"/>
-                {/* Neck */}
-                <line x1="110" y1="68" x2="110" y2="88" stroke="rgba(16,217,160,.8)" strokeWidth="3" strokeLinecap="round"/>
-                {/* Shoulders */}
-                <line x1="60" y1="100" x2="160" y2="100" stroke="rgba(16,217,160,.8)" strokeWidth="3" strokeLinecap="round"/>
-                {/* Spine */}
-                <line x1="110" y1="88" x2="110" y2="190" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
-                {/* Left arm */}
-                <line x1="60" y1="100" x2="38" y2="165" stroke="rgba(16,217,160,.65)" strokeWidth="2.5" strokeLinecap="round"/>
-                <line x1="38" y1="165" x2="28" y2="218" stroke="rgba(16,217,160,.5)" strokeWidth="2" strokeLinecap="round"/>
-                {/* Right arm */}
-                <line x1="160" y1="100" x2="182" y2="165" stroke="rgba(16,217,160,.65)" strokeWidth="2.5" strokeLinecap="round"/>
-                <line x1="182" y1="165" x2="192" y2="218" stroke="rgba(16,217,160,.5)" strokeWidth="2" strokeLinecap="round"/>
-                {/* Hips */}
-                <line x1="80" y1="190" x2="140" y2="190" stroke="rgba(16,217,160,.75)" strokeWidth="2.5" strokeLinecap="round"/>
-                {/* Left leg */}
-                <line x1="80" y1="190" x2="72" y2="268" stroke="rgba(16,217,160,.6)" strokeWidth="2.5" strokeLinecap="round"/>
-                <line x1="72" y1="268" x2="68" y2="330" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
-                {/* Right leg */}
-                <line x1="140" y1="190" x2="148" y2="268" stroke="rgba(16,217,160,.6)" strokeWidth="2.5" strokeLinecap="round"/>
-                <line x1="148" y1="268" x2="152" y2="330" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
-
-                {/* Landmark dots */}
-                {[
-                  [110,42],[110,68],[60,100],[160,100],[110,100],[110,145],[110,190],
-                  [80,190],[140,190],[38,165],[182,165],[28,218],[192,218],
-                  [72,268],[148,268],[68,330],[152,330]
-                ].map(([x,y],i)=>(
-                  <circle key={i} cx={x} cy={y} r={i===0?5:i<4?4.5:3.5}
-                    fill={i<=1?"rgba(245,158,11,.9)":"rgba(16,217,160,.92)"}
-                    style={{ filter: i<=1?"drop-shadow(0 0 5px rgba(245,158,11,.6))":"drop-shadow(0 0 3px rgba(16,217,160,.5))" }}/>
-                ))}
-
-                {/* Floating angle annotation */}
-                <text x="125" y="52" fill="rgba(245,158,11,.9)" fontSize="10" fontFamily="monospace" fontWeight="bold">12°</text>
-                <line x1="118" y1="52" x2="126" y2="52" stroke="rgba(245,158,11,.7)" strokeWidth="1" strokeDasharray="2,1"/>
-
-                {/* Connecting lines for visual flair */}
-                <circle cx="110" cy="88" r="4" fill="rgba(16,217,160,.9)"/>
-                <circle cx="110" cy="190" r="4.5" fill="rgba(16,217,160,.9)"/>
-              </svg>
-
-              {/* Stats row below figure */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:16 }}>
-                {[
-                  [ar?"وقت الإعداد":"15 min","⏱", ar?"الإعداد الكامل":"Team onboarding time"],
-                  [ar?"رضا المستخدمين":"98%","😊", ar?"اختُبر مع المستخدمين":"Beta user satisfaction"],
-                ].map(([val, icon, label])=>(
-                  <div key={label} style={{
-                    background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
-                    borderRadius:12, padding:"12px 10px", textAlign:"center",
-                  }}>
-                    <div style={{ fontSize:11, marginBottom:4 }}>{icon}</div>
-                    <div style={{ fontSize:18, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{val}</div>
-                    <div style={{ fontSize:10, color:C.muted, marginTop:4, lineHeight:1.3 }}>{label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Feature tabs */}
-            <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-              {features.map((item, i) => (
-                <button key={i} onClick={() => setActive(i)} style={{
-                  background: active===i ? "rgba(79,124,249,.1)" : "transparent",
-                  border: active===i ? "1px solid rgba(79,124,249,.25)" : `1px solid transparent`,
-                  borderRadius:12, padding:"12px 14px",
-                  cursor:"pointer", textAlign:ar?"right":"left",
-                  display:"flex", alignItems:"center", gap:10,
-                  transition:"background .2s, border-color .2s",
-                }}>
-                  <span style={{
-                    width:34, height:34, borderRadius:9, flexShrink:0,
-                    display:"flex", alignItems:"center", justifyContent:"center", fontSize:16,
-                    background: active===i ? C.gBlue : "rgba(255,255,255,.04)",
-                    transition:"background .2s",
-                  }}>{item.icon}</span>
-                  <div style={{ textAlign:"left" }}>
-                    <div style={{ fontSize:13.5, fontWeight:600, color:active===i?C.text:C.sub }}>{item.title}</div>
-                    <div style={{ fontSize:11.5, color:C.muted, marginTop:2 }}>{item.desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
+        <div className="lp-features-grid" style={{ display:"grid", gridTemplateColumns:"300px 1fr", gap:36 }}>
+          {/* Feature tabs */}
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }} className="lp-features-tabs">
+            {features.map((item, i) => (
+              <button key={i} onClick={() => setActive(i)} style={{
+                background: active === i ? "rgba(79,124,249,.12)" : "transparent",
+                border: active === i ? "1px solid rgba(79,124,249,.28)" : "1px solid transparent",
+                borderRadius:14, padding:"15px 16px",
+                cursor:"pointer", textAlign: ar ? "right" : "left",
+                transition:"background .2s,border-color .2s",
+                display:"flex", alignItems:"center", gap:13,
+              }}>
+                <span style={{
+                  width:38, height:38, borderRadius:11, flexShrink:0,
+                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
+                  background: active === i ? C.gBlue : "rgba(255,255,255,.05)",
+                  boxShadow: active === i ? "0 4px 14px rgba(79,124,249,.4)" : "none",
+                  transition:"background .2s,box-shadow .2s",
+                }}>{item.icon}</span>
+                <span style={{ fontSize:14.5, fontWeight:500,
+                  color: active === i ? C.text : C.sub }}>{item.title}</span>
+              </button>
+            ))}
           </div>
 
-          {/* Right — active feature detail card */}
+          {/* Feature detail */}
           <motion.div key={active}
-            initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }}
-            transition={{ duration:.32, ease:[0.22,1,0.36,1] }}>
-            <div style={{
-              background:"rgba(255,255,255,.03)", border:`1px solid rgba(79,124,249,.22)`,
-              borderRadius:20, padding:"32px 28px",
-              boxShadow:"0 0 40px rgba(79,124,249,.07)",
-            }}>
-              <span style={{
-                width:56, height:56, borderRadius:16, fontSize:26,
-                display:"flex", alignItems:"center", justifyContent:"center",
-                background:C.gBlue, boxShadow:"0 6px 20px rgba(79,124,249,.35)",
-                marginBottom:20,
-              }}>{f.icon}</span>
-              <h3 style={{ fontSize:22, fontWeight:700, color:C.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
-                {f.title}
-              </h3>
-              <p style={{ fontSize:15, color:C.indigo, margin:"0 0 16px", fontWeight:500 }}>
-                {f.desc}
-              </p>
-              <p style={{ fontSize:14.5, color:C.sub, lineHeight:1.75, margin:"0 0 24px" }}>
-                {f.detail}
-              </p>
-              <a href="#" style={{
-                display:"inline-flex", alignItems:"center", gap:6,
-                color:C.blue, fontSize:14, fontWeight:600, textDecoration:"none",
-                transition:"gap .18s",
-              }}
-              onMouseEnter={e=>e.currentTarget.style.gap="10px"}
-              onMouseLeave={e=>e.currentTarget.style.gap="6px"}>
-                {ar ? "اعرف أكثر عن الـ AI ←" : "Learn more about our AI →"}
-              </a>
-            </div>
+            initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
+            transition={{ duration:.35, ease:[0.22,1,0.36,1] }}
+            style={{ ...card(true), display:"flex", flexDirection:"column", gap:18, padding:"clamp(28px,3vw,44px)" }}>
+            <span style={{
+              width:60, height:60, borderRadius:16, fontSize:28,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              background:C.gBlue, boxShadow:"0 6px 20px rgba(79,124,249,.4)",
+            }}>{f.icon}</span>
+            <h3 style={{ ...TYPE.h3, fontSize:26, color:C.text, margin:0, fontFamily:FONT_DISPLAY }}>
+              {f.title}
+            </h3>
+            <p style={{ fontSize:16.5, color:C.indigo, margin:0, fontWeight:500 }}>
+              {f.desc}
+            </p>
+            <p style={{ ...TYPE.bodySm, color:C.sub, margin:0 }}>
+              {f.detail}
+            </p>
           </motion.div>
         </div>
       </div>
       <style>{`
         @media(max-width:860px){
-          .lp-features-wrap{grid-template-columns:1fr!important}
+          .lp-features-grid{grid-template-columns:1fr!important}
+          .lp-features-tabs{flex-direction:row!important;overflow-x:auto;gap:8px!important;
+            padding-bottom:6px;-webkit-overflow-scrolling:touch}
+          .lp-features-tabs button{flex-shrink:0}
+          .lp-features-tabs button span:last-child{display:none}
         }
       `}</style>
     </section>
@@ -1329,13 +977,13 @@ function Features({ lang }) {
 function HowItWorks({ lang }) {
   const ar = lang === "ar";
   const steps = ar ? [
-    { n:"01", icon:"👤", title:"الإعداد السريع", desc:"أضف فريقك بالـ CSV أو رابط الدعوة. الإعداد الكامل في 15 دقيقة." },
-    { n:"02", icon:"📷", title:"التحليل الفوري", desc:"الموظفون يستخدمون الكاميرا للتحليل. لا يلزم أي جهاز خاص." },
-    { n:"03", icon:"📊", title:"رؤى قابلة للتنفيذ", desc:"تقارير HR أسبوعية وتنبيهات فورية للمخاطر المهنية." },
+    { n:"01", title:"الإعداد السريع", desc:"أضف موظفيك بالCSV أو رابط الدعوة. الإعداد الكامل في 15 دقيقة." },
+    { n:"02", title:"التحليل الفوري", desc:"يستخدم الموظفون الكاميرا للتحليل. لا يلزم أي جهاز خاص." },
+    { n:"03", title:"رؤى قابلة للتنفيذ", desc:"احصل على تقارير HR أسبوعية وتنبيهات فورية للمخاطر المهنية." },
   ] : [
-    { n:"01", icon:"👤", title:"Quick Setup", desc:"Add your team via CSV or invite link. Full onboarding in 15 minutes." },
-    { n:"02", icon:"📷", title:"Instant Analysis", desc:"Employees use their webcam for analysis. No special hardware needed." },
-    { n:"03", icon:"📊", title:"Actionable Insights", desc:"Get weekly HR reports and real-time alerts for occupational risks." },
+    { n:"01", title:"Quick Setup", desc:"Add your team via CSV or invite link. Full onboarding in 15 minutes." },
+    { n:"02", title:"Instant Analysis", desc:"Employees use their webcam for analysis. No special hardware needed." },
+    { n:"03", title:"Actionable Insights", desc:"Get weekly HR reports and real-time alerts for occupational risks." },
   ];
 
   return (
@@ -1354,17 +1002,13 @@ function HowItWorks({ lang }) {
             display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:28, position:"relative" }}>
             {steps.map((s) => (
               <StaggerItem key={s.n}>
-                <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"36px 24px" }}>
+                <div className="lp-lift" style={{ ...card(), textAlign:"center" }}>
                   <div className="lp-timeline-node" style={{
-                    width:64, height:64, borderRadius:"50%", margin:"-64px auto 20px",
+                    width:64, height:64, borderRadius:"50%", margin:"-64px auto 22px",
                     background:C.bg1, border:`2px solid rgba(79,124,249,.4)`,
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:26,
+                    fontFamily:FONT_MONO, fontSize:21, fontWeight:700, color:C.blue,
                     boxShadow:"0 0 0 6px "+C.bg1+", 0 4px 18px rgba(79,124,249,.25)",
-                  }}>{s.icon}</div>
-                  <div style={{
-                    fontSize:11, fontWeight:700, color:C.blue, fontFamily:FONT_MONO,
-                    letterSpacing:".08em", marginBottom:8,
                   }}>{s.n}</div>
                   <h3 style={{ ...TYPE.h3, color:C.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
                     {s.title}
@@ -1411,72 +1055,33 @@ function CaseStudies({ lang }) {
 
         <Stagger key={String(ar)} className="lp-cases-grid" style={{
           display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
-          {cases.map((c, ci) => {
-            // SVG background scenes: telecom tower / bank building / tech office — like image
-            const bgSvgs = [
-              <svg key="tc" style={{ position:"absolute", inset:0, width:"100%", height:"60%", opacity:.13, pointerEvents:"none" }} viewBox="0 0 260 180" preserveAspectRatio="xMidYMax meet">
-                <rect x="120" y="10" width="20" height="170" fill="#4f7cf9" rx="2"/>
-                <rect x="110" y="25" width="40" height="6" fill="#4f7cf9" rx="1"/>
-                <rect x="100" y="42" width="60" height="5" fill="#4f7cf9" rx="1"/>
-                <rect x="86" y="60" width="88" height="5" fill="#4f7cf9" rx="1"/>
-                <line x1="130" y1="10" x2="86" y2="40" stroke="#4f7cf9" strokeWidth="1"/>
-                <line x1="130" y1="10" x2="174" y2="40" stroke="#4f7cf9" strokeWidth="1"/>
-                <rect x="40" y="120" width="180" height="60" fill="#4f7cf9" rx="3" opacity=".7"/>
-                <rect x="60" y="100" width="140" height="28" fill="#4f7cf9" rx="2" opacity=".5"/>
-              </svg>,
-              <svg key="bk" style={{ position:"absolute", inset:0, width:"100%", height:"60%", opacity:.12, pointerEvents:"none" }} viewBox="0 0 260 180" preserveAspectRatio="xMidYMax meet">
-                <rect x="30" y="75" width="200" height="105" fill="#818cf8" rx="3"/>
-                <rect x="20" y="65" width="220" height="16" fill="#818cf8" rx="2"/>
-                <rect x="80" y="50" width="100" height="20" fill="#818cf8" rx="2"/>
-                <rect x="122" y="34" width="16" height="18" fill="#818cf8"/>
-                {[50,78,106,134,162,190].map(x=><rect key={x} x={x} y={82} width="14" height="98" fill="rgba(255,255,255,.07)" rx="1"/>)}
-                <rect x="102" y="148" width="56" height="32" fill="rgba(255,255,255,.05)" rx="2"/>
-              </svg>,
-              <svg key="of" style={{ position:"absolute", inset:0, width:"100%", height:"60%", opacity:.11, pointerEvents:"none" }} viewBox="0 0 260 180" preserveAspectRatio="xMidYMax meet">
-                <rect x="10" y="10" width="240" height="170" fill="#22d3ee" rx="5"/>
-                {[30,65,100,135,170,205].map(x=>[0,1,2,3].map(r=>(
-                  <rect key={`${x}-${r}`} x={x} y={20+r*40} width="25" height="28" fill="rgba(255,255,255,.07)" rx="2"/>
-                )))}
-                <rect x="40" y="155" width="180" height="18" fill="rgba(255,255,255,.04)" rx="2"/>
-              </svg>,
-            ];
-
-            return (
+          {cases.map((c) => (
             <StaggerItem key={c.co}>
-              <div className="lp-lift" style={{ ...card(), height:"100%", position:"relative", overflow:"hidden" }}>
-                {/* Background scene */}
-                {bgSvgs[ci]}
-                {/* Gradient overlay for readability */}
-                <div style={{ position:"absolute", inset:0, pointerEvents:"none",
-                  background:"linear-gradient(180deg, rgba(13,31,51,.15) 0%, rgba(13,31,51,.75) 45%, rgba(13,31,51,.97) 100%)" }}/>
-                {/* Content */}
-                <div style={{ position:"relative", zIndex:1 }}>
-                  <div style={{
-                    background:"rgba(79,124,249,.1)", borderRadius:8,
-                    padding:"5px 12px", fontSize:12.5, color:C.indigo,
-                    fontWeight:500, display:"inline-block", marginBottom:18,
-                  }}>{c.industry}</div>
-                  <h3 style={{ fontSize:17.5, fontWeight:700, color:C.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
-                    {c.co}
-                  </h3>
-                  <div style={{ fontSize:13, color:C.muted, marginBottom:22 }}>
-                    {c.employees} {ar ? "موظف" : "employees"} · {c.time}
-                  </div>
-                  <div style={{
-                    fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:C.green, marginBottom:6,
-                    fontFamily:FONT_MONO, lineHeight:1,
-                  }}>{c.result}</div>
-                  <div style={{ fontSize:14.5, color:C.text, fontWeight:600, marginBottom:16 }}>
-                    {c.resultLabel}
-                  </div>
-                  <p style={{ ...TYPE.bodySm, color:C.sub, margin:0, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
-                    {c.detail}
-                  </p>
+              <div className="lp-lift" style={{ ...card(), height:"100%" }}>
+                <div style={{
+                  background:"rgba(79,124,249,.08)", borderRadius:8,
+                  padding:"5px 12px", fontSize:12.5, color:C.indigo,
+                  fontWeight:500, display:"inline-block", marginBottom:18,
+                }}>{c.industry}</div>
+                <h3 style={{ fontSize:17.5, fontWeight:700, color:C.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
+                  {c.co}
+                </h3>
+                <div style={{ fontSize:13, color:C.muted, marginBottom:22 }}>
+                  {c.employees} {ar ? "موظف" : "employees"} · {c.time}
                 </div>
+                <div style={{
+                  fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:C.green, marginBottom:6,
+                  fontFamily:FONT_MONO, lineHeight:1,
+                }}>{c.result}</div>
+                <div style={{ fontSize:14.5, color:C.text, fontWeight:600, marginBottom:16 }}>
+                  {c.resultLabel}
+                </div>
+                <p style={{ ...TYPE.bodySm, color:C.sub, margin:0, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+                  {c.detail}
+                </p>
               </div>
             </StaggerItem>
-            );
-          })}
+          ))}
         </Stagger>
       </div>
       <style>{`@media(max-width:860px){.lp-cases-grid{grid-template-columns:1fr!important}}`}</style>
@@ -1750,137 +1355,68 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 // ── Testimonials ──────────────────────────────────────────────────
 function Testimonials({ lang }) {
   const ar = lang === "ar";
-  const [idx, setIdx] = useState(0);
-
   const testimonials = ar ? [
-    { name:"م. س.", initials:"SM", role:"مهندسة برمجيات · القاهرة", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", color:"#818cf8" },
-    { name:"ه. أ.", initials:"HA", role:"مدير موارد بشرية · دبي", text:"تحليلات HR عندنا أوضح من أي وقت. دلوقتي نقدر نمنع المشاكل قبل ما تبقى إجازات مرضية مكلفة.", score:"5/5", color:"#22d3ee" },
+    { name:"م. س.", initials:"مس", role:"مهندسة برمجيات · القاهرة", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", outcome:"آلام الرقبة انتهت في أسبوعين", color:"#818cf8" },
+    { name:"أ. م.", initials:"أم", role:"مدير موارد بشرية · متعدد الجنسيات", text:"جربنا 3 أدوات قبل Corvus. دي الأولى اللي الفريق بيستخدمها فعلاً. الـ AI coach بيعمل فرق حقيقي ومش مجرد رقم على شاشة.", score:"4.9/5", outcome:"أعلى adoption rate من 3 أدوات", color:"#22d3ee" },
+    { name:"ي. ح.", initials:"يح", role:"مدير تقنية · شركة تمويل", text:"الإعداد خلص في 20 دقيقة. الدقة في تتبع وضعية الرقبة أعلى من أي أداة جربتها. التقارير الأسبوعية مفيدة للتتبع.", score:"4.8/5", outcome:"إعداد كامل في 20 دقيقة", color:"#10d9a0" },
   ] : [
-    { name:"S. M.", initials:"SM", role:"Software Engineer · Cairo", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", color:"#818cf8" },
-    { name:"H. A.", initials:"HA", role:"HR Manager · Dubai", text:"HR analytics are crystal clear. We can now prevent issues before they become costly sick leaves.", score:"5/5", color:"#22d3ee" },
+    { name:"S. M.", initials:"SM", role:"Software Engineer · Cairo", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", outcome:"Neck pain gone in 2 weeks", color:"#818cf8" },
+    { name:"A. K.", initials:"AK", role:"HR Director · Multinational", text:"We tried 3 tools before Corvus. This is the first one the team actually uses. The AI coach makes a real difference — not just a number on a screen.", score:"4.9/5", outcome:"Highest adoption of 3 tools tested", color:"#22d3ee" },
+    { name:"Y. H.", initials:"YH", role:"CTO · Finance Company", text:"Setup took 20 minutes. Neck posture tracking accuracy is higher than any tool I've tested. Weekly reports are genuinely useful for tracking progress.", score:"4.8/5", outcome:"Full team setup in 20 min", color:"#10d9a0" },
   ];
-
-  const prev = () => setIdx(i => (i - 1 + testimonials.length) % testimonials.length);
-  const next = () => setIdx(i => (i + 1) % testimonials.length);
-
-  const t = testimonials[idx];
 
   return (
     <section className="lp-section">
       <div className="lp-wrap">
         <SectionHead title={ar ? "ماذا يقول عملاؤنا" : "What our customers say"} />
-
-        <div style={{ position:"relative", maxWidth:860, margin:"0 auto" }}>
-          {/* Prev arrow */}
-          <button onClick={prev} style={{
-            position:"absolute", left:-20, top:"50%", transform:"translateY(-50%)",
-            width:40, height:40, borderRadius:"50%", border:`1px solid ${C.border}`,
-            background:"rgba(255,255,255,.04)", color:C.text, fontSize:18,
-            cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
-            zIndex:2, transition:"background .18s, border-color .18s",
-          }}
-          onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,.1)";e.currentTarget.style.borderColor=C.borderM}}
-          onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,.04)";e.currentTarget.style.borderColor=C.border}}>
-            ‹
-          </button>
-
-          {/* Card */}
-          <motion.div key={idx}
-            initial={{ opacity:0, x:30 }} animate={{ opacity:1, x:0 }}
-            transition={{ duration:.32, ease:[0.22,1,0.36,1] }}
-            style={{
-              background:"rgba(255,255,255,.035)", border:`1px solid ${C.border}`,
-              borderRadius:20, padding:"40px 52px",
-              display:"grid", gridTemplateColumns:"1fr 1fr", gap:40,
-              alignItems:"center",
-            }}>
-            {/* Left — stars + quote */}
-            <div>
-              <div style={{ display:"flex", gap:3, marginBottom:16 }}>
-                {"★★★★★".split("").map((s,i)=>(
-                  <span key={i} style={{ color:C.amber, fontSize:18 }}>{s}</span>
-                ))}
-                <span style={{ color:C.muted, fontSize:12, marginLeft:8, fontFamily:FONT_MONO, alignSelf:"center" }}>{t.score}</span>
-              </div>
-              <p style={{ fontSize:16, color:C.sub, lineHeight:1.75, margin:"0 0 24px", fontStyle:"italic" }}>
-                "{t.text}"
-              </p>
-              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                <div style={{
-                  width:42, height:42, borderRadius:"50%",
-                  background:`linear-gradient(135deg,${t.color}50,${t.color}20)`,
-                  border:`1.5px solid ${t.color}60`,
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  fontSize:13, fontWeight:800, color:t.color,
-                }}>{t.initials}</div>
-                <div>
-                  <div style={{ fontWeight:700, color:C.text, fontSize:14 }}>{t.name}</div>
-                  <div style={{ color:C.muted, fontSize:11.5, marginTop:2 }}>{t.role}</div>
+        <Stagger key={String(ar)} className="lp-testi-grid" style={{
+          display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
+          {testimonials.map((t) => (
+            <StaggerItem key={t.name}>
+              <div className="lp-lift" style={{
+                height:"100%", borderRadius:20, padding:28, position:"relative",
+                background:"rgba(255,255,255,.035)", border:`1px solid ${C.border}`,
+                backdropFilter:"blur(16px)", display:"flex", flexDirection:"column",
+              }}>
+                {/* Quote mark */}
+                <div style={{ position:"absolute", top:20, [ar?"left":"right"]:24,
+                  fontSize:44, color:"rgba(79,124,249,.14)", fontFamily:"Georgia,serif", lineHeight:1 }}>"</div>
+                {/* Outcome badge */}
+                <div style={{ display:"inline-flex", alignItems:"center", gap:6,
+                  background:"rgba(16,217,160,.08)", border:"1px solid rgba(16,217,160,.2)",
+                  borderRadius:99, padding:"4px 11px", marginBottom:14, alignSelf:"flex-start" }}>
+                  <span style={{ width:5, height:5, borderRadius:"50%", background:C.green, flexShrink:0 }}/>
+                  <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{t.outcome}</span>
+                </div>
+                {/* Stars */}
+                <div style={{ display:"flex", gap:2, marginBottom:14 }}>
+                  {"★★★★★".split("").map((s,i) => (
+                    <span key={i} style={{ color:C.amber, fontSize:14 }}>{s}</span>
+                  ))}
+                  <span style={{ color:C.muted, fontSize:11.5, marginLeft:8, fontFamily:FONT_MONO }}>{t.score}</span>
+                </div>
+                {/* Text */}
+                <p style={{ fontSize:15, color:C.sub, lineHeight:1.7, margin:"0 0 22px", flex:1 }}>"{t.text}"</p>
+                {/* Author */}
+                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                  <div style={{
+                    width:40, height:40, borderRadius:"50%", flexShrink:0,
+                    background:`linear-gradient(135deg, ${t.color}40, ${t.color}18)`,
+                    border:`1.5px solid ${t.color}50`,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:13, fontWeight:800, color:t.color, letterSpacing:".5px",
+                  }}>{t.initials}</div>
+                  <div>
+                    <div style={{ fontWeight:700, color:C.text, fontSize:14 }}>{t.name}</div>
+                    <div style={{ color:C.muted, fontSize:11.5, marginTop:1 }}>{t.role}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* Right — outcome visual */}
-            <div style={{
-              background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
-              borderRadius:16, padding:"28px 24px", textAlign:"center",
-            }}>
-              <div style={{ fontSize:36, marginBottom:12 }}>
-                {idx === 0 ? "🧘" : "📊"}
-              </div>
-              <div style={{
-                fontSize:28, fontWeight:800, color:C.green,
-                fontFamily:FONT_MONO, lineHeight:1, marginBottom:8,
-              }}>
-                {idx === 0 ? "-47%" : "94%"}
-              </div>
-              <div style={{ fontSize:13, color:C.sub, lineHeight:1.5 }}>
-                {idx === 0
-                  ? (ar ? "تراجع آلام الرقبة في أسبوعين" : "Neck pain reduction in 2 weeks")
-                  : (ar ? "معدل الاستخدام اليومي" : "Daily active rate")}
-              </div>
-              {/* Mini sparkline */}
-              <svg width="100%" height="36" viewBox="0 0 140 36" style={{ display:"block", marginTop:14 }}>
-                <defs>
-                  <linearGradient id="testiGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={C.green} stopOpacity=".35"/>
-                    <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
-                  </linearGradient>
-                </defs>
-                <path d="M0,30 L23,26 L46,20 L70,23 L93,12 L116,6 L140,2"
-                  fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round"/>
-                <path d="M0,30 L23,26 L46,20 L70,23 L93,12 L116,6 L140,2 L140,36 L0,36 Z"
-                  fill="url(#testiGrad)"/>
-              </svg>
-            </div>
-          </motion.div>
-
-          {/* Next arrow */}
-          <button onClick={next} style={{
-            position:"absolute", right:-20, top:"50%", transform:"translateY(-50%)",
-            width:40, height:40, borderRadius:"50%", border:`1px solid ${C.border}`,
-            background:"rgba(255,255,255,.04)", color:C.text, fontSize:18,
-            cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
-            zIndex:2, transition:"background .18s, border-color .18s",
-          }}
-          onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,.1)";e.currentTarget.style.borderColor=C.borderM}}
-          onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,.04)";e.currentTarget.style.borderColor=C.border}}>
-            ›
-          </button>
-
-          {/* Dot navigation */}
-          <div style={{ display:"flex", gap:8, justifyContent:"center", marginTop:24 }}>
-            {testimonials.map((_,i) => (
-              <button key={i} onClick={()=>setIdx(i)} style={{
-                width: i===idx ? 24 : 8, height:8, borderRadius:4,
-                background: i===idx ? C.blue : "rgba(255,255,255,.18)",
-                border:"none", cursor:"pointer", padding:0,
-                transition:"width .3s, background .3s",
-              }}/>
-            ))}
-          </div>
-        </div>
+            </StaggerItem>
+          ))}
+        </Stagger>
       </div>
+      <style>{`@media(max-width:860px){.lp-testi-grid{grid-template-columns:1fr!important}}`}</style>
     </section>
   );
 }
@@ -1997,55 +1533,35 @@ function MidCTA({ lang, onCTA, variant="features" }) {
 function FinalCTA({ lang, onCTA }) {
   const ar = lang === "ar";
   return (
-    <section style={{ padding:"0 24px 0", marginBottom:0 }}>
-      <div className="lp-wrap">
+    <section className="lp-section">
+      <div style={{ maxWidth:780, margin:"0 auto", textAlign:"center", padding:"0 24px" }}>
         <Reveal>
-          <div style={{
-            background:"linear-gradient(120deg,rgba(26,86,219,.85),rgba(8,145,178,.75))",
-            borderRadius:20, padding:"28px 36px",
-            display:"flex", alignItems:"center",
-            gap:20, flexWrap:"wrap", justifyContent:"space-between",
-            boxShadow:"0 8px 40px rgba(26,86,219,.3)",
-            position:"relative", overflow:"hidden",
+          <div className="lp-glow" style={{
+            background:"linear-gradient(135deg,rgba(79,124,249,.1),rgba(16,217,160,.05))",
+            border:`1px solid rgba(79,124,249,.22)`,
+            borderRadius:28, padding:"clamp(48px,6vw,76px) clamp(28px,5vw,56px)",
           }}>
-            {/* Glow orb behind */}
             <div style={{
-              position:"absolute", right:-60, top:-60,
-              width:200, height:200,
-              background:"radial-gradient(circle,rgba(255,255,255,.12),transparent 70%)",
-              borderRadius:"50%", pointerEvents:"none",
-            }}/>
-            {/* Icon + text */}
-            <div style={{ display:"flex", alignItems:"center", gap:16, flex:1, minWidth:260 }}>
-              <div style={{
-                width:44, height:44, borderRadius:12, flexShrink:0,
-                background:"rgba(255,255,255,.15)",
-                display:"flex", alignItems:"center", justifyContent:"center", fontSize:20,
-              }}>◈</div>
-              <div>
-                <div style={{ fontSize:16, fontWeight:700, color:"#fff", lineHeight:1.35 }}>
-                  {ar ? "انضم لـ 50+ فريق يحسّن الوضعية بالذكاء الاصطناعي." : "Join 50+ teams improving posture with AI."}
-                </div>
-                <div style={{ fontSize:12.5, color:"rgba(255,255,255,.7)", marginTop:3 }}>
-                  {ar ? "تجربة مجانية 7 أيام، وصول كامل، بدون التزام." : "7-day free trial, full access, no commitment."}
-                </div>
-              </div>
+              width:72, height:72, borderRadius:20, margin:"0 auto 26px",
+              background:C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:34, boxShadow:"0 8px 28px rgba(79,124,249,.45)",
+            }}>🧘</div>
+            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 18px", fontFamily:FONT_DISPLAY }}>
+              {ar ? "ابدأ تحسين صحة فريقك اليوم" : "Start improving your team's health today"}
+            </h2>
+            <p style={{ ...TYPE.body, color:C.sub, maxWidth:480, margin:"0 auto 40px" }}>
+              {ar
+                ? "انضم إلى الشركات التي تستخدم Corvus. تجربة مجانية 7 أيام."
+                : "Join companies reducing workplace pain using AI-powered posture intelligence. 7-day free trial, no credit card required."}
+            </p>
+            <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" }}>
+              <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
+                {ar ? "🚀 ابدأ تجربتك المجانية" : "🚀 Start Free Trial"}
+              </a>
+              <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-ghost" style={btn("ghost","lg")}>
+                {ar ? "احجز عرضاً" : "Book Demo"}
+              </a>
             </div>
-            {/* CTA button */}
-            <a href="#" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
-              style={{
-                background:"#fff", color:"#1a56db",
-                padding:"12px 26px", borderRadius:12,
-                fontSize:14.5, fontWeight:700,
-                textDecoration:"none", flexShrink:0, whiteSpace:"nowrap",
-                transition:"transform .18s, box-shadow .18s",
-                boxShadow:"0 4px 16px rgba(0,0,0,.2)",
-                display:"flex", alignItems:"center", gap:6,
-              }}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,.3)"}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,.2)"}}>
-              {ar ? "جرّب Corvus مجاناً" : "Try Corvus Free"} →
-            </a>
           </div>
         </Reveal>
       </div>
@@ -2060,60 +1576,46 @@ function Footer({ lang }) {
   const sections = ar ? [
     { title:"المنتج", links:[
       ["المميزات","#features"],
-      ["كيف يعمل","#how"],
       ["الأسعار","#pricing"],
-      ["التكاملات","#"],
-    ]},
-    { title:"الحلول", links:[
-      ["فرق HR","#casestudies"],
-      ["الصحة المهنية","#features"],
-      ["العمل عن بُعد","#features"],
       ["للمؤسسات","#enterprise"],
-    ]},
-    { title:"الموارد", links:[
-      ["المدوّنة","#"],
-      ["دراسات الحالة","#casestudies"],
-      ["الأدلة","#"],
-      ["مركز المساعدة",`mailto:${SUPPORT_EMAIL}`],
+      ["كيف يعمل","#how"],
     ]},
     { title:"الشركة", links:[
       ["من نحن",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],
-      ["الأمان","#"],
-      ["الخصوصية","#"],
       ["تواصل معنا",`mailto:${SUPPORT_EMAIL}`],
+      ["المدوّنة","#"],
+      ["الشركاء","#"],
+    ]},
+    { title:"قانوني", links:[
+      ["سياسة الخصوصية","#privacy"],
+      ["شروط الاستخدام","#terms"],
+      ["الأمان","#security"],
+      ["GDPR","#gdpr"],
     ]},
   ] : [
     { title:"Product", links:[
       ["Features","#features"],
-      ["How It Works","#how"],
       ["Pricing","#pricing"],
-      ["Integrations","#"],
-    ]},
-    { title:"Solutions", links:[
-      ["HR Teams","#casestudies"],
-      ["Occupational Health","#features"],
-      ["Remote Teams","#features"],
       ["Enterprise","#enterprise"],
-    ]},
-    { title:"Resources", links:[
-      ["Blog","#"],
-      ["Case Studies","#casestudies"],
-      ["Guides","#"],
-      ["Help Center",`mailto:${SUPPORT_EMAIL}`],
+      ["How It Works","#how"],
     ]},
     { title:"Company", links:[
       ["About",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],
-      ["Security","#"],
-      ["Privacy Policy","#"],
       ["Contact",`mailto:${SUPPORT_EMAIL}`],
+      ["Blog","#"],
+      ["Partners","#"],
+    ]},
+    { title:"Legal", links:[
+      ["Privacy Policy","#privacy"],
+      ["Terms of Service","#terms"],
+      ["Security","#security"],
+      ["GDPR","#gdpr"],
     ]},
   ];
 
   const socials = [
-    { label:"in", title:"LinkedIn",  href:"https://www.linkedin.com/in/mo-postureai" },
-    { label:"𝕏",  title:"X",         href:"https://x.com/corvusposture" },
-    { label:"▶",  title:"YouTube",   href:"https://youtube.com/@corvusai" },
-    { label:"◉",  title:"Instagram", href:"https://instagram.com/corvusai" },
+    { label:"LinkedIn", href:"https://www.linkedin.com/in/mo-postureai" },
+    { label:"Email",    href:`mailto:${SUPPORT_EMAIL}` },
   ];
 
   return (
@@ -2122,9 +1624,9 @@ function Footer({ lang }) {
         {/* Main grid — 4 cols desktop, 2 cols tablet, 1 col mobile */}
         <div style={{
           display:"grid",
-          gridTemplateColumns:"1.4fr 1fr 1fr 1fr 1fr",
-          gap:"40px 32px",
-          marginBottom:48,
+          gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))",
+          gap:"40px 48px",
+          marginBottom:52,
         }}>
           {/* Brand column */}
           <div style={{ gridColumn:"span 1" }}>
@@ -2147,30 +1649,19 @@ function Footer({ lang }) {
                 : "AI posture analysis for individuals and teams across MENA."}
             </p>
 
-            {/* Social icon buttons */}
-            <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-              {socials.map(({ label, title, href }) => (
-                <a key={label} href={href} title={title}
-                  target="_blank" rel="noopener noreferrer"
+            {/* Social links */}
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {socials.map(({ label, href }) => (
+                <a key={label} href={href}
+                  target={href.startsWith("http") ? "_blank" : undefined}
+                  rel="noopener noreferrer"
                   style={{
-                    width:34, height:34, borderRadius:9,
-                    background:"rgba(255,255,255,.05)",
-                    border:`1px solid ${C.border}`,
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    color:C.muted, fontSize:13, fontWeight:700,
-                    textDecoration:"none",
-                    transition:"color .18s, border-color .18s, background .18s",
+                    color:C.muted, fontSize:12.5, textDecoration:"none",
+                    padding:"6px 12px", border:`1px solid ${C.border}`,
+                    borderRadius:7, transition:"color .18s, border-color .18s",
                   }}
-                  onMouseEnter={e=>{
-                    e.currentTarget.style.color=C.text;
-                    e.currentTarget.style.borderColor=C.borderM;
-                    e.currentTarget.style.background="rgba(255,255,255,.09)";
-                  }}
-                  onMouseLeave={e=>{
-                    e.currentTarget.style.color=C.muted;
-                    e.currentTarget.style.borderColor=C.border;
-                    e.currentTarget.style.background="rgba(255,255,255,.05)";
-                  }}>
+                  onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM}}
+                  onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border}}>
                   {label}
                 </a>
               ))}
@@ -2239,7 +1730,7 @@ function Footer({ lang }) {
           </span>
           <div style={{ display:"flex", gap:20, alignItems:"center" }}>
             <span style={{ fontSize:12, color:C.muted, opacity:.7 }}>
-              {ar ? "صُنع بـ ❤ في مصر" : "Made with ❤ in Egypt"}
+              {ar ? "صُنع بـ ❤ في MENA" : "Made with ❤ in MENA"}
             </span>
             <a href={`mailto:${SUPPORT_EMAIL}`}
               style={{ fontSize:12.5, color:C.sub, textDecoration:"none" }}
