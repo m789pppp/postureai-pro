@@ -2465,10 +2465,12 @@ export default function App(){
 
           try { const lm=localStorage.getItem("last_mode"); if(lm) setMode(lm); } catch{}
 
-          // Navigate
+          // Navigate — always land on home or setup, never on live (live requires user interaction)
           try {
             const params=new URLSearchParams(window.location.search);
             const pendingInvite=sessionStorage.getItem("pending_invite");
+            // Clear #live hash if present — live page should only open via explicit user action
+            if(window.location.hash === "#live") window.history.replaceState({},"","#home");
             if(pendingInvite){ window.__invite_token=pendingInvite; setPage("invite"); }
             else if(!p || !p.setup_complete) setPage("setup");
             else {
@@ -3561,6 +3563,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
   );
   if(page==="profile"){setPage("home"); return null; /* Settings handled in HomePage tabs */}
   if(page==="leaderboard")return <ErrorBoundary><Leaderboard {...shared} users={allUsers} onBack={()=>setPage("home")} lang={lang}/></ErrorBoundary>;
+
+  // Guard: live page requires user + profile — prevent crash on #live URL before auth resolves
+  if(page==="live" && (!user || !profile)){
+    // Don't setPage here — onAuthStateChanged will navigate correctly once auth resolves
+    return null;
+  }
+
   // page==="live" and page==="home" fall through to their renders below
 
   // ── SETUP SCREEN: account type + device selection ─────────────────
