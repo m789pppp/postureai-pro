@@ -108,62 +108,158 @@ function Input({ label, value, onChange, placeholder, type = "text", hint }) {
    STEP COMPONENTS
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ── Step 0: Welcome splash ───────────────────────────────────────── */
-function StepWelcome({ isAr, onNext, name }) {
-  const [show, setShow] = useState(false);
-  useEffect(() => { setTimeout(() => setShow(true), 80); }, []);
-  const firstName = name?.split(" ")[0] || (isAr ? "صديقي" : "there");
-
+/* ── Step 0: Account Type Picker ────────────────────────────────── */
+function StepAccountType({ isAr, onNext, setProfile }) {
+  const [chosen, setChosen] = React.useState(null);
+  const types = [
+    {
+      id:"individual", icon:"🧑‍💻",
+      en:"Individual", ar:"مستخدم فردي",
+      desc:"Personal posture tracking, AI coaching, and wellness reports — just for you.",
+      descAr:"تتبع وضعيتك الشخصية، AI Coach، وتقارير صحية شخصية.",
+      color:"#3b82f6",
+      features:["Personal dashboard","AI Coach","PDF reports","Progress tracking"],
+      featuresAr:["داشبورد شخصي","AI Coach","تقارير PDF","تتبع التقدم"],
+    },
+    {
+      id:"company", icon:"🏢",
+      en:"Company / Team", ar:"شركة / فريق",
+      desc:"Monitor your entire team, HR analytics, at-risk alerts, and org-level reports.",
+      descAr:"راقب الفريق كاملاً، HR analytics، تنبيهات الخطر، وتقارير المؤسسة.",
+      color:"#10b981",
+      features:["Team overview dashboard","HR Panel + Analytics","At-risk alerts","Team PDF reports"],
+      featuresAr:["داشبورد الفريق","HR Panel + Analytics","تنبيهات الخطر","تقارير PDF للفريق"],
+    },
+  ];
   return (
-    <div style={{ textAlign: "center", padding: "32px 24px 24px" }}>
-      {/* Animated logo */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-        <div style={{
-          width: 88, height: 88, borderRadius: 24,
-          background: "linear-gradient(135deg,#1a56db,#0891b2)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 42, boxShadow: "0 12px 40px rgba(26,86,219,.45)",
-          animation: show ? "ob-bounceIn 600ms cubic-bezier(.16,1,.3,1) both" : "none",
-        }}>◈</div>
-      </div>
-
-      <div style={{ opacity: show ? 1 : 0, transform: show ? "none" : "translateY(16px)", transition: `all 500ms 150ms ${SPRING}` }}>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".16em", textTransform: "uppercase", color: "#60a5fa", marginBottom: 12 }}>
-          {isAr ? "منصة ذكاء القوى العاملة بالـ AI" : "AI WORKFORCE INTELLIGENCE PLATFORM"}
-        </div>
-        <h1 style={{ fontFamily: SYNE, fontSize: "clamp(26px,5vw,42px)", fontWeight: 800, letterSpacing: "-.035em", lineHeight: 1.1, marginBottom: 16 }}>
-          {isAr ? `أهلاً ${firstName}! 👋` : `Welcome, ${firstName}! 👋`}
-        </h1>
-        <p style={{ fontSize: 15, color: "#94a3b8", lineHeight: 1.75, maxWidth: 460, margin: "0 auto 28px" }}>
-          {isAr
-            ? "جاهز تحوّل وضعيتك وصحة فريقك إلى ميزة تنافسية حقيقية؟ خلينا نعمل إعداد سريع تبدأ بعده مباشرة."
-            : "Ready to transform your posture and team health into a real competitive advantage? Let's do a quick setup so you can start right away."}
+    <div style={{padding:"8px 0"}}>
+      <div style={{textAlign:"center",marginBottom:28}}>
+        <div style={{fontSize:36,marginBottom:12}}>🎯</div>
+        <h2 style={{fontFamily:SYNE,fontSize:22,fontWeight:800,letterSpacing:"-.02em",marginBottom:8,color:"#e8f0fe"}}>
+          {isAr?"كيف ستستخدم Corvus؟":"How will you use Corvus?"}
+        </h2>
+        <p style={{fontSize:13,color:"#64748b",lineHeight:1.6}}>
+          {isAr?"اختر نوع حسابك — التجربة مختلفة تماماً لكل نوع":"Choose your account type — each gets a fully different experience"}
         </p>
       </div>
+      <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:28}}>
+        {types.map(t=>(
+          <button key={t.id} onClick={()=>setChosen(t.id)} style={{
+            width:"100%",textAlign:"left",padding:"18px 20px",borderRadius:14,cursor:"pointer",
+            background:chosen===t.id?`linear-gradient(135deg,${t.color}18,${t.color}08)`:"rgba(255,255,255,.02)",
+            border:`2px solid ${chosen===t.id?t.color:"rgba(148,163,184,.1)"}`,
+            transition:`all 200ms ${SPRING}`,
+            boxShadow:chosen===t.id?`0 0 0 4px ${t.color}18`:"none",
+          }}>
+            <div style={{display:"flex",alignItems:"flex-start",gap:14}}>
+              <div style={{width:48,height:48,borderRadius:12,flexShrink:0,
+                background:chosen===t.id?`${t.color}22`:"rgba(255,255,255,.06)",
+                border:`1.5px solid ${chosen===t.id?t.color+"44":"rgba(148,163,184,.1)"}`,
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{t.icon}</div>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                  <span style={{fontFamily:SYNE,fontSize:16,fontWeight:800,color:chosen===t.id?t.color:"#e8f0fe"}}>
+                    {isAr?t.ar:t.en}
+                  </span>
+                  {chosen===t.id&&(
+                    <span style={{fontSize:10,fontWeight:700,color:t.color,
+                      background:`${t.color}18`,border:`1px solid ${t.color}44`,
+                      borderRadius:99,padding:"2px 8px"}}>
+                      {isAr?"✓ تم الاختيار":"✓ Selected"}
+                    </span>
+                  )}
+                </div>
+                <div style={{fontSize:12,color:"#64748b",lineHeight:1.6,marginBottom:10}}>
+                  {isAr?t.descAr:t.desc}
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {(isAr?t.featuresAr:t.features).map((f,i)=>(
+                    <span key={i} style={{fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:99,
+                      background:chosen===t.id?`${t.color}15`:"rgba(255,255,255,.04)",
+                      color:chosen===t.id?t.color:"#475569",
+                      border:`1px solid ${chosen===t.id?t.color+"30":"rgba(148,163,184,.08)"}`}}>
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+      <Btn fullWidth size="lg" disabled={!chosen}
+        onClick={()=>{
+          setProfile(p=>({...p,
+            acct_type:chosen,
+            user_type:chosen==="company"?"hr_admin":"individual",
+            is_org_owner:chosen==="company",
+          }));
+          onNext();
+        }}>
+        {isAr?"التالي ←":"Continue →"}
+      </Btn>
+      {!chosen&&(
+        <div style={{textAlign:"center",fontSize:11,color:"#475569",marginTop:10}}>
+          {isAr?"اختر نوع الحساب للمتابعة":"Select an account type to continue"}
+        </div>
+      )}
+    </div>
+  );
+}
 
-      {/* Feature pills */}
-      <div style={{ opacity: show ? 1 : 0, transition: `opacity 500ms 300ms`, display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 32 }}>
-        {(isAr
-          ? ["🧠 ذكاء AI فوري", "📊 تقارير HR", "🔮 تنبؤ بالإرهاق", "🏆 تحديات الفريق", "🔒 أمان مؤسسي"]
-          : ["🧠 Real-time AI", "📊 HR Reports", "🔮 Burnout prediction", "🏆 Team challenges", "🔒 Enterprise security"]
-        ).map((f, i) => (
+/* ── Step 1: Welcome splash ───────────────────────────────────────── */
+function StepWelcome({ isAr, onNext, name, acctType }) {
+  const [show, setShow] = useState(false);
+  useEffect(()=>{setTimeout(()=>setShow(true),80);},[]);
+  const firstName = name?.split(" ")[0]||(isAr?"صديقي":"there");
+  const isCompany = acctType==="company";
+  return (
+    <div style={{textAlign:"center",padding:"32px 24px 24px"}}>
+      <div style={{display:"flex",justifyContent:"center",marginBottom:24}}>
+        <div style={{
+          width:88,height:88,borderRadius:24,
+          background:isCompany?"linear-gradient(135deg,#059669,#0891b2)":"linear-gradient(135deg,#1a56db,#0891b2)",
+          display:"flex",alignItems:"center",justifyContent:"center",
+          fontSize:42,boxShadow:isCompany?"0 12px 40px rgba(5,150,105,.45)":"0 12px 40px rgba(26,86,219,.45)",
+          animation:show?"ob-bounceIn 600ms cubic-bezier(.16,1,.3,1) both":"none",
+        }}>{isCompany?"🏢":"◈"}</div>
+      </div>
+      <div style={{opacity:show?1:0,transform:show?"none":"translateY(16px)",transition:`all 500ms 150ms ${SPRING}`}}>
+        <div style={{fontSize:10,fontWeight:800,letterSpacing:".16em",textTransform:"uppercase",
+          color:isCompany?"#34d399":"#60a5fa",marginBottom:12}}>
+          {isCompany?(isAr?"منصة HR للقوى العاملة":"HR WORKFORCE PLATFORM"):(isAr?"منصة ذكاء الوضعية بالـ AI":"AI POSTURE INTELLIGENCE")}
+        </div>
+        <h1 style={{fontFamily:SYNE,fontSize:"clamp(24px,5vw,38px)",fontWeight:800,letterSpacing:"-.035em",lineHeight:1.1,marginBottom:16}}>
+          {isAr?`أهلاً ${firstName}! 👋`:`Welcome, ${firstName}! 👋`}
+        </h1>
+        <p style={{fontSize:14,color:"#94a3b8",lineHeight:1.75,maxWidth:460,margin:"0 auto 28px"}}>
+          {isCompany
+            ?(isAr?"سنعدّ لك لوحة HR كاملة لمراقبة صحة فريقك وتحليل البيانات وإرسال التنبيهات.":"We'll set up your HR dashboard to monitor team health, analyze data, and send smart alerts.")
+            :(isAr?"سنعدّ لك تجربة تتبع شخصية مخصصة بالـ AI لتحسين وضعيتك وصحتك.":"We'll set up your personal AI-powered posture tracking experience.")}
+        </p>
+      </div>
+      <div style={{opacity:show?1:0,transition:"opacity 500ms 300ms",display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginBottom:32}}>
+        {(isCompany
+          ?(isAr?["👥 نظرة عامة للفريق","📊 HR Analytics","🔔 تنبيهات الخطر","📋 تقارير المؤسسة","🔒 أمان مؤسسي"]:["👥 Team overview","📊 HR Analytics","🔔 At-risk alerts","📋 Org reports","🔒 Enterprise security"])
+          :(isAr?["🧠 ذكاء AI فوري","📈 تحليلات شخصية","🤖 AI Coach","📋 تقارير PDF","🏆 تتبع التقدم"]:["🧠 Real-time AI","📈 Personal analytics","🤖 AI Coach","📋 PDF reports","🏆 Progress tracking"])
+        ).map((f,i)=>(
           <span key={i} style={{
-            background: "rgba(26,86,219,.1)", border: "1px solid rgba(26,86,219,.22)",
-            borderRadius: 99, padding: "6px 14px", fontSize: 12, fontWeight: 600, color: "#60a5fa",
-            animation: show ? `ob-fadeIn 300ms ${400 + i * 60}ms both` : "none",
+            background:isCompany?"rgba(5,150,105,.1)":"rgba(26,86,219,.1)",
+            border:`1px solid ${isCompany?"rgba(5,150,105,.22)":"rgba(26,86,219,.22)"}`,
+            borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:600,
+            color:isCompany?"#34d399":"#60a5fa",
+            animation:show?`ob-fadeIn 300ms ${400+i*60}ms both`:"none",
           }}>{f}</span>
         ))}
       </div>
-
-      <div style={{ opacity: show ? 1 : 0, transition: `opacity 500ms 500ms` }}>
+      <div style={{opacity:show?1:0,transition:"opacity 500ms 500ms"}}>
         <Btn size="lg" onClick={onNext} fullWidth icon="→">
-          {isAr ? "هيا نبدأ ←" : "Let's get started →"}
+          {isAr?"هيا نبدأ ←":"Let's get started →"}
         </Btn>
-        <div style={{ fontSize: 11, color: "#475569", marginTop: 12 }}>
-          {isAr ? "⏱ سيستغرق الإعداد أقل من 3 دقائق" : "⏱ Setup takes less than 3 minutes"}
+        <div style={{fontSize:11,color:"#475569",marginTop:12}}>
+          {isAr?"⏱ سيستغرق الإعداد أقل من 3 دقائق":"⏱ Setup takes less than 3 minutes"}
         </div>
       </div>
-
       <style>{`
         @keyframes ob-bounceIn{0%{opacity:0;transform:scale(.6) rotate(-10deg)}60%{transform:scale(1.12) rotate(3deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
         @keyframes ob-fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -173,78 +269,66 @@ function StepWelcome({ isAr, onNext, name }) {
   );
 }
 
-/* ── Step 1: Profile setup ───────────────────────────────────────── */
+/* ── Step 2: Profile setup ───────────────────────────────────────── */
 function StepProfile({ isAr, profile, setProfile, onNext, onBack }) {
-  const userTypes = [
-    { id: "individual", icon: "🧑‍💻", en: "Individual", ar: "فرد", desc: "Personal wellness & productivity", descAr: "صحة شخصية وإنتاجية" },
-    { id: "hr_manager", icon: "📋",  en: "HR Manager",  ar: "مدير HR", desc: "Team health & workforce analytics", descAr: "صحة الفريق وتحليلات القوى العاملة" },
-    { id: "developer",  icon: "💻",  en: "Developer",   ar: "مطور", desc: "Remote work wellness", descAr: "صحة العمل عن بُعد" },
-    { id: "executive",  icon: "🏢",  en: "Executive",   ar: "مدير تنفيذي", desc: "Company-wide wellness ROI", descAr: "عائد استثمار صحة المؤسسة" },
-  ];
-  const [type, setType] = useState("individual");
-
+  const isCompany = profile.acct_type==="company";
   return (
-    <div style={{ padding: "8px 0" }}>
-      <h2 style={{ fontFamily: SYNE, fontSize: 20, fontWeight: 800, letterSpacing: "-.02em", marginBottom: 6 }}>
-        {isAr ? "أخبرنا عنك" : "Tell us about you"}
+    <div style={{padding:"8px 0"}}>
+      <h2 style={{fontFamily:SYNE,fontSize:20,fontWeight:800,letterSpacing:"-.02em",marginBottom:6}}>
+        {isCompany?(isAr?"بيانات شركتك":"Your company details"):(isAr?"أخبرنا عنك":"Tell us about you")}
       </h2>
-      <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 24, lineHeight: 1.6 }}>
-        {isAr ? "سنخصّص تجربتك بناءً على دورك" : "We'll personalise your experience based on your role"}
+      <p style={{fontSize:13,color:"#94a3b8",marginBottom:24,lineHeight:1.6}}>
+        {isCompany
+          ?(isAr?"سنستخدم هذه البيانات لإعداد لوحة HR الخاصة بك":"We'll use this to set up your HR dashboard")
+          :(isAr?"سنخصّص تجربتك بناءً على بيانات ملفك":"We'll personalise your experience based on your profile")}
       </p>
-
-      {/* Role selector */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
-        {userTypes.map(u => (
-          <button key={u.id} onClick={() => setType(u.id)} style={{
-            padding: "14px 12px", borderRadius: 12, cursor: "pointer", textAlign: "left",
-            background: type === u.id ? "rgba(26,86,219,.12)" : "rgba(255,255,255,.03)",
-            border: `1.5px solid ${type === u.id ? "rgba(26,86,219,.45)" : "rgba(148,163,184,.1)"}`,
-            transition: `all 200ms ${SPRING}`,
-            boxShadow: type === u.id ? "0 0 0 3px rgba(26,86,219,.14)" : "none",
-          }}>
-            <div style={{ fontSize: 24, marginBottom: 6 }}>{u.icon}</div>
-            <div style={{ fontFamily: SYNE, fontSize: 13, fontWeight: 800, color: type === u.id ? "#60a5fa" : "#e8f0fe", marginBottom: 3 }}>
-              {isAr ? u.ar : u.en}
+      <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:24}}>
+        <Input label={isAr?"اسمك":"Your name"} value={profile.name||""}
+          onChange={e=>setProfile(p=>({...p,name:e.target.value}))}
+          placeholder={isAr?"أحمد مصطفى":"Jane Smith"}/>
+        {isCompany?(
+          <div style={{animation:`ob-fadeIn 250ms ${SPRING} both`}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <Input label={isAr?"اسم الشركة":"Company name"} value={profile.company||""}
+                onChange={e=>setProfile(p=>({...p,company:e.target.value}))}
+                placeholder={isAr?"TechCorp Egypt":"Acme Corp"}/>
+              <Input label={isAr?"عدد الموظفين":"Team size"} value={profile.teamSize||""}
+                onChange={e=>setProfile(p=>({...p,teamSize:e.target.value}))}
+                placeholder="50" type="number"/>
             </div>
-            <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.4 }}>
-              {isAr ? u.descAr : u.desc}
+            <div style={{marginTop:12}}>
+              <Input label={isAr?"قطاع الصناعة":"Industry"} value={profile.industry||""}
+                onChange={e=>setProfile(p=>({...p,industry:e.target.value}))}
+                placeholder={isAr?"تقنية / مالية / رعاية صحية...":"Tech / Finance / Healthcare..."}/>
             </div>
-          </button>
-        ))}
-      </div>
-
-      {/* Name + company */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
-        <Input
-          label={isAr ? "اسمك" : "Your name"}
-          value={profile.name || ""}
-          onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
-          placeholder={isAr ? "أحمد مصطفى" : "Jane Smith"}
-        />
-        {(type === "hr_manager" || type === "executive") && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, animation: `ob-fadeIn 250ms ${SPRING} both` }}>
-            <Input
-              label={isAr ? "اسم الشركة" : "Company name"}
-              value={profile.company || ""}
-              onChange={e => setProfile(p => ({ ...p, company: e.target.value }))}
-              placeholder={isAr ? "TechCorp Egypt" : "Acme Corp"}
-            />
-            <Input
-              label={isAr ? "عدد الموظفين" : "Team size"}
-              value={profile.teamSize || ""}
-              onChange={e => setProfile(p => ({ ...p, teamSize: e.target.value }))}
-              placeholder="50"
-              type="number"
-            />
+          </div>
+        ):(
+          <div style={{animation:`ob-fadeIn 250ms ${SPRING} both`}}>
+            <Input label={isAr?"تخصصك / وظيفتك":"Your role / job"} value={profile.jobTitle||""}
+              onChange={e=>setProfile(p=>({...p,jobTitle:e.target.value}))}
+              placeholder={isAr?"مطور، محاسب، مصمم...":"Developer, accountant, designer..."}/>
           </div>
         )}
       </div>
-
-      <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="ghost" onClick={onBack} size="base">{isAr ? "← رجوع" : "← Back"}</Btn>
-        <Btn onClick={() => { setProfile(p => ({ ...p, userType: type })); onNext(); }} fullWidth>
-          {isAr ? "التالي ←" : "Continue →"}
-        </Btn>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",
+        background:isCompany?"rgba(16,185,129,.06)":"rgba(59,130,246,.06)",
+        border:`1px solid ${isCompany?"rgba(16,185,129,.2)":"rgba(59,130,246,.2)"}`,
+        borderRadius:10,marginBottom:24}}>
+        <span style={{fontSize:18}}>{isCompany?"🏢":"🧑‍💻"}</span>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:isCompany?"#34d399":"#60a5fa"}}>
+            {isCompany?(isAr?"حساب شركة":"Company Account"):(isAr?"حساب فردي":"Individual Account")}
+          </div>
+          <div style={{fontSize:10,color:"#475569"}}>
+            {isCompany
+              ?(isAr?"سيُفعَّل HR Panel والـ Team Analytics بعد الإعداد":"HR Panel and Team Analytics will be activated after setup")
+              :(isAr?"سيُفعَّل الداشبورد الشخصي والـ AI Coach":"Personal dashboard and AI Coach will be activated")}
+          </div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn variant="ghost" onClick={onBack} size="base">{isAr?"← رجوع":"← Back"}</Btn>
+        <Btn onClick={onNext} fullWidth>{isAr?"التالي ←":"Continue →"}</Btn>
       </div>
     </div>
   );
@@ -855,7 +939,7 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
       import("./firebase.js").then(({ db }) =>
         getDoc(doc(db, "users", user.uid)).then(snap => {
           const saved = snap.data()?.onboarding_step;
-          if (saved && saved > 0 && saved < 7) { // don't resume from finish step
+          if (saved && saved > 0 && saved < 8) { // don't resume from finish step
             setStep(saved);
           }
         }).catch(() => {})
@@ -864,14 +948,15 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
   }, [user?.uid]);
 
   const STEPS = [
-    { id: "welcome",      label: isAr ? "مرحباً"    : "Welcome"     },
-    { id: "profile",      label: isAr ? "ملفك"      : "Profile"     },
-    { id: "device",       label: isAr ? "الجهاز"    : "Device"      },
-    { id: "goals",        label: isAr ? "الأهداف"   : "Goals"       },
-    { id: "demo",         label: isAr ? "تجريبي"    : "Demo"        },
-    { id: "walkthrough",  label: isAr ? "جولة"      : "Tour"        },
-    { id: "integrations", label: isAr ? "تكاملات"   : "Integrations"},
-    { id: "finish",       label: isAr ? "اكتمل!"    : "All set!"    },
+    { id: "account",      label: isAr ? "نوع الحساب" : "Account type"  },
+    { id: "welcome",      label: isAr ? "مرحباً"     : "Welcome"        },
+    { id: "profile",      label: isAr ? "ملفك"       : "Profile"        },
+    { id: "device",       label: isAr ? "الجهاز"     : "Device"         },
+    { id: "goals",        label: isAr ? "الأهداف"    : "Goals"          },
+    { id: "demo",         label: isAr ? "تجريبي"     : "Demo"           },
+    { id: "walkthrough",  label: isAr ? "جولة"       : "Tour"           },
+    { id: "integrations", label: isAr ? "تكاملات"    : "Integrations"   },
+    { id: "finish",       label: isAr ? "اكتمل!"     : "All set!"       },
   ];
 
   const progress = Math.round((step / (STEPS.length - 1)) * 100);
@@ -880,7 +965,8 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
   const goBack = () => { setDir("back");    setStep(s => Math.max(s - 1, 0)); };
 
   const STEP_COMPS = [
-    <StepWelcome      isAr={isAr} name={profile.name} onNext={goNext} />,
+    <StepAccountType isAr={isAr} setProfile={setProfile} onNext={goNext} />,
+    <StepWelcome      isAr={isAr} name={profile.name} acctType={profile.acct_type} onNext={goNext} />,
     <StepProfile      isAr={isAr} profile={profile} setProfile={setProfile} onNext={goNext} onBack={goBack} />,
     <StepDevice       isAr={isAr} profile={profile} setProfile={setProfile} onNext={goNext} onBack={goBack} />,
     <StepGoals        isAr={isAr} profile={profile} setProfile={setProfile} onNext={goNext} onBack={goBack} />,

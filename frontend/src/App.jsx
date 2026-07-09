@@ -2244,14 +2244,28 @@ export default function App(){
     if(user?.uid) {
       updateDoc(doc(db,"users",user.uid),{
         name: onboardProfile?.name || "",
-        userType: onboardProfile?.userType || "individual",
+        userType: onboardProfile?.userType || onboardProfile?.acct_type || "individual",
+        acct_type: onboardProfile?.acct_type || "individual",
+        user_type: onboardProfile?.acct_type === "company" ? "hr_admin" : "individual",
+        is_org_owner: onboardProfile?.acct_type === "company" ? true : false,
+        company: onboardProfile?.company || "",
+        industry: onboardProfile?.industry || "",
+        jobTitle: onboardProfile?.jobTitle || "",
         goals: onboardProfile?.goals || [],
-        onboarding_done: ["completed"],          // FIX: array not boolean — trigger checks .length
+        onboarding_done: ["completed"],
         onboarding_completed_at: new Date().toISOString(),
-        setup_complete: true,                    // FIX: prevent re-routing to setup on next login
+        setup_complete: true,
         updated_at: serverTimestamp(),
       }).then(()=>{
-        setProfile(p=>p?({...p,onboarding_done:["completed"],setup_complete:true}):p);
+        setProfile(p=>p?({
+          ...p,
+          onboarding_done:["completed"],
+          setup_complete:true,
+          acct_type: onboardProfile?.acct_type || "individual",
+          user_type: onboardProfile?.acct_type === "company" ? "hr_admin" : "individual",
+          is_org_owner: onboardProfile?.acct_type === "company",
+          company: onboardProfile?.company || p?.company || "",
+        }):p);
       }).catch(()=>{});
     }
     setPage("home"); // FIX: go to home first, don't force camera
