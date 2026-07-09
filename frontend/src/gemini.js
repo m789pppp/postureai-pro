@@ -47,18 +47,23 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
 
   const { localChat } = await import("./localAI.js");
 
-  // Pass context as JSON — localAI.js reads it reliably via JSON.parse (not fragile regex)
-  const ctxBlock = Object.keys(context).length
-    ? `Context: ${JSON.stringify(context)}`
-    : "";
-
-  const langLine = lang === "ar"
-    ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (\u0639\u0627\u0645\u064a\u0629 \u0645\u0635\u0631\u064a\u0629)."
-    : "LANGUAGE: Respond in English.";
-
-  const fullSystemPrompt = [systemPrompt, ctxBlock, langLine]
-    .filter(Boolean)
-    .join("\n\n");
+  // If caller already built a full system prompt (e.g. AICoach builds Dr. Corvus prompt
+  // with all patient data), pass it through directly — don't append redundant context.
+  // Only append context JSON if the system prompt is minimal/empty.
+  let fullSystemPrompt;
+  if (systemPrompt && systemPrompt.length > 200) {
+    // Full prompt provided — use as-is (AICoach, AIInsights pattern)
+    fullSystemPrompt = systemPrompt;
+  } else {
+    // Minimal/no prompt — build from context (legacy callers)
+    const ctxBlock = Object.keys(context).length
+      ? `Context: ${JSON.stringify(context)}`
+      : "";
+    const langLine = lang === "ar"
+      ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (\u0639\u0627\u0645\u064a\u0629 \u0645\u0635\u0631\u064a\u0629)."
+      : "LANGUAGE: Respond in English.";
+    fullSystemPrompt = [systemPrompt, ctxBlock, langLine].filter(Boolean).join("\n\n");
+  }
 
   try {
     return await localChat(messages, { systemPrompt: fullSystemPrompt, maxTokens });

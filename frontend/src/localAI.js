@@ -929,7 +929,12 @@ export async function localChat(messages, {systemPrompt=""} = {}) {
 
   // 1️⃣ Vercel Edge Proxy → LLM7 gpt-4o-mini (primary AI)
   try {
-    const sp = buildLLMSystemPrompt(systemPrompt, false);
+    // If caller already built a full clinical system prompt (AICoach does this),
+    // use it directly — don't rebuild and lose the patient data.
+    // Only rebuild if the prompt is minimal/empty (legacy callers).
+    const sp = systemPrompt && systemPrompt.length > 200
+      ? systemPrompt
+      : buildLLMSystemPrompt(systemPrompt, false);
     return await callLLM7Direct(messages, sp, 700);
   } catch(e) {
     console.warn("[CorvusAI] Vercel proxy failed:", e.message);
