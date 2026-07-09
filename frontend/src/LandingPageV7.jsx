@@ -1052,25 +1052,24 @@ function Stats({ lang }) {
 function Features({ lang }) {
   const ar = lang === "ar";
   const [active, setActive] = useState(0);
-  // Reset to first tab on language change — avoids stale index if array length differs
   useEffect(() => { setActive(0); }, [ar]);
 
   const features = ar ? [
     { icon:"🎯", title:"تحليل دقيق بالذكاء الاصطناعي",
-      desc:"478 نقطة تتبع + تحليل ثلاثي الأبعاد لوضع الرأس بدقة ~96%",
-      detail:"تقنية MediaPipe FaceMesh المتقدمة تتتبع 478 نقطة معلم على الوجه والجسم لتقييم الوضعية بدقة لم تكن ممكنة من قبل." },
+      desc:"478 نقطة تتبع + تحليل ثلاثي الأبعاد بدقة ~96%",
+      detail:"تقنية MediaPipe FaceMesh المتقدمة تتتبع 478 نقطة معلم لتقييم الوضعية بدقة طبية." },
     { icon:"📊", title:"لوحة HR الذكية",
       desc:"تحليلات فورية لصحة الفريق والمخاطر المهنية",
-      detail:"لوحة قيادة متكاملة تعرض مؤشرات الأداء، تنبيهات المخاطر، وتقارير قابلة للتصدير بصيغ PDF وExcel." },
+      detail:"لوحة قيادة متكاملة تعرض مؤشرات الأداء، تنبيهات المخاطر، وتقارير PDF." },
     { icon:"🤖", title:"مدرب AI شخصي",
       desc:"توصيات مخصصة بالذكاء الاصطناعي",
-      detail:"محادثة AI تفاعلية تحلل بيانات الجلسة وتقدم توصيات علاجية مخصصة لكل موظف." },
+      detail:"محادثة AI تفاعلية تحلل بيانات الجلسة وتقدم توصيات علاجية مخصصة." },
     { icon:"🔗", title:"تكاملات المؤسسات",
-      desc:"Slack · Teams · Jira · SAP HR · Webhooks",
-      detail:"API متكامل مع أنظمة HR الموجودة. تنبيهات تلقائية على Slack وTeams عند اكتشاف مخاطر عالية." },
+      desc:"Slack · Teams · Jira · SAP HR",
+      detail:"API متكامل مع أنظمة HR الموجودة. تنبيهات تلقائية على Slack وTeams." },
     { icon:"🛡️", title:"أمان المستوى المؤسسي",
-      desc:"SAML SSO · RBAC · تشفير كامل · سجلات التدقيق",
-      detail:"ISO27001 · تشفير AES-256 للبيانات في حالة السكون. سجلات تدقيق شاملة لكل حدث." },
+      desc:"SAML SSO · RBAC · تشفير كامل",
+      detail:"ISO27001 · تشفير AES-256 · سجلات تدقيق شاملة." },
   ] : [
     { icon:"🎯", title:"Precision AI Analysis",
       desc:"478-landmark tracking + 3D head pose at ~96% accuracy",
@@ -1095,64 +1094,161 @@ function Features({ lang }) {
     <section id="features" className="lp-section">
       <div className="lp-wrap">
         <SectionHead eyebrow={ar ? "المنصة" : "Platform"}
-          title={ar ? "كل ما تحتاجه لصحة موظفيك" : "Everything your workforce health program needs"}
+          title={ar ? "كل ما يحتاجه برنامج صحة موظفيك" : "Everything your workforce health program needs"}
           sub={ar ? "من التحليل الفوري إلى الرؤى المؤسسية — كل شيء في مكان واحد"
                   : "From real-time analysis to enterprise insights — everything in one platform"}/>
 
-        <div className="lp-features-grid" style={{ display:"grid", gridTemplateColumns:"300px 1fr", gap:36 }}>
-          {/* Feature tabs */}
-          <div style={{ display:"flex", flexDirection:"column", gap:6 }} className="lp-features-tabs">
-            {features.map((item, i) => (
-              <button key={i} onClick={() => setActive(i)} style={{
-                background: active === i ? "rgba(79,124,249,.12)" : "transparent",
-                border: active === i ? "1px solid rgba(79,124,249,.28)" : "1px solid transparent",
-                borderRadius:14, padding:"15px 16px",
-                cursor:"pointer", textAlign: ar ? "right" : "left",
-                transition:"background .2s,border-color .2s",
-                display:"flex", alignItems:"center", gap:13,
-              }}>
-                <span style={{
-                  width:38, height:38, borderRadius:11, flexShrink:0,
-                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
-                  background: active === i ? C.gBlue : "rgba(255,255,255,.05)",
-                  boxShadow: active === i ? "0 4px 14px rgba(79,124,249,.4)" : "none",
-                  transition:"background .2s,box-shadow .2s",
-                }}>{item.icon}</span>
-                <span style={{ fontSize:14.5, fontWeight:500,
-                  color: active === i ? C.text : C.sub }}>{item.title}</span>
-              </button>
-            ))}
+        <div style={{
+          display:"grid", gridTemplateColumns:"1fr 1fr", gap:32, alignItems:"start",
+        }} className="lp-features-wrap">
+
+          {/* Left — Human body illustration + feature tabs */}
+          <div>
+            {/* SVG Human body with pose landmarks */}
+            <div style={{
+              background:"rgba(255,255,255,.025)", border:`1px solid ${C.border}`,
+              borderRadius:20, padding:"28px 24px", marginBottom:20, textAlign:"center",
+              position:"relative", overflow:"hidden",
+            }}>
+              {/* Glow behind figure */}
+              <div style={{
+                position:"absolute", top:"30%", left:"50%", transform:"translate(-50%,-50%)",
+                width:280, height:280,
+                background:"radial-gradient(circle,rgba(79,124,249,.14) 0%,transparent 70%)",
+                borderRadius:"50%", pointerEvents:"none",
+              }}/>
+              <svg viewBox="0 0 220 340" width="180" height="280" style={{ display:"block", margin:"0 auto", position:"relative" }}>
+                {/* Body glow */}
+                <ellipse cx="110" cy="170" rx="60" ry="100" fill="rgba(79,124,249,.06)"/>
+
+                {/* Body skeleton — standing pose */}
+                {/* Head */}
+                <circle cx="110" cy="42" r="26" fill="rgba(40,68,115,.7)" stroke="rgba(79,124,249,.3)" strokeWidth="1"/>
+                {/* Neck */}
+                <line x1="110" y1="68" x2="110" y2="88" stroke="rgba(16,217,160,.8)" strokeWidth="3" strokeLinecap="round"/>
+                {/* Shoulders */}
+                <line x1="60" y1="100" x2="160" y2="100" stroke="rgba(16,217,160,.8)" strokeWidth="3" strokeLinecap="round"/>
+                {/* Spine */}
+                <line x1="110" y1="88" x2="110" y2="190" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
+                {/* Left arm */}
+                <line x1="60" y1="100" x2="38" y2="165" stroke="rgba(16,217,160,.65)" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="38" y1="165" x2="28" y2="218" stroke="rgba(16,217,160,.5)" strokeWidth="2" strokeLinecap="round"/>
+                {/* Right arm */}
+                <line x1="160" y1="100" x2="182" y2="165" stroke="rgba(16,217,160,.65)" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="182" y1="165" x2="192" y2="218" stroke="rgba(16,217,160,.5)" strokeWidth="2" strokeLinecap="round"/>
+                {/* Hips */}
+                <line x1="80" y1="190" x2="140" y2="190" stroke="rgba(16,217,160,.75)" strokeWidth="2.5" strokeLinecap="round"/>
+                {/* Left leg */}
+                <line x1="80" y1="190" x2="72" y2="268" stroke="rgba(16,217,160,.6)" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="72" y1="268" x2="68" y2="330" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
+                {/* Right leg */}
+                <line x1="140" y1="190" x2="148" y2="268" stroke="rgba(16,217,160,.6)" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="148" y1="268" x2="152" y2="330" stroke="rgba(16,217,160,.45)" strokeWidth="2" strokeLinecap="round"/>
+
+                {/* Landmark dots */}
+                {[
+                  [110,42],[110,68],[60,100],[160,100],[110,100],[110,145],[110,190],
+                  [80,190],[140,190],[38,165],[182,165],[28,218],[192,218],
+                  [72,268],[148,268],[68,330],[152,330]
+                ].map(([x,y],i)=>(
+                  <circle key={i} cx={x} cy={y} r={i===0?5:i<4?4.5:3.5}
+                    fill={i<=1?"rgba(245,158,11,.9)":"rgba(16,217,160,.92)"}
+                    style={{ filter: i<=1?"drop-shadow(0 0 5px rgba(245,158,11,.6))":"drop-shadow(0 0 3px rgba(16,217,160,.5))" }}/>
+                ))}
+
+                {/* Floating angle annotation */}
+                <text x="125" y="52" fill="rgba(245,158,11,.9)" fontSize="10" fontFamily="monospace" fontWeight="bold">12°</text>
+                <line x1="118" y1="52" x2="126" y2="52" stroke="rgba(245,158,11,.7)" strokeWidth="1" strokeDasharray="2,1"/>
+
+                {/* Connecting lines for visual flair */}
+                <circle cx="110" cy="88" r="4" fill="rgba(16,217,160,.9)"/>
+                <circle cx="110" cy="190" r="4.5" fill="rgba(16,217,160,.9)"/>
+              </svg>
+
+              {/* Stats row below figure */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:16 }}>
+                {[
+                  [ar?"وقت الإعداد":"15 min","⏱", ar?"الإعداد الكامل":"Team onboarding time"],
+                  [ar?"رضا المستخدمين":"98%","😊", ar?"اختُبر مع المستخدمين":"Beta user satisfaction"],
+                ].map(([val, icon, label])=>(
+                  <div key={label} style={{
+                    background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
+                    borderRadius:12, padding:"12px 10px", textAlign:"center",
+                  }}>
+                    <div style={{ fontSize:11, marginBottom:4 }}>{icon}</div>
+                    <div style={{ fontSize:18, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{val}</div>
+                    <div style={{ fontSize:10, color:C.muted, marginTop:4, lineHeight:1.3 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Feature tabs */}
+            <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+              {features.map((item, i) => (
+                <button key={i} onClick={() => setActive(i)} style={{
+                  background: active===i ? "rgba(79,124,249,.1)" : "transparent",
+                  border: active===i ? "1px solid rgba(79,124,249,.25)" : `1px solid transparent`,
+                  borderRadius:12, padding:"12px 14px",
+                  cursor:"pointer", textAlign:ar?"right":"left",
+                  display:"flex", alignItems:"center", gap:10,
+                  transition:"background .2s, border-color .2s",
+                }}>
+                  <span style={{
+                    width:34, height:34, borderRadius:9, flexShrink:0,
+                    display:"flex", alignItems:"center", justifyContent:"center", fontSize:16,
+                    background: active===i ? C.gBlue : "rgba(255,255,255,.04)",
+                    transition:"background .2s",
+                  }}>{item.icon}</span>
+                  <div style={{ textAlign:"left" }}>
+                    <div style={{ fontSize:13.5, fontWeight:600, color:active===i?C.text:C.sub }}>{item.title}</div>
+                    <div style={{ fontSize:11.5, color:C.muted, marginTop:2 }}>{item.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Feature detail */}
+          {/* Right — active feature detail card */}
           <motion.div key={active}
-            initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
-            transition={{ duration:.35, ease:[0.22,1,0.36,1] }}
-            style={{ ...card(true), display:"flex", flexDirection:"column", gap:18, padding:"clamp(28px,3vw,44px)" }}>
-            <span style={{
-              width:60, height:60, borderRadius:16, fontSize:28,
-              display:"flex", alignItems:"center", justifyContent:"center",
-              background:C.gBlue, boxShadow:"0 6px 20px rgba(79,124,249,.4)",
-            }}>{f.icon}</span>
-            <h3 style={{ ...TYPE.h3, fontSize:26, color:C.text, margin:0, fontFamily:FONT_DISPLAY }}>
-              {f.title}
-            </h3>
-            <p style={{ fontSize:16.5, color:C.indigo, margin:0, fontWeight:500 }}>
-              {f.desc}
-            </p>
-            <p style={{ ...TYPE.bodySm, color:C.sub, margin:0 }}>
-              {f.detail}
-            </p>
+            initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }}
+            transition={{ duration:.32, ease:[0.22,1,0.36,1] }}>
+            <div style={{
+              background:"rgba(255,255,255,.03)", border:`1px solid rgba(79,124,249,.22)`,
+              borderRadius:20, padding:"32px 28px",
+              boxShadow:"0 0 40px rgba(79,124,249,.07)",
+            }}>
+              <span style={{
+                width:56, height:56, borderRadius:16, fontSize:26,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                background:C.gBlue, boxShadow:"0 6px 20px rgba(79,124,249,.35)",
+                marginBottom:20,
+              }}>{f.icon}</span>
+              <h3 style={{ fontSize:22, fontWeight:700, color:C.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
+                {f.title}
+              </h3>
+              <p style={{ fontSize:15, color:C.indigo, margin:"0 0 16px", fontWeight:500 }}>
+                {f.desc}
+              </p>
+              <p style={{ fontSize:14.5, color:C.sub, lineHeight:1.75, margin:"0 0 24px" }}>
+                {f.detail}
+              </p>
+              <a href="#" style={{
+                display:"inline-flex", alignItems:"center", gap:6,
+                color:C.blue, fontSize:14, fontWeight:600, textDecoration:"none",
+                transition:"gap .18s",
+              }}
+              onMouseEnter={e=>e.currentTarget.style.gap="10px"}
+              onMouseLeave={e=>e.currentTarget.style.gap="6px"}>
+                {ar ? "اعرف أكثر عن الـ AI ←" : "Learn more about our AI →"}
+              </a>
+            </div>
           </motion.div>
         </div>
       </div>
       <style>{`
         @media(max-width:860px){
-          .lp-features-grid{grid-template-columns:1fr!important}
-          .lp-features-tabs{flex-direction:row!important;overflow-x:auto;gap:8px!important;
-            padding-bottom:6px;-webkit-overflow-scrolling:touch}
-          .lp-features-tabs button{flex-shrink:0}
-          .lp-features-tabs button span:last-child{display:none}
+          .lp-features-wrap{grid-template-columns:1fr!important}
         }
       `}</style>
     </section>
@@ -1580,68 +1676,137 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 // ── Testimonials ──────────────────────────────────────────────────
 function Testimonials({ lang }) {
   const ar = lang === "ar";
+  const [idx, setIdx] = useState(0);
+
   const testimonials = ar ? [
-    { name:"م. س.", initials:"مس", role:"مهندسة برمجيات · القاهرة", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", outcome:"آلام الرقبة انتهت في أسبوعين", color:"#818cf8" },
-    { name:"أ. م.", initials:"أم", role:"مدير موارد بشرية · متعدد الجنسيات", text:"جربنا 3 أدوات قبل Corvus. دي الأولى اللي الفريق بيستخدمها فعلاً. الـ AI coach بيعمل فرق حقيقي ومش مجرد رقم على شاشة.", score:"4.9/5", outcome:"أعلى adoption rate من 3 أدوات", color:"#22d3ee" },
-    { name:"ي. ح.", initials:"يح", role:"مدير تقنية · شركة تمويل", text:"الإعداد خلص في 20 دقيقة. الدقة في تتبع وضعية الرقبة أعلى من أي أداة جربتها. التقارير الأسبوعية مفيدة للتتبع.", score:"4.8/5", outcome:"إعداد كامل في 20 دقيقة", color:"#10d9a0" },
+    { name:"م. س.", initials:"SM", role:"مهندسة برمجيات · القاهرة", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", color:"#818cf8" },
+    { name:"ه. أ.", initials:"HA", role:"مدير موارد بشرية · دبي", text:"تحليلات HR عندنا أوضح من أي وقت. دلوقتي نقدر نمنع المشاكل قبل ما تبقى إجازات مرضية مكلفة.", score:"5/5", color:"#22d3ee" },
   ] : [
-    { name:"S. M.", initials:"SM", role:"Software Engineer · Cairo", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", outcome:"Neck pain gone in 2 weeks", color:"#818cf8" },
-    { name:"A. K.", initials:"AK", role:"HR Director · Multinational", text:"We tried 3 tools before Corvus. This is the first one the team actually uses. The AI coach makes a real difference — not just a number on a screen.", score:"4.9/5", outcome:"Highest adoption of 3 tools tested", color:"#22d3ee" },
-    { name:"Y. H.", initials:"YH", role:"CTO · Finance Company", text:"Setup took 20 minutes. Neck posture tracking accuracy is higher than any tool I've tested. Weekly reports are genuinely useful for tracking progress.", score:"4.8/5", outcome:"Full team setup in 20 min", color:"#10d9a0" },
+    { name:"S. M.", initials:"SM", role:"Software Engineer · Cairo", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", color:"#818cf8" },
+    { name:"H. A.", initials:"HA", role:"HR Manager · Dubai", text:"HR analytics are crystal clear. We can now prevent issues before they become costly sick leaves.", score:"5/5", color:"#22d3ee" },
   ];
+
+  const prev = () => setIdx(i => (i - 1 + testimonials.length) % testimonials.length);
+  const next = () => setIdx(i => (i + 1) % testimonials.length);
+
+  const t = testimonials[idx];
 
   return (
     <section className="lp-section">
       <div className="lp-wrap">
         <SectionHead title={ar ? "ماذا يقول عملاؤنا" : "What our customers say"} />
-        <Stagger key={String(ar)} className="lp-testi-grid" style={{
-          display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
-          {testimonials.map((t) => (
-            <StaggerItem key={t.name}>
-              <div className="lp-lift" style={{
-                height:"100%", borderRadius:20, padding:28, position:"relative",
-                background:"rgba(255,255,255,.035)", border:`1px solid ${C.border}`,
-                backdropFilter:"blur(16px)", display:"flex", flexDirection:"column",
-              }}>
-                {/* Quote mark */}
-                <div style={{ position:"absolute", top:20, [ar?"left":"right"]:24,
-                  fontSize:44, color:"rgba(79,124,249,.14)", fontFamily:"Georgia,serif", lineHeight:1 }}>"</div>
-                {/* Outcome badge */}
-                <div style={{ display:"inline-flex", alignItems:"center", gap:6,
-                  background:"rgba(16,217,160,.08)", border:"1px solid rgba(16,217,160,.2)",
-                  borderRadius:99, padding:"4px 11px", marginBottom:14, alignSelf:"flex-start" }}>
-                  <span style={{ width:5, height:5, borderRadius:"50%", background:C.green, flexShrink:0 }}/>
-                  <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{t.outcome}</span>
-                </div>
-                {/* Stars */}
-                <div style={{ display:"flex", gap:2, marginBottom:14 }}>
-                  {"★★★★★".split("").map((s,i) => (
-                    <span key={i} style={{ color:C.amber, fontSize:14 }}>{s}</span>
-                  ))}
-                  <span style={{ color:C.muted, fontSize:11.5, marginLeft:8, fontFamily:FONT_MONO }}>{t.score}</span>
-                </div>
-                {/* Text */}
-                <p style={{ fontSize:15, color:C.sub, lineHeight:1.7, margin:"0 0 22px", flex:1 }}>"{t.text}"</p>
-                {/* Author */}
-                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                  <div style={{
-                    width:40, height:40, borderRadius:"50%", flexShrink:0,
-                    background:`linear-gradient(135deg, ${t.color}40, ${t.color}18)`,
-                    border:`1.5px solid ${t.color}50`,
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:13, fontWeight:800, color:t.color, letterSpacing:".5px",
-                  }}>{t.initials}</div>
-                  <div>
-                    <div style={{ fontWeight:700, color:C.text, fontSize:14 }}>{t.name}</div>
-                    <div style={{ color:C.muted, fontSize:11.5, marginTop:1 }}>{t.role}</div>
-                  </div>
+
+        <div style={{ position:"relative", maxWidth:860, margin:"0 auto" }}>
+          {/* Prev arrow */}
+          <button onClick={prev} style={{
+            position:"absolute", left:-20, top:"50%", transform:"translateY(-50%)",
+            width:40, height:40, borderRadius:"50%", border:`1px solid ${C.border}`,
+            background:"rgba(255,255,255,.04)", color:C.text, fontSize:18,
+            cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2, transition:"background .18s, border-color .18s",
+          }}
+          onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,.1)";e.currentTarget.style.borderColor=C.borderM}}
+          onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,.04)";e.currentTarget.style.borderColor=C.border}}>
+            ‹
+          </button>
+
+          {/* Card */}
+          <motion.div key={idx}
+            initial={{ opacity:0, x:30 }} animate={{ opacity:1, x:0 }}
+            transition={{ duration:.32, ease:[0.22,1,0.36,1] }}
+            style={{
+              background:"rgba(255,255,255,.035)", border:`1px solid ${C.border}`,
+              borderRadius:20, padding:"40px 52px",
+              display:"grid", gridTemplateColumns:"1fr 1fr", gap:40,
+              alignItems:"center",
+            }}>
+            {/* Left — stars + quote */}
+            <div>
+              <div style={{ display:"flex", gap:3, marginBottom:16 }}>
+                {"★★★★★".split("").map((s,i)=>(
+                  <span key={i} style={{ color:C.amber, fontSize:18 }}>{s}</span>
+                ))}
+                <span style={{ color:C.muted, fontSize:12, marginLeft:8, fontFamily:FONT_MONO, alignSelf:"center" }}>{t.score}</span>
+              </div>
+              <p style={{ fontSize:16, color:C.sub, lineHeight:1.75, margin:"0 0 24px", fontStyle:"italic" }}>
+                "{t.text}"
+              </p>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <div style={{
+                  width:42, height:42, borderRadius:"50%",
+                  background:`linear-gradient(135deg,${t.color}50,${t.color}20)`,
+                  border:`1.5px solid ${t.color}60`,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:13, fontWeight:800, color:t.color,
+                }}>{t.initials}</div>
+                <div>
+                  <div style={{ fontWeight:700, color:C.text, fontSize:14 }}>{t.name}</div>
+                  <div style={{ color:C.muted, fontSize:11.5, marginTop:2 }}>{t.role}</div>
                 </div>
               </div>
-            </StaggerItem>
-          ))}
-        </Stagger>
+            </div>
+
+            {/* Right — outcome visual */}
+            <div style={{
+              background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
+              borderRadius:16, padding:"28px 24px", textAlign:"center",
+            }}>
+              <div style={{ fontSize:36, marginBottom:12 }}>
+                {idx === 0 ? "🧘" : "📊"}
+              </div>
+              <div style={{
+                fontSize:28, fontWeight:800, color:C.green,
+                fontFamily:FONT_MONO, lineHeight:1, marginBottom:8,
+              }}>
+                {idx === 0 ? "-47%" : "94%"}
+              </div>
+              <div style={{ fontSize:13, color:C.sub, lineHeight:1.5 }}>
+                {idx === 0
+                  ? (ar ? "تراجع آلام الرقبة في أسبوعين" : "Neck pain reduction in 2 weeks")
+                  : (ar ? "معدل الاستخدام اليومي" : "Daily active rate")}
+              </div>
+              {/* Mini sparkline */}
+              <svg width="100%" height="36" viewBox="0 0 140 36" style={{ display:"block", marginTop:14 }}>
+                <defs>
+                  <linearGradient id="testiGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={C.green} stopOpacity=".35"/>
+                    <stop offset="100%" stopColor={C.green} stopOpacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M0,30 L23,26 L46,20 L70,23 L93,12 L116,6 L140,2"
+                  fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round"/>
+                <path d="M0,30 L23,26 L46,20 L70,23 L93,12 L116,6 L140,2 L140,36 L0,36 Z"
+                  fill="url(#testiGrad)"/>
+              </svg>
+            </div>
+          </motion.div>
+
+          {/* Next arrow */}
+          <button onClick={next} style={{
+            position:"absolute", right:-20, top:"50%", transform:"translateY(-50%)",
+            width:40, height:40, borderRadius:"50%", border:`1px solid ${C.border}`,
+            background:"rgba(255,255,255,.04)", color:C.text, fontSize:18,
+            cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2, transition:"background .18s, border-color .18s",
+          }}
+          onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,.1)";e.currentTarget.style.borderColor=C.borderM}}
+          onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,.04)";e.currentTarget.style.borderColor=C.border}}>
+            ›
+          </button>
+
+          {/* Dot navigation */}
+          <div style={{ display:"flex", gap:8, justifyContent:"center", marginTop:24 }}>
+            {testimonials.map((_,i) => (
+              <button key={i} onClick={()=>setIdx(i)} style={{
+                width: i===idx ? 24 : 8, height:8, borderRadius:4,
+                background: i===idx ? C.blue : "rgba(255,255,255,.18)",
+                border:"none", cursor:"pointer", padding:0,
+                transition:"width .3s, background .3s",
+              }}/>
+            ))}
+          </div>
+        </div>
       </div>
-      <style>{`@media(max-width:860px){.lp-testi-grid{grid-template-columns:1fr!important}}`}</style>
     </section>
   );
 }
