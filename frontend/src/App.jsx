@@ -2444,8 +2444,13 @@ export default function App(){
           try { p = await getUserProfile(u.uid); } catch(e){ console.warn("[Auth] profile:",e?.code); }
 
           if(!p){
+            // Profile might not be written yet (race with AuthPage signup) — wait & retry once
+            await new Promise(r=>setTimeout(r,1200));
+            try { p = await getUserProfile(u.uid); } catch{}
+          }
+          if(!p){
             try {
-              await createUserProfile(u.uid,{email:u.email,name:u.displayName||"",company:""});
+              await createUserProfile(u.uid,{email:u.email,name:u.displayName||"",company:"",setup_complete:false});
               p = await getUserProfile(u.uid);
             } catch(e){ console.warn("[Auth] create:",e?.code); }
             try { EmailAPI.sequence({email:u.email,name:u.displayName||u.email.split("@")[0],
@@ -3475,9 +3480,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
               sendVerificationEmail(u).catch(()=>{});
             });
             setShowEmailVerify(true);
-            setPage("setup");
+            // Let onAuthStateChanged handle routing — it will read the
+            // profile we just created and go to setup automatically.
+            // Don't setPage here — avoids race where profile isn't loaded yet.
             return;
           }
+          // Existing user — onAuthStateChanged will route to home.
+          // setPage("home") here as a fast-path for immediate feedback.
           setPage("home");
         }}
       />
@@ -3549,7 +3558,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         lang={lang} setLang={setLang}
         onAuth={(u,isNew)=>{
           setUser(u);
-          if(isNew){setPage("setup");return;}
+          if(isNew){ /* onAuthStateChanged will route to setup */ return;}
           setPage("home");
         }}
       />
