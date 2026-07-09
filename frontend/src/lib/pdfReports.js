@@ -1,775 +1,757 @@
 /**
- * pdfReports.js — Corvus PostureAI Pro · PDF Report System v2.0
- * ─────────────────────────────────────────────────────────────────
- * 5 report types, all using HTML→canvas→PDF pipeline:
- *   1. SESSION    — single session deep dive
- *   2. CLINICAL   — medical-grade posture assessment
- *   3. COMPARISON — before/after or period comparison
- *   4. LONGITUDINAL — long-term trend analysis (Elite)
- *   5. AI         — AI-narrated executive report
- *
- * Requires: jspdf@4, html2canvas@1
+ * pdfReports.js — Corvus PostureAI Pro · PDF Report System v3.0
+ * Dark-theme enterprise PDFs using jsPDF native drawing (no html2canvas)
+ * Zero white pages — pure vector PDF with dark background
  */
 
 import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
 
-// ── Helpers ──────────────────────────────────────────────────────────
-const avg = (arr) =>
-  arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
-const sc = (v) => (v >= 80 ? "#10b981" : v >= 60 ? "#f59e0b" : "#ef4444");
-const grade = (v, ar) =>
-  v >= 80
-    ? ar
-      ? "ممتاز"
-      : "Excellent"
-    : v >= 60
-    ? ar
-      ? "جيد"
-      : "Good"
-    : ar
-    ? "يحتاج تحسين"
-    : "Needs Improvement";
+// ── Colors ────────────────────────────────────────────────────────────
+const C = {
+  bg:       [10, 15, 30],       // #0a0f1e
+  card:     [16, 24, 48],       // #101830
+  card2:    [20, 30, 58],       // #141e3a
+  border:   [35, 50, 90],       // #23325a
+  accent:   [26, 86, 219],      // #1a56db
+  green:    [16, 185, 129],     // #10b981
+  yellow:   [245, 158, 11],     // #f59e0b
+  red:      [239, 68, 68],      // #ef4444
+  cyan:     [8, 145, 178],      // #0891b2
+  white:    [255, 255, 255],
+  text:     [220, 230, 255],    // main text
+  muted:    [100, 130, 180],    // muted text
+  dim:      [55, 75, 120],      // very dim
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────
+const avg = (arr) => arr.length ? Math.round(arr.reduce((s,v)=>s+v,0)/arr.length) : 0;
+const sc  = (v) => v >= 80 ? C.green : v >= 60 ? C.yellow : C.red;
+const grade = (v) => v >= 80 ? "Excellent" : v >= 60 ? "Good" : "Needs Work";
 const fmt = (d) => {
-  try {
-    return new Date(d?.toDate?.() || d).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return "—";
-  }
+  try { return new Date(d?.toDate?.() || d).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}); }
+  catch { return "—"; }
 };
 const dur = (s) => {
-  const sec = s?.duration_s || s?.duration_sec || (s?.duration_min || 0) * 60 || 0;
-  return sec > 0
-    ? `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, "0")}`
-    : "—";
+  const sec = s?.duration_s || s?.duration_sec || (s?.duration_min||0)*60 || 0;
+  return sec > 0 ? `${Math.floor(sec/60)}:${String(Math.round(sec%60)).padStart(2,"0")} min` : "—";
 };
-const esc = (str) =>
-  String(str ?? "").replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
-  );
+const hex = (rgb) => "#"+rgb.map(v=>v.toString(16).padStart(2,"0")).join("");
+const toMs = (s) => {
+  try { return (s?.created_at?.toDate?.() || new Date(s?.created_at||0)).getTime(); } catch { return 0; }
+};
 const streak = (sessions) => {
-  const dates = [
-    ...new Set(
-      sessions
-        .map((s) => {
-          try {
-            return (s.created_at?.toDate?.() || new Date(s.created_at || 0))
-              .toISOString()
-              .slice(0, 10);
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean)
-    ),
-  ].sort();
-  if (dates.length < 2) return dates.length;
-  let st = 1;
-  for (let i = dates.length - 2; i >= 0; i--) {
-    const diff = (new Date(dates[i + 1]) - new Date(dates[i])) / 86400000;
-    if (diff <= 1.5) st++;
-    else break;
+  const dates = [...new Set(sessions.map(s=>{
+    try{return(s.created_at?.toDate?.()||new Date(s.created_at||0)).toISOString().slice(0,10);}catch{return null;}
+  }).filter(Boolean))].sort();
+  if(dates.length<2) return dates.length;
+  let st=1;
+  for(let i=dates.length-2;i>=0;i--){
+    if((new Date(dates[i+1])-new Date(dates[i]))/86400000<=1.5) st++; else break;
   }
   return st;
 };
 
-// ── Shared CSS injected into every report ────────────────────────────
-const BASE_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'DM Sans',sans-serif;background:#fff;color:#0d1b35;padding:52px 56px;font-size:13px;line-height:1.65;width:794px}
-  .logo{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#1a56db;letter-spacing:-.03em}
-  .logo span{color:#10b981}
-  h1{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#0d1b35;margin:18px 0 6px;letter-spacing:-.03em}
-  h2{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:#0d1b35;margin:28px 0 10px;padding-left:12px;border-left:3px solid #1a56db}
-  .meta{font-size:11px;color:#7890b0}
-  .meta strong{color:#334d6e;font-size:12px}
-  .divider{height:2px;background:linear-gradient(90deg,#1a56db,#0891b2,transparent);margin:20px 0 28px;border:none}
-  .kpi-row{display:grid;gap:12px;margin:20px 0}
-  .kpi{background:#f5f7fb;border-radius:12px;padding:16px 18px;border-top:3px solid}
-  .kpi-label{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7890b0;margin-bottom:7px}
-  .kpi-val{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;line-height:1}
-  .kpi-sub{font-size:10px;color:#7890b0;margin-top:5px;font-weight:500}
-  table{width:100%;border-collapse:collapse;margin:10px 0}
-  th{background:#f0f4fb;padding:9px 14px;font-size:10px;font-weight:700;color:#7890b0;letter-spacing:.06em;text-transform:uppercase;text-align:left;border-bottom:1px solid #dde5f5}
-  td{padding:9px 14px;font-size:12px;border-bottom:1px solid #f0f4fb}
-  tr:last-child td{border-bottom:none}
-  .pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:700}
-  .ai-box{background:#f8faff;border:1px solid #dde5f5;border-radius:12px;padding:20px 22px;margin:14px 0}
-  .ai-label{font-size:9px;font-weight:700;color:#1a56db;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
-  .bar-wrap{margin:10px 0}
-  .bar-label{display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px;font-weight:600}
-  .bar-bg{height:10px;background:#eef2fb;border-radius:99px;overflow:hidden}
-  .bar-fill{height:100%;border-radius:99px}
-  .footer{margin-top:44px;padding-top:14px;border-top:1px solid #e8eef8;display:flex;justify-content:space-between;font-size:10px;color:#9bacc8}
-  .badge{display:inline-block;background:#eef2ff;color:#1a56db;border:1px solid #c7d7fd;border-radius:99px;padding:3px 11px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
-  .section-intro{font-size:12px;color:#556b8a;line-height:1.7;margin-bottom:16px}
-  .risk-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:9px;margin:7px 0}
-  .risk-high{background:#fef2f2;border-left:3px solid #ef4444}
-  .risk-med{background:#fffbeb;border-left:3px solid #f59e0b}
-  .risk-low{background:#f0fdf4;border-left:3px solid #10b981}
-`;
+// ── PDF Drawing Class ─────────────────────────────────────────────────
+class CorvusPDF {
+  constructor(filename) {
+    this.doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+    this.filename = filename;
+    this.W = 210; this.H = 297;
+    this.mx = 14; // margin x
+    this.cw = this.W - this.mx * 2; // content width
+    this.y = 0; this.page = 1;
+  }
 
-// ── Core: render HTML string → PDF blob ─────────────────────────────
-async function htmlToPDF(htmlString, filename) {
-  // Create hidden container
-  const wrap = document.createElement("div");
-  wrap.style.cssText =
-    "position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-1";
-  wrap.innerHTML = htmlString;
-  document.body.appendChild(wrap);
+  // Fill whole page with dark bg
+  bgPage() {
+    this.doc.setFillColor(...C.bg);
+    this.doc.rect(0, 0, this.W, this.H, "F");
+  }
 
-  // Wait for fonts/images
-  await new Promise((r) => setTimeout(r, 600));
+  newPage() {
+    this.doc.addPage();
+    this.page++;
+    this.y = 0;
+    this.bgPage();
+  }
 
-  try {
-    const canvas = await html2canvas(wrap, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: "#ffffff",
-      width: 794,
-      windowWidth: 794,
-      logging: false,
-    });
+  checkY(needed = 20) {
+    if (this.y + needed > this.H - 14) this.newPage();
+  }
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-    });
+  // Text helpers
+  txt(text, x, y, color=C.text, size=9, style="normal", align="left") {
+    this.doc.setFontSize(size);
+    this.doc.setFont("helvetica", style);
+    this.doc.setTextColor(...color);
+    this.doc.text(String(text??''), x, y, { align });
+  }
 
-    const pdfW = pdf.internal.pageSize.getWidth();
-    const pdfH = pdf.internal.pageSize.getHeight();
-    const imgW = pdfW;
-    const imgH = (canvas.height * pdfW) / canvas.width;
+  // Filled rounded rect
+  card(x, y, w, h, color=C.card, radius=3) {
+    this.doc.setFillColor(...color);
+    this.doc.roundedRect(x, y, w, h, radius, radius, "F");
+  }
 
-    // Paginate if content exceeds one page
-    let posY = 0;
-    let remaining = imgH;
-    let page = 0;
-    while (remaining > 0) {
-      if (page > 0) pdf.addPage();
-      pdf.addImage(
-        imgData,
-        "JPEG",
-        0,
-        -posY,
-        imgW,
-        imgH,
-        undefined,
-        "FAST"
-      );
-      posY += pdfH;
-      remaining -= pdfH;
-      page++;
+  // Accent left-border rect
+  accentCard(x, y, w, h, accentColor=C.accent) {
+    this.card(x, y, w, h, C.card2, 2);
+    this.doc.setFillColor(...accentColor);
+    this.doc.rect(x, y, 1.5, h, "F");
+  }
+
+  // Progress bar
+  bar(x, y, w, h, value, color) {
+    // bg
+    this.doc.setFillColor(...C.card2);
+    this.doc.roundedRect(x, y, w, h, h/2, h/2, "F");
+    // fill
+    const fw = Math.max(1, (value/100)*w);
+    this.doc.setFillColor(...color);
+    this.doc.roundedRect(x, y, fw, h, h/2, h/2, "F");
+  }
+
+  // Divider line
+  divider(y, alpha=40) {
+    this.doc.setDrawColor(...C.border);
+    this.doc.setLineWidth(0.3);
+    this.doc.line(this.mx, y, this.W-this.mx, y);
+  }
+
+  // Score pill
+  pill(x, y, value, size=18) {
+    const color = sc(value);
+    this.doc.setFillColor(color[0],color[1],color[2],30);
+    this.doc.roundedRect(x-2, y-size*0.7, 20, size*0.9, 2, 2, "F");
+    this.txt(`${value}`, x+8, y-size*0.1, color, size, "bold", "center");
+    this.txt("/100", x+8, y-size*0.1+4, C.muted, 7, "normal", "center");
+  }
+
+  // ── Header (every page) ────────────────────────────────────────
+  header(reportType, tierLabel) {
+    this.bgPage();
+    // Top bar gradient simulation
+    this.doc.setFillColor(...C.accent);
+    this.doc.rect(0, 0, this.W, 1.5, "F");
+
+    // Logo
+    this.doc.setFontSize(14);
+    this.doc.setFont("helvetica","bold");
+    this.doc.setTextColor(...C.accent);
+    this.doc.text("CORVUS", this.mx, 12);
+    if(tierLabel) {
+      this.doc.setFontSize(8);
+      this.doc.setTextColor(...C.green);
+      this.doc.text(tierLabel.toUpperCase(), this.mx+27, 12);
     }
 
-    pdf.save(filename);
-  } finally {
-    document.body.removeChild(wrap);
+    // Report type badge
+    this.doc.setFillColor(...C.card);
+    this.doc.roundedRect(this.W-this.mx-40, 5, 40, 9, 2, 2, "F");
+    this.doc.setFontSize(7);
+    this.doc.setFont("helvetica","bold");
+    this.doc.setTextColor(...C.muted);
+    this.doc.text(reportType.toUpperCase(), this.W-this.mx-20, 10.5, {align:"center"});
+
+    // Accent divider
+    this.doc.setFillColor(...C.dim);
+    this.doc.rect(this.mx, 16, this.cw, 0.3, "F");
+    this.doc.setFillColor(...C.accent);
+    this.doc.rect(this.mx, 16, 30, 0.3, "F");
+
+    this.y = 22;
+  }
+
+  // ── Title block ────────────────────────────────────────────────
+  titleBlock(title, subtitle, name, date) {
+    this.txt(title, this.mx, this.y, C.white, 18, "bold");
+    this.y += 6;
+    if(subtitle) { this.txt(subtitle, this.mx, this.y, C.muted, 8); this.y += 5; }
+    this.txt(`${name}  ·  ${date}`, this.mx, this.y, C.dim, 7);
+    this.y += 10;
+  }
+
+  // ── KPI row (4 cards) ──────────────────────────────────────────
+  kpiRow(items) {
+    this.checkY(28);
+    const cw = (this.cw - 3*3) / Math.min(items.length,4);
+    items.slice(0,4).forEach((k,i) => {
+      const x = this.mx + i*(cw+3);
+      this.card(x, this.y, cw, 24, C.card, 3);
+      // accent top line
+      this.doc.setFillColor(...(k.color||C.accent));
+      this.doc.rect(x, this.y, cw, 1, "F");
+      this.txt(k.label, x+4, this.y+7, C.muted, 6.5, "bold");
+      this.doc.setFontSize(16); this.doc.setFont("helvetica","bold");
+      this.doc.setTextColor(...(k.color||C.white));
+      this.doc.text(String(k.value??'—'), x+4, this.y+17);
+      if(k.sub) this.txt(k.sub, x+4, this.y+22, C.dim, 6);
+    });
+    this.y += 30;
+  }
+
+  // ── Section heading ────────────────────────────────────────────
+  section(title) {
+    this.checkY(16);
+    this.y += 4;
+    this.doc.setFillColor(...C.accent);
+    this.doc.rect(this.mx, this.y-3, 1.5, 8, "F");
+    this.txt(title, this.mx+5, this.y+3, C.white, 9, "bold");
+    this.y += 9;
+    this.divider(this.y); this.y += 4;
+  }
+
+  // ── Bar chart row ──────────────────────────────────────────────
+  barRow(label, value, maxVal=100) {
+    this.checkY(10);
+    this.txt(label, this.mx, this.y, C.text, 7.5);
+    const bx = this.mx + 60, bw = this.cw - 70;
+    this.bar(bx, this.y-3.5, bw, 4, (value/maxVal)*100, sc(value));
+    this.txt(`${value}`, this.W-this.mx, this.y, sc(value), 8, "bold", "right");
+    this.y += 8;
+  }
+
+  // ── Table ──────────────────────────────────────────────────────
+  tableRow(cols, widths, isHeader=false) {
+    this.checkY(9);
+    if(isHeader) {
+      this.doc.setFillColor(...C.dim);
+      this.doc.rect(this.mx, this.y-4, this.cw, 8, "F");
+    }
+    let x = this.mx + 2;
+    cols.forEach((col,i) => {
+      const color = isHeader ? C.muted : C.text;
+      const size  = isHeader ? 6.5 : 7.5;
+      const style = isHeader ? "bold" : "normal";
+      this.txt(col, x, this.y+1, color, size, style);
+      x += widths[i];
+    });
+    if(!isHeader) {
+      this.doc.setDrawColor(...C.dim);
+      this.doc.setLineWidth(0.2);
+      this.doc.line(this.mx, this.y+3.5, this.W-this.mx, this.y+3.5);
+    }
+    this.y += 8;
+  }
+
+  // ── AI text box ────────────────────────────────────────────────
+  aiBox(text) {
+    if(!text) return;
+    this.checkY(30);
+    // Strip markdown
+    const clean = text
+      .replace(/\*\*(.+?)\*\*/g,"$1")
+      .replace(/\*(.+?)\*/g,"$1")
+      .replace(/^#+\s*/gm,"")
+      .replace(/^-\s*/gm,"• ")
+      .trim();
+
+    const lines = this.doc.splitTextToSize(clean, this.cw-12);
+    const boxH = Math.min(lines.length*4+12, 80);
+    this.checkY(boxH+4);
+
+    this.card(this.mx, this.y, this.cw, boxH, C.card2, 3);
+    this.doc.setFillColor(...C.accent);
+    this.doc.rect(this.mx, this.y, 1.5, boxH, "F");
+
+    this.txt("🧠 CORVUS AI ANALYSIS", this.mx+5, this.y+7, C.accent, 6.5, "bold");
+
+    this.doc.setFontSize(7.5);
+    this.doc.setFont("helvetica","normal");
+    this.doc.setTextColor(...C.text);
+    lines.slice(0, Math.floor((boxH-14)/4)).forEach((line,i)=>{
+      this.doc.text(line, this.mx+5, this.y+13+i*4);
+    });
+    this.y += boxH + 6;
+  }
+
+  // ── Footer ─────────────────────────────────────────────────────
+  footer(type) {
+    const fy = this.H - 8;
+    this.divider(fy-3);
+    const now = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+    this.txt(`Corvus PostureAI Pro · ${type} · Confidential`, this.mx, fy, C.dim, 6);
+    this.txt(`Generated by Corvus AI · ${now} · Page ${this.page}`, this.W-this.mx, fy, C.dim, 6, "normal", "right");
+  }
+
+  save() {
+    this.footer(this._type||"Report");
+    this.doc.save(this.filename);
   }
 }
 
-// ── Header shared block ───────────────────────────────────────────────
-function header({ tierLabel, tierColor, name, date, subtitle, badge }) {
-  return `
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-    <div>
-      <div class="logo">Corvus<span>${tierLabel ? " " + tierLabel : ""}</span></div>
-      <div style="font-size:11px;color:#7890b0;margin-top:3px">${subtitle}</div>
-    </div>
-    <div style="text-align:right">
-      <div class="meta"><strong>${esc(name)}</strong></div>
-      <div class="meta">${date}</div>
-      ${badge ? `<div style="margin-top:5px"><span class="badge">${badge}</span></div>` : ""}
-    </div>
-  </div>
-  <hr class="divider"/>`;
-}
-
-function footer({ tierLabel, type, confidential = true }) {
-  const now = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-  return `
-  <div class="footer">
-    <span>Corvus${tierLabel ? " " + tierLabel : ""} · ${type}${confidential ? " · Confidential" : ""}</span>
-    <span>Generated by Corvus AI · ${now}</span>
-  </div>`;
-}
-
-function kpiGrid(items, cols = 4) {
-  return `
-  <div class="kpi-row" style="grid-template-columns:repeat(${cols},1fr)">
-    ${items
-      .map(
-        (k) => `
-    <div class="kpi" style="border-color:${k.color}">
-      <div class="kpi-label">${k.label}</div>
-      <div class="kpi-val" style="color:${k.color}">${k.value}</div>
-      ${k.sub ? `<div class="kpi-sub">${k.sub}</div>` : ""}
-    </div>`
-      )
-      .join("")}
-  </div>`;
-}
-
-function barChart(items) {
-  const max = Math.max(...items.map((i) => i.value), 1);
-  return items
-    .map(
-      (item) => `
-    <div class="bar-wrap">
-      <div class="bar-label">
-        <span style="color:#334d6e">${esc(item.label)}</span>
-        <span style="color:${sc(item.value)};font-family:'Syne',sans-serif">${item.value}/100</span>
-      </div>
-      <div class="bar-bg">
-        <div class="bar-fill" style="width:${Math.round((item.value / 100) * 100)}%;background:${sc(item.value)}"></div>
-      </div>
-    </div>`
-    )
-    .join("");
-}
-
-function aiBox(text, label = "Corvus AI Analysis") {
-  const safe = esc(text || "AI analysis unavailable.")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/^### (.+)$/gm, "<h4 style='margin:8px 0 4px;font-size:12px;font-weight:700;color:#1a56db'>$1</h4>")
-    .replace(/^## (.+)$/gm, "<h3 style='margin:12px 0 5px;font-size:13px;font-weight:800;color:#0d1b35'>$1</h3>")
-    .replace(/^- (.+)$/gm, "<li style='margin:4px 0 4px 16px;list-style:disc'>$1</li>")
-    .replace(/\n\n/g, "<br/><br/>")
-    .replace(/\n/g, "<br/>");
-  return `
-  <div class="ai-box">
-    <div class="ai-label">🧠 ${label}</div>
-    <div style="font-size:12.5px;color:#334d6e;line-height:1.75">${safe}</div>
-  </div>`;
-}
-
 // ═══════════════════════════════════════════════════════════════════════
-// 1. SESSION REPORT — single session deep dive
+// 1. SESSION REPORT
 // ═══════════════════════════════════════════════════════════════════════
-export async function generateSessionPDF({ session, profile, aiSummary, lang = "en" }) {
-  const isAr = lang === "ar";
+export async function generateSessionPDF({ session, profile, aiSummary }) {
   const score = session?.avg_score || 0;
   const color = sc(score);
-  const tierLabel = profile?.tier === "elite" ? "Elite" : profile?.tier === "professional" ? "Pro" : "";
-  const tierColor = profile?.tier === "elite" ? "#10b981" : "#0891b2";
-  const name = profile?.name || "User";
-  const sessionDate = fmt(session?.created_at);
+  const name  = profile?.name || "User";
+  const tier  = profile?.tier || "standard";
+  const tierLabel = tier === "elite" ? "Elite" : tier === "professional" ? "Pro" : "";
 
-  // Parse alerts
+  const pdf = new CorvusPDF(`Corvus_Session_${fmt(session?.created_at).replace(/[,\s]/g,"_")}.pdf`);
+  pdf._type = "Session Report";
+  pdf.header("Session Report", tierLabel);
+  pdf.titleBlock("Session Analysis", "Single-session posture deep dive", name, fmt(session?.created_at));
+
+  pdf.kpiRow([
+    { label:"POSTURE SCORE",  value:score,          color,       sub: grade(score) },
+    { label:"DURATION",       value:dur(session),   color:C.cyan, sub:"" },
+    { label:"ALERTS",         value:(session?.alerts||[]).length, color:C.yellow, sub:"detected" },
+    { label:"ENGINE",         value:session?.engine_version||"v3", color:C.muted, sub:"version" },
+  ]);
+
+  // Score visual
+  pdf.section("Performance Score");
+  const barX = pdf.mx + 10, barW = pdf.cw - 50;
+  pdf.bar(barX, pdf.y, barW, 8, score, color);
+  pdf.txt(`${score}/100 — ${grade(score)}`, barX + barW + 6, pdf.y + 5, color, 9, "bold");
+  pdf.y += 16;
+
+  // Alerts
   const alerts = session?.alerts || session?.posture_alerts || [];
-  const alertRows =
-    alerts.length > 0
-      ? alerts
-          .slice(0, 8)
-          .map(
-            (a) => `<tr>
-            <td>${esc(a.type || a.label || a)}</td>
-            <td><span class="pill" style="background:${a.severity === "high" ? "#fef2f2" : "#fffbeb"};color:${a.severity === "high" ? "#ef4444" : "#f59e0b"}">${a.severity || "medium"}</span></td>
-            <td>${a.count || 1}×</td>
-          </tr>`
-          )
-          .join("")
-      : `<tr><td colspan="3" style="text-align:center;color:#9bacc8;padding:16px">No alerts recorded</td></tr>`;
+  if(alerts.length > 0) {
+    pdf.section("Alert Breakdown");
+    pdf.tableRow(["ALERT TYPE","SEVERITY","COUNT"],[70,40,30], true);
+    alerts.slice(0,10).forEach(a => {
+      const sev = a.severity||"medium";
+      const sevColor = sev==="high" ? C.red : sev==="medium" ? C.yellow : C.green;
+      pdf.checkY(9);
+      pdf.txt(a.type||a.label||String(a), pdf.mx+2, pdf.y+1, C.text, 7.5);
+      pdf.txt(sev.toUpperCase(), pdf.mx+72, pdf.y+1, sevColor, 7, "bold");
+      pdf.txt(String(a.count||1), pdf.mx+112, pdf.y+1, C.muted, 7.5);
+      pdf.doc.setDrawColor(...C.dim); pdf.doc.setLineWidth(0.2);
+      pdf.doc.line(pdf.mx, pdf.y+3.5, pdf.W-pdf.mx, pdf.y+3.5);
+      pdf.y += 8;
+    });
+  }
 
-  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><style>${BASE_CSS}</style></head><body>
-  ${header({ tierLabel, tierColor, name, date: sessionDate, subtitle: "Session Report · Deep Dive Analysis", badge: "Session" })}
-  <h1>Session Analysis</h1>
-  <p class="section-intro">Detailed breakdown of your posture monitoring session on ${sessionDate}.</p>
+  // Frame scores timeline
+  if(session?.frame_scores?.length > 0) {
+    pdf.section("Score Timeline (Sampled Frames)");
+    const fs = session.frame_scores;
+    const step = Math.ceil(fs.length/10);
+    fs.filter((_,i)=>i%step===0).slice(0,10).forEach((v,i)=>{
+      pdf.barRow(`Frame ${i+1}`, Math.round(v));
+    });
+  }
 
-  ${kpiGrid([
-    { label: "Posture Score", value: score, color, sub: grade(score) },
-    { label: "Duration", value: dur(session), color: "#1a56db", sub: "min:sec" },
-    { label: "Alerts", value: alerts.length || 0, color: alerts.length > 5 ? "#ef4444" : "#f59e0b", sub: "total" },
-    { label: "Grade", value: grade(score), color, sub: `${score}/100` },
-  ])}
+  // Metadata
+  pdf.section("Session Metadata");
+  [
+    ["Session ID",   session?.id||"—"],
+    ["Date",         fmt(session?.created_at)],
+    ["Duration",     dur(session)],
+    ["Frames",       String(session?.frame_count||session?.frame_scores?.length||"—")],
+    ["Calibration",  session?.calibrated?"✓ Calibrated":"Not calibrated"],
+  ].forEach(([k,v])=>{
+    pdf.checkY(8);
+    pdf.txt(k, pdf.mx+2, pdf.y, C.muted, 7.5, "bold");
+    pdf.txt(v, pdf.mx+55, pdf.y, C.text, 7.5);
+    pdf.y += 7;
+  });
 
-  <h2>📊 Alert Breakdown</h2>
-  <table>
-    <thead><tr><th>Alert Type</th><th>Severity</th><th>Frequency</th></tr></thead>
-    <tbody>${alertRows}</tbody>
-  </table>
+  if(aiSummary) { pdf.section("AI Analysis"); pdf.aiBox(aiSummary); }
 
-  ${session?.frame_scores?.length > 0 ? `
-  <h2>📈 Score Timeline</h2>
-  <p class="section-intro">Score distribution across the session (sampled frames).</p>
-  ${barChart(
-    session.frame_scores
-      .filter((_, i) => i % Math.ceil(session.frame_scores.length / 8) === 0)
-      .slice(0, 8)
-      .map((v, i) => ({ label: `Frame ${i + 1}`, value: Math.round(v) }))
-  )}` : ""}
-
-  ${aiSummary ? `
-  <h2>🧠 AI Session Insights</h2>
-  ${aiBox(aiSummary, "Corvus Session Analysis")}` : ""}
-
-  <h2>📋 Session Metadata</h2>
-  <table>
-    <tbody>
-      <tr><td style="font-weight:600;color:#556b8a;width:40%">Session ID</td><td>${esc(session?.id || "—")}</td></tr>
-      <tr><td style="font-weight:600;color:#556b8a">Date</td><td>${sessionDate}</td></tr>
-      <tr><td style="font-weight:600;color:#556b8a">Duration</td><td>${dur(session)}</td></tr>
-      <tr><td style="font-weight:600;color:#556b8a">Frames Analyzed</td><td>${session?.frame_count || session?.frame_scores?.length || "—"}</td></tr>
-      <tr><td style="font-weight:600;color:#556b8a">Calibration</td><td>${session?.calibrated ? "✓ Calibrated" : "Not calibrated"}</td></tr>
-      <tr><td style="font-weight:600;color:#556b8a">Engine Version</td><td>${session?.engine_version || "v3"}</td></tr>
-    </tbody>
-  </table>
-
-  ${footer({ tierLabel, type: "Session Report" })}
-  </body></html>`;
-
-  await htmlToPDF(html, `Corvus_Session_${sessionDate.replace(/[,\s]/g, "_")}.pdf`);
+  pdf.save();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 2. CLINICAL REPORT — medical-grade posture assessment
+// 2. CLINICAL REPORT
 // ═══════════════════════════════════════════════════════════════════════
-export async function generateClinicalPDF({ sessions, profile, aiSummary, lang = "en" }) {
-  const isAr = lang === "ar";
-  const scores = sessions.map((s) => s.avg_score || 0).filter(Boolean);
+export async function generateClinicalPDF({ sessions, profile, aiSummary }) {
+  const scores = sessions.map(s=>s.avg_score||0).filter(Boolean);
   const avgScore = avg(scores);
   const color = sc(avgScore);
-  const tierLabel = profile?.tier === "elite" ? "Elite" : profile?.tier === "professional" ? "Pro" : "";
-  const tierColor = profile?.tier === "elite" ? "#10b981" : "#0891b2";
-  const name = profile?.name || "User";
-  const now = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const name  = profile?.name || "User";
+  const tier  = profile?.tier || "standard";
+  const tierLabel = tier==="elite"?"Elite":tier==="professional"?"Pro":"";
+  const riskLevel = avgScore>=80?"LOW":avgScore>=60?"MODERATE":"HIGH";
+  const riskColor = avgScore>=80?C.green:avgScore>=60?C.yellow:C.red;
+  const rulaScore = avgScore>=80?"1–2":avgScore>=65?"3–4":avgScore>=50?"5–6":"7";
+  const now = fmt(new Date());
 
-  // Aggregate all alerts across sessions
+  const pdf = new CorvusPDF(`Corvus_Clinical_${new Date().toISOString().slice(0,10)}.pdf`);
+  pdf._type = "Clinical Report";
+  pdf.header("Clinical Report", tierLabel);
+  pdf.titleBlock("Clinical Posture Assessment","ISO 11226 Medical-Grade Ergonomic Analysis", name, now);
+
+  pdf.kpiRow([
+    { label:"OVERALL SCORE",  value:avgScore,      color,         sub:grade(avgScore) },
+    { label:"RISK LEVEL",     value:riskLevel,     color:riskColor, sub:"musculoskeletal" },
+    { label:"RULA ESTIMATE",  value:rulaScore,     color:riskColor, sub:"action level" },
+    { label:"SESSIONS",       value:sessions.length, color:C.cyan, sub:"analyzed" },
+  ]);
+
+  // Risk panel
+  pdf.section("Clinical Risk Assessment");
+  const rpH = 22;
+  pdf.card(pdf.mx, pdf.y, pdf.cw, rpH, C.card2, 3);
+  pdf.doc.setFillColor(...riskColor);
+  pdf.doc.rect(pdf.mx, pdf.y, 2, rpH, "F");
+  const riskMsg = riskLevel==="HIGH"
+    ? "High Risk — Immediate ergonomic intervention recommended."
+    : riskLevel==="MODERATE"
+    ? "Moderate Risk — Workspace adjustments and awareness training recommended."
+    : "Low Risk — Maintain current posture habits and monitor regularly.";
+  pdf.txt(riskLevel+" RISK", pdf.mx+6, pdf.y+8, riskColor, 11, "bold");
+  pdf.txt(riskMsg, pdf.mx+6, pdf.y+15, C.muted, 7.5);
+  pdf.y += rpH + 8;
+
+  // ISO compliance table
+  pdf.section("ISO 11226 Compliance");
+  pdf.tableRow(["BODY REGION","STATUS","FINDING"],[55,40,80], true);
+  [
+    ["Head / Neck",   avgScore>=70, avgScore>=70?"Within acceptable range":"Forward head posture detected"],
+    ["Spine / Back",  avgScore>=65, avgScore>=65?"Neutral alignment maintained":"Spinal deviation observed"],
+    ["Shoulders",     avgScore>=75, avgScore>=75?"Neutral position confirmed":"Elevated / protracted position"],
+    ["Overall",       avgScore>=70, avgScore>=70?"ISO Compliant":"Non-Compliant — review required"],
+  ].forEach(([region,ok,finding])=>{
+    pdf.checkY(9);
+    pdf.txt(region, pdf.mx+2, pdf.y+1, C.text, 7.5);
+    pdf.txt(ok?"✓ PASS":"✗ FAIL", pdf.mx+57, pdf.y+1, ok?C.green:C.red, 7, "bold");
+    pdf.txt(finding, pdf.mx+97, pdf.y+1, C.muted, 7);
+    pdf.doc.setDrawColor(...C.dim); pdf.doc.setLineWidth(0.2);
+    pdf.doc.line(pdf.mx, pdf.y+3.5, pdf.W-pdf.mx, pdf.y+3.5);
+    pdf.y += 8;
+  });
+
+  // Top alerts aggregated
   const alertMap = {};
-  sessions.forEach((s) => {
-    (s.alerts || s.posture_alerts || []).forEach((a) => {
-      const key = a.type || a.label || String(a);
-      alertMap[key] = (alertMap[key] || 0) + (a.count || 1);
+  sessions.forEach(s=>(s.alerts||s.posture_alerts||[]).forEach(a=>{
+    const k=a.type||a.label||String(a);
+    alertMap[k]=(alertMap[k]||0)+(a.count||1);
+  }));
+  const topAlerts = Object.entries(alertMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  if(topAlerts.length>0) {
+    pdf.section("Top Posture Issues");
+    const maxCount = Math.max(...topAlerts.map(([,c])=>c),1);
+    topAlerts.forEach(([label,count])=>{
+      pdf.barRow(label, Math.min(Math.round((count/maxCount)*100),100));
     });
+  }
+
+  // Recommendations
+  pdf.section("Clinical Recommendations");
+  [
+    "Take a posture break every 25 minutes — set a timer for the Pomodoro technique.",
+    "Adjust monitor to eye level and keyboard at elbow height to reduce strain.",
+    "Perform neck/shoulder stretches every hour (chin tucks, shoulder rolls).",
+    "Strengthen core muscles — a stronger core supports healthier spinal posture.",
+    "Consider a standing desk for 20–30 min intervals during the workday.",
+  ].forEach(rec => {
+    pdf.checkY(9);
+    pdf.doc.setFillColor(...C.accent);
+    pdf.doc.circle(pdf.mx+3, pdf.y-1, 1, "F");
+    pdf.txt(rec, pdf.mx+8, pdf.y, C.text, 7.5);
+    pdf.y += 7;
   });
-  const topAlerts = Object.entries(alertMap)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
 
-  // Risk classification
-  const riskLevel =
-    avgScore >= 80 ? "low" : avgScore >= 60 ? "medium" : "high";
-  const riskColor =
-    riskLevel === "high" ? "#ef4444" : riskLevel === "medium" ? "#f59e0b" : "#10b981";
-  const riskClass =
-    riskLevel === "high" ? "risk-high" : riskLevel === "medium" ? "risk-med" : "risk-low";
+  // Disclaimer
+  pdf.checkY(14);
+  pdf.y += 4;
+  pdf.accentCard(pdf.mx, pdf.y, pdf.cw, 12, C.yellow);
+  pdf.txt("⚕ Medical Disclaimer: This report is for ergonomic awareness only. It does not constitute medical advice.", pdf.mx+5, pdf.y+5, C.muted, 6.5);
+  pdf.txt("Consult a qualified healthcare professional for clinical assessment and treatment.", pdf.mx+5, pdf.y+9.5, C.dim, 6.5);
+  pdf.y += 16;
 
-  // RULA-like score estimate (simplified)
-  const rulaEstimate =
-    avgScore >= 80 ? "1–2 (Acceptable)" : avgScore >= 65 ? "3–4 (Investigate)" : avgScore >= 50 ? "5–6 (Change Soon)" : "7 (Implement Change)";
-
-  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><style>${BASE_CSS}
-    .iso-box{background:#f0f4fb;border-radius:10px;padding:14px 18px;margin:12px 0;border-left:3px solid #1a56db}
-    .iso-title{font-size:10px;font-weight:700;color:#1a56db;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
-  </style></head><body>
-  ${header({ tierLabel, tierColor, name, date: now, subtitle: "Clinical Posture Assessment Report", badge: "Clinical" })}
-  <h1>Clinical Assessment</h1>
-  <p class="section-intro">Medical-grade ergonomic posture analysis based on ${sessions.length} monitored sessions. This report follows ISO 11226 ergonomic standards for workplace posture evaluation.</p>
-
-  ${kpiGrid([
-    { label: "Overall Score", value: avgScore, color, sub: grade(avgScore) },
-    { label: "Risk Level", value: riskLevel.toUpperCase(), color: riskColor, sub: "musculoskeletal" },
-    { label: "Sessions", value: sessions.length, color: "#1a56db", sub: "analyzed" },
-    { label: "RULA Estimate", value: avgScore >= 80 ? "1–2" : avgScore >= 65 ? "3–4" : avgScore >= 50 ? "5–6" : "7", color: riskColor, sub: "action level" },
-  ])}
-
-  <h2>🏥 Clinical Risk Assessment</h2>
-  <div class="${riskClass} risk-item">
-    <div style="font-size:24px">${riskLevel === "high" ? "⚠️" : riskLevel === "medium" ? "⚡" : "✅"}</div>
-    <div>
-      <div style="font-weight:700;font-size:13px;color:${riskColor};margin-bottom:4px">${riskLevel === "high" ? "High Risk — Immediate Action Required" : riskLevel === "medium" ? "Moderate Risk — Intervention Recommended" : "Low Risk — Maintain Current Habits"}</div>
-      <div style="font-size:12px;color:#556b8a">RULA Estimate: ${rulaEstimate}. Average posture score: ${avgScore}/100 across ${sessions.length} sessions.</div>
-    </div>
-  </div>
-
-  <h2>📐 ISO 11226 Compliance</h2>
-  <div class="iso-box">
-    <div class="iso-title">ISO 11226:2000 — Ergonomics of working postures</div>
-    <table style="margin:0">
-      <tbody>
-        <tr><td style="font-weight:600;color:#556b8a;width:45%">Head/Neck Posture</td><td><span class="pill" style="background:${avgScore>=70?"#f0fdf4":"#fef2f2"};color:${avgScore>=70?"#10b981":"#ef4444"}">${avgScore>=70?"Acceptable":"Review Needed"}</span></td></tr>
-        <tr><td style="font-weight:600;color:#556b8a">Spine Alignment</td><td><span class="pill" style="background:${avgScore>=65?"#f0fdf4":"#fffbeb"};color:${avgScore>=65?"#10b981":"#f59e0b"}">${avgScore>=65?"Within Range":"Deviation Detected"}</span></td></tr>
-        <tr><td style="font-weight:600;color:#556b8a">Shoulder Position</td><td><span class="pill" style="background:${avgScore>=75?"#f0fdf4":"#fef2f2"};color:${avgScore>=75?"#10b981":"#ef4444"}">${avgScore>=75?"Neutral":"Elevated Risk"}</span></td></tr>
-        <tr><td style="font-weight:600;color:#556b8a">Overall Compliance</td><td><span class="pill" style="background:${color}22;color:${color}">${avgScore>=80?"Compliant":avgScore>=60?"Partial":"Non-Compliant"}</span></td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  ${topAlerts.length > 0 ? `
-  <h2>⚕️ Top Posture Issues Detected</h2>
-  ${barChart(topAlerts.map(([label, count]) => ({ label, value: Math.min(count * 10, 100) })))}
-  <table style="margin-top:12px">
-    <thead><tr><th>Issue</th><th>Occurrences</th><th>Clinical Significance</th></tr></thead>
-    <tbody>
-      ${topAlerts.map(([label, count]) => `
-      <tr>
-        <td>${esc(label)}</td>
-        <td>${count}</td>
-        <td>${count > 10 ? "High — ergonomic intervention recommended" : count > 4 ? "Moderate — monitor and adjust workstation" : "Low — maintain awareness"}</td>
-      </tr>`).join("")}
-    </tbody>
-  </table>` : ""}
-
-  ${aiSummary ? `
-  <h2>🧠 Clinical AI Assessment</h2>
-  ${aiBox(aiSummary, "Corvus Clinical Intelligence")}` : ""}
-
-  <h2>📋 Clinical Recommendations</h2>
-  <div style="background:#f8faff;border-radius:10px;padding:16px 20px;border:1px solid #dde5f5">
-    ${[
-      ["Monitor posture every 25 minutes", "Use the Pomodoro technique — sit well, move often."],
-      ["Ergonomic workstation setup", "Monitor at eye level, keyboard at elbow height, feet flat."],
-      ["Neck and shoulder mobility", "Perform gentle stretches every hour to prevent strain."],
-      ["Core strengthening", "A stronger core supports better spinal posture during long sessions."],
-    ].map(([title, desc]) => `
-    <div style="display:flex;gap:12px;margin:10px 0">
-      <div style="width:6px;height:6px;border-radius:50%;background:#1a56db;margin-top:5px;flex-shrink:0"></div>
-      <div><div style="font-weight:700;font-size:12px;color:#0d1b35">${title}</div><div style="font-size:11px;color:#556b8a;margin-top:2px">${desc}</div></div>
-    </div>`).join("")}
-  </div>
-
-  <p style="font-size:10px;color:#9bacc8;margin-top:20px;line-height:1.6">⚕️ <strong>Medical Disclaimer:</strong> This report is generated by AI-assisted posture analysis software and is intended for ergonomic awareness purposes only. It does not constitute medical advice, diagnosis, or treatment. Consult a qualified healthcare professional for clinical assessment.</p>
-
-  ${footer({ tierLabel, type: "Clinical Report" })}
-  </body></html>`;
-
-  await htmlToPDF(html, `Corvus_Clinical_${new Date().toISOString().slice(0, 10)}.pdf`);
+  if(aiSummary){ pdf.section("AI Clinical Assessment"); pdf.aiBox(aiSummary); }
+  pdf.save();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 3. COMPARISON REPORT — two periods side by side
+// 3. COMPARISON REPORT
 // ═══════════════════════════════════════════════════════════════════════
-export async function generateComparisonPDF({ sessions, profile, aiSummary, lang = "en" }) {
+export async function generateComparisonPDF({ sessions, profile, aiSummary }) {
   const name = profile?.name || "User";
-  const tierLabel = profile?.tier === "elite" ? "Elite" : profile?.tier === "professional" ? "Pro" : "";
-  const tierColor = profile?.tier === "elite" ? "#10b981" : "#0891b2";
-  const now = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const tier = profile?.tier || "standard";
+  const tierLabel = tier==="elite"?"Elite":tier==="professional"?"Pro":"";
 
-  // Split sessions into two halves chronologically
-  const sorted = [...sessions].sort((a, b) => {
-    const da = (a.created_at?.toDate?.() || new Date(a.created_at || 0)).getTime();
-    const db = (b.created_at?.toDate?.() || new Date(b.created_at || 0)).getTime();
-    return da - db;
-  });
-  const mid = Math.floor(sorted.length / 2);
-  const periodA = sorted.slice(0, mid);
-  const periodB = sorted.slice(mid);
+  if(sessions.length < 2) {
+    alert("Need at least 2 sessions for a Comparison report.");
+    return;
+  }
 
-  const scoreA = avg(periodA.map((s) => s.avg_score || 0));
-  const scoreB = avg(periodB.map((s) => s.avg_score || 0));
-  const delta = scoreB - scoreA;
-  const deltaColor = delta >= 0 ? "#10b981" : "#ef4444";
-  const deltaSign = delta >= 0 ? "+" : "";
+  const sorted = [...sessions].sort((a,b)=>toMs(a)-toMs(b));
+  const mid    = Math.max(1, Math.floor(sorted.length/2));
+  const pA     = sorted.slice(0, mid);
+  const pB     = sorted.slice(mid);
 
-  const dateA =
-    periodA.length > 0
-      ? `${fmt(periodA[0].created_at)} – ${fmt(periodA[periodA.length - 1].created_at)}`
-      : "—";
-  const dateB =
-    periodB.length > 0
-      ? `${fmt(periodB[0].created_at)} – ${fmt(periodB[periodB.length - 1].created_at)}`
-      : "—";
+  const scoreA = avg(pA.map(s=>s.avg_score||0));
+  const scoreB = avg(pB.map(s=>s.avg_score||0));
+  const delta  = scoreB - scoreA;
+  const deltaColor = delta>=0 ? C.green : C.red;
 
-  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><style>${BASE_CSS}
-  .compare-col{flex:1;background:#f8faff;border-radius:12px;padding:20px;border:1px solid #dde5f5}
-  .compare-col.period-b{background:#f0fdf4;border-color:#bbf7d0}
-  </style></head><body>
-  ${header({ tierLabel, tierColor, name, date: now, subtitle: "Period Comparison Report", badge: "Comparison" })}
-  <h1>Before vs. After Comparison</h1>
-  <p class="section-intro">Comparing your posture performance across two time periods. Earlier sessions (Period A) vs. more recent sessions (Period B).</p>
+  const dateA = pA.length ? `${fmt(pA[0].created_at)} – ${fmt(pA[pA.length-1].created_at)}` : "—";
+  const dateB = pB.length ? `${fmt(pB[0].created_at)} – ${fmt(pB[pB.length-1].created_at)}` : "—";
+  const now   = fmt(new Date());
 
-  <!-- Delta KPI -->
-  ${kpiGrid([
-    { label: "Period A Score", value: scoreA, color: sc(scoreA), sub: `${periodA.length} sessions` },
-    { label: "Period B Score", value: scoreB, color: sc(scoreB), sub: `${periodB.length} sessions` },
-    { label: "Change", value: `${deltaSign}${delta}`, color: deltaColor, sub: delta >= 0 ? "improvement" : "decline" },
-    { label: "Overall", value: avg([scoreA, scoreB]), color: sc(avg([scoreA, scoreB])), sub: grade(avg([scoreA, scoreB])) },
-  ])}
+  const pdf = new CorvusPDF(`Corvus_Comparison_${new Date().toISOString().slice(0,10)}.pdf`);
+  pdf._type = "Comparison Report";
+  pdf.header("Comparison Report", tierLabel);
+  pdf.titleBlock("Period Comparison","Before vs. After posture performance analysis", name, now);
 
-  <h2>📅 Period Breakdown</h2>
-  <div style="display:flex;gap:16px">
-    <div class="compare-col">
-      <div style="font-size:10px;font-weight:700;color:#7890b0;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">Period A — Earlier</div>
-      <div style="font-size:10px;color:#9bacc8;margin-bottom:12px">${dateA}</div>
-      <div style="font-family:'Syne',sans-serif;font-size:40px;font-weight:800;color:${sc(scoreA)};line-height:1">${scoreA}</div>
-      <div style="font-size:11px;color:#7890b0;margin-top:4px">/100 · ${grade(scoreA)}</div>
-      <div style="margin-top:14px;font-size:11px;color:#556b8a">${periodA.length} sessions analyzed</div>
-    </div>
-    <div style="display:flex;align-items:center;padding:0 4px">
-      <div style="font-size:28px;color:${deltaColor};font-family:'Syne',sans-serif;font-weight:800">${deltaSign}${delta}</div>
-    </div>
-    <div class="compare-col period-b">
-      <div style="font-size:10px;font-weight:700;color:#059669;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">Period B — Recent</div>
-      <div style="font-size:10px;color:#9bacc8;margin-bottom:12px">${dateB}</div>
-      <div style="font-family:'Syne',sans-serif;font-size:40px;font-weight:800;color:${sc(scoreB)};line-height:1">${scoreB}</div>
-      <div style="font-size:11px;color:#7890b0;margin-top:4px">/100 · ${grade(scoreB)}</div>
-      <div style="margin-top:14px;font-size:11px;color:#556b8a">${periodB.length} sessions analyzed</div>
-    </div>
-  </div>
+  pdf.kpiRow([
+    { label:"PERIOD A SCORE", value:scoreA,      color:sc(scoreA), sub:`${pA.length} sessions` },
+    { label:"PERIOD B SCORE", value:scoreB,      color:sc(scoreB), sub:`${pB.length} sessions` },
+    { label:"CHANGE",         value:`${delta>=0?"+":""}${delta}`, color:deltaColor, sub:delta>=0?"improvement":"decline" },
+    { label:"OVERALL",        value:avg([scoreA,scoreB]), color:sc(avg([scoreA,scoreB])), sub:grade(avg([scoreA,scoreB])) },
+  ]);
 
-  <h2>📊 Session-by-Session</h2>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div>
-      <div style="font-size:11px;font-weight:700;color:#7890b0;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Period A</div>
-      ${barChart(periodA.slice(0, 6).map((s, i) => ({ label: `Session ${i + 1} · ${fmt(s.created_at)}`, value: s.avg_score || 0 })))}
-    </div>
-    <div>
-      <div style="font-size:11px;font-weight:700;color:#059669;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Period B</div>
-      ${barChart(periodB.slice(0, 6).map((s, i) => ({ label: `Session ${i + 1} · ${fmt(s.created_at)}`, value: s.avg_score || 0 })))}
-    </div>
-  </div>
+  // Side-by-side period panels
+  pdf.section("Period Analysis");
+  const panelW = (pdf.cw - 6) / 2;
 
-  ${aiSummary ? `
-  <h2>🧠 Comparison Insights</h2>
-  ${aiBox(aiSummary, "Corvus Comparison Analysis")}` : ""}
+  // Period A panel
+  pdf.card(pdf.mx, pdf.y, panelW, 40, C.card, 3);
+  pdf.doc.setFillColor(...sc(scoreA));
+  pdf.doc.rect(pdf.mx, pdf.y, panelW, 1, "F");
+  pdf.txt("PERIOD A — EARLIER", pdf.mx+4, pdf.y+8, C.muted, 6.5, "bold");
+  pdf.txt(dateA, pdf.mx+4, pdf.y+14, C.dim, 6.5);
+  pdf.doc.setFontSize(24); pdf.doc.setFont("helvetica","bold");
+  pdf.doc.setTextColor(...sc(scoreA));
+  pdf.doc.text(String(scoreA), pdf.mx+4, pdf.y+30);
+  pdf.txt("/100 · "+grade(scoreA), pdf.mx+4, pdf.y+37, C.muted, 6.5);
 
-  ${footer({ tierLabel, type: "Comparison Report" })}
-  </body></html>`;
+  // Period B panel
+  const bx = pdf.mx + panelW + 6;
+  pdf.card(bx, pdf.y, panelW, 40, C.card, 3);
+  pdf.doc.setFillColor(...sc(scoreB));
+  pdf.doc.rect(bx, pdf.y, panelW, 1, "F");
+  pdf.txt("PERIOD B — RECENT", bx+4, pdf.y+8, C.muted, 6.5, "bold");
+  pdf.txt(dateB, bx+4, pdf.y+14, C.dim, 6.5);
+  pdf.doc.setFontSize(24); pdf.doc.setFont("helvetica","bold");
+  pdf.doc.setTextColor(...sc(scoreB));
+  pdf.doc.text(String(scoreB), bx+4, pdf.y+30);
+  pdf.txt("/100 · "+grade(scoreB), bx+4, pdf.y+37, C.muted, 6.5);
 
-  await htmlToPDF(html, `Corvus_Comparison_${new Date().toISOString().slice(0, 10)}.pdf`);
+  // Delta badge center
+  pdf.doc.setFillColor(...deltaColor);
+  pdf.doc.circle(pdf.mx + panelW + 3, pdf.y + 20, 4, "F");
+  pdf.txt(`${delta>=0?"+":""}${delta}`, pdf.mx+panelW+3, pdf.y+22.5, C.bg, 6.5, "bold", "center");
+  pdf.y += 48;
+
+  // Bar comparison both periods
+  pdf.section("Session-by-Session — Period A");
+  pA.slice(0,8).forEach((s,i) => pdf.barRow(`Session ${i+1}  ${fmt(s.created_at)}`, s.avg_score||0));
+
+  pdf.section("Session-by-Session — Period B");
+  pB.slice(0,8).forEach((s,i) => pdf.barRow(`Session ${i+1}  ${fmt(s.created_at)}`, s.avg_score||0));
+
+  // Insight text
+  pdf.section("Trend Insight");
+  pdf.checkY(18);
+  pdf.accentCard(pdf.mx, pdf.y, pdf.cw, 18, deltaColor);
+  const insightMsg = delta >= 5
+    ? `Strong improvement of +${delta} points. Posture habits are developing well. Maintain this momentum.`
+    : delta >= 0
+    ? `Slight improvement of +${delta} points. Consistency is key — keep up daily monitoring.`
+    : delta >= -10
+    ? `Minor decline of ${delta} points. Review workspace ergonomics and increase break frequency.`
+    : `Significant decline of ${delta} points. Immediate ergonomic review and posture training recommended.`;
+  pdf.txt(insightMsg, pdf.mx+5, pdf.y+10, C.text, 7.5);
+  pdf.y += 24;
+
+  if(aiSummary){ pdf.section("AI Comparison Insights"); pdf.aiBox(aiSummary); }
+  pdf.save();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 4. LONGITUDINAL REPORT — long-term trend (Elite only)
+// 4. LONGITUDINAL REPORT (Elite only)
 // ═══════════════════════════════════════════════════════════════════════
-export async function generateLongitudinalPDF({ sessions, profile, aiSummary, lang = "en" }) {
+export async function generateLongitudinalPDF({ sessions, profile, aiSummary }) {
   const name = profile?.name || "User";
-  const tierLabel = "Elite";
-  const tierColor = "#10b981";
-  const now = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const now  = fmt(new Date());
 
-  // Group sessions by month
+  if(sessions.length < 3) {
+    alert("Need at least 3 sessions for a Longitudinal report.");
+    return;
+  }
+
+  // Group by month
   const byMonth = {};
-  sessions.forEach((s) => {
+  sessions.forEach(s => {
     try {
-      const d = s.created_at?.toDate?.() || new Date(s.created_at || 0);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (!byMonth[key]) byMonth[key] = [];
-      byMonth[key].push(s.avg_score || 0);
-    } catch {}
+      const d = s.created_at?.toDate?.() || new Date(s.created_at||0);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      if(!byMonth[key]) byMonth[key]=[];
+      byMonth[key].push(s.avg_score||0);
+    } catch{}
   });
-
-  const monthlyData = Object.entries(byMonth)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, scores]) => ({
-      label: new Date(month + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-      value: avg(scores),
-      count: scores.length,
+  const monthly = Object.entries(byMonth).sort(([a],[b])=>a.localeCompare(b))
+    .map(([month,scores])=>({
+      label: new Date(month+"-01").toLocaleDateString("en-US",{month:"short",year:"numeric"}),
+      value: avg(scores), count: scores.length,
     }));
 
-  const allScores = sessions.map((s) => s.avg_score || 0).filter(Boolean);
+  const allScores = sessions.map(s=>s.avg_score||0).filter(Boolean);
   const overallAvg = avg(allScores);
   const best = Math.max(...allScores, 0);
-  const worst = Math.min(...allScores.filter(Boolean), 100);
   const streakDays = streak(sessions);
 
-  // Trend direction (linear regression slope on last 8 months)
-  const lastN = monthlyData.slice(-8);
+  // Linear regression slope
+  const n = monthly.length;
   let slope = 0;
-  if (lastN.length >= 2) {
-    const n = lastN.length;
-    const sumX = lastN.reduce((s, _, i) => s + i, 0);
-    const sumY = lastN.reduce((s, m) => s + m.value, 0);
-    const sumXY = lastN.reduce((s, m, i) => s + i * m.value, 0);
-    const sumX2 = lastN.reduce((s, _, i) => s + i * i, 0);
-    slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  if(n >= 2){
+    const sumX=monthly.reduce((s,_,i)=>s+i,0), sumY=monthly.reduce((s,m)=>s+m.value,0);
+    const sumXY=monthly.reduce((s,m,i)=>s+i*m.value,0), sumX2=monthly.reduce((s,_,i)=>s+i*i,0);
+    slope = (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX);
   }
-  const trendLabel = slope > 1 ? "📈 Improving" : slope < -1 ? "📉 Declining" : "➡ Stable";
-  const trendColor = slope > 1 ? "#10b981" : slope < -1 ? "#ef4444" : "#f59e0b";
+  const trendLabel = slope>1?"IMPROVING":slope<-1?"DECLINING":"STABLE";
+  const trendColor = slope>1?C.green:slope<-1?C.red:C.yellow;
+
+  const pdf = new CorvusPDF(`Corvus_Longitudinal_${new Date().toISOString().slice(0,10)}.pdf`);
+  pdf._type = "Longitudinal Report";
+  pdf.header("Longitudinal Report · Elite", "Elite");
+  pdf.titleBlock("Long-term Trend Analysis",`${monthly.length} months · ${sessions.length} sessions · Elite Intelligence`, name, now);
+
+  pdf.kpiRow([
+    { label:"OVERALL AVG",  value:overallAvg,    color:sc(overallAvg), sub:grade(overallAvg) },
+    { label:"PERSONAL BEST",value:best,          color:C.green,         sub:"highest score" },
+    { label:"TREND",        value:trendLabel,    color:trendColor,      sub:`${slope>=0?"+":""}${slope.toFixed(1)} pts/mo` },
+    { label:"STREAK",       value:`${streakDays}d`, color:C.yellow,    sub:"consecutive days" },
+  ]);
+
+  // Trend indicator
+  pdf.section("Trend Analysis");
+  pdf.checkY(20);
+  pdf.card(pdf.mx, pdf.y, pdf.cw, 20, C.card2, 3);
+  pdf.doc.setFillColor(...trendColor);
+  pdf.doc.rect(pdf.mx, pdf.y, pdf.cw, 1, "F");
+  const trendMsg = slope>1
+    ? `Posture improving at +${slope.toFixed(1)} pts/month. Projected score in 3 months: ${Math.min(overallAvg+Math.round(slope*3),100)}/100.`
+    : slope<-1
+    ? `Score declining ${Math.abs(slope).toFixed(1)} pts/month. Ergonomic review recommended immediately.`
+    : `Score stable. Add workspace ergonomic audits to accelerate improvement.`;
+  pdf.doc.setFontSize(10); pdf.doc.setFont("helvetica","bold"); pdf.doc.setTextColor(...trendColor);
+  pdf.doc.text(trendLabel, pdf.mx+5, pdf.y+9);
+  pdf.txt(trendMsg, pdf.mx+5, pdf.y+16, C.muted, 7);
+  pdf.y += 26;
+
+  // Monthly bars
+  pdf.section("Monthly Score Trend");
+  monthly.forEach(m => pdf.barRow(`${m.label}  (${m.count} sessions)`, m.value));
+
+  // Monthly table
+  pdf.section("Month-by-Month Breakdown");
+  pdf.tableRow(["MONTH","SESSIONS","AVG SCORE","GRADE"],[45,30,35,50], true);
+  monthly.forEach(m => {
+    pdf.checkY(9);
+    pdf.txt(m.label,       pdf.mx+2,  pdf.y+1, C.text,      7.5);
+    pdf.txt(String(m.count),pdf.mx+47, pdf.y+1, C.muted,    7.5);
+    pdf.doc.setTextColor(...sc(m.value)); pdf.doc.setFontSize(7.5); pdf.doc.setFont("helvetica","bold");
+    pdf.doc.text(`${m.value}/100`, pdf.mx+77, pdf.y+1);
+    pdf.txt(grade(m.value), pdf.mx+112, pdf.y+1, C.muted, 7);
+    pdf.doc.setDrawColor(...C.dim); pdf.doc.setLineWidth(0.2);
+    pdf.doc.line(pdf.mx, pdf.y+3.5, pdf.W-pdf.mx, pdf.y+3.5);
+    pdf.y += 8;
+  });
 
   // Milestones
   const milestones = [];
-  if (overallAvg >= 80) milestones.push({ icon: "🏆", text: "Excellent posture health maintained" });
-  if (streakDays >= 7) milestones.push({ icon: "🔥", text: `${streakDays}-day consistency streak` });
-  if (sessions.length >= 20) milestones.push({ icon: "💪", text: `${sessions.length} total sessions completed` });
-  if (best >= 90) milestones.push({ icon: "⭐", text: `Personal best: ${best}/100` });
+  if(overallAvg>=80) milestones.push([C.green,"🏆","Excellent posture health maintained throughout period"]);
+  if(streakDays>=7)  milestones.push([C.yellow,"🔥",`${streakDays}-day consecutive monitoring streak`]);
+  if(sessions.length>=20) milestones.push([C.cyan,"💪",`${sessions.length} total sessions completed`]);
+  if(best>=90) milestones.push([C.green,"⭐",`Personal best score: ${best}/100`]);
+  if(milestones.length>0){
+    pdf.section("Milestones");
+    milestones.forEach(([color, icon, text])=>{
+      pdf.checkY(11);
+      pdf.card(pdf.mx, pdf.y, pdf.cw, 10, C.card2, 2);
+      pdf.doc.setFillColor(...color); pdf.doc.rect(pdf.mx, pdf.y, 1.5, 10, "F");
+      pdf.txt(`${icon}  ${text}`, pdf.mx+5, pdf.y+6.5, C.text, 8);
+      pdf.y += 13;
+    });
+  }
 
-  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><style>${BASE_CSS}
-  .milestone{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#f0fdf4;border-radius:9px;margin:6px 0;border:1px solid #bbf7d0}
-  .month-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
-  .month-card{background:#f8faff;border-radius:9px;padding:12px;border:1px solid #e8eef8;text-align:center}
-  </style></head><body>
-  ${header({ tierLabel: "Elite", tierColor, name, date: now, subtitle: "Longitudinal Trend Analysis — Elite Report", badge: "Elite · Long-term" })}
-  <h1>Long-term Trend Analysis</h1>
-  <p class="section-intro">Comprehensive analysis of your posture health trajectory spanning ${monthlyData.length} months and ${sessions.length} total sessions. This Elite-tier report includes advanced trend modeling and predictive insights.</p>
-
-  ${kpiGrid([
-    { label: "Overall Average", value: overallAvg, color: sc(overallAvg), sub: grade(overallAvg) },
-    { label: "Best Score", value: best, color: "#10b981", sub: "personal record" },
-    { label: "Trend", value: slope > 0 ? `+${slope.toFixed(1)}` : slope.toFixed(1), color: trendColor, sub: "pts/month" },
-    { label: "Streak", value: `${streakDays}d`, color: "#f59e0b", sub: "consecutive days" },
-  ], 4)}
-
-  <h2>📈 Monthly Score Trend</h2>
-  ${barChart(monthlyData)}
-
-  <div style="display:grid;grid-template-columns:repeat(${Math.min(monthlyData.length, 4)},1fr);gap:10px;margin:14px 0">
-    ${monthlyData.slice(-Math.min(monthlyData.length, 8)).map(m => `
-    <div class="month-card">
-      <div style="font-size:9px;font-weight:700;color:#7890b0;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px">${m.label}</div>
-      <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:${sc(m.value)}">${m.value}</div>
-      <div style="font-size:9px;color:#9bacc8;margin-top:3px">${m.count} sessions</div>
-    </div>`).join("")}
-  </div>
-
-  <h2>🎯 Trend Analysis</h2>
-  <div style="background:${trendColor}11;border:1px solid ${trendColor}44;border-radius:10px;padding:16px 20px">
-    <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:${trendColor};margin-bottom:6px">${trendLabel}</div>
-    <div style="font-size:12px;color:#556b8a;line-height:1.7">
-      ${slope > 1
-        ? `Your posture is improving at +${slope.toFixed(1)} points/month. At this rate, you'll reach ${Math.min(overallAvg + Math.round(slope * 3), 100)}/100 in 3 months. Keep up the great work!`
-        : slope < -1
-        ? `Your posture score has been declining ${Math.abs(slope).toFixed(1)} pts/month. Focus on workspace ergonomics and take more frequent breaks. Early intervention can reverse this trend.`
-        : `Your posture is holding steady. To accelerate improvement, try adding a daily 5-minute posture check and reviewing your workspace ergonomics.`}
-    </div>
-  </div>
-
-  ${milestones.length > 0 ? `
-  <h2>🏆 Milestones Achieved</h2>
-  ${milestones.map(m => `<div class="milestone"><div style="font-size:22px">${m.icon}</div><div style="font-size:12px;font-weight:600;color:#065f46">${m.text}</div></div>`).join("")}` : ""}
-
-  <h2>📊 Session Distribution</h2>
-  <table>
-    <thead><tr><th>Month</th><th>Sessions</th><th>Avg Score</th><th>Grade</th></tr></thead>
-    <tbody>
-      ${monthlyData.map(m => `<tr>
-        <td>${m.label}</td>
-        <td>${m.count}</td>
-        <td><span class="pill" style="background:${sc(m.value)}22;color:${sc(m.value)}">${m.value}/100</span></td>
-        <td>${grade(m.value)}</td>
-      </tr>`).join("")}
-    </tbody>
-  </table>
-
-  ${aiSummary ? `
-  <h2>🧠 Elite AI — Long-term Insights</h2>
-  ${aiBox(aiSummary, "Corvus Elite Intelligence")}` : ""}
-
-  ${footer({ tierLabel: "Elite", type: "Longitudinal Report" })}
-  </body></html>`;
-
-  await htmlToPDF(html, `Corvus_Longitudinal_${new Date().toISOString().slice(0, 10)}.pdf`);
+  if(aiSummary){ pdf.section("Elite AI — Long-term Intelligence"); pdf.aiBox(aiSummary); }
+  pdf.save();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 5. AI REPORT — AI-narrated executive report (Pro + Elite)
+// 5. AI EXECUTIVE REPORT
 // ═══════════════════════════════════════════════════════════════════════
-export async function generateAIPDF({ sessions, profile, aiSummary, lang = "en" }) {
-  const isAr = lang === "ar";
-  const name = profile?.name || "User";
-  const tierLabel = profile?.tier === "elite" ? "Elite" : "Pro";
-  const tierColor = profile?.tier === "elite" ? "#10b981" : "#0891b2";
-  const now = new Date().toLocaleDateString(isAr ? "ar-EG" : "en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  const scores = sessions.map((s) => s.avg_score || 0).filter(Boolean);
-  const overallAvg = avg(scores);
-  const color = sc(overallAvg);
+export async function generateAIPDF({ sessions, profile, aiSummary }) {
+  const name  = profile?.name || "User";
+  const tier  = profile?.tier || "standard";
+  const tierLabel = tier==="elite"?"Elite":tier==="professional"?"Pro":"";
+  const now   = fmt(new Date());
   const now_ms = Date.now();
-  const thisWeek = sessions.filter(
-    (s) =>
-      now_ms - (s.created_at?.toDate?.() || new Date(s.created_at || 0)).getTime() <
-      7 * 86400000
-  );
-  const weekAvg = avg(thisWeek.map((s) => s.avg_score || 0));
-  const streakDays = streak(sessions);
 
-  const recentRows = sessions.slice(0, 8).map((s, i) => {
-    const scoreVal = s.avg_score || 0;
-    const c = sc(scoreVal);
-    return `<tr>
-      <td>${i + 1}</td>
-      <td>${fmt(s.created_at)}</td>
-      <td>${dur(s)}</td>
-      <td><span class="pill" style="background:${c}22;color:${c}">${scoreVal}/100</span></td>
-      <td>${grade(scoreVal, isAr)}</td>
-    </tr>`;
+  const scores    = sessions.map(s=>s.avg_score||0).filter(Boolean);
+  const overall   = avg(scores);
+  const thisWeek  = sessions.filter(s=>now_ms-toMs(s)<7*86400000);
+  const weekAvg   = avg(thisWeek.map(s=>s.avg_score||0));
+  const streakD   = streak(sessions);
+  const best      = Math.max(...scores, 0);
+
+  const pdf = new CorvusPDF(`Corvus_AI_Report_${new Date().toISOString().slice(0,10)}.pdf`);
+  pdf._type = "AI Executive Report";
+  pdf.header("AI Executive Report", tierLabel);
+  pdf.titleBlock("AI Executive Report", `Powered by Corvus Intelligence · ${sessions.length} sessions analyzed`, name, now);
+
+  pdf.kpiRow([
+    { label:"OVERALL SCORE", value:overall,      color:sc(overall), sub:grade(overall) },
+    { label:"THIS WEEK",     value:weekAvg||"—", color:sc(weekAvg), sub:`${thisWeek.length} sessions` },
+    { label:"SESSIONS",      value:sessions.length, color:C.cyan,   sub:"total" },
+    { label:"STREAK",        value:`${streakD}d`,color:C.yellow,    sub:"consecutive" },
+  ]);
+
+  // AI analysis box — primary feature
+  pdf.section("Corvus AI Analysis");
+  pdf.aiBox(aiSummary || "Connect your Groq API key to enable AI-powered insights.");
+
+  // Recent sessions table
+  pdf.section("Recent Sessions");
+  pdf.tableRow(["#","DATE","DURATION","SCORE","GRADE"],[12,42,35,25,50], true);
+  sessions.slice(0,12).forEach((s,i)=>{
+    const scoreVal = s.avg_score||0;
+    pdf.checkY(9);
+    pdf.txt(String(i+1), pdf.mx+2, pdf.y+1, C.dim, 7);
+    pdf.txt(fmt(s.created_at), pdf.mx+14, pdf.y+1, C.text, 7.5);
+    pdf.txt(dur(s), pdf.mx+56, pdf.y+1, C.muted, 7.5);
+    pdf.doc.setTextColor(...sc(scoreVal)); pdf.doc.setFontSize(7.5); pdf.doc.setFont("helvetica","bold");
+    pdf.doc.text(`${scoreVal}/100`, pdf.mx+91, pdf.y+1);
+    pdf.txt(grade(scoreVal), pdf.mx+116, pdf.y+1, C.muted, 7);
+    pdf.doc.setDrawColor(...C.dim); pdf.doc.setLineWidth(0.2);
+    pdf.doc.line(pdf.mx, pdf.y+3.5, pdf.W-pdf.mx, pdf.y+3.5);
+    pdf.y += 8;
   });
 
-  const html = `<!DOCTYPE html><html lang="${lang}" dir="${isAr ? "rtl" : "ltr"}"><head><meta charset="UTF-8"/>
-  <style>${BASE_CSS}
-    body{direction:${isAr ? "rtl" : "ltr"};font-family:${isAr ? "'Cairo','DM Sans'" : "'DM Sans'"}, sans-serif}
-    h2{border-${isAr ? "right" : "left"}:3px solid #1a56db;border-${isAr ? "left" : "right"}:none;padding-${isAr ? "right" : "left"}:12px;padding-${isAr ? "left" : "right"}:0}
-    th{text-align:${isAr ? "right" : "left"}}
-    .footer{direction:${isAr ? "rtl" : "ltr"}}
-  </style></head><body>
-  ${header({
-    tierLabel,
-    tierColor,
-    name,
-    date: now,
-    subtitle: isAr ? "تقرير تنفيذي مدعوم بالذكاء الاصطناعي" : "AI-Powered Executive Report",
-    badge: isAr ? "تقرير AI" : "AI Report",
-  })}
-  <h1>${isAr ? `تقرير الأداء — ${esc(name)}` : `Executive Report — ${esc(name)}`}</h1>
-  <p class="section-intro">${isAr
-    ? `تقرير تنفيذي شامل مدعوم بذكاء Corvus الاصطناعي. بناءً على ${sessions.length} جلسة مُراقَبة.`
-    : `Comprehensive AI-narrated executive report powered by Corvus Intelligence. Based on ${sessions.length} monitored sessions.`}</p>
+  // Score distribution bar
+  pdf.section("Score Distribution");
+  pdf.barRow("All-time Average", overall);
+  pdf.barRow("This Week Average", weekAvg||0);
+  pdf.barRow("Personal Best", best);
 
-  ${kpiGrid([
-    { label: isAr ? "المتوسط الكلي" : "Avg Score", value: overallAvg, color, sub: grade(overallAvg, isAr) },
-    { label: isAr ? "هذا الأسبوع" : "This Week", value: weekAvg || "—", color: sc(weekAvg), sub: `${thisWeek.length} ${isAr ? "جلسة" : "sessions"}` },
-    { label: isAr ? "إجمالي الجلسات" : "Sessions", value: sessions.length, color: "#1a56db", sub: isAr ? "إجمالي" : "total" },
-    { label: isAr ? "السلسلة" : "Streak", value: `${streakDays}${isAr ? " يوم" : "d"}`, color: "#f59e0b", sub: isAr ? "متتالية" : "consecutive" },
-  ])}
+  // Summary stats
+  pdf.section("Summary Statistics");
+  [
+    ["Total Sessions",  String(sessions.length)],
+    ["Average Score",   `${overall}/100 — ${grade(overall)}`],
+    ["Best Score",      `${best}/100`],
+    ["Monitoring Streak", `${streakD} consecutive days`],
+    ["This Week",       `${weekAvg}/100 (${thisWeek.length} sessions)`],
+  ].forEach(([k,v])=>{
+    pdf.checkY(8);
+    pdf.txt(k, pdf.mx+2, pdf.y, C.muted, 7.5, "bold");
+    pdf.txt(v, pdf.mx+60, pdf.y, C.text, 7.5);
+    pdf.y += 7;
+  });
 
-  <h2>${isAr ? "🧠 تحليل الذكاء الاصطناعي — Corvus AI" : "🧠 Corvus AI Analysis"}</h2>
-  ${aiBox(aiSummary, isAr ? "Corvus AI" : "Corvus Intelligence")}
-
-  <h2>${isAr ? "📊 أحدث الجلسات" : "📊 Recent Sessions"}</h2>
-  <table>
-    <thead><tr>
-      <th>#</th>
-      <th>${isAr ? "التاريخ" : "Date"}</th>
-      <th>${isAr ? "المدة" : "Duration"}</th>
-      <th>${isAr ? "النتيجة" : "Score"}</th>
-      <th>${isAr ? "التقييم" : "Grade"}</th>
-    </tr></thead>
-    <tbody>${recentRows.join("") || `<tr><td colspan="5" style="text-align:center;color:#9bacc8;padding:16px">${isAr ? "لا توجد جلسات" : "No sessions"}</td></tr>`}</tbody>
-  </table>
-
-  ${footer({ tierLabel, type: isAr ? "تقرير AI" : "AI Report" })}
-  </body></html>`;
-
-  await htmlToPDF(
-    html,
-    `Corvus_AI_Report_${new Date().toISOString().slice(0, 10)}.pdf`
-  );
+  pdf.save();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// UNIFIED ENTRY POINT — call this from AIReports.jsx
+// UNIFIED ENTRY POINT
 // ═══════════════════════════════════════════════════════════════════════
 export async function exportPDFReport({ type, sessions, session, profile, aiSummary, lang }) {
-  switch (type) {
-    case "session":
-      return generateSessionPDF({ session: session || sessions?.[0], profile, aiSummary, lang });
-    case "clinical":
-      return generateClinicalPDF({ sessions, profile, aiSummary, lang });
-    case "comparison":
-      return generateComparisonPDF({ sessions, profile, aiSummary, lang });
-    case "longitudinal":
-      return generateLongitudinalPDF({ sessions, profile, aiSummary, lang });
-    case "ai":
-    default:
-      return generateAIPDF({ sessions, profile, aiSummary, lang });
+  switch(type) {
+    case "session":      return generateSessionPDF({ session: session||sessions?.[0], profile, aiSummary });
+    case "clinical":     return generateClinicalPDF({ sessions, profile, aiSummary });
+    case "comparison":   return generateComparisonPDF({ sessions, profile, aiSummary });
+    case "longitudinal": return generateLongitudinalPDF({ sessions, profile, aiSummary });
+    case "ai": default:  return generateAIPDF({ sessions, profile, aiSummary });
   }
 }
