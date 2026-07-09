@@ -460,8 +460,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
   const ar = lang === "ar";
   const reduce = useReducedMotion();
   const isCompany = mode === "company";
-  const [demoScore, setDemoScore] = useState(75);
-  const [neckAngle, setNeckAngle] = useState(12);
+  const [demoScore, setDemoScore] = useState(89);
+  const [neckAngle, setNeckAngle] = useState(15);
   useEffect(() => {
     const iv = setInterval(() => {
       setDemoScore(s => {
@@ -683,85 +683,127 @@ function Hero({ lang, onCTA, mode, setMode }) {
             </div>
 
             {/* Camera viewport */}
-            <div style={{ position:"relative", background:"#030c18", aspectRatio:"4/3", overflow:"hidden" }}>
-              {/* Deep dark bg */}
+            <div style={{ position:"relative", background:"#050e1c", aspectRatio:"4/3", overflow:"hidden" }}>
+              {/* Dark radial bg */}
               <div style={{ position:"absolute", inset:0,
-                background:"radial-gradient(ellipse 60% 80% at 50% 25%, rgba(15,35,65,.9) 0%, rgba(2,6,16,1) 100%)" }}/>
+                background:"radial-gradient(ellipse 70% 85% at 45% 40%, rgba(12,28,58,.95) 0%, rgba(2,5,14,1) 100%)" }}/>
 
-              {/* Faint grid */}
-              <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.05 }}
-                viewBox="0 0 400 300">
-                {[0,60,120,180,240,300].map(y=><line key={`h${y}`} x1="0" y1={y} x2="400" y2={y} stroke={C.blue} strokeWidth=".5"/>)}
-                {[0,80,160,240,320,400].map(x=><line key={`v${x}`} x1={x} y1="0" x2={x} y2="300" stroke={C.blue} strokeWidth=".5"/>)}
-              </svg>
-
-              {/* Person + pose skeleton */}
+              {/* Seated person + skeleton — matches uploaded image exactly */}
               <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
-                viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
+                viewBox="0 0 400 320" preserveAspectRatio="xMidYMid meet">
+
+                {/* ── Desk & chair ── */}
                 {/* Desk surface */}
-                <rect x="0" y="248" width="400" height="52" fill="rgba(12,24,46,.75)"/>
-                {/* Monitor */}
-                <rect x="148" y="196" width="112" height="62" rx="3" fill="rgba(20,45,85,.6)" stroke="rgba(79,124,249,.28)" strokeWidth="1.5"/>
-                <rect x="153" y="201" width="102" height="52" rx="2" fill="rgba(79,124,249,.08)"/>
+                <rect x="60" y="228" width="280" height="8" rx="3" fill="rgba(20,42,80,.85)" stroke="rgba(79,124,249,.2)" strokeWidth="1"/>
+                {/* Desk legs */}
+                <rect x="80" y="236" width="8" height="84" rx="2" fill="rgba(15,32,62,.7)"/>
+                <rect x="312" y="236" width="8" height="84" rx="2" fill="rgba(15,32,62,.7)"/>
+                {/* Chair seat */}
+                <rect x="148" y="235" width="104" height="14" rx="5" fill="rgba(18,36,70,.8)" stroke="rgba(79,124,249,.15)" strokeWidth="1"/>
+                {/* Chair back */}
+                <rect x="165" y="182" width="70" height="58" rx="5" fill="rgba(14,28,56,.7)" stroke="rgba(79,124,249,.12)" strokeWidth="1"/>
+                {/* Chair legs */}
+                <line x1="158" y1="249" x2="148" y2="290" stroke="rgba(18,36,70,.8)" strokeWidth="4" strokeLinecap="round"/>
+                <line x1="242" y1="249" x2="252" y2="290" stroke="rgba(18,36,70,.8)" strokeWidth="4" strokeLinecap="round"/>
+
+                {/* ── Monitor on desk ── */}
+                <rect x="148" y="148" width="104" height="72" rx="4" fill="rgba(16,38,78,.75)" stroke="rgba(79,124,249,.35)" strokeWidth="1.5"/>
+                {/* Screen glow */}
+                <rect x="154" y="154" width="92" height="60" rx="2" fill="rgba(79,124,249,.1)"/>
                 {/* Screen content lines */}
-                <rect x="162" y="210" width="68" height="3" rx="1" fill="rgba(79,124,249,.35)"/>
-                <rect x="162" y="218" width="48" height="2" rx="1" fill="rgba(79,124,249,.2)"/>
-                <rect x="162" y="224" width="58" height="2" rx="1" fill="rgba(79,124,249,.15)"/>
-                <rect x="188" y="258" width="28" height="6" rx="2" fill="rgba(30,55,95,.6)"/>
-                <rect x="170" y="264" width="64" height="3" rx="2" fill="rgba(30,55,95,.5)"/>
+                <rect x="164" y="163" width="52" height="3" rx="1" fill="rgba(79,124,249,.5)"/>
+                <rect x="164" y="171" width="36" height="2" rx="1" fill="rgba(79,124,249,.3)"/>
+                <rect x="164" y="178" width="44" height="2" rx="1" fill="rgba(79,124,249,.2)"/>
+                <rect x="164" y="185" width="30" height="2" rx="1" fill="rgba(79,124,249,.15)"/>
+                {/* Monitor stand */}
+                <rect x="192" y="220" width="16" height="10" rx="2" fill="rgba(20,42,80,.8)"/>
+                <rect x="178" y="228" width="44" height="4" rx="2" fill="rgba(20,42,80,.7)"/>
 
-                {/* Body — forward-leaning seated posture */}
-                <ellipse cx="200" cy="178" rx="27" ry="38" fill="rgba(30,52,92,.7)"/>
-                <ellipse cx="200" cy="106" rx="22" ry="27" fill="rgba(40,68,115,.65)"/>
-                <rect x="193" y="131" width="14" height="16" rx="5" fill="rgba(36,60,105,.65)"/>
-                <ellipse cx="168" cy="180" rx="10" ry="28" fill="rgba(28,48,86,.65)" transform="rotate(-5,168,180)"/>
-                <ellipse cx="232" cy="180" rx="10" ry="28" fill="rgba(28,48,86,.65)" transform="rotate(5,232,180)"/>
-
-                {/* Green skeleton — spine, shoulders, arms */}
-                <line x1="200" y1="135" x2="200" y2="212" stroke="rgba(16,217,160,.8)" strokeWidth="2.5" strokeLinecap="round"/>
-                <line x1="170" y1="153" x2="230" y2="153" stroke="rgba(16,217,160,.8)" strokeWidth="2.5" strokeLinecap="round"/>
-                <line x1="200" y1="129" x2="200" y2="153" stroke="rgba(16,217,160,.75)" strokeWidth="2" strokeLinecap="round"/>
-                {/* Amber neck — forward tilt */}
-                <line x1="200" y1="94" x2="200" y2="129" stroke="rgba(245,158,11,.9)" strokeWidth="2.2" strokeLinecap="round"/>
-                {/* Left arm */}
-                <line x1="170" y1="153" x2="161" y2="196" stroke="rgba(16,217,160,.6)" strokeWidth="2" strokeLinecap="round"/>
-                <line x1="161" y1="196" x2="157" y2="229" stroke="rgba(16,217,160,.45)" strokeWidth="1.8" strokeLinecap="round"/>
+                {/* ── Person body (seated silhouette) ── */}
+                {/* Head */}
+                <ellipse cx="200" cy="88" rx="28" ry="32" fill="rgba(28,52,100,.75)" stroke="rgba(79,124,249,.15)" strokeWidth="1"/>
+                {/* Neck */}
+                <rect x="192" y="118" width="16" height="20" rx="5" fill="rgba(24,46,90,.7)"/>
+                {/* Torso */}
+                <ellipse cx="200" cy="168" rx="32" ry="38" fill="rgba(22,44,88,.75)"/>
+                {/* Left arm — bent forward toward desk */}
+                <ellipse cx="162" cy="170" rx="11" ry="30" fill="rgba(20,40,80,.7)" transform="rotate(-8,162,170)"/>
+                <ellipse cx="145" cy="210" rx="10" ry="22" fill="rgba(18,36,70,.65)" transform="rotate(15,145,210)"/>
                 {/* Right arm */}
-                <line x1="230" y1="153" x2="241" y2="196" stroke="rgba(16,217,160,.6)" strokeWidth="2" strokeLinecap="round"/>
-                <line x1="241" y1="196" x2="245" y2="229" stroke="rgba(16,217,160,.45)" strokeWidth="1.8" strokeLinecap="round"/>
+                <ellipse cx="238" cy="170" rx="11" ry="30" fill="rgba(20,40,80,.7)" transform="rotate(8,238,170)"/>
+                <ellipse cx="255" cy="210" rx="10" ry="22" fill="rgba(18,36,70,.65)" transform="rotate(-15,255,210)"/>
 
-                {/* Landmark dots */}
-                {[[200,94],[200,129],[170,153],[230,153],[200,153],[161,196],[241,196],[157,229],[245,229],[200,212]]
-                  .map(([x,y],i)=>(
-                    <circle key={i} cx={x} cy={y} r={i<=1?5:3.8}
-                      fill={i<=1?"rgba(245,158,11,.95)":"rgba(16,217,160,.92)"}
-                      style={i<=1?{filter:"drop-shadow(0 0 4px rgba(245,158,11,.7))"}:{}}/>
-                  ))}
+                {/* ── Green skeleton overlay ── */}
+                {/* Spine */}
+                <line x1="200" y1="136" x2="200" y2="205" stroke="rgba(16,217,160,.85)" strokeWidth="3" strokeLinecap="round"/>
+                {/* Shoulder bar */}
+                <line x1="165" y1="150" x2="235" y2="150" stroke="rgba(16,217,160,.85)" strokeWidth="3" strokeLinecap="round"/>
+                {/* Neck to shoulders */}
+                <line x1="200" y1="136" x2="200" y2="150" stroke="rgba(16,217,160,.8)" strokeWidth="2.5" strokeLinecap="round"/>
+                {/* Left arm */}
+                <line x1="165" y1="150" x2="152" y2="195" stroke="rgba(16,217,160,.65)" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="152" y1="195" x2="142" y2="228" stroke="rgba(16,217,160,.5)" strokeWidth="2" strokeLinecap="round"/>
+                {/* Right arm */}
+                <line x1="235" y1="150" x2="248" y2="195" stroke="rgba(16,217,160,.65)" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="248" y1="195" x2="258" y2="228" stroke="rgba(16,217,160,.5)" strokeWidth="2" strokeLinecap="round"/>
+                {/* Hip bar */}
+                <line x1="175" y1="205" x2="225" y2="205" stroke="rgba(16,217,160,.7)" strokeWidth="2.5" strokeLinecap="round"/>
 
-                {/* Angle indicator */}
-                <path d={`M200,94 L${200+neckAngle},114`} stroke="rgba(245,158,11,.85)" strokeWidth="1.5" strokeDasharray="3,2"/>
-                <path d="M200,94 L200,114" stroke="rgba(255,255,255,.18)" strokeWidth="1" strokeDasharray="3,2"/>
-                <text x={205+neckAngle} y="110" fill="rgba(245,158,11,.95)" fontSize="11" fontFamily="monospace" fontWeight="bold">{neckAngle}°</text>
+                {/* Amber neck line — forward tilt */}
+                <line x1="200" y1="86" x2="200" y2="136" stroke="rgba(245,158,11,.9)" strokeWidth="2.5" strokeLinecap="round"/>
+
+                {/* ── Landmark dots ── */}
+                {/* Head top (amber — problem area) */}
+                <circle cx="200" cy="72" r="7" fill="rgba(245,158,11,.95)" style={{filter:"drop-shadow(0 0 6px rgba(245,158,11,.8))"}}/>
+                {/* Neck base (amber) */}
+                <circle cx="200" cy="136" r="6" fill="rgba(245,158,11,.9)" style={{filter:"drop-shadow(0 0 4px rgba(245,158,11,.6))"}}/>
+                {/* Shoulders (green) */}
+                <circle cx="165" cy="150" r="5.5" fill="rgba(16,217,160,.95)" style={{filter:"drop-shadow(0 0 4px rgba(16,217,160,.6))"}}/>
+                <circle cx="235" cy="150" r="5.5" fill="rgba(16,217,160,.95)" style={{filter:"drop-shadow(0 0 4px rgba(16,217,160,.6))"}}/>
+                {/* Spine center */}
+                <circle cx="200" cy="150" r="4.5" fill="rgba(16,217,160,.88)"/>
+                <circle cx="200" cy="180" r="4" fill="rgba(16,217,160,.8)"/>
+                {/* Hips */}
+                <circle cx="175" cy="205" r="4.5" fill="rgba(16,217,160,.85)"/>
+                <circle cx="225" cy="205" r="4.5" fill="rgba(16,217,160,.85)"/>
+                {/* Elbows */}
+                <circle cx="152" cy="195" r="4" fill="rgba(16,217,160,.75)"/>
+                <circle cx="248" cy="195" r="4" fill="rgba(16,217,160,.75)"/>
+                {/* Wrists */}
+                <circle cx="142" cy="228" r="3.5" fill="rgba(16,217,160,.6)"/>
+                <circle cx="258" cy="228" r="3.5" fill="rgba(16,217,160,.6)"/>
+
+                {/* ── Neck angle indicator ── exactly like image */}
+                {/* Vertical reference line */}
+                <line x1="200" y1="72" x2="200" y2="108" stroke="rgba(255,255,255,.2)" strokeWidth="1.2" strokeDasharray="4,3"/>
+                {/* Angle line */}
+                <line x1="200" y1="72" x2={200+neckAngle*1.4} y2="108" stroke="rgba(245,158,11,.9)" strokeWidth="1.5" strokeDasharray="4,3"/>
+                {/* Angle arc */}
+                <path d={`M200,88 Q${204+neckAngle*.6},82 ${200+neckAngle*1.1},76`}
+                  fill="none" stroke="rgba(245,158,11,.5)" strokeWidth="1" strokeDasharray="2,2"/>
+                {/* Angle label */}
+                <text x={208+neckAngle*1.2} y="88" fill="rgba(245,158,11,.95)"
+                  fontSize="13" fontFamily="monospace" fontWeight="bold">{neckAngle}°</text>
               </svg>
 
-              {/* LIVE badge */}
+              {/* LIVE + warning — single pill like image */}
               <div style={{
                 position:"absolute", top:10, left:10,
-                display:"flex", alignItems:"center", gap:5,
-                background:"rgba(0,0,0,.65)", backdropFilter:"blur(10px)",
-                borderRadius:99, padding:"4px 10px",
+                display:"flex", alignItems:"center", gap:6,
+                background:"rgba(0,0,0,.72)", backdropFilter:"blur(12px)",
+                borderRadius:99, padding:"5px 12px",
                 border:"1px solid rgba(16,217,160,.3)",
               }}>
                 <span style={{
-                  width:6, height:6, borderRadius:"50%", background:C.green,
-                  boxShadow:`0 0 6px ${C.green}`,
-                  animation:"lp-pulse 1.5s ease-in-out infinite",
+                  width:7, height:7, borderRadius:"50%", background:C.green,
+                  boxShadow:`0 0 8px ${C.green}`,
+                  animation:"lp-pulse 1.5s ease-in-out infinite", flexShrink:0,
                 }}/>
-                <span style={{ fontSize:10.5, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
-                <span style={{ fontSize:10, color:C.muted, fontFamily:FONT_MONO, marginLeft:3 }}>
+                <span style={{ fontSize:11, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
+                <span style={{ fontSize:10.5, color:"rgba(255,255,255,.7)", fontFamily:FONT_MONO }}>
                   {ar ? "رقبة للأمام" : "Neck forward"} {neckAngle}°
                 </span>
-                <span style={{ fontSize:11, marginLeft:2 }}>⚠️</span>
+                <span style={{ fontSize:12 }}>⚠️</span>
               </div>
             </div>
 
