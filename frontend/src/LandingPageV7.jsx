@@ -535,8 +535,36 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
           {/* ══ COL 1 — Hero copy ══ */}
           <div style={{ paddingTop:8 }}>
-            {/* "Now Available" pill */}
+
+            {/* Individual / Company toggle — matches image */}
             <Reveal>
+              <div style={{
+                display:"inline-flex", alignItems:"center", gap:3,
+                background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
+                borderRadius:100, padding:3, marginBottom:20,
+              }}>
+                {[
+                  { id:"individual", en:"👤 Individual", ar:"👤 فردي" },
+                  { id:"company",    en:"🏢 Company / HR", ar:"🏢 شركات وفرق" },
+                ].map(m => (
+                  <button key={m.id} onClick={()=>setMode(m.id)} style={{
+                    padding:"7px 16px", borderRadius:99, border:"none",
+                    fontSize:13, fontWeight:600, cursor:"pointer",
+                    background: mode===m.id
+                      ? "linear-gradient(135deg,#1a56db,#0891b2)"
+                      : "transparent",
+                    color: mode===m.id ? "#fff" : C.sub,
+                    boxShadow: mode===m.id ? "0 2px 12px rgba(26,86,219,.35)" : "none",
+                    transition:"background .22s, color .22s, box-shadow .22s",
+                  }}>
+                    {ar ? m.ar : m.en}
+                  </button>
+                ))}
+              </div>
+            </Reveal>
+
+            {/* "Now Available" pill */}
+            <Reveal delay={30}>
               <div style={{
                 display:"inline-flex", alignItems:"center", gap:8,
                 background:"rgba(16,217,160,.08)",
@@ -1259,13 +1287,13 @@ function Features({ lang }) {
 function HowItWorks({ lang }) {
   const ar = lang === "ar";
   const steps = ar ? [
-    { n:"01", title:"الإعداد السريع", desc:"أضف موظفيك بالCSV أو رابط الدعوة. الإعداد الكامل في 15 دقيقة." },
-    { n:"02", title:"التحليل الفوري", desc:"يستخدم الموظفون الكاميرا للتحليل. لا يلزم أي جهاز خاص." },
-    { n:"03", title:"رؤى قابلة للتنفيذ", desc:"احصل على تقارير HR أسبوعية وتنبيهات فورية للمخاطر المهنية." },
+    { n:"01", icon:"👤", title:"الإعداد السريع", desc:"أضف فريقك بالـ CSV أو رابط الدعوة. الإعداد الكامل في 15 دقيقة." },
+    { n:"02", icon:"📷", title:"التحليل الفوري", desc:"الموظفون يستخدمون الكاميرا للتحليل. لا يلزم أي جهاز خاص." },
+    { n:"03", icon:"📊", title:"رؤى قابلة للتنفيذ", desc:"تقارير HR أسبوعية وتنبيهات فورية للمخاطر المهنية." },
   ] : [
-    { n:"01", title:"Quick Setup", desc:"Add your team via CSV or invite link. Full onboarding in 15 minutes." },
-    { n:"02", title:"Instant Analysis", desc:"Employees use their webcam for analysis. No special hardware needed." },
-    { n:"03", title:"Actionable Insights", desc:"Get weekly HR reports and real-time alerts for occupational risks." },
+    { n:"01", icon:"👤", title:"Quick Setup", desc:"Add your team via CSV or invite link. Full onboarding in 15 minutes." },
+    { n:"02", icon:"📷", title:"Instant Analysis", desc:"Employees use their webcam for analysis. No special hardware needed." },
+    { n:"03", icon:"📊", title:"Actionable Insights", desc:"Get weekly HR reports and real-time alerts for occupational risks." },
   ];
 
   return (
@@ -1284,13 +1312,17 @@ function HowItWorks({ lang }) {
             display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:28, position:"relative" }}>
             {steps.map((s) => (
               <StaggerItem key={s.n}>
-                <div className="lp-lift" style={{ ...card(), textAlign:"center" }}>
+                <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"36px 24px" }}>
                   <div className="lp-timeline-node" style={{
-                    width:64, height:64, borderRadius:"50%", margin:"-64px auto 22px",
+                    width:64, height:64, borderRadius:"50%", margin:"-64px auto 20px",
                     background:C.bg1, border:`2px solid rgba(79,124,249,.4)`,
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    fontFamily:FONT_MONO, fontSize:21, fontWeight:700, color:C.blue,
+                    fontSize:26,
                     boxShadow:"0 0 0 6px "+C.bg1+", 0 4px 18px rgba(79,124,249,.25)",
+                  }}>{s.icon}</div>
+                  <div style={{
+                    fontSize:11, fontWeight:700, color:C.blue, fontFamily:FONT_MONO,
+                    letterSpacing:".08em", marginBottom:8,
                   }}>{s.n}</div>
                   <h3 style={{ ...TYPE.h3, color:C.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
                     {s.title}
@@ -1947,7 +1979,7 @@ function FinalCTA({ lang, onCTA }) {
                 width:44, height:44, borderRadius:12, flexShrink:0,
                 background:"rgba(255,255,255,.15)",
                 display:"flex", alignItems:"center", justifyContent:"center", fontSize:20,
-              }}>🏠</div>
+              }}>◈</div>
               <div>
                 <div style={{ fontSize:16, fontWeight:700, color:"#fff", lineHeight:1.35 }}>
                   {ar ? "انضم لـ 50+ فريق يحسّن الوضعية بالذكاء الاصطناعي." : "Join 50+ teams improving posture with AI."}
