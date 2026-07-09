@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
 import { getLocalAIStatus } from "./localAI.js";
 import { featureTier, qualityFor } from "./lib/tierQuality.js";
+import { exportPDFReport } from "./lib/pdfReports.js";
 
 // ── helpers ───────────────────────────────────────────────────────
 const avg  = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
@@ -268,6 +269,8 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   const [aiText, setAiText]     = useState({});  // keyed by tab
   const [loading, setLoading]   = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfType, setPdfType]   = useState("ai"); // "session"|"clinical"|"comparison"|"longitudinal"|"ai"
+  const [showPdfMenu, setShowPdfMenu] = useState(false);
   const [error, setError]       = useState("");
   const [exported, setExported] = useState(false);
   const [dateRange, setDateRange] = useState("week"); // "week" | "month" | "all"
@@ -353,51 +356,49 @@ This user score: ${avgScore}/100
 
   useEffect(() => { loadReport(tab); }, [tab]);
 
-  const exportPDF = async () => {
+  // PDF type definitions — longitudinal gated to Elite only
+  const PDF_TYPES = [
+    { id: "ai",           icon: "🧠", en: "AI Executive",    ar: "تقرير AI",        elite: false },
+    { id: "session",      icon: "📋", en: "Session Report",  ar: "تقرير جلسة",      elite: false },
+    { id: "clinical",     icon: "⚕️",  en: "Clinical",        ar: "سريري",           elite: false },
+    { id: "comparison",   icon: "📊", en: "Comparison",      ar: "مقارنة",          elite: false },
+    { id: "longitudinal", icon: "📈", en: "Longitudinal",    ar: "اتجاه طويل",      elite: true  },
+  ];
+
+  const exportPDF = async (type = pdfType) => {
     if (!canExportPdf) {
       setError(isAr
         ? "تصدير PDF متاح فقط لخطط Professional و Elite. قم بترقية خطتك."
         : "PDF export is only available on Professional and Elite plans. Please upgrade your plan.");
       return;
     }
+    // Longitudinal is Elite-only
+    if (type === "longitudinal" && pdfDetail !== "full") {
+      setError(isAr ? "تقرير الاتجاه الطويل متاح فقط لخطة Elite." : "Longitudinal report is available on Elite plan only.");
+      return;
+    }
+    setShowPdfMenu(false);
     setPdfLoading(true);
-    // Get or generate summary text for PDF
+    // Get or generate AI summary
     let summary = aiText["summary"];
     if (!summary) {
       try { summary = await callGemini(prompts.summary(), system, 800); }
       catch { summary = "AI summary unavailable."; }
     }
-    const html = buildPDFHTML({
-      reportTitle: isAr ? `تقرير الأداء — ${profile?.name || ""}` : `Performance Report — ${profile?.name || "User"}`,
-      profile, sessions: filteredSessions, summaryText: summary, lang, pdfDetail,
-      tier: profile?.tier || "standard",
-      reportType: dateRange, // "week" | "month" | "all"
-    });
-
     try {
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const blobUrl = URL.createObjectURL(blob);
-      const filename = `Corvus_Report_${new Date().toISOString().slice(0,10)}.html`;
-
-      // Always use <a download> — most reliable cross-browser method.
-      // tab.onload doesn't fire on Blob URLs in Chrome/Firefox.
-      // Users can print from the opened tab themselves (Ctrl+P / Cmd+P).
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      // Also try to open in new tab for preview (may be blocked — that's OK)
-      const tab = window.open(blobUrl, "_blank");
-      if (tab) tab.focus();
-
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-      setPdfLoading(false); setExported(true); setTimeout(() => setExported(false), 3000);
+      await exportPDFReport({
+        type,
+        sessions: filteredSessions,
+        session: filteredSessions[0],
+        profile,
+        aiSummary: summary,
+        lang,
+      });
+      setExported(true); setTimeout(() => setExported(false), 3000);
     } catch(e) {
-      console.error("Export error:", e);
+      console.error("PDF export error:", e);
+      setError(isAr ? "فشل تصدير PDF — " + e.message : "PDF export failed — " + e.message);
+    } finally {
       setPdfLoading(false);
     }
   };
@@ -442,21 +443,58 @@ This user score: ${avgScore}/100
                 </div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {/* PDF Export — gated by canExportPdf (standard/basic plans don't get PDF export) */}
-              <button
-                onClick={exportPDF}
-                disabled={pdfLoading || !sessions.length || !canExportPdf}
-                title={!canExportPdf ? (isAr ? "متاح من خطة Professional فأعلى" : "Available on Professional plan and above") : undefined}
-                style={{ background: !canExportPdf ? "rgba(255,255,255,.05)" : exported ? "rgba(16,185,129,.15)" : "rgba(5,150,105,.15)", border: `1px solid ${!canExportPdf ? "rgba(255,255,255,.1)" : exported ? "rgba(16,185,129,.35)" : "rgba(5,150,105,.3)"}`, borderRadius: 9, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: !canExportPdf ? "#6b82a6" : exported ? "#34d399" : "#34d399", cursor: pdfLoading || !sessions.length || !canExportPdf ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, opacity: !sessions.length ? 0.4 : 1, transition: "all 200ms" }}>
-                {pdfLoading
-                  ? <><span style={{ animation: "spin 700ms linear infinite", display: "inline-block" }}>⟳</span> {isAr ? "جارٍ..." : "Generating..."}</>
-                  : exported
-                  ? `✓ ${isAr ? "تم التصدير" : "Exported!"}`
-                  : !canExportPdf
-                  ? `🔒 ${isAr ? "تصدير PDF (Pro+)" : "Export PDF (Pro+)"}`
-                  : `⬇ ${isAr ? "تصدير PDF" : "Export PDF"}`}
-              </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", position: "relative" }}>
+              {/* PDF Export dropdown */}
+              {canExportPdf ? (
+                <div style={{ position: "relative" }}>
+                  <div style={{ display: "flex", border: "1px solid rgba(5,150,105,.3)", borderRadius: 9, overflow: "hidden" }}>
+                    {/* Main export button */}
+                    <button
+                      onClick={() => exportPDF(pdfType)}
+                      disabled={pdfLoading || !sessions.length}
+                      style={{ background: exported ? "rgba(16,185,129,.15)" : "rgba(5,150,105,.12)", padding: "7px 12px", fontSize: 11, fontWeight: 700, color: exported ? "#34d399" : "#34d399", cursor: pdfLoading || !sessions.length ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, border: "none", opacity: !sessions.length ? 0.4 : 1, transition: "all 200ms" }}>
+                      {pdfLoading
+                        ? <><span style={{ animation: "spin 700ms linear infinite", display: "inline-block" }}>⟳</span> {isAr ? "جارٍ..." : "Generating..."}</>
+                        : exported
+                        ? `✓ ${isAr ? "تم!" : "Done!"}`
+                        : <>⬇ {PDF_TYPES.find(p => p.id === pdfType)?.icon} {isAr ? "تصدير PDF" : "Export PDF"}</>}
+                    </button>
+                    {/* Dropdown arrow */}
+                    <button
+                      onClick={() => setShowPdfMenu(v => !v)}
+                      style={{ background: "rgba(5,150,105,.08)", borderLeft: "1px solid rgba(5,150,105,.2)", padding: "7px 9px", fontSize: 10, color: "#34d399", cursor: "pointer", border: "none", transition: "all 200ms" }}>
+                      {showPdfMenu ? "▲" : "▼"}
+                    </button>
+                  </div>
+                  {/* Dropdown menu */}
+                  {showPdfMenu && (
+                    <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#0c1528", border: "1px solid rgba(255,255,255,.1)", borderRadius: 10, overflow: "hidden", zIndex: 100, width: 200, boxShadow: "0 12px 40px rgba(0,0,0,.5)" }}>
+                      <div style={{ padding: "8px 12px 6px", fontSize: 9, fontWeight: 700, color: "#6b82a6", letterSpacing: ".08em", textTransform: "uppercase", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+                        {isAr ? "نوع التقرير" : "Report Type"}
+                      </div>
+                      {PDF_TYPES.map(pt => {
+                        const locked = pt.elite && pdfDetail !== "full";
+                        return (
+                          <button key={pt.id}
+                            onClick={() => { if (!locked) { setPdfType(pt.id); exportPDF(pt.id); } }}
+                            style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", background: pdfType === pt.id ? "rgba(5,150,105,.12)" : "transparent", border: "none", color: locked ? "#4a5568" : pdfType === pt.id ? "#34d399" : "#b0c4de", cursor: locked ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 600, textAlign: "left", borderBottom: "1px solid rgba(255,255,255,.04)", transition: "background 150ms" }}>
+                            <span style={{ fontSize: 15 }}>{pt.icon}</span>
+                            <span style={{ flex: 1 }}>{isAr ? pt.ar : pt.en}</span>
+                            {locked && <span style={{ fontSize: 9, color: "#10b981", background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.2)", borderRadius: 99, padding: "2px 7px" }}>Elite</span>}
+                            {pdfType === pt.id && !locked && <span style={{ fontSize: 10, color: "#34d399" }}>✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  disabled
+                  style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 9, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "#4a5568", cursor: "not-allowed", display: "flex", alignItems: "center", gap: 6 }}>
+                  🔒 {isAr ? "تصدير PDF (Pro+)" : "Export PDF (Pro+)"}
+                </button>
+              )}
               <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", color: "#6b82a6", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
             </div>
           </div>
