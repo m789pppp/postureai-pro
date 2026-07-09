@@ -1,5 +1,5 @@
-// Corvus — Service Worker v5 — Network First for HTML (fixes stale deploy issue)
-const CACHE_VER = "corvus-v6";
+// Corvus — Service Worker v7 — POST requests bypass SW entirely
+const CACHE_VER = "corvus-v7";
 const MP_CACHE  = "mediapipe-v3";
 
 const MP_ASSETS = [
@@ -14,7 +14,7 @@ self.addEventListener("install", e => {
   );
 });
 
-// Activate — delete ALL old caches
+// Activate — delete old caches
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
@@ -29,12 +29,18 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
 
-  // Never intercept Firebase / Google APIs
+  // CRITICAL: Never intercept POST/PUT/PATCH/DELETE — body already consumed
+  // This fixes "Response body is already used" error on /api/llm
+  if (e.request.method !== "GET") return;
+
+  // Never intercept Firebase / Google / payment APIs
   if (
     url.hostname.includes("firebase") ||
     url.hostname.includes("googleapis.com") ||
+    url.hostname.includes("firestore") ||
     url.hostname.includes("stripe.com") ||
-    url.hostname.includes("paymob.com")
+    url.hostname.includes("paymob.com") ||
+    url.hostname.includes("llm7.io")
   ) return;
 
   // MediaPipe CDN — cache forever (large files, never change)
@@ -52,20 +58,13 @@ self.addEventListener("fetch", e => {
     return;
   }
 
-  // API — always network, never cache
+  // API GET requests — always network, never cache
   if (url.pathname.startsWith("/api/")) {
-    e.respondWith(
-      fetch(e.request).catch(() =>
-        new Response(JSON.stringify({ error: "Offline", offline: true }), {
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-    );
+    e.respondWith(fetch(e.request));
     return;
   }
 
-  // HTML (index.html + SPA routes) — NETWORK FIRST, cache as fallback only
-  // This ensures new deploys are always visible immediately
+  // HTML (SPA routes) — network first, cache as fallback
   if (
     e.request.mode === "navigate" ||
     e.request.headers.get("accept")?.includes("text/html")
@@ -73,9 +72,9 @@ self.addEventListener("fetch", e => {
     e.respondWith(
       fetch(e.request)
         .then(res => {
-          // Update cache with fresh version
           if (res.ok) {
-            caches.open(CACHE_VER).then(c => c.put(e.request, res.clone()));
+            const clone = res.clone();
+            caches.open(CACHE_VER).then(c => c.put(e.request, clone));
           }
           return res;
         })
@@ -84,12 +83,13 @@ self.addEventListener("fetch", e => {
     return;
   }
 
-  // Static assets (JS/CSS/images) — cache first (they have hashed filenames)
+  // Static assets (JS/CSS/images with hashed names) — cache first
   e.respondWith(
     caches.match(e.request).then(cached =>
       cached || fetch(e.request).then(res => {
-        if (res.ok && e.request.method === "GET") {
-          caches.open(CACHE_VER).then(c => c.put(e.request, res.clone()));
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_VER).then(c => c.put(e.request, clone));
         }
         return res;
       })
@@ -97,7 +97,7 @@ self.addEventListener("fetch", e => {
   );
 });
 
-// Force activate when main thread requests it
+// Force activate
 self.addEventListener("message", e => {
   if (e.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
