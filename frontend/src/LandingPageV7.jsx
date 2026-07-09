@@ -240,30 +240,94 @@ function SectionHead({ eyebrow, eyebrowColor, eyebrowBg, eyebrowBorder, title, s
 function GlobalStyle() {
   return (
     <style>{`
-      .lp-wrap{max-width:1280px;margin:0 auto;width:100%}
-      .lp-section{padding:120px 32px}
-      @media(max-width:1024px){.lp-section{padding:80px 24px}}
-      @media(max-width:600px){.lp-section{padding:60px 16px}}
+      *{box-sizing:border-box}
+      .lp-wrap{max-width:1200px;margin:0 auto;width:100%;padding:0 24px}
+      .lp-section{padding:72px 24px}
 
-      .lp-lift{transition:transform .3s cubic-bezier(.16,1,.3,1),border-color .3s}
-      .lp-lift:hover{transform:translateY(-6px)}
-
-      .lp-glow{position:relative;isolation:isolate}
-      .lp-glow::before{content:"";position:absolute;inset:-1.5px;border-radius:inherit;
-        background:linear-gradient(135deg,rgba(79,124,249,.55),rgba(34,211,238,.45));
-        opacity:0;transition:opacity .35s;z-index:-1;filter:blur(16px)}
-      .lp-glow:hover::before{opacity:1}
+      .lp-lift{transition:transform .25s ease,box-shadow .25s ease}
+      .lp-lift:hover{transform:translateY(-4px);box-shadow:0 16px 40px rgba(0,0,0,.3)}
 
       .lp-btn:hover{transform:translateY(-2px)}
       .lp-btn-primary:hover{box-shadow:0 8px 32px rgba(79,124,249,.5)!important}
       .lp-btn-ghost:hover{background:rgba(255,255,255,.09)!important;border-color:${C.borderM}!important}
-      .lp-btn-outline:hover{background:rgba(129,140,248,.08)!important}
       .lp-btn:active{transform:translateY(0)}
 
-      @media(prefers-reduced-motion:reduce){
-        .lp-lift,.lp-btn,.lp-glow::before{transition:none!important}
-      }
+      @keyframes lp-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.5)}}
+      @keyframes lp-drift-a{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-46%,-54%)}}
+      @keyframes lp-drift-b{0%,100%{transform:translate(0,0)}50%{transform:translate(3%,-4%)}}
+      .lp-drift-a{animation:lp-drift-a 18s ease-in-out infinite}
+      .lp-drift-b{animation:lp-drift-b 22s ease-in-out infinite}
+
       :focus-visible{outline:2px solid ${C.indigo};outline-offset:3px}
+
+      /* ── HERO ── */
+      .lp-hero-grid{
+        display:grid;
+        grid-template-columns:1fr 1.1fr 210px;
+        gap:24px;
+        align-items:start;
+      }
+      @media(max-width:1100px){
+        .lp-hero-grid{grid-template-columns:1fr 1fr;gap:20px}
+        .lp-hero-col3{display:none!important}
+      }
+      @media(max-width:720px){
+        .lp-hero-grid{grid-template-columns:1fr}
+        .lp-hero-col2{display:none!important}
+        .lp-section{padding:52px 16px}
+      }
+
+      /* ── NAV ── */
+      @media(max-width:860px){
+        .lp-nav-links,.lp-nav-actions{display:none!important}
+        .lp-nav-burger{display:flex!important}
+      }
+
+      /* ── STATS ── */
+      .lp-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+      @media(max-width:860px){.lp-stats-grid{grid-template-columns:repeat(2,1fr)}}
+      @media(max-width:480px){.lp-stats-grid{grid-template-columns:1fr 1fr}}
+
+      /* ── FEATURES ── */
+      .lp-features-wrap{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
+      @media(max-width:860px){.lp-features-wrap{grid-template-columns:1fr}}
+
+      /* ── HOW IT WORKS ── */
+      .lp-how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+      @media(max-width:720px){.lp-how-grid{grid-template-columns:1fr;gap:16px}}
+
+      /* ── CASES ── */
+      .lp-cases-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+      @media(max-width:900px){.lp-cases-grid{grid-template-columns:repeat(2,1fr)}}
+      @media(max-width:600px){.lp-cases-grid{grid-template-columns:1fr}}
+
+      /* ── PRICING ── */
+      .lp-pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+      @media(max-width:900px){.lp-pricing-grid{grid-template-columns:1fr;max-width:420px;margin:0 auto}}
+
+      /* ── TESTIMONIALS ── */
+      .lp-testi-inner{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center}
+      @media(max-width:720px){.lp-testi-inner{grid-template-columns:1fr}}
+
+      /* ── FOOTER ── */
+      .lp-footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:40px 28px}
+      @media(max-width:1024px){.lp-footer-grid{grid-template-columns:1fr 1fr 1fr}}
+      @media(max-width:600px){.lp-footer-grid{grid-template-columns:1fr 1fr}}
+
+      /* ── SOCIAL PROOF ── */
+      .lp-sp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+      @media(max-width:720px){.lp-sp-stats{grid-template-columns:repeat(2,1fr)}}
+      .lp-sp-row2{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+
+      /* ── GENERAL ── */
+      @media(max-width:480px){
+        .lp-wrap{padding:0 16px}
+        .lp-section{padding:44px 16px}
+        h1{font-size:32px!important}
+      }
+      @media(prefers-reduced-motion:reduce){
+        .lp-drift-a,.lp-drift-b,.lp-lift,.lp-btn{animation:none!important;transition:none!important}
+      }
     `}</style>
   );
 }
@@ -433,7 +497,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
   return (
     <section style={{
       minHeight: "100vh", display:"flex", alignItems:"center",
-      padding:"132px 24px 90px", position:"relative", overflow:"hidden",
+      padding:"clamp(80px,12vw,132px) 24px clamp(60px,8vw,90px)", position:"relative", overflow:"hidden",
     }}>
       {/* Ambient background */}
       <div style={{ position:"absolute", inset:0, pointerEvents:"none" }}>
@@ -467,9 +531,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
         </svg>
       </div>
 
-      <div className="lp-wrap lp-hero-grid" style={{ width:"100%",
-        display:"grid", gridTemplateColumns:"1.08fr 1fr", gap:"clamp(40px,5vw,80px)", alignItems:"center",
-        direction: ar ? "rtl" : "ltr" }}>
+      <div className="lp-wrap" style={{ width:"100%", position:"relative" }}>
+        <div className="lp-hero-grid" style={{ direction: ar ? "rtl" : "ltr" }}>
         {/* Left */}
         <div>
           <Reveal>
@@ -748,7 +811,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
             </motion.div>
           </div>
         </Reveal>
-      </div>
+        </div>{/* end lp-hero-grid */}
+      </div>{/* end lp-wrap */}
 
       {/* Scroll cue */}
       {!reduce && (
@@ -836,28 +900,25 @@ function Stats({ lang }) {
     ? [["-47%","تقليل الإجازات المرضية","من متوسط تقارير الإرغونوميا"],["3.2×","عائد الاستثمار المتوقع","بناءً على تكاليف الغياب"],["15دق","وقت الإعداد للفريق","مُختبر مع مستخدمي البيتا"],["98%","رضا مستخدمي البيتا","50+ مستخدم في 4 دول"]]
     : [["-47%","Reduction in sick leave","Ergonomics research average"],["3.2×","Projected ROI in year 1","Based on absence cost models"],["15min","Team onboarding time","Tested with beta users"],["98%","Beta user satisfaction","50+ users across 4 countries"]];
   return (
-    <section className="lp-section" style={{ paddingTop:"clamp(60px,7vw,100px)", paddingBottom:"clamp(60px,7vw,100px)" }}>
-      <div className="lp-wrap lp-stats-grid" style={{
-        display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:22 }}>
+    <section className="lp-section">
+      <div className="lp-wrap">
+        <div className="lp-stats-grid">
         {stats.map(([val, label, source], i) => (
           <Reveal key={label} delay={i * 80} y={20}>
-            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"36px 24px" }}>
+            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"clamp(20px,3vw,36px) clamp(16px,2vw,24px)" }}>
               <div style={{
-                fontSize:"clamp(38px,3.2vw,52px)", fontWeight:700, letterSpacing:"-.02em",
+                fontSize:"clamp(32px,3.2vw,52px)", fontWeight:700, letterSpacing:"-.02em",
                 background:C.gHero, WebkitBackgroundClip:"text",
-                WebkitTextFillColor:"transparent", lineHeight:1, marginBottom:12,
+                WebkitTextFillColor:"transparent", lineHeight:1, marginBottom:10,
                 fontFamily:FONT_MONO,
               }}>{val}</div>
-              <div style={{ fontSize:14.5, color:C.sub, lineHeight:1.5 }}>{label}</div>
+              <div style={{ fontSize:"clamp(13px,1.2vw,14.5px)", color:C.sub, lineHeight:1.5 }}>{label}</div>
               {source&&<div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4 }}>{source}</div>}
             </div>
           </Reveal>
         ))}
+        </div>
       </div>
-      <style>{`
-        @media(max-width:860px){.lp-stats-grid{grid-template-columns:1fr 1fr!important}}
-        @media(max-width:480px){.lp-stats-grid{grid-template-columns:1fr!important}}
-      `}</style>
     </section>
   );
 }
@@ -998,8 +1059,7 @@ function HowItWorks({ lang }) {
             position:"absolute", top:0, left:"16.6%", right:"16.6%", height:2,
             background:"linear-gradient(90deg,rgba(79,124,249,.45),rgba(34,211,238,.45),rgba(16,217,160,.45))",
           }}/>
-          <Stagger key={String(ar)} className="lp-steps-grid" gap={0.12} style={{
-            display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:28, position:"relative" }}>
+          <Stagger key={String(ar)} className="lp-how-grid" gap={0.12} style={{ position:"relative" }}>
             {steps.map((s) => (
               <StaggerItem key={s.n}>
                 <div className="lp-lift" style={{ ...card(), textAlign:"center" }}>
