@@ -2099,9 +2099,9 @@ export default function App(){
   const[sessionInsights,setSessionInsights]=useState([]);
   useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); distSmootherRef.current?.reset(); resetProportions(); },[mode]);
   const[tier,setTier]=useState(null);
-  const[acctType,setAcctType]=useState(profile?.acct_type||null);
-  // Sync acctType when profile loads (e.g. after Google login)
-  useEffect(()=>{ if(profile?.acct_type&&!acctType) setAcctType(profile.acct_type); },[profile?.acct_type,acctType]); // "company" | "personal"
+  const[acctType,setAcctType]=useState(null); // always null on setup — user must choose
+  // Sync acctType when profile loads (only if NOT on setup page)
+  useEffect(()=>{ if(profile?.acct_type&&!acctType&&page!=="setup") setAcctType(profile.acct_type); },[profile?.acct_type,acctType,page]); // "company" | "individual"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
@@ -3636,19 +3636,44 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{textAlign:"center",marginBottom:24}}>
                 <div style={{fontSize:20,fontWeight:700,marginBottom:6,color:cs.text}}>{t.acctType}</div>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
                 {[
-                  {id:"company",icon:"🏢",label:t.acctCompany,desc:t.acctCompanyDesc,color:"#0ea5e9"},
-                  {id:"personal",icon:"👤",label:t.acctPersonal,desc:t.acctPersonalDesc,color:"#6366f1"},
+                  {id:"individual",icon:"🧑‍💻",label:isAr?"مستخدم فردي":"Individual",desc:isAr?"تتبع وضعيتك الشخصية، AI Coach، وتقارير شخصية":"Personal posture tracking, AI Coach, personal reports",color:"#3b82f6",features:isAr?["داشبورد شخصي","AI Coach","تقارير PDF"]:["Personal dashboard","AI Coach","PDF reports"]},
+                  {id:"company",icon:"🏢",label:isAr?"شركة / فريق":"Company / Team",desc:isAr?"راقب فريقك كاملاً، HR analytics، وتنبيهات الخطر":"Monitor your entire team, HR analytics, at-risk alerts",color:"#10b981",features:isAr?["داشبورد الفريق","HR Panel","تقارير المؤسسة"]:["Team dashboard","HR Panel","Org reports"]},
                 ].map(o=>(
-                  <div key={o.id} onClick={()=>setAcctType(o.id)}
-                    style={{background:cs.card,border:`1.5px solid ${o.color}40`,borderRadius:14,padding:"20px 16px",cursor:"pointer",textAlign:"center",transition:"all .2s"}}
-                    onMouseEnter={e=>e.currentTarget.style.borderColor=o.color}
-                    onMouseLeave={e=>e.currentTarget.style.borderColor=o.color+"40"}>
-                    <div style={{fontSize:32,marginBottom:10}}>{o.icon}</div>
-                    <div style={{fontSize:13,fontWeight:700,color:cs.text,marginBottom:5}}>{o.label}</div>
-                    <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>{o.desc}</div>
-                  </div>
+                  <button key={o.id}
+                    type="button"
+                    onClick={()=>setAcctType(o.id)}
+                    style={{
+                      width:"100%",textAlign:"left",
+                      background:acctType===o.id?`linear-gradient(135deg,${o.color}18,${o.color}08)`:cs.card,
+                      border:`2px solid ${acctType===o.id?o.color:o.color+"30"}`,
+                      borderRadius:14,padding:"18px 18px",cursor:"pointer",
+                      transition:"all .2s",
+                      boxShadow:acctType===o.id?`0 0 0 4px ${o.color}18`:"none",
+                    }}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:14}}>
+                      <div style={{width:46,height:46,borderRadius:11,flexShrink:0,
+                        background:acctType===o.id?`${o.color}22`:"rgba(255,255,255,.06)",
+                        border:`1.5px solid ${acctType===o.id?o.color+"55":"rgba(148,163,184,.12)"}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{o.icon}</div>
+                      <div style={{flex:1}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                          <span style={{fontSize:15,fontWeight:800,color:acctType===o.id?o.color:cs.text}}>{o.label}</span>
+                          {acctType===o.id&&<span style={{fontSize:9,fontWeight:700,color:o.color,background:`${o.color}18`,border:`1px solid ${o.color}44`,borderRadius:99,padding:"2px 7px"}}>{isAr?"✓ محدد":"✓ Selected"}</span>}
+                        </div>
+                        <div style={{fontSize:11.5,color:cs.muted,lineHeight:1.55,marginBottom:8}}>{o.desc}</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                          {o.features.map((f,i)=>(
+                            <span key={i} style={{fontSize:9.5,fontWeight:600,padding:"2px 8px",borderRadius:99,
+                              background:acctType===o.id?`${o.color}15`:"rgba(255,255,255,.04)",
+                              color:acctType===o.id?o.color:cs.muted,
+                              border:`1px solid ${acctType===o.id?o.color+"30":"rgba(148,163,184,.08)"}`}}>{f}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
                 ))}
               </div>
             </>
