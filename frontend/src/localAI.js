@@ -793,11 +793,10 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
   if (!window.puter) {
     await new Promise((resolve, reject) => {
       if (document.querySelector('script[src*="puter"]')) {
-        // Already loading — wait
         const check = setInterval(() => {
           if (window.puter) { clearInterval(check); resolve(); }
         }, 100);
-        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 10000);
+        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 12000);
         return;
       }
       const s = document.createElement("script");
@@ -806,14 +805,15 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
         const check = setInterval(() => {
           if (window.puter) { clearInterval(check); resolve(); }
         }, 100);
-        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 8000);
+        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 10000);
       };
       s.onerror = () => reject(new Error("puter_load_failed"));
       document.head.appendChild(s);
     });
   }
 
-  // Build full prompt with system context
+  if (!window.puter?.ai?.chat) throw new Error("puter_not_initialized");
+
   const fullMessages = [
     { role: "system", content: systemPrompt },
     ...messages.map(m => ({
@@ -827,8 +827,21 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
     stream: false,
   });
 
-  const text = (typeof response === "string" ? response : response?.message?.content)?.trim();
-  if (!text) throw new Error("puter_empty");
+  // Puter.js v2 response format: string | {message:{content:string}} | {choices:[{message:{content}}]}
+  let text = null;
+  if (typeof response === "string") {
+    text = response.trim();
+  } else if (response?.message?.content) {
+    text = String(response.message.content).trim();
+  } else if (response?.choices?.[0]?.message?.content) {
+    text = String(response.choices[0].message.content).trim();
+  } else if (response?.content) {
+    text = String(response.content).trim();
+  } else {
+    console.error("[CorvusAI] Unknown puter response format:", JSON.stringify(response)?.slice(0,200));
+  }
+
+  if (!text) throw new Error("puter_empty_response");
   return text;
 }
 
