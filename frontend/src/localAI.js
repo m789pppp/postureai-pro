@@ -788,61 +788,95 @@ function runAnalysis(prompt,sp) {
 
 
 // AI — Puter.js (free, no API key, works from browser)
+// AI — multiple free endpoints, no login required
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
-  // Load puter.js if not already loaded
-  if (!window.puter) {
-    await new Promise((resolve, reject) => {
-      if (document.querySelector('script[src*="puter"]')) {
-        const check = setInterval(() => {
-          if (window.puter) { clearInterval(check); resolve(); }
-        }, 100);
-        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 12000);
-        return;
-      }
-      const s = document.createElement("script");
-      s.src = "https://js.puter.com/v2/";
-      s.onload = () => {
-        const check = setInterval(() => {
-          if (window.puter) { clearInterval(check); resolve(); }
-        }, 100);
-        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 10000);
-      };
-      s.onerror = () => reject(new Error("puter_load_failed"));
-      document.head.appendChild(s);
+  const userMsg = messages.filter(m => m.role === "user").map(m => m.content).join("\n");
+
+  // ── 1. Pollinations AI — completely free, no auth, no login ──────
+  try {
+    const pollinationsMsgs = [
+      { role: "system", content: systemPrompt },
+      ...messages.map(m => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: String(m.content || ""),
+      })),
+    ];
+    const res = await fetch("https://text.pollinations.ai/openai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "openai-large",
+        messages: pollinationsMsgs,
+        max_tokens: maxTokens || 700,
+        temperature: 0.5,
+        seed: 42,
+      }),
     });
+    if (res.ok) {
+      const data = await res.json();
+      const text = data?.choices?.[0]?.message?.content?.trim();
+      if (text && text.length > 20) {
+        console.info("[CorvusAI] ✅ Pollinations");
+        return text;
+      }
+    }
+  } catch(e) {
+    console.warn("[CorvusAI] Pollinations failed:", e.message);
   }
 
-  if (!window.puter?.ai?.chat) throw new Error("puter_not_initialized");
-
-  const fullMessages = [
-    { role: "system", content: systemPrompt },
-    ...messages.map(m => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: String(m.content || ""),
-    })),
-  ];
-
-  const response = await window.puter.ai.chat(fullMessages, {
-    model: "gpt-4o-mini",
-    stream: false,
-  });
-
-  // Puter.js v2 response format: string | {message:{content:string}} | {choices:[{message:{content}}]}
-  let text = null;
-  if (typeof response === "string") {
-    text = response.trim();
-  } else if (response?.message?.content) {
-    text = String(response.message.content).trim();
-  } else if (response?.choices?.[0]?.message?.content) {
-    text = String(response.choices[0].message.content).trim();
-  } else if (response?.content) {
-    text = String(response.content).trim();
-  } else {
-    console.error("[CorvusAI] Unknown puter response format:", JSON.stringify(response)?.slice(0,200));
+  // ── 2. Pollinations simple text endpoint (fallback) ──────────────
+  try {
+    const prompt = `${systemPrompt}\n\nUser: ${userMsg}\n\nAssistant:`;
+    const encoded = encodeURIComponent(prompt);
+    const res = await fetch(`https://text.pollinations.ai/${encoded}?model=openai-large&seed=42`, {
+      method: "GET",
+    });
+    if (res.ok) {
+      const text = (await res.text()).trim();
+      if (text && text.length > 20) {
+        console.info("[CorvusAI] ✅ Pollinations GET");
+        return text;
+      }
+    }
+  } catch(e) {
+    console.warn("[CorvusAI] Pollinations GET failed:", e.message);
   }
 
-  if (!text) throw new Error("puter_empty_response");
-  return text;
+  // ── 3. OpenRouter free tier — no key needed for free models ──────
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://postureai-pro-omega-nine.vercel.app",
+        "X-Title": "Corvus PostureAI",
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-3.1-8b-instruct:free",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages.map(m => ({
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: String(m.content || ""),
+          })),
+        ],
+        max_tokens: maxTokens || 700,
+        temperature: 0.5,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const text = data?.choices?.[0]?.message?.content?.trim();
+      if (text && text.length > 20) {
+        console.info("[CorvusAI] ✅ OpenRouter");
+        return text;
+      }
+    }
+  } catch(e) {
+    console.warn("[CorvusAI] OpenRouter failed:", e.message);
+  }
+
+  throw new Error("all_free_apis_failed");
 }
 
 
