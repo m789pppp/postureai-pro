@@ -387,8 +387,10 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       try {
         const p = await getUserProfile(r.user.uid);
         if (!p) await createUserProfile(r.user.uid, {
-          email: r.user.email, name: r.user.displayName||"", company: "",
-          user_type: isCompany ? "hr_admin" : "individual",
+          email: r.user.email, name: r.user.displayName||"", company: isCompany ? companyName.trim() : "",
+          user_type:   isCompany ? "hr_admin" : "individual",
+          acct_type:   isCompany ? "company"  : "individual",
+          is_org_owner: isCompany,
         });
       } catch (profileErr) {
         console.warn("[Auth] profile setup error (non-fatal):", profileErr?.code || profileErr?.message);
@@ -426,12 +428,14 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
             first_name:  fname.trim(),
             last_name:   lname.trim(),
             country,
-            profession:  isCompany ? "hr_admin" : profession.trim(),
+            profession:   isCompany ? "hr_admin" : profession.trim(),
             newsletter,
-            company:     isCompany ? companyName.trim() : "",
-            team_size:   isCompany ? teamSize : "",
-            user_type:   isCompany ? "hr_admin" : "individual",
+            company:      isCompany ? companyName.trim() : "",
+            team_size:    isCompany ? teamSize : "",
+            user_type:    isCompany ? "hr_admin" : "individual",
+            acct_type:    isCompany ? "company" : "individual",
             account_type: accountType,
+            is_org_owner: isCompany ? true : false,
           });
         } catch (profileErr) {
           console.error("[Auth] profile creation failed:", profileErr?.code || profileErr?.message);

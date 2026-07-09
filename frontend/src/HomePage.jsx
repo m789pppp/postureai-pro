@@ -10,11 +10,15 @@ import { tierAtLeast } from "./lib/tierQuality.js";
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
   if (isAdmin) return "platform_admin";
-  // HR admin: explicitly set — NOT just having company_id
-  if (isHRAdmin) return "hr_admin";
-  // Employee: belongs to a company but not HR
-  if (profile?.company_id && !isHRAdmin) return "employee";
-  // Default: personal/individual user
+  // HR/Company: prop OR profile fields
+  if (isHRAdmin
+    || profile?.user_type === "hr_admin"
+    || profile?.acct_type === "company"
+    || profile?.is_org_owner === true
+  ) return "hr_admin";
+  // Employee: belongs to a company but is NOT hr_admin
+  if (profile?.company_id) return "employee";
+  // Default: individual user
   return "individual";
 }
 
