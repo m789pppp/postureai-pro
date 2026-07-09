@@ -726,12 +726,21 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                   {id:"individual", en:"👤 Individual", ar:"👤 فردي"},
                   {id:"company",    en:"🏢 Company / HR", ar:"🏢 شركات وفرق"},
                 ].map(m=>(
-                  <button key={m.id} style={{
-                    flex:1,padding:"7px 4px",border:"none",borderRadius:7,
-                    fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
-                    background:"transparent",color:t.muted,
-                    transition:"all .2s",
-                  }}>
+                  <button key={m.id}
+                    type="button"
+                    onClick={()=>setAccountType(m.id)}
+                    style={{
+                      flex:1,padding:"7px 4px",border:"none",borderRadius:7,
+                      fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+                      background: accountType===m.id
+                        ? (m.id==="company" ? "rgba(16,185,129,.15)" : "rgba(59,130,246,.15)")
+                        : "transparent",
+                      color: accountType===m.id
+                        ? (m.id==="company" ? "#34d399" : "#60a5fa")
+                        : t.muted,
+                      boxShadow: accountType===m.id ? `inset 0 0 0 1.5px ${m.id==="company"?"rgba(16,185,129,.4)":"rgba(59,130,246,.4)"}` : "none",
+                      transition:"all .2s",
+                    }}>
                     {isAr?m.ar:m.en}
                   </button>
                 ))}
