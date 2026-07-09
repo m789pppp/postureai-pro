@@ -787,43 +787,49 @@ function runAnalysis(prompt,sp) {
 // ── Vercel AI Proxy helpers ──────────────────────────────────────
 
 
-// AI Proxy — tries multiple endpoints in order
+// AI — Puter.js (free, no API key, works from browser)
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
-  const proxyBody = JSON.stringify({
-    messages,
-    system_prompt: systemPrompt,
-    max_tokens: maxTokens || 700,
-    temperature: 0.5,
-  });
-
-  const endpoints = [
-    "/api/llm",           // Vercel → Flask/Edge → LLM7
-    "/api/ai-chat",       // Vercel Edge Function direct (if routing works)
-  ];
-
-  for (const endpoint of endpoints) {
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: proxyBody,
-      });
-      if (!res.ok) {
-        console.warn(`[CorvusAI] ${endpoint} returned ${res.status}`);
-        continue;
+  // Load puter.js if not already loaded
+  if (!window.puter) {
+    await new Promise((resolve, reject) => {
+      if (document.querySelector('script[src*="puter"]')) {
+        // Already loading — wait
+        const check = setInterval(() => {
+          if (window.puter) { clearInterval(check); resolve(); }
+        }, 100);
+        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 10000);
+        return;
       }
-      const data = await res.json();
-      const text = data?.text?.trim();
-      if (text) {
-        console.info(`[CorvusAI] Success via ${endpoint}`);
-        return text;
-      }
-    } catch(e) {
-      console.warn(`[CorvusAI] ${endpoint} failed:`, e.message);
-    }
+      const s = document.createElement("script");
+      s.src = "https://js.puter.com/v2/";
+      s.onload = () => {
+        const check = setInterval(() => {
+          if (window.puter) { clearInterval(check); resolve(); }
+        }, 100);
+        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 8000);
+      };
+      s.onerror = () => reject(new Error("puter_load_failed"));
+      document.head.appendChild(s);
+    });
   }
 
-  throw new Error("all_proxies_failed");
+  // Build full prompt with system context
+  const fullMessages = [
+    { role: "system", content: systemPrompt },
+    ...messages.map(m => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: String(m.content || ""),
+    })),
+  ];
+
+  const response = await window.puter.ai.chat(fullMessages, {
+    model: "gpt-4o-mini",
+    stream: false,
+  });
+
+  const text = (typeof response === "string" ? response : response?.message?.content)?.trim();
+  if (!text) throw new Error("puter_empty");
+  return text;
 }
 
 
