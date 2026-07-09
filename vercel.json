@@ -57,6 +57,10 @@
       "dest": "/assets/$1"
     },
     {
+      "src": "/api/llm",
+      "dest": "/api/llm.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/index.py"
     },
