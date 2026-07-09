@@ -110,7 +110,7 @@ function Input({ label, value, onChange, placeholder, type = "text", hint }) {
 
 /* ── Step 0: Account Type Picker ────────────────────────────────── */
 function StepAccountType({ isAr, onNext, setProfile }) {
-  const [chosen, setChosen] = React.useState(null);
+  const [chosen, setChosen] = useState(null);
   const types = [
     {
       id:"individual", icon:"🧑‍💻",
