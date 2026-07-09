@@ -259,7 +259,7 @@ function AITextSection({ loading, data, error, onRetry, isAr, D }) {
   );
 }
 
-export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose }) {
+export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose , effectiveTier}) {
   const [tab, setTab]               = useState("executive");
   const [loading, setLoading]       = useState(false);
   const [data, setData]             = useState(null);   // AI-generated text
@@ -300,7 +300,7 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
   // ── AI summary builder ─────────────────────────────────────────
   const buildContext = useCallback(() => ({
     name:         profile?.name?.split(" ")[0] || "User",
-    tier:         profile?.tier || "professional",
+    tier:         (effectiveTier || profile?.tier || "standard") || "professional",
     avgScore,
     weekAvg,
     lastWeekAvg,
@@ -655,9 +655,9 @@ Max 280 words.`,
               <div>
                 <div style={{ ...D.t.label, color:D.c.muted, marginBottom:12 }}>{isAr?"توزيع مستويات الأداء":"Performance Distribution"}</div>
                 {[
-                  { lbl:isAr?"ممتاز (80+)":"Excellent (80+)", pct:Math.round(scores.filter(s=>s>=80).length/Math.max(scores.length,1)*100), col:D.c.success },
-                  { lbl:isAr?"جيد (60-79)":"Good (60-79)",    pct:Math.round(scores.filter(s=>s>=60&&s<80).length/Math.max(scores.length,1)*100), col:D.c.accent },
-                  { lbl:isAr?"ضعيف (<60)":"Weak (<60)",      pct:Math.round(scores.filter(s=>s<60).length/Math.max(scores.length,1)*100), col:D.c.danger },
+                  { lbl:isAr?"ممتاز (80+)":"Excellent (80+)", pct:Math.round(last30Scores.filter(s=>s>=80).length/Math.max(last30Scores.length,1)*100), col:D.c.success },
+                  { lbl:isAr?"جيد (60-79)":"Good (60-79)",    pct:Math.round(last30Scores.filter(s=>s>=60&&s<80).length/Math.max(last30Scores.length,1)*100), col:D.c.accent },
+                  { lbl:isAr?"ضعيف (<60)":"Weak (<60)",      pct:Math.round(last30Scores.filter(s=>s<60).length/Math.max(last30Scores.length,1)*100), col:D.c.danger },
                 ].map((b,i)=>(
                   <div key={i} style={{ marginBottom:10 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>

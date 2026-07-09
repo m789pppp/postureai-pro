@@ -57,8 +57,8 @@
       "dest": "/assets/$1"
     },
     {
-      "src": "/api/ai-chat",
-      "dest": "/api/ai-chat.js"
+      "src": "/api/llm",
+      "dest": "/api/llm.js"
     },
     {
       "src": "/api/(.*)",
@@ -68,10 +68,5 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ],
-  "functions": {
-    "api/ai-chat.js": {
-      "runtime": "edge"
-    }
-  }
+  ]
 }

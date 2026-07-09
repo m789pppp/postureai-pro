@@ -4,7 +4,7 @@
  * Proxies LLM7.io server-side (no CORS), no API key needed
  */
 
-export const config = { runtime: "edge" };
+export const runtime = "edge";
 
 const MODELS = [
   "gpt-4o-mini",
