@@ -55,7 +55,7 @@ const SUGGESTIONS = {
 };
 
 // ── Main AI Coach Component ───────────────────────────────────────
-export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClose }) {
+export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClose , effectiveTier}) {
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState("");
   const [loading,      setLoading]     = useState(false);
@@ -80,9 +80,9 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
 
   // ── Coach quality/limits — single source of truth, correctly handles
   //    B2B plans (b2b_growth/b2b_enterprise) via featureTier() mapping ──
-  const quality        = qualityFor(profile?.tier);
+  const quality        = qualityFor((effectiveTier || profile?.tier || "standard"));
   const coachLimit      = quality.aiCoach.monthlyLimit;
-  const coachLimitLabel = tierCoachLimitLabel(profile?.tier, lang);
+  const coachLimitLabel = tierCoachLimitLabel((effectiveTier || profile?.tier || "standard"), lang);
 
   const T = {
     en: {
@@ -181,14 +181,14 @@ export function AICoach({ profile, sessions, calibration, cs, lang = "en", onClo
       worst_time:       worstHour,
       top_alerts:       topAlerts,
       has_calibration:  !!calibration,
-      tier:             profile?.tier || "standard",
+      tier:             (effectiveTier || profile?.tier || "standard") || "standard",
       neck_risk:        neckRisk,
       fatigue_score:    fatigueScore,
       burnout_risk:     burnoutRisk,
       streak_days:      profile?.streak_days || 0,
       user_name:        profile?.name?.split(" ")[0] || "",
     };
-  }, [sessions, calibration, profile?.tier, profile?.streak_days, profile?.name]);
+  }, [sessions, calibration, (effectiveTier || profile?.tier || "standard"), profile?.streak_days, profile?.name]);
 
   // Welcome message — re-run when lang changes so it stays in correct language
   useEffect(() => {
@@ -357,7 +357,7 @@ Answer EVERY question professionally. Never say "I can't help with that" — eng
             ["📊", isAr ? `${context.avg_score}/100 معدل` : `${context.avg_score}/100 avg`],
             ["📅", isAr ? `${context.sessions_count} جلسة` : `${context.sessions_count} sessions`],
             ["🎯", context.has_calibration ? (isAr ? "معايَر ✓" : "Calibrated") : (isAr ? "غير معايَر" : "Not calibrated")],
-            ["⭐", profile?.tier || "standard"],
+            ["⭐", (effectiveTier || profile?.tier || "standard") || "standard"],
             [coachLimit === -1 ? "💬" : "💬", coachLimit === -1 ? (isAr ? "∞ رسائل" : "∞ msgs") : `${coachLimit} ${isAr ? "رسالة/شهر" : "msgs/mo"}`],
           ].map(([icon, label]) => (
             <div key={label} style={{ fontSize: 10, color: DARK.muted, whiteSpace: "nowrap", display: "flex", gap: 4, alignItems: "center" }}>

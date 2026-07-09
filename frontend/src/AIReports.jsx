@@ -68,7 +68,7 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
   const _cleanName = (profile?.name || (isAr ? "المستخدم" : "User")).replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
   const safeName  = escapeHtml(_cleanName);
   const safeTitle = escapeHtml(reportTitle);
-  const planLabel = escapeHtml(qualityFor(profile?.tier).label[isAr ? "ar" : "en"]);
+  const planLabel = escapeHtml(qualityFor(_tier).label[isAr ? "ar" : "en"]);
 
   // ── Dynamic tier label (Fix: was hardcoded "Pro")
   const tierLabel = tier === "elite" ? "Elite" : tier === "professional" ? "Pro" : tier === "basic" ? "Basic" : "";
@@ -264,7 +264,7 @@ function ReportSkeleton() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "en", onClose }) {
+export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "en", effectiveTier, onClose }) {
   const [tab, setTab]           = useState("summary");
   const [aiText, setAiText]     = useState({});  // keyed by tab
   const [loading, setLoading]   = useState(false);
@@ -290,7 +290,9 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   // Canonical tier gating — single source of truth is tierQuality.js.
   // standard/basic → pdfDetail "none" (no export); professional → "standard";
   // elite → "full". Keep in sync with backend/config/tier_quality.py.
-  const pdfDetail = qualityFor(profile?.tier).pdfDetail;
+  // effectiveTier accounts for trial (e.g. is_trial with trial_tier="elite") 
+  const _tier = effectiveTier || profile?.tier || "standard";
+  const pdfDetail = qualityFor(_tier).pdfDetail;
   const canExportPdf = pdfDetail !== "none";
 
   // Individual vs Company — same detection pattern used everywhere else.
@@ -310,19 +312,36 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   const lastWeekAvg = avg(lastWeek.map(s => s.avg_score || 0));
   const trendPct   = pct(weekAvg, lastWeekAvg);
 
-  const system = `You are Corvus's report generation engine. Generate professional, concise reports in ${isAr ? "Arabic" : "English"}.
-Use markdown: ## for sections, - for bullets, **bold** for key data. Be data-driven, executive-ready. Max 300 words.`;
+  const _name = profile?.name?.split(" ")[0] || (isAr ? "المستخدم" : "Patient");
+  const system = `You are Dr. Corvus — the clinical AI physiotherapist inside Corvus PostureAI Pro.
+
+ROLE: Generate professional, evidence-based clinical posture reports.
+
+PATIENT: ${_name} | Tier: ${_tier}
+All-time average score: ${avgScore}/100 | This week: ${weekAvg}/100 | Last week: ${lastWeekAvg}/100
+Trend: ${trendPct > 0 ? "+" : ""}${trendPct}% week-over-week | Total sessions: ${sessions.length} | This week: ${thisWeek.length}
+
+STANDARDS:
+- Use ## section headers, **bold** clinical terms, numbered protocols
+- Reference the patient's ACTUAL numbers — no generic statements
+- Give evidence-based recommendations with timeframes
+- Be concise and executive-ready
+${isAr ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية مصرية)." : "LANGUAGE: Respond in clear, professional English."}`;
 
   const prompts = {
-    summary: () => `Generate a weekly automated summary report for ${profile?.name || "User"}:
-Data: avg score ${avgScore}/100, this week: ${weekAvg}/100, last week: ${lastWeekAvg}/100, trend: ${trendPct}, total sessions: ${sessions.length}, this week: ${thisWeek.length}
+    summary: () => `Generate a weekly clinical posture summary for ${_name}.
 
-## Executive Summary
+## Executive Summary — ${_name}
+[2-3 sentences: interpret ${weekAvg}/100 this week vs ${lastWeekAvg}/100 last week (${trendPct > 0 ? "+" : ""}${trendPct}% trend). What does this mean clinically for MSK load?]
+
 ## Performance vs Last Week
-## Top 3 Recommendations for Next Week`,
+[Specific comparison with clinical interpretation. Reference session count: ${thisWeek.length} this week vs last week.]
+
+## Top 3 Clinical Priorities for Next Week
+[3 numbered, specific, evidence-based interventions — not generic advice. Include WHY and TIMEFRAME for each.]`,
 
     manager: () => `Generate a manager insights report:
-Employee: ${profile?.name || "User"} | Tier: ${profile?.tier || "professional"}
+Patient: ${_name} | Tier: ${_tier}
 Avg score: ${avgScore}/100 | This week: ${weekAvg}/100 | Sessions/week: ${thisWeek.length} | Total: ${sessions.length}
 Trend: ${trendPct} week-over-week
 
@@ -615,7 +634,7 @@ This user score: ${avgScore}/100
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {[
                     { l: isAr ? "الاسم" : "Name",          v: profile?.name || "—" },
-                    { l: isAr ? "الخطة" : "Plan",           v: profile?.tier || "professional" },
+                    { l: isAr ? "الخطة" : "Plan",           v: _tier },
                     { l: isAr ? "إجمالي الجلسات" : "Total", v: sessions.length },
                     { l: isAr ? "آخر جلسة" : "Last Session", v: sessions[0] ? fmt(sessions[0].created_at) : "—" },
                     { l: isAr ? "المعدل الكلي" : "Avg Score", v: `${avgScore}/100` },

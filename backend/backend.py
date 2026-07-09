@@ -15780,6 +15780,69 @@ def org_send_invite():
     except Exception as e:
         return safe_error(e)
 
+@app.route("/api/llm", methods=["POST", "OPTIONS"])
+def llm_proxy():
+    """
+    LLM proxy — forwards requests to LLM7.io server-side (no CORS issues).
+    Used by AI Coach, AI Insights, Predictive AI.
+    No auth required — rate limited by IP via Vercel.
+    """
+    if req.method == "OPTIONS":
+        resp = jsonify({})
+        resp.headers["Access-Control-Allow-Origin"]  = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        return resp, 204
+
+    try:
+        data = req.get_json(force=True) or {}
+        messages     = data.get("messages", [])
+        system_prompt = data.get("system_prompt", "You are Dr. Corvus, a clinical physiotherapy AI.")
+        max_tokens   = int(data.get("max_tokens", 700))
+        temperature  = float(data.get("temperature", 0.5))
+
+        if not messages:
+            return jsonify({"error": "messages required"}), 400
+
+        llm_messages = [{"role": "system", "content": system_prompt}] + [
+            {"role": ("assistant" if m.get("role") == "assistant" else "user"),
+             "content": str(m.get("content", ""))}
+            for m in messages
+        ]
+
+        models = ["gpt-4o-mini", "meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-r1"]
+
+        import requests as _req
+        for model in models:
+            try:
+                r = _req.post(
+                    "https://api.llm7.io/v1/chat/completions",
+                    headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
+                    json={"model": model, "messages": llm_messages,
+                          "max_tokens": max_tokens, "temperature": temperature},
+                    timeout=25,
+                )
+                if r.status_code == 429:
+                    continue
+                if not r.ok:
+                    continue
+                text = (r.json().get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+                if not text:
+                    continue
+                resp = jsonify({"ok": True, "text": text, "model": model})
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                return resp, 200
+            except Exception:
+                continue
+
+        resp = jsonify({"ok": False, "error": "All AI models unavailable"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp, 503
+
+    except Exception as e:
+        return safe_error(e)
+
+
 
 
 

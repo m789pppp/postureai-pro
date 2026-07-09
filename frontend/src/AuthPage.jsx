@@ -564,18 +564,20 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       }}>
 
         {/* Logo */}
-        <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:22}}>
           <div style={{
-            width:48,height:48,borderRadius:13,margin:"0 auto 12px",
+            width:38,height:38,borderRadius:10,flexShrink:0,
             background:"linear-gradient(135deg,#1a56db 0%,#0891b2 100%)",
             display:"flex",alignItems:"center",justifyContent:"center",
-            fontSize:22,
-            boxShadow:"0 8px 24px rgba(26,86,219,.3)",
+            fontSize:19, color:"#fff",
+            boxShadow:"0 6px 20px rgba(26,86,219,.35)",
             animation:"logoAnim 4s ease-in-out infinite",
           }}>◈</div>
-          <div style={{fontSize:19,fontWeight:800,color:t.text,letterSpacing:"-.025em"}}>Corvus</div>
-          <div style={{fontSize:12,color:t.textSub,marginTop:2,letterSpacing:".01em"}}>
-            {isAr?"صحة العمل بالذكاء الاصطناعي":"AI Workplace Health Platform"}
+          <div style={{lineHeight:1.1}}>
+            <div style={{fontSize:17,fontWeight:800,color:t.text,letterSpacing:"-.025em"}}>Corvus</div>
+            <div style={{fontSize:9.5,color:t.muted,marginTop:2,letterSpacing:".05em",textTransform:"uppercase"}}>
+              {isAr?"صحة العمل بالذكاء الاصطناعي":"AI Posture Coaching"}
+            </div>
           </div>
         </div>
 
@@ -677,18 +679,50 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
             </div>
 
             {/* Heading */}
-            <div style={{marginBottom:20}}>\
-              <h1 style={{fontSize:19,fontWeight:700,color:t.text,letterSpacing:"-.02em",margin:0,marginBottom:4}}>
+            <div style={{marginBottom:view==="signup"?16:20}}>
+              <h1 style={{fontSize:20,fontWeight:800,color:t.text,letterSpacing:"-.02em",margin:0,marginBottom:4,textAlign:"center"}}>
                 {view==="signup"
-                  ?(isAr?"إنشاء حساب جديد":"Create your account")
-                  :(isAr?"أهلاً بعودتك 👋":"Welcome back")}
+                  ?(isAr?"ابدأ مجاناً":"Start for free")
+                  :(isAr?"أهلاً بعودتك":"Welcome back")}
               </h1>
-              <p style={{fontSize:13,color:t.textSub,margin:0}}>
-                {view==="signup"
-                  ?(isAr?"مجاني تماماً — لا بطاقة بنكية مطلوبة":"Completely free — no credit card required")
-                  :(isAr?"سجّل دخول للمتابعة من حيث توقفت":"Sign in to continue where you left off")}
-              </p>
+              {view==="signup" ? (
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+                  background:"rgba(16,217,160,.08)",border:"1px solid rgba(16,217,160,.18)",
+                  borderRadius:99,padding:"5px 14px",margin:"10px auto 0",width:"fit-content"}}>
+                  <span style={{width:5,height:5,borderRadius:"50%",background:"#10d9a0",flexShrink:0}}/>
+                  <span style={{fontSize:11.5,color:"#10d9a0",fontWeight:600}}>
+                    {isAr?"7 أيام مجانية · بدون بطاقة بنكية":"7-day free trial · No credit card"}
+                  </span>
+                </div>
+              ) : (
+                <p style={{fontSize:13,color:t.textSub,margin:0,textAlign:"center"}}>
+                  {isAr?"سجّل دخول للمتابعة من حيث توقفت":"Sign in to continue where you left off"}
+                </p>
+              )}
             </div>
+
+            {/* Role tabs — signup only */}
+            {view==="signup" && (
+              <div style={{
+                display:"flex",background:t.faint,
+                border:`1px solid ${t.border}`,
+                borderRadius:10,padding:3,marginBottom:16,gap:3,
+              }}>
+                {[
+                  {id:"individual", en:"👤 Individual", ar:"👤 فردي"},
+                  {id:"company",    en:"🏢 Company / HR", ar:"🏢 شركات وفرق"},
+                ].map(m=>(
+                  <button key={m.id} style={{
+                    flex:1,padding:"7px 4px",border:"none",borderRadius:7,
+                    fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+                    background:"transparent",color:t.muted,
+                    transition:"all .2s",
+                  }}>
+                    {isAr?m.ar:m.en}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Social buttons — TOP (industry standard: Google first) */}
             <div style={{display:"flex",gap:10,marginBottom:14}}>
