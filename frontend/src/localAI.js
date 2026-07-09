@@ -787,26 +787,43 @@ function runAnalysis(prompt,sp) {
 // ── Vercel AI Proxy helpers ──────────────────────────────────────
 
 
-// Vercel Edge Function proxy → LLM7.io (server-side, no CORS)
+// AI Proxy — tries multiple endpoints in order
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
-  const res = await fetch("/api/llm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messages,
-      system_prompt: systemPrompt,
-      max_tokens: maxTokens || 700,
-      temperature: 0.5,
-    }),
+  const proxyBody = JSON.stringify({
+    messages,
+    system_prompt: systemPrompt,
+    max_tokens: maxTokens || 700,
+    temperature: 0.5,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error || `proxy ${res.status}`);
+
+  const endpoints = [
+    "/api/llm",           // Vercel → Flask/Edge → LLM7
+    "/api/ai-chat",       // Vercel Edge Function direct (if routing works)
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: proxyBody,
+      });
+      if (!res.ok) {
+        console.warn(`[CorvusAI] ${endpoint} returned ${res.status}`);
+        continue;
+      }
+      const data = await res.json();
+      const text = data?.text?.trim();
+      if (text) {
+        console.info(`[CorvusAI] Success via ${endpoint}`);
+        return text;
+      }
+    } catch(e) {
+      console.warn(`[CorvusAI] ${endpoint} failed:`, e.message);
+    }
   }
-  const data = await res.json();
-  const text = data?.text?.trim();
-  if (!text) throw new Error(data?.error || "proxy_empty");
-  return text;
+
+  throw new Error("all_proxies_failed");
 }
 
 
