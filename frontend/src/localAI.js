@@ -789,7 +789,7 @@ function runAnalysis(prompt,sp) {
 
 // Vercel Edge Function proxy → LLM7.io (server-side, no CORS)
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
-  const res = await fetch("/api/ai-chat", {
+  const res = await fetch("/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
