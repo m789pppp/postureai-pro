@@ -2133,7 +2133,7 @@ export default function HomePage({
         cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
         onCoach={openCoach} onBilling={openBilling} onAnalytics={openAnalytics}
         onCalib={openCalib} onReports={openReports} addToast={addToast}
-        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
+        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onShareReport={shareReport}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin}
         setShowGamification={setShowGamification}
         setShowGrowthHub={setShowGrowthHub}
