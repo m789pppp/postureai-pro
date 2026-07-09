@@ -3295,14 +3295,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── Role Detection ─────────────────────────────────────────────
   // platform_admin: is_admin=true in Firestore (set manually, never by client)
   const isAdmin   = profile?.is_admin === true;
-  // hr_admin: org owner OR explicitly set as HR — NOT just having company_id
+  // hr_admin: org owner OR explicitly set as HR OR signed up as company
   const isHRAdmin = isAdmin
     || profile?.is_org_owner === true
     || profile?.user_type === "hr_admin"
+    || profile?.acct_type === "company"
     || profile?.is_hr === true
     || (HR_EMAILS||[]).includes(user?.email||"");
-  // employee: has company_id but is NOT hr_admin
-  // individual: no company_id and not HR
+  // employee: has company_id but NOT hr_admin → role() handles this
+  // individual: no company_id, not HR → role() default
 
   // Shared props
   const shared={cs,t,darkMode,setDarkMode,lang,setLang,addToast};
