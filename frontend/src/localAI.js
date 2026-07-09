@@ -801,7 +801,7 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
         content: String(m.content || ""),
       })),
     ];
-    const res = await fetch("https://text.pollinations.ai/openai", {
+    const res = await fetch("https://text.pollinations.ai/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -824,11 +824,11 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
     console.warn("[CorvusAI] Pollinations failed:", e.message);
   }
 
-  // ── 2. Pollinations simple text endpoint (fallback) ──────────────
+  // ── 2. Pollinations GET endpoint (fallback) ─────────────────────
   try {
     const prompt = `${systemPrompt}\n\nUser: ${userMsg}\n\nAssistant:`;
     const encoded = encodeURIComponent(prompt);
-    const res = await fetch(`https://text.pollinations.ai/${encoded}?model=openai-large&seed=42`, {
+    const res = await fetch(`https://text.pollinations.ai/${encoded}?model=openai&seed=42`, {
       method: "GET",
     });
     if (res.ok) {
