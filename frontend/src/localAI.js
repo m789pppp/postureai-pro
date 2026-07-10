@@ -787,34 +787,10 @@ function runAnalysis(prompt,sp) {
 // ── Vercel AI Proxy helpers ──────────────────────────────────────
 
 
-// AI — Puter.js (free, no API key, works from browser)
+
+// AI — race all 3 simultaneously, fastest response wins
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
-  // Load puter.js if not already loaded
-  if (!window.puter) {
-    await new Promise((resolve, reject) => {
-      if (document.querySelector('script[src*="puter"]')) {
-        const check = setInterval(() => {
-          if (window.puter) { clearInterval(check); resolve(); }
-        }, 100);
-        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 12000);
-        return;
-      }
-      const s = document.createElement("script");
-      s.src = "https://js.puter.com/v2/";
-      s.onload = () => {
-        const check = setInterval(() => {
-          if (window.puter) { clearInterval(check); resolve(); }
-        }, 100);
-        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 10000);
-      };
-      s.onerror = () => reject(new Error("puter_load_failed"));
-      document.head.appendChild(s);
-    });
-  }
-
-  if (!window.puter?.ai?.chat) throw new Error("puter_not_initialized");
-
-  const fullMessages = [
+  const allMsgs = [
     { role: "system", content: systemPrompt },
     ...messages.map(m => ({
       role: m.role === "assistant" ? "assistant" : "user",
@@ -822,28 +798,60 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
     })),
   ];
 
-  const response = await window.puter.ai.chat(fullMessages, {
-    model: "gpt-4o-mini",
-    stream: false,
-  });
+  const go = (url, opts, parse) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 18000);
+    return fetch(url, { ...opts, signal: ctrl.signal })
+      .finally(() => clearTimeout(t))
+      .then(async r => {
+        if (!r.ok) throw new Error(`${r.status}`);
+        const text = await parse(r);
+        if (!text || text.length < 15) throw new Error("empty");
+        return text;
+      });
+  };
 
-  // Puter.js v2 response format: string | {message:{content:string}} | {choices:[{message:{content}}]}
-  let text = null;
-  if (typeof response === "string") {
-    text = response.trim();
-  } else if (response?.message?.content) {
-    text = String(response.message.content).trim();
-  } else if (response?.choices?.[0]?.message?.content) {
-    text = String(response.choices[0].message.content).trim();
-  } else if (response?.content) {
-    text = String(response.content).trim();
-  } else {
-    console.error("[CorvusAI] Unknown puter response format:", JSON.stringify(response)?.slice(0,200));
-  }
+  return Promise.any([
+    // 1. Pollinations POST — GPT-4o quality, free, no auth
+    go("https://text.pollinations.ai/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: maxTokens || 700, temperature: 0.5 }),
+    }, async r => {
+      const d = await r.json();
+      const t = d?.choices?.[0]?.message?.content?.trim();
+      console.info("[CorvusAI] ✅ Pollinations POST");
+      return t;
+    }),
 
-  if (!text) throw new Error("puter_empty_response");
-  return text;
+    // 2. OpenRouter — llama-3.1-8b free, fast
+    go("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://postureai-pro-omega-nine.vercel.app",
+        "X-Title": "Corvus PostureAI",
+      },
+      body: JSON.stringify({ model: "meta-llama/llama-3.1-8b-instruct:free", messages: allMsgs, max_tokens: maxTokens || 700 }),
+    }, async r => {
+      const d = await r.json();
+      const t = d?.choices?.[0]?.message?.content?.trim();
+      console.info("[CorvusAI] ✅ OpenRouter");
+      return t;
+    }),
+
+    // 3. Pollinations GET — simplest fallback
+    go(`https://text.pollinations.ai/${encodeURIComponent(
+      allMsgs.map(m => `${m.role}: ${m.content}`).join("\n")
+    )}?model=openai`, { method: "GET" }, async r => {
+      const t = (await r.text()).trim();
+      console.info("[CorvusAI] ✅ Pollinations GET");
+      return t;
+    }),
+
+  ]).catch(() => { throw new Error("all_free_apis_failed"); });
 }
+
 
 
 
