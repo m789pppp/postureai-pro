@@ -473,10 +473,12 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div style={{
-      minHeight:"100vh",background:t.bg,
-      display:"flex",alignItems:"center",justifyContent:"center",
+      minHeight:"100vh", background:t.bg,
+      display:"flex", alignItems:"flex-start", justifyContent:"center",
       fontFamily:"'Inter','IBM Plex Sans Arabic',system-ui,-apple-system,sans-serif",
-      direction:isAr?"rtl":"ltr",padding:"24px 16px",position:"relative",
+      direction:isAr?"rtl":"ltr",
+      padding:"clamp(80px,10vw,100px) 16px clamp(32px,5vw,48px)",
+      position:"relative", overflowY:"auto",
     }}>
       <MeshBg dark={dark}/>
 

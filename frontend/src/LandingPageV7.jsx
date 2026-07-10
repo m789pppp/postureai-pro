@@ -313,6 +313,8 @@ function GlobalStyle() {
       }
 
       @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.lp-btn::after{display:none}}
+      @media(max-width:640px){.lp-popular-card{transform:none!important}}
+      @media(max-width:900px){.lp-hero-mobile-stats{display:flex!important}}
     `}</style>
   );
 }
@@ -349,6 +351,7 @@ function ScrollProgress() {
 function Nav({ lang, setLang, onCTA }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("");
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
@@ -356,7 +359,15 @@ function Nav({ lang, setLang, onCTA }) {
     return () => window.removeEventListener("scroll", h);
   }, []);
 
-  // Close the mobile menu automatically if the viewport grows back to desktop
+  useEffect(() => {
+    const sections = ["features","casestudies","pricing"];
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if(e.isIntersecting) setActiveSection(e.target.id); });
+    }, { threshold: 0.3 });
+    sections.forEach(id => { const el = document.getElementById(id); if(el) obs.observe(el); });
+    return () => obs.disconnect();
+  }, []);
+
   useEffect(() => {
     const h = () => { if (window.innerWidth > 860) setMobileOpen(false); };
     window.addEventListener("resize", h);
@@ -398,15 +409,23 @@ function Nav({ lang, setLang, onCTA }) {
 
         {/* Desktop links */}
         <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:4 }}>
-          {links.map(([label, href]) => (
+          {links.map(([label, href]) => {
+            const sectionId = href.replace("#","");
+            const isActive = activeSection === sectionId;
+            return (
             <a key={href} href={href} style={{
-              color:C.sub, textDecoration:"none", padding:"9px 16px",
-              borderRadius:8, fontSize:14.5, fontWeight:500,
+              color: isActive ? C.text : C.sub,
+              textDecoration:"none", padding:"9px 14px",
+              borderRadius:8, fontSize:14, fontWeight: isActive ? 600 : 500,
               transition:"color .2s",
+              borderBottom: isActive ? `2px solid ${C.blue}` : "2px solid transparent",
             }}
             onMouseEnter={e => e.currentTarget.style.color = C.text}
-            onMouseLeave={e => e.currentTarget.style.color = C.sub}>{label}</a>
-          ))}
+            onMouseLeave={e => e.currentTarget.style.color = isActive ? C.text : C.sub}>
+              {label}
+            </a>
+            );
+          })}
         </div>
 
         {/* Desktop actions */}
@@ -649,15 +668,25 @@ function Hero({ lang, onCTA, mode, setMode }) {
             </div>
           </Reveal>
 
+          {/* Mobile-only mini stats */}
           <Reveal delay={260}>
-            <div style={{ display:"flex", gap:"10px 26px", flexWrap:"wrap" }}>
+            <div className="lp-hero-mobile-stats" style={{
+              display:"none", gap:0,
+              background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
+              borderRadius:16, overflow:"hidden", marginTop:20,
+            }}>
               {(ar
-                ? ["بدون بطاقة ائتمان","7 أيام مجاناً","إعداد في 5 دقائق"]
-                : ["No credit card","7-day free trial","Setup in 5 min"]
-              ).map(t => (
-                <span key={t} style={{ display:"flex", alignItems:"center", gap:7, color:C.muted, fontSize:14, fontWeight:500 }}>
-                  <span style={{ color:C.green, fontSize:13 }}>✓</span>{t}
-                </span>
+                ? [["50+","مستخدم بيتا","👥"],["4.9★","تقييم","⭐"],["أسبوعان","للتحسن","⏱"],["0","فيديو محفوظ","🛡"]]
+                : [["50+","beta users","👥"],["4.9★","rating","⭐"],["2 wks","to improve","⏱"],["0","video stored","🛡"]]
+              ).map(([val,label,icon],i)=>(
+                <div key={label} style={{
+                  flex:1, textAlign:"center", padding:"14px 8px",
+                  borderRight: i<3 ? `1px solid ${C.border}` : "none",
+                }}>
+                  <div style={{ fontSize:12, marginBottom:3 }}>{icon}</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{val}</div>
+                  <div style={{ fontSize:9.5, color:C.muted, marginTop:3 }}>{label}</div>
+                </div>
               ))}
             </div>
           </Reveal>
@@ -1328,7 +1357,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                 position:"relative", height:"100%", display:"flex", flexDirection:"column",
                 padding:"clamp(28px,2.6vw,36px)",
                 transform: p.popular ? "scale(1.035)" : "none",
-              }}>
+              }} className={p.popular ? "lp-lift lp-popular-card" : "lp-lift"}>
                 {p.popular && (
                   <div style={{
                     position:"absolute", top:-14, left:"50%", transform:"translateX(-50%)",
