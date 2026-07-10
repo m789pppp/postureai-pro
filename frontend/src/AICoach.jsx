@@ -155,15 +155,31 @@ function Bubble({ msg, isAr, index }) {
           : "0 2px 12px rgba(0,0,0,.2)",
         backdropFilter: isUser ? "none" : "blur(8px)",
       }}>
-        <MdText text={msg.content} />
-        {isStreaming && (
+        {/* Shimmer placeholder while waiting for first token */}
+        {isStreaming && !msg.content && (
+          <div style={{ display:"flex", flexDirection:"column", gap:8, minWidth:180 }}>
+            {[70,90,50].map((w,i) => (
+              <div key={i} style={{
+                height:12, width:`${w}%`, borderRadius:6,
+                background:"linear-gradient(90deg,rgba(99,179,237,.08) 0%,rgba(99,179,237,.18) 50%,rgba(99,179,237,.08) 100%)",
+                backgroundSize:"200% 100%",
+                animation:`shimmer 1.4s ease-in-out ${i*0.15}s infinite`,
+              }}/>
+            ))}
+          </div>
+        )}
+        {msg.content && <MdText text={msg.content} />}
+        {isStreaming && msg.content && (
           <span style={{
             display:"inline-block", width:2, height:"1em",
             background:C.cyan, marginLeft:2, verticalAlign:"text-bottom",
             animation:"blink .6s step-end infinite",
           }}/>
         )}
-        <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}`}</style>
+        <style>{`
+          @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+          @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+        `}</style>
         <div style={{
           fontSize:9.5, marginTop:6, opacity:.45,
           textAlign: isAr ? "left" : "right",
@@ -319,7 +335,7 @@ export function AICoach({ profile, sessions = [], calibration, cs, lang = "en", 
 3. استشهد بالأبحاث: "هانسراج 2014..."
 4. ⚕️ علّم العلامات الخطيرة (ألم متشع، تنميل)
 5. الشكل: **خط عريض**، أرقام للبروتوكولات، ## للعناوين
-6. 150-250 كلمة للمحادثة
+6. مختصر: 120-180 كلمة للمحادثة. لا تبدأ بـ "سؤال رائع" أو "بالطبع".
 اللغة: عامية مصرية كاملة.`
       : `You are Dr. Corvus — the AI physiotherapist inside Corvus PostureAI Pro.
 
@@ -340,7 +356,8 @@ PRINCIPLES:
 3. Cite evidence: "Hansraj (2014) showed at 45° neck flexion = 22kg load..."
 4. ⚕️ Flag red flags (radiating pain, numbness) → recommend professional evaluation
 5. Format: **bold** terms, numbered protocols, ## headers for structure
-6. 150-250 words conversational | up to 400 for full reports
+6. CONCISE: 120-200 words max for conversation. Only exceed for explicit report/plan requests.
+7. Start your response immediately — no preamble like "Great question!" or "Of course!"
 LANGUAGE: Clear, professional English.`;
 
     const streamingId = Date.now();
@@ -357,7 +374,7 @@ LANGUAGE: Clear, professional English.`;
 
       // Try streaming first (shows text as it arrives)
       try {
-        await localChatStream(allMsgs, systemPrompt, quality.max_tokens || 700, (partial) => {
+        await localChatStream(allMsgs, systemPrompt, Math.min(quality.max_tokens || 500, 500), (partial) => {
           setMessages(prev => prev.map(m =>
             m.ts === streamingId ? { ...m, content: partial } : m
           ));
@@ -370,7 +387,7 @@ LANGUAGE: Clear, professional English.`;
         // Streaming failed — fall back to non-streaming
         console.warn("[CorvusAI] Stream failed, using fallback:", streamErr.message);
         const reply = await geminiChat(allMsgs, {
-          systemPrompt, context, lang, maxTokens: quality.max_tokens || 700,
+          systemPrompt, context, lang, maxTokens: Math.min(quality.max_tokens || 500, 500),
         });
         setMessages(prev => prev.map(m =>
           m.ts === streamingId ? { ...m, content: reply, streaming: false } : m

@@ -800,52 +800,63 @@ export async function localChatStream(messages, systemPrompt, maxTokens, onChunk
   ];
 
   const ctrl = new AbortController();
-  setTimeout(() => ctrl.abort(), 22000);
+  const timer = setTimeout(() => ctrl.abort(), 20000);
 
-  // Try streaming from Pollinations
+  // Try Pollinations streaming (fastest first-token)
   const res = await fetch("https://text.pollinations.ai/", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Origin": "https://postureai-pro-omega-nine.vercel.app",
+    },
     body: JSON.stringify({
       model: "openai",
       messages: allMsgs,
-      max_tokens: maxTokens || 700,
-      temperature: 0.5,
+      max_tokens: maxTokens || 600,
+      temperature: 0.45,
       stream: true,
+      private: true,  // skip caching → faster first token
     }),
     signal: ctrl.signal,
   });
 
-  if (!res.ok) throw new Error(`stream_${res.status}`);
+  if (!res.ok) {
+    clearTimeout(timer);
+    throw new Error(`stream_${res.status}`);
+  }
 
-  const reader = res.body.getReader();
+  const reader  = res.body.getReader();
   const decoder = new TextDecoder();
   let full = "";
+  let buf  = "";
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split("\n");
+
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop(); // keep incomplete line
+
     for (const line of lines) {
       if (!line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (data === "[DONE]") break;
+      const raw = line.slice(5).trim();
+      if (raw === "[DONE]") { clearTimeout(timer); return full; }
       try {
-        const json = JSON.parse(data);
-        const token = json?.choices?.[0]?.delta?.content || "";
+        const token = JSON.parse(raw)?.choices?.[0]?.delta?.content || "";
         if (token) {
           full += token;
-          onChunk(full);
+          onChunk(full); // fire immediately — don't buffer
         }
       } catch {}
     }
   }
 
+  clearTimeout(timer);
   if (!full || full.length < 10) throw new Error("stream_empty");
-  console.info("[CorvusAI] ✅ Stream complete", full.length, "chars");
   return full;
 }
+
 
 // Fallback: non-streaming race (if streaming fails)
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
