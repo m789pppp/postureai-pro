@@ -301,8 +301,14 @@ function GlobalStyle() {
       @media(max-width:900px){.lp-pricing-grid{grid-template-columns:1fr;max-width:420px;margin:0 auto}}
 
       /* ── TESTIMONIALS ── */
-      .lp-testi-inner{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center}
-      @media(max-width:720px){.lp-testi-inner{grid-template-columns:1fr}}
+      .lp-testi-inner,.lp-testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+      @media(max-width:860px){.lp-testi-inner,.lp-testi-grid{grid-template-columns:1fr!important}}
+
+      /* ── HOWIT WORKS mobile fix ── */
+      @media(max-width:720px){
+        .lp-timeline-line{display:none!important}
+        .lp-timeline-node{margin-top:0!important;margin-bottom:16px!important}
+      }
 
       /* ── FOOTER ── */
       .lp-footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:40px 28px}
@@ -975,7 +981,7 @@ function Features({ lang }) {
           sub={ar ? "من التحليل الفوري إلى الرؤى المؤسسية — كل شيء في مكان واحد"
                   : "From real-time analysis to enterprise insights — everything in one platform"}/>
 
-        <div className="lp-features-grid" style={{ display:"grid", gridTemplateColumns:"300px 1fr", gap:36 }}>
+        <div className="lp-features-wrap">
           {/* Feature tabs */}
           <div style={{ display:"flex", flexDirection:"column", gap:6 }} className="lp-features-tabs">
             {features.map((item, i) => (
@@ -1063,12 +1069,12 @@ function HowItWorks({ lang }) {
           <Stagger key={String(ar)} className="lp-how-grid" gap={0.12} style={{ position:"relative" }}>
             {steps.map((s) => (
               <StaggerItem key={s.n}>
-                <div className="lp-lift" style={{ ...card(), textAlign:"center" }}>
+                <div className="lp-lift" style={{ ...card(), textAlign:"center", paddingTop:48 }}>
                   <div className="lp-timeline-node" style={{
-                    width:64, height:64, borderRadius:"50%", margin:"-64px auto 22px",
+                    width:56, height:56, borderRadius:"50%", margin:"-76px auto 20px",
                     background:C.bg1, border:`2px solid rgba(79,124,249,.4)`,
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    fontFamily:FONT_MONO, fontSize:21, fontWeight:700, color:C.blue,
+                    fontFamily:FONT_MONO, fontSize:18, fontWeight:700, color:C.blue,
                     boxShadow:"0 0 0 6px "+C.bg1+", 0 4px 18px rgba(79,124,249,.25)",
                   }}>{s.n}</div>
                   <h3 style={{ ...TYPE.h3, color:C.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
@@ -1114,8 +1120,7 @@ function CaseStudies({ lang }) {
           eyebrowColor={C.green} eyebrowBg="rgba(16,217,160,.08)" eyebrowBorder="rgba(16,217,160,.2)"
           title={ar ? "عملاؤنا يحقّقون نتائج قابلة للقياس" : "Our customers achieve measurable results"}/>
 
-        <Stagger key={String(ar)} className="lp-cases-grid" style={{
-          display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
+        <Stagger key={String(ar)} className="lp-cases-grid">
           {cases.map((c) => (
             <StaggerItem key={c.co}>
               <div className="lp-lift" style={{ ...card(), height:"100%" }}>
@@ -1296,8 +1301,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
           </div>
         </Reveal>
 
-        <Stagger key={`${localMode}-${billing}`} className="lp-pricing-grid" style={{
-          display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:22, alignItems:"start" }}>
+        <Stagger key={`${localMode}-${billing}`} className="lp-pricing-grid" style={{ alignItems:"start" }}>
           {plans.map((p) => (
             <StaggerItem key={p.id}>
               <div className={p.popular ? "lp-lift lp-glow" : "lp-lift"} style={{
@@ -1430,8 +1434,7 @@ function Testimonials({ lang }) {
     <section className="lp-section">
       <div className="lp-wrap">
         <SectionHead title={ar ? "ماذا يقول عملاؤنا" : "What our customers say"} />
-        <Stagger key={String(ar)} className="lp-testi-grid" style={{
-          display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
+        <Stagger key={String(ar)} className="lp-testi-grid" style={{}}>
           {testimonials.map((t) => (
             <StaggerItem key={t.name}>
               <div className="lp-lift" style={{
@@ -1594,32 +1597,40 @@ function MidCTA({ lang, onCTA, variant="features" }) {
 function FinalCTA({ lang, onCTA }) {
   const ar = lang === "ar";
   return (
-    <section className="lp-section">
-      <div style={{ maxWidth:780, margin:"0 auto", textAlign:"center", padding:"0 24px" }}>
+    <section style={{ padding:"clamp(44px,6vw,80px) 16px" }}>
+      <div style={{ maxWidth:760, margin:"0 auto" }}>
         <Reveal>
-          <div className="lp-glow" style={{
-            background:"linear-gradient(135deg,rgba(79,124,249,.1),rgba(16,217,160,.05))",
+          <div style={{
+            background:"linear-gradient(135deg,rgba(26,86,219,.12),rgba(8,145,178,.08))",
             border:`1px solid rgba(79,124,249,.22)`,
-            borderRadius:28, padding:"clamp(48px,6vw,76px) clamp(28px,5vw,56px)",
+            borderRadius:24, padding:"clamp(36px,5vw,64px) clamp(20px,4vw,48px)",
+            textAlign:"center",
           }}>
             <div style={{
-              width:72, height:72, borderRadius:20, margin:"0 auto 26px",
-              background:C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:34, boxShadow:"0 8px 28px rgba(79,124,249,.45)",
-            }}>🧘</div>
-            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 18px", fontFamily:FONT_DISPLAY }}>
+              width:64, height:64, borderRadius:18, margin:"0 auto 22px",
+              background:"linear-gradient(135deg,#1a56db,#0891b2)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:30, color:"#fff", fontWeight:800,
+              boxShadow:"0 8px 28px rgba(26,86,219,.45)",
+            }}>◈</div>
+            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 14px", fontFamily:FONT_DISPLAY,
+              fontSize:"clamp(22px,3vw,34px)" }}>
               {ar ? "ابدأ تحسين صحة فريقك اليوم" : "Start improving your team's health today"}
             </h2>
-            <p style={{ ...TYPE.body, color:C.sub, maxWidth:480, margin:"0 auto 40px" }}>
+            <p style={{ ...TYPE.body, color:C.sub, maxWidth:460, margin:"0 auto 32px",
+              fontSize:"clamp(14px,1.2vw,16px)" }}>
               {ar
                 ? "انضم إلى الشركات التي تستخدم Corvus. تجربة مجانية 7 أيام."
-                : "Join companies reducing workplace pain using AI-powered posture intelligence. 7-day free trial, no credit card required."}
+                : "Join 50+ teams reducing workplace pain with AI posture coaching. 7-day free trial, no credit card."}
             </p>
-            <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" }}>
-              <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
+            <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+              <a href="#" className="lp-btn lp-btn-primary"
+                onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
+                style={btn("primary","lg")}>
                 {ar ? "🚀 ابدأ تجربتك المجانية" : "🚀 Start Free Trial"}
               </a>
-              <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-ghost" style={btn("ghost","lg")}>
+              <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer"
+                className="lp-btn lp-btn-ghost" style={btn("ghost","lg")}>
                 {ar ? "احجز عرضاً" : "Book Demo"}
               </a>
             </div>
