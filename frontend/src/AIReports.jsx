@@ -23,7 +23,7 @@ const escapeHtml = (str) => String(str ?? "").replace(/[&<>"']/g, c => ({
 
 async function callGemini(prompt, system, maxTokens = 1200) {
   try {
-    return await geminiAnalysis(prompt, { context: { system_prompt: system }, maxTokens });
+    return await geminiAnalysis(prompt, { systemPrompt: system, maxTokens });
   } catch (e) {
     if (getLocalAIStatus().ready) return await localFallbackAnalysis(prompt, { systemPrompt: system, maxTokens });
     throw e;

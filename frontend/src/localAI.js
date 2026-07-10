@@ -1023,40 +1023,46 @@ CONVERSATION STYLE:
 
 export async function localChat(messages, {systemPrompt=""} = {}) {
   const d = parseData(systemPrompt);
+  const sp = systemPrompt && systemPrompt.length > 200
+    ? systemPrompt
+    : buildLLMSystemPrompt(systemPrompt, false);
 
-  // 1️⃣ Vercel Edge Proxy → LLM7 gpt-4o-mini (primary AI)
-  try {
-    // If caller already built a full clinical system prompt (AICoach does this),
-    // use it directly — don't rebuild and lose the patient data.
-    // Only rebuild if the prompt is minimal/empty (legacy callers).
-    const sp = systemPrompt && systemPrompt.length > 200
-      ? systemPrompt
-      : buildLLMSystemPrompt(systemPrompt, false);
-    return await callLLM7Direct(messages, sp, 700);
-  } catch(e) {
-    console.warn("[CorvusAI] Vercel proxy failed:", e.message);
+  // Try twice before falling back
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const text = await callLLM7Direct(messages, sp, 700);
+      if (text) return text;
+    } catch(e) {
+      console.warn(`[CorvusAI] chat attempt ${attempt+1} failed:`, e.message);
+      if (attempt === 0) await new Promise(r => setTimeout(r, 600));
+    }
   }
 
-  // 2️⃣ Rule-based KB (true offline fallback)
-  const hist   = analyzeHistory(messages);
-  const last   = [...messages].reverse().find(m => m.role === "user");
+  // Rule-based KB (only if both attempts fail)
+  console.warn("[CorvusAI] Using rule-based KB fallback");
+  const hist = analyzeHistory(messages);
+  const last = [...messages].reverse().find(m => m.role === "user");
   const intent = detectIntent(last?.content || "");
   return buildResponse(intent, last?.content || "", d, hist);
 }
 
 export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
-  // 1️⃣ Vercel Edge Proxy → LLM7 gpt-4o-mini (primary AI)
-  try {
-    // If caller provided a full system prompt (AIInsights/PredictiveAI), use it directly.
-    // Otherwise build a clinical system prompt from embedded data.
-    const sp = systemPrompt && systemPrompt.length > 100
-      ? systemPrompt
-      : buildLLMSystemPrompt(systemPrompt + " " + prompt, true);
-    return await callLLM7Direct([{ role: "user", content: prompt }], sp, 800);
-  } catch(e) {
-    console.warn("[CorvusAI] Vercel proxy failed (analysis):", e.message);
+  const sp = systemPrompt && systemPrompt.length > 100
+    ? systemPrompt
+    : buildLLMSystemPrompt(systemPrompt + " " + prompt, true);
+
+  // Try twice (race is fast, occasional network hiccup shouldn't mean fallback)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const text = await callLLM7Direct([{ role: "user", content: prompt }], sp, 800);
+      if (text) return text;
+    } catch(e) {
+      console.warn(`[CorvusAI] analysis attempt ${attempt+1} failed:`, e.message);
+      if (attempt === 0) await new Promise(r => setTimeout(r, 800)); // brief pause before retry
+    }
   }
 
-  // 2️⃣ Rule-based fallback
+  // True fallback — rule-based (only if both attempts fail)
+  console.warn("[CorvusAI] Using rule-based fallback for analysis");
   return runAnalysis(prompt, systemPrompt);
 }

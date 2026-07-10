@@ -789,7 +789,7 @@ Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bul
     setAiLoading(p=>({...p,[key]:true}));
     setAiError(p=>({...p,[key]:""}));
     try {
-      const text = await geminiAnalysis(AI_PROMPTS[key]?.(), { lang, context:{ system_prompt: system }, maxTokens:900 });
+      const text = await geminiAnalysis(AI_PROMPTS[key]?.(), { lang, systemPrompt: system, maxTokens:900 });
       setAiData(p=>({...p,[key]:text}));
     } catch(e) { setAiError(p=>({...p,[key]:e.message})); }
     finally { setAiLoading(p=>({...p,[key]:false})); }

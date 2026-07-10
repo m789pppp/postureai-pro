@@ -828,7 +828,7 @@ function AIAlertsPanel({orgId,profile,sessions=[],allUsers=[],isAr}) {
     try {
       const system=`You are Corvus's alert rule generator. Generate 3 smart alert rule suggestions for a workforce health platform. Respond in ${isAr?"Arabic":"English"} as a JSON array with fields: name, condition, action, severity, rationale.`;
       const prompt=`Generate 3 alert rules for: avg posture score ${Math.round(50+Math.random()*30)}/100, ${sessions.length} sessions, ${allUsers.length} employees. Make them practical and specific.`;
-      const text = await geminiAnalysis(prompt,{lang:isAr?"ar":"en",context:{system_prompt:system},maxTokens:600});
+      const text = await geminiAnalysis(prompt,{lang:isAr?"ar":"en",systemPrompt:system,maxTokens:600});
       setAiText(text);
     } catch(e){setAiText(isAr?"⚠️ خطأ في توليد القواعد":"⚠️ Error generating rules");}
     setAiLoading(false);
