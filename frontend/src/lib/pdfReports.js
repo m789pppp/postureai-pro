@@ -831,7 +831,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
     doc.text("2 / 2",W-mr,H-4.5,{align:"right"});
 
-    doc.save(`Corvus_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`);
+    await doc.save(`Corvus_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
     return;
   }
 
@@ -1105,7 +1105,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     sf(5.5,"normal");tc(doc,...TEXT3);doc.text(`${p} / ${tot}`,W-mr,H-4.5,{align:"right"});
   }
 
-  doc.save(`Corvus_Elite_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`);
+  await doc.save(`Corvus_Elite_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
 }
 
 
@@ -1526,7 +1526,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   }
 
   const filename=`Corvus_Clinical_Report_Session${realIndex}_${now.toISOString().slice(0,10)}.pdf`;
-  doc.save(filename);
+  await doc.save(filename, {returnPromise:true});
   return filename;
 }
 
@@ -1947,7 +1947,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   }
 
   const filename=`Corvus_Comparison_S${num1}_vs_S${num2}_${now.toISOString().slice(0,10)}.pdf`;
-  doc.save(filename);
+  await doc.save(filename, {returnPromise:true});
   return filename;
 }
 
@@ -2131,7 +2131,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   }
 
   const filename=`Corvus_Team_Report_${(company||"Team").replace(/\s/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`;
-  doc.save(filename);
+  await doc.save(filename, {returnPromise:true});
   return filename;
 }
 
@@ -2622,7 +2622,7 @@ const programme=[
   }
 
   const filename=`Corvus_Longitudinal_${now.toISOString().slice(0,10)}.pdf`;
-  doc.save(filename);
+  await doc.save(filename, {returnPromise:true});
   return filename;
 }
 
