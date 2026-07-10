@@ -354,8 +354,8 @@ function Nav({ lang, setLang, onCTA }) {
 
   const ar = lang === "ar";
   const links = ar
-    ? [["المنصة","#features"],["الأسعار","#pricing"],["المؤسسات","#enterprise"],["نتائج حقيقية","#casestudies"]]
-    : [["Platform","#features"],["Pricing","#pricing"],["Enterprise","#enterprise"],["Results","#casestudies"]];
+    ? [["المنتج","#features"],["الحلول","#casestudies"],["الأسعار","#pricing"],["الموارد","#"],["الشركة","#"]]
+    : [["Product","#features"],["Solutions","#casestudies"],["Pricing","#pricing"],["Resources","#"],["Company","#"]];
 
   return (
     <nav style={{
@@ -366,18 +366,20 @@ function Nav({ lang, setLang, onCTA }) {
       borderBottom: scrolled || mobileOpen ? `1px solid ${C.border}` : "none",
       transition: "background .3s,border-color .3s",
     }}>
-      <div className="lp-wrap" style={{ height: 72,
+      <div className="lp-wrap" style={{ height: 68,
         display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         {/* Logo */}
-        <a href="#" onClick={e=>e.preventDefault()} style={{ display:"flex", alignItems:"center", gap:10,
+        <a href="#" onClick={e=>e.preventDefault()} style={{ display:"flex", alignItems:"center", gap:9,
           textDecoration:"none", color:C.text, flexShrink:0 }}>
-          <div style={{ width:38, height:38, borderRadius:11,
-            background: C.gBlue, display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:19, boxShadow:"0 4px 16px rgba(79,124,249,.4)" }}>🧘</div>
-          <span style={{ fontWeight:700, fontSize:18, letterSpacing:"-.02em", fontFamily:FONT_DISPLAY }}>
-            Corvus <span style={{ background:C.gHero, WebkitBackgroundClip:"text",
-              WebkitTextFillColor:"transparent" }}>Pro</span>
-          </span>
+          <div style={{ width:34, height:34, borderRadius:9,
+            background:"linear-gradient(135deg,#1a56db,#0891b2)",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:17, color:"#fff", fontWeight:800,
+            boxShadow:"0 4px 14px rgba(26,86,219,.4)" }}>◈</div>
+          <div style={{ lineHeight:1.1 }}>
+            <div style={{ fontWeight:800, fontSize:15.5, color:C.text, letterSpacing:"-.02em", fontFamily:FONT_DISPLAY }}>Corvus</div>
+            <div style={{ fontSize:9.5, color:C.muted, letterSpacing:".04em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+          </div>
         </a>
 
         {/* Desktop links */}
@@ -401,11 +403,11 @@ function Nav({ lang, setLang, onCTA }) {
             cursor:"pointer", fontSize:13, fontWeight:500,
           }}>{ar ? "EN" : "عربي"}</button>
           <a href="#" onClick={(e)=>{e.preventDefault();navTo("/auth")}} style={{
-            color:C.sub, textDecoration:"none", fontSize:14.5, fontWeight:500,
-            padding:"8px 14px", display:"inline-block",
-          }}>{ar ? "تسجيل دخول" : "Sign in"}</a>
-          <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","sm")}>
-            {ar ? "جرّب مجاناً" : "Start Free Trial"}
+            color:C.sub, textDecoration:"none", fontSize:14, fontWeight:500,
+            padding:"8px 12px", display:"inline-block",
+          }}>{ar ? "تسجيل دخول" : "Log in"}</a>
+          <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={{...btn("primary","sm"), borderRadius:9}}>
+            {ar ? "ابدأ مجاناً" : "Start Free Trial"}
           </a>
         </div>
 
@@ -479,14 +481,14 @@ function Hero({ lang, onCTA, mode, setMode }) {
   const ar = lang === "ar";
   const reduce = useReducedMotion();
   const isCompany = mode === "company";
-  const [demoScore, setDemoScore] = useState(82);
+  const [demoScore, setDemoScore] = useState(89);
   useEffect(() => {
     const iv = setInterval(() => {
       setDemoScore(s => {
-        const n = s + (Math.random() > .5 ? 1 : -1) * Math.floor(Math.random() * 4);
-        return Math.max(55, Math.min(98, n));
+        const n = s + (Math.random() > .5 ? 1 : -1) * Math.floor(Math.random() * 3);
+        return Math.max(72, Math.min(98, n));
       });
-    }, 1400);
+    }, 1800);
     return () => clearInterval(iv);
   }, []);
 
@@ -647,10 +649,10 @@ function Hero({ lang, onCTA, mode, setMode }) {
           </Reveal>
         </div>
 
-        {/* Right — Camera demo with posture skeleton overlay */}
+        {/* Right — Camera demo */}
         <Reveal delay={100} className="lp-hero-right">
-          <div style={{ position:"relative", paddingTop:34, paddingBottom:30 }}>
-            {/* Main camera view mockup */}
+          <div style={{ position:"relative", paddingTop:20, paddingBottom:20 }}>
+            {/* Main camera card */}
             <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
               {/* Browser chrome */}
               <div style={{ display:"flex", alignItems:"center", gap:8,
@@ -827,13 +829,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
       )}
 
       <style>{`
-        @keyframes lp-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.4)}}
-        @keyframes lp-drift-a{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-46%,-54%)}}
-        @keyframes lp-drift-b{0%,100%{transform:translate(0,0)}50%{transform:translate(3%,-4%)}}
-        .lp-drift-a{animation:lp-drift-a 16s ease-in-out infinite}
-        .lp-drift-b{animation:lp-drift-b 20s ease-in-out infinite}
-        @media(prefers-reduced-motion:reduce){.lp-drift-a,.lp-drift-b{animation:none}}
-        @media(max-width:860px){.lp-hero-grid{grid-template-columns:1fr!important;gap:56px!important}}
+        @media(max-width:860px){.lp-hero-grid{grid-template-columns:1fr!important}}
+        @media(max-width:480px){.lp-hero-grid h1{font-size:30px!important}}
       `}</style>
     </section>
   );
@@ -844,50 +841,52 @@ function SocialProof({ lang }) {
   const ar = lang === "ar";
   return (
     <section style={{ borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
-      padding:"40px 24px", background:"rgba(255,255,255,.015)" }}>
+      padding:"32px 24px", background:"rgba(255,255,255,.012)" }}>
       <Reveal>
         <div className="lp-wrap">
-          {/* Trust numbers row */}
-          <div style={{ display:"flex", gap:"10px 40px", justifyContent:"center",
-            flexWrap:"wrap", alignItems:"center", marginBottom:28 }}>
+          {/* 4 stat cards */}
+          <div className="lp-sp-stats" style={{ marginBottom:20 }}>
             {(ar ? [
-              ["50+","مستخدم بيتا نشط"],["4.9★","تقييم متوسط"],["2 أسبوع","وقت التحسن"],["0","لا نحفظ فيديو"],
+              ["50+","مستخدم بيتا نشط","👥"],["4.9★","تقييم متوسط","⭐"],
+              ["أسبوعان","وقت التحسن","⏱"],["0","لا نحفظ فيديو","🛡"],
             ] : [
-              ["50+","active beta users"],["4.9★","average rating"],["2 weeks","avg improvement time"],["0","video data stored"],
-            ]).map(([num, label]) => (
-              <div key={label} style={{ textAlign:"center" }}>
-                <div style={{ fontSize:22, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{num}</div>
-                <div style={{ fontSize:11.5, color:C.muted, marginTop:4 }}>{label}</div>
+              ["50+","active beta users","👥"],["4.9★","average rating","⭐"],
+              ["2 weeks","avg improvement time","⏱"],["0","video data stored","🛡"],
+            ]).map(([num, label, icon]) => (
+              <div key={label} style={{
+                background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
+                borderRadius:14, padding:"16px 12px", textAlign:"center",
+              }}>
+                <div style={{ fontSize:13, marginBottom:5 }}>{icon}</div>
+                <div style={{ fontSize:20, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{num}</div>
+                <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{label}</div>
               </div>
             ))}
           </div>
-          {/* Divider */}
-          <div style={{ height:1, background:C.border, margin:"0 0 22px" }}/>
-          {/* Early adopters note */}
-          <p style={{ textAlign:"center", color:C.muted, marginBottom:18, ...TYPE.eyebrow }}>
-            {ar ? "يُستخدم حالياً في" : "Currently used at"}
-          </p>
-          <div style={{ display:"flex", gap:"12px 36px", justifyContent:"center", flexWrap:"wrap", alignItems:"center", marginBottom:24 }}>
-            {(ar
-              ? ["Coventry University ✓", "جامعة القاهرة — تجريبي", "50+ مستخدم في 4 دول"]
-              : ["Coventry University ✓", "Cairo University — Pilot", "50+ users across 4 countries"]
-            ).map(logo => (
-              <div key={logo} style={{
-                color: logo.includes("✓") ? "#3b82f6" : C.muted,
-                fontSize:14, fontWeight:600, letterSpacing:"-.01em",
-                opacity: logo.includes("✓") ? 1 : .75,
-              }}>{logo}</div>
-            ))}
-          </div>
-          {/* Security badges */}
-          <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
-            {["ISO 27001 Aligned","AES-256 Encryption","GDPR Ready","On-device AI — No Video Stored"].map(badge => (
-              <span key={badge} style={{
-                background:"rgba(59,130,246,.08)", border:"1px solid rgba(59,130,246,.18)",
-                color:"#60a5fa", fontSize:11, padding:"4px 11px", borderRadius:99, fontWeight:500,
-                fontFamily:FONT_MONO,
-              }}>{badge}</span>
-            ))}
+          {/* Row 2 — used at + security badges */}
+          <div className="lp-sp-row2">
+            <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+              <span style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>
+                {ar ? "يُستخدم في" : "Currently used at"}
+              </span>
+              <div style={{ background:"rgba(255,255,255,.04)", border:`1px solid ${C.border}`,
+                borderRadius:9, padding:"6px 14px", fontSize:13.5, fontWeight:700, color:C.text }}>
+                Coventry University
+              </div>
+              <span style={{ fontSize:12, color:C.muted }}>
+                {ar ? "جامعة القاهرة — تجريبي · 50+ مستخدم في 4 دول" : "Cairo University — Pilot · 50+ users across 4 countries"}
+              </span>
+            </div>
+            <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
+              {[["🛡","ISO 27001\nAligned"],["🔒","AES-256\nEncryption"],["✅","GDPR\nReady"],["📷","On-device AI\nNo Video"]].map(([icon,text])=>(
+                <div key={text} style={{ display:"flex", alignItems:"center", gap:5,
+                  background:"rgba(59,130,246,.06)", border:"1px solid rgba(59,130,246,.15)",
+                  borderRadius:9, padding:"6px 10px" }}>
+                  <span style={{ fontSize:12 }}>{icon}</span>
+                  <span style={{ fontSize:10, color:"#60a5fa", fontWeight:600, lineHeight:1.3, whiteSpace:"pre-line", fontFamily:FONT_MONO }}>{text}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </Reveal>
@@ -1636,94 +1635,50 @@ function Footer({ lang }) {
   const ar = lang === "ar";
 
   const sections = ar ? [
-    { title:"المنتج", links:[
-      ["المميزات","#features"],
-      ["الأسعار","#pricing"],
-      ["للمؤسسات","#enterprise"],
-      ["كيف يعمل","#how"],
-    ]},
-    { title:"الشركة", links:[
-      ["من نحن",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],
-      ["تواصل معنا",`mailto:${SUPPORT_EMAIL}`],
-      ["المدوّنة","#"],
-      ["الشركاء","#"],
-    ]},
-    { title:"قانوني", links:[
-      ["سياسة الخصوصية","#privacy"],
-      ["شروط الاستخدام","#terms"],
-      ["الأمان","#security"],
-      ["GDPR","#gdpr"],
-    ]},
+    { title:"المنتج", links:[["المميزات","#features"],["الأسعار","#pricing"],["كيف يعمل","#how"],["التكاملات","#"]] },
+    { title:"الحلول", links:[["فرق HR","#casestudies"],["الصحة المهنية","#features"],["الفرق عن بُعد","#"],["المؤسسات","#enterprise"]] },
+    { title:"الموارد", links:[["المدونة","#"],["دراسات الحالة","#casestudies"],["الأدلة","#"],["مركز المساعدة","#"]] },
+    { title:"الشركة", links:[["من نحن","#"],["الأمان","#"],["الخصوصية","#privacy"],["تواصل معنا",`mailto:${SUPPORT_EMAIL}`]] },
   ] : [
-    { title:"Product", links:[
-      ["Features","#features"],
-      ["Pricing","#pricing"],
-      ["Enterprise","#enterprise"],
-      ["How It Works","#how"],
-    ]},
-    { title:"Company", links:[
-      ["About",`mailto:${SUPPORT_EMAIL}?subject=About Corvus`],
-      ["Contact",`mailto:${SUPPORT_EMAIL}`],
-      ["Blog","#"],
-      ["Partners","#"],
-    ]},
-    { title:"Legal", links:[
-      ["Privacy Policy","#privacy"],
-      ["Terms of Service","#terms"],
-      ["Security","#security"],
-      ["GDPR","#gdpr"],
-    ]},
+    { title:"Product", links:[["Features","#features"],["Pricing","#pricing"],["How it works","#how"],["Integrations","#"]] },
+    { title:"Solutions", links:[["HR Teams","#casestudies"],["Occupational Health","#features"],["Remote Teams","#"],["Enterprise","#enterprise"]] },
+    { title:"Resources", links:[["Blog","#"],["Case Studies","#casestudies"],["Guides","#"],["Help Center","#"]] },
+    { title:"Company", links:[["About","#"],["Security","#"],["Privacy Policy","#privacy"],["Contact",`mailto:${SUPPORT_EMAIL}`]] },
   ];
 
   const socials = [
-    { label:"LinkedIn", href:"https://www.linkedin.com/in/mo-postureai" },
-    { label:"Email",    href:`mailto:${SUPPORT_EMAIL}` },
+    { label:"in", title:"LinkedIn",  href:"https://www.linkedin.com/in/mo-postureai" },
+    { label:"𝕏",  title:"X",        href:"https://x.com/corvusposture" },
+    { label:"▶",  title:"YouTube",  href:"https://youtube.com/@corvusai" },
+    { label:"◉",  title:"Instagram",href:"https://instagram.com/corvusai" },
   ];
 
   return (
-    <footer style={{ borderTop:`1px solid ${C.border}`, padding:"64px 24px 36px", background:C.bg }}>
+    <footer style={{ borderTop:`1px solid ${C.border}`, padding:"52px 24px 28px", background:C.bg }}>
       <div className="lp-wrap">
-        {/* Main grid — 4 cols desktop, 2 cols tablet, 1 col mobile */}
-        <div style={{
-          display:"grid",
-          gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))",
-          gap:"40px 48px",
-          marginBottom:52,
-        }}>
-          {/* Brand column */}
-          <div style={{ gridColumn:"span 1" }}>
-            {/* Logo mark */}
-            <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:16 }}>
-              <div style={{
-                width:32, height:32, borderRadius:8,
+        <div className="lp-footer-grid" style={{ marginBottom:44 }}>
+          {/* Brand */}
+          <div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+              <div style={{ width:30, height:30, borderRadius:8, flexShrink:0,
                 background:"linear-gradient(135deg,#1a56db,#0891b2)",
                 display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:16, flexShrink:0,
-              }}>◈</div>
-              <span style={{ fontWeight:800, color:C.text, fontSize:16, fontFamily:FONT_DISPLAY, letterSpacing:"-.02em" }}>
-                Corvus
-              </span>
+                fontSize:15, color:"#fff" }}>◈</div>
+              <span style={{ fontWeight:800, color:C.text, fontSize:15, fontFamily:FONT_DISPLAY, letterSpacing:"-.02em" }}>Corvus</span>
             </div>
-
-            <p style={{ fontSize:13.5, color:C.muted, lineHeight:1.75, maxWidth:240, margin:"0 0 20px" }}>
-              {ar
-                ? "تحليل الوضعية بالذكاء الاصطناعي — للأفراد والفرق في منطقة MENA."
-                : "AI posture analysis for individuals and teams across MENA."}
+            <p style={{ fontSize:12.5, color:C.muted, lineHeight:1.75, maxWidth:210, margin:"0 0 16px" }}>
+              {ar ? "للفرق في MENA. قلّل إجازات الأمراض وارفع الإنتاجية." : "Built for MENA teams. Improve posture, boost productivity."}
             </p>
-
-            {/* Social links */}
-            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              {socials.map(({ label, href }) => (
-                <a key={label} href={href}
-                  target={href.startsWith("http") ? "_blank" : undefined}
-                  rel="noopener noreferrer"
-                  style={{
-                    color:C.muted, fontSize:12.5, textDecoration:"none",
-                    padding:"6px 12px", border:`1px solid ${C.border}`,
-                    borderRadius:7, transition:"color .18s, border-color .18s",
-                  }}
-                  onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM}}
-                  onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border}}>
+            <div style={{ display:"flex", gap:6 }}>
+              {socials.map(({ label, title, href }) => (
+                <a key={label} href={href} title={title} target="_blank" rel="noopener noreferrer"
+                  style={{ width:32, height:32, borderRadius:8,
+                    background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    color:C.muted, fontSize:12, fontWeight:700, textDecoration:"none",
+                    transition:"all .18s" }}
+                  onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.borderM;e.currentTarget.style.background="rgba(255,255,255,.09)"}}
+                  onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background="rgba(255,255,255,.05)"}}>
                   {label}
                 </a>
               ))}
@@ -1792,7 +1747,7 @@ function Footer({ lang }) {
           </span>
           <div style={{ display:"flex", gap:20, alignItems:"center" }}>
             <span style={{ fontSize:12, color:C.muted, opacity:.7 }}>
-              {ar ? "صُنع بـ ❤ في MENA" : "Made with ❤ in MENA"}
+              {ar ? "صُنع بـ ❤ في مصر" : "Made with ❤ in Egypt"}
             </span>
             <a href={`mailto:${SUPPORT_EMAIL}`}
               style={{ fontSize:12.5, color:C.sub, textDecoration:"none" }}
