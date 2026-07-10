@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { geminiChat, buildCoachContext, friendlyError } from "./gemini.js";
-import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
+import { getLocalAIStatus, onLocalAIStatus, localChatStream } from "./localAI.js";
 import { qualityFor, coachLimitLabel as tierCoachLimitLabel } from "./lib/tierQuality.js";
 
 // ── Design tokens ─────────────────────────────────────────────────
@@ -65,6 +65,7 @@ function TypingDots() {
 // ── Message bubble ────────────────────────────────────────────────
 function Bubble({ msg, isAr, index }) {
   const isUser = msg.role === "user";
+  const isStreaming = msg.streaming;
   return (
     <div style={{
       display:"flex", gap:10, alignItems:"flex-end",
@@ -105,6 +106,14 @@ function Bubble({ msg, isAr, index }) {
         backdropFilter: isUser ? "none" : "blur(8px)",
       }}>
         <MdText text={msg.content} />
+        {isStreaming && (
+          <span style={{
+            display:"inline-block", width:2, height:"1em",
+            background:C.cyan, marginLeft:2, verticalAlign:"text-bottom",
+            animation:"blink .6s step-end infinite",
+          }}/>
+        )}
+        <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}`}</style>
         <div style={{
           fontSize:9.5, marginTop:6, opacity:.45,
           textAlign: isAr ? "left" : "right",
@@ -282,13 +291,38 @@ PRINCIPLES:
 6. 150-250 words conversational | up to 400 for full reports
 LANGUAGE: Clear, professional English.`;
 
+    const streamingId = Date.now();
+    // Add empty AI message immediately — will fill as tokens arrive
+    setMessages(prev => [...prev, { role:"assistant", content:"", ts:streamingId, streaming:true }]);
+
     try {
       const history = messages.slice(-8).map(m=>({role:m.role,content:m.content}));
-      const reply = await geminiChat([...history, {role:"user",content}], {
-        systemPrompt, context, lang, maxTokens: quality.max_tokens || 700,
-      });
-      setMessages(prev => [...prev, { role:"assistant", content:reply, ts:Date.now() }]);
+      const allMsgs = [...history, {role:"user",content}];
+
+      // Try streaming first (shows text as it arrives)
+      try {
+        await localChatStream(allMsgs, systemPrompt, quality.max_tokens || 700, (partial) => {
+          setMessages(prev => prev.map(m =>
+            m.ts === streamingId ? { ...m, content: partial } : m
+          ));
+        });
+        // Mark streaming done
+        setMessages(prev => prev.map(m =>
+          m.ts === streamingId ? { ...m, streaming: false } : m
+        ));
+      } catch(streamErr) {
+        // Streaming failed — fall back to non-streaming
+        console.warn("[CorvusAI] Stream failed, using fallback:", streamErr.message);
+        const reply = await geminiChat(allMsgs, {
+          systemPrompt, context, lang, maxTokens: quality.max_tokens || 700,
+        });
+        setMessages(prev => prev.map(m =>
+          m.ts === streamingId ? { ...m, content: reply, streaming: false } : m
+        ));
+      }
     } catch(e) {
+      // Remove the empty streaming message
+      setMessages(prev => prev.filter(m => m.ts !== streamingId));
       setError(friendlyError(e, lang));
     } finally {
       setLoading(false);
@@ -397,7 +431,7 @@ LANGUAGE: Clear, professional English.`;
           ))}
 
           {/* Typing indicator */}
-          {loading && (
+          {loading && !messages.some(m=>m.streaming&&m.content) && (
             <div style={{
               display:"flex", gap:10, alignItems:"flex-end",
               animation:"msgIn .28s cubic-bezier(.2,.8,.3,1) both",

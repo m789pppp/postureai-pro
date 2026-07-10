@@ -789,6 +789,65 @@ function runAnalysis(prompt,sp) {
 
 
 // AI — race all 3 simultaneously, fastest response wins
+// Stream from Pollinations with real SSE — shows text as it arrives
+export async function localChatStream(messages, systemPrompt, maxTokens, onChunk) {
+  const allMsgs = [
+    { role: "system", content: systemPrompt },
+    ...messages.map(m => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: String(m.content || ""),
+    })),
+  ];
+
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), 22000);
+
+  // Try streaming from Pollinations
+  const res = await fetch("https://text.pollinations.ai/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "openai",
+      messages: allMsgs,
+      max_tokens: maxTokens || 700,
+      temperature: 0.5,
+      stream: true,
+    }),
+    signal: ctrl.signal,
+  });
+
+  if (!res.ok) throw new Error(`stream_${res.status}`);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split("\n");
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") break;
+      try {
+        const json = JSON.parse(data);
+        const token = json?.choices?.[0]?.delta?.content || "";
+        if (token) {
+          full += token;
+          onChunk(full);
+        }
+      } catch {}
+    }
+  }
+
+  if (!full || full.length < 10) throw new Error("stream_empty");
+  console.info("[CorvusAI] ✅ Stream complete", full.length, "chars");
+  return full;
+}
+
+// Fallback: non-streaming race (if streaming fails)
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
   const allMsgs = [
     { role: "system", content: systemPrompt },
@@ -812,7 +871,6 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
   };
 
   return Promise.any([
-    // 1. Pollinations POST — GPT-4o quality, free, no auth
     go("https://text.pollinations.ai/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -820,11 +878,9 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
     }, async r => {
       const d = await r.json();
       const t = d?.choices?.[0]?.message?.content?.trim();
-      console.info("[CorvusAI] ✅ Pollinations POST");
+      console.info("[CorvusAI] ✅ Pollinations");
       return t;
     }),
-
-    // 2. OpenRouter — llama-3.1-8b free, fast
     go("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -839,8 +895,6 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
       console.info("[CorvusAI] ✅ OpenRouter");
       return t;
     }),
-
-    // 3. Pollinations GET — simplest fallback
     go(`https://text.pollinations.ai/${encodeURIComponent(
       allMsgs.map(m => `${m.role}: ${m.content}`).join("\n")
     )}?model=openai`, { method: "GET" }, async r => {
@@ -848,7 +902,6 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
       console.info("[CorvusAI] ✅ Pollinations GET");
       return t;
     }),
-
   ]).catch(() => { throw new Error("all_free_apis_failed"); });
 }
 
