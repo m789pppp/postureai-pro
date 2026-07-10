@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 // ═══════════════════════════════════════════════════════════════════
 // PricingPage.jsx — SINGLE SOURCE OF TRUTH for B2C + B2B pricing
@@ -201,9 +201,9 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
 }
 
 export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, cs: csProp, defaultSeg }) {
-  const [billing, setBilling] = React.useState("monthly");
-  const [region,  setRegion]  = React.useState("gulf");
-  const [seg,     setSeg]     = React.useState(defaultSeg || "b2c");  // "b2c" | "b2b"
+  const [billing, setBilling] = useState("monthly");
+  const [region,  setRegion]  = useState("gulf");
+  const [seg,     setSeg]     = useState(defaultSeg || "b2c");  // "b2c" | "b2b"
   const isAr   = lang === "ar";
   const isB2B  = seg === "b2b";
   const plans  = isB2B ? B2B_PAID_PLANS : PAID_PLANS;

@@ -1162,7 +1162,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
   const [localMode, setLocalMode] = useState(modeProp || "company");
 
   // Sync if parent changes mode (e.g. nav toggle)
-  React.useEffect(() => { if (modeProp) setLocalMode(modeProp); }, [modeProp]);
+  useEffect(() => { if (modeProp) setLocalMode(modeProp); }, [modeProp]);
 
   const isCompany = localMode === "company";
 

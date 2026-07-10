@@ -398,9 +398,9 @@ const COPY = {
 
 // ─── Enterprise contact form ──────────────────────────────────────
 function EnterpriseContactForm({ t, isAr, cs }) {
-  const [form, setForm] = React.useState({ name:"", email:"", company:"", size:"", message:"" });
-  const [sent, setSent]   = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
+  const [form, setForm] = useState({ name:"", email:"", company:"", size:"", message:"" });
+  const [sent, setSent]   = useState(false);
+  const [loading, setLoading] = useState(false);
   const API = import.meta.env.VITE_API_URL || "/api";
 
   const handleSubmit = async () => {
