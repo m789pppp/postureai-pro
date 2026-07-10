@@ -24,24 +24,74 @@ const C = {
 };
 
 // ── Markdown → HTML (clean, no XSS risk since content is from our AI) ──
-function renderMd(text) {
-  return text
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/`(.+?)`/g, "<code style='background:rgba(99,179,237,.12);padding:1px 5px;border-radius:4px;font-size:.92em'>$1</code>")
-    .replace(/^#### (.+)$/gm, "<h5 style='margin:10px 0 3px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748b'>$1</h5>")
-    .replace(/^### (.+)$/gm, "<h4 style='margin:12px 0 4px;font-size:13px;font-weight:700;color:#93c5fd'>$1</h4>")
-    .replace(/^## (.+)$/gm,  "<h3 style='margin:14px 0 6px;font-size:14px;font-weight:700;color:#bfdbfe'>$1</h3>")
-    .replace(/^⚕️ (.+)$/gm, "<div style='background:rgba(239,68,68,.08);border:0.5px solid rgba(239,68,68,.25);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12.5px'>⚕️ $1</div>")
-    .replace(/^(\d+)\. (.+)$/gm, "<div style='display:flex;gap:8px;margin:4px 0'><span style='color:#3b82f6;font-weight:700;min-width:18px'>$1.</span><span>$2</span></div>")
-    .replace(/^[-•] (.+)$/gm, "<div style='display:flex;gap:8px;margin:3px 0'><span style='color:#06b6d4;margin-top:2px'>▸</span><span>$1</span></div>")
-    .replace(/\n\n/g, "<div style='height:8px'></div>")
-    .replace(/\n/g, "<br/>");
+function renderMd(raw) {
+  if (!raw) return "";
+  // Escape HTML first
+  let t = raw
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
+
+  // Block elements — process line by line
+  const lines = t.split("\n");
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    // ## Heading
+    if (/^## (.+)$/.test(l)) {
+      out.push(`<div style="font-size:14px;font-weight:700;color:#bfdbfe;margin:14px 0 6px;letter-spacing:-.01em">${l.replace(/^## /,"")}</div>`);
+    }
+    // ### Subheading
+    else if (/^### (.+)$/.test(l)) {
+      out.push(`<div style="font-size:13px;font-weight:700;color:#93c5fd;margin:10px 0 4px">${l.replace(/^### /,"")}</div>`);
+    }
+    // Numbered list
+    else if (/^\d+\. (.+)$/.test(l)) {
+      const [,num,rest] = l.match(/^(\d+)\. (.+)$/);
+      out.push(`<div style="display:flex;gap:9px;margin:5px 0;align-items:baseline"><span style="color:#60a5fa;font-weight:700;font-size:12px;min-width:16px;flex-shrink:0">${num}.</span><span>${inline(rest)}</span></div>`);
+    }
+    // Bullet
+    else if (/^[-•▸] (.+)$/.test(l)) {
+      const rest = l.replace(/^[-•▸] /,"");
+      out.push(`<div style="display:flex;gap:8px;margin:4px 0;align-items:baseline"><span style="color:#22d3ee;font-size:10px;flex-shrink:0;margin-top:3px">●</span><span>${inline(rest)}</span></div>`);
+    }
+    // ⚕️ warning
+    else if (l.startsWith("⚕️")) {
+      out.push(`<div style="background:rgba(239,68,68,.08);border:0.5px solid rgba(239,68,68,.22);border-radius:8px;padding:9px 12px;margin:10px 0;font-size:12.5px;line-height:1.6">${inline(l)}</div>`);
+    }
+    // Empty line → spacing
+    else if (l.trim() === "") {
+      out.push(`<div style="height:7px"></div>`);
+    }
+    // Normal paragraph
+    else {
+      out.push(`<span>${inline(l)}</span><br/>`);
+    }
+    i++;
+  }
+  return out.join("");
+}
+
+function inline(t) {
+  return t
+    .replace(/\*\*(.+?)\*\*/g, "<strong style='color:#e2e8f0;font-weight:600'>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em style='color:#cbd5e1'>$1</em>")
+    .replace(/`(.+?)`/g, "<code style='background:rgba(99,179,237,.13);padding:1px 6px;border-radius:4px;font-size:.9em;font-family:monospace'>$1</code>");
 }
 
 function MdText({ text }) {
-  return <span style={{ lineHeight: 1.7 }} dangerouslySetInnerHTML={{ __html: renderMd(text) }} />;
+  return (
+    <div style={{
+      lineHeight: 1.72,
+      fontFamily: "'DM Sans', system-ui, sans-serif",
+      fontSize: 13.5,
+      fontFeatureSettings: "'kern' 1",
+      letterSpacing: "-.01em",
+    }}
+    dangerouslySetInnerHTML={{ __html: renderMd(text) }}
+    />
+  );
 }
 
 // ── Animated typing dots ──────────────────────────────────────────
@@ -153,6 +203,8 @@ export function AICoach({ profile, sessions = [], calibration, cs, lang = "en", 
   const [input,     setInput]     = useState("");
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState("");
+  const messagesRef = useRef([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [localAIReady,  setLocalAIReady]  = useState(false);
   const [localAIStatus, setLocalAIStatus] = useState({ loading:false, progress:0 });
 
@@ -296,7 +348,11 @@ LANGUAGE: Clear, professional English.`;
     setMessages(prev => [...prev, { role:"assistant", content:"", ts:streamingId, streaming:true }]);
 
     try {
-      const history = messages.slice(-8).map(m=>({role:m.role,content:m.content}));
+      // Use ref to get latest messages (avoids stale closure bug)
+      const history = messagesRef.current
+        .filter(m => m.content && !m.streaming)  // skip empty streaming msgs
+        .slice(-8)
+        .map(m=>({role:m.role,content:m.content}));
       const allMsgs = [...history, {role:"user",content}];
 
       // Try streaming first (shows text as it arrives)
@@ -321,14 +377,14 @@ LANGUAGE: Clear, professional English.`;
         ));
       }
     } catch(e) {
-      // Remove the empty streaming message
-      setMessages(prev => prev.filter(m => m.ts !== streamingId));
+      // Remove the empty streaming placeholder
+      setMessages(prev => prev.filter(m => m.ts !== streamingId || m.content));
       setError(friendlyError(e, lang));
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [input, loading, messages, context, isAr, quality, lang]);
+  }, [input, loading, context, isAr, quality, lang]);
 
   const handleKey = e => {
     if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
