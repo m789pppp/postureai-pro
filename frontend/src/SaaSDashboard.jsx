@@ -535,7 +535,7 @@ export default function Dashboard({ user, sessions = [], profile, onNavigate, la
   const [activeTab, setActiveTab] = useState("overview");
 
   // Real data from passed sessions prop
-  const dashData = React.useMemo(() => {
+  const dashData = useMemo(() => {
     if (!sessions.length) return { avgScore: 0, activeUsers: 1, hoursTracked: 0, alerts: 0 };
     const scores = sessions.map(s => s.avg_score || 0).filter(Boolean);
     const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
