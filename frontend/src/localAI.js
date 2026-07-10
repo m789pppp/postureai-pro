@@ -787,97 +787,71 @@ function runAnalysis(prompt,sp) {
 // ── Vercel AI Proxy helpers ──────────────────────────────────────
 
 
-// AI — Puter.js (free, no API key, works from browser)
-// AI — multiple free endpoints, no login required
-async function callLLM7Direct(messages, systemPrompt, maxTokens) {
-  const userMsg = messages.filter(m => m.role === "user").map(m => m.content).join("\n");
 
-  // ── 1. Pollinations AI — completely free, no auth, no login ──────
-  try {
-    const pollinationsMsgs = [
-      { role: "system", content: systemPrompt },
-      ...messages.map(m => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: String(m.content || ""),
-      })),
-    ];
-    const res = await fetch("https://text.pollinations.ai/", {
+// AI — race all 3 simultaneously, fastest response wins
+async function callLLM7Direct(messages, systemPrompt, maxTokens) {
+  const allMsgs = [
+    { role: "system", content: systemPrompt },
+    ...messages.map(m => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: String(m.content || ""),
+    })),
+  ];
+
+  const go = (url, opts, parse) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 18000);
+    return fetch(url, { ...opts, signal: ctrl.signal })
+      .finally(() => clearTimeout(t))
+      .then(async r => {
+        if (!r.ok) throw new Error(`${r.status}`);
+        const text = await parse(r);
+        if (!text || text.length < 15) throw new Error("empty");
+        return text;
+      });
+  };
+
+  return Promise.any([
+    // 1. Pollinations POST — GPT-4o quality, free, no auth
+    go("https://text.pollinations.ai/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "openai-large",
-        messages: pollinationsMsgs,
-        max_tokens: maxTokens || 700,
-        temperature: 0.5,
-        seed: 42,
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const text = data?.choices?.[0]?.message?.content?.trim();
-      if (text && text.length > 20) {
-        console.info("[CorvusAI] ✅ Pollinations");
-        return text;
-      }
-    }
-  } catch(e) {
-    console.warn("[CorvusAI] Pollinations failed:", e.message);
-  }
+      body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: maxTokens || 700, temperature: 0.5 }),
+    }, async r => {
+      const d = await r.json();
+      const t = d?.choices?.[0]?.message?.content?.trim();
+      console.info("[CorvusAI] ✅ Pollinations POST");
+      return t;
+    }),
 
-  // ── 2. Pollinations GET endpoint (fallback) ─────────────────────
-  try {
-    const prompt = `${systemPrompt}\n\nUser: ${userMsg}\n\nAssistant:`;
-    const encoded = encodeURIComponent(prompt);
-    const res = await fetch(`https://text.pollinations.ai/${encoded}?model=openai&seed=42`, {
-      method: "GET",
-    });
-    if (res.ok) {
-      const text = (await res.text()).trim();
-      if (text && text.length > 20) {
-        console.info("[CorvusAI] ✅ Pollinations GET");
-        return text;
-      }
-    }
-  } catch(e) {
-    console.warn("[CorvusAI] Pollinations GET failed:", e.message);
-  }
-
-  // ── 3. OpenRouter free tier — no key needed for free models ──────
-  try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    // 2. OpenRouter — llama-3.1-8b free, fast
+    go("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "HTTP-Referer": "https://postureai-pro-omega-nine.vercel.app",
         "X-Title": "Corvus PostureAI",
       },
-      body: JSON.stringify({
-        model: "meta-llama/llama-3.1-8b-instruct:free",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages.map(m => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: String(m.content || ""),
-          })),
-        ],
-        max_tokens: maxTokens || 700,
-        temperature: 0.5,
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const text = data?.choices?.[0]?.message?.content?.trim();
-      if (text && text.length > 20) {
-        console.info("[CorvusAI] ✅ OpenRouter");
-        return text;
-      }
-    }
-  } catch(e) {
-    console.warn("[CorvusAI] OpenRouter failed:", e.message);
-  }
+      body: JSON.stringify({ model: "meta-llama/llama-3.1-8b-instruct:free", messages: allMsgs, max_tokens: maxTokens || 700 }),
+    }, async r => {
+      const d = await r.json();
+      const t = d?.choices?.[0]?.message?.content?.trim();
+      console.info("[CorvusAI] ✅ OpenRouter");
+      return t;
+    }),
 
-  throw new Error("all_free_apis_failed");
+    // 3. Pollinations GET — simplest fallback
+    go(`https://text.pollinations.ai/${encodeURIComponent(
+      allMsgs.map(m => `${m.role}: ${m.content}`).join("\n")
+    )}?model=openai`, { method: "GET" }, async r => {
+      const t = (await r.text()).trim();
+      console.info("[CorvusAI] ✅ Pollinations GET");
+      return t;
+    }),
+
+  ]).catch(() => { throw new Error("all_free_apis_failed"); });
 }
+
 
 
 
