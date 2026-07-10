@@ -226,7 +226,7 @@ function Eyebrow({ children, color = C.indigo, bg = "rgba(129,140,248,.1)", bord
 function SectionHead({ eyebrow, eyebrowColor, eyebrowBg, eyebrowBorder, title, sub, subMax = 560, align = "center" }) {
   return (
     <Reveal>
-      <div style={{ textAlign:align, marginBottom:"clamp(40px,5vw,72px)",
+      <div style={{ textAlign:align, marginBottom:"clamp(32px,4vw,56px)",
         marginInline: align==="center" ? "auto" : 0 }}>
         {eyebrow && <Eyebrow color={eyebrowColor} bg={eyebrowBg} border={eyebrowBorder}>{eyebrow}</Eyebrow>}
         <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 18px", fontFamily:FONT_DISPLAY }}>{title}</h2>
@@ -236,107 +236,112 @@ function SectionHead({ eyebrow, eyebrowColor, eyebrowBg, eyebrowBorder, title, s
   );
 }
 
-// ── Global stylesheet — one place, no selector collisions ─────────
+// ── Global stylesheet ─────────────────────────────────────────────
 function GlobalStyle() {
   return (
     <style>{`
       *{box-sizing:border-box}
-      .lp-wrap{max-width:1200px;margin:0 auto;width:100%;padding:0 24px}
-      .lp-section{padding:72px 24px}
+      html{scroll-behavior:smooth}
+      ::selection{background:rgba(79,124,249,.32);color:#fff}
 
-      .lp-lift{transition:transform .25s ease,box-shadow .25s ease}
-      .lp-lift:hover{transform:translateY(-4px);box-shadow:0 16px 40px rgba(0,0,0,.3)}
+      .lp-wrap{max-width:1200px;margin:0 auto;width:100%;padding:0 32px}
+      .lp-section{padding:88px 32px}
 
+      /* cards */
+      .lp-lift{transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s,border-color .28s}
+      .lp-lift:hover{transform:translateY(-5px);box-shadow:0 20px 48px rgba(0,0,0,.38),0 0 0 1px rgba(79,124,249,.1)}
+
+      /* buttons — shimmer sweep on hover */
+      .lp-btn{transition:transform .22s cubic-bezier(.16,1,.3,1),box-shadow .22s;position:relative;overflow:hidden}
+      .lp-btn::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.16) 50%,transparent 62%);transform:translateX(-120%);transition:transform .55s ease;pointer-events:none}
+      .lp-btn:hover::after{transform:translateX(120%)}
       .lp-btn:hover{transform:translateY(-2px)}
-      .lp-btn-primary:hover{box-shadow:0 8px 32px rgba(79,124,249,.5)!important}
-      .lp-btn-ghost:hover{background:rgba(255,255,255,.09)!important;border-color:${C.borderM}!important}
-      .lp-btn:active{transform:translateY(0)}
+      .lp-btn:active{transform:translateY(0) scale(.97)}
+      .lp-btn-primary{background:linear-gradient(135deg,#1a56db,#0891b2)!important;box-shadow:0 4px 20px rgba(26,86,219,.38)!important}
+      .lp-btn-primary:hover{box-shadow:0 10px 36px rgba(26,86,219,.52)!important}
+      .lp-btn-ghost:hover{background:rgba(255,255,255,.08)!important;border-color:rgba(148,163,184,.2)!important}
 
-      @keyframes lp-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.5)}}
+      /* animations */
+      @keyframes lp-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.42;transform:scale(1.65)}}
       @keyframes lp-drift-a{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-46%,-54%)}}
       @keyframes lp-drift-b{0%,100%{transform:translate(0,0)}50%{transform:translate(3%,-4%)}}
-      .lp-drift-a{animation:lp-drift-a 18s ease-in-out infinite}
-      .lp-drift-b{animation:lp-drift-b 22s ease-in-out infinite}
+      .lp-drift-a{animation:lp-drift-a 20s ease-in-out infinite}
+      .lp-drift-b{animation:lp-drift-b 26s ease-in-out infinite}
 
-      :focus-visible{outline:2px solid ${C.indigo};outline-offset:3px}
+      :focus-visible{outline:2px solid #4f7cf9;outline-offset:3px;border-radius:4px}
 
-      /* ── HERO — 2 columns ── */
-      .lp-hero-grid{
-        display:grid;
-        grid-template-columns:1fr 1.05fr;
-        gap:clamp(32px,4vw,64px);
-        align-items:center;
+      /* hero */
+      .lp-hero-grid{display:grid;grid-template-columns:1fr 1.05fr;gap:clamp(32px,4vw,64px);align-items:center}
+      @media(max-width:900px){.lp-hero-grid{grid-template-columns:1fr}.lp-hero-right{display:none!important}}
+
+      /* nav */
+      @media(max-width:860px){.lp-nav-links,.lp-nav-actions{display:none!important}.lp-nav-burger{display:flex!important}}
+
+      /* grids */
+      .lp-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+      .lp-features-wrap{display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:start}
+      .lp-how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
+      .lp-cases-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+      .lp-pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+      .lp-testi-grid,.lp-testi-inner{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+      .lp-footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:40px 32px}
+      .lp-sp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+      .lp-sp-row2{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px}
+
+      /* tablet */
+      @media(max-width:1024px){
+        .lp-wrap{padding:0 24px}.lp-section{padding:68px 24px}
+        .lp-footer-grid{grid-template-columns:1fr 1fr 1fr}
+        .lp-stats-grid{grid-template-columns:repeat(2,1fr)}
       }
-      @media(max-width:900px){
-        .lp-hero-grid{grid-template-columns:1fr}
-        .lp-hero-right{display:none!important}
-      }
 
-      /* ── NAV ── */
-      @media(max-width:860px){
-        .lp-nav-links,.lp-nav-actions{display:none!important}
-        .lp-nav-burger{display:flex!important}
-      }
-
-      /* ── STATS ── */
-      .lp-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-      @media(max-width:860px){.lp-stats-grid{grid-template-columns:repeat(2,1fr)}}
-      @media(max-width:480px){.lp-stats-grid{grid-template-columns:1fr 1fr}}
-
-      /* ── FEATURES ── */
-      .lp-features-wrap{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
-      @media(max-width:860px){.lp-features-wrap{grid-template-columns:1fr}}
-
-      /* ── HOW IT WORKS ── */
-      .lp-how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-      @media(max-width:720px){.lp-how-grid{grid-template-columns:1fr;gap:16px}}
-
-      /* ── CASES ── */
-      .lp-cases-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-      @media(max-width:900px){.lp-cases-grid{grid-template-columns:repeat(2,1fr)}}
-      @media(max-width:600px){.lp-cases-grid{grid-template-columns:1fr}}
-
-      /* ── PRICING ── */
-      .lp-pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-      @media(max-width:900px){.lp-pricing-grid{grid-template-columns:1fr;max-width:420px;margin:0 auto}}
-
-      /* ── TESTIMONIALS ── */
-      .lp-testi-inner,.lp-testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-      @media(max-width:860px){.lp-testi-inner,.lp-testi-grid{grid-template-columns:1fr!important}}
-
-      /* ── HOWIT WORKS mobile fix ── */
+      /* mobile */
       @media(max-width:720px){
+        .lp-how-grid{grid-template-columns:1fr;gap:20px}
+        .lp-testi-grid,.lp-testi-inner{grid-template-columns:1fr}
         .lp-timeline-line{display:none!important}
         .lp-timeline-node{margin-top:0!important;margin-bottom:16px!important}
       }
+      @media(max-width:640px){
+        .lp-wrap{padding:0 16px}.lp-section{padding:52px 16px}
+        .lp-stats-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+        .lp-cases-grid{grid-template-columns:1fr}
+        .lp-features-wrap{grid-template-columns:1fr}
+        .lp-pricing-grid{grid-template-columns:1fr;max-width:400px;margin:0 auto}
+        .lp-footer-grid{grid-template-columns:1fr 1fr}
+        .lp-sp-stats{grid-template-columns:repeat(2,1fr)}
+      }
 
-      /* ── FOOTER ── */
-      .lp-footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:40px 28px}
-      @media(max-width:1024px){.lp-footer-grid{grid-template-columns:1fr 1fr 1fr}}
-      @media(max-width:600px){.lp-footer-grid{grid-template-columns:1fr 1fr}}
-
-      /* ── SOCIAL PROOF ── */
-      .lp-sp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-      @media(max-width:720px){.lp-sp-stats{grid-template-columns:repeat(2,1fr)}}
-      .lp-sp-row2{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
-
-      /* ── GENERAL ── */
-      @media(max-width:1024px){
-        .lp-wrap{padding:0 20px}
-        .lp-section{padding:60px 20px}
-      }
-      @media(max-width:600px){
-        .lp-wrap{padding:0 16px}
-        .lp-section{padding:44px 16px}
-      }
-      @media(max-width:420px){
-        h1{font-size:30px!important;line-height:1.1!important}
-      }
-      @media(prefers-reduced-motion:reduce){
-        .lp-drift-a,.lp-drift-b{animation:none!important}
-        .lp-lift,.lp-btn{transition:none!important}
-      }
+      @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.lp-btn::after{display:none}}
     `}</style>
+  );
+}
+
+
+// ── Scroll progress bar ───────────────────────────────────────────
+function ScrollProgress() {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const h = () => {
+      const el = document.documentElement;
+      const pct = el.scrollTop / (el.scrollHeight - el.clientHeight);
+      setW(Math.round(pct * 100));
+    };
+    window.addEventListener("scroll", h, { passive: true });
+    return () => window.removeEventListener("scroll", h);
+  }, []);
+  return (
+    <div style={{
+      position:"fixed", top:0, left:0, right:0, height:2.5, zIndex:2000,
+      background:"rgba(255,255,255,.04)",
+    }}>
+      <div style={{
+        height:"100%", width:`${w}%`,
+        background:"linear-gradient(90deg,#1a56db,#22d3ee,#10d9a0)",
+        transition:"width .1s linear",
+        boxShadow:"0 0 8px rgba(34,211,238,.5)",
+      }}/>
+    </div>
   );
 }
 
@@ -367,10 +372,13 @@ function Nav({ lang, setLang, onCTA }) {
     <nav style={{
       position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000,
       padding: "0 24px",
-      background: scrolled || mobileOpen ? "rgba(3,11,20,.94)" : "transparent",
-      backdropFilter: scrolled || mobileOpen ? "blur(20px)" : "none",
-      borderBottom: scrolled || mobileOpen ? `1px solid ${C.border}` : "none",
-      transition: "background .3s,border-color .3s",
+      background: scrolled || mobileOpen
+        ? "rgba(3,11,20,.96)"
+        : "rgba(3,11,20,.3)",
+      backdropFilter: "blur(24px)",
+      borderBottom: `1px solid ${scrolled ? "rgba(148,163,184,.1)" : "transparent"}`,
+      transition: "background .35s ease, border-color .35s ease",
+      boxShadow: scrolled ? "0 4px 32px rgba(0,0,0,.3)" : "none",
     }}>
       <div className="lp-wrap" style={{ height: 68,
         display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -912,15 +920,25 @@ function Stats({ lang }) {
         <div className="lp-stats-grid">
         {stats.map(([val, label, source], i) => (
           <Reveal key={label} delay={i * 80} y={20}>
-            <div className="lp-lift" style={{ ...card(), textAlign:"center", padding:"clamp(20px,3vw,36px) clamp(16px,2vw,24px)" }}>
+            <div className="lp-lift" style={{
+              ...card(), textAlign:"center",
+              padding:"clamp(20px,3vw,36px) clamp(16px,2vw,24px)",
+              borderTop:`2px solid ${[C.green,C.blue,C.indigo,C.sky][i]}`,
+              position:"relative", overflow:"hidden",
+            }}>
+              <div style={{
+                position:"absolute", top:0, left:0, right:0, height:60,
+                background:`radial-gradient(ellipse at 50% 0%,${[C.green,C.blue,C.indigo,C.sky][i]}18,transparent 70%)`,
+                pointerEvents:"none",
+              }}/>
               <div style={{
                 fontSize:"clamp(32px,3.2vw,52px)", fontWeight:700, letterSpacing:"-.02em",
                 background:C.gHero, WebkitBackgroundClip:"text",
                 WebkitTextFillColor:"transparent", lineHeight:1, marginBottom:10,
-                fontFamily:FONT_MONO,
+                fontFamily:FONT_MONO, position:"relative",
               }}>{val}</div>
-              <div style={{ fontSize:"clamp(13px,1.2vw,14.5px)", color:C.sub, lineHeight:1.5 }}>{label}</div>
-              {source&&<div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4 }}>{source}</div>}
+              <div style={{ fontSize:"clamp(13px,1.2vw,14.5px)", color:C.sub, lineHeight:1.5, position:"relative" }}>{label}</div>
+              {source&&<div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4, position:"relative" }}>{source}</div>}
             </div>
           </Reveal>
         ))}
@@ -1801,6 +1819,7 @@ export default function LandingPage({ onNavigate }) {
   return (
     <div style={{ background:C.bg, minHeight:"100vh", color:C.text, fontFamily:FONT_DISPLAY }}>
       <GlobalStyle/>
+      <ScrollProgress/>
       <Nav lang={lang} setLang={setLang} onCTA={handleCTA} mode={mode} setMode={setMode}/>
       <Hero lang={lang} onCTA={handleCTA} mode={mode} setMode={setMode}/>
       <SocialProof lang={lang}/>
