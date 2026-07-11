@@ -22,7 +22,25 @@
  *   engine has no FaceMesh/solvePnP access and uses a pure nose+ear 2D
  *   blend instead. Expect the two neck-lean readings to differ by a few
  *   degrees for the same pose — this is expected, not a sync bug.
+ *
+ * v4 ADDITIONS (tier-aware precision layer):
+ * - ENGINE_PROFILES + setEngineTier(): feature gating per plan level
+ *   (standard/basic/professional/elite) via lib/tierQuality featureTier().
+ * - Velocity-adaptive landmark smoothing (One-Euro-inspired): near-still
+ *   frames are smoothed harder (sub-pixel jitter removal), intentional
+ *   movement tracks faster. Professional+ only.
+ * - Yaw reliability gate: beyond ~28° head rotation the front-view
+ *   FHP (Z-depth) and rounded-shoulder geometry degrade — those modules
+ *   are marked unreliable instead of emitting misleading values.
+ * - Alert persistence: an alert only surfaces after N consecutive
+ *   qualifying frames (tier-dependent), eliminating single-frame
+ *   false-positive flicker.
+ * - Elite clinical metrics: cervical spine load (Hansraj 2014),
+ *   RULA-lite ergonomic risk (simplified from McAtamney & Corlett 1993),
+ *   posture stability index, and L/R symmetry index.
  */
+
+import { featureTier } from "../../lib/tierQuality.js";
 
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS — no magic numbers
@@ -121,6 +139,69 @@ const SEV = {
   // Spine lean (degrees)
   SPINE: { mild: 5, moderate: 10, severe: 18 },
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// TIER PROFILES — engine feature gating (v4)
+// ═══════════════════════════════════════════════════════════════════
+// Every tier gets the full production-grade core pipeline (all 10 core
+// metrics, jitter rejection, confidence weighting, quality gates).
+// Higher tiers add PRECISION and CLINICAL DEPTH on top:
+//   professional → adaptive smoothing, stability + symmetry indices
+//   elite        → + cervical load model, RULA-lite ergonomic risk,
+//                    fastest alert response (4-frame persistence)
+export const ENGINE_PROFILES = {
+  standard:     { adaptiveSmoothing:false, alertPersistFrames:8, stabilityIndex:false, symmetryIndex:false, clinicalLoad:false, rula:false },
+  basic:        { adaptiveSmoothing:false, alertPersistFrames:7, stabilityIndex:false, symmetryIndex:false, clinicalLoad:false, rula:false },
+  professional: { adaptiveSmoothing:true,  alertPersistFrames:6, stabilityIndex:true,  symmetryIndex:true,  clinicalLoad:false, rula:false },
+  elite:        { adaptiveSmoothing:true,  alertPersistFrames:4, stabilityIndex:true,  symmetryIndex:true,  clinicalLoad:true,  rula:true  },
+};
+
+let _tierLevel     = "standard";
+let _engineProfile = ENGINE_PROFILES.standard;
+
+/**
+ * Configure the engine for a plan tier. Accepts any raw tier string
+ * (B2C, legacy alias, or b2b_*) — normalised via featureTier().
+ * Idempotent and cheap: safe to call every frame.
+ */
+export function setEngineTier(rawTier) {
+  const lvl = featureTier(rawTier);
+  if (lvl !== _tierLevel) {
+    _tierLevel     = lvl;
+    _engineProfile = ENGINE_PROFILES[lvl] || ENGINE_PROFILES.standard;
+  }
+  return _tierLevel;
+}
+
+export function getEngineTier() { return _tierLevel; }
+
+// Rolling overall-score history (feeds the stability index) and
+// per-alert persistence streaks — both cleared in resetProportions().
+const _scoreHist    = [];
+const _alertStreaks = Object.create(null);
+
+/**
+ * Alert persistence gate: condition must hold for `need` consecutive
+ * analysed frames before the alert surfaces. Kills single-frame
+ * false positives (blinks, occlusions, landmark spikes).
+ */
+function _persistAlert(key, condition, need) {
+  _alertStreaks[key] = condition ? (_alertStreaks[key] || 0) + 1 : 0;
+  return _alertStreaks[key] >= need;
+}
+
+/**
+ * Posture Stability Index from the rolling overall-score window.
+ * Low variance = held, controlled posture; high variance = fidgeting /
+ * slouch-correct cycles. Returns a metric entry or null (<20 frames).
+ */
+function _stabilityMetric() {
+  if (_scoreHist.length < 20) return null;
+  const mean = _scoreHist.reduce((a, b) => a + b, 0) / _scoreHist.length;
+  const sd   = Math.sqrt(_scoreHist.reduce((s, v) => s + (v - mean) ** 2, 0) / _scoreHist.length);
+  const stability = Math.max(0, Math.min(100, Math.round(100 - sd * 4)));
+  return { value: stability, score: stability, unit: "%", label: "Posture stability", window_frames: _scoreHist.length };
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // LANDMARK INDICES
@@ -295,7 +376,15 @@ export function createLandmarkSmoother(alpha = 0.4, maxRejectStreak = MAX_REJECT
         rejectStreak[i] = 0;
         const vis = c.visibility ?? 1;
         // Low-confidence landmark: lean on history, trust raw value less
-        const a = vis < VIS_MIN ? alpha * 0.4 : alpha;
+        let a = vis < VIS_MIN ? alpha * 0.4 : alpha;
+        // Velocity-adaptive smoothing (One-Euro-inspired, professional+):
+        // near-still → smooth harder (removes sub-pixel sensor jitter),
+        // deliberate movement → track faster (no perceived lag).
+        if (_engineProfile.adaptiveSmoothing) {
+          const speed = jump / dt;                    // normalized units/sec
+          const t = Math.min(1, speed / 0.9);         // 0 = still, 1 = fast
+          a = Math.min(0.95, a * (0.5 + 0.9 * t));
+        }
 
         out[i] = {
           x:          p.x + a * (c.x - p.x),
@@ -431,6 +520,9 @@ export function resetProportions() {
   analyzeMP._cachedFhp     = null;
   analyzeMP._cachedElbow   = null;
   analyzeMP._cachedMonitor = null;
+  // v4: clear stability window + alert persistence streaks
+  _scoreHist.length = 0;
+  for (const k in _alertStreaks) delete _alertStreaks[k];
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -874,9 +966,13 @@ function analyzeMonitorHeight(lms, W, H, distCm) {
 // ═══════════════════════════════════════════════════════════════════
 
 function buildAlerts(modules, distCm, lo, hi) {
-  const seen    = new Set();
+  const seen = new Set();
+  const need = _engineProfile.alertPersistFrames;
   const add = (key, condition, text) => {
-    if (!condition || !text || seen.has(key)) return null;
+    // Persistence gate first — streaks must update EVERY frame, including
+    // frames where the condition is false (that's what resets them).
+    const stable = _persistAlert(key, !!condition, need);
+    if (!condition || !stable || !text || seen.has(key)) return null;
     seen.add(key);
     return text;
   };
@@ -971,6 +1067,18 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // Spine runs every frame (fast) but depends on rounded.score from above
   const spine = analyzeSpineLean(lms, W, H, prop, rounded.score);
 
+  // ── Yaw reliability gate (v4) ─────────────────────────────────────
+  // Beyond ~28° head rotation the front-view geometry degrades badly:
+  // MediaPipe Z becomes unstable (corrupts FHP's sagittal displacement)
+  // and the ear-midpoint elevation reference shifts (corrupts rounded-
+  // shoulder deviation). Mark both unreliable — the confidence-weighted
+  // scorer then excludes them instead of ingesting misleading values.
+  // Copies only — the frame-skip cache keeps the raw modules untouched.
+  if (Math.abs(headYaw) > 28) {
+    if (fhp.reliable)     fhp     = { ...fhp,     reliable: false, confidence: Math.min(fhp.confidence ?? 100, 40), yawGated: true };
+    if (rounded.reliable) rounded = { ...rounded, reliable: false, confidence: Math.min(rounded.confidence ?? 100, 40), yawGated: true };
+  }
+
   // Confidence-weighted overall score.
   // Previous: unreliable modules contributed at a fixed 30% weight, meaning
   // a default score of 90 from an invisible landmark was still inflating the
@@ -1029,7 +1137,60 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // Alerts
   const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor }, distCm, lo, hi);
 
+  // ── Tier-gated clinical metrics (v4) ──────────────────────────────
+  _scoreHist.push(overall);
+  if (_scoreHist.length > FRAME_BUFFER_SIZE) _scoreHist.shift();
+  const advMetrics   = {};
+  const tierFeatures = [];
+
+  // Posture Stability Index (professional+)
+  if (_engineProfile.stabilityIndex) {
+    const stab = _stabilityMetric();
+    if (stab) { advMetrics.posture_stability = stab; tierFeatures.push("stability"); }
+  }
+
+  // L/R Symmetry Index (professional+) — combined coronal-plane
+  // asymmetry: shoulder height imbalance + lateral head tilt.
+  if (_engineProfile.symmetryIndex && shoulder.reliable && headTilt.reliable) {
+    const asymDeg = Math.round((Math.abs(shoulder.signedAngle ?? shoulder.angle) + headTilt.angle) * 10) / 10;
+    advMetrics.symmetry_index = { value: asymDeg, score: scoreMetric(asymDeg, 0, 4, 14), unit: "°", label: "L/R symmetry", reliable: true };
+    tierFeatures.push("symmetry");
+  }
+
+  // Cervical Spine Load (elite) — total effective head weight on the
+  // cervical spine. Hansraj (2014), Surgical Technology International:
+  // neutral head ≈ 4.5–5.4 kg; load rises with flexion angle.
+  if (_engineProfile.clinicalLoad && fhp.reliable) {
+    const HEAD_KG = 4.5;
+    const totalLoadKg = Math.round((HEAD_KG + fhp.extraLoadKg) * 10) / 10;
+    advMetrics.cervical_load = { value: totalLoadKg, score: fhp.score, unit: "kg", label: "Cervical spine load", baseline_kg: HEAD_KG, extra_kg: fhp.extraLoadKg, model: "Hansraj 2014" };
+    tierFeatures.push("cervical_load");
+  }
+
+  // RULA-lite Ergonomic Risk (elite) — SIMPLIFIED screen-based
+  // adaptation of RULA (McAtamney & Corlett 1993, Applied Ergonomics).
+  // Seated desk subset: neck + trunk + upper-arm bands with twist
+  // penalties. Grand score 1–7; NOT a substitute for a full RULA
+  // assessment by a qualified assessor.
+  if (_engineProfile.rula) {
+    const neckR  = !neck.reliable  ? 1 : neck.angle  <= 10 ? 1 : neck.angle  <= 20 ? 2 : 3;
+    const trunkR = !spine.reliable ? 1 : spine.angle <=  5 ? 1 : spine.angle <= 20 ? 2 : 3;
+    const armDev = elbow.reliable && elbow.angle != null ? Math.abs(elbow.angle - 105) : 0;
+    const armR   = armDev <= 15 ? 1 : armDev <= 30 ? 2 : 3;
+    const twistPen = (shoulder.reliable && shoulder.angle > 7 ? 1 : 0)
+                   + (yaw.reliable && yaw.absAngle > 18 ? 1 : 0);
+    const grand = Math.max(1, Math.min(7, neckR + trunkR + armR + twistPen - 2));
+    advMetrics.ergo_rula = {
+      value: grand, score: Math.max(5, 100 - (grand - 1) * 15), unit: "/7",
+      label: "RULA-lite ergonomic risk",
+      action: grand <= 2 ? "acceptable" : grand <= 4 ? "investigate" : grand <= 6 ? "change soon" : "change now",
+    };
+    tierFeatures.push("rula");
+  }
+
   return {
+    engine_tier:   _tierLevel,
+    tier_features: tierFeatures,
     score:       overall,
     qualityScore: 100,
     confidence:  detectionConfidence,
@@ -1069,6 +1230,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       monitor_height:    { value: monitor.offsetCm, score: monitor.score,  unit: "cm", label: "Monitor height offset",direction: monitor.direction, reliable: monitor.reliable },
       session_fatigue:   { value: fatiguePenalty,   score: Math.max(0, overall - fatiguePenalty), unit: "pts", label: "Fatigue adjustment", session_min: sessionMin },
       confidence_val:    { value: detectionConfidence, score: detectionConfidence, unit: "%", label: "Detection confidence" },
+      // v4: tier-gated clinical metrics (empty object below elite/professional)
+      ...advMetrics,
     },
 
     alerts,
@@ -1210,17 +1373,33 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
     sideBase
   )));
 
+  // v4: same persistence gate as the front camera — an alert must hold
+  // for N consecutive frames (tier-dependent) before it surfaces.
+  const needP = _engineProfile.alertPersistFrames;
   const alerts = [
-    neckOK && neckLean > neckBadAdj               && `⚠️ Forward head ${Math.round(neckLean)}° — ear must be above shoulder`,
-    neckOK && neckLean > (neckOkAdj+neckBadAdj)/2 && neckLean <= neckBadAdj && `Neck lean ${Math.round(neckLean)}° — tuck chin back`,
-    earOK && shOK && fhpSideCm > 5                && `⚠️ Forward head posture ${fhpSideCm}cm (side view) — tuck chin, pull head back over shoulders`,
-    shOK && hipOK && trunkLean > 12               && `Trunk leaning ${Math.round(trunkLean)}° — sit back with lumbar support`,
-    hipOK && kneeOK && Math.abs(hipAngle-90) > 15  && `Hip angle ${Math.round(hipAngle)}° (ideal ~90°) — adjust seat height`,
-    kneeOK && ankleOK && Math.abs(kneeAngle-90) > 18 && `Knee angle ${Math.round(kneeAngle)}° (ideal ~90°) — adjust footrest`,
-    shOK && hipOK && earOK && spineAlign > 12       && `Spine curvature ${Math.round(spineAlign)}° — maintain neutral spine, lumbar support`,
-  ].filter(Boolean);
+    ["s_neck_sev",  neckOK && neckLean > neckBadAdj,                                    `⚠️ Forward head ${Math.round(neckLean)}° — ear must be above shoulder`],
+    ["s_neck_mid",  neckOK && neckLean > (neckOkAdj+neckBadAdj)/2 && neckLean <= neckBadAdj, `Neck lean ${Math.round(neckLean)}° — tuck chin back`],
+    ["s_fhp",       earOK && shOK && fhpSideCm > 5,                                     `⚠️ Forward head posture ${fhpSideCm}cm (side view) — tuck chin, pull head back over shoulders`],
+    ["s_trunk",     shOK && hipOK && trunkLean > 12,                                    `Trunk leaning ${Math.round(trunkLean)}° — sit back with lumbar support`],
+    ["s_hip",       hipOK && kneeOK && Math.abs(hipAngle-90) > 15,                      `Hip angle ${Math.round(hipAngle)}° (ideal ~90°) — adjust seat height`],
+    ["s_knee",      kneeOK && ankleOK && Math.abs(kneeAngle-90) > 18,                   `Knee angle ${Math.round(kneeAngle)}° (ideal ~90°) — adjust footrest`],
+    ["s_spine",     shOK && hipOK && earOK && spineAlign > 12,                          `Spine curvature ${Math.round(spineAlign)}° — maintain neutral spine, lumbar support`],
+  ].map(([k, cond, text]) => (_persistAlert(k, !!cond, needP) && cond ? text : null))
+   .filter(Boolean);
+
+  // v4: tier-gated stability index for the side camera too
+  _scoreHist.push(overall);
+  if (_scoreHist.length > FRAME_BUFFER_SIZE) _scoreHist.shift();
+  const advMetricsSide = {};
+  const tierFeaturesSide = [];
+  if (_engineProfile.stabilityIndex) {
+    const stab = _stabilityMetric();
+    if (stab) { advMetricsSide.posture_stability = stab; tierFeaturesSide.push("stability"); }
+  }
 
   return {
+    engine_tier:   _tierLevel,
+    tier_features: tierFeaturesSide,
     score:    overall,
     confidence: Math.min(93, 70 + (shOK?10:0) + (earOK?8:0) + (hipOK?5:0)),
     metrics: {
@@ -1230,6 +1409,7 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
       hip_angle:      { value: Math.round(hipAngle),  score: hipSc,   unit: "°",  label: "Hip angle",         reliable: hipOK && kneeOK },
       knee_angle:     { value: Math.round(kneeAngle), score: kneeSc,  unit: "°",  label: "Knee angle",        reliable: kneeOK && ankleOK },
       spine_align:    { value: Math.round(spineAlign),score: spineSc, unit: "°",  label: "Spine alignment",   reliable: shOK && hipOK && earOK },
+      ...advMetricsSide,
     },
     bodyModules: { neck: { angle: Math.round(neckLean), score: neckSc, severity: classify(neckLean, SEV.NECK) },
                    trunk: { angle: Math.round(trunkLean), score: trunkSc }, hip: { angle: Math.round(hipAngle), score: hipSc },

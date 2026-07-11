@@ -34,7 +34,7 @@ import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
-import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
+import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions, setEngineTier } from "./features/analysis/postureEngine.js";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
@@ -2642,6 +2642,7 @@ export default function App(){
         const det=mpRef.current.detectForVideo(vid,performance.now());
         if(det.landmarks?.length>0){
           const quality = qualityFor(tier);
+          setEngineTier(tier); // v4 engine profile — idempotent, safe per frame
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(150); // was 60 (2s) → 150 (5s) for smoother score history
           if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);

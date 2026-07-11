@@ -20,6 +20,9 @@ const METRIC_LABELS = {
   distance:"Viewing Distance", screen_distance:"Viewing Distance",
   trunk_lean:"Trunk Lean",
   hip_angle:"Hip Angle", knee_angle:"Knee Angle",
+  // v4 engine — tier-gated clinical metrics (Professional/Elite)
+  posture_stability:"Posture Stability", symmetry_index:"L/R Symmetry",
+  cervical_load:"Cervical Spine Load", ergo_rula:"RULA Ergonomic Risk",
 };
 const METRIC_LABELS_AR = {
   neck_lean:"ميل الرقبة", neck_lean_side:"ميل الرقبة (جانبي)",
@@ -34,6 +37,9 @@ const METRIC_LABELS_AR = {
   distance:"مسافة المشاهدة", screen_distance:"مسافة المشاهدة",
   trunk_lean:"ميل الجذع",
   hip_angle:"زاوية الورك", knee_angle:"زاوية الركبة",
+  // v4 engine — tier-gated clinical metrics (Professional/Elite)
+  posture_stability:"ثبات الوضعية", symmetry_index:"التماثل الجانبي",
+  cervical_load:"حمل الفقرات العنقية", ergo_rula:"مؤشر RULA للمخاطر",
 };
 
 // Engine keys that are informational, not posture metrics — never
