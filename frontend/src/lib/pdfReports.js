@@ -31,9 +31,11 @@ const METRIC_LABELS_AR = {
 
 // ── Unified entry point (called from AIReports.jsx + App.jsx) ──────
 export async function exportPDFReport({ type, sessions, session, profile, aiSummary, lang="en" }) {
+  // Always use the most recent session (first in array = most recent from Firestore)
+  const latestSession = session || sessions?.[0];
   switch(type) {
-    case "session":      return generateSessionPDF({ session: session||sessions?.[0], profile, aiSummary, lang, allSessions: sessions });
-    case "clinical":     return generateClinicalPDF({ session: session||sessions?.[0], profile, aiSummary, lang, allSessions: sessions });
+    case "session":      return generateSessionPDF({ session: latestSession, profile, aiSummary, lang, allSessions: sessions });
+    case "clinical":     return generateClinicalPDF({ session: latestSession, profile, aiSummary, lang, allSessions: sessions });
     case "comparison":   return generateComparisonPDF({ sessions, profile, aiSummary, lang });
     case "longitudinal": return generateLongitudinalPDF({ sessions, profile, aiSummary, lang });
     case "ai": default:  return generateAIPDF({ sessions, profile, aiSummary, lang });
@@ -104,6 +106,8 @@ function _scoreLabel(s,isAr){
   if(s>=40) return isAr?"مقبول":"Fair";
   return isAr?"يحتاج تحسين":"Needs Work";
 }
+// Normalize tier string aliases (personal_elite→elite, b2b_growth→professional, etc.)
+const _t = t => (!t?"standard":t.includes("elite")||t==="enterprise"||t==="premium"?"elite":t.includes("pro")||t.includes("professional")||t==="growth"?"professional":t);
 function _scLt(s){ return s>=80?T.successLt:s>=60?T.warningLt:T.dangerLt; }
 function _sl(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Work"); }
 function _riskLabel(v,ar){ return v>=70?(ar?"عالي":"High"):v>=40?(ar?"متوسط":"Moderate"):(ar?"منخفض":"Low"); }
@@ -446,7 +450,11 @@ function _drawSparkline(doc,hist,x,y,w,h,col){_spark(doc,hist,x,y,w,h,col);}
 export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[], aiSummary="" }) {
   const { jsPDF } = await import("jspdf");
   const isAr   = lang === "ar";
-  const tier   = profile?.tier || session?.tier || "standard";
+  const _rawTier = profile?.tier || session?.tier || "standard";
+  // Normalize aliases: personal_elite/b2b_enterprise → elite, personal_pro/b2b_growth → professional
+  const tier     = _rawTier.includes("elite")||_rawTier==="enterprise"||_rawTier==="premium"?"elite"
+                 : _rawTier.includes("pro")||_rawTier.includes("professional")||_rawTier==="growth"?"professional"
+                 : _rawTier;
   const isElite= tierAtLeast(tier,"elite");
   const isPro  = !isElite && tierAtLeast(tier,"professional");
   const doc    = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
@@ -462,7 +470,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const alerts   = session.alerts_count||0;
   const hist     = session.score_history||[];
   const metrics  = session.metrics||{};
-  const aiText   = session.ai_tip||session.ai_insight||session.claude_analysis||"";
+  const aiText   = session.ai_tip||session.ai_insight||session.claude_analysis||aiSummary||"";
   const painSum  = session.pain_summary||"";
   const name     = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
   const email    = user?.email||"";
@@ -1150,7 +1158,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
-  const tier    = profile?.tier || session?.tier || "standard";
+  const tier    = _t(profile?.tier || session?.tier || "standard");
   // Note: tier gate is enforced in App.jsx downloadPDF() before calling here.
   // We don't re-throw here to avoid silent failures from stale session.tier values.
 
@@ -1573,7 +1581,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 
   const { jsPDF } = await import("jspdf");
   const isAr = lang==="ar";
-  const tier = profile?.tier||"standard";
+  const tier = _t(profile?.tier||"standard");
   // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
@@ -1994,7 +2002,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 export async function generateTeamPDF({ users=[], company="", dateRange=30, profile, lang="en", aiSummary="" }) {
   const { jsPDF } = await import("jspdf");
   const isAr = lang==="ar";
-  const tier = profile?.tier||"standard";
+  const tier = _t(profile?.tier||"standard");
   // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
@@ -2190,7 +2198,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   const { jsPDF } = await import("jspdf");
   if (sessions.length < 2) { console.warn("[PDF] Need more sessions for longitudinal"); }
   const isAr = lang==="ar";
-  const tier = profile?.tier||"standard";
+  const tier = _t(profile?.tier||"standard");
   // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
