@@ -79,20 +79,70 @@ function MdText({ text }) {
           margin: "10px 0 4px",
         }} dangerouslySetInnerHTML={{ __html: inlineFormat(line.slice(4)) }} />
       );
-    } else if (line.startsWith("- ") || line.startsWith("• ")) {
+    } else if (line.startsWith("- ") || line.startsWith("• ") || line.startsWith("* ")) {
       bulletBuffer.push(inlineFormat(line.slice(2)));
+    } else if (/^\d+\./.test(line)) {
+      flushBullets();
+      const [,num,rest] = line.match(/^(\d+)\.\s(.+)$/) || [,"","",line];
+      elements.push(
+        <div key={key++} style={{ display:"flex", gap:10, margin:"5px 0", alignItems:"baseline" }}>
+          <span style={{ color:"#60a5fa", fontWeight:700, fontSize:12, minWidth:18, flexShrink:0 }}>{num || "•"}.</span>
+          <span style={{ color:"#cbd5e1", lineHeight:1.65, fontSize:13 }} dangerouslySetInnerHTML={{ __html: inlineFormat(rest||line) }} />
+        </div>
+      );
+    } else if (line.startsWith("|")) {
+      // Table row — collect all table lines then render
+      flushBullets();
+      const tableLines = [line];
+      while (i + 1 < lines.length && lines[i+1].trim().startsWith("|")) {
+        i++; tableLines.push(lines[i].trim());
+      }
+      const tableRows = tableLines.filter(r => !r.match(/^[|\s-]+$/));
+      if (tableRows.length >= 2) {
+        const headers = tableRows[0].split("|").filter((_,j,a)=>j>0&&j<a.length-1).map(h=>h.trim());
+        const dataRows = tableRows.slice(1);
+        elements.push(
+          <div key={key++} style={{ overflowX:"auto", margin:"12px 0" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12.5 }}>
+              <thead>
+                <tr>{headers.map((h,hi)=>(
+                  <th key={hi} style={{ padding:"8px 12px", textAlign:"left", background:"rgba(99,179,237,.1)", color:"#93c5fd", fontWeight:600, borderBottom:"1px solid rgba(99,179,237,.2)" }}
+                    dangerouslySetInnerHTML={{ __html: inlineFormat(h) }}/>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {dataRows.map((row,ri)=>{
+                  const cells = row.split("|").filter((_,j,a)=>j>0&&j<a.length-1).map(c=>c.trim());
+                  return <tr key={ri} style={{ background:ri%2===0?"rgba(255,255,255,.02)":"transparent" }}>
+                    {cells.map((c,ci)=>(
+                      <td key={ci} style={{ padding:"7px 12px", borderBottom:"1px solid rgba(255,255,255,.05)", color:"#cbd5e1" }}
+                        dangerouslySetInnerHTML={{ __html: inlineFormat(c) }}/>
+                    ))}
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    } else if (line.startsWith("⚕️") || line.startsWith("⚠️")) {
+      flushBullets();
+      elements.push(
+        <div key={key++} style={{ background:"rgba(239,68,68,.07)", border:"0.5px solid rgba(239,68,68,.22)", borderRadius:8, padding:"10px 14px", margin:"10px 0", fontSize:12.5, color:"#fca5a5", lineHeight:1.6 }}
+          dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />
+      );
     } else {
       flushBullets();
       elements.push(
         <p key={key++} style={{
           margin: "4px 0", lineHeight: 1.7,
-          color: "#94a3b8", fontSize: 13,
+          color: "#cbd5e1", fontSize: 13.5,
         }} dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />
       );
     }
   }
   flushBullets();
-  return <div style={{ display: "flex", flexDirection: "column" }}>{elements}</div>;
+  return <div style={{ display:"flex", flexDirection:"column", fontFamily:"'DM Sans',system-ui,sans-serif" }}>{elements}</div>;
 }
 
 // ── Fatigue Gauge ──────────────────────────────────────────────────
