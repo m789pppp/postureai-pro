@@ -192,7 +192,7 @@ function AnomalyRow({ anomaly, sessions, isAr }) {
     : "—";
   const isHigh = anomaly.direction === "high";
   const color  = isHigh ? "#10b981" : "#ef4444";
-  const T = D?.t || { label:{fontSize:9,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase"}, small:{fontSize:11}, h3:{fontSize:12,fontWeight:600} };
+  // T removed — using TOKENS directly
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: TOKENS.sp3,
