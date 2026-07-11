@@ -3131,7 +3131,9 @@ export default function App(){
   }
 
   async function shareReport(sessionData) {
-    if (!tierAtLeast(tier,"elite")) {
+    const _eTier = effectiveTier || tier;
+    const normalizedTier = _eTier?.includes?.("elite") ? "elite" : _eTier?.includes?.("pro") ? "professional" : _eTier;
+    if (!tierAtLeast(normalizedTier,"elite")) {
       addToast(isAr?"المشاركة متاحة لباقة Elite فقط":"Shareable reports require Elite tier","warn");
       setShowBilling(true); return;
     }
@@ -3141,6 +3143,7 @@ export default function App(){
       const { url, expiresAt } = await createShareableReport({
         session: sessionData, profile, user, lang,
         allSessions: userSessions,
+        effectiveTier: normalizedTier,
       });
       // Copy to clipboard
       await navigator.clipboard.writeText(url).catch(()=>{});
