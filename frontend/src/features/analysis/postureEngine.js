@@ -175,6 +175,23 @@ export function setEngineTier(rawTier) {
 
 export function getEngineTier() { return _tierLevel; }
 
+// ── Measurement-grade declaration (v4, enterprise/compliance) ──────
+// Camera-based pose estimation is SCREENING-grade by nature: MediaPipe
+// infers joints from a 2D image (pseudo-3D Z), so absolute angles carry
+// single-digit-degree uncertainty. Trends, patterns, and relative
+// change over time are what this engine measures reliably — which is
+// exactly what a workplace monitoring tool needs. Clinical-grade
+// measurement requires goniometry or radiographic imaging.
+// This constant is attached to every analysis result so downstream
+// consumers (reports, APIs, enterprise dashboards) can disclose it.
+export const MEASUREMENT_DISCLOSURE = Object.freeze({
+  grade:  "screening",                       // NOT "diagnostic"
+  basis:  "camera_pose_estimation_2d",       // MediaPipe pseudo-3D
+  suits:  "trend & pattern monitoring, ergonomic screening",
+  not_for:"medical diagnosis, treatment decisions, clinical measurement",
+  reference_methods: "goniometry, radiographic assessment",
+});
+
 // Rolling overall-score history (feeds the stability index) and
 // per-alert persistence streaks — both cleared in resetProportions().
 const _scoreHist    = [];
@@ -1216,6 +1233,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   return {
     engine_tier:   _tierLevel,
     tier_features: tierFeatures,
+    measurement_grade: MEASUREMENT_DISCLOSURE.grade,
     score:       overall,
     qualityScore: 100,
     confidence:  detectionConfidence,
@@ -1425,6 +1443,7 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
   return {
     engine_tier:   _tierLevel,
     tier_features: tierFeaturesSide,
+    measurement_grade: MEASUREMENT_DISCLOSURE.grade,
     score:    overall,
     confidence: Math.min(93, 70 + (shOK?10:0) + (earOK?8:0) + (hipOK?5:0)),
     metrics: {
