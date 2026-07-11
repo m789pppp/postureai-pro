@@ -1153,7 +1153,12 @@ function HowItWorks({ lang }) {
 
   return (
     <section id="how" className="lp-section" style={{ background:C.bg1 }}>
-          sub={ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "Three simple steps to a healthier team"}/>
+      <div className="lp-wrap">
+        <SectionHead
+          eyebrow={ar ? "كيف يعمل" : "How it works"}
+          title={ar ? "ثلاث خطوات بسيطة" : "Three simple steps to a healthier team"}
+          sub={ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "No hardware. No IT setup. Just your laptop camera and 15 minutes."}
+        />
 
         <div style={{ position:"relative" }}>
           {/* Connecting line — these steps are a real sequence, so the timeline earns its keep */}
@@ -1183,6 +1188,7 @@ function HowItWorks({ lang }) {
             ))}
           </Stagger>
         </div>
+      </div>
     </section>
   );
 }
@@ -1497,75 +1503,102 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     <section id="pricing" className="lp-section" style={{ background:C.bg1 }}>
       <div className="lp-wrap">
         <Reveal>
-          <div style={{ textAlign:"center", marginBottom:48 }}>
-            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 16px", fontFamily:FONT_DISPLAY }}>
-              {ar ? "أسعار بسيطة وشفافة" : "Simple, transparent pricing"}
+          {/* Section head */}
+          <div style={{ textAlign:"center", marginBottom:36 }}>
+            <div style={{
+              display:"inline-flex", alignItems:"center", gap:7,
+              background:"rgba(79,124,249,.08)", border:"1px solid rgba(79,124,249,.2)",
+              borderRadius:99, padding:"5px 16px", marginBottom:16,
+            }}>
+              <span style={{ fontSize:12, fontWeight:600, color:C.indigo }}>
+                {ar ? "أسعار شفافة" : "Simple pricing"}
+              </span>
+            </div>
+            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 12px", fontFamily:FONT_DISPLAY }}>
+              {ar ? "ابدأ مجاناً، ارفع بعد كده" : "Start free, scale when ready"}
             </h2>
-            <p style={{ ...TYPE.body, color:C.sub, marginBottom:30 }}>
+            <p style={{ ...TYPE.body, color:C.sub, marginBottom:0 }}>
               {ar ? "تجربة مجانية 7 أيام · لا بطاقة ائتمان" : "7-day free trial · No credit card required"}
             </p>
+          </div>
 
-            {/* Individual / Company toggle */}
+          {/* Controls row */}
+          <div style={{
+            display:"flex", alignItems:"center", justifyContent:"center",
+            gap:12, flexWrap:"wrap", marginBottom:40,
+          }}>
+            {/* Individual / Company */}
             <div style={{
-              display:"inline-flex", alignItems:"center", gap:4,
-              background:"rgba(255,255,255,.06)", borderRadius:12,
-              padding:4, border:`1px solid ${C.border}`,
-              marginBottom:20,
+              display:"flex", background:"rgba(255,255,255,.04)",
+              border:`1px solid ${C.border}`, borderRadius:12, padding:3, gap:3,
             }}>
               {[
-                { id:"individual", icon:"👤", en:"Individual", ar:"فرد" },
-                { id:"company",    icon:"🏢", en:"Company / HR", ar:"شركة / HR" },
+                { id:"individual", en:"👤 Individual", ar:"👤 فرد" },
+                { id:"company",    en:"🏢 Company / HR", ar:"🏢 شركة" },
               ].map(seg => (
                 <button key={seg.id} onClick={() => setLocalMode(seg.id)} style={{
-                  background: localMode === seg.id
-                    ? (seg.id === "company" ? C.indigo : C.blue)
+                  padding:"9px 20px", borderRadius:9, border:"none",
+                  cursor:"pointer", fontWeight:600, fontSize:13.5,
+                  fontFamily:"inherit", transition:"all .2s",
+                  background: localMode===seg.id
+                    ? "linear-gradient(135deg,#1a56db,#0891b2)"
                     : "transparent",
-                  color: localMode === seg.id ? "#fff" : C.muted,
-                  border:"none", borderRadius:9,
-                  padding:"9px 22px",
-                  cursor:"pointer", fontWeight:600, fontSize:14,
-                  transition:"background .18s,color .18s",
-                  whiteSpace:"nowrap",
+                  color: localMode===seg.id ? "#fff" : C.muted,
+                  boxShadow: localMode===seg.id ? "0 4px 14px rgba(26,86,219,.3)" : "none",
                 }}>
-                  {seg.icon} {ar ? seg.ar : seg.en}
+                  {ar ? seg.ar : seg.en}
                 </button>
               ))}
             </div>
 
-            {/* Monthly / Yearly toggle */}
+            {/* Divider dot */}
+            <div style={{ width:4, height:4, borderRadius:"50%", background:C.border }}/>
+
+            {/* Monthly / Yearly */}
             <div style={{
-              display:"inline-flex", alignItems:"center",
-              background:"rgba(255,255,255,.05)", borderRadius:100,
-              padding:4, border:`1px solid ${C.border}`,
+              display:"flex", background:"rgba(255,255,255,.04)",
+              border:`1px solid ${C.border}`, borderRadius:99, padding:3, gap:3,
             }}>
-              {["monthly","yearly"].map(b => (
-                <button key={b} onClick={() => setBilling(b)} style={{
-                  background: billing === b ? C.blue : "transparent",
-                  color: billing === b ? "#fff" : C.sub,
-                  border:"none", borderRadius:100, padding:"10px 22px",
-                  cursor:"pointer", fontWeight:500, fontSize:14.5,
-                  transition:"background .2s,color .2s",
+              {[
+                { id:"monthly",  en:"Monthly",         ar:"شهري" },
+                { id:"yearly",   en:"Yearly",           ar:"سنوي" },
+              ].map(b => (
+                <button key={b.id} onClick={() => setBilling(b.id)} style={{
+                  padding:"8px 18px", borderRadius:99, border:"none",
+                  cursor:"pointer", fontWeight:500, fontSize:13.5,
+                  fontFamily:"inherit", transition:"all .2s",
+                  background: billing===b.id ? C.blue : "transparent",
+                  color: billing===b.id ? "#fff" : C.muted,
                 }}>
-                  {b === "monthly"
-                    ? (ar ? "شهري" : "Monthly")
-                    : (ar ? "سنوي (وفّر 20%)" : "Yearly (save 20%)")}
+                  {ar ? b.ar : b.en}
+                  {b.id==="yearly" && billing==="yearly" && (
+                    <span style={{
+                      marginLeft:7, fontSize:10.5, fontWeight:700,
+                      background:"rgba(16,217,160,.2)", color:C.green,
+                      padding:"2px 7px", borderRadius:99,
+                    }}>-20%</span>
+                  )}
                 </button>
               ))}
             </div>
 
-            <div style={{ marginTop:16, fontSize:13, color:C.muted }}>
-              {isEgypt
-                ? (ar ? "🇪🇬 الأسعار معروضة بالجنيه المصري" : "🇪🇬 Prices shown in EGP")
-                : (ar ? "🌍 الأسعار معروضة بالدولار الأمريكي" : "🌍 Prices shown in USD")}
-              {" · "}
-              <button onClick={() => setCurrencyOverride(isEgypt ? "USD" : "EGP")} style={{
-                background:"none", border:"none", color:C.indigo, cursor:"pointer",
-                fontSize:13, textDecoration:"underline", padding:0, fontFamily:"inherit",
-              }}>
-                {isEgypt
-                  ? (ar ? "اعرض بالدولار" : "Show in USD")
-                  : (ar ? "اعرض بالجنيه" : "Show in EGP")}
-              </button>
+            {/* Currency toggle */}
+            <div style={{
+              display:"flex", background:"rgba(255,255,255,.04)",
+              border:`1px solid ${C.border}`, borderRadius:99, padding:3, gap:2,
+            }}>
+              {[
+                { id:"egp", label:"EGP 🇪🇬" },
+                { id:"usd", label:"USD 🌍" },
+              ].map(c => (
+                <button key={c.id} onClick={() => setCurrencyOverride && setCurrencyOverride(c.id === "egp")} style={{
+                  padding:"7px 14px", borderRadius:99, border:"none",
+                  cursor:"pointer", fontSize:12, fontFamily:"inherit",
+                  transition:"all .2s",
+                  background: (isEgypt && c.id==="egp") || (!isEgypt && c.id==="usd") ? "rgba(255,255,255,.1)" : "transparent",
+                  color: (isEgypt && c.id==="egp") || (!isEgypt && c.id==="usd") ? C.text : C.muted,
+                }}>{c.label}</button>
+              ))}
             </div>
           </div>
         </Reveal>
@@ -1573,13 +1606,13 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
         <Stagger key={`${localMode}-${billing}`} className="lp-pricing-grid" style={{ alignItems:"start" }}>
           {plans.map((p) => (
             <StaggerItem key={p.id}>
-              <div className={p.popular ? "lp-lift lp-glow" : "lp-lift"} style={{
+              <div className={p.popular ? "lp-lift lp-popular-card" : "lp-lift"} style={{
                 ...card(p.popular),
                 border: p.popular ? `1px solid rgba(79,124,249,.45)` : `1px solid ${C.border}`,
                 position:"relative", height:"100%", display:"flex", flexDirection:"column",
-                padding:"clamp(28px,2.6vw,36px)",
+                padding:"clamp(24px,2.6vw,36px)",
                 transform: p.popular ? "scale(1.035)" : "none",
-              }} className={p.popular ? "lp-lift lp-popular-card" : "lp-lift"}>
+              }}>
                 {p.popular && (
                   <div style={{
                     position:"absolute", top:-14, left:"50%", transform:"translateX(-50%)",
