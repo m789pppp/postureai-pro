@@ -11,14 +11,14 @@ import { db } from "./firebase.js";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
-const C = {
+const AUDIT_TOKENS = {
   bg:"#030711", card:"#0c1832", border:"rgba(99,102,241,.14)",
   text:"#e8eeff", sub:"#94a3b8", muted:"#475569",
   primary:"#6366f1", green:"#10b981", amber:"#f59e0b", red:"#ef4444",
 };
 
 const CATEGORIES = ["all","auth","data","admin","billing","api","security","compliance"];
-const SEV_COLORS  = { info:C.green, warning:C.amber, critical:C.red };
+const SEV_COLORS  = { info:AUDIT_TOKENS.green, warning:AUDIT_TOKENS.amber, critical:AUDIT_TOKENS.red };
 const CAT_ICONS   = {
   auth:"🔐", data:"📦", admin:"⚙️", billing:"💳",
   api:"📡", security:"🛡️", compliance:"📋", all:"🔍",
@@ -151,12 +151,12 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.78)", zIndex:2000,
       display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-      <div style={{ background:C.card, borderRadius:20, width:"100%", maxWidth:1200,
+      <div style={{ background:AUDIT_TOKENS.card, borderRadius:20, width:"100%", maxWidth:1200,
         height:"92vh", display:"flex", flexDirection:"column", overflow:"hidden",
-        border:`1px solid ${C.border}`, boxShadow:"0 32px 80px rgba(0,0,0,.55)" }}>
+        border:`1px solid ${AUDIT_TOKENS.border}`, boxShadow:"0 32px 80px rgba(0,0,0,.55)" }}>
 
         {/* Header */}
-        <div style={{ padding:"18px 28px", borderBottom:`1px solid ${C.border}`, flexShrink:0,
+        <div style={{ padding:"18px 28px", borderBottom:`1px solid ${AUDIT_TOKENS.border}`, flexShrink:0,
           background:"linear-gradient(135deg,rgba(99,102,241,.07),rgba(16,185,129,.04))",
           display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -164,8 +164,8 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
               background:"linear-gradient(135deg,#6366f1,#10b981)",
               display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🛡️</div>
             <div>
-              <div style={{ fontWeight:800, fontSize:20, color:C.text }}>Audit & Compliance Center</div>
-              <div style={{ fontSize:12, color:C.muted }}>
+              <div style={{ fontWeight:800, fontSize:20, color:AUDIT_TOKENS.text }}>Audit & Compliance Center</div>
+              <div style={{ fontSize:12, color:AUDIT_TOKENS.muted }}>
                 Live Firestore · {events.length} events loaded
                 {loading && " · Loading…"}
               </div>
@@ -173,36 +173,36 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
           </div>
           <div style={{ display:"flex", gap:12, alignItems:"center" }}>
             {criticalCount > 0 && (
-              <div style={{ background:`${C.red}18`, border:`1px solid ${C.red}44`,
+              <div style={{ background:`${AUDIT_TOKENS.red}18`, border:`1px solid ${AUDIT_TOKENS.red}44`,
                 borderRadius:8, padding:"7px 14px", display:"flex", alignItems:"center", gap:6 }}>
                 <span style={{ fontSize:16 }}>🚨</span>
-                <span style={{ fontSize:13, fontWeight:700, color:C.red }}>
+                <span style={{ fontSize:13, fontWeight:700, color:AUDIT_TOKENS.red }}>
                   {criticalCount} critical event{criticalCount>1?"s":""}
                 </span>
               </div>
             )}
             <button onClick={doExport} disabled={exporting} style={{
-              padding:"8px 18px", borderRadius:9, background:C.primary, color:"#fff",
+              padding:"8px 18px", borderRadius:9, background:AUDIT_TOKENS.primary, color:"#fff",
               border:"none", fontWeight:600, cursor:exporting?"wait":"pointer", fontSize:13 }}>
               {exporting ? "Exporting…" : "⬇ Export CSV"}
             </button>
             <button onClick={onClose} style={{ width:36, height:36, borderRadius:"50%",
-              background:"rgba(255,255,255,.07)", border:`1px solid ${C.border}`,
-              color:C.sub, fontSize:20, cursor:"pointer",
+              background:"rgba(255,255,255,.07)", border:`1px solid ${AUDIT_TOKENS.border}`,
+              color:AUDIT_TOKENS.sub, fontSize:20, cursor:"pointer",
               display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
           </div>
         </div>
 
         {/* Tabs */}
         <div style={{ display:"flex", gap:4, padding:"12px 24px 0",
-          borderBottom:`1px solid ${C.border}`, flexShrink:0 }}>
+          borderBottom:`1px solid ${AUDIT_TOKENS.border}`, flexShrink:0 }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               padding:"9px 18px", borderRadius:"8px 8px 0 0", border:"none",
               fontFamily:"'Sora',sans-serif", fontWeight:600, fontSize:13, cursor:"pointer",
-              background: tab===t.id ? C.card : "transparent",
-              color:      tab===t.id ? C.text : C.muted,
-              borderBottom: tab===t.id ? `2px solid ${C.primary}` : "2px solid transparent",
+              background: tab===t.id ? AUDIT_TOKENS.card : "transparent",
+              color:      tab===t.id ? AUDIT_TOKENS.text : AUDIT_TOKENS.muted,
+              borderBottom: tab===t.id ? `2px solid ${AUDIT_TOKENS.primary}` : "2px solid transparent",
             }}>
               {t.icon} {t.label}
             </button>
@@ -222,12 +222,12 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Search user, action, IP, detail…"
                   style={{ flex:1, minWidth:200, padding:"9px 14px", borderRadius:9,
-                    background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
-                    color:C.text, fontSize:13, outline:"none" }}
+                    background:"rgba(255,255,255,.05)", border:`1px solid ${AUDIT_TOKENS.border}`,
+                    color:AUDIT_TOKENS.text, fontSize:13, outline:"none" }}
                 />
                 <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
                   style={{ padding:"9px 12px", borderRadius:9, background:"rgba(255,255,255,.05)",
-                    border:`1px solid ${C.border}`, color:C.text, fontSize:13, cursor:"pointer" }}>
+                    border:`1px solid ${AUDIT_TOKENS.border}`, color:AUDIT_TOKENS.text, fontSize:13, cursor:"pointer" }}>
                   {CATEGORIES.map(c => (
                     <option key={c} value={c} style={{ background:"#0c1832" }}>
                       {CAT_ICONS[c]} {c}
@@ -236,20 +236,20 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
                 </select>
                 <select value={sevFilter} onChange={e => setSevFilter(e.target.value)}
                   style={{ padding:"9px 12px", borderRadius:9, background:"rgba(255,255,255,.05)",
-                    border:`1px solid ${C.border}`, color:C.text, fontSize:13, cursor:"pointer" }}>
+                    border:`1px solid ${AUDIT_TOKENS.border}`, color:AUDIT_TOKENS.text, fontSize:13, cursor:"pointer" }}>
                   {["all","info","warning","critical"].map(s => (
                     <option key={s} value={s} style={{ background:"#0c1832" }}>{s}</option>
                   ))}
                 </select>
                 <button onClick={() => loadEvents()} style={{ padding:"9px 16px", borderRadius:9,
-                  background:"transparent", border:`1px solid ${C.border}`,
-                  color:C.sub, cursor:"pointer", fontSize:13 }}>↻ Refresh</button>
+                  background:"transparent", border:`1px solid ${AUDIT_TOKENS.border}`,
+                  color:AUDIT_TOKENS.sub, cursor:"pointer", fontSize:13 }}>↻ Refresh</button>
               </div>
 
               {/* Error */}
               {error && (
                 <div style={{ padding:"12px 16px", borderRadius:10, marginBottom:12,
-                  background:`${C.red}12`, border:`1px solid ${C.red}33`, color:C.red, fontSize:13 }}>
+                  background:`${AUDIT_TOKENS.red}12`, border:`1px solid ${AUDIT_TOKENS.red}33`, color:AUDIT_TOKENS.red, fontSize:13 }}>
                   ⚠️ {error}
                 </div>
               )}
@@ -258,10 +258,10 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
               {loading && events.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"48px 0" }}>
                   <div style={{ fontSize:36, marginBottom:10 }}>⏳</div>
-                  <div style={{ color:C.sub, fontSize:14 }}>Loading audit logs from Firestore…</div>
+                  <div style={{ color:AUDIT_TOKENS.sub, fontSize:14 }}>Loading audit logs from Firestore…</div>
                 </div>
               ) : filtered.length === 0 ? (
-                <div style={{ textAlign:"center", padding:"48px 0", color:C.muted, fontSize:14 }}>
+                <div style={{ textAlign:"center", padding:"48px 0", color:AUDIT_TOKENS.muted, fontSize:14 }}>
                   {events.length === 0
                     ? "No audit logs yet. Events are written by the backend on every significant action."
                     : "No events match your filters."}
@@ -274,33 +274,33 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
                         onClick={() => setSelected(selected?.id === e.id ? null : e)}
                         style={{ background: selected?.id===e.id ? "rgba(99,102,241,.08)" : "rgba(255,255,255,.025)",
                           borderRadius:10, padding:"11px 16px", cursor:"pointer",
-                          border:`1px solid ${selected?.id===e.id ? C.primary : C.border}`,
+                          border:`1px solid ${selected?.id===e.id ? AUDIT_TOKENS.primary : AUDIT_TOKENS.border}`,
                           transition:"all .12s" }}>
                         <div style={{ display:"grid",
                           gridTemplateColumns:"160px 180px 180px 90px 120px 1fr",
                           gap:12, alignItems:"center" }}>
-                          <span style={{ fontSize:11, color:C.muted, fontFamily:"monospace" }}>
+                          <span style={{ fontSize:11, color:AUDIT_TOKENS.muted, fontFamily:"monospace" }}>
                             {(e.ts||"").slice(0,19).replace("T"," ")}
                           </span>
-                          <span style={{ fontSize:12, fontWeight:600, color:C.primary }}>
+                          <span style={{ fontSize:12, fontWeight:600, color:AUDIT_TOKENS.primary }}>
                             {CAT_ICONS[e.category]||"•"} {e.action||"—"}
                           </span>
-                          <span style={{ fontSize:12, color:C.sub }}>{e.user||"—"}</span>
+                          <span style={{ fontSize:12, color:AUDIT_TOKENS.sub }}>{e.user||"—"}</span>
                           <span style={{ fontSize:11, padding:"2px 8px", borderRadius:4, fontWeight:700,
-                            background:`${SEV_COLORS[e.severity]||C.muted}22`,
-                            color:SEV_COLORS[e.severity]||C.muted }}>
+                            background:`${SEV_COLORS[e.severity]||AUDIT_TOKENS.muted}22`,
+                            color:SEV_COLORS[e.severity]||AUDIT_TOKENS.muted }}>
                             {e.severity||"info"}
                           </span>
-                          <span style={{ fontSize:11, color:C.muted, fontFamily:"monospace" }}>
+                          <span style={{ fontSize:11, color:AUDIT_TOKENS.muted, fontFamily:"monospace" }}>
                             {e.ip||"—"}
                           </span>
-                          <span style={{ fontSize:12, color:C.sub, overflow:"hidden",
+                          <span style={{ fontSize:12, color:AUDIT_TOKENS.sub, overflow:"hidden",
                             whiteSpace:"nowrap", textOverflow:"ellipsis" }}>
                             {e.detail||"—"}
                           </span>
                         </div>
                         {selected?.id === e.id && (
-                          <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}`,
+                          <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${AUDIT_TOKENS.border}`,
                             display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
                             {[
                               ["Event ID",    e.id],
@@ -311,9 +311,9 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
                               ["Location",    e.geo||"—"],
                             ].map(([label, val]) => (
                               <div key={label}>
-                                <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase",
+                                <div style={{ fontSize:10, color:AUDIT_TOKENS.muted, textTransform:"uppercase",
                                   letterSpacing:".06em", marginBottom:2 }}>{label}</div>
-                                <div style={{ fontSize:12, color:C.text, fontFamily:"monospace" }}>{val}</div>
+                                <div style={{ fontSize:12, color:AUDIT_TOKENS.text, fontFamily:"monospace" }}>{val}</div>
                               </div>
                             ))}
                           </div>
@@ -327,7 +327,7 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
                     <div style={{ textAlign:"center", marginTop:16 }}>
                       <button onClick={() => loadEvents(lastDoc)} disabled={loadingMore} style={{
                         padding:"10px 24px", borderRadius:9, background:"transparent",
-                        border:`1px solid ${C.border}`, color:C.sub, cursor:"pointer", fontSize:13 }}>
+                        border:`1px solid ${AUDIT_TOKENS.border}`, color:AUDIT_TOKENS.sub, cursor:"pointer", fontSize:13 }}>
                         {loadingMore ? "Loading…" : "Load more"}
                       </button>
                     </div>
@@ -342,31 +342,31 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
               {COMPLIANCE_CHECKS.map(c => (
                 <div key={c.standard} style={{ background:"rgba(255,255,255,.03)",
-                  borderRadius:14, padding:"20px 24px", border:`1px solid ${C.border}` }}>
+                  borderRadius:14, padding:"20px 24px", border:`1px solid ${AUDIT_TOKENS.border}` }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
                     <div>
-                      <div style={{ fontSize:16, fontWeight:700, color:C.text }}>{c.standard}</div>
-                      <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>
+                      <div style={{ fontSize:16, fontWeight:700, color:AUDIT_TOKENS.text }}>{c.standard}</div>
+                      <div style={{ fontSize:11, color:AUDIT_TOKENS.muted, marginTop:2 }}>
                         Last audit: {c.last} · Next: {c.next}
                       </div>
                     </div>
                     <div style={{ textAlign:"center" }}>
                       <div style={{ fontSize:28, fontWeight:800,
-                        color:c.status==="passing"?C.green:C.amber }}>{c.score}%</div>
+                        color:c.status==="passing"?AUDIT_TOKENS.green:AUDIT_TOKENS.amber }}>{c.score}%</div>
                       <div style={{ fontSize:10, padding:"2px 8px", borderRadius:4, fontWeight:700,
-                        background:c.status==="passing"?`${C.green}22`:`${C.amber}22`,
-                        color:c.status==="passing"?C.green:C.amber }}>
+                        background:c.status==="passing"?`${AUDIT_TOKENS.green}22`:`${AUDIT_TOKENS.amber}22`,
+                        color:c.status==="passing"?AUDIT_TOKENS.green:AUDIT_TOKENS.amber }}>
                         {c.status}
                       </div>
                     </div>
                   </div>
                   <div style={{ height:4, background:"rgba(255,255,255,.08)", borderRadius:4, marginBottom:14 }}>
                     <div style={{ height:"100%", width:`${c.score}%`, borderRadius:4,
-                      background:c.status==="passing"?C.green:C.amber, transition:"width .8s" }} />
+                      background:c.status==="passing"?AUDIT_TOKENS.green:AUDIT_TOKENS.amber, transition:"width .8s" }} />
                   </div>
                   {c.items.map(item => (
-                    <div key={item} style={{ fontSize:12, color:item.includes("⚠️")?C.amber:C.sub,
-                      padding:"4px 0", borderBottom:`1px solid ${C.border}` }}>
+                    <div key={item} style={{ fontSize:12, color:item.includes("⚠️")?AUDIT_TOKENS.amber:AUDIT_TOKENS.sub,
+                      padding:"4px 0", borderBottom:`1px solid ${AUDIT_TOKENS.border}` }}>
                       {item}
                     </div>
                   ))}
@@ -379,11 +379,11 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
           {tab === "anomalies" && (
             <div>
               <div style={{ marginBottom:16, padding:"14px 18px", borderRadius:12,
-                background:`${C.amber}10`, border:`1px solid ${C.amber}33` }}>
-                <div style={{ fontSize:14, fontWeight:700, color:C.amber, marginBottom:4 }}>
+                background:`${AUDIT_TOKENS.amber}10`, border:`1px solid ${AUDIT_TOKENS.amber}33` }}>
+                <div style={{ fontSize:14, fontWeight:700, color:AUDIT_TOKENS.amber, marginBottom:4 }}>
                   ⚡ Real-time anomaly detection is active
                 </div>
-                <div style={{ fontSize:13, color:C.sub }}>
+                <div style={{ fontSize:13, color:AUDIT_TOKENS.sub }}>
                   The backend monitors for: brute force attacks, unusual IPs, rate limit breaches,
                   suspicious data exports, and privilege escalation attempts.
                 </div>
@@ -391,16 +391,16 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
               {events
                 .filter(e => e.severity === "critical" || e.action?.includes("BRUTE") || e.action?.includes("INJECTION"))
                 .map(e => (
-                  <div key={e.id} style={{ background:`${C.red}10`, borderRadius:12,
-                    padding:"16px 20px", marginBottom:10, border:`1px solid ${C.red}33` }}>
+                  <div key={e.id} style={{ background:`${AUDIT_TOKENS.red}10`, borderRadius:12,
+                    padding:"16px 20px", marginBottom:10, border:`1px solid ${AUDIT_TOKENS.red}33` }}>
                     <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
                       <span style={{ fontSize:24, flexShrink:0 }}>🚨</span>
                       <div>
-                        <div style={{ fontSize:14, fontWeight:700, color:C.red }}>
+                        <div style={{ fontSize:14, fontWeight:700, color:AUDIT_TOKENS.red }}>
                           {e.action||"Unknown"}
                         </div>
-                        <div style={{ fontSize:12, color:C.sub, marginTop:4 }}>{e.detail}</div>
-                        <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>
+                        <div style={{ fontSize:12, color:AUDIT_TOKENS.sub, marginTop:4 }}>{e.detail}</div>
+                        <div style={{ fontSize:11, color:AUDIT_TOKENS.muted, marginTop:6 }}>
                           {(e.ts||"").slice(0,19)} · IP: {e.ip} · {e.geo}
                         </div>
                       </div>
@@ -411,8 +411,8 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
               {events.filter(e => e.severity === "critical").length === 0 && (
                 <div style={{ textAlign:"center", padding:"48px 0" }}>
                   <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
-                  <div style={{ fontSize:16, fontWeight:700, color:C.green }}>No anomalies detected</div>
-                  <div style={{ fontSize:13, color:C.muted, marginTop:6 }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:AUDIT_TOKENS.green }}>No anomalies detected</div>
+                  <div style={{ fontSize:13, color:AUDIT_TOKENS.muted, marginTop:6 }}>
                     All events in the loaded window look normal.
                   </div>
                 </div>

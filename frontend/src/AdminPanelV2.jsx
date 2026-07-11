@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { AdminAPI } from "./services/api.js";
 
-const C = {
+const APV2_TOKENS = {
   bg:    "#020a14",
   surf:  "#060e1a",
   card:  "#0a1826",
@@ -24,8 +24,8 @@ const C = {
 };
 
 const card = (glow) => ({
-  background: C.card,
-  border: `1px solid ${glow ? "rgba(79,124,249,.22)" : C.border}`,
+  background: APV2_TOKENS.card,
+  border: `1px solid ${glow ? "rgba(79,124,249,.22)" : APV2_TOKENS.border}`,
   borderRadius: 12, padding: 20,
 });
 
@@ -33,7 +33,7 @@ const card = (glow) => ({
 function Badge({ color, children }) {
   const bgs = { green:"rgba(16,217,160,.1)", amber:"rgba(245,158,11,.1)",
     red:"rgba(248,113,113,.1)", blue:"rgba(79,124,249,.1)", violet:"rgba(167,139,250,.1)", gray:"rgba(148,163,184,.08)" };
-  const texts = { green:C.green, amber:C.amber, red:C.red, blue:C.blue, violet:C.violet, gray:C.sub };
+  const texts = { green:APV2_TOKENS.green, amber:APV2_TOKENS.amber, red:APV2_TOKENS.red, blue:APV2_TOKENS.blue, violet:APV2_TOKENS.violet, gray:APV2_TOKENS.sub };
   return (
     <span style={{
       background: bgs[color]||bgs.gray, color: texts[color]||texts.gray,
@@ -43,7 +43,7 @@ function Badge({ color, children }) {
 }
 
 // ── KPI Card ──────────────────────────────────────────────────────
-function KPI({ icon, label, value, trend, color = C.blue }) {
+function KPI({ icon, label, value, trend, color = APV2_TOKENS.blue }) {
   const isPos = (trend||"").startsWith("+");
   return (
     <div style={{ ...card() }}>
@@ -53,14 +53,14 @@ function KPI({ icon, label, value, trend, color = C.blue }) {
           <span style={{
             fontSize:11, fontWeight:600, padding:"2px 7px", borderRadius:6,
             background: isPos ? "rgba(16,217,160,.1)" : "rgba(248,113,113,.1)",
-            color: isPos ? C.green : C.red,
+            color: isPos ? APV2_TOKENS.green : APV2_TOKENS.red,
           }}>{trend}</span>
         )}
       </div>
-      <div style={{ fontSize:30, fontWeight:800, color:C.text, letterSpacing:"-.03em", lineHeight:1, marginBottom:4 }}>
+      <div style={{ fontSize:30, fontWeight:800, color:APV2_TOKENS.text, letterSpacing:"-.03em", lineHeight:1, marginBottom:4 }}>
         {value}
       </div>
-      <div style={{ fontSize:12, color:C.muted }}>{label}</div>
+      <div style={{ fontSize:12, color:APV2_TOKENS.muted }}>{label}</div>
     </div>
   );
 }
@@ -73,22 +73,22 @@ function RevenueDash({ stats }) {
 
   return (
     <div>
-      <h2 style={{ fontSize:20, fontWeight:700, color:C.text, margin:"0 0 20px", letterSpacing:"-.02em" }}>
+      <h2 style={{ fontSize:20, fontWeight:700, color:APV2_TOKENS.text, margin:"0 0 20px", letterSpacing:"-.02em" }}>
         Revenue Dashboard
       </h2>
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }} className="kpi-grid">
-        <KPI icon="💰" label="MRR" value={`$${(stats?.mrr || 8420).toLocaleString()}`} trend="+18%" color={C.green}/>
+        <KPI icon="💰" label="MRR" value={`$${(stats?.mrr || 8420).toLocaleString()}`} trend="+18%" color={APV2_TOKENS.green}/>
         <KPI icon="📈" label="ARR" value={`$${((stats?.mrr || 8420)*12).toLocaleString()}`} trend="+22%"/>
         <KPI icon="👥" label="Paying Customers" value={stats?.paying_customers || 94} trend="+8"/>
-        <KPI icon="📉" label="Churn Rate" value={`${stats?.churn_rate || 2.1}%`} trend="-0.3%" color={C.green}/>
+        <KPI icon="📉" label="Churn Rate" value={`${stats?.churn_rate || 2.1}%`} trend="-0.3%" color={APV2_TOKENS.green}/>
       </div>
 
       {/* Revenue bar chart */}
       <div style={{ ...card(), marginBottom:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
-          <h3 style={{ margin:0, fontSize:15, fontWeight:600, color:C.text }}>Monthly Revenue (12m)</h3>
-          <span style={{ fontSize:13, color:C.muted }}>USD</span>
+          <h3 style={{ margin:0, fontSize:15, fontWeight:600, color:APV2_TOKENS.text }}>Monthly Revenue (12m)</h3>
+          <span style={{ fontSize:13, color:APV2_TOKENS.muted }}>USD</span>
         </div>
         <div style={{ display:"flex", alignItems:"flex-end", gap:4, height:120 }}>
           {revenueData.map((v, i) => (
@@ -96,7 +96,7 @@ function RevenueDash({ stats }) {
               <div style={{
                 width:"100%", height:`${(v/maxR)*110}px`,
                 background: i === revenueData.length-1
-                  ? C.gBlue
+                  ? APV2_TOKENS.gBlue
                   : `linear-gradient(to top,rgba(79,124,249,.3),rgba(79,124,249,.15))`,
                 borderRadius:"4px 4px 0 0",
                 border:`1px solid rgba(79,124,249,.2)`,
@@ -104,7 +104,7 @@ function RevenueDash({ stats }) {
                 cursor:"pointer",
                 position:"relative",
               }} title={`$${Math.round(v).toLocaleString()}`}/>
-              <span style={{ fontSize:9, color:C.muted, letterSpacing:".03em" }}>
+              <span style={{ fontSize:9, color:APV2_TOKENS.muted, letterSpacing:".03em" }}>
                 {months[i]}
               </span>
             </div>
@@ -114,16 +114,16 @@ function RevenueDash({ stats }) {
 
       {/* Plan distribution */}
       <div style={{ ...card() }}>
-        <h3 style={{ margin:"0 0 16px", fontSize:15, fontWeight:600, color:C.text }}>Plan Distribution</h3>
+        <h3 style={{ margin:"0 0 16px", fontSize:15, fontWeight:600, color:APV2_TOKENS.text }}>Plan Distribution</h3>
         {[
-          { plan:"Enterprise", count:8,  pct:9,  color:C.green },
-          { plan:"Business",   count:24, pct:26, color:C.violet },
-          { plan:"Professional",count:62, pct:66, color:C.blue },
+          { plan:"Enterprise", count:8,  pct:9,  color:APV2_TOKENS.green },
+          { plan:"Business",   count:24, pct:26, color:APV2_TOKENS.violet },
+          { plan:"Professional",count:62, pct:66, color:APV2_TOKENS.blue },
         ].map(p => (
           <div key={p.plan} style={{ marginBottom:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-              <span style={{ fontSize:13, color:C.sub }}>{p.plan}</span>
-              <span style={{ fontSize:13, color:C.text, fontWeight:500 }}>{p.count} ({p.pct}%)</span>
+              <span style={{ fontSize:13, color:APV2_TOKENS.sub }}>{p.plan}</span>
+              <span style={{ fontSize:13, color:APV2_TOKENS.text, fontWeight:500 }}>{p.count} ({p.pct}%)</span>
             </div>
             <div style={{ height:6, background:"rgba(255,255,255,.05)", borderRadius:100, overflow:"hidden" }}>
               <div style={{ width:`${p.pct}%`, height:"100%", background:p.color, borderRadius:100, transition:"width .6s ease" }}/>
@@ -141,12 +141,12 @@ function UsersTable({ users, loading, onBlock, onChangeRole }) {
   const filtered = (users||[]).filter(u =>
     [u.email, u.name, u.org_name].some(f => (f||"").toLowerCase().includes(search.toLowerCase()))
   );
-  const tierColor = { enterprise:C.green, business:C.violet, professional:C.blue, starter:C.sub };
+  const tierColor = { enterprise:APV2_TOKENS.green, business:APV2_TOKENS.violet, professional:APV2_TOKENS.blue, starter:APV2_TOKENS.sub };
 
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <h2 style={{ fontSize:20, fontWeight:700, color:C.text, margin:0, letterSpacing:"-.02em" }}>
+        <h2 style={{ fontSize:20, fontWeight:700, color:APV2_TOKENS.text, margin:0, letterSpacing:"-.02em" }}>
           User Management
         </h2>
         <input
@@ -154,8 +154,8 @@ function UsersTable({ users, loading, onBlock, onChangeRole }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
-            background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
-            borderRadius:8, padding:"8px 14px", color:C.text, fontSize:13,
+            background:"rgba(255,255,255,.05)", border:`1px solid ${APV2_TOKENS.border}`,
+            borderRadius:8, padding:"8px 14px", color:APV2_TOKENS.text, fontSize:13,
             outline:"none", width:220,
           }}
         />
@@ -167,8 +167,8 @@ function UsersTable({ users, loading, onBlock, onChangeRole }) {
             <tr>
               {["User","Plan","Organization","Role","Status","Last seen","Actions"].map(h => (
                 <th key={h} style={{
-                  textAlign:"left", color:C.muted, fontWeight:500,
-                  padding:"10px 12px", borderBottom:`1px solid ${C.border}`,
+                  textAlign:"left", color:APV2_TOKENS.muted, fontWeight:500,
+                  padding:"10px 12px", borderBottom:`1px solid ${APV2_TOKENS.border}`,
                   fontSize:11, textTransform:"uppercase", letterSpacing:".06em",
                   whiteSpace:"nowrap",
                 }}>{h}</th>
@@ -177,28 +177,28 @@ function UsersTable({ users, loading, onBlock, onChangeRole }) {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ padding:32, textAlign:"center", color:C.muted }}>Loading…</td></tr>
+              <tr><td colSpan={7} style={{ padding:32, textAlign:"center", color:APV2_TOKENS.muted }}>Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding:32, textAlign:"center", color:C.muted }}>No users found</td></tr>
+              <tr><td colSpan={7} style={{ padding:32, textAlign:"center", color:APV2_TOKENS.muted }}>No users found</td></tr>
             ) : filtered.slice(0,50).map(u => (
-              <tr key={u.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+              <tr key={u.id} style={{ borderBottom:`1px solid ${APV2_TOKENS.border}` }}>
                 <td style={{ padding:"12px 12px" }}>
-                  <div style={{ fontWeight:500, color:C.text }}>{u.name || "—"}</div>
-                  <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{u.email}</div>
+                  <div style={{ fontWeight:500, color:APV2_TOKENS.text }}>{u.name || "—"}</div>
+                  <div style={{ fontSize:12, color:APV2_TOKENS.muted, marginTop:2 }}>{u.email}</div>
                 </td>
                 <td style={{ padding:"12px 12px" }}>
                   <Badge color={tierColor[u.tier] ? u.tier : "gray"}>
                     {u.tier || "starter"}
                   </Badge>
                 </td>
-                <td style={{ padding:"12px 12px", color:C.sub }}>{u.org_name || "—"}</td>
+                <td style={{ padding:"12px 12px", color:APV2_TOKENS.sub }}>{u.org_name || "—"}</td>
                 <td style={{ padding:"12px 12px" }}>
                   <select
                     value={u.role || "member"}
                     onChange={e => onChangeRole?.(u.id, e.target.value)}
                     style={{
-                      background:"transparent", border:`1px solid ${C.border}`,
-                      borderRadius:6, padding:"4px 8px", color:C.sub,
+                      background:"transparent", border:`1px solid ${APV2_TOKENS.border}`,
+                      borderRadius:6, padding:"4px 8px", color:APV2_TOKENS.sub,
                       fontSize:12, cursor:"pointer",
                     }}>
                     {["owner","admin","hr_manager","member","viewer"].map(r => (
@@ -211,7 +211,7 @@ function UsersTable({ users, loading, onBlock, onChangeRole }) {
                     {u.is_blocked ? "Blocked" : u.is_trial ? "Trial" : "Active"}
                   </Badge>
                 </td>
-                <td style={{ padding:"12px 12px", color:C.muted, fontSize:12 }}>
+                <td style={{ padding:"12px 12px", color:APV2_TOKENS.muted, fontSize:12 }}>
                   {u.last_seen_at ? new Date(u.last_seen_at).toLocaleDateString() : "Never"}
                 </td>
                 <td style={{ padding:"12px 12px" }}>
@@ -220,7 +220,7 @@ function UsersTable({ users, loading, onBlock, onChangeRole }) {
                       onClick={() => onBlock?.(u.id, !u.is_blocked)}
                       style={{
                         background: u.is_blocked ? "rgba(16,217,160,.1)" : "rgba(248,113,113,.1)",
-                        color: u.is_blocked ? C.green : C.red,
+                        color: u.is_blocked ? APV2_TOKENS.green : APV2_TOKENS.red,
                         border:"none", borderRadius:6, padding:"4px 10px",
                         cursor:"pointer", fontSize:11, fontWeight:500,
                       }}>
@@ -241,25 +241,25 @@ function UsersTable({ users, loading, onBlock, onChangeRole }) {
 function FeatureFlagsPanel({ flags, onToggle, onUpdateRollout }) {
   return (
     <div>
-      <h2 style={{ fontSize:20, fontWeight:700, color:C.text, margin:"0 0 20px", letterSpacing:"-.02em" }}>
+      <h2 style={{ fontSize:20, fontWeight:700, color:APV2_TOKENS.text, margin:"0 0 20px", letterSpacing:"-.02em" }}>
         Feature Flags
       </h2>
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
         {(flags||defaultFlags).map(flag => (
           <div key={flag.key} style={{ ...card(), display:"flex", alignItems:"center", gap:16 }}>
             <div style={{ flex:1 }}>
-              <div style={{ fontWeight:500, color:C.text, fontSize:14 }}>{flag.key}</div>
-              <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{flag.description}</div>
+              <div style={{ fontWeight:500, color:APV2_TOKENS.text, fontSize:14 }}>{flag.key}</div>
+              <div style={{ fontSize:12, color:APV2_TOKENS.muted, marginTop:2 }}>{flag.description}</div>
             </div>
             {/* Rollout % */}
             <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:120 }}>
-              <span style={{ fontSize:12, color:C.sub }}>Rollout:</span>
+              <span style={{ fontSize:12, color:APV2_TOKENS.sub }}>Rollout:</span>
               <input
                 type="range" min="0" max="100" value={flag.rollout_pct}
                 onChange={e => onUpdateRollout?.(flag.key, parseInt(e.target.value))}
-                style={{ width:80, accentColor:C.blue }}
+                style={{ width:80, accentColor:APV2_TOKENS.blue }}
               />
-              <span style={{ fontSize:12, color:C.text, fontWeight:500, minWidth:28 }}>
+              <span style={{ fontSize:12, color:APV2_TOKENS.text, fontWeight:500, minWidth:28 }}>
                 {flag.rollout_pct}%
               </span>
             </div>
@@ -268,7 +268,7 @@ function FeatureFlagsPanel({ flags, onToggle, onUpdateRollout }) {
               onClick={() => onToggle?.(flag.key, !flag.enabled)}
               style={{
                 width:44, height:24, borderRadius:12, cursor:"pointer",
-                background: flag.enabled ? C.blue : "rgba(255,255,255,.08)",
+                background: flag.enabled ? APV2_TOKENS.blue : "rgba(255,255,255,.08)",
                 position:"relative", transition:"background .2s", flexShrink:0,
               }}>
               <div style={{
@@ -311,7 +311,7 @@ function PlatformSettings() {
 
   return (
     <div>
-      <h2 style={{ fontSize:20, fontWeight:700, color:C.text, margin:"0 0 20px", letterSpacing:"-.02em" }}>
+      <h2 style={{ fontSize:20, fontWeight:700, color:APV2_TOKENS.text, margin:"0 0 20px", letterSpacing:"-.02em" }}>
         Platform Settings
       </h2>
       <div style={{ ...card(), maxWidth:560 }}>
@@ -325,12 +325,12 @@ function PlatformSettings() {
         ].map(f => (
           <div key={f.key} style={{ display:"flex", justifyContent:"space-between",
             alignItems:"center", padding:"12px 0",
-            borderBottom:`1px solid ${C.border}` }}>
-            <label style={{ fontSize:14, color:C.sub }}>{f.label}</label>
+            borderBottom:`1px solid ${APV2_TOKENS.border}` }}>
+            <label style={{ fontSize:14, color:APV2_TOKENS.sub }}>{f.label}</label>
             {f.type === "toggle" ? (
               <div onClick={() => setSettings(p => ({...p, [f.key]:!p[f.key]}))}
                 style={{ width:44, height:24, borderRadius:12, cursor:"pointer",
-                  background:settings[f.key] ? C.blue : "rgba(255,255,255,.08)",
+                  background:settings[f.key] ? APV2_TOKENS.blue : "rgba(255,255,255,.08)",
                   position:"relative", transition:"background .2s" }}>
                 <div style={{ position:"absolute", width:18, height:18, borderRadius:"50%",
                   background:"#fff", top:3, left:settings[f.key] ? 23 : 3,
@@ -339,15 +339,15 @@ function PlatformSettings() {
             ) : (
               <input type={f.type} value={settings[f.key]}
                 onChange={e => setSettings(p => ({...p,[f.key]:f.type==="number"?+e.target.value:e.target.value}))}
-                style={{ background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
-                  borderRadius:6, padding:"6px 10px", color:C.text, fontSize:13,
+                style={{ background:"rgba(255,255,255,.05)", border:`1px solid ${APV2_TOKENS.border}`,
+                  borderRadius:6, padding:"6px 10px", color:APV2_TOKENS.text, fontSize:13,
                   outline:"none", width:200, textAlign:f.type==="number"?"right":"left" }}/>
             )}
           </div>
         ))}
         <div style={{ marginTop:16 }}>
           <button onClick={save} style={{
-            background:C.gBlue, color:"#fff", border:"none", borderRadius:8,
+            background:APV2_TOKENS.gBlue, color:"#fff", border:"none", borderRadius:8,
             padding:"10px 20px", cursor:"pointer", fontSize:14, fontWeight:600,
           }}>
             {saved ? "✓ Saved" : "Save Settings"}
@@ -370,14 +370,14 @@ const ADMIN_NAV = [
 
 function AdminSidebar({ active, setActive }) {
   return (
-    <aside style={{ width:200, background:C.surf, borderRight:`1px solid ${C.border}`,
+    <aside style={{ width:200, background:APV2_TOKENS.surf, borderRight:`1px solid ${APV2_TOKENS.border}`,
       height:"100vh", position:"sticky", top:0, flexShrink:0,
       display:"flex", flexDirection:"column" }}>
-      <div style={{ padding:"18px 14px 14px", borderBottom:`1px solid ${C.border}` }}>
+      <div style={{ padding:"18px 14px 14px", borderBottom:`1px solid ${APV2_TOKENS.border}` }}>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <div style={{ width:28, height:28, borderRadius:6, background:C.gBlue,
+          <div style={{ width:28, height:28, borderRadius:6, background:APV2_TOKENS.gBlue,
             display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>🛡️</div>
-          <span style={{ fontWeight:700, fontSize:14, color:C.text }}>Admin Panel</span>
+          <span style={{ fontWeight:700, fontSize:14, color:APV2_TOKENS.text }}>Admin Panel</span>
         </div>
       </div>
       <nav style={{ flex:1, padding:"10px 8px" }}>
@@ -391,12 +391,12 @@ function AdminSidebar({ active, setActive }) {
           }}>
             <span style={{ fontSize:14 }}>{item.icon}</span>
             <span style={{ fontSize:13, fontWeight:active===item.id?600:400,
-              color:active===item.id?C.text:C.sub }}>{item.label}</span>
+              color:active===item.id?APV2_TOKENS.text:APV2_TOKENS.sub }}>{item.label}</span>
           </button>
         ))}
       </nav>
-      <div style={{ padding:"10px 14px", borderTop:`1px solid ${C.border}` }}>
-        <a href="/app" style={{ color:C.muted, fontSize:12, textDecoration:"none",
+      <div style={{ padding:"10px 14px", borderTop:`1px solid ${APV2_TOKENS.border}` }}>
+        <a href="/app" style={{ color:APV2_TOKENS.muted, fontSize:12, textDecoration:"none",
           display:"flex", alignItems:"center", gap:6 }}>
           ← Back to App
         </a>
@@ -459,8 +459,8 @@ export default function AdminPanel({ user }) {
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
             justifyContent:"center", height:"60vh", gap:12 }}>
             <div style={{ fontSize:40 }}>🔧</div>
-            <h2 style={{ color:C.text, fontSize:18, fontWeight:600, margin:0 }}>{active}</h2>
-            <p style={{ color:C.sub, fontSize:14, margin:0 }}>Section in progress</p>
+            <h2 style={{ color:APV2_TOKENS.text, fontSize:18, fontWeight:600, margin:0 }}>{active}</h2>
+            <p style={{ color:APV2_TOKENS.sub, fontSize:14, margin:0 }}>Section in progress</p>
           </div>
         );
     }
@@ -470,34 +470,34 @@ export default function AdminPanel({ user }) {
   if (!user?.is_admin) {
     return (
       <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
-        height:"100vh", background:C.bg, fontFamily:"-apple-system,sans-serif" }}>
+        height:"100vh", background:APV2_TOKENS.bg, fontFamily:"-apple-system,sans-serif" }}>
         <div style={{ textAlign:"center" }}>
           <div style={{ fontSize:48, marginBottom:16 }}>🚫</div>
-          <h1 style={{ color:C.text, fontSize:22, fontWeight:700 }}>Access Denied</h1>
-          <p style={{ color:C.sub, fontSize:15 }}>Admin access required</p>
-          <a href="/app" style={{ color:C.blue, fontSize:14, textDecoration:"none" }}>← Back to app</a>
+          <h1 style={{ color:APV2_TOKENS.text, fontSize:22, fontWeight:700 }}>Access Denied</h1>
+          <p style={{ color:APV2_TOKENS.sub, fontSize:15 }}>Admin access required</p>
+          <a href="/app" style={{ color:APV2_TOKENS.blue, fontSize:14, textDecoration:"none" }}>← Back to app</a>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ display:"flex", background:C.bg, minHeight:"100vh",
-      fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:C.text }}>
+    <div style={{ display:"flex", background:APV2_TOKENS.bg, minHeight:"100vh",
+      fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:APV2_TOKENS.text }}>
       <AdminSidebar active={active} setActive={setActive}/>
       <main style={{ flex:1, overflow:"auto" }}>
         <div style={{
-          padding:"14px 24px", borderBottom:`1px solid ${C.border}`,
+          padding:"14px 24px", borderBottom:`1px solid ${APV2_TOKENS.border}`,
           background:"rgba(2,10,20,.9)", backdropFilter:"blur(12px)",
           display:"flex", justifyContent:"space-between", alignItems:"center",
           position:"sticky", top:0, zIndex:100,
         }}>
-          <div style={{ fontSize:12, color:C.muted }}>
+          <div style={{ fontSize:12, color:APV2_TOKENS.muted }}>
             🛡️ Admin Mode · {user.email}
           </div>
           <div style={{
             background:"rgba(248,113,113,.1)", border:"1px solid rgba(248,113,113,.2)",
-            borderRadius:6, padding:"4px 12px", fontSize:11, color:C.red, fontWeight:600,
+            borderRadius:6, padding:"4px 12px", fontSize:11, color:APV2_TOKENS.red, fontWeight:600,
           }}>ADMIN ACCESS</div>
         </div>
         <div style={{ padding:24 }}>{renderPanel()}</div>
