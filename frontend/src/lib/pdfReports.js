@@ -457,6 +457,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
                  : _rawTier;
   const isElite= tierAtLeast(tier,"elite");
   const isPro  = !isElite && tierAtLeast(tier,"professional");
+  console.log("[PDF] tier detection:", {_rawTier, tier, isElite, isPro});
   const doc    = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
 
