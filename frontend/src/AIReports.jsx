@@ -30,16 +30,91 @@ async function callGemini(prompt, system, maxTokens = 1200) {
   }
 }
 
+function inlineMd(t) {
+  return (t||"")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/\*\*(.+?)\*\*/g, "<strong style='color:#e2e8f0;font-weight:600'>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em style='color:#cbd5e1'>$1</em>")
+    .replace(/`(.+?)`/g, "<code style='background:rgba(99,179,237,.13);padding:1px 6px;border-radius:4px;font-size:.88em;font-family:monospace'>$1</code>");
+}
+
+function renderTable(rows) {
+  const lines = rows.filter(l => l.trim().startsWith("|"));
+  if (lines.length < 2) return "";
+  const headers = lines[0].split("|").filter((_,i,a)=>i>0&&i<a.length-1).map(h=>h.trim());
+  const dataRows = lines.slice(2); // skip separator line
+  return `<div style="overflow-x:auto;margin:12px 0">
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <thead>
+        <tr>${headers.map(h=>`<th style="padding:8px 12px;text-align:left;background:rgba(99,179,237,.1);color:#93c5fd;font-weight:600;border-bottom:1px solid rgba(99,179,237,.2)">${inlineMd(h)}</th>`).join("")}</tr>
+      </thead>
+      <tbody>
+        ${dataRows.map((row,ri)=>{
+          const cells = row.split("|").filter((_,i,a)=>i>0&&i<a.length-1).map(c=>c.trim());
+          return `<tr style="background:${ri%2===0?"rgba(255,255,255,.02)":"transparent"}">${cells.map(c=>`<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05);color:#cbd5e1">${inlineMd(c)}</td>`).join("")}</tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  </div>`;
+}
+
 function MdText({ text }) {
-  const html = (text || "")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g,     "<em>$1</em>")
-    .replace(/^### (.+)$/gm,   "<h4 style='margin:10px 0 4px;font-size:13px;font-weight:700;color:#e8f0fe'>$1</h4>")
-    .replace(/^## (.+)$/gm,    "<h3 style='margin:14px 0 6px;font-size:15px;font-weight:800;color:#e8f0fe;font-family:Syne,sans-serif'>$1</h3>")
-    .replace(/^- (.+)$/gm,     "<li style='margin:5px 0;line-height:1.6'>$1</li>")
-    .replace(/(<li[\s\S]+?<\/li>)/g, "<ul style='padding-left:18px;margin:8px 0'>$1</ul>")
-    .replace(/\n\n/g, "<br/><br/>").replace(/\n/g, "<br/>");
-  return <span dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 1.75 }} />;
+  if (!text) return null;
+  const lines = text.split("\n");
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const l = lines[i];
+
+    // Table detection
+    if (l.trim().startsWith("|")) {
+      const tableLines = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      out.push(renderTable(tableLines));
+      continue;
+    }
+
+    // ## Heading
+    if (/^## (.+)$/.test(l)) {
+      out.push(`<div style="font-size:15px;font-weight:700;color:#e2e8f0;margin:20px 0 8px;padding-bottom:6px;border-bottom:1px solid rgba(99,179,237,.15);letter-spacing:-.02em">${inlineMd(l.replace(/^## /,""))}</div>`);
+    }
+    // ### Subheading
+    else if (/^### (.+)$/.test(l)) {
+      out.push(`<div style="font-size:13px;font-weight:700;color:#93c5fd;margin:14px 0 5px">${inlineMd(l.replace(/^### /,""))}</div>`);
+    }
+    // Numbered list
+    else if (/^\d+\. (.+)$/.test(l)) {
+      const [,num,rest] = l.match(/^(\d+)\. (.+)$/);
+      out.push(`<div style="display:flex;gap:10px;margin:5px 0 5px 4px;align-items:baseline"><span style="color:#60a5fa;font-weight:700;font-size:12px;min-width:18px;flex-shrink:0">${num}.</span><span style="color:#cbd5e1;line-height:1.65">${inlineMd(rest)}</span></div>`);
+    }
+    // Bullet
+    else if (/^[-•*] (.+)$/.test(l)) {
+      const rest = l.replace(/^[-•*] /,"");
+      out.push(`<div style="display:flex;gap:9px;margin:4px 0 4px 4px;align-items:baseline"><span style="color:#22d3ee;font-size:8px;flex-shrink:0;margin-top:5px">●</span><span style="color:#cbd5e1;line-height:1.65">${inlineMd(rest)}</span></div>`);
+    }
+    // ⚕️ warning box
+    else if (l.startsWith("⚕️") || l.startsWith("⚠️")) {
+      out.push(`<div style="background:rgba(239,68,68,.07);border:0.5px solid rgba(239,68,68,.22);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12.5px;color:#fca5a5;line-height:1.6">${inlineMd(l)}</div>`);
+    }
+    // Empty line
+    else if (l.trim() === "") {
+      out.push(`<div style="height:6px"></div>`);
+    }
+    // Normal text
+    else {
+      out.push(`<p style="margin:0 0 6px;color:#cbd5e1;line-height:1.7;font-size:13.5px">${inlineMd(l)}</p>`);
+    }
+    i++;
+  }
+
+  return (
+    <div style={{ fontFamily:"'DM Sans',system-ui,sans-serif", fontSize:13.5 }}
+         dangerouslySetInnerHTML={{ __html: out.join("") }} />
+  );
 }
 
 // ── PDF generator (pure HTML → print) ────────────────────────────
