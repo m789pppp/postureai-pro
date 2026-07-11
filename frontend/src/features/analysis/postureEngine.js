@@ -864,6 +864,25 @@ function analyzeRoundedShoulders(lms, prop) {
   return { depth: Math.round(deviation * 10) / 10, asymmetry: 0, score, severity, confidence: 80, reliable: true };
 }
 
+/**
+ * Total cervical spine load (kg) at a given head-flexion angle.
+ * Piecewise-linear interpolation of Hansraj (2014, Surgical Technology
+ * International 25:277-9) published values. Clamped at the study's
+ * 60° maximum (27 kg) — beyond that the model is unvalidated.
+ */
+const _HANSRAJ_TABLE = [[0, 4.5], [15, 12], [30, 18], [45, 22], [60, 27]];
+function _hansrajLoadKg(pitchDeg) {
+  const t = _HANSRAJ_TABLE;
+  const p = Math.max(0, Math.min(60, pitchDeg));
+  for (let i = 1; i < t.length; i++) {
+    if (p <= t[i][0]) {
+      const [a0, l0] = t[i - 1], [a1, l1] = t[i];
+      return l0 + ((p - a0) / (a1 - a0)) * (l1 - l0);
+    }
+  }
+  return t[t.length - 1][1];
+}
+
 function analyzeFHP(lms, W, H, prop) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
@@ -885,12 +904,18 @@ function analyzeFHP(lms, W, H, prop) {
   const dist2D  = Math.sqrt(deltaX * deltaX + deltaZpx * deltaZpx);
   const distCm  = Math.round(dist2D * prop.cmPerPx * 10) / 10;
 
-  // Clinically correct extra neck load — Hansraj (2014) Surgical Technology International
+  // Cervical load — Hansraj (2014) Surgical Technology International.
+  // Uses the study's PUBLISHED load table via piecewise-linear
+  // interpolation: 0°≈4.5 kg (neutral), 15°≈12, 30°≈18, 45°≈22, 60°≈27 kg.
+  // The previous 1/cos(θ) model underestimated load by up to 3× versus
+  // the source it cited (e.g. 30° → ~5 kg instead of 18 kg): cervical
+  // load is a lever-arm MOMENT effect, not a simple vector projection.
+  // Also ~matches backend.py's linear model (4.5 kg per 2.5 cm FHP).
   const HEAD_WEIGHT_KG   = 4.5;
   const CERVICAL_HEIGHT  = 15; // cm — approximate C1-to-head-centre distance
   const pitchRad         = Math.atan2(Math.max(0, distCm), CERVICAL_HEIGHT);
   const pitchDeg         = pitchRad * 180 / Math.PI;
-  const extraLoadKg      = Math.round(Math.max(0, (HEAD_WEIGHT_KG / Math.max(Math.cos(pitchRad), 0.35)) - HEAD_WEIGHT_KG) * 10) / 10;
+  const extraLoadKg      = Math.round(Math.max(0, _hansrajLoadKg(pitchDeg) - HEAD_WEIGHT_KG) * 10) / 10;
 
   const score    = scoreMetric(distCm, 0, THR.FHP_CM.ok, THR.FHP_CM.bad);
   const severity = classify(distCm, SEV.FHP);
