@@ -11,7 +11,7 @@ import { Skeleton, Spinner, EmptyState, ErrorState,
          ProgressBar, Badge, Btn, Divider } from "./ui/index.jsx";
 
 // ─── tokens ─────────────────────────────────────────────────────
-const T = {
+const TOKENS = {
   bg:C.bg, surf:C.bgElevated, card:C.surface,
   border:C.border, text:C.text, muted:C.muted,
   blue:C.blue, green:C.green, amber:C.amber, red:C.red,
@@ -32,15 +32,15 @@ const fmt   = d => d?.toDate?.()?.toLocaleDateString?.() || d?.split?.("T")?.[0]
 // ─── sub-components ─────────────────────────────────────────────
 function Card({ title, sub, action, children, style }) {
   return (
-    <div style={{ background:T.card, border:`1px solid ${T.border}`,
+    <div style={{ background:TOKENS.card, border:`1px solid ${TOKENS.border}`,
       borderRadius:R.lg, overflow:"hidden", ...style }}>
       {title && (
         <div style={{ padding:`${SP[4]}px ${SP[5]}px`,
-          borderBottom:`1px solid ${T.border}`,
+          borderBottom:`1px solid ${TOKENS.border}`,
           display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{title}</div>
-            {sub && <div style={{ fontSize:10, color:T.muted, marginTop:2 }}>{sub}</div>}
+            <div style={{ fontSize:13, fontWeight:700, color:TOKENS.text }}>{title}</div>
+            {sub && <div style={{ fontSize:10, color:TOKENS.muted, marginTop:2 }}>{sub}</div>}
           </div>
           {action}
         </div>
@@ -51,19 +51,19 @@ function Card({ title, sub, action, children, style }) {
 }
 
 function KpiBox({ label, value, sub, color, trend }) {
-  const col = color || T.text;
+  const col = color || TOKENS.text;
   return (
-    <div style={{ background:T.card, border:`1px solid ${T.border}`,
+    <div style={{ background:TOKENS.card, border:`1px solid ${TOKENS.border}`,
       borderRadius:R.md, padding:SP[4], position:"relative", overflow:"hidden" }}>
       <div style={{ position:"absolute", top:0, left:0, right:0, height:2,
         background:`linear-gradient(90deg,${col}60,transparent)` }}/>
-      <div style={{ fontSize:10, fontWeight:700, color:T.muted,
+      <div style={{ fontSize:10, fontWeight:700, color:TOKENS.muted,
         letterSpacing:".08em", textTransform:"uppercase", marginBottom:8 }}>{label}</div>
       <div style={{ fontSize:26, fontWeight:800, color:col,
         letterSpacing:"-1.5px", lineHeight:1, marginBottom:4 }}>{value ?? "—"}</div>
       {sub   && <div style={{ fontSize:10.5, color:col, fontWeight:500 }}>{sub}</div>}
       {trend !== undefined && (
-        <div style={{ fontSize:10, color:trend>0?T.green:trend<0?T.red:T.muted, marginTop:4 }}>
+        <div style={{ fontSize:10, color:trend>0?TOKENS.green:trend<0?TOKENS.red:TOKENS.muted, marginTop:4 }}>
           {trend>0?`↑ +${trend}`:trend<0?`↓ ${trend}`:"→ stable"}
         </div>
       )}
@@ -74,12 +74,12 @@ function KpiBox({ label, value, sub, color, trend }) {
 function UsageMeter({ label, used, limit, color }) {
   const unlimited = limit < 0;
   const pct = unlimited ? 0 : limit > 0 ? Math.min(100, Math.round(used/limit*100)) : 100;
-  const col = unlimited ? T.green : pct>=90?T.red:pct>=70?T.amber:T.green;
+  const col = unlimited ? TOKENS.green : pct>=90?TOKENS.red:pct>=70?TOKENS.amber:TOKENS.green;
   return (
     <div style={{ marginBottom:SP[3] }}>
       <div style={{ display:"flex", justifyContent:"space-between",
         alignItems:"center", marginBottom:6 }}>
-        <span style={{ fontSize:12, color:T.text, fontWeight:500 }}>{label}</span>
+        <span style={{ fontSize:12, color:TOKENS.text, fontWeight:500 }}>{label}</span>
         <span style={{ fontSize:11, color:col, fontWeight:600 }}>
           {unlimited ? "∞ Unlimited" : `${used} / ${limit}`}
         </span>
@@ -88,7 +88,7 @@ function UsageMeter({ label, used, limit, color }) {
         <ProgressBar value={pct} max={100} color={col} h={5}/>
       )}
       {unlimited && (
-        <div style={{ height:5, background:`${T.green}25`, borderRadius:99 }}/>
+        <div style={{ height:5, background:`${TOKENS.green}25`, borderRadius:99 }}/>
       )}
     </div>
   );
@@ -110,7 +110,7 @@ function PlanBadge({ plan }) {
 function RevenueSparkline({ data }) {
   if (!data || !Object.keys(data).length) return (
     <div style={{ height:56, display:"flex", alignItems:"center",
-      justifyContent:"center", fontSize:11, color:T.muted }}>No data</div>
+      justifyContent:"center", fontSize:11, color:TOKENS.muted }}>No data</div>
   );
   const entries = Object.entries(data).sort((a,b)=>a[0].localeCompare(b[0]));
   const max = Math.max(...entries.map(e=>e[1]), 1);
@@ -120,10 +120,10 @@ function RevenueSparkline({ data }) {
         <div key={m} style={{ flex:1, display:"flex", flexDirection:"column",
           alignItems:"center", gap:4 }}>
           <div style={{ width:"100%", borderRadius:"3px 3px 0 0",
-            background:T.blue, opacity:.5+(v/max)*.5,
+            background:TOKENS.blue, opacity:.5+(v/max)*.5,
             height:Math.max(4, Math.round(v/max*50)),
             transition:"height .5s ease" }}/>
-          <div style={{ fontSize:7.5, color:T.muted }}>{m.slice(5)}</div>
+          <div style={{ fontSize:7.5, color:TOKENS.muted }}>{m.slice(5)}</div>
         </div>
       ))}
     </div>
@@ -134,32 +134,32 @@ function ProrationCard({ currentPlan, newPlan, prorate, isAr }) {
   if (!prorate) return null;
   const isUp = prorate.is_upgrade;
   return (
-    <div style={{ background:isUp?`${T.green}08`:`${T.amber}08`,
-      border:`1px solid ${isUp?T.green:T.amber}25`,
+    <div style={{ background:isUp?`${TOKENS.green}08`:`${TOKENS.amber}08`,
+      border:`1px solid ${isUp?TOKENS.green:TOKENS.amber}25`,
       borderRadius:R.md, padding:SP[4] }}>
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:SP[2] }}>
         <span style={{ fontSize:16 }}>{isUp?"↑":"↓"}</span>
         <span style={{ fontSize:13, fontWeight:700,
-          color:isUp?T.green:T.amber }}>
+          color:isUp?TOKENS.green:TOKENS.amber }}>
           {isUp?(isAr?"ترقية فورية":"Immediate Upgrade")
               :(isAr?"تخفيض في الدورة القادمة":"Downgrade at next cycle")}
         </span>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:SP[2] }}>
         {[
-          [isAr?"رصيد":"Credit",   money(prorate.credit_amount), T.green],
-          [isAr?"سعر الخطة":"New Price", money(prorate.new_plan_price), T.blue],
+          [isAr?"رصيد":"Credit",   money(prorate.credit_amount), TOKENS.green],
+          [isAr?"سعر الخطة":"New Price", money(prorate.new_plan_price), TOKENS.blue],
           [isAr?"صافي الدفع":"Net Charge", money(prorate.net_charge),
-            prorate.net_charge===0?T.green:T.amber],
+            prorate.net_charge===0?TOKENS.green:TOKENS.amber],
         ].map(([l,v,col])=>(
           <div key={l} style={{ textAlign:"center" }}>
             <div style={{ fontSize:16, fontWeight:800, color:col }}>{v}</div>
-            <div style={{ fontSize:9, color:T.muted, marginTop:2 }}>{l}</div>
+            <div style={{ fontSize:9, color:TOKENS.muted, marginTop:2 }}>{l}</div>
           </div>
         ))}
       </div>
       {prorate.note && (
-        <div style={{ marginTop:SP[2], fontSize:11, color:T.muted }}>{prorate.note}</div>
+        <div style={{ marginTop:SP[2], fontSize:11, color:TOKENS.muted }}>{prorate.note}</div>
       )}
     </div>
   );
@@ -301,7 +301,7 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
   })();
 
   return (
-    <div style={{ minHeight:"100vh", background:T.bg, color:T.text,
+    <div style={{ minHeight:"100vh", background:TOKENS.bg, color:TOKENS.text,
       fontFamily:"'DM Sans',system-ui,sans-serif",
       direction:isAr_?"rtl":"ltr" }}>
       <style>{GLOBAL_CSS}</style>
@@ -310,47 +310,47 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
       {toast && (
         <div style={{
           position:"fixed", top:20, right:20, zIndex:9999,
-          background:T.green, color:"white",
+          background:TOKENS.green, color:"white",
           padding:"10px 18px", borderRadius:R.md,
           fontSize:12, fontWeight:600,
-          boxShadow:`0 8px 24px ${T.green}50`,
+          boxShadow:`0 8px 24px ${TOKENS.green}50`,
           animation:"ds-fadeUp .2s ease",
         }}>✓ {toast}</div>
       )}
 
       {/* Header */}
       <div style={{ position:"sticky", top:0, zIndex:30,
-        background:"rgba(7,11,18,.95)", borderBottom:`1px solid ${T.border}`,
+        background:"rgba(7,11,18,.95)", borderBottom:`1px solid ${TOKENS.border}`,
         backdropFilter:"blur(16px)" }}>
         <div style={{ padding:`${SP[4]}px ${SP[5]}px`,
           display:"flex", alignItems:"center", gap:12 }}>
           <Btn variant="ghost" size="sm" onClick={onClose}>← {isAr_?"رجوع":"Back"}</Btn>
           <div style={{ flex:1 }}>
-            <div style={{ fontSize:16, fontWeight:800, color:T.text, letterSpacing:"-.02em" }}>
+            <div style={{ fontSize:16, fontWeight:800, color:TOKENS.text, letterSpacing:"-.02em" }}>
               {isAr_?"لوحة الفوترة":"Billing Dashboard"}
             </div>
-            <div style={{ fontSize:10, color:T.muted, marginTop:1 }}>
+            <div style={{ fontSize:10, color:TOKENS.muted, marginTop:1 }}>
               {profile?.email} · <PlanBadge plan={tier}/>
             </div>
           </div>
         </div>
         {/* Tabs */}
         <div style={{ display:"flex", padding:`0 ${SP[5]}px`,
-          borderTop:`1px solid ${T.border}`, overflowX:"auto" }}>
+          borderTop:`1px solid ${TOKENS.border}`, overflowX:"auto" }}>
           {TABS.map(tb => (
             <button key={tb.id} onClick={()=>setTab(tb.id)} style={{
               background:"none", border:"none",
-              borderBottom: tab===tb.id?`2px solid ${T.blue}`:"2px solid transparent",
+              borderBottom: tab===tb.id?`2px solid ${TOKENS.blue}`:"2px solid transparent",
               padding:`${SP[3]}px ${SP[4]}px`,
               fontSize:11, fontWeight:600,
-              color: tab===tb.id?T.blue:T.muted,
+              color: tab===tb.id?TOKENS.blue:TOKENS.muted,
               cursor:"pointer", whiteSpace:"nowrap",
               display:"flex", alignItems:"center", gap:5,
             }}>
               <span>{tb.icon}</span><span>{tb.label}</span>
               {tb.badge > 0 && (
                 <span style={{ fontSize:8, fontWeight:800, padding:"1px 5px",
-                  borderRadius:99, background:T.amber, color:"white" }}>{tb.badge}</span>
+                  borderRadius:99, background:TOKENS.amber, color:"white" }}>{tb.badge}</span>
               )}
             </button>
           ))}
@@ -365,9 +365,9 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
         {tab==="overview" && (<>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:SP[2] }}>
             <KpiBox label={L.currentPlan}    value={PLAN_META[tier]?.label} color={PLAN_META[tier]?.color}/>
-            <KpiBox label={L.totalSpend}     value={money(totalSpend)} color={T.green}/>
-            <KpiBox label={L.paymentsMade}   value={confirmedPayments.length} color={T.blue}/>
-            <KpiBox label={L.nextRenewal}    value={nextRenewal} color={T.muted}/>
+            <KpiBox label={L.totalSpend}     value={money(totalSpend)} color={TOKENS.green}/>
+            <KpiBox label={L.paymentsMade}   value={confirmedPayments.length} color={TOKENS.blue}/>
+            <KpiBox label={L.nextRenewal}    value={nextRenewal} color={TOKENS.muted}/>
           </div>
 
           {/* Plan features */}
@@ -378,10 +378,10 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:SP[2] }}>
                   <PlanBadge plan={tier}/>
                   {profile?.is_trial && (
-                    <Badge label="TRIAL" color={T.amber} bg={`${T.amber}10`}/>
+                    <Badge label="TRIAL" color={TOKENS.amber} bg={`${TOKENS.amber}10`}/>
                   )}
                 </div>
-                <div style={{ fontSize:12, color:T.muted, lineHeight:1.7 }}>
+                <div style={{ fontSize:12, color:TOKENS.muted, lineHeight:1.7 }}>
                   {isAr_
                     ? "للترقية أو تغيير خطتك، اضغط على تغيير الخطة"
                     : "To upgrade or change your plan, click the Change Plan tab."}
@@ -401,21 +401,21 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                   <div key={p.id||i} className="ds-row-hov" style={{
                     display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr .8fr",
                     padding:`${SP[3]}px ${SP[5]}px`, alignItems:"center",
-                    borderBottom:i<4?`1px solid ${T.border}`:"none",
+                    borderBottom:i<4?`1px solid ${TOKENS.border}`:"none",
                   }}>
                     <div>
-                      <div style={{ fontSize:12, fontWeight:600, color:T.text }}>
+                      <div style={{ fontSize:12, fontWeight:600, color:TOKENS.text }}>
                         {PLAN_META[p.tier]?.label||p.tier} Plan
                       </div>
-                      <div style={{ fontSize:10, color:T.muted, marginTop:1 }}>
+                      <div style={{ fontSize:10, color:TOKENS.muted, marginTop:1 }}>
                         {p.billing_cycle||"monthly"} · {p.payment_method_name||"—"}
                       </div>
                     </div>
-                    <div style={{ fontSize:13, fontWeight:800, color:T.green }}>
+                    <div style={{ fontSize:13, fontWeight:800, color:TOKENS.green }}>
                       {money(p.amount)}
                     </div>
-                    <div style={{ fontSize:10, color:T.muted }}>{fmt(p.created_at)}</div>
-                    <Badge label="PAID" color={T.green} bg={`${T.green}10`}/>
+                    <div style={{ fontSize:10, color:TOKENS.muted }}>{fmt(p.created_at)}</div>
+                    <Badge label="PAID" color={TOKENS.green} bg={`${TOKENS.green}10`}/>
                     <Btn size="sm" variant="ghost"
                       loading={invoiceLoading[p.ref_code||p.id]}
                       onClick={()=>downloadInvoice(p)}>
@@ -429,15 +429,15 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
 
           {/* Failed payments alert */}
           {failedPayments.length > 0 && (
-            <div style={{ background:`${T.red}08`, border:`1px solid ${T.red}25`,
+            <div style={{ background:`${TOKENS.red}08`, border:`1px solid ${TOKENS.red}25`,
               borderRadius:R.md, padding:SP[4] }}>
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:SP[2] }}>
                 <span style={{ fontSize:16 }}>⚠️</span>
-                <span style={{ fontSize:13, fontWeight:700, color:T.red }}>
+                <span style={{ fontSize:13, fontWeight:700, color:TOKENS.red }}>
                   {failedPayments.length} {isAr_?"دفع فاشل":"failed payment(s)"}
                 </span>
               </div>
-              <div style={{ fontSize:12, color:T.muted, marginBottom:SP[3] }}>
+              <div style={{ fontSize:12, color:TOKENS.muted, marginBottom:SP[3] }}>
                 {isAr_
                   ?"بعض مدفوعاتك لم تتم — تواصل معنا لحل المشكلة"
                   :"Some payments didn't go through — contact us to resolve."}
@@ -463,30 +463,30 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                 label={isAr_?"الجلسات اليوم":"Sessions Today"}
                 used={usage.usage.sessions_today}
                 limit={usage.limits.sessions_per_day}
-                color={T.blue}
+                color={TOKENS.blue}
               />
               <UsageMeter
                 label={isAr_?"الجلسات هذا الشهر":"Sessions This Month"}
                 used={usage.usage.sessions_this_month}
                 limit={usage.limits.sessions_per_month}
-                color={T.sky}
+                color={TOKENS.sky}
               />
               <UsageMeter
                 label={isAr_?"AI Coach هذا الشهر":"AI Coach This Month"}
                 used={usage.usage.ai_coach_this_month}
                 limit={usage.limits.ai_coach}
-                color={T.purple}
+                color={TOKENS.purple}
               />
               <UsageMeter
                 label={isAr_?"تصدير PDF هذا الشهر":"PDF Exports This Month"}
                 used={usage.usage.pdf_exports_this_month}
                 limit={usage.limits.pdf_exports}
-                color={T.amber}
+                color={TOKENS.amber}
               />
               {usage.at_limit && (
                 <div style={{ marginTop:SP[3], padding:SP[3],
-                  background:`${T.amber}08`, border:`1px solid ${T.amber}25`,
-                  borderRadius:R.sm, fontSize:12, color:T.amber }}>
+                  background:`${TOKENS.amber}08`, border:`1px solid ${TOKENS.amber}25`,
+                  borderRadius:R.sm, fontSize:12, color:TOKENS.amber }}>
                   ⚡ {isAr_?"وصلت للحد الأقصى — قم بترقية خطتك للاستمرار"
                     :"You've hit your plan limit — upgrade to continue"}
                   <Btn size="sm" variant="amber"
@@ -509,24 +509,24 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
           {pendingPayments.length > 0 && (
             <Card title={isAr_?"مدفوعات معلقة":"Pending Payments"}
               sub={isAr_?"تحتاج مراجعة":"Awaiting confirmation"}
-              style={{ borderColor:`${T.amber}30` }}>
+              style={{ borderColor:`${TOKENS.amber}30` }}>
               {pendingPayments.map((p,i) => (
                 <div key={p.id||i} style={{
                   display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr",
                   padding:`${SP[3]}px 0`, alignItems:"center",
-                  borderBottom:i<pendingPayments.length-1?`1px solid ${T.border}`:"none",
+                  borderBottom:i<pendingPayments.length-1?`1px solid ${TOKENS.border}`:"none",
                 }}>
                   <div>
                     <div style={{ fontSize:12, fontWeight:600 }}>
                       {PLAN_META[p.tier]?.label} · {p.billing_cycle}
                     </div>
-                    <div style={{ fontSize:10, color:T.muted }}>Ref: {p.ref_code}</div>
+                    <div style={{ fontSize:10, color:TOKENS.muted }}>Ref: {p.ref_code}</div>
                   </div>
-                  <div style={{ fontSize:13, fontWeight:700, color:T.amber }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:TOKENS.amber }}>
                     {money(p.amount)}
                   </div>
-                  <div style={{ fontSize:10, color:T.muted }}>{fmt(p.created_at)}</div>
-                  <Badge label="PENDING" color={T.amber} bg={`${T.amber}10`}/>
+                  <div style={{ fontSize:10, color:TOKENS.muted }}>{fmt(p.created_at)}</div>
+                  <Badge label="PENDING" color={TOKENS.amber} bg={`${TOKENS.amber}10`}/>
                 </div>
               ))}
             </Card>
@@ -547,8 +547,8 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                 <div style={{
                   display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr .8fr",
                   padding:`${SP[2]+1}px ${SP[5]}px`,
-                  borderBottom:`1px solid ${T.border}`,
-                  fontSize:9, fontWeight:700, color:T.muted,
+                  borderBottom:`1px solid ${TOKENS.border}`,
+                  fontSize:9, fontWeight:700, color:TOKENS.muted,
                   letterSpacing:".08em", textTransform:"uppercase",
                 }}>
                   {[isAr_?"الخطة":"Plan", isAr_?"المبلغ":"Amount",
@@ -559,28 +559,28 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                 </div>
                 {payments.map((p,i) => {
                   const st = p.status;
-                  const sc = st==="confirmed"?T.green:st==="pending"?T.amber:T.red;
+                  const sc = st==="confirmed"?TOKENS.green:st==="pending"?TOKENS.amber:TOKENS.red;
                   const ref = p.ref_code||p.id;
                   return (
                     <div key={ref||i} className="ds-row-hov" style={{
                       display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr .8fr",
                       padding:`${SP[3]}px ${SP[5]}px`, alignItems:"center",
-                      borderBottom:i<payments.length-1?`1px solid ${T.border}`:"none",
+                      borderBottom:i<payments.length-1?`1px solid ${TOKENS.border}`:"none",
                     }}>
                       <div>
-                        <div style={{ fontSize:12, fontWeight:600, color:T.text }}>
+                        <div style={{ fontSize:12, fontWeight:600, color:TOKENS.text }}>
                           {PLAN_META[p.tier]?.label||p.tier} · {p.billing_cycle||"—"}
                         </div>
-                        <div style={{ fontSize:9, color:T.muted,
+                        <div style={{ fontSize:9, color:TOKENS.muted,
                           fontFamily:"DM Mono,monospace", marginTop:1 }}>{ref}</div>
                       </div>
-                      <div style={{ fontSize:12, fontWeight:700, color:T.green }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:TOKENS.green }}>
                         {money(p.amount)}
                       </div>
-                      <div style={{ fontSize:11, color:T.muted }}>
+                      <div style={{ fontSize:11, color:TOKENS.muted }}>
                         {p.payment_method_name||"—"}
                       </div>
-                      <div style={{ fontSize:10, color:T.muted }}>
+                      <div style={{ fontSize:10, color:TOKENS.muted }}>
                         {fmt(p.created_at)}
                       </div>
                       <Badge label={st.toUpperCase()} color={sc} bg={`${sc}10`}/>
@@ -614,7 +614,7 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
               :"Upgrades are immediate · Downgrades take effect next cycle"}>
             {/* Current plan */}
             <div style={{ marginBottom:SP[4] }}>
-              <div style={{ fontSize:10, color:T.muted,
+              <div style={{ fontSize:10, color:TOKENS.muted,
                 textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>
                 {isAr_?"خطتك الحالية":"Current Plan"}
               </div>
@@ -638,7 +638,7 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                     disabled={cur}
                     style={{
                       background: sel?`${m.color}12`:cur?"rgba(255,255,255,.02)":"none",
-                      border:`${sel?2:1}px solid ${sel?m.color:cur?T.border:T.border}`,
+                      border:`${sel?2:1}px solid ${sel?m.color:cur?TOKENS.border:TOKENS.border}`,
                       borderRadius:R.md, padding:`${SP[3]}px ${SP[2]}px`,
                       cursor:cur?"not-allowed":"pointer",
                       opacity:cur?.5:1, transition:"all .18s",
@@ -646,9 +646,9 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                     }}>
                     <div style={{ fontSize:11, fontWeight:700, color:m.color,
                       marginBottom:4 }}>{m.label}</div>
-                    {cur && <div style={{ fontSize:9, color:T.muted }}>Current</div>}
-                    {!cur && isUp && <div style={{ fontSize:9, color:T.green }}>↑ Upgrade</div>}
-                    {!cur && isDn && <div style={{ fontSize:9, color:T.amber }}>↓ Downgrade</div>}
+                    {cur && <div style={{ fontSize:9, color:TOKENS.muted }}>Current</div>}
+                    {!cur && isUp && <div style={{ fontSize:9, color:TOKENS.green }}>↑ Upgrade</div>}
+                    {!cur && isDn && <div style={{ fontSize:9, color:TOKENS.amber }}>↓ Downgrade</div>}
                   </button>
                 );
               })}
@@ -658,7 +658,7 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
               gap:SP[2], marginBottom:SP[3] }}>
               <div>
-                <div style={{ fontSize:10, color:T.muted, marginBottom:6,
+                <div style={{ fontSize:10, color:TOKENS.muted, marginBottom:6,
                   textTransform:"uppercase", letterSpacing:".06em" }}>
                   {isAr_?"دورة الفوترة":"Billing Cycle"}
                 </div>
@@ -666,19 +666,19 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                   {["monthly","yearly"].map(cy=>(
                     <button key={cy} onClick={()=>setNewCycle(cy)} style={{
                       flex:1, padding:"7px 0", borderRadius:R.xs,
-                      border:`1px solid ${newCycle===cy?T.blue:T.border}`,
-                      background:newCycle===cy?`${T.blue}12`:"none",
-                      color:newCycle===cy?T.blue:T.muted,
+                      border:`1px solid ${newCycle===cy?TOKENS.blue:TOKENS.border}`,
+                      background:newCycle===cy?`${TOKENS.blue}12`:"none",
+                      color:newCycle===cy?TOKENS.blue:TOKENS.muted,
                       fontSize:10, fontWeight:600, cursor:"pointer",
                     }}>
                       {cy==="monthly"?(isAr_?"شهري":"Monthly"):(isAr_?"سنوي":"Yearly")}
-                      {cy==="yearly"&&<span style={{ fontSize:8, color:T.green, marginLeft:4 }}>-20%</span>}
+                      {cy==="yearly"&&<span style={{ fontSize:8, color:TOKENS.green, marginLeft:4 }}>-20%</span>}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize:10, color:T.muted, marginBottom:6,
+                <div style={{ fontSize:10, color:TOKENS.muted, marginBottom:6,
                   textTransform:"uppercase", letterSpacing:".06em" }}>
                   {isAr_?"أيام مستخدمة":"Days Used This Cycle"}
                 </div>
@@ -688,8 +688,8 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                   onChange={e=>setDaysUsed(Number(e.target.value))}
                   style={{
                     width:"100%", background:"rgba(255,255,255,.04)",
-                    border:`1px solid ${T.border}`, borderRadius:R.xs,
-                    padding:"7px 12px", fontSize:12, color:T.text,
+                    border:`1px solid ${TOKENS.border}`, borderRadius:R.xs,
+                    padding:"7px 12px", fontSize:12, color:TOKENS.text,
                     fontFamily:"DM Mono,monospace",
                   }}
                 />
@@ -726,13 +726,13 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
           ) : analytics ? (<>
             {/* KPIs */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:SP[2] }}>
-              <KpiBox label="MRR" value={money(analytics.mrr)} color={T.green}
+              <KpiBox label="MRR" value={money(analytics.mrr)} color={TOKENS.green}
                 sub="Monthly Recurring Revenue"/>
-              <KpiBox label="ARR" value={money(analytics.arr)} color={T.blue}
+              <KpiBox label="ARR" value={money(analytics.arr)} color={TOKENS.blue}
                 sub="Annual Run Rate"/>
-              <KpiBox label="ARPU" value={money(analytics.arpu)} color={T.purple}
+              <KpiBox label="ARPU" value={money(analytics.arpu)} color={TOKENS.purple}
                 sub="Avg Revenue Per User"/>
-              <KpiBox label="Customers" value={analytics.unique_customers} color={T.sky}
+              <KpiBox label="Customers" value={analytics.unique_customers} color={TOKENS.sky}
                 sub={`${analytics.avg_payment?.toLocaleString()} EGP avg`}/>
             </div>
 
@@ -750,7 +750,7 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                       <div style={{ display:"flex", justifyContent:"space-between",
                         marginBottom:4, fontSize:11 }}>
                         <span style={{ color:m.color }}>{m.label}</span>
-                        <span style={{ color:T.muted }}>{count} ({Math.round(count/total*100)}%)</span>
+                        <span style={{ color:TOKENS.muted }}>{count} ({Math.round(count/total*100)}%)</span>
                       </div>
                       <ProgressBar value={count} max={total} color={m.color} h={4}/>
                     </div>
@@ -762,28 +762,28 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
             {/* Risk / conversion */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:SP[2] }}>
               <KpiBox label="Conversion Rate" value={`${analytics.conversion_rate}%`}
-                color={analytics.conversion_rate>=70?T.green:T.amber}/>
+                color={analytics.conversion_rate>=70?TOKENS.green:TOKENS.amber}/>
               <KpiBox label="Failed Payments" value={analytics.failed_count}
-                color={analytics.failed_count>0?T.red:T.green}
+                color={analytics.failed_count>0?TOKENS.red:TOKENS.green}
                 sub={analytics.failed_revenue_at_risk>0?`${money(analytics.failed_revenue_at_risk)} at risk`:undefined}/>
               <KpiBox label="Pending Review" value={analytics.pending_count}
-                color={analytics.pending_count>0?T.amber:T.green}/>
+                color={analytics.pending_count>0?TOKENS.amber:TOKENS.green}/>
             </div>
 
             {/* Dunning panel */}
             {isAdmin && failedPayments.length > 0 && (
               <Card title="Failed Payment Recovery (Dunning)"
                 sub={`${failedPayments.length} payments need attention`}
-                style={{ borderColor:`${T.red}25` }}>
+                style={{ borderColor:`${TOKENS.red}25` }}>
                 {failedPayments.slice(0,5).map((p,i) => (
                   <div key={p.id||i} style={{
                     display:"flex", alignItems:"center", gap:SP[3],
                     padding:`${SP[2]+1}px 0`,
-                    borderBottom:i<failedPayments.length-1?`1px solid ${T.border}`:"none",
+                    borderBottom:i<failedPayments.length-1?`1px solid ${TOKENS.border}`:"none",
                   }}>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:12, fontWeight:600 }}>{p.user_email}</div>
-                      <div style={{ fontSize:10, color:T.muted }}>
+                      <div style={{ fontSize:10, color:TOKENS.muted }}>
                         {PLAN_META[p.tier]?.label} · {money(p.amount)}
                       </div>
                     </div>

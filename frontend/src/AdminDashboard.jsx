@@ -10,7 +10,7 @@ import {
 import { apiFetch } from "./services/api.js";
 
 // ── Design tokens ──────────────────────────────────────────────────
-const T = {
+const TOKENS = {
   bg:       "#080c14",
   surface:  "#0d1220",
   surfaceHover: "#111827",
@@ -39,11 +39,11 @@ const T = {
 
 const fmt   = d => d?.toDate?.()?.toLocaleDateString() || d?.split?.("T")[0] || "—";
 const money = n => n ? `${Number(n).toLocaleString()} EGP` : "—";
-const scoreColor = v => v >= 75 ? T.green : v >= 50 ? T.amber : T.red;
+const scoreColor = v => v >= 75 ? TOKENS.green : v >= 50 ? TOKENS.amber : TOKENS.red;
 const tierMeta = {
-  elite:        { color: T.purple, bg: T.purpleBg, label: "Elite" },
-  professional: { color: T.sky,    bg: T.skyBg,    label: "Pro" },
-  standard:     { color: T.muted,  bg: "rgba(100,116,139,.08)", label: "Free" },
+  elite:        { color: TOKENS.purple, bg: TOKENS.purpleBg, label: "Elite" },
+  professional: { color: TOKENS.sky,    bg: TOKENS.skyBg,    label: "Pro" },
+  standard:     { color: TOKENS.muted,  bg: "rgba(100,116,139,.08)", label: "Free" },
 };
 
 // ── Global styles ──────────────────────────────────────────────────
@@ -72,9 +72,9 @@ function KpiCard({ label, value, sub, icon, accent, onClick, trend }) {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        background: T.surface,
-        border: `1px solid ${hov && onClick ? T.borderHover : T.border}`,
-        borderRadius: T.radiusLg,
+        background: TOKENS.surface,
+        border: `1px solid ${hov && onClick ? TOKENS.borderHover : TOKENS.border}`,
+        borderRadius: TOKENS.radiusLg,
         padding: "20px 22px",
         cursor: onClick ? "pointer" : "default",
         transition: "border-color .2s, transform .15s",
@@ -86,13 +86,13 @@ function KpiCard({ label, value, sub, icon, accent, onClick, trend }) {
       {/* accent top bar */}
       <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:`linear-gradient(90deg, ${accent}80, transparent)` }} />
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
-        <span style={{ fontSize:11, fontWeight:600, color:T.muted, letterSpacing:".06em", textTransform:"uppercase" }}>{label}</span>
+        <span style={{ fontSize:11, fontWeight:600, color:TOKENS.muted, letterSpacing:".06em", textTransform:"uppercase" }}>{label}</span>
         <div style={{ width:34, height:34, borderRadius:10, background:`${accent}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>{icon}</div>
       </div>
       <div style={{ fontSize:30, fontWeight:700, color:accent, lineHeight:1, letterSpacing:"-1px", marginBottom:6 }}>{value}</div>
-      {sub && <div style={{ fontSize:11, color:T.muted }}>{sub}</div>}
+      {sub && <div style={{ fontSize:11, color:TOKENS.muted }}>{sub}</div>}
       {trend !== undefined && (
-        <div style={{ position:"absolute", bottom:12, right:14, fontSize:10, color: trend > 0 ? T.green : T.muted }}>
+        <div style={{ position:"absolute", bottom:12, right:14, fontSize:10, color: trend > 0 ? TOKENS.green : TOKENS.muted }}>
           {trend > 0 ? `↑ ${trend}%` : "—"}
         </div>
       )}
@@ -102,10 +102,10 @@ function KpiCard({ label, value, sub, icon, accent, onClick, trend }) {
 
 function Card({ children, style, title, action }) {
   return (
-    <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:T.radiusLg, overflow:"hidden", ...style }}>
+    <div style={{ background:TOKENS.surface, border:`1px solid ${TOKENS.border}`, borderRadius:TOKENS.radiusLg, overflow:"hidden", ...style }}>
       {title && (
-        <div style={{ padding:"16px 20px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <span style={{ fontSize:13, fontWeight:600, color:T.text }}>{title}</span>
+        <div style={{ padding:"16px 20px", borderBottom:`1px solid ${TOKENS.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span style={{ fontSize:13, fontWeight:600, color:TOKENS.text }}>{title}</span>
           {action}
         </div>
       )}
@@ -120,7 +120,7 @@ function Badge({ label, color, bg }) {
       display:"inline-flex", alignItems:"center", gap:4,
       fontSize:10, fontWeight:600, letterSpacing:".04em",
       padding:"3px 9px", borderRadius:99,
-      color: color || T.muted,
+      color: color || TOKENS.muted,
       background: bg || "rgba(100,116,139,.1)",
     }}>{label}</span>
   );
@@ -131,12 +131,12 @@ function Pill({ label, active, color, onClick }) {
     <button
       onClick={onClick}
       style={{
-        background: active ? (color || T.blue) : "transparent",
-        border: `1px solid ${active ? (color || T.blue) : T.border}`,
+        background: active ? (color || TOKENS.blue) : "transparent",
+        border: `1px solid ${active ? (color || TOKENS.blue) : TOKENS.border}`,
         borderRadius: 99,
         padding: "5px 14px",
         fontSize: 11, fontWeight: 600,
-        color: active ? "white" : T.muted,
+        color: active ? "white" : TOKENS.muted,
         cursor: "pointer", transition: ".15s",
       }}
     >{label}</button>
@@ -152,26 +152,26 @@ function Input({ value, onChange, placeholder, style, type = "text" }) {
       placeholder={placeholder}
       style={{
         background: "rgba(255,255,255,.04)",
-        border: `1px solid ${T.border}`,
-        borderRadius: T.radiusSm,
+        border: `1px solid ${TOKENS.border}`,
+        borderRadius: TOKENS.radiusSm,
         padding: "8px 14px",
-        fontSize: 12, color: T.text,
+        fontSize: 12, color: TOKENS.text,
         outline: "none", transition: "border-color .15s",
         fontFamily: "DM Sans, system-ui, sans-serif",
         ...style,
       }}
-      onFocus={e => e.target.style.borderColor = T.blue}
-      onBlur={e  => e.target.style.borderColor = T.border}
+      onFocus={e => e.target.style.borderColor = TOKENS.blue}
+      onBlur={e  => e.target.style.borderColor = TOKENS.border}
     />
   );
 }
 
 function Btn({ children, onClick, variant = "primary", disabled, size = "md", style }) {
   const styles = {
-    primary: { background: T.blue,    color:"white",  border:`1px solid ${T.blue}` },
-    ghost:   { background:"transparent", color:T.muted, border:`1px solid ${T.border}` },
-    danger:  { background:T.redBg,    color:T.red,    border:`1px solid rgba(239,68,68,.2)` },
-    success: { background:T.greenBg,  color:T.green,  border:`1px solid rgba(16,185,129,.2)` },
+    primary: { background: TOKENS.blue,    color:"white",  border:`1px solid ${TOKENS.blue}` },
+    ghost:   { background:"transparent", color:TOKENS.muted, border:`1px solid ${TOKENS.border}` },
+    danger:  { background:TOKENS.redBg,    color:TOKENS.red,    border:`1px solid rgba(239,68,68,.2)` },
+    success: { background:TOKENS.greenBg,  color:TOKENS.green,  border:`1px solid rgba(16,185,129,.2)` },
   };
   const pads = { sm:"4px 12px", md:"8px 18px", lg:"10px 24px" };
   return (
@@ -180,7 +180,7 @@ function Btn({ children, onClick, variant = "primary", disabled, size = "md", st
       disabled={disabled}
       style={{
         ...styles[variant],
-        borderRadius: T.radiusSm,
+        borderRadius: TOKENS.radiusSm,
         padding: pads[size],
         fontSize: size === "sm" ? 10 : 12,
         fontWeight: 600,
@@ -203,7 +203,7 @@ function RevenueChart({ payments }) {
   });
   const entries = Object.entries(byDate).slice(-14).sort((a,b) => a[0].localeCompare(b[0]));
   if (!entries.length) return (
-    <div style={{ padding:"40px 0", textAlign:"center", fontSize:12, color:T.muted }}>No revenue data yet</div>
+    <div style={{ padding:"40px 0", textAlign:"center", fontSize:12, color:TOKENS.muted }}>No revenue data yet</div>
   );
   const max = Math.max(...entries.map(e => e[1]), 1);
   return (
@@ -213,15 +213,15 @@ function RevenueChart({ payments }) {
         return (
           <div key={date} title={`${date}: ${money(amt)}`}
             style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-            <div style={{ fontSize:9, color:T.muted, fontFamily:"DM Mono,monospace" }}>{amt > 0 ? (amt/1000).toFixed(0)+"k" : ""}</div>
+            <div style={{ fontSize:9, color:TOKENS.muted, fontFamily:"DM Mono,monospace" }}>{amt > 0 ? (amt/1000).toFixed(0)+"k" : ""}</div>
             <div style={{
               width:"100%", borderRadius:"4px 4px 0 0",
-              background: `linear-gradient(180deg, ${T.blue}, ${T.blue}80)`,
+              background: `linear-gradient(180deg, ${TOKENS.blue}, ${TOKENS.blue}80)`,
               height: `${pct}%`, minHeight:4,
               transition: "height .4s",
-              boxShadow: `0 0 8px ${T.blue}40`,
+              boxShadow: `0 0 8px ${TOKENS.blue}40`,
             }} />
-            <div style={{ fontSize:8, color:T.muted, writingMode:"vertical-rl", transform:"rotate(180deg)", maxHeight:28, overflow:"hidden" }}>
+            <div style={{ fontSize:8, color:TOKENS.muted, writingMode:"vertical-rl", transform:"rotate(180deg)", maxHeight:28, overflow:"hidden" }}>
               {date.slice(5)}
             </div>
           </div>
@@ -239,10 +239,10 @@ function TierBar({ users }) {
   const free   = Math.max(0, users.length - elite - pro - trial);
   const total  = users.length || 1;
   const rows = [
-    { label:"Elite",        count:elite, color:T.purple },
-    { label:"Professional", count:pro,   color:T.sky },
-    { label:"Trial",        count:trial, color:T.amber },
-    { label:"Free",         count:free,  color:T.faint },
+    { label:"Elite",        count:elite, color:TOKENS.purple },
+    { label:"Professional", count:pro,   color:TOKENS.sky },
+    { label:"Trial",        count:trial, color:TOKENS.amber },
+    { label:"Free",         count:free,  color:TOKENS.faint },
   ];
   return (
     <div>
@@ -255,9 +255,9 @@ function TierBar({ users }) {
       {rows.map(r => (
         <div key={r.label} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
           <div style={{ width:8, height:8, borderRadius:3, background:r.color, flexShrink:0 }} />
-          <div style={{ flex:1, fontSize:12, color:T.muted }}>{r.label}</div>
+          <div style={{ flex:1, fontSize:12, color:TOKENS.muted }}>{r.label}</div>
           <div style={{ fontSize:13, fontWeight:600, color:r.color }}>{r.count}</div>
-          <div style={{ fontSize:11, color:T.muted, width:36, textAlign:"right" }}>
+          <div style={{ fontSize:11, color:TOKENS.muted, width:36, textAlign:"right" }}>
             {Math.round(r.count/total*100)}%
           </div>
         </div>
@@ -274,14 +274,14 @@ function Table({ cols, rows, emptyMsg = "No data" }) {
       <div style={{
         display:"grid", gridTemplateColumns: cols.map(c => c.w || "1fr").join(" "),
         padding:"10px 20px",
-        borderBottom:`1px solid ${T.border}`,
+        borderBottom:`1px solid ${TOKENS.border}`,
         fontSize:10, fontWeight:700,
-        color:T.muted, letterSpacing:".08em", textTransform:"uppercase",
+        color:TOKENS.muted, letterSpacing:".08em", textTransform:"uppercase",
       }}>
         {cols.map(c => <div key={c.key}>{c.label}</div>)}
       </div>
       {rows.length === 0 && (
-        <div style={{ padding:"40px 20px", textAlign:"center", fontSize:12, color:T.muted }}>{emptyMsg}</div>
+        <div style={{ padding:"40px 20px", textAlign:"center", fontSize:12, color:TOKENS.muted }}>{emptyMsg}</div>
       )}
       {rows.map((row, i) => (
         <div
@@ -290,12 +290,12 @@ function Table({ cols, rows, emptyMsg = "No data" }) {
           style={{
             display:"grid", gridTemplateColumns: cols.map(c => c.w || "1fr").join(" "),
             padding:"13px 20px",
-            borderBottom: i < rows.length - 1 ? `1px solid ${T.border}` : "none",
+            borderBottom: i < rows.length - 1 ? `1px solid ${TOKENS.border}` : "none",
             alignItems:"center",
           }}
         >
           {cols.map(c => (
-            <div key={c.key} style={{ fontSize:12, color:T.text }}>
+            <div key={c.key} style={{ fontSize:12, color:TOKENS.text }}>
               {c.render ? c.render(row) : row[c.key] ?? "—"}
             </div>
           ))}
@@ -306,7 +306,7 @@ function Table({ cols, rows, emptyMsg = "No data" }) {
 }
 
 // ── Skeleton loader ────────────────────────────────────────────────
-function Skeleton({ h = 80, radius = T.radius }) {
+function Skeleton({ h = 80, radius = TOKENS.radius }) {
   return (
     <div style={{
       height:h, borderRadius:radius,
@@ -319,13 +319,13 @@ function Skeleton({ h = 80, radius = T.radius }) {
 
 // ── Toast ─────────────────────────────────────────────────────────
 function Toast({ msg, type = "success" }) {
-  const bg = type === "error" ? T.red : T.green;
+  const bg = type === "error" ? TOKENS.red : TOKENS.green;
   if (!msg) return null;
   return (
     <div style={{
       position:"fixed", top:20, right:20, zIndex:9999,
       background:bg, color:"white",
-      padding:"10px 18px", borderRadius:T.radius,
+      padding:"10px 18px", borderRadius:TOKENS.radius,
       fontSize:12, fontWeight:600,
       boxShadow:`0 8px 32px ${bg}60`,
       animation:"fadeIn .2s ease",
@@ -340,21 +340,21 @@ function HealthDot({ ok, label, sub }) {
   return (
     <div style={{
       background:"rgba(255,255,255,.03)",
-      border:`1px solid ${T.border}`,
-      borderRadius:T.radius,
+      border:`1px solid ${TOKENS.border}`,
+      borderRadius:TOKENS.radius,
       padding:"12px 16px",
       display:"flex", alignItems:"center", gap:12,
     }}>
       <div style={{
         width:8, height:8, borderRadius:"50%", flexShrink:0,
-        background: ok ? T.green : T.red,
-        boxShadow: ok ? `0 0 6px ${T.green}` : `0 0 6px ${T.red}`,
+        background: ok ? TOKENS.green : TOKENS.red,
+        boxShadow: ok ? `0 0 6px ${TOKENS.green}` : `0 0 6px ${TOKENS.red}`,
       }} />
       <div>
-        <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{label}</div>
-        {sub && <div style={{ fontSize:10, color:T.muted, marginTop:2 }}>{sub}</div>}
+        <div style={{ fontSize:12, fontWeight:600, color:TOKENS.text }}>{label}</div>
+        {sub && <div style={{ fontSize:10, color:TOKENS.muted, marginTop:2 }}>{sub}</div>}
       </div>
-      <div style={{ marginLeft:"auto", fontSize:10, color: ok ? T.green : T.red, fontWeight:600 }}>
+      <div style={{ marginLeft:"auto", fontSize:10, color: ok ? TOKENS.green : TOKENS.red, fontWeight:600 }}>
         {ok ? "OK" : "OFF"}
       </div>
     </div>
@@ -434,9 +434,9 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
   return (
     <div style={{
       minHeight:"100vh",
-      background:T.bg,
+      background:TOKENS.bg,
       fontFamily:"'DM Sans', system-ui, sans-serif",
-      color:T.text,
+      color:TOKENS.text,
       direction: isAr ? "rtl" : "ltr",
       display:"flex",
     }}>
@@ -446,23 +446,23 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
       {/* ── Sidebar ──────────────────────────────────────────────── */}
       <aside style={{
         width:220, flexShrink:0,
-        background:T.surface,
-        borderRight:`1px solid ${T.border}`,
+        background:TOKENS.surface,
+        borderRight:`1px solid ${TOKENS.border}`,
         display:"flex", flexDirection:"column",
         height:"100vh", position:"sticky", top:0,
       }}>
         {/* Logo area */}
-        <div style={{ padding:"24px 20px 20px", borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ padding:"24px 20px 20px", borderBottom:`1px solid ${TOKENS.border}` }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <div style={{
               width:36, height:36, borderRadius:10,
-              background:`linear-gradient(135deg, ${T.blue}, #0891b2)`,
+              background:`linear-gradient(135deg, ${TOKENS.blue}, #0891b2)`,
               display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:18, fontWeight:700, color:"white", letterSpacing:"-1px",
             }}>◈</div>
             <div>
-              <div style={{ fontSize:13, fontWeight:700, color:T.text, lineHeight:1 }}>Corvus</div>
-              <div style={{ fontSize:9, color:T.muted, fontWeight:500, letterSpacing:".06em", marginTop:2 }}>INTELLIGENCE CONSOLE</div>
+              <div style={{ fontSize:13, fontWeight:700, color:TOKENS.text, lineHeight:1 }}>Corvus</div>
+              <div style={{ fontSize:9, color:TOKENS.muted, fontWeight:500, letterSpacing:".06em", marginTop:2 }}>INTELLIGENCE CONSOLE</div>
             </div>
           </div>
         </div>
@@ -477,21 +477,21 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
                 onClick={() => setTab(t.id)}
                 style={{
                   width:"100%", display:"flex", alignItems:"center", gap:10,
-                  padding:"9px 12px", borderRadius:T.radiusSm, marginBottom:2,
-                  background: active ? T.blueBg : "transparent",
-                  border: `1px solid ${active ? `${T.blue}40` : "transparent"}`,
+                  padding:"9px 12px", borderRadius:TOKENS.radiusSm, marginBottom:2,
+                  background: active ? TOKENS.blueBg : "transparent",
+                  border: `1px solid ${active ? `${TOKENS.blue}40` : "transparent"}`,
                   cursor:"pointer", transition:".15s", textAlign:"left",
                 }}
               >
-                <span style={{ fontSize:14, color: active ? T.blue : T.muted, width:18, textAlign:"center" }}>{t.icon}</span>
-                <span style={{ flex:1, fontSize:12, fontWeight: active ? 600 : 400, color: active ? T.text : T.muted }}>
+                <span style={{ fontSize:14, color: active ? TOKENS.blue : TOKENS.muted, width:18, textAlign:"center" }}>{t.icon}</span>
+                <span style={{ flex:1, fontSize:12, fontWeight: active ? 600 : 400, color: active ? TOKENS.text : TOKENS.muted }}>
                   {t.label}
                 </span>
                 {t.badge > 0 && (
                   <span style={{
                     fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:99,
-                    background: t.badgeRed ? T.red : T.blueBg,
-                    color: t.badgeRed ? "white" : T.blue,
+                    background: t.badgeRed ? TOKENS.red : TOKENS.blueBg,
+                    color: t.badgeRed ? "white" : TOKENS.blue,
                   }}>{t.badge}</span>
                 )}
               </button>
@@ -500,12 +500,12 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
         </nav>
 
         {/* Bottom: user + back */}
-        <div style={{ padding:"12px 10px", borderTop:`1px solid ${T.border}` }}>
-          <div style={{ padding:"10px 12px", borderRadius:T.radiusSm, marginBottom:8, background:"rgba(255,255,255,.02)" }}>
-            <div style={{ fontSize:11, fontWeight:600, color:T.text, marginBottom:2 }}>
+        <div style={{ padding:"12px 10px", borderTop:`1px solid ${TOKENS.border}` }}>
+          <div style={{ padding:"10px 12px", borderRadius:TOKENS.radiusSm, marginBottom:8, background:"rgba(255,255,255,.02)" }}>
+            <div style={{ fontSize:11, fontWeight:600, color:TOKENS.text, marginBottom:2 }}>
               {adminProfile?.name || "Admin"}
             </div>
-            <div style={{ fontSize:10, color:T.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            <div style={{ fontSize:10, color:TOKENS.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
               {adminProfile?.email}
             </div>
           </div>
@@ -521,21 +521,21 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
         {/* Topbar */}
         <div style={{
           padding:"16px 28px",
-          borderBottom:`1px solid ${T.border}`,
+          borderBottom:`1px solid ${TOKENS.border}`,
           display:"flex", alignItems:"center", justifyContent:"space-between",
-          background:T.surface, position:"sticky", top:0, zIndex:10,
+          background:TOKENS.surface, position:"sticky", top:0, zIndex:10,
         }}>
           <div>
-            <div style={{ fontSize:18, fontWeight:700, color:T.text, letterSpacing:"-.4px" }}>
+            <div style={{ fontSize:18, fontWeight:700, color:TOKENS.text, letterSpacing:"-.4px" }}>
               {TABS.find(t => t.id === tab)?.label}
             </div>
-            <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+            <div style={{ fontSize:11, color:TOKENS.muted, marginTop:2 }}>
               {new Date().toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long" })}
             </div>
           </div>
           <div style={{ display:"flex", gap:8 }}>
             {loading && (
-              <div style={{ fontSize:11, color:T.muted, alignSelf:"center" }}>Syncing…</div>
+              <div style={{ fontSize:11, color:TOKENS.muted, alignSelf:"center" }}>Syncing…</div>
             )}
             <Btn variant="ghost" size="sm" onClick={loadAll}>↻ {isAr ? "تحديث" : "Refresh"}</Btn>
           </div>
@@ -547,7 +547,7 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
           {loading ? (
             <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
-                {[0,1,2,3].map(i => <Skeleton key={i} h={110} radius={T.radiusLg} />)}
+                {[0,1,2,3].map(i => <Skeleton key={i} h={110} radius={TOKENS.radiusLg} />)}
               </div>
               <Skeleton h={220} />
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
@@ -604,17 +604,17 @@ function OverviewTab({ users, payments, health, totalRevenue, pendingPayments, a
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       {/* KPI row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
-        <KpiCard label={isAr?"إجمالي الإيرادات":"Platform Revenue"} value={money(totalRevenue)} sub="Confirmed payments" icon="◈" accent={T.green} />
+        <KpiCard label={isAr?"إجمالي الإيرادات":"Platform Revenue"} value={money(totalRevenue)} sub="Confirmed payments" icon="◈" accent={TOKENS.green} />
         <KpiCard label={isAr?"مدفوعات معلقة":"Pending"} value={pendingPayments}
-          sub="Awaiting review" icon="⏳" accent={pendingPayments > 0 ? T.amber : T.muted}
+          sub="Awaiting review" icon="⏳" accent={pendingPayments > 0 ? TOKENS.amber : TOKENS.muted}
           onClick={() => { setTab("payments"); setPaySt("pending"); }} />
-        <KpiCard label={isAr?"مشتركون نشطون":"Active Intelligence Users"} value={activeUsers} sub={`${eliteUsers} Elite · ${proUsers} Pro`} icon="✦" accent={T.blue} />
-        <KpiCard label={isAr?"تجربة مجانية":"Trial Users"} value={trialUsers} sub="Active trials" icon="◷" accent={T.amber} />
+        <KpiCard label={isAr?"مشتركون نشطون":"Active Intelligence Users"} value={activeUsers} sub={`${eliteUsers} Elite · ${proUsers} Pro`} icon="✦" accent={TOKENS.blue} />
+        <KpiCard label={isAr?"تجربة مجانية":"Trial Users"} value={trialUsers} sub="Active trials" icon="◷" accent={TOKENS.amber} />
       </div>
 
       {/* Revenue chart */}
       <Card title={isAr?"الإيرادات (آخر 14 يوم)":"Revenue — last 14 days"}
-        action={<span style={{ fontSize:11, color:T.green, fontWeight:600 }}>MRR ≈ {money(mrr)}</span>}
+        action={<span style={{ fontSize:11, color:TOKENS.green, fontWeight:600 }}>MRR ≈ {money(mrr)}</span>}
         style={{ padding:"0 0 20px" }}>
         <div style={{ padding:"20px 20px 0" }}>
           <RevenueChart payments={payments} />
@@ -638,7 +638,7 @@ function OverviewTab({ users, payments, health, totalRevenue, pendingPayments, a
               { label:"PDF Engine",  ok: health.pdf_available, sub: "ReportLab" },
               { label:"Redis",       ok: health.redis?.status === "ok", sub: "Cache & sessions" },
             ].map((item, i) => <HealthDot key={i} {...item} />)
-            : <div style={{ padding:"20px 0", textAlign:"center", fontSize:12, color:T.muted }}>Loading…</div>}
+            : <div style={{ padding:"20px 0", textAlign:"center", fontSize:12, color:TOKENS.muted }}>Loading…</div>}
           </div>
         </Card>
       </div>
@@ -650,18 +650,18 @@ function OverviewTab({ users, payments, health, totalRevenue, pendingPayments, a
           cols={[
             { key:"user",   label:"Customer", w:"2fr",  render: p => (
               <div><div style={{ fontWeight:600 }}>{p.user_name || p.user_email?.split("@")[0] || "—"}</div>
-              <div style={{ fontSize:10, color:T.muted }}>{p.user_email}</div></div>
+              <div style={{ fontSize:10, color:TOKENS.muted }}>{p.user_email}</div></div>
             )},
             { key:"tier",   label:"Plan", w:"1fr",  render: p => {
               const m = tierMeta[p.tier] || tierMeta.standard;
               return <Badge label={(p.tier||"free").toUpperCase()} color={m.color} bg={m.bg} />;
             }},
-            { key:"amount", label:"Amount", w:"1fr", render: p => <span style={{ color:T.green, fontWeight:600 }}>{money(p.amount)}</span> },
+            { key:"amount", label:"Amount", w:"1fr", render: p => <span style={{ color:TOKENS.green, fontWeight:600 }}>{money(p.amount)}</span> },
             { key:"status", label:"Status", w:"1fr", render: p => {
-              const col = p.status==="confirmed" ? T.green : p.status==="rejected" ? T.red : T.amber;
+              const col = p.status==="confirmed" ? TOKENS.green : p.status==="rejected" ? TOKENS.red : TOKENS.amber;
               return <Badge label={p.status?.toUpperCase()} color={col} bg={`${col}18`} />;
             }},
-            { key:"created_at", label:"Date", w:"1fr", render: p => <span style={{ color:T.muted, fontSize:11 }}>{fmt(p.created_at)}</span> },
+            { key:"created_at", label:"Date", w:"1fr", render: p => <span style={{ color:TOKENS.muted, fontSize:11 }}>{fmt(p.created_at)}</span> },
           ]}
           rows={payments.slice(0,5)}
           emptyMsg="No payments yet"
@@ -686,11 +686,11 @@ function UsersTab({ users, filtUsers, search, setSearch, tierFilter, setTier, is
           {["all","elite","professional","standard"].map(t => (
             <Pill key={t} label={t === "all" ? "All" : t.charAt(0).toUpperCase()+t.slice(1)}
               active={tierFilter === t}
-              color={tierMeta[t]?.color || T.blue}
+              color={tierMeta[t]?.color || TOKENS.blue}
               onClick={() => setTier(t)} />
           ))}
         </div>
-        <span style={{ fontSize:11, color:T.muted }}>{filtUsers.length}/{users.length} users</span>
+        <span style={{ fontSize:11, color:TOKENS.muted }}>{filtUsers.length}/{users.length} users</span>
       </div>
 
       {/* Table */}
@@ -701,26 +701,26 @@ function UsersTab({ users, filtUsers, search, setSearch, tierFilter, setTier, is
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <div style={{
                   width:32, height:32, borderRadius:10, flexShrink:0,
-                  background:`linear-gradient(135deg, ${T.blue}40, ${T.sky}40)`,
+                  background:`linear-gradient(135deg, ${TOKENS.blue}40, ${TOKENS.sky}40)`,
                   display:"flex", alignItems:"center", justifyContent:"center",
-                  fontSize:13, fontWeight:700, color:T.blue,
+                  fontSize:13, fontWeight:700, color:TOKENS.blue,
                 }}>{(u.name||u.email||"?")[0].toUpperCase()}</div>
                 <div>
                   <div style={{ fontWeight:600 }}>{u.name || "—"}</div>
                   <div style={{ display:"flex", gap:4, marginTop:2 }}>
-                    {u.is_admin && <Badge label="ADMIN" color={T.red} bg={T.redBg} />}
-                    {u.is_trial && <Badge label="TRIAL" color={T.amber} bg={T.amberBg} />}
+                    {u.is_admin && <Badge label="ADMIN" color={TOKENS.red} bg={TOKENS.redBg} />}
+                    {u.is_trial && <Badge label="TRIAL" color={TOKENS.amber} bg={TOKENS.amberBg} />}
                   </div>
                 </div>
               </div>
             )},
-            { key:"email",      label:"Email",    w:"2fr", render: u => <span style={{ color:T.muted, fontSize:11 }}>{u.email}</span> },
+            { key:"email",      label:"Email",    w:"2fr", render: u => <span style={{ color:TOKENS.muted, fontSize:11 }}>{u.email}</span> },
             { key:"tier",       label:"Plan",     w:"1fr", render: u => {
               const m = tierMeta[u.tier] || tierMeta.standard;
               return <Badge label={(u.tier||"free").toUpperCase()} color={m.color} bg={m.bg} />;
             }},
             { key:"sessions",   label:"Sessions", w:"1fr", render: u => <span style={{ fontWeight:600 }}>{u.sessions_count || 0}</span> },
-            { key:"created_at", label:"Joined",   w:"1fr", render: u => <span style={{ color:T.muted, fontSize:11 }}>{fmt(u.created_at)}</span> },
+            { key:"created_at", label:"Joined",   w:"1fr", render: u => <span style={{ color:TOKENS.muted, fontSize:11 }}>{fmt(u.created_at)}</span> },
             { key:"actions",    label:"",         w:"1fr", render: u => (
               <div style={{ display:"flex", gap:4 }}>
                 {["elite","professional","standard"].map(tier => {
@@ -736,9 +736,9 @@ function UsersTab({ users, filtUsers, search, setSearch, tierFilter, setTier, is
                       style={{
                         width:22, height:22, borderRadius:6,
                         background: u.tier === tier ? m.color : "transparent",
-                        border:`1px solid ${u.tier === tier ? m.color : T.border}`,
+                        border:`1px solid ${u.tier === tier ? m.color : TOKENS.border}`,
                         cursor:"pointer", fontSize:8, fontWeight:700,
-                        color: u.tier === tier ? "white" : T.muted,
+                        color: u.tier === tier ? "white" : TOKENS.muted,
                         transition:".15s",
                       }}
                     >{tier[0].toUpperCase()}</button>
@@ -767,22 +767,22 @@ function PaymentsTab({ payments, filtPay, payStatus, setPaySt, dateFrom, setDate
             <Pill key={s}
               label={s === "all" ? "All" : s.charAt(0).toUpperCase()+s.slice(1)}
               active={payStatus === s}
-              color={s==="confirmed" ? T.green : s==="rejected" ? T.red : s==="pending" ? T.amber : T.blue}
+              color={s==="confirmed" ? TOKENS.green : s==="rejected" ? TOKENS.red : s==="pending" ? TOKENS.amber : TOKENS.blue}
               onClick={() => setPaySt(s)}
             />
           ))}
         </div>
         {pendingPayments > 0 && payStatus !== "pending" && (
-          <div style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 10px", background:T.amberBg, borderRadius:99, border:`1px solid ${T.amber}30` }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:T.amber }} />
-            <span style={{ fontSize:10, color:T.amber, fontWeight:600 }}>{pendingPayments} pending review</span>
+          <div style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 10px", background:TOKENS.amberBg, borderRadius:99, border:`1px solid ${TOKENS.amber}30` }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:TOKENS.amber }} />
+            <span style={{ fontSize:10, color:TOKENS.amber, fontWeight:600 }}>{pendingPayments} pending review</span>
           </div>
         )}
         <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
           <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ width:130, fontSize:11 }} />
-          <span style={{ color:T.muted, fontSize:11 }}>→</span>
+          <span style={{ color:TOKENS.muted, fontSize:11 }}>→</span>
           <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ width:130, fontSize:11 }} />
-          <span style={{ fontSize:12, fontWeight:700, color:T.green }}>{money(confirmedTotal)}</span>
+          <span style={{ fontSize:12, fontWeight:700, color:TOKENS.green }}>{money(confirmedTotal)}</span>
         </div>
       </div>
 
@@ -792,18 +792,18 @@ function PaymentsTab({ payments, filtPay, payStatus, setPaySt, dateFrom, setDate
             { key:"customer", label:"Customer", w:"2fr", render: p => (
               <div>
                 <div style={{ fontWeight:600 }}>{p.user_name || p.user_email?.split("@")[0] || "—"}</div>
-                <div style={{ fontSize:10, color:T.muted }}>{p.user_email}</div>
+                <div style={{ fontSize:10, color:TOKENS.muted }}>{p.user_email}</div>
               </div>
             )},
             { key:"tier",   label:"Plan",   w:"1fr", render: p => {
               const m = tierMeta[p.tier] || tierMeta.standard;
               return <Badge label={(p.tier||"—").toUpperCase()} color={m.color} bg={m.bg} />;
             }},
-            { key:"amount", label:"Amount", w:"1fr", render: p => <span style={{ color:T.green, fontWeight:700, fontFamily:"DM Mono, monospace" }}>{money(p.amount)}</span> },
-            { key:"method", label:"Method", w:"1fr", render: p => <span style={{ color:T.muted, fontSize:11 }}>{p.payment_method || p.payment_method_name || "—"}</span> },
-            { key:"date",   label:"Date",   w:"1fr", render: p => <span style={{ color:T.muted, fontSize:11 }}>{fmt(p.created_at)}</span> },
+            { key:"amount", label:"Amount", w:"1fr", render: p => <span style={{ color:TOKENS.green, fontWeight:700, fontFamily:"DM Mono, monospace" }}>{money(p.amount)}</span> },
+            { key:"method", label:"Method", w:"1fr", render: p => <span style={{ color:TOKENS.muted, fontSize:11 }}>{p.payment_method || p.payment_method_name || "—"}</span> },
+            { key:"date",   label:"Date",   w:"1fr", render: p => <span style={{ color:TOKENS.muted, fontSize:11 }}>{fmt(p.created_at)}</span> },
             { key:"action", label:"",       w:"1.2fr", render: p => {
-              const col = p.status==="confirmed" ? T.green : p.status==="rejected" ? T.red : T.amber;
+              const col = p.status==="confirmed" ? TOKENS.green : p.status==="rejected" ? TOKENS.red : TOKENS.amber;
               if (p.status !== "pending")
                 return <Badge label={p.status.toUpperCase()} color={col} bg={`${col}18`} />;
               return (
@@ -836,12 +836,12 @@ function AuditTab({ auditLogs, isAr }) {
     <Card style={{ padding:0 }}>
       <Table
         cols={[
-          { key:"id",       label:"ID",       w:"1.2fr", render: l => <span style={{ fontFamily:"DM Mono,monospace", fontSize:9, color:T.muted }}>{l.id?.slice(-8)}</span> },
-          { key:"uid",      label:"User",     w:"1.5fr", render: l => <span style={{ fontSize:11, fontFamily:"DM Mono,monospace", color:T.muted }}>{l.uid?.slice(0,12)}…</span> },
-          { key:"action",   label:"Action",   w:"2fr",   render: l => <span style={{ fontWeight:600, color:T.sky }}>{l.action}</span> },
-          { key:"resource", label:"Resource", w:"1fr",   render: l => <span style={{ color:T.muted, fontSize:11 }}>{l.resource||"—"}</span> },
-          { key:"ip",       label:"IP",       w:"1fr",   render: l => <span style={{ fontFamily:"DM Mono,monospace", fontSize:10, color:T.muted }}>{l.ip||"—"}</span> },
-          { key:"ts",       label:"Time",     w:"1fr",   render: l => <span style={{ color:T.muted, fontSize:10 }}>{l.ts?.replace("T"," ").slice(0,19)||"—"}</span> },
+          { key:"id",       label:"ID",       w:"1.2fr", render: l => <span style={{ fontFamily:"DM Mono,monospace", fontSize:9, color:TOKENS.muted }}>{l.id?.slice(-8)}</span> },
+          { key:"uid",      label:"User",     w:"1.5fr", render: l => <span style={{ fontSize:11, fontFamily:"DM Mono,monospace", color:TOKENS.muted }}>{l.uid?.slice(0,12)}…</span> },
+          { key:"action",   label:"Action",   w:"2fr",   render: l => <span style={{ fontWeight:600, color:TOKENS.sky }}>{l.action}</span> },
+          { key:"resource", label:"Resource", w:"1fr",   render: l => <span style={{ color:TOKENS.muted, fontSize:11 }}>{l.resource||"—"}</span> },
+          { key:"ip",       label:"IP",       w:"1fr",   render: l => <span style={{ fontFamily:"DM Mono,monospace", fontSize:10, color:TOKENS.muted }}>{l.ip||"—"}</span> },
+          { key:"ts",       label:"Time",     w:"1fr",   render: l => <span style={{ color:TOKENS.muted, fontSize:10 }}>{l.ts?.replace("T"," ").slice(0,19)||"—"}</span> },
         ]}
         rows={auditLogs.slice(0,100)}
         emptyMsg="No audit logs yet"
@@ -890,17 +890,17 @@ function WebhookManager({ webhooks, lang, onRefresh, showToast }) {
           {webhooks.map((wh, i) => (
             <div key={wh.id} style={{
               padding:"16px 20px",
-              borderBottom: i < webhooks.length-1 ? `1px solid ${T.border}` : "none",
+              borderBottom: i < webhooks.length-1 ? `1px solid ${TOKENS.border}` : "none",
               display:"flex", alignItems:"center", gap:14,
             }}>
               <div style={{
                 width:8, height:8, borderRadius:"50%", flexShrink:0,
-                background: wh.active ? T.green : T.red,
-                boxShadow: wh.active ? `0 0 6px ${T.green}` : "none",
+                background: wh.active ? TOKENS.green : TOKENS.red,
+                boxShadow: wh.active ? `0 0 6px ${TOKENS.green}` : "none",
               }} />
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:T.text, marginBottom:3, fontFamily:"DM Mono,monospace" }}>{wh.url}</div>
-                <div style={{ fontSize:10, color:T.muted }}>{wh.description || "—"} · Events: {wh.events?.join(", ")}</div>
+                <div style={{ fontSize:12, fontWeight:600, color:TOKENS.text, marginBottom:3, fontFamily:"DM Mono,monospace" }}>{wh.url}</div>
+                <div style={{ fontSize:10, color:TOKENS.muted }}>{wh.description || "—"} · Events: {wh.events?.join(", ")}</div>
               </div>
               <div style={{ display:"flex", gap:6 }}>
                 <Btn size="sm" variant="ghost" onClick={async () => {
@@ -923,10 +923,10 @@ function WebhookManager({ webhooks, lang, onRefresh, showToast }) {
         <Card title="Recent Deliveries" style={{ padding:0 }}>
           <Table
             cols={[
-              { key:"ok",     label:"Status", w:".8fr", render: l => <Badge label={l.ok?"200":"FAIL"} color={l.ok?T.green:T.red} bg={l.ok?T.greenBg:T.redBg} /> },
-              { key:"url",    label:"URL",    w:"3fr",  render: l => <span style={{ fontFamily:"DM Mono,monospace", fontSize:10, color:T.muted }}>{l.url?.slice(0,50)}</span> },
+              { key:"ok",     label:"Status", w:".8fr", render: l => <Badge label={l.ok?"200":"FAIL"} color={l.ok?TOKENS.green:TOKENS.red} bg={l.ok?TOKENS.greenBg:TOKENS.redBg} /> },
+              { key:"url",    label:"URL",    w:"3fr",  render: l => <span style={{ fontFamily:"DM Mono,monospace", fontSize:10, color:TOKENS.muted }}>{l.url?.slice(0,50)}</span> },
               { key:"status", label:"HTTP",   w:"1fr",  render: l => <span style={{ fontFamily:"DM Mono,monospace", fontSize:11 }}>{l.status||"0"}</span> },
-              { key:"ts",     label:"Time",   w:"1fr",  render: l => <span style={{ color:T.muted, fontSize:10 }}>{l.ts?.split("T")[1]?.split(".")[0]}</span> },
+              { key:"ts",     label:"Time",   w:"1fr",  render: l => <span style={{ color:TOKENS.muted, fontSize:10 }}>{l.ts?.split("T")[1]?.split(".")[0]}</span> },
             ]}
             rows={logs.slice(0,10)}
           />
@@ -953,24 +953,24 @@ function BillingAnalyticsTab({ isAr, showToast }) {
 
   if (loading) return (
     <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-      {[0,1,2].map(i=><div key={i} style={{height:i===0?120:80,background:T.surface,borderRadius:14,animation:"shimmer 1.6s ease infinite",backgroundSize:"200% 100%",backgroundImage:"linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.06) 50%,rgba(255,255,255,.03) 75%)"}}/>)}
+      {[0,1,2].map(i=><div key={i} style={{height:i===0?120:80,background:TOKENS.surface,borderRadius:14,animation:"shimmer 1.6s ease infinite",backgroundSize:"200% 100%",backgroundImage:"linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.06) 50%,rgba(255,255,255,.03) 75%)"}}/>)}
     </div>
   );
-  if (error) return <div style={{padding:24,color:T.red,fontSize:12}}>Error: {error}</div>;
-  if (!data)  return <div style={{padding:24,color:T.muted,fontSize:12}}>No billing data</div>;
+  if (error) return <div style={{padding:24,color:TOKENS.red,fontSize:12}}>Error: {error}</div>;
+  if (!data)  return <div style={{padding:24,color:TOKENS.muted,fontSize:12}}>No billing data</div>;
 
   const money = n => n != null ? `${Number(n).toLocaleString()} EGP` : "—";
-  const planColors = { standard:T.muted, professional:T.sky, elite:T.purple, enterprise:T.amber };
+  const planColors = { standard:TOKENS.muted, professional:TOKENS.sky, elite:TOKENS.purple, enterprise:TOKENS.amber };
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       {/* KPI row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
         {[
-          ["MRR",          money(data.mrr),          T.green,  "Monthly Recurring Revenue"],
-          ["ARR",          money(data.arr),           T.blue,   "Annual Run Rate"],
-          ["ARPU",         money(data.arpu),          T.purple, "Avg Revenue Per User"],
-          ["Conversion",   `${data.conversion_rate}%`,data.conversion_rate>=70?T.green:T.amber,"Payment Success Rate"],
+          ["MRR",          money(data.mrr),          TOKENS.green,  "Monthly Recurring Revenue"],
+          ["ARR",          money(data.arr),           TOKENS.blue,   "Annual Run Rate"],
+          ["ARPU",         money(data.arpu),          TOKENS.purple, "Avg Revenue Per User"],
+          ["Conversion",   `${data.conversion_rate}%`,data.conversion_rate>=70?TOKENS.green:TOKENS.amber,"Payment Success Rate"],
         ].map(([label, value, color, sub]) => (
           <KpiCard key={label} label={label} value={value} sub={sub} icon="◈" accent={color}/>
         ))}
@@ -979,7 +979,7 @@ function BillingAnalyticsTab({ isAr, showToast }) {
       {/* Revenue + Plans */}
       <div style={{ display:"grid", gridTemplateColumns:"1.5fr 1fr", gap:12 }}>
         <Card title="Revenue Trend (6 months)" action={
-          <span style={{ fontSize:11, color:T.green, fontWeight:600 }}>
+          <span style={{ fontSize:11, color:TOKENS.green, fontWeight:600 }}>
             ARR {money(data.arr)}
           </span>
         }>
@@ -988,8 +988,8 @@ function BillingAnalyticsTab({ isAr, showToast }) {
               const maxV = Math.max(...Object.values(data.monthly_revenue||{}),1);
               return (
                 <div key={m} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                  <div style={{width:"100%",borderRadius:"3px 3px 0 0",background:T.blue,opacity:.4+(v/maxV)*.6,height:Math.max(4,Math.round(v/maxV*56))}}/>
-                  <div style={{fontSize:8,color:T.muted}}>{m.slice(5)}</div>
+                  <div style={{width:"100%",borderRadius:"3px 3px 0 0",background:TOKENS.blue,opacity:.4+(v/maxV)*.6,height:Math.max(4,Math.round(v/maxV*56))}}/>
+                  <div style={{fontSize:8,color:TOKENS.muted}}>{m.slice(5)}</div>
                 </div>
               );
             })}
@@ -999,13 +999,13 @@ function BillingAnalyticsTab({ isAr, showToast }) {
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {Object.entries(data.plan_distribution||{}).map(([plan,count])=>{
               const total = Object.values(data.plan_distribution||{}).reduce((a,b)=>a+b,0)||1;
-              const col = planColors[plan]||T.muted;
+              const col = planColors[plan]||TOKENS.muted;
               const pct = Math.round(count/total*100);
               return (
                 <div key={plan}>
                   <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:4 }}>
                     <span style={{ color:col, fontWeight:600 }}>{plan.charAt(0).toUpperCase()+plan.slice(1)}</span>
-                    <span style={{ color:T.muted }}>{count} ({pct}%)</span>
+                    <span style={{ color:TOKENS.muted }}>{count} ({pct}%)</span>
                   </div>
                   <div style={{ height:4, background:`rgba(255,255,255,.06)`, borderRadius:99, overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:99 }}/>
@@ -1021,12 +1021,12 @@ function BillingAnalyticsTab({ isAr, showToast }) {
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
         <KpiCard label="Failed Payments"  value={data.failed_count}
           sub={data.failed_revenue_at_risk>0?`${money(data.failed_revenue_at_risk)} at risk`:undefined}
-          icon="⚠" accent={data.failed_count>0?T.red:T.green}/>
+          icon="⚠" accent={data.failed_count>0?TOKENS.red:TOKENS.green}/>
         <KpiCard label="Pending Review"   value={data.pending_count}
           sub="Awaiting admin confirmation" icon="⏳"
-          accent={data.pending_count>0?T.amber:T.green}/>
+          accent={data.pending_count>0?TOKENS.amber:TOKENS.green}/>
         <KpiCard label="Total Customers"  value={data.unique_customers}
-          sub={`${money(data.avg_payment)} avg payment`} icon="◉" accent={T.blue}/>
+          sub={`${money(data.avg_payment)} avg payment`} icon="◉" accent={TOKENS.blue}/>
       </div>
     </div>
   );
@@ -1062,15 +1062,15 @@ function SystemPanel({ health, lang, adminProfile, onRefresh, showToast }) {
             <div style={{
               padding:"12px 16px",
               background:"rgba(255,255,255,.02)",
-              borderRadius:T.radiusSm,
-              border:`1px solid ${T.border}`,
+              borderRadius:TOKENS.radiusSm,
+              border:`1px solid ${TOKENS.border}`,
               fontFamily:"DM Mono,monospace",
-              fontSize:10, color:T.muted, lineHeight:1.8,
+              fontSize:10, color:TOKENS.muted, lineHeight:1.8,
             }}>
-              <span style={{ color:T.blue }}>engine</span>: {health.engine}<br/>
-              <span style={{ color:T.blue }}>version</span>: {health.version}<br/>
-              <span style={{ color:T.blue }}>pdf</span>: {health.pdf_available ? "✓ reportlab" : "✗ not installed"}<br/>
-              <span style={{ color:T.blue }}>redis</span>: {health.redis?.status || "unknown"}
+              <span style={{ color:TOKENS.blue }}>engine</span>: {health.engine}<br/>
+              <span style={{ color:TOKENS.blue }}>version</span>: {health.version}<br/>
+              <span style={{ color:TOKENS.blue }}>pdf</span>: {health.pdf_available ? "✓ reportlab" : "✗ not installed"}<br/>
+              <span style={{ color:TOKENS.blue }}>redis</span>: {health.redis?.status || "unknown"}
             </div>
           </div>
         </Card>
@@ -1079,7 +1079,7 @@ function SystemPanel({ health, lang, adminProfile, onRefresh, showToast }) {
       {/* API Key generator */}
       <Card title={isAr?"مفاتيح API للمطورين":"Developer API Keys"}>
         <div style={{ padding:"0 20px 20px" }}>
-          <p style={{ fontSize:12, color:T.muted, lineHeight:1.7, marginBottom:16 }}>
+          <p style={{ fontSize:12, color:TOKENS.muted, lineHeight:1.7, marginBottom:16 }}>
             {isAr ? "أنشئ مفتاح API لتكامل Corvus مع أنظمة الشركة (SAP, Workday, إلخ)" : "Generate API keys for enterprise integrations (SAP, Workday, custom HR systems)."}
           </p>
           <Btn onClick={generateKey} disabled={genLoading}>
@@ -1087,18 +1087,18 @@ function SystemPanel({ health, lang, adminProfile, onRefresh, showToast }) {
           </Btn>
 
           {newKey && (
-            <div style={{ marginTop:16, padding:"14px 16px", background:T.greenBg, border:`1px solid rgba(16,185,129,.2)`, borderRadius:T.radiusSm }}>
-              <div style={{ fontSize:10, color:T.green, marginBottom:8, fontWeight:600 }}>⚠️ Save this key now — it won't be shown again</div>
-              <div style={{ fontFamily:"DM Mono,monospace", fontSize:11, color:T.text, wordBreak:"break-all", marginBottom:10 }}>{newKey}</div>
+            <div style={{ marginTop:16, padding:"14px 16px", background:TOKENS.greenBg, border:`1px solid rgba(16,185,129,.2)`, borderRadius:TOKENS.radiusSm }}>
+              <div style={{ fontSize:10, color:TOKENS.green, marginBottom:8, fontWeight:600 }}>⚠️ Save this key now — it won't be shown again</div>
+              <div style={{ fontFamily:"DM Mono,monospace", fontSize:11, color:TOKENS.text, wordBreak:"break-all", marginBottom:10 }}>{newKey}</div>
               <Btn size="sm" variant="success" onClick={() => { navigator.clipboard.writeText(newKey); showToast("Copied!"); }}>
                 Copy key
               </Btn>
             </div>
           )}
 
-          <div style={{ marginTop:16, padding:"12px 16px", background:"rgba(255,255,255,.02)", borderRadius:T.radiusSm, border:`1px solid ${T.border}`, fontFamily:"DM Mono,monospace", fontSize:10, color:T.muted, lineHeight:2 }}>
-            <span style={{ color:T.sky }}>Header:</span> X-Corvus-Key: pai_xxx<br/>
-            <span style={{ color:T.sky }}>Endpoint:</span> POST /api/v1/posture/analyze
+          <div style={{ marginTop:16, padding:"12px 16px", background:"rgba(255,255,255,.02)", borderRadius:TOKENS.radiusSm, border:`1px solid ${TOKENS.border}`, fontFamily:"DM Mono,monospace", fontSize:10, color:TOKENS.muted, lineHeight:2 }}>
+            <span style={{ color:TOKENS.sky }}>Header:</span> X-Corvus-Key: pai_xxx<br/>
+            <span style={{ color:TOKENS.sky }}>Endpoint:</span> POST /api/v1/posture/analyze
           </div>
         </div>
       </Card>
