@@ -245,7 +245,7 @@ function GlobalStyle() {
       ::selection{background:rgba(79,124,249,.32);color:#fff}
 
       .lp-wrap{max-width:1200px;margin:0 auto;width:100%;padding:0 32px}
-      .lp-section{padding:88px 32px}
+      .lp-section{padding:72px 32px}
 
       /* cards */
       .lp-lift{transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s,border-color .28s}
@@ -1518,8 +1518,14 @@ function Testimonials({ lang }) {
   ];
 
   return (
-    <section id="testimonials" className="lp-section"> />
-        <Stagger key={String(ar)} className="lp-testi-grid" style={{}}>
+    <section id="testimonials" className="lp-section">
+      <div className="lp-wrap">
+        <SectionHead
+          eyebrow={ar ? "آراء العملاء" : "Real results"}
+          title={ar ? "ماذا يقول عملاؤنا" : "What our customers say"}
+          sub={ar ? "نتائج حقيقية من مستخدمين حقيقيين في مصر والخليج" : "Real results from real users across Egypt and the Gulf"}
+        />
+        <Stagger key={String(ar)} className="lp-testi-grid">
           {testimonials.map((t) => (
             <StaggerItem key={t.name}>
               <div className="lp-lift" style={{
@@ -1564,6 +1570,7 @@ function Testimonials({ lang }) {
             </StaggerItem>
           ))}
         </Stagger>
+      </div>
     </section>
   );
 }
@@ -1625,14 +1632,18 @@ function FAQ({ lang }) {
 
   return (
     <section id="faq" className="lp-section" style={{ background:C.bg1 }}>
-        <SectionHead title={ar ? "أسئلة شائعة" : "Frequently asked questions"} />
-        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {items.map(([q, a], i) => (
-            <Reveal key={i} delay={i * 50} y={16}>
-              <FAQItem q={q} a={a} ar={ar} isOpen={open===i} onToggle={() => setOpen(open===i ? null : i)}/>
-            </Reveal>
-          ))}
+      <div className="lp-wrap">
+        <div style={{ maxWidth:740, margin:"0 auto" }}>
+          <SectionHead title={ar ? "أسئلة شائعة" : "Frequently asked questions"} />
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            {items.map(([q, a], i) => (
+              <Reveal key={i} delay={i * 50} y={16}>
+                <FAQItem q={q} a={a} ar={ar} isOpen={open===i} onToggle={() => setOpen(open===i ? null : i)}/>
+              </Reveal>
+            ))}
+          </div>
         </div>
+      </div>
     </section>
   );
 }
@@ -1898,18 +1909,18 @@ function Footer({ lang }) {
       {/* Bottom bar */}
       <div style={{ borderTop:"1px solid rgba(255,255,255,.05)" }}>
         <div className="lp-wrap" style={{ padding:"18px 32px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
-          <span style={{ fontSize:12, color:"#1e293b" }}>
+          <span style={{ fontSize:12, color:"#334155" }}>
             © {new Date().getFullYear()} Corvus Health Intelligence.{" "}
             {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
           </span>
           <div style={{ display:"flex", gap:20, alignItems:"center" }}>
             <a href={`mailto:${SUPPORT_EMAIL}`}
-              style={{ fontSize:12, color:"#1e293b", textDecoration:"none", transition:"color .18s" }}
-              onMouseEnter={e=>e.currentTarget.style.color="#475569"}
-              onMouseLeave={e=>e.currentTarget.style.color="#1e293b"}>
+              style={{ fontSize:12, color:"#334155", textDecoration:"none", transition:"color .18s" }}
+              onMouseEnter={e=>e.currentTarget.style.color="#64748b"}
+              onMouseLeave={e=>e.currentTarget.style.color="#334155"}>
               {SUPPORT_EMAIL}
             </a>
-            <span style={{ fontSize:11.5, color:"#1e293b" }}>
+            <span style={{ fontSize:11.5, color:"#334155" }}>
               {ar ? "صُنع بـ ❤ في مصر" : "Made with ❤ in Egypt"}
             </span>
           </div>
@@ -1953,11 +1964,8 @@ export default function LandingPage({ onNavigate }) {
       <SocialProof lang={lang}/>
       <Stats lang={lang}/>
       <Features lang={lang}/>
-      <MidCTA lang={lang} onCTA={handleCTA} variant="features"/>
       <HowItWorks lang={lang}/>
-      <MidCTA lang={lang} onCTA={handleCTA}/>
       <CaseStudies lang={lang}/>
-      <MidCTA lang={lang} onCTA={handleCTA} variant="cases"/>
       <Pricing lang={lang} onCTA={handleCTA} mode={mode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
       <Testimonials lang={lang}/>
       <FAQ lang={lang}/>
