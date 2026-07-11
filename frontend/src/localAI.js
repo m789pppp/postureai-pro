@@ -788,6 +788,19 @@ function runAnalysis(prompt,sp) {
 
 
 
+// Strip Pollinations watermark from responses
+function cleanAIResponse(text) {
+  if (!text) return text;
+  return text
+    .replace(/\n*-{3,}\n*🌸.*?🌸.*?\n*/gs, "")
+    .replace(/\n*Support Pollinations.*?\n*/gi, "")
+    .replace(/\n*Powered by Pollinations.*?\n*/gi, "")
+    .replace(/\n*\[Support our mission\].*?\n*/gi, "")
+    .replace(/\n*Ad 🌸.*?\n*/gi, "")
+    .trim();
+}
+
+
 // AI — race all 3 simultaneously, fastest response wins
 // Stream from Pollinations with real SSE — shows text as it arrives
 export async function localChatStream(messages, systemPrompt, maxTokens, onChunk) {
@@ -904,14 +917,14 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
       const d = await r.json();
       const t = d?.choices?.[0]?.message?.content?.trim();
       console.info("[CorvusAI] ✅ OpenRouter");
-      return t;
+      return cleanAIResponse(t);
     }),
     go(`https://text.pollinations.ai/${encodeURIComponent(
       allMsgs.map(m => `${m.role}: ${m.content}`).join("\n")
     )}?model=openai`, { method: "GET" }, async r => {
       const t = (await r.text()).trim();
       console.info("[CorvusAI] ✅ Pollinations GET");
-      return t;
+      return cleanAIResponse(t);
     }),
   ]).catch(() => { throw new Error("all_free_apis_failed"); });
 }
