@@ -4,7 +4,7 @@ import { getLocalAIStatus, onLocalAIStatus, localChatStream } from "./localAI.js
 import { qualityFor, coachLimitLabel as tierCoachLimitLabel } from "./lib/tierQuality.js";
 
 // ── Design tokens ─────────────────────────────────────────────────
-const C = {
+const COACH_TOKENS = {
   bg:       "#080f1e",
   surface:  "#0d1526",
   card:     "#111d30",
@@ -101,7 +101,7 @@ function TypingDots() {
       {[0,1,2].map(i => (
         <div key={i} style={{
           width:7, height:7, borderRadius:"50%",
-          background: C.cyan,
+          background: COACH_TOKENS.cyan,
           animation:`corvusDot 1.4s ease-in-out ${i*0.15}s infinite`,
         }}/>
       ))}
@@ -131,9 +131,9 @@ function Bubble({ msg, isAr, index }) {
         display:"flex", alignItems:"center", justifyContent:"center",
         fontSize:13, fontWeight:700, letterSpacing:".02em",
         background: isUser
-          ? C.userBg
+          ? COACH_TOKENS.userBg
           : `linear-gradient(135deg,#1e3a5f,#0c4a6e)`,
-        border: isUser ? "none" : `1px solid ${C.borderHi}`,
+        border: isUser ? "none" : `1px solid ${COACH_TOKENS.borderHi}`,
         boxShadow: isUser ? "0 2px 8px rgba(29,78,216,.4)" : "0 2px 8px rgba(6,182,212,.12)",
         color:"#fff", userSelect:"none",
       }}>
@@ -143,13 +143,13 @@ function Bubble({ msg, isAr, index }) {
       {/* Bubble */}
       <div style={{
         maxWidth:"76%", position:"relative",
-        background: isUser ? C.userBg : C.aiBg,
-        border: isUser ? "none" : `0.5px solid ${C.aiBorder}`,
+        background: isUser ? COACH_TOKENS.userBg : COACH_TOKENS.aiBg,
+        border: isUser ? "none" : `0.5px solid ${COACH_TOKENS.aiBorder}`,
         borderRadius: isUser
           ? (isAr ? "16px 4px 16px 16px" : "4px 16px 16px 16px")
           : (isAr ? "4px 16px 16px 16px" : "16px 4px 16px 16px"),
         padding:"11px 15px",
-        fontSize:13.5, color: C.text, lineHeight:1.7,
+        fontSize:13.5, color: COACH_TOKENS.text, lineHeight:1.7,
         boxShadow: isUser
           ? "0 4px 16px rgba(29,78,216,.25)"
           : "0 2px 12px rgba(0,0,0,.2)",
@@ -172,7 +172,7 @@ function Bubble({ msg, isAr, index }) {
         {isStreaming && msg.content && (
           <span style={{
             display:"inline-block", width:2, height:"1em",
-            background:C.cyan, marginLeft:2, verticalAlign:"text-bottom",
+            background:COACH_TOKENS.cyan, marginLeft:2, verticalAlign:"text-bottom",
             animation:"blink .6s step-end infinite",
           }}/>
         )}
@@ -183,7 +183,7 @@ function Bubble({ msg, isAr, index }) {
         <div style={{
           fontSize:9.5, marginTop:6, opacity:.45,
           textAlign: isAr ? "left" : "right",
-          color: isUser ? "rgba(255,255,255,.7)" : C.muted,
+          color: isUser ? "rgba(255,255,255,.7)" : COACH_TOKENS.muted,
         }}>
           {new Date(msg.ts).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}
         </div>
@@ -432,8 +432,8 @@ LANGUAGE: Clear, professional English.`;
       {/* Panel */}
       <div dir={dir} style={{
         width:"100%", maxWidth:620, height:"min(680px,90vh)",
-        background:C.bg,
-        border:`0.5px solid ${C.borderHi}`,
+        background:COACH_TOKENS.bg,
+        border:`0.5px solid ${COACH_TOKENS.borderHi}`,
         borderRadius:20,
         display:"flex", flexDirection:"column",
         overflow:"hidden",
@@ -445,7 +445,7 @@ LANGUAGE: Clear, professional English.`;
         <div style={{
           padding:"14px 18px", flexShrink:0,
           background:`linear-gradient(135deg,rgba(29,78,216,.12),rgba(8,145,178,.06))`,
-          borderBottom:`0.5px solid ${C.border}`,
+          borderBottom:`0.5px solid ${COACH_TOKENS.border}`,
           display:"flex", alignItems:"center", gap:12,
         }}>
           {/* Logo */}
@@ -457,13 +457,13 @@ LANGUAGE: Clear, professional English.`;
           }}>🤖</div>
 
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:C.text, letterSpacing:"-.01em" }}>
+            <div style={{ fontSize:14, fontWeight:700, color:COACH_TOKENS.text, letterSpacing:"-.01em" }}>
               Dr. Corvus
             </div>
-            <div style={{ fontSize:10.5, color:C.cyan, display:"flex", alignItems:"center", gap:5 }}>
+            <div style={{ fontSize:10.5, color:COACH_TOKENS.cyan, display:"flex", alignItems:"center", gap:5 }}>
               <span style={{
-                width:5, height:5, borderRadius:"50%", background:C.green,
-                display:"inline-block", boxShadow:`0 0 6px ${C.green}`,
+                width:5, height:5, borderRadius:"50%", background:COACH_TOKENS.green,
+                display:"inline-block", boxShadow:`0 0 6px ${COACH_TOKENS.green}`,
                 animation:"pulse 2s ease infinite",
               }}/>
               <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
@@ -479,16 +479,16 @@ LANGUAGE: Clear, professional English.`;
               _tier,
             ].map(label => (
               <div key={label} style={{
-                fontSize:10, color:C.subtle, background:"rgba(255,255,255,.04)",
-                border:`0.5px solid ${C.border}`, borderRadius:6,
+                fontSize:10, color:COACH_TOKENS.subtle, background:"rgba(255,255,255,.04)",
+                border:`0.5px solid ${COACH_TOKENS.border}`, borderRadius:6,
                 padding:"3px 8px", whiteSpace:"nowrap",
               }}>{label}</div>
             ))}
           </div>
 
           <button onClick={onClose} style={{
-            width:28, height:28, borderRadius:8, border:`0.5px solid ${C.border}`,
-            background:"rgba(255,255,255,.04)", color:C.muted, cursor:"pointer",
+            width:28, height:28, borderRadius:8, border:`0.5px solid ${COACH_TOKENS.border}`,
+            background:"rgba(255,255,255,.04)", color:COACH_TOKENS.muted, cursor:"pointer",
             display:"flex", alignItems:"center", justifyContent:"center", fontSize:13,
             flexShrink:0, transition:"all .15s",
           }}>✕</button>
@@ -512,12 +512,12 @@ LANGUAGE: Clear, professional English.`;
               <div style={{
                 width:30, height:30, borderRadius:"50%", flexShrink:0,
                 background:"linear-gradient(135deg,#1e3a5f,#0c4a6e)",
-                border:`1px solid ${C.borderHi}`,
+                border:`1px solid ${COACH_TOKENS.borderHi}`,
                 display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:13, color:"#fff",
               }}>✦</div>
               <div style={{
-                background:C.aiBg, border:`0.5px solid ${C.aiBorder}`,
+                background:COACH_TOKENS.aiBg, border:`0.5px solid ${COACH_TOKENS.aiBorder}`,
                 borderRadius:"16px 4px 16px 16px",
                 backdropFilter:"blur(8px)",
               }}>
@@ -567,7 +567,7 @@ LANGUAGE: Clear, professional English.`;
 
         {/* Input */}
         <div style={{
-          padding:"12px 14px", borderTop:`0.5px solid ${C.border}`,
+          padding:"12px 14px", borderTop:`0.5px solid ${COACH_TOKENS.border}`,
           background:`rgba(13,21,38,.6)`, flexShrink:0,
           display:"flex", gap:8, alignItems:"flex-end",
         }}>
@@ -582,9 +582,9 @@ LANGUAGE: Clear, professional English.`;
             rows={1}
             style={{
               flex:1, background:"rgba(255,255,255,.04)",
-              border:`0.5px solid ${C.border}`,
+              border:`0.5px solid ${COACH_TOKENS.border}`,
               borderRadius:12, padding:"10px 14px",
-              fontSize:13.5, color:C.text, outline:"none",
+              fontSize:13.5, color:COACH_TOKENS.text, outline:"none",
               resize:"none", fontFamily:"inherit",
               direction: isAr?"rtl":"ltr",
               minHeight:42, maxHeight:120,
@@ -597,7 +597,7 @@ LANGUAGE: Clear, professional English.`;
             onClick={() => sendMessage()}
             disabled={loading || !input.trim()}
             style={{
-              background: loading||!input.trim() ? "rgba(59,130,246,.25)" : C.blue,
+              background: loading||!input.trim() ? "rgba(59,130,246,.25)" : COACH_TOKENS.blue,
               border:"none", borderRadius:12, width:44, height:44,
               fontSize:18, color:"white", cursor: loading||!input.trim() ? "default" : "pointer",
               transition:"all .2s", flexShrink:0, display:"flex",

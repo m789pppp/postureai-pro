@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 
 // ── Design tokens ─────────────────────────────────────────────────
-const C = {
+const SAAS_TOKENS = {
   bg:    "#030b14",
   surf:  "#071220",
   card:  "#0d1e33",
@@ -27,14 +27,14 @@ const C = {
 };
 
 const card = (accent = false) => ({
-  background: C.card,
-  border: `1px solid ${accent ? "rgba(79,124,249,.25)" : C.border}`,
+  background: SAAS_TOKENS.card,
+  border: `1px solid ${accent ? "rgba(79,124,249,.25)" : SAAS_TOKENS.border}`,
   borderRadius: 14,
   padding: 24,
 });
 
 // ── Sparkline ─────────────────────────────────────────────────────
-function Sparkline({ data = [], color = C.blue, height = 36 }) {
+function Sparkline({ data = [], color = SAAS_TOKENS.blue, height = 36 }) {
   if (!data.length) return null;
   const max = Math.max(...data), min = Math.min(...data);
   const range = max - min || 1;
@@ -61,29 +61,29 @@ function Sparkline({ data = [], color = C.blue, height = 36 }) {
 }
 
 // ── Metric card ───────────────────────────────────────────────────
-function MetricCard({ icon, label, value, sub, trend, sparkData, color = C.blue }) {
+function MetricCard({ icon, label, value, sub, trend, sparkData, color = SAAS_TOKENS.blue }) {
   const isPos = trend?.startsWith("+");
   return (
     <div style={{ ...card(), display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
         <div style={{
           width:38, height:38, borderRadius:10,
-          background:`rgba(${color === C.green ? "16,217,160" : color === C.amber ? "245,158,11" : color === C.red ? "248,113,113" : "79,124,249"},.12)`,
+          background:`rgba(${color === SAAS_TOKENS.green ? "16,217,160" : color === SAAS_TOKENS.amber ? "245,158,11" : color === SAAS_TOKENS.red ? "248,113,113" : "79,124,249"},.12)`,
           display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
         }}>{icon}</div>
         {trend && (
           <span style={{
             fontSize:12, fontWeight:600, padding:"3px 8px", borderRadius:6,
             background: isPos ? "rgba(16,217,160,.1)" : "rgba(248,113,113,.1)",
-            color: isPos ? C.green : C.red,
+            color: isPos ? SAAS_TOKENS.green : SAAS_TOKENS.red,
           }}>{trend}</span>
         )}
       </div>
       <div>
-        <div style={{ fontSize:28, fontWeight:800, color:C.text, letterSpacing:"-.02em",
+        <div style={{ fontSize:28, fontWeight:800, color:SAAS_TOKENS.text, letterSpacing:"-.02em",
           lineHeight:1, marginBottom:4 }}>{value}</div>
-        <div style={{ fontSize:13, color:C.muted }}>{label}</div>
-        {sub && <div style={{ fontSize:12, color:C.sub, marginTop:2 }}>{sub}</div>}
+        <div style={{ fontSize:13, color:SAAS_TOKENS.muted }}>{label}</div>
+        {sub && <div style={{ fontSize:12, color:SAAS_TOKENS.sub, marginTop:2 }}>{sub}</div>}
       </div>
       {sparkData && (
         <div style={{ marginTop:-4 }}>
@@ -117,17 +117,17 @@ function Sidebar({ active, setActive, user, lang }) {
 
   return (
     <aside style={{
-      width:220, background:C.surf, borderRight:`1px solid ${C.border}`,
+      width:220, background:SAAS_TOKENS.surf, borderRight:`1px solid ${SAAS_TOKENS.border}`,
       display:"flex", flexDirection:"column", height:"100vh",
       position:"sticky", top:0, flexShrink:0,
     }}>
       {/* Logo */}
-      <div style={{ padding:"20px 16px 16px", borderBottom:`1px solid ${C.border}` }}>
+      <div style={{ padding:"20px 16px 16px", borderBottom:`1px solid ${SAAS_TOKENS.border}` }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:32, height:32, borderRadius:8,
-            background:C.gBlue, display:"flex", alignItems:"center",
+            background:SAAS_TOKENS.gBlue, display:"flex", alignItems:"center",
             justifyContent:"center", fontSize:16 }}>🧘</div>
-          <span style={{ fontWeight:700, fontSize:15, color:C.text }}>Corvus</span>
+          <span style={{ fontWeight:700, fontSize:15, color:SAAS_TOKENS.text }}>Corvus</span>
         </div>
       </div>
 
@@ -143,14 +143,14 @@ function Sidebar({ active, setActive, user, lang }) {
           }}>
             <span style={{ fontSize:16, flexShrink:0 }}>{item.icon}</span>
             <span style={{ fontSize:14, fontWeight:active === item.id ? 600 : 400,
-              color: active === item.id ? C.text : C.sub,
+              color: active === item.id ? SAAS_TOKENS.text : SAAS_TOKENS.sub,
               transition:"color .15s" }}>{item.label}</span>
           </button>
         ))}
       </nav>
 
       {/* User */}
-      <div style={{ padding:"12px 16px", borderTop:`1px solid ${C.border}` }}>
+      <div style={{ padding:"12px 16px", borderTop:`1px solid ${SAAS_TOKENS.border}` }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:32, height:32, borderRadius:"50%",
             background:"linear-gradient(135deg,#4f7cf9,#22d3ee)",
@@ -159,11 +159,11 @@ function Sidebar({ active, setActive, user, lang }) {
             {(user?.name || user?.email || "U").charAt(0).toUpperCase()}
           </div>
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:13, fontWeight:600, color:C.text,
+            <div style={{ fontSize:13, fontWeight:600, color:SAAS_TOKENS.text,
               overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
               {user?.name || "User"}
             </div>
-            <div style={{ fontSize:11, color:C.muted,
+            <div style={{ fontSize:11, color:SAAS_TOKENS.muted,
               overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
               {user?.email}
             </div>
@@ -182,15 +182,15 @@ function Overview({ data, lang }) {
     Math.round(50 + Math.sin((i+seed)*.7)*20 + Math.cos((i+seed)*.3)*8));
 
   const metrics = ar ? [
-    { icon:"🎯", label:"متوسط درجة الوضعية اليوم", value:`${data?.avgScore || 78}`, sub:`↑ من ${(data?.avgScore || 78) - 3} أمس`, trend:"+4%", color:C.green, sparkData:sparkBase(0) },
-    { icon:"👥", label:"المستخدمون النشطون", value:`${data?.activeUsers || 124}`, sub:"من أصل 150 موظف", trend:"+12", color:C.blue, sparkData:sparkBase(1) },
-    { icon:"⏱️", label:"ساعات التتبع اليوم", value:`${data?.hoursTracked || 342}`, sub:"متوسط 2.8 ساعة/موظف", trend:"+8%", color:C.sky, sparkData:sparkBase(2) },
-    { icon:"⚠️", label:"تنبيهات المخاطر المرسلة", value:`${data?.alerts || 23}`, sub:"14 درجة عالية · 9 متوسطة", trend:"-15%", color:C.amber, sparkData:sparkBase(3) },
+    { icon:"🎯", label:"متوسط درجة الوضعية اليوم", value:`${data?.avgScore || 78}`, sub:`↑ من ${(data?.avgScore || 78) - 3} أمس`, trend:"+4%", color:SAAS_TOKENS.green, sparkData:sparkBase(0) },
+    { icon:"👥", label:"المستخدمون النشطون", value:`${data?.activeUsers || 124}`, sub:"من أصل 150 موظف", trend:"+12", color:SAAS_TOKENS.blue, sparkData:sparkBase(1) },
+    { icon:"⏱️", label:"ساعات التتبع اليوم", value:`${data?.hoursTracked || 342}`, sub:"متوسط 2.8 ساعة/موظف", trend:"+8%", color:SAAS_TOKENS.sky, sparkData:sparkBase(2) },
+    { icon:"⚠️", label:"تنبيهات المخاطر المرسلة", value:`${data?.alerts || 23}`, sub:"14 درجة عالية · 9 متوسطة", trend:"-15%", color:SAAS_TOKENS.amber, sparkData:sparkBase(3) },
   ] : [
-    { icon:"🎯", label:"Avg posture score today", value:`${data?.avgScore || 78}`, sub:`↑ from ${(data?.avgScore || 78) - 3} yesterday`, trend:"+4%", color:C.green, sparkData:sparkBase() },
-    { icon:"👥", label:"Active users today", value:`${data?.activeUsers || 124}`, sub:"out of 150 employees", trend:"+12", color:C.blue, sparkData:sparkBase() },
-    { icon:"⏱️", label:"Tracking hours today", value:`${data?.hoursTracked || 342}`, sub:"avg 2.8 hrs/employee", trend:"+8%", color:C.sky, sparkData:sparkBase() },
-    { icon:"⚠️", label:"Risk alerts sent", value:`${data?.alerts || 23}`, sub:"14 high · 9 medium", trend:"-15%", color:C.amber, sparkData:sparkBase() },
+    { icon:"🎯", label:"Avg posture score today", value:`${data?.avgScore || 78}`, sub:`↑ from ${(data?.avgScore || 78) - 3} yesterday`, trend:"+4%", color:SAAS_TOKENS.green, sparkData:sparkBase() },
+    { icon:"👥", label:"Active users today", value:`${data?.activeUsers || 124}`, sub:"out of 150 employees", trend:"+12", color:SAAS_TOKENS.blue, sparkData:sparkBase() },
+    { icon:"⏱️", label:"Tracking hours today", value:`${data?.hoursTracked || 342}`, sub:"avg 2.8 hrs/employee", trend:"+8%", color:SAAS_TOKENS.sky, sparkData:sparkBase() },
+    { icon:"⚠️", label:"Risk alerts sent", value:`${data?.alerts || 23}`, sub:"14 high · 9 medium", trend:"-15%", color:SAAS_TOKENS.amber, sparkData:sparkBase() },
   ];
 
   const recentActivity = ar ? [
@@ -208,10 +208,10 @@ function Overview({ data, lang }) {
   return (
     <div>
       <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontSize:24, fontWeight:700, color:C.text, margin:"0 0 4px", letterSpacing:"-.02em" }}>
+        <h1 style={{ fontSize:24, fontWeight:700, color:SAAS_TOKENS.text, margin:"0 0 4px", letterSpacing:"-.02em" }}>
           {ar ? "مرحباً بعودتك 👋" : "Welcome back 👋"}
         </h1>
-        <p style={{ fontSize:15, color:C.sub, margin:0 }}>
+        <p style={{ fontSize:15, color:SAAS_TOKENS.sub, margin:0 }}>
           {ar ? "إليك ملخص اليوم لفريقك" : "Here's your team's summary for today"}
         </p>
       </div>
@@ -226,10 +226,10 @@ function Overview({ data, lang }) {
         {/* Score trend chart placeholder */}
         <div style={{ ...card(), minHeight:200 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-            <h3 style={{ margin:0, fontSize:16, fontWeight:600, color:C.text }}>
+            <h3 style={{ margin:0, fontSize:16, fontWeight:600, color:SAAS_TOKENS.text }}>
               {ar ? "اتجاه الوضعية (14 يوم)" : "Posture Trend (14 days)"}
             </h3>
-            <span style={{ fontSize:12, color:C.muted }}>
+            <span style={{ fontSize:12, color:SAAS_TOKENS.muted }}>
               {ar ? "متوسط الفريق" : "Team average"}
             </span>
           </div>
@@ -237,7 +237,7 @@ function Overview({ data, lang }) {
           <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:120 }}>
             {Array.from({length:14}, (_,i) => {
               const v = Math.round(55 + Math.sin(i*.6)*20 + Math.cos(i*.4)*10);
-              const color = v >= 80 ? C.green : v >= 65 ? C.amber : C.red;
+              const color = v >= 80 ? SAAS_TOKENS.green : v >= 65 ? SAAS_TOKENS.amber : SAAS_TOKENS.red;
               return (
                 <div key={i} style={{ flex:1, display:"flex", flexDirection:"column",
                   alignItems:"center", gap:4 }}>
@@ -253,7 +253,7 @@ function Overview({ data, lang }) {
             })}
           </div>
           <div style={{ display:"flex", justifyContent:"space-between",
-            marginTop:8, fontSize:11, color:C.muted }}>
+            marginTop:8, fontSize:11, color:SAAS_TOKENS.muted }}>
             <span>{ar ? "14 يوم مضت" : "14 days ago"}</span>
             <span>{ar ? "اليوم" : "Today"}</span>
           </div>
@@ -261,7 +261,7 @@ function Overview({ data, lang }) {
 
         {/* Activity feed */}
         <div style={{ ...card() }}>
-          <h3 style={{ margin:"0 0 16px", fontSize:16, fontWeight:600, color:C.text }}>
+          <h3 style={{ margin:"0 0 16px", fontSize:16, fontWeight:600, color:SAAS_TOKENS.text }}>
             {ar ? "النشاط الأخير" : "Recent Activity"}
           </h3>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -269,9 +269,9 @@ function Overview({ data, lang }) {
               <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                 <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{a.icon}</span>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:C.text }}>{a.user}</div>
-                  <div style={{ fontSize:12, color:C.sub, lineHeight:1.4, marginTop:2 }}>{a.action}</div>
-                  <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{a.time}</div>
+                  <div style={{ fontSize:12, fontWeight:600, color:SAAS_TOKENS.text }}>{a.user}</div>
+                  <div style={{ fontSize:12, color:SAAS_TOKENS.sub, lineHeight:1.4, marginTop:2 }}>{a.action}</div>
+                  <div style={{ fontSize:11, color:SAAS_TOKENS.muted, marginTop:2 }}>{a.time}</div>
                 </div>
               </div>
             ))}
@@ -291,8 +291,8 @@ function Overview({ data, lang }) {
 function BillingPanel({ user, lang }) {
   const ar = lang === "ar";
   const plan = user?.tier || "professional";
-  const planColors = { starter:C.sub, professional:C.blue, business:C.violet, enterprise:C.green };
-  const color = planColors[plan] || C.blue;
+  const planColors = { starter:SAAS_TOKENS.sub, professional:SAAS_TOKENS.blue, business:SAAS_TOKENS.violet, enterprise:SAAS_TOKENS.green };
+  const color = planColors[plan] || SAAS_TOKENS.blue;
 
   const invoices = [
     { date:"Jun 1, 2026", amount:"$9.00", status:"paid" },
@@ -302,7 +302,7 @@ function BillingPanel({ user, lang }) {
 
   return (
     <div>
-      <h1 style={{ fontSize:24, fontWeight:700, color:C.text, margin:"0 0 24px", letterSpacing:"-.02em" }}>
+      <h1 style={{ fontSize:24, fontWeight:700, color:SAAS_TOKENS.text, margin:"0 0 24px", letterSpacing:"-.02em" }}>
         {ar ? "الفوترة والاشتراك" : "Billing & Subscription"}
       </h1>
 
@@ -310,22 +310,22 @@ function BillingPanel({ user, lang }) {
         className="billing-top">
         {/* Current plan */}
         <div style={{ ...card(true), border:`1px solid ${color}44` }}>
-          <div style={{ fontSize:12, color:C.muted, textTransform:"uppercase",
+          <div style={{ fontSize:12, color:SAAS_TOKENS.muted, textTransform:"uppercase",
             letterSpacing:".08em", marginBottom:8 }}>
             {ar ? "الخطة الحالية" : "Current Plan"}
           </div>
-          <div style={{ fontSize:28, fontWeight:800, color:C.text, marginBottom:4,
+          <div style={{ fontSize:28, fontWeight:800, color:SAAS_TOKENS.text, marginBottom:4,
             textTransform:"capitalize" }}>{plan}</div>
           <div style={{ fontSize:14, color:color, marginBottom:16, fontWeight:500 }}>
             {ar ? "يتجدد في 1 يوليو 2026" : "Renews Jul 1, 2026"}
           </div>
           <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
             <button style={{
-              background:C.gBlue, color:"#fff", border:"none", borderRadius:8,
+              background:SAAS_TOKENS.gBlue, color:"#fff", border:"none", borderRadius:8,
               padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:600,
             }}>{ar ? "ترقية الخطة" : "Upgrade Plan"}</button>
             <button style={{
-              background:"transparent", color:C.sub, border:`1px solid ${C.border}`,
+              background:"transparent", color:SAAS_TOKENS.sub, border:`1px solid ${SAAS_TOKENS.border}`,
               borderRadius:8, padding:"8px 18px", cursor:"pointer", fontSize:13,
             }}>{ar ? "إدارة الاشتراك" : "Manage Subscription"}</button>
           </div>
@@ -333,7 +333,7 @@ function BillingPanel({ user, lang }) {
 
         {/* Usage */}
         <div style={{ ...card() }}>
-          <div style={{ fontSize:12, color:C.muted, textTransform:"uppercase",
+          <div style={{ fontSize:12, color:SAAS_TOKENS.muted, textTransform:"uppercase",
             letterSpacing:".08em", marginBottom:14 }}>
             {ar ? "الاستخدام هذا الشهر" : "This Month's Usage"}
           </div>
@@ -344,8 +344,8 @@ function BillingPanel({ user, lang }) {
             ).map(([label, val]) => (
               <div key={label} style={{ display:"flex", justifyContent:"space-between",
                 alignItems:"center" }}>
-                <span style={{ fontSize:14, color:C.sub }}>{label}</span>
-                <span style={{ fontSize:14, fontWeight:600, color:C.text }}>{val}</span>
+                <span style={{ fontSize:14, color:SAAS_TOKENS.sub }}>{label}</span>
+                <span style={{ fontSize:14, fontWeight:600, color:SAAS_TOKENS.text }}>{val}</span>
               </div>
             ))}
           </div>
@@ -354,27 +354,27 @@ function BillingPanel({ user, lang }) {
 
       {/* Invoice history */}
       <div style={{ ...card() }}>
-        <h3 style={{ fontSize:16, fontWeight:600, color:C.text, margin:"0 0 16px" }}>
+        <h3 style={{ fontSize:16, fontWeight:600, color:SAAS_TOKENS.text, margin:"0 0 16px" }}>
           {ar ? "سجل الفواتير" : "Invoice History"}
         </h3>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead>
             <tr>
               {(ar ? ["التاريخ","المبلغ","الحالة",""] : ["Date","Amount","Status",""]).map(h => (
-                <th key={h} style={{ textAlign:"left", color:C.muted, fontWeight:500,
-                  padding:"8px 12px", borderBottom:`1px solid ${C.border}`, fontSize:12,
+                <th key={h} style={{ textAlign:"left", color:SAAS_TOKENS.muted, fontWeight:500,
+                  padding:"8px 12px", borderBottom:`1px solid ${SAAS_TOKENS.border}`, fontSize:12,
                   textTransform:"uppercase", letterSpacing:".06em" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {invoices.map((inv, i) => (
-              <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
-                <td style={{ padding:"12px 12px", color:C.text }}>{inv.date}</td>
-                <td style={{ padding:"12px 12px", color:C.text, fontWeight:600 }}>{inv.amount}</td>
+              <tr key={i} style={{ borderBottom:`1px solid ${SAAS_TOKENS.border}` }}>
+                <td style={{ padding:"12px 12px", color:SAAS_TOKENS.text }}>{inv.date}</td>
+                <td style={{ padding:"12px 12px", color:SAAS_TOKENS.text, fontWeight:600 }}>{inv.amount}</td>
                 <td style={{ padding:"12px 12px" }}>
                   <span style={{
-                    background:"rgba(16,217,160,.1)", color:C.green,
+                    background:"rgba(16,217,160,.1)", color:SAAS_TOKENS.green,
                     padding:"3px 10px", borderRadius:100, fontSize:12, fontWeight:500,
                   }}>
                     {ar ? "مدفوع" : "Paid"}
@@ -382,7 +382,7 @@ function BillingPanel({ user, lang }) {
                 </td>
                 <td style={{ padding:"12px 12px" }}>
                   <button style={{
-                    background:"transparent", color:C.blue,
+                    background:"transparent", color:SAAS_TOKENS.blue,
                     border:`1px solid rgba(79,124,249,.3)`, borderRadius:6,
                     padding:"4px 12px", cursor:"pointer", fontSize:12,
                   }}>{ar ? "تنزيل PDF" : "Download PDF"}</button>
@@ -417,14 +417,14 @@ function SettingsPanel({ user, lang }) {
 
   return (
     <div>
-      <h1 style={{ fontSize:24, fontWeight:700, color:C.text, margin:"0 0 24px", letterSpacing:"-.02em" }}>
+      <h1 style={{ fontSize:24, fontWeight:700, color:SAAS_TOKENS.text, margin:"0 0 24px", letterSpacing:"-.02em" }}>
         {ar ? "الإعدادات" : "Settings"}
       </h1>
 
       <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:560 }}>
         {/* Profile */}
         <div style={{ ...card() }}>
-          <h3 style={{ fontSize:16, fontWeight:600, color:C.text, margin:"0 0 16px" }}>
+          <h3 style={{ fontSize:16, fontWeight:600, color:SAAS_TOKENS.text, margin:"0 0 16px" }}>
             {ar ? "معلومات الملف الشخصي" : "Profile Information"}
           </h3>
           {[
@@ -433,7 +433,7 @@ function SettingsPanel({ user, lang }) {
             { label: ar?"اسم الشركة":"Company", key:"company", type:"text" },
           ].map(f => (
             <div key={f.key} style={{ marginBottom:14 }}>
-              <label style={{ display:"block", fontSize:13, color:C.sub, marginBottom:6, fontWeight:500 }}>
+              <label style={{ display:"block", fontSize:13, color:SAAS_TOKENS.sub, marginBottom:6, fontWeight:500 }}>
                 {f.label}
               </label>
               <input
@@ -443,15 +443,15 @@ function SettingsPanel({ user, lang }) {
                 style={{
                   width:"100%", padding:"10px 14px",
                   background:"rgba(255,255,255,.05)",
-                  border:`1px solid ${C.border}`, borderRadius:8,
-                  color:C.text, fontSize:14, outline:"none",
+                  border:`1px solid ${SAAS_TOKENS.border}`, borderRadius:8,
+                  color:SAAS_TOKENS.text, fontSize:14, outline:"none",
                   boxSizing:"border-box",
                 }}
               />
             </div>
           ))}
           <button onClick={handleSave} style={{
-            background:C.gBlue, color:"#fff", border:"none",
+            background:SAAS_TOKENS.gBlue, color:"#fff", border:"none",
             borderRadius:8, padding:"10px 20px", cursor:"pointer",
             fontSize:14, fontWeight:600,
           }}>
@@ -461,7 +461,7 @@ function SettingsPanel({ user, lang }) {
 
         {/* Notifications */}
         <div style={{ ...card() }}>
-          <h3 style={{ fontSize:16, fontWeight:600, color:C.text, margin:"0 0 16px" }}>
+          <h3 style={{ fontSize:16, fontWeight:600, color:SAAS_TOKENS.text, margin:"0 0 16px" }}>
             {ar ? "الإشعارات" : "Notifications"}
           </h3>
           {[
@@ -470,12 +470,12 @@ function SettingsPanel({ user, lang }) {
           ].map(n => (
             <div key={n.key} style={{ display:"flex", justifyContent:"space-between",
               alignItems:"center", marginBottom:14 }}>
-              <span style={{ fontSize:14, color:C.sub }}>{n.label}</span>
+              <span style={{ fontSize:14, color:SAAS_TOKENS.sub }}>{n.label}</span>
               <div
                 onClick={() => setForm(p => ({ ...p, [n.key]:!p[n.key] }))}
                 style={{
                   width:44, height:24, borderRadius:12, cursor:"pointer",
-                  background: form[n.key] ? C.blue : "rgba(255,255,255,.1)",
+                  background: form[n.key] ? SAAS_TOKENS.blue : "rgba(255,255,255,.1)",
                   position:"relative", transition:"background .2s",
                 }}>
                 <div style={{
@@ -492,13 +492,13 @@ function SettingsPanel({ user, lang }) {
 
         {/* Security */}
         <div style={{ ...card() }}>
-          <h3 style={{ fontSize:16, fontWeight:600, color:C.text, margin:"0 0 16px" }}>
+          <h3 style={{ fontSize:16, fontWeight:600, color:SAAS_TOKENS.text, margin:"0 0 16px" }}>
             {ar ? "الأمان" : "Security"}
           </h3>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             <button style={{
-              background:"transparent", color:C.sub,
-              border:`1px solid ${C.border}`, borderRadius:8,
+              background:"transparent", color:SAAS_TOKENS.sub,
+              border:`1px solid ${SAAS_TOKENS.border}`, borderRadius:8,
               padding:"10px 16px", cursor:"pointer", fontSize:14, textAlign:"left",
               display:"flex", justifyContent:"space-between",
             }}>
@@ -506,8 +506,8 @@ function SettingsPanel({ user, lang }) {
               <span>→</span>
             </button>
             <button style={{
-              background:"transparent", color:C.sub,
-              border:`1px solid ${C.border}`, borderRadius:8,
+              background:"transparent", color:SAAS_TOKENS.sub,
+              border:`1px solid ${SAAS_TOKENS.border}`, borderRadius:8,
               padding:"10px 16px", cursor:"pointer", fontSize:14, textAlign:"left",
               display:"flex", justifyContent:"space-between",
             }}>
@@ -515,8 +515,8 @@ function SettingsPanel({ user, lang }) {
               <span>→</span>
             </button>
             <button style={{
-              background:"transparent", color:C.sub,
-              border:`1px solid ${C.border}`, borderRadius:8,
+              background:"transparent", color:SAAS_TOKENS.sub,
+              border:`1px solid ${SAAS_TOKENS.border}`, borderRadius:8,
               padding:"10px 16px", cursor:"pointer", fontSize:14, textAlign:"left",
               display:"flex", justifyContent:"space-between",
             }}>
@@ -554,10 +554,10 @@ export default function Dashboard({ user, sessions = [], profile, onNavigate, la
           <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
             height:"60vh", flexDirection:"column", gap:12 }}>
             <div style={{ fontSize:48 }}>🔧</div>
-            <h2 style={{ color:C.text, fontSize:20, fontWeight:600, margin:0 }}>
+            <h2 style={{ color:SAAS_TOKENS.text, fontSize:20, fontWeight:600, margin:0 }}>
               {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
             </h2>
-            <p style={{ color:C.sub, fontSize:15, margin:0 }}>
+            <p style={{ color:SAAS_TOKENS.sub, fontSize:15, margin:0 }}>
               {lang === "ar" ? "هذا القسم في التطوير" : "This section is part of the full app"}
             </p>
           </div>
@@ -566,33 +566,33 @@ export default function Dashboard({ user, sessions = [], profile, onNavigate, la
   };
 
   return (
-    <div style={{ display:"flex", background:C.bg, minHeight:"100vh",
+    <div style={{ display:"flex", background:SAAS_TOKENS.bg, minHeight:"100vh",
       fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
-      color:C.text }}>
+      color:SAAS_TOKENS.text }}>
       <Sidebar active={activeTab} setActive={setActiveTab} user={user} lang={lang}/>
       <main style={{ flex:1, overflow:"auto" }}>
         {/* Top bar */}
         <div style={{
-          padding:"16px 28px", borderBottom:`1px solid ${C.border}`,
+          padding:"16px 28px", borderBottom:`1px solid ${SAAS_TOKENS.border}`,
           display:"flex", justifyContent:"space-between", alignItems:"center",
           position:"sticky", top:0, background:"rgba(3,11,20,.9)",
           backdropFilter:"blur(12px)", zIndex:100,
         }}>
-          <div style={{ fontSize:13, color:C.muted }}>
+          <div style={{ fontSize:13, color:SAAS_TOKENS.muted }}>
             {new Date().toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US",
               { weekday:"long", year:"numeric", month:"long", day:"numeric" })}
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <button style={{
               background:"rgba(79,124,249,.1)", border:"1px solid rgba(79,124,249,.2)",
-              color:C.indigo, borderRadius:8, padding:"7px 14px",
+              color:SAAS_TOKENS.indigo, borderRadius:8, padding:"7px 14px",
               cursor:"pointer", fontSize:13, fontWeight:500,
             }}>
               🎯 {lang === "ar" ? "تحليل الآن" : "Analyze Now"}
             </button>
             <div style={{
-              width:8, height:8, borderRadius:"50%", background:C.green,
-              boxShadow:`0 0 8px ${C.green}`,
+              width:8, height:8, borderRadius:"50%", background:SAAS_TOKENS.green,
+              boxShadow:`0 0 8px ${SAAS_TOKENS.green}`,
             }}/>
           </div>
         </div>

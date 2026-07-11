@@ -10,7 +10,7 @@ import { db, collection, addDoc, getDocs, query, orderBy, limit,
          where, updateDoc, doc, setDoc, getDoc, serverTimestamp } from "./firebase.js";
 
 /* ── Design tokens ───────────────────────────────────────────────── */
-const D = {
+const NHUB_TOKENS = {
   bg:"#020a18", bg2:"#040f22", bg3:"#071428", surf:"#0a1830",
   card:"rgba(8,18,36,.88)", border:"rgba(148,163,184,.08)", borderH:"rgba(26,86,219,.35)",
   text:"#e8f0fe", text2:"#94a3b8", muted:"#475569",
@@ -227,8 +227,8 @@ function Btn({children,onClick,variant="primary",size="base",disabled=false,icon
   const fss={xs:10,sm:11,base:12,lg:13};
   const varMap={
     primary:{bg:"linear-gradient(135deg,#1a56db,#0891b2)",c:"#fff",border:"none",sh:hov?"0 8px 28px rgba(26,86,219,.5)":"0 4px 16px rgba(26,86,219,.3)"},
-    secondary:{bg:D.surf,c:D.text,border:`1px solid ${D.border}`},
-    ghost:{bg:"transparent",c:D.text2,border:`1px solid ${D.border}`},
+    secondary:{bg:NHUB_TOKENS.surf,c:NHUB_TOKENS.text,border:`1px solid ${NHUB_TOKENS.border}`},
+    ghost:{bg:"transparent",c:NHUB_TOKENS.text2,border:`1px solid ${NHUB_TOKENS.border}`},
     danger:{bg:"rgba(239,68,68,.1)",c:"#f87171",border:"1px solid rgba(239,68,68,.2)"},
     success:{bg:"rgba(16,185,129,.1)",c:"#34d399",border:"1px solid rgba(16,185,129,.2)"},
   };
@@ -254,16 +254,16 @@ function Input({label,value,onChange,placeholder,type="text",hint,error,mono=fal
   const [foc,setFoc]=useState(false);
   return (
     <div style={{width:"100%"}}>
-      {label&&<label style={{display:"block",fontSize:11,fontWeight:700,color:D.text2,letterSpacing:".03em",marginBottom:5}}>{label}</label>}
+      {label&&<label style={{display:"block",fontSize:11,fontWeight:700,color:NHUB_TOKENS.text2,letterSpacing:".03em",marginBottom:5}}>{label}</label>}
       <input type={type} value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
         onFocus={()=>setFoc(true)} onBlur={()=>setFoc(false)}
-        style={{width:"100%",padding:"9px 13px",background:disabled?"rgba(148,163,184,.04)":D.surf,
-          border:`1.5px solid ${error?D.red:foc?D.blue:D.border}`,
-          borderRadius:9,color:disabled?D.muted:D.text,fontSize:12,outline:"none",
+        style={{width:"100%",padding:"9px 13px",background:disabled?"rgba(148,163,184,.04)":NHUB_TOKENS.surf,
+          border:`1.5px solid ${error?NHUB_TOKENS.red:foc?NHUB_TOKENS.blue:NHUB_TOKENS.border}`,
+          borderRadius:9,color:disabled?NHUB_TOKENS.muted:NHUB_TOKENS.text,fontSize:12,outline:"none",
           fontFamily:mono?"'DM Mono',monospace":"'DM Sans',system-ui,sans-serif",
           boxShadow:foc&&!disabled?(error?`0 0 0 3px rgba(239,68,68,.12)`:`0 0 0 3px rgba(26,86,219,.12)`):"none",
           transition:`border-color 150ms, box-shadow 150ms`}}/>
-      {(hint||error)&&<div style={{fontSize:10,color:error?D.red:D.muted,marginTop:4,fontWeight:500}}>{error||hint}</div>}
+      {(hint||error)&&<div style={{fontSize:10,color:error?NHUB_TOKENS.red:NHUB_TOKENS.muted,marginTop:4,fontWeight:500}}>{error||hint}</div>}
     </div>
   );
 }
@@ -277,7 +277,7 @@ function Toggle({value,onChange,label,disabled=false}) {
         <div style={{position:"absolute",top:2,left:value?20:2,width:16,height:16,borderRadius:"50%",
           background:"#fff",transition:`left 200ms ${SPRING}`,boxShadow:"0 1px 4px rgba(0,0,0,.25)"}}/>
       </div>
-      {label&&<span style={{fontSize:12,color:D.text2,fontWeight:500}}>{label}</span>}
+      {label&&<span style={{fontSize:12,color:NHUB_TOKENS.text2,fontWeight:500}}>{label}</span>}
     </div>
   );
 }
@@ -311,7 +311,7 @@ function QueuePanel({orgId,profile,isAr}) {
         {type:"burnout_alert",  payload:{user:"Ahmed M.",score:72,dept:"Engineering"}, channels:["slack","in_app"]},
         {type:"weekly_digest",  payload:{user:"All",period:"This week"},               channels:["email","slack"], schedule: new Date(Date.now()+3600000).toISOString()},
         {type:"ai_insight",     payload:{text:"Your posture improved 8% this week"},   channels:["in_app"]},
-        {type:"session_reminder",payload:{user:"Sara D.",due:"14:00"},                 channels:["teams","in_app"]},
+        {type:"session_reminder",payload:{user:"Sara NHUB_TOKENS.",due:"14:00"},                 channels:["teams","in_app"]},
         {type:"risk_alert",     payload:{user:"Omar K.",risk:78,type:"burnout"},       channels:["slack","email","jira"]},
       ];
       seeds.forEach(s=>globalQueue.enqueue(mkQueueEntry(s.type,s.payload,s.channels,s.schedule||null)));
@@ -339,7 +339,7 @@ function QueuePanel({orgId,profile,isAr}) {
     setSending(false);
   };
 
-  const STATUS_COLOR={queued:D.amber,processing:D.blue,sent:D.green,failed:D.red,scheduled:D.purple};
+  const STATUS_COLOR={queued:NHUB_TOKENS.amber,processing:NHUB_TOKENS.blue,sent:NHUB_TOKENS.green,failed:NHUB_TOKENS.red,scheduled:NHUB_TOKENS.purple};
   const STATUS_LABEL={queued:isAr?"في الانتظار":"Queued",processing:isAr?"جاري الإرسال":"Processing",sent:isAr?"تم الإرسال":"Sent",failed:isAr?"فشل":"Failed",scheduled:isAr?"مجدول":"Scheduled"};
 
   return (
@@ -347,16 +347,16 @@ function QueuePanel({orgId,profile,isAr}) {
       {/* Stats row */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
         {[
-          {l:isAr?"الكل":"Total",      v:stats.total,    c:D.text2},
-          {l:isAr?"في الانتظار":"Queued",  v:stats.queued,   c:D.amber},
-          {l:isAr?"تم":"Sent",           v:stats.sent,     c:D.green},
-          {l:isAr?"مجدول":"Scheduled",   v:stats.scheduled,c:D.purple},
-          {l:isAr?"فشل":"Failed",        v:stats.failed,   c:D.red},
+          {l:isAr?"الكل":"Total",      v:stats.total,    c:NHUB_TOKENS.text2},
+          {l:isAr?"في الانتظار":"Queued",  v:stats.queued,   c:NHUB_TOKENS.amber},
+          {l:isAr?"تم":"Sent",           v:stats.sent,     c:NHUB_TOKENS.green},
+          {l:isAr?"مجدول":"Scheduled",   v:stats.scheduled,c:NHUB_TOKENS.purple},
+          {l:isAr?"فشل":"Failed",        v:stats.failed,   c:NHUB_TOKENS.red},
         ].map((m,i)=>(
           <div key={i} style={{background:`${m.c}08`,border:`1px solid ${m.c}20`,borderRadius:12,padding:"12px 14px",textAlign:"center",cursor:"pointer"}}
             onClick={()=>setFilter(i===0?"all":["all","queued","sent","scheduled","failed"][i])}>
             <div style={{fontFamily:SYNE,fontSize:24,fontWeight:800,color:m.c,lineHeight:1}}>{m.v}</div>
-            <div style={{fontSize:9,color:D.muted,marginTop:4,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em"}}>{m.l}</div>
+            <div style={{fontSize:9,color:NHUB_TOKENS.muted,marginTop:4,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em"}}>{m.l}</div>
           </div>
         ))}
       </div>
@@ -367,8 +367,8 @@ function QueuePanel({orgId,profile,isAr}) {
           <button key={s} onClick={()=>setFilter(s)} style={{
             padding:"5px 13px",borderRadius:99,cursor:"pointer",fontSize:11,fontWeight:700,
             background:filter===s?"rgba(26,86,219,.14)":"transparent",
-            border:`1px solid ${filter===s?"rgba(26,86,219,.35)":D.border}`,
-            color:filter===s?D.blue:D.muted,transition:"all 150ms",
+            border:`1px solid ${filter===s?"rgba(26,86,219,.35)":NHUB_TOKENS.border}`,
+            color:filter===s?NHUB_TOKENS.blue:NHUB_TOKENS.muted,transition:"all 150ms",
           }}>{STATUS_LABEL[s]||"All"}</button>
         ))}
         <div style={{marginLeft:"auto",display:"flex",gap:8}}>
@@ -381,32 +381,32 @@ function QueuePanel({orgId,profile,isAr}) {
       {showCompose&&<ComposeNotification isAr={isAr} onSend={(entry)=>{globalQueue.enqueue(entry);setShowCompose(false);}} onClose={()=>setShowCompose(false)}/>}
 
       {/* Queue table */}
-      <div style={{background:D.surf,border:`1px solid ${D.border}`,borderRadius:14,overflow:"hidden"}}>
+      <div style={{background:NHUB_TOKENS.surf,border:`1px solid ${NHUB_TOKENS.border}`,borderRadius:14,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"36px 1fr 120px 120px auto auto",gap:0,
-          padding:"9px 16px",borderBottom:`1px solid ${D.border}`,background:"rgba(255,255,255,.02)"}}>
+          padding:"9px 16px",borderBottom:`1px solid ${NHUB_TOKENS.border}`,background:"rgba(255,255,255,.02)"}}>
           {["","Notification","Channels","Status","Attempts",""].map((h,i)=>(
-            <div key={i} style={{fontSize:9,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:D.muted}}>{isAr&&h==="Notification"?"التنبيه":isAr&&h==="Channels"?"القنوات":isAr&&h==="Status"?"الحالة":isAr&&h==="Attempts"?"المحاولات":h}</div>
+            <div key={i} style={{fontSize:9,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:NHUB_TOKENS.muted}}>{isAr&&h==="Notification"?"التنبيه":isAr&&h==="Channels"?"القنوات":isAr&&h==="Status"?"الحالة":isAr&&h==="Attempts"?"المحاولات":h}</div>
           ))}
         </div>
         <div style={{maxHeight:340,overflowY:"auto"}}>
           {filtered.length===0&&(
-            <div style={{padding:"32px",textAlign:"center",fontSize:12,color:D.muted}}>
+            <div style={{padding:"32px",textAlign:"center",fontSize:12,color:NHUB_TOKENS.muted}}>
               {isAr?"لا توجد إشعارات":"No notifications"}
             </div>
           )}
           {filtered.map((item,i)=>{
-            const meta=NOTIF_TYPES[item.type]||{icon:"●",label:item.type,color:D.muted};
-            const sc=STATUS_COLOR[item.status]||D.muted;
+            const meta=NOTIF_TYPES[item.type]||{icon:"●",label:item.type,color:NHUB_TOKENS.muted};
+            const sc=STATUS_COLOR[item.status]||NHUB_TOKENS.muted;
             return (
               <div key={item.id} style={{display:"grid",gridTemplateColumns:"36px 1fr 120px 120px auto auto",
-                gap:0,padding:"11px 16px",borderBottom:i<filtered.length-1?`1px solid ${D.border}`:"none",
+                gap:0,padding:"11px 16px",borderBottom:i<filtered.length-1?`1px solid ${NHUB_TOKENS.border}`:"none",
                 alignItems:"center",transition:"background 150ms",animation:`nh-fadeIn 200ms ${Math.min(i,8)*40}ms both`}}
                 onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.025)"}
                 onMouseLeave={e=>e.currentTarget.style.background="none"}>
                 <span style={{fontSize:18}}>{meta.icon}</span>
                 <div>
-                  <div style={{fontSize:12,fontWeight:600,color:D.text}}>{meta.label}</div>
-                  <div style={{fontSize:10,color:D.muted,marginTop:1}}>
+                  <div style={{fontSize:12,fontWeight:600,color:NHUB_TOKENS.text}}>{meta.label}</div>
+                  <div style={{fontSize:10,color:NHUB_TOKENS.muted,marginTop:1}}>
                     {item.payload?.user&&`${item.payload.user} · `}
                     {item.payload?.text||item.payload?.period||""}
                     {item.scheduled_for&&item.status==="scheduled"&&` · 🕐 ${new Date(item.scheduled_for).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`}
@@ -415,7 +415,7 @@ function QueuePanel({orgId,profile,isAr}) {
                 <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
                   {(item.channels||[]).map(ch=>(
                     <span key={ch} style={{fontSize:9,padding:"2px 7px",borderRadius:99,
-                      background:"rgba(148,163,184,.08)",border:`1px solid ${D.border}`,color:D.text2,fontWeight:600}}>
+                      background:"rgba(148,163,184,.08)",border:`1px solid ${NHUB_TOKENS.border}`,color:NHUB_TOKENS.text2,fontWeight:600}}>
                       {ch}
                     </span>
                   ))}
@@ -424,10 +424,10 @@ function QueuePanel({orgId,profile,isAr}) {
                   <StatusDot status={item.status==="sent"?"connected":item.status==="failed"?"error":item.status==="processing"?"testing":"disconnected"}/>
                   <span style={{fontSize:11,fontWeight:700,color:sc}}>{STATUS_LABEL[item.status]||item.status}</span>
                 </div>
-                <div style={{fontSize:11,color:D.muted,textAlign:"center"}}>{item.attempts}/{item.maxAttempts}</div>
+                <div style={{fontSize:11,color:NHUB_TOKENS.muted,textAlign:"center"}}>{item.attempts}/{item.maxAttempts}</div>
                 <div style={{display:"flex",gap:4}}>
-                  {item.status==="failed"&&<button onClick={()=>globalQueue.retry(item.id)} style={{fontSize:10,padding:"3px 8px",borderRadius:6,background:"rgba(26,86,219,.1)",border:`1px solid rgba(26,86,219,.2)`,color:D.blue,cursor:"pointer",fontWeight:700}}>⟳</button>}
-                  <button onClick={()=>globalQueue.remove(item.id)} style={{fontSize:10,padding:"3px 8px",borderRadius:6,background:"rgba(239,68,68,.08)",border:`1px solid rgba(239,68,68,.15)`,color:D.red,cursor:"pointer",fontWeight:700}}>✕</button>
+                  {item.status==="failed"&&<button onClick={()=>globalQueue.retry(item.id)} style={{fontSize:10,padding:"3px 8px",borderRadius:6,background:"rgba(26,86,219,.1)",border:`1px solid rgba(26,86,219,.2)`,color:NHUB_TOKENS.blue,cursor:"pointer",fontWeight:700}}>⟳</button>}
+                  <button onClick={()=>globalQueue.remove(item.id)} style={{fontSize:10,padding:"3px 8px",borderRadius:6,background:"rgba(239,68,68,.08)",border:`1px solid rgba(239,68,68,.15)`,color:NHUB_TOKENS.red,cursor:"pointer",fontWeight:700}}>✕</button>
                 </div>
               </div>
             );
@@ -454,45 +454,45 @@ function ComposeNotification({isAr,onSend,onClose}) {
   };
 
   return (
-    <div style={{background:D.bg2,border:`1px solid ${D.blue}28`,borderRadius:14,padding:18,animation:`nh-fadeIn 250ms ${SPRING} both`}}>
-      <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text,marginBottom:14}}>
+    <div style={{background:NHUB_TOKENS.bg2,border:`1px solid ${NHUB_TOKENS.blue}28`,borderRadius:14,padding:18,animation:`nh-fadeIn 250ms ${SPRING} both`}}>
+      <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:NHUB_TOKENS.text,marginBottom:14}}>
         {isAr?"إنشاء إشعار جديد":"Compose Notification"}
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
         <div>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:D.text2,marginBottom:5}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:NHUB_TOKENS.text2,marginBottom:5}}>
             {isAr?"نوع الإشعار":"Notification Type"}
           </label>
           <select value={type} onChange={e=>setType(e.target.value)}
-            style={{width:"100%",padding:"9px 13px",background:D.surf,border:`1px solid ${D.border}`,borderRadius:9,color:D.text,fontSize:12,outline:"none"}}>
+            style={{width:"100%",padding:"9px 13px",background:NHUB_TOKENS.surf,border:`1px solid ${NHUB_TOKENS.border}`,borderRadius:9,color:NHUB_TOKENS.text,fontSize:12,outline:"none"}}>
             {Object.entries(NOTIF_TYPES).map(([k,v])=>(
               <option key={k} value={k}>{v.icon} {v.label}</option>
             ))}
           </select>
         </div>
         <div>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:D.text2,marginBottom:5}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:NHUB_TOKENS.text2,marginBottom:5}}>
             {isAr?"المستلمون":"Recipients"}
           </label>
           <input value={recipients} onChange={e=>setRecipients(e.target.value)}
             placeholder="all / dept:engineering / uid:abc"
-            style={{width:"100%",padding:"9px 13px",background:D.surf,border:`1px solid ${D.border}`,borderRadius:9,color:D.text,fontSize:12,outline:"none"}}/>
+            style={{width:"100%",padding:"9px 13px",background:NHUB_TOKENS.surf,border:`1px solid ${NHUB_TOKENS.border}`,borderRadius:9,color:NHUB_TOKENS.text,fontSize:12,outline:"none"}}/>
         </div>
       </div>
 
       <div style={{marginBottom:12}}>
-        <label style={{display:"block",fontSize:11,fontWeight:700,color:D.text2,marginBottom:5}}>
+        <label style={{display:"block",fontSize:11,fontWeight:700,color:NHUB_TOKENS.text2,marginBottom:5}}>
           {isAr?"نص الرسالة":"Message"}
         </label>
         <textarea value={text} onChange={e=>setText(e.target.value)} rows={3}
           placeholder={isAr?"اكتب رسالتك...":"Write your message..."}
-          style={{width:"100%",padding:"9px 13px",background:D.surf,border:`1px solid ${D.border}`,borderRadius:9,color:D.text,fontSize:12,outline:"none",resize:"vertical",fontFamily:"'DM Sans',system-ui,sans-serif"}}/>
+          style={{width:"100%",padding:"9px 13px",background:NHUB_TOKENS.surf,border:`1px solid ${NHUB_TOKENS.border}`,borderRadius:9,color:NHUB_TOKENS.text,fontSize:12,outline:"none",resize:"vertical",fontFamily:"'DM Sans',system-ui,sans-serif"}}/>
       </div>
 
       {/* Channel checkboxes */}
       <div style={{marginBottom:12}}>
-        <div style={{fontSize:11,fontWeight:700,color:D.text2,marginBottom:8}}>{isAr?"القنوات":"Channels"}</div>
+        <div style={{fontSize:11,fontWeight:700,color:NHUB_TOKENS.text2,marginBottom:8}}>{isAr?"القنوات":"Channels"}</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {ALL_CH.map(ch=>{
             const on=channels.includes(ch);
@@ -500,8 +500,8 @@ function ComposeNotification({isAr,onSend,onClose}) {
               <button key={ch} onClick={()=>setChannels(prev=>on?prev.filter(c=>c!==ch):[...prev,ch])} style={{
                 padding:"5px 13px",borderRadius:99,cursor:"pointer",fontSize:11,fontWeight:700,
                 background:on?"rgba(26,86,219,.14)":"transparent",
-                border:`1px solid ${on?"rgba(26,86,219,.35)":D.border}`,
-                color:on?D.blue:D.muted,transition:"all 150ms",
+                border:`1px solid ${on?"rgba(26,86,219,.35)":NHUB_TOKENS.border}`,
+                color:on?NHUB_TOKENS.blue:NHUB_TOKENS.muted,transition:"all 150ms",
               }}>{on?"✓ ":""}{ch}</button>
             );
           })}
@@ -562,8 +562,8 @@ function DigestsPanel({orgId,isAr}) {
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
-          <div style={{fontFamily:SYNE,fontSize:14,fontWeight:800,color:D.text}}>{isAr?"الملخصات المجدولة":"Scheduled Digests"}</div>
-          <div style={{fontSize:11,color:D.muted,marginTop:2}}>{isAr?"ملخصات AI مؤتمتة على فترات منتظمة":"AI-powered automated digests on regular intervals"}</div>
+          <div style={{fontFamily:SYNE,fontSize:14,fontWeight:800,color:NHUB_TOKENS.text}}>{isAr?"الملخصات المجدولة":"Scheduled Digests"}</div>
+          <div style={{fontSize:11,color:NHUB_TOKENS.muted,marginTop:2}}>{isAr?"ملخصات AI مؤتمتة على فترات منتظمة":"AI-powered automated digests on regular intervals"}</div>
         </div>
         <Btn size="sm" variant="primary" icon="+" onClick={()=>setEditing({
           id:`d${Date.now()}`,name:"",schedule:"",frequency:"weekly",
@@ -572,7 +572,7 @@ function DigestsPanel({orgId,isAr}) {
       </div>
 
       {digests.map((d,i)=>(
-        <div key={d.id} style={{background:D.card,border:`1px solid ${d.enabled?D.blue+"20":D.border}`,
+        <div key={d.id} style={{background:NHUB_TOKENS.card,border:`1px solid ${d.enabled?NHUB_TOKENS.blue+"20":NHUB_TOKENS.border}`,
           borderRadius:14,padding:18,position:"relative",overflow:"hidden",
           animation:`nh-fadeIn 300ms ${i*60}ms both`}}>
           {d.enabled&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#1a56db,transparent)"}}/>}
@@ -580,7 +580,7 @@ function DigestsPanel({orgId,isAr}) {
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
                 <StatusDot status={d.enabled?"connected":"disconnected"}/>
-                <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text}}>{d.name}</div>
+                <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:NHUB_TOKENS.text}}>{d.name}</div>
                 {d.aiEnhanced&&<span style={{background:"rgba(124,58,237,.12)",border:"1px solid rgba(124,58,237,.25)",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,color:"#a78bfa"}}>🧠 AI-Enhanced</span>}
               </div>
               <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
@@ -592,14 +592,14 @@ function DigestsPanel({orgId,isAr}) {
                   {l:isAr?"الإرسال القادم":"Next send",v:d.nextSend||"—"},
                 ].map(m=>(
                   <div key={m.l}>
-                    <div style={{fontSize:9,color:D.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>{m.l}</div>
-                    <div style={{fontSize:11,color:D.text2,fontWeight:500,marginTop:2}}>{m.v}</div>
+                    <div style={{fontSize:9,color:NHUB_TOKENS.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>{m.l}</div>
+                    <div style={{fontSize:11,color:NHUB_TOKENS.text2,fontWeight:500,marginTop:2}}>{m.v}</div>
                   </div>
                 ))}
                 <div>
-                  <div style={{fontSize:9,color:D.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>{isAr?"القنوات":"Channels"}</div>
+                  <div style={{fontSize:9,color:NHUB_TOKENS.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>{isAr?"القنوات":"Channels"}</div>
                   <div style={{display:"flex",gap:4,marginTop:2}}>
-                    {d.channels.map(c=><span key={c} style={{fontSize:10,padding:"2px 8px",borderRadius:99,background:"rgba(26,86,219,.1)",border:`1px solid rgba(26,86,219,.2)`,color:D.blue,fontWeight:600}}>{c}</span>)}
+                    {d.channels.map(c=><span key={c} style={{fontSize:10,padding:"2px 8px",borderRadius:99,background:"rgba(26,86,219,.1)",border:`1px solid rgba(26,86,219,.2)`,color:NHUB_TOKENS.blue,fontWeight:600}}>{c}</span>)}
                   </div>
                 </div>
               </div>
@@ -615,16 +615,16 @@ function DigestsPanel({orgId,isAr}) {
 
       {/* Edit panel */}
       {editing&&(
-        <div style={{background:D.bg2,border:`1px solid ${D.blue}28`,borderRadius:14,padding:18,animation:`nh-fadeIn 250ms both`}}>
-          <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text,marginBottom:14}}>
+        <div style={{background:NHUB_TOKENS.bg2,border:`1px solid ${NHUB_TOKENS.blue}28`,borderRadius:14,padding:18,animation:`nh-fadeIn 250ms both`}}>
+          <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:NHUB_TOKENS.text,marginBottom:14}}>
             {editing.id.startsWith("d")?isAr?"تعديل الملخص":"Edit Digest":isAr?"ملخص جديد":"New Digest"}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
             <Input label={isAr?"اسم الملخص":"Digest Name"} value={editing.name} onChange={e=>setEditing(p=>({...p,name:e.target.value}))} placeholder="Weekly HR Digest"/>
             <div>
-              <label style={{display:"block",fontSize:11,fontWeight:700,color:D.text2,marginBottom:5}}>{isAr?"التكرار":"Frequency"}</label>
+              <label style={{display:"block",fontSize:11,fontWeight:700,color:NHUB_TOKENS.text2,marginBottom:5}}>{isAr?"التكرار":"Frequency"}</label>
               <select value={editing.frequency} onChange={e=>setEditing(p=>({...p,frequency:e.target.value}))}
-                style={{width:"100%",padding:"9px 13px",background:D.surf,border:`1px solid ${D.border}`,borderRadius:9,color:D.text,fontSize:12,outline:"none"}}>
+                style={{width:"100%",padding:"9px 13px",background:NHUB_TOKENS.surf,border:`1px solid ${NHUB_TOKENS.border}`,borderRadius:9,color:NHUB_TOKENS.text,fontSize:12,outline:"none"}}>
                 {["daily","weekly","monthly","custom"].map(f=><option key={f} value={f}>{FREQ_LABELS[f]||f}</option>)}
               </select>
             </div>
@@ -695,8 +695,8 @@ function IntegrationsPanel({orgId,profile,isAr}) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <div>
-        <div style={{fontFamily:SYNE,fontSize:14,fontWeight:800,color:D.text}}>{isAr?"تكاملات النظام":"System Integrations"}</div>
-        <div style={{fontSize:11,color:D.muted,marginTop:2}}>{isAr?"ربط Corvus مع منصاتك المفضلة":"Connect Corvus with your favourite platforms"}</div>
+        <div style={{fontFamily:SYNE,fontSize:14,fontWeight:800,color:NHUB_TOKENS.text}}>{isAr?"تكاملات النظام":"System Integrations"}</div>
+        <div style={{fontSize:11,color:NHUB_TOKENS.muted,marginTop:2}}>{isAr?"ربط Corvus مع منصاتك المفضلة":"Connect Corvus with your favourite platforms"}</div>
       </div>
 
       {/* Integration cards grid */}
@@ -706,12 +706,12 @@ function IntegrationsPanel({orgId,profile,isAr}) {
           const status=statuses[int.id]||(cfg.enabled?"connected":"disconnected");
           const isOpen=activeInt===int.id;
           return (
-            <div key={int.id} style={{background:D.card,border:`1px solid ${status==="connected"?int.color+"35":D.border}`,
+            <div key={int.id} style={{background:NHUB_TOKENS.card,border:`1px solid ${status==="connected"?int.color+"35":NHUB_TOKENS.border}`,
               borderRadius:14,overflow:"hidden",transition:`border-color 200ms`,
               animation:`nh-fadeIn 300ms ${i*70}ms both`}}>
               {/* Card header */}
               <div style={{padding:"16px 18px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",
-                borderBottom:isOpen?`1px solid ${D.border}`:"none"}}
+                borderBottom:isOpen?`1px solid ${NHUB_TOKENS.border}`:"none"}}
                 onClick={()=>setActiveInt(isOpen?null:int.id)}>
                 <div style={{width:42,height:42,borderRadius:12,background:`${int.color}14`,border:`1px solid ${int.color}28`,
                   display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>
@@ -719,13 +719,13 @@ function IntegrationsPanel({orgId,profile,isAr}) {
                 </div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-                    <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text}}>{int.name}</div>
+                    <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:NHUB_TOKENS.text}}>{int.name}</div>
                     <StatusDot status={status}/>
-                    {status==="connected"&&<span style={{fontSize:9,fontWeight:700,color:D.green,background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.2)",borderRadius:99,padding:"2px 8px"}}>Connected</span>}
+                    {status==="connected"&&<span style={{fontSize:9,fontWeight:700,color:NHUB_TOKENS.green,background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.2)",borderRadius:99,padding:"2px 8px"}}>Connected</span>}
                   </div>
-                  <div style={{fontSize:11,color:D.muted}}>{isAr?int.descriptionAr:int.description}</div>
+                  <div style={{fontSize:11,color:NHUB_TOKENS.muted}}>{isAr?int.descriptionAr:int.description}</div>
                 </div>
-                <span style={{color:D.muted,fontSize:16,transform:isOpen?"rotate(180deg)":"none",transition:"transform 200ms"}}>▾</span>
+                <span style={{color:NHUB_TOKENS.muted,fontSize:16,transform:isOpen?"rotate(180deg)":"none",transition:"transform 200ms"}}>▾</span>
               </div>
 
               {/* Expanded config */}
@@ -733,7 +733,7 @@ function IntegrationsPanel({orgId,profile,isAr}) {
                 <div style={{padding:"16px 18px",animation:`nh-fadeIn 200ms both`}}>
                   {/* Events this integration handles */}
                   <div style={{marginBottom:14}}>
-                    <div style={{fontSize:10,fontWeight:700,color:D.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:7}}>
+                    <div style={{fontSize:10,fontWeight:700,color:NHUB_TOKENS.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:7}}>
                       {isAr?"الأحداث المدعومة":"Supported Events"}
                     </div>
                     <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
@@ -775,7 +775,7 @@ function IntegrationsPanel({orgId,profile,isAr}) {
                   {/* Actions */}
                   <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center"}}>
                     <a href={int.docs} target="_blank" rel="noopener noreferrer"
-                      style={{fontSize:11,color:D.blue,textDecoration:"none"}}>
+                      style={{fontSize:11,color:NHUB_TOKENS.blue,textDecoration:"none"}}>
                       📖 {isAr?"وثائق API":"API Docs ↗"}
                     </a>
                     <div style={{display:"flex",gap:7}}>
@@ -841,8 +841,8 @@ function AIAlertsPanel({orgId,profile,sessions=[],allUsers=[],isAr}) {
         border:"1px solid rgba(124,58,237,.2)",borderRadius:16,padding:18}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div>
-            <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text}}>{isAr?"مولّد قواعد AI":"AI Rule Generator"}</div>
-            <div style={{fontSize:11,color:D.muted,marginTop:2}}>{isAr?"دع Corvus AI يقترح قواعد تنبيه مخصصة لبياناتك":"Let Corvus AI suggest custom alert rules based on your data"}</div>
+            <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:NHUB_TOKENS.text}}>{isAr?"مولّد قواعد AI":"AI Rule Generator"}</div>
+            <div style={{fontSize:11,color:NHUB_TOKENS.muted,marginTop:2}}>{isAr?"دع Corvus AI يقترح قواعد تنبيه مخصصة لبياناتك":"Let Corvus AI suggest custom alert rules based on your data"}</div>
           </div>
           <Btn size="sm" variant="primary" loading={aiLoading} onClick={generateAIRule} icon="🧠">
             {isAr?"توليد قواعد":"Generate Rules"}
@@ -854,7 +854,7 @@ function AIAlertsPanel({orgId,profile,sessions=[],allUsers=[],isAr}) {
           </div>
         )}
         {aiText&&!aiLoading&&(
-          <div style={{background:"rgba(255,255,255,.03)",border:`1px solid ${D.border}`,borderRadius:10,padding:14,fontSize:12,color:D.text2,lineHeight:1.75,maxHeight:220,overflowY:"auto"}}>
+          <div style={{background:"rgba(255,255,255,.03)",border:`1px solid ${NHUB_TOKENS.border}`,borderRadius:10,padding:14,fontSize:12,color:NHUB_TOKENS.text2,lineHeight:1.75,maxHeight:220,overflowY:"auto"}}>
             {aiText}
           </div>
         )}
@@ -863,28 +863,28 @@ function AIAlertsPanel({orgId,profile,sessions=[],allUsers=[],isAr}) {
       {/* Alert rules */}
       <div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text}}>{isAr?"قواعد التنبيه":"Alert Rules"}</div>
-          <span style={{fontSize:11,color:D.muted}}>{rules.filter(r=>r.enabled).length}/{rules.length} {isAr?"مفعّل":"active"}</span>
+          <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:NHUB_TOKENS.text}}>{isAr?"قواعد التنبيه":"Alert Rules"}</div>
+          <span style={{fontSize:11,color:NHUB_TOKENS.muted}}>{rules.filter(r=>r.enabled).length}/{rules.length} {isAr?"مفعّل":"active"}</span>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {rules.map((rule,i)=>(
-            <div key={rule.id} style={{background:D.card,border:`1px solid ${rule.enabled?D.border:"rgba(148,163,184,.04)"}`,
+            <div key={rule.id} style={{background:NHUB_TOKENS.card,border:`1px solid ${rule.enabled?NHUB_TOKENS.border:"rgba(148,163,184,.04)"}`,
               borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,
               opacity:rule.enabled?1:.55,transition:"opacity 200ms",animation:`nh-fadeIn 250ms ${i*60}ms both`}}>
-              <div style={{width:10,height:10,borderRadius:"50%",background:SEV_COLOR[rule.severity]||D.muted,flexShrink:0,
+              <div style={{width:10,height:10,borderRadius:"50%",background:SEV_COLOR[rule.severity]||NHUB_TOKENS.muted,flexShrink:0,
                 animation:rule.enabled&&rule.severity==="critical"?"nh-livePulse 1.8s ease-out infinite":"none"}}/>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                  <span style={{fontFamily:SYNE,fontSize:12,fontWeight:800,color:D.text}}>{rule.name}</span>
-                  <span style={{fontSize:9,padding:"2px 8px",borderRadius:99,background:`${SEV_COLOR[rule.severity]||D.muted}14`,
-                    border:`1px solid ${SEV_COLOR[rule.severity]||D.muted}28`,color:SEV_COLOR[rule.severity]||D.muted,fontWeight:700,textTransform:"uppercase"}}>
+                  <span style={{fontFamily:SYNE,fontSize:12,fontWeight:800,color:NHUB_TOKENS.text}}>{rule.name}</span>
+                  <span style={{fontSize:9,padding:"2px 8px",borderRadius:99,background:`${SEV_COLOR[rule.severity]||NHUB_TOKENS.muted}14`,
+                    border:`1px solid ${SEV_COLOR[rule.severity]||NHUB_TOKENS.muted}28`,color:SEV_COLOR[rule.severity]||NHUB_TOKENS.muted,fontWeight:700,textTransform:"uppercase"}}>
                     {rule.severity}
                   </span>
                 </div>
                 <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
-                  <div style={{fontSize:10,color:D.muted}}><span style={{color:D.text2}}>Condition:</span> <code style={{fontFamily:"monospace",fontSize:10,color:"#a78bfa"}}>{rule.condition}</code></div>
-                  <div style={{fontSize:10,color:D.muted}}><span style={{color:D.text2}}>Action:</span> {rule.action}</div>
-                  <div style={{fontSize:10,color:D.muted}}>{isAr?"تفعيل":"Triggered"}: {rule.triggered}× · {rule.lastTriggered}</div>
+                  <div style={{fontSize:10,color:NHUB_TOKENS.muted}}><span style={{color:NHUB_TOKENS.text2}}>Condition:</span> <code style={{fontFamily:"monospace",fontSize:10,color:"#a78bfa"}}>{rule.condition}</code></div>
+                  <div style={{fontSize:10,color:NHUB_TOKENS.muted}}><span style={{color:NHUB_TOKENS.text2}}>Action:</span> {rule.action}</div>
+                  <div style={{fontSize:10,color:NHUB_TOKENS.muted}}>{isAr?"تفعيل":"Triggered"}: {rule.triggered}× · {rule.lastTriggered}</div>
                 </div>
               </div>
               <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
@@ -953,15 +953,15 @@ function InAppNotifications({profile,sessions=[],isAr}) {
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{fontFamily:SYNE,fontSize:14,fontWeight:800,color:D.text}}>{isAr?"الإشعارات":"Notifications"}</div>
-          {unread>0&&<span style={{background:D.red,borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,color:"#fff"}}>{unread}</span>}
+          <div style={{fontFamily:SYNE,fontSize:14,fontWeight:800,color:NHUB_TOKENS.text}}>{isAr?"الإشعارات":"Notifications"}</div>
+          {unread>0&&<span style={{background:NHUB_TOKENS.red,borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,color:"#fff"}}>{unread}</span>}
         </div>
         <div style={{display:"flex",gap:8}}>
           {["all","unread"].map(f=>(
             <button key={f} onClick={()=>setFilterRead(f)} style={{padding:"5px 13px",borderRadius:99,cursor:"pointer",fontSize:11,fontWeight:700,
               background:filterRead===f?"rgba(26,86,219,.14)":"transparent",
-              border:`1px solid ${filterRead===f?"rgba(26,86,219,.35)":D.border}`,
-              color:filterRead===f?D.blue:D.muted,transition:"all 150ms"}}>
+              border:`1px solid ${filterRead===f?"rgba(26,86,219,.35)":NHUB_TOKENS.border}`,
+              color:filterRead===f?NHUB_TOKENS.blue:NHUB_TOKENS.muted,transition:"all 150ms"}}>
               {f==="all"?(isAr?"الكل":"All"):(isAr?"غير مقروء":"Unread")}
             </button>
           ))}
@@ -975,15 +975,15 @@ function InAppNotifications({profile,sessions=[],isAr}) {
       <div style={{display:"flex",flexDirection:"column",gap:2}}>
         {filtered.map((n,i)=>(
           <div key={n.id}
-            style={{background:n.read?D.card:`${n.color}08`,
-              border:`1px solid ${n.read?D.border:`${n.color}22`}`,
+            style={{background:n.read?NHUB_TOKENS.card:`${n.color}08`,
+              border:`1px solid ${n.read?NHUB_TOKENS.border:`${n.color}22`}`,
               borderRadius:12,padding:"14px 16px",
               display:"flex",gap:12,alignItems:"flex-start",
               transition:`all 200ms`,cursor:"pointer",
               animation:`nh-fadeIn 200ms ${i*40}ms both`,
               position:"relative",overflow:"hidden"}}
             onMouseEnter={e=>e.currentTarget.style.borderColor=n.color+"35"}
-            onMouseLeave={e=>e.currentTarget.style.borderColor=n.read?D.border:`${n.color}22`}
+            onMouseLeave={e=>e.currentTarget.style.borderColor=n.read?NHUB_TOKENS.border:`${n.color}22`}
             onClick={()=>markRead(n.id)}>
             {!n.read&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:n.color,borderRadius:"0 2px 2px 0"}}/>}
             <div style={{width:40,height:40,borderRadius:11,background:`${n.color}14`,border:`1px solid ${n.color}22`,
@@ -992,14 +992,14 @@ function InAppNotifications({profile,sessions=[],isAr}) {
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:3}}>
-                <span style={{fontFamily:SYNE,fontSize:12,fontWeight:800,color:n.read?D.text2:D.text}}>{n.title}</span>
+                <span style={{fontFamily:SYNE,fontSize:12,fontWeight:800,color:n.read?NHUB_TOKENS.text2:NHUB_TOKENS.text}}>{n.title}</span>
                 <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
-                  <span style={{fontSize:10,color:D.muted,whiteSpace:"nowrap"}}>{timeAgo(n.time)}</span>
+                  <span style={{fontSize:10,color:NHUB_TOKENS.muted,whiteSpace:"nowrap"}}>{timeAgo(n.time)}</span>
                   {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:n.color,flexShrink:0}}/>}
-                  <button onClick={e=>{e.stopPropagation();dismiss(n.id);}} style={{background:"none",border:"none",color:D.muted,cursor:"pointer",fontSize:12,padding:"0 2px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                  <button onClick={e=>{e.stopPropagation();dismiss(n.id);}} style={{background:"none",border:"none",color:NHUB_TOKENS.muted,cursor:"pointer",fontSize:12,padding:"0 2px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
                 </div>
               </div>
-              <div style={{fontSize:12,color:n.read?D.muted:D.text2,lineHeight:1.55,marginBottom:8}}>{n.body}</div>
+              <div style={{fontSize:12,color:n.read?NHUB_TOKENS.muted:NHUB_TOKENS.text2,lineHeight:1.55,marginBottom:8}}>{n.body}</div>
               <div style={{display:"flex",gap:6}}>
                 {n.actions.map(a=>(
                   <button key={a.key} onClick={e=>{e.stopPropagation();markRead(n.id);}}
@@ -1014,7 +1014,7 @@ function InAppNotifications({profile,sessions=[],isAr}) {
           </div>
         ))}
         {filtered.length===0&&(
-          <div style={{padding:"48px 24px",textAlign:"center",fontSize:13,color:D.muted}}>
+          <div style={{padding:"48px 24px",textAlign:"center",fontSize:13,color:NHUB_TOKENS.muted}}>
             {isAr?"🎉 لا توجد إشعارات جديدة":"🎉 You're all caught up!"}
           </div>
         )}
@@ -1043,7 +1043,7 @@ export function NotificationsHub({ orgId, profile, sessions=[], allUsers=[], cs,
       WebkitBackdropFilter:"blur(10px)",zIndex:9200,display:"flex",alignItems:"center",
       justifyContent:"center",padding:16}}>
       <div style={{
-        background:D.bg, border:`1px solid ${D.border}`,
+        background:NHUB_TOKENS.bg, border:`1px solid ${NHUB_TOKENS.border}`,
         borderRadius:20, width:"min(980px,97vw)", height:"min(840px,96vh)",
         display:"flex", flexDirection:"column", overflow:"hidden",
         direction:isAr?"rtl":"ltr",
@@ -1051,15 +1051,15 @@ export function NotificationsHub({ orgId, profile, sessions=[], allUsers=[], cs,
         animation:`nh-slideUp 350ms ${SPRING} both`,
       }}>
         {/* HEADER */}
-        <div style={{padding:"18px 22px",borderBottom:`1px solid ${D.border}`,flexShrink:0}}>
+        <div style={{padding:"18px 22px",borderBottom:`1px solid ${NHUB_TOKENS.border}`,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{display:"flex",alignItems:"center",gap:11}}>
               <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#1a56db,#0891b2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,boxShadow:"0 4px 16px rgba(26,86,219,.4)"}}>🔔</div>
               <div>
-                <div style={{fontFamily:SYNE,fontSize:15,fontWeight:800,color:D.text,letterSpacing:"-.02em"}}>
+                <div style={{fontFamily:SYNE,fontSize:15,fontWeight:800,color:NHUB_TOKENS.text,letterSpacing:"-.02em"}}>
                   {isAr?"مركز الإشعارات والتكاملات":"Notifications & Integrations Hub"}
                 </div>
-                <div style={{fontSize:10,color:D.teal,fontWeight:600,marginTop:1}}>
+                <div style={{fontSize:10,color:NHUB_TOKENS.teal,fontWeight:600,marginTop:1}}>
                   {isAr?"طابور ذكي · ملخصات مجدولة · Slack · Teams · Jira · Zoom":"Smart queue · Scheduled digests · Slack · Teams · Jira · Zoom"}
                 </div>
               </div>
@@ -1068,18 +1068,18 @@ export function NotificationsHub({ orgId, profile, sessions=[], allUsers=[], cs,
               {/* Live queue indicator */}
               <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.2)",borderRadius:99,padding:"5px 12px"}}>
                 <StatusDot status="connected"/>
-                <span style={{fontSize:10,fontWeight:700,color:D.green}}>{globalQueue.pending.length} {isAr?"في الطابور":"in queue"}</span>
+                <span style={{fontSize:10,fontWeight:700,color:NHUB_TOKENS.green}}>{globalQueue.pending.length} {isAr?"في الطابور":"in queue"}</span>
               </div>
-              <button onClick={onClose} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,.06)",border:`1px solid ${D.border}`,color:D.muted,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              <button onClick={onClose} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,.06)",border:`1px solid ${NHUB_TOKENS.border}`,color:NHUB_TOKENS.muted,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
             </div>
           </div>
 
           {/* Integration status pills */}
           <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
             {Object.values(INTEGRATIONS_META).map(int=>(
-              <div key={int.id} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.04)",border:`1px solid ${D.border}`,borderRadius:99,padding:"4px 12px"}}>
+              <div key={int.id} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.04)",border:`1px solid ${NHUB_TOKENS.border}`,borderRadius:99,padding:"4px 12px"}}>
                 <span style={{fontSize:12}}>{int.icon}</span>
-                <span style={{fontSize:10,fontWeight:600,color:D.muted}}>{int.name}</span>
+                <span style={{fontSize:10,fontWeight:600,color:NHUB_TOKENS.muted}}>{int.name}</span>
                 <StatusDot status="disconnected"/>
               </div>
             ))}
@@ -1087,12 +1087,12 @@ export function NotificationsHub({ orgId, profile, sessions=[], allUsers=[], cs,
         </div>
 
         {/* TABS */}
-        <div style={{display:"flex",borderBottom:`1px solid ${D.border}`,flexShrink:0,overflowX:"auto"}}>
+        <div style={{display:"flex",borderBottom:`1px solid ${NHUB_TOKENS.border}`,flexShrink:0,overflowX:"auto"}}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{
               flex:1,padding:"12px 8px",background:"none",border:"none",
-              borderBottom:`2px solid ${tab===t.id?D.blue:"transparent"}`,
-              color:tab===t.id?"#60a5fa":D.muted,
+              borderBottom:`2px solid ${tab===t.id?NHUB_TOKENS.blue:"transparent"}`,
+              color:tab===t.id?"#60a5fa":NHUB_TOKENS.muted,
               fontSize:11,fontWeight:700,cursor:"pointer",
               display:"flex",flexDirection:"column",alignItems:"center",gap:3,
               transition:"color 150ms",minWidth:90,whiteSpace:"nowrap",

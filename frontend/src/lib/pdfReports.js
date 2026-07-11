@@ -51,7 +51,7 @@ export async function exportPDFReport({ type, sessions, session, profile, aiSumm
 // ═══════════════════════════════════════════════════════════════════
 
 // ── Extended Design Tokens ─────────────────────────────────────────
-const T = {
+const PDF_TOKENS = {
   // Core brand
   primary:   [37,99,235],   primaryDk:[30,64,175],  primaryLt:[239,246,255],
   success:   [34,197,94],   successDk:[21,128,61],  successLt:[240,253,244],
@@ -80,7 +80,7 @@ const T = {
 };
 
 // ── Typography Scale — 8pt baseline grid ──────────────────────────
-const F = {
+const PDF_FLAGS = {
   display:   28,   // Hero numbers, cover title
   h1:        17,   // Page section title
   h2:        13,   // Subsection
@@ -98,7 +98,7 @@ const SP = { xs:2, sm:4, md:8, lg:12, xl:20, xxl:32, page:18 };
 
 
 // ── Core helpers ───────────────────────────────────────────────────
-function _sc(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
+function _sc(s){ return s>=80?PDF_TOKENS.success:s>=60?PDF_TOKENS.warning:PDF_TOKENS.danger; }
 const _scoreColor = _sc; // alias used in Comparison + Longitudinal + Team PDFs
 function _scoreLabel(s,isAr){
   if(s>=80) return isAr?"ممتاز":"Excellent";
@@ -108,10 +108,10 @@ function _scoreLabel(s,isAr){
 }
 // Normalize tier string aliases (personal_elite→elite, b2b_growth→professional, etc.)
 const _t = t => (!t?"standard":t.includes("elite")||t==="enterprise"||t==="premium"?"elite":t.includes("pro")||t.includes("professional")||t==="growth"?"professional":t);
-function _scLt(s){ return s>=80?T.successLt:s>=60?T.warningLt:T.dangerLt; }
+function _scLt(s){ return s>=80?PDF_TOKENS.successLt:s>=60?PDF_TOKENS.warningLt:PDF_TOKENS.dangerLt; }
 function _sl(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Work"); }
 function _riskLabel(v,ar){ return v>=70?(ar?"عالي":"High"):v>=40?(ar?"متوسط":"Moderate"):(ar?"منخفض":"Low"); }
-function _riskColor(v){ return v>=70?T.danger:v>=40?T.warning:T.success; }
+function _riskColor(v){ return v>=70?PDF_TOKENS.danger:v>=40?PDF_TOKENS.warning:PDF_TOKENS.success; }
 function _fmtDur(s){ if(!s)return"—"; const m=Math.floor(s/60),r=s%60; return m>0?`${m}m ${r}s`:`${r}s`; }
 function _fmtDate(ts,ar){
   if(!ts)return"—";
@@ -134,8 +134,8 @@ function fc(doc,...c){doc.setFillColor(...c);}
 function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
 function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
-function hr(doc,x,y,w,col=T.border,thickness=0.18){dc(doc,...col);lw(doc,thickness);doc.line(x,y,x+w,y);lw(doc,0.3);}
-function vl(doc,x,y,h,col=T.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x,y+h);lw(doc,0.3);}
+function hr(doc,x,y,w,col=PDF_TOKENS.border,thickness=0.18){dc(doc,...col);lw(doc,thickness);doc.line(x,y,x+w,y);lw(doc,0.3);}
+function vl(doc,x,y,h,col=PDF_TOKENS.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x,y+h);lw(doc,0.3);}
 
 // ── Font helper ────────────────────────────────────────────────────
 let _cairoLoaded=false, _cairoCachedB64=null;
@@ -171,8 +171,8 @@ async function _ensureLogo(){
 function _logo(doc,x,y,sz,b64){
   if(b64){try{doc.addImage(b64,"PNG",x,y,sz,sz);return;}catch{}}
   fc(doc,3,11,20);rr(doc,x,y,sz,sz,sz*.14,"F");
-  fc(doc,...T.primary);rr(doc,x+sz*.19,y+sz*.19,sz*.62,sz*.62,sz*.12,"F");
-  font(doc,sz*.42,"bold");tc(doc,...T.card);doc.text("P",x+sz/2,y+sz*.72,{align:"center"});
+  fc(doc,...PDF_TOKENS.primary);rr(doc,x+sz*.19,y+sz*.19,sz*.62,sz*.62,sz*.12,"F");
+  font(doc,sz*.42,"bold");tc(doc,...PDF_TOKENS.card);doc.text("P",x+sz/2,y+sz*.72,{align:"center"});
 }
 
 // ── _zonalRisk ─────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ function _zonalRisk(metrics){
 // ── COVER HEADER — cinematic dark with brand gradient ─────────────
 function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
   // Full bleed dark
-  fc(doc,...T.slate);doc.rect(0,0,W,76,"F");
+  fc(doc,...PDF_TOKENS.slate);doc.rect(0,0,W,76,"F");
   // Layered depth circles (brand feel)
   fc(doc,...tierCol);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.05}));
@@ -208,7 +208,7 @@ function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
   // Logo
   _logo(doc,ml,16,28,_logoMd);
   // Brand
-  font(doc,13.5,"bold");tc(doc,...T.card);doc.text("CORVUS",ml+36,30);
+  font(doc,13.5,"bold");tc(doc,...PDF_TOKENS.card);doc.text("CORVUS",ml+36,30);
   font(doc,6.5,"normal");tc(doc,130,148,180);doc.text("Health Intelligence Platform",ml+36,38);
   // Tier badge
   const tw=doc.getTextWidth(tier.toUpperCase())+12;
@@ -220,7 +220,7 @@ function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
   doc.text(tier.toUpperCase(),ml+36+tw/2,49.5,{align:"center"});
   // Right: date + label
   font(doc,6.5,"normal");tc(doc,130,148,180);doc.text(now,W-ml,27,{align:"right"});
-  font(doc,7.5,"bold");tc(doc,...T.card);doc.text(label,W-ml,37,{align:"right"});
+  font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.card);doc.text(label,W-ml,37,{align:"right"});
   if(sub){font(doc,6.5,"normal");tc(doc,130,148,180);doc.text(sub,W-ml,45,{align:"right"});}
   // Bottom divider
   fc(doc,...tierCol);doc.rect(0,73.5,W,2.5,"F");
@@ -228,30 +228,30 @@ function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
 
 // ── INNER PAGE HEADER ──────────────────────────────────────────────
 function _hdr(doc,W,ml,mr,label,isAr){
-  fc(doc,...T.bg);doc.rect(0,0,W,15,"F");
-  fc(doc,...T.primary);doc.rect(0,15,W,.35,"F");
+  fc(doc,...PDF_TOKENS.bg);doc.rect(0,0,W,15,"F");
+  fc(doc,...PDF_TOKENS.primary);doc.rect(0,15,W,.35,"F");
   _logo(doc,ml,3.5,8,_logoSm);
-  font(doc,7.5,"bold");tc(doc,...T.ink2);doc.text("Corvus",ml+12,10);
-  font(doc,6.5,"normal");tc(doc,...T.muted);doc.text("Health Intelligence",ml+28,10);
-  font(doc,7,"bold");tc(doc,...T.primary);doc.text(label,W-mr,10,{align:"right"});
+  font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.ink2);doc.text("Corvus",ml+12,10);
+  font(doc,6.5,"normal");tc(doc,...PDF_TOKENS.muted);doc.text("Health Intelligence",ml+28,10);
+  font(doc,7,"bold");tc(doc,...PDF_TOKENS.primary);doc.text(label,W-mr,10,{align:"right"});
 }
 
 // ── FOOTER ─────────────────────────────────────────────────────────
 function _ftr(doc,W,ml,mr,H,p,total,name){
-  hr(doc,0,H-10,W,T.border);
-  fc(doc,...T.bg);doc.rect(0,H-9.5,W,9.5,"F");
-  font(doc,F.micro,"normal");tc(doc,...T.ghost);
+  hr(doc,0,H-10,W,PDF_TOKENS.border);
+  fc(doc,...PDF_TOKENS.bg);doc.rect(0,H-9.5,W,9.5,"F");
+  font(doc,PDF_FLAGS.micro,"normal");tc(doc,...PDF_TOKENS.ghost);
   doc.text("Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-3.5);
-  font(doc,F.micro,"bold");tc(doc,...T.muted);
+  font(doc,PDF_FLAGS.micro,"bold");tc(doc,...PDF_TOKENS.muted);
   doc.text(name,W/2,H-3.5,{align:"center"});
   doc.text(`${p} / ${total}`,W-mr,H-3.5,{align:"right"});
 }
 
 // ── SECTION HEADING with left accent ─────────────────────────────
-function _sh(doc,ml,y,title,sub="",col=T.primary,isAr=false){
+function _sh(doc,ml,y,title,sub="",col=PDF_TOKENS.primary,isAr=false){
   fc(doc,...col);doc.rect(ml,y,2.2,sub?14:9.5,"F");
-  font(doc,F.h2,"bold",isAr);tc(doc,...T.ink);doc.text(title,ml+7,y+(sub?7:7));
-  if(sub){font(doc,F.small,"normal",isAr);tc(doc,...T.light);doc.text(sub,ml+7,y+13);}
+  font(doc,PDF_FLAGS.h2,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(title,ml+7,y+(sub?7:7));
+  if(sub){font(doc,PDF_FLAGS.small,"normal",isAr);tc(doc,...PDF_TOKENS.light);doc.text(sub,ml+7,y+13);}
   return y+(sub?21:14);
 }
 
@@ -259,7 +259,7 @@ function _sh(doc,ml,y,title,sub="",col=T.primary,isAr=false){
 function _ring(doc,cx,cy,r,score,isAr,showGrade=true){
   const col=_sc(score),lbl=_sl(score,isAr);
   // Outer track
-  dc(doc,...T.borderSoft);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
+  dc(doc,...PDF_TOKENS.borderSoft);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
   // Inner tint
   fc(doc,...col);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
@@ -268,18 +268,18 @@ function _ring(doc,cx,cy,r,score,isAr,showGrade=true){
   // Score arc
   dc(doc,...col);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
   // Number
-  font(doc,F.dataXl,"bold");tc(doc,...col);
+  font(doc,PDF_FLAGS.dataXl,"bold");tc(doc,...col);
   doc.text(String(score),cx,cy+4,{align:"center"});
-  font(doc,F.micro+.5,"normal");tc(doc,...T.muted);
+  font(doc,PDF_FLAGS.micro+.5,"normal");tc(doc,...PDF_TOKENS.muted);
   doc.text("/100",cx,cy+10,{align:"center"});
-  if(showGrade){font(doc,F.small+.5,"bold",isAr);tc(doc,...col);doc.text(lbl,cx,cy+r+8,{align:"center"});}
+  if(showGrade){font(doc,PDF_FLAGS.small+.5,"bold",isAr);tc(doc,...col);doc.text(lbl,cx,cy+r+8,{align:"center"});}
 }
 
 // ── METRIC ROW v5 ─────────────────────────────────────────────────
 function _mRow(doc,x,y,w,lbl,value,unit,score,isAr,idx=0){
   const col=_sc(score),colLt=_scLt(score),h=22;
-  fc(doc,...(idx%2===0?T.card:T.bg));rr(doc,x,y,w,h,3,"F");
-  dc(doc,...T.borderSoft);lw(doc,0.15);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
+  fc(doc,...(idx%2===0?PDF_TOKENS.card:PDF_TOKENS.bg));rr(doc,x,y,w,h,3,"F");
+  dc(doc,...PDF_TOKENS.borderSoft);lw(doc,0.15);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
   // Left accent
   fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
   // Score chip
@@ -287,15 +287,15 @@ function _mRow(doc,x,y,w,lbl,value,unit,score,isAr,idx=0){
   font(doc,8.5,"bold");tc(doc,...col);
   doc.text(String(Math.round(score)),x+14,y+12.5,{align:"center"});
   // Label
-  font(doc,9,"bold",isAr);tc(doc,...T.ink);doc.text(lbl,x+27,y+9.5);
+  font(doc,9,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(lbl,x+27,y+9.5);
   // Value
   if(value!==undefined&&value!==null){
-    font(doc,7.5,"normal");tc(doc,...T.muted);
+    font(doc,7.5,"normal");tc(doc,...PDF_TOKENS.muted);
     doc.text(`${Math.round(value*10)/10}${unit||""}`,x+27,y+16.5);
   }
   // Progress bar
   const bx=x+w*.52,bw=w*.44,bh=5;
-  fc(doc,...T.borderSoft);rr(doc,bx,y+8.5,bw,bh,2,"F");
+  fc(doc,...PDF_TOKENS.borderSoft);rr(doc,bx,y+8.5,bw,bh,2,"F");
   fc(doc,...col);rr(doc,bx,y+8.5,Math.max(bw*(score/100),3),bh,2,"F");
   // Grade
   const gl=_sl(score,isAr);
@@ -304,23 +304,23 @@ function _mRow(doc,x,y,w,lbl,value,unit,score,isAr,idx=0){
   doc.setGState&&doc.setGState(new doc.GState({opacity:.1}));
   rr(doc,x+w-gw-3,y+14.5,gw,6,2,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,F.micro+.5,"bold",isAr);tc(doc,...col);
+  font(doc,PDF_FLAGS.micro+.5,"bold",isAr);tc(doc,...col);
   doc.text(gl,x+w-gw/2-3,y+18.5,{align:"center"});
 }
 
 // ── KPI CHIP v5 — elevated with top accent ─────────────────────────
 function _kpi(doc,x,y,w,h,val,label,col,sub=""){
-  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
-  dc(doc,...T.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  fc(doc,...PDF_TOKENS.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...PDF_TOKENS.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
   // Top color accent
   fc(doc,...col);rr(doc,x,y,w,3,2,"F");doc.rect(x,y+1.5,w,1.5,"F");
   // Value
-  font(doc,F.dataLg,"bold");tc(doc,...col);
+  font(doc,PDF_FLAGS.dataLg,"bold");tc(doc,...col);
   doc.text(String(val),x+w/2,y+h*.56,{align:"center"});
   // Label
-  font(doc,F.small,"bold");tc(doc,...T.muted);
+  font(doc,PDF_FLAGS.small,"bold");tc(doc,...PDF_TOKENS.muted);
   doc.text(label,x+w/2,y+h*.78,{align:"center"});
-  if(sub){font(doc,F.micro,"normal");tc(doc,...T.light);doc.text(sub,x+w/2,y+h*.9,{align:"center"});}
+  if(sub){font(doc,PDF_FLAGS.micro,"normal");tc(doc,...PDF_TOKENS.light);doc.text(sub,x+w/2,y+h*.9,{align:"center"});}
 }
 
 // ── SPARKLINE v5 ─────────────────────────────────────────────────
@@ -334,8 +334,8 @@ function _spark(doc,hist,x,y,w,h,col){
   [50,65,80].forEach(v=>{
     if(v<lo||v>hi)return;
     const gy=y+h-((v-lo)/rng)*h;
-    dc(doc,...T.borderSoft);lw(doc,0.12);doc.line(x,gy,x+w,gy);
-    font(doc,5,"normal");tc(doc,...T.ghost);doc.text(String(v),x-2,gy+1.5,{align:"right"});
+    dc(doc,...PDF_TOKENS.borderSoft);lw(doc,0.12);doc.line(x,gy,x+w,gy);
+    font(doc,5,"normal");tc(doc,...PDF_TOKENS.ghost);doc.text(String(v),x-2,gy+1.5,{align:"right"});
   });lw(doc,0.3);
   // Area
   try{
@@ -349,7 +349,7 @@ function _spark(doc,hist,x,y,w,h,col){
   dc(doc,...col);lw(doc,1.4);
   co.forEach((p,i)=>{if(i>0)doc.line(co[i-1].px,co[i-1].py,p.px,p.py);});lw(doc,0.3);
   // Endpoints
-  fc(doc,...T.card);doc.circle(co[0].px,co[0].py,2,"F");
+  fc(doc,...PDF_TOKENS.card);doc.circle(co[0].px,co[0].py,2,"F");
   dc(doc,...col);lw(doc,0.8);doc.circle(co[0].px,co[0].py,2,"S");lw(doc,0.3);
   fc(doc,...col);doc.circle(co[co.length-1].px,co[co.length-1].py,2.5,"F");
   font(doc,6.5,"bold");tc(doc,...col);
@@ -359,15 +359,15 @@ function _spark(doc,hist,x,y,w,h,col){
 
 // ── CALLOUT STRIP ─────────────────────────────────────────────────
 function _callout(doc,x,y,w,text,type="info",isAr=false){
-  const cols={info:T.primary,success:T.success,warning:T.warning,danger:T.danger};
-  const col=cols[type]||T.primary;
-  const colBg={info:T.primaryBg,success:T.successBg,warning:T.warningBg,danger:T.dangerBg};
+  const cols={info:PDF_TOKENS.primary,success:PDF_TOKENS.success,warning:PDF_TOKENS.warning,danger:PDF_TOKENS.danger};
+  const col=cols[type]||PDF_TOKENS.primary;
+  const colBg={info:PDF_TOKENS.primaryBg,success:PDF_TOKENS.successBg,warning:PDF_TOKENS.warningBg,danger:PDF_TOKENS.dangerBg};
   const lines=doc.splitTextToSize(text.replace(/[#*`]/g,""),w-14);
   const h=Math.max(14,lines.length*5.2+8);
-  fc(doc,...(colBg[type]||T.bg));rr(doc,x,y,w,h,3,"F");
+  fc(doc,...(colBg[type]||PDF_TOKENS.bg));rr(doc,x,y,w,h,3,"F");
   dc(doc,...col);lw(doc,0.2);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
   fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
-  font(doc,F.body,"normal",isAr);tc(doc,...T.sub);
+  font(doc,PDF_FLAGS.body,"normal",isAr);tc(doc,...PDF_TOKENS.sub);
   lines.forEach((l,i)=>doc.text(l,x+7,y+7+(i*5.2)));
   return y+h+6;
 }
@@ -375,15 +375,15 @@ function _callout(doc,x,y,w,text,type="info",isAr=false){
 // ── STEP CARD v5 ─────────────────────────────────────────────────
 function _step(doc,x,y,w,num,title,score,steps,isAr){
   const col=_sc(score),colLt=_scLt(score),h=46;
-  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
-  dc(doc,...T.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  fc(doc,...PDF_TOKENS.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...PDF_TOKENS.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
   fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
   // Number circle
   fc(doc,...colLt);doc.circle(x+15,y+14,9,"F");
   dc(doc,...col);lw(doc,.8);doc.circle(x+15,y+14,9,"S");lw(doc,0.3);
   font(doc,10,"bold");tc(doc,...col);doc.text(String(num),x+15,y+17.5,{align:"center"});
   // Title + score
-  font(doc,10,"bold",isAr);tc(doc,...T.ink);doc.text(title,x+30,y+12);
+  font(doc,10,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(title,x+30,y+12);
   const sb=`${Math.round(score)}/100`;const sw=doc.getTextWidth(sb)+7;
   fc(doc,...col);
   doc.setGState&&doc.setGState(new doc.GState({opacity:.1}));
@@ -391,10 +391,10 @@ function _step(doc,x,y,w,num,title,score,steps,isAr){
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   font(doc,6.5,"bold");tc(doc,...col);doc.text(sb,x+w-sw/2-4,y+10.5,{align:"center"});
   // Steps
-  font(doc,7.5,"normal",isAr);tc(doc,...T.sub);
+  font(doc,7.5,"normal",isAr);tc(doc,...PDF_TOKENS.sub);
   steps.slice(0,3).forEach((s,i)=>{
     font(doc,7.5,"bold");tc(doc,...col);doc.text(`${i+1}.`,x+30,y+22+(i*7));
-    font(doc,7.5,"normal",isAr);tc(doc,...T.sub);
+    font(doc,7.5,"normal",isAr);tc(doc,...PDF_TOKENS.sub);
     doc.text(doc.splitTextToSize(s,w-40)[0],x+36,y+22+(i*7));
   });
   return y+h+8;
@@ -405,15 +405,15 @@ function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
   const col=_riskColor(risk);
   const lines=doc.splitTextToSize(desc,w-50);
   const h=Math.max(48,lines.length*5+34);
-  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
+  fc(doc,...PDF_TOKENS.card);rr(doc,x,y,w,h,4,"F");
   dc(doc,...col);lw(doc,0.25);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
   fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
   // Risk badge
   fc(doc,...col);doc.circle(x+18,y+h/2,11,"F");
-  font(doc,9.5,"bold");tc(doc,...T.card);doc.text(`${risk}%`,x+18,y+h/2+3.5,{align:"center"});
+  font(doc,9.5,"bold");tc(doc,...PDF_TOKENS.card);doc.text(`${risk}%`,x+18,y+h/2+3.5,{align:"center"});
   // Title
-  font(doc,10,"bold",isAr);tc(doc,...T.ink);doc.text(name,x+35,y+12);
-  font(doc,7.5,"bold");tc(doc,...T.primary);doc.text(region,x+35,y+19);
+  font(doc,10,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(name,x+35,y+12);
+  font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.primary);doc.text(region,x+35,y+19);
   // Risk label
   const rlbl=_riskLabel(risk,isAr);
   const rw=doc.getTextWidth(rlbl)+8;
@@ -424,21 +424,21 @@ function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
   font(doc,7.5,"bold",isAr);tc(doc,...col);doc.text(rlbl,x+w-rw/2-4,y+12,{align:"center"});
   // Bar
   const bx=x+35,bw=w*.52;
-  fc(doc,...T.borderSoft);rr(doc,bx,y+23,bw,4.5,2,"F");
+  fc(doc,...PDF_TOKENS.borderSoft);rr(doc,bx,y+23,bw,4.5,2,"F");
   fc(doc,...col);rr(doc,bx,y+23,Math.max(bw*(risk/100),3),4.5,2,"F");
   // Desc
-  font(doc,7.5,"normal",isAr);tc(doc,...T.sub);
+  font(doc,7.5,"normal",isAr);tc(doc,...PDF_TOKENS.sub);
   lines.forEach((l,i)=>doc.text(l,x+7,y+32+(i*5)));
-  font(doc,6,"bold");tc(doc,...T.ghost);
+  font(doc,6,"bold");tc(doc,...PDF_TOKENS.ghost);
   doc.text(`Sources: ${mlist}`,x+7,y+h-4);
   return y+h+6;
 }
 
 // ── INFO TABLE ROW ────────────────────────────────────────────────
 function _iRow(doc,x,y,w,key,val,even,isAr){
-  fc(doc,...(even?T.bg:T.card));doc.rect(x,y,w,8.5,"F");
-  font(doc,F.small,"normal",isAr);tc(doc,...T.muted);doc.text(key,x+5,y+5.8);
-  font(doc,F.small,"bold");tc(doc,...T.ink);doc.text(String(val),x+w-5,y+5.8,{align:"right"});
+  fc(doc,...(even?PDF_TOKENS.bg:PDF_TOKENS.card));doc.rect(x,y,w,8.5,"F");
+  font(doc,PDF_FLAGS.small,"normal",isAr);tc(doc,...PDF_TOKENS.muted);doc.text(key,x+5,y+5.8);
+  font(doc,PDF_FLAGS.small,"bold");tc(doc,...PDF_TOKENS.ink);doc.text(String(val),x+w-5,y+5.8,{align:"right"});
 }
 
 // ── _drawSparkline alias ──────────────────────────────────────────
@@ -1592,14 +1592,14 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const now = new Date();
   const nowStr = now.toLocaleDateString(isAr?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"});
   const name   = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
-  const tierCol= tierAtLeast(tier,"elite")?T.success:T.cyan;
+  const tierCol= tierAtLeast(tier,"elite")?PDF_TOKENS.success:PDF_TOKENS.cyan;
   const tierLbl= tier.charAt(0).toUpperCase()+tier.slice(1);
 
   // ── DATA ──────────────────────────────────────────────────────
   const a1=Math.round(session1.avg_score||0), a2=Math.round(session2.avg_score||0);
   const delta=a2-a1, improved=delta>0, declined=delta<0;
-  const deltaCol = delta>0?T.success:delta<0?T.danger:T.muted;
-  const deltaBg  = delta>0?T.successBg:delta<0?T.dangerBg:T.bg;
+  const deltaCol = delta>0?PDF_TOKENS.success:delta<0?PDF_TOKENS.danger:PDF_TOKENS.muted;
+  const deltaBg  = delta>0?PDF_TOKENS.successBg:delta<0?PDF_TOKENS.dangerBg:PDF_TOKENS.bg;
   const g1=_scoreColor(a1), g2=_scoreColor(a2);
 
   const idx1=allSessions.findIndex(s=>(s.id||s.session_id)===(session1.id||session1.session_id));
@@ -1628,7 +1628,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // ══════════════════════════════════════════════════════════════
 
   // Dark header
-  fc(doc,...T.slate); doc.rect(0,0,W,72,"F");
+  fc(doc,...PDF_TOKENS.slate); doc.rect(0,0,W,72,"F");
   fc(doc,...deltaCol);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
   doc.circle(W*0.85,36,55,"F");
@@ -1639,7 +1639,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 
   // Logo + brand
   _logo(doc,ml,16,26,_logoMd);
-  font(doc,13,"bold"); tc(doc,...T.card); doc.text("CORVUS",ml+34,28);
+  font(doc,13,"bold"); tc(doc,...PDF_TOKENS.card); doc.text("CORVUS",ml+34,28);
   font(doc,7,"normal"); tc(doc,148,163,184); doc.text("Health Intelligence Platform",ml+34,36);
 
   // Tier badge
@@ -1653,16 +1653,16 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 
   // Date right
   font(doc,7,"normal"); tc(doc,148,163,184); doc.text(nowStr,W-mr,26,{align:"right"});
-  font(doc,7.5,"bold"); tc(doc,...T.card);
+  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
   doc.text(`Session #${num1} vs #${num2}`,W-mr,36,{align:"right"});
 
   fc(doc,...deltaCol); doc.rect(0,69.5,W,2.5,"F");
 
   // Title
   let y=86;
-  font(doc,20,"bold"); tc(doc,...T.ink);
+  font(doc,20,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"تقرير المقارنة":"Session Comparison Report",ml,y); y+=9;
-  font(doc,9,"normal"); tc(doc,...T.muted);
+  font(doc,9,"normal"); tc(doc,...PDF_TOKENS.muted);
   doc.text(`${name} · ${isAr?"مقارنة جلستين":"Head-to-head session analysis"}`,ml,y); y+=16;
   hr(doc,ml,y,cw); y+=14;
 
@@ -1670,12 +1670,12 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const heroH=70, half=(cw-14)/2;
 
   // Session 1 card
-  fc(doc,...T.card); rr(doc,ml,y,half,heroH,6,"F");
+  fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,half,heroH,6,"F");
   dc(doc,...g1); lw(doc,0.3); rr(doc,ml,y,half,heroH,6,"S"); lw(doc,0.3);
   fc(doc,...g1); doc.rect(ml,y,half,3,"F"); rr(doc,ml,y,half,3,3,"F");
   // Session number chip
   const s1lbl=`Session #${num1}`;
-  font(doc,7,"bold"); tc(doc,...T.card);
+  font(doc,7,"bold"); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g1); rr(doc,ml+6,y+8,half-12,10,2,"F");
   doc.text(s1lbl,ml+6+(half-12)/2,y+14.5,{align:"center"});
   // Score ring
@@ -1686,7 +1686,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   font(doc,20,"bold"); tc(doc,...g1);
   doc.text(String(a1),ml+half/2,y+45,{align:"center"});
-  font(doc,7,"normal"); tc(doc,...T.muted);
+  font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
   doc.text("/100",ml+half/2,y+52,{align:"center"});
   font(doc,8.5,"bold"); tc(doc,...g1);
   doc.text(_scoreLabel(a1,isAr),ml+half/2,y+62,{align:"center"});
@@ -1704,16 +1704,16 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   font(doc,7,"bold"); tc(doc,...deltaCol);
   doc.text(`${delta>0?"+":""}${delta}`,mx,y+41,{align:"center"});
   // VS label
-  font(doc,6.5,"bold"); tc(doc,...T.muted);
+  font(doc,6.5,"bold"); tc(doc,...PDF_TOKENS.muted);
   doc.text("VS",mx,y+52,{align:"center"});
 
   // Session 2 card
   const rx=mx+7;
-  fc(doc,...T.card); rr(doc,rx,y,half,heroH,6,"F");
+  fc(doc,...PDF_TOKENS.card); rr(doc,rx,y,half,heroH,6,"F");
   dc(doc,...g2); lw(doc,0.3); rr(doc,rx,y,half,heroH,6,"S"); lw(doc,0.3);
   fc(doc,...g2); doc.rect(rx,y,half,3,"F"); rr(doc,rx,y,half,3,3,"F");
   const s2lbl=`Session #${num2}`;
-  font(doc,7,"bold"); tc(doc,...T.card);
+  font(doc,7,"bold"); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g2); rr(doc,rx+6,y+8,half-12,10,2,"F");
   doc.text(s2lbl,rx+6+(half-12)/2,y+14.5,{align:"center"});
   // Score ring
@@ -1724,7 +1724,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   font(doc,20,"bold"); tc(doc,...g2);
   doc.text(String(a2),rx+half/2,y+45,{align:"center"});
-  font(doc,7,"normal"); tc(doc,...T.muted);
+  font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
   doc.text("/100",rx+half/2,y+52,{align:"center"});
   font(doc,8.5,"bold"); tc(doc,...g2);
   doc.text(_scoreLabel(a2,isAr),rx+half/2,y+62,{align:"center"});
@@ -1732,17 +1732,17 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 
   // ── QUICK STATS STRIP ─────────────────────────────────────────
   const qStats=[
-    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr),T.primary],
-    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2),T.indigo],
-    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`,T.success],
-    [isAr?"التنبيهات":"Alerts",String(al1),String(al2),T.warning],
+    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr),PDF_TOKENS.primary],
+    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2),PDF_TOKENS.indigo],
+    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`,PDF_TOKENS.success],
+    [isAr?"التنبيهات":"Alerts",String(al1),String(al2),PDF_TOKENS.warning],
   ];
   qStats.forEach(([lbl,v1,v2,col],i)=>{
     const qy=y+i*12;
-    if(i%2===0){fc(doc,...T.bg); doc.rect(ml,qy,cw,12,"F");}
-    font(doc,7.5,"normal",isAr); tc(doc,...T.muted); doc.text(lbl,ml+4,qy+8);
+    if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,qy,cw,12,"F");}
+    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(lbl,ml+4,qy+8);
     font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v1,ml+cw*0.45,qy+8,{align:"right"});
-    font(doc,7.5,"bold",false); tc(doc,...T.muted); doc.text("→",ml+cw*0.5,qy+8,{align:"center"});
+    font(doc,7.5,"bold",false); tc(doc,...PDF_TOKENS.muted); doc.text("→",ml+cw*0.5,qy+8,{align:"center"});
     font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v2,ml+cw*0.98,qy+8,{align:"right"});
   });
   y+=qStats.length*12+10;
@@ -1771,20 +1771,20 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 
   // Column headers
   const colX=[ml+3,ml+cw*0.42,ml+cw*0.56,ml+cw*0.70,ml+cw*0.85];
-  fc(doc,...T.slate); rr(doc,ml,y,cw,10,2,"F");
-  font(doc,7.5,"bold"); tc(doc,...T.card);
+  fc(doc,...PDF_TOKENS.slate); rr(doc,ml,y,cw,10,2,"F");
+  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
   [isAr?"المقياس":"Metric",`#${num1}`,`#${num2}`,isAr?"Δ":"Δ",isAr?"الاتجاه":"Trend"]
     .forEach((h,i)=>doc.text(h,colX[i],y+7));
   y+=12;
 
   metRows.forEach(({lbl,sc1,sc2,d},idx)=>{
     if(y>H-28){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued",isAr);y=22;}
-    const dC=d>2?T.success:d<-2?T.danger:T.muted;
+    const dC=d>2?PDF_TOKENS.success:d<-2?PDF_TOKENS.danger:PDF_TOKENS.muted;
     const rowH=11;
-    fc(doc,...(idx%2===0?T.bg:T.card)); doc.rect(ml,y,cw,rowH,"F");
+    fc(doc,...(idx%2===0?PDF_TOKENS.bg:PDF_TOKENS.card)); doc.rect(ml,y,cw,rowH,"F");
     // Left accent for significant changes
     if(Math.abs(d)>5){ fc(doc,...dC); doc.rect(ml,y,2,rowH,"F"); }
-    font(doc,8,"normal",isAr); tc(doc,...T.ink); doc.text(lbl,colX[0]+2,y+7.5);
+    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,colX[0]+2,y+7.5);
     // Score 1 with mini dot
     const c1=_scoreColor(sc1),c2=_scoreColor(sc2);
     fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
@@ -1809,7 +1809,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // ── SPINAL ZONE COMPARISON ────────────────────────────────────
   if(y>H-90){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المناطق":"Zone Map",isAr);y=22;}
   _sh(doc,ml,y,isAr?"مقارنة مناطق العمود الفقري":"Spinal Zone Comparison",
-    isAr?"المخاطرة % — منخفض/متوسط/عالي":"Risk % — low/moderate/high",T.danger,isAr);
+    isAr?"المخاطرة % — منخفض/متوسط/عالي":"Risk % — low/moderate/high",PDF_TOKENS.danger,isAr);
   y+=16;
 
   const zones=[
@@ -1820,23 +1820,23 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   zones.forEach(({k,en,ar,r})=>{
     if(y>H-44){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
     const r1=z1[k]||0, r2=z2[k]||0, dz=r2-r1;
-    const rc1=_riskColor(r1), rc2=_riskColor(r2), dzC=dz>0?T.danger:T.success;
+    const rc1=_riskColor(r1), rc2=_riskColor(r2), dzC=dz>0?PDF_TOKENS.danger:PDF_TOKENS.success;
     const zh=36;
-    fc(doc,...T.card); rr(doc,ml,y,cw,zh,4,"F");
+    fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,zh,4,"F");
     dc(doc,...rc2); lw(doc,0.25); rr(doc,ml,y,cw,zh,4,"S"); lw(doc,0.3);
     fc(doc,...rc2); doc.rect(ml,y,3,zh,"F"); rr(doc,ml,y,3,zh,1.5,"F");
     // Zone label
-    font(doc,9.5,"bold",isAr); tc(doc,...T.ink); doc.text(isAr?ar:en,ml+9,y+10);
-    font(doc,7,"bold"); tc(doc,...T.primary); doc.text(r,ml+9,y+17);
+    font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(isAr?ar:en,ml+9,y+10);
+    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+9,y+17);
     // Two risk bars side by side
     const bw2=(cw-24)/2, barY=y+22;
     // Session 1 bar
-    fc(doc,...T.borderSoft); rr(doc,ml+9,barY,bw2,5,2,"F");
+    fc(doc,...PDF_TOKENS.borderSoft); rr(doc,ml+9,barY,bw2,5,2,"F");
     fc(doc,...rc1); rr(doc,ml+9,barY,Math.max(bw2*(r1/100),3),5,2,"F");
     font(doc,6.5,"bold"); tc(doc,...rc1);
     doc.text(`#${num1}: ${r1}%`,ml+9,barY+10);
     // Session 2 bar
-    fc(doc,...T.borderSoft); rr(doc,ml+9+bw2+4,barY,bw2,5,2,"F");
+    fc(doc,...PDF_TOKENS.borderSoft); rr(doc,ml+9+bw2+4,barY,bw2,5,2,"F");
     fc(doc,...rc2); rr(doc,ml+9+bw2+4,barY,Math.max(bw2*(r2/100),3),5,2,"F");
     font(doc,6.5,"bold"); tc(doc,...rc2);
     doc.text(`#${num2}: ${r2}%`,ml+9+bw2+4,barY+10);
@@ -1862,18 +1862,18 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const improved2=metRows.filter(r=>r.d>3).slice(0,3);
 
   if(regressed.length>0){
-    _sh(doc,ml,y,isAr?"مقاييس تراجعت — تحتاج اهتماماً":"Regressed Metrics — Needs Attention","",T.danger,isAr);
+    _sh(doc,ml,y,isAr?"مقاييس تراجعت — تحتاج اهتماماً":"Regressed Metrics — Needs Attention","",PDF_TOKENS.danger,isAr);
     y+=14;
     regressed.forEach(({lbl,sc1,sc2,d})=>{
       if(y>H-20){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
-      fc(doc,...T.dangerBg); rr(doc,ml,y,cw,14,3,"F");
-      dc(doc,...T.danger); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
-      fc(doc,...T.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-      font(doc,8.5,"bold",isAr); tc(doc,...T.danger); doc.text(lbl,ml+7,y+5.5);
-      font(doc,7.5,"normal",false); tc(doc,...T.sub);
+      fc(doc,...PDF_TOKENS.dangerBg); rr(doc,ml,y,cw,14,3,"F");
+      dc(doc,...PDF_TOKENS.danger); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
+      fc(doc,...PDF_TOKENS.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
+      font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger); doc.text(lbl,ml+7,y+5.5);
+      font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
       doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
       const bw2=cw*0.3;
-      fc(doc,...T.danger);
+      fc(doc,...PDF_TOKENS.danger);
       doc.setGState&&doc.setGState(new doc.GState({opacity:0.2}));
       rr(doc,W-mr-bw2-2,y+3,bw2*(Math.abs(d)/30),8,2,"F");
       doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
@@ -1884,15 +1884,15 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 
   if(improved2.length>0){
     if(y>H-60){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
-    _sh(doc,ml,y,isAr?"مقاييس تحسّنت — استمر":"Improved Metrics — Keep Going","",T.success,isAr);
+    _sh(doc,ml,y,isAr?"مقاييس تحسّنت — استمر":"Improved Metrics — Keep Going","",PDF_TOKENS.success,isAr);
     y+=14;
     improved2.forEach(({lbl,sc1,sc2,d})=>{
       if(y>H-20){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
-      fc(doc,...T.successBg); rr(doc,ml,y,cw,14,3,"F");
-      dc(doc,...T.success); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
-      fc(doc,...T.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-      font(doc,8.5,"bold",isAr); tc(doc,...T.success); doc.text(lbl,ml+7,y+5.5);
-      font(doc,7.5,"normal",false); tc(doc,...T.sub);
+      fc(doc,...PDF_TOKENS.successBg); rr(doc,ml,y,cw,14,3,"F");
+      dc(doc,...PDF_TOKENS.success); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
+      fc(doc,...PDF_TOKENS.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
+      font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success); doc.text(lbl,ml+7,y+5.5);
+      font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
       doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
       y+=18;
     });
@@ -1902,7 +1902,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // Action plan
   if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خطة الإجراءات":"Action Plan",isAr);y=22;}
   _sh(doc,ml,y,isAr?"خطة الإجراءات المقترحة":"Recommended Action Plan",
-    isAr?"بناءً على أبرز التغيرات بين الجلستين":"Based on most significant changes between sessions",T.primary,isAr);
+    isAr?"بناءً على أبرز التغيرات بين الجلستين":"Based on most significant changes between sessions",PDF_TOKENS.primary,isAr);
   y+=16;
 
   const NXT={
@@ -1925,8 +1925,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     const col=_scoreColor(sc2||50);
     const steps=NXT[k]||NXT.default;
     const ph=44;
-    fc(doc,...T.card); rr(doc,ml,y,cw,ph,4,"F");
-    dc(doc,...T.border); lw(doc,0.18); rr(doc,ml,y,cw,ph,4,"S"); lw(doc,0.3);
+    fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,ph,4,"F");
+    dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,ph,4,"S"); lw(doc,0.3);
     fc(doc,...col); doc.rect(ml,y,3,ph,"F"); rr(doc,ml,y,3,ph,1.5,"F");
     // Number circle
     fc(doc,...col);
@@ -1936,12 +1936,12 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     dc(doc,...col); lw(doc,1); doc.circle(ml+16,y+14,9,"S"); lw(doc,0.3);
     font(doc,10,"bold"); tc(doc,...col); doc.text(String(idx+1),ml+16,y+17.5,{align:"center"});
     // Title
-    font(doc,10,"bold",isAr); tc(doc,...T.ink); doc.text(lbl,ml+30,y+12);
-    font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
+    font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,ml+30,y+12);
+    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
     steps.slice(0,3).forEach((s,i)=>{
       font(doc,7.5,"bold"); tc(doc,...col);
       doc.text(`${i+1}.`,ml+30,y+22+(i*7));
-      font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
+      font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
       doc.text(doc.splitTextToSize(s,cw-38)[0],ml+36,y+22+(i*7));
     });
     y+=ph+8;
@@ -1949,7 +1949,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 
   // ── SESSION SUMMARY TABLE ─────────────────────────────────────
   y+=4; if(y>H-65){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الملخص":"Summary",isAr);y=22;}
-  _sh(doc,ml,y,isAr?"ملخص الجلستين":"Session Summary","",T.indigo,isAr);
+  _sh(doc,ml,y,isAr?"ملخص الجلستين":"Session Summary","",PDF_TOKENS.indigo,isAr);
   y+=14;
 
   const sumRows=[
@@ -1962,21 +1962,21 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     [isAr?"التغيّر":"Change","—",`${delta>0?"+":""}${delta} pts`],
   ];
   const th3=sumRows.length*9+3;
-  fc(doc,...T.card); rr(doc,ml,y,cw,th3,4,"F");
-  dc(doc,...T.border); lw(doc,0.18); rr(doc,ml,y,cw,th3,4,"S"); lw(doc,0.3);
+  fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,th3,4,"F");
+  dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,th3,4,"S"); lw(doc,0.3);
   // Header row
-  fc(doc,...T.slate); doc.rect(ml,y,cw,9,"F"); rr(doc,ml,y,cw,9,2,"F"); doc.rect(ml,y+5,cw,4,"F");
-  font(doc,7.5,"bold"); tc(doc,...T.card);
+  fc(doc,...PDF_TOKENS.slate); doc.rect(ml,y,cw,9,"F"); rr(doc,ml,y,cw,9,2,"F"); doc.rect(ml,y+5,cw,4,"F");
+  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
   doc.text(isAr?"البند":"Item",ml+5,y+6.5);
   doc.text(`Session #${num1}`,ml+cw*0.42,y+6.5,{align:"center"});
   doc.text(`Session #${num2}`,ml+cw*0.75,y+6.5,{align:"center"});
   y+=9;
   sumRows.forEach(([k,v1,v2],i)=>{
-    if(i%2===0){fc(doc,...T.bg); doc.rect(ml,y,cw,9,"F");}
-    font(doc,7.5,"normal",isAr); tc(doc,...T.muted); doc.text(k,ml+5,y+6.5);
+    if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,9,"F");}
+    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(k,ml+5,y+6.5);
     font(doc,7.5,"bold",false);
-    tc(doc,...(i===6?deltaCol:T.ink)); doc.text(v1,ml+cw*0.42,y+6.5,{align:"center"});
-    tc(doc,...(i===6?deltaCol:T.ink)); doc.text(v2,ml+cw*0.75,y+6.5,{align:"center"});
+    tc(doc,...(i===6?deltaCol:PDF_TOKENS.ink)); doc.text(v1,ml+cw*0.42,y+6.5,{align:"center"});
+    tc(doc,...(i===6?deltaCol:PDF_TOKENS.ink)); doc.text(v2,ml+cw*0.75,y+6.5,{align:"center"});
     y+=9;
   });
 
@@ -2024,51 +2024,51 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   const gradeC = _scoreColor(teamAvg);
 
   // ── COVER ─────────────────────────────────────────────────────
-  fc(doc,...T.ink); doc.rect(0,0,W,64,"F");
-  fc(doc,...T.primary); doc.rect(0,62,W,2,"F");
+  fc(doc,...PDF_TOKENS.ink); doc.rect(0,0,W,64,"F");
+  fc(doc,...PDF_TOKENS.primary); doc.rect(0,62,W,2,"F");
   _logo(doc,ml,14,22,_logoMd);
-  sf(9,"normal"); tc(doc,...T.muted);
+  sf(9,"normal"); tc(doc,...PDF_TOKENS.muted);
   doc.text(isAr?"تقرير صحة الوضعية للفريق":"Team Posture Health Report", ml+30,22);
   sf(7,"normal"); doc.text(`${company||profile?.company||"Organisation"} · ${nowStr}`,ml+30,29);
   sf(7,"normal"); doc.text(rangeLabel,ml+30,35);
   let y=78;
 
-  sf(18,"bold"); tc(doc,...T.ink);
+  sf(18,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?`تقرير الفريق — ${company||"المؤسسة"}`:`Team Report — ${company||"Organisation"}`,ml,y); y+=8;
-  sf(8.5,"normal"); tc(doc,...T.muted);
+  sf(8.5,"normal"); tc(doc,...PDF_TOKENS.muted);
   doc.text(isAr?`${totalU} موظف · ${rangeLabel}`:`${totalU} employees · ${rangeLabel}`,ml,y); y+=14;
 
   // KPI row
   const kpis = [
     [String(teamAvg), isAr?"متوسط الفريق":"Team Avg", gradeC],
-    [String(totalU),  isAr?"إجمالي المستخدمين":"Active Users", T.primary],
-    [String(atRisk.length),  isAr?"في خطر":"At Risk", atRisk.length>0?T.danger:T.success],
-    [String(excellent.length), isAr?"ممتاز":"Excellent", T.success],
+    [String(totalU),  isAr?"إجمالي المستخدمين":"Active Users", PDF_TOKENS.primary],
+    [String(atRisk.length),  isAr?"في خطر":"At Risk", atRisk.length>0?PDF_TOKENS.danger:PDF_TOKENS.success],
+    [String(excellent.length), isAr?"ممتاز":"Excellent", PDF_TOKENS.success],
   ];
   kpis.forEach(([v,l,col],i)=>{
     const kx=ml+i*(cw/4);
-    fc(doc,...T.bg); rr(doc,kx,y,cw/4-4,28,3,"F");
+    fc(doc,...PDF_TOKENS.bg); rr(doc,kx,y,cw/4-4,28,3,"F");
     sf(16,"bold"); tc(doc,...col);
     doc.text(v, kx+(cw/4-4)/2, y+17,{align:"center"});
-    sf(7,"normal"); tc(doc,...T.muted);
+    sf(7,"normal"); tc(doc,...PDF_TOKENS.muted);
     doc.text(l, kx+(cw/4-4)/2, y+24.5,{align:"center"});
   });
   y+=36;
 
   // Score distribution bar
-  sf(10,"bold"); tc(doc,...T.ink);
+  sf(10,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"توزيع النقاط":"Score Distribution",ml,y); y+=6;
   const bands=[
-    {label:isAr?"ممتاز (80+)":"Excellent (80+)", col:T.success, users:activeUsers.filter(u=>(u.avg_score||0)>=80)},
-    {label:isAr?"جيد (65-79)":"Good (65-79)",    col:T.primary, users:activeUsers.filter(u=>(u.avg_score||0)>=65&&(u.avg_score||0)<80)},
-    {label:isAr?"متوسط (55-64)":"Fair (55-64)",  col:T.warning, users:activeUsers.filter(u=>(u.avg_score||0)>=55&&(u.avg_score||0)<65)},
-    {label:isAr?"ضعيف (<55)":"Poor (<55)",       col:T.danger,  users:atRisk},
+    {label:isAr?"ممتاز (80+)":"Excellent (80+)", col:PDF_TOKENS.success, users:activeUsers.filter(u=>(u.avg_score||0)>=80)},
+    {label:isAr?"جيد (65-79)":"Good (65-79)",    col:PDF_TOKENS.primary, users:activeUsers.filter(u=>(u.avg_score||0)>=65&&(u.avg_score||0)<80)},
+    {label:isAr?"متوسط (55-64)":"Fair (55-64)",  col:PDF_TOKENS.warning, users:activeUsers.filter(u=>(u.avg_score||0)>=55&&(u.avg_score||0)<65)},
+    {label:isAr?"ضعيف (<55)":"Poor (<55)",       col:PDF_TOKENS.danger,  users:atRisk},
   ];
   for(const {label,col,users:bu} of bands){
     if(y>H-30){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"التوزيع":"Distribution"); y=22;}
     const pct=totalU>0?bu.length/totalU:0;
-    fc(doc,...T.bg); doc.rect(ml,y,cw,8,"F");
-    sf(7.5,"normal"); tc(doc,...T.ink); doc.text(label,ml+2,y+5.5);
+    fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8,"F");
+    sf(7.5,"normal"); tc(doc,...PDF_TOKENS.ink); doc.text(label,ml+2,y+5.5);
     fc(doc,...col); doc.rect(ml+70,y+2,Math.max((cw-74)*pct,0),4,"F");
     sf(7.5,"bold"); tc(doc,...col);
     doc.text(`${bu.length} (${Math.round(pct*100)}%)`,W-mr-2,y+5.5,{align:"right"});
@@ -2079,13 +2079,13 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   // At-Risk Users list
   if(atRisk.length>0){
     if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk Employees"); y=22;}
-    sf(10,"bold"); tc(doc,...T.danger);
+    sf(10,"bold"); tc(doc,...PDF_TOKENS.danger);
     doc.text(isAr?`الموظفون في خطر (${atRisk.length})`:`At-Risk Employees (${atRisk.length})`,ml,y); y+=5;
-    sf(7.5,"normal"); tc(doc,...T.muted);
+    sf(7.5,"normal"); tc(doc,...PDF_TOKENS.muted);
     doc.text(isAr?"متوسط الوضعية أقل من 55 — يُنصح بتدخل عاجل":"Posture avg below 55 — immediate ergonomic review recommended",ml,y); y+=7;
 
     // Table
-    fc(doc,...T.ink); rr(doc,ml,y,cw,9,1,"F");
+    fc(doc,...PDF_TOKENS.ink); rr(doc,ml,y,cw,9,1,"F");
     sf(7,"bold"); tc(doc,255,255,255);
     doc.text(isAr?"الاسم":"Name",ml+3,y+6);
     doc.text(isAr?"النتيجة":"Score",ml+cw*0.55,y+6);
@@ -2093,17 +2093,17 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     y+=11;
     for(const u of atRisk.slice(0,15)){
       if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk"); y=22;}
-      fc(doc,...T.bg); doc.rect(ml,y,cw,8,"F");
-      sf(8,"normal"); tc(doc,...T.ink);
+      fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8,"F");
+      sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
       doc.text(u.name||u.email||"—",ml+3,y+5.5);
-      sf(8,"bold"); tc(doc,...T.danger);
+      sf(8,"bold"); tc(doc,...PDF_TOKENS.danger);
       doc.text(String(Math.round(u.avg_score||0)),ml+cw*0.55,y+5.5);
-      sf(7.5,"normal"); tc(doc,...T.muted);
+      sf(7.5,"normal"); tc(doc,...PDF_TOKENS.muted);
       doc.text(u.last_session?_fmtDate(u.last_session,isAr):"—",ml+cw*0.72,y+5.5);
       y+=8;
     }
     if(atRisk.length>15){
-      sf(7.5,"normal"); tc(doc,...T.muted);
+      sf(7.5,"normal"); tc(doc,...PDF_TOKENS.muted);
       doc.text(`+ ${atRisk.length-15} ${isAr?"آخرين":"more"}`,ml,y+5); y+=10;
     }
   }
@@ -2111,10 +2111,10 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   // League table — top 10
   y+=6;
   if(y>H-70){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard"); y=22;}
-  sf(10,"bold"); tc(doc,...T.ink);
+  sf(10,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"تصنيف الأداء":"Performance Leaderboard",ml,y); y+=7;
   const sorted=[...activeUsers].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
-  fc(doc,...T.ink); rr(doc,ml,y,cw,9,1,"F");
+  fc(doc,...PDF_TOKENS.ink); rr(doc,ml,y,cw,9,1,"F");
   sf(7,"bold"); tc(doc,255,255,255);
   doc.text("#",ml+3,y+6); doc.text(isAr?"الاسم":"Name",ml+14,y+6);
   doc.text(isAr?"النتيجة":"Score",ml+cw*0.65,y+6); doc.text(isAr?"التقييم":"Grade",ml+cw*0.82,y+6);
@@ -2123,8 +2123,8 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     if(y>H-18){doc.addPage(); y=22;}
     fc(doc,i%2===0?248:255,i%2===0?250:255,i%2===0?252:255); doc.rect(ml,y,cw,8,"F");
     const sc=Math.round(u.avg_score||0); const col=_scoreColor(sc);
-    sf(8,"bold"); tc(doc,...(i<3?col:T.muted)); doc.text(String(i+1),ml+3,y+5.5);
-    sf(8,"normal"); tc(doc,...T.ink); doc.text(u.name||u.email||"—",ml+14,y+5.5);
+    sf(8,"bold"); tc(doc,...(i<3?col:PDF_TOKENS.muted)); doc.text(String(i+1),ml+3,y+5.5);
+    sf(8,"normal"); tc(doc,...PDF_TOKENS.ink); doc.text(u.name||u.email||"—",ml+14,y+5.5);
     sf(8,"bold"); tc(doc,...col); doc.text(String(sc),ml+cw*0.65,y+5.5);
     sf(7.5,"normal"); doc.text(_scoreLabel(sc,isAr),ml+cw*0.82,y+5.5);
     y+=8;
@@ -2133,7 +2133,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   // HR Recommendations
   y+=10;
   if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations"); y=22;}
-  sf(10,"bold"); tc(doc,...T.ink);
+  sf(10,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"توصيات لمدير الموارد البشرية":"HR Recommendations",ml,y); y+=7;
   const hrRecs = [
     atRisk.length>totalU*0.3
@@ -2154,8 +2154,8 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   ];
   for(const rec of hrRecs){
     if(y>H-22){doc.addPage(); y=22;}
-    fc(doc,...T.bg); rr(doc,ml,y,cw,16,2,"F");
-    sf(8,"normal"); tc(doc,...T.ink);
+    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,16,2,"F");
+    sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
     const lines=doc.splitTextToSize(rec,cw-8);
     lines.slice(0,2).forEach((l,i)=>doc.text(l,ml+4,y+7+(i*5.5)));
     y+=20;
@@ -2165,7 +2165,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   const tp=doc.internal.getNumberOfPages();
   for(let p=1;p<=tp;p++){
     doc.setPage(p);
-    fc(doc,...T.ink); doc.rect(0,H-8,W,8,"F");
+    fc(doc,...PDF_TOKENS.ink); doc.rect(0,H-8,W,8,"F");
     font(doc,6.5,"normal"); tc(doc,100,116,139);
     doc.text(`Corvus — ${isAr?"تقرير الفريق — سري":"Team Report — Confidential"} · ${nowStr}`,ml,H-2.5);
     doc.text(`${p} / ${tp}`,W-mr,H-2.5,{align:"right"});
@@ -2225,8 +2225,8 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   const avgLast    = Math.round(allScores.slice(-n3).reduce((a,b)=>a+b,0)/n3);
   const trendDelta = avgLast-avgFirst;
   const improved   = trendDelta>2, declined=trendDelta<-2;
-  const trendCol   = improved?T.success:declined?T.danger:T.muted;
-  const trendBg    = improved?T.successBg:declined?T.dangerBg:T.bg;
+  const trendCol   = improved?PDF_TOKENS.success:declined?PDF_TOKENS.danger:PDF_TOKENS.muted;
+  const trendBg    = improved?PDF_TOKENS.successBg:declined?PDF_TOKENS.dangerBg:PDF_TOKENS.bg;
 
   // Weekly day pattern
   const byDay=Array(7).fill(null).map(()=>({scores:[]}));
@@ -2261,9 +2261,9 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   // ══════════════════════════════════════════════════════════════
 
   // Full dark header band
-  fc(doc,...T.slate); doc.rect(0,0,W,80,"F");
+  fc(doc,...PDF_TOKENS.slate); doc.rect(0,0,W,80,"F");
   // Subtle accent circles
-  fc(doc,...T.indigo);
+  fc(doc,...PDF_TOKENS.indigo);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
   doc.circle(W*0.85,40,60,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.03}));
@@ -2275,7 +2275,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
 
   // Logo + brand
   _logo(doc,ml,18,26,_logoMd);
-  font(doc,13,"bold"); tc(doc,...T.card);
+  font(doc,13,"bold"); tc(doc,...PDF_TOKENS.card);
   doc.text("CORVUS",ml+34,30);
   font(doc,7,"normal"); tc(doc,148,163,184);
   doc.text("Health Intelligence Platform",ml+34,38);
@@ -2283,17 +2283,17 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   // ELITE badge
   const elbadge="* ELITE";
   const elw=doc.getTextWidth(elbadge)+12;
-  fc(doc,...T.success);
+  fc(doc,...PDF_TOKENS.success);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
   rr(doc,ml+34,43,elw,10,3,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,7.5,"bold"); tc(doc,...T.success);
+  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.success);
   doc.text(elbadge,ml+34+elw/2,50,{align:"center"});
 
   // Date + session count right
   font(doc,7,"normal"); tc(doc,148,163,184);
   doc.text(nowStr,W-mr,27,{align:"right"});
-  font(doc,7.5,"bold"); tc(doc,...T.card);
+  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
   doc.text(`${sessions.length} ${isAr?"جلسة":"sessions"} · ${weeksSpan} ${isAr?"أسبوع":"weeks"}`,W-mr,37,{align:"right"});
 
   // Bottom accent
@@ -2301,9 +2301,9 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
 
   // Report title block
   let y=96;
-  font(doc,22,"bold"); tc(doc,...T.ink);
+  font(doc,22,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"التقرير الطولي":"Longitudinal Health Report",ml,y); y+=10;
-  font(doc,10,"normal"); tc(doc,...T.muted);
+  font(doc,10,"normal"); tc(doc,...PDF_TOKENS.muted);
   doc.text(`${name} · ${isAr?"تحليل متعدد الجلسات":"Multi-session posture analysis"}`,ml,y); y+=16;
 
   // Thin divider
@@ -2314,22 +2314,22 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     [isAr?`${avgAll}`:`${avgAll}`,    isAr?"متوسط الكل":"All-time avg",  _scoreColor(avgAll)],
     [isAr?`${avg90}`:`${avg90}`,      isAr?"آخر 90 يوم":"90-day avg",    _scoreColor(avg90)],
     [`${trendDelta>0?"+":""}${trendDelta}`, isAr?`تغيّر (${avgFirst} - ${avgLast})`:`Trend (${avgFirst} - ${avgLast})`,   trendCol],
-    [String(sessions.length),          isAr?"الجلسات":"Sessions",         T.indigo],
-    [freqPerWeek,                       isAr?"جلسة/أسبوع":"Per week",     T.cyan],
-    [`${avgDurMin}m`,                   isAr?"متوسط المدة":"Avg duration", T.primary],
+    [String(sessions.length),          isAr?"الجلسات":"Sessions",         PDF_TOKENS.indigo],
+    [freqPerWeek,                       isAr?"جلسة/أسبوع":"Per week",     PDF_TOKENS.cyan],
+    [`${avgDurMin}m`,                   isAr?"متوسط المدة":"Avg duration", PDF_TOKENS.primary],
   ];
   const kw=(cw-10)/3, kh=32;
   kpis.forEach(([v,l,col],i)=>{
     const kx=ml+(i%3)*(kw+5), ky=y+Math.floor(i/3)*(kh+6);
-    fc(doc,...T.card); rr(doc,kx,ky,kw,kh,4,"F");
-    dc(doc,...T.border); lw(doc,0.18); rr(doc,kx,ky,kw,kh,4,"S"); lw(doc,0.3);
+    fc(doc,...PDF_TOKENS.card); rr(doc,kx,ky,kw,kh,4,"F");
+    dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,kx,ky,kw,kh,4,"S"); lw(doc,0.3);
     // Top accent
     fc(doc,...col); rr(doc,kx,ky,kw,3,2,"F"); doc.rect(kx,ky+1.5,kw,1.5,"F");
     // Value
     font(doc,16,"bold"); tc(doc,...col);
     doc.text(v,kx+kw/2,ky+kh*0.58,{align:"center"});
     // Label
-    font(doc,7,"bold"); tc(doc,...T.muted);
+    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.muted);
     doc.text(l,kx+kw/2,ky+kh*0.82,{align:"center"});
   });
   y+=kh*2+6*2+12;
@@ -2352,8 +2352,8 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   _sh(doc,ml,y,isAr?"مسار النقاط":"Score Trajectory",isAr?"كل الجلسات بالترتيب الزمني":"All sessions in chronological order",_scoreColor(avgAll),isAr);
   y+=14;
   const th=42;
-  fc(doc,...T.bg); rr(doc,ml,y,cw,th,4,"F");
-  dc(doc,...T.border); lw(doc,0.18); rr(doc,ml,y,cw,th,4,"S"); lw(doc,0.3);
+  fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,th,4,"F");
+  dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,th,4,"S"); lw(doc,0.3);
 
   const spts=allScores.map((sc,i)=>({
     px:ml+6+(i/Math.max(allScores.length-1,1))*(cw-12),
@@ -2363,8 +2363,8 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   // Reference lines
   [50,65,80].forEach(v=>{
     const gy=y+th-6-((v-30)/70)*(th-12);
-    dc(doc,...T.border); lw(doc,0.12); doc.line(ml+3,gy,ml+cw-3,gy);
-    font(doc,5,"normal"); tc(doc,...T.light);
+    dc(doc,...PDF_TOKENS.border); lw(doc,0.12); doc.line(ml+3,gy,ml+cw-3,gy);
+    font(doc,5,"normal"); tc(doc,...PDF_TOKENS.light);
     doc.text(String(v),ml+1,gy+1.5,{align:"right"});
   }); lw(doc,0.3);
 
@@ -2385,7 +2385,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     const sxy=spts.reduce((a,p,i)=>a+i*p.py,0), sx2=spts.reduce((a,_,i)=>a+i*i,0);
     const slope=(n2*sxy-sx*sy)/(n2*sx2-sx*sx)||0;
     const b2=(sy-slope*sx)/n2;
-    const rC=slope<0?T.success:T.danger;
+    const rC=slope<0?PDF_TOKENS.success:PDF_TOKENS.danger;
     dc(doc,...rC); lw(doc,0.5); doc.setLineDashPattern([2,2],0);
     doc.line(spts[0].px,b2,spts[n2-1].px,b2+slope*(n2-1));
     doc.setLineDashPattern([],0); lw(doc,0.3);
@@ -2396,7 +2396,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     spts.forEach((p,i)=>{ if(i>0) doc.line(spts[i-1].px,spts[i-1].py,p.px,p.py); });
     lw(doc,0.3);
     // First & last highlighted
-    fc(doc,...T.card); doc.circle(spts[0].px,spts[0].py,2.2,"F");
+    fc(doc,...PDF_TOKENS.card); doc.circle(spts[0].px,spts[0].py,2.2,"F");
     dc(doc,...lC); lw(doc,1); doc.circle(spts[0].px,spts[0].py,2.2,"S"); lw(doc,0.3);
     fc(doc,...lC); doc.circle(spts[spts.length-1].px,spts[spts.length-1].py,2.8,"F");
     // Score labels
@@ -2412,12 +2412,12 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   doc.addPage(); _hdr(doc,W,ml,mr,isAr?"التحليل التفصيلي":"Detailed Analysis",isAr); y=22;
 
   // ── WEEKLY DAY BARS ──────────────────────────────────────────
-  _sh(doc,ml,y,isAr?"النمط الأسبوعي":"Weekly Pattern",isAr?"متوسط النقاط حسب اليوم":"Average score by day of week",T.primary,isAr);
+  _sh(doc,ml,y,isAr?"النمط الأسبوعي":"Weekly Pattern",isAr?"متوسط النقاط حسب اليوم":"Average score by day of week",PDF_TOKENS.primary,isAr);
   y+=16;
 
   const barZoneH=52;
-  fc(doc,...T.bg); rr(doc,ml,y,cw,barZoneH,4,"F");
-  dc(doc,...T.border); lw(doc,0.18); rr(doc,ml,y,cw,barZoneH,4,"S"); lw(doc,0.3);
+  fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,barZoneH,4,"F");
+  dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,barZoneH,4,"S"); lw(doc,0.3);
 
   const maxDayV=Math.max(...(validDA.length?validDA:[80]),80);
   const barW2=(cw-24)/7, barMaxH=barZoneH-18;
@@ -2425,14 +2425,14 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     const bx=ml+12+di*(barW2+2);
     if(!avg){
       // No data — ghost bar
-      fc(doc,...T.border); rr(doc,bx,y+barZoneH-12-4,barW2,4,1,"F");
-      font(doc,5.5,"normal"); tc(doc,...T.light);
+      fc(doc,...PDF_TOKENS.border); rr(doc,bx,y+barZoneH-12-4,barW2,4,1,"F");
+      font(doc,5.5,"normal"); tc(doc,...PDF_TOKENS.light);
       doc.text("—",bx+barW2/2,y+barZoneH-5.5,{align:"center"});
       doc.text(isAr?dayNamesAr[di]:dayNamesEn[di],bx+barW2/2,y+barZoneH-1.5,{align:"center"});
       return;
     }
     const bh=Math.max(((avg-30)/70)*barMaxH,3);
-    const bc=di===bestDay?T.success:di===worstDay?T.danger:T.primary;
+    const bc=di===bestDay?PDF_TOKENS.success:di===worstDay?PDF_TOKENS.danger:PDF_TOKENS.primary;
     // Bar
     fc(doc,...bc);
     doc.setGState&&doc.setGState(new doc.GState({opacity:di===bestDay||di===worstDay?1:0.7}));
@@ -2442,7 +2442,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     font(doc,6.5,"bold"); tc(doc,...bc);
     doc.text(String(avg),bx+barW2/2,y+barZoneH-12-bh-2,{align:"center"});
     // Day label
-    font(doc,6,"bold"); tc(doc,...(di===bestDay?T.success:di===worstDay?T.danger:T.muted));
+    font(doc,6,"bold"); tc(doc,...(di===bestDay?PDF_TOKENS.success:di===worstDay?PDF_TOKENS.danger:PDF_TOKENS.muted));
     doc.text(isAr?dayNamesAr[di]:dayNamesEn[di],bx+barW2/2,y+barZoneH-1.5,{align:"center"});
   });
   y+=barZoneH+8;
@@ -2451,8 +2451,8 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   if(bestDay>=0&&worstDay>=0){
     const bdn=isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay];
     const wdn=isAr?dayNamesAr[worstDay]:dayNamesEn[worstDay];
-    fc(doc,...T.bg); rr(doc,ml,y,cw,11,2,"F");
-    font(doc,7.5,"normal"); tc(doc,...T.sub);
+    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,11,2,"F");
+    font(doc,7.5,"normal"); tc(doc,...PDF_TOKENS.sub);
     const ins=isAr
       ?`أفضل يوم: ${bdn} (${dayAvgs[bestDay]}) · أسوأ يوم: ${wdn} (${dayAvgs[worstDay]})`
       :`Best day: ${bdn} (${dayAvgs[bestDay]}) · Worst day: ${wdn} (${dayAvgs[worstDay]})`;
@@ -2462,7 +2462,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
 
   // ── SPINAL ZONE RISK ──────────────────────────────────────────
   y+=4;
-  _sh(doc,ml,y,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"متوسط من كل الجلسات":"Averaged across all sessions",T.danger,isAr);
+  _sh(doc,ml,y,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"متوسط من كل الجلسات":"Averaged across all sessions",PDF_TOKENS.danger,isAr);
   y+=16;
 
   const zones=[
@@ -2474,17 +2474,17 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     if(y>H-42){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map",isAr);y=22;}
     const risk=avgZonal[k]||0, rc=_riskColor(risk);
     const zh=34;
-    fc(doc,...T.card); rr(doc,ml,y,cw,zh,4,"F");
+    fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,zh,4,"F");
     dc(doc,...rc); lw(doc,0.25); rr(doc,ml,y,cw,zh,4,"S"); lw(doc,0.3);
     fc(doc,...rc); doc.rect(ml,y,3,zh,"F"); rr(doc,ml,y,3,zh,1.5,"F");
     // Risk circle
     fc(doc,...rc); doc.circle(ml+18,y+zh/2,10,"F");
-    font(doc,9.5,"bold"); tc(doc,...T.card);
+    font(doc,9.5,"bold"); tc(doc,...PDF_TOKENS.card);
     doc.text(`${risk}%`,ml+18,y+zh/2+3.5,{align:"center"});
     // Title + region
-    font(doc,10,"bold",isAr); tc(doc,...T.ink);
+    font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
     doc.text(isAr?ar:en,ml+33,y+10);
-    font(doc,7,"bold"); tc(doc,...T.primary); doc.text(r,ml+33,y+17);
+    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+33,y+17);
     // Risk label pill
     const rlbl=_riskLabel(risk,isAr);
     const rw=doc.getTextWidth(rlbl)+8;
@@ -2496,10 +2496,10 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     doc.text(rlbl,W-mr-rw/2-2,y+11.8,{align:"center"});
     // Progress bar
     const bx=ml+33, bw2=cw*0.42;
-    fc(doc,...T.borderSoft); rr(doc,bx,y+21,bw2,5,2,"F");
+    fc(doc,...PDF_TOKENS.borderSoft); rr(doc,bx,y+21,bw2,5,2,"F");
     fc(doc,...rc); rr(doc,bx,y+21,Math.max(bw2*(risk/100),3),5,2,"F");
     // Desc
-    font(doc,7,"normal",isAr); tc(doc,...T.muted);
+    font(doc,7,"normal",isAr); tc(doc,...PDF_TOKENS.muted);
     doc.text(desc,ml+33,y+zh-4);
     y+=zh+7;
   });
@@ -2507,29 +2507,29 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   // ── BEST / WORST SESSION CARDS ─────────────────────────────
   y+=6;
   if(y>H-80){doc.addPage();_hdr(doc,W,ml,mr,isAr?"أفضل وأسوأ":"Best & Worst",isAr);y=22;}
-  _sh(doc,ml,y,isAr?"أفضل وأسوأ جلسة":"Best & Worst Sessions","",T.success,isAr);
+  _sh(doc,ml,y,isAr?"أفضل وأسوأ جلسة":"Best & Worst Sessions","",PDF_TOKENS.success,isAr);
   y+=14;
 
-  [[isAr?"* الجلسة الأفضل":"* Best Session",best,T.success],
-   [isAr?"! الجلسة الأسوأ":"! Worst Session",worst,T.danger]
+  [[isAr?"* الجلسة الأفضل":"* Best Session",best,PDF_TOKENS.success],
+   [isAr?"! الجلسة الأسوأ":"! Worst Session",worst,PDF_TOKENS.danger]
   ].forEach(([label,sess,col])=>{
     if(!sess||y>H-36){if(y>H-36){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;} else return;}
     const sh2=28;
-    fc(doc,...T.card); rr(doc,ml,y,cw,sh2,4,"F");
+    fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,sh2,4,"F");
     dc(doc,...col); lw(doc,0.25); rr(doc,ml,y,cw,sh2,4,"S"); lw(doc,0.3);
     fc(doc,...col); doc.rect(ml,y,3,sh2,"F"); rr(doc,ml,y,3,sh2,1.5,"F");
     // Score badge
     fc(doc,...col); rr(doc,ml+7,y+5,18,18,3,"F");
-    font(doc,11,"bold"); tc(doc,...T.card);
+    font(doc,11,"bold"); tc(doc,...PDF_TOKENS.card);
     doc.text(String(Math.round(sess.avg_score||0)),ml+16,y+16,{align:"center"});
     // Label
-    font(doc,9.5,"bold",isAr); tc(doc,...T.ink); doc.text(label,ml+30,y+11);
-    font(doc,7.5,"normal"); tc(doc,...T.muted);
+    font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(label,ml+30,y+11);
+    font(doc,7.5,"normal"); tc(doc,...PDF_TOKENS.muted);
     doc.text(_fmtDate(sess.created_at,isAr),ml+30,y+19);
     // Right stats
     font(doc,7.5,"bold"); tc(doc,...col);
     doc.text(`${isAr?"المدة":"Duration"}: ${_fmtDur(sess.duration_s||sess.duration_sec||0)}`,W-mr-2,y+11,{align:"right"});
-    font(doc,7,"normal"); tc(doc,...T.muted);
+    font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
     doc.text(`${isAr?"تنبيهات":"Alerts"}: ${sess.alerts_count||0}`,W-mr-2,y+19,{align:"right"});
     y+=sh2+8;
   });
@@ -2540,7 +2540,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   doc.addPage(); _hdr(doc,W,ml,mr,isAr?"التحليل والخطة":"Analysis & Plan",isAr); y=22;
 
   // AI narrative
-  _sh(doc,ml,y,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"مولّد من بيانات جلساتك":"Generated from your session data",T.primary,isAr);
+  _sh(doc,ml,y,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"مولّد من بيانات جلساتك":"Generated from your session data",PDF_TOKENS.primary,isAr);
   y+=16;
 
   const highestRiskAll = Math.max(avgZonal.cervical, avgZonal.thoracic, avgZonal.lumbar);
@@ -2571,15 +2571,15 @@ const narrative=[
 ].join("\n\n");
 
   const narLines=doc.splitTextToSize(narrative.replace(/[#*`]/g,"").trim(),cw-8);
-  fc(doc,...T.bg); rr(doc,ml,y,cw,narLines.length*5.4+12,4,"F");
+  fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,narLines.length*5.4+12,4,"F");
   y+=8;
-  font(doc,8.5,"normal",isAr); tc(doc,...T.sub);
+  font(doc,8.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
   narLines.forEach(l=>{ if(y>H-32){doc.addPage();_hdr(doc,W,ml,mr,"Analysis",isAr);y=22;} doc.text(l,ml+4,y); y+=5.4; });
   y+=14;
 
   // 8-week programme
   if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطة":"Programme",isAr);y=22;}
-  _sh(doc,ml,y,isAr?"برنامج التحسين — 8 أسابيع":"8-Week Improvement Programme",isAr?"خطة مخصصة لنتائجك":"Personalised to your results",T.success,isAr);
+  _sh(doc,ml,y,isAr?"برنامج التحسين — 8 أسابيع":"8-Week Improvement Programme",isAr?"خطة مخصصة لنتائجك":"Personalised to your results",PDF_TOKENS.success,isAr);
   y+=16;
 
   const highestRiskZone = avgZonal.cervical >= avgZonal.thoracic && avgZonal.cervical >= avgZonal.lumbar ? "cervical" : avgZonal.thoracic >= avgZonal.lumbar ? "thoracic" : "lumbar";
@@ -2611,20 +2611,20 @@ const programme=[
   programme.forEach(({wk,goal,action},idx)=>{
     if(y>H-32){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطة":"Programme",isAr);y=22;}
     const ph=28;
-    fc(doc,...T.card); rr(doc,ml,y,cw,ph,4,"F");
-    dc(doc,...T.border); lw(doc,0.18); rr(doc,ml,y,cw,ph,4,"S"); lw(doc,0.3);
+    fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,ph,4,"F");
+    dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,ph,4,"S"); lw(doc,0.3);
     // Week badge
-    fc(doc,...T.primary);
+    fc(doc,...PDF_TOKENS.primary);
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
     rr(doc,ml+4,y+5,22,18,3,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    dc(doc,...T.primary); lw(doc,0.8); rr(doc,ml+4,y+5,22,18,3,"S"); lw(doc,0.3);
-    font(doc,6.5,"bold"); tc(doc,...T.primary);
+    dc(doc,...PDF_TOKENS.primary); lw(doc,0.8); rr(doc,ml+4,y+5,22,18,3,"S"); lw(doc,0.3);
+    font(doc,6.5,"bold"); tc(doc,...PDF_TOKENS.primary);
     doc.text("W",ml+15,y+11.5,{align:"center"});
     doc.text(wk,ml+15,y+17,{align:"center"});
     // Goal + action
-    font(doc,9.5,"bold",isAr); tc(doc,...T.ink); doc.text(goal,ml+32,y+11);
-    font(doc,7.5,"normal",isAr); tc(doc,...T.sub);
+    font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(goal,ml+32,y+11);
+    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
     const aLines=doc.splitTextToSize(action,cw-36);
     aLines.slice(0,2).forEach((l,i)=>doc.text(l,ml+32,y+18+(i*5)));
     y+=ph+7;
@@ -2632,7 +2632,7 @@ const programme=[
 
   // ── SESSION STATS TABLE ───────────────────────────────────
   y+=4; if(y>H-70){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الإحصائيات":"Statistics",isAr);y=22;}
-  _sh(doc,ml,y,isAr?"ملخص الإحصائيات":"Summary Statistics","",T.indigo,isAr);
+  _sh(doc,ml,y,isAr?"ملخص الإحصائيات":"Summary Statistics","",PDF_TOKENS.indigo,isAr);
   y+=14;
 
   const stats=[
@@ -2646,12 +2646,12 @@ const programme=[
     [isAr?"التغيّر الكلي":"Overall trend",             `${trendDelta>0?"+":""}${trendDelta} pts · ${improved?"Improving":declined?"Declining":"Stable"}`],
   ];
   const th2=stats.length*8.5+2;
-  fc(doc,...T.card); rr(doc,ml,y,cw,th2,4,"F");
-  dc(doc,...T.border); lw(doc,0.18); rr(doc,ml,y,cw,th2,4,"S"); lw(doc,0.3);
+  fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,th2,4,"F");
+  dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,th2,4,"S"); lw(doc,0.3);
   stats.forEach(([k,v],i)=>{
-    if(i%2===0){fc(doc,...T.bg); doc.rect(ml,y,cw,8.5,"F");}
-    font(doc,7.5,"normal",isAr); tc(doc,...T.muted); doc.text(k,ml+5,y+5.8);
-    font(doc,7.5,"bold",false); tc(doc,...T.ink); doc.text(v,ml+cw-5,y+5.8,{align:"right"});
+    if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8.5,"F");}
+    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(k,ml+5,y+5.8);
+    font(doc,7.5,"bold",false); tc(doc,...PDF_TOKENS.ink); doc.text(v,ml+cw-5,y+5.8,{align:"right"});
     y+=8.5;
   });
 

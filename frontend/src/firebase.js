@@ -717,7 +717,7 @@ const METRIC_LABELS_AR = {
 // ═══════════════════════════════════════════════════════════════════
 
 // ── Extended Design Tokens ─────────────────────────────────────────
-const T = {
+const FB_TOKENS = {
   // Core brand
   primary:   [37,99,235],   primaryDk:[30,64,175],  primaryLt:[239,246,255],
   success:   [34,197,94],   successDk:[21,128,61],  successLt:[240,253,244],
@@ -746,7 +746,7 @@ const T = {
 };
 
 // ── Typography Scale — 8pt baseline grid ──────────────────────────
-const F = {
+const FB_FLAGS = {
   display:   28,   // Hero numbers, cover title
   h1:        17,   // Page section title
   h2:        13,   // Subsection
@@ -764,11 +764,11 @@ const SP = { xs:2, sm:4, md:8, lg:12, xl:20, xxl:32, page:18 };
 
 
 // ── Core helpers ───────────────────────────────────────────────────
-function _sc(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
-function _scLt(s){ return s>=80?T.successLt:s>=60?T.warningLt:T.dangerLt; }
+function _sc(s){ return s>=80?FB_TOKENS.success:s>=60?FB_TOKENS.warning:FB_TOKENS.danger; }
+function _scLt(s){ return s>=80?FB_TOKENS.successLt:s>=60?FB_TOKENS.warningLt:FB_TOKENS.dangerLt; }
 function _sl(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Work"); }
 function _riskLabel(v,ar){ return v>=70?(ar?"عالي":"High"):v>=40?(ar?"متوسط":"Moderate"):(ar?"منخفض":"Low"); }
-function _riskColor(v){ return v>=70?T.danger:v>=40?T.warning:T.success; }
+function _riskColor(v){ return v>=70?FB_TOKENS.danger:v>=40?FB_TOKENS.warning:FB_TOKENS.success; }
 function _fmtDur(s){ if(!s)return"—"; const m=Math.floor(s/60),r=s%60; return m>0?`${m}m ${r}s`:`${r}s`; }
 function _fmtDate(ts,ar){
   if(!ts)return"—";
@@ -791,8 +791,8 @@ function fc(doc,...c){doc.setFillColor(...c);}
 function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
 function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
-function hr(doc,x,y,w,col=T.border,thickness=0.18){dc(doc,...col);lw(doc,thickness);doc.line(x,y,x+w,y);lw(doc,0.3);}
-function vl(doc,x,y,h,col=T.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x,y+h);lw(doc,0.3);}
+function hr(doc,x,y,w,col=FB_TOKENS.border,thickness=0.18){dc(doc,...col);lw(doc,thickness);doc.line(x,y,x+w,y);lw(doc,0.3);}
+function vl(doc,x,y,h,col=FB_TOKENS.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x,y+h);lw(doc,0.3);}
 
 // ── Font helper ────────────────────────────────────────────────────
 let _cairoLoaded=false, _cairoCachedB64=null;
@@ -828,8 +828,8 @@ async function _ensureLogo(){
 function _logo(doc,x,y,sz,b64){
   if(b64){try{doc.addImage(b64,"PNG",x,y,sz,sz);return;}catch{}}
   fc(doc,3,11,20);rr(doc,x,y,sz,sz,sz*.14,"F");
-  fc(doc,...T.primary);rr(doc,x+sz*.19,y+sz*.19,sz*.62,sz*.62,sz*.12,"F");
-  font(doc,sz*.42,"bold");tc(doc,...T.card);doc.text("P",x+sz/2,y+sz*.72,{align:"center"});
+  fc(doc,...FB_TOKENS.primary);rr(doc,x+sz*.19,y+sz*.19,sz*.62,sz*.62,sz*.12,"F");
+  font(doc,sz*.42,"bold");tc(doc,...FB_TOKENS.card);doc.text("P",x+sz/2,y+sz*.72,{align:"center"});
 }
 
 // ── _zonalRisk ─────────────────────────────────────────────────────
@@ -850,7 +850,7 @@ function _zonalRisk(metrics){
 // ── COVER HEADER — cinematic dark with brand gradient ─────────────
 function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
   // Full bleed dark
-  fc(doc,...T.slate);doc.rect(0,0,W,76,"F");
+  fc(doc,...FB_TOKENS.slate);doc.rect(0,0,W,76,"F");
   // Layered depth circles (brand feel)
   fc(doc,...tierCol);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.05}));
@@ -865,7 +865,7 @@ function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
   // Logo
   _logo(doc,ml,16,28,_logoMd);
   // Brand
-  font(doc,13.5,"bold");tc(doc,...T.card);doc.text("CORVUS",ml+36,30);
+  font(doc,13.5,"bold");tc(doc,...FB_TOKENS.card);doc.text("CORVUS",ml+36,30);
   font(doc,6.5,"normal");tc(doc,130,148,180);doc.text("Health Intelligence Platform",ml+36,38);
   // Tier badge
   const tw=doc.getTextWidth(tier.toUpperCase())+12;
@@ -877,7 +877,7 @@ function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
   doc.text(tier.toUpperCase(),ml+36+tw/2,49.5,{align:"center"});
   // Right: date + label
   font(doc,6.5,"normal");tc(doc,130,148,180);doc.text(now,W-ml,27,{align:"right"});
-  font(doc,7.5,"bold");tc(doc,...T.card);doc.text(label,W-ml,37,{align:"right"});
+  font(doc,7.5,"bold");tc(doc,...FB_TOKENS.card);doc.text(label,W-ml,37,{align:"right"});
   if(sub){font(doc,6.5,"normal");tc(doc,130,148,180);doc.text(sub,W-ml,45,{align:"right"});}
   // Bottom divider
   fc(doc,...tierCol);doc.rect(0,73.5,W,2.5,"F");
@@ -885,30 +885,30 @@ function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
 
 // ── INNER PAGE HEADER ──────────────────────────────────────────────
 function _hdr(doc,W,ml,mr,label,isAr){
-  fc(doc,...T.bg);doc.rect(0,0,W,15,"F");
-  fc(doc,...T.primary);doc.rect(0,15,W,.35,"F");
+  fc(doc,...FB_TOKENS.bg);doc.rect(0,0,W,15,"F");
+  fc(doc,...FB_TOKENS.primary);doc.rect(0,15,W,.35,"F");
   _logo(doc,ml,3.5,8,_logoSm);
-  font(doc,7.5,"bold");tc(doc,...T.ink2);doc.text("Corvus",ml+12,10);
-  font(doc,6.5,"normal");tc(doc,...T.muted);doc.text("Health Intelligence",ml+28,10);
-  font(doc,7,"bold");tc(doc,...T.primary);doc.text(label,W-mr,10,{align:"right"});
+  font(doc,7.5,"bold");tc(doc,...FB_TOKENS.ink2);doc.text("Corvus",ml+12,10);
+  font(doc,6.5,"normal");tc(doc,...FB_TOKENS.muted);doc.text("Health Intelligence",ml+28,10);
+  font(doc,7,"bold");tc(doc,...FB_TOKENS.primary);doc.text(label,W-mr,10,{align:"right"});
 }
 
 // ── FOOTER ─────────────────────────────────────────────────────────
 function _ftr(doc,W,ml,mr,H,p,total,name){
-  hr(doc,0,H-10,W,T.border);
-  fc(doc,...T.bg);doc.rect(0,H-9.5,W,9.5,"F");
-  font(doc,F.micro,"normal");tc(doc,...T.ghost);
+  hr(doc,0,H-10,W,FB_TOKENS.border);
+  fc(doc,...FB_TOKENS.bg);doc.rect(0,H-9.5,W,9.5,"F");
+  font(doc,FB_FLAGS.micro,"normal");tc(doc,...FB_TOKENS.ghost);
   doc.text("Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-3.5);
-  font(doc,F.micro,"bold");tc(doc,...T.muted);
+  font(doc,FB_FLAGS.micro,"bold");tc(doc,...FB_TOKENS.muted);
   doc.text(name,W/2,H-3.5,{align:"center"});
   doc.text(`${p} / ${total}`,W-mr,H-3.5,{align:"right"});
 }
 
 // ── SECTION HEADING with left accent ─────────────────────────────
-function _sh(doc,ml,y,title,sub="",col=T.primary,isAr=false){
+function _sh(doc,ml,y,title,sub="",col=FB_TOKENS.primary,isAr=false){
   fc(doc,...col);doc.rect(ml,y,2.2,sub?14:9.5,"F");
-  font(doc,F.h2,"bold",isAr);tc(doc,...T.ink);doc.text(title,ml+7,y+(sub?7:7));
-  if(sub){font(doc,F.small,"normal",isAr);tc(doc,...T.light);doc.text(sub,ml+7,y+13);}
+  font(doc,FB_FLAGS.h2,"bold",isAr);tc(doc,...FB_TOKENS.ink);doc.text(title,ml+7,y+(sub?7:7));
+  if(sub){font(doc,FB_FLAGS.small,"normal",isAr);tc(doc,...FB_TOKENS.light);doc.text(sub,ml+7,y+13);}
   return y+(sub?21:14);
 }
 
@@ -916,7 +916,7 @@ function _sh(doc,ml,y,title,sub="",col=T.primary,isAr=false){
 function _ring(doc,cx,cy,r,score,isAr,showGrade=true){
   const col=_sc(score),lbl=_sl(score,isAr);
   // Outer track
-  dc(doc,...T.borderSoft);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
+  dc(doc,...FB_TOKENS.borderSoft);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
   // Inner tint
   fc(doc,...col);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
@@ -925,18 +925,18 @@ function _ring(doc,cx,cy,r,score,isAr,showGrade=true){
   // Score arc
   dc(doc,...col);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
   // Number
-  font(doc,F.dataXl,"bold");tc(doc,...col);
+  font(doc,FB_FLAGS.dataXl,"bold");tc(doc,...col);
   doc.text(String(score),cx,cy+4,{align:"center"});
-  font(doc,F.micro+.5,"normal");tc(doc,...T.muted);
+  font(doc,FB_FLAGS.micro+.5,"normal");tc(doc,...FB_TOKENS.muted);
   doc.text("/100",cx,cy+10,{align:"center"});
-  if(showGrade){font(doc,F.small+.5,"bold",isAr);tc(doc,...col);doc.text(lbl,cx,cy+r+8,{align:"center"});}
+  if(showGrade){font(doc,FB_FLAGS.small+.5,"bold",isAr);tc(doc,...col);doc.text(lbl,cx,cy+r+8,{align:"center"});}
 }
 
 // ── METRIC ROW v5 ─────────────────────────────────────────────────
 function _mRow(doc,x,y,w,lbl,value,unit,score,isAr,idx=0){
   const col=_sc(score),colLt=_scLt(score),h=22;
-  fc(doc,...(idx%2===0?T.card:T.bg));rr(doc,x,y,w,h,3,"F");
-  dc(doc,...T.borderSoft);lw(doc,0.15);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
+  fc(doc,...(idx%2===0?FB_TOKENS.card:FB_TOKENS.bg));rr(doc,x,y,w,h,3,"F");
+  dc(doc,...FB_TOKENS.borderSoft);lw(doc,0.15);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
   // Left accent
   fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
   // Score chip
@@ -944,15 +944,15 @@ function _mRow(doc,x,y,w,lbl,value,unit,score,isAr,idx=0){
   font(doc,8.5,"bold");tc(doc,...col);
   doc.text(String(Math.round(score)),x+14,y+12.5,{align:"center"});
   // Label
-  font(doc,9,"bold",isAr);tc(doc,...T.ink);doc.text(lbl,x+27,y+9.5);
+  font(doc,9,"bold",isAr);tc(doc,...FB_TOKENS.ink);doc.text(lbl,x+27,y+9.5);
   // Value
   if(value!==undefined&&value!==null){
-    font(doc,7.5,"normal");tc(doc,...T.muted);
+    font(doc,7.5,"normal");tc(doc,...FB_TOKENS.muted);
     doc.text(`${Math.round(value*10)/10}${unit||""}`,x+27,y+16.5);
   }
   // Progress bar
   const bx=x+w*.52,bw=w*.44,bh=5;
-  fc(doc,...T.borderSoft);rr(doc,bx,y+8.5,bw,bh,2,"F");
+  fc(doc,...FB_TOKENS.borderSoft);rr(doc,bx,y+8.5,bw,bh,2,"F");
   fc(doc,...col);rr(doc,bx,y+8.5,Math.max(bw*(score/100),3),bh,2,"F");
   // Grade
   const gl=_sl(score,isAr);
@@ -961,23 +961,23 @@ function _mRow(doc,x,y,w,lbl,value,unit,score,isAr,idx=0){
   doc.setGState&&doc.setGState(new doc.GState({opacity:.1}));
   rr(doc,x+w-gw-3,y+14.5,gw,6,2,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,F.micro+.5,"bold",isAr);tc(doc,...col);
+  font(doc,FB_FLAGS.micro+.5,"bold",isAr);tc(doc,...col);
   doc.text(gl,x+w-gw/2-3,y+18.5,{align:"center"});
 }
 
 // ── KPI CHIP v5 — elevated with top accent ─────────────────────────
 function _kpi(doc,x,y,w,h,val,label,col,sub=""){
-  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
-  dc(doc,...T.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  fc(doc,...FB_TOKENS.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...FB_TOKENS.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
   // Top color accent
   fc(doc,...col);rr(doc,x,y,w,3,2,"F");doc.rect(x,y+1.5,w,1.5,"F");
   // Value
-  font(doc,F.dataLg,"bold");tc(doc,...col);
+  font(doc,FB_FLAGS.dataLg,"bold");tc(doc,...col);
   doc.text(String(val),x+w/2,y+h*.56,{align:"center"});
   // Label
-  font(doc,F.small,"bold");tc(doc,...T.muted);
+  font(doc,FB_FLAGS.small,"bold");tc(doc,...FB_TOKENS.muted);
   doc.text(label,x+w/2,y+h*.78,{align:"center"});
-  if(sub){font(doc,F.micro,"normal");tc(doc,...T.light);doc.text(sub,x+w/2,y+h*.9,{align:"center"});}
+  if(sub){font(doc,FB_FLAGS.micro,"normal");tc(doc,...FB_TOKENS.light);doc.text(sub,x+w/2,y+h*.9,{align:"center"});}
 }
 
 // ── SPARKLINE v5 ─────────────────────────────────────────────────
@@ -991,8 +991,8 @@ function _spark(doc,hist,x,y,w,h,col){
   [50,65,80].forEach(v=>{
     if(v<lo||v>hi)return;
     const gy=y+h-((v-lo)/rng)*h;
-    dc(doc,...T.borderSoft);lw(doc,0.12);doc.line(x,gy,x+w,gy);
-    font(doc,5,"normal");tc(doc,...T.ghost);doc.text(String(v),x-2,gy+1.5,{align:"right"});
+    dc(doc,...FB_TOKENS.borderSoft);lw(doc,0.12);doc.line(x,gy,x+w,gy);
+    font(doc,5,"normal");tc(doc,...FB_TOKENS.ghost);doc.text(String(v),x-2,gy+1.5,{align:"right"});
   });lw(doc,0.3);
   // Area
   try{
@@ -1006,7 +1006,7 @@ function _spark(doc,hist,x,y,w,h,col){
   dc(doc,...col);lw(doc,1.4);
   co.forEach((p,i)=>{if(i>0)doc.line(co[i-1].px,co[i-1].py,p.px,p.py);});lw(doc,0.3);
   // Endpoints
-  fc(doc,...T.card);doc.circle(co[0].px,co[0].py,2,"F");
+  fc(doc,...FB_TOKENS.card);doc.circle(co[0].px,co[0].py,2,"F");
   dc(doc,...col);lw(doc,0.8);doc.circle(co[0].px,co[0].py,2,"S");lw(doc,0.3);
   fc(doc,...col);doc.circle(co[co.length-1].px,co[co.length-1].py,2.5,"F");
   font(doc,6.5,"bold");tc(doc,...col);
@@ -1016,15 +1016,15 @@ function _spark(doc,hist,x,y,w,h,col){
 
 // ── CALLOUT STRIP ─────────────────────────────────────────────────
 function _callout(doc,x,y,w,text,type="info",isAr=false){
-  const cols={info:T.primary,success:T.success,warning:T.warning,danger:T.danger};
-  const col=cols[type]||T.primary;
-  const colBg={info:T.primaryBg,success:T.successBg,warning:T.warningBg,danger:T.dangerBg};
+  const cols={info:FB_TOKENS.primary,success:FB_TOKENS.success,warning:FB_TOKENS.warning,danger:FB_TOKENS.danger};
+  const col=cols[type]||FB_TOKENS.primary;
+  const colBg={info:FB_TOKENS.primaryBg,success:FB_TOKENS.successBg,warning:FB_TOKENS.warningBg,danger:FB_TOKENS.dangerBg};
   const lines=doc.splitTextToSize(text.replace(/[#*`]/g,""),w-14);
   const h=Math.max(14,lines.length*5.2+8);
-  fc(doc,...(colBg[type]||T.bg));rr(doc,x,y,w,h,3,"F");
+  fc(doc,...(colBg[type]||FB_TOKENS.bg));rr(doc,x,y,w,h,3,"F");
   dc(doc,...col);lw(doc,0.2);rr(doc,x,y,w,h,3,"S");lw(doc,0.3);
   fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
-  font(doc,F.body,"normal",isAr);tc(doc,...T.sub);
+  font(doc,FB_FLAGS.body,"normal",isAr);tc(doc,...FB_TOKENS.sub);
   lines.forEach((l,i)=>doc.text(l,x+7,y+7+(i*5.2)));
   return y+h+6;
 }
@@ -1032,15 +1032,15 @@ function _callout(doc,x,y,w,text,type="info",isAr=false){
 // ── STEP CARD v5 ─────────────────────────────────────────────────
 function _step(doc,x,y,w,num,title,score,steps,isAr){
   const col=_sc(score),colLt=_scLt(score),h=46;
-  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
-  dc(doc,...T.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
+  fc(doc,...FB_TOKENS.card);rr(doc,x,y,w,h,4,"F");
+  dc(doc,...FB_TOKENS.border);lw(doc,0.15);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
   fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
   // Number circle
   fc(doc,...colLt);doc.circle(x+15,y+14,9,"F");
   dc(doc,...col);lw(doc,.8);doc.circle(x+15,y+14,9,"S");lw(doc,0.3);
   font(doc,10,"bold");tc(doc,...col);doc.text(String(num),x+15,y+17.5,{align:"center"});
   // Title + score
-  font(doc,10,"bold",isAr);tc(doc,...T.ink);doc.text(title,x+30,y+12);
+  font(doc,10,"bold",isAr);tc(doc,...FB_TOKENS.ink);doc.text(title,x+30,y+12);
   const sb=`${Math.round(score)}/100`;const sw=doc.getTextWidth(sb)+7;
   fc(doc,...col);
   doc.setGState&&doc.setGState(new doc.GState({opacity:.1}));
@@ -1048,10 +1048,10 @@ function _step(doc,x,y,w,num,title,score,steps,isAr){
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   font(doc,6.5,"bold");tc(doc,...col);doc.text(sb,x+w-sw/2-4,y+10.5,{align:"center"});
   // Steps
-  font(doc,7.5,"normal",isAr);tc(doc,...T.sub);
+  font(doc,7.5,"normal",isAr);tc(doc,...FB_TOKENS.sub);
   steps.slice(0,3).forEach((s,i)=>{
     font(doc,7.5,"bold");tc(doc,...col);doc.text(`${i+1}.`,x+30,y+22+(i*7));
-    font(doc,7.5,"normal",isAr);tc(doc,...T.sub);
+    font(doc,7.5,"normal",isAr);tc(doc,...FB_TOKENS.sub);
     doc.text(doc.splitTextToSize(s,w-40)[0],x+36,y+22+(i*7));
   });
   return y+h+8;
@@ -1062,15 +1062,15 @@ function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
   const col=_riskColor(risk);
   const lines=doc.splitTextToSize(desc,w-50);
   const h=Math.max(48,lines.length*5+34);
-  fc(doc,...T.card);rr(doc,x,y,w,h,4,"F");
+  fc(doc,...FB_TOKENS.card);rr(doc,x,y,w,h,4,"F");
   dc(doc,...col);lw(doc,0.25);rr(doc,x,y,w,h,4,"S");lw(doc,0.3);
   fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
   // Risk badge
   fc(doc,...col);doc.circle(x+18,y+h/2,11,"F");
-  font(doc,9.5,"bold");tc(doc,...T.card);doc.text(`${risk}%`,x+18,y+h/2+3.5,{align:"center"});
+  font(doc,9.5,"bold");tc(doc,...FB_TOKENS.card);doc.text(`${risk}%`,x+18,y+h/2+3.5,{align:"center"});
   // Title
-  font(doc,10,"bold",isAr);tc(doc,...T.ink);doc.text(name,x+35,y+12);
-  font(doc,7.5,"bold");tc(doc,...T.primary);doc.text(region,x+35,y+19);
+  font(doc,10,"bold",isAr);tc(doc,...FB_TOKENS.ink);doc.text(name,x+35,y+12);
+  font(doc,7.5,"bold");tc(doc,...FB_TOKENS.primary);doc.text(region,x+35,y+19);
   // Risk label
   const rlbl=_riskLabel(risk,isAr);
   const rw=doc.getTextWidth(rlbl)+8;
@@ -1081,21 +1081,21 @@ function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
   font(doc,7.5,"bold",isAr);tc(doc,...col);doc.text(rlbl,x+w-rw/2-4,y+12,{align:"center"});
   // Bar
   const bx=x+35,bw=w*.52;
-  fc(doc,...T.borderSoft);rr(doc,bx,y+23,bw,4.5,2,"F");
+  fc(doc,...FB_TOKENS.borderSoft);rr(doc,bx,y+23,bw,4.5,2,"F");
   fc(doc,...col);rr(doc,bx,y+23,Math.max(bw*(risk/100),3),4.5,2,"F");
   // Desc
-  font(doc,7.5,"normal",isAr);tc(doc,...T.sub);
+  font(doc,7.5,"normal",isAr);tc(doc,...FB_TOKENS.sub);
   lines.forEach((l,i)=>doc.text(l,x+7,y+32+(i*5)));
-  font(doc,6,"bold");tc(doc,...T.ghost);
+  font(doc,6,"bold");tc(doc,...FB_TOKENS.ghost);
   doc.text(`Sources: ${mlist}`,x+7,y+h-4);
   return y+h+6;
 }
 
 // ── INFO TABLE ROW ────────────────────────────────────────────────
 function _iRow(doc,x,y,w,key,val,even,isAr){
-  fc(doc,...(even?T.bg:T.card));doc.rect(x,y,w,8.5,"F");
-  font(doc,F.small,"normal",isAr);tc(doc,...T.muted);doc.text(key,x+5,y+5.8);
-  font(doc,F.small,"bold");tc(doc,...T.ink);doc.text(String(val),x+w-5,y+5.8,{align:"right"});
+  fc(doc,...(even?FB_TOKENS.bg:FB_TOKENS.card));doc.rect(x,y,w,8.5,"F");
+  font(doc,FB_FLAGS.small,"normal",isAr);tc(doc,...FB_TOKENS.muted);doc.text(key,x+5,y+5.8);
+  font(doc,FB_FLAGS.small,"bold");tc(doc,...FB_TOKENS.ink);doc.text(String(val),x+w-5,y+5.8,{align:"right"});
 }
 
 // ── _drawSparkline alias ──────────────────────────────────────────

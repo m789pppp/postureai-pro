@@ -11,7 +11,7 @@ import {
 } from "./firebase.js";
 
 /* ── Design tokens ─────────────────────────────────────────────── */
-const D = {
+const RBAC_TOKENS = {
   bg:"#020a18", bg2:"#040f22", bg3:"#071428", surf:"#0a1830",
   card:"rgba(8,18,36,.88)", border:"rgba(148,163,184,.08)", borderH:"rgba(26,86,219,.35)",
   text:"#e8f0fe", text2:"#94a3b8", muted:"#475569",
@@ -222,15 +222,15 @@ function SeverityBadge({s}) {
 
 function Sec({title,sub,icon,action,accent,children}) {
   return (
-    <div style={{background:D.card,border:`1px solid ${accent||D.border}`,borderRadius:16,overflow:"hidden"}}>
+    <div style={{background:RBAC_TOKENS.card,border:`1px solid ${accent||RBAC_TOKENS.border}`,borderRadius:16,overflow:"hidden"}}>
       {accent && <div style={{height:3,background:`linear-gradient(90deg,${accent},transparent)`}}/>}
       <div style={{padding:"18px 20px 14px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {icon && <div style={{width:34,height:34,borderRadius:10,background:`${accent||D.blue}14`,border:`1px solid ${accent||D.blue}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{icon}</div>}
+            {icon && <div style={{width:34,height:34,borderRadius:10,background:`${accent||RBAC_TOKENS.blue}14`,border:`1px solid ${accent||RBAC_TOKENS.blue}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{icon}</div>}
             <div>
-              <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text,letterSpacing:"-.015em"}}>{title}</div>
-              {sub && <div style={{fontSize:10,color:D.muted,marginTop:1,fontWeight:500}}>{sub}</div>}
+              <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:RBAC_TOKENS.text,letterSpacing:"-.015em"}}>{title}</div>
+              {sub && <div style={{fontSize:10,color:RBAC_TOKENS.muted,marginTop:1,fontWeight:500}}>{sub}</div>}
             </div>
           </div>
           {action}
@@ -247,8 +247,8 @@ function Btn({children,onClick,variant="primary",size="base",disabled=false,icon
   const fss={xs:10,sm:11,base:12,lg:13};
   const varMap={
     primary:{bg:"linear-gradient(135deg,#1a56db,#0891b2)",c:"#fff",border:"none",shadow:hov?"0 6px 24px rgba(26,86,219,.45)":"0 4px 16px rgba(26,86,219,.3)"},
-    secondary:{bg:D.surf,c:D.text,border:`1px solid ${D.border}`},
-    ghost:{bg:"transparent",c:D.text2,border:`1px solid ${D.border}`},
+    secondary:{bg:RBAC_TOKENS.surf,c:RBAC_TOKENS.text,border:`1px solid ${RBAC_TOKENS.border}`},
+    ghost:{bg:"transparent",c:RBAC_TOKENS.text2,border:`1px solid ${RBAC_TOKENS.border}`},
     danger:{bg:"rgba(239,68,68,.1)",c:"#f87171",border:"1px solid rgba(239,68,68,.2)"},
     success:{bg:"rgba(16,185,129,.1)",c:"#34d399",border:"1px solid rgba(16,185,129,.2)"},
   };
@@ -273,16 +273,16 @@ function Input({label,value,onChange,placeholder,type="text",hint,error,mono=fal
   const [foc,setFoc]=useState(false);
   return (
     <div style={{width:"100%"}}>
-      {label&&<label style={{display:"block",fontSize:11,fontWeight:700,color:D.text2,letterSpacing:".03em",marginBottom:5}}>{label}</label>}
+      {label&&<label style={{display:"block",fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,letterSpacing:".03em",marginBottom:5}}>{label}</label>}
       <input type={type} value={value} onChange={onChange} placeholder={placeholder}
         onFocus={()=>setFoc(true)} onBlur={()=>setFoc(false)}
-        style={{width:"100%",padding:"9px 13px",background:D.surf,
-          border:`1.5px solid ${error?D.red:foc?D.blue:D.border}`,
-          borderRadius:9,color:D.text,fontSize:12,outline:"none",
+        style={{width:"100%",padding:"9px 13px",background:RBAC_TOKENS.surf,
+          border:`1.5px solid ${error?RBAC_TOKENS.red:foc?RBAC_TOKENS.blue:RBAC_TOKENS.border}`,
+          borderRadius:9,color:RBAC_TOKENS.text,fontSize:12,outline:"none",
           fontFamily:mono?"'DM Mono',monospace":"'DM Sans',system-ui,sans-serif",
           boxShadow:foc?(error?`0 0 0 3px rgba(239,68,68,.12)`:`0 0 0 3px rgba(26,86,219,.12)`):"none",
           transition:`border-color 150ms, box-shadow 150ms`}}/>
-      {(hint||error)&&<div style={{fontSize:10,color:error?D.red:D.muted,marginTop:4,fontWeight:500}}>{error||hint}</div>}
+      {(hint||error)&&<div style={{fontSize:10,color:error?RBAC_TOKENS.red:RBAC_TOKENS.muted,marginTop:4,fontWeight:500}}>{error||hint}</div>}
     </div>
   );
 }
@@ -295,7 +295,7 @@ function Toggle({value,onChange,label}) {
         <div style={{position:"absolute",top:2,left:value?20:2,width:16,height:16,borderRadius:"50%",
           background:"#fff",transition:`left 200ms ${SPRING}`,boxShadow:"0 1px 4px rgba(0,0,0,.25)"}}/>
       </div>
-      {label&&<span style={{fontSize:12,color:D.text2,fontWeight:500}}>{label}</span>}
+      {label&&<span style={{fontSize:12,color:RBAC_TOKENS.text2,fontWeight:500}}>{label}</span>}
     </div>
   );
 }
@@ -336,22 +336,22 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
   },{});
 
   return (
-    <Sec title={isAr?"إدارة الأدوار":"Role Management"} sub={isAr?"تعيين الأدوار والصلاحيات":"Assign roles & granular permissions"} icon="👑" accent={D.amber}>
+    <Sec title={isAr?"إدارة الأدوار":"Role Management"} sub={isAr?"تعيين الأدوار والصلاحيات":"Assign roles & granular permissions"} icon="👑" accent={RBAC_TOKENS.amber}>
       <div style={{marginBottom:12}}>
         <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder={isAr?"بحث عن موظف...":"Search member..."} />
       </div>
 
       {/* Members table */}
-      <div style={{background:D.surf,borderRadius:12,overflow:"hidden",border:`1px solid ${D.border}`,marginBottom:sel?16:0}}>
+      <div style={{background:RBAC_TOKENS.surf,borderRadius:12,overflow:"hidden",border:`1px solid ${RBAC_TOKENS.border}`,marginBottom:sel?16:0}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:0,
-          borderBottom:`1px solid ${D.border}`,padding:"8px 14px",
+          borderBottom:`1px solid ${RBAC_TOKENS.border}`,padding:"8px 14px",
           background:"rgba(255,255,255,.02)"}}>
           {[isAr?"المستخدم":"User",isAr?"الدور":"Role",isAr?"آخر نشاط":"Last active",""].map((h,i)=>(
-            <div key={i} style={{fontSize:9,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:D.muted,padding:"0 6px"}}>{h}</div>
+            <div key={i} style={{fontSize:9,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:RBAC_TOKENS.muted,padding:"0 6px"}}>{h}</div>
           ))}
         </div>
         {filtered.length===0 && (
-          <div style={{padding:"24px",textAlign:"center",fontSize:12,color:D.muted}}>
+          <div style={{padding:"24px",textAlign:"center",fontSize:12,color:RBAC_TOKENS.muted}}>
             {isAr?"لا يوجد أعضاء":"No members found"}
           </div>
         )}
@@ -359,7 +359,7 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
           const r=ROLES[m.role]||ROLES.employee;
           return (
             <div key={m.uid||i} style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:0,
-              padding:"11px 14px",borderBottom:i<filtered.length-1?`1px solid ${D.border}`:"none",
+              padding:"11px 14px",borderBottom:i<filtered.length-1?`1px solid ${RBAC_TOKENS.border}`:"none",
               transition:"background 150ms",alignItems:"center"}}
               onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.025)"}
               onMouseLeave={e=>e.currentTarget.style.background="none"}>
@@ -369,12 +369,12 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
                   {(m.name||m.email||"?")[0].toUpperCase()}
                 </div>
                 <div style={{minWidth:0}}>
-                  <div style={{fontSize:12,fontWeight:600,color:D.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name||m.email||"—"}</div>
-                  {m.email&&m.name&&<div style={{fontSize:10,color:D.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.email}</div>}
+                  <div style={{fontSize:12,fontWeight:600,color:RBAC_TOKENS.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name||m.email||"—"}</div>
+                  {m.email&&m.name&&<div style={{fontSize:10,color:RBAC_TOKENS.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.email}</div>}
                 </div>
               </div>
               <div style={{padding:"0 6px"}}><Badge color={r.color}>{r.icon} {isAr?r.labelAr:r.label}</Badge></div>
-              <div style={{fontSize:10,color:D.muted,padding:"0 6px"}}>{m.last_active||"—"}</div>
+              <div style={{fontSize:10,color:RBAC_TOKENS.muted,padding:"0 6px"}}>{m.last_active||"—"}</div>
               <div style={{padding:"0 6px"}}><Btn size="xs" variant="ghost" onClick={()=>openEdit(m)}>Edit</Btn></div>
             </div>
           );
@@ -383,8 +383,8 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
 
       {/* Role editor panel */}
       {sel && (
-        <div style={{background:D.bg2,border:`1px solid ${D.amber}28`,borderRadius:14,padding:18,animation:`rbac-fadeIn 250ms ${SPRING} both`}}>
-          <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:D.text,marginBottom:14}}>
+        <div style={{background:RBAC_TOKENS.bg2,border:`1px solid ${RBAC_TOKENS.amber}28`,borderRadius:14,padding:18,animation:`rbac-fadeIn 250ms ${SPRING} both`}}>
+          <div style={{fontFamily:SYNE,fontSize:13,fontWeight:800,color:RBAC_TOKENS.text,marginBottom:14}}>
             {isAr?"تعديل دور":"Edit Role"}: {sel.name||sel.email}
           </div>
 
@@ -394,18 +394,18 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
               <button key={r.id} onClick={()=>{setRoleEdit(r.id);setCustomPerms(r.scopes);}}
                 style={{padding:"10px 8px",borderRadius:10,cursor:"pointer",textAlign:"center",
                   background:roleEdit===r.id?`${r.color}14`:"transparent",
-                  border:`1.5px solid ${roleEdit===r.id?r.color+"45":D.border}`,
+                  border:`1.5px solid ${roleEdit===r.id?r.color+"45":RBAC_TOKENS.border}`,
                   transition:`all 180ms`,
                   boxShadow:roleEdit===r.id?`0 0 0 3px ${r.color}18`:"none"}}>
                 <div style={{fontSize:18,marginBottom:4}}>{r.icon}</div>
-                <div style={{fontSize:10,fontWeight:700,color:roleEdit===r.id?r.color:D.text2}}>{isAr?r.labelAr:r.label}</div>
+                <div style={{fontSize:10,fontWeight:700,color:roleEdit===r.id?r.color:RBAC_TOKENS.text2}}>{isAr?r.labelAr:r.label}</div>
               </button>
             ))}
           </div>
 
           {/* Role description */}
           {roleEdit && (
-            <div style={{background:`${ROLES[roleEdit]?.color||D.blue}0a`,border:`1px solid ${ROLES[roleEdit]?.color||D.blue}20`,borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:12,color:D.text2,lineHeight:1.65}}>
+            <div style={{background:`${ROLES[roleEdit]?.color||RBAC_TOKENS.blue}0a`,border:`1px solid ${ROLES[roleEdit]?.color||RBAC_TOKENS.blue}20`,borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:12,color:RBAC_TOKENS.text2,lineHeight:1.65}}>
               {isAr?ROLES[roleEdit]?.descriptionAr:ROLES[roleEdit]?.description}
             </div>
           )}
@@ -416,10 +416,10 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
           </div>
 
           {showCustom && (
-            <div style={{background:D.surf,border:`1px solid ${D.border}`,borderRadius:12,padding:14,marginBottom:14,maxHeight:260,overflowY:"auto"}}>
+            <div style={{background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:12,padding:14,marginBottom:14,maxHeight:260,overflowY:"auto"}}>
               {Object.entries(byGroup).map(([group,perms])=>(
                 <div key={group} style={{marginBottom:14}}>
-                  <div style={{fontSize:9,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:D.muted,marginBottom:8}}>{group}</div>
+                  <div style={{fontSize:9,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:RBAC_TOKENS.muted,marginBottom:8}}>{group}</div>
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
                     {perms.map(p=>{
                       const on=customPerms.includes(p.id)||customPerms.includes("*");
@@ -430,11 +430,11 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
                               if(e.target.checked) setCustomPerms(prev=>[...prev,p.id]);
                               else setCustomPerms(prev=>prev.filter(x=>x!==p.id));
                             }}
-                            style={{width:14,height:14,accentColor:D.blue,cursor:"pointer"}}/>
-                          <span style={{fontSize:12,color:on?D.text:D.text2,fontWeight:on?500:400}}>
+                            style={{width:14,height:14,accentColor:RBAC_TOKENS.blue,cursor:"pointer"}}/>
+                          <span style={{fontSize:12,color:on?RBAC_TOKENS.text:RBAC_TOKENS.text2,fontWeight:on?500:400}}>
                             {isAr?p.labelAr:p.label}
                           </span>
-                          <span style={{fontSize:9,color:D.muted,marginLeft:"auto",fontFamily:"monospace"}}>{p.id}</span>
+                          <span style={{fontSize:9,color:RBAC_TOKENS.muted,marginLeft:"auto",fontFamily:"monospace"}}>{p.id}</span>
                         </label>
                       );
                     })}
@@ -512,17 +512,17 @@ function AuditLogs({orgId,isAr}) {
   return (
     <Sec title={isAr?"سجلات التدقيق":"Audit Logs"}
       sub={isAr?"سجل كامل لكل الأنشطة":"Full immutable activity record"}
-      icon="📋" accent={D.purple}
+      icon="📋" accent={RBAC_TOKENS.purple}
       action={<Btn size="sm" variant="ghost" onClick={exportCSV} icon="⬇">{isAr?"تصدير CSV":"Export CSV"}</Btn>}>
 
       {/* Summary pills */}
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
-        {[["all","All",D.text2],["high","High",D.red],["medium","Medium",D.teal],["warn","Warning",D.amber],["info","Info",D.blue]].map(([s,l,c])=>(
+        {[["all","All",RBAC_TOKENS.text2],["high","High",RBAC_TOKENS.red],["medium","Medium",RBAC_TOKENS.teal],["warn","Warning",RBAC_TOKENS.amber],["info","Info",RBAC_TOKENS.blue]].map(([s,l,c])=>(
           <button key={s} onClick={()=>setFilter(s)} style={{
             padding:"4px 12px",borderRadius:99,cursor:"pointer",
             background:filter===s?`${c}18`:"transparent",
-            border:`1px solid ${filter===s?`${c}35`:D.border}`,
-            fontSize:11,fontWeight:700,color:filter===s?c:D.muted,
+            border:`1px solid ${filter===s?`${c}35`:RBAC_TOKENS.border}`,
+            fontSize:11,fontWeight:700,color:filter===s?c:RBAC_TOKENS.muted,
             transition:`all 150ms`}}>
             {l} {s!=="all"&&severityCounts[s]?`(${severityCounts[s]})`:""}
           </button>
@@ -533,16 +533,16 @@ function AuditLogs({orgId,isAr}) {
       </div>
 
       {/* Log table */}
-      <div style={{background:D.surf,border:`1px solid ${D.border}`,borderRadius:12,overflow:"hidden"}}>
+      <div style={{background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:12,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"150px 1fr 140px 80px 90px",
-          padding:"8px 14px",borderBottom:`1px solid ${D.border}`,background:"rgba(255,255,255,.02)"}}>
+          padding:"8px 14px",borderBottom:`1px solid ${RBAC_TOKENS.border}`,background:"rgba(255,255,255,.02)"}}>
           {[isAr?"الوقت":"Time",isAr?"الحدث":"Event",isAr?"المستخدم":"Actor",isAr?"الخطورة":"Severity",isAr?"عنوان IP":"IP"].map((h,i)=>(
-            <div key={i} style={{fontSize:9,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:D.muted}}>{h}</div>
+            <div key={i} style={{fontSize:9,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:RBAC_TOKENS.muted}}>{h}</div>
           ))}
         </div>
         <div style={{maxHeight:320,overflowY:"auto"}}>
           {loading && Array.from({length:6}).map((_,i)=>(
-            <div key={i} style={{padding:"12px 14px",borderBottom:`1px solid ${D.border}`}}>
+            <div key={i} style={{padding:"12px 14px",borderBottom:`1px solid ${RBAC_TOKENS.border}`}}>
               <Skel h={14} w={`${60+i*5}%`}/>
             </div>
           ))}
@@ -551,34 +551,34 @@ function AuditLogs({orgId,isAr}) {
             const d=log.timestamp?.toDate?.()??new Date(log.created_at||0);
             return (
               <div key={log.id||i} style={{display:"grid",gridTemplateColumns:"150px 1fr 140px 80px 90px",
-                padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${D.border}`:"none",
+                padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${RBAC_TOKENS.border}`:"none",
                 alignItems:"center",transition:"background 150ms",animation:`rbac-fadeIn 200ms ${Math.min(i,10)*30}ms both`}}
                 onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.02)"}
                 onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                <div style={{fontSize:10,color:D.muted,fontFamily:"monospace"}}>
+                <div style={{fontSize:10,color:RBAC_TOKENS.muted,fontFamily:"monospace"}}>
                   {d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})} {d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:13}}>{meta.icon}</span>
                   <div>
-                    <div style={{fontSize:12,fontWeight:600,color:D.text}}>{meta.label||log.type}</div>
-                    {log.details&&<div style={{fontSize:10,color:D.muted,marginTop:1}}>{log.details}</div>}
+                    <div style={{fontSize:12,fontWeight:600,color:RBAC_TOKENS.text}}>{meta.label||log.type}</div>
+                    {log.details&&<div style={{fontSize:10,color:RBAC_TOKENS.muted,marginTop:1}}>{log.details}</div>}
                   </div>
                 </div>
-                <div style={{fontSize:11,color:D.text2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{log.actor||"—"}</div>
+                <div style={{fontSize:11,color:RBAC_TOKENS.text2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{log.actor||"—"}</div>
                 <div><SeverityBadge s={log.severity||"info"}/></div>
-                <div style={{fontSize:10,color:D.muted,fontFamily:"monospace"}}>{log.ip||"—"}</div>
+                <div style={{fontSize:10,color:RBAC_TOKENS.muted,fontFamily:"monospace"}}>{log.ip||"—"}</div>
               </div>
             );
           })}
           {!loading&&filtered.length===0&&(
-            <div style={{padding:"32px",textAlign:"center",fontSize:12,color:D.muted}}>
+            <div style={{padding:"32px",textAlign:"center",fontSize:12,color:RBAC_TOKENS.muted}}>
               {isAr?"لا توجد سجلات":"No log entries found"}
             </div>
           )}
         </div>
       </div>
-      <div style={{marginTop:10,fontSize:10,color:D.muted}}>
+      <div style={{marginTop:10,fontSize:10,color:RBAC_TOKENS.muted}}>
         {isAr?`إجمالي ${filtered.length} سجل مُصفّى`:`Showing ${filtered.length} filtered entries`}
         {" · "}{isAr?"سجلات غير قابلة للتعديل":"Immutable records"}
       </div>
@@ -607,35 +607,35 @@ function ActivityTracking({orgId,isAr,members=[]}) {
   const peakHour="10:00–11:00";
 
   return (
-    <Sec title={isAr?"تتبع النشاط":"Activity Tracking"} sub={isAr?"خريطة نشاط القوى العاملة في الوقت الفعلي":"Real-time workforce activity heatmap"} icon="🌡️" accent={D.teal}>
+    <Sec title={isAr?"تتبع النشاط":"Activity Tracking"} sub={isAr?"خريطة نشاط القوى العاملة في الوقت الفعلي":"Real-time workforce activity heatmap"} icon="🌡️" accent={RBAC_TOKENS.teal}>
       {/* Live stats */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
         {[
-          {icon:"🟢",label:isAr?"متصلون الآن":"Online now",    v:onlineNow,  c:D.green},
-          {icon:"📊",label:isAr?"جلسات اليوم":"Today sessions", v:todaySessions, c:D.blue},
-          {icon:"⚡",label:isAr?"ذروة النشاط":"Peak hour",       v:peakHour,  c:D.amber},
+          {icon:"🟢",label:isAr?"متصلون الآن":"Online now",    v:onlineNow,  c:RBAC_TOKENS.green},
+          {icon:"📊",label:isAr?"جلسات اليوم":"Today sessions", v:todaySessions, c:RBAC_TOKENS.blue},
+          {icon:"⚡",label:isAr?"ذروة النشاط":"Peak hour",       v:peakHour,  c:RBAC_TOKENS.amber},
         ].map((m,i)=>(
           <div key={i} style={{background:`${m.c}0a`,border:`1px solid ${m.c}20`,borderRadius:11,padding:"12px 14px",textAlign:"center"}}>
             <div style={{fontSize:18,marginBottom:6}}>{m.icon}</div>
             <div style={{fontFamily:SYNE,fontSize:typeof m.v==="number"?22:14,fontWeight:800,color:m.c,lineHeight:1}}>{m.v}</div>
-            <div style={{fontSize:9,color:D.muted,marginTop:4,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em"}}>{m.label}</div>
+            <div style={{fontSize:9,color:RBAC_TOKENS.muted,marginTop:4,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em"}}>{m.label}</div>
           </div>
         ))}
       </div>
 
       {/* Activity heatmap */}
-      <div style={{background:D.surf,border:`1px solid ${D.border}`,borderRadius:12,padding:"14px"}}>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:D.muted,marginBottom:10}}>
+      <div style={{background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:12,padding:"14px"}}>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:RBAC_TOKENS.muted,marginBottom:10}}>
           {isAr?"نمط النشاط الأسبوعي":"Weekly activity pattern"}
         </div>
         <div style={{display:"flex",gap:3}}>
           <div style={{display:"flex",flexDirection:"column",gap:3,justifyContent:"space-around",paddingTop:16}}>
-            {days.map(d=><div key={d} style={{fontSize:8,color:D.muted,fontWeight:600,width:24,textAlign:"right"}}>{d}</div>)}
+            {days.map(d=><div key={d} style={{fontSize:8,color:RBAC_TOKENS.muted,fontWeight:600,width:24,textAlign:"right"}}>{d}</div>)}
           </div>
           <div style={{flex:1,overflow:"hidden"}}>
             {/* hour labels */}
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,padding:"0 2px"}}>
-              {hours.map(h=><div key={h} style={{fontSize:8,color:D.muted}}>{h}</div>)}
+              {hours.map(h=><div key={h} style={{fontSize:8,color:RBAC_TOKENS.muted}}>{h}</div>)}
             </div>
             {heatData.map((row,d)=>(
               <div key={d} style={{display:"flex",gap:2,marginBottom:2}}>
@@ -654,10 +654,10 @@ function ActivityTracking({orgId,isAr,members=[]}) {
           </div>
         </div>
         <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
-          <span style={{fontSize:9,color:D.muted}}>{isAr?"نشاط:":"Activity:"}</span>
+          <span style={{fontSize:9,color:RBAC_TOKENS.muted}}>{isAr?"نشاط:":"Activity:"}</span>
           {[["rgba(148,163,184,.12)",isAr?"منخفض":"Low"],["rgba(26,86,219,.3)",isAr?"متوسط":"Mid"],["rgba(8,145,178,.6)",isAr?"مرتفع":"High"]].map(([c,l])=>(
             <div key={l} style={{display:"flex",alignItems:"center",gap:4}}>
-              <div style={{width:10,height:10,borderRadius:2,background:c}}/><span style={{fontSize:9,color:D.muted}}>{l}</span>
+              <div style={{width:10,height:10,borderRadius:2,background:c}}/><span style={{fontSize:9,color:RBAC_TOKENS.muted}}>{l}</span>
             </div>
           ))}
         </div>
@@ -666,25 +666,25 @@ function ActivityTracking({orgId,isAr,members=[]}) {
       {/* Active users list */}
       {members.length>0&&(
         <div style={{marginTop:12}}>
-          <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:D.muted,marginBottom:8}}>
+          <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:RBAC_TOKENS.muted,marginBottom:8}}>
             {isAr?"الأكثر نشاطاً هذا الأسبوع":"Most active this week"}
           </div>
           {members.slice(0,5).map((m,i)=>{
             const sessions=Math.floor(Math.random()*7)+1;
             return (
               <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",
-                borderBottom:i<4?`1px solid ${D.border}`:"none"}}>
-                <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${D.blue},${D.teal})`,
+                borderBottom:i<4?`1px solid ${RBAC_TOKENS.border}`:"none"}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${RBAC_TOKENS.blue},${RBAC_TOKENS.teal})`,
                   display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:700,flexShrink:0}}>
                   {(m.name||m.email||"?")[0].toUpperCase()}
                 </div>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:12,fontWeight:600,color:D.text}}>{m.name||m.email||"User"}</div>
+                  <div style={{fontSize:12,fontWeight:600,color:RBAC_TOKENS.text}}>{m.name||m.email||"User"}</div>
                   <div style={{height:3,borderRadius:99,background:"rgba(148,163,184,.1)",marginTop:4,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${sessions*14}%`,background:D.blue,borderRadius:99,transition:"width 500ms"}}/>
+                    <div style={{height:"100%",width:`${sessions*14}%`,background:RBAC_TOKENS.blue,borderRadius:99,transition:"width 500ms"}}/>
                   </div>
                 </div>
-                <div style={{fontSize:11,fontWeight:700,color:D.teal,flexShrink:0}}>{sessions} {isAr?"جلسة":"sess"}</div>
+                <div style={{fontSize:11,fontWeight:700,color:RBAC_TOKENS.teal,flexShrink:0}}>{sessions} {isAr?"جلسة":"sess"}</div>
               </div>
             );
           })}
@@ -735,12 +735,12 @@ function SAMLConfig({orgId,adminUid,isAr}) {
   ];
 
   return (
-    <Sec title={isAr?"إعداد SAML SSO":"SAML SSO Configuration"} sub={isAr?"Azure AD · Okta · Google Workspace · SAML 2.0":"Azure AD · Okta · Google Workspace · SAML 2.0"} icon="🔐" accent={D.purple}>
+    <Sec title={isAr?"إعداد SAML SSO":"SAML SSO Configuration"} sub={isAr?"Azure AD · Okta · Google Workspace · SAML 2.0":"Azure AD · Okta · Google Workspace · SAML 2.0"} icon="🔐" accent={RBAC_TOKENS.purple}>
       {loading?<Skel h={200}/>:(
         <>
           {/* Provider selector */}
           <div style={{marginBottom:16}}>
-            <div style={{fontSize:11,fontWeight:700,color:D.text2,marginBottom:8,letterSpacing:".03em"}}>
+            <div style={{fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,marginBottom:8,letterSpacing:".03em"}}>
               {isAr?"اختر مزود الهوية (IdP)":"Select Identity Provider (IdP)"}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
@@ -748,11 +748,11 @@ function SAMLConfig({orgId,adminUid,isAr}) {
                 <button key={p.id} onClick={()=>setConfig(c=>({...c,provider:p.id}))}
                   style={{padding:"12px 8px",borderRadius:11,cursor:"pointer",textAlign:"center",
                     background:config.provider===p.id?`${p.color}14`:"transparent",
-                    border:`1.5px solid ${config.provider===p.id?p.color+"45":D.border}`,
+                    border:`1.5px solid ${config.provider===p.id?p.color+"45":RBAC_TOKENS.border}`,
                     transition:`all 180ms ${SPRING}`,
                     boxShadow:config.provider===p.id?`0 0 0 3px ${p.color}15`:"none"}}>
                   <div style={{fontSize:20,marginBottom:5}}>{p.icon}</div>
-                  <div style={{fontSize:9,fontWeight:700,color:config.provider===p.id?p.color:D.muted,lineHeight:1.3}}>{isAr?p.nameAr:p.name}</div>
+                  <div style={{fontSize:9,fontWeight:700,color:config.provider===p.id?p.color:RBAC_TOKENS.muted,lineHeight:1.3}}>{isAr?p.nameAr:p.name}</div>
                 </button>
               ))}
             </div>
@@ -776,21 +776,21 @@ function SAMLConfig({orgId,adminUid,isAr}) {
           </div>
 
           <div style={{marginBottom:14}}>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:D.text2,letterSpacing:".03em",marginBottom:5}}>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,letterSpacing:".03em",marginBottom:5}}>
               {isAr?"شهادة X.509 (Base64)":"X.509 Certificate (Base64)"}
             </label>
             <textarea value={config.certificate}
               onChange={e=>setConfig(c=>({...c,certificate:e.target.value}))}
               placeholder="-----BEGIN CERTIFICATE-----&#10;MIIBkTCB...&#10;-----END CERTIFICATE-----"
               rows={4}
-              style={{width:"100%",padding:"9px 13px",background:D.surf,border:`1.5px solid ${D.border}`,
-                borderRadius:9,color:D.text,fontSize:11,outline:"none",resize:"vertical",
+              style={{width:"100%",padding:"9px 13px",background:RBAC_TOKENS.surf,border:`1.5px solid ${RBAC_TOKENS.border}`,
+                borderRadius:9,color:RBAC_TOKENS.text,fontSize:11,outline:"none",resize:"vertical",
                 fontFamily:"'DM Mono',monospace",lineHeight:1.6}}/>
           </div>
 
           {/* Attribute mapping */}
-          <div style={{background:D.surf,border:`1px solid ${D.border}`,borderRadius:11,padding:"14px",marginBottom:14}}>
-            <div style={{fontSize:11,fontWeight:700,color:D.text2,marginBottom:10,letterSpacing:".03em"}}>
+          <div style={{background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:11,padding:"14px",marginBottom:14}}>
+            <div style={{fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,marginBottom:10,letterSpacing:".03em"}}>
               {isAr?"تعيين الصفات (Attribute Mapping)":"Attribute Mapping"}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
@@ -800,11 +800,11 @@ function SAMLConfig({orgId,adminUid,isAr}) {
                 {key:"department",label:isAr?"القسم":"Department"},
               ].map(({key,label})=>(
                 <div key={key}>
-                  <div style={{fontSize:10,color:D.muted,marginBottom:4,fontWeight:500}}>{label} →</div>
+                  <div style={{fontSize:10,color:RBAC_TOKENS.muted,marginBottom:4,fontWeight:500}}>{label} →</div>
                   <input value={config.attributeMapping[key]||""}
                     onChange={e=>setConfig(c=>({...c,attributeMapping:{...c.attributeMapping,[key]:e.target.value}}))}
-                    style={{width:"100%",padding:"7px 11px",background:D.bg2,border:`1px solid ${D.border}`,
-                      borderRadius:7,color:D.text,fontSize:11,outline:"none",fontFamily:"monospace"}}/>
+                    style={{width:"100%",padding:"7px 11px",background:RBAC_TOKENS.bg2,border:`1px solid ${RBAC_TOKENS.border}`,
+                      borderRadius:7,color:RBAC_TOKENS.text,fontSize:11,outline:"none",fontFamily:"monospace"}}/>
                 </div>
               ))}
             </div>
@@ -812,17 +812,17 @@ function SAMLConfig({orgId,adminUid,isAr}) {
 
           {/* Session timeout */}
           <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16}}>
-            <label style={{fontSize:11,fontWeight:700,color:D.text2,whiteSpace:"nowrap"}}>{isAr?"انتهاء الجلسة (دقيقة):":"Session timeout (min):"}</label>
+            <label style={{fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,whiteSpace:"nowrap"}}>{isAr?"انتهاء الجلسة (دقيقة):":"Session timeout (min):"}</label>
             <input type="number" min={30} max={1440} value={config.sessionTimeout}
               onChange={e=>setConfig(c=>({...c,sessionTimeout:Number(e.target.value)}))}
-              style={{width:90,padding:"7px 11px",background:D.surf,border:`1px solid ${D.border}`,
-                borderRadius:8,color:D.text,fontSize:12,outline:"none"}}/>
-            <span style={{fontSize:11,color:D.muted}}>{Math.round(config.sessionTimeout/60)} {isAr?"ساعة":"hours"}</span>
+              style={{width:90,padding:"7px 11px",background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,
+                borderRadius:8,color:RBAC_TOKENS.text,fontSize:12,outline:"none"}}/>
+            <span style={{fontSize:11,color:RBAC_TOKENS.muted}}>{Math.round(config.sessionTimeout/60)} {isAr?"ساعة":"hours"}</span>
           </div>
 
           {/* ACS / metadata URLs (read-only) */}
-          <div style={{background:D.bg2,border:`1px solid ${D.border}`,borderRadius:11,padding:"14px",marginBottom:16}}>
-            <div style={{fontSize:11,fontWeight:700,color:D.text2,marginBottom:10,letterSpacing:".03em"}}>
+          <div style={{background:RBAC_TOKENS.bg2,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:11,padding:"14px",marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,marginBottom:10,letterSpacing:".03em"}}>
               {isAr?"روابط Corvus (SP) — انسخها لـ IdP":"Corvus (SP) URLs — copy to your IdP"}
             </div>
             {[
@@ -830,12 +830,12 @@ function SAMLConfig({orgId,adminUid,isAr}) {
               {l:isAr?"رابط البيانات الوصفية":"Metadata", v:`https://app.corvus.io/saml/metadata`},
               {l:isAr?"رابط تسجيل الخروج":"Logout URL",  v:`https://app.corvus.io/saml/logout`},
             ].map(({l,v})=>(
-              <div key={l} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${D.border}`}}>
-                <span style={{fontSize:11,color:D.muted,minWidth:120,fontWeight:500}}>{l}</span>
-                <code style={{flex:1,fontSize:10,color:D.text2,background:"none",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</code>
+              <div key={l} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${RBAC_TOKENS.border}`}}>
+                <span style={{fontSize:11,color:RBAC_TOKENS.muted,minWidth:120,fontWeight:500}}>{l}</span>
+                <code style={{flex:1,fontSize:10,color:RBAC_TOKENS.text2,background:"none",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</code>
                 <button onClick={()=>navigator.clipboard.writeText(v)}
-                  style={{background:"none",border:`1px solid ${D.border}`,borderRadius:5,padding:"3px 9px",
-                    fontSize:10,color:D.muted,cursor:"pointer"}}>⎘</button>
+                  style={{background:"none",border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:5,padding:"3px 9px",
+                    fontSize:10,color:RBAC_TOKENS.muted,cursor:"pointer"}}>⎘</button>
               </div>
             ))}
           </div>
@@ -848,8 +848,8 @@ function SAMLConfig({orgId,adminUid,isAr}) {
             <Btn variant="ghost" onClick={testSSO} disabled={testResult==="testing"} icon="🧪">
               {testResult==="testing"?(isAr?"جاري الاختبار...":"Testing..."):(isAr?"اختبار الاتصال":"Test Connection")}
             </Btn>
-            {testResult==="success"&&<span style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:D.green}}>✓ {isAr?"الاتصال ناجح":"Connection successful"}</span>}
-            {testResult==="error"&&<span style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:D.red}}>✕ {isAr?"فشل الاتصال":"Connection failed"}</span>}
+            {testResult==="success"&&<span style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:RBAC_TOKENS.green}}>✓ {isAr?"الاتصال ناجح":"Connection successful"}</span>}
+            {testResult==="error"&&<span style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:RBAC_TOKENS.red}}>✕ {isAr?"فشل الاتصال":"Connection failed"}</span>}
           </div>
         </>
       )}
@@ -894,22 +894,22 @@ function GDPRTools({orgId,adminUid,isAr}) {
     setShowForm(false); setSubmitting(false);
   };
 
-  const STATUS={pending:{c:D.amber,label:isAr?"في الانتظار":"Pending"},fulfilled:{c:D.green,label:isAr?"منجز":"Fulfilled"},in_progress:{c:D.blue,label:isAr?"قيد التنفيذ":"In Progress"},rejected:{c:D.red,label:isAr?"مرفوض":"Rejected"}};
+  const STATUS={pending:{c:RBAC_TOKENS.amber,label:isAr?"في الانتظار":"Pending"},fulfilled:{c:RBAC_TOKENS.green,label:isAr?"منجز":"Fulfilled"},in_progress:{c:RBAC_TOKENS.blue,label:isAr?"قيد التنفيذ":"In Progress"},rejected:{c:RBAC_TOKENS.red,label:isAr?"مرفوض":"Rejected"}};
   const TYPES={access:{icon:"📄",label:isAr?"طلب الوصول":"Data Access"},deletion:{icon:"🗑️",label:isAr?"طلب الحذف":"Data Deletion"},portability:{icon:"📦",label:isAr?"قابلية النقل":"Data Portability"},rectification:{icon:"✏️",label:isAr?"تصحيح البيانات":"Rectification"},restriction:{icon:"🔒",label:isAr?"تقييد المعالجة":"Processing Restriction"}};
 
   return (
-    <Sec title={isAr?"أدوات GDPR":"GDPR Tools"} sub={isAr?"إدارة طلبات الخصوصية واستبقاء البيانات":"Privacy requests, data retention & compliance"} icon="🛡️" accent={D.green}
+    <Sec title={isAr?"أدوات GDPR":"GDPR Tools"} sub={isAr?"إدارة طلبات الخصوصية واستبقاء البيانات":"Privacy requests, data retention & compliance"} icon="🛡️" accent={RBAC_TOKENS.green}
       action={<Btn size="sm" variant="success" onClick={()=>setShowForm(!showForm)} icon="+">{isAr?"طلب جديد":"New Request"}</Btn>}>
 
       {/* New request form */}
       {showForm&&(
-        <div style={{background:D.bg2,border:`1px solid ${D.green}25`,borderRadius:12,padding:16,marginBottom:16,animation:`rbac-fadeIn 250ms both`}}>
-          <div style={{fontFamily:SYNE,fontSize:12,fontWeight:800,color:D.text,marginBottom:12}}>{isAr?"طلب GDPR جديد":"New GDPR Request"}</div>
+        <div style={{background:RBAC_TOKENS.bg2,border:`1px solid ${RBAC_TOKENS.green}25`,borderRadius:12,padding:16,marginBottom:16,animation:`rbac-fadeIn 250ms both`}}>
+          <div style={{fontFamily:SYNE,fontSize:12,fontWeight:800,color:RBAC_TOKENS.text,marginBottom:12}}>{isAr?"طلب GDPR جديد":"New GDPR Request"}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <div>
-              <label style={{display:"block",fontSize:11,fontWeight:700,color:D.text2,marginBottom:5}}>{isAr?"نوع الطلب":"Request Type"}</label>
+              <label style={{display:"block",fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,marginBottom:5}}>{isAr?"نوع الطلب":"Request Type"}</label>
               <select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}
-                style={{width:"100%",padding:"8px 11px",background:D.surf,border:`1px solid ${D.border}`,borderRadius:8,color:D.text,fontSize:12,outline:"none"}}>
+                style={{width:"100%",padding:"8px 11px",background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:8,color:RBAC_TOKENS.text,fontSize:12,outline:"none"}}>
                 {Object.entries(TYPES).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
               </select>
             </div>
@@ -928,7 +928,7 @@ function GDPRTools({orgId,adminUid,isAr}) {
       )}
 
       {/* Requests table */}
-      <div style={{background:D.surf,border:`1px solid ${D.border}`,borderRadius:12,overflow:"hidden",marginBottom:16}}>
+      <div style={{background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:12,overflow:"hidden",marginBottom:16}}>
         {loading?<div style={{padding:16}}><Skel h={100}/></div>:
           requests.map((r,i)=>{
             const st=STATUS[r.status]||STATUS.pending;
@@ -937,29 +937,29 @@ function GDPRTools({orgId,adminUid,isAr}) {
             return (
               <div key={r.id||i} style={{display:"grid",gridTemplateColumns:"32px 1fr 1fr auto auto",
                 gap:10,padding:"12px 14px",alignItems:"center",
-                borderBottom:i<requests.length-1?`1px solid ${D.border}`:"none",
+                borderBottom:i<requests.length-1?`1px solid ${RBAC_TOKENS.border}`:"none",
                 animation:`rbac-fadeIn 200ms ${i*50}ms both`}}>
                 <span style={{fontSize:18}}>{tp.icon}</span>
                 <div>
-                  <div style={{fontSize:12,fontWeight:600,color:D.text}}>{tp.label}</div>
-                  <div style={{fontSize:10,color:D.muted}}>{r.subject_email||"—"}</div>
+                  <div style={{fontSize:12,fontWeight:600,color:RBAC_TOKENS.text}}>{tp.label}</div>
+                  <div style={{fontSize:10,color:RBAC_TOKENS.muted}}>{r.subject_email||"—"}</div>
                 </div>
-                <div style={{fontSize:10,color:D.muted}}>{d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</div>
+                <div style={{fontSize:10,color:RBAC_TOKENS.muted}}>{d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</div>
                 <Badge color={st.c} size="xs">{st.label}</Badge>
                 <Btn size="xs" variant="ghost">{isAr?"تفاصيل":"Details"}</Btn>
               </div>
             );
           })}
         {!loading&&requests.length===0&&(
-          <div style={{padding:"24px",textAlign:"center",fontSize:12,color:D.muted}}>
+          <div style={{padding:"24px",textAlign:"center",fontSize:12,color:RBAC_TOKENS.muted}}>
             {isAr?"لا توجد طلبات GDPR":"No GDPR requests"}
           </div>
         )}
       </div>
 
       {/* Data retention settings */}
-      <div style={{background:D.bg2,border:`1px solid ${D.border}`,borderRadius:12,padding:"16px"}}>
-        <div style={{fontFamily:SYNE,fontSize:12,fontWeight:800,color:D.text,marginBottom:14}}>{isAr?"سياسة استبقاء البيانات":"Data Retention Policy"}</div>
+      <div style={{background:RBAC_TOKENS.bg2,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:12,padding:"16px"}}>
+        <div style={{fontFamily:SYNE,fontSize:12,fontWeight:800,color:RBAC_TOKENS.text,marginBottom:14}}>{isAr?"سياسة استبقاء البيانات":"Data Retention Policy"}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
           {[
             {key:"sessions_days",label:isAr?"سجلات الجلسات (يوم)":"Session records (days)"},
@@ -967,11 +967,11 @@ function GDPRTools({orgId,adminUid,isAr}) {
             {key:"anonymise_after",label:isAr?"إخفاء الهوية بعد (يوم)":"Anonymise after (days)"},
           ].map(({key,label})=>(
             <div key={key}>
-              <label style={{display:"block",fontSize:11,fontWeight:700,color:D.text2,marginBottom:5}}>{label}</label>
+              <label style={{display:"block",fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,marginBottom:5}}>{label}</label>
               <input type="number" min={30} max={2555} value={dataRetention[key]}
                 onChange={e=>setDataRetention(r=>({...r,[key]:Number(e.target.value)}))}
-                style={{width:"100%",padding:"8px 11px",background:D.surf,border:`1px solid ${D.border}`,
-                  borderRadius:8,color:D.text,fontSize:12,outline:"none"}}/>
+                style={{width:"100%",padding:"8px 11px",background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,
+                  borderRadius:8,color:RBAC_TOKENS.text,fontSize:12,outline:"none"}}/>
             </div>
           ))}
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -979,7 +979,7 @@ function GDPRTools({orgId,adminUid,isAr}) {
               label={isAr?"تخزين الفيديو (غير موصى به)":"Store video (not recommended)"} />
           </div>
         </div>
-        <div style={{background:"rgba(239,68,68,.07)",border:"1px solid rgba(239,68,68,.18)",borderRadius:9,padding:"10px 12px",fontSize:11,color:D.text2,lineHeight:1.65}}>
+        <div style={{background:"rgba(239,68,68,.07)",border:"1px solid rgba(239,68,68,.18)",borderRadius:9,padding:"10px 12px",fontSize:11,color:RBAC_TOKENS.text2,lineHeight:1.65}}>
           ⚠️ {isAr?"الفيديو لا يُخزَّن أبداً افتراضياً. فقط نقاط البيانات المجردة تُحفظ. مطابق لـ GDPR وHIPAA.":"Video is never stored by default. Only anonymised data points are persisted. Compliant with GDPR & HIPAA."}
         </div>
       </div>
@@ -1009,56 +1009,56 @@ function SecurityPolicies({orgId,adminUid,isAr}) {
   const REGIONS=[{id:"eu",label:"EU (Frankfurt)"},{id:"us",label:"US (Virginia)"},{id:"me",label:"ME (UAE)"}];
 
   return (
-    <Sec title={isAr?"سياسات الأمان":"Security Policies"} sub={isAr?"ضوابط الوصول وحماية البيانات":"Access controls & data protection"} icon="🔒" accent={D.red}>
+    <Sec title={isAr?"سياسات الأمان":"Security Policies"} sub={isAr?"ضوابط الوصول وحماية البيانات":"Access controls & data protection"} icon="🔒" accent={RBAC_TOKENS.red}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
         {/* Auth policies */}
         <div>
-          <div style={{fontSize:11,fontWeight:700,color:D.text2,letterSpacing:".04em",marginBottom:10,textTransform:"uppercase"}}>{isAr?"المصادقة":"Authentication"}</div>
+          <div style={{fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,letterSpacing:".04em",marginBottom:10,textTransform:"uppercase"}}>{isAr?"المصادقة":"Authentication"}</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <Toggle value={policies.mfaRequired} onChange={v=>setPolicies(p=>({...p,mfaRequired:v}))} label={isAr?"MFA إلزامي":"Require MFA"} />
             <Toggle value={policies.alertOnNewDevice} onChange={v=>setPolicies(p=>({...p,alertOnNewDevice:v}))} label={isAr?"تنبيه عند جهاز جديد":"Alert on new device"} />
             <Toggle value={policies.alertOnSuspicious} onChange={v=>setPolicies(p=>({...p,alertOnSuspicious:v}))} label={isAr?"تنبيه نشاط مشبوه":"Alert on suspicious activity"} />
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <label style={{fontSize:11,color:D.text2,minWidth:130}}>{isAr?"حد محاولات الدخول:":"Max login attempts:"}</label>
+              <label style={{fontSize:11,color:RBAC_TOKENS.text2,minWidth:130}}>{isAr?"حد محاولات الدخول:":"Max login attempts:"}</label>
               <input type="number" min={3} max={20} value={policies.maxLoginAttempts}
                 onChange={e=>setPolicies(p=>({...p,maxLoginAttempts:Number(e.target.value)}))}
-                style={{width:60,padding:"6px 10px",background:D.surf,border:`1px solid ${D.border}`,borderRadius:7,color:D.text,fontSize:12,outline:"none"}}/>
+                style={{width:60,padding:"6px 10px",background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:7,color:RBAC_TOKENS.text,fontSize:12,outline:"none"}}/>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <label style={{fontSize:11,color:D.text2,minWidth:130}}>{isAr?"مدة الجلسة (د):":"Session timeout (min):"}</label>
+              <label style={{fontSize:11,color:RBAC_TOKENS.text2,minWidth:130}}>{isAr?"مدة الجلسة (د):":"Session timeout (min):"}</label>
               <input type="number" min={15} max={1440} value={policies.sessionInactivityMin}
                 onChange={e=>setPolicies(p=>({...p,sessionInactivityMin:Number(e.target.value)}))}
-                style={{width:70,padding:"6px 10px",background:D.surf,border:`1px solid ${D.border}`,borderRadius:7,color:D.text,fontSize:12,outline:"none"}}/>
+                style={{width:70,padding:"6px 10px",background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,borderRadius:7,color:RBAC_TOKENS.text,fontSize:12,outline:"none"}}/>
             </div>
           </div>
         </div>
 
         {/* Data policies */}
         <div>
-          <div style={{fontSize:11,fontWeight:700,color:D.text2,letterSpacing:".04em",marginBottom:10,textTransform:"uppercase"}}>{isAr?"البيانات":"Data"}</div>
+          <div style={{fontSize:11,fontWeight:700,color:RBAC_TOKENS.text2,letterSpacing:".04em",marginBottom:10,textTransform:"uppercase"}}>{isAr?"البيانات":"Data"}</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <Toggle value={policies.encryptionAtRest} onChange={v=>setPolicies(p=>({...p,encryptionAtRest:v}))} label={isAr?"تشفير البيانات المحفوظة":"Encrypt data at rest"} />
             <Toggle value={policies.passwordComplexity} onChange={v=>setPolicies(p=>({...p,passwordComplexity:v}))} label={isAr?"تعقيد كلمة المرور":"Password complexity"} />
             <div>
-              <label style={{display:"block",fontSize:11,color:D.text2,marginBottom:5}}>{isAr?"إقامة البيانات:":"Data residency:"}</label>
+              <label style={{display:"block",fontSize:11,color:RBAC_TOKENS.text2,marginBottom:5}}>{isAr?"إقامة البيانات:":"Data residency:"}</label>
               <div style={{display:"flex",gap:6}}>
                 {REGIONS.map(r=>(
                   <button key={r.id} onClick={()=>setPolicies(p=>({...p,dataResidency:r.id}))}
                     style={{flex:1,padding:"7px 6px",borderRadius:8,cursor:"pointer",fontSize:10,fontWeight:700,
                       background:policies.dataResidency===r.id?"rgba(26,86,219,.12)":"transparent",
-                      border:`1px solid ${policies.dataResidency===r.id?D.blue+"45":D.border}`,
-                      color:policies.dataResidency===r.id?D.blue:D.muted,transition:"all 150ms"}}>
+                      border:`1px solid ${policies.dataResidency===r.id?RBAC_TOKENS.blue+"45":RBAC_TOKENS.border}`,
+                      color:policies.dataResidency===r.id?RBAC_TOKENS.blue:RBAC_TOKENS.muted,transition:"all 150ms"}}>
                     {r.label}
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <label style={{display:"block",fontSize:11,color:D.text2,marginBottom:5}}>{isAr?"قائمة IP المسموح بها (اختياري):":"IP Allowlist (optional):"}</label>
+              <label style={{display:"block",fontSize:11,color:RBAC_TOKENS.text2,marginBottom:5}}>{isAr?"قائمة IP المسموح بها (اختياري):":"IP Allowlist (optional):"}</label>
               <input value={policies.ipAllowlist} onChange={e=>setPolicies(p=>({...p,ipAllowlist:e.target.value}))}
                 placeholder="196.140.0.0/16, 10.0.0.1"
-                style={{width:"100%",padding:"8px 11px",background:D.surf,border:`1px solid ${D.border}`,
-                  borderRadius:8,color:D.text,fontSize:11,outline:"none",fontFamily:"monospace"}}/>
+                style={{width:"100%",padding:"8px 11px",background:RBAC_TOKENS.surf,border:`1px solid ${RBAC_TOKENS.border}`,
+                  borderRadius:8,color:RBAC_TOKENS.text,fontSize:11,outline:"none",fontFamily:"monospace"}}/>
             </div>
           </div>
         </div>
@@ -1066,7 +1066,7 @@ function SecurityPolicies({orgId,adminUid,isAr}) {
 
       {/* Compliance badges */}
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
-        {[["GDPR",D.green],["HIPAA-ready",D.blue],["SOC 2 (in progress)",D.amber],["AES-256",D.purple],["TLS 1.3",D.teal]].map(([l,c])=>(
+        {[["GDPR",RBAC_TOKENS.green],["HIPAA-ready",RBAC_TOKENS.blue],["SOC 2 (in progress)",RBAC_TOKENS.amber],["AES-256",RBAC_TOKENS.purple],["TLS 1.3",RBAC_TOKENS.teal]].map(([l,c])=>(
           <Badge key={l} color={c}>✓ {l}</Badge>
         ))}
       </div>
@@ -1099,25 +1099,25 @@ export function EnterpriseRBAC({ orgId, adminUid, profile, members=[], cs, lang=
       WebkitBackdropFilter:"blur(10px)",zIndex:9200,display:"flex",alignItems:"center",
       justifyContent:"center",padding:16}}>
       <div style={{
-        background:D.bg, border:`1px solid ${D.border}`,
+        background:RBAC_TOKENS.bg, border:`1px solid ${RBAC_TOKENS.border}`,
         borderRadius:20,width:"min(960px,97vw)",height:"min(820px,96vh)",
         display:"flex",flexDirection:"column",overflow:"hidden",
         direction:isAr?"rtl":"ltr",
         boxShadow:"0 28px 80px rgba(0,0,0,.65)",
         animation:`rbac-slideUp 350ms ${SPRING} both`,
-        "--rbac-blue":D.blue,
+        "--rbac-blue":RBAC_TOKENS.blue,
       }}>
 
         {/* HEADER */}
-        <div style={{padding:"18px 22px",borderBottom:`1px solid ${D.border}`,flexShrink:0}}>
+        <div style={{padding:"18px 22px",borderBottom:`1px solid ${RBAC_TOKENS.border}`,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{display:"flex",alignItems:"center",gap:11}}>
               <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#7c3aed,#1a56db)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,boxShadow:"0 4px 16px rgba(124,58,237,.4)"}}>🔐</div>
               <div>
-                <div style={{fontFamily:SYNE,fontSize:15,fontWeight:800,color:D.text,letterSpacing:"-.02em"}}>
+                <div style={{fontFamily:SYNE,fontSize:15,fontWeight:800,color:RBAC_TOKENS.text,letterSpacing:"-.02em"}}>
                   {isAr?"أمان المؤسسة والصلاحيات":"Enterprise Security & RBAC"}
                 </div>
-                <div style={{fontSize:10,color:D.purple,fontWeight:600,marginTop:1}}>
+                <div style={{fontSize:10,color:RBAC_TOKENS.purple,fontWeight:600,marginTop:1}}>
                   {isAr?"صلاحيات دقيقة · تدقيق · SSO · GDPR":"Granular permissions · Audit logs · SAML SSO · GDPR"}
                 </div>
               </div>
@@ -1128,19 +1128,19 @@ export function EnterpriseRBAC({ orgId, adminUid, profile, members=[], cs, lang=
                   borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,color:"#34d399"}}>✓ {b}</span>
               ))}
               <button onClick={onClose} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,.06)",
-                border:`1px solid ${D.border}`,color:D.muted,cursor:"pointer",fontSize:14,
+                border:`1px solid ${RBAC_TOKENS.border}`,color:RBAC_TOKENS.muted,cursor:"pointer",fontSize:14,
                 display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
             </div>
           </div>
         </div>
 
         {/* TABS */}
-        <div style={{display:"flex",borderBottom:`1px solid ${D.border}`,flexShrink:0,overflowX:"auto"}}>
+        <div style={{display:"flex",borderBottom:`1px solid ${RBAC_TOKENS.border}`,flexShrink:0,overflowX:"auto"}}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{
               flex:1,padding:"12px 8px",background:"none",border:"none",
-              borderBottom:`2px solid ${tab===t.id?D.purple:"transparent"}`,
-              color:tab===t.id?"#a78bfa":D.muted,
+              borderBottom:`2px solid ${tab===t.id?RBAC_TOKENS.purple:"transparent"}`,
+              color:tab===t.id?"#a78bfa":RBAC_TOKENS.muted,
               fontSize:11,fontWeight:700,cursor:"pointer",
               display:"flex",flexDirection:"column",alignItems:"center",gap:3,
               transition:"color 150ms",minWidth:80,whiteSpace:"nowrap",

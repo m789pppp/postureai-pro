@@ -66,7 +66,7 @@ function AnimatedNumber({ to, suffix = "", prefix = "" }) {
 }
 
 // ─── Design tokens ────────────────────────────────────────────────
-const D = {
+const LP_TOKENS = {
   bg:      "#040b14",
   bgUp:    "#06101c",
   surf:    "#0a1628",
@@ -517,8 +517,8 @@ function FeatureCard({ f, i }) {
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
         style={{
-          background: hov ? `${f.accent}08` : D.card,
-          border: `1px solid ${hov ? f.accent + "40" : D.border}`,
+          background: hov ? `${f.accent}08` : LP_TOKENS.card,
+          border: `1px solid ${hov ? f.accent + "40" : LP_TOKENS.border}`,
           borderRadius: 18, padding: "24px 22px",
           transition: "all .22s cubic-bezier(.16,1,.3,1)",
           transform: hov ? "translateY(-4px)" : "none",
@@ -538,8 +538,8 @@ function FeatureCard({ f, i }) {
           boxShadow: hov ? `0 0 20px ${f.accent}30` : "none",
           transition: "box-shadow .22s",
         }}>{f.icon}</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: D.text, marginBottom: 7 }}>{f.title}</div>
-        <div style={{ fontSize: 12.5, color: D.sub, lineHeight: 1.65 }}>{f.desc}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: LP_TOKENS.text, marginBottom: 7 }}>{f.title}</div>
+        <div style={{ fontSize: 12.5, color: LP_TOKENS.sub, lineHeight: 1.65 }}>{f.desc}</div>
       </div>
     </Reveal>
   );
@@ -553,8 +553,8 @@ function PlanCard({ plan, price, i, t, isAr, onStart }) {
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
         style={{
-          background: hov ? `${plan.color}08` : D.card,
-          border: `${plan.popular ? 2 : 1}px solid ${plan.popular ? plan.color : hov ? `${plan.color}40` : D.border}`,
+          background: hov ? `${plan.color}08` : LP_TOKENS.card,
+          border: `${plan.popular ? 2 : 1}px solid ${plan.popular ? plan.color : hov ? `${plan.color}40` : LP_TOKENS.border}`,
           borderRadius: 20, padding: "26px 22px",
           position: "relative", transition: "all .22s",
           transform: hov ? "translateY(-5px)" : "none",
@@ -569,7 +569,7 @@ function PlanCard({ plan, price, i, t, isAr, onStart }) {
             boxShadow: `0 4px 12px ${plan.color}40`,
           }}>{isAr ? "الأكثر طلباً ✦" : "✦ Most Popular"}</div>
         )}
-        <div style={{ fontSize: 15, fontWeight: 800, color: D.text, marginBottom: 8 }}>{plan.name}</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: LP_TOKENS.text, marginBottom: 8 }}>{plan.name}</div>
         {plan.price === 0 ? (
           <div style={{ fontSize: 30, fontWeight: 900, color: plan.color, marginBottom: 6, letterSpacing: "-1px" }}>
             {isAr ? "مجاناً" : "Free"}
@@ -579,7 +579,7 @@ function PlanCard({ plan, price, i, t, isAr, onStart }) {
             <span style={{ fontSize: 30, fontWeight: 900, color: plan.color, letterSpacing: "-1.5px" }}>
               {price?.toLocaleString()}
             </span>
-            <span style={{ fontSize: 12, color: D.muted }}>
+            <span style={{ fontSize: 12, color: LP_TOKENS.muted }}>
               {t.pricing.egp}{t.pricing.perMonth}
             </span>
           </div>
@@ -589,11 +589,11 @@ function PlanCard({ plan, price, i, t, isAr, onStart }) {
           </div>
         )}
         {plan.seats !== undefined && (
-          <div style={{ fontSize: 11, color: D.muted, marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: LP_TOKENS.muted, marginBottom: 16 }}>
             {t.pricing.seats(plan.seats)}
           </div>
         )}
-        <div style={{ height: 1, background: D.border, marginBottom: 16 }}/>
+        <div style={{ height: 1, background: LP_TOKENS.border, marginBottom: 16 }}/>
         {plan.features.map((f, fi) => (
           <div key={fi} style={{ display: "flex", alignItems: "flex-start", gap: 9, marginBottom: 8 }}>
             <div style={{
@@ -603,7 +603,7 @@ function PlanCard({ plan, price, i, t, isAr, onStart }) {
             }}>
               <span style={{ fontSize: 8.5, color: plan.color, fontWeight: 800 }}>✓</span>
             </div>
-            <span style={{ fontSize: 12, color: D.sub, lineHeight: 1.4 }}>{f}</span>
+            <span style={{ fontSize: 12, color: LP_TOKENS.sub, lineHeight: 1.4 }}>{f}</span>
           </div>
         ))}
         <div style={{ marginTop: 18 }}>
@@ -642,8 +642,8 @@ function DemoPreview({ demo, isAr }) {
   const maxS = Math.max(...scores);
   return (
     <div style={{
-      background: D.surf,
-      border: `1px solid ${D.border}`,
+      background: LP_TOKENS.surf,
+      border: `1px solid ${LP_TOKENS.border}`,
       borderRadius: 22,
       overflow: "hidden",
       boxShadow: "0 32px 96px rgba(0,0,0,.5)",
@@ -651,8 +651,8 @@ function DemoPreview({ demo, isAr }) {
     }}>
       {/* Window chrome */}
       <div style={{
-        padding: "12px 18px", background: D.card,
-        borderBottom: `1px solid ${D.border}`,
+        padding: "12px 18px", background: LP_TOKENS.card,
+        borderBottom: `1px solid ${LP_TOKENS.border}`,
         display: "flex", alignItems: "center", gap: 10,
       }}>
         <div style={{ display: "flex", gap: 6 }}>
@@ -664,14 +664,14 @@ function DemoPreview({ demo, isAr }) {
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             background: "rgba(255,255,255,.04)", borderRadius: 6,
-            padding: "3px 14px", fontSize: 11, color: D.muted,
+            padding: "3px 14px", fontSize: 11, color: LP_TOKENS.muted,
           }}>
             🔒 app.corvus.io/dashboard
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: D.green, boxShadow: `0 0 6px ${D.green}` }}/>
-          <span style={{ fontSize: 10, color: D.green, fontWeight: 600 }}>LIVE</span>
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: LP_TOKENS.green, boxShadow: `0 0 6px ${LP_TOKENS.green}` }}/>
+          <span style={{ fontSize: 10, color: LP_TOKENS.green, fontWeight: 600 }}>LIVE</span>
         </div>
       </div>
 
@@ -681,19 +681,19 @@ function DemoPreview({ demo, isAr }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
           {demo.metrics.map((m, i) => (
             <div key={i} style={{
-              background: D.card, borderRadius: 12, padding: "12px 14px",
-              border: `1px solid ${D.border}`, position: "relative", overflow: "hidden",
+              background: LP_TOKENS.card, borderRadius: 12, padding: "12px 14px",
+              border: `1px solid ${LP_TOKENS.border}`, position: "relative", overflow: "hidden",
             }}>
               <div style={{
                 position: "absolute", top: 0, left: 0, right: 0, height: 2,
                 background: `linear-gradient(90deg,${m.color}60,transparent)`,
               }}/>
-              <div style={{ fontSize: 9, color: D.muted, textTransform: "uppercase",
+              <div style={{ fontSize: 9, color: LP_TOKENS.muted, textTransform: "uppercase",
                 letterSpacing: ".06em", marginBottom: 5 }}>{m.label}</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: m.color, letterSpacing: "-0.5px" }}>
                 {m.value}
               </div>
-              <div style={{ fontSize: 9, color: D.muted, marginTop: 3 }}>{m.delta}</div>
+              <div style={{ fontSize: 9, color: LP_TOKENS.muted, marginTop: 3 }}>{m.delta}</div>
             </div>
           ))}
         </div>
@@ -702,15 +702,15 @@ function DemoPreview({ demo, isAr }) {
         <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 12 }}>
           {/* Chart */}
           <div style={{
-            background: D.card, borderRadius: 14, padding: "14px 16px",
-            border: `1px solid ${D.border}`,
+            background: LP_TOKENS.card, borderRadius: 14, padding: "14px 16px",
+            border: `1px solid ${LP_TOKENS.border}`,
           }}>
             <div style={{ display: "flex", justifyContent: "space-between",
               alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: D.text }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: LP_TOKENS.text }}>
                 {isAr ? "اتجاه مؤشر الصحة" : "Health Intelligence Trend"}
               </div>
-              <div style={{ fontSize: 10, color: D.green, fontWeight: 600 }}>↑ Improving</div>
+              <div style={{ fontSize: 10, color: LP_TOKENS.green, fontWeight: 600 }}>↑ Improving</div>
             </div>
             <div style={{ display: "flex", gap: 4, height: 56, alignItems: "flex-end" }}>
               {scores.map((s, i) => {
@@ -720,10 +720,10 @@ function DemoPreview({ demo, isAr }) {
                     alignItems: "center", gap: 3 }}>
                     <div style={{
                       width: "100%", borderRadius: "3px 3px 0 0",
-                      background: isLast ? D.blue : `${D.blue}50`,
+                      background: isLast ? LP_TOKENS.blue : `${LP_TOKENS.blue}50`,
                       height: Math.max(3, Math.round(s / maxS * 52)),
                       transition: "height .4s",
-                      boxShadow: isLast ? `0 0 8px ${D.blue}60` : "none",
+                      boxShadow: isLast ? `0 0 8px ${LP_TOKENS.blue}60` : "none",
                     }}/>
                   </div>
                 );
@@ -743,18 +743,18 @@ function DemoPreview({ demo, isAr }) {
                 background: "rgba(99,102,241,.15)",
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
               }}>✦</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: D.blueBr }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: LP_TOKENS.blueBr }}>
                 {isAr ? "رؤية AI" : "AI Insight"}
               </div>
             </div>
-            <div style={{ fontSize: 11, color: D.sub, lineHeight: 1.65 }}>
+            <div style={{ fontSize: 11, color: LP_TOKENS.sub, lineHeight: 1.65 }}>
               {isAr
                 ? "3 موظفون يُظهرون أنماط تدل على إرهاق وشيك. يُنصح بالتدخل خلال الأسبوعين القادمين."
                 : "3 employees showing early burnout patterns. Recommend intervention within the next 2 weeks."}
             </div>
             <div style={{
               marginTop: 10, display: "flex", gap: 4, alignItems: "center",
-              fontSize: 10, color: D.amber, fontWeight: 600,
+              fontSize: 10, color: LP_TOKENS.amber, fontWeight: 600,
             }}>
               ⚠ {isAr ? "يحتاج انتباهاً" : "Needs attention"}
             </div>
@@ -783,7 +783,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
     return () => window.removeEventListener("scroll", fn);
   }, []);
 
-  const gPrimary = { background: D.gPrimary, border: "none" };
+  const gPrimary = { background: LP_TOKENS.gPrimary, border: "none" };
   const btnP = {
     ...gPrimary, display: "inline-flex", alignItems: "center", gap: 8,
     borderRadius: 12, padding: "14px 28px", fontSize: 14,
@@ -794,9 +794,9 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
   const btnS = {
     display: "inline-flex", alignItems: "center", gap: 8,
     background: "transparent",
-    border: `1px solid ${D.borderM}`,
+    border: `1px solid ${LP_TOKENS.borderM}`,
     borderRadius: 12, padding: "13px 24px", fontSize: 13,
-    fontWeight: 600, color: D.sub, cursor: "pointer",
+    fontWeight: 600, color: LP_TOKENS.sub, cursor: "pointer",
     transition: "all .2s",
   };
 
@@ -829,7 +829,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
 
   return (
     <div dir={dir} style={{
-      background: D.bg, color: D.text,
+      background: LP_TOKENS.bg, color: LP_TOKENS.text,
       fontFamily: "'Inter', system-ui, sans-serif",
       overflowX: "hidden", minHeight: "100vh",
     }}>
@@ -840,7 +840,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
         background: navScrolled ? "rgba(4,11,20,.94)" : "transparent",
         backdropFilter: navScrolled ? "blur(16px)" : "none",
-        borderBottom: navScrolled ? `1px solid ${D.border}` : "none",
+        borderBottom: navScrolled ? `1px solid ${LP_TOKENS.border}` : "none",
         transition: "all .35s cubic-bezier(.16,1,.3,1)",
         height: 62, padding: "0 32px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -848,13 +848,13 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <div style={{
-            width: 32, height: 32, background: D.gPrimary,
+            width: 32, height: 32, background: LP_TOKENS.gPrimary,
             borderRadius: 10, display: "flex", alignItems: "center",
             justifyContent: "center", fontSize: 17, fontWeight: 800,
             boxShadow: navScrolled ? `0 0 14px rgba(99,102,241,.3)` : "none",
           }}>◈</div>
           <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.025em" }}>
-            Corvus <span style={{ color: D.blue }}>Pro</span>
+            Corvus <span style={{ color: LP_TOKENS.blue }}>Pro</span>
           </span>
         </div>
 
@@ -862,11 +862,11 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
         <div className="hide-mobile" style={{ display: "flex", gap: 28, alignItems: "center" }}>
           {[[`#demo`, t.nav.platform], [`#b2b`, t.nav.enterprise], [`#pricing`, t.nav.pricing]].map(([href, label]) => (
             <a key={href} href={href} style={{
-              fontSize: 13, color: D.sub, textDecoration: "none",
+              fontSize: 13, color: LP_TOKENS.sub, textDecoration: "none",
               fontWeight: 500, transition: "color .2s",
             }}
-            onMouseEnter={e => e.target.style.color = D.text}
-            onMouseLeave={e => e.target.style.color = D.sub}>{label}</a>
+            onMouseEnter={e => e.target.style.color = LP_TOKENS.text}
+            onMouseLeave={e => e.target.style.color = LP_TOKENS.sub}>{label}</a>
           ))}
         </div>
 
@@ -876,15 +876,15 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             className="hide-mobile"
             style={{
               background: "rgba(148,163,184,.06)",
-              border: `1px solid ${D.border}`,
+              border: `1px solid ${LP_TOKENS.border}`,
               borderRadius: 7, padding: "5px 12px",
-              fontSize: 11, color: D.muted, cursor: "pointer",
+              fontSize: 11, color: LP_TOKENS.muted, cursor: "pointer",
             }}>{isAr ? "🇬🇧 EN" : "🇪🇬 عربي"}</button>
           <button onClick={() => setDarkMode(!darkMode)}
             className="hide-mobile"
             style={{
               background: "rgba(148,163,184,.06)",
-              border: `1px solid ${D.border}`,
+              border: `1px solid ${LP_TOKENS.border}`,
               borderRadius: 7, padding: "5px 8px",
               fontSize: 13, cursor: "pointer",
             }}>{darkMode ? "☀️" : "🌙"}</button>
@@ -905,7 +905,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
         {/* Grid bg */}
         <div style={{
           position: "absolute", inset: 0, pointerEvents: "none",
-          backgroundImage: `linear-gradient(${D.border} 1px,transparent 1px),linear-gradient(90deg,${D.border} 1px,transparent 1px)`,
+          backgroundImage: `linear-gradient(${LP_TOKENS.border} 1px,transparent 1px),linear-gradient(90deg,${LP_TOKENS.border} 1px,transparent 1px)`,
           backgroundSize: "64px 64px",
           animation: "grid-fade 1.5s ease forwards",
           WebkitMaskImage: "radial-gradient(ellipse 80% 60% at 50% 40%,black 30%,transparent 100%)",
@@ -937,7 +937,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               marginBottom: 28, fontWeight: 500,
             }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%",
-                background: D.green, boxShadow: `0 0 6px ${D.green}` }}/>
+                background: LP_TOKENS.green, boxShadow: `0 0 6px ${LP_TOKENS.green}` }}/>
               {t.hero.eyebrow}
             </div>
           </Reveal>
@@ -950,7 +950,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               letterSpacing: "-.04em", marginBottom: 24,
             }}>
               <span style={{
-                background: D.gHero,
+                background: LP_TOKENS.gHero,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
               }}>{t.hero.h1a}</span>
@@ -961,7 +961,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
           {/* Sub */}
           <Reveal delay={150}>
             <p style={{
-              fontSize: "clamp(15px,2vw,18px)", color: D.sub,
+              fontSize: "clamp(15px,2vw,18px)", color: LP_TOKENS.sub,
               maxWidth: 580, margin: "0 auto 36px", lineHeight: 1.75,
             }}>{t.hero.sub}</p>
           </Reveal>
@@ -986,9 +986,9 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               {t.hero.trust.map((p, i) => (
                 <span key={i} style={{
                   background: "rgba(148,163,184,.06)",
-                  border: `1px solid ${D.border}`,
+                  border: `1px solid ${LP_TOKENS.border}`,
                   borderRadius: 99, padding: "5px 14px",
-                  fontSize: 11.5, color: D.muted,
+                  fontSize: 11.5, color: LP_TOKENS.muted,
                 }}>✓ {p}</span>
               ))}
             </div>
@@ -999,23 +999,23 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
       {/* ══ SOCIAL PROOF BAR ════════════════════════════════════════ */}
       <section style={{
         padding: "28px 32px",
-        background: D.bgUp,
-        borderTop: `1px solid ${D.border}`,
-        borderBottom: `1px solid ${D.border}`,
+        background: LP_TOKENS.bgUp,
+        borderTop: `1px solid ${LP_TOKENS.border}`,
+        borderBottom: `1px solid ${LP_TOKENS.border}`,
       }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 28,
             justifyContent: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, color: D.muted, fontWeight: 600,
+            <span style={{ fontSize: 11, color: LP_TOKENS.muted, fontWeight: 600,
               textTransform: "uppercase", letterSpacing: ".08em", flexShrink: 0 }}>
               {t.proof.label}
             </span>
             {t.proof.logos.map((logo, i) => (
               <div key={i} style={{
-                fontSize: 12, fontWeight: 700, color: D.muted,
+                fontSize: 12, fontWeight: 700, color: LP_TOKENS.muted,
                 padding: "6px 18px",
-                border: `1px solid ${D.border}`,
-                borderRadius: 8, background: D.card,
+                border: `1px solid ${LP_TOKENS.border}`,
+                borderRadius: 8, background: LP_TOKENS.card,
                 opacity: .75, transition: "opacity .2s",
               }}
               onMouseEnter={e => e.currentTarget.style.opacity = "1"}
@@ -1028,7 +1028,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
       </section>
 
       {/* ══ ANIMATED STATS ══════════════════════════════════════════ */}
-      <section style={{ padding: "80px 32px", background: D.bgUp }}>
+      <section style={{ padding: "80px 32px", background: LP_TOKENS.bgUp }}>
         <div style={{ maxWidth: 980, margin: "0 auto" }}>
           <div className="lp-grid-4" style={{
             display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 20,
@@ -1037,19 +1037,19 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               <Reveal key={i} delay={i * 80}>
                 <div style={{
                   textAlign: "center", padding: "28px 20px",
-                  background: D.card, border: `1px solid ${D.border}`,
+                  background: LP_TOKENS.card, border: `1px solid ${LP_TOKENS.border}`,
                   borderRadius: 18,
                 }}>
                   <div style={{
                     fontSize: "clamp(32px,4vw,48px)", fontWeight: 900,
-                    background: D.gHero,
+                    background: LP_TOKENS.gHero,
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
                     lineHeight: 1, marginBottom: 10,
                   }}>
                     <AnimatedNumber to={s.n} prefix={s.pfx || ""} suffix={s.sfx || ""}/>
                   </div>
-                  <div style={{ fontSize: 12.5, color: D.sub, lineHeight: 1.55 }}>{s.label}</div>
+                  <div style={{ fontSize: 12.5, color: LP_TOKENS.sub, lineHeight: 1.55 }}>{s.label}</div>
                 </div>
               </Reveal>
             ))}
@@ -1074,7 +1074,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                 fontSize: "clamp(26px,4vw,44px)", fontWeight: 900,
                 letterSpacing: "-.03em", marginBottom: 14,
               }}>{t.demo.h2}</h2>
-              <p style={{ fontSize: 15.5, color: D.sub, maxWidth: 520, margin: "0 auto" }}>
+              <p style={{ fontSize: 15.5, color: LP_TOKENS.sub, maxWidth: 520, margin: "0 auto" }}>
                 {t.demo.sub}
               </p>
             </div>
@@ -1097,9 +1097,9 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
       {/* ══ CASE STUDIES ════════════════════════════════════════════ */}
       <section style={{
         padding: "100px 32px",
-        background: D.bgUp,
-        borderTop: `1px solid ${D.border}`,
-        borderBottom: `1px solid ${D.border}`,
+        background: LP_TOKENS.bgUp,
+        borderTop: `1px solid ${LP_TOKENS.border}`,
+        borderBottom: `1px solid ${LP_TOKENS.border}`,
       }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <Reveal>
@@ -1124,16 +1124,16 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             {t.cases.items.map((cs, i) => (
               <Reveal key={i} delay={i * 100}>
                 <div style={{
-                  background: D.card,
-                  border: `1px solid ${D.border}`,
+                  background: LP_TOKENS.card,
+                  border: `1px solid ${LP_TOKENS.border}`,
                   borderRadius: 20, overflow: "hidden",
                   transition: "transform .2s, box-shadow .2s",
                 }}
                 className="lp-hover-lift">
                   {/* Case header */}
                   <div style={{
-                    padding: "20px 22px", background: D.surf,
-                    borderBottom: `1px solid ${D.border}`,
+                    padding: "20px 22px", background: LP_TOKENS.surf,
+                    borderBottom: `1px solid ${LP_TOKENS.border}`,
                     display: "flex", alignItems: "center",
                     justifyContent: "space-between",
                   }}>
@@ -1145,10 +1145,10 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                         fontSize: 14, fontWeight: 800, color: "white",
                       }}>{cs.logo}</div>
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: LP_TOKENS.text }}>
                           {cs.company}
                         </div>
-                        <div style={{ fontSize: 11, color: D.muted, marginTop: 2 }}>
+                        <div style={{ fontSize: 11, color: LP_TOKENS.muted, marginTop: 2 }}>
                           {cs.industry}
                         </div>
                       </div>
@@ -1164,16 +1164,16 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                   {/* Metrics */}
                   <div style={{
                     display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-                    gap: 0, borderBottom: `1px solid ${D.border}`,
+                    gap: 0, borderBottom: `1px solid ${LP_TOKENS.border}`,
                   }}>
                     {[cs.metric1, cs.metric2, cs.metric3].map((m, mi) => (
                       <div key={mi} style={{
                         padding: "16px 14px", textAlign: "center",
-                        borderRight: mi < 2 ? `1px solid ${D.border}` : "none",
+                        borderRight: mi < 2 ? `1px solid ${LP_TOKENS.border}` : "none",
                       }}>
                         <div style={{ fontSize: 22, fontWeight: 900,
                           color: cs.color, letterSpacing: "-1px" }}>{m.n}</div>
-                        <div style={{ fontSize: 9.5, color: D.muted, marginTop: 3,
+                        <div style={{ fontSize: 9.5, color: LP_TOKENS.muted, marginTop: 3,
                           lineHeight: 1.3 }}>{m.label}</div>
                       </div>
                     ))}
@@ -1181,11 +1181,11 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
 
                   {/* Quote */}
                   <div style={{ padding: "18px 22px" }}>
-                    <div style={{ fontSize: 12.5, color: D.sub, lineHeight: 1.7,
+                    <div style={{ fontSize: 12.5, color: LP_TOKENS.sub, lineHeight: 1.7,
                       fontStyle: "italic", marginBottom: 12 }}>
                       "{cs.quote}"
                     </div>
-                    <div style={{ fontSize: 11, color: D.muted, fontWeight: 600 }}>
+                    <div style={{ fontSize: 11, color: LP_TOKENS.muted, fontWeight: 600 }}>
                       — {cs.person}
                     </div>
                   </div>
@@ -1211,7 +1211,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               }}>{t.b2b.eyebrow}</div>
               <h2 style={{ fontSize: "clamp(26px,4vw,44px)", fontWeight: 900,
                 letterSpacing: "-.03em", marginBottom: 14 }}>{t.b2b.h2}</h2>
-              <p style={{ fontSize: 16, color: D.sub, maxWidth: 580,
+              <p style={{ fontSize: 16, color: LP_TOKENS.sub, maxWidth: 580,
                 margin: "0 auto" }}>{t.b2b.sub}</p>
             </div>
           </Reveal>
@@ -1234,9 +1234,9 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
       {/* ══ B2C FEATURES ════════════════════════════════════════════ */}
       <section className="lp-section" style={{
         padding: "100px 32px",
-        background: D.bgUp,
-        borderTop: `1px solid ${D.border}`,
-        borderBottom: `1px solid ${D.border}`,
+        background: LP_TOKENS.bgUp,
+        borderTop: `1px solid ${LP_TOKENS.border}`,
+        borderBottom: `1px solid ${LP_TOKENS.border}`,
       }}>
         <div style={{ maxWidth: 1060, margin: "0 auto" }}>
           <Reveal>
@@ -1251,7 +1251,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               }}>{t.b2c.eyebrow}</div>
               <h2 style={{ fontSize: "clamp(26px,4vw,44px)", fontWeight: 900,
                 letterSpacing: "-.03em", marginBottom: 14 }}>{t.b2c.h2}</h2>
-              <p style={{ fontSize: 16, color: D.sub, maxWidth: 560,
+              <p style={{ fontSize: 16, color: LP_TOKENS.sub, maxWidth: 560,
                 margin: "0 auto" }}>{t.b2c.sub}</p>
             </div>
           </Reveal>
@@ -1285,21 +1285,21 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               }}>{t.pricing.eyebrow}</div>
               <h2 style={{ fontSize: "clamp(26px,4vw,44px)", fontWeight: 900,
                 letterSpacing: "-.03em", marginBottom: 10 }}>{t.pricing.h2}</h2>
-              <p style={{ fontSize: 15, color: D.sub, marginBottom: 30 }}>{t.pricing.sub}</p>
+              <p style={{ fontSize: 15, color: LP_TOKENS.sub, marginBottom: 30 }}>{t.pricing.sub}</p>
 
               {/* B2B / B2C toggle */}
               <div style={{ display: "inline-flex",
                 background: "rgba(148,163,184,.06)",
-                border: `1px solid ${D.border}`,
+                border: `1px solid ${LP_TOKENS.border}`,
                 borderRadius: 13, padding: 4, gap: 3, marginBottom: 18 }}>
                 {[["b2b", t.pricing.b2bLabel], ["b2c", t.pricing.b2cLabel]].map(([v, l]) => (
                   <button key={v} onClick={() => setPricingTab(v)} style={{
                     padding: "9px 24px", fontSize: 12.5, fontWeight: 600,
-                    background: pricingTab === v ? D.blue : "transparent",
-                    color: pricingTab === v ? "#fff" : D.muted,
+                    background: pricingTab === v ? LP_TOKENS.blue : "transparent",
+                    color: pricingTab === v ? "#fff" : LP_TOKENS.muted,
                     border: "none", borderRadius: 10,
                     cursor: "pointer", transition: "all .2s",
-                    boxShadow: pricingTab === v ? `0 2px 12px ${D.blue}40` : "none",
+                    boxShadow: pricingTab === v ? `0 2px 12px ${LP_TOKENS.blue}40` : "none",
                   }}>{l}</button>
                 ))}
               </div>
@@ -1307,14 +1307,14 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               {/* Monthly / Yearly */}
               <div style={{ display: "inline-flex",
                 background: "rgba(148,163,184,.06)",
-                border: `1px solid ${D.border}`,
+                border: `1px solid ${LP_TOKENS.border}`,
                 borderRadius: 10, padding: 3, gap: 2 }}>
                 {["monthly", "yearly"].map(b => (
                   <button key={b} onClick={() => setBillingCycle(b)} style={{
                     padding: "7px 20px", fontSize: 12, fontWeight: 600,
-                    background: billingCycle === b ? D.surf : "transparent",
-                    color: billingCycle === b ? D.text : D.muted,
-                    border: billingCycle === b ? `1px solid ${D.border}` : "1px solid transparent",
+                    background: billingCycle === b ? LP_TOKENS.surf : "transparent",
+                    color: billingCycle === b ? LP_TOKENS.text : LP_TOKENS.muted,
+                    border: billingCycle === b ? `1px solid ${LP_TOKENS.border}` : "1px solid transparent",
                     borderRadius: 8, cursor: "pointer", transition: "all .2s",
                     display: "flex", alignItems: "center", gap: 6,
                   }}>
@@ -1322,7 +1322,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                     {b === "yearly" && (
                       <span style={{
                         fontSize: 9, background: "rgba(16,185,129,.18)",
-                        color: D.green, padding: "1px 7px", borderRadius: 99, fontWeight: 700,
+                        color: LP_TOKENS.green, padding: "1px 7px", borderRadius: 99, fontWeight: 700,
                       }}>{t.pricing.save}</span>
                     )}
                   </button>
@@ -1365,7 +1365,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                 ["🛡", isAr ? "بيانات آمنة 100%" : "100% data privacy"],
               ].map(([icon, label], i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 6,
-                  fontSize: 12, color: D.muted }}>
+                  fontSize: 12, color: LP_TOKENS.muted }}>
                   <span style={{ fontSize: 14 }}>{icon}</span>{label}
                 </div>
               ))}
@@ -1377,8 +1377,8 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
       {/* ══ TESTIMONIALS ════════════════════════════════════════════ */}
       <section style={{
         padding: "100px 32px",
-        background: D.bgUp,
-        borderTop: `1px solid ${D.border}`,
+        background: LP_TOKENS.bgUp,
+        borderTop: `1px solid ${LP_TOKENS.border}`,
       }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <Reveal>
@@ -1386,7 +1386,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               textAlign: "center", fontSize: "clamp(24px,4vw,40px)",
               fontWeight: 900, letterSpacing: "-.03em", marginBottom: 12,
             }}>{isAr ? "ماذا يقول عملاؤنا" : "What our customers say"}</h2>
-            <p style={{ textAlign: "center", color: D.muted, fontSize: 13, marginBottom: 44 }}>
+            <p style={{ textAlign: "center", color: LP_TOKENS.muted, fontSize: 13, marginBottom: 44 }}>
               {isAr ? "شركات حقيقية. نتائج قابلة للقياس." : "Real companies. Measurable outcomes."}
             </p>
           </Reveal>
@@ -1396,7 +1396,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             {t.testimonials.map((tm, i) => (
               <Reveal key={i} delay={i * 90}>
                 <div className="lp-hover-lift" style={{
-                  background: D.card, border: `1px solid ${D.border}`,
+                  background: LP_TOKENS.card, border: `1px solid ${LP_TOKENS.border}`,
                   borderRadius: 20, padding: "24px 22px",
                   transition: "transform .2s, box-shadow .2s",
                   display: "flex", flexDirection: "column", gap: 16,
@@ -1404,29 +1404,29 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                   {/* Stars */}
                   <div style={{ display: "flex", gap: 3 }}>
                     {[0,1,2,3,4].map(s => (
-                      <span key={s} style={{ color: D.amber, fontSize: 13 }}>★</span>
+                      <span key={s} style={{ color: LP_TOKENS.amber, fontSize: 13 }}>★</span>
                     ))}
                   </div>
                   {/* Quote */}
                   <p style={{
-                    fontSize: 13, color: D.sub, lineHeight: 1.7, flex: 1,
+                    fontSize: 13, color: LP_TOKENS.sub, lineHeight: 1.7, flex: 1,
                     fontStyle: "italic",
                   }}>"{tm.quote}"</p>
                   {/* Author */}
                   <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
                     <div style={{
                       width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
-                      background: D.gPrimary,
+                      background: LP_TOKENS.gPrimary,
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 14, color: "#fff", fontWeight: 700,
                     }}>{tm.avatar}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: D.text }}>{tm.name}</div>
-                      <div style={{ fontSize: 10.5, color: D.muted, marginTop: 2 }}>{tm.role}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: LP_TOKENS.text }}>{tm.name}</div>
+                      <div style={{ fontSize: 10.5, color: LP_TOKENS.muted, marginTop: 2 }}>{tm.role}</div>
                     </div>
                     <div style={{
                       fontSize: 15, fontWeight: 900,
-                      color: tm.score >= 80 ? D.green : tm.score >= 60 ? D.amber : D.red,
+                      color: tm.score >= 80 ? LP_TOKENS.green : tm.score >= 60 ? LP_TOKENS.amber : LP_TOKENS.red,
                       flexShrink: 0,
                     }}>{tm.score}</div>
                   </div>
@@ -1439,17 +1439,17 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
 
       
       {/* ══ HOW IT WORKS ════════════════════════════════════════════ */}
-      <section style={{ padding: "100px 32px", background: D.bg }}>
+      <section style={{ padding: "100px 32px", background: LP_TOKENS.bg }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
           <Reveal>
             <div style={{ textAlign:"center", marginBottom: 64 }}>
-              <p style={{ fontSize:12, fontWeight:700, letterSpacing:".14em", color:D.sub, textTransform:"uppercase", marginBottom:14 }}>
+              <p style={{ fontSize:12, fontWeight:700, letterSpacing:".14em", color:LP_TOKENS.sub, textTransform:"uppercase", marginBottom:14 }}>
                 {isAr ? "كيف يعمل" : "HOW IT WORKS"}
               </p>
-              <h2 style={{ fontSize:"clamp(28px,4vw,42px)", fontWeight:700, color:D.text, margin:"0 0 16px" }}>
+              <h2 style={{ fontSize:"clamp(28px,4vw,42px)", fontWeight:700, color:LP_TOKENS.text, margin:"0 0 16px" }}>
                 {isAr ? "ثلاث خطوات للبدء" : "Up and running in 3 minutes"}
               </h2>
-              <p style={{ fontSize:17, color:D.sub, maxWidth:560, margin:"0 auto" }}>
+              <p style={{ fontSize:17, color:LP_TOKENS.sub, maxWidth:560, margin:"0 auto" }}>
                 {isAr ? "لا أجهزة. لا تحميل. افتح المتصفح وابدأ فوراً." : "No hardware. No downloads. Open your browser and start instantly."}
               </p>
             </div>
@@ -1486,16 +1486,16 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             ].map((s, i) => (
               <Reveal key={s.step} delay={i * 120}>
                 <div style={{
-                  background: D.card,
+                  background: LP_TOKENS.card,
                   borderRadius: 20,
                   padding: "36px 28px",
-                  border: `1px solid ${D.border}`,
+                  border: `1px solid ${LP_TOKENS.border}`,
                   position:"relative",
                   overflow:"hidden",
                   transition:"transform .2s, border-color .2s",
                 }}
                   onMouseEnter={e => { e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.borderColor=s.color+"66"; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.borderColor=D.border; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.borderColor=LP_TOKENS.border; }}
                 >
                   <div style={{
                     position:"absolute", top:20, right: isAr ? "auto" : 24, left: isAr ? 24 : "auto",
@@ -1509,10 +1509,10 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                     display:"flex", alignItems:"center", justifyContent:"center",
                     fontSize:24, marginBottom:20,
                   }}>{s.icon}</div>
-                  <p style={{ fontWeight:700, fontSize:18, color:D.text, margin:"0 0 10px" }}>
+                  <p style={{ fontWeight:700, fontSize:18, color:LP_TOKENS.text, margin:"0 0 10px" }}>
                     {isAr ? s.ar_title : s.en_title}
                   </p>
-                  <p style={{ fontSize:14, color:D.sub, lineHeight:1.7, margin:0 }}>
+                  <p style={{ fontSize:14, color:LP_TOKENS.sub, lineHeight:1.7, margin:0 }}>
                     {isAr ? s.ar_desc : s.en_desc}
                   </p>
                 </div>
@@ -1523,19 +1523,19 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
       </section>
 
       {/* ══ ENTERPRISE CONTACT ════════════════════════════════════════ */}
-      <section id="enterprise" style={{ padding: "100px 32px", background: D.surf }}>
+      <section id="enterprise" style={{ padding: "100px 32px", background: LP_TOKENS.surf }}>
         <div style={{ maxWidth:1100, margin:"0 auto", display:"grid", gridTemplateColumns:"1fr 1fr", gap:64, alignItems:"center" }}>
           <Reveal>
             <div>
-              <p style={{ fontSize:12, fontWeight:700, letterSpacing:".14em", color:D.sub, textTransform:"uppercase", marginBottom:14 }}>
+              <p style={{ fontSize:12, fontWeight:700, letterSpacing:".14em", color:LP_TOKENS.sub, textTransform:"uppercase", marginBottom:14 }}>
                 {isAr ? "حلول المؤسسات" : "ENTERPRISE SOLUTIONS"}
               </p>
-              <h2 style={{ fontSize:"clamp(26px,3.5vw,40px)", fontWeight:700, color:D.text, margin:"0 0 20px", lineHeight:1.2 }}>
+              <h2 style={{ fontSize:"clamp(26px,3.5vw,40px)", fontWeight:700, color:LP_TOKENS.text, margin:"0 0 20px", lineHeight:1.2 }}>
                   {isAr ? "أكثر من ١٠٠ موظف؟ تواصل معنا" : "Over 100 employees? Let's build your custom plan."}
 
 
               </h2>
-              <p style={{ fontSize:16, color:D.sub, lineHeight:1.8, margin:"0 0 32px" }}>
+              <p style={{ fontSize:16, color:LP_TOKENS.sub, lineHeight:1.8, margin:"0 0 32px" }}>
                 {isAr
                   ? "العملاء المؤسسيون يحصلون على: SSO/SAML، Azure AD، Okta، تقارير ذكاء اصطناعي مخصصة، تكامل HRIS، لوحة ذات علامة بيضاء، مدير نجاح مخصص، واتفاقية مستوى خدمة."
                   : "Enterprise customers get: SSO/SAML, Azure AD & Okta, Custom AI reports, HRIS integration, White-label dashboard, Dedicated CSM, and SLA guarantee."}
@@ -1548,7 +1548,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               ].map((f,i) => (
                 <div key={i} style={{ display:"flex", gap:12, alignItems:"center", marginBottom:14 }}>
                   <span style={{ fontSize:20 }}>{f.icon}</span>
-                  <span style={{ fontSize:15, color:D.sub }}>{isAr ? f.ar : f.en}</span>
+                  <span style={{ fontSize:15, color:LP_TOKENS.sub }}>{isAr ? f.ar : f.en}</span>
                 </div>
               ))}
             </div>
@@ -1572,8 +1572,8 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             <Reveal key={i} delay={i * 45}>
               <div style={{
                 marginBottom: 8,
-                background: D.card,
-                border: `1px solid ${openFaq === i ? D.borderH : D.border}`,
+                background: LP_TOKENS.card,
+                border: `1px solid ${openFaq === i ? LP_TOKENS.borderH : LP_TOKENS.border}`,
                 borderRadius: 14, overflow: "hidden",
                 transition: "border-color .22s",
               }}>
@@ -1583,11 +1583,11 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                   background: "none", border: "none", cursor: "pointer",
                   textAlign: isAr ? "right" : "left",
                 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: D.text, flex: 1 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: LP_TOKENS.text, flex: 1 }}>
                     {item.q}
                   </span>
                   <span style={{
-                    fontSize: 18, color: openFaq === i ? D.blue : D.muted,
+                    fontSize: 18, color: openFaq === i ? LP_TOKENS.blue : LP_TOKENS.muted,
                     transition: "transform .22s, color .22s",
                     transform: openFaq === i ? "rotate(45deg)" : "none",
                     flexShrink: 0, marginLeft: 12,
@@ -1599,7 +1599,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
                   transition: "max-height .35s cubic-bezier(.16,1,.3,1)",
                 }}>
                   <div style={{ padding: "0 22px 18px", fontSize: 13.5,
-                    color: D.sub, lineHeight: 1.7 }}>{item.a}</div>
+                    color: LP_TOKENS.sub, lineHeight: 1.7 }}>{item.a}</div>
                 </div>
               </div>
             </Reveal>
@@ -1611,7 +1611,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
       <section style={{
         padding: "120px 32px", textAlign: "center",
         position: "relative", overflow: "hidden",
-        borderTop: `1px solid ${D.border}`,
+        borderTop: `1px solid ${LP_TOKENS.border}`,
       }}>
         {/* Ambient */}
         <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
@@ -1633,7 +1633,7 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
               marginBottom: 24,
             }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%",
-                background: D.green, boxShadow: `0 0 6px ${D.green}` }}/>
+                background: LP_TOKENS.green, boxShadow: `0 0 6px ${LP_TOKENS.green}` }}/>
               {isAr ? "500+ شركة تثق بنا الآن" : "500+ companies trust Corvus"}
             </div>
 
@@ -1643,12 +1643,12 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             }}>
               {t.finalCta.h2a}<br/>
               <span style={{
-                background: D.gHero,
+                background: LP_TOKENS.gHero,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
               }}>{t.finalCta.h2b}</span>
             </h2>
-            <p style={{ fontSize: 16, color: D.sub, marginBottom: 36,
+            <p style={{ fontSize: 16, color: LP_TOKENS.sub, marginBottom: 36,
               lineHeight: 1.7 }}>{t.finalCta.sub}</p>
 
             <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
@@ -1665,9 +1665,9 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             <div style={{ marginTop: 28, display: "flex", gap: 20,
               justifyContent: "center", flexWrap: "wrap" }}>
               {["SOC 2 Type II", "GDPR Compliant", "ISO 27001 Ready", "Zero video storage"].map((l, i) => (
-                <span key={i} style={{ fontSize: 11, color: D.muted,
+                <span key={i} style={{ fontSize: 11, color: LP_TOKENS.muted,
                   display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ color: D.green }}>✓</span>{l}
+                  <span style={{ color: LP_TOKENS.green }}>✓</span>{l}
                 </span>
               ))}
             </div>
@@ -1678,8 +1678,8 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
       {/* ══ FOOTER ══════════════════════════════════════════════════ */}
       <footer style={{
         padding: "36px 32px",
-        borderTop: `1px solid ${D.border}`,
-        background: D.bgUp,
+        borderTop: `1px solid ${LP_TOKENS.border}`,
+        background: LP_TOKENS.bgUp,
       }}>
         <div style={{ maxWidth: 1060, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between",
@@ -1687,48 +1687,48 @@ export default function LandingPage({ onStart, lang = "en", setLang, darkMode, s
             {/* Brand */}
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
-                <div style={{ width: 28, height: 28, background: D.gPrimary,
+                <div style={{ width: 28, height: 28, background: LP_TOKENS.gPrimary,
                   borderRadius: 9, display: "flex", alignItems: "center",
                   justifyContent: "center", fontSize: 15 }}>◈</div>
                 <span style={{ fontSize: 15, fontWeight: 800 }}>Corvus</span>
               </div>
-              <div style={{ fontSize: 11.5, color: D.muted, lineHeight: 1.6 }}>
+              <div style={{ fontSize: 11.5, color: LP_TOKENS.muted, lineHeight: 1.6 }}>
                 {t.footer.tagline}
               </div>
             </div>
             {/* Links */}
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center" }}>
               {t.footer.links.map((l, i) => (
-                <a key={i} href="#" style={{ fontSize: 12, color: D.muted,
+                <a key={i} href="#" style={{ fontSize: 12, color: LP_TOKENS.muted,
                   textDecoration: "none", transition: "color .2s" }}
-                onMouseEnter={e => e.target.style.color = D.text}
-                onMouseLeave={e => e.target.style.color = D.muted}>{l}</a>
+                onMouseEnter={e => e.target.style.color = LP_TOKENS.text}
+                onMouseLeave={e => e.target.style.color = LP_TOKENS.muted}>{l}</a>
               ))}
             </div>
             {/* Contact */}
-            <div style={{ fontSize: 11.5, color: D.muted, lineHeight: 1.9 }}>
-              <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: D.blue,
+            <div style={{ fontSize: 11.5, color: LP_TOKENS.muted, lineHeight: 1.9 }}>
+              <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: LP_TOKENS.blue,
                 textDecoration: "none", display: "block" }}>{SUPPORT_EMAIL}</a>
-              <a href={`tel:${ADMIN_PHONE}`} style={{ color: D.muted,
+              <a href={`tel:${ADMIN_PHONE}`} style={{ color: LP_TOKENS.muted,
                 textDecoration: "none" }}>{ADMIN_PHONE}</a>
             </div>
           </div>
-          <div style={{ height: 1, background: D.border, marginBottom: 18 }}/>
+          <div style={{ height: 1, background: LP_TOKENS.border, marginBottom: 18 }}/>
           <div style={{ display: "flex", justifyContent: "space-between",
             alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <span style={{ fontSize: 11, color: D.muted }}>
+            <span style={{ fontSize: 11, color: LP_TOKENS.muted }}>
               © {new Date().getFullYear()} Corvus · {t.footer.rights}
             </span>
             <div style={{ display: "flex", gap: 16 }}>
               <button onClick={() => setLang(isAr ? "en" : "ar")} style={{
-                background: "none", border: `1px solid ${D.border}`,
+                background: "none", border: `1px solid ${LP_TOKENS.border}`,
                 borderRadius: 6, padding: "3px 10px",
-                fontSize: 10, color: D.muted, cursor: "pointer",
+                fontSize: 10, color: LP_TOKENS.muted, cursor: "pointer",
               }}>{isAr ? "🇬🇧 English" : "🇪🇬 العربية"}</button>
               <button onClick={() => setDarkMode(!darkMode)} style={{
-                background: "none", border: `1px solid ${D.border}`,
+                background: "none", border: `1px solid ${LP_TOKENS.border}`,
                 borderRadius: 6, padding: "3px 8px",
-                fontSize: 11, cursor: "pointer", color: D.muted,
+                fontSize: 11, cursor: "pointer", color: LP_TOKENS.muted,
               }}>{darkMode ? "☀️ Light" : "🌙 Dark"}</button>
             </div>
           </div>

@@ -16,7 +16,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 // ─────────────────────────────────────────────────────────────────
 // TOKENS (local copy — single-file self-contained)
 // ─────────────────────────────────────────────────────────────────
-const C = {
+const UI_TOKENS = {
   bg:"#070b12", surface:"#0c1220", card:"#101827",
   border:"rgba(255,255,255,.06)", borderHov:"rgba(255,255,255,.12)",
   text:"#f1f5f9", sub:"#94a3b8", muted:"#64748b",
@@ -26,7 +26,7 @@ const C = {
   red:"#ef4444", redDim:"rgba(239,68,68,.08)",
   sky:"#38bdf8", purple:"#a78bfa",
 };
-const sc = v => v>=75?C.green:v>=50?C.amber:C.red;
+const sc = v => v>=75?UI_TOKENS.green:v>=50?UI_TOKENS.amber:UI_TOKENS.red;
 
 // ─────────────────────────────────────────────────────────────────
 // GLOBAL STYLES (injected once)
@@ -161,15 +161,15 @@ export function Btn({ children, onClick, variant = "primary", size = "md",
   const variants = {
     primary: { background:"linear-gradient(135deg,#6366f1,#0891b2)", color:"white",
                border:"none", boxShadow:"0 4px 16px rgba(99,102,241,.35)" },
-    secondary:{ background:C.blueDim, color:C.blue,
-                border:`1px solid ${C.blueBorder}` },
-    ghost:   { background:"transparent", color:C.muted,
-               border:`1px solid ${C.border}` },
-    danger:  { background:C.redDim, color:C.red,
+    secondary:{ background:UI_TOKENS.blueDim, color:UI_TOKENS.blue,
+                border:`1px solid ${UI_TOKENS.blueBorder}` },
+    ghost:   { background:"transparent", color:UI_TOKENS.muted,
+               border:`1px solid ${UI_TOKENS.border}` },
+    danger:  { background:UI_TOKENS.redDim, color:UI_TOKENS.red,
                border:`1px solid rgba(239,68,68,.2)` },
-    success: { background:C.greenDim, color:C.green,
-               border:`1px solid ${C.greenBorder}` },
-    amber:   { background:C.amberDim, color:C.amber,
+    success: { background:UI_TOKENS.greenDim, color:UI_TOKENS.green,
+               border:`1px solid ${UI_TOKENS.greenBorder}` },
+    amber:   { background:UI_TOKENS.amberDim, color:UI_TOKENS.amber,
                border:`1px solid rgba(245,158,11,.2)` },
   };
 
@@ -216,7 +216,7 @@ export function Badge({ label, color, bg, border, dot }) {
       display:"inline-flex", alignItems:"center", gap:4,
       fontSize:9.5, fontWeight:700, letterSpacing:".05em",
       padding:"2px 8px", borderRadius:99,
-      color:color||C.muted, background:bg||"rgba(100,116,139,.1)",
+      color:color||UI_TOKENS.muted, background:bg||"rgba(100,116,139,.1)",
       border:`1px solid ${border||"transparent"}`,
     }}>
       {dot && <span style={{ width:5, height:5, borderRadius:"50%", background:color, flexShrink:0 }}/>}
@@ -263,7 +263,7 @@ export function Skeleton({ w = "100%", h = 14, r = 6, style }) {
 export function SkeletonCard({ h = 120, rows = 0, style }) {
   return (
     <div style={{
-      background:C.card, border:`1px solid ${C.border}`,
+      background:UI_TOKENS.card, border:`1px solid ${UI_TOKENS.border}`,
       borderRadius:16, padding:"16px 18px",
       display:"flex", flexDirection:"column", gap:10,
       ...style,
@@ -285,7 +285,7 @@ export function SkeletonHome() {
     <div style={{ padding:"54px 16px 80px", maxWidth:520, margin:"0 auto",
       display:"flex", flexDirection:"column", gap:12 }}>
       {/* greeting */}
-      <div style={{ background:C.card, border:`1px solid ${C.border}`,
+      <div style={{ background:UI_TOKENS.card, border:`1px solid ${UI_TOKENS.border}`,
         borderRadius:20, padding:"20px 20px", display:"flex",
         justifyContent:"space-between", alignItems:"center" }}>
         <div style={{ flex:1, display:"flex", flexDirection:"column", gap:10 }}>
@@ -323,16 +323,16 @@ export function SkeletonHome() {
 // ─────────────────────────────────────────────────────────────────
 export function SkeletonTable({ rows = 5, cols = 4 }) {
   return (
-    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, overflow:"hidden" }}>
+    <div style={{ background:UI_TOKENS.card, border:`1px solid ${UI_TOKENS.border}`, borderRadius:14, overflow:"hidden" }}>
       {/* header */}
       <div style={{ display:"grid", gridTemplateColumns:`repeat(${cols},1fr)`,
-        padding:"10px 18px", borderBottom:`1px solid ${C.border}`, gap:12 }}>
+        padding:"10px 18px", borderBottom:`1px solid ${UI_TOKENS.border}`, gap:12 }}>
         {Array.from({length:cols}).map((_,i)=><Skeleton key={i} h={8} r={4}/>)}
       </div>
       {/* rows */}
       {Array.from({length:rows}).map((_,ri)=>(
         <div key={ri} style={{ display:"grid", gridTemplateColumns:`repeat(${cols},1fr)`,
-          padding:"13px 18px", borderBottom:ri<rows-1?`1px solid ${C.border}`:"none", gap:12, alignItems:"center" }}>
+          padding:"13px 18px", borderBottom:ri<rows-1?`1px solid ${UI_TOKENS.border}`:"none", gap:12, alignItems:"center" }}>
           {Array.from({length:cols}).map((_,ci)=>(
             <Skeleton key={ci} h={ci===0?32:10} w={ci===0?"100%":["100%","70%","55%","40%"][ci%4]} r={ci===0?8:4}/>
           ))}
@@ -380,7 +380,7 @@ export function EmptyState({ icon = "📭", title, desc, action, cs, minimal }) 
   if (minimal) return (
     <div style={{ padding:"24px 16px", textAlign:"center" }}>
       <div style={{ fontSize:28, marginBottom:8, opacity:.6 }}>{icon}</div>
-      {title && <div style={{ fontSize:12, fontWeight:600, color:C.muted }}>{title}</div>}
+      {title && <div style={{ fontSize:12, fontWeight:600, color:UI_TOKENS.muted }}>{title}</div>}
     </div>
   );
   return (
@@ -388,9 +388,9 @@ export function EmptyState({ icon = "📭", title, desc, action, cs, minimal }) 
       animation:"fade-up .35s ease both" }}>
       <div style={{ fontSize:44, marginBottom:14, filter:"drop-shadow(0 4px 12px rgba(0,0,0,.3))",
         animation:"pop .4s cubic-bezier(.34,1.56,.64,1) both" }}>{icon}</div>
-      {title && <div style={{ fontSize:15, fontWeight:700, color:C.text,
+      {title && <div style={{ fontSize:15, fontWeight:700, color:UI_TOKENS.text,
         marginBottom:6, letterSpacing:"-.02em" }}>{title}</div>}
-      {desc && <div style={{ fontSize:12, color:C.muted, lineHeight:1.7,
+      {desc && <div style={{ fontSize:12, color:UI_TOKENS.muted, lineHeight:1.7,
         marginBottom:action?18:0, maxWidth:260, margin:"0 auto" }}>{desc}</div>}
       {action && <div style={{ marginTop:18 }}>{action}</div>}
     </div>
@@ -405,10 +405,10 @@ export function ErrorState({ error, onRetry, isAr }) {
   return (
     <div style={{ textAlign:"center", padding:"40px 20px", animation:"fade-up .3s ease" }}>
       <div style={{ fontSize:40, marginBottom:12 }}>⚠️</div>
-      <div style={{ fontSize:14, fontWeight:700, color:C.red, marginBottom:6 }}>
+      <div style={{ fontSize:14, fontWeight:700, color:UI_TOKENS.red, marginBottom:6 }}>
         {isAr ? "حدث خطأ" : "Something went wrong"}
       </div>
-      <div style={{ fontSize:11, color:C.muted, marginBottom:16, lineHeight:1.6,
+      <div style={{ fontSize:11, color:UI_TOKENS.muted, marginBottom:16, lineHeight:1.6,
         fontFamily:"'DM Mono',monospace", background:"rgba(239,68,68,.05)",
         border:"1px solid rgba(239,68,68,.15)", borderRadius:8,
         padding:"8px 12px", maxWidth:300, margin:"0 auto 16px" }}>
@@ -436,7 +436,7 @@ export function LoadingState({ label, isAr }) {
         <div style={{ position:"absolute", inset:0, display:"flex",
           alignItems:"center", justifyContent:"center", fontSize:18 }}>◈</div>
       </div>
-      <div style={{ fontSize:12, color:C.muted, fontWeight:500 }}>
+      <div style={{ fontSize:12, color:UI_TOKENS.muted, fontWeight:500 }}>
         {label || (isAr ? "جارٍ التحميل…" : "Loading…")}
       </div>
     </div>
@@ -462,11 +462,11 @@ export function ZeroDashboard({ isAr, onStart }) {
       {/* illustration */}
       <div style={{ fontSize:64, marginBottom:8, lineHeight:1,
         animation:"pop .5s cubic-bezier(.34,1.56,.64,1) both" }}>🏃</div>
-      <div style={{ fontSize:20, fontWeight:800, color:C.text, letterSpacing:"-.04em",
+      <div style={{ fontSize:20, fontWeight:800, color:UI_TOKENS.text, letterSpacing:"-.04em",
         marginBottom:6 }}>
         {isAr ? "ابدأ رحلتك مع Corvus" : "Your journey starts here"}
       </div>
-      <div style={{ fontSize:13, color:C.muted, marginBottom:28, lineHeight:1.7 }}>
+      <div style={{ fontSize:13, color:UI_TOKENS.muted, marginBottom:28, lineHeight:1.7 }}>
         {isAr
           ? "لا توجد جلسات بعد — ابدأ جلستك الأولى الآن واكتشف كيف يمكن تحسين صحتك"
           : "No sessions yet — start your first session and discover how to improve your posture"}
@@ -475,7 +475,7 @@ export function ZeroDashboard({ isAr, onStart }) {
       <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:24, textAlign:"left" }}>
         {steps.map((s,i) => (
           <div key={i} style={{
-            background:C.card, border:`1px solid ${C.border}`,
+            background:UI_TOKENS.card, border:`1px solid ${UI_TOKENS.border}`,
             borderRadius:14, padding:"14px 16px",
             display:"flex", alignItems:"center", gap:14,
             animation:`fade-up .35s ${i*.08}s ease both`,
@@ -486,8 +486,8 @@ export function ZeroDashboard({ isAr, onStart }) {
               {s.icon}
             </div>
             <div>
-              <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:2 }}>{s.title}</div>
-              <div style={{ fontSize:11, color:C.muted }}>{s.desc}</div>
+              <div style={{ fontSize:13, fontWeight:700, color:UI_TOKENS.text, marginBottom:2 }}>{s.title}</div>
+              <div style={{ fontSize:11, color:UI_TOKENS.muted }}>{s.desc}</div>
             </div>
             <div style={{ marginLeft:"auto", fontSize:16, color:"rgba(255,255,255,.15)" }}>›</div>
           </div>
@@ -528,7 +528,7 @@ export function OnboardingWizard({ steps, onComplete, isAr }) {
       display:"flex", alignItems:"flex-end", justifyContent:"center",
     }}>
       <div style={{
-        background:C.surface, border:`1px solid ${C.border}`,
+        background:UI_TOKENS.surface, border:`1px solid ${UI_TOKENS.border}`,
         borderRadius:"24px 24px 0 0", width:"100%", maxWidth:480,
         padding:"28px 24px 32px",
         animation: leaving ? "slide-down .2s ease both" : "slide-up .35s cubic-bezier(.16,1,.3,1) both",
@@ -538,7 +538,7 @@ export function OnboardingWizard({ steps, onComplete, isAr }) {
           {steps.map((_,i) => (
             <div key={i} style={{
               width: i===step ? 20 : 6, height:6, borderRadius:99,
-              background: i<=step ? C.blue : C.border,
+              background: i<=step ? UI_TOKENS.blue : UI_TOKENS.border,
               transition:"all .3s ease",
             }}/>
           ))}
@@ -546,9 +546,9 @@ export function OnboardingWizard({ steps, onComplete, isAr }) {
         {/* content */}
         <div style={{ textAlign:"center", animation:"fade-up .25s ease both" }}>
           <div style={{ fontSize:56, marginBottom:12, lineHeight:1 }}>{s.icon}</div>
-          <div style={{ fontSize:18, fontWeight:800, color:C.text, letterSpacing:"-.03em",
+          <div style={{ fontSize:18, fontWeight:800, color:UI_TOKENS.text, letterSpacing:"-.03em",
             marginBottom:8 }}>{s.title}</div>
-          <div style={{ fontSize:13, color:C.muted, lineHeight:1.7,
+          <div style={{ fontSize:13, color:UI_TOKENS.muted, lineHeight:1.7,
             marginBottom:24 }}>{s.desc}</div>
         </div>
         {/* actions */}
@@ -557,7 +557,7 @@ export function OnboardingWizard({ steps, onComplete, isAr }) {
             {step < steps.length-1 ? (isAr ? "التالي →" : "Next →") : (isAr ? "ابدأ 🚀" : "Get Started 🚀")}
           </Btn>
           <button onClick={skip} style={{ background:"none", border:"none",
-            fontSize:12, color:C.muted, cursor:"pointer", padding:"4px" }}>
+            fontSize:12, color:UI_TOKENS.muted, cursor:"pointer", padding:"4px" }}>
             {isAr ? "تخطى" : "Skip"}
           </button>
         </div>
@@ -698,11 +698,11 @@ export function AchievementToast({ title, desc, icon = "🏆", onClose, isAr }) 
             letterSpacing:".08em", textTransform:"uppercase", marginBottom:2 }}>
             {isAr ? "إنجاز جديد 🎉" : "Achievement Unlocked 🎉"}
           </div>
-          <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:2 }}>{title}</div>
-          <div style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>{desc}</div>
+          <div style={{ fontSize:13, fontWeight:700, color:UI_TOKENS.text, marginBottom:2 }}>{title}</div>
+          <div style={{ fontSize:11, color:UI_TOKENS.muted, lineHeight:1.4 }}>{desc}</div>
         </div>
         <button onClick={() => { setShow(false); setTimeout(onClose,400); }}
-          style={{ background:"none", border:"none", color:C.muted,
+          style={{ background:"none", border:"none", color:UI_TOKENS.muted,
             cursor:"pointer", fontSize:14, flexShrink:0, padding:"0 0 0 4px" }}>×</button>
       </div>
     </>
@@ -714,17 +714,17 @@ export function AchievementToast({ title, desc, icon = "🏆", onClose, isAr }) 
 // ─────────────────────────────────────────────────────────────────
 export function ProgressBar({ value, max = 100, color, label, showPct, h = 6 }) {
   const pct = Math.min(100, Math.round((value/max)*100));
-  const col = color || (pct>=75?C.green:pct>=50?C.amber:C.red);
+  const col = color || (pct>=75?UI_TOKENS.green:pct>=50?UI_TOKENS.amber:UI_TOKENS.red);
   return (
     <div>
       {(label||showPct) && (
         <div style={{ display:"flex", justifyContent:"space-between",
-          marginBottom:6, fontSize:11, color:C.muted }}>
+          marginBottom:6, fontSize:11, color:UI_TOKENS.muted }}>
           {label && <span>{label}</span>}
           {showPct && <span style={{ fontWeight:600, color:col }}>{pct}%</span>}
         </div>
       )}
-      <div style={{ height:h, background:C.border, borderRadius:99, overflow:"hidden" }}>
+      <div style={{ height:h, background:UI_TOKENS.border, borderRadius:99, overflow:"hidden" }}>
         <div style={{
           height:"100%", width:`${pct}%`, background:col,
           borderRadius:99, transition:"width .7s cubic-bezier(.16,1,.3,1)",
@@ -766,7 +766,7 @@ export function BottomSheet({ open, onClose, children, title, maxH = "82vh" }) {
       <div
         onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
         style={{
-          background:C.surface, borderTop:`1px solid ${C.border}`,
+          background:UI_TOKENS.surface, borderTop:`1px solid ${UI_TOKENS.border}`,
           borderRadius:"24px 24px 0 0",
           width:"100%", maxWidth:520,
           maxHeight:maxH, overflowY:"auto",
@@ -775,14 +775,14 @@ export function BottomSheet({ open, onClose, children, title, maxH = "82vh" }) {
         }}>
         {/* drag handle */}
         <div style={{ display:"flex", justifyContent:"center", padding:"12px 0 0" }}>
-          <div style={{ width:36, height:4, background:C.border, borderRadius:99 }}/>
+          <div style={{ width:36, height:4, background:UI_TOKENS.border, borderRadius:99 }}/>
         </div>
         {title && (
           <div style={{ padding:"12px 20px 8px", display:"flex",
             justifyContent:"space-between", alignItems:"center" }}>
-            <span style={{ fontSize:15, fontWeight:700, color:C.text }}>{title}</span>
+            <span style={{ fontSize:15, fontWeight:700, color:UI_TOKENS.text }}>{title}</span>
             <button onClick={close} style={{ background:"none", border:"none",
-              color:C.muted, cursor:"pointer", fontSize:20, lineHeight:1 }}>×</button>
+              color:UI_TOKENS.muted, cursor:"pointer", fontSize:20, lineHeight:1 }}>×</button>
           </div>
         )}
         {children}
@@ -820,19 +820,19 @@ export function Modal({ children, onClose, cs, maxWidth = 500, title }) {
         zIndex:9500, padding:16,
       }}>
       <div style={{
-        background: cs?.card || C.surface,
-        border:`1px solid ${cs?.border || C.border}`,
+        background: cs?.card || UI_TOKENS.surface,
+        border:`1px solid ${cs?.border || UI_TOKENS.border}`,
         borderRadius:22,
         width:`min(${maxWidth}px,96vw)`,
         maxHeight:"92vh", overflowY:"auto",
         animation: closing ? "scale-out .2s ease both" : "scale-in .25s cubic-bezier(.16,1,.3,1) both",
       }}>
         {title && (
-          <div style={{ padding:"18px 20px 14px", borderBottom:`1px solid ${C.border}`,
+          <div style={{ padding:"18px 20px 14px", borderBottom:`1px solid ${UI_TOKENS.border}`,
             display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <span style={{ fontSize:15, fontWeight:700, color:C.text }}>{title}</span>
+            <span style={{ fontSize:15, fontWeight:700, color:UI_TOKENS.text }}>{title}</span>
             <button onClick={close} style={{ background:"none", border:"none",
-              color:C.muted, cursor:"pointer", fontSize:20, lineHeight:1 }}>×</button>
+              color:UI_TOKENS.muted, cursor:"pointer", fontSize:20, lineHeight:1 }}>×</button>
           </div>
         )}
         {children}
@@ -948,14 +948,14 @@ export function Ring({ score, size = 78, strokeWidth = 6 }) {
 // METRIC ROW
 // ─────────────────────────────────────────────────────────────────
 export function MetRow({ label, value, unit, score: s, cs }) {
-  const col = s>=75?C.green:s>=50?C.amber:s>0?C.red:"rgba(148,163,184,.25)";
+  const col = s>=75?UI_TOKENS.green:s>=50?UI_TOKENS.amber:s>0?UI_TOKENS.red:"rgba(148,163,184,.25)";
   const icon = s>=75?"✅":s>=50?"⚠️":s>0?"❌":"○";
   return (
-    <div style={{ padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+    <div style={{ padding:"8px 0", borderBottom:`1px solid ${UI_TOKENS.border}` }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
         <div style={{ display:"flex", alignItems:"center", gap:6 }}>
           <span style={{ fontSize:11 }}>{icon}</span>
-          <span style={{ fontSize:11.5, color:s>0?C.text:C.muted, fontWeight:s>0?500:400 }}>{label}</span>
+          <span style={{ fontSize:11.5, color:s>0?UI_TOKENS.text:UI_TOKENS.muted, fontWeight:s>0?500:400 }}>{label}</span>
         </div>
         <span style={{ fontSize:12, fontWeight:700, color:col }}>
           {value!=null?value:"—"}{unit&&value!=null?unit:""}
@@ -986,7 +986,7 @@ export function BarChart({ data, color = "#6366f1", cs, height = 44 }) {
             height:Math.max(2, Math.round((d.v/max)*height)),
             transition:"height .5s ease", opacity:.85,
           }} title={`${d.l}: ${d.v}`}/>
-          {d.l&&<div style={{ fontSize:7, color:cs?.muted||C.muted,
+          {d.l&&<div style={{ fontSize:7, color:cs?.muted||UI_TOKENS.muted,
             overflow:"hidden", whiteSpace:"nowrap" }}>{d.l}</div>}
         </div>
       ))}
@@ -1019,10 +1019,10 @@ export function TierBadge({ tier, isTrial }) {
 export function Divider({ label, my = 16 }) {
   return (
     <div style={{ display:"flex", alignItems:"center", gap:10, margin:`${my}px 0` }}>
-      <div style={{ flex:1, height:1, background:C.border }}/>
-      {label && <span style={{ fontSize:10, color:C.muted, fontWeight:600,
+      <div style={{ flex:1, height:1, background:UI_TOKENS.border }}/>
+      {label && <span style={{ fontSize:10, color:UI_TOKENS.muted, fontWeight:600,
         letterSpacing:".08em", textTransform:"uppercase", flexShrink:0 }}>{label}</span>}
-      <div style={{ flex:1, height:1, background:C.border }}/>
+      <div style={{ flex:1, height:1, background:UI_TOKENS.border }}/>
     </div>
   );
 }

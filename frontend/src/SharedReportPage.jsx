@@ -16,7 +16,7 @@ const METRIC_LABELS = {
 };
 
 /* ── Styles ── */
-const S = {
+const SRP_TOKENS = {
   page: {
     minHeight:"100vh", background:"#030b14", color:"#f1f5f9",
     fontFamily:"'DM Sans', system-ui, sans-serif",
@@ -204,21 +204,21 @@ export default function SharedReportPage() {
   }, [token]);
 
   if (loading) return (
-    <div style={{ ...S.page, direction: isAr ? 'rtl' : 'ltr' }}>
-      <div style={S.center}>
-        <div style={S.spinner} />
+    <div style={{ ...SRP_TOKENS.page, direction: isAr ? 'rtl' : 'ltr' }}>
+      <div style={SRP_TOKENS.center}>
+        <div style={SRP_TOKENS.spinner} />
         <p style={{ color:"#94a3b8", marginTop:16 }}>Loading report…</p>
       </div>
     </div>
   );
 
   if (error) return (
-    <div style={{ ...S.page, direction: isAr ? 'rtl' : 'ltr' }}>
-      <div style={S.center}>
+    <div style={{ ...SRP_TOKENS.page, direction: isAr ? 'rtl' : 'ltr' }}>
+      <div style={SRP_TOKENS.center}>
         <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
         <h2 style={{ color:"#f1f5f9", marginBottom:8 }}>Report Unavailable</h2>
         <p style={{ color:"#94a3b8" }}>{error}</p>
-        <a href="/" style={{ ...S.btn, marginTop:24, display:"inline-block", textDecoration:"none" }}>
+        <a href="/" style={{ ...SRP_TOKENS.btn, marginTop:24, display:"inline-block", textDecoration:"none" }}>
           Open Corvus →
         </a>
       </div>
@@ -299,14 +299,14 @@ export default function SharedReportPage() {
   };
 
   return (
-    <div style={{ ...S.page, direction: isAr ? "rtl" : "ltr", fontFamily: isAr ? "'Cairo', 'DM Sans', system-ui" : "'DM Sans', system-ui" }}>
+    <div style={{ ...SRP_TOKENS.page, direction: isAr ? "rtl" : "ltr", fontFamily: isAr ? "'Cairo', 'DM Sans', system-ui" : "'DM Sans', system-ui" }}>
       {/* Header */}
-      <header style={S.header}>
-        <div style={S.headerInner}>
-          <div style={S.logo}>
-            <div style={S.logoIcon}>◈</div>
-            <span style={S.logoText}>Corvus</span>
-            <span style={S.logoBadge}>Elite</span>
+      <header style={SRP_TOKENS.header}>
+        <div style={SRP_TOKENS.headerInner}>
+          <div style={SRP_TOKENS.logo}>
+            <div style={SRP_TOKENS.logoIcon}>◈</div>
+            <span style={SRP_TOKENS.logoText}>Corvus</span>
+            <span style={SRP_TOKENS.logoBadge}>Elite</span>
           </div>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:11, color:"#64748b" }}>{isAr ? "تقرير الوضعية المشترك" : "Shared Posture Report"}</div>
@@ -315,14 +315,14 @@ export default function SharedReportPage() {
         </div>
       </header>
 
-      <main style={S.main}>
+      <main style={SRP_TOKENS.main}>
         {/* Title */}
-        <div style={S.titleBlock}>
-          <h1 style={S.title}>
+        <div style={SRP_TOKENS.titleBlock}>
+          <h1 style={SRP_TOKENS.title}>
             {data.display_name}'s Posture Analysis
             {data.session_num ? ` — Session #${data.session_num}` : ""}
           </h1>
-          <p style={S.subtitle}>
+          <p style={SRP_TOKENS.subtitle}>
             {data.mode === "side" ? "Side camera" : "Front camera"} ·{" "}
             {fmtDate(data.created_at?.toDate?.() || data.created_at)} ·{" "}
             Shared {fmtDate(sharedAt)}
@@ -330,9 +330,9 @@ export default function SharedReportPage() {
         </div>
 
         {/* Score card */}
-        <div style={{ ...S.card, border:`1.5px solid ${col}44`, marginBottom:20 }}>
+        <div style={{ ...SRP_TOKENS.card, border:`1.5px solid ${col}44`, marginBottom:20 }}>
           <div style={{ display:"flex", alignItems:"center", gap:24 }}>
-            <div style={{ ...S.scoreRing, background:`${col}22`, border:`3px solid ${col}` }}>
+            <div style={{ ...SRP_TOKENS.scoreRing, background:`${col}22`, border:`3px solid ${col}` }}>
               <span style={{ fontSize:28, fontWeight:800, color:col }}>{avg}</span>
               <span style={{ fontSize:11, color:col }}>/100</span>
             </div>
@@ -357,8 +357,8 @@ export default function SharedReportPage() {
 
         {/* Sparkline */}
         {hist.length > 2 && (
-          <div style={{ ...S.card, marginBottom:20 }}>
-            <h2 style={S.sectionTitle}>Score Timeline</h2>
+          <div style={{ ...SRP_TOKENS.card, marginBottom:20 }}>
+            <h2 style={SRP_TOKENS.sectionTitle}>Score Timeline</h2>
             <div style={{ background:"#0f172a", borderRadius:8, padding:"12px 8px 4px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
                 {[50,65,80,95].map(v => (
@@ -378,7 +378,7 @@ export default function SharedReportPage() {
 
         {/* AI tip */}
         {data.ai_tip && (
-          <div style={{ ...S.card, border:"1px solid #1e3a5f", background:"#0c1929", marginBottom:20 }}>
+          <div style={{ ...SRP_TOKENS.card, border:"1px solid #1e3a5f", background:"#0c1929", marginBottom:20 }}>
             <div style={{ fontSize:10, fontWeight:700, color:"#3b82f6", letterSpacing:"0.06em", marginBottom:10 }}>
               🤖 CORVUS AI ANALYSIS
             </div>
@@ -387,8 +387,8 @@ export default function SharedReportPage() {
         )}
 
         {/* Zonal risk map — interactive */}
-        <div style={{ ...S.card, marginBottom:20 }}>
-          <h2 style={S.sectionTitle}>Spinal Zone Risk Map</h2>
+        <div style={{ ...SRP_TOKENS.card, marginBottom:20 }}>
+          <h2 style={SRP_TOKENS.sectionTitle}>Spinal Zone Risk Map</h2>
           <p style={{ fontSize:11, color:"#64748b", marginBottom:16 }}>
             Click a zone to see contributing metrics. Not a medical diagnosis.
           </p>
@@ -447,8 +447,8 @@ export default function SharedReportPage() {
         </div>
 
         {/* Metrics breakdown */}
-        <div style={{ ...S.card, marginBottom:20 }}>
-          <h2 style={S.sectionTitle}>Posture Metrics Breakdown</h2>
+        <div style={{ ...SRP_TOKENS.card, marginBottom:20 }}>
+          <h2 style={SRP_TOKENS.sectionTitle}>Posture Metrics Breakdown</h2>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {metricEntries.map(({k,lbl,sc,val,unit}) => {
               const mc = scoreColor(sc);
@@ -487,12 +487,12 @@ export default function SharedReportPage() {
         {(data.improvement_tip || data.pain_summary) && (
           <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
             {data.pain_summary && (
-              <div style={{ ...S.card, background:"#1c1208", border:"1px solid #92400e" }}>
+              <div style={{ ...SRP_TOKENS.card, background:"#1c1208", border:"1px solid #92400e" }}>
                 <p style={{ fontSize:13, color:"#fbbf24" }}>{data.pain_summary}</p>
               </div>
             )}
             {data.improvement_tip && (
-              <div style={{ ...S.card, background:"#0a1f12", border:"1px solid #166534" }}>
+              <div style={{ ...SRP_TOKENS.card, background:"#0a1f12", border:"1px solid #166534" }}>
                 <p style={{ fontSize:13, color:"#86efac" }}>{data.improvement_tip}</p>
               </div>
             )}
@@ -500,7 +500,7 @@ export default function SharedReportPage() {
         )}
 
         {/* Footer CTA */}
-        <div style={{ ...S.card, textAlign:"center", background:"#0f1729" }}>
+        <div style={{ ...SRP_TOKENS.card, textAlign:"center", background:"#0f1729" }}>
           <div style={{ fontSize:13, color:"#64748b", marginBottom:4 }}>
             This report was generated by Corvus PostureAI Pro
           </div>
@@ -508,7 +508,7 @@ export default function SharedReportPage() {
             Link expires {fmtDate(expiresAt)} · Views: {(data.view_count||0)+1}
           </div>
           <a href="https://postureai-pro-omega-nine.vercel.app" target="_blank" rel="noopener noreferrer"
-            style={{ ...S.btn, display:"inline-block", marginTop:16, textDecoration:"none" }}>
+            style={{ ...SRP_TOKENS.btn, display:"inline-block", marginTop:16, textDecoration:"none" }}>
             Try Corvus Free →
           </a>
         </div>

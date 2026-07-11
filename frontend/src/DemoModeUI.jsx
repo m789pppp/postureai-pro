@@ -22,13 +22,13 @@ import {
   getDemoSessions, deleteDemoSession, DEMO_SHOWCASE_NAME,
 } from "./DemoMode.js";
 
-const C = {
+const DEMO_TOKENS = {
   bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.12)",
   text: "#f0f4f8", muted: "#64748b", blue: "#1a56db", green: "#10b981",
   amber: "#f59e0b", red: "#ef4444",
 };
 
-function gradeColor(s) { return s >= 75 ? C.green : s >= 50 ? C.amber : C.red; }
+function gradeColor(s) { return s >= 75 ? DEMO_TOKENS.green : s >= 50 ? DEMO_TOKENS.amber : DEMO_TOKENS.red; }
 function gradeLabel(s, ar) {
   return s >= 85 ? (ar ? "ممتاز" : "Excellent")
        : s >= 70 ? (ar ? "جيد" : "Good")
@@ -45,13 +45,13 @@ function DemoBanner({ isAr, onExit }) {
       padding: "10px 16px", display: "flex", alignItems: "center",
       justifyContent: "space-between", gap: 12, marginBottom: 18, flexWrap: "wrap",
     }}>
-      <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>
+      <div style={{ fontSize: 12.5, color: DEMO_TOKENS.text, fontWeight: 600 }}>
         🎬 {isAr ? "وضع العرض التجريبي — البيانات محفوظة على هذا الجهاز فقط، غير مرتبطة بأي حساب"
                   : "Demo Mode — data is saved on this device only, not linked to any account"}
       </div>
       <button onClick={onExit} style={{
-        background: "rgba(255,255,255,.06)", border: `1px solid ${C.border}`,
-        borderRadius: 8, padding: "6px 14px", color: C.text, fontSize: 12,
+        background: "rgba(255,255,255,.06)", border: `1px solid ${DEMO_TOKENS.border}`,
+        borderRadius: 8, padding: "6px 14px", color: DEMO_TOKENS.text, fontSize: 12,
         fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
       }}>
         {isAr ? "إنهاء العرض" : "Exit Demo"}
@@ -73,7 +73,7 @@ export function DemoWelcome({ isAr, onStart, onBack }) {
 
   return (
     <div style={{
-      minHeight: "100vh", background: C.bg, color: C.text,
+      minHeight: "100vh", background: DEMO_TOKENS.bg, color: DEMO_TOKENS.text,
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: "24px", fontFamily: "'DM Sans',system-ui,sans-serif",
       direction: isAr ? "rtl" : "ltr",
@@ -81,7 +81,7 @@ export function DemoWelcome({ isAr, onStart, onBack }) {
       <div style={{ maxWidth: 440, width: "100%" }}>
         {onBack && (
           <button onClick={onBack} style={{
-            background: "none", border: "none", color: C.muted, cursor: "pointer",
+            background: "none", border: "none", color: DEMO_TOKENS.muted, cursor: "pointer",
             fontSize: 13, fontWeight: 600, marginBottom: 24, display: "flex",
             alignItems: "center", gap: 6,
           }}>
@@ -90,21 +90,21 @@ export function DemoWelcome({ isAr, onStart, onBack }) {
         )}
 
         <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em",
-          textTransform: "uppercase", color: C.blue, marginBottom: 10 }}>
+          textTransform: "uppercase", color: DEMO_TOKENS.blue, marginBottom: 10 }}>
           {isAr ? "عرض تجريبي · بدون تسجيل" : "DEMO · NO SIGNUP REQUIRED"}
         </div>
         <h1 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 10px", letterSpacing: "-0.02em" }}>
           {isAr ? "جرّب Corvus الآن" : "Try Corvus right now"}
         </h1>
-        <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.7, margin: "0 0 28px" }}>
+        <p style={{ fontSize: 14, color: DEMO_TOKENS.muted, lineHeight: 1.7, margin: "0 0 28px" }}>
           {isAr
             ? "تتبّع وضعيتك الحية بالكاميرا فوراً. بياناتك تُحفظ على جهازك فقط — مفيش إيميل، مفيش حساب."
             : "Live posture tracking from your camera, instantly. Your data stays on this device only — no email, no account."}
         </p>
 
-        <div style={{ background: C.card, border: `1px solid ${C.border}`,
+        <div style={{ background: DEMO_TOKENS.card, border: `1px solid ${DEMO_TOKENS.border}`,
           borderRadius: 16, padding: 24, marginBottom: 16 }}>
-          <label style={{ fontSize: 12, fontWeight: 700, color: C.muted,
+          <label style={{ fontSize: 12, fontWeight: 700, color: DEMO_TOKENS.muted,
             display: "block", marginBottom: 8 }}>
             {isAr ? "اسمك (اختياري)" : "Your name (optional)"}
           </label>
@@ -114,7 +114,7 @@ export function DemoWelcome({ isAr, onStart, onBack }) {
             onKeyDown={e => e.key === "Enter" && !busy && go(false)}
             style={{
               width: "100%", padding: "12px 14px", background: "rgba(255,255,255,.04)",
-              border: `1px solid ${C.border}`, borderRadius: 10, color: C.text,
+              border: `1px solid ${DEMO_TOKENS.border}`, borderRadius: 10, color: DEMO_TOKENS.text,
               fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 14,
             }}
           />
@@ -128,18 +128,18 @@ export function DemoWelcome({ isAr, onStart, onBack }) {
         </div>
 
         <button onClick={() => go(true)} disabled={busy} style={{
-          width: "100%", background: "rgba(255,255,255,.03)", border: `1px solid ${C.border}`,
-          borderRadius: 14, padding: "14px 16px", color: C.text, cursor: busy ? "wait" : "pointer",
+          width: "100%", background: "rgba(255,255,255,.03)", border: `1px solid ${DEMO_TOKENS.border}`,
+          borderRadius: 14, padding: "14px 16px", color: DEMO_TOKENS.text, cursor: busy ? "wait" : "pointer",
           display: "flex", alignItems: "center", gap: 12, textAlign: isAr ? "right" : "left",
         }}>
           <span style={{ fontSize: 22 }}>🎓</span>
           <span style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>{DEMO_SHOWCASE_NAME}</div>
-            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+            <div style={{ fontSize: 11.5, color: DEMO_TOKENS.muted, marginTop: 2 }}>
               {isAr ? "شاهد البيانات والتقارير فوراً بدون كاميرا" : "See sample data & reports instantly, no camera needed"}
             </div>
           </span>
-          <span style={{ color: C.muted }}>{isAr ? "←" : "→"}</span>
+          <span style={{ color: DEMO_TOKENS.muted }}>{isAr ? "←" : "→"}</span>
         </button>
       </div>
     </div>
@@ -170,7 +170,7 @@ export function DemoDashboard({ isAr, onStartSession, onExit, onUpgrade }) {
 
   return (
     <div style={{
-      minHeight: "100vh", background: C.bg, color: C.text,
+      minHeight: "100vh", background: DEMO_TOKENS.bg, color: DEMO_TOKENS.text,
       padding: "32px 5vw 60px", fontFamily: "'DM Sans',system-ui,sans-serif",
       direction: isAr ? "rtl" : "ltr",
     }}>
@@ -180,7 +180,7 @@ export function DemoDashboard({ isAr, onStartSession, onExit, onUpgrade }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
           marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>
+            <div style={{ fontSize: 12, color: DEMO_TOKENS.muted, fontWeight: 600 }}>
               {isAr ? "أهلاً" : "Hey"}, {profile?.name || "Guest"}
             </div>
             <h1 style={{ fontSize: 24, fontWeight: 800, margin: "4px 0 0" }}>
@@ -202,22 +202,22 @@ export function DemoDashboard({ isAr, onStartSession, onExit, onUpgrade }) {
             { label: isAr ? "المتوسط" : "Avg Score", val: avg || "—", color: "#3b82f6" },
             { label: isAr ? "الأفضل" : "Best", val: best || "—", color: "#10b981" },
           ].map(m => (
-            <div key={m.label} style={{ background: C.card, border: `1px solid ${C.border}`,
+            <div key={m.label} style={{ background: DEMO_TOKENS.card, border: `1px solid ${DEMO_TOKENS.border}`,
               borderRadius: 12, padding: "14px 12px", textAlign: "center" }}>
               <div style={{ fontSize: 22, fontWeight: 800, color: m.color }}>{m.val}</div>
-              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{m.label}</div>
+              <div style={{ fontSize: 10.5, color: DEMO_TOKENS.muted, marginTop: 3 }}>{m.label}</div>
             </div>
           ))}
         </div>
 
         {sessions.length === 0 ? (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+          <div style={{ background: DEMO_TOKENS.card, border: `1px solid ${DEMO_TOKENS.border}`, borderRadius: 16,
             padding: "48px 24px", textAlign: "center" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
               {isAr ? "لا توجد جلسات بعد" : "No sessions yet"}
             </div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 20 }}>
+            <div style={{ fontSize: 12.5, color: DEMO_TOKENS.muted, marginBottom: 20 }}>
               {isAr ? "ابدأ جلستك الأولى لترى نتائج حقيقية من الكاميرا" : "Start your first session to see real camera-based results"}
             </div>
             <button onClick={onStartSession} style={{
@@ -238,7 +238,7 @@ export function DemoDashboard({ isAr, onStartSession, onExit, onUpgrade }) {
               const durStr = dur >= 60 ? `${Math.floor(dur / 60)}m ${dur % 60}s` : dur > 0 ? `${dur}s` : "";
               return (
                 <div key={s.id || i} style={{
-                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+                  background: DEMO_TOKENS.card, border: `1px solid ${DEMO_TOKENS.border}`, borderRadius: 12,
                   padding: "13px 16px", display: "flex", gap: 12, alignItems: "center",
                 }}>
                   <div style={{ width: 42, height: 42, borderRadius: 8, flexShrink: 0,
@@ -250,13 +250,13 @@ export function DemoDashboard({ isAr, onStartSession, onExit, onUpgrade }) {
                     <div style={{ fontSize: 13, fontWeight: 600, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       {isAr ? `جلسة #${sessions.length - i}` : `Session #${sessions.length - i}`}
                       {s.isShowcaseSample && (
-                        <span style={{ fontSize: 9, color: C.muted, background: "rgba(255,255,255,.06)",
+                        <span style={{ fontSize: 9, color: DEMO_TOKENS.muted, background: "rgba(255,255,255,.06)",
                           padding: "1px 7px", borderRadius: 99 }}>
                           {isAr ? "نموذج" : "sample"}
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: DEMO_TOKENS.muted, marginTop: 2 }}>
                       {d.toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "short", day: "numeric" })}
                       {durStr && ` · ${durStr}`}
                       {s.good_pct > 0 && ` · ${s.good_pct}% ${isAr ? "جيدة" : "good"}`}
@@ -285,7 +285,7 @@ export function DemoDashboard({ isAr, onStartSession, onExit, onUpgrade }) {
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
               {isAr ? "عجبك العرض؟" : "Liked what you saw?"}
             </div>
-            <div style={{ fontSize: 12.5, color: C.muted }}>
+            <div style={{ fontSize: 12.5, color: DEMO_TOKENS.muted }}>
               {isAr ? "أنشئ حساب مجاني واحتفظ بسجلك الحقيقي إلى الأبد" : "Create a free account and keep your real history forever"}
             </div>
           </div>

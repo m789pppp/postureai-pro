@@ -137,7 +137,7 @@ function useCurrency(arFallback) {
 }
 
 // ── Design tokens (brand colors — unchanged) ───────────────────────
-const C = {
+const LPV7_TOKENS = {
   bg:    "#030b14",
   bg1:   "#040d18",
   bg2:   "#06111e",
@@ -187,23 +187,23 @@ const btn = (variant = "primary", size = "md") => {
     border: "none", textDecoration: "none", letterSpacing: "-.01em", whiteSpace:"nowrap",
   };
   if (variant === "primary") return { ...base,
-    background: C.gBlue, color: "#fff",
+    background: LPV7_TOKENS.gBlue, color: "#fff",
     boxShadow: "0 4px 24px rgba(79,124,249,.35)",
   };
   if (variant === "ghost") return { ...base,
-    background: "rgba(255,255,255,.05)", color: C.text,
-    border: `1px solid ${C.border}`,
+    background: "rgba(255,255,255,.05)", color: LPV7_TOKENS.text,
+    border: `1px solid ${LPV7_TOKENS.border}`,
   };
   if (variant === "outline") return { ...base,
-    background: "transparent", color: C.indigo,
+    background: "transparent", color: LPV7_TOKENS.indigo,
     border: `1px solid rgba(129,140,248,.4)`,
   };
   return base;
 };
 
 const card = (glow = false) => ({
-  background: C.card,
-  border: `1px solid ${glow ? "rgba(79,124,249,.25)" : C.border}`,
+  background: LPV7_TOKENS.card,
+  border: `1px solid ${glow ? "rgba(79,124,249,.25)" : LPV7_TOKENS.border}`,
   borderRadius: 20,
   padding: 32,
   backdropFilter: "blur(12px)",
@@ -212,7 +212,7 @@ const card = (glow = false) => ({
 });
 
 // Eyebrow pill — used above most section headings
-function Eyebrow({ children, color = C.indigo, bg = "rgba(129,140,248,.1)", border = "rgba(129,140,248,.2)" }) {
+function Eyebrow({ children, color = LPV7_TOKENS.indigo, bg = "rgba(129,140,248,.1)", border = "rgba(129,140,248,.2)" }) {
   return (
     <span style={{
       background:bg, border:`1px solid ${border}`, borderRadius:100,
@@ -229,8 +229,8 @@ function SectionHead({ eyebrow, eyebrowColor, eyebrowBg, eyebrowBorder, title, s
       <div style={{ textAlign:align, marginBottom:"clamp(32px,4vw,56px)",
         marginInline: align==="center" ? "auto" : 0 }}>
         {eyebrow && <Eyebrow color={eyebrowColor} bg={eyebrowBg} border={eyebrowBorder}>{eyebrow}</Eyebrow>}
-        <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 18px", fontFamily:FONT_DISPLAY }}>{title}</h2>
-        {sub && <p style={{ ...TYPE.body, color:C.sub, maxWidth:subMax, margin: align==="center" ? "0 auto" : 0 }}>{sub}</p>}
+        <h2 style={{ ...TYPE.h2, color:LPV7_TOKENS.text, margin:"0 0 18px", fontFamily:FONT_DISPLAY }}>{title}</h2>
+        {sub && <p style={{ ...TYPE.body, color:LPV7_TOKENS.sub, maxWidth:subMax, margin: align==="center" ? "0 auto" : 0 }}>{sub}</p>}
       </div>
     </Reveal>
   );
@@ -575,7 +575,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
     return () => clearInterval(iv);
   }, []);
 
-  const scoreColor = demoScore >= 80 ? C.green : demoScore >= 60 ? C.amber : C.red;
+  const scoreColor = demoScore >= 80 ? LPV7_TOKENS.green : demoScore >= 60 ? LPV7_TOKENS.amber : LPV7_TOKENS.red;
   const float = (delay = 0, dist = 10) => reduce ? {} : {
     animate: { y: [0, -dist, 0] },
     transition: { duration: 5, repeat: Infinity, ease: "easeInOut", delay },
@@ -611,7 +611,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
           xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M40 0L0 0 0 40" fill="none" stroke={C.text} strokeWidth=".5"/>
+              <path d="M40 0L0 0 0 40" fill="none" stroke={LPV7_TOKENS.text} strokeWidth=".5"/>
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)"/>
@@ -626,7 +626,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
             {/* Individual / Company toggle — drives the rest of the page */}
             <div style={{
               display:"inline-flex", alignItems:"center", gap:3,
-              background:"rgba(255,255,255,.05)", border:`1px solid ${C.border}`,
+              background:"rgba(255,255,255,.05)", border:`1px solid ${LPV7_TOKENS.border}`,
               borderRadius:100, padding:4, marginBottom:24,
             }}>
               {[
@@ -636,8 +636,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 <button key={m.id} onClick={()=>setMode(m.id)} style={{
                   padding:"8px 18px", borderRadius:99, border:"none",
                   fontSize:13.5, fontWeight:600, cursor:"pointer",
-                  background: mode===m.id ? C.gHero : "transparent",
-                  color: mode===m.id ? "#06121f" : C.sub,
+                  background: mode===m.id ? LPV7_TOKENS.gHero : "transparent",
+                  color: mode===m.id ? "#06121f" : LPV7_TOKENS.sub,
                   boxShadow: mode===m.id ? "0 2px 12px rgba(34,211,238,.25)" : "none",
                   transition:"background .25s, color .25s, box-shadow .25s",
                 }}>
@@ -652,11 +652,11 @@ function Hero({ lang, onCTA, mode, setMode }) {
               display:"inline-flex", alignItems:"center", gap:9,
               background:"rgba(79,124,249,.1)", border:"1px solid rgba(79,124,249,.25)",
               borderRadius:100, padding:"7px 16px", marginBottom:28,
-              fontSize:13.5, color:C.indigo, fontWeight:500,
+              fontSize:13.5, color:LPV7_TOKENS.indigo, fontWeight:500,
             }}>
               <span style={{
-                width:6, height:6, borderRadius:"50%", background:C.green,
-                boxShadow:`0 0 8px ${C.green}`,
+                width:6, height:6, borderRadius:"50%", background:LPV7_TOKENS.green,
+                boxShadow:`0 0 8px ${LPV7_TOKENS.green}`,
                 animation:"lp-pulse 1.5s ease-in-out infinite",
               }}/>
               {ar ? "متاح الآن · ابدأ مجاناً" : "Now Available · Free to Start"}
@@ -665,22 +665,22 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
           <Reveal delay={80}>
             <h1 style={{
-              ...TYPE.hero, color:C.text, margin:"0 0 24px", fontFamily:FONT_DISPLAY,
+              ...TYPE.hero, color:LPV7_TOKENS.text, margin:"0 0 24px", fontFamily:FONT_DISPLAY,
             }}>
               {isCompany ? (
                 ar
-                  ? <><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>قلّل إجازات الأمراض</span>{" "}47% بدون أجهزة إضافية</>
-                  : <>Cut Sick Leave <span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>47%</span><br/>with AI Posture Coaching</>
+                  ? <><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>قلّل إجازات الأمراض</span>{" "}47% بدون أجهزة إضافية</>
+                  : <>Cut Sick Leave <span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>47%</span><br/>with AI Posture Coaching</>
               ) : (
                 ar
-                  ? <>اخلص من آلام الظهر والرقبة<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>في أسبوعين فقط</span></>
-                  : <>Stop Back & Neck Pain<br/><span style={{ background:C.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 2 Weeks</span></>
+                  ? <>اخلص من آلام الظهر والرقبة<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>في أسبوعين فقط</span></>
+                  : <>Stop Back & Neck Pain<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 2 Weeks</span></>
               )}
             </h1>
           </Reveal>
 
           <Reveal delay={140}>
-            <p style={{ ...TYPE.body, color:C.sub, maxWidth:520, margin:"0 0 40px" }}>
+            <p style={{ ...TYPE.body, color:LPV7_TOKENS.sub, maxWidth:520, margin:"0 0 40px" }}>
               {isCompany
                 ? (ar
                     ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
@@ -713,7 +713,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 ? ["✓ مجاني 7 أيام","✓ بدون بطاقة بنكية","✓ بدون تحميل برنامج","✓ أي كاميرا لابتوب"]
                 : ["✓ 7-day free trial","✓ No credit card","✓ No software to install","✓ Any laptop camera"]
               ).map(tr=>(
-                <span key={tr} style={{ fontSize:12, color:C.muted, fontWeight:500 }}>{tr}</span>
+                <span key={tr} style={{ fontSize:12, color:LPV7_TOKENS.muted, fontWeight:500 }}>{tr}</span>
               ))}
             </div>
           </Reveal>
@@ -722,7 +722,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
           <Reveal delay={260}>
             <div className="lp-hero-mobile-stats" style={{
               display:"none", gap:0,
-              background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
+              background:"rgba(255,255,255,.03)", border:`1px solid ${LPV7_TOKENS.border}`,
               borderRadius:16, overflow:"hidden", marginTop:20,
             }}>
               {(ar
@@ -731,11 +731,11 @@ function Hero({ lang, onCTA, mode, setMode }) {
               ).map(([val,label,icon],i)=>(
                 <div key={label} style={{
                   flex:1, textAlign:"center", padding:"14px 8px",
-                  borderRight: i<3 ? `1px solid ${C.border}` : "none",
+                  borderRight: i<3 ? `1px solid ${LPV7_TOKENS.border}` : "none",
                 }}>
                   <div style={{ fontSize:12, marginBottom:3 }}>{icon}</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{val}</div>
-                  <div style={{ fontSize:9.5, color:C.muted, marginTop:3 }}>{label}</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_MONO, lineHeight:1 }}>{val}</div>
+                  <div style={{ fontSize:9.5, color:LPV7_TOKENS.muted, marginTop:3 }}>{label}</div>
                 </div>
               ))}
             </div>
@@ -749,13 +749,13 @@ function Hero({ lang, onCTA, mode, setMode }) {
             <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
               {/* Browser chrome */}
               <div style={{ display:"flex", alignItems:"center", gap:8,
-                padding:"12px 16px", borderBottom:`1px solid ${C.border}`,
+                padding:"12px 16px", borderBottom:`1px solid ${LPV7_TOKENS.border}`,
                 background:"rgba(255,255,255,.02)" }}>
                 <span style={{ width:9, height:9, borderRadius:"50%", background:"#f87171" }}/>
                 <span style={{ width:9, height:9, borderRadius:"50%", background:"#f59e0b" }}/>
                 <span style={{ width:9, height:9, borderRadius:"50%", background:"#10d9a0" }}/>
                 <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
-                  <span style={{ fontSize:11.5, color:C.muted, fontFamily:FONT_MONO,
+                  <span style={{ fontSize:11.5, color:LPV7_TOKENS.muted, fontFamily:FONT_MONO,
                     background:"rgba(255,255,255,.04)", padding:"3px 14px", borderRadius:6 }}>
                     postureai-pro-omega-nine.vercel.app
                   </span>
@@ -824,9 +824,9 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 <div style={{ position:"absolute", top:12, left:12, display:"flex", alignItems:"center",
                   gap:6, background:"rgba(0,0,0,.55)", backdropFilter:"blur(8px)",
                   borderRadius:99, padding:"4px 10px", border:"1px solid rgba(16,217,160,.3)" }}>
-                  <span style={{ width:6, height:6, borderRadius:"50%", background:C.green,
-                    boxShadow:`0 0 6px ${C.green}`, animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
-                  <span style={{ fontSize:11, color:C.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:LPV7_TOKENS.green,
+                    boxShadow:`0 0 6px ${LPV7_TOKENS.green}`, animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
+                  <span style={{ fontSize:11, color:LPV7_TOKENS.green, fontWeight:700, fontFamily:FONT_MONO }}>LIVE</span>
                 </div>
 
                 {/* Score overlay — bottom right */}
@@ -836,7 +836,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                   textAlign:"center" }}>
                   <div style={{ fontSize:28, fontWeight:800, color:scoreColor,
                     fontFamily:FONT_MONO, transition:"color .4s", lineHeight:1 }}>{demoScore}</div>
-                  <div style={{ fontSize:9.5, color:C.muted, marginTop:2 }}>{ar ? "نقطة" : "score"}</div>
+                  <div style={{ fontSize:9.5, color:LPV7_TOKENS.muted, marginTop:2 }}>{ar ? "نقطة" : "score"}</div>
                 </div>
 
                 {/* Alert badge — top right */}
@@ -851,14 +851,14 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
               {/* Metrics strip below camera */}
               <div style={{ padding:"14px 20px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10,
-                borderTop:`1px solid ${C.border}` }}>
+                borderTop:`1px solid ${LPV7_TOKENS.border}` }}>
                 {(ar
-                  ? [["انحناء الرقبة","12°",C.amber],["وضع الكتف","جيد ✓",C.green],["المسافة","58cm",C.blue]]
-                  : [["Neck Tilt","12°",C.amber],["Shoulder","Good ✓",C.green],["Distance","58cm",C.blue]]
+                  ? [["انحناء الرقبة","12°",LPV7_TOKENS.amber],["وضع الكتف","جيد ✓",LPV7_TOKENS.green],["المسافة","58cm",LPV7_TOKENS.blue]]
+                  : [["Neck Tilt","12°",LPV7_TOKENS.amber],["Shoulder","Good ✓",LPV7_TOKENS.green],["Distance","58cm",LPV7_TOKENS.blue]]
                 ).map(([label, val, color]) => (
                   <div key={label} style={{ textAlign:"center" }}>
                     <div style={{ fontSize:17, fontWeight:700, color, fontFamily:FONT_MONO }}>{val}</div>
-                    <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{label}</div>
+                    <div style={{ fontSize:10.5, color:LPV7_TOKENS.muted, marginTop:2 }}>{label}</div>
                   </div>
                 ))}
               </div>
@@ -869,7 +869,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 border:"1px solid rgba(79,124,249,.15)",
                 display:"flex", gap:10, alignItems:"flex-start" }}>
                 <span style={{ fontSize:16 }}>🤖</span>
-                <p style={{ margin:0, fontSize:12.5, color:C.sub, lineHeight:1.5 }}>
+                <p style={{ margin:0, fontSize:12.5, color:LPV7_TOKENS.sub, lineHeight:1.5 }}>
                   {ar
                     ? "رقبتك للأمام قليلاً. ارفع الشاشة 2 سم وحاول تمرين سحب الرقبة 10 مرات."
                     : "Neck is slightly forward. Raise your monitor 2cm and try 10 chin tucks now."}
@@ -881,14 +881,14 @@ function Hero({ lang, onCTA, mode, setMode }) {
             <motion.div {...float(0, 9)} style={{
               position:"absolute", top:-12, [ar?"left":"right"]:-18,
               background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
-              border:`1px solid ${C.borderM}`, borderRadius:16,
+              border:`1px solid ${LPV7_TOKENS.borderM}`, borderRadius:16,
               padding:"12px 16px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
               display:"flex", alignItems:"center", gap:10, zIndex:2,
             }}>
               <span style={{ fontSize:20 }}>📉</span>
               <div>
-                <div style={{ fontSize:15, fontWeight:800, color:C.green, fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
-                <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{ar ? "إجازات مرضية" : "sick leave"}</div>
+                <div style={{ fontSize:15, fontWeight:800, color:LPV7_TOKENS.green, fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
+                <div style={{ fontSize:10.5, color:LPV7_TOKENS.muted, marginTop:2 }}>{ar ? "إجازات مرضية" : "sick leave"}</div>
               </div>
             </motion.div>
 
@@ -896,13 +896,13 @@ function Hero({ lang, onCTA, mode, setMode }) {
             <motion.div {...float(1.4, 8)} style={{
               position:"absolute", bottom:-6, [ar?"right":"left"]:-22,
               background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
-              border:`1px solid ${C.borderM}`, borderRadius:16,
+              border:`1px solid ${LPV7_TOKENS.borderM}`, borderRadius:16,
               padding:"11px 15px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
               display:"flex", alignItems:"center", gap:9, zIndex:2, maxWidth:200,
             }}>
-              <span style={{ width:8, height:8, borderRadius:"50%", background:C.green, flexShrink:0,
-                boxShadow:`0 0 8px ${C.green}` }}/>
-              <span style={{ fontSize:11.5, color:C.sub, lineHeight:1.4 }}>
+              <span style={{ width:8, height:8, borderRadius:"50%", background:LPV7_TOKENS.green, flexShrink:0,
+                boxShadow:`0 0 8px ${LPV7_TOKENS.green}` }}/>
+              <span style={{ fontSize:11.5, color:LPV7_TOKENS.sub, lineHeight:1.4 }}>
                 {ar ? "جلسة 45 دق — تحسن 18 نقطة 🎯" : "45 min session — +18 score 🎯"}
               </span>
             </motion.div>
@@ -916,7 +916,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
         <motion.div aria-hidden="true"
           animate={{ y:[0,8,0] }} transition={{ duration:1.8, repeat:Infinity, ease:"easeInOut" }}
           style={{ position:"absolute", bottom:28, left:"50%", transform:"translateX(-50%)",
-            color:C.muted, fontSize:20, opacity:.6 }}>
+            color:LPV7_TOKENS.muted, fontSize:20, opacity:.6 }}>
           ↓
         </motion.div>
       )}
@@ -933,7 +933,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 function SocialProof({ lang }) {
   const ar = lang === "ar";
   return (
-    <section style={{ borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
+    <section style={{ borderTop:`1px solid ${LPV7_TOKENS.border}`, borderBottom:`1px solid ${LPV7_TOKENS.border}`,
       padding:"32px 24px", background:"rgba(255,255,255,.012)" }}>
       <Reveal>
         <div className="lp-wrap">
@@ -947,26 +947,26 @@ function SocialProof({ lang }) {
               ["2 weeks","avg improvement time","⏱"],["0","video data stored","🛡"],
             ]).map(([num, label, icon]) => (
               <div key={label} style={{
-                background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
+                background:"rgba(255,255,255,.03)", border:`1px solid ${LPV7_TOKENS.border}`,
                 borderRadius:14, padding:"16px 12px", textAlign:"center",
               }}>
                 <div style={{ fontSize:13, marginBottom:5 }}>{icon}</div>
-                <div style={{ fontSize:20, fontWeight:800, color:C.text, fontFamily:FONT_MONO, lineHeight:1 }}>{num}</div>
-                <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{label}</div>
+                <div style={{ fontSize:20, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_MONO, lineHeight:1 }}>{num}</div>
+                <div style={{ fontSize:11, color:LPV7_TOKENS.muted, marginTop:4 }}>{label}</div>
               </div>
             ))}
           </div>
           {/* Row 2 — used at + security badges */}
           <div className="lp-sp-row2">
             <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-              <span style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>
+              <span style={{ fontSize:11, color:LPV7_TOKENS.muted, fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>
                 {ar ? "يُستخدم في" : "Currently used at"}
               </span>
-              <div style={{ background:"rgba(255,255,255,.04)", border:`1px solid ${C.border}`,
-                borderRadius:9, padding:"6px 14px", fontSize:13.5, fontWeight:700, color:C.text }}>
+              <div style={{ background:"rgba(255,255,255,.04)", border:`1px solid ${LPV7_TOKENS.border}`,
+                borderRadius:9, padding:"6px 14px", fontSize:13.5, fontWeight:700, color:LPV7_TOKENS.text }}>
                 Coventry University
               </div>
-              <span style={{ fontSize:12, color:C.muted }}>
+              <span style={{ fontSize:12, color:LPV7_TOKENS.muted }}>
                 {ar ? "جامعة القاهرة — تجريبي · 50+ مستخدم في 4 دول" : "Cairo University — Pilot · 50+ users across 4 countries"}
               </span>
             </div>
@@ -1002,22 +1002,22 @@ function Stats({ lang }) {
             <div className="lp-lift" style={{
               ...card(), textAlign:"center",
               padding:"clamp(20px,3vw,36px) clamp(16px,2vw,24px)",
-              borderTop:`2px solid ${[C.green,C.blue,C.indigo,C.sky][i]}`,
+              borderTop:`2px solid ${[LPV7_TOKENS.green,LPV7_TOKENS.blue,LPV7_TOKENS.indigo,LPV7_TOKENS.sky][i]}`,
               position:"relative", overflow:"hidden",
             }}>
               <div style={{
                 position:"absolute", top:0, left:0, right:0, height:60,
-                background:`radial-gradient(ellipse at 50% 0%,${[C.green,C.blue,C.indigo,C.sky][i]}18,transparent 70%)`,
+                background:`radial-gradient(ellipse at 50% 0%,${[LPV7_TOKENS.green,LPV7_TOKENS.blue,LPV7_TOKENS.indigo,LPV7_TOKENS.sky][i]}18,transparent 70%)`,
                 pointerEvents:"none",
               }}/>
               <div style={{
                 fontSize:"clamp(32px,3.2vw,52px)", fontWeight:700, letterSpacing:"-.02em",
-                background:C.gHero, WebkitBackgroundClip:"text",
+                background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text",
                 WebkitTextFillColor:"transparent", lineHeight:1, marginBottom:10,
                 fontFamily:FONT_MONO, position:"relative",
               }}>{val}</div>
-              <div style={{ fontSize:"clamp(13px,1.2vw,14.5px)", color:C.sub, lineHeight:1.5, position:"relative" }}>{label}</div>
-              {source&&<div style={{ fontSize:10, color:C.sub, opacity:.5, marginTop:6, lineHeight:1.4, position:"relative" }}>{source}</div>}
+              <div style={{ fontSize:"clamp(13px,1.2vw,14.5px)", color:LPV7_TOKENS.sub, lineHeight:1.5, position:"relative" }}>{label}</div>
+              {source&&<div style={{ fontSize:10, color:LPV7_TOKENS.sub, opacity:.5, marginTop:6, lineHeight:1.4, position:"relative" }}>{source}</div>}
             </div>
           </Reveal>
         ))}
@@ -1093,12 +1093,12 @@ function Features({ lang }) {
                 <span style={{
                   width:38, height:38, borderRadius:11, flexShrink:0,
                   display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
-                  background: active === i ? C.gBlue : "rgba(255,255,255,.05)",
+                  background: active === i ? LPV7_TOKENS.gBlue : "rgba(255,255,255,.05)",
                   boxShadow: active === i ? "0 4px 14px rgba(79,124,249,.4)" : "none",
                   transition:"background .2s,box-shadow .2s",
                 }}>{item.icon}</span>
                 <span style={{ fontSize:14.5, fontWeight:500,
-                  color: active === i ? C.text : C.sub }}>{item.title}</span>
+                  color: active === i ? LPV7_TOKENS.text : LPV7_TOKENS.sub }}>{item.title}</span>
               </button>
             ))}
           </div>
@@ -1111,15 +1111,15 @@ function Features({ lang }) {
             <span style={{
               width:60, height:60, borderRadius:16, fontSize:28,
               display:"flex", alignItems:"center", justifyContent:"center",
-              background:C.gBlue, boxShadow:"0 6px 20px rgba(79,124,249,.4)",
+              background:LPV7_TOKENS.gBlue, boxShadow:"0 6px 20px rgba(79,124,249,.4)",
             }}>{f.icon}</span>
-            <h3 style={{ ...TYPE.h3, fontSize:26, color:C.text, margin:0, fontFamily:FONT_DISPLAY }}>
+            <h3 style={{ ...TYPE.h3, fontSize:26, color:LPV7_TOKENS.text, margin:0, fontFamily:FONT_DISPLAY }}>
               {f.title}
             </h3>
-            <p style={{ fontSize:16.5, color:C.indigo, margin:0, fontWeight:500 }}>
+            <p style={{ fontSize:16.5, color:LPV7_TOKENS.indigo, margin:0, fontWeight:500 }}>
               {f.desc}
             </p>
-            <p style={{ ...TYPE.bodySm, color:C.sub, margin:0 }}>
+            <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:0 }}>
               {f.detail}
             </p>
           </motion.div>
@@ -1152,7 +1152,7 @@ function HowItWorks({ lang }) {
   ];
 
   return (
-    <section id="how" className="lp-section" style={{ background:C.bg1 }}>
+    <section id="how" className="lp-section" style={{ background:LPV7_TOKENS.bg1 }}>
           sub={ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "Three simple steps to a healthier team"}/>
 
         <div style={{ position:"relative" }}>
@@ -1167,15 +1167,15 @@ function HowItWorks({ lang }) {
                 <div className="lp-lift" style={{ ...card(), textAlign:"center", paddingTop:48 }}>
                   <div className="lp-timeline-node" style={{
                     width:56, height:56, borderRadius:"50%", margin:"-76px auto 20px",
-                    background:C.bg1, border:`2px solid rgba(79,124,249,.4)`,
+                    background:LPV7_TOKENS.bg1, border:`2px solid rgba(79,124,249,.4)`,
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    fontFamily:FONT_MONO, fontSize:18, fontWeight:700, color:C.blue,
-                    boxShadow:"0 0 0 6px "+C.bg1+", 0 4px 18px rgba(79,124,249,.25)",
+                    fontFamily:FONT_MONO, fontSize:18, fontWeight:700, color:LPV7_TOKENS.blue,
+                    boxShadow:"0 0 0 6px "+LPV7_TOKENS.bg1+", 0 4px 18px rgba(79,124,249,.25)",
                   }}>{s.n}</div>
-                  <h3 style={{ ...TYPE.h3, color:C.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
+                  <h3 style={{ ...TYPE.h3, color:LPV7_TOKENS.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
                     {s.title}
                   </h3>
-                  <p style={{ ...TYPE.bodySm, color:C.sub, margin:0 }}>
+                  <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:0 }}>
                     {s.desc}
                   </p>
                 </div>
@@ -1204,7 +1204,7 @@ function CaseStudies({ lang }) {
     <section id="casestudies" className="lp-section">
       <div className="lp-wrap">
         <SectionHead eyebrow={ar ? "نتائج حقيقية" : "Real Results"}
-          eyebrowColor={C.green} eyebrowBg="rgba(16,217,160,.08)" eyebrowBorder="rgba(16,217,160,.2)"
+          eyebrowColor={LPV7_TOKENS.green} eyebrowBg="rgba(16,217,160,.08)" eyebrowBorder="rgba(16,217,160,.2)"
           title={ar ? "عملاؤنا يحقّقون نتائج قابلة للقياس" : "Our customers achieve measurable results"}/>
 
         <Stagger key={String(ar)} className="lp-cases-grid">
@@ -1213,23 +1213,23 @@ function CaseStudies({ lang }) {
               <div className="lp-lift" style={{ ...card(), height:"100%" }}>
                 <div style={{
                   background:"rgba(79,124,249,.08)", borderRadius:8,
-                  padding:"5px 12px", fontSize:12.5, color:C.indigo,
+                  padding:"5px 12px", fontSize:12.5, color:LPV7_TOKENS.indigo,
                   fontWeight:500, display:"inline-block", marginBottom:18,
                 }}>{c.industry}</div>
-                <h3 style={{ fontSize:17.5, fontWeight:700, color:C.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
+                <h3 style={{ fontSize:17.5, fontWeight:700, color:LPV7_TOKENS.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
                   {c.co}
                 </h3>
-                <div style={{ fontSize:13, color:C.muted, marginBottom:22 }}>
+                <div style={{ fontSize:13, color:LPV7_TOKENS.muted, marginBottom:22 }}>
                   {c.employees} {ar ? "موظف" : "employees"} · {c.time}
                 </div>
                 <div style={{
-                  fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:C.green, marginBottom:6,
+                  fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:LPV7_TOKENS.green, marginBottom:6,
                   fontFamily:FONT_MONO, lineHeight:1,
                 }}>{c.result}</div>
-                <div style={{ fontSize:14.5, color:C.text, fontWeight:600, marginBottom:16 }}>
+                <div style={{ fontSize:14.5, color:LPV7_TOKENS.text, fontWeight:600, marginBottom:16 }}>
                   {c.resultLabel}
                 </div>
-                <p style={{ ...TYPE.bodySm, color:C.sub, margin:0, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+                <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:0, paddingTop:16, borderTop:`1px solid ${LPV7_TOKENS.border}` }}>
                   {c.detail}
                 </p>
               </div>
@@ -1259,7 +1259,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     {
       id:"basic", name: ar?"أساسي":"Basic",
       priceUSD:{ monthly:9.99, yearly:79.99 }, priceEGP:{ monthly:199, yearly:1590 },
-      color:C.sub,
+      color:LPV7_TOKENS.sub,
       features: ar
         ? ["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","سلسلة وأهداف","توقع الألم","المتصدرين","بطاقة مشاركة"]
         : ["Unlimited sessions","AI Coach (10 msgs/mo)","Streak & Goals","Pain prediction","Leaderboard","Share card"],
@@ -1267,7 +1267,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     {
       id:"professional", name: ar?"احترافي":"Pro",
       priceUSD:{ monthly:19.99, yearly:159.99 }, priceEGP:{ monthly:399, yearly:3190 },
-      popular:true, color:C.blue,
+      popular:true, color:LPV7_TOKENS.blue,
       features: ar
         ? ["كل Basic","رؤى AI","تقارير كاملة","مقارنة الجلسات","تصدير CSV/PDF","تقرير أسبوعي","تنبيهات الشذوذ"]
         : ["Everything in Basic","AI Insights","Full Reports","Session compare","Export CSV/PDF","Weekly report","Anomaly alerts"],
@@ -1275,7 +1275,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     {
       id:"elite", name: ar?"إيليت":"Elite",
       priceUSD:{ monthly:39.99, yearly:299.99 }, priceEGP:{ monthly:699, yearly:5590 },
-      color:C.green,
+      color:LPV7_TOKENS.green,
       features: ar
         ? ["كل Pro","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية","معايرة","سرد الجلسة"]
         : ["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support","Calibration","Session narrative"],
@@ -1286,7 +1286,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     {
       id:"b2b_starter", name: ar?"ستارتر":"Starter",
       priceUSD:{ monthly:79, yearly:758 }, priceEGP:{ monthly:2499, yearly:23990 },
-      color:C.sub,
+      color:LPV7_TOKENS.sub,
       features: ar
         ? ["حتى 30 موظف","كشف 33 نقطة بالـAI","تقارير PDF","لوحة تحليلات HR","تجربة مجانية 7 أيام","دعم بالبريد"]
         : ["Up to 30 employees","33-point AI pose detection","PDF reports","HR analytics dashboard","7-day free trial","Email support"],
@@ -1294,7 +1294,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     {
       id:"b2b_growth", name: ar?"جروث":"Growth",
       priceUSD:{ monthly:199, yearly:1910 }, priceEGP:{ monthly:6999, yearly:67190 },
-      popular:true, color:C.blue,
+      popular:true, color:LPV7_TOKENS.blue,
       features: ar
         ? ["حتى 100 موظف","FaceMesh 478 نقطة","وضع رأس ثلاثي الأبعاد","تنبيهات Slack/Teams","تقرير HR تنفيذي","دعم أولوية + SLA"]
         : ["Up to 100 employees","FaceMesh 478 landmarks","3D head pose","Slack/Teams alerts","Executive HR reports","Priority support + SLA"],
@@ -1302,7 +1302,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     {
       id:"b2b_enterprise", name: ar?"إنتربرايز":"Enterprise",
       priceUSD:{ monthly:null, yearly:null, startingAt:499 }, priceEGP:{ monthly:null, yearly:null },
-      isEnterprise:true, color:C.green,
+      isEnterprise:true, color:LPV7_TOKENS.green,
       features: ar
         ? ["موظفون غير محدودون","AI clinical narrative","SAML SSO / Azure AD","White-label","SLA مخصص","مدير نجاح مخصص"]
         : ["Unlimited employees","AI clinical narrative","SAML SSO / Azure AD","White-label","Custom SLA","Dedicated success manager"],
@@ -1312,14 +1312,14 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
   const plans = isCompany ? b2bPlans : b2cPlans;
 
   return (
-    <section id="pricing" className="lp-section" style={{ background:C.bg1 }}>
+    <section id="pricing" className="lp-section" style={{ background:LPV7_TOKENS.bg1 }}>
       <div className="lp-wrap">
         <Reveal>
           <div style={{ textAlign:"center", marginBottom:48 }}>
-            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 16px", fontFamily:FONT_DISPLAY }}>
+            <h2 style={{ ...TYPE.h2, color:LPV7_TOKENS.text, margin:"0 0 16px", fontFamily:FONT_DISPLAY }}>
               {ar ? "أسعار بسيطة وشفافة" : "Simple, transparent pricing"}
             </h2>
-            <p style={{ ...TYPE.body, color:C.sub, marginBottom:30 }}>
+            <p style={{ ...TYPE.body, color:LPV7_TOKENS.sub, marginBottom:30 }}>
               {ar ? "تجربة مجانية 7 أيام · لا بطاقة ائتمان" : "7-day free trial · No credit card required"}
             </p>
 
@@ -1327,7 +1327,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
             <div style={{
               display:"inline-flex", alignItems:"center", gap:4,
               background:"rgba(255,255,255,.06)", borderRadius:12,
-              padding:4, border:`1px solid ${C.border}`,
+              padding:4, border:`1px solid ${LPV7_TOKENS.border}`,
               marginBottom:20,
             }}>
               {[
@@ -1336,9 +1336,9 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
               ].map(seg => (
                 <button key={seg.id} onClick={() => setLocalMode(seg.id)} style={{
                   background: localMode === seg.id
-                    ? (seg.id === "company" ? C.indigo : C.blue)
+                    ? (seg.id === "company" ? LPV7_TOKENS.indigo : LPV7_TOKENS.blue)
                     : "transparent",
-                  color: localMode === seg.id ? "#fff" : C.muted,
+                  color: localMode === seg.id ? "#fff" : LPV7_TOKENS.muted,
                   border:"none", borderRadius:9,
                   padding:"9px 22px",
                   cursor:"pointer", fontWeight:600, fontSize:14,
@@ -1354,12 +1354,12 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
             <div style={{
               display:"inline-flex", alignItems:"center",
               background:"rgba(255,255,255,.05)", borderRadius:100,
-              padding:4, border:`1px solid ${C.border}`,
+              padding:4, border:`1px solid ${LPV7_TOKENS.border}`,
             }}>
               {["monthly","yearly"].map(b => (
                 <button key={b} onClick={() => setBilling(b)} style={{
-                  background: billing === b ? C.blue : "transparent",
-                  color: billing === b ? "#fff" : C.sub,
+                  background: billing === b ? LPV7_TOKENS.blue : "transparent",
+                  color: billing === b ? "#fff" : LPV7_TOKENS.sub,
                   border:"none", borderRadius:100, padding:"10px 22px",
                   cursor:"pointer", fontWeight:500, fontSize:14.5,
                   transition:"background .2s,color .2s",
@@ -1371,13 +1371,13 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
               ))}
             </div>
 
-            <div style={{ marginTop:16, fontSize:13, color:C.muted }}>
+            <div style={{ marginTop:16, fontSize:13, color:LPV7_TOKENS.muted }}>
               {isEgypt
                 ? (ar ? "🇪🇬 الأسعار معروضة بالجنيه المصري" : "🇪🇬 Prices shown in EGP")
                 : (ar ? "🌍 الأسعار معروضة بالدولار الأمريكي" : "🌍 Prices shown in USD")}
               {" · "}
               <button onClick={() => setCurrencyOverride(isEgypt ? "USD" : "EGP")} style={{
-                background:"none", border:"none", color:C.indigo, cursor:"pointer",
+                background:"none", border:"none", color:LPV7_TOKENS.indigo, cursor:"pointer",
                 fontSize:13, textDecoration:"underline", padding:0, fontFamily:"inherit",
               }}>
                 {isEgypt
@@ -1393,7 +1393,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
             <StaggerItem key={p.id}>
               <div className={p.popular ? "lp-lift lp-glow" : "lp-lift"} style={{
                 ...card(p.popular),
-                border: p.popular ? `1px solid rgba(79,124,249,.45)` : `1px solid ${C.border}`,
+                border: p.popular ? `1px solid rgba(79,124,249,.45)` : `1px solid ${LPV7_TOKENS.border}`,
                 position:"relative", height:"100%", display:"flex", flexDirection:"column",
                 padding:"clamp(28px,2.6vw,36px)",
                 transform: p.popular ? "scale(1.035)" : "none",
@@ -1401,7 +1401,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                 {p.popular && (
                   <div style={{
                     position:"absolute", top:-14, left:"50%", transform:"translateX(-50%)",
-                    background:C.gBlue, color:"#fff", borderRadius:100,
+                    background:LPV7_TOKENS.gBlue, color:"#fff", borderRadius:100,
                     padding:"5px 18px", fontSize:12.5, fontWeight:600, whiteSpace:"nowrap",
                     boxShadow:"0 4px 16px rgba(79,124,249,.5)",
                   }}>{ar ? "✦ الأكثر شيوعاً" : "✦ Most Popular"}</div>
@@ -1413,11 +1413,11 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                   </div>
                   {p.isEnterprise ? (
                     <div>
-                      <div style={{ fontSize:32, fontWeight:800, color:C.text, fontFamily:FONT_DISPLAY }}>
+                      <div style={{ fontSize:32, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
                         {ar ? "تواصل معنا" : "Contact us"}
                       </div>
                       {p.priceUSD?.startingAt && (
-                        <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
+                        <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginTop:6, fontFamily:FONT_MONO }}>
                           {ar ? `يبدأ من $${p.priceUSD.startingAt}/شهر` : `Starting at $${p.priceUSD.startingAt}/mo`}
                         </div>
                       )}
@@ -1427,17 +1427,17 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                       {isEgypt ? (
                         <>
                           <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
-                            <span style={{ fontSize:40, fontWeight:800, color:C.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
+                            <span style={{ fontSize:40, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
                               {billing==="monthly"
                                 ? (p.priceEGP.monthly ?? 0).toLocaleString()
                                 : p.priceEGP.yearly
                                   ? Math.round(p.priceEGP.yearly/12).toLocaleString()
                                   : (p.priceEGP.monthly ?? 0).toLocaleString()}
                             </span>
-                            <span style={{ fontSize:14.5, color:C.muted }}>{ar ? "ج.م./شهر" : "EGP/mo"}</span>
+                            <span style={{ fontSize:14.5, color:LPV7_TOKENS.muted }}>{ar ? "ج.م./شهر" : "EGP/mo"}</span>
                           </div>
                           {billing==="yearly" && p.priceEGP.yearly && (
-                            <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
+                            <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginTop:6, fontFamily:FONT_MONO }}>
                               {(p.priceEGP.yearly).toLocaleString()} {ar?"سنوياً":"EGP/yr"}
                             </div>
                           )}
@@ -1445,13 +1445,13 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                       ) : (
                         <>
                           <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
-                            <span style={{ fontSize:40, fontWeight:800, color:C.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
+                            <span style={{ fontSize:40, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
                               ${p.priceUSD[billing] ?? p.priceUSD.monthly ?? "—"}
                             </span>
-                            <span style={{ fontSize:14.5, color:C.muted }}>/{ar ? "شهر" : "mo"}</span>
+                            <span style={{ fontSize:14.5, color:LPV7_TOKENS.muted }}>/{ar ? "شهر" : "mo"}</span>
                           </div>
                           {p.priceEGP.yearly || p.priceEGP.monthly ? (
-                            <div style={{ fontSize:12.5, color:C.muted, marginTop:6, fontFamily:FONT_MONO }}>
+                            <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginTop:6, fontFamily:FONT_MONO }}>
                               ≈ {billing==="monthly" || !p.priceEGP.yearly
                                 ? (p.priceEGP.monthly ?? 0).toLocaleString()
                                 : Math.round(p.priceEGP.yearly/12).toLocaleString()
@@ -1467,7 +1467,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                 <ul style={{ listStyle:"none", padding:0, margin:"0 0 28px", flex:1 }}>
                   {p.features.map(f => (
                     <li key={f} style={{ display:"flex", gap:10, alignItems:"flex-start",
-                      marginBottom:12, fontSize:14.5, color:C.sub }}>
+                      marginBottom:12, fontSize:14.5, color:LPV7_TOKENS.sub }}>
                       <span style={{
                         width:18, height:18, borderRadius:"50%", flexShrink:0, marginTop:1,
                         display:"flex", alignItems:"center", justifyContent:"center",
@@ -1530,7 +1530,7 @@ function Testimonials({ lang }) {
             <StaggerItem key={t.name}>
               <div className="lp-lift" style={{
                 height:"100%", borderRadius:20, padding:28, position:"relative",
-                background:"rgba(255,255,255,.035)", border:`1px solid ${C.border}`,
+                background:"rgba(255,255,255,.035)", border:`1px solid ${LPV7_TOKENS.border}`,
                 backdropFilter:"blur(16px)", display:"flex", flexDirection:"column",
               }}>
                 {/* Quote mark */}
@@ -1540,18 +1540,18 @@ function Testimonials({ lang }) {
                 <div style={{ display:"inline-flex", alignItems:"center", gap:6,
                   background:"rgba(16,217,160,.08)", border:"1px solid rgba(16,217,160,.2)",
                   borderRadius:99, padding:"4px 11px", marginBottom:14, alignSelf:"flex-start" }}>
-                  <span style={{ width:5, height:5, borderRadius:"50%", background:C.green, flexShrink:0 }}/>
-                  <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{t.outcome}</span>
+                  <span style={{ width:5, height:5, borderRadius:"50%", background:LPV7_TOKENS.green, flexShrink:0 }}/>
+                  <span style={{ fontSize:11, color:LPV7_TOKENS.green, fontWeight:600 }}>{t.outcome}</span>
                 </div>
                 {/* Stars */}
                 <div style={{ display:"flex", gap:2, marginBottom:14 }}>
                   {"★★★★★".split("").map((s,i) => (
-                    <span key={i} style={{ color:C.amber, fontSize:14 }}>{s}</span>
+                    <span key={i} style={{ color:LPV7_TOKENS.amber, fontSize:14 }}>{s}</span>
                   ))}
-                  <span style={{ color:C.muted, fontSize:11.5, marginLeft:8, fontFamily:FONT_MONO }}>{t.score}</span>
+                  <span style={{ color:LPV7_TOKENS.muted, fontSize:11.5, marginLeft:8, fontFamily:FONT_MONO }}>{t.score}</span>
                 </div>
                 {/* Text */}
-                <p style={{ fontSize:15, color:C.sub, lineHeight:1.7, margin:"0 0 22px", flex:1 }}>"{t.text}"</p>
+                <p style={{ fontSize:15, color:LPV7_TOKENS.sub, lineHeight:1.7, margin:"0 0 22px", flex:1 }}>"{t.text}"</p>
                 {/* Author */}
                 <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                   <div style={{
@@ -1562,8 +1562,8 @@ function Testimonials({ lang }) {
                     fontSize:13, fontWeight:800, color:t.color, letterSpacing:".5px",
                   }}>{t.initials}</div>
                   <div>
-                    <div style={{ fontWeight:700, color:C.text, fontSize:14 }}>{t.name}</div>
-                    <div style={{ color:C.muted, fontSize:11.5, marginTop:1 }}>{t.role}</div>
+                    <div style={{ fontWeight:700, color:LPV7_TOKENS.text, fontSize:14 }}>{t.name}</div>
+                    <div style={{ color:LPV7_TOKENS.muted, fontSize:11.5, marginTop:1 }}>{t.role}</div>
                   </div>
                 </div>
               </div>
@@ -1579,7 +1579,7 @@ function Testimonials({ lang }) {
 function FAQItem({ q, a, isOpen, onToggle, ar }) {
   return (
     <div style={{
-      background:C.card, border:`1px solid ${isOpen ? "rgba(79,124,249,.35)" : C.border}`,
+      background:LPV7_TOKENS.card, border:`1px solid ${isOpen ? "rgba(79,124,249,.35)" : LPV7_TOKENS.border}`,
       borderRadius:16, overflow:"hidden", transition:"border-color .25s",
     }}>
       <button onClick={onToggle} aria-expanded={isOpen} style={{
@@ -1588,12 +1588,12 @@ function FAQItem({ q, a, isOpen, onToggle, ar }) {
         display:"flex", justifyContent:"space-between", alignItems:"center", gap:16,
         textAlign: ar ? "right" : "left",
       }}>
-        <span style={{ fontWeight:600, color:C.text, fontSize:15.5, flex:1, fontFamily:FONT_DISPLAY }}>{q}</span>
+        <span style={{ fontWeight:600, color:LPV7_TOKENS.text, fontSize:15.5, flex:1, fontFamily:FONT_DISPLAY }}>{q}</span>
         <span style={{
           width:28, height:28, borderRadius:"50%", flexShrink:0,
           display:"flex", alignItems:"center", justifyContent:"center",
           background: isOpen ? "rgba(79,124,249,.18)" : "rgba(255,255,255,.05)",
-          color:C.blue, fontSize:17,
+          color:LPV7_TOKENS.blue, fontSize:17,
           transform: isOpen ? "rotate(45deg)" : "none",
           transition:"transform .25s, background .25s",
         }}>+</span>
@@ -1603,7 +1603,7 @@ function FAQItem({ q, a, isOpen, onToggle, ar }) {
         animate={{ height: isOpen ? "auto" : 0, opacity: isOpen ? 1 : 0 }}
         transition={{ duration:.28, ease:[0.22,1,0.36,1] }}
         style={{ overflow:"hidden" }}>
-        <p style={{ color:C.sub, fontSize:15, lineHeight:1.7, margin:0, padding:"0 22px 20px" }}>{a}</p>
+        <p style={{ color:LPV7_TOKENS.sub, fontSize:15, lineHeight:1.7, margin:0, padding:"0 22px 20px" }}>{a}</p>
       </motion.div>
     </div>
   );
@@ -1631,7 +1631,7 @@ function FAQ({ lang }) {
   ];
 
   return (
-    <section id="faq" className="lp-section" style={{ background:C.bg1 }}>
+    <section id="faq" className="lp-section" style={{ background:LPV7_TOKENS.bg1 }}>
       <div className="lp-wrap">
         <div style={{ maxWidth:740, margin:"0 auto" }}>
           <SectionHead title={ar ? "أسئلة شائعة" : "Frequently asked questions"} />
@@ -1672,8 +1672,8 @@ function MidCTA({ lang, onCTA, variant="features" }) {
           gap:24, flexWrap:"wrap", justifyContent:"space-between",
         }}>
           <div>
-            <div style={{ fontSize:17, fontWeight:700, color:C.text, marginBottom:5, fontFamily:FONT_DISPLAY }}>{m.h}</div>
-            <div style={{ fontSize:12.5, color:C.muted }}>{m.sub}</div>
+            <div style={{ fontSize:17, fontWeight:700, color:LPV7_TOKENS.text, marginBottom:5, fontFamily:FONT_DISPLAY }}>{m.h}</div>
+            <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted }}>{m.sub}</div>
           </div>
           <a href="#" className="lp-btn lp-btn-primary" onClick={e=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
             style={{...btn("primary","md"), whiteSpace:"nowrap", flexShrink:0}}>
@@ -1704,11 +1704,11 @@ function FinalCTA({ lang, onCTA }) {
               fontSize:30, color:"#fff", fontWeight:800,
               boxShadow:"0 8px 28px rgba(26,86,219,.45)",
             }}>◈</div>
-            <h2 style={{ ...TYPE.h2, color:C.text, margin:"0 0 14px", fontFamily:FONT_DISPLAY,
+            <h2 style={{ ...TYPE.h2, color:LPV7_TOKENS.text, margin:"0 0 14px", fontFamily:FONT_DISPLAY,
               fontSize:"clamp(22px,3vw,34px)" }}>
               {ar ? "ابدأ تحسين صحة فريقك اليوم" : "Start improving your team's health today"}
             </h2>
-            <p style={{ ...TYPE.body, color:C.sub, maxWidth:460, margin:"0 auto 32px",
+            <p style={{ ...TYPE.body, color:LPV7_TOKENS.sub, maxWidth:460, margin:"0 auto 32px",
               fontSize:"clamp(14px,1.2vw,16px)" }}>
               {ar
                 ? "انضم إلى الشركات التي تستخدم Corvus. تجربة مجانية 7 أيام."
@@ -1956,7 +1956,7 @@ export default function LandingPage({ onNavigate }) {
   }, [lang]);
 
   return (
-    <div style={{ background:C.bg, minHeight:"100vh", color:C.text, fontFamily:FONT_DISPLAY }}>
+    <div style={{ background:LPV7_TOKENS.bg, minHeight:"100vh", color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
       <GlobalStyle/>
       <ScrollProgress/>
       <Nav lang={lang} setLang={setLang} onCTA={handleCTA} mode={mode} setMode={setMode}/>
