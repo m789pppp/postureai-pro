@@ -260,7 +260,7 @@ function AITextSection({ loading, data, error, onRetry, isAr, D }) {
   );
 }
 
-export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose, effectiveTier }) {
+export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose, effectiveTier, uid = "" }) {
   const [tab, setTab]               = useState("executive");
   const [loading, setLoading]       = useState(false);
   const [data, setData]             = useState(null);   // AI-generated text
@@ -431,7 +431,6 @@ Max 280 words.`,
   const loadInsight = useCallback(async (tabKey) => {
     if (!sessions.length) return;
     // ── Check cache first (pre-generated on login) ──
-    const uid = profile?.uid || profile?.id || "";
     const cached = uid ? getCached(uid, tabKey, lang) : null;
     if (cached) { setData(cached); setLoading(false); return; }
     setLoading(true);
