@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
+import { getCached, setCache } from "./aiPreloader.js";
 
 // ── AI call via offline engine ──────────────────────────────────────
 // NOTE: previously routed through geminiChat() -> /api/coach/chat, but
@@ -259,7 +260,7 @@ function AITextSection({ loading, data, error, onRetry, isAr, D }) {
   );
 }
 
-export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose , effectiveTier}) {
+export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose, effectiveTier }) {
   const [tab, setTab]               = useState("executive");
   const [loading, setLoading]       = useState(false);
   const [data, setData]             = useState(null);   // AI-generated text
@@ -429,6 +430,10 @@ Max 280 words.`,
 
   const loadInsight = useCallback(async (tabKey) => {
     if (!sessions.length) return;
+    // ── Check cache first (pre-generated on login) ──
+    const uid = profile?.uid || profile?.id || "";
+    const cached = uid ? getCached(uid, tabKey, lang) : null;
+    if (cached) { setData(cached); setLoading(false); return; }
     setLoading(true);
     setError("");
     setData(null);
@@ -437,13 +442,14 @@ Max 280 words.`,
       const prompt = tabPrompts[tabKey]?.(ctx);
       if (!prompt) return;
       const text = await callGemini(prompt, systemPrompt);
+      if (text && uid) setCache(uid, tabKey, lang, text);
       setData(text);
     } catch (e) {
       setError(e.message || "Failed to generate insight");
     } finally {
       setLoading(false);
     }
-  }, [buildContext, sessions.length]);
+  }, [buildContext, sessions.length, profile, lang]);
 
   // Auto-load when tab changes
   useEffect(() => {

@@ -21,6 +21,7 @@ import { AICoach } from "./AICoach.jsx";
 import { AIInsights } from "./AIInsights.jsx";
 import { PredictiveAI } from "./PredictiveAI.jsx";
 import { AIReports } from "./AIReports.jsx";
+import { preloadAIInsights } from "./aiPreloader.js";
 import { WorkforceAnalytics } from "./WorkforceAnalytics.jsx";
 import { EnterpriseRBAC } from "./EnterpriseRBAC.jsx";
 import { NotificationsHub, useNotifications } from "./NotificationsHub.jsx";
@@ -2471,7 +2472,15 @@ export default function App(){
           // Real-time sessions listener
           try {
             if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; }
-            const unsubSessions = onUserSessions(u.uid, sessions=>{ setUserSessions(sessions); });
+            const unsubSessions = onUserSessions(u.uid, sessions=>{
+              setUserSessions(sessions);
+              // Re-trigger preloader when sessions arrive (has real data now)
+              if (sessions.length > 0) {
+                setTimeout(() => {
+                  preloadAIInsights(u.uid, p, sessions, null, p?.is_trial ? p?.trial_tier : p?.tier, lang);
+                }, 1500);
+              }
+            });
             window.__unsubSessions = unsubSessions;
           } catch(e){ console.warn("[Auth] sessions:",e?.code); }
 
@@ -2498,6 +2507,12 @@ export default function App(){
             }
           } catch{ setPage("home"); }
           setAuthChecked(true); // always mark checked when user is logged in
+          // Pre-generate AI insights in background (3s delay so auth fully settles)
+          setTimeout(() => {
+            preloadAIInsights(
+              u.uid, p, [], null, effectiveTier, lang
+            );
+          }, 3000);
 
         } else {
           // u===null: user signed out OR Firebase is still processing OAuth redirect
