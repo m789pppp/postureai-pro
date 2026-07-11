@@ -16,7 +16,7 @@ const fmt = d => d?.toDate?.()?.toLocaleDateString?.() || d?.split?.("T")[0] || 
 const dur = s => { const m=Math.floor((s.duration_s||0)/60),sec=(s.duration_s||0)%60; return m?`${m}m ${sec}s`:`${sec}s`; };
 
 // ─── Design tokens (local) ───────────────────────────────────────
-const T = {
+const TOKENS = {
   bg: C.bg, surf: C.bgElevated, card: C.surface,
   border: C.border, text: C.text, muted: C.muted,
   blue: C.blue, green: C.green, amber: C.amber, red: C.red,
@@ -25,14 +25,14 @@ const T = {
 // ─── Micro components ────────────────────────────────────────────
 function Card({ children, style, title, sub, action, noPad }) {
   return (
-    <div style={{ background:T.card, borderRadius:R.lg, border:`1px solid ${T.border}`,
+    <div style={{ background:TOKENS.card, borderRadius:R.lg, border:`1px solid ${TOKENS.border}`,
       overflow:"hidden", ...style }}>
       {(title||sub||action)&&(
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-          padding:`${SP[4]}px ${SP[5]}px`, borderBottom:`1px solid ${T.border}` }}>
+          padding:`${SP[4]}px ${SP[5]}px`, borderBottom:`1px solid ${TOKENS.border}` }}>
           <div>
-            {title&&<div style={{ fontSize:TY.md, fontWeight:700, color:T.text }}>{title}</div>}
-            {sub&&<div style={{ fontSize:TY.sm, color:T.muted, marginTop:2 }}>{sub}</div>}
+            {title&&<div style={{ fontSize:TY.md, fontWeight:700, color:TOKENS.text }}>{title}</div>}
+            {sub&&<div style={{ fontSize:TY.sm, color:TOKENS.muted, marginTop:2 }}>{sub}</div>}
           </div>
           {action&&<div>{action}</div>}
         </div>
@@ -45,7 +45,7 @@ function Card({ children, style, title, sub, action, noPad }) {
 function ScoreLine({ scores, color="#6366f1", h=70 }) {
   if (!scores || scores.length < 2) return (
     <div style={{ height:h, display:"flex", alignItems:"center",
-      justifyContent:"center", fontSize:11, color:T.muted }}>
+      justifyContent:"center", fontSize:11, color:TOKENS.muted }}>
       Not enough data yet
     </div>
   );
@@ -73,7 +73,7 @@ function ScoreLine({ scores, color="#6366f1", h=70 }) {
 
 function HourlyHeatmap({ hourly }) {
   if (!hourly || !Object.keys(hourly).length) return (
-    <div style={{ fontSize:11, color:T.muted, padding:"8px 0" }}>No hourly data yet</div>
+    <div style={{ fontSize:11, color:TOKENS.muted, padding:"8px 0" }}>No hourly data yet</div>
   );
   const hours = Array.from({length:24},(_,i)=>i);
   const vals  = Object.values(hourly);
@@ -98,7 +98,7 @@ function HourlyHeatmap({ hourly }) {
 }
 
 function RiskGauge({ value, label }) {
-  const col = value>=60?T.red:value>=30?T.amber:T.green;
+  const col = value>=60?TOKENS.red:value>=30?TOKENS.amber:TOKENS.green;
   const r=28, circ=2*Math.PI*r, dash=circ*(value/100);
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
@@ -119,16 +119,16 @@ function RiskGauge({ value, label }) {
 }
 
 function InsightCard({ icon, title, body, priority }) {
-  const colMap = { high:T.red, medium:T.amber, low:T.green };
-  const col = colMap[priority] || T.blue;
+  const colMap = { high:TOKENS.red, medium:TOKENS.amber, low:TOKENS.green };
+  const col = colMap[priority] || TOKENS.blue;
   return (
     <div style={{ display:"flex", gap:12, padding:`${SP[3]}px`, background:"rgba(255,255,255,.025)",
       border:`1px solid rgba(255,255,255,.05)`, borderRadius:R.sm, alignItems:"flex-start",
       borderLeft:`3px solid ${col}` }}>
       <span style={{ fontSize:20, flexShrink:0 }}>{icon}</span>
       <div>
-        <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:3 }}>{title}</div>
-        <div style={{ fontSize:11, color:T.muted, lineHeight:1.6 }}>{body}</div>
+        <div style={{ fontSize:12, fontWeight:700, color:TOKENS.text, marginBottom:3 }}>{title}</div>
+        <div style={{ fontSize:11, color:TOKENS.muted, lineHeight:1.6 }}>{body}</div>
       </div>
       <Badge label={priority||"info"} color={col} bg={`${col}15`}
         style={{ marginLeft:"auto", flexShrink:0 }}/>
@@ -140,11 +140,11 @@ function ForecastBar({ day, score, confidence }) {
   const col = sc(score);
   return (
     <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-      <div style={{ fontSize:10, color:T.muted, fontFamily:"DM Mono,monospace" }}>{score}</div>
+      <div style={{ fontSize:10, color:TOKENS.muted, fontFamily:"DM Mono,monospace" }}>{score}</div>
       <div style={{ width:"100%", borderRadius:"3px 3px 0 0",
         background:col, opacity:.6+confidence*.004,
         height:Math.max(4,Math.round(score/100*52)), transition:"height .5s ease" }}/>
-      <div style={{ fontSize:9, color:T.muted }}>D{day}</div>
+      <div style={{ fontSize:9, color:TOKENS.muted }}>D{day}</div>
     </div>
   );
 }
@@ -198,10 +198,10 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
   function renderTabContent() {
     if (tab === "overview") return (<>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:SP[2] }}>
-              <KpiBox label={t.totalSessions} value={filtered.length} icon="📊" color={T.text}/>
+              <KpiBox label={t.totalSessions} value={filtered.length} icon="📊" color={TOKENS.text}/>
               <KpiBox label={t.avgScore}       value={avgScore}   icon="🎯" color={sc(avgScore)} sub={scoreGrade(avgScore,isAr)} trend={delta||undefined}/>
-              <KpiBox label={t.goodPosture}    value={`${goodPct}%`} icon="✅" color={T.green}/>
-              <KpiBox label={t.totalTime}      value={`${totalMin}m`} icon="⏱" color={T.text}/>
+              <KpiBox label={t.goodPosture}    value={`${goodPct}%`} icon="✅" color={TOKENS.green}/>
+              <KpiBox label={t.totalTime}      value={`${totalMin}m`} icon="⏱" color={TOKENS.text}/>
             </div>
 
             <Card title={isAr?"اتجاه مؤشر الصحة":"Health Intelligence Trend"}
@@ -209,15 +209,15 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
               action={
                 <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                   <div style={{ width:8, height:8, borderRadius:"50%",
-                    background: delta>=0?T.green:T.red,
-                    boxShadow:`0 0 6px ${delta>=0?T.green:T.red}` }}/>
+                    background: delta>=0?TOKENS.green:TOKENS.red,
+                    boxShadow:`0 0 6px ${delta>=0?TOKENS.green:TOKENS.red}` }}/>
                   <span style={{ fontSize:11, fontWeight:700,
-                    color:delta>=0?T.green:T.red }}>
+                    color:delta>=0?TOKENS.green:TOKENS.red }}>
                     {delta>=0?`+${delta}`:delta} vs last week
                   </span>
                 </div>
               }>
-              <ScoreLine scores={scoreHist} color={T.blue} h={80}/>
+              <ScoreLine scores={scoreHist} color={TOKENS.blue} h={80}/>
             </Card>
 
             {/* Session history */}
@@ -226,19 +226,19 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
                 <div key={s.id||i} className="ds-row-hov" style={{
                   display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr",
                   padding:`${SP[3]}px ${SP[5]}px`, alignItems:"center",
-                  borderBottom: i<filtered.length-1 ? `1px solid ${T.border}` : "none",
+                  borderBottom: i<filtered.length-1 ? `1px solid ${TOKENS.border}` : "none",
                 }}>
                   <div>
-                    <div style={{ fontSize:12, fontWeight:600, color:T.text }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:TOKENS.text }}>
                       {fmt(s.created_at)}
                     </div>
-                    <div style={{ fontSize:10, color:T.muted, marginTop:1 }}>
+                    <div style={{ fontSize:10, color:TOKENS.muted, marginTop:1 }}>
                       {s.mode||"laptop"} · {dur(s)}
                     </div>
                   </div>
                   <div style={{ fontSize:14, fontWeight:800,
                     color:sc(s.avg_score||0) }}>{s.avg_score||"—"}</div>
-                  <div style={{ fontSize:10, color:T.muted }}>
+                  <div style={{ fontSize:10, color:TOKENS.muted }}>
                     {scoreGrade(s.avg_score||0,isAr)}
                   </div>
                   <div>
@@ -256,24 +256,24 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
     if (tab === "trends") return (<>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:SP[2] }}>
               <KpiBox label={isAr?"أفضل جلسة":"Best Session"}
-                value={bestScore} color={T.green}/>
+                value={bestScore} color={TOKENS.green}/>
               <KpiBox label={isAr?"هذا الأسبوع":"This Week"}
-                value={thisWeek.length} color={T.blue}
+                value={thisWeek.length} color={TOKENS.blue}
                 sub={`avg ${twAvg}/100`}/>
               <KpiBox label={isAr?"أيام متتالية":"Streak"}
-                value={streak} color={T.amber} icon="🔥"/>
+                value={streak} color={TOKENS.amber} icon="🔥"/>
             </div>
 
             <Card title={isAr?"توزيع مؤشرات الصحة":"Health Score Distribution"}>
               <div style={{ display:"flex", gap:SP[3] }}>
-                {[["Excellent",85,100,T.green],["Good",70,85,T.blue],
-                  ["Fair",50,70,T.amber],["Poor",0,50,T.red]].map(([l,min,max,col])=>{
+                {[["Excellent",85,100,TOKENS.green],["Good",70,85,TOKENS.blue],
+                  ["Fair",50,70,TOKENS.amber],["Poor",0,50,TOKENS.red]].map(([l,min,max,col])=>{
                   const cnt  = filtered.filter(s=>s.avg_score>=min&&s.avg_score<max).length;
                   const pct  = filtered.length?Math.round(cnt/filtered.length*100):0;
                   return (
                     <div key={l} style={{ flex:1, textAlign:"center" }}>
                       <div style={{ fontSize:22, fontWeight:800, color:col }}>{pct}%</div>
-                      <div style={{ fontSize:9, color:T.muted, marginTop:2 }}>{l}</div>
+                      <div style={{ fontSize:9, color:TOKENS.muted, marginTop:2 }}>{l}</div>
                       <ProgressBar value={pct} max={100} color={col} h={4}
                         style={{ marginTop:6 }}/>
                     </div>
@@ -292,8 +292,8 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
                 ].map(([l,v])=>(
                   <div key={l} style={{ background:"rgba(255,255,255,.025)",
                     borderRadius:R.sm, padding:SP[3] }}>
-                    <div style={{ fontSize:10, color:T.muted, marginBottom:4 }}>{l}</div>
-                    <div style={{ fontSize:20, fontWeight:800, color:T.text }}>{v}</div>
+                    <div style={{ fontSize:10, color:TOKENS.muted, marginBottom:4 }}>{l}</div>
+                    <div style={{ fontSize:20, fontWeight:800, color:TOKENS.text }}>{v}</div>
                   </div>
                 ))}
               </div>
@@ -304,7 +304,7 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
               gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:SP[3] }}>
               {achievements.map(a=>(
                 <div key={a.label} style={{
-                  background:T.card, border:`1px solid ${a.done?"rgba(16,185,129,.3)":T.border}`,
+                  background:TOKENS.card, border:`1px solid ${a.done?"rgba(16,185,129,.3)":TOKENS.border}`,
                   borderRadius:R.md, padding:`${SP[5]}px ${SP[4]}px`,
                   textAlign:"center", opacity:a.done?1:.45,
                   transition:"all .3s ease",
@@ -312,9 +312,9 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
                   <div style={{ fontSize:36, marginBottom:SP[2],
                     filter:a.done?"none":"grayscale(1)" }}>{a.icon}</div>
                   <div style={{ fontSize:12, fontWeight:600,
-                    color:a.done?T.green:T.muted }}>{a.label}</div>
+                    color:a.done?TOKENS.green:TOKENS.muted }}>{a.label}</div>
                   {a.done && (
-                    <div style={{ fontSize:9, color:T.green,
+                    <div style={{ fontSize:9, color:TOKENS.green,
                       marginTop:4, fontWeight:700 }}>✓ {isAr?"محقق":"Achieved"}</div>
                   )}
                 </div>
@@ -327,20 +327,20 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr",
                 gap:SP[2], marginBottom:SP[4] }}>
                 <KpiBox label={isAr?"محالون":"Referred"}
-                  value={referral?.total||0} icon="👥" color={T.text}/>
+                  value={referral?.total||0} icon="👥" color={TOKENS.text}/>
                 <KpiBox label={isAr?"محوّل":"Converted"}
-                  value={referral?.converted||0} icon="✅" color={T.green}/>
+                  value={referral?.converted||0} icon="✅" color={TOKENS.green}/>
                 <KpiBox label={isAr?"مكتسب":"Earned"}
-                  value={`${referral?.earned||0} EGP`} icon="💰" color={T.amber}/>
+                  value={`${referral?.earned||0} EGP`} icon="💰" color={TOKENS.amber}/>
               </div>
-              <div style={{ fontSize:11, color:T.muted, marginBottom:6, fontWeight:600 }}>
+              <div style={{ fontSize:11, color:TOKENS.muted, marginBottom:6, fontWeight:600 }}>
                 {isAr?"كود الإحالة":"Referral Code"}
               </div>
               <div style={{ display:"flex", gap:8, marginBottom:SP[4] }}>
                 <div style={{ flex:1, background:"rgba(255,255,255,.04)",
-                  border:`1px solid ${T.border}`, borderRadius:R.sm,
+                  border:`1px solid ${TOKENS.border}`, borderRadius:R.sm,
                   padding:`${SP[2]+1}px ${SP[3]}px`, fontSize:13,
-                  fontFamily:"DM Mono,monospace", color:T.text, letterSpacing:".05em" }}>
+                  fontFamily:"DM Mono,monospace", color:TOKENS.text, letterSpacing:".05em" }}>
                   {profile?.referral_code||"—"}
                 </div>
                 <button onClick={copyReferral} style={{
@@ -362,13 +362,13 @@ export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessio
   };
 
 function KpiBox({ label, value, sub, color, icon, trend, accent }) {
-  const col = color || T.text;
+  const col = color || TOKENS.text;
   return (
-    <div style={{ background:T.card, border:`1px solid ${T.border}`,
+    <div style={{ background:TOKENS.card, border:`1px solid ${TOKENS.border}`,
       borderRadius:R.md, padding:`${SP[4]}px`, position:"relative", overflow:"hidden" }}>
       <div style={{ position:"absolute", top:0, left:0, right:0, height:2,
         background:`linear-gradient(90deg,${col}60,transparent)` }}/>
-      <div style={{ fontSize:10, fontWeight:700, color:T.muted, letterSpacing:".08em",
+      <div style={{ fontSize:10, fontWeight:700, color:TOKENS.muted, letterSpacing:".08em",
         textTransform:"uppercase", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
         {icon && <span>{icon}</span>}{label}
       </div>
@@ -377,7 +377,7 @@ function KpiBox({ label, value, sub, color, icon, trend, accent }) {
       </div>
       {sub && <div style={{ fontSize:10.5, color:col, fontWeight:500 }}>{sub}</div>}
       {trend !== undefined && (
-        <div style={{ fontSize:10, marginTop:4, color:trend>0?T.green:trend<0?T.red:T.muted }}>
+        <div style={{ fontSize:10, marginTop:4, color:trend>0?TOKENS.green:trend<0?TOKENS.red:TOKENS.muted }}>
           {trend>0?`↑ +${trend}`:`↓ ${trend}`} pts vs last week
         </div>
       )}
@@ -447,38 +447,38 @@ function KpiBox({ label, value, sub, color, icon, trend, accent }) {
 
   return (
     <div style={{ position:"fixed", inset:0, zIndex:2000, overflowY:"auto",
-      background:T.bg, color:T.text,
+      background:TOKENS.bg, color:TOKENS.text,
       fontFamily:"'DM Sans',system-ui,sans-serif", direction:isAr?"rtl":"ltr" }}>
       <style>{GLOBAL_CSS}</style>
 
       {/* HEADER */}
       <div style={{ position:"sticky", top:0, zIndex:30, background:"rgba(7,11,18,.95)",
-        borderBottom:`1px solid ${T.border}`, backdropFilter:"blur(16px)" }}>
+        borderBottom:`1px solid ${TOKENS.border}`, backdropFilter:"blur(16px)" }}>
         <div style={{ padding:`${SP[4]}px ${SP[5]}px`, display:"flex",
           alignItems:"center", gap:12 }}>
           <button onClick={onBack} style={{ background:"none",
-            border:`1px solid ${T.border}`, borderRadius:R.xs,
-            padding:`${SP[1]+2}px ${SP[3]}px`, fontSize:11, color:T.muted, cursor:"pointer" }}>
+            border:`1px solid ${TOKENS.border}`, borderRadius:R.xs,
+            padding:`${SP[1]+2}px ${SP[3]}px`, fontSize:11, color:TOKENS.muted, cursor:"pointer" }}>
             {t.back}
           </button>
           <div style={{ flex:1 }}>
-            <div style={{ fontSize:16, fontWeight:800, color:T.text, letterSpacing:"-.03em" }}>
+            <div style={{ fontSize:16, fontWeight:800, color:TOKENS.text, letterSpacing:"-.03em" }}>
               {isCompany
                 ? (isAr ? "لوحة ذكاء القوى العاملة" : "Workforce Intelligence Dashboard")
                 : (isAr ? "لوحة التحليلات الشخصية"  : "Personal Analytics Dashboard")}
             </div>
-            <div style={{ fontSize:10, color:T.muted, marginTop:1 }}>
+            <div style={{ fontSize:10, color:TOKENS.muted, marginTop:1 }}>
               {profile?.name||profile?.email}
             </div>
           </div>
           <div style={{ display:"flex", gap:6 }}>
             {["7d","30d","all"].map(r=>(
               <button key={r} onClick={()=>setDateRange(r)} style={{
-                background: dateRange===r ? T.blue : "none",
-                border:`1px solid ${dateRange===r?T.blue:T.border}`,
+                background: dateRange===r ? TOKENS.blue : "none",
+                border:`1px solid ${dateRange===r?TOKENS.blue:TOKENS.border}`,
                 borderRadius:R.xs, padding:`${SP[1]}px ${SP[2]+2}px`,
                 fontSize:10, fontWeight:600,
-                color:dateRange===r?"white":T.muted, cursor:"pointer",
+                color:dateRange===r?"white":TOKENS.muted, cursor:"pointer",
               }}>{r==="all"?(isAr?"الكل":"All"):r}</button>
             ))}
           </div>
@@ -486,14 +486,14 @@ function KpiBox({ label, value, sub, color, icon, trend, accent }) {
 
         {/* Tabs */}
         <div style={{ display:"flex", padding:`0 ${SP[5]}px`,
-          borderTop:`1px solid ${T.border}`, overflowX:"auto" }}>
+          borderTop:`1px solid ${TOKENS.border}`, overflowX:"auto" }}>
           {TABS.map(tb=>(
             <button key={tb.id} onClick={()=>setTab(tb.id)} style={{
               background:"none", border:"none",
-              borderBottom: tab===tb.id ? `2px solid ${T.blue}` : "2px solid transparent",
+              borderBottom: tab===tb.id ? `2px solid ${TOKENS.blue}` : "2px solid transparent",
               padding:`${SP[3]}px ${SP[4]}px`,
               fontSize:11, fontWeight:600,
-              color: tab===tb.id ? T.blue : T.muted,
+              color: tab===tb.id ? TOKENS.blue : TOKENS.muted,
               cursor:"pointer", whiteSpace:"nowrap",
               display:"flex", alignItems:"center", gap:5,
             }}>

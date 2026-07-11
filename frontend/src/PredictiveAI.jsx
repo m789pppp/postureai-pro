@@ -13,7 +13,7 @@ async function callGemini(prompt, system, maxTokens = 900) {
 }
 
 // ── Design tokens (consistent across entire component) ─────────────
-const T = {
+const TOKENS = {
   // Font sizes — strict 3-level hierarchy
   xs:   9.5,   // metadata, labels, badges
   sm:   11.5,  // secondary text, hints
@@ -136,15 +136,15 @@ function forecast(scores, days = 7) {
 function MetricChip({ label, value, color, raw }) {
   return (
     <div style={{
-      background: T.surfaceL, border: `1px solid ${T.border}`,
-      borderRadius: 10, padding: `${T.sp2}px ${T.sp3}px`,
+      background: TOKENS.surfaceL, border: `1px solid ${TOKENS.border}`,
+      borderRadius: 10, padding: `${TOKENS.sp2}px ${TOKENS.sp3}px`,
       flex: "1 1 auto", minWidth: 72,
     }}>
-      <div style={{ fontSize: T.xs, color: T.textMuted, fontWeight: T.bold,
+      <div style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted, fontWeight: TOKENS.bold,
         letterSpacing: ".07em", textTransform: "uppercase", marginBottom: 5 }}>
         {label}
       </div>
-      <div style={{ fontSize: T.md, fontWeight: T.black, color, lineHeight: 1 }}>
+      <div style={{ fontSize: TOKENS.md, fontWeight: TOKENS.black, color, lineHeight: 1 }}>
         {raw ? value : `${value}/100`}
       </div>
     </div>
@@ -156,19 +156,19 @@ function RiskCard({ title, score, icon, color, desc }) {
   const pct = typeof score === "number" ? score : 0;
   return (
     <div style={{
-      background: T.surface, border: `1px solid ${T.border}`,
-      borderRadius: 14, padding: T.sp4, display: "flex", flexDirection: "column", gap: T.sp3,
+      background: TOKENS.surface, border: `1px solid ${TOKENS.border}`,
+      borderRadius: 14, padding: TOKENS.sp4, display: "flex", flexDirection: "column", gap: TOKENS.sp3,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: T.sp2 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: TOKENS.sp2 }}>
         <span style={{ fontSize: 18 }}>{icon}</span>
-        <span style={{ fontSize: T.sm, fontWeight: T.bold, color: T.textSub,
+        <span style={{ fontSize: TOKENS.sm, fontWeight: TOKENS.bold, color: TOKENS.textSub,
           textTransform: "uppercase", letterSpacing: ".06em" }}>
           {title}
         </span>
       </div>
-      <div style={{ fontSize: T.xl, fontWeight: T.black, color, lineHeight: 1 }}>
+      <div style={{ fontSize: TOKENS.xl, fontWeight: TOKENS.black, color, lineHeight: 1 }}>
         {pct}
-        <span style={{ fontSize: T.sm, fontWeight: T.medium, color: T.textMuted,
+        <span style={{ fontSize: TOKENS.sm, fontWeight: TOKENS.medium, color: TOKENS.textMuted,
           marginLeft: 3 }}>/100</span>
       </div>
       {/* Progress bar */}
@@ -178,7 +178,7 @@ function RiskCard({ title, score, icon, color, desc }) {
           background: color, transition: "width .6s cubic-bezier(.16,1,.3,1)",
         }} />
       </div>
-      <div style={{ fontSize: T.sm, color: T.textSub, lineHeight: 1.5 }}>{desc}</div>
+      <div style={{ fontSize: TOKENS.sm, color: TOKENS.textSub, lineHeight: 1.5 }}>{desc}</div>
     </div>
   );
 }
@@ -195,8 +195,8 @@ function AnomalyRow({ anomaly, sessions, isAr }) {
   const T = D?.t || { label:{fontSize:9,fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase"}, small:{fontSize:11}, h3:{fontSize:12,fontWeight:600} };
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: T.sp3,
-      padding: `${T.sp3}px 0`, borderBottom: `1px solid ${T.border}`,
+      display: "flex", alignItems: "center", gap: TOKENS.sp3,
+      padding: `${TOKENS.sp3}px 0`, borderBottom: `1px solid ${TOKENS.border}`,
     }}>
       <div style={{
         width: 38, height: 38, borderRadius: 10, flexShrink: 0,
@@ -206,19 +206,19 @@ function AnomalyRow({ anomaly, sessions, isAr }) {
         {isHigh ? "📈" : "📉"}
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: T.base, fontWeight: T.semibold, color: T.text, lineHeight: 1.3 }}>
+        <div style={{ fontSize: TOKENS.base, fontWeight: TOKENS.semibold, color: TOKENS.text, lineHeight: 1.3 }}>
           {isAr
             ? `${isHigh ? "أداء استثنائي" : "انخفاض ملحوظ"} — ${anomaly.value}/100`
             : `${isHigh ? "Exceptional session" : "Below-average drop"} — ${anomaly.value}/100`}
         </div>
-        <div style={{ fontSize: T.xs, color: T.textMuted, marginTop: 3 }}>
+        <div style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted, marginTop: 3 }}>
           {date} · {isAr ? `Z-score: ${anomaly.z.toFixed(1)}` : `z-score ${anomaly.z.toFixed(1)}`}
         </div>
       </div>
       <div style={{
         background: `${color}18`, border: `1px solid ${color}30`,
         borderRadius: 99, padding: "3px 10px",
-        fontSize: T.xs, fontWeight: T.bold, color,
+        fontSize: TOKENS.xs, fontWeight: TOKENS.bold, color,
         textTransform: "uppercase", letterSpacing: ".05em",
       }}>
         {isAr ? "شذوذ" : "Anomaly"}
@@ -253,21 +253,21 @@ function ForecastChart({ historical, predicted, isAr }) {
   }).join(" ");
 
   return (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`,
-      borderRadius: 14, padding: T.sp4 }}>
+    <div style={{ background: TOKENS.surface, border: `1px solid ${TOKENS.border}`,
+      borderRadius: 14, padding: TOKENS.sp4 }}>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: T.sp4, marginBottom: T.sp3 }}>
+      <div style={{ display: "flex", gap: TOKENS.sp4, marginBottom: TOKENS.sp3 }}>
         {[
           { color: "#1a56db", label: isAr ? "السجل" : "Historical", dashed: false },
           { color: "#0891b2", label: isAr ? "التوقع" : "Forecast",   dashed: true },
         ].map(({ color, label, dashed }) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", gap: T.sp2 }}>
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: TOKENS.sp2 }}>
             <svg width={20} height={8} viewBox="0 0 20 8">
               <line x1="0" y1="4" x2="20" y2="4" stroke={color} strokeWidth="2"
                 strokeDasharray={dashed ? "4,3" : "none"} strokeLinecap="round" />
             </svg>
-            <span style={{ fontSize: T.xs, color: T.textSub, fontWeight: T.semibold }}>{label}</span>
+            <span style={{ fontSize: TOKENS.xs, color: TOKENS.textSub, fontWeight: TOKENS.semibold }}>{label}</span>
           </div>
         ))}
       </div>
@@ -293,16 +293,16 @@ function ForecastChart({ historical, predicted, isAr }) {
           stroke="rgba(148,163,184,.2)" strokeWidth=".8" strokeDasharray="3,3" />
       </svg>
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: T.sp2 }}>
-        <span style={{ fontSize: T.xs, color: T.textMuted }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: TOKENS.sp2 }}>
+        <span style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted }}>
           {isAr ? "14 يوم مضت" : "14 days ago"}
         </span>
-        <span style={{ fontSize: T.xs, color: "#0891b2", fontWeight: T.bold }}>
+        <span style={{ fontSize: TOKENS.xs, color: "#0891b2", fontWeight: TOKENS.bold }}>
           {isAr
             ? `التوقع بعد 7 أيام: ${predicted[predicted.length - 1]}/100`
             : `7-day forecast: ${predicted[predicted.length - 1]}/100`}
         </span>
-        <span style={{ fontSize: T.xs, color: T.textMuted }}>+7d</span>
+        <span style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted }}>+7d</span>
       </div>
     </div>
   );
@@ -313,16 +313,16 @@ function AIBlock({ loading, data, error, onRetry, isAr }) {
   return (
     <div style={{
       background: "rgba(124,58,237,.05)", border: "1px solid rgba(124,58,237,.18)",
-      borderRadius: 14, padding: T.sp4,
+      borderRadius: 14, padding: TOKENS.sp4,
     }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: T.sp2, marginBottom: T.sp3 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: TOKENS.sp2, marginBottom: TOKENS.sp3 }}>
         <div style={{
           width: 28, height: 28, borderRadius: 8, flexShrink: 0,
           background: "linear-gradient(135deg,#7c3aed,#1a56db)",
           display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13,
         }}>🧠</div>
-        <span style={{ fontSize: T.sm, fontWeight: T.bold, color: T.accentL,
+        <span style={{ fontSize: TOKENS.sm, fontWeight: TOKENS.bold, color: TOKENS.accentL,
           letterSpacing: ".05em", textTransform: "uppercase" }}>
           {isAr ? "تحليل الذكاء التنبؤي" : "Predictive AI Analysis"}
         </span>
@@ -331,7 +331,7 @@ function AIBlock({ loading, data, error, onRetry, isAr }) {
             {[0, 1, 2].map(i => (
               <span key={i} style={{
                 width: 5, height: 5, borderRadius: "50%",
-                background: T.accent, display: "inline-block",
+                background: TOKENS.accent, display: "inline-block",
                 animation: `blink 1.2s ${i * .2}s infinite`,
               }} />
             ))}
@@ -341,7 +341,7 @@ function AIBlock({ loading, data, error, onRetry, isAr }) {
 
       {/* Skeleton */}
       {loading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: T.sp2 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp2 }}>
           {[100, 82, 65].map((w, i) => (
             <div key={i} style={{
               height: 11, borderRadius: 6, width: `${w}%`,
@@ -357,12 +357,12 @@ function AIBlock({ loading, data, error, onRetry, isAr }) {
 
       {/* Error */}
       {!loading && error && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: T.sp3 }}>
-          <span style={{ fontSize: T.base, color: "#f87171" }}>⚠ {error}</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: TOKENS.sp3 }}>
+          <span style={{ fontSize: TOKENS.base, color: "#f87171" }}>⚠ {error}</span>
           <button onClick={onRetry} style={{
             background: "rgba(124,58,237,.15)", border: "1px solid rgba(124,58,237,.3)",
-            borderRadius: 8, padding: `${T.sp1}px ${T.sp3}px`,
-            fontSize: T.sm, fontWeight: T.bold, color: T.accentL, cursor: "pointer",
+            borderRadius: 8, padding: `${TOKENS.sp1}px ${TOKENS.sp3}px`,
+            fontSize: TOKENS.sm, fontWeight: TOKENS.bold, color: TOKENS.accentL, cursor: "pointer",
           }}>
             {isAr ? "⟳ أعد المحاولة" : "⟳ Retry"}
           </button>
@@ -492,7 +492,7 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
       display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
     }}>
       <div style={{
-        background: "#0b1525", border: `1px solid ${T.border}`,
+        background: "#0b1525", border: `1px solid ${TOKENS.border}`,
         borderRadius: 20, width: "min(660px,96vw)", height: "min(740px,94vh)",
         display: "flex", flexDirection: "column", overflow: "hidden",
         direction: isAr ? "rtl" : "ltr",
@@ -502,36 +502,36 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
 
         {/* ── Header ─────────────────────────────────────────────── */}
         <div style={{
-          padding: `${T.sp4}px ${T.sp5}px`, flexShrink: 0,
-          borderBottom: `1px solid ${T.border}`,
+          padding: `${TOKENS.sp4}px ${TOKENS.sp5}px`, flexShrink: 0,
+          borderBottom: `1px solid ${TOKENS.border}`,
         }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: T.sp4 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: T.sp3 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: TOKENS.sp4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: TOKENS.sp3 }}>
               <div style={{
                 width: 38, height: 38, borderRadius: 11, flexShrink: 0,
                 background: "linear-gradient(135deg,#7c3aed,#1a56db)",
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
               }}>🔮</div>
               <div>
-                <div style={{ fontSize: T.md, fontWeight: T.black, color: T.text,
+                <div style={{ fontSize: TOKENS.md, fontWeight: TOKENS.black, color: TOKENS.text,
                   letterSpacing: "-.02em", fontFamily: "Syne,sans-serif" }}>
                   {isAr ? "الذكاء التنبؤي" : "Predictive AI Engine"}
                 </div>
-                <div style={{ fontSize: T.xs, color: T.accentL, fontWeight: T.semibold, marginTop: 2 }}>
+                <div style={{ fontSize: TOKENS.xs, color: TOKENS.accentL, fontWeight: TOKENS.semibold, marginTop: 2 }}>
                   {isAr ? "توقعات مبنية على أنماط بياناتك" : "Pattern detection & performance forecasting"}
                 </div>
               </div>
             </div>
             <button onClick={onClose} style={{
               width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-              background: T.surfaceL, border: `1px solid ${T.border}`,
-              color: T.textSub, cursor: "pointer", fontSize: 15,
+              background: TOKENS.surfaceL, border: `1px solid ${TOKENS.border}`,
+              color: TOKENS.textSub, cursor: "pointer", fontSize: 15,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>✕</button>
           </div>
 
           {/* Metric chips */}
-          <div style={{ display: "flex", gap: T.sp2, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: TOKENS.sp2, flexWrap: "wrap" }}>
             <MetricChip label={isAr ? "خطر الإرهاق" : "Burnout Risk"}
               value={burnoutScore} color={riskColor(burnoutScore)} />
             <MetricChip label={isAr ? "الخطر العام" : "Overall Risk"}
@@ -547,18 +547,18 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
 
         {/* ── Tabs ───────────────────────────────────────────────── */}
         <div style={{
-          display: "flex", borderBottom: `1px solid ${T.border}`,
+          display: "flex", borderBottom: `1px solid ${TOKENS.border}`,
           flexShrink: 0, overflowX: "auto",
         }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: 1, padding: `${T.sp3}px ${T.sp2}px`,
+              flex: 1, padding: `${TOKENS.sp3}px ${TOKENS.sp2}px`,
               background: "none", border: "none",
-              borderBottom: `2px solid ${tab === t.id ? T.accent : "transparent"}`,
-              color: tab === t.id ? T.accentL : T.textMuted,
-              fontSize: T.sm, fontWeight: tab === t.id ? T.bold : T.medium,
+              borderBottom: `2px solid ${tab === t.id ? TOKENS.accent : "transparent"}`,
+              color: tab === t.id ? TOKENS.accentL : TOKENS.textMuted,
+              fontSize: TOKENS.sm, fontWeight: tab === t.id ? TOKENS.bold : TOKENS.medium,
               cursor: "pointer", display: "flex", flexDirection: "column",
-              alignItems: "center", gap: T.sp1, transition: "color 150ms",
+              alignItems: "center", gap: TOKENS.sp1, transition: "color 150ms",
               minWidth: 72,
             }}>
               <span style={{ fontSize: 17 }}>{t.icon}</span>
@@ -568,17 +568,17 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
         </div>
 
         {/* ── Content ────────────────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: T.sp5 }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: TOKENS.sp5 }}>
 
           {/* Empty state */}
           {sessions.length === 0 && (
             <div style={{ textAlign: "center", padding: "60px 20px" }}>
-              <div style={{ fontSize: 52, marginBottom: T.sp4 }}>🔮</div>
-              <div style={{ fontSize: T.md, fontWeight: T.black, color: T.text,
-                marginBottom: T.sp2, fontFamily: "Syne,sans-serif" }}>
+              <div style={{ fontSize: 52, marginBottom: TOKENS.sp4 }}>🔮</div>
+              <div style={{ fontSize: TOKENS.md, fontWeight: TOKENS.black, color: TOKENS.text,
+                marginBottom: TOKENS.sp2, fontFamily: "Syne,sans-serif" }}>
                 {isAr ? "لا توجد بيانات للتنبؤ" : "No data for predictions"}
               </div>
-              <div style={{ fontSize: T.base, color: T.textSub }}>
+              <div style={{ fontSize: TOKENS.base, color: TOKENS.textSub }}>
                 {isAr ? "أكمل بعض الجلسات لتفعيل الذكاء التنبؤي" : "Complete a few sessions to activate predictive AI"}
               </div>
             </div>
@@ -586,8 +586,8 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
 
           {/* Burnout tab */}
           {tab === "burnout" && sessions.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: T.sp4 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: T.sp3 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp4 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: TOKENS.sp3 }}>
                 <RiskCard
                   title={isAr ? "خطر الإرهاق" : "Burnout Risk"}
                   score={burnoutScore} icon="🔥"
@@ -610,21 +610,21 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
 
           {/* Anomalies tab */}
           {tab === "anomaly" && sessions.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: T.sp4 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp4 }}>
               <div style={{
-                background: T.surface, border: `1px solid ${T.border}`,
-                borderRadius: 14, padding: T.sp4,
+                background: TOKENS.surface, border: `1px solid ${TOKENS.border}`,
+                borderRadius: 14, padding: TOKENS.sp4,
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between",
-                  alignItems: "center", marginBottom: T.sp3 }}>
-                  <div style={{ fontSize: T.base, fontWeight: T.bold, color: T.text }}>
+                  alignItems: "center", marginBottom: TOKENS.sp3 }}>
+                  <div style={{ fontSize: TOKENS.base, fontWeight: TOKENS.bold, color: TOKENS.text }}>
                     {isAr ? `${anomalies.length} شذوذ مكتشف` : `${anomalies.length} anomalies detected`}
                   </div>
                   <div style={{
                     background: anomalies.length > 0 ? "rgba(245,158,11,.12)" : "rgba(16,185,129,.12)",
                     border: `1px solid ${anomalies.length > 0 ? "rgba(245,158,11,.3)" : "rgba(16,185,129,.3)"}`,
                     borderRadius: 99, padding: "3px 10px",
-                    fontSize: T.xs, fontWeight: T.bold,
+                    fontSize: TOKENS.xs, fontWeight: TOKENS.bold,
                     color: anomalies.length > 0 ? "#fbbf24" : "#34d399",
                     textTransform: "uppercase", letterSpacing: ".05em",
                   }}>
@@ -632,7 +632,7 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
                   </div>
                 </div>
                 {anomalies.length === 0
-                  ? <div style={{ fontSize: T.base, color: T.textSub, textAlign: "center", padding: "20px 0" }}>
+                  ? <div style={{ fontSize: TOKENS.base, color: TOKENS.textSub, textAlign: "center", padding: "20px 0" }}>
                       {isAr ? "✅ لا توجد شذوذات في بياناتك" : "✅ No anomalies detected in your data"}
                     </div>
                   : anomalies.slice(0, 5).map((a, i) =>
@@ -646,8 +646,8 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
 
           {/* Risk tab */}
           {tab === "risk" && sessions.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: T.sp4 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: T.sp3 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp4 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: TOKENS.sp3 }}>
                 <RiskCard
                   title={isAr ? "الخطر الكلي" : "Overall Risk"}
                   score={riskScore} icon="⚠️"
@@ -666,13 +666,13 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
 
           {/* Forecast tab */}
           {tab === "forecast" && sessions.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: T.sp4 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp4 }}>
               <ForecastChart
                 historical={recent14.length >= 3 ? recent14 : allScores.slice(-14)}
                 predicted={fore?.predicted || []} isAr={isAr} />
 
               {fore && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: T.sp2 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: TOKENS.sp2 }}>
                   {[
                     {
                       l: isAr ? "الاتجاه" : "Trend",
@@ -683,7 +683,7 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
                       v: fore.predicted?.[6] ? `${fore.predicted[6]}/100` : "—",
                       c: fore.predicted?.[6]
                         ? riskColor(100 - fore.predicted[6])
-                        : T.textMuted,
+                        : TOKENS.textMuted,
                     },
                     {
                       l: isAr ? "الميل اليومي" : "Daily Slope",
@@ -692,15 +692,15 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
                     },
                   ].map((m, i) => (
                     <div key={i} style={{
-                      background: T.surface, border: `1px solid ${T.border}`,
-                      borderRadius: 12, padding: `${T.sp3}px ${T.sp4}px`,
+                      background: TOKENS.surface, border: `1px solid ${TOKENS.border}`,
+                      borderRadius: 12, padding: `${TOKENS.sp3}px ${TOKENS.sp4}px`,
                       textAlign: "center",
                     }}>
-                      <div style={{ fontSize: T.xs, fontWeight: T.bold, color: T.textMuted,
-                        letterSpacing: ".07em", textTransform: "uppercase", marginBottom: T.sp2 }}>
+                      <div style={{ fontSize: TOKENS.xs, fontWeight: TOKENS.bold, color: TOKENS.textMuted,
+                        letterSpacing: ".07em", textTransform: "uppercase", marginBottom: TOKENS.sp2 }}>
                         {m.l}
                       </div>
-                      <div style={{ fontSize: T.lg, fontWeight: T.black, color: m.c,
+                      <div style={{ fontSize: TOKENS.lg, fontWeight: TOKENS.black, color: m.c,
                         fontFamily: "Syne,sans-serif" }}>
                         {m.v}
                       </div>
