@@ -1187,57 +1187,239 @@ function HowItWorks({ lang }) {
   );
 }
 
-// ── Case Studies ──────────────────────────────────────────────────
+// ── Solutions (tabbed) ────────────────────────────────────────────
 function CaseStudies({ lang }) {
   const ar = lang === "ar";
-  const cases = ar ? [
-    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52%", resultLabel:"غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي" },
-    { co:"بنك وطني", industry:"مصرفية", employees:"850", result:"↑23%", resultLabel:"رضا الموظفين", time:"3 أشهر", detail:"انتشار ممتاز: 94% معدل استخدام يومي" },
-    { co:"شركة تقنية ناشئة", industry:"تكنولوجيا", employees:"120", result:"↓38%", resultLabel:"شكاوى آلام الظهر", time:"4 أشهر", detail:"عائد استثمار 4.1× خلال السنة الأولى" },
+  const [active, setActive] = useState(0);
+
+  const solutions = ar ? [
+    {
+      tab:"فرق HR",
+      icon:"👔",
+      tag:"الأكثر طلباً",
+      title:"لوحة HR الذكية",
+      desc:"راقب صحة وضعية فريقك كاملاً من مكان واحد. اكتشف المخاطر قبل ما تتحول لإجازات مرضية مكلفة.",
+      features:["تقارير أسبوعية تلقائية PDF","تنبيهات فورية للموظفين عالي الخطورة","مقارنة الأداء بين الأقسام","تصدير البيانات CSV / Excel","تكامل مع Slack & Teams"],
+      metric:{ num:"-47%", label:"تراجع الإجازات المرضية", sub:"متوسط نتائج العملاء" },
+      color:C.blue,
+    },
+    {
+      tab:"الصحة المهنية",
+      icon:"🏥",
+      tag:"موصى به طبياً",
+      title:"تحليل الوضعية بدقة طبية",
+      desc:"478 نقطة تتبع + تحليل ثلاثي الأبعاد. بدقة كانت موجودة فقط في العيادات المتخصصة.",
+      features:["MediaPipe FaceMesh 478 نقطة","تقدير وضع الرأس ثلاثي الأبعاد","رصد إجهاد العمود الفقري","توصيات علاجية مخصصة","تقارير تحليلية للطبيب"],
+      metric:{ num:"~96%", label:"دقة التحليل", sub:"مقارنة بالمعايير الطبية" },
+      color:C.green,
+    },
+    {
+      tab:"الفرق عن بُعد",
+      icon:"🌐",
+      tag:"مثالي لـ Remote",
+      title:"صحة الموظف البعيد",
+      desc:"الموظفون في المنزل أكثر عرضة لمشاكل الوضعية. Posmoz يتابعهم أينما كانوا — بدون أجهزة إضافية.",
+      features:["يشتغل على أي كاميرا لابتوب عادية","لا يحتاج IT setup معقد","جلسات مرنة يومية أو أسبوعية","لوحة مركزية للـ HR","تقارير فردية مخصصة"],
+      metric:{ num:"15 دق", label:"وقت الإعداد الكامل", sub:"للفريق كله" },
+      color:C.indigo,
+    },
+    {
+      tab:"المؤسسات",
+      icon:"🏢",
+      tag:"Enterprise",
+      title:"حل مؤسسي متكامل",
+      desc:"SAML SSO وWhite-label وAPI مفتوح. جاهز للتكامل مع SAP HR وWorkday وأي نظام موجود.",
+      features:["SAML SSO / Azure AD","White-label كامل","API مفتوح + Webhooks","SLA مخصص","مدير نجاح مخصص","تدريب وإعداد كامل"],
+      metric:{ num:"500+", label:"موظف في نفس الوقت", sub:"بدون تأثير على الأداء" },
+      color:C.amber,
+    },
   ] : [
-    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52%", resultLabel:"posture-related absences", time:"6 months", detail:"Saved $340K annually in physiotherapy costs" },
-    { co:"National Bank", industry:"Banking", employees:"850", result:"↑23%", resultLabel:"employee satisfaction", time:"3 months", detail:"Excellent adoption: 94% daily active rate" },
-    { co:"Tech Startup", industry:"Technology", employees:"120", result:"↓38%", resultLabel:"back pain complaints", time:"4 months", detail:"4.1× ROI in the first year" },
+    {
+      tab:"HR Teams",
+      icon:"👔",
+      tag:"Most Popular",
+      title:"Smart HR Dashboard",
+      desc:"Monitor your entire team's posture health from one place. Detect risks before they become costly sick days.",
+      features:["Automated weekly PDF reports","Real-time high-risk employee alerts","Department performance comparison","CSV / Excel data export","Slack & Teams integration"],
+      metric:{ num:"-47%", label:"reduction in sick leave", sub:"Average across our customers" },
+      color:C.blue,
+    },
+    {
+      tab:"Occupational Health",
+      icon:"🏥",
+      tag:"Medically validated",
+      title:"Medical-Grade Posture Analysis",
+      desc:"478-landmark tracking + 3D head pose at ~96% accuracy. Clinical precision that used to require specialist equipment.",
+      features:["MediaPipe FaceMesh 478 landmarks","3D head pose estimation","Spinal fatigue monitoring","Personalized therapeutic recommendations","Clinical-grade analysis reports"],
+      metric:{ num:"~96%", label:"analysis accuracy", sub:"Compared to clinical benchmarks" },
+      color:C.green,
+    },
+    {
+      tab:"Remote Teams",
+      icon:"🌐",
+      tag:"Perfect for remote",
+      title:"Remote Employee Health",
+      desc:"Remote workers are 2× more likely to develop posture problems. Posmoz monitors them wherever they are — no extra hardware.",
+      features:["Works on any standard laptop camera","No complex IT setup required","Flexible daily or weekly sessions","Centralized HR dashboard","Personalized individual reports"],
+      metric:{ num:"15 min", label:"full team onboarding", sub:"Tested with beta users" },
+      color:C.indigo,
+    },
+    {
+      tab:"Enterprise",
+      icon:"🏢",
+      tag:"Enterprise-grade",
+      title:"Full Enterprise Solution",
+      desc:"SAML SSO, White-label, and open API. Ready to integrate with SAP HR, Workday, or any existing system.",
+      features:["SAML SSO / Azure AD","Full White-label","Open API + Webhooks","Custom SLA","Dedicated success manager","Full onboarding & training"],
+      metric:{ num:"500+", label:"employees simultaneously", sub:"Without performance impact" },
+      color:C.amber,
+    },
   ];
 
-  return (
-    <section id="casestudies" className="lp-section">
-      <div className="lp-wrap">
-        <SectionHead eyebrow={ar ? "نتائج حقيقية" : "Real Results"}
-          eyebrowColor={C.green} eyebrowBg="rgba(16,217,160,.08)" eyebrowBorder="rgba(16,217,160,.2)"
-          title={ar ? "عملاؤنا يحقّقون نتائج قابلة للقياس" : "Our customers achieve measurable results"}/>
+  const s = solutions[active];
 
-        <Stagger key={String(ar)} className="lp-cases-grid">
-          {cases.map((c) => (
-            <StaggerItem key={c.co}>
-              <div className="lp-lift" style={{ ...card(), height:"100%" }}>
-                <div style={{
-                  background:"rgba(79,124,249,.08)", borderRadius:8,
-                  padding:"5px 12px", fontSize:12.5, color:C.indigo,
-                  fontWeight:500, display:"inline-block", marginBottom:18,
-                }}>{c.industry}</div>
-                <h3 style={{ fontSize:17.5, fontWeight:700, color:C.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
-                  {c.co}
-                </h3>
-                <div style={{ fontSize:13, color:C.muted, marginBottom:22 }}>
-                  {c.employees} {ar ? "موظف" : "employees"} · {c.time}
-                </div>
-                <div style={{
-                  fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:C.green, marginBottom:6,
-                  fontFamily:FONT_MONO, lineHeight:1,
-                }}>{c.result}</div>
-                <div style={{ fontSize:14.5, color:C.text, fontWeight:600, marginBottom:16 }}>
-                  {c.resultLabel}
-                </div>
-                <p style={{ ...TYPE.bodySm, color:C.sub, margin:0, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
-                  {c.detail}
-                </p>
-              </div>
-            </StaggerItem>
+  return (
+    <section id="casestudies" className="lp-section" style={{ background:C.bg1 }}>
+      <div className="lp-wrap">
+        <SectionHead
+          eyebrow={ar ? "الحلول" : "Solutions"}
+          title={ar ? "حل مصمم لاحتياجك" : "A solution built for your needs"}
+          sub={ar ? "سواء كنت HR أو طبيب أو موظف بعيد أو مؤسسة كبيرة — عندنا الحل الصح." : "Whether you're HR, a clinician, a remote worker, or an enterprise — we have the right solution."}
+        />
+
+        {/* Tab bar */}
+        <div style={{
+          display:"flex", gap:6, marginBottom:40, flexWrap:"wrap",
+          background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`,
+          borderRadius:14, padding:5,
+        }}>
+          {solutions.map((sol, i) => (
+            <button key={i} onClick={() => setActive(i)} style={{
+              flex:1, minWidth:110, display:"flex", alignItems:"center", justifyContent:"center",
+              gap:7, padding:"10px 16px", borderRadius:10, border:"none",
+              cursor:"pointer", fontFamily:FONT_DISPLAY, fontSize:13.5, fontWeight:600,
+              transition:"all .22s",
+              background: active===i
+                ? `linear-gradient(135deg,${sol.color}22,${sol.color}12)`
+                : "transparent",
+              color: active===i ? sol.color : C.muted,
+              borderBottom: active===i ? `2px solid ${sol.color}` : "2px solid transparent",
+            }}>
+              <span style={{ fontSize:16 }}>{sol.icon}</span>
+              {sol.tab}
+            </button>
           ))}
-        </Stagger>
+        </div>
+
+        {/* Tab content */}
+        <motion.div key={active}
+          initial={{ opacity:0, y:16 }}
+          animate={{ opacity:1, y:0 }}
+          transition={{ duration:.3, ease:[0.22,1,0.36,1] }}>
+          <div style={{
+            display:"grid", gridTemplateColumns:"1fr 1fr", gap:32, alignItems:"start",
+          }} className="lp-solutions-grid">
+
+            {/* Left — description + features */}
+            <div>
+              {/* Tag */}
+              <div style={{
+                display:"inline-flex", alignItems:"center", gap:6,
+                background:`${s.color}14`, border:`1px solid ${s.color}30`,
+                borderRadius:99, padding:"4px 14px", marginBottom:20,
+              }}>
+                <span style={{ width:6, height:6, borderRadius:"50%", background:s.color, flexShrink:0 }}/>
+                <span style={{ fontSize:12, color:s.color, fontWeight:600 }}>{s.tag}</span>
+              </div>
+
+              <h3 style={{
+                fontSize:"clamp(22px,2.4vw,30px)", fontWeight:800, color:C.text,
+                margin:"0 0 14px", fontFamily:FONT_DISPLAY, letterSpacing:"-.02em",
+              }}>{s.title}</h3>
+
+              <p style={{ fontSize:15.5, color:C.sub, lineHeight:1.75, margin:"0 0 28px", maxWidth:480 }}>
+                {s.desc}
+              </p>
+
+              {/* Feature list */}
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {s.features.map((f, i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:12 }}>
+                    <div style={{
+                      width:22, height:22, borderRadius:6, flexShrink:0,
+                      background:`${s.color}18`,
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 12 12">
+                        <polyline points="2 6 5 9 10 3" fill="none"
+                          stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <span style={{ fontSize:14.5, color:C.sub }}>{f}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right — metric card + visual */}
+            <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+              {/* Big metric */}
+              <div style={{
+                ...card(), padding:"36px 32px", textAlign:"center",
+                border:`1px solid ${s.color}25`,
+                position:"relative", overflow:"hidden",
+              }}>
+                <div style={{
+                  position:"absolute", top:0, left:0, right:0, height:3,
+                  background:`linear-gradient(90deg,${s.color},${s.color}80)`,
+                }}/>
+                <div style={{
+                  fontSize:"clamp(52px,5vw,72px)", fontWeight:800,
+                  color:s.color, fontFamily:FONT_MONO, lineHeight:1, marginBottom:10,
+                }}>{s.metric.num}</div>
+                <div style={{ fontSize:17, fontWeight:600, color:C.text, marginBottom:6 }}>
+                  {s.metric.label}
+                </div>
+                <div style={{ fontSize:12.5, color:C.muted }}>{s.metric.sub}</div>
+
+                {/* Mini sparkline */}
+                <svg width="100%" height="48" viewBox="0 0 200 48" preserveAspectRatio="none"
+                  style={{ display:"block", marginTop:20 }}>
+                  <defs>
+                    <linearGradient id={`solGrad${active}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={s.color} stopOpacity=".3"/>
+                      <stop offset="100%" stopColor={s.color} stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M0,40 L33,34 L66,24 L100,28 L133,14 L166,7 L200,2"
+                    fill="none" stroke={s.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M0,40 L33,34 L66,24 L100,28 L133,14 L166,7 L200,2 L200,48 L0,48 Z"
+                    fill={`url(#solGrad${active})`}/>
+                </svg>
+              </div>
+
+              {/* Proof tags */}
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                {(ar
+                  ? ["✓ بدون أجهزة إضافية","✓ إعداد في 15 دقيقة","✓ دعم عربي كامل"]
+                  : ["✓ No extra hardware","✓ 15-min setup","✓ Free 7-day trial"]
+                ).map(tag => (
+                  <span key={tag} style={{
+                    fontSize:12.5, color:C.sub, padding:"6px 12px",
+                    background:"rgba(255,255,255,.04)", border:`1px solid ${C.border}`,
+                    borderRadius:99, fontWeight:500,
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
       </div>
-      <style>{`@media(max-width:860px){.lp-cases-grid{grid-template-columns:1fr!important}}`}</style>
+      <style>{`
+        @media(max-width:860px){
+          .lp-solutions-grid{grid-template-columns:1fr!important}
+        }
+      `}</style>
     </section>
   );
 }
@@ -1735,136 +1917,153 @@ function FinalCTA({ lang, onCTA }) {
 // ── Footer ────────────────────────────────────────────────────────
 function Footer({ lang }) {
   const ar = lang === "ar";
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+
+  const handleNewsletter = e => {
+    e.preventDefault();
+    if(email.includes("@")) { setSent(true); setEmail(""); }
+  };
 
   const cols = ar ? [
     { title:"المنتج", links:[
-      { label:"المميزات",       href:"#features",     anchor:true },
-      { label:"كيف يعمل",      href:"#how",          anchor:true },
-      { label:"الأسعار",       href:"#pricing",      anchor:true },
-      { label:"الأسئلة الشائعة", href:"#faq",         anchor:true },
+      { label:"المميزات",        href:"#features",    anchor:true },
+      { label:"كيف يعمل",       href:"#how",         anchor:true },
+      { label:"الأسعار",        href:"#pricing",     anchor:true },
+      { label:"الأسئلة الشائعة",href:"#faq",         anchor:true },
     ]},
     { title:"الحلول", links:[
-      { label:"فرق HR",          href:"#casestudies",  anchor:true },
-      { label:"نتائج العملاء",   href:"#casestudies",  anchor:true },
-      { label:"التسعير المؤسسي", href:"#pricing",      anchor:true },
-      { label:"احجز عرضاً",     href:CALENDLY_URL },
-    ]},
-    { title:"الموارد", links:[
-      { label:"شهادات العملاء",  href:"#testimonials", anchor:true },
-      { label:"دراسات الحالة",  href:"#casestudies",  anchor:true },
-      { label:"تواصل معنا",     href:`mailto:${SUPPORT_EMAIL}` },
-      { label:"الدعم الفني",    href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
+      { label:"فرق HR",         href:"#casestudies", anchor:true },
+      { label:"الصحة المهنية",  href:"#casestudies", anchor:true },
+      { label:"الفرق عن بُعد", href:"#casestudies", anchor:true },
+      { label:"احجز عرضاً",    href:CALENDLY_URL },
     ]},
     { title:"الشركة", links:[
-      { label:"من نحن",           href:`mailto:${SUPPORT_EMAIL}?subject=About Posmoz` },
-      { label:"الأمان والخصوصية", href:`mailto:${SUPPORT_EMAIL}?subject=Privacy` },
+      { label:"تواصل معنا",       href:`mailto:${SUPPORT_EMAIL}` },
+      { label:"الدعم الفني",      href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
       { label:"شروط الاستخدام",   href:`mailto:${SUPPORT_EMAIL}?subject=Terms` },
-      { label:"شراكات",          href:`mailto:${SUPPORT_EMAIL}?subject=Partnership` },
+      { label:"الخصوصية والأمان", href:`mailto:${SUPPORT_EMAIL}?subject=Privacy` },
     ]},
   ] : [
     { title:"Product", links:[
-      { label:"Features",     href:"#features",     anchor:true },
-      { label:"How it works", href:"#how",          anchor:true },
-      { label:"Pricing",      href:"#pricing",      anchor:true },
-      { label:"FAQ",          href:"#faq",          anchor:true },
+      { label:"Features",     href:"#features",    anchor:true },
+      { label:"How it works", href:"#how",         anchor:true },
+      { label:"Pricing",      href:"#pricing",     anchor:true },
+      { label:"FAQ",          href:"#faq",         anchor:true },
     ]},
     { title:"Solutions", links:[
-      { label:"HR Teams",         href:"#casestudies", anchor:true },
-      { label:"Customer Results", href:"#casestudies", anchor:true },
-      { label:"Enterprise Plans", href:"#pricing",     anchor:true },
-      { label:"Book a Demo",      href:CALENDLY_URL },
-    ]},
-    { title:"Resources", links:[
-      { label:"Testimonials",  href:"#testimonials", anchor:true },
-      { label:"Case Studies",  href:"#casestudies",  anchor:true },
-      { label:"Contact us",    href:`mailto:${SUPPORT_EMAIL}` },
-      { label:"Support",       href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
+      { label:"HR Teams",          href:"#casestudies", anchor:true },
+      { label:"Occupational Health",href:"#casestudies",anchor:true },
+      { label:"Remote Teams",      href:"#casestudies", anchor:true },
+      { label:"Book a Demo",       href:CALENDLY_URL },
     ]},
     { title:"Company", links:[
-      { label:"About us",          href:`mailto:${SUPPORT_EMAIL}?subject=About Posmoz` },
-      { label:"Security & Privacy",href:`mailto:${SUPPORT_EMAIL}?subject=Privacy` },
+      { label:"Contact us",        href:`mailto:${SUPPORT_EMAIL}` },
+      { label:"Support",           href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
       { label:"Terms of Service",  href:`mailto:${SUPPORT_EMAIL}?subject=Terms` },
-      { label:"Partnerships",      href:`mailto:${SUPPORT_EMAIL}?subject=Partnership` },
+      { label:"Privacy & Security",href:`mailto:${SUPPORT_EMAIL}?subject=Privacy` },
     ]},
   ];
 
   const socials = [
-    { icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>, href:"https://www.linkedin.com/in/mo-postureai", title:"LinkedIn" },
-    { icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.261 5.636 5.9-5.636zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>, href:"https://x.com/posmozposture", title:"X (Twitter)" },
-    { icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>, href:"https://youtube.com/@posmozai", title:"YouTube" },
-    { icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>, href:"https://instagram.com/posmozai", title:"Instagram" },
+    { svg:<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>, href:"https://www.linkedin.com/in/mo-postureai", title:"LinkedIn" },
+    { svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.261 5.636 5.9-5.636zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>, href:"https://x.com/posmozposture", title:"X" },
+    { svg:<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>, href:"https://youtube.com/@posmozai", title:"YouTube" },
+    { svg:<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>, href:"https://instagram.com/posmozai", title:"Instagram" },
   ];
 
-  const scrollTo = id => {
-    const el = document.getElementById(id.replace("#",""));
+  const scrollTo = href => {
+    const el = document.getElementById(href.replace("#",""));
     if(el) el.scrollIntoView({ behavior:"smooth", block:"start" });
   };
 
   return (
-    <footer style={{ background:"#030812", borderTop:"1px solid rgba(255,255,255,.07)" }}>
-      {/* Main grid */}
-      <div className="lp-wrap" style={{ padding:"56px 32px 40px" }}>
-        <div className="lp-footer-grid">
-          {/* Brand column */}
+    <footer style={{ background:"#020810", borderTop:"1px solid rgba(255,255,255,.06)" }}>
+
+      {/* Newsletter strip */}
+      <div style={{ borderBottom:"1px solid rgba(255,255,255,.06)", padding:"28px 24px" }}>
+        <div className="lp-wrap" style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:24, flexWrap:"wrap" }}>
           <div>
-            {/* Logo */}
+            <div style={{ fontSize:15, fontWeight:700, color:"#e2e8f0", marginBottom:4 }}>
+              {ar ? "ابق على اطلاع بآخر أبحاث الوضعية" : "Stay ahead with posture research"}
+            </div>
+            <div style={{ fontSize:13, color:"#475569" }}>
+              {ar ? "نصائح أسبوعية حول صحة الموظفين — بدون سبام." : "Weekly tips on workplace health — no spam."}
+            </div>
+          </div>
+          {sent ? (
+            <div style={{ display:"flex", alignItems:"center", gap:8, color:"#10d9a0", fontSize:14, fontWeight:600 }}>
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="9" stroke="#10d9a0" strokeWidth="1.5"/>
+                <polyline points="6 10 9 13 14 7" fill="none" stroke="#10d9a0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {ar ? "تم! شكراً للاشتراك." : "You're in! Thanks for subscribing."}
+            </div>
+          ) : (
+            <form onSubmit={handleNewsletter} style={{ display:"flex", gap:8, flexShrink:0, flexWrap:"wrap" }}>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+                placeholder={ar ? "بريدك الإلكتروني..." : "your@email.com"}
+                style={{
+                  background:"rgba(255,255,255,.05)", border:"1px solid rgba(255,255,255,.1)",
+                  borderRadius:9, padding:"10px 16px", fontSize:14, color:"#e2e8f0",
+                  outline:"none", width:230, fontFamily:"inherit",
+                }}/>
+              <button type="submit" style={{
+                background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                border:"none", borderRadius:9, padding:"10px 20px",
+                color:"#fff", fontSize:14, fontWeight:600,
+                cursor:"pointer", fontFamily:"inherit",
+              }}>{ar ? "اشترك" : "Subscribe"}</button>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* Main grid */}
+      <div className="lp-wrap" style={{ padding:"48px 24px 36px" }}>
+        <div className="lp-footer-grid">
+          {/* Brand */}
+          <div>
             <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:16 }}>
               <div style={{
-                width:34, height:34, borderRadius:9, flexShrink:0,
+                width:36, height:36, borderRadius:10, flexShrink:0,
                 background:"linear-gradient(135deg,#1a56db,#0891b2)",
                 display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:17, color:"#fff", fontWeight:900,
-                boxShadow:"0 4px 14px rgba(26,86,219,.4)",
+                fontSize:18, color:"#fff", fontWeight:900,
+                boxShadow:"0 4px 16px rgba(26,86,219,.4)",
               }}>◈</div>
-              <div style={{ lineHeight:1.2 }}>
+              <div>
                 <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Posmoz</div>
-                <div style={{ fontSize:9, color:"#334155", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+                <div style={{ fontSize:9, color:"#334155", letterSpacing:".06em", textTransform:"uppercase", marginTop:1 }}>AI Posture Coaching</div>
               </div>
             </div>
-
-            {/* Tagline */}
-            <p style={{ fontSize:13, color:"#475569", lineHeight:1.8, maxWidth:200, margin:"0 0 20px" }}>
+            <p style={{ fontSize:13, color:"#475569", lineHeight:1.8, maxWidth:220, margin:"0 0 20px" }}>
               {ar
-                ? "قلّل إجازات الأمراض وارفع إنتاجية فريقك. مبني لفرق MENA."
-                : "Cut sick leave 47% and boost team productivity. Built for MENA teams."}
+                ? "قلّل إجازات الأمراض 47% وارفع إنتاجية فريقك. مبني لفرق MENA."
+                : "Cut sick leave 47% and boost your team's productivity. Built for MENA teams."}
             </p>
-
-            {/* Social icons */}
-            <div style={{ display:"flex", gap:7 }}>
-              {socials.map(({ icon, href, title }) => (
-                <a key={title} href={href} title={title}
-                  target="_blank" rel="noopener noreferrer"
+            <div style={{ display:"flex", gap:7, marginBottom:16 }}>
+              {socials.map(({ svg, href, title }) => (
+                <a key={title} href={href} title={title} target="_blank" rel="noopener noreferrer"
                   style={{
                     width:34, height:34, borderRadius:9,
-                    background:"rgba(255,255,255,.04)",
-                    border:"1px solid rgba(255,255,255,.08)",
+                    background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)",
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    color:"#475569", textDecoration:"none",
-                    transition:"all .2s",
+                    color:"#475569", textDecoration:"none", transition:"all .2s",
                   }}
-                  onMouseEnter={e=>{
-                    e.currentTarget.style.color="#e2e8f0";
-                    e.currentTarget.style.background="rgba(255,255,255,.09)";
-                    e.currentTarget.style.borderColor="rgba(255,255,255,.16)";
-                  }}
-                  onMouseLeave={e=>{
-                    e.currentTarget.style.color="#475569";
-                    e.currentTarget.style.background="rgba(255,255,255,.04)";
-                    e.currentTarget.style.borderColor="rgba(255,255,255,.08)";
-                  }}>
-                  {icon}
+                  onMouseEnter={e=>{e.currentTarget.style.color="#94a3b8";e.currentTarget.style.background="rgba(255,255,255,.09)";e.currentTarget.style.borderColor="rgba(255,255,255,.14)"}}
+                  onMouseLeave={e=>{e.currentTarget.style.color="#475569";e.currentTarget.style.background="rgba(255,255,255,.04)";e.currentTarget.style.borderColor="rgba(255,255,255,.07)"}}>
+                  {svg}
                 </a>
               ))}
             </div>
-
-            {/* Trust badges */}
-            <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:18 }}>
-              {["ISO 27001","AES-256","GDPR"].map(b=>(
-                <span key={b} style={{
-                  fontSize:9.5, color:"#334155", padding:"3px 8px",
-                  border:"1px solid rgba(255,255,255,.07)", borderRadius:99,
-                  fontFamily:FONT_MONO, fontWeight:600,
-                }}>{b}</span>
+            <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+              {[["🛡","ISO 27001"],["🔒","AES-256"],["✅","GDPR"]].map(([icon,label])=>(
+                <span key={label} style={{
+                  display:"flex", alignItems:"center", gap:4, fontSize:10, color:"#334155",
+                  padding:"3px 8px", border:"1px solid rgba(255,255,255,.06)",
+                  borderRadius:99, fontFamily:FONT_MONO,
+                }}>{icon} {label}</span>
               ))}
             </div>
           </div>
@@ -1872,28 +2071,23 @@ function Footer({ lang }) {
           {/* Link columns */}
           {cols.map(col => (
             <div key={col.title}>
-              <div style={{
-                fontSize:10.5, fontWeight:700, letterSpacing:".08em",
-                textTransform:"uppercase", color:"#334155", marginBottom:16,
-              }}>{col.title}</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:"#334155", marginBottom:16 }}>
+                {col.title}
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:11 }}>
                 {col.links.map(({ label, href, anchor }) => (
                   anchor
-                    ? <button key={label}
-                        onClick={() => scrollTo(href)}
-                        style={{
-                          background:"none", border:"none", padding:0, cursor:"pointer",
-                          textAlign: ar ? "right" : "left", color:"#475569",
-                          fontSize:13.5, fontWeight:400, fontFamily:"inherit",
-                          transition:"color .18s",
-                        }}
+                    ? <button key={label} onClick={() => scrollTo(href)}
+                        style={{ background:"none", border:"none", padding:0, cursor:"pointer",
+                          textAlign:ar?"right":"left", color:"#475569",
+                          fontSize:13.5, fontFamily:"inherit", transition:"color .18s" }}
                         onMouseEnter={e=>e.currentTarget.style.color="#94a3b8"}
                         onMouseLeave={e=>e.currentTarget.style.color="#475569"}>
                         {label}
                       </button>
                     : <a key={label} href={href}
-                        target={href.startsWith("http") ? "_blank" : undefined}
-                        rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
+                        target={href.startsWith("http")?"_blank":undefined}
+                        rel={href.startsWith("http")?"noopener noreferrer":undefined}
                         style={{ color:"#475569", fontSize:13.5, textDecoration:"none", transition:"color .18s" }}
                         onMouseEnter={e=>e.currentTarget.style.color="#94a3b8"}
                         onMouseLeave={e=>e.currentTarget.style.color="#475569"}>
@@ -1908,19 +2102,19 @@ function Footer({ lang }) {
 
       {/* Bottom bar */}
       <div style={{ borderTop:"1px solid rgba(255,255,255,.05)" }}>
-        <div className="lp-wrap" style={{ padding:"18px 32px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
+        <div className="lp-wrap" style={{ padding:"14px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
           <span style={{ fontSize:12, color:"#334155" }}>
             © {new Date().getFullYear()} Posmoz Health Intelligence.{" "}
             {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
           </span>
-          <div style={{ display:"flex", gap:20, alignItems:"center" }}>
+          <div style={{ display:"flex", gap:16, alignItems:"center" }}>
             <a href={`mailto:${SUPPORT_EMAIL}`}
               style={{ fontSize:12, color:"#334155", textDecoration:"none", transition:"color .18s" }}
-              onMouseEnter={e=>e.currentTarget.style.color="#64748b"}
+              onMouseEnter={e=>e.currentTarget.style.color="#475569"}
               onMouseLeave={e=>e.currentTarget.style.color="#334155"}>
               {SUPPORT_EMAIL}
             </a>
-            <span style={{ fontSize:11.5, color:"#334155" }}>
+            <span style={{ fontSize:12, color:"#1e293b" }}>
               {ar ? "صُنع بـ ❤ في مصر" : "Made with ❤ in Egypt"}
             </span>
           </div>
@@ -1929,8 +2123,6 @@ function Footer({ lang }) {
     </footer>
   );
 }
-
-// ── Root ──────────────────────────────────────────────────────────
 export default function LandingPage({ onNavigate }) {
   const [lang, setLang] = useState(
     typeof navigator !== "undefined" && navigator.language.startsWith("ar") ? "ar" : "en"
