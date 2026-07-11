@@ -407,8 +407,9 @@ This user score: ${avgScore}/100
     try {
       await exportPDFReport({
         type,
-        sessions: filteredSessions,
-        session: filteredSessions[0],
+        // longitudinal needs ALL sessions (not date-filtered) for trend analysis
+        sessions: type === "longitudinal" ? sessions : filteredSessions,
+        session: filteredSessions[0] || sessions[0],
         profile,
         aiSummary: summary,
         lang,

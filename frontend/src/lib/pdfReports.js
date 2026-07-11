@@ -4,6 +4,31 @@
  * Apple Health × Bloomberg Terminal × WHO Medical Reports
  */
 
+import { tierAtLeast } from "./tierQuality.js";
+
+// ── Metric labels (used in PDF tables) ───────────────────────────
+const METRIC_LABELS = {
+  neck_lean:"Neck Lean", neck_lean_side:"Neck Lean (Side)",
+  head_tilt:"Head Tilt", head_yaw:"Head Rotation",
+  shoulder:"Shoulder Balance", spine_lean:"Spine Lean",
+  spine_align:"Spine Alignment", fhp:"Forward Head Posture",
+  fhp_side:"Forward Head (Side)", rounded:"Rounded Shoulders",
+  elbow:"Elbow Angle", monitor:"Monitor Height",
+  distance:"Viewing Distance", trunk_lean:"Trunk Lean",
+  hip_angle:"Hip Angle", knee_angle:"Knee Angle",
+};
+const METRIC_LABELS_AR = {
+  neck_lean:"ميل الرقبة", neck_lean_side:"ميل الرقبة (جانبي)",
+  head_tilt:"انحناء الرأس", head_yaw:"دوران الرأس",
+  shoulder:"توازن الكتفين", spine_lean:"ميل العمود الفقري",
+  spine_align:"محاذاة العمود الفقري", fhp:"تقدم الرأس للأمام",
+  fhp_side:"تقدم الرأس (جانبي)", rounded:"تقريس الأكتاف",
+  elbow:"زاوية الكوع", monitor:"ارتفاع الشاشة",
+  distance:"مسافة المشاهدة", trunk_lean:"ميل الجذع",
+  hip_angle:"زاوية الورك", knee_angle:"زاوية الركبة",
+};
+
+
 // ── Unified entry point (called from AIReports.jsx + App.jsx) ──────
 export async function exportPDFReport({ type, sessions, session, profile, aiSummary, lang="en" }) {
   switch(type) {
