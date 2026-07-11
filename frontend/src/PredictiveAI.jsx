@@ -46,12 +46,13 @@ const T = {
 
 const riskColor = v => v >= 70 ? "#ef4444" : v >= 45 ? "#f59e0b" : "#10b981";
 
+// Inline markdown — NO T. references (avoids minifier collision)
 function inlineMdP(t) {
   return (t||"")
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-    .replace(/\*\*(.+?)\*\*/g, `<strong style="color:${T.text};font-weight:${T.bold}">$1</strong>`)
-    .replace(/\*(.+?)\*/g, `<em style="color:${T.textSub}">$1</em>`)
-    .replace(/`(.+?)`/g, `<code style="background:rgba(124,58,237,.15);padding:1px 6px;border-radius:4px;font-size:.88em;font-family:monospace;color:#c4b5fd">$1</code>`);
+    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#e2eaf6;font-weight:700">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em style="color:#94a3b8">$1</em>')
+    .replace(/`(.+?)`/g, '<code style="background:rgba(124,58,237,.15);padding:1px 6px;border-radius:4px;font-size:.88em;font-family:monospace;color:#c4b5fd">$1</code>');
 }
 
 function MdText({ text }) {
@@ -59,38 +60,45 @@ function MdText({ text }) {
   const lines = text.split("\n");
   const out = [];
   let i = 0;
+  const il = inlineMdP;
 
   while (i < lines.length) {
     const l = lines[i].trim();
 
     if (l.startsWith("## ")) {
-      out.push(`<div style="font-size:${T.base}px;font-weight:${T.bold};color:${T.text};margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid rgba(124,58,237,.2);letter-spacing:-.01em">${inlineMdP(l.slice(3))}</div>`);
+      out.push('<div style="font-size:14px;font-weight:700;color:#e2eaf6;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid rgba(124,58,237,.2)">' + il(l.slice(3)) + '</div>');
     } else if (l.startsWith("### ")) {
-      out.push(`<div style="font-size:${T.sm}px;font-weight:${T.bold};color:${T.accentL};text-transform:uppercase;letter-spacing:.06em;margin:14px 0 5px">${inlineMdP(l.slice(4))}</div>`);
+      out.push('<div style="font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 5px">' + il(l.slice(4)) + '</div>');
     } else if (/^\d+\.\s/.test(l)) {
-      const [,num,rest] = l.match(/^(\d+)\.\s(.+)$/) || ["","•","",l];
-      out.push(`<div style="display:flex;gap:10px;margin:5px 0;align-items:baseline"><span style="color:${T.accentL};font-weight:${T.bold};font-size:12px;min-width:18px;flex-shrink:0">${num}.</span><span style="color:${T.textSub};line-height:1.65;font-size:${T.base}px">${inlineMdP(rest)}</span></div>`);
+      const m = l.match(/^(\d+)\.\s(.+)$/);
+      const num = m ? m[1] : "•"; const rest = m ? m[2] : l;
+      out.push('<div style="display:flex;gap:10px;margin:5px 0;align-items:baseline"><span style="color:#a78bfa;font-weight:700;font-size:12px;min-width:18px;flex-shrink:0">' + num + '.</span><span style="color:#94a3b8;line-height:1.65;font-size:13.5px">' + il(rest) + '</span></div>');
     } else if (/^[-•*]\s/.test(l)) {
-      out.push(`<div style="display:flex;gap:9px;margin:4px 0;align-items:baseline"><span style="color:${T.accentL};font-size:8px;flex-shrink:0;margin-top:5px">●</span><span style="color:${T.textSub};line-height:1.65;font-size:${T.base}px">${inlineMdP(l.slice(2))}</span></div>`);
+      out.push('<div style="display:flex;gap:9px;margin:4px 0;align-items:baseline"><span style="color:#a78bfa;font-size:8px;flex-shrink:0;margin-top:5px">●</span><span style="color:#94a3b8;line-height:1.65;font-size:13.5px">' + il(l.slice(2)) + '</span></div>');
     } else if (l.startsWith("|")) {
-      const tableLines = [l];
-      while (i + 1 < lines.length && lines[i+1].trim().startsWith("|")) { i++; tableLines.push(lines[i].trim()); }
-      const rows = tableLines.filter(r => !r.match(/^[|\s:-]+$/));
+      const tbl = [l];
+      while (i+1 < lines.length && lines[i+1].trim().startsWith("|")) { i++; tbl.push(lines[i].trim()); }
+      const rows = tbl.filter(r => !/^[\s|:-]+$/.test(r));
       if (rows.length >= 2) {
-        const headers = rows[0].split("|").filter((_,j,a)=>j>0&&j<a.length-1).map(h=>h.trim());
-        const dataRows = rows.slice(1);
-        out.push(`<div style="overflow-x:auto;margin:12px 0"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>${headers.map(h=>`<th style="padding:8px 12px;text-align:left;background:rgba(124,58,237,.12);color:${T.accentL};font-weight:${T.semibold};border-bottom:1px solid rgba(124,58,237,.2)">${inlineMdP(h)}</th>`).join("")}</tr></thead><tbody>${dataRows.map((row,ri)=>{const cells=row.split("|").filter((_,j,a)=>j>0&&j<a.length-1).map(c=>c.trim());return`<tr style="background:${ri%2===0?"rgba(255,255,255,.02)":"transparent"}">${cells.map(c=>`<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05);color:${T.textSub}">${inlineMdP(c)}</td>`).join("")}</tr>`;}).join("")}</tbody></table></div>`);
+        const hdrs = rows[0].split("|").filter((_,j,a)=>j>0&&j<a.length-1).map(h=>h.trim());
+        const drows = rows.slice(1);
+        const ths = hdrs.map(h=>'<th style="padding:8px 12px;text-align:left;background:rgba(124,58,237,.12);color:#a78bfa;font-weight:600;border-bottom:1px solid rgba(124,58,237,.2)">' + il(h) + '</th>').join('');
+        const tds = drows.map((row,ri)=>{
+          const cells = row.split("|").filter((_,j,a)=>j>0&&j<a.length-1).map(c=>c.trim());
+          const bg = ri%2===0 ? 'rgba(255,255,255,.02)' : 'transparent';
+          return '<tr style="background:' + bg + '">' + cells.map(c=>'<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05);color:#94a3b8">' + il(c) + '</td>').join('') + '</tr>';
+        }).join('');
+        out.push('<div style="overflow-x:auto;margin:12px 0"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>' + ths + '</tr></thead><tbody>' + tds + '</tbody></table></div>');
       }
     } else if (l.startsWith("⚕️") || l.startsWith("⚠️")) {
-      out.push(`<div style="background:rgba(239,68,68,.07);border:0.5px solid rgba(239,68,68,.22);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12.5px;color:#fca5a5;line-height:1.6">${inlineMdP(l)}</div>`);
+      out.push('<div style="background:rgba(239,68,68,.07);border:0.5px solid rgba(239,68,68,.22);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12.5px;color:#fca5a5;line-height:1.6">' + il(l) + '</div>');
     } else if (l === "") {
-      out.push(`<div style="height:5px"></div>`);
+      out.push('<div style="height:5px"></div>');
     } else {
-      out.push(`<p style="margin:4px 0;line-height:1.7;color:${T.textSub};font-size:${T.base}px">${inlineMdP(l)}</p>`);
+      out.push('<p style="margin:4px 0;line-height:1.7;color:#94a3b8;font-size:13.5px">' + il(l) + '</p>');
     }
     i++;
   }
-
   return <div style={{ fontFamily:"'DM Sans',system-ui,sans-serif" }} dangerouslySetInnerHTML={{ __html: out.join("") }} />;
 }
 
