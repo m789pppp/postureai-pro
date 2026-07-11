@@ -329,7 +329,7 @@ function AIBlock({ loading, data, error, onRetry, isAr }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose , effectiveTier}) {
+export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose , effectiveTier, uid = ""}) {
   const [tab, setTab]         = useState("burnout");
   const [aiText, setAiText]   = useState("");
   const [loading, setLoading] = useState(false);
@@ -411,7 +411,6 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
 
   const loadAI = useCallback(async (key) => {
     if (!sessions.length) return;
-    const uid = profile?.uid || profile?.id || "";
     const cacheTabKey = `predictive_${key}`;
     const cached = uid ? getCached(uid, cacheTabKey, lang) : null;
     if (cached) { setAiText(cached); return; }
