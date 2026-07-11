@@ -3294,8 +3294,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
       await fn({
         session: sessionData,
         sessions: userSessions,
-        profile,
-        aiSummary: sessionData.ai_tip || "",
+        profile: { ...profile, tier: effectiveTier },
+        allSessions: userSessions,
+        aiSummary: sessionData.ai_tip || sessionData.ai_insight || "",
       });
       addToast(isClinical
         ? (isAr?"✅ تم تحميل التقرير الطبي":"✅ Clinical PDF downloaded")
@@ -4161,12 +4162,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     await generateSessionPDF({
                       session: {
                         ...sessionResult,
-                        created_at: new Date(), mode, tier,
+                        created_at: new Date(), mode, tier: effectiveTier,
                         session_id: sessionId,
                         score_history: histRef.current||[],
                         metrics: lastAnalRef.current?.metrics||sessionResult.metrics||{},
                       },
-                      profile,
+                      profile: { ...profile, tier: effectiveTier },
+                      allSessions: userSessions,
                       aiSummary: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||sessionResult.ai_tip||"",
                     });
                     addToast(isAr?"✅ تم تحميل PDF":"✅ PDF downloaded","success");
@@ -5118,11 +5120,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 await generateSessionPDF({
                   session:{
                     avg_score:sc, duration_s:dur, good_pct:gp,
-                    alerts_count:acRef.current?.total||0, mode, tier,
+                    alerts_count:acRef.current?.total||0, mode, tier:effectiveTier,
                     score_history:hist.slice(-60), created_at:new Date(),
                     metrics:lastAnalRef.current?.metrics||{},
                   },
-                  profile,
+                  profile: { ...profile, tier: effectiveTier },
+                  allSessions: userSessions,
                   aiSummary: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
                 });
               } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
