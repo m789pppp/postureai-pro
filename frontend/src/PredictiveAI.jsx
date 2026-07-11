@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
+import { getCached, setCache } from "./aiPreloader.js";
 
 async function callGemini(prompt, system, maxTokens = 900) {
   try {
@@ -410,11 +411,19 @@ Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
 
   const loadAI = useCallback(async (key) => {
     if (!sessions.length) return;
+    const uid = profile?.uid || profile?.id || "";
+    const cacheTabKey = `predictive_${key}`;
+    const cached = uid ? getCached(uid, cacheTabKey, lang) : null;
+    if (cached) { setAiText(cached); return; }
     setLoading(true); setError(""); setAiText("");
-    try { setAiText(await callGemini(prompts[key]?.() || "", system)); }
+    try {
+      const text = await callGemini(prompts[key]?.() || "", system);
+      if (text && uid) setCache(uid, cacheTabKey, lang, text);
+      setAiText(text);
+    }
     catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [sessions.length, avgScore, burnoutScore, riskScore, fore?.trend, lang]);
+  }, [sessions.length, avgScore, burnoutScore, riskScore, fore?.trend, lang, profile]);
 
   useEffect(() => { loadAI(tab); }, [tab]);
 
