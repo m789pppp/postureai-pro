@@ -128,8 +128,22 @@ Max 250 words.`,
 let _preloading = false;
 
 export async function preloadAIInsights(uid, profile, sessions, calibration, effectiveTier, lang = "en") {
+  if (!uid || !sessions?.length || sessions.length < 1) return;
+
+  // Invalidate cache if session count changed (new session recorded)
+  const countKey = `corvus_ai_count_${uid}`;
+  const prevCount = sessionStorage.getItem(countKey);
+  const currCount = String(sessions.length);
+  if (prevCount && prevCount !== currCount) {
+    // Clear old cache so new data gets generated
+    ["executive","trends","fatigue","recommendations"].forEach(t => {
+      sessionStorage.removeItem(`corvus_ai_${uid}_${t}_${lang}`);
+    });
+    console.info("[AIPreloader] Cache invalidated — session count changed");
+  }
+  sessionStorage.setItem(countKey, currCount);
+
   if (_preloading) return;
-  if (!uid || !sessions?.length) return;
 
   // Check if all tabs already cached
   const tabs = ["executive", "trends", "fatigue", "recommendations"];
