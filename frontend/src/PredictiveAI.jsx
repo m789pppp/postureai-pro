@@ -61,45 +61,82 @@ function MdText({ text }) {
   const out = [];
   let i = 0;
   const il = inlineMdP;
+  let firstH2 = true;
 
   while (i < lines.length) {
     const l = lines[i].trim();
 
+    // ## Section heading — card-like with left accent border
     if (l.startsWith("## ")) {
-      out.push('<div style="font-size:14px;font-weight:700;color:#e2eaf6;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid rgba(124,58,237,.2)">' + il(l.slice(3)) + '</div>');
-    } else if (l.startsWith("### ")) {
-      out.push('<div style="font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 5px">' + il(l.slice(4)) + '</div>');
-    } else if (/^\d+\.\s/.test(l)) {
+      const marginTop = firstH2 ? '4px' : '20px';
+      firstH2 = false;
+      out.push(
+        '<div style="margin:' + marginTop + ' 0 10px;display:flex;align-items:center;gap:10px">' +
+          '<div style="width:3px;height:18px;background:linear-gradient(180deg,#7c3aed,#a78bfa);border-radius:99px;flex-shrink:0"></div>' +
+          '<span style="font-size:13.5px;font-weight:700;color:#e2eaf6;letter-spacing:-.01em">' + il(l.slice(3)) + '</span>' +
+        '</div>'
+      );
+    }
+    // ### Sub-section label
+    else if (l.startsWith("### ")) {
+      out.push('<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.1em;margin:14px 0 6px;opacity:.9">' + il(l.slice(4)) + '</div>');
+    }
+    // Numbered list — pill number badge
+    else if (/^\d+\.\s/.test(l)) {
       const m = l.match(/^(\d+)\.\s(.+)$/);
-      const num = m ? m[1] : "•"; const rest = m ? m[2] : l;
-      out.push('<div style="display:flex;gap:10px;margin:5px 0;align-items:baseline"><span style="color:#a78bfa;font-weight:700;font-size:12px;min-width:18px;flex-shrink:0">' + num + '.</span><span style="color:#94a3b8;line-height:1.65;font-size:13.5px">' + il(rest) + '</span></div>');
-    } else if (/^[-•*]\s/.test(l)) {
-      out.push('<div style="display:flex;gap:9px;margin:4px 0;align-items:baseline"><span style="color:#a78bfa;font-size:8px;flex-shrink:0;margin-top:5px">●</span><span style="color:#94a3b8;line-height:1.65;font-size:13.5px">' + il(l.slice(2)) + '</span></div>');
-    } else if (l.startsWith("|")) {
+      const num = m ? m[1] : '1';
+      const rest = m ? m[2] : l;
+      out.push(
+        '<div style="display:flex;gap:10px;margin:7px 0;align-items:flex-start">' +
+          '<span style="background:rgba(124,58,237,.2);color:#a78bfa;font-weight:700;font-size:11px;min-width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">' + num + '</span>' +
+          '<span style="color:#cbd5e1;line-height:1.65;font-size:13px">' + il(rest) + '</span>' +
+        '</div>'
+      );
+    }
+    // Bullet list
+    else if (/^[-•*]\s/.test(l)) {
+      out.push(
+        '<div style="display:flex;gap:10px;margin:5px 0;align-items:flex-start">' +
+          '<span style="color:#7c3aed;font-size:16px;line-height:1;flex-shrink:0;margin-top:1px">·</span>' +
+          '<span style="color:#cbd5e1;line-height:1.65;font-size:13px">' + il(l.slice(2)) + '</span>' +
+        '</div>'
+      );
+    }
+    // Table
+    else if (l.startsWith("|")) {
       const tbl = [l];
       while (i+1 < lines.length && lines[i+1].trim().startsWith("|")) { i++; tbl.push(lines[i].trim()); }
       const rows = tbl.filter(r => !/^[\s|:-]+$/.test(r));
       if (rows.length >= 2) {
         const hdrs = rows[0].split("|").filter((_,j,a)=>j>0&&j<a.length-1).map(h=>h.trim());
         const drows = rows.slice(1);
-        const ths = hdrs.map(h=>'<th style="padding:8px 12px;text-align:left;background:rgba(124,58,237,.12);color:#a78bfa;font-weight:600;border-bottom:1px solid rgba(124,58,237,.2)">' + il(h) + '</th>').join('');
+        const ths = hdrs.map(h=>'<th style="padding:8px 12px;text-align:left;background:rgba(124,58,237,.12);color:#a78bfa;font-weight:600;font-size:12px;border-bottom:1px solid rgba(124,58,237,.2)">' + il(h) + '</th>').join('');
         const tds = drows.map((row,ri)=>{
           const cells = row.split("|").filter((_,j,a)=>j>0&&j<a.length-1).map(c=>c.trim());
-          const bg = ri%2===0 ? 'rgba(255,255,255,.02)' : 'transparent';
-          return '<tr style="background:' + bg + '">' + cells.map(c=>'<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05);color:#94a3b8">' + il(c) + '</td>').join('') + '</tr>';
+          return '<tr style="background:' + (ri%2===0?'rgba(255,255,255,.02)':'transparent') + '">' +
+            cells.map(c=>'<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:#94a3b8;font-size:12.5px">' + il(c) + '</td>').join('') + '</tr>';
         }).join('');
-        out.push('<div style="overflow-x:auto;margin:12px 0"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>' + ths + '</tr></thead><tbody>' + tds + '</tbody></table></div>');
+        out.push('<div style="overflow-x:auto;margin:10px 0;border-radius:8px;overflow:hidden;border:1px solid rgba(124,58,237,.15)"><table style="width:100%;border-collapse:collapse"><thead><tr>' + ths + '</tr></thead><tbody>' + tds + '</tbody></table></div>');
       }
-    } else if (l.startsWith("⚕️") || l.startsWith("⚠️")) {
-      out.push('<div style="background:rgba(239,68,68,.07);border:0.5px solid rgba(239,68,68,.22);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12.5px;color:#fca5a5;line-height:1.6">' + il(l) + '</div>');
-    } else if (l === "") {
-      out.push('<div style="height:5px"></div>');
-    } else {
-      out.push('<p style="margin:4px 0;line-height:1.7;color:#94a3b8;font-size:13.5px">' + il(l) + '</p>');
+    }
+    // Warning / red flag
+    else if (l.startsWith("⚕️") || l.startsWith("⚠️")) {
+      out.push('<div style="background:rgba(239,68,68,.07);border:0.5px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12.5px;color:#fca5a5;line-height:1.6;display:flex;gap:8px;align-items:flex-start">' + il(l) + '</div>');
+    }
+    // Empty line
+    else if (l === "") {
+      out.push('<div style="height:4px"></div>');
+    }
+    // Normal paragraph
+    else {
+      out.push('<p style="margin:3px 0 6px;line-height:1.7;color:#94a3b8;font-size:13px">' + il(l) + '</p>');
     }
     i++;
   }
-  return <div style={{ fontFamily:"'DM Sans',system-ui,sans-serif" }} dangerouslySetInnerHTML={{ __html: out.join("") }} />;
+  return (
+    <div style={{ fontFamily:"'DM Sans',system-ui,sans-serif", padding:'2px 0' }}
+         dangerouslySetInnerHTML={{ __html: out.join("") }} />
+  );
 }
 
 function avg(arr) { return arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0; }
@@ -429,28 +466,88 @@ RESPONSE STANDARDS:
 ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية مصرية)." : "LANGUAGE: Respond in clear, professional English."}`;
 
   const prompts = {
-    burnout: () => `Analyze burnout risk:
-- Burnout risk score: ${burnoutScore}/100
-- Average posture score: ${avgScore}/100
-- This week average: ${weekAvg}/100
-- Sessions this week: ${thisWeek.length} / Total: ${sessions.length}
-Generate: ## Burnout Risk Assessment\n### Warning Indicators (3 bullets)\n### Prevention Plan (3 bullets)`,
+    burnout: () => `Burnout & fatigue analysis for ${sessions.length} sessions.
+Data: burnout=${burnoutScore}%, posture avg=${avgScore}/100, this week=${weekAvg}/100, sessions this week=${thisWeek.length}
 
-    anomaly: () => `Analyze ${anomalies.length} posture anomalies:
-${anomalies.map(a => `- Session ${a.index + 1}: ${a.value}/100 (${a.direction === "high" ? "unusually high" : "unusually low"}, z=${a.z.toFixed(1)})`).join("\n")}
-Overall average: ${avgScore}/100
-Generate: ## What These Mean\n### Likely Causes\n### Action Steps`,
+YOU MUST USE EXACTLY THIS STRUCTURE (use ## for section headers):
 
-    risk: () => `Generate posture risk analysis:
-- Overall risk: ${riskScore}/100 / Burnout component: ${burnoutScore}/100
-- Anomalies: ${anomalies.length} / Trend: ${forecastTrend}
-Generate: ## Risk Profile\n### Highest Risk Areas (3 bullets)\n### Mitigation Plan`,
+## Burnout Assessment
+[2 sentences: interpret ${burnoutScore}% clinically. What does this mean for MSK health?]
 
-    forecast: () => `Generate 7-day posture forecast:
-- 14-day average: ${avg(recent14) || avgScore}/100 / Trend: ${forecastTrend}
-- Predicted scores: ${fore?.predicted?.join(", ") || "insufficient data"}
-- Slope: ${fore?.slope?.toFixed(2) || "N/A"}
-Generate: ## 7-Day Forecast\n### Key Drivers\n### How to Improve`,
+## Warning Signs
+1. [specific warning with clinical mechanism]
+2. [specific warning with clinical mechanism]
+3. [specific warning with clinical mechanism]
+
+## Recovery Protocol
+1. [specific action with duration/frequency]
+2. [specific action with duration/frequency]
+3. [specific action with duration/frequency]
+
+## Timeline
+[When to expect improvement with consistent protocol]
+
+Max 220 words. Start immediately — no preamble.`,
+
+    anomaly: () => `Analyze ${anomalies.length} posture anomalies detected in sessions.
+Data: ${anomalies.map(a => `Session ${a.index+1}: ${a.value}/100 (${a.direction==="high"?"HIGH":"LOW"}, z=${a.z.toFixed(1)})`).join(", ")}
+Overall avg: ${avgScore}/100
+
+YOU MUST USE EXACTLY THIS STRUCTURE:
+
+## What These Anomalies Mean
+[Clinical interpretation — what z-scores indicate about postural instability]
+
+## Root Causes
+1. [specific cause]
+2. [specific cause]
+3. [specific cause]
+
+## Correction Protocol
+1. [specific action]
+2. [specific action]
+3. [specific action]
+
+Max 200 words. Start immediately.`,
+
+    risk: () => `Posture risk analysis.
+Data: risk score=${riskScore}/100, burnout=${burnoutScore}%, anomalies=${anomalies.length}, trend=${forecastTrend}
+
+YOU MUST USE EXACTLY THIS STRUCTURE:
+
+## Risk Profile
+[Overall risk interpretation — what ${riskScore}/100 means clinically]
+
+## Highest Risk Areas
+1. [specific risk + consequence]
+2. [specific risk + consequence]
+3. [specific risk + consequence]
+
+## Mitigation Plan
+1. [specific action + timeline]
+2. [specific action + timeline]
+3. [specific action + timeline]
+
+Max 200 words. Start immediately.`,
+
+    forecast: () => `7-day posture forecast.
+Data: 14-day avg=${avg(recent14)||avgScore}/100, trend=${forecastTrend}, predicted=${fore?.predicted?.join(", ")||"insufficient data"}
+
+YOU MUST USE EXACTLY THIS STRUCTURE:
+
+## 7-Day Forecast
+[Interpret the trend: ${forecastTrend}. What score range is expected?]
+
+## Key Drivers
+1. [driver affecting trajectory]
+2. [driver affecting trajectory]
+
+## How to Improve Forecast
+1. [specific daily action]
+2. [specific daily action]
+3. [specific daily action]
+
+Max 180 words. Start immediately.`,
   };
 
   const loadAI = useCallback(async (key) => {
