@@ -10,23 +10,35 @@ import { tierAtLeast } from "./tierQuality.js";
 const METRIC_LABELS = {
   neck_lean:"Neck Lean", neck_lean_side:"Neck Lean (Side)",
   head_tilt:"Head Tilt", head_yaw:"Head Rotation",
-  shoulder:"Shoulder Balance", spine_lean:"Spine Lean",
+  shoulder:"Shoulder Balance", shoulder_level:"Shoulder Balance",
+  spine_lean:"Spine Lean",
   spine_align:"Spine Alignment", fhp:"Forward Head Posture",
-  fhp_side:"Forward Head (Side)", rounded:"Rounded Shoulders",
-  elbow:"Elbow Angle", monitor:"Monitor Height",
-  distance:"Viewing Distance", trunk_lean:"Trunk Lean",
+  fhp_index:"Forward Head Posture", fhp_side:"Forward Head (Side)",
+  rounded:"Rounded Shoulders", rounded_shoulders:"Rounded Shoulders",
+  elbow:"Elbow Angle", elbow_angle:"Elbow Angle",
+  monitor:"Monitor Height", monitor_height:"Monitor Height",
+  distance:"Viewing Distance", screen_distance:"Viewing Distance",
+  trunk_lean:"Trunk Lean",
   hip_angle:"Hip Angle", knee_angle:"Knee Angle",
 };
 const METRIC_LABELS_AR = {
   neck_lean:"ميل الرقبة", neck_lean_side:"ميل الرقبة (جانبي)",
   head_tilt:"انحناء الرأس", head_yaw:"دوران الرأس",
-  shoulder:"توازن الكتفين", spine_lean:"ميل العمود الفقري",
+  shoulder:"توازن الكتفين", shoulder_level:"توازن الكتفين",
+  spine_lean:"ميل العمود الفقري",
   spine_align:"محاذاة العمود الفقري", fhp:"تقدم الرأس للأمام",
-  fhp_side:"تقدم الرأس (جانبي)", rounded:"تقريس الأكتاف",
-  elbow:"زاوية الكوع", monitor:"ارتفاع الشاشة",
-  distance:"مسافة المشاهدة", trunk_lean:"ميل الجذع",
+  fhp_index:"تقدم الرأس للأمام", fhp_side:"تقدم الرأس (جانبي)",
+  rounded:"تقوس الأكتاف", rounded_shoulders:"تقوس الأكتاف",
+  elbow:"زاوية الكوع", elbow_angle:"زاوية الكوع",
+  monitor:"ارتفاع الشاشة", monitor_height:"ارتفاع الشاشة",
+  distance:"مسافة المشاهدة", screen_distance:"مسافة المشاهدة",
+  trunk_lean:"ميل الجذع",
   hip_angle:"زاوية الورك", knee_angle:"زاوية الركبة",
 };
+
+// Engine keys that are informational, not posture metrics — never
+// rank them as "worst metrics" or feed them into recommendations.
+const NON_POSTURE_KEYS = new Set(["session_fatigue","confidence_val"]);
 
 
 // ── Unified entry point (called from AIReports.jsx + App.jsx) ──────
@@ -176,14 +188,29 @@ function _logo(doc,x,y,sz,b64){
 }
 
 // ── _zonalRisk ─────────────────────────────────────────────────────
+// Alias-aware: the engine emits shoulder_level / fhp_index /
+// rounded_shoulders etc. Risk = 100 − mean(scores of PRESENT metrics);
+// missing metrics are skipped instead of counting as a perfect 100.
+const _ZONE_KEYS = {
+  cervical: ["neck_lean","neck_lean_side","head_tilt","head_yaw","fhp","fhp_index","fhp_side"],
+  thoracic: ["shoulder","shoulder_level","rounded","rounded_shoulders","spine_lean"],
+  lumbar:   ["spine_align","hip_angle","trunk_lean"],
+};
 function _zonalRisk(metrics){
-  if(!metrics) return{cervical:0,thoracic:0,lumbar:0};
-  const sc=k=>typeof metrics[k]==="number"?metrics[k]:(metrics[k]?.score??100);
-  return{
-    cervical:Math.round(100-Math.min(100,(sc("neck_lean")+sc("head_tilt")+sc("head_yaw"))/3)),
-    thoracic:Math.round(100-Math.min(100,(sc("shoulder")+sc("rounded_shoulders")+sc("spine_lean"))/3)),
-    lumbar:  Math.round(100-Math.min(100,(sc("spine_align")+sc("hip_angle")+sc("trunk_lean"))/3)),
+  const out={cervical:0,thoracic:0,lumbar:0};
+  if(!metrics) return out;
+  const sc=k=>{
+    const v=metrics[k];
+    if(v==null) return null;
+    if(typeof v==="number") return v;
+    return typeof v?.score==="number"?v.score:null;
   };
+  for(const zone in _ZONE_KEYS){
+    const scores=_ZONE_KEYS[zone].map(sc).filter(s=>s!=null);
+    if(scores.length)
+      out[zone]=Math.max(0,Math.round(100-Math.min(100,scores.reduce((a,b)=>a+b,0)/scores.length)));
+  }
+  return out;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -255,6 +282,21 @@ function _sh(doc,ml,y,title,sub="",col=PDF_TOKENS.primary,isAr=false){
   return y+(sub?21:14);
 }
 
+// ── Arc segment (polyline approximation, 12 o'clock start, clockwise)
+function _arc(doc,cx,cy,r,frac,col,w=3.5){
+  const f=Math.max(0,Math.min(1,frac));
+  if(f<=0)return;
+  const steps=Math.max(6,Math.round(72*f)), start=-Math.PI/2;
+  dc(doc,...col); lw(doc,w);
+  let px=cx+r*Math.cos(start), py=cy+r*Math.sin(start);
+  for(let i=1;i<=steps;i++){
+    const a=start+f*2*Math.PI*(i/steps);
+    const nx=cx+r*Math.cos(a), ny=cy+r*Math.sin(a);
+    doc.line(px,py,nx,ny); px=nx; py=ny;
+  }
+  lw(doc,0.3);
+}
+
 // ── SCORE RING v5 — with inner glow simulation ─────────────────────
 function _ring(doc,cx,cy,r,score,isAr,showGrade=true){
   const col=_sc(score),lbl=_sl(score,isAr);
@@ -265,8 +307,8 @@ function _ring(doc,cx,cy,r,score,isAr,showGrade=true){
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
   doc.circle(cx,cy,r-2,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Score arc
-  dc(doc,...col);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
+  // Score arc — proportional to score (was a full circle for any score)
+  _arc(doc,cx,cy,r,score/100,col,3.5);
   // Number
   font(doc,PDF_FLAGS.dataXl,"bold");tc(doc,...col);
   doc.text(String(score),cx,cy+4,{align:"center"});
@@ -487,7 +529,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const gradeL   = avg>=80?(isAr?"ممتاز":"Excellent"):avg>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs Work");
 
   const mEntries = Object.entries(metrics)
-    .filter(([k])=>!k.startsWith("_")&&metrics[k])
+    .filter(([k])=>!k.startsWith("_")&&!NON_POSTURE_KEYS.has(k)&&metrics[k])
     .map(([k,v])=>{
       const sc=typeof v==="number"?v:(v?.score??100);
       const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
@@ -1191,7 +1233,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   })();
 
   const metricEntries = Object.entries(metrics)
-    .filter(([k])=>!k.startsWith("_") && metrics[k])
+    .filter(([k])=>!k.startsWith("_") && !NON_POSTURE_KEYS.has(k) && metrics[k])
     .map(([k,v])=>{
       const sc  = typeof v==="number" ? v : (v?.score ?? 100);
       const lbl = METRIC_LABELS[k] || v?.label || k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
@@ -1608,7 +1650,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const num2=idx2>=0?allSessions.length-idx2:2;
 
   const m1=session1.metrics||{}, m2=session2.metrics||{};
-  const allKeys=[...new Set([...Object.keys(m1),...Object.keys(m2)])].filter(k=>!k.startsWith("_"));
+  const allKeys=[...new Set([...Object.keys(m1),...Object.keys(m2)])].filter(k=>!k.startsWith("_")&&!NON_POSTURE_KEYS.has(k));
   const metRows=allKeys.map(k=>{
     const sc1=typeof m1[k]==="number"?m1[k]:(m1[k]?.score??100);
     const sc2=typeof m2[k]==="number"?m2[k]:(m2[k]?.score??100);
@@ -1914,6 +1956,15 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     distance: ["Screen 50–70cm from eyes","Increase font size to reduce forward lean","20-20-20 rule: every 20 min look 20ft away"],
     default:  ["2-min stretch break every 30 min","Roll shoulders backward 5 times","Walk 5 min every hour"],
   };
+  // Engine metric keys → NXT action-card keys. Without this map most
+  // engine metrics fell through to NXT.default generic advice.
+  const NXT_ALIAS={
+    neck_lean_side:"neck_lean", head_yaw:"neck_lean",
+    screen_distance:"distance", dist:"distance",
+    shoulder_level:"shoulder", rounded_shoulders:"shoulder",
+    fhp:"neck_lean", fhp_index:"neck_lean", fhp_side:"neck_lean",
+    trunk_lean:"spine_lean",
+  };
 
   const topRegressed=regressed.slice(0,3);
   if(topRegressed.length===0){
@@ -1923,7 +1974,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   topRegressed.forEach(({k,lbl,sc2},idx)=>{
     if(y>H-42){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
     const col=_scoreColor(sc2||50);
-    const steps=NXT[k]||NXT.default;
+    const steps=NXT[k]||NXT[NXT_ALIAS[k]]||NXT.default;
     const ph=44;
     fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,ph,4,"F");
     dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,ph,4,"S"); lw(doc,0.3);

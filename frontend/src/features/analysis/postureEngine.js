@@ -1136,6 +1136,10 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
     y: nose.y * noseWeight + ear.y * earWeight,
   };
   const neckLeanRaw  = earOK && shOK ? angleVert(sh, neckRef) : 0;
+  // Shoulder width in px — mirrors backend.py analyze_side() sh_width_px.
+  // Must be computed BEFORE the calibration block and approxDistCmSide below
+  // (previously declared after them → TDZ ReferenceError on every side frame).
+  const shWidthPx = earOK && shOK ? Math.abs(g(PL.L_SHOULDER).x * W - g(PL.R_SHOULDER).x * W) : 0;
   // Nose ~5cm anterior to ear — correction scales with camera distance (same formula as front)
   // Apply calibration-based shoulder width correction (same logic as front mode).
   // Without this, all cm-based side calculations used the hardcoded 42cm average.
@@ -1177,7 +1181,6 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
 
   // ── Forward head posture (side view) — horizontal ear-to-shoulder offset in cm ──
   // Mirrors backend.py analyze_side(): _fhp_side_cm = |ear.x - sh.x| * cm_per_px
-  const shWidthPx  = earOK && shOK ? Math.abs(g(PL.L_SHOULDER).x * W - g(PL.R_SHOULDER).x * W) : 0;
   const cmPerPxSide = effectiveShoulderWidthCm / Math.max(shWidthPx, 1);
   const fhpSideCm   = earOK && shOK ? Math.round(Math.abs(ear.x - sh.x) * cmPerPxSide * 10) / 10 : 0;
   const fhpSideSc   = earOK && shOK ? scoreMetric(fhpSideCm, 0, 2.5, 7) : NEUTRAL;
@@ -1226,7 +1229,7 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
       trunk_lean:     { value: Math.round(trunkLean), score: trunkSc, unit: "°",  label: "Trunk lean",        reliable: shOK && hipOK },
       hip_angle:      { value: Math.round(hipAngle),  score: hipSc,   unit: "°",  label: "Hip angle",         reliable: hipOK && kneeOK },
       knee_angle:     { value: Math.round(kneeAngle), score: kneeSc,  unit: "°",  label: "Knee angle",        reliable: kneeOK && ankleOK },
-      spine_align:    { value: Math.round(spineAlign),score: spineSc, unit: "%",  label: "Spine plumb-line",  reliable: shOK && ankleOK },
+      spine_align:    { value: Math.round(spineAlign),score: spineSc, unit: "°",  label: "Spine alignment",   reliable: shOK && hipOK && earOK },
     },
     bodyModules: { neck: { angle: Math.round(neckLean), score: neckSc, severity: classify(neckLean, SEV.NECK) },
                    trunk: { angle: Math.round(trunkLean), score: trunkSc }, hip: { angle: Math.round(hipAngle), score: hipSc },
