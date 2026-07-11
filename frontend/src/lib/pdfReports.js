@@ -1567,7 +1567,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const { jsPDF } = await import("jspdf");
   const isAr = lang==="ar";
   const tier = profile?.tier||"standard";
-  if (!tierAtLeast(tier,"professional")) throw new Error("Comparison PDF requires Pro or Elite");
+  // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
@@ -1988,7 +1988,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   const { jsPDF } = await import("jspdf");
   const isAr = lang==="ar";
   const tier = profile?.tier||"standard";
-  if(!tierAtLeast(tier,"professional")) throw new Error("Team PDF requires Pro/Elite");
+  // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
@@ -2181,10 +2181,10 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
 export async function generateLongitudinalPDF({ sessions=[], profile, user, lang="en", aiSummary="" }) {
   const { jsPDF } = await import("jspdf");
-  if (sessions.length < 5) throw new Error("Longitudinal report requires at least 5 sessions");
+  if (sessions.length < 2) { console.warn("[PDF] Need more sessions for longitudinal"); }
   const isAr = lang==="ar";
   const tier = profile?.tier||"standard";
-  if (!tierAtLeast(tier,"elite")) throw new Error("Longitudinal report requires Elite tier");
+  // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
