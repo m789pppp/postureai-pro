@@ -97,6 +97,13 @@ const SP = { xs:2, sm:4, md:8, lg:12, xl:20, xxl:32, page:18 };
 
 // ── Core helpers ───────────────────────────────────────────────────
 function _sc(s){ return s>=80?T.success:s>=60?T.warning:T.danger; }
+const _scoreColor = _sc; // alias used in Comparison + Longitudinal + Team PDFs
+function _scoreLabel(s,isAr){
+  if(s>=80) return isAr?"ممتاز":"Excellent";
+  if(s>=60) return isAr?"جيد":"Good";
+  if(s>=40) return isAr?"مقبول":"Fair";
+  return isAr?"يحتاج تحسين":"Needs Work";
+}
 function _scLt(s){ return s>=80?T.successLt:s>=60?T.warningLt:T.dangerLt; }
 function _sl(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Work"); }
 function _riskLabel(v,ar){ return v>=70?(ar?"عالي":"High"):v>=40?(ar?"متوسط":"Moderate"):(ar?"منخفض":"Low"); }

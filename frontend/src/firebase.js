@@ -1108,9 +1108,11 @@ function _drawSparkline(doc,hist,x,y,w,h,col){_spark(doc,hist,x,y,w,h,col);}
 
 
 
-export async function createShareableReport({ session, profile, user, lang="en", allSessions=[] }) {
-  const tier = profile?.tier || session?.tier || "standard";
-  if (!tierAtLeast(tier,"elite")) throw new Error("Shareable reports require Elite tier");
+export async function createShareableReport({ session, profile, user, lang="en", allSessions=[], effectiveTier }) {
+  const tier = effectiveTier || profile?.tier || session?.tier || "standard";
+  // Normalize tier aliases (personal_elite → elite, etc.)
+  const normalizedTier = tier.includes("elite") ? "elite" : tier.includes("pro") || tier.includes("professional") ? "professional" : tier;
+  if (!tierAtLeast(normalizedTier,"elite")) throw new Error("Shareable reports require Elite tier");
 
   const { collection, addDoc, serverTimestamp } = await import("firebase/firestore");
   const allKeys = Object.keys(session.metrics || {}).filter(k => !k.startsWith("_"));
