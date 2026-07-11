@@ -378,15 +378,17 @@ function Nav({ lang, setLang, onCTA }) {
   const ar = lang === "ar";
 
   const navItems = ar ? [
-    { label:"المنتج",   href:"#features",    id:"features" },
-    { label:"الحلول",   href:"#casestudies", id:"casestudies" },
-    { label:"الأسعار",  href:"#pricing",     id:"pricing" },
-    { label:"كيف يعمل", href:"#how",         id:"how" },
+    { label:"المنتج",    href:"#features",     id:"features" },
+    { label:"الحلول",   href:"#casestudies",  id:"casestudies" },
+    { label:"الأسعار",  href:"#pricing",      id:"pricing" },
+    { label:"كيف يعمل", href:"#how",          id:"how" },
+    { label:"الأسئلة",  href:"#faq",          id:"faq" },
   ] : [
-    { label:"Product",   href:"#features",    id:"features" },
-    { label:"Solutions", href:"#casestudies", id:"casestudies" },
-    { label:"Pricing",   href:"#pricing",     id:"pricing" },
-    { label:"How it works", href:"#how",      id:"how" },
+    { label:"Product",    href:"#features",    id:"features" },
+    { label:"Solutions",  href:"#casestudies", id:"casestudies" },
+    { label:"Pricing",    href:"#pricing",     id:"pricing" },
+    { label:"How it works",href:"#how",        id:"how" },
+    { label:"FAQ",        href:"#faq",         id:"faq" },
   ];
 
   return (
@@ -992,7 +994,7 @@ function Stats({ lang }) {
     ? [["-47%","تقليل الإجازات المرضية","من متوسط تقارير الإرغونوميا"],["3.2×","عائد الاستثمار المتوقع","بناءً على تكاليف الغياب"],["15دق","وقت الإعداد للفريق","مُختبر مع مستخدمي البيتا"],["98%","رضا مستخدمي البيتا","50+ مستخدم في 4 دول"]]
     : [["-47%","Reduction in sick leave","Ergonomics research average"],["3.2×","Projected ROI in year 1","Based on absence cost models"],["15min","Team onboarding time","Tested with beta users"],["98%","Beta user satisfaction","50+ users across 4 countries"]];
   return (
-    <section className="lp-section">
+    <section id="stats" className="lp-section">
       <div className="lp-wrap">
         <div className="lp-stats-grid">
         {stats.map(([val, label, source], i) => (
@@ -1150,9 +1152,7 @@ function HowItWorks({ lang }) {
   ];
 
   return (
-    <section className="lp-section" style={{ background:C.bg1 }}>
-      <div className="lp-wrap">
-        <SectionHead title={ar ? "كيف يعمل النظام" : "How it works"}
+    <section id="how" className="lp-section" style={{ background:C.bg1 }}>
           sub={ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "Three simple steps to a healthier team"}/>
 
         <div style={{ position:"relative" }}>
@@ -1183,14 +1183,6 @@ function HowItWorks({ lang }) {
             ))}
           </Stagger>
         </div>
-      </div>
-      <style>{`
-        @media(max-width:860px){
-          .lp-steps-grid{grid-template-columns:1fr!important}
-          .lp-timeline-line{display:none}
-          .lp-timeline-node{margin:0 auto 18px!important;box-shadow:none!important}
-        }
-      `}</style>
     </section>
   );
 }
@@ -1526,9 +1518,7 @@ function Testimonials({ lang }) {
   ];
 
   return (
-    <section className="lp-section">
-      <div className="lp-wrap">
-        <SectionHead title={ar ? "ماذا يقول عملاؤنا" : "What our customers say"} />
+    <section id="testimonials" className="lp-section"> />
         <Stagger key={String(ar)} className="lp-testi-grid" style={{}}>
           {testimonials.map((t) => (
             <StaggerItem key={t.name}>
@@ -1574,8 +1564,6 @@ function Testimonials({ lang }) {
             </StaggerItem>
           ))}
         </Stagger>
-      </div>
-      <style>{`@media(max-width:860px){.lp-testi-grid{grid-template-columns:1fr!important}}`}</style>
     </section>
   );
 }
@@ -1636,8 +1624,7 @@ function FAQ({ lang }) {
   ];
 
   return (
-    <section className="lp-section" style={{ background:C.bg1 }}>
-      <div style={{ maxWidth:740, margin:"0 auto", padding:"0 24px" }}>
+    <section id="faq" className="lp-section" style={{ background:C.bg1 }}>
         <SectionHead title={ar ? "أسئلة شائعة" : "Frequently asked questions"} />
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           {items.map(([q, a], i) => (
@@ -1646,13 +1633,11 @@ function FAQ({ lang }) {
             </Reveal>
           ))}
         </div>
-      </div>
     </section>
   );
 }
 
-// ── Mid-page CTA (between HowItWorks and CaseStudies) ─────────────
-// ── Mid-page CTA (compact, appears after Features + after CaseStudies) ──
+// ── Mid-page CTA
 function MidCTA({ lang, onCTA, variant="features" }) {
   const ar = lang === "ar";
   const msgs = {
@@ -1742,53 +1727,53 @@ function Footer({ lang }) {
 
   const cols = ar ? [
     { title:"المنتج", links:[
-      { label:"المميزات",    href:"#features",    anchor:true },
-      { label:"الأسعار",    href:"#pricing",     anchor:true },
-      { label:"كيف يعمل",   href:"#how",         anchor:true },
-      { label:"دراسات الحالة", href:"#casestudies", anchor:true },
+      { label:"المميزات",       href:"#features",     anchor:true },
+      { label:"كيف يعمل",      href:"#how",          anchor:true },
+      { label:"الأسعار",       href:"#pricing",      anchor:true },
+      { label:"الأسئلة الشائعة", href:"#faq",         anchor:true },
     ]},
     { title:"الحلول", links:[
-      { label:"فرق HR",          href:"#casestudies", anchor:true },
-      { label:"الصحة المهنية",    href:"#features",    anchor:true },
-      { label:"الفرق عن بُعد",   href:"#features",    anchor:true },
-      { label:"المؤسسات الكبرى", href:"#pricing",     anchor:true },
+      { label:"فرق HR",          href:"#casestudies",  anchor:true },
+      { label:"نتائج العملاء",   href:"#casestudies",  anchor:true },
+      { label:"التسعير المؤسسي", href:"#pricing",      anchor:true },
+      { label:"احجز عرضاً",     href:CALENDLY_URL },
     ]},
     { title:"الموارد", links:[
-      { label:"المدونة",        href:`mailto:${SUPPORT_EMAIL}?subject=Blog` },
-      { label:"دراسات الحالة",  href:"#casestudies", anchor:true },
+      { label:"شهادات العملاء",  href:"#testimonials", anchor:true },
+      { label:"دراسات الحالة",  href:"#casestudies",  anchor:true },
       { label:"تواصل معنا",     href:`mailto:${SUPPORT_EMAIL}` },
       { label:"الدعم الفني",    href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
     ]},
     { title:"الشركة", links:[
-      { label:"من نحن",         href:`mailto:${SUPPORT_EMAIL}?subject=About Corvus` },
+      { label:"من نحن",           href:`mailto:${SUPPORT_EMAIL}?subject=About Corvus` },
       { label:"الأمان والخصوصية", href:`mailto:${SUPPORT_EMAIL}?subject=Privacy` },
-      { label:"شروط الاستخدام", href:`mailto:${SUPPORT_EMAIL}?subject=Terms` },
-      { label:"شراكات",         href:`mailto:${SUPPORT_EMAIL}?subject=Partnership` },
+      { label:"شروط الاستخدام",   href:`mailto:${SUPPORT_EMAIL}?subject=Terms` },
+      { label:"شراكات",          href:`mailto:${SUPPORT_EMAIL}?subject=Partnership` },
     ]},
   ] : [
     { title:"Product", links:[
-      { label:"Features",    href:"#features",    anchor:true },
-      { label:"Pricing",     href:"#pricing",     anchor:true },
-      { label:"How it works",href:"#how",         anchor:true },
-      { label:"Case Studies",href:"#casestudies", anchor:true },
+      { label:"Features",     href:"#features",     anchor:true },
+      { label:"How it works", href:"#how",          anchor:true },
+      { label:"Pricing",      href:"#pricing",      anchor:true },
+      { label:"FAQ",          href:"#faq",          anchor:true },
     ]},
     { title:"Solutions", links:[
-      { label:"HR Teams",          href:"#casestudies", anchor:true },
-      { label:"Occupational Health",href:"#features",   anchor:true },
-      { label:"Remote Teams",      href:"#features",    anchor:true },
-      { label:"Enterprise",        href:"#pricing",     anchor:true },
+      { label:"HR Teams",         href:"#casestudies", anchor:true },
+      { label:"Customer Results", href:"#casestudies", anchor:true },
+      { label:"Enterprise Plans", href:"#pricing",     anchor:true },
+      { label:"Book a Demo",      href:CALENDLY_URL },
     ]},
     { title:"Resources", links:[
-      { label:"Blog",       href:`mailto:${SUPPORT_EMAIL}?subject=Blog` },
-      { label:"Case Studies",href:"#casestudies", anchor:true },
-      { label:"Contact us", href:`mailto:${SUPPORT_EMAIL}` },
-      { label:"Support",    href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
+      { label:"Testimonials",  href:"#testimonials", anchor:true },
+      { label:"Case Studies",  href:"#casestudies",  anchor:true },
+      { label:"Contact us",    href:`mailto:${SUPPORT_EMAIL}` },
+      { label:"Support",       href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
     ]},
     { title:"Company", links:[
-      { label:"About",          href:`mailto:${SUPPORT_EMAIL}?subject=About Corvus` },
-      { label:"Security & Privacy", href:`mailto:${SUPPORT_EMAIL}?subject=Privacy` },
-      { label:"Terms of Service",   href:`mailto:${SUPPORT_EMAIL}?subject=Terms` },
-      { label:"Partnerships",       href:`mailto:${SUPPORT_EMAIL}?subject=Partnership` },
+      { label:"About us",          href:`mailto:${SUPPORT_EMAIL}?subject=About Corvus` },
+      { label:"Security & Privacy",href:`mailto:${SUPPORT_EMAIL}?subject=Privacy` },
+      { label:"Terms of Service",  href:`mailto:${SUPPORT_EMAIL}?subject=Terms` },
+      { label:"Partnerships",      href:`mailto:${SUPPORT_EMAIL}?subject=Partnership` },
     ]},
   ];
 
@@ -1800,8 +1785,8 @@ function Footer({ lang }) {
   ];
 
   const scrollTo = id => {
-    const el = document.getElementById(id);
-    if(el) el.scrollIntoView({ behavior:"smooth" });
+    const el = document.getElementById(id.replace("#",""));
+    if(el) el.scrollIntoView({ behavior:"smooth", block:"start" });
   };
 
   return (
@@ -1884,7 +1869,7 @@ function Footer({ lang }) {
                 {col.links.map(({ label, href, anchor }) => (
                   anchor
                     ? <button key={label}
-                        onClick={() => scrollTo(href.replace("#",""))}
+                        onClick={() => scrollTo(href)}
                         style={{
                           background:"none", border:"none", padding:0, cursor:"pointer",
                           textAlign: ar ? "right" : "left", color:"#475569",
