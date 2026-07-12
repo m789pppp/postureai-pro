@@ -807,29 +807,34 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const isAr  = lang === "ar";
   const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
-  const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
+  const W=210, H=297, ml=16, mr=16, cw=W-ml-mr;
+  const NAVY=[15,23,42], SKY=[14,165,233], SLATE=[51,65,85], MUTE=[100,116,139], LIGHTB=[226,232,240], PANEL=[248,250,252];
+  // Arabic-safe text: switches to the Cairo font only when the string
+  // actually contains Arabic (patient names etc.) — clinical body stays EN.
+  const hasAr = s => /[؀-ۿ]/.test(String(s||""));
+  const txt = (s,x,y2,size,style="normal",color=NAVY,opt)=>{
+    font(doc,size,style,hasAr(s)&&_cairoLoaded);
+    tc(doc,...color);
+    doc.text(String(s),x,y2,opt);
+  };
+  const clamp1=(s,wd)=>doc.splitTextToSize(String(s??"—"),wd)[0];
 
   const tier    = _t(profile?.tier || session?.tier || "standard");
-  // Note: tier gate is enforced in App.jsx downloadPDF() before calling here.
-  // We don't re-throw here to avoid silent failures from stale session.tier values.
-
-  // Cairo already loaded via _ensureCairoFont above
-  const cairo = _cairoLoaded;
-  const fnt = (size, style="normal") => cairo && isAr ? fontAr(doc,size,style,true) : font(doc,size,style);
+  // Tier gate enforced in App.jsx downloadPDF() before calling here.
 
   const avg     = Math.round(session.avg_score || 0);
   const dur     = session.duration_s || session.duration_sec || 0;
-  const goodPct = session.good_pct || 0;
+  const goodPct = Math.round(session.good_pct || 0);
+  const alerts  = session.alerts_count || 0;
   const metrics = session.metrics || {};
   const hist    = session.score_history || [];
-  const _rawName2 = profile?.name || user?.displayName || user?.email?.split("@")[0] || "Patient";
-  const name    = _rawName2.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
-  const email   = user?.email || "";
-  const dob     = profile?.dob || "—";
+  const _rawNm  = profile?.name || user?.displayName || user?.email?.split("@")[0] || "Patient";
+  const name    = _rawNm.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
+  const email   = user?.email || "—";
   const gradeC  = _gc(avg);
   const zonal   = _zonalRisk(metrics);
   const now     = new Date();
-  const dateStr = isAr ? now.toLocaleDateString("ar-EG",{year:"numeric",month:"long",day:"numeric"}) : now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const dateStr = now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
 
   const realIndex = (() => {
     if (sessionIndex) return sessionIndex;
@@ -843,388 +848,239 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const metricEntries = Object.entries(metrics)
     .filter(([k])=>!k.startsWith("_") && !NON_POSTURE_KEYS.has(k) && metrics[k])
     .map(([k,v])=>{
-      const sc  = typeof v==="number" ? v : (v?.score ?? 100);
+      const sc  = Math.round(typeof v==="number" ? v : (v?.score ?? 100));
       const lbl = METRIC_LABELS[k] || v?.label || k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
       return { key:k, sc, lbl, value:v?.value, unit:v?.unit||"" };
     })
     .sort((a,b)=>a.sc-b.sc);
 
+  // ── Shared page furniture ─────────────────────────────────────
+  const slimHdr = () => {
+    fc(doc,...NAVY); doc.rect(0,0,W,12,"F");
+    fc(doc,...SKY);  doc.rect(0,0,W,1.2,"F");
+    txt("Posmoz Posture Health — Clinical Summary",ml,8,8,"normal",[148,163,184]);
+    txt("PHYSIOTHERAPIST REPORT",W-mr,8,7.5,"bold",SKY,{align:"right"});
+  };
+  const brk = need => { if (y > H-need-14) { doc.addPage(); slimHdr(); y=20; return true; } return false; };
+  const secTitle = (t,sub) => {
+    fc(doc,...SKY); doc.rect(ml,y-4.5,2.2,sub?12:8,"F");
+    txt(t,ml+6,y,11,"bold",NAVY);
+    if(sub){ txt(sub,ml+6,y+5.5,7.5,"normal",MUTE); y+=13; } else y+=9;
+  };
+
   let y=0;
 
-  // ── PAGE 1: Clinical Header + Patient Info ────────────────────
-  // Clinical header — formal white + navy, with brand mark and accent
-  doc.setFillColor(15,23,42); doc.rect(0,0,W,36,"F");
-  doc.setFillColor(14,165,233); doc.rect(0,0,W,1.8,"F");
-  _logo(doc,ml,9,18,_logoMd);
-  doc.setFontSize(14); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text("POSMOZ POSTURE HEALTH", ml+24, 16);
-  doc.setFontSize(8.5); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
-  doc.text("AI-Assisted Workplace Ergonomics & Posture Assessment", ml+24, 23);
-  doc.text("For Clinical Review — Not for Diagnostic Purposes", ml+24, 29.5);
+  // ══ PAGE 1 — Cover header + patient info + score + timeline ═══
+  fc(doc,...NAVY); doc.rect(0,0,W,38,"F");
+  fc(doc,...SKY);  doc.rect(0,0,W,1.8,"F");
+  _logo(doc,ml,10,18,_logoMd);
+  txt("POSMOZ POSTURE HEALTH",ml+24,17,14,"bold",[255,255,255]);
+  txt("AI-Assisted Workplace Ergonomics & Posture Assessment",ml+24,24,8.5,"normal",[148,163,184]);
+  txt("For Clinical Review — Not for Diagnostic Purposes",ml+24,30.5,8.5,"normal",[148,163,184]);
+  // Document badge
+  fc(doc,...SKY); rr(doc,W-mr-44,10,44,16,2,"F");
+  txt("CLINICAL SUMMARY",W-mr-22,17,8,"bold",[255,255,255],{align:"center"});
+  txt("PHYSIOTHERAPIST REPORT",W-mr-22,22.5,6,"normal",[186,230,253],{align:"center"});
+  y=48;
 
-  // Document type badge
-  doc.setFillColor(14,165,233); doc.roundedRect(W-mr-42,10,42,14,2,2,"F");
-  doc.setFontSize(8); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text("CLINICAL SUMMARY", W-mr-21, 18.5, {align:"center"});
-  doc.setFontSize(6.5); doc.setTextColor(186,230,253); doc.setFont("helvetica","normal");
-  doc.text("PHYSIOTHERAPIST REPORT", W-mr-21, 23.5, {align:"center"});
-
-  y=46;
-
-  // Patient Info block
-  doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,32,3,3,"F");
-  doc.setDrawColor(226,232,240); doc.setLineWidth(0.4); doc.roundedRect(ml,y,cw,32,3,3,"S"); doc.setLineWidth(0.3);
-
-  doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
-  doc.text("PATIENT INFORMATION", ml+4, y+7);
-  doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
+  // Patient information — strict 2-column grid, every value clamped
+  secTitle("Patient Information");
+  const infoH=34;
+  fc(doc,...PANEL); rr(doc,ml,y,cw,infoH,3,"F");
+  dc(doc,...LIGHTB); lw(doc,0.4); rr(doc,ml,y,cw,infoH,3,"S"); lw(doc,0.3);
+  const colW=cw/2, labW=30;
   [
-    [`Patient Name:`, name, ml+4],
-    [`Email:`, email, ml+4],
-    [`Date of Assessment:`, dateStr, ml+cw/2+4],
-    [`Session Reference:`, `#${realIndex}`, ml+cw/2+4],
-    [`Session Duration:`, _fmtDur(dur), ml+4],
-    [`Recording Mode:`, session.mode||"Laptop Camera", ml+cw/2+4],
-  ].forEach(([lbl,val,x],i) => {
-    const row = Math.floor(i/2);
-    const yy = y+13+(row*8);
-    doc.setFont("helvetica","bold"); doc.setTextColor(100,116,139); doc.setFontSize(7.5);
-    doc.text(lbl, x, yy);
-    doc.setFont("helvetica","normal"); doc.setTextColor(15,23,42); doc.setFontSize(8.5);
-    doc.text(val||"—", x+32, yy);
+    ["Patient Name", name,             0,0],
+    ["Assessment Date", dateStr,       1,0],
+    ["Email", email,                   0,1],
+    ["Session Reference", `#${realIndex}`, 1,1],
+    ["Session Duration", _fmtDur(dur), 0,2],
+    ["Recording Mode", String(session.mode||"laptop").toUpperCase(), 1,2],
+  ].forEach(([lbl,val,c,r])=>{
+    const x=ml+6+c*colW, yy=y+9+r*9.5;
+    txt(lbl.toUpperCase(),x,yy,6.5,"bold",MUTE);
+    txt(clamp1(val,colW-labW-14),x+labW,yy,8.5,"normal",NAVY);
   });
-  y+=40;
+  // Row separators
+  dc(doc,...LIGHTB); lw(doc,0.2);
+  doc.line(ml+4,y+13,ml+cw-4,y+13); doc.line(ml+4,y+22.5,ml+cw-4,y+22.5);
+  doc.line(ml+colW,y+4,ml+colW,y+infoH-4); lw(doc,0.3);
+  y+=infoH+10;
 
-  // ── Overall score clinical interpretation ─────────────────────
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Overall Posture Score", ml, y); y+=6;
-
-  doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,36,3,3,"F");
-  doc.setDrawColor(...gradeC); doc.setLineWidth(0.5); doc.roundedRect(ml,y,cw,36,3,3,"S"); doc.setLineWidth(0.3);
-
-  const cx2=ml+20, cy2=y+18;
-  // Ring with proportional arc (was a solid filled circle)
-  doc.setDrawColor(226,232,240); doc.setLineWidth(3); doc.circle(cx2,cy2,13,"S"); doc.setLineWidth(0.3);
-  doc.setFillColor(...gradeC);
+  // Overall score — ring + interpretation, heights computed, no collisions
+  secTitle("Overall Posture Score");
+  const interpretation = avg>=80
+    ? "Posture quality is consistently good across the monitored session. Preventive ergonomic advice is appropriate; no targeted intervention indicated by screen data."
+    : avg>=60
+    ? "Moderate posture deviations observed during the monitored session. Targeted ergonomic intervention and a corrective exercise programme are recommended."
+    : "Significant postural deviations detected across multiple planes. Correlation with a full clinical assessment is advised.";
+  font(doc,8,"normal");
+  const interpLines=doc.splitTextToSize(interpretation,cw-56);
+  const scoreH=Math.max(40, 16+interpLines.length*5.2+14);
+  fc(doc,...PANEL); rr(doc,ml,y,cw,scoreH,3,"F");
+  dc(doc,...gradeC); lw(doc,0.5); rr(doc,ml,y,cw,scoreH,3,"S"); lw(doc,0.3);
+  // Arc ring
+  const cx2=ml+22, cy2=y+scoreH/2;
+  dc(doc,...LIGHTB); lw(doc,3); doc.circle(cx2,cy2,13,"S"); lw(doc,0.3);
+  fc(doc,...gradeC);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
   doc.circle(cx2,cy2,11.5,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   _arc(doc,cx2,cy2,13,avg/100,gradeC,3);
-  doc.setFontSize(15); doc.setTextColor(...gradeC); doc.setFont("helvetica","bold");
-  doc.text(String(avg), cx2, cy2+2.5, {align:"center"});
-  doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("/100", cx2, cy2+8, {align:"center"});
+  txt(String(avg),cx2,cy2+2.5,15,"bold",gradeC,{align:"center"});
+  txt("/100",cx2,cy2+8,6.5,"normal",MUTE,{align:"center"});
+  // Text column
+  txt(_gl(avg,false),ml+44,y+10,10,"bold",gradeC);
+  font(doc,8,"normal"); tc(doc,...SLATE);
+  interpLines.forEach((l,i)=>doc.text(l,ml+44,y+17+(i*5.2)));
+  txt(`Good posture: ${goodPct}% of session   ·   Alerts: ${alerts}   ·   Duration: ${_fmtDur(dur)}`,
+      ml+44,y+scoreH-6,7.5,"normal",MUTE);
+  y+=scoreH+10;
 
-  const interpretation = avg>=80
-    ? "Posture quality is consistently good. Preventive ergonomic advice appropriate."
-    : avg>=60
-    ? "Moderate posture deviations observed. Targeted ergonomic intervention recommended."
-    : "Significant postural deficits detected across multiple planes. Clinical assessment advised.";
-  doc.setFontSize(9); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text(_gl(avg,false), ml+38, y+12);
-  doc.setFontSize(8); doc.setTextColor(51,65,85); doc.setFont("helvetica","normal");
-  const interpLines = doc.splitTextToSize(interpretation, cw-44);
-  interpLines.forEach((l,i)=>doc.text(l, ml+38, y+20+(i*6)));
-  doc.setFontSize(7.5); doc.setTextColor(100,116,139);
-  doc.text(`Good posture maintained: ${goodPct}% of session  |  Alerts triggered: ${session.alerts_count||0}`, ml+38, y+33);
-  y+=44;
-
-  // ── Score timeline ────────────────────────────────────────────
+  // Score timeline — the sparkline draws its OWN scale-correct grid
   if (hist.length>2) {
-    doc.setFontSize(10); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-    doc.text("Posture Score Timeline (Full Session)", ml, y); y+=4;
-    doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-    doc.text("Continuous posture quality measurement from session start to end", ml, y); y+=5;
-    const sh=28;
-    doc.setFillColor(241,245,249); doc.roundedRect(ml,y,cw,sh,2,2,"F");
-    [50,65,80,95].forEach(v=>{
-      const gy=y+sh-2-((v-40)/60)*(sh-4);
-      doc.setDrawColor(200,210,220); doc.setLineWidth(0.15); doc.line(ml+2,gy,ml+cw-2,gy);
-      doc.setFontSize(4.5); doc.setTextColor(160,174,192); doc.text(String(v),ml,gy+1.5,{align:"right"});
-    });
-    _drawSparkline(doc,hist,ml+3,y+2,cw-6,sh-4,gradeC);
-    y+=sh+10;
+    secTitle("Posture Score Timeline","Continuous measurement from session start to end");
+    const sh2=32;
+    fc(doc,...PANEL); rr(doc,ml,y,cw,sh2,3,"F");
+    dc(doc,...LIGHTB); lw(doc,0.3); rr(doc,ml,y,cw,sh2,3,"S"); lw(doc,0.3);
+    _spark(doc,hist,ml+10,y+5,cw-20,sh2-11,gradeC);
+    y+=sh2+8;
   }
 
-  // ── PAGE 2: Zonal Pain Map ────────────────────────────────────
-  doc.addPage();
-  doc.setFillColor(15,23,42); doc.rect(0,0,W,12,"F");
-  doc.setFontSize(8); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
-  doc.text("Posmoz Posture Health — Clinical Summary", ml, 8.5);
-  doc.setFontSize(7.5); doc.setTextColor(14,165,233); doc.setFont("helvetica","bold");
-  doc.text("PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
-  y=22;
-
-  doc.setFontSize(12); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Spinal Zone Risk Assessment", ml, y); y+=5;
-  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Risk percentages are derived computationally from posture metrics. They are not medical diagnoses.", ml, y); y+=9;
+  // ══ PAGE 2 — Spinal zone risk assessment ══════════════════════
+  doc.addPage(); slimHdr(); y=22;
+  secTitle("Spinal Zone Risk Assessment","Risk percentages are derived computationally from posture metrics. They are not medical diagnoses.");
+  y+=2;
 
   const clinicalZones = [
-    {
-      key:"cervical", region:"C1–C7", title:"Cervical Spine (Neck)",
+    { key:"cervical", region:"C1–C7", title:"Cervical Spine (Neck)",
       desc:"Assesses head position, neck lean, forward head posture, and rotational deviation. Elevated risk correlates with increased load on cervical discs and potential for tension-type headache, cervicogenic dizziness, or upper trapezius hypertonicity.",
-      metrics:"Neck Lean, Forward Head Posture, Head Tilt, Head Rotation",
-    },
-    {
-      key:"thoracic", region:"T1–T12", title:"Thoracic Spine (Upper Back)",
+      metrics:"Neck Lean, Forward Head Posture, Head Tilt, Head Rotation" },
+    { key:"thoracic", region:"T1–T12", title:"Thoracic Spine (Upper Back)",
       desc:"Evaluates shoulder symmetry, rounded shoulder posture, and upper spinal curvature. Chronic elevation indicates risk for thoracic kyphosis progression, intercostal restriction, or rotator cuff impingement patterns.",
-      metrics:"Shoulder Balance, Rounded Shoulders, Spine Lean, Trunk Lean",
-    },
-    {
-      key:"lumbar", region:"L1–S1", title:"Lumbar Spine (Lower Back)",
+      metrics:"Shoulder Balance, Rounded Shoulders, Spine Lean" },
+    { key:"lumbar", region:"L1–S1", title:"Lumbar Spine (Lower Back)",
       desc:"Measures sagittal and coronal spinal alignment, hip angle, and pelvic positioning relative to trunk. Risk elevation may indicate posterior chain tightness, lumbar flexion intolerance, or disc load asymmetry.",
-      metrics:"Spine Alignment, Hip Angle, Trunk Lean",
-    },
+      metrics:"Spine Alignment, Hip Angle, Trunk Lean" },
   ];
-
   clinicalZones.forEach(({key,region,title,desc,metrics:mlist})=>{
-    if(y>H-72){doc.addPage();y=22;}
-    const risk=zonal[key]||0;
-    const rcol=_riskColor(risk);
-    const rlbl=_riskLabel(risk,false);
-
-    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,52,3,3,"F");
-    doc.setDrawColor(...rcol); doc.setLineWidth(0.5); doc.roundedRect(ml,y,cw,52,3,3,"S"); doc.setLineWidth(0.3);
-
-    // Zone identifier
-    doc.setFillColor(...rcol); doc.roundedRect(ml+2,y+2,22,22,2,2,"F");
-    doc.setFontSize(13); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-    doc.text(`${risk}%`, ml+13, y+13.5, {align:"center"});
-    doc.setFontSize(6); doc.text("RISK", ml+13, y+20, {align:"center"});
-
-    doc.setFontSize(9.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-    doc.text(title, ml+28, y+8);
-    doc.setFontSize(7.5); doc.setTextColor(14,165,233); doc.setFont("helvetica","bold");
-    doc.text(region, ml+28, y+14);
-    doc.setFontSize(7); doc.setTextColor(...rcol); doc.setFont("helvetica","bold");
-    doc.text(`Risk Level: ${rlbl}`, ml+28, y+20);
-
-    // Risk bar
-    const bx=ml+cw*0.52, bw2=cw*0.46;
-    doc.setFillColor(226,232,240); doc.roundedRect(bx,y+15,bw2,4,1,1,"F");
-    doc.setFillColor(...rcol); doc.roundedRect(bx,y+15,Math.max(bw2*(risk/100),3),4,1,1,"F");
-
-    // Description
-    doc.setFontSize(7.5); doc.setTextColor(51,65,85); doc.setFont("helvetica","normal");
-    const descLines = doc.splitTextToSize(desc, cw-8);
-    descLines.slice(0,4).forEach((l,i)=>doc.text(l, ml+4, y+30+(i*5.5)));
-
-    // Metrics source
-    doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
-    doc.text("Contributing metrics: ", ml+4, y+53.5);
-    doc.setFont("helvetica","normal"); doc.text(mlist, ml+38, y+53.5);
-
-    y+=58;
+    brk(64);
+    y=_zone(doc,ml,y,cw,title,region,zonal[key]||0,desc,mlist,false);
   });
+  y+=2;
 
-  // ── PAGE 3: Body Outline + Metrics Detail + Recommendations ─────
-  doc.addPage();
-  doc.setFillColor(15,23,42); doc.rect(0,0,W,12,"F");
-  doc.setFontSize(8); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
-  doc.text("Posmoz Posture Health — Clinical Summary", ml, 8.5);
-  doc.setFontSize(7.5); doc.setTextColor(14,165,233); doc.setFont("helvetica","bold");
-  doc.text("PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
-  y=22;
-
-  // ── Body Outline Diagram — zonal risk visualization ───────────
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Spinal Zone Risk — Visual Overview", ml, y); y+=6;
-  doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Risk zones derived computationally from posture measurements", ml, y); y+=8;
-
-  // Draw simplified body silhouette
-  const bx = ml+cw*0.55, bodyW=24, headR=7;
-  const bodyTop = y+4;
-  // Head circle
-  doc.setDrawColor(200,210,220); doc.setLineWidth(0.5);
-  doc.setFillColor(241,245,249); doc.circle(bx+bodyW/2, bodyTop+headR, headR,"FD");
-  // Cervical zone
-  const cervCol=_riskColor(zonal.cervical||0);
-  doc.setFillColor(...cervCol); doc.setGState&&doc.setGState(new doc.GState({opacity:0.35}));
-  doc.roundedRect(bx+4, bodyTop+headR*2, bodyW-8, 12, 2, 2, "F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Thoracic zone
-  const thorCol=_riskColor(zonal.thoracic||0);
-  doc.setFillColor(...thorCol); doc.setGState&&doc.setGState(new doc.GState({opacity:0.35}));
-  doc.roundedRect(bx+2, bodyTop+headR*2+12, bodyW-4, 22, 2, 2, "F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Lumbar zone
-  const lumbCol=_riskColor(zonal.lumbar||0);
-  doc.setFillColor(...lumbCol); doc.setGState&&doc.setGState(new doc.GState({opacity:0.35}));
-  doc.roundedRect(bx+3, bodyTop+headR*2+34, bodyW-6, 14, 2, 2, "F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Body outline stroke
-  doc.setFillColor(0,0,0,0);
-  doc.setDrawColor(200,210,220); doc.setLineWidth(0.3);
-  doc.roundedRect(bx+2, bodyTop+headR*2, bodyW-4, 48, 3, 3, "S");
-
-  // Legend
-  const lx = ml; let ly = y+2;
-  [
-    ["Cervical  C1–C7", _riskLabel(zonal.cervical||0,false), cervCol, zonal.cervical||0],
-    ["Thoracic  T1–T12", _riskLabel(zonal.thoracic||0,false), thorCol, zonal.thoracic||0],
-    ["Lumbar  L1–S1", _riskLabel(zonal.lumbar||0,false), lumbCol, zonal.lumbar||0],
-  ].forEach(([zone,rl,col,pct])=>{
-    doc.setFillColor(...col); doc.roundedRect(lx,ly,8,8,1,1,"F");
-    doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-    doc.text(zone, lx+11, ly+5.5);
-    doc.setFontSize(8); doc.setTextColor(...col);
-    doc.text(`${pct}% — ${rl}`, lx+11, ly+12);
-    // Mini horizontal bar
-    doc.setFillColor(226,232,240); doc.roundedRect(lx+11, ly+14, 60, 3.5, 1,1,"F");
-    doc.setFillColor(...col); doc.roundedRect(lx+11, ly+14, Math.max(60*(pct/100),2), 3.5, 1,1,"F");
-    ly+=24;
+  // Zone summary strip
+  brk(30);
+  fc(doc,...PANEL); rr(doc,ml,y,cw,20,3,"F");
+  dc(doc,...LIGHTB); lw(doc,0.3); rr(doc,ml,y,cw,20,3,"S"); lw(doc,0.3);
+  const third=cw/3;
+  [["CERVICAL",zonal.cervical||0],["THORACIC",zonal.thoracic||0],["LUMBAR",zonal.lumbar||0]].forEach(([z,r],i)=>{
+    const x=ml+i*third;
+    txt(z,x+third/2,y+7,6.5,"bold",MUTE,{align:"center"});
+    txt(`${r}%  ·  ${_riskLabel(r,false)}`,x+third/2,y+15,9,"bold",_riskColor(r),{align:"center"});
+    if(i<2){ dc(doc,...LIGHTB); lw(doc,0.2); doc.line(x+third,y+4,x+third,y+16); lw(doc,0.3); }
   });
-  y = Math.max(y+62, bodyTop+headR*2+56); y+=8;
+  y+=28;
 
-  // ── Exercise Prescription ──────────────────────────────────────
-  if(y>H-80){doc.addPage();y=22;}
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Exercise Prescription", ml, y); y+=5;
-  doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Evidence-based exercises targeting the highest-risk zones identified in this session", ml, y); y+=9;
+  // ══ PAGE 3 — Metrics table + recommendations ══════════════════
+  doc.addPage(); slimHdr(); y=22;
+  secTitle("Posture Metrics Detail","All session measurements, prioritised by improvement opportunity");
+  y+=1;
 
-  const EXERCISES = {
-    cervical:[
-      {name:"Chin Tuck",sets:"3×10",desc:"Retract head parallel to floor, hold 5s. Activates deep neck flexors."},
-      {name:"Cervical Rotation",sets:"2×10/side",desc:"Slow rotation L/R to end range. Reduces upper trapezius hypertonicity."},
-      {name:"Doorway Chest Stretch",sets:"3×30s",desc:"Open chest, reduce FHP. Targets pec minor and anterior scalenes."},
-    ],
-    thoracic:[
-      {name:"Thoracic Extension (foam roller)",sets:"2×60s",desc:"Over foam roller at T6–T9. Restores thoracic extension lost to sustained flexion."},
-      {name:"W-Y-T Raises (prone)",sets:"3×12",desc:"Prone scapular retraction + depression. Activates lower/mid trapezius."},
-      {name:"Wall Angels",sets:"2×10",desc:"Scapular mobilisation against wall. Targets serratus anterior + posterior deltoid."},
-    ],
-    lumbar:[
-      {name:"Posterior Pelvic Tilt",sets:"3×10",desc:"Supine lumbar flattening. Resets neutral spine and inhibits hip flexors."},
-      {name:"Bird-Dog",sets:"3×10/side",desc:"Quadruped opposite arm/leg extension. Core stability + lumbar unloading."},
-      {name:"Hip Flexor Stretch",sets:"3×30s/side",desc:"Kneeling lunge stretch. Addresses anterior pelvic tilt from prolonged sitting."},
-    ],
+  // Table header (re-drawn after every page break)
+  const C_LBL=ml+4, C_VAL=ml+cw*0.42, C_SCO=ml+cw*0.60, C_STA=ml+cw*0.74;
+  const tblHead = () => {
+    fc(doc,...NAVY); rr(doc,ml,y,cw,9,2,"F");
+    txt("MEASUREMENT",C_LBL,y+6,7,"bold",[255,255,255]);
+    txt("VALUE",C_VAL,y+6,7,"bold",[255,255,255]);
+    txt("SCORE",C_SCO,y+6,7,"bold",[255,255,255]);
+    txt("STATUS",C_STA,y+6,7,"bold",[255,255,255]);
+    y+=11;
   };
-
-  // Prioritise exercises by zone risk
-  const zonePriority = ["cervical","thoracic","lumbar"]
-    .sort((a,b)=>(zonal[b]||0)-(zonal[a]||0));
-
-  for(const zk of zonePriority.slice(0,3)){
-    if(y>H-55){doc.addPage();y=22;}
-    const col = _riskColor(zonal[zk]||0);
-    doc.setFillColor(...col); doc.roundedRect(ml,y,cw,9,2,2,"F");
-    doc.setFontSize(9); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-    doc.text(`${zk.charAt(0).toUpperCase()+zk.slice(1)} Zone Exercises (Risk: ${_riskLabel(zonal[zk]||0,false)} ${zonal[zk]||0}%)`,ml+4,y+6.5); y+=13;
-    for(const ex of EXERCISES[zk].slice(0,2)){
-      if(y>H-22){doc.addPage();y=22;}
-      doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,16,2,2,"F");
-      doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-      doc.text(`${ex.name} — ${ex.sets}`, ml+4, y+7);
-      doc.setFontSize(7.5); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
-      doc.text(ex.desc, ml+4, y+13);
-      y+=19;
-    }
-    y+=4;
-  }
-
-  // All metrics in clinical table style
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Posture Metrics Detail", ml, y); y+=7;
-
-  // Table header
-  doc.setFillColor(15,23,42); doc.roundedRect(ml,y,cw,9,2,2,"F");
-  doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  ["Measurement","Value","Score","Status"].forEach((h,i)=>{
-    const xs=[ml+3, ml+cw*0.38, ml+cw*0.56, ml+cw*0.72];
-    doc.text(h, xs[i], y+6);
-  });
-  y+=11;
-
+  tblHead();
   metricEntries.forEach(({lbl,value,unit,sc},i)=>{
-    if(y>H-40){doc.addPage();y=22;}
-    doc.setFillColor(i%2===0?248:255, i%2===0?250:255, i%2===0?252:255);
-    doc.rect(ml,y,cw,9,"F");
+    if (brk(14)) tblHead();
     const col=_gc(sc);
-    doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
-    doc.text(lbl, ml+3, y+6);
-    doc.setTextColor(...col); doc.setFont("helvetica","bold");
-    if(value!==undefined&&value!==null) doc.text(`${Math.round(value*10)/10} ${unit||""}`, ml+cw*0.38, y+6);
-    doc.text(String(Math.round(sc)), ml+cw*0.56, y+6);
-    doc.setFontSize(7.5); doc.text(_gl(sc,false), ml+cw*0.72, y+6);
+    if(i%2===0){ fc(doc,248,250,252); doc.rect(ml,y-1,cw,9,"F"); }
+    txt(clamp1(lbl,cw*0.42-10),C_LBL,y+5,8,"normal",NAVY);
+    txt(value!==undefined&&value!==null?`${Math.round(value*10)/10} ${unit||""}`:"—",C_VAL,y+5,8,"normal",SLATE);
+    // Score chip
+    fc(doc,...col);
+    doc.setGState&&doc.setGState(new doc.GState({opacity:0.14}));
+    rr(doc,C_SCO-2,y,14,7,2,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    txt(String(sc),C_SCO+5,y+5,8,"bold",col,{align:"center"});
+    txt(_gl(sc,false),C_STA,y+5,7.5,"bold",col);
     y+=9;
   });
+  y+=8;
 
-  y+=10;
-
-  // Clinical recommendations
-  if(y>H-80){doc.addPage();y=22;}
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Clinical Notes & Recommendations", ml, y); y+=5;
-  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Suggested focus areas based on session measurements. Please apply clinical judgment.", ml, y); y+=9;
-
+  // Clinical notes — dynamic-height cards, full text, never truncated
+  brk(40);
+  secTitle("Clinical Notes & Recommendations","Suggested focus areas from session measurements. Please apply clinical judgment.");
+  y+=1;
   const clinicalRecos = [
-  avg < 60
-    ? `Overall posture score of ${avg}/100 indicates significant postural deviation across multiple planes. ${zonal.cervical > zonal.thoracic && zonal.cervical > zonal.lumbar ? "Cervical zone is the primary contributor." : zonal.thoracic > zonal.lumbar ? "Thoracic zone shows the most concern." : "Lumbar zone requires the most attention."} Full clinical assessment with manual palpation recommended.`
-    : avg < 80
-    ? `Moderate postural deviations identified (score: ${avg}/100). ${zonal.cervical > 45 ? "Cervical risk at " + zonal.cervical + "% requires targeted intervention. " : ""}${zonal.thoracic > 45 ? "Thoracic risk at " + zonal.thoracic + "% noted. " : ""}Targeted corrective exercise programming is likely to yield measurable improvement within 4-6 weeks.`
-    : `Posture quality is broadly good during monitored sessions (${avg}/100, ${goodPct}% good posture). Reinforce current ergonomic patterns. ${zonal.cervical > zonal.thoracic ? "Monitor cervical zone closely during extended work periods." : "Continue current workstation setup and posture awareness practices."}`,
-  zonal.cervical >= 45
-    ? `Cervical zone risk: ${zonal.cervical}%. Neck lean and head position metrics require attention. Chin tuck exercises (3x10 reps daily) and monitor height adjustment to eye level are indicated. Consider cervicogenic headache screening if symptoms present.`
-    : `Cervical zone within acceptable range (${zonal.cervical}%). Current head and neck positioning is adequate. Maintain 50-70cm screen distance and monitor at eye level.`,
-  zonal.thoracic >= 45
-    ? `Thoracic zone risk: ${zonal.thoracic}%. Shoulder asymmetry and upper spinal curvature detected. Thoracic extension exercises (foam roller at T6-T9, 2x60s) and scapular retraction drills recommended. Workstation ergonomic review advised.`
-    : `Thoracic zone acceptable (${zonal.thoracic}%). Shoulder balance and upper back posture are within normal parameters. Encourage thoracic extension breaks every 45 minutes.`,
-  zonal.lumbar >= 45
-    ? `Lumbar zone risk: ${zonal.lumbar}%. Spinal alignment and hip angle metrics indicate concern. Posterior pelvic tilt exercises (3x10) and hip flexor stretches (3x30s/side) indicated. Lumbar support cushion and sit-stand desk rotation recommended.`
-    : `Lumbar zone within expected range (${zonal.lumbar}%). Current seated posture maintains adequate lumbar support. Continue current chair settings with feet flat and knees at 90 degrees.`,
-];
-
-  clinicalRecos.forEach((rec,i)=>{
-    if(y>H-35){doc.addPage();y=22;}
-    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,22,2,2,"F");
-    doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-    const zones2 = ["General Assessment","Cervical Focus","Thoracic Focus","Lumbar Focus"];
-    doc.text(`${i+1}. ${zones2[i]}`, ml+4, y+7);
-    doc.setFont("helvetica","normal"); doc.setTextColor(51,65,85);
-    const recLines = doc.splitTextToSize(rec, cw-10);
-    recLines.slice(0,2).forEach((l,li)=>doc.text(l, ml+4, y+13+(li*5.5)));
-    y+=26;
+    ["General Assessment", avg<60
+      ? `Overall posture score of ${avg}/100 indicates significant postural deviation across multiple planes. ${zonal.cervical>zonal.thoracic&&zonal.cervical>zonal.lumbar?"The cervical zone is the primary contributor.":zonal.thoracic>zonal.lumbar?"The thoracic zone shows the most concern.":"The lumbar zone requires the most attention."} A full clinical assessment with manual palpation is recommended.`
+      : avg<80
+      ? `Moderate postural deviations identified (score ${avg}/100). Targeted corrective exercise programming is likely to yield measurable improvement within 4–6 weeks.`
+      : `Posture quality is broadly good during monitored sessions (${avg}/100, ${goodPct}% good posture). Reinforce current ergonomic patterns and monitor for creep during extended work periods.`],
+    ["Cervical Focus", zonal.cervical>=45
+      ? `Cervical zone risk ${zonal.cervical}%. Neck lean and head-position metrics require attention. Chin-tuck exercises (3×10 daily) and monitor raised to eye level are indicated. Screen for cervicogenic headache if symptomatic.`
+      : `Cervical zone within acceptable range (${zonal.cervical}%). Maintain 50–70 cm screen distance with the monitor top edge at eye level.`],
+    ["Thoracic Focus", zonal.thoracic>=45
+      ? `Thoracic zone risk ${zonal.thoracic}%. Shoulder asymmetry and upper spinal curvature detected. Thoracic extension work (foam roller T6–T9, 2×60 s) and scapular retraction drills recommended; review workstation ergonomics.`
+      : `Thoracic zone acceptable (${zonal.thoracic}%). Encourage thoracic extension breaks every 45 minutes of seated work.`],
+    ["Lumbar Focus", zonal.lumbar>=45
+      ? `Lumbar zone risk ${zonal.lumbar}%. Spinal alignment and hip-angle metrics indicate concern. Posterior pelvic tilts (3×10) and hip-flexor stretches (3×30 s/side) indicated; consider lumbar support and sit-stand rotation.`
+      : `Lumbar zone within expected range (${zonal.lumbar}%). Continue current chair setup with feet flat and knees at ~90°.`],
+  ];
+  clinicalRecos.forEach(([title,rec],i)=>{
+    font(doc,8,"normal");
+    const recLines=doc.splitTextToSize(rec,cw-12);
+    const rh=12+recLines.length*4.8+3;
+    brk(rh+4);
+    fc(doc,...PANEL); rr(doc,ml,y,cw,rh,2,"F");
+    dc(doc,...LIGHTB); lw(doc,0.3); rr(doc,ml,y,cw,rh,2,"S"); lw(doc,0.3);
+    fc(doc,...SKY); doc.rect(ml,y,2,rh,"F"); rr(doc,ml,y,2,rh,1,"F");
+    txt(`${i+1}.  ${title}`,ml+5,y+7,8,"bold",NAVY);
+    font(doc,8,"normal"); tc(doc,...SLATE);
+    recLines.forEach((l,li)=>doc.text(l,ml+5,y+13+(li*4.8)));
+    y+=rh+4;
   });
 
-  // ── Disclaimer + Signature block ─────────────────────────────
-  y+=8;
+  // Disclaimer — dynamic height
+  y+=4;
   const disc="All measurements in this report are camera-based pose estimates (screening-grade). They reliably capture trends and patterns over time but are not equivalent to goniometric or radiographic measurement. This report is generated by an AI-based postural monitoring system and is intended to supplement, not replace, professional clinical assessment. Findings should be interpreted alongside a full physical examination by a qualified physiotherapist or medical professional. Posmoz is a wellness and ergonomics product, not a medical device; it does not diagnose or treat any medical condition.";
-  doc.setFontSize(7.5);
-  const discLines=doc.splitTextToSize(disc,cw-8);
+  font(doc,7.5,"normal");
+  const discLines=doc.splitTextToSize(disc,cw-10);
   const discH=12+discLines.length*4.2+4;
-  if(y>H-discH-12){doc.addPage();y=22;}
-  doc.setFillColor(254,243,199); doc.roundedRect(ml,y,cw,discH,2,2,"F");
-  doc.setTextColor(146,64,14); doc.setFont("helvetica","bold");
-  doc.text("IMPORTANT DISCLAIMER — SCREENING-GRADE MEASUREMENT", ml+4, y+7);
-  doc.setFont("helvetica","normal"); doc.setTextColor(120,53,15);
-  discLines.forEach((l,i)=>doc.text(l,ml+4,y+12+(i*4.2)));
-  y+=discH+6;
+  brk(discH+40);
+  fc(doc,254,243,199); rr(doc,ml,y,cw,discH,2,"F");
+  txt("IMPORTANT DISCLAIMER — SCREENING-GRADE MEASUREMENT",ml+5,y+7,7.5,"bold",[146,64,14]);
+  font(doc,7.5,"normal"); tc(doc,120,53,15);
+  discLines.forEach((l,i)=>doc.text(l,ml+5,y+12+(i*4.2)));
+  y+=discH+8;
 
   // Signature block
-  y+=8;
-  doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,28,3,3,"F");
-  doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Reviewing Clinician:", ml+4, y+8);
-  doc.text("Signature:", ml+cw/2+4, y+8);
-  doc.setDrawColor(100,116,139); doc.setLineWidth(0.3);
-  doc.line(ml+4, y+18, ml+cw/2-4, y+18);
-  doc.line(ml+cw/2+4, y+18, ml+cw-4, y+18);
-  doc.setFontSize(7); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Name / Clinic", ml+4, y+23);
-  doc.text("Date reviewed", ml+cw/2+4, y+23);
+  brk(34);
+  fc(doc,...PANEL); rr(doc,ml,y,cw,28,3,"F");
+  dc(doc,...LIGHTB); lw(doc,0.3); rr(doc,ml,y,cw,28,3,"S"); lw(doc,0.3);
+  txt("Reviewing Clinician:",ml+5,y+8,8,"bold",NAVY);
+  txt("Signature:",ml+cw/2+5,y+8,8,"bold",NAVY);
+  dc(doc,...MUTE); lw(doc,0.3);
+  doc.line(ml+5,y+18,ml+cw/2-6,y+18);
+  doc.line(ml+cw/2+5,y+18,ml+cw-5,y+18);
+  txt("Name / Clinic",ml+5,y+23,7,"normal",MUTE);
+  txt("Date reviewed",ml+cw/2+5,y+23,7,"normal",MUTE);
 
-  // Page numbers
+  // Footer band on every page
   const totalPages2=doc.internal.getNumberOfPages();
   for(let p=1;p<=totalPages2;p++){
     doc.setPage(p);
-    doc.setFillColor(15,23,42); doc.rect(0,H-8,W,8,"F");
-    doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-    doc.text(`Posmoz Posture Health — Clinical Report — ${dateStr} — Confidential`, ml, H-2.5);
-    doc.text(`${p} / ${totalPages2}`, W-mr, H-2.5, {align:"right"});
+    fc(doc,...NAVY); doc.rect(0,H-9,W,9,"F");
+    txt(`Posmoz Posture Health · Clinical Report · ${dateStr} · Confidential — Not a medical diagnosis`,ml,H-3.2,6.5,"normal",[148,163,184]);
+    txt(`${p} / ${totalPages2}`,W-mr,H-3.2,6.5,"normal",[148,163,184],{align:"right"});
   }
 
   const filename=`Posmoz_Clinical_Report_Session${realIndex}_${now.toISOString().slice(0,10)}.pdf`;
