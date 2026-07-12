@@ -585,12 +585,12 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const mEntries = Object.entries(metrics)
     .filter(([k])=>!k.startsWith("_")&&!NON_POSTURE_KEYS.has(k)&&metrics[k])
     .map(([k,v])=>{
-      const sc=typeof v==="number"?v:(v?.score??100);
+      const sc=Math.round(typeof v==="number"?v:(v?.score??100));
       const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||v?.label||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
       return{key:k,sc,lbl,value:v?.value,unit:v?.unit||""};
     }).sort((a,b)=>a.sc-b.sc);
 
-  // ── NON-ELITE: premium preview + upsell ───────────────────────
+  // ── NON-ELITE: premium preview + upsell (unchanged) ───────────
   if(!isElite){
     _cover(doc,W,ml,tier,tierCol,name,realIdx,dateStr,avg,isAr);
     let y=76;
@@ -673,144 +673,315 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // ELITE PAGE 1 — Cover + Summary
+  // ELITE — approved portrait design, emerald identity, personal voice
   // ═══════════════════════════════════════════════════════════════
-  _cover(doc,W,ml,tier,tierCol,name,realIdx,dateStr,avg,isAr);
-  let y=76;
+  const EL=12, ECW=W-EL*2;
+  const NAVY=[11,18,32], INKC=[15,23,42], SUBC=[71,85,105], MUTEC=[124,138,160], GHOSTC=[168,180,200];
+  const BGC=[246,248,252], CARDC=[255,255,255], BORDC=[228,233,242], BORD2C=[238,242,248];
+  const BLUEC=[37,99,235], VIOLETC=[124,58,237], GREENC=[34,197,94], AMBERC=[245,158,11], REDC=[239,68,68], CYANC=[6,182,212];
+  const GREENBGC=[236,253,244], AMBERBGC=[255,251,235], REDBGC=[254,242,242], BLUEBGC=[239,246,255], VIOLETBGC=[245,243,255];
 
-  font(doc,PDF_FLAGS.h1,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
-  doc.text(isAr?"تقرير وضعية احترافي":"Professional Posture Report",ml,y);
-  font(doc,PDF_FLAGS.body,"normal",isAr); tc(doc,...PDF_TOKENS.muted);
-  doc.text(doc.splitTextToSize(`${name} · ${email||"—"} · ${dateStr}`,cw)[0],ml,y+8); y+=20;
-  hr(doc,ml,y,cw); y+=12;
-
-  // Ring + 3 KPI chips — 36mm chips + 6mm gaps end exactly at the right
-  // margin. The old 4th chip (Session #) started AT the margin and was
-  // rendered entirely off the page; the session number already appears
-  // on the cover band top-right.
-  _ring(doc,ml+22,y+24,19,avg,isAr);
-  [[`${goodPct}%`,isAr?"جيدة":"Good",PDF_TOKENS.success],
-   [String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",PDF_TOKENS.warning],
-   [_fmtDur(dur),isAr?"المدة":"Duration",PDF_TOKENS.primary]]
-    .forEach(([v,l,col],i)=>_kpi(doc,ml+54+i*42,y+4,36,30,v,l,col));
-  y+=62; hr(doc,ml,y,cw); y+=12;
-
-  // Sparkline
-  if(hist.length>2){
-    y=_sh(doc,ml,y,isAr?"مسار النقاط":"Score Timeline",isAr?"الجلسة الكاملة":"Full session",gradeC,isAr);
-    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,42,4,"F");
-    dc(doc,...PDF_TOKENS.border); lw(doc,0.15); rr(doc,ml,y,cw,42,4,"S"); lw(doc,0.3);
-    _spark(doc,hist,ml+12,y+7,cw-24,28,gradeC);
-    y+=50;
+  const F=(s,st="normal",ar=false)=>{doc.setFont(ar&&_cairoLoaded?"cairo":"helvetica",st);doc.setFontSize(s);};
+  const T=(t,x,yy,o)=>doc.text(String(t),x,yy,o);
+  const hasAr=s=>/[؀-ۿ]/.test(String(s||""));
+  const card=(x,yy,w,h,r=4)=>{fc(doc,...CARDC);rr(doc,x,yy,w,h,r,"F");dc(doc,...BORDC);lw(doc,.35);rr(doc,x,yy,w,h,r,"S");lw(doc,.3);};
+  const clamp1=(s,wd)=>doc.splitTextToSize(String(s??"—"),wd)[0];
+  const lerpC=(a,b,t)=>a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+  const op=o=>doc.setGState&&doc.setGState(new doc.GState({opacity:o}));
+  const scCol=s=>s>=80?GREENC:s>=60?AMBERC:REDC;
+  const scBg=s=>s>=80?GREENBGC:s>=60?AMBERBGC:REDBGC;
+  const stTxt=s=>s>=80?(isAr?"ممتاز":"Excellent"):s>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs Improvement");
+  function gradArc(cx,cy,r,frac,w,c1=GREENC,c2=CYANC){
+    const f=Math.max(0,Math.min(1,frac)), steps=Math.max(10,Math.round(90*f)), start=-Math.PI/2;
+    lw(doc,w); doc.setLineCap("round");
+    let px=cx+r*Math.cos(start), py=cy+r*Math.sin(start);
+    for(let i=1;i<=steps;i++){
+      const a=start+f*2*Math.PI*(i/steps);
+      const nx=cx+r*Math.cos(a), ny=cy+r*Math.sin(a);
+      dc(doc,...lerpC(c1,c2,i/steps)); doc.line(px,py,nx,ny); px=nx; py=ny;
+    }
+    doc.setLineCap("butt"); lw(doc,.3);
   }
+  const solidArc=(cx,cy,r,frac,w,col)=>gradArc(cx,cy,r,frac,w,col,col);
+  function icoCheck(x,yy,s,col){dc(doc,...col);lw(doc,s*.22);doc.line(x-s*.4,yy,x-s*.08,yy+s*.32);doc.line(x-s*.08,yy+s*.32,x+s*.45,yy-s*.35);lw(doc,.3);}
+  function icoClock(x,yy,s,col){dc(doc,...col);lw(doc,s*.16);doc.circle(x,yy,s*.5,"S");doc.line(x,yy,x,yy-s*.28);doc.line(x,yy,x+s*.2,yy+s*.08);lw(doc,.3);}
+  function icoCal(x,yy,s,col){dc(doc,...col);lw(doc,s*.14);rr(doc,x-s*.45,yy-s*.35,s*.9,s*.75,s*.1,"S");doc.line(x-s*.45,yy-s*.12,x+s*.45,yy-s*.12);doc.line(x-s*.2,yy-s*.48,x-s*.2,yy-s*.28);doc.line(x+s*.2,yy-s*.48,x+s*.2,yy-s*.28);lw(doc,.3);}
+  function icoShield(x,yy,s,col){dc(doc,...col);lw(doc,s*.14);doc.lines([[s*.42,s*.14],[0,s*.5],[-s*.42,s*.32],[-s*.42,-s*.32],[0,-s*.5]],x,yy-s*.48,[1,1],"S",true);icoCheck(x,yy+s*.02,s*.5,col);}
+  function pillC(x,yy,txt,col,bg,alignRight=false){F(6,"bold",isAr&&hasAr(txt));const w=doc.getTextWidth(txt)+8;const px=alignRight?x-w:x;fc(doc,...bg);rr(doc,px,yy,w,7.5,2.5,"F");tc(doc,...col);T(txt,px+w/2,yy+5.1,{align:"center"});return w;}
 
-  if(painSum){ y=_callout(doc,ml,y,cw,painSum,"warning",isAr); }
-  if(impTip)  { y=_callout(doc,ml,y,cw,impTip,"success",isAr); }
-
-  // Only start the Key Metrics preview if the heading AND at least one
-  // row fit — a lone heading at the page bottom looked broken.
-  if(y<=H-72){
-    y=_sh(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"مرتبة حسب أولوية التحسين":"Prioritised — highest improvement opportunity first",gradeC,isAr);
-    mEntries.slice(0,4).forEach(({lbl,value,unit,sc},i)=>{
-      if(y>H-46)return;
-      _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // ELITE PAGE 2 — All metrics + Zonal map
-  // ═══════════════════════════════════════════════════════════════
-  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"تفاصيل المقاييس":"Metrics Detail",isAr); y=24;
-  y=_sh(doc,ml,y,isAr?"جميع مقاييس الوضعية":"Complete Posture Metrics",isAr?"مرتبة حسب أولوية التحسين":"Prioritised by improvement opportunity",gradeC,isAr);
-  mEntries.forEach(({lbl,value,unit,sc},i)=>{
-    if(y>H-38){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued",isAr);y=24;}
-    _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
-  });
-
-  y+=4; if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map",isAr);y=24;}
-  y=_sh(doc,ml,y,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"من بيانات الجلسة — ليس تشخيصاً طبياً":"Derived from session data · not a medical diagnosis",PDF_TOKENS.danger,isAr);
   const zonal=_zonalRisk(metrics);
-  [{k:"cervical",en:"Cervical (Neck)",ar:"منطقة الرقبة",r:"C1–C7",
-    desc:"Neck lean, FHP, and rotational deviation. Elevation increases cervical disc load and headache risk.",m:"Neck Lean, FHP, Head Tilt/Yaw"},
-   {k:"thoracic",en:"Thoracic (Upper Back)",ar:"الظهر العلوي",r:"T1–T12",
-    desc:"Shoulder symmetry and upper spinal curvature. Sustained elevation indicates kyphosis or rotator cuff risk.",m:"Shoulder Balance, Rounded Shoulders, Spine"},
-   {k:"lumbar",en:"Lumbar (Lower Back)",ar:"أسفل الظهر",r:"L1–S1",
-    desc:"Spinal alignment, hip angle, and pelvic positioning. Risk elevation may indicate disc asymmetry or flexion intolerance.",m:"Spine Alignment, Hip Angle, Trunk Lean"},
-  ].forEach(({k,en,ar,r,desc,m})=>{
-    if(y>H-65){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map",isAr);y=24;}
-    y=_zone(doc,ml,y,cw,isAr?ar:en,r,zonal[k]||0,desc,m,isAr);
+  const riskCol=p=>p>=40?REDC:p>=20?AMBERC:GREENC;
+  const riskBg =p=>p>=40?REDBGC:p>=20?AMBERBGC:GREENBGC;
+  const riskLbl=p=>p>=40?(isAr?"مرتفع":"Moderate"):p>=20?(isAr?"متوسط":"Elevated"):(isAr?"منخفض":"Low");
+  const worst=mEntries[0];
+
+  const TOTAL_SECTIONS={p1:isAr?"نظرة عامة":"OVERVIEW",p2:isAr?"مقاييسك":"YOUR METRICS",p3:isAr?"عمودك الفقري":"YOUR SPINE",p4:isAr?"مدرب الذكاء الاصطناعي":"AI COACH",p5:isAr?"الملخص":"SUMMARY"};
+  function pageBase(section){
+    fc(doc,...BGC);doc.rect(0,0,W,H,"F");
+    fc(doc,...NAVY);doc.rect(0,0,W,20,"F");
+    fc(doc,...GREENC);doc.rect(0,0,W,1.2,"F");
+    _logo(doc,EL,4,12,_logoSm);
+    F(8,"bold");tc(doc,255,255,255);T("POSMOZ",EL+15,9.5);
+    F(4.4,"normal");tc(doc,...GHOSTC);T("HEALTH INTELLIGENCE",EL+15,13.5);
+    fc(doc,...GREENC);rr(doc,EL+46,6.5,15,7,2,"F");
+    F(5.4,"bold");tc(doc,255,255,255);T("ELITE",EL+53.5,11.2,{align:"center"});
+    F(6.2,"bold",isAr);tc(doc,...GHOSTC);T(section,W/2+14,11.5,{align:"center"});
+    F(5.6,"bold");
+    const bt="ELITE REPORT", bw=doc.getTextWidth(bt)+6;
+    fc(doc,...GREENBGC);rr(doc,W-EL-bw,6.5,bw,7,2,"F");
+    tc(doc,...GREENC);T(bt,W-EL-bw/2,11.2,{align:"center"});
+  }
+  let y=0;
+  const brk=(need,section)=>{ if(y>H-need-12){doc.addPage();pageBase(section);y=28;return true;} return false; };
+
+  // ══ PAGE 1 — Overview ═════════════════════════════════════════
+  pageBase(TOTAL_SECTIONS.p1);
+  y=28;
+  F(15,"bold",isAr);tc(doc,...INKC);T(isAr?"تقريرك الشخصي للوضعية":"Your Posture Report",EL,y+2);
+  F(6.6,"normal",isAr);tc(doc,...SUBC);
+  T(isAr?"تحليل ذكاء اصطناعي شخصي لجلستك":"Personal AI analysis of this session — written for you",EL,y+8.5);
+  y+=14;
+  // patient strip
+  card(EL,y,ECW,18,3.5);
+  fc(doc,...GREENC);doc.circle(EL+9,y+9,5,"F");
+  F(7.5,"bold");tc(doc,255,255,255);T((name[0]||"U").toUpperCase(),EL+9,y+11.3,{align:"center"});
+  F(8,"bold",hasAr(name));tc(doc,...INKC);T(clamp1(name,60),EL+17,y+8);
+  F(6,"normal");tc(doc,...MUTEC);T(clamp1(email||"—",60),EL+17,y+13.5);
+  [[isAr?"الجلسة":"Session","#"+realIdx],[isAr?"التاريخ":"Date",dateStr],[isAr?"المدة":"Duration",_fmtDur(dur)],[isAr?"الكاميرا":"Camera",String(session.mode||"laptop").toUpperCase()]].forEach(([k,v],i)=>{
+    const x=EL+86+i*25;
+    F(5.4,"normal",isAr);tc(doc,...MUTEC);T(k,x,y+7);
+    F(6.8,"bold");tc(doc,...INKC);T(clamp1(v,23),x,y+13);
+    if(i<3){dc(doc,...BORD2C);lw(doc,.25);doc.line(x+21,y+4,x+21,y+14);lw(doc,.3);}
   });
-
-  // ═══════════════════════════════════════════════════════════════
-  // ELITE PAGE 3 — AI + Next Steps + Stats
-  // ═══════════════════════════════════════════════════════════════
-  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"التحليل والتوصيات":"Analysis & Recommendations",isAr); y=24;
-
-  if(aiText){
-    y=_sh(doc,ml,y,isAr?"تحليل Posmoz AI":"Posmoz AI Analysis",isAr?"مولّد خصيصاً لجلستك":"Generated specifically for this session",PDF_TOKENS.primary,isAr);
-    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,6,2,"F"); y+=9;
-    const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-6);
-    font(doc,PDF_FLAGS.body,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
-    aiLines.forEach(l=>{
-      if(y>H-28){doc.addPage();_hdr(doc,W,ml,mr,"AI Analysis",isAr);y=24;}
-      doc.text(l,ml+3,y); y+=5.2;
+  y+=24;
+  // emerald ring card + KPI 2×2
+  card(EL,y,86,74,5);
+  F(6.5,"bold",isAr);tc(doc,...SUBC);T(isAr?"نتيجة الوضعية الكلية":"Overall Posture Score",EL+43,y+8,{align:"center"});
+  dc(doc,...BORD2C);lw(doc,4.2);doc.circle(EL+43,y+36,18.5,"S");lw(doc,.3);
+  gradArc(EL+43,y+36,18.5,avg/100,4.2);
+  F(20,"bold");tc(doc,...INKC);T(String(avg),EL+43,y+38,{align:"center"});
+  F(5.6,"normal");tc(doc,...MUTEC);T("/100",EL+43,y+43.5,{align:"center"});
+  F(8.5,"bold",isAr);tc(doc,...scCol(avg));T(_sl(avg,isAr),EL+43,y+61,{align:"center"});
+  F(5.6,"normal",isAr);tc(doc,...SUBC);
+  const heroLine = worst
+    ? (isAr?`أكبر فرصة للتحسين: ${worst.lbl}`:`Biggest opportunity: ${worst.lbl}`)
+    : (isAr?"وضعية ممتازة — استمر":"Excellent posture — keep it up");
+  doc.splitTextToSize(heroLine,80).slice(0,2).forEach((l,i)=>T(l,EL+43,y+66.5+i*4,{align:"center"}));
+  const kx=EL+90, kw=(ECW-90-4)/2, kh=35;
+  function kpi(x,yy,ic,icol,label,val,sub,subCol){
+    card(x,yy,kw,kh,4);
+    fc(doc,...GREENBGC);rr(doc,x+4.5,yy+4.5,8.5,8.5,2.5,"F");ic(x+8.7,yy+8.7,4.6,icol);
+    F(5.8,"normal",isAr);tc(doc,...MUTEC);T(label,x+16,yy+8.5);
+    F(12,"bold");tc(doc,...INKC);T(clamp1(val,kw-10),x+4.5,yy+23);
+    F(5.8,"bold",isAr);tc(doc,...subCol);T(clamp1(sub,kw-10),x+4.5,yy+29.5);
+  }
+  kpi(kx,y,icoCheck,GREENC,isAr?"وضعية جيدة":"Good Posture",goodPct+"%",stTxt(goodPct),scCol(goodPct));
+  kpi(kx+kw+4,y,icoClock,BLUEC,isAr?"مدة الجلسة":"Session Duration",_fmtDur(dur),dur<300?(isAr?"جلسة قصيرة":"Short Session"):dur<1800?(isAr?"جلسة قياسية":"Standard Session"):(isAr?"جلسة طويلة":"Long Session"),MUTEC);
+  kpi(kx,y+kh+4,icoShield,(session.alerts_count||0)===0?GREENC:AMBERC,isAr?"التنبيهات":"Alerts Triggered",String(session.alerts_count||0),(session.alerts_count||0)===0?(isAr?"مثالي":"Perfect"):(isAr?"راجع عاداتك":"Review your habits"),(session.alerts_count||0)===0?GREENC:AMBERC);
+  kpi(kx+kw+4,y+kh+4,icoCal,VIOLETC,isAr?"تاريخ الجلسة":"Assessment Date",dateStr,(isAr?"جلسة #":"Session #")+realIdx,MUTEC);
+  y+=80;
+  // pain / improvement banners (data-driven)
+  [[painSum,AMBERC,AMBERBGC],[impTip,GREENC,GREENBGC]].forEach(([txt,col,bg])=>{
+    if(!txt) return;
+    F(6.8,"bold",isAr||hasAr(txt));
+    const lines=doc.splitTextToSize(String(txt).replace(/[#*`]/g,""),ECW-18);
+    const bh=Math.max(11,6+lines.length*4.8);
+    if(y>H-bh-14) return;
+    fc(doc,...bg);rr(doc,EL,y,ECW,bh,3,"F");dc(doc,...col);lw(doc,.3);rr(doc,EL,y,ECW,bh,3,"S");lw(doc,.3);
+    fc(doc,...col);doc.rect(EL,y,2.2,bh,"F");rr(doc,EL,y,2.2,bh,1.1,"F");
+    tc(doc,...col);
+    lines.slice(0,2).forEach((l,i)=>T(l,EL+7,y+7+i*4.8));
+    y+=bh+5;
+  });
+  // timeline
+  if(hist.length>2 && y<H-80){
+    card(EL,y,ECW,64,5);
+    F(8,"bold",isAr);tc(doc,...INKC);T(isAr?"مسار النقاط":"Posture Score Timeline",EL+6,y+9);
+    F(6,"normal",isAr);tc(doc,...MUTEC);T(isAr?"الجلسة كاملة من البداية للنهاية":"(Full Session) — from start to end",EL+(isAr?42:45),y+9);
+    const tlx=EL+13,tly=y+15,tlw=ECW-24,tlh=36;
+    const lo=Math.max(0,Math.min(...hist)-5),hi=Math.min(100,Math.max(...hist)+5),rng=Math.max(hi-lo,10);
+    [Math.round(lo+rng*.2),Math.round(lo+rng*.5),Math.round(lo+rng*.8)].forEach(v=>{
+      const gy=tly+tlh-((v-lo)/rng)*tlh;
+      dc(doc,...BORD2C);lw(doc,.25);doc.line(tlx,gy,tlx+tlw,gy);
+      F(5,"normal");tc(doc,...GHOSTC);T(String(v),tlx-2.5,gy+1.5,{align:"right"});
     });
-    y+=10; hr(doc,ml,y,cw); y+=12;
+    const hv=hist.length>90?hist.filter((_,i)=>i%Math.ceil(hist.length/90)===0):hist;
+    const pts=hv.map((v,i)=>({x:tlx+(i/(hv.length-1))*tlw,y:tly+tlh-((Math.max(lo,Math.min(hi,v))-lo)/rng)*tlh}));
+    try{const segs=pts.slice(1).map((p,i)=>[p.x-pts[i].x,p.y-pts[i].y]);
+    fc(doc,...GREENC);op(.09);doc.lines([...segs,[0,tly+tlh-pts[pts.length-1].y],[-(pts[pts.length-1].x-pts[0].x),0]],pts[0].x,pts[0].y,[1,1],"F",false);op(1);}catch{}
+    dc(doc,...GREENC);lw(doc,1);pts.forEach((p,i)=>{if(i>0)doc.line(pts[i-1].x,pts[i-1].y,p.x,p.y);});lw(doc,.3);
+    pts.filter((_,i)=>i%2===0).forEach(p=>{fc(doc,...GREENC);doc.circle(p.x,p.y,.85,"F");});
+    fc(doc,...GREENC);doc.circle(pts[pts.length-1].x,pts[pts.length-1].y,3.2,"F");
+    F(6.2,"bold");tc(doc,255,255,255);T(String(avg),pts[pts.length-1].x,pts[pts.length-1].y+1.9,{align:"center"});
+    F(5,"normal");tc(doc,...GHOSTC);
+    const fmtT=s=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(Math.round(s%60)).padStart(2,"0")}`;
+    for(let i=0;i<=5;i++)T(fmtT(dur*i/5),tlx+(i/5)*tlw,tly+tlh+5.5,{align:"center"});
   }
 
-  if(y>H-110){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps",isAr);y=24;}
-  y=_sh(doc,ml,y,isAr?"الخطوات العملية المقترحة":"Prioritised Next Steps",isAr?"بناءً على أسوأ المقاييس":"Based on worst-performing metrics",PDF_TOKENS.success,isAr);
+  // ══ PAGE 2 — Your metrics ═════════════════════════════════════
+  doc.addPage();pageBase(TOTAL_SECTIONS.p2);y=28;
+  F(13,"bold",isAr);tc(doc,...INKC);T(isAr?"مقاييسك":"Your Metrics",EL,y+2);
+  F(6.4,"normal",isAr);tc(doc,...SUBC);
+  T(isAr?`${mEntries.length} قياساً من هذه الجلسة — الأهم للتحسين أولاً`:`All ${mEntries.length} measurements from this session — the ones worth your attention come first`,EL,y+8.5);
+  y+=14;
+  mEntries.forEach(({lbl,value,unit,sc})=>{
+    brk(20,TOTAL_SECTIONS.p2);
+    const col=scCol(sc);
+    card(EL,y,ECW,16,3);
+    fc(doc,...col);rr(doc,EL,y,2.2,16,1.1,"F");
+    fc(doc,...scBg(sc));rr(doc,EL+6,y+3.5,13,9,2,"F");
+    F(8,"bold");tc(doc,...col);T(String(sc),EL+12.5,y+9.6,{align:"center"});
+    F(7.8,"bold",isAr);tc(doc,...INKC);T(clamp1(lbl,ECW*.34),EL+24,y+7.5);
+    F(6.2,"normal");tc(doc,...MUTEC);
+    T(value!==undefined&&value!==null?`${Math.round(value*10)/10} ${unit||""}`.trim():"—",EL+24,y+13);
+    const bx=EL+ECW*.52, bw=ECW*.26;
+    fc(doc,...BORD2C);rr(doc,bx,y+6,bw,4,1.8,"F");
+    fc(doc,...col);rr(doc,bx,y+6,Math.max(bw*(sc/100),2.5),4,1.8,"F");
+    pillC(EL+ECW-4,y+4.2,stTxt(sc),col,scBg(sc),true);
+    y+=19;
+  });
 
+  // ══ PAGE 3 — Your spine ═══════════════════════════════════════
+  doc.addPage();pageBase(TOTAL_SECTIONS.p3);y=28;
+  F(13,"bold",isAr);tc(doc,...INKC);T(isAr?"مناطق عمودك الفقري":"Your Spinal Zones",EL,y+2);
+  F(6.4,"normal",isAr);tc(doc,...SUBC);
+  T(isAr?"كيف حمّلت هذه الجلسة كل منطقة في عمودك الفقري — ليس تشخيصاً طبياً":"How this session loaded each area of your spine. Not a medical diagnosis.",EL,y+8.5);
+  y+=14;
+  card(EL,y,74,150,5);
+  const bx2=EL+37, by2=y+12;
+  fc(doc,230,236,246);
+  doc.circle(bx2,by2+8,8,"F");
+  doc.lines([[9,5],[5,9],[3,14],[1,16],[-1,14],[-2,12],[-32,0],[-2,-12],[-1,-14],[1,-16],[3,-14],[5,-9],[9,-5]],bx2-17,by2+19,[1,1],"F",true);
+  rr(doc,bx2-11,by2+76,9,40,4,"F"); rr(doc,bx2+2,by2+76,9,40,4,"F");
+  const zoneOf=i=>i<7?"cervical":i<19?"thoracic":"lumbar";
+  [["cervical",by2+17,7*3.9],["thoracic",by2+17+7*3.9,12*3.9],["lumbar",by2+17+19*3.9,5*3.9]].forEach(([z,zy,zh])=>{fc(doc,...riskCol(zonal[z]||0));op(.12);rr(doc,bx2-6.5,zy-1,13,zh+1,4,"F");op(1);});
+  for(let i=0;i<24;i++){const vy=by2+17+i*3.9;fc(doc,...riskCol(zonal[zoneOf(i)]||0));op(.9);rr(doc,bx2-2.4,vy,4.8,3,1.1,"F");op(1);}
+  F(5.6,"normal",isAr);tc(doc,...MUTEC);T(isAr?"الفقرات ملونة حسب مخاطر المنطقة":"Vertebrae coloured by zone risk",EL+37,y+145,{align:"center"});
+  const zx=EL+79, zw=ECW-79;
+  [["cervical",isAr?"الرقبة":"Cervical Spine (Neck)","C1–C7",
+    isAr?"ميل الرقبة وتقدم الرأس ودورانه بيحمّلوا فقرات رقبتك — دي أول منطقة تركز عليها.":"Neck lean, forward head and rotation load your cervical discs. If elevated, this is your first focus zone.",
+    "Neck Lean, FHP, Head Tilt, Head Rotation"],
+   ["thoracic",isAr?"الظهر العلوي":"Thoracic Spine (Upper Back)","T1–T12",
+    isAr?"توازن الكتفين وتقوسهما وانحناء أعلى الظهر خلال الجلسة.":"Shoulder balance, rounded shoulders and upper-back curvature during the session.",
+    "Shoulder Balance, Rounded Shoulders, Spine Lean"],
+   ["lumbar",isAr?"أسفل الظهر":"Lumbar Spine (Lower Back)","L1–S1",
+    isAr?"محاذاة الجلوس وزاوية الورك ووضع الحوض بالنسبة للجذع.":"Seated alignment, hip angle and pelvic positioning relative to your trunk.",
+    "Spine Alignment, Hip Angle, Trunk Lean"]].forEach(([key,t,reg,desc,mets],i)=>{
+    const pct=zonal[key]||0, col=riskCol(pct), bg=riskBg(pct);
+    const zy=y+i*51;
+    card(zx,zy,zw,48,4);
+    dc(doc,...BORD2C);lw(doc,2.4);doc.circle(zx+11,zy+12,7,"S");lw(doc,.3);
+    solidArc(zx+11,zy+12,7,pct/100,2.4,col);
+    F(6.8,"bold");tc(doc,...col);T(pct+"%",zx+11,zy+14,{align:"center"});
+    F(8.2,"bold",isAr);tc(doc,...INKC);T(t,zx+22,zy+10);
+    F(5.8,"normal");tc(doc,...MUTEC);T(reg,zx+22,zy+15.5);
+    pillC(zx+zw-4.5,zy+4.5,(isAr?"الخطر: ":"Risk: ")+riskLbl(pct),col,bg,true);
+    F(6.2,"normal",isAr);tc(doc,...SUBC);
+    doc.splitTextToSize(desc,zw-27).slice(0,3).forEach((l,li)=>T(l,zx+22,zy+22+li*4.4));
+    F(5.6,"normal");tc(doc,...MUTEC);
+    T(clamp1((isAr?"المصادر:  ":"Contributing:  ")+mets,zw-27),zx+22,zy+43.5);
+  });
+
+  // ══ PAGE 4 — AI coach + next steps ════════════════════════════
+  doc.addPage();pageBase(TOTAL_SECTIONS.p4);y=28;
+  F(13,"bold",isAr);tc(doc,...INKC);T(isAr?"ماذا يرى مدربك الذكي":"What Your AI Coach Sees",EL,y+2);
+  F(6.4,"normal",isAr);tc(doc,...SUBC);
+  T(isAr?"قراءة مكتوبة من بيانات جلستك — وأسرع 3 تحركات ترفع نتيجتك":"Written from this session's data — and the three moves that raise your score fastest",EL,y+8.5);
+  y+=14;
+  const fallbackAI = worst
+    ? (isAr
+      ? `${worst.lbl} هو أكبر سبب لخصم النقاط في هذه الجلسة (${worst.sc}/100). عالجه أولاً وسترى أسرع تحسن في نتيجتك الكلية. باقي مقاييسك ${avg>=60?"في نطاق جيد عموماً":"تحتاج متابعة"} — الحفاظ على إعداد مكتبك الحالي مع تصحيح هذه النقطة هو أقصر طريق للتقدم.`
+      : `${worst.lbl} is the main driver of score loss this session (${worst.sc}/100). Fix it first and you'll see the fastest gain in your overall score. The rest of your metrics are ${avg>=60?"broadly in a healthy range":"worth monitoring"} — keeping your current desk setup while correcting this one habit is the shortest path to progress.`)
+    : (isAr?"جلسة ممتازة بدون نقاط ضعف بارزة — حافظ على نفس الإعداد والعادات.":"An excellent session with no standout weak points — keep the same setup and habits.");
+  const aiBody=(aiText&&String(aiText).trim())?String(aiText).replace(/[#*`]/g,"").trim():fallbackAI;
+  F(6.8,"normal",isAr||hasAr(aiBody));
+  const aiLines=doc.splitTextToSize(aiBody,ECW-24);
+  const aiShown=aiLines.slice(0,16);
+  const aiH=19+aiShown.length*4.6+3;
+  card(EL,y,ECW,aiH,4);
+  fc(doc,...GREENC);doc.circle(EL+9,y+9,4,"F");F(7,"bold");tc(doc,255,255,255);T("AI",EL+9,y+11,{align:"center"});
+  F(8.5,"bold",isAr);tc(doc,...INKC);T(isAr?"تحليل Posmoz AI":"Posmoz AI Analysis",EL+16,y+11);
+  F(6.8,"normal",isAr||hasAr(aiBody));tc(doc,...SUBC);
+  aiShown.forEach((l,i)=>T(l,EL+16,y+19+i*4.6));
+  y+=aiH+8;
+  F(9.5,"bold",isAr);tc(doc,...INKC);T(isAr?"خطواتك القادمة بالأولوية":"Prioritised Next Steps",EL,y+3);
+  F(6,"normal",isAr);tc(doc,...MUTEC);T(isAr?"مبنية على أضعف مقاييسك":"Based on your worst-performing metrics",EL+(isAr?42:44),y+3);
+  y+=8;
   const NXT={
-    neck:["Raise monitor: top edge at eye level","Chin tuck gently — ear over shoulder","Set a posture alert every 20 min"],
-    neck_lean:["Raise monitor: top edge at eye level","Chin tuck gently — ear over shoulder","Cervical retraction: 10 reps × 3 sets daily"],
-    yaw:["Centre monitor directly in front","Avoid sustained head rotation","Chin tucks: 10 reps × 3 sets daily"],
-    dist:["Maintain 50–70cm screen distance","Increase font size to avoid leaning","20-20-20 rule: every 20 min look 20ft away"],
-    posture:["Sit fully back against lumbar support","Feet flat, knees at 90°","Stand 5 min every 45 min"],
+    neck_lean:["Raise monitor: top edge at eye level","Chin tuck gently — ear over shoulder","Set a posture alert every 20 min"],
+    head_tilt:["Level your monitor and check chair height","Equal weight on both sitting bones","Head-levelling drill 10 reps daily"],
     shoulder:["Level armrests to equal height","Shoulder rolls backward 10 reps × 3","Doorway chest stretch 30s × 2 daily"],
-    spine:["Align ear, shoulder, hip vertically","Use lumbar roll or support cushion","Core brace 30s × 5 reps daily"],
-    rounded:["Retract shoulder blades together","Band pull-aparts 15 reps × 3","Pec doorway stretch 30s × 2 daily"],
-    elbow:["Lower keyboard so elbows rest at 90°","Keep keyboard close to body","Wrist break every 45 min"],
-    monitor:["Top of screen at eye level","Use laptop stand + external keyboard","Reduce neck flexion with tray adjustment"],
-    distance:["Screen 50-80cm from eyes","Larger font = less lean","20-20-20 rule every 20 min"],
+    rounded:["Pull shoulder blades together and down","Band pull-aparts 15 reps × 3 sets","Pec doorway stretch 30s × 2 daily"],
+    spine_lean:["Sit fully back against lumbar support","Feet flat, knees at 90°","Stand 5 min every 45 min"],
+    spine_align:["Align ear, shoulder, hip vertically","Use a lumbar roll or cushion","Core brace 30s × 5 reps daily"],
+    distance:["Keep the screen 50–70cm away","Increase font size to avoid leaning","20-20-20 rule: every 20 min look far for 20s"],
+    elbow:["Lower keyboard so elbows rest at ~90°","Keep the keyboard close to your body","Wrist break every 45 min"],
+    monitor:["Top of screen at eye level","Laptop stand + external keyboard","Reduce neck flexion with tray adjustment"],
     default:["2-min stretch break every 30 min","Roll shoulders backward 5 times","Walk 5 min every hour"],
   };
-  // Engine metric keys → NXT action-card keys. Without this map almost
-  // every metric fell through to NXT.default generic advice.
-  const NXT_ALIAS={
-    neck_lean_side:"neck_lean", head_yaw:"yaw", head_tilt:"neck",
-    screen_distance:"distance", dist:"distance",
-    shoulder_level:"shoulder", rounded_shoulders:"rounded",
-    fhp:"neck_lean", fhp_index:"neck_lean", fhp_side:"neck_lean",
-    elbow_angle:"elbow", monitor_height:"monitor",
-    spine_lean:"spine", spine_align:"spine", trunk_lean:"spine",
-    hip_angle:"posture", knee_angle:"posture",
-  };
+  const NXT_ALIAS={neck_lean_side:"neck_lean",head_yaw:"neck_lean",fhp:"neck_lean",fhp_index:"neck_lean",fhp_side:"neck_lean",
+    shoulder_level:"shoulder",rounded_shoulders:"rounded",screen_distance:"distance",dist:"distance",
+    elbow_angle:"elbow",monitor_height:"monitor",trunk_lean:"spine_lean",hip_angle:"spine_align",knee_angle:"spine_align"};
   mEntries.slice(0,3).forEach(({key,lbl,sc},i)=>{
-    if(y>H-54){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطوات التالية":"Next Steps",isAr);y=24;}
-    y=_step(doc,ml,y,cw,i+1,lbl,sc,NXT[key]||NXT[NXT_ALIAS[key]]||NXT.default,isAr);
+    brk(38,TOTAL_SECTIONS.p4);
+    const col=scCol(sc);
+    card(EL,y,ECW,34,4);
+    fc(doc,...col);rr(doc,EL,y,2.2,34,1.1,"F");
+    fc(doc,...scBg(sc));doc.circle(EL+12,y+17,7,"F");
+    F(9,"bold");tc(doc,...col);T(String(i+1),EL+12,y+19.5,{align:"center"});
+    F(8.4,"bold",isAr);tc(doc,...INKC);T(clamp1(lbl,ECW-70),EL+24,y+9);
+    pillC(EL+ECW-4,y+4.5,`${sc}/100`,col,scBg(sc),true);
+    const steps=NXT[key]||NXT[NXT_ALIAS[key]]||NXT.default;
+    steps.slice(0,3).forEach((s,si)=>{
+      F(6.4,"bold");tc(doc,...col);T(`${si+1}.`,EL+24,y+16+si*5.6);
+      F(6.4,"normal");tc(doc,...SUBC);T(clamp1(s,ECW-36),EL+29,y+16+si*5.6);
+    });
+    y+=38;
   });
 
-  y+=4; if(y>H-75){doc.addPage();_hdr(doc,W,ml,mr,isAr?"إحصائيات":"Statistics",isAr);y=24;}
-  y=_sh(doc,ml,y,isAr?"إحصائيات الجلسة":"Session Statistics","",gradeC,isAr);
-  fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,72,4,"F");
-  dc(doc,...PDF_TOKENS.border); lw(doc,0.15); rr(doc,ml,y,cw,72,4,"S"); lw(doc,0.3);
-  [
-    [isAr?"النتيجة الكلية":"Overall Score",`${avg}/100 — ${_sl(avg,isAr)}`],
-    [isAr?"المدة":"Duration",_fmtDur(dur)],
-    [isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`],
-    [isAr?"التنبيهات":"Alerts",String(session.alerts_count||0)],
-    [isAr?"وضع الكاميرا":"Camera Mode",(session.mode||"laptop").toUpperCase()],
-    [isAr?"المستوى":"Tier",tier.toUpperCase()],
-    [isAr?"تاريخ الجلسة":"Date",dateStr],
-    [isAr?"رقم الجلسة":"Session #",String(realIdx)],
-  ].forEach(([k,v],i)=>{_iRow(doc,ml,y,cw,k,v,i%2===0,isAr);y+=8.5;});
+  // ══ PAGE 5 — Summary ══════════════════════════════════════════
+  doc.addPage();pageBase(TOTAL_SECTIONS.p5);y=28;
+  F(13,"bold",isAr);tc(doc,...INKC);T(isAr?"جلستك في لمحة":"Your Session at a Glance",EL,y+2);
+  F(6.4,"normal",isAr);tc(doc,...SUBC);T(isAr?"الأرقام وراء كل ما قرأته":"The numbers behind everything you just read",EL,y+8.5);
+  y+=14;
+  const EST=[
+   [isAr?"النتيجة الكلية":"Overall Score",`${avg}/100 · ${_sl(avg,isAr)}`,scCol(avg)],
+   [isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`,scCol(goodPct)],
+   [isAr?"مدة الجلسة":"Session Duration",_fmtDur(dur),SUBC],
+   [isAr?"التنبيهات":"Alerts Triggered",String(session.alerts_count||0),(session.alerts_count||0)===0?GREENC:AMBERC],
+   [isAr?"وضع الكاميرا":"Camera Mode",String(session.mode||"laptop").toUpperCase(),SUBC],
+   [isAr?"المستوى":"User Tier","ELITE",GREENC],
+   [isAr?"تاريخ الجلسة":"Session Date",dateStr,SUBC],
+   [isAr?"رقم الجلسة":"Session Reference",`#${realIdx}`,SUBC]];
+  card(EL,y,ECW,EST.length*12+14,5);
+  EST.forEach(([k,v,col],i)=>{
+    const ry=y+11+i*12;
+    F(6.6,"normal",isAr);tc(doc,...MUTEC);T(k,EL+6,ry);
+    F(7.4,"bold",hasAr(v));tc(doc,...col);T(clamp1(v,ECW*.5),EL+ECW-6,ry,{align:"right"});
+    if(i<EST.length-1){dc(doc,...BORD2C);lw(doc,.22);doc.line(EL+5,ry+4.6,EL+ECW-5,ry+4.6);lw(doc,.3);}
+  });
+  y+=EST.length*12+22;
+  fc(doc,...GREENBGC);rr(doc,EL,y,ECW,24,4,"F");
+  icoShield(EL+9,y+12,6.5,GREENC);
+  F(7,"bold",isAr);tc(doc,...GREENC);T(isAr?"قياس بدرجة الفحص الأولي":"SCREENING-GRADE MEASUREMENT",EL+17,y+8);
+  F(6.2,"normal",isAr);tc(doc,...SUBC);
+  doc.splitTextToSize(isAr
+    ?"تقدير الوضعية بالكاميرا يرصد الاتجاهات والأنماط بدقة عبر الوقت، لكنه لا يعادل القياس السريري. هذا تقرير عافية وبيئة عمل — وليس تشخيصاً طبياً."
+    :"Camera-based pose estimation reliably captures trends and patterns over time, but is not equivalent to clinical measurement. This is a wellness and ergonomics report — not a medical diagnosis.",ECW-26)
+    .slice(0,3).forEach((l,i)=>T(l,EL+17,y+13.5+i*4.2));
 
-  const tot2=doc.internal.getNumberOfPages();
-  for(let p=1;p<=tot2;p++){doc.setPage(p);_ftr(doc,W,ml,mr,H,p,tot2,name);}
+  // footer band on every page
+  const tp=doc.internal.getNumberOfPages();
+  for(let p=1;p<=tp;p++){
+    doc.setPage(p);
+    fc(doc,...NAVY);doc.rect(0,H-8,W,8,"F");
+    F(5.2,"normal");tc(doc,...GHOSTC);
+    T(`Posmoz Health Intelligence  ·  ${isAr?"":"Personal Elite Report  ·  "}${dateStr}  ·  Confidential — Not a medical diagnosis`,EL,H-3);
+    F(5.2,"normal",hasAr(name));T(`${name}   ·   ${p} / ${tp}`,W-EL,H-3,{align:"right"});
+  }
+
   await doc.save(`Posmoz_Elite_Report_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
 }
-
 
 export async function generateClinicalPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[], aiSummary="" }) {
   const { jsPDF } = await import("jspdf");
