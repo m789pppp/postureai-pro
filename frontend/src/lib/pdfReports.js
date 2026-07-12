@@ -1390,429 +1390,369 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // Support both old API (session1,session2) and new API (sessions array)
   if (!session1 && sessions.length >= 2) { session1 = sessions[0]; session2 = sessions[1]; }
   if (!session1 || !session2) { console.warn("[PDF] Comparison needs 2 sessions"); return; }
+  // Compare older → newer regardless of input order
+  const _ms = s => { try{ return s.created_at?.toDate?.()?.getTime?.() ?? new Date(s.created_at||0).getTime(); }catch{ return 0; } };
+  if (_ms(session1) > _ms(session2)) { const tmp=session1; session1=session2; session2=tmp; }
 
   const { jsPDF } = await import("jspdf");
   const isAr = lang==="ar";
-  const tier = _t(profile?.tier||"standard");
-  // tier check handled in UI — proceed regardless
-
-  const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const doc  = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
-  const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
-  const sf  = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
-  const now = new Date();
-  const nowStr = now.toLocaleDateString(isAr?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"});
-  const name   = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
-  const tierCol= tierAtLeast(tier,"elite")?PDF_TOKENS.success:PDF_TOKENS.cyan;
-  const tierLbl= tier.charAt(0).toUpperCase()+tier.slice(1);
+  const W=210, H=297, ml=12, cw=W-ml*2;
 
-  // ── DATA ──────────────────────────────────────────────────────
+  // ── palette + inner helpers (approved portrait design) ─────────
+  const NAVY=[11,18,32], INKC=[15,23,42], SUBC=[71,85,105], MUTEC=[124,138,160], GHOSTC=[168,180,200];
+  const BGC=[246,248,252], CARDC=[255,255,255], BORDC=[228,233,242], BORD2C=[238,242,248];
+  const BLUEC=[37,99,235], VIOLETC=[124,58,237], GREENC=[34,197,94], AMBERC=[245,158,11], REDC=[239,68,68];
+  const GREENBGC=[236,253,244], AMBERBGC=[255,251,235], REDBGC=[254,242,242], BLUEBGC=[239,246,255], VIOLETBGC=[245,243,255];
+  const F=(s,st="normal",ar=false)=>{doc.setFont(ar&&_cairoLoaded?"cairo":"helvetica",st);doc.setFontSize(s);};
+  const T=(t,x,yy,o)=>doc.text(String(t),x,yy,o);
+  const hasAr=s=>/[؀-ۿ]/.test(String(s||""));
+  const card=(x,yy,w,h,r=4)=>{fc(doc,...CARDC);rr(doc,x,yy,w,h,r,"F");dc(doc,...BORDC);lw(doc,.35);rr(doc,x,yy,w,h,r,"S");lw(doc,.3);};
+  const clamp1=(s,wd)=>doc.splitTextToSize(String(s??"—"),wd)[0];
+  const lerpC=(a,b,t)=>a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+  const op=o=>doc.setGState&&doc.setGState(new doc.GState({opacity:o}));
+  const scCol=s=>s>=80?GREENC:s>=60?AMBERC:REDC;
+  const dstr=d=>(d>0?"+":"")+d;
+  function gradArc(cx,cy,r,frac,w,c1=BLUEC,c2=VIOLETC){
+    const f=Math.max(0,Math.min(1,frac)), steps=Math.max(10,Math.round(90*f)), start=-Math.PI/2;
+    lw(doc,w); doc.setLineCap("round");
+    let px=cx+r*Math.cos(start), py=cy+r*Math.sin(start);
+    for(let i=1;i<=steps;i++){
+      const a=start+f*2*Math.PI*(i/steps);
+      const nx=cx+r*Math.cos(a), ny=cy+r*Math.sin(a);
+      dc(doc,...lerpC(c1,c2,i/steps)); doc.line(px,py,nx,ny); px=nx; py=ny;
+    }
+    doc.setLineCap("butt"); lw(doc,.3);
+  }
+  const solidArc=(cx,cy,r,frac,w,col)=>gradArc(cx,cy,r,frac,w,col,col);
+  function icoCheck(x,yy,s,col){dc(doc,...col);lw(doc,s*.22);doc.line(x-s*.4,yy,x-s*.08,yy+s*.32);doc.line(x-s*.08,yy+s*.32,x+s*.45,yy-s*.35);lw(doc,.3);}
+  function icoClock(x,yy,s,col){dc(doc,...col);lw(doc,s*.16);doc.circle(x,yy,s*.5,"S");doc.line(x,yy,x,yy-s*.28);doc.line(x,yy,x+s*.2,yy+s*.08);lw(doc,.3);}
+  function icoCal(x,yy,s,col){dc(doc,...col);lw(doc,s*.14);rr(doc,x-s*.45,yy-s*.35,s*.9,s*.75,s*.1,"S");doc.line(x-s*.45,yy-s*.12,x+s*.45,yy-s*.12);doc.line(x-s*.2,yy-s*.48,x-s*.2,yy-s*.28);doc.line(x+s*.2,yy-s*.48,x+s*.2,yy-s*.28);lw(doc,.3);}
+  function icoTrend(x,yy,s,col){dc(doc,...col);lw(doc,s*.16);doc.line(x-s*.4,yy+s*.25,x-s*.08,yy-s*.05);doc.line(x-s*.08,yy-s*.05,x+s*.1,yy+s*.12);doc.line(x+s*.1,yy+s*.12,x+s*.42,yy-s*.3);doc.line(x+s*.42,yy-s*.3,x+s*.42,yy-s*.08);doc.line(x+s*.42,yy-s*.3,x+s*.2,yy-s*.3);lw(doc,.3);}
+  function icoBell(x,yy,s,col){dc(doc,...col);lw(doc,s*.14);doc.lines([[s*.3,0],[s*.1,s*.14],[.06*s,s*.34],[-s*.92,0],[.06*s,-s*.34],[s*.1,-s*.14],[s*.3,0]],x-s*.45,yy+s*.18,[1,1],"S",false);doc.line(x-s*.1,yy+s*.34,x+s*.1,yy+s*.34);lw(doc,.3);}
+  function pillC(x,yy,txt,col,bg,mode="left"){ // mode: left | right | center
+    F(6,"bold",hasAr(txt));
+    const w=doc.getTextWidth(txt)+8;
+    const px=mode==="right"?x-w:mode==="center"?x-w/2:x;
+    fc(doc,...bg);rr(doc,px,yy,w,7.5,2.5,"F");
+    tc(doc,...col);T(txt,px+w/2,yy+5.1,{align:"center"});
+    return w;
+  }
+
+  // ── data ──────────────────────────────────────────────────────
+  const name  = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
+  const email = user?.email||"—";
+  const now   = new Date();
+  const nowStr= now.toLocaleDateString(isAr?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"});
+  const idxOf = s => { const i=allSessions.findIndex(x=>(x.id||x.session_id)===(s.id||s.session_id)); return i>=0?allSessions.length-i:null; };
+  const num1=idxOf(session1)??1, num2=idxOf(session2)??2;
   const a1=Math.round(session1.avg_score||0), a2=Math.round(session2.avg_score||0);
-  const delta=a2-a1, improved=delta>0, declined=delta<0;
-  const deltaCol = delta>0?PDF_TOKENS.success:delta<0?PDF_TOKENS.danger:PDF_TOKENS.muted;
-  const deltaBg  = delta>0?PDF_TOKENS.successBg:delta<0?PDF_TOKENS.dangerBg:PDF_TOKENS.bg;
-  const g1=_scoreColor(a1), g2=_scoreColor(a2);
-
-  const idx1=allSessions.findIndex(s=>(s.id||s.session_id)===(session1.id||session1.session_id));
-  const idx2=allSessions.findIndex(s=>(s.id||s.session_id)===(session2.id||session2.session_id));
-  const num1=idx1>=0?allSessions.length-idx1:1;
-  const num2=idx2>=0?allSessions.length-idx2:2;
+  const delta=a2-a1, deltaCol=delta>0?GREENC:delta<0?REDC:MUTEC, deltaBg=delta>0?GREENBGC:delta<0?REDBGC:BGC;
+  const d1=session1.duration_s||session1.duration_sec||0, d2=session2.duration_s||session2.duration_sec||0;
+  const gp1=Math.round(session1.good_pct||0), gp2=Math.round(session2.good_pct||0);
+  const al1=session1.alerts_count||0, al2=session2.alerts_count||0;
+  const date1=_fmtDate(session1.created_at,isAr), date2=_fmtDate(session2.created_at,isAr);
+  const daysApart=Math.max(0,Math.round((_ms(session2)-_ms(session1))/86400000));
+  const durDelta=d2-d1;
+  const fmtDurDelta=s=>{const a=Math.abs(s),m=Math.floor(a/60),r=a%60;return (s<0?"−":"+")+(m>0?`${m}m ${r}s`:`${r}s`);};
 
   const m1=session1.metrics||{}, m2=session2.metrics||{};
   const allKeys=[...new Set([...Object.keys(m1),...Object.keys(m2)])].filter(k=>!k.startsWith("_")&&!NON_POSTURE_KEYS.has(k));
+  const scOf=(m,k)=>{const v=m[k];if(v==null)return null;return Math.round(typeof v==="number"?v:(typeof v?.score==="number"?v.score:NaN));};
   const metRows=allKeys.map(k=>{
-    const sc1=typeof m1[k]==="number"?m1[k]:(m1[k]?.score??100);
-    const sc2=typeof m2[k]==="number"?m2[k]:(m2[k]?.score??100);
-    const d=Math.round(sc2-sc1);
+    const sc1=scOf(m1,k), sc2=scOf(m2,k);
+    const d=(sc1!=null&&sc2!=null&&isFinite(sc1)&&isFinite(sc2))?sc2-sc1:null;
     const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
     return{k,lbl,sc1,sc2,d};
-  }).sort((a,b)=>a.d-b.d);
-
+  }).filter(r=>r.sc1!=null||r.sc2!=null)
+    .sort((a,b)=>(a.d??999)-(b.d??999));
   const z1=_zonalRisk(m1), z2=_zonalRisk(m2);
-  const d1=session1.duration_s||session1.duration_sec||0;
-  const d2=session2.duration_s||session2.duration_sec||0;
-  const gp1=Math.round(session1.good_pct||0), gp2=Math.round(session2.good_pct||0);
-  const al1=session1.alerts_count||0, al2=session2.alerts_count||0;
+  const zc=p=>p>=40?REDC:p>=20?AMBERC:GREENC;
 
-  // ══════════════════════════════════════════════════════════════
-  // PAGE 1 — PREMIUM COVER
-  // ══════════════════════════════════════════════════════════════
+  // ── page furniture ────────────────────────────────────────────
+  function pageBase(section){
+    fc(doc,...BGC);doc.rect(0,0,W,H,"F");
+    fc(doc,...NAVY);doc.rect(0,0,W,20,"F");
+    fc(doc,...BLUEC);doc.rect(0,0,W,1.2,"F");
+    _logo(doc,ml,4,12,_logoSm);
+    F(8,"bold");tc(doc,255,255,255);T("POSMOZ",ml+15,9.5);
+    F(4.4,"normal");tc(doc,...GHOSTC);T("HEALTH INTELLIGENCE",ml+15,13.5);
+    fc(doc,...VIOLETC);rr(doc,ml+46,6.5,15,7,2,"F");
+    F(5.4,"bold");tc(doc,255,255,255);T("ELITE",ml+53.5,11.2,{align:"center"});
+    F(6.2,"bold",isAr);tc(doc,...GHOSTC);T(section,W/2+14,11.5,{align:"center"});
+    F(5.6,"bold");
+    const bt="COMPARISON REPORT", bw=doc.getTextWidth(bt)+6;
+    fc(doc,...VIOLETBGC);rr(doc,W-ml-bw,6.5,bw,7,2,"F");
+    tc(doc,...VIOLETC);T(bt,W-ml-bw/2,11.2,{align:"center"});
+  }
+  let y=0;
+  const brk=(need,section)=>{ if(y>H-need-12){doc.addPage();pageBase(section);y=28;return true;} return false; };
+  const SEC={p1:isAr?"نظرة عامة":"OVERVIEW",p2:isAr?"مقارنة المقاييس":"METRIC BREAKDOWN",p3:isAr?"مقارنة المناطق":"ZONE COMPARISON",p4:isAr?"النتائج والخطة":"FINDINGS & PLAN"};
 
-  // Dark header
-  fc(doc,...PDF_TOKENS.slate); doc.rect(0,0,W,72,"F");
-  fc(doc,...deltaCol);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
-  doc.circle(W*0.85,36,55,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.03}));
-  doc.circle(W*0.85,36,78,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  fc(doc,...deltaCol); doc.rect(0,0,W,3,"F");
-
-  // Logo + brand
-  _logo(doc,ml,16,26,_logoMd);
-  font(doc,13,"bold"); tc(doc,...PDF_TOKENS.card); doc.text("POSMOZ",ml+34,28);
-  font(doc,7,"normal"); tc(doc,148,163,184); doc.text("Health Intelligence Platform",ml+34,36);
-
-  // Tier badge
-  const tlw=doc.getTextWidth(tierLbl)+12;
-  fc(doc,...tierCol);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
-  rr(doc,ml+34,41,tlw,10,3,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,7.5,"bold"); tc(doc,...tierCol);
-  doc.text(tierLbl,ml+34+tlw/2,48,{align:"center"});
-
-  // Date right
-  font(doc,7,"normal"); tc(doc,148,163,184); doc.text(nowStr,W-mr,26,{align:"right"});
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
-  doc.text(`Session #${num1} vs #${num2}`,W-mr,36,{align:"right"});
-
-  fc(doc,...deltaCol); doc.rect(0,69.5,W,2.5,"F");
-
-  // Title
-  let y=86;
-  font(doc,20,"bold"); tc(doc,...PDF_TOKENS.ink);
-  doc.text(isAr?"تقرير المقارنة":"Session Comparison Report",ml,y); y+=9;
-  font(doc,9,"normal"); tc(doc,...PDF_TOKENS.muted);
-  doc.text(`${name} · ${isAr?"مقارنة جلستين":"Head-to-head session analysis"}`,ml,y); y+=16;
-  hr(doc,ml,y,cw); y+=14;
-
-  // ── HERO SCORE COMPARISON ─────────────────────────────────────
-  const heroH=70, half=(cw-14)/2;
-
-  // Session 1 card
-  fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,half,heroH,6,"F");
-  dc(doc,...g1); lw(doc,0.3); rr(doc,ml,y,half,heroH,6,"S"); lw(doc,0.3);
-  fc(doc,...g1); doc.rect(ml,y,half,3,"F"); rr(doc,ml,y,half,3,3,"F");
-  // Session number chip
-  const s1lbl=`Session #${num1}`;
-  font(doc,7,"bold"); tc(doc,...PDF_TOKENS.card);
-  fc(doc,...g1); rr(doc,ml+6,y+8,half-12,10,2,"F");
-  doc.text(s1lbl,ml+6+(half-12)/2,y+14.5,{align:"center"});
-  // Score ring
-  dc(doc,...g1); lw(doc,3); doc.circle(ml+half/2,y+40,16,"S"); lw(doc,0.3);
-  fc(doc,...g1);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
-  doc.circle(ml+half/2,y+40,14.5,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,20,"bold"); tc(doc,...g1);
-  doc.text(String(a1),ml+half/2,y+45,{align:"center"});
-  font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
-  doc.text("/100",ml+half/2,y+52,{align:"center"});
-  font(doc,8.5,"bold"); tc(doc,...g1);
-  doc.text(_scoreLabel(a1,isAr),ml+half/2,y+62,{align:"center"});
-
-  // VS divider + delta
-  const mx=ml+half+7;
-  // Delta circle
-  fc(doc,...deltaBg);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.9}));
-  doc.circle(mx,y+35,10,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  dc(doc,...deltaCol); lw(doc,1); doc.circle(mx,y+35,10,"S"); lw(doc,0.3);
-  font(doc,9,"bold"); tc(doc,...deltaCol);
-  doc.text(delta===0?"=":(improved?"↑":"↓"),mx,y+33.5,{align:"center"});
-  font(doc,7,"bold"); tc(doc,...deltaCol);
-  doc.text(`${delta>0?"+":""}${delta}`,mx,y+41,{align:"center"});
-  // VS label
-  font(doc,6.5,"bold"); tc(doc,...PDF_TOKENS.muted);
-  doc.text("VS",mx,y+52,{align:"center"});
-
-  // Session 2 card
-  const rx=mx+7;
-  fc(doc,...PDF_TOKENS.card); rr(doc,rx,y,half,heroH,6,"F");
-  dc(doc,...g2); lw(doc,0.3); rr(doc,rx,y,half,heroH,6,"S"); lw(doc,0.3);
-  fc(doc,...g2); doc.rect(rx,y,half,3,"F"); rr(doc,rx,y,half,3,3,"F");
-  const s2lbl=`Session #${num2}`;
-  font(doc,7,"bold"); tc(doc,...PDF_TOKENS.card);
-  fc(doc,...g2); rr(doc,rx+6,y+8,half-12,10,2,"F");
-  doc.text(s2lbl,rx+6+(half-12)/2,y+14.5,{align:"center"});
-  // Score ring
-  dc(doc,...g2); lw(doc,3); doc.circle(rx+half/2,y+40,16,"S"); lw(doc,0.3);
-  fc(doc,...g2);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
-  doc.circle(rx+half/2,y+40,14.5,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,20,"bold"); tc(doc,...g2);
-  doc.text(String(a2),rx+half/2,y+45,{align:"center"});
-  font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
-  doc.text("/100",rx+half/2,y+52,{align:"center"});
-  font(doc,8.5,"bold"); tc(doc,...g2);
-  doc.text(_scoreLabel(a2,isAr),rx+half/2,y+62,{align:"center"});
-  y+=heroH+8;
-
-  // ── QUICK STATS STRIP ─────────────────────────────────────────
-  const qStats=[
-    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr),PDF_TOKENS.primary],
-    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2),PDF_TOKENS.indigo],
-    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`,PDF_TOKENS.success],
-    [isAr?"التنبيهات":"Alerts",String(al1),String(al2),PDF_TOKENS.warning],
-  ];
-  qStats.forEach(([lbl,v1,v2,col],i)=>{
-    const qy=y+i*12;
-    if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,qy,cw,12,"F");}
-    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(lbl,ml+4,qy+8);
-    font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v1,ml+cw*0.45,qy+8,{align:"right"});
-    font(doc,7.5,"bold",false); tc(doc,...PDF_TOKENS.muted); doc.text("→",ml+cw*0.5,qy+8,{align:"center"});
-    font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v2,ml+cw*0.98,qy+8,{align:"right"});
-  });
-  y+=qStats.length*12+10;
-
-  // ── INSIGHT BANNER ────────────────────────────────────────────
-  const insText=improved
-    ?(isAr?`📈 تحسّن +${delta} نقطة — ${_scoreLabel(a2,isAr)} مقارنةً بـ ${_scoreLabel(a1,isAr)}`:`📈 +${delta} point improvement — ${_scoreLabel(a2,isAr)} vs ${_scoreLabel(a1,isAr)}`)
-    :declined
-    ?(isAr?`📉 انخفاض ${Math.abs(delta)} نقطة — راجع المقاييس المتراجعة أدناه`:`📉 ${Math.abs(delta)} point decline — review regressed metrics below`)
-    :(isAr?"📊 النتيجة مستقرة بين الجلستين":"📊 Score stable between sessions");
-  fc(doc,...deltaBg); rr(doc,ml,y,cw,14,3,"F");
-  dc(doc,...deltaCol); lw(doc,0.25); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
-  fc(doc,...deltaCol); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-  font(doc,8.5,"bold",isAr); tc(doc,...deltaCol);
-  doc.text(doc.splitTextToSize(insText,cw-14)[0],ml+8,y+9.5);
+  // ══ PAGE 1 — Overview ═════════════════════════════════════════
+  pageBase(SEC.p1);
+  y=28;
+  F(15,"bold",isAr);tc(doc,...INKC);T(isAr?"تقرير مقارنة الجلسات":"Session Comparison Report",ml,y+2);
+  F(6.6,"normal",isAr);tc(doc,...SUBC);
+  T(isAr?`مقارنة مباشرة — جلسة #${num1} مقابل جلسة #${num2}`:`Head-to-head analysis  ·  Session #${num1} vs Session #${num2}`,ml,y+8.5);
+  y+=14;
+  // patient strip
+  card(ml,y,cw,16,3.5);
+  fc(doc,...BLUEC);doc.circle(ml+8.5,y+8,4.4,"F");
+  F(7,"bold");tc(doc,255,255,255);T((name[0]||"U").toUpperCase(),ml+8.5,y+10.2,{align:"center"});
+  F(7.6,"bold",hasAr(name));tc(doc,...INKC);T(clamp1(name,60),ml+16,y+7);
+  F(5.8,"normal");tc(doc,...MUTEC);T(clamp1(email,60),ml+16,y+12.5);
+  F(6,"normal",isAr);tc(doc,...MUTEC);T(isAr?"المقارنة بين:":"Comparing:",ml+cw-62,y+7);
+  F(6.8,"bold");tc(doc,...INKC);T(clamp1(`${date1}  →  ${date2}`,58),ml+cw-62,y+12.5);
   y+=22;
+  // hero: two session cards + delta circle
+  const half=(cw-24)/2;
+  [[ml,num1,session1,a1,date1,gp1,al1,d1,false],[ml+half+24,num2,session2,a2,date2,gp2,al2,d2,true]].forEach(([x,num,s,sc,dt,gp,al,du,isNew])=>{
+    const col=scCol(sc);
+    card(x,y,half,74,5);
+    fc(doc,...col);rr(doc,x,y,half,3,3,"F");doc.rect(x,y+1.5,half,1.5,"F");
+    F(6.5,"bold");tc(doc,...MUTEC);T(`SESSION #${num}`,x+half/2,y+10,{align:"center"});
+    F(5.6,"normal",isAr);tc(doc,...GHOSTC);T(clamp1(dt,half-10),x+half/2,y+15,{align:"center"});
+    dc(doc,...BORD2C);lw(doc,3.8);doc.circle(x+half/2,y+37,15.5,"S");lw(doc,.3);
+    if(isNew)gradArc(x+half/2,y+37,15.5,sc/100,3.8);
+    else solidArc(x+half/2,y+37,15.5,sc/100,3.8,col);
+    F(16,"bold");tc(doc,...INKC);T(String(sc),x+half/2,y+39,{align:"center"});
+    F(5.2,"normal");tc(doc,...MUTEC);T("/100",x+half/2,y+44,{align:"center"});
+    F(7.5,"bold",isAr);tc(doc,...col);T(_sl(sc,isAr),x+half/2,y+60,{align:"center"});
+    F(5.6,"normal",isAr);tc(doc,...MUTEC);
+    T(clamp1(isAr?`${gp}% جيدة · ${al} تنبيه · ${_fmtDur(du)}`:`${gp}% good · ${al} alerts · ${_fmtDur(du)}`,half-8),x+half/2,y+67,{align:"center"});
+  });
+  const mx=ml+half+12;
+  fc(doc,...CARDC);doc.circle(mx,y+30,10,"F");dc(doc,...deltaCol);lw(doc,1);doc.circle(mx,y+30,10,"S");lw(doc,.3);
+  F(9,"bold");tc(doc,...deltaCol);T(dstr(delta),mx,y+29,{align:"center"});
+  F(4.6,"normal",isAr);tc(doc,...MUTEC);T(isAr?"نقطة":"pts",mx,y+34,{align:"center"});
+  F(6.5,"bold");tc(doc,...MUTEC);T("VS",mx,y+48,{align:"center"});
+  y+=80;
+  // verdict banner
+  fc(doc,...deltaBg);rr(doc,ml,y,cw,11,3,"F");dc(doc,...deltaCol);lw(doc,.3);rr(doc,ml,y,cw,11,3,"S");lw(doc,.3);
+  icoTrend(ml+8,y+5.5,5,deltaCol);
+  F(7.2,"bold",isAr);tc(doc,...deltaCol);
+  T(delta>0?(isAr?`تحسن +${delta} نقطة — استمر على نفس النهج`:`+${delta} point improvement — keep building on this trend`)
+    :delta<0?(isAr?`انخفاض ${Math.abs(delta)} نقطة — راجع المقاييس المتراجعة بالداخل`:`${Math.abs(delta)} point decline — review the regressed metrics inside`)
+    :(isAr?"النتيجة مستقرة بين الجلستين":"Score stable between the two sessions"),ml+15,y+7.2);
+  y+=17;
+  // At a Glance — fixed column grid
+  card(ml,y,cw,58,4);
+  F(8,"bold",isAr);tc(doc,...INKC);T(isAr?"في لمحة":"At a Glance",ml+6,y+9);
+  F(5.8,"bold");tc(doc,...MUTEC);
+  T(`SESSION #${num1}`,ml+cw*.46,y+9,{align:"center"});
+  T(`SESSION #${num2}`,ml+cw*.70,y+9,{align:"center"});
+  T(isAr?"التغير":"CHANGE",ml+cw*.90,y+9,{align:"center"});
+  dc(doc,...BORDC);lw(doc,.25);doc.line(ml+5,y+12.5,ml+cw-5,y+12.5);lw(doc,.3);
+  const glance=[
+    [isAr?"التاريخ":"Date",date1,date2,icoCal,BLUEC,daysApart>0?(isAr?`فرق ${daysApart} يوم`:`${daysApart} days apart`):(isAr?"نفس اليوم":"same day"),MUTEC,BGC],
+    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2),icoClock,VIOLETC,fmtDurDelta(durDelta),MUTEC,BGC],
+    [isAr?"وضعية جيدة":"Good posture",gp1+"%",gp2+"%",icoCheck,GREENC,dstr(gp2-gp1)+"%",gp2-gp1>=0?GREENC:REDC,gp2-gp1>=0?GREENBGC:REDBGC],
+    [isAr?"التنبيهات":"Alerts",String(al1),String(al2),icoBell,AMBERC,dstr(al2-al1),al2-al1<=0?GREENC:REDC,al2-al1<=0?GREENBGC:REDBGC],
+  ];
+  glance.forEach(([k,v1,v2,ic,col,dtxt,dcol,dbg],i)=>{
+    const ry=y+20+i*10;
+    fc(doc,...BLUEBGC);rr(doc,ml+5,ry-4.4,8,8,2,"F");ic(ml+9,ry-.4,3.6,col);
+    F(6.6,"normal",isAr);tc(doc,...MUTEC);T(k,ml+17,ry);
+    F(6.8,"bold",isAr);tc(doc,...INKC);T(clamp1(v1,cw*.2),ml+cw*.46,ry,{align:"center"});
+    F(7,"bold");tc(doc,...MUTEC);T("→",ml+cw*.58,ry,{align:"center"});
+    F(6.8,"bold",isAr);tc(doc,...INKC);T(clamp1(v2,cw*.2),ml+cw*.70,ry,{align:"center"});
+    F(6,"bold",isAr);const dw=doc.getTextWidth(dtxt)+8;
+    fc(doc,...dbg);rr(doc,ml+cw*.90-dw/2,ry-4.6,dw,7.5,2.5,"F");
+    tc(doc,...dcol);T(dtxt,ml+cw*.90,ry+.5,{align:"center"});
+    if(i<3){dc(doc,...BORD2C);lw(doc,.22);doc.line(ml+5,ry+4.4,ml+cw-5,ry+4.4);lw(doc,.3);}
+  });
 
-  // ══════════════════════════════════════════════════════════════
-  // PAGE 2 — METRIC COMPARISON TABLE + ZONE MAP
-  // ══════════════════════════════════════════════════════════════
-  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"مقارنة المقاييس":"Metric Comparison",isAr); y=22;
-
-  _sh(doc,ml,y,isAr?"مقارنة مفصّلة للمقاييس":"Detailed Metric Breakdown",
-    isAr?"مرتبة من الأسوأ تراجعاً إلى الأفضل تحسناً":"Sorted worst regression to best improvement",deltaCol,isAr);
-  y+=16;
-
-  // Column headers
-  const colX=[ml+3,ml+cw*0.42,ml+cw*0.56,ml+cw*0.70,ml+cw*0.85];
-  fc(doc,...PDF_TOKENS.slate); rr(doc,ml,y,cw,10,2,"F");
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
-  [isAr?"المقياس":"Metric",`#${num1}`,`#${num2}`,isAr?"Δ":"Δ",isAr?"الاتجاه":"Trend"]
-    .forEach((h,i)=>doc.text(h,colX[i],y+7));
-  y+=12;
-
-  metRows.forEach(({lbl,sc1,sc2,d},idx)=>{
-    if(y>H-28){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued",isAr);y=22;}
-    const dC=d>2?PDF_TOKENS.success:d<-2?PDF_TOKENS.danger:PDF_TOKENS.muted;
-    const rowH=11;
-    fc(doc,...(idx%2===0?PDF_TOKENS.bg:PDF_TOKENS.card)); doc.rect(ml,y,cw,rowH,"F");
-    // Left accent for significant changes
-    if(Math.abs(d)>5){ fc(doc,...dC); doc.rect(ml,y,2,rowH,"F"); }
-    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink);
-    doc.text(doc.splitTextToSize(lbl,cw*0.42-14)[0],colX[0]+2,y+7.5); // clamped to its column
-    // Score 1 with mini dot
-    const c1=_scoreColor(sc1),c2=_scoreColor(sc2);
-    fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
-    font(doc,8,"bold"); tc(doc,...c1); doc.text(String(Math.round(sc1)),colX[1]+2,y+7.5);
-    fc(doc,...c2); doc.circle(colX[2]-3,y+5.5,2.5,"F");
-    font(doc,8,"bold"); tc(doc,...c2); doc.text(String(Math.round(sc2)),colX[2]+2,y+7.5);
-    // Delta
-    font(doc,8.5,"bold"); tc(doc,...dC);
-    doc.text(`${d>0?"+":""}${d}`,colX[3],y+7.5);
-    // Trend arrow pill
-    const arrow=d>2?"▲":d<-2?"▼":"–";
-    fc(doc,...dC);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
-    rr(doc,colX[4]-2,y+2,14,7,2,"F");
-    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    font(doc,8.5,"bold"); tc(doc,...dC);
-    doc.text(arrow,colX[4]+5,y+7.5,{align:"center"});
+  // ══ PAGE 2 — Metric breakdown ═════════════════════════════════
+  doc.addPage();pageBase(SEC.p2);y=28;
+  F(13,"bold",isAr);tc(doc,...INKC);T(isAr?"مقارنة مقياس بمقياس":"Metric-by-Metric Breakdown",ml,y+2);
+  F(6.4,"normal",isAr);tc(doc,...SUBC);
+  T(isAr?"الأكثر تراجعاً أولاً — كل مقياس مقارن عبر الجلستين":"Sorted worst regression first — every metric compared across the two sessions",ml,y+8.5);
+  y+=14;
+  // fixed columns — every header exactly over its column
+  const CX_M=ml+6, CX_S1=ml+cw*.42, CX_S2=ml+cw*.53, CX_D=ml+cw*.66, CX_TR=ml+cw*.77, CX_BAR=ml+cw*.84, BARW=cw*.13;
+  const rowH=13.4;
+  function tblHead(count){
+    card(ml,y,cw,count*rowH+18,4);
+    F(6,"bold");tc(doc,...MUTEC);
+    T(isAr?"المقياس":"METRIC",CX_M,y+7);
+    T(`#${num1}`,CX_S1,y+7,{align:"center"});
+    T(`#${num2}`,CX_S2,y+7,{align:"center"});
+    T(isAr?"التغير":"CHANGE",CX_D,y+7,{align:"center"});
+    T(isAr?"الاتجاه":"TREND",CX_TR,y+7,{align:"center"});
+    T(isAr?"النتائج":"SCORES",CX_BAR+BARW/2,y+7,{align:"center"});
+    dc(doc,...BORDC);lw(doc,.25);doc.line(ml+4,y+9.5,ml+cw-4,y+9.5);lw(doc,.3);
+    y+=14.5;
+  }
+  const fitRows=Math.floor((H-14-y-20)/rowH);
+  tblHead(Math.min(metRows.length,fitRows));
+  metRows.forEach((r,i)=>{
+    if(y>H-24){
+      doc.addPage();pageBase(SEC.p2);y=28;
+      tblHead(Math.min(metRows.length-i,Math.floor((H-14-y-20)/rowH)));
+    }
+    const dC=r.d==null?MUTEC:r.d>2?GREENC:r.d<-2?REDC:MUTEC;
+    if(i%2===0){fc(doc,...BGC);doc.rect(ml+2,y-4.6,cw-4,rowH,"F");}
+    if(r.d!=null&&Math.abs(r.d)>5){fc(doc,...dC);rr(doc,ml+2,y-4.6,1.8,rowH,.9,"F");}
+    F(7.2,"bold",isAr);tc(doc,...INKC);T(clamp1(r.lbl,cw*.33),CX_M,y);
+    F(7.4,"bold");
+    if(r.sc1!=null){tc(doc,...scCol(r.sc1));T(String(r.sc1),CX_S1,y,{align:"center"});}
+    else{tc(doc,...GHOSTC);T("—",CX_S1,y,{align:"center"});}
+    if(r.sc2!=null){tc(doc,...scCol(r.sc2));T(String(r.sc2),CX_S2,y,{align:"center"});}
+    else{tc(doc,...GHOSTC);T("—",CX_S2,y,{align:"center"});}
+    if(r.d!=null){
+      F(6,"bold");const dl=dstr(r.d), dw=doc.getTextWidth(dl)+8;
+      fc(doc,...(r.d>2?GREENBGC:r.d<-2?REDBGC:BGC));rr(doc,CX_D-dw/2,y-4.8,dw,7.5,2.5,"F");
+      tc(doc,...dC);T(dl,CX_D,y+.3,{align:"center"});
+      F(8.5,"bold");tc(doc,...dC);T(r.d>2?"▲":r.d<-2?"▼":"–",CX_TR,y+.5,{align:"center"});
+    } else {
+      F(6.5,"normal");tc(doc,...GHOSTC);T(isAr?"جديد":"new",CX_D,y,{align:"center"});
+    }
+    fc(doc,...BORD2C);rr(doc,CX_BAR,y-3.8,BARW,3,1.3,"F");rr(doc,CX_BAR,y+.4,BARW,3,1.3,"F");
+    if(r.sc1!=null){fc(doc,...BLUEC);op(.55);rr(doc,CX_BAR,y-3.8,Math.max(BARW*(r.sc1/100),2),3,1.3,"F");op(1);}
+    if(r.sc2!=null){fc(doc,...VIOLETC);rr(doc,CX_BAR,y+.4,Math.max(BARW*(r.sc2/100),2),3,1.3,"F");}
     y+=rowH;
   });
-  y+=10;
+  y+=6;
+  F(5.8,"normal",isAr);tc(doc,...MUTEC);
+  T(isAr?`الأشرطة: أزرق = جلسة #${num1} · بنفسجي = جلسة #${num2} · الحافة الملونة = تغيّر كبير (أكثر من 5 نقاط)`
+       :`Score bars: blue = Session #${num1}, violet = Session #${num2}. A coloured left edge marks a change of more than 5 points.`,ml+2,y);
 
-  // ── SPINAL ZONE COMPARISON ────────────────────────────────────
-  if(y>H-90){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المناطق":"Zone Map",isAr);y=22;}
-  _sh(doc,ml,y,isAr?"مقارنة مناطق العمود الفقري":"Spinal Zone Comparison",
-    isAr?"المخاطرة % — منخفض/متوسط/عالي":"Risk % — low/moderate/high",PDF_TOKENS.danger,isAr);
-  y+=16;
-
-  // NOTE: previous Arabic labels used "عنق الرحم" (cervix) — a serious
-  // medical mistranslation of "cervical". Corrected to الفقرات العنقية.
-  const zones=[
-    {k:"cervical",en:"Cervical (Neck)",  ar:"الفقرات العنقية (الرقبة)",     r:"C1–C7"},
-    {k:"thoracic",en:"Thoracic (Upper)", ar:"الفقرات الصدرية (أعلى الظهر)", r:"T1–T12"},
-    {k:"lumbar",  en:"Lumbar (Lower)",   ar:"الفقرات القطنية (أسفل الظهر)", r:"L1–S1"},
-  ];
-  zones.forEach(({k,en,ar,r})=>{
-    if(y>H-44){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
-    const r1=z1[k]||0, r2=z2[k]||0, dz=r2-r1;
-    const rc1=_riskColor(r1), rc2=_riskColor(r2), dzC=dz>0?PDF_TOKENS.danger:PDF_TOKENS.success;
-    const zh=36;
-    fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,zh,4,"F");
-    dc(doc,...rc2); lw(doc,0.25); rr(doc,ml,y,cw,zh,4,"S"); lw(doc,0.3);
-    fc(doc,...rc2); doc.rect(ml,y,3,zh,"F"); rr(doc,ml,y,3,zh,1.5,"F");
-    // Zone label
-    font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(isAr?ar:en,ml+9,y+10);
-    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+9,y+17);
-    // Two risk bars side by side
-    const bw2=(cw-24)/2, barY=y+22;
-    // Session 1 bar
-    fc(doc,...PDF_TOKENS.borderSoft); rr(doc,ml+9,barY,bw2,5,2,"F");
-    fc(doc,...rc1); rr(doc,ml+9,barY,Math.max(bw2*(r1/100),3),5,2,"F");
-    font(doc,6.5,"bold"); tc(doc,...rc1);
-    doc.text(`#${num1}: ${r1}%`,ml+9,barY+10);
-    // Session 2 bar
-    fc(doc,...PDF_TOKENS.borderSoft); rr(doc,ml+9+bw2+4,barY,bw2,5,2,"F");
-    fc(doc,...rc2); rr(doc,ml+9+bw2+4,barY,Math.max(bw2*(r2/100),3),5,2,"F");
-    font(doc,6.5,"bold"); tc(doc,...rc2);
-    doc.text(`#${num2}: ${r2}%`,ml+9+bw2+4,barY+10);
-    // Delta badge top right
-    const dzlbl=`${dz>0?"↑":"↓"} ${Math.abs(dz)}%`;
-    const dzw=doc.getTextWidth(dzlbl)+8;
-    fc(doc,...dzC);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
-    rr(doc,W-mr-dzw-2,y+7,dzw,9,2,"F");
-    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    font(doc,7.5,"bold"); tc(doc,...dzC);
-    doc.text(dzlbl,W-mr-dzw/2-2,y+13,{align:"center"});
-    y+=zh+7;
-  });
-
-  // ══════════════════════════════════════════════════════════════
-  // PAGE 3 — REGRESSED METRICS + INSIGHTS + ACTIONS
-  // ══════════════════════════════════════════════════════════════
-  doc.addPage(); _hdr(doc,W,ml,mr,isAr?"التوصيات":"Recommendations",isAr); y=22;
-
-  // Regressed & improved metrics summary
-  const regressed=metRows.filter(r=>r.d<-3).slice(0,5);
-  const improved2=metRows.filter(r=>r.d>3).slice(0,3);
-
-  if(regressed.length>0){
-    _sh(doc,ml,y,isAr?"مقاييس تراجعت — تحتاج اهتماماً":"Regressed Metrics — Needs Attention","",PDF_TOKENS.danger,isAr);
-    y+=14;
-    regressed.forEach(({lbl,sc1,sc2,d})=>{
-      if(y>H-20){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
-      fc(doc,...PDF_TOKENS.dangerBg); rr(doc,ml,y,cw,14,3,"F");
-      dc(doc,...PDF_TOKENS.danger); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
-      fc(doc,...PDF_TOKENS.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-      font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger);
-      doc.text(doc.splitTextToSize(lbl,cw*0.58)[0],ml+7,y+5.5); // clear of the delta bar
-      font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
-      const bw2=cw*0.3;
-      fc(doc,...PDF_TOKENS.danger);
-      doc.setGState&&doc.setGState(new doc.GState({opacity:0.2}));
-      // Ratio clamped — deltas beyond 30 pts previously drew a bar wider
-      // than its own track, escaping the card to the right.
-      rr(doc,W-mr-bw2-2,y+3,Math.max(3,bw2*Math.min(1,Math.abs(d)/30)),8,2,"F");
-      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      y+=18;
-    });
-    y+=6;
-  }
-
-  if(improved2.length>0){
-    if(y>H-60){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
-    _sh(doc,ml,y,isAr?"مقاييس تحسّنت — استمر":"Improved Metrics — Keep Going","",PDF_TOKENS.success,isAr);
-    y+=14;
-    improved2.forEach(({lbl,sc1,sc2,d})=>{
-      if(y>H-20){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
-      fc(doc,...PDF_TOKENS.successBg); rr(doc,ml,y,cw,14,3,"F");
-      dc(doc,...PDF_TOKENS.success); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
-      fc(doc,...PDF_TOKENS.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-      font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success);
-      doc.text(doc.splitTextToSize(lbl,cw-14)[0],ml+7,y+5.5);
-      font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
-      y+=18;
-    });
-    y+=6;
-  }
-
-  // Action plan
-  if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خطة الإجراءات":"Action Plan",isAr);y=22;}
-  _sh(doc,ml,y,isAr?"خطة الإجراءات المقترحة":"Recommended Action Plan",
-    isAr?"بناءً على أبرز التغيرات بين الجلستين":"Based on most significant changes between sessions",PDF_TOKENS.primary,isAr);
-  y+=16;
-
-  const NXT={
-    neck_lean:["Raise monitor: top edge at eye level","Chin tuck 10 reps × 3 sets daily","Set posture alert every 20 min"],
-    head_tilt:["Level monitor and check seating height","Head levelling exercise 10 reps daily","Ergonomic assessment recommended"],
-    shoulder: ["Level armrests to equal height","Shoulder rolls backward 10 reps × 3","Doorway chest stretch 30s × 2 daily"],
-    spine_align:["Align ear, shoulder, hip vertically","Lumbar support roll or cushion","Core brace 30s × 5 reps daily"],
-    spine_lean:["Check chair tilt and lumbar support","Side stretch 30s each direction × 2","Walk 5 min every 45 min"],
-    distance: ["Screen 50–70cm from eyes","Increase font size to reduce forward lean","20-20-20 rule: every 20 min look 20ft away"],
-    default:  ["2-min stretch break every 30 min","Roll shoulders backward 5 times","Walk 5 min every hour"],
-  };
-  // Engine metric keys → NXT action-card keys. Without this map most
-  // engine metrics fell through to NXT.default generic advice.
-  const NXT_ALIAS={
-    neck_lean_side:"neck_lean", head_yaw:"neck_lean",
-    screen_distance:"distance", dist:"distance",
-    shoulder_level:"shoulder", rounded_shoulders:"shoulder",
-    fhp:"neck_lean", fhp_index:"neck_lean", fhp_side:"neck_lean",
-    trunk_lean:"spine_lean",
-  };
-
-  const topRegressed=regressed.slice(0,3);
-  if(topRegressed.length===0){
-    // No regressions — general maintenance actions
-    topRegressed.push({k:"default",lbl:isAr?"الصيانة العامة":"General Maintenance",sc2:Math.min(a1,a2)});
-  }
-  topRegressed.forEach(({k,lbl,sc2},idx)=>{
-    if(y>H-42){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
-    const col=_scoreColor(sc2||50);
-    const steps=NXT[k]||NXT[NXT_ALIAS[k]]||NXT.default;
-    const ph=44;
-    fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,ph,4,"F");
-    dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,ph,4,"S"); lw(doc,0.3);
-    fc(doc,...col); doc.rect(ml,y,3,ph,"F"); rr(doc,ml,y,3,ph,1.5,"F");
-    // Number circle
-    fc(doc,...col);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:0.15}));
-    doc.circle(ml+16,y+14,9,"F");
-    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    dc(doc,...col); lw(doc,1); doc.circle(ml+16,y+14,9,"S"); lw(doc,0.3);
-    font(doc,10,"bold"); tc(doc,...col); doc.text(String(idx+1),ml+16,y+17.5,{align:"center"});
-    // Title — clamped clear of the card edge
-    font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
-    doc.text(doc.splitTextToSize(lbl,cw-44)[0],ml+30,y+12);
-    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
-    steps.slice(0,3).forEach((s,i)=>{
-      font(doc,7.5,"bold"); tc(doc,...col);
-      doc.text(`${i+1}.`,ml+30,y+22+(i*7));
-      font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
-      doc.text(doc.splitTextToSize(s,cw-44)[0],ml+36,y+22+(i*7));
-    });
-    y+=ph+8;
-  });
-
-  // ── SESSION SUMMARY TABLE ─────────────────────────────────────
-  y+=4; if(y>H-65){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الملخص":"Summary",isAr);y=22;}
-  _sh(doc,ml,y,isAr?"ملخص الجلستين":"Session Summary","",PDF_TOKENS.indigo,isAr);
+  // ══ PAGE 3 — Zone comparison ══════════════════════════════════
+  doc.addPage();pageBase(SEC.p3);y=28;
+  F(13,"bold",isAr);tc(doc,...INKC);T(isAr?"مقارنة مناطق العمود الفقري":"Spinal Zone Comparison",ml,y+2);
+  F(6.4,"normal",isAr);tc(doc,...SUBC);
+  T(isAr?"مخاطر كل منطقة محسوبة من مقاييس كل جلسة — الأقل أفضل. ليس تشخيصاً طبياً.":"Zone risk derived from each session's metrics. Lower is better. Not a medical diagnosis.",ml,y+8.5);
   y+=14;
-
-  const sumRows=[
-    [isAr?"رقم الجلسة":"Session number",`#${num1}`,`#${num2}`],
-    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr)],
-    [isAr?"المجموع":"Score",`${a1}/100`,`${a2}/100`],
-    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`],
-    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2)],
-    [isAr?"التنبيهات":"Alerts",String(al1),String(al2)],
-    [isAr?"التغيّر":"Change","—",`${delta>0?"+":""}${delta} pts`],
-  ];
-  const th3=sumRows.length*9+3;
-  fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,th3,4,"F");
-  dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,th3,4,"S"); lw(doc,0.3);
-  // Header row
-  fc(doc,...PDF_TOKENS.slate); doc.rect(ml,y,cw,9,"F"); rr(doc,ml,y,cw,9,2,"F"); doc.rect(ml,y+5,cw,4,"F");
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
-  doc.text(isAr?"البند":"Item",ml+5,y+6.5);
-  doc.text(`Session #${num1}`,ml+cw*0.42,y+6.5,{align:"center"});
-  doc.text(`Session #${num2}`,ml+cw*0.75,y+6.5,{align:"center"});
-  y+=9;
-  sumRows.forEach(([k,v1,v2],i)=>{
-    if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,9,"F");}
-    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(k,ml+5,y+6.5);
-    font(doc,7.5,"bold",false);
-    tc(doc,...(i===6?deltaCol:PDF_TOKENS.ink)); doc.text(v1,ml+cw*0.42,y+6.5,{align:"center"});
-    tc(doc,...(i===6?deltaCol:PDF_TOKENS.ink)); doc.text(v2,ml+cw*0.75,y+6.5,{align:"center"});
-    y+=9;
+  // body map (coloured by the newer session)
+  card(ml,y,74,150,5);
+  const bx2=ml+37, by2=y+12;
+  fc(doc,230,236,246);
+  doc.circle(bx2,by2+8,8,"F");
+  doc.lines([[9,5],[5,9],[3,14],[1,16],[-1,14],[-2,12],[-32,0],[-2,-12],[-1,-14],[1,-16],[3,-14],[5,-9],[9,-5]],bx2-17,by2+19,[1,1],"F",true);
+  rr(doc,bx2-11,by2+76,9,40,4,"F"); rr(doc,bx2+2,by2+76,9,40,4,"F");
+  const zoneOf=i=>i<7?"cervical":i<19?"thoracic":"lumbar";
+  [["cervical",by2+17,7*3.9],["thoracic",by2+17+7*3.9,12*3.9],["lumbar",by2+17+19*3.9,5*3.9]].forEach(([z,zy,zh])=>{fc(doc,...zc(z2[z]||0));op(.12);rr(doc,bx2-6.5,zy-1,13,zh+1,4,"F");op(1);});
+  for(let i=0;i<24;i++){const vy=by2+17+i*3.9;fc(doc,...zc(z2[zoneOf(i)]||0));op(.9);rr(doc,bx2-2.4,vy,4.8,3,1.1,"F");op(1);}
+  F(5.6,"normal",isAr);tc(doc,...MUTEC);T(isAr?`ملونة حسب جلسة #${num2}`:`Coloured by Session #${num2} risk`,ml+37,y+145,{align:"center"});
+  // zone rows: two rings + measures + verdict
+  const zx=ml+79, zw=cw-79;
+  [[isAr?"الرقبة":"Cervical (Neck)","C1–C7","cervical",isAr?"ميل الرقبة وتقدم الرأس ودورانه":"Neck lean, FHP, head tilt and rotation"],
+   [isAr?"الظهر العلوي":"Thoracic (Upper)","T1–T12","thoracic",isAr?"توازن الكتفين وانحناء أعلى الظهر":"Shoulder symmetry and upper spinal curvature"],
+   [isAr?"أسفل الظهر":"Lumbar (Lower)","L1–S1","lumbar",isAr?"محاذاة الجلوس وزاوية الورك":"Spinal alignment and hip angle"]].forEach(([t,reg,k,desc],i)=>{
+    const r1=z1[k]||0, r2=z2[k]||0, dz=r2-r1;
+    const c1=zc(r1), c2=zc(r2), dzC=dz<=0?GREENC:REDC;
+    const zy=y+i*51;
+    card(zx,zy,zw,48,4);
+    F(8.4,"bold",isAr);tc(doc,...INKC);T(t,zx+5,zy+9);
+    F(6,"normal");tc(doc,...MUTEC);T(reg,zx+5,zy+14.5);
+    pillC(zx+zw-4.5,zy+4.5,`${dz<=0?"↓":"↑"} ${Math.abs(dz)}%`,dzC,dz<=0?GREENBGC:REDBGC,"right");
+    [[`#${num1}`,r1,c1,zx+15],[`#${num2}`,r2,c2,zx+43]].forEach(([lbl,pct,col,rx])=>{
+      dc(doc,...BORD2C);lw(doc,2.4);doc.circle(rx,zy+29,8.5,"S");lw(doc,.3);
+      solidArc(rx,zy+29,8.5,pct/100,2.4,col);
+      F(7,"bold");tc(doc,...col);T(pct+"%",rx,zy+31,{align:"center"});
+      F(5,"normal");tc(doc,...MUTEC);T(lbl,rx,zy+42,{align:"center"});
+    });
+    F(7.2,"bold");tc(doc,...MUTEC);T("→",zx+29,zy+30.5,{align:"center"});
+    F(6.2,"bold",isAr);tc(doc,...SUBC);T(isAr?"يقيس:":"Measures:",zx+57,zy+24);
+    F(6.2,"normal",isAr);tc(doc,...SUBC);
+    doc.splitTextToSize(desc,zw-62).slice(0,3).forEach((l,li)=>T(l,zx+57,zy+29+li*4.3));
+    F(6,"bold",isAr);tc(doc,...dzC);
+    T(dz<0?(isAr?`تحسن ${Math.abs(dz)}% عن الجلسة السابقة`:`Improved ${Math.abs(dz)}% since last session`)
+      :dz>0?(isAr?`ارتفع ${dz}% — يحتاج انتباهاً`:`Up ${dz}% — needs attention`)
+      :(isAr?"بدون تغيير":"Unchanged"),zx+57,zy+43);
   });
 
-  // Footers
+  // ══ PAGE 4 — Findings & plan ══════════════════════════════════
+  doc.addPage();pageBase(SEC.p4);y=28;
+  F(13,"bold",isAr);tc(doc,...INKC);T(isAr?"أبرز النتائج وخطة العمل":"Key Findings & Action Plan",ml,y+2);
+  F(6.4,"normal",isAr);tc(doc,...SUBC);
+  T(isAr?"أكبر التغيرات بين الجلستين — وما التالي":"What changed most between the two sessions, and what to do next",ml,y+8.5);
+  y+=14;
+  const changed=metRows.filter(r=>r.d!=null);
+  const best=changed.length?changed[changed.length-1]:null;
+  const worst=changed.length?changed[0]:null;
+  const half3=(cw-6)/2;
+  [[ml,isAr?"أكبر تحسن":"BIGGEST IMPROVEMENT",best&&best.d>0?best:null,GREENC,GREENBGC,icoTrend,isAr?"لا يوجد تحسن":"No improvements"],
+   [ml+half3+6,isAr?"أكبر تراجع":"BIGGEST REGRESSION",worst&&worst.d<0?worst:null,REDC,REDBGC,icoBell,isAr?"لا يوجد تراجع":"No regressions"]].forEach(([x,t,m,col,bg,ic,none])=>{
+    card(x,y,half3,30,4);
+    fc(doc,...col);rr(doc,x,y,half3,2.5,1.5,"F");doc.rect(x,y+1.2,half3,1.3,"F");
+    fc(doc,...bg);rr(doc,x+4.5,y+7,9,9,2.5,"F");ic(x+9,y+11.5,4.4,col);
+    F(6,"bold",isAr);tc(doc,...col);T(t,x+17,y+10);
+    F(8.6,"bold",isAr);tc(doc,...INKC);
+    T(m?clamp1(`${m.lbl}  ${dstr(m.d)}`,half3-22):none,x+17,y+17.5);
+    F(6,"normal");tc(doc,...MUTEC);T(m?`${m.sc1} → ${m.sc2}`:"—",x+17,y+24);
+  });
+  y+=36;
+  F(9.5,"bold",isAr);tc(doc,...INKC);T(isAr?"خطة العمل المقترحة":"Recommended Action Plan",ml,y+3);
+  F(6,"normal",isAr);tc(doc,...MUTEC);T(isAr?"مبنية على أهم التغيرات":"Based on the most significant changes",ml+(isAr?40:50),y+3);
+  y+=8;
+  const NXT={
+    neck_lean:["Raise monitor: top edge at eye level","Chin tuck gently — ear over shoulder","Set a posture alert every 20 min"],
+    head_tilt:["Level your monitor and check chair height","Equal weight on both sitting bones","Head-levelling drill 10 reps daily"],
+    shoulder:["Level armrests to equal height","Shoulder rolls backward 10 reps × 3","Doorway chest stretch 30s × 2 daily"],
+    rounded:["Pull shoulder blades together and down","Band pull-aparts 15 reps × 3 sets","Pec doorway stretch 30s × 2 daily"],
+    spine_lean:["Sit fully back against lumbar support","Feet flat, knees at 90°","Stand 5 min every 45 min"],
+    spine_align:["Align ear, shoulder, hip vertically","Use a lumbar roll or cushion","Core brace 30s × 5 reps daily"],
+    distance:["Keep the screen 50–70cm away","Increase font size to avoid leaning","20-20-20 rule: every 20 min look far for 20s"],
+    elbow:["Lower keyboard so elbows rest at ~90°","Keep the keyboard close to your body","Wrist break every 45 min"],
+    monitor:["Top of screen at eye level","Laptop stand + external keyboard","Reduce neck flexion with tray adjustment"],
+    default:["2-min stretch break every 30 min","Roll shoulders backward 5 times","Walk 5 min every hour"],
+  };
+  const NXT_ALIAS={neck_lean_side:"neck_lean",head_yaw:"neck_lean",fhp:"neck_lean",fhp_index:"neck_lean",fhp_side:"neck_lean",
+    shoulder_level:"shoulder",rounded_shoulders:"rounded",screen_distance:"distance",dist:"distance",
+    elbow_angle:"elbow",monitor_height:"monitor",trunk_lean:"spine_lean",hip_angle:"spine_align",knee_angle:"spine_align"};
+  // priority: regressions first, then lowest current scores
+  const regressed=changed.filter(r=>r.d<0);
+  const lowNow=metRows.filter(r=>r.sc2!=null).sort((a,b)=>a.sc2-b.sc2);
+  const plan=[...regressed,...lowNow.filter(r=>!regressed.includes(r))].slice(0,3);
+  plan.forEach((r,i)=>{
+    brk(38,SEC.p4);
+    const col=r.d!=null&&r.d<0?REDC:(r.sc2??50)>=60?AMBERC:REDC;
+    const bg=col===REDC?REDBGC:AMBERBGC;
+    const sub=r.d!=null&&r.d<0
+      ?(isAr?`تراجع ${r.d} · أولوية قصوى`:`Regressed ${r.d} · top priority`)
+      :r.d!=null&&r.d>0
+      ?(isAr?`تحسن +${r.d}، ما زال منخفضاً (${r.sc2}/100)`:`Improved +${r.d}, still low (${r.sc2}/100)`)
+      :(isAr?`نتيجة منخفضة (${r.sc2}/100)`:`Low score (${r.sc2}/100)`);
+    card(ml,y,cw,34,4);
+    fc(doc,...col);rr(doc,ml,y,2.2,34,1.1,"F");
+    fc(doc,...bg);doc.circle(ml+12,y+17,7,"F");
+    F(9,"bold");tc(doc,...col);T(String(i+1),ml+12,y+19.5,{align:"center"});
+    F(8.4,"bold",isAr);tc(doc,...INKC);T(clamp1(r.lbl,cw-95),ml+24,y+9);
+    pillC(ml+cw-4,y+4.5,sub,col,bg,"right");
+    const steps=NXT[r.k]||NXT[NXT_ALIAS[r.k]]||NXT.default;
+    steps.slice(0,3).forEach((s,si)=>{
+      F(6.4,"bold");tc(doc,...col);T(`${si+1}.`,ml+24,y+16+si*5.6);
+      F(6.4,"normal");tc(doc,...SUBC);T(clamp1(s,cw-36),ml+29,y+16+si*5.6);
+    });
+    y+=38;
+  });
+  y+=2;
+  // summary paragraph — generated from the data
+  const zWorst=Object.entries(z2).sort((a,b)=>b[1]-a[1])[0];
+  const summary=(aiSummary&&String(aiSummary).trim())?String(aiSummary).replace(/[#*`]/g,"").trim():(isAr
+    ?`الجلسة #${num2} سجلت ${a2}/100 (${dstr(delta)} نقطة عن #${num1}) مع ${al2} تنبيه مقابل ${al1} ونسبة وضعية جيدة ${gp2}% مقابل ${gp1}%. ${worst&&worst.d<0?`${worst.lbl} تراجع وهو أولويتك الأولى الآن.`:`حافظ على نفس الإعداد واستمر.`}`
+    :`Session #${num2} scored ${a2}/100 (${dstr(delta)} pts vs #${num1}) with ${al2} alert${al2===1?"":"s"} vs ${al1} and a ${gp2}% good-posture rate vs ${gp1}%. ${worst&&worst.d<0?`${worst.lbl} regressed and is now the top priority.`:`Keep the current setup and habits going.`} ${zWorst?`Highest zone risk this session: ${zWorst[0]} (${zWorst[1]}%).`:""}`);
+  F(6.6,"normal",isAr||hasAr(summary));
+  const sumLines=doc.splitTextToSize(summary,cw-14);
+  const sumH=13+Math.min(sumLines.length,5)*4.4+3;
+  brk(sumH+4,SEC.p4);
+  card(ml,y,cw,sumH,4);
+  F(8,"bold",isAr);tc(doc,...INKC);T(isAr?"الخلاصة":"Summary",ml+6,y+8);
+  dc(doc,...BORDC);lw(doc,.25);doc.line(ml+5,y+11,ml+cw-5,y+11);lw(doc,.3);
+  F(6.6,"normal",isAr||hasAr(summary));tc(doc,...SUBC);
+  sumLines.slice(0,5).forEach((l,i)=>T(l,ml+6,y+16.5+i*4.4));
+
+  // footer band on every page
   const tp=doc.internal.getNumberOfPages();
   for(let p=1;p<=tp;p++){
     doc.setPage(p);
-    _ftr(doc,W,ml,mr,H,p,tp,name);
+    fc(doc,...NAVY);doc.rect(0,H-8,W,8,"F");
+    F(5.2,"normal");tc(doc,...GHOSTC);
+    T(`Posmoz Health Intelligence  ·  ${nowStr}  ·  Confidential — Not a medical diagnosis`,ml,H-3);
+    F(5.2,"normal",hasAr(name));T(`${name}   ·   ${p} / ${tp}`,W-ml,H-3,{align:"right"});
   }
 
   const filename=`Posmoz_Comparison_S${num1}_vs_S${num2}_${now.toISOString().slice(0,10)}.pdf`;
