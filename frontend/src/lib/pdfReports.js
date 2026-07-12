@@ -492,8 +492,10 @@ function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
 // ── INFO TABLE ROW ────────────────────────────────────────────────
 function _iRow(doc,x,y,w,key,val,even,isAr){
   fc(doc,...(even?PDF_TOKENS.bg:PDF_TOKENS.card));doc.rect(x,y,w,8.5,"F");
-  font(doc,PDF_FLAGS.small,"normal",isAr);tc(doc,...PDF_TOKENS.muted);doc.text(key,x+5,y+5.8);
-  font(doc,PDF_FLAGS.small,"bold");tc(doc,...PDF_TOKENS.ink);doc.text(String(val),x+w-5,y+5.8,{align:"right"});
+  font(doc,PDF_FLAGS.small,"normal",isAr);tc(doc,...PDF_TOKENS.muted);
+  doc.text(doc.splitTextToSize(String(key),w*0.38)[0],x+5,y+5.8);
+  font(doc,PDF_FLAGS.small,"bold");tc(doc,...PDF_TOKENS.ink);
+  doc.text(doc.splitTextToSize(String(val),w*0.58)[0],x+w-5,y+5.8,{align:"right"});
 }
 
 // ── _drawSparkline alias ──────────────────────────────────────────
@@ -600,12 +602,14 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.text(`${name} · ${dateStr}`,ml,y+8); y+=20;
     hr(doc,ml,y,cw); y+=12;
 
-    // Score ring + KPI chips
+    // Score ring + KPI chips — 3 chips of 36mm + 6mm gaps fill exactly
+    // the space up to the right margin (54+3*36+2*6 = 174 = cw). The old
+    // 46mm/52mm spacing pushed the last chip past the page edge.
     _ring(doc,ml+22,y+24,19,avg,isAr);
     [[`${goodPct}%`,isAr?"جيدة":"Good",PDF_TOKENS.success],
      [String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",PDF_TOKENS.warning],
      [_fmtDur(dur),isAr?"المدة":"Duration",PDF_TOKENS.primary]]
-      .forEach(([v,l,col],i)=>_kpi(doc,ml+54+i*52,y+4,46,30,v,l,col));
+      .forEach(([v,l,col],i)=>_kpi(doc,ml+54+i*42,y+4,36,30,v,l,col));
     y+=62; hr(doc,ml,y,cw); y+=12;
 
     // Sparkline
@@ -680,13 +684,15 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   doc.text(doc.splitTextToSize(`${name} · ${email||"—"} · ${dateStr}`,cw)[0],ml,y+8); y+=20;
   hr(doc,ml,y,cw); y+=12;
 
-  // Ring + 4 KPI chips
+  // Ring + 3 KPI chips — 36mm chips + 6mm gaps end exactly at the right
+  // margin. The old 4th chip (Session #) started AT the margin and was
+  // rendered entirely off the page; the session number already appears
+  // on the cover band top-right.
   _ring(doc,ml+22,y+24,19,avg,isAr);
   [[`${goodPct}%`,isAr?"جيدة":"Good",PDF_TOKENS.success],
    [String(session.alerts_count||0),isAr?"تنبيهات":"Alerts",PDF_TOKENS.warning],
-   [_fmtDur(dur),isAr?"المدة":"Duration",PDF_TOKENS.primary],
-   [`#${realIdx}`,isAr?"الجلسة":"Session",PDF_TOKENS.indigo]]
-    .forEach(([v,l,col],i)=>_kpi(doc,ml+54+i*40,y+4,36,30,v,l,col));
+   [_fmtDur(dur),isAr?"المدة":"Duration",PDF_TOKENS.primary]]
+    .forEach(([v,l,col],i)=>_kpi(doc,ml+54+i*42,y+4,36,30,v,l,col));
   y+=62; hr(doc,ml,y,cw); y+=12;
 
   // Sparkline
@@ -701,11 +707,15 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   if(painSum){ y=_callout(doc,ml,y,cw,painSum,"warning",isAr); }
   if(impTip)  { y=_callout(doc,ml,y,cw,impTip,"success",isAr); }
 
-  y=_sh(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"مرتبة حسب أولوية التحسين":"Prioritised — highest improvement opportunity first",gradeC,isAr);
-  mEntries.slice(0,4).forEach(({lbl,value,unit,sc},i)=>{
-    if(y>H-46)return;
-    _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
-  });
+  // Only start the Key Metrics preview if the heading AND at least one
+  // row fit — a lone heading at the page bottom looked broken.
+  if(y<=H-72){
+    y=_sh(doc,ml,y,isAr?"أبرز المقاييس":"Key Metrics",isAr?"مرتبة حسب أولوية التحسين":"Prioritised — highest improvement opportunity first",gradeC,isAr);
+    mEntries.slice(0,4).forEach(({lbl,value,unit,sc},i)=>{
+      if(y>H-46)return;
+      _mRow(doc,ml,y,cw,lbl,value,unit,sc,isAr,i); y+=25;
+    });
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // ELITE PAGE 2 — All metrics + Zonal map
@@ -1273,8 +1283,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   fc(doc,...deltaBg); rr(doc,ml,y,cw,14,3,"F");
   dc(doc,...deltaCol); lw(doc,0.25); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
   fc(doc,...deltaCol); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-  font(doc,8.5,"bold"); tc(doc,...deltaCol);
-  doc.text(insText,ml+8,y+9.5);
+  font(doc,8.5,"bold",isAr); tc(doc,...deltaCol);
+  doc.text(doc.splitTextToSize(insText,cw-14)[0],ml+8,y+9.5);
   y+=22;
 
   // ══════════════════════════════════════════════════════════════
@@ -1301,7 +1311,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     fc(doc,...(idx%2===0?PDF_TOKENS.bg:PDF_TOKENS.card)); doc.rect(ml,y,cw,rowH,"F");
     // Left accent for significant changes
     if(Math.abs(d)>5){ fc(doc,...dC); doc.rect(ml,y,2,rowH,"F"); }
-    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,colX[0]+2,y+7.5);
+    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink);
+    doc.text(doc.splitTextToSize(lbl,cw*0.42-14)[0],colX[0]+2,y+7.5); // clamped to its column
     // Score 1 with mini dot
     const c1=_scoreColor(sc1),c2=_scoreColor(sc2);
     fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
@@ -1329,10 +1340,12 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     isAr?"المخاطرة % — منخفض/متوسط/عالي":"Risk % — low/moderate/high",PDF_TOKENS.danger,isAr);
   y+=16;
 
+  // NOTE: previous Arabic labels used "عنق الرحم" (cervix) — a serious
+  // medical mistranslation of "cervical". Corrected to الفقرات العنقية.
   const zones=[
-    {k:"cervical",en:"Cervical (Neck)",  ar:"عنق الرحم — الرقبة",  r:"C1–C7"},
-    {k:"thoracic",en:"Thoracic (Upper)", ar:"الصدر — الظهر العلوي", r:"T1–T12"},
-    {k:"lumbar",  en:"Lumbar (Lower)",   ar:"القطن — الظهر السفلي", r:"L1–S1"},
+    {k:"cervical",en:"Cervical (Neck)",  ar:"الفقرات العنقية (الرقبة)",     r:"C1–C7"},
+    {k:"thoracic",en:"Thoracic (Upper)", ar:"الفقرات الصدرية (أعلى الظهر)", r:"T1–T12"},
+    {k:"lumbar",  en:"Lumbar (Lower)",   ar:"الفقرات القطنية (أسفل الظهر)", r:"L1–S1"},
   ];
   zones.forEach(({k,en,ar,r})=>{
     if(y>H-44){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
@@ -1386,13 +1399,16 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.dangerBg); rr(doc,ml,y,cw,14,3,"F");
       dc(doc,...PDF_TOKENS.danger); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
       fc(doc,...PDF_TOKENS.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-      font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger); doc.text(lbl,ml+7,y+5.5);
+      font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger);
+      doc.text(doc.splitTextToSize(lbl,cw*0.58)[0],ml+7,y+5.5); // clear of the delta bar
       font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
       doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
       const bw2=cw*0.3;
       fc(doc,...PDF_TOKENS.danger);
       doc.setGState&&doc.setGState(new doc.GState({opacity:0.2}));
-      rr(doc,W-mr-bw2-2,y+3,bw2*(Math.abs(d)/30),8,2,"F");
+      // Ratio clamped — deltas beyond 30 pts previously drew a bar wider
+      // than its own track, escaping the card to the right.
+      rr(doc,W-mr-bw2-2,y+3,Math.max(3,bw2*Math.min(1,Math.abs(d)/30)),8,2,"F");
       doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
       y+=18;
     });
@@ -1408,7 +1424,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.successBg); rr(doc,ml,y,cw,14,3,"F");
       dc(doc,...PDF_TOKENS.success); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
       fc(doc,...PDF_TOKENS.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-      font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success); doc.text(lbl,ml+7,y+5.5);
+      font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success);
+      doc.text(doc.splitTextToSize(lbl,cw-14)[0],ml+7,y+5.5);
       font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
       doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
       y+=18;
@@ -1461,14 +1478,15 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     dc(doc,...col); lw(doc,1); doc.circle(ml+16,y+14,9,"S"); lw(doc,0.3);
     font(doc,10,"bold"); tc(doc,...col); doc.text(String(idx+1),ml+16,y+17.5,{align:"center"});
-    // Title
-    font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,ml+30,y+12);
+    // Title — clamped clear of the card edge
+    font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
+    doc.text(doc.splitTextToSize(lbl,cw-44)[0],ml+30,y+12);
     font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
     steps.slice(0,3).forEach((s,i)=>{
       font(doc,7.5,"bold"); tc(doc,...col);
       doc.text(`${i+1}.`,ml+30,y+22+(i*7));
       font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
-      doc.text(doc.splitTextToSize(s,cw-38)[0],ml+36,y+22+(i*7));
+      doc.text(doc.splitTextToSize(s,cw-44)[0],ml+36,y+22+(i*7));
     });
     y+=ph+8;
   });
@@ -1871,8 +1889,8 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   fc(doc,...trendBg); rr(doc,ml,y,cw,14,3,"F");
   dc(doc,...trendCol); lw(doc,0.25); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
   fc(doc,...trendCol); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-  font(doc,8.5,"bold"); tc(doc,...trendCol);
-  doc.text(`${trendIcon}  ${trendText}`,ml+8,y+9.2);
+  font(doc,8.5,"bold",isAr); tc(doc,...trendCol);
+  doc.text(doc.splitTextToSize(`${trendIcon}  ${trendText}`,cw-14)[0],ml+8,y+9.2);
   y+=22;
 
   // ── SCORE TRAJECTORY ────────────────────────────────────────
@@ -1992,10 +2010,11 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   _sh(doc,ml,y,isAr?"خريطة مناطق الخطر":"Spinal Zone Risk Map",isAr?"متوسط من كل الجلسات":"Averaged across all sessions",PDF_TOKENS.danger,isAr);
   y+=16;
 
+  // NOTE: previous Arabic labels used "عنق الرحم" (cervix) — corrected.
   const zones=[
-    {k:"cervical",en:"Cervical (Neck)",   ar:"عنق الرحم — الرقبة",   r:"C1–C7",  desc:isAr?"انحناء الرقبة والرأس للأمام":"Neck lean, FHP, head tilt and rotation"},
-    {k:"thoracic",en:"Thoracic (Upper)",  ar:"الصدر — الظهر العلوي",  r:"T1–T12", desc:isAr?"تماثل الكتفين والوضعية العلوية":"Shoulder symmetry and upper spinal curvature"},
-    {k:"lumbar",  en:"Lumbar (Lower)",    ar:"القطن — الظهر السفلي",  r:"L1–S1",  desc:isAr?"محاذاة العمود الفقري وزاوية الورك":"Spinal alignment and hip angle"},
+    {k:"cervical",en:"Cervical (Neck)",   ar:"الفقرات العنقية (الرقبة)",     r:"C1–C7",  desc:isAr?"ميل الرقبة وتقدم الرأس للأمام ودورانه":"Neck lean, FHP, head tilt and rotation"},
+    {k:"thoracic",en:"Thoracic (Upper)",  ar:"الفقرات الصدرية (أعلى الظهر)", r:"T1–T12", desc:isAr?"توازن الكتفين وانحناء أعلى الظهر":"Shoulder symmetry and upper spinal curvature"},
+    {k:"lumbar",  en:"Lumbar (Lower)",    ar:"الفقرات القطنية (أسفل الظهر)", r:"L1–S1",  desc:isAr?"محاذاة العمود الفقري وزاوية الورك":"Spinal alignment and hip angle"},
   ];
   zones.forEach(({k,en,ar,r,desc})=>{
     if(y>H-42){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map",isAr);y=22;}
@@ -2025,9 +2044,9 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     const bx=ml+33, bw2=cw*0.42;
     fc(doc,...PDF_TOKENS.borderSoft); rr(doc,bx,y+21,bw2,5,2,"F");
     fc(doc,...rc); rr(doc,bx,y+21,Math.max(bw2*(risk/100),3),5,2,"F");
-    // Desc
+    // Desc — clamped to the card
     font(doc,7,"normal",isAr); tc(doc,...PDF_TOKENS.muted);
-    doc.text(desc,ml+33,y+zh-4);
+    doc.text(doc.splitTextToSize(desc,cw-42)[0],ml+33,y+zh-4);
     y+=zh+7;
   });
 
@@ -2040,7 +2059,9 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   [[isAr?"* الجلسة الأفضل":"* Best Session",best,PDF_TOKENS.success],
    [isAr?"! الجلسة الأسوأ":"! Worst Session",worst,PDF_TOKENS.danger]
   ].forEach(([label,sess,col])=>{
-    if(!sess||y>H-36){if(y>H-36){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;} else return;}
+    // Old guard fell through with a null session after a page break → crash
+    if(!sess) return;
+    if(y>H-36){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
     const sh2=28;
     fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,sh2,4,"F");
     dc(doc,...col); lw(doc,0.25); rr(doc,ml,y,cw,sh2,4,"S"); lw(doc,0.3);
@@ -2072,10 +2093,10 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
 
   const highestRiskAll = Math.max(avgZonal.cervical, avgZonal.thoracic, avgZonal.lumbar);
 const highestRiskName = avgZonal.cervical >= avgZonal.thoracic && avgZonal.cervical >= avgZonal.lumbar
-  ? (isAr ? "Cervical (neck)" : "Cervical (neck)")
+  ? (isAr ? "الفقرات العنقية (الرقبة)" : "Cervical (neck)")
   : avgZonal.thoracic >= avgZonal.lumbar
-    ? (isAr ? "Thoracic (upper back)" : "Thoracic (upper back)")
-    : (isAr ? "Lumbar (lower back)" : "Lumbar (lower back)");
+    ? (isAr ? "الفقرات الصدرية (أعلى الظهر)" : "Thoracic (upper back)")
+    : (isAr ? "الفقرات القطنية (أسفل الظهر)" : "Lumbar (lower back)");
 
 const narrative=[
   improved
@@ -2090,19 +2111,31 @@ const narrative=[
       ? `جودة الوضعية ظلت مستقرة عبر ${sessions.length} جلسة (متوسط ${avgAll}/100). الاتساق إيجابي، لكن هناك إمكانية لتحسين 10-15 نقطة. أعلى منطقة خطر: ${highestRiskName} (${highestRiskAll}%).`
       : `Posture quality remained stable across ${sessions.length} sessions (avg ${avgAll}/100). While consistency is positive, 10-15 point improvement is achievable. Highest-risk zone: ${highestRiskName} (${highestRiskAll}%).`),
   (isAr
-    ? `مناطق العمود الفقري: Cervical ${avgZonal.cervical}%, Thoracic ${avgZonal.thoracic}%, Lumbar ${avgZonal.lumbar}%. المنطقة الأعلى خطراً: ${highestRiskName}. ${highestRiskAll > 50 ? "يتطلب هذا مستوى الخطر تدخلاً مستهدفاً فورياً." : "المستويات الحالية قابلة للتحسين من خلال تمارين مستهدفة."}`
+    ? `مناطق العمود الفقري: العنقية ${avgZonal.cervical}٪، الصدرية ${avgZonal.thoracic}٪، القطنية ${avgZonal.lumbar}٪. المنطقة الأعلى خطراً: ${highestRiskName}. ${highestRiskAll > 50 ? "مستوى الخطر هذا يتطلب تدخلاً مستهدفاً فورياً." : "المستويات الحالية قابلة للتحسين من خلال تمارين مستهدفة."}`
     : `Spinal zones: Cervical ${avgZonal.cervical}%, Thoracic ${avgZonal.thoracic}%, Lumbar ${avgZonal.lumbar}%. Primary risk: ${highestRiskName}. ${highestRiskAll > 50 ? "This risk level requires immediate targeted intervention." : "Current levels are improvable through targeted exercises."}`),
   (isAr
-    ? `معدل التكرار: ${freqPerWeek} جلسة/أسبوع، متوسط المدة: ${avgDurMin} دقيقة. ${parseFloat(freqPerWeek) < 3 ? "زيادة التكرار إلى 3-4 جلسات أسبوعياً ستسرّع التحسين بشكل كبير." : " CONSISTENCY جيدة — حافظ على هذا التكرار لتعزيز المكاسب."} إجمالي التنبيهات: ${totalAlerts} عبر ${sessions.length} جلسة.`
+    ? `معدل الجلسات: ${freqPerWeek} جلسة/أسبوع، ومتوسط المدة: ${avgDurMin} دقيقة. ${parseFloat(freqPerWeek) < 3 ? "زيادة المعدل إلى 3–4 جلسات أسبوعياً ستسرّع التحسن بشكل ملحوظ." : "الاستمرارية جيدة — حافظ على هذا المعدل لتثبيت المكاسب."} إجمالي التنبيهات: ${totalAlerts} عبر ${sessions.length} جلسة.`
     : `Session frequency: ${freqPerWeek}/week, average duration: ${avgDurMin} minutes. ${parseFloat(freqPerWeek) < 3 ? "Increasing to 3-4 sessions per week would significantly accelerate improvement." : "Good consistency — maintain this frequency to consolidate gains."} Total alerts: ${totalAlerts} across ${sessions.length} sessions.`),
 ].join("\n\n");
 
-  const narLines=doc.splitTextToSize(narrative.replace(/[#*`]/g,"").trim(),cw-8);
-  fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,narLines.length*5.4+12,4,"F");
-  y+=8;
-  font(doc,8.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
-  narLines.forEach(l=>{ if(y>H-32){doc.addPage();_hdr(doc,W,ml,mr,"Analysis",isAr);y=22;} doc.text(l,ml+4,y); y+=5.4; });
-  y+=14;
+  // Chunked rendering: the old code drew ONE box sized to the full text
+  // (overflowing past the page bottom) and then paginated the text
+  // WITHOUT a box — text floating outside any container. Now each page
+  // gets its own correctly-sized box around exactly the lines it holds.
+  const narLines=doc.splitTextToSize(narrative.replace(/[#*`]/g,"").trim(),cw-12);
+  let li=0;
+  while(li<narLines.length){
+    const avail=H-24-y;
+    const fit=Math.max(1,Math.min(narLines.length-li,Math.floor((avail-10)/5.4)));
+    const boxH=fit*5.4+9;
+    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,boxH,4,"F");
+    dc(doc,...PDF_TOKENS.border); lw(doc,0.15); rr(doc,ml,y,cw,boxH,4,"S"); lw(doc,0.3);
+    font(doc,8.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
+    for(let j=0;j<fit;j++){ doc.text(narLines[li+j],ml+5,y+7+j*5.4); }
+    li+=fit; y+=boxH+4;
+    if(li<narLines.length){ doc.addPage(); _hdr(doc,W,ml,mr,isAr?"التحليل":"Analysis",isAr); y=22; }
+  }
+  y+=10;
 
   // 8-week programme
   if(y>H-100){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطة":"Programme",isAr);y=22;}
@@ -2111,33 +2144,37 @@ const narrative=[
 
   const highestRiskZone = avgZonal.cervical >= avgZonal.thoracic && avgZonal.cervical >= avgZonal.lumbar ? "cervical" : avgZonal.thoracic >= avgZonal.lumbar ? "thoracic" : "lumbar";
 const zoneExercises = {
-  cervical: isAr ? "chin tuck 3x10 + cervical rotation 2x10/ji + stretch pectoral 3x30s" : "chin tucks 3x10 + cervical rotation 2x10/side + doorway chest stretch 3x30s",
-  thoracic: isAr ? "thoracic extension (foam roller) 2x60s + W-Y-T raises 3x12 + wall angels 2x10" : "thoracic extension (foam roller) 2x60s + W-Y-T raises 3x12 + wall angels 2x10",
-  lumbar: isAr ? "posterior pelvic tilt 3x10 + bird-dog 3x10/ji + hip flexor stretch 3x30s/ji" : "posterior pelvic tilt 3x10 + bird-dog 3x10/side + hip flexor stretch 3x30s/side",
+  cervical: isAr ? "إدخال الذقن 3×10 + دوران الرقبة 2×10 لكل جانب + إطالة الصدر على إطار الباب 3×30 ثانية" : "chin tucks 3x10 + cervical rotation 2x10/side + doorway chest stretch 3x30s",
+  thoracic: isAr ? "بسط الظهر العلوي على الفوم رولر 2×60 ثانية + رفعات W-Y-T ‏3×12 + ملائكة الحائط 2×10" : "thoracic extension (foam roller) 2x60s + W-Y-T raises 3x12 + wall angels 2x10",
+  lumbar: isAr ? "إمالة الحوض الخلفية 3×10 + تمرين bird-dog ‏3×10 لكل جانب + إطالة عضلات الورك 3×30 ثانية لكل جانب" : "posterior pelvic tilt 3x10 + bird-dog 3x10/side + hip flexor stretch 3x30s/side",
 };
-const targetZone = highestRiskZone === "cervical" ? (isAr ? "عنق الرقبة" : "neck/cervical") : highestRiskZone === "thoracic" ? (isAr ? "الصدر" : "thoracic/upper back") : (isAr ? "القطن" : "lumbar/lower back");
+const targetZone = highestRiskZone === "cervical" ? (isAr ? "الرقبة" : "neck/cervical") : highestRiskZone === "thoracic" ? (isAr ? "أعلى الظهر" : "thoracic/upper back") : (isAr ? "أسفل الظهر" : "lumbar/lower back");
 const programme=[
-    {wk:"1-2",goal: isAr ? "Posture Awareness" : "Posture Awareness",
+    {wk:"1-2",goal: isAr ? "الوعي بالوضعية" : "Posture Awareness",
      action: isAr
-       ? `3 sessions x 20 min daily. Focus on self-correction. Current ${targetZone} risk: ${avgZonal[highestRiskZone]}%.`
-       : `3 sessions/day x 20 min. Observe alerts without forced correction. Current ${targetZone} risk: ${avgZonal[highestRiskZone]}%.`},
-    {wk:"3-4",goal: isAr ? "Workstation + Exercises" : "Workstation + Exercises",
+       ? `جلسة مراقبة يومية 20 دقيقة على الأقل. راقب التنبيهات وصحح وضعيتك ذاتياً. مخاطر ${targetZone} الحالية: ${avgZonal[highestRiskZone]}٪.`
+       : `Daily 20-min monitored session. Observe alerts and self-correct. Current ${targetZone} risk: ${avgZonal[highestRiskZone]}%.`},
+    {wk:"3-4",goal: isAr ? "بيئة العمل + التمارين" : "Workstation + Exercises",
      action: isAr
-       ? `Adjust monitor to eye level + chair height. Start: ${zoneExercises[highestRiskZone]}. Target: +5 pts weekly avg.`
+       ? `اضبط الشاشة لمستوى العين وارتفاع الكرسي. ابدأ: ${zoneExercises[highestRiskZone]}. الهدف: +5 نقاط في المتوسط الأسبوعي.`
        : `Adjust monitor to eye level + chair height. Start: ${zoneExercises[highestRiskZone]}. Target: +5pt weekly average.`},
-    {wk:"5-6",goal: isAr ? "Habit Building" : "Habit Building",
+    {wk:"5-6",goal: isAr ? "بناء العادة" : "Habit Building",
      action: isAr
-       ? `Continue exercises daily. Add break reminder every 30 min. Expected ${targetZone} improvement: 5-10%.`
+       ? `واصل التمارين يومياً وأضف تذكير استراحة كل 30 دقيقة. التحسن المتوقع في ${targetZone}: ‏5–10٪.`
        : `Continue exercises daily. Add break reminder every 30 min. Expected ${targetZone} improvement: 5-10%.`},
-    {wk:"7-8",goal: isAr ? "Measure & Adjust" : "Consolidation & Measure",
+    {wk:"7-8",goal: isAr ? "القياس والتثبيت" : "Consolidation & Measure",
      action: isAr
-       ? `Compare avg with weeks 1-2. Target: +10 pts minimum. Reassess ${targetZone} risk zone.`
+       ? `قارن متوسطك بأسبوعي البداية. الهدف: +10 نقاط على الأقل، ثم أعد تقييم مخاطر ${targetZone}.`
        : `Compare avg to weeks 1-2 baseline. Target: +10 points minimum. Reassess ${targetZone} risk zone.`},
   ];
 
   programme.forEach(({wk,goal,action},idx)=>{
-    if(y>H-32){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطة":"Programme",isAr);y=22;}
-    const ph=28;
+    // Dynamic card height — the old fixed 28mm card truncated the action
+    // text to 2 lines, cutting sentences mid-word.
+    font(doc,7.5,"normal",isAr);
+    const aLines=doc.splitTextToSize(action,cw-40).slice(0,3);
+    const ph=Math.max(28, 14+aLines.length*5+7);
+    if(y>H-ph-14){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الخطة":"Programme",isAr);y=22;}
     fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,ph,4,"F");
     dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,ph,4,"S"); lw(doc,0.3);
     // Week badge
@@ -2150,10 +2187,10 @@ const programme=[
     doc.text("W",ml+15,y+11.5,{align:"center"});
     doc.text(wk,ml+15,y+17,{align:"center"});
     // Goal + action
-    font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(goal,ml+32,y+11);
+    font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
+    doc.text(doc.splitTextToSize(goal,cw-40)[0],ml+32,y+11);
     font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
-    const aLines=doc.splitTextToSize(action,cw-36);
-    aLines.slice(0,2).forEach((l,i)=>doc.text(l,ml+32,y+18+(i*5)));
+    aLines.forEach((l,i)=>doc.text(l,ml+32,y+18+(i*5)));
     y+=ph+7;
   });
 
