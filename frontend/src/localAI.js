@@ -792,11 +792,16 @@ function runAnalysis(prompt,sp) {
 function cleanAIResponse(text) {
   if (!text) return text;
   return text
-    .replace(/\n*-{3,}\n*🌸.*?🌸.*?\n*/gs, "")
-    .replace(/\n*Support Pollinations.*?\n*/gi, "")
-    .replace(/\n*Powered by Pollinations.*?\n*/gi, "")
-    .replace(/\n*\[Support our mission\].*?\n*/gi, "")
-    .replace(/\n*Ad 🌸.*?\n*/gi, "")
+    // Pollinations ad blocks (various formats)
+    .replace(/\n*-{2,}\n*🌸[\s\S]*?🌸[\s\S]*?(?=\n|$)/gm, "")
+    .replace(/\n*🌸[\s\S]*?🌸[\s\S]*?(?=\n|$)/gm, "")
+    .replace(/\n*[-–]{2,}\n*[\s\S]*?[Pp]ollinations[\s\S]*?(?:\n|$)/gm, "")
+    .replace(/\n*[Ss]upport [Pp]ollinations[\s\S]*?(?:\n\n|$)/gm, "")
+    .replace(/\n*[Pp]owered by [Pp]ollinations[\s\S]*?(?:\n\n|$)/gm, "")
+    .replace(/\n*\[[Ss]upport our mission\][\s\S]*?(?:\n|$)/gm, "")
+    .replace(/\n*[Aa]d 🌸[\s\S]*?(?:\n|$)/gm, "")
+    .replace(/\n*https?:\/\/pollinations\.ai[^\s]*/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -813,7 +818,7 @@ export async function localChatStream(messages, systemPrompt, maxTokens, onChunk
   ];
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20000);
+  const timer = setTimeout(() => ctrl.abort(), 14000);
 
   // Try Pollinations streaming (fastest first-token)
   const res = await fetch("https://text.pollinations.ai/", {
@@ -825,8 +830,8 @@ export async function localChatStream(messages, systemPrompt, maxTokens, onChunk
     body: JSON.stringify({
       model: "openai",
       messages: allMsgs,
-      max_tokens: maxTokens || 600,
-      temperature: 0.45,
+      max_tokens: Math.min(maxTokens || 500, 500),
+      temperature: 0.4,
       stream: true,
       private: true,  // skip caching → faster first token
     }),
@@ -880,52 +885,71 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
       content: String(m.content || ""),
     })),
   ];
+  const toks = Math.min(maxTokens || 600, 600);
 
-  const go = (url, opts, parse) => {
+  const go = (url, opts, parse, ms = 12000) => {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 18000);
+    const t = setTimeout(() => ctrl.abort(), ms);
     return fetch(url, { ...opts, signal: ctrl.signal })
       .finally(() => clearTimeout(t))
       .then(async r => {
         if (!r.ok) throw new Error(`${r.status}`);
         const text = await parse(r);
         if (!text || text.length < 15) throw new Error("empty");
-        return text;
+        return cleanAIResponse(text);
       });
   };
 
+  const orHeaders = {
+    "Content-Type": "application/json",
+    "HTTP-Referer": "https://postureai-pro-omega-nine.vercel.app",
+    "X-Title": "Corvus PostureAI",
+  };
+  const parseOR = async r => {
+    const d = await r.json();
+    return d?.choices?.[0]?.message?.content?.trim();
+  };
+  const parsePOST = async r => {
+    const d = await r.json();
+    return d?.choices?.[0]?.message?.content?.trim();
+  };
+
+  // 5 endpoints race simultaneously — first valid response wins
   return Promise.any([
+
+    // 1. Pollinations POST — gpt-4o quality, usually fastest
     go("https://text.pollinations.ai/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: maxTokens || 700, temperature: 0.5 }),
-    }, async r => {
-      const d = await r.json();
-      const t = d?.choices?.[0]?.message?.content?.trim();
-      console.info("[CorvusAI] ✅ Pollinations");
-      return t;
-    }),
+      body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: toks, temperature: 0.45, private: true }),
+    }, parsePOST, 14000),
+
+    // 2. OpenRouter llama-3.1-8b free — reliable fallback
     go("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://postureai-pro-omega-nine.vercel.app",
-        "X-Title": "Corvus PostureAI",
-      },
-      body: JSON.stringify({ model: "meta-llama/llama-3.1-8b-instruct:free", messages: allMsgs, max_tokens: maxTokens || 700 }),
-    }, async r => {
-      const d = await r.json();
-      const t = d?.choices?.[0]?.message?.content?.trim();
-      console.info("[CorvusAI] ✅ OpenRouter");
-      return cleanAIResponse(t);
-    }),
+      headers: orHeaders,
+      body: JSON.stringify({ model: "meta-llama/llama-3.1-8b-instruct:free", messages: allMsgs, max_tokens: toks }),
+    }, parseOR, 14000),
+
+    // 3. OpenRouter gemma-3-4b free — second OR model
+    go("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: orHeaders,
+      body: JSON.stringify({ model: "google/gemma-3-4b-it:free", messages: allMsgs, max_tokens: toks }),
+    }, parseOR, 14000),
+
+    // 4. Pollinations GET — simplest endpoint, different server path
     go(`https://text.pollinations.ai/${encodeURIComponent(
       allMsgs.map(m => `${m.role}: ${m.content}`).join("\n")
-    )}?model=openai`, { method: "GET" }, async r => {
-      const t = (await r.text()).trim();
-      console.info("[CorvusAI] ✅ Pollinations GET");
-      return cleanAIResponse(t);
-    }),
+    )}?model=openai&private=true`, { method: "GET" }, async r => (await r.text()).trim(), 14000),
+
+    // 5. Pollinations mistral — different model on same infra
+    go("https://text.pollinations.ai/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "mistral", messages: allMsgs, max_tokens: toks, temperature: 0.45 }),
+    }, parsePOST, 14000),
+
   ]).catch(() => { throw new Error("all_free_apis_failed"); });
 }
 

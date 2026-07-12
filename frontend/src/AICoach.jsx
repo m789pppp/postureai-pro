@@ -368,7 +368,7 @@ LANGUAGE: Clear, professional English.`;
       // Use ref to get latest messages (avoids stale closure bug)
       const history = messagesRef.current
         .filter(m => m.content && !m.streaming)  // skip empty streaming msgs
-        .slice(-8)
+        .slice(-6)
         .map(m=>({role:m.role,content:m.content}));
       const allMsgs = [...history, {role:"user",content}];
 
@@ -384,10 +384,10 @@ LANGUAGE: Clear, professional English.`;
           m.ts === streamingId ? { ...m, streaming: false } : m
         ));
       } catch(streamErr) {
-        // Streaming failed — fall back to non-streaming
-        console.warn("[CorvusAI] Stream failed, using fallback:", streamErr.message);
+        // Streaming failed — fall back to non-streaming race (usually succeeds)
+        console.warn("[CorvusAI] Stream failed, trying non-stream fallback:", streamErr.message);
         const reply = await geminiChat(allMsgs, {
-          systemPrompt, context, lang, maxTokens: Math.min(quality.max_tokens || 500, 500),
+          systemPrompt, lang, maxTokens: Math.min(quality.max_tokens || 500, 500),
         });
         setMessages(prev => prev.map(m =>
           m.ts === streamingId ? { ...m, content: reply, streaming: false } : m
