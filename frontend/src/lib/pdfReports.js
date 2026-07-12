@@ -814,283 +814,396 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
 export async function generateClinicalPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[], aiSummary="" }) {
   const { jsPDF } = await import("jspdf");
-  const isAr  = lang === "ar";
-  const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+  const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
-  const W=210, H=297, ml=16, mr=16, cw=W-ml-mr;
-  const NAVY=[15,23,42], SKY=[14,165,233], SLATE=[51,65,85], MUTE=[100,116,139], LIGHTB=[226,232,240], PANEL=[248,250,252];
-  // Arabic-safe text: switches to the Cairo font only when the string
-  // actually contains Arabic (patient names etc.) — clinical body stays EN.
-  const hasAr = s => /[؀-ۿ]/.test(String(s||""));
-  const txt = (s,x,y2,size,style="normal",color=NAVY,opt)=>{
-    font(doc,size,style,hasAr(s)&&_cairoLoaded);
-    tc(doc,...color);
-    doc.text(String(s),x,y2,opt);
-  };
+  const W=210, H=297, ml=12, cw=W-ml*2;
+
+  // ── palette (approved portrait design) ────────────────────────
+  const NAVY=[11,18,32], INKC=[15,23,42], SUBC=[71,85,105], MUTEC=[124,138,160], GHOSTC=[168,180,200];
+  const BGC=[246,248,252], CARDC=[255,255,255], BORDC=[228,233,242], BORD2C=[238,242,248];
+  const BLUEC=[37,99,235], VIOLETC=[124,58,237], GREENC=[34,197,94], AMBERC=[245,158,11], REDC=[239,68,68];
+  const GREENBGC=[236,253,244], AMBERBGC=[255,251,235], REDBGC=[254,242,242], BLUEBGC=[239,246,255], VIOLETBGC=[245,243,255];
+
+  // ── inner helpers (self-contained; no module collisions) ──────
+  const F=(s,st="normal",ar=false)=>{doc.setFont(ar&&_cairoLoaded?"cairo":"helvetica",st);doc.setFontSize(s);};
+  const T=(t,x,yy,o)=>doc.text(String(t),x,yy,o);
+  const hasAr=s=>/[؀-ۿ]/.test(String(s||""));
+  const card=(x,yy,w,h,r=4)=>{fc(doc,...CARDC);rr(doc,x,yy,w,h,r,"F");dc(doc,...BORDC);lw(doc,.35);rr(doc,x,yy,w,h,r,"S");lw(doc,.3);};
   const clamp1=(s,wd)=>doc.splitTextToSize(String(s??"—"),wd)[0];
+  const lerpC=(a,b,t)=>a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+  const op=o=>doc.setGState&&doc.setGState(new doc.GState({opacity:o}));
+  const scCol=s=>s>=80?GREENC:s>=60?AMBERC:REDC;
+  const scBg=s=>s>=80?GREENBGC:s>=60?AMBERBGC:REDBGC;
+  const stTxt=s=>s>=80?"Excellent":s>=60?"Good":"Needs Improvement";
+  function gradArc(cx,cy,r,frac,w,c1=BLUEC,c2=VIOLETC){
+    const f=Math.max(0,Math.min(1,frac)), steps=Math.max(10,Math.round(90*f)), start=-Math.PI/2;
+    lw(doc,w); doc.setLineCap("round");
+    let px=cx+r*Math.cos(start), py=cy+r*Math.sin(start);
+    for(let i=1;i<=steps;i++){
+      const a=start+f*2*Math.PI*(i/steps);
+      const nx=cx+r*Math.cos(a), ny=cy+r*Math.sin(a);
+      dc(doc,...lerpC(c1,c2,i/steps)); doc.line(px,py,nx,ny); px=nx; py=ny;
+    }
+    doc.setLineCap("butt"); lw(doc,.3);
+  }
+  const solidArc=(cx,cy,r,frac,w,col)=>gradArc(cx,cy,r,frac,w,col,col);
+  function icoCheck(x,yy,s,col){dc(doc,...col);lw(doc,s*.22);doc.line(x-s*.4,yy,x-s*.08,yy+s*.32);doc.line(x-s*.08,yy+s*.32,x+s*.45,yy-s*.35);lw(doc,.3);}
+  function icoClock(x,yy,s,col){dc(doc,...col);lw(doc,s*.16);doc.circle(x,yy,s*.5,"S");doc.line(x,yy,x,yy-s*.28);doc.line(x,yy,x+s*.2,yy+s*.08);lw(doc,.3);}
+  function icoCal(x,yy,s,col){dc(doc,...col);lw(doc,s*.14);rr(doc,x-s*.45,yy-s*.35,s*.9,s*.75,s*.1,"S");doc.line(x-s*.45,yy-s*.12,x+s*.45,yy-s*.12);doc.line(x-s*.2,yy-s*.48,x-s*.2,yy-s*.28);doc.line(x+s*.2,yy-s*.48,x+s*.2,yy-s*.28);lw(doc,.3);}
+  function icoShield(x,yy,s,col){dc(doc,...col);lw(doc,s*.14);doc.lines([[s*.42,s*.14],[0,s*.5],[-s*.42,s*.32],[-s*.42,-s*.32],[0,-s*.5]],x,yy-s*.48,[1,1],"S",true);icoCheck(x,yy+s*.02,s*.5,col);}
+  function icoUser(x,yy,s,col){dc(doc,...col);lw(doc,s*.14);doc.circle(x,yy-s*.18,s*.22,"S");doc.ellipse&&doc.ellipse(x,yy+s*.3,s*.34,s*.18,"S");lw(doc,.3);}
+  function pillC(x,yy,txt,col,bg,alignRight=false){F(6,"bold");const w=doc.getTextWidth(txt)+8;const px=alignRight?x-w:x;fc(doc,...bg);rr(doc,px,yy,w,7.5,2.5,"F");tc(doc,...col);T(txt,px+w/2,yy+5.1,{align:"center"});return w;}
+  function pictogram(x,yy,s,pose,col){
+    fc(doc,...BLUEBGC);rr(doc,x,yy,s,s,2.5,"F");dc(doc,...col);lw(doc,.7);
+    const cx=x+s/2, cy=yy+s/2;
+    if(pose==="chin"){doc.circle(cx+s*.12,cy-s*.22,s*.13,"S");doc.line(cx+s*.06,cy-s*.1,cx-s*.05,cy+s*.18);doc.line(cx-s*.05,cy+.18*s,cx-s*.05,cy+s*.34);doc.line(cx+s*.02,cy,cx+s*.24,cy+s*.1);dc(doc,...GREENC);doc.line(cx+s*.3,cy-s*.22,cx+s*.18,cy-s*.22);}
+    else if(pose==="rot"){doc.circle(cx,cy-s*.2,s*.13,"S");doc.line(cx,cy-s*.07,cx,cy+s*.2);doc.line(cx-s*.2,cy+s*.02,cx+s*.2,cy+s*.02);dc(doc,...GREENC);for(let i=0;i<10;i++){const a=-.5+i*.16;doc.line(cx+Math.cos(a)*s*.22,cy-s*.2+Math.sin(a)*s*.22,cx+Math.cos(a+.12)*s*.22,cy-s*.2+Math.sin(a+.12)*s*.22);}}
+    else if(pose==="foam"){doc.circle(cx-s*.05,cy+s*.12,s*.09,"S");doc.line(cx-s*.3,cy+s*.02,cx+s*.28,cy-s*.08);doc.circle(cx+s*.33,cy-s*.14,s*.1,"S");doc.line(cx-s*.3,cy+s*.02,cx-s*.36,cy+s*.3);}
+    else if(pose==="wyt"){doc.line(cx,cy-s*.05,cx,cy+s*.3);doc.circle(cx,cy-s*.18,s*.12,"S");doc.line(cx,cy,cx-s*.22,cy-s*.18);doc.line(cx,cy,cx+s*.22,cy-s*.18);}
+    else if(pose==="tilt"){doc.line(cx-s*.3,cy+s*.14,cx+s*.1,cy+s*.14);doc.circle(cx+s*.24,cy+s*.02,s*.1,"S");doc.line(cx-s*.2,cy+s*.14,cx+s*.14,cy+s*.06);dc(doc,...GREENC);doc.line(cx-s*.05,cy-s*.02,cx-s*.05,cy+s*.1);}
+    else {doc.line(cx-s*.22,cy+s*.1,cx+s*.18,cy+s*.1);doc.circle(cx+s*.28,cy+s*.02,s*.09,"S");doc.line(cx-s*.22,cy+s*.1,cx-s*.38,cy-s*.04);doc.line(cx+s*.18,cy+s*.1,cx+s*.34,cy-s*.06);}
+    lw(doc,.3);
+  }
 
-  const tier    = _t(profile?.tier || session?.tier || "standard");
-  // Tier gate enforced in App.jsx downloadPDF() before calling here.
-
-  const avg     = Math.round(session.avg_score || 0);
-  const dur     = session.duration_s || session.duration_sec || 0;
-  const goodPct = Math.round(session.good_pct || 0);
-  const alerts  = session.alerts_count || 0;
-  const metrics = session.metrics || {};
-  const hist    = session.score_history || [];
-  const _rawNm  = profile?.name || user?.displayName || user?.email?.split("@")[0] || "Patient";
+  // ── data ──────────────────────────────────────────────────────
+  const avg     = Math.round(session.avg_score||0);
+  const dur     = session.duration_s||session.duration_sec||0;
+  const goodPct = Math.round(session.good_pct||0);
+  const alerts  = session.alerts_count||0;
+  const metrics = session.metrics||{};
+  const hist    = session.score_history||[];
+  const _rawNm  = profile?.name||user?.displayName||user?.email?.split("@")[0]||"Patient";
   const name    = _rawNm.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
-  const email   = user?.email || "—";
-  const gradeC  = _gc(avg);
+  const email   = user?.email||"—";
   const zonal   = _zonalRisk(metrics);
   const now     = new Date();
   const dateStr = now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
-
-  const realIndex = (() => {
-    if (sessionIndex) return sessionIndex;
-    if (allSessions.length) {
-      const idx = allSessions.findIndex(s=>(s.id||s.session_id)===(session.id||session.session_id));
-      if (idx>=0) return allSessions.length - idx;
-    }
-    return 1;
-  })();
-
-  const metricEntries = Object.entries(metrics)
-    .filter(([k])=>!k.startsWith("_") && !NON_POSTURE_KEYS.has(k) && metrics[k])
+  const mode    = String(session.mode||"laptop");
+  const modeLbl = mode.charAt(0).toUpperCase()+mode.slice(1);
+  const realIndex=(()=>{ if(sessionIndex)return sessionIndex;
+    if(allSessions.length){const i=allSessions.findIndex(s=>(s.id||s.session_id)===(session.id||session.session_id));if(i>=0)return allSessions.length-i;}
+    return 1; })();
+  const mEntries=Object.entries(metrics)
+    .filter(([k])=>!k.startsWith("_")&&!NON_POSTURE_KEYS.has(k)&&metrics[k])
     .map(([k,v])=>{
-      const sc  = Math.round(typeof v==="number" ? v : (v?.score ?? 100));
-      const lbl = METRIC_LABELS[k] || v?.label || k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-      return { key:k, sc, lbl, value:v?.value, unit:v?.unit||"" };
-    })
-    .sort((a,b)=>a.sc-b.sc);
-
-  // ── Shared page furniture ─────────────────────────────────────
-  const slimHdr = () => {
-    fc(doc,...NAVY); doc.rect(0,0,W,12,"F");
-    fc(doc,...SKY);  doc.rect(0,0,W,1.2,"F");
-    txt("Posmoz Posture Health — Clinical Summary",ml,8,8,"normal",[148,163,184]);
-    txt("PHYSIOTHERAPIST REPORT",W-mr,8,7.5,"bold",SKY,{align:"right"});
-  };
-  const brk = need => { if (y > H-need-14) { doc.addPage(); slimHdr(); y=20; return true; } return false; };
-  const secTitle = (t,sub) => {
-    fc(doc,...SKY); doc.rect(ml,y-4.5,2.2,sub?12:8,"F");
-    txt(t,ml+6,y,11,"bold",NAVY);
-    if(sub){ txt(sub,ml+6,y+5.5,7.5,"normal",MUTE); y+=13; } else y+=9;
-  };
-
-  let y=0;
-
-  // ══ PAGE 1 — Cover header + patient info + score + timeline ═══
-  fc(doc,...NAVY); doc.rect(0,0,W,38,"F");
-  fc(doc,...SKY);  doc.rect(0,0,W,1.8,"F");
-  _logo(doc,ml,10,18,_logoMd);
-  txt("POSMOZ POSTURE HEALTH",ml+24,17,14,"bold",[255,255,255]);
-  txt("AI-Assisted Workplace Ergonomics & Posture Assessment",ml+24,24,8.5,"normal",[148,163,184]);
-  txt("For Clinical Review — Not for Diagnostic Purposes",ml+24,30.5,8.5,"normal",[148,163,184]);
-  // Document badge
-  fc(doc,...SKY); rr(doc,W-mr-44,10,44,16,2,"F");
-  txt("CLINICAL SUMMARY",W-mr-22,17,8,"bold",[255,255,255],{align:"center"});
-  txt("PHYSIOTHERAPIST REPORT",W-mr-22,22.5,6,"normal",[186,230,253],{align:"center"});
-  y=48;
-
-  // Patient information — strict 2-column grid, every value clamped
-  secTitle("Patient Information");
-  const infoH=34;
-  fc(doc,...PANEL); rr(doc,ml,y,cw,infoH,3,"F");
-  dc(doc,...LIGHTB); lw(doc,0.4); rr(doc,ml,y,cw,infoH,3,"S"); lw(doc,0.3);
-  const colW=cw/2, labW=30;
-  [
-    ["Patient Name", name,             0,0],
-    ["Assessment Date", dateStr,       1,0],
-    ["Email", email,                   0,1],
-    ["Session Reference", `#${realIndex}`, 1,1],
-    ["Session Duration", _fmtDur(dur), 0,2],
-    ["Recording Mode", String(session.mode||"laptop").toUpperCase(), 1,2],
-  ].forEach(([lbl,val,c,r])=>{
-    const x=ml+6+c*colW, yy=y+9+r*9.5;
-    txt(lbl.toUpperCase(),x,yy,6.5,"bold",MUTE);
-    txt(clamp1(val,colW-labW-14),x+labW,yy,8.5,"normal",NAVY);
-  });
-  // Row separators
-  dc(doc,...LIGHTB); lw(doc,0.2);
-  doc.line(ml+4,y+13,ml+cw-4,y+13); doc.line(ml+4,y+22.5,ml+cw-4,y+22.5);
-  doc.line(ml+colW,y+4,ml+colW,y+infoH-4); lw(doc,0.3);
-  y+=infoH+10;
-
-  // Overall score — ring + interpretation, heights computed, no collisions
-  secTitle("Overall Posture Score");
+      const sc=Math.round(typeof v==="number"?v:(v?.score??100));
+      const lbl=METRIC_LABELS[k]||v?.label||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+      const val=(v?.value!==undefined&&v?.value!==null)?`${Math.round(v.value*10)/10} ${v?.unit||""}`.trim():"—";
+      return {k,sc,lbl,val};
+    }).sort((a,b)=>a.sc-b.sc);
+  const riskLvl=p=>p>=40?"Moderate":p>=20?"Elevated":"Low";
+  const riskCol=p=>p>=40?REDC:p>=20?AMBERC:GREENC;
+  const riskBg =p=>p>=40?REDBGC:p>=20?AMBERBGC:GREENBGC;
   const interpretation = avg>=80
-    ? "Posture quality is consistently good across the monitored session. Preventive ergonomic advice is appropriate; no targeted intervention indicated by screen data."
+    ? "Posture quality is consistently good across the monitored session. Preventive ergonomic advice is appropriate."
     : avg>=60
-    ? "Moderate posture deviations observed during the monitored session. Targeted ergonomic intervention and a corrective exercise programme are recommended."
-    : "Significant postural deviations detected across multiple planes. Correlation with a full clinical assessment is advised.";
-  font(doc,8,"normal");
-  const interpLines=doc.splitTextToSize(interpretation,cw-56);
-  const scoreH=Math.max(40, 16+interpLines.length*5.2+14);
-  fc(doc,...PANEL); rr(doc,ml,y,cw,scoreH,3,"F");
-  dc(doc,...gradeC); lw(doc,0.5); rr(doc,ml,y,cw,scoreH,3,"S"); lw(doc,0.3);
-  // Arc ring
-  const cx2=ml+22, cy2=y+scoreH/2;
-  dc(doc,...LIGHTB); lw(doc,3); doc.circle(cx2,cy2,13,"S"); lw(doc,0.3);
-  fc(doc,...gradeC);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
-  doc.circle(cx2,cy2,11.5,"F");
-  doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  _arc(doc,cx2,cy2,13,avg/100,gradeC,3);
-  txt(String(avg),cx2,cy2+2.5,15,"bold",gradeC,{align:"center"});
-  txt("/100",cx2,cy2+8,6.5,"normal",MUTE,{align:"center"});
-  // Text column
-  txt(_gl(avg,false),ml+44,y+10,10,"bold",gradeC);
-  font(doc,8,"normal"); tc(doc,...SLATE);
-  interpLines.forEach((l,i)=>doc.text(l,ml+44,y+17+(i*5.2)));
-  txt(`Good posture: ${goodPct}% of session   ·   Alerts: ${alerts}   ·   Duration: ${_fmtDur(dur)}`,
-      ml+44,y+scoreH-6,7.5,"normal",MUTE);
-  y+=scoreH+10;
+    ? "Moderate posture deviations observed. Targeted ergonomic intervention recommended."
+    : "Significant postural deviations detected across multiple planes. Clinical correlation advised.";
 
-  // Score timeline — the sparkline draws its OWN scale-correct grid
-  if (hist.length>2) {
-    secTitle("Posture Score Timeline","Continuous measurement from session start to end");
-    const sh2=32;
-    fc(doc,...PANEL); rr(doc,ml,y,cw,sh2,3,"F");
-    dc(doc,...LIGHTB); lw(doc,0.3); rr(doc,ml,y,cw,sh2,3,"S"); lw(doc,0.3);
-    _spark(doc,hist,ml+10,y+5,cw-20,sh2-11,gradeC);
-    y+=sh2+8;
+  // ── page furniture ────────────────────────────────────────────
+  const SECTIONS=[];
+  function pageBase(section){
+    SECTIONS.push(section);
+    fc(doc,...BGC);doc.rect(0,0,W,H,"F");
+    fc(doc,...NAVY);doc.rect(0,0,W,20,"F");
+    fc(doc,...BLUEC);doc.rect(0,0,W,1.2,"F");
+    _logo(doc,ml,4,12,_logoSm);
+    F(8,"bold");tc(doc,255,255,255);T("POSMOZ",ml+15,9.5);
+    F(4.4,"normal");tc(doc,...GHOSTC);T("POSTURE HEALTH",ml+15,13.5);
+    fc(doc,...VIOLETC);rr(doc,ml+43,6.5,15,7,2,"F");
+    F(5.4,"bold");tc(doc,255,255,255);T("ELITE",ml+50.5,11.2,{align:"center"});
+    F(6.2,"bold");tc(doc,...GHOSTC);T(section,W/2+12,11.5,{align:"center"});
+    F(5.6,"bold");
+    const bt="PHYSIOTHERAPIST REPORT", bw=doc.getTextWidth(bt)+6;
+    fc(doc,...VIOLETBGC);rr(doc,W-ml-bw,6.5,bw,7,2,"F");
+    tc(doc,...VIOLETC);T(bt,W-ml-bw/2,11.2,{align:"center"});
+  }
+  let y=0;
+  const brk=(need,section)=>{ if(y>H-need-12){doc.addPage();pageBase(section);y=28;return true;} return false; };
+  function title(t,sub){
+    F(13,"bold");tc(doc,...INKC);T(t,ml,y+2);
+    F(6.4,"normal");tc(doc,...SUBC);T(clamp1(sub,cw),ml,y+8.5);
+    y+=14;
   }
 
-  // ══ PAGE 2 — Spinal zone risk assessment ══════════════════════
-  doc.addPage(); slimHdr(); y=22;
-  secTitle("Spinal Zone Risk Assessment","Risk percentages are derived computationally from posture metrics. They are not medical diagnoses.");
-  y+=2;
+  // ══ PAGE 1 — Overview ═════════════════════════════════════════
+  pageBase("OVERVIEW");
+  y=28;
+  F(15,"bold");tc(doc,...INKC);T("Professional Posture Report",ml,y+2);
+  F(6.6,"normal");tc(doc,...SUBC);
+  T("AI-Assisted Workplace Ergonomics & Posture Assessment  ·  For Clinical Review — Not for Diagnostic Purposes",ml,y+8.5);
+  y+=14;
+  // patient strip
+  card(ml,y,cw,18,3.5);
+  fc(doc,...BLUEC);doc.circle(ml+9,y+9,5,"F");
+  F(7.5,"bold");tc(doc,255,255,255);T((name[0]||"P").toUpperCase(),ml+9,y+11.3,{align:"center"});
+  F(8,"bold",hasAr(name));tc(doc,...INKC);T(clamp1(name,60),ml+17,y+8);
+  F(6,"normal");tc(doc,...MUTEC);T(clamp1(email,60),ml+17,y+13.5);
+  [["Session","#"+realIndex],["Date",dateStr],["Duration",_fmtDur(dur)],["Camera",modeLbl]].forEach(([k,v],i)=>{
+    const x=ml+86+i*25;
+    F(5.4,"normal");tc(doc,...MUTEC);T(k,x,y+7);
+    F(6.8,"bold");tc(doc,...INKC);T(clamp1(v,23),x,y+13);
+    if(i<3){dc(doc,...BORD2C);lw(doc,.25);doc.line(x+21,y+4,x+21,y+14);lw(doc,.3);}
+  });
+  y+=24;
+  // ring + KPI grid
+  card(ml,y,86,74,5);
+  F(6.5,"bold");tc(doc,...SUBC);T("Overall Posture Score",ml+43,y+8,{align:"center"});
+  dc(doc,...BORD2C);lw(doc,4.2);doc.circle(ml+43,y+36,18.5,"S");lw(doc,.3);
+  gradArc(ml+43,y+36,18.5,avg/100,4.2);
+  F(20,"bold");tc(doc,...INKC);T(String(avg),ml+43,y+38,{align:"center"});
+  F(5.6,"normal");tc(doc,...MUTEC);T("/100",ml+43,y+43.5,{align:"center"});
+  F(8.5,"bold");tc(doc,...scCol(avg));T(_gl(avg,false),ml+43,y+61,{align:"center"});
+  F(5.6,"normal");tc(doc,...SUBC);
+  doc.splitTextToSize(interpretation,80).slice(0,2).forEach((l,i)=>T(l,ml+43,y+66.5+i*4,{align:"center"}));
+  const kx=ml+90, kw=(cw-90-4)/2, kh=35;
+  function kpi(x,yy,ic,icol,label,val,sub,subCol){
+    card(x,yy,kw,kh,4);
+    fc(doc,...BLUEBGC);rr(doc,x+4.5,yy+4.5,8.5,8.5,2.5,"F");ic(x+8.7,yy+8.7,4.6,icol);
+    F(5.8,"normal");tc(doc,...MUTEC);T(label,x+16,yy+8.5);
+    F(12,"bold");tc(doc,...INKC);T(clamp1(val,kw-10),x+4.5,yy+23);
+    F(5.8,"bold");tc(doc,...subCol);T(clamp1(sub,kw-10),x+4.5,yy+29.5);
+  }
+  kpi(kx,y,icoCheck,GREENC,"Good Posture",goodPct+"%",goodPct>=80?"Excellent":goodPct>=60?"Good":"Needs work",goodPct>=80?GREENC:goodPct>=60?AMBERC:REDC);
+  kpi(kx+kw+4,y,icoClock,BLUEC,"Session Duration",_fmtDur(dur),dur<300?"Short Session":dur<1800?"Standard Session":"Long Session",MUTEC);
+  kpi(kx,y+kh+4,icoShield,alerts===0?GREENC:AMBERC,"Alerts Triggered",String(alerts),alerts===0?"Perfect":alerts<5?"Minor":"Review posture habits",alerts===0?GREENC:AMBERC);
+  kpi(kx+kw+4,y+kh+4,icoCal,VIOLETC,"Assessment Date",dateStr.replace(/, \d{4}$/,""),`Session #${realIndex}`,MUTEC);
+  y+=80;
+  // timeline
+  if(hist.length>2){
+    card(ml,y,cw,66,5);
+    F(8,"bold");tc(doc,...INKC);T("Posture Score Timeline",ml+6,y+9);
+    F(6,"normal");tc(doc,...MUTEC);T("(Full Session) — continuous posture quality from session start to end",ml+45,y+9);
+    const tlx=ml+13,tly=y+15,tlw=cw-24,tlh=38;
+    const lo=Math.max(0,Math.min(...hist)-5),hi=Math.min(100,Math.max(...hist)+5),rng=Math.max(hi-lo,10);
+    [Math.round(lo+rng*.2),Math.round(lo+rng*.5),Math.round(lo+rng*.8)].forEach(v=>{
+      const gy=tly+tlh-((v-lo)/rng)*tlh;
+      dc(doc,...BORD2C);lw(doc,.25);doc.line(tlx,gy,tlx+tlw,gy);
+      F(5,"normal");tc(doc,...GHOSTC);T(String(v),tlx-2.5,gy+1.5,{align:"right"});
+    });
+    const hv=hist.length>90?hist.filter((_,i)=>i%Math.ceil(hist.length/90)===0):hist;
+    const pts=hv.map((v,i)=>({x:tlx+(i/(hv.length-1))*tlw,y:tly+tlh-((Math.max(lo,Math.min(hi,v))-lo)/rng)*tlh}));
+    try{const segs=pts.slice(1).map((p,i)=>[p.x-pts[i].x,p.y-pts[i].y]);
+    fc(doc,...BLUEC);op(.09);doc.lines([...segs,[0,tly+tlh-pts[pts.length-1].y],[-(pts[pts.length-1].x-pts[0].x),0]],pts[0].x,pts[0].y,[1,1],"F",false);op(1);}catch{}
+    dc(doc,...BLUEC);lw(doc,1);pts.forEach((p,i)=>{if(i>0)doc.line(pts[i-1].x,pts[i-1].y,p.x,p.y);});lw(doc,.3);
+    pts.filter((_,i)=>i%2===0).forEach(p=>{fc(doc,...BLUEC);doc.circle(p.x,p.y,.85,"F");});
+    fc(doc,...BLUEC);doc.circle(pts[pts.length-1].x,pts[pts.length-1].y,3.2,"F");
+    F(6.2,"bold");tc(doc,255,255,255);T(String(avg),pts[pts.length-1].x,pts[pts.length-1].y+1.9,{align:"center"});
+    F(5,"normal");tc(doc,...GHOSTC);
+    const fmtT=s=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(Math.round(s%60)).padStart(2,"0")}`;
+    for(let i=0;i<=5;i++)T(fmtT(dur*i/5),tlx+(i/5)*tlw,tly+tlh+5.5,{align:"center"});
+  }
 
-  const clinicalZones = [
-    { key:"cervical", region:"C1–C7", title:"Cervical Spine (Neck)",
-      desc:"Assesses head position, neck lean, forward head posture, and rotational deviation. Elevated risk correlates with increased load on cervical discs and potential for tension-type headache, cervicogenic dizziness, or upper trapezius hypertonicity.",
-      metrics:"Neck Lean, Forward Head Posture, Head Tilt, Head Rotation" },
-    { key:"thoracic", region:"T1–T12", title:"Thoracic Spine (Upper Back)",
-      desc:"Evaluates shoulder symmetry, rounded shoulder posture, and upper spinal curvature. Chronic elevation indicates risk for thoracic kyphosis progression, intercostal restriction, or rotator cuff impingement patterns.",
-      metrics:"Shoulder Balance, Rounded Shoulders, Spine Lean" },
-    { key:"lumbar", region:"L1–S1", title:"Lumbar Spine (Lower Back)",
-      desc:"Measures sagittal and coronal spinal alignment, hip angle, and pelvic positioning relative to trunk. Risk elevation may indicate posterior chain tightness, lumbar flexion intolerance, or disc load asymmetry.",
-      metrics:"Spine Alignment, Hip Angle, Trunk Lean" },
+  // ══ PAGE 2 — Spinal zone risk ═════════════════════════════════
+  doc.addPage();pageBase("RISK ASSESSMENT");y=28;
+  title("Spinal Zone Risk Assessment","Risk percentages are derived computationally from posture metrics. They are not medical diagnoses.");
+  // body card
+  card(ml,y,74,150,5);
+  const bx=ml+30, by=y+12;
+  fc(doc,230,236,246);
+  doc.circle(bx,by+8,8,"F");
+  doc.lines([[9,5],[5,9],[3,14],[1,16],[-1,14],[-2,12],[-32,0],[-2,-12],[-1,-14],[1,-16],[3,-14],[5,-9],[9,-5]],bx-17,by+19,[1,1],"F",true);
+  rr(doc,bx-11,by+76,9,40,4,"F"); rr(doc,bx+2,by+76,9,40,4,"F");
+  const zoneOf=i=>i<7?"cervical":i<19?"thoracic":"lumbar";
+  [["cervical",by+17,7*3.9],["thoracic",by+17+7*3.9,12*3.9],["lumbar",by+17+19*3.9,5*3.9]].forEach(([z,zy,zh])=>{fc(doc,...riskCol(zonal[z]||0));op(.12);rr(doc,bx-6.5,zy-1,13,zh+1,4,"F");op(1);});
+  for(let i=0;i<24;i++){const vy=by+17+i*3.9;fc(doc,...riskCol(zonal[zoneOf(i)]||0));op(.9);rr(doc,bx-2.4,vy,4.8,3,1.1,"F");op(1);}
+  function riskBadge(zy,pct,col){
+    dc(doc,...col);lw(doc,.5);doc.line(bx+6,zy,bx+22,zy);lw(doc,.3);
+    fc(doc,...CARDC);doc.circle(bx+30,zy,7.8,"F");dc(doc,...col);lw(doc,.85);doc.circle(bx+30,zy,7.8,"S");lw(doc,.3);
+    F(7.2,"bold");tc(doc,...col);T(pct+"%",bx+30,zy-.3,{align:"center"});
+    F(4.3,"bold");tc(doc,...MUTEC);T("RISK",bx+30,zy+4,{align:"center"});
+  }
+  riskBadge(by+26,zonal.cervical||0,riskCol(zonal.cervical||0));
+  riskBadge(by+58,zonal.thoracic||0,riskCol(zonal.thoracic||0));
+  riskBadge(by+88,zonal.lumbar||0,riskCol(zonal.lumbar||0));
+  F(5.6,"normal");tc(doc,...MUTEC);T("Vertebrae coloured by computed zone risk",ml+37,y+145,{align:"center"});
+  // zone cards
+  const zx=ml+79, zw=cw-79;
+  const ZDATA=[
+   ["cervical","Cervical Spine (Neck)","C1–C7",
+    "Assesses head position, neck lean, forward head posture, and rotational deviation. Elevated risk correlates with increased load on cervical discs and potential for tension-type headache, cervicogenic dizziness, or upper trapezius hypertonicity.",
+    "Neck Lean, FHP, Head Tilt, Head Rotation"],
+   ["thoracic","Thoracic Spine (Upper Back)","T1–T12",
+    "Evaluates shoulder symmetry, rounded shoulder posture, and upper spinal curvature. Chronic elevation indicates risk for thoracic kyphosis progression or rotator cuff impingement patterns.",
+    "Shoulder Balance, Rounded Shoulders, Spine Lean"],
+   ["lumbar","Lumbar Spine (Lower Back)","L1–S1",
+    "Measures sagittal and coronal spinal alignment, hip angle, and pelvic positioning relative to trunk. Risk elevation may indicate posterior chain tightness or disc load asymmetry.",
+    "Spine Alignment, Hip Angle, Trunk Lean"],
   ];
-  clinicalZones.forEach(({key,region,title,desc,metrics:mlist})=>{
-    brk(64);
-    y=_zone(doc,ml,y,cw,title,region,zonal[key]||0,desc,mlist,false);
+  let zy2=y;
+  ZDATA.forEach(([key,t,reg,desc,mets])=>{
+    const pct=zonal[key]||0, col=riskCol(pct), bg=riskBg(pct);
+    card(zx,zy2,zw,48,4);
+    fc(doc,...bg);rr(doc,zx+4.5,zy2+4.5,10,10,3,"F");icoUser(zx+9.5,zy2+9.5,5.2,col);
+    F(8.4,"bold");tc(doc,...INKC);T(t,zx+18,zy2+9);
+    F(6,"normal");tc(doc,...MUTEC);T(reg,zx+18,zy2+14.5);
+    pillC(zx+zw-4.5,zy2+4.5,`Risk: ${riskLvl(pct)} (${pct}%)`,col,bg,true);
+    F(6.2,"normal");tc(doc,...SUBC);
+    doc.splitTextToSize(desc,zw-23).slice(0,4).forEach((l,i)=>T(l,zx+18,zy2+20.5+i*4.4));
+    F(5.6,"normal");tc(doc,...MUTEC);
+    T(clamp1("Contributing:  "+mets,zw-23),zx+18,zy2+43.5);
+    zy2+=51;
   });
+
+  // ══ PAGE 3 — Exercise prescription + metrics table ════════════
+  doc.addPage();pageBase("EXERCISE PLAN");y=28;
+  title("Exercise Prescription","Evidence-based exercises targeting the highest-risk zones identified in this session.");
+  const EX=[
+   ["cervical","CERVICAL ZONE",[
+     ["chin","Chin Tuck","3×10","Retract head parallel to floor, hold 5s. Activates deep neck flexors."],
+     ["rot","Cervical Rotation","2×10/side","Slow rotation L/R to end range. Reduces upper trapezius hypertonicity."]]],
+   ["thoracic","THORACIC ZONE",[
+     ["foam","Thoracic Extension (foam roller)","2×60s","Over foam roller at T6–T9. Restores extension lost to sustained flexion."],
+     ["wyt","W-Y-T Raises (prone)","3×12","Prone scapular retraction + depression. Activates lower/mid trapezius."]]],
+   ["lumbar","LUMBAR ZONE",[
+     ["tilt","Posterior Pelvic Tilt","3×10","Supine lumbar flattening. Resets neutral spine, inhibits hip flexors."],
+     ["bird","Bird-Dog","3×10/side","Quadruped opposite arm/leg extension. Core stability + lumbar unloading."]]],
+  ];
+  const colW=(cw-6)/2;
+  EX.forEach(([key,zt,items])=>{
+    const pct=zonal[key]||0, col=riskCol(pct), bg=riskBg(pct);
+    const risk=`Risk: ${riskLvl(pct)} (${pct}%)`;
+    F(7,"bold");tc(doc,...col);T(zt,ml,y+4);
+    F(5.6,"bold");const rw=doc.getTextWidth(risk)+6;fc(doc,...bg);rr(doc,ml+cw-rw,y,rw,6.5,2,"F");tc(doc,...col);T(risk,ml+cw-rw/2,y+4.4,{align:"center"});
+    y+=8;
+    items.forEach(([pose,nm,reps,desc],ii)=>{
+      const x=ml+ii*(colW+6);
+      card(x,y,colW,24,3.5);
+      pictogram(x+3.5,y+3.5,17,pose,BLUEC);
+      F(7.6,"bold");tc(doc,...INKC);T(clamp1(nm,colW-42),x+24.5,y+8);
+      F(5.8,"bold");const rpw=doc.getTextWidth(reps)+5;fc(doc,...BLUEBGC);rr(doc,x+colW-rpw-3.5,y+3.5,rpw,6,2,"F");tc(doc,...BLUEC);T(reps,x+colW-rpw/2-3.5,y+7.6,{align:"center"});
+      F(6,"normal");tc(doc,...SUBC);
+      doc.splitTextToSize(desc,colW-29).slice(0,3).forEach((l,i)=>T(l,x+24.5,y+13.5+i*4));
+    });
+    y+=30;
+  });
+  // metrics table
   y+=2;
-
-  // Zone summary strip
-  brk(30);
-  fc(doc,...PANEL); rr(doc,ml,y,cw,20,3,"F");
-  dc(doc,...LIGHTB); lw(doc,0.3); rr(doc,ml,y,cw,20,3,"S"); lw(doc,0.3);
-  const third=cw/3;
-  [["CERVICAL",zonal.cervical||0],["THORACIC",zonal.thoracic||0],["LUMBAR",zonal.lumbar||0]].forEach(([z,r],i)=>{
-    const x=ml+i*third;
-    txt(z,x+third/2,y+7,6.5,"bold",MUTE,{align:"center"});
-    txt(`${r}%  ·  ${_riskLabel(r,false)}`,x+third/2,y+15,9,"bold",_riskColor(r),{align:"center"});
-    if(i<2){ dc(doc,...LIGHTB); lw(doc,0.2); doc.line(x+third,y+4,x+third,y+16); lw(doc,0.3); }
-  });
-  y+=28;
-
-  // ══ PAGE 3 — Metrics table + recommendations ══════════════════
-  doc.addPage(); slimHdr(); y=22;
-  secTitle("Posture Metrics Detail","All session measurements, prioritised by improvement opportunity");
-  y+=1;
-
-  // Table header (re-drawn after every page break)
-  const C_LBL=ml+4, C_VAL=ml+cw*0.42, C_SCO=ml+cw*0.60, C_STA=ml+cw*0.74;
-  const tblHead = () => {
-    fc(doc,...NAVY); rr(doc,ml,y,cw,9,2,"F");
-    txt("MEASUREMENT",C_LBL,y+6,7,"bold",[255,255,255]);
-    txt("VALUE",C_VAL,y+6,7,"bold",[255,255,255]);
-    txt("SCORE",C_SCO,y+6,7,"bold",[255,255,255]);
-    txt("STATUS",C_STA,y+6,7,"bold",[255,255,255]);
+  F(10,"bold");tc(doc,...INKC);T("Posture Metrics Detail",ml,y+4); y+=8;
+  const rowsFit=Math.floor((H-14-y-16)/8.8);
+  function tblHead(){
+    F(6,"bold");tc(doc,...MUTEC);
+    T("METRIC",ml+14,y+4);T("VALUE",ml+cw*.5,y+4);T("SCORE",ml+cw*.66,y+4);T("STATUS",ml+cw*.78,y+4);
+    dc(doc,...BORDC);lw(doc,.25);doc.line(ml+3,y+6.5,ml+cw-3,y+6.5);lw(doc,.3);
     y+=11;
-  };
+  }
+  const tblH=Math.min(mEntries.length,rowsFit)*8.8+16;
+  card(ml,y,cw,tblH,4); y+=3;
   tblHead();
-  metricEntries.forEach(({lbl,value,unit,sc},i)=>{
-    if (brk(14)) tblHead();
-    const col=_gc(sc);
-    if(i%2===0){ fc(doc,248,250,252); doc.rect(ml,y-1,cw,9,"F"); }
-    txt(clamp1(lbl,cw*0.42-10),C_LBL,y+5,8,"normal",NAVY);
-    txt(value!==undefined&&value!==null?`${Math.round(value*10)/10} ${unit||""}`:"—",C_VAL,y+5,8,"normal",SLATE);
-    // Score chip
-    fc(doc,...col);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:0.14}));
-    rr(doc,C_SCO-2,y,14,7,2,"F");
-    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    txt(String(sc),C_SCO+5,y+5,8,"bold",col,{align:"center"});
-    txt(_gl(sc,false),C_STA,y+5,7.5,"bold",col);
-    y+=9;
+  mEntries.forEach(({lbl,val,sc},i)=>{
+    if(y>H-24){
+      doc.addPage();pageBase("POSTURE METRICS");y=28;
+      const remain=mEntries.length-i;
+      card(ml,y,cw,Math.min(remain,26)*8.8+16,4); y+=3;
+      tblHead();
+    }
+    const col=scCol(sc), st=stTxt(sc);
+    if(i%2===0){fc(doc,...BGC);doc.rect(ml+2,y-4,cw-4,8.8,"F");}
+    fc(doc,...BLUEBGC);doc.circle(ml+8.5,y-.4,2.5,"F");dc(doc,...BLUEC);lw(doc,.45);doc.circle(ml+8.5,y-.4,2.5,"S");lw(doc,.3);
+    F(7,"normal");tc(doc,...INKC);T(clamp1(lbl,cw*.34),ml+14,y+1);
+    F(6.6,"normal");tc(doc,...SUBC);T(clamp1(val,cw*.14),ml+cw*.5,y+1);
+    F(7.6,"bold");tc(doc,...col);T(String(sc),ml+cw*.66,y+1.3);
+    pillC(ml+cw*.78,y-4,st,col,scBg(sc));
+    y+=8.8;
   });
-  y+=8;
 
-  // Clinical notes — dynamic-height cards, full text, never truncated
-  brk(40);
-  secTitle("Clinical Notes & Recommendations","Suggested focus areas from session measurements. Please apply clinical judgment.");
-  y+=1;
-  const clinicalRecos = [
-    ["General Assessment", avg<60
-      ? `Overall posture score of ${avg}/100 indicates significant postural deviation across multiple planes. ${zonal.cervical>zonal.thoracic&&zonal.cervical>zonal.lumbar?"The cervical zone is the primary contributor.":zonal.thoracic>zonal.lumbar?"The thoracic zone shows the most concern.":"The lumbar zone requires the most attention."} A full clinical assessment with manual palpation is recommended.`
-      : avg<80
-      ? `Moderate postural deviations identified (score ${avg}/100). Targeted corrective exercise programming is likely to yield measurable improvement within 4–6 weeks.`
-      : `Posture quality is broadly good during monitored sessions (${avg}/100, ${goodPct}% good posture). Reinforce current ergonomic patterns and monitor for creep during extended work periods.`],
-    ["Cervical Focus", zonal.cervical>=45
-      ? `Cervical zone risk ${zonal.cervical}%. Neck lean and head-position metrics require attention. Chin-tuck exercises (3×10 daily) and monitor raised to eye level are indicated. Screen for cervicogenic headache if symptomatic.`
-      : `Cervical zone within acceptable range (${zonal.cervical}%). Maintain 50–70 cm screen distance with the monitor top edge at eye level.`],
-    ["Thoracic Focus", zonal.thoracic>=45
-      ? `Thoracic zone risk ${zonal.thoracic}%. Shoulder asymmetry and upper spinal curvature detected. Thoracic extension work (foam roller T6–T9, 2×60 s) and scapular retraction drills recommended; review workstation ergonomics.`
-      : `Thoracic zone acceptable (${zonal.thoracic}%). Encourage thoracic extension breaks every 45 minutes of seated work.`],
-    ["Lumbar Focus", zonal.lumbar>=45
-      ? `Lumbar zone risk ${zonal.lumbar}%. Spinal alignment and hip-angle metrics indicate concern. Posterior pelvic tilts (3×10) and hip-flexor stretches (3×30 s/side) indicated; consider lumbar support and sit-stand rotation.`
-      : `Lumbar zone within expected range (${zonal.lumbar}%). Continue current chair setup with feet flat and knees at ~90°.`],
+  // ══ PAGE 4 — Clinical notes + statistics ══════════════════════
+  doc.addPage();pageBase("RECOMMENDATIONS");y=28;
+  title("Clinical Notes & Recommendations","Suggested focus areas based on session measurements. Please apply clinical judgment.");
+  const NOTES=[
+   ["General Assessment",BLUEC, avg<60
+     ? `Overall posture score of ${avg}/100 indicates significant postural deviation across multiple planes. ${zonal.cervical>=zonal.thoracic&&zonal.cervical>=zonal.lumbar?"The cervical zone is the primary contributor.":zonal.thoracic>=zonal.lumbar?"The thoracic zone shows the most concern.":"The lumbar zone requires the most attention."} A full clinical assessment with manual palpation is recommended.`
+     : avg<80
+     ? `Moderate postural deviations identified (score: ${avg}/100). Targeted corrective exercise programming is likely to yield measurable improvement within 4–6 weeks.`
+     : `Posture quality is broadly good during monitored sessions (${avg}/100, ${goodPct}% good posture). Reinforce current ergonomic patterns and monitor for creep during extended work periods.`],
+   ["Cervical Focus", riskCol(zonal.cervical||0), (zonal.cervical||0)>=40
+     ? `Cervical zone risk ${zonal.cervical}%. Neck lean and head-position metrics require attention. Chin-tuck exercises (3×10 daily) and monitor raised to eye level are indicated. Screen for cervicogenic headache if symptomatic.`
+     : `Cervical zone within acceptable range (${zonal.cervical||0}%). Current head and neck positioning is adequate. Maintain 50–70 cm screen distance with the monitor top edge at eye level.`],
+   ["Thoracic Focus", riskCol(zonal.thoracic||0), (zonal.thoracic||0)>=40
+     ? `Thoracic zone risk ${zonal.thoracic}%. Shoulder asymmetry and upper spinal curvature detected. Thoracic extension work (foam roller T6–T9, 2×60 s) and scapular retraction drills recommended.`
+     : `Thoracic zone acceptable (${zonal.thoracic||0}%). Shoulder balance and upper-back posture are within normal parameters. Encourage thoracic extension breaks every 45 minutes.`],
+   ["Lumbar Focus", riskCol(zonal.lumbar||0), (zonal.lumbar||0)>=40
+     ? `Lumbar zone risk ${zonal.lumbar}%. Spinal alignment and hip-angle metrics indicate concern. Posterior pelvic tilts (3×10) and hip-flexor stretches (3×30 s/side) indicated; consider lumbar support and sit-stand rotation.`
+     : `Lumbar zone within expected range (${zonal.lumbar||0}%). Current seated posture maintains adequate lumbar support. Continue current chair settings with feet flat and knees at 90 degrees.`],
   ];
-  clinicalRecos.forEach(([title,rec],i)=>{
-    font(doc,8,"normal");
-    const recLines=doc.splitTextToSize(rec,cw-12);
-    const rh=12+recLines.length*4.8+3;
-    brk(rh+4);
-    fc(doc,...PANEL); rr(doc,ml,y,cw,rh,2,"F");
-    dc(doc,...LIGHTB); lw(doc,0.3); rr(doc,ml,y,cw,rh,2,"S"); lw(doc,0.3);
-    fc(doc,...SKY); doc.rect(ml,y,2,rh,"F"); rr(doc,ml,y,2,rh,1,"F");
-    txt(`${i+1}.  ${title}`,ml+5,y+7,8,"bold",NAVY);
-    font(doc,8,"normal"); tc(doc,...SLATE);
-    recLines.forEach((l,li)=>doc.text(l,ml+5,y+13+(li*4.8)));
-    y+=rh+4;
+  const noteW=cw-66;
+  NOTES.forEach(([t,col,body],i)=>{
+    F(6.6,"normal");
+    const lines=doc.splitTextToSize(body,noteW-22);
+    const nh=14+lines.length*4.6;
+    brk(nh+4,"RECOMMENDATIONS");
+    card(ml,y,noteW,nh,3.5);
+    fc(doc,...col);doc.circle(ml+8.5,y+8.5,4,"F");
+    F(7,"bold");tc(doc,255,255,255);T(String(i+1),ml+8.5,y+10.7,{align:"center"});
+    F(8,"bold");tc(doc,...INKC);T(t,ml+16,y+10.5);
+    F(6.6,"normal");tc(doc,...SUBC);lines.forEach((l,li)=>T(l,ml+16,y+17+li*4.6));
+    y+=nh+5;
+  });
+  // statistics (right column of page 4)
+  doc.setPage(doc.internal.getNumberOfPages());
+  const stx=ml+noteW+6, stw=cw-noteW-6;
+  card(stx,42,stw,116,4);
+  F(8,"bold");tc(doc,...INKC);T("Session Statistics",stx+5,50.5);
+  dc(doc,...BORDC);lw(doc,.25);doc.line(stx+4,53.5,stx+stw-4,53.5);lw(doc,.3);
+  const STATS=[["Overall Score",`${avg}/100`,scCol(avg)],["Good Posture",goodPct+"%",goodPct>=80?GREENC:AMBERC],
+   ["Duration",_fmtDur(dur),SUBC],["Alerts",String(alerts),alerts===0?GREENC:AMBERC],
+   ["Camera",modeLbl,SUBC],["Tier","ELITE",VIOLETC],
+   ["Date",dateStr.replace(/, \d{4}$/,""),SUBC],["Session",`#${realIndex}`,SUBC]];
+  STATS.forEach(([k,v,col],i)=>{
+    const ry=61+i*12;
+    F(6.2,"normal");tc(doc,...MUTEC);T(k,stx+5,ry);
+    F(7.2,"bold");tc(doc,...col);T(clamp1(v,stw-28),stx+stw-5,ry,{align:"right"});
+    if(i<STATS.length-1){dc(doc,...BORD2C);lw(doc,.22);doc.line(stx+4,ry+4,stx+stw-4,ry+4);lw(doc,.3);}
   });
 
-  // Disclaimer — dynamic height
-  y+=4;
-  const disc="All measurements in this report are camera-based pose estimates (screening-grade). They reliably capture trends and patterns over time but are not equivalent to goniometric or radiographic measurement. This report is generated by an AI-based postural monitoring system and is intended to supplement, not replace, professional clinical assessment. Findings should be interpreted alongside a full physical examination by a qualified physiotherapist or medical professional. Posmoz is a wellness and ergonomics product, not a medical device; it does not diagnose or treat any medical condition.";
-  font(doc,7.5,"normal");
-  const discLines=doc.splitTextToSize(disc,cw-10);
-  const discH=12+discLines.length*4.2+4;
-  brk(discH+40);
-  fc(doc,254,243,199); rr(doc,ml,y,cw,discH,2,"F");
-  txt("IMPORTANT DISCLAIMER — SCREENING-GRADE MEASUREMENT",ml+5,y+7,7.5,"bold",[146,64,14]);
-  font(doc,7.5,"normal"); tc(doc,120,53,15);
-  discLines.forEach((l,i)=>doc.text(l,ml+5,y+12+(i*4.2)));
-  y+=discH+8;
+  // ══ PAGE 5 — Disclaimer + workstation + signature ═════════════
+  doc.addPage();pageBase("SUMMARY");y=28;
+  fc(doc,...VIOLETBGC);rr(doc,ml,y,cw,27,4,"F");dc(doc,...VIOLETC);lw(doc,.35);rr(doc,ml,y,cw,27,4,"S");lw(doc,.3);
+  icoShield(ml+9,y+13.5,7,VIOLETC);
+  F(7.5,"bold");tc(doc,...VIOLETC);T("IMPORTANT DISCLAIMER — SCREENING-GRADE MEASUREMENT",ml+18,y+7.5);
+  F(6.2,"normal");tc(doc,...SUBC);
+  doc.splitTextToSize("This report is generated by an AI-based postural monitoring system using screening-grade camera pose estimation, and is intended to supplement, not replace, professional clinical assessment. Findings should be interpreted alongside a full physical examination by a qualified physiotherapist or medical professional. Posmoz is a wellness and ergonomics product, not a medical device; it does not diagnose or treat any medical condition.",cw-24).forEach((l,i)=>T(l,ml+18,y+13+i*4.2));
+  y+=33;
+  card(ml,y,cw,120,5);
+  F(9,"bold");tc(doc,...INKC);T("Recommended Workstation Setup",ml+6,y+9);
+  const dx=ml+12, dy=y+18;
+  dc(doc,...SUBC);lw(doc,.8);
+  doc.line(dx,dy+64,dx+104,dy+64);
+  doc.line(dx+8,dy+64,dx+8,dy+94); doc.line(dx+96,dy+64,dx+96,dy+94);
+  rr(doc,dx+58,dy+20,32,23,2,"S");
+  doc.line(dx+74,dy+43,dx+74,dy+50); doc.line(dx+66,dy+50,dx+82,dy+50);
+  doc.line(dx+36,dy+60,dx+52,dy+60);
+  doc.circle(dx+20,dy+16,5.6,"S");
+  doc.line(dx+20,dy+22,dx+20,dy+46);
+  doc.line(dx+20,dy+30,dx+36,dy+38); doc.line(dx+36,dy+38,dx+47,dy+56);
+  doc.line(dx+20,dy+46,dx+31,dy+46); doc.line(dx+31,dy+46,dx+31,dy+78); doc.line(dx+31,dy+78,dx+42,dy+78);
+  rr(doc,dx+7,dy+38,6.5,42,2.5,"S");
+  dc(doc,...GREENC);lw(doc,.4);for(let gx=dx+26;gx<dx+58;gx+=4)doc.line(gx,dy+14,gx+2,dy+14);lw(doc,.3);
+  [["Monitor at eye level"],["Screen distance 50–70 cm"],["Elbows at 90°"],["Feet flat · Knees 90°"]].forEach(([t],i)=>{
+    const cyy=dy+2+i*24;
+    fc(doc,...GREENBGC);rr(doc,ml+126,cyy,58,16,3,"F");dc(doc,...GREENC);lw(doc,.3);rr(doc,ml+126,cyy,58,16,3,"S");lw(doc,.3);
+    fc(doc,...GREENC);doc.circle(ml+133,cyy+8,3.4,"F");icoCheck(ml+133,cyy+8,3,[255,255,255]);
+    F(6.6,"bold");tc(doc,...INKC);T(t,ml+139,cyy+9.8);
+  });
+  y+=126;
+  card(ml,y,(cw-6)/2,26,3.5);
+  icoUser(ml+9,y+9,6,SUBC);
+  F(7.5,"bold");tc(doc,...INKC);T("Reviewing Clinician",ml+16,y+9);
+  dc(doc,...MUTEC);lw(doc,.3);doc.line(ml+6,y+18,ml+(cw-6)/2-6,y+18);
+  F(5.6,"normal");tc(doc,...MUTEC);T("Name / Clinic",ml+6,y+22.5);
+  card(ml+(cw-6)/2+6,y,(cw-6)/2,26,3.5);
+  F(7.5,"bold");tc(doc,...INKC);T("Signature & Date",ml+(cw-6)/2+13,y+9);
+  dc(doc,...MUTEC);doc.line(ml+(cw-6)/2+12,y+18,ml+cw-6,y+18);
+  F(5.6,"normal");tc(doc,...MUTEC);T("Signed on physical review",ml+(cw-6)/2+12,y+22.5);
 
-  // Signature block
-  brk(34);
-  fc(doc,...PANEL); rr(doc,ml,y,cw,28,3,"F");
-  dc(doc,...LIGHTB); lw(doc,0.3); rr(doc,ml,y,cw,28,3,"S"); lw(doc,0.3);
-  txt("Reviewing Clinician:",ml+5,y+8,8,"bold",NAVY);
-  txt("Signature:",ml+cw/2+5,y+8,8,"bold",NAVY);
-  dc(doc,...MUTE); lw(doc,0.3);
-  doc.line(ml+5,y+18,ml+cw/2-6,y+18);
-  doc.line(ml+cw/2+5,y+18,ml+cw-5,y+18);
-  txt("Name / Clinic",ml+5,y+23,7,"normal",MUTE);
-  txt("Date reviewed",ml+cw/2+5,y+23,7,"normal",MUTE);
-
-  // Footer band on every page
-  const totalPages2=doc.internal.getNumberOfPages();
-  for(let p=1;p<=totalPages2;p++){
+  // ── footer band on every page ─────────────────────────────────
+  const tp=doc.internal.getNumberOfPages();
+  for(let p=1;p<=tp;p++){
     doc.setPage(p);
-    fc(doc,...NAVY); doc.rect(0,H-9,W,9,"F");
-    txt(`Posmoz Posture Health · Clinical Report · ${dateStr} · Confidential — Not a medical diagnosis`,ml,H-3.2,6.5,"normal",[148,163,184]);
-    txt(`${p} / ${totalPages2}`,W-mr,H-3.2,6.5,"normal",[148,163,184],{align:"right"});
+    fc(doc,...NAVY);doc.rect(0,H-8,W,8,"F");
+    F(5.2,"normal");tc(doc,...GHOSTC);
+    T(`Posmoz Posture Health  ·  Clinical Report  ·  ${dateStr}  ·  Confidential — Not a medical diagnosis`,ml,H-3);
+    T(`${p} / ${tp}`,W-ml,H-3,{align:"right"});
   }
 
   const filename=`Posmoz_Clinical_Report_Session${realIndex}_${now.toISOString().slice(0,10)}.pdf`;
