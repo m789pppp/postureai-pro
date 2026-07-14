@@ -452,27 +452,78 @@ This user score: ${avgScore}/100
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", position: "relative" }}>
-              {/* PDF Export — single AI Executive button */}
+              {/* PDF Export dropdown */}
               {canExportPdf ? (
-                <button
-                  onClick={() => exportPDF("ai")}
-                  disabled={pdfLoading || !sessions.length}
-                  style={{
-                    background: exported ? "rgba(16,185,129,.15)" : "rgba(5,150,105,.12)",
-                    border: `1px solid ${exported ? "rgba(16,185,129,.4)" : "rgba(5,150,105,.3)"}`,
-                    borderRadius: 9, padding: "7px 14px", fontSize: 11, fontWeight: 700,
-                    color: "#34d399", cursor: pdfLoading || !sessions.length ? "not-allowed" : "pointer",
-                    display: "flex", alignItems: "center", gap: 6,
-                    opacity: !sessions.length ? 0.4 : 1, transition: "all 200ms",
-                  }}>
-                  {pdfLoading
-                    ? <><span style={{ display:"inline-block", animation:"spin 700ms linear infinite" }}>⟳</span> {isAr ? "جارٍ..." : "Generating..."}</>
-                    : exported
-                    ? `✓ ${isAr ? "تم!" : "Done!"}`
-                    : <>⬇ 🧠 {isAr ? "تصدير PDF" : "Export PDF"}</>}
-                </button>
+                <div
+                  style={{ position: "relative" }}
+                  tabIndex={-1}
+                  onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setShowPdfMenu(false); }}
+                >
+                  <div style={{ display: "flex", border: "1px solid rgba(5,150,105,.3)", borderRadius: 9, overflow: "hidden" }}>
+                    {/* Main export button */}
+                    <button
+                      onClick={() => exportPDF(pdfType)}
+                      disabled={pdfLoading || !sessions.length}
+                      style={{ background: exported ? "rgba(16,185,129,.15)" : "rgba(5,150,105,.12)", padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#34d399", cursor: pdfLoading || !sessions.length ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, border: "none", opacity: !sessions.length ? 0.4 : 1, transition: "all 200ms" }}>
+                      {pdfLoading
+                        ? <><span style={{ display:"inline-block", animation:"spin 700ms linear infinite" }}>⟳</span> {isAr ? "جارٍ..." : "Generating..."}</>
+                        : exported
+                        ? `✓ ${isAr ? "تم!" : "Done!"}`
+                        : <>⬇ {PDF_TYPES.find(p => p.id === pdfType)?.icon || "📄"} {isAr ? "تصدير PDF" : "Export PDF"}</>}
+                    </button>
+                    {/* Dropdown toggle */}
+                    <button
+                      onClick={() => setShowPdfMenu(v => !v)}
+                      style={{ background: showPdfMenu ? "rgba(5,150,105,.2)" : "rgba(5,150,105,.08)", borderLeft: "1px solid rgba(5,150,105,.2)", padding: "7px 10px", fontSize: 10, color: "#34d399", cursor: "pointer", border: "none", transition: "all 200ms", minWidth: 28 }}>
+                      {showPdfMenu ? "▲" : "▼"}
+                    </button>
+                  </div>
+                  {/* Dropdown menu */}
+                  {showPdfMenu && (
+                    <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#0a1020", border: "1px solid rgba(26,86,219,.25)", borderRadius: 10, overflow: "hidden", zIndex: 9999, width: 210, boxShadow: "0 16px 48px rgba(0,0,0,.7)" }}>
+                      <div style={{ padding: "8px 12px 6px", fontSize: 9, fontWeight: 700, color: "#4a6090", letterSpacing: ".1em", textTransform: "uppercase", borderBottom: "1px solid rgba(255,255,255,.06)", background: "#060e1e" }}>
+                        {isAr ? "نوع التقرير" : "Select Report Type"}
+                      </div>
+                      {PDF_TYPES.map(pt => {
+                        const locked = pt.elite && pdfDetail !== "full";
+                        const active = pdfType === pt.id;
+                        return (
+                          <button key={pt.id}
+                            onClick={() => {
+                              if (locked) return;
+                              setPdfType(pt.id);
+                              setShowPdfMenu(false);
+                              exportPDF(pt.id);
+                            }}
+                            style={{
+                              width: "100%", display: "flex", alignItems: "center", gap: 10,
+                              padding: "10px 14px",
+                              background: active ? "rgba(26,86,219,.15)" : locked ? "rgba(255,255,255,.01)" : "transparent",
+                              border: "none",
+                              color: locked ? "#2d3e5a" : active ? "#60a5fa" : "#94b4d8",
+                              cursor: locked ? "not-allowed" : "pointer",
+                              fontSize: 11.5, fontWeight: active ? 700 : 500,
+                              textAlign: "left",
+                              borderBottom: "1px solid rgba(255,255,255,.04)",
+                              transition: "background 120ms",
+                            }}>
+                            <span style={{ fontSize: 14, opacity: locked ? 0.3 : 1 }}>{pt.icon}</span>
+                            <span style={{ flex: 1 }}>{isAr ? pt.ar : pt.en}</span>
+                            {locked
+                              ? <span style={{ fontSize: 8, color: "#10b981", background: "rgba(16,185,129,.08)", border: "1px solid rgba(16,185,129,.15)", borderRadius: 99, padding: "2px 7px", fontWeight: 700 }}>ELITE</span>
+                              : active
+                              ? <span style={{ fontSize: 9, color: "#34d399" }}>✓</span>
+                              : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               ) : (
-                <button disabled style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 9, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "#3a4a66", cursor: "not-allowed", display: "flex", alignItems: "center", gap: 6 }}>
+                <button
+                  disabled
+                  style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 9, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "#3a4a66", cursor: "not-allowed", display: "flex", alignItems: "center", gap: 6 }}>
                   🔒 {isAr ? "تصدير PDF (Pro+)" : "Export PDF (Pro+)"}
                 </button>
               )}
