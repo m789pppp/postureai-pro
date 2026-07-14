@@ -449,13 +449,15 @@ function estimateHeadYaw(lms, W, H) {
     const g = i => lms[i];
     const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
 
-    // Bug #10 fix: use inner/outer eye corners instead of eye centres (landmarks 2 & 5).
-    // L_EYE_INNER (1) and R_EYE_OUTER (6) span the widest inter-ocular distance,
-    // giving a more stable baseline for yaw estimation, especially under partial occlusion.
-    // Fall back to L_EYE / R_EYE centres if inner/outer aren't visible.
-    const useEdge = vis(PL.L_EYE_INNER) && vis(PL.R_EYE_OUTER);
+    // Use a SYMMETRIC eye pair for the yaw baseline. The previous "wide
+    // baseline" used L_EYE_INNER (1) with R_EYE_OUTER (6) — asymmetric
+    // around the face centre, so the eye midpoint was systematically
+    // shifted and every user carried a constant phantom yaw of ~5-10°.
+    // Outer corners (3 & 6) give the widest symmetric span; fall back to
+    // eye centres (2 & 5) when the corners aren't visible.
+    const useEdge = vis(PL.L_EYE_OUTER) && vis(PL.R_EYE_OUTER);
     const lEye = useEdge
-      ? { x: g(PL.L_EYE_INNER).x * W, y: g(PL.L_EYE_INNER).y * H }
+      ? { x: g(PL.L_EYE_OUTER).x * W, y: g(PL.L_EYE_OUTER).y * H }
       : { x: g(PL.L_EYE).x * W,       y: g(PL.L_EYE).y * H };
     const rEye = useEdge
       ? { x: g(PL.R_EYE_OUTER).x * W, y: g(PL.R_EYE_OUTER).y * H }
@@ -497,11 +499,15 @@ function estimateDistanceCm(lms, W, H, yawDeg = 0, calibFactor = null) {
     const g   = i => lms[i];
     const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
 
-    // Bug #10 fix: prefer L_EYE_INNER / R_EYE_OUTER for wider IPD baseline
-    const useEdge = vis(PL.L_EYE_INNER) && vis(PL.R_EYE_OUTER);
-    const lEyeX   = useEdge ? g(PL.L_EYE_INNER).x : g(PL.L_EYE).x;
-    const rEyeX   = useEdge ? g(PL.R_EYE_OUTER).x : g(PL.R_EYE).x;
-    if ((useEdge ? vis(PL.L_EYE_INNER) && vis(PL.R_EYE_OUTER) : vis(PL.L_EYE) && vis(PL.R_EYE))) {
+    // IPD must be measured between eye CENTRES (2 & 5) — two reasons:
+    //  1. IPD_CM (6.3) is the pupil-to-pupil distance; the old
+    //     L_EYE_INNER→R_EYE_OUTER span is ~25% wider, so distances were
+    //     systematically underestimated by ~25%.
+    //  2. PostureCalibration.jsx computes distCalibFactor from eye centres —
+    //     measuring here with different landmarks broke calibrated users too.
+    const lEyeX = g(PL.L_EYE).x;
+    const rEyeX = g(PL.R_EYE).x;
+    if (vis(PL.L_EYE) && vis(PL.R_EYE)) {
       let ipdPx = Math.abs(rEyeX * W - lEyeX * W);
       const cosYaw = Math.max(Math.cos(Math.min(50, Math.abs(yawDeg)) * Math.PI / 180), 0.55);
       ipdPx /= cosYaw;
@@ -730,7 +736,7 @@ function analyzeSpineLean(lms, W, H, prop, roundedScore) {
   return { angle: Math.round(angle), score, severity, confidence: 88, reliable: true };
 }
 
-function analyzeRoundedShoulders(lms, prop) {
+function analyzeRoundedShoulders(lms, prop, H) {
   if (!prop.shOK) return { depth: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
   const g = i => lms[i];
@@ -756,16 +762,23 @@ function analyzeRoundedShoulders(lms, prop) {
 
   // Primary 2D method: compare shoulder-Y to ear-midpoint-Y.
   // Rounded shoulders → shoulders creep upward toward ears (Y decreases in image coords).
-  const lEar = { x: g(PL.L_EAR).x, y: g(PL.L_EAR).y };
-  const rEar = { x: g(PL.R_EAR).x, y: g(PL.R_EAR).y };
-  const midEarY  = (lEar.y + rEar.y) / 2;
-  const midShY   = (g(PL.L_SHOULDER).y + g(PL.R_SHOULDER).y) / 2;
+  //
+  // Both distances are converted to PIXELS before taking the ratio.
+  // The old version divided H-normalised Y by W-normalised width, which
+  // made the ratio depend on the video aspect ratio, and its neutral
+  // constant (2.8) was anatomically impossible — real upright values are
+  // ~0.5 (ear-to-shoulder drop ≈ 22cm vs shoulder width ≈ 42cm), so the
+  // deviation was permanently ~35+ and the metric sat pinned at score 5
+  // with a constant "severe rounded shoulders" alert for everyone.
+  const midEarYpx = ((g(PL.L_EAR).y + g(PL.R_EAR).y) / 2) * H;
+  const midShYpx  = prop.midSh.y; // already in pixels
+  const elevRatio = (midShYpx - midEarYpx) / Math.max(prop.shWidthPx, 1);
 
-  // Normalized by shoulder width so it's camera-distance-independent
-  const elevFrac = (midShY - midEarY) / Math.max(prop.shWidthFrac, 0.01);
-  // elevFrac ~2.5-3.5 = normal; lower = rounded (shoulders elevated)
-  const NEUTRAL = 2.8;
-  const deviation = Math.max(0, NEUTRAL - elevFrac) * 20; // scale to 0–30 range
+  // Upright anatomical ratio ≈ 0.52; shoulders creeping toward the ears
+  // (rounding/shrugging) shrinks it. Scale ×45 maps typical rounding
+  // (ratio 0.30–0.42) onto the existing 0–30 "depth" range and thresholds.
+  const NEUTRAL_RATIO = 0.52;
+  const deviation = Math.max(0, NEUTRAL_RATIO - elevRatio) * 45;
 
   const score    = scoreMetric(deviation, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
   const severity = classify(deviation, SEV.ROUNDED);
@@ -954,7 +967,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // pass it directly to spine. On skip frames, use the cached value.
   let rounded, fhp, elbow, monitor;
   if (!skipExpensive || !analyzeMP._cachedRounded) {
-    rounded = analyzeRoundedShoulders(lms, prop);
+    rounded = analyzeRoundedShoulders(lms, prop, H);
     fhp     = analyzeFHP(lms, W, H, prop);
     elbow   = analyzeElbow(lms, W, H);
     monitor = analyzeMonitorHeight(lms, W, H, distCm);
@@ -1116,27 +1129,22 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
   const hip   = px(I.HIP);
   const knee  = px(I.KNEE);
   const ankle = px(I.ANKLE);
-  const nose  = px(PL.NOSE);
 
   const earOK   = vis(I.EAR);
   const shOK    = vis(I.SH);
   const hipOK   = vis(I.HIP);
   const kneeOK  = vis(I.KNEE);
   const ankleOK = vis(I.ANKLE);
-  const noseOK  = vis(PL.NOSE);
 
   const NEUTRAL = 90;
 
-  // ── Neck lean (side) — nose+ear blend, same as front ──
-  const noseVis   = g(PL.NOSE)?.visibility ?? 0;
-  const earWeight = noseOK && noseVis > 0.7 ? 0.15 : 0.50;
-  const noseWeight = 1 - earWeight;
-  const neckRef = {
-    x: nose.x * noseWeight + ear.x * earWeight,
-    y: nose.y * noseWeight + ear.y * earWeight,
-  };
-  const neckLeanRaw  = earOK && shOK ? angleVert(sh, neckRef) : 0;
-  // Nose ~5cm anterior to ear — correction scales with camera distance (same formula as front)
+  // Shoulder width in px — the cm ruler for side-view conversions (mirrors
+  // backend.py analyze_side). MUST be computed before any use below: it was
+  // previously declared with `const` AFTER its first use, which threw a TDZ
+  // ReferenceError on every frame and silently killed side-mode analysis
+  // (the RAF loop catches and swallows engine errors).
+  const shWidthPx = shOK ? Math.abs(g(PL.L_SHOULDER).x * W - g(PL.R_SHOULDER).x * W) : 0;
+
   // Apply calibration-based shoulder width correction (same logic as front mode).
   // Without this, all cm-based side calculations used the hardcoded 42cm average.
   let effectiveShoulderWidthCm = SHOULDER_WIDTH_CM;
@@ -1148,14 +1156,21 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
     }
   }
 
-  const approxDistCmSide = shWidthPx > 0 ? (effectiveShoulderWidthCm / Math.max(shWidthPx / W, 0.01)) * 0.5 : 65;
-  const neckCorrect  = Math.atan2(NOSE_AHEAD_CM * noseWeight, Math.max(approxDistCmSide, 30)) * 180 / Math.PI;
-  const neckLean     = Math.max(0, neckLeanRaw - neckCorrect);
-  const neckOK       = earOK && shOK;
+  // ── Neck lean (side) — pure ear-over-shoulder angle ──
+  // Matches backend.py analyze_side(), which treats the profile view as
+  // geometrically exact (angle_vert(sh, ear), no nose blend). The old
+  // nose-dominant blend (nose 85% when visible, 50% when NOT visible) added
+  // a systematic forward bias — the nose sits several cm anterior of the
+  // ear in profile, so blending it always inflated the lean reading.
+  const neckLean = earOK && shOK ? angleVert(sh, ear) : 0;
+  const neckOK   = earOK && shOK;
 
-  // Normalize neck thresholds by ear-shoulder span (camera-distance proxy)
-  const earShSpan = Math.abs(ear.x - sh.x);
-  const spanFrac  = earShSpan / Math.max(W, 1);
+  // Normalize neck thresholds by ear-shoulder span (camera-distance proxy).
+  // Full euclidean ear→shoulder distance — the old |ear.x - sh.x| was the
+  // horizontal FHP offset (≈0 px for an upright sitter), not a distance
+  // proxy, so the ratio always sat clamped at 0.70.
+  const earShSpanPx = Math.hypot(ear.x - sh.x, ear.y - sh.y);
+  const spanFrac  = earShSpanPx / Math.max(W, 1);
   const spanRatio = Math.max(0.70, Math.min(1.30, spanFrac / 0.14));
   const neckOkAdj  = Math.max(5.0,  8.0  * spanRatio);  // backend: neck_ok = max(5.0, 8.0*ratio)
   const neckBadAdj = Math.max(16.0, 22.0 * spanRatio);  // backend: neck_bad = max(16.0, 22.0*ratio)
@@ -1176,9 +1191,18 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
   }
 
   // ── Forward head posture (side view) — horizontal ear-to-shoulder offset in cm ──
-  // Mirrors backend.py analyze_side(): _fhp_side_cm = |ear.x - sh.x| * cm_per_px
-  const shWidthPx  = earOK && shOK ? Math.abs(g(PL.L_SHOULDER).x * W - g(PL.R_SHOULDER).x * W) : 0;
-  const cmPerPxSide = effectiveShoulderWidthCm / Math.max(shWidthPx, 1);
+  // cm ruler: in a true profile view the L-R shoulder width is foreshortened
+  // to near-zero px, so using it as a 42cm ruler (backend.py's approach)
+  // explodes the conversion — an upright sitter measured 20+cm of "FHP".
+  // Instead use spans that stay fully visible in profile: shoulder→hip
+  // (~46cm seated torso) when hips are visible, else ear→shoulder (~25cm).
+  // Intentional divergence from backend.py until it gets the same fix.
+  const TORSO_CM = 46, EAR_SH_CM = 25;
+  const torsoPx = shOK && hipOK ? Math.hypot(sh.x - hip.x, sh.y - hip.y) : 0;
+  const cmPerPxSide =
+    torsoPx     > 20 ? TORSO_CM  / torsoPx     :
+    earShSpanPx > 10 ? EAR_SH_CM / earShSpanPx :
+    effectiveShoulderWidthCm / Math.max(shWidthPx, 1);
   const fhpSideCm   = earOK && shOK ? Math.round(Math.abs(ear.x - sh.x) * cmPerPxSide * 10) / 10 : 0;
   const fhpSideSc   = earOK && shOK ? scoreMetric(fhpSideCm, 0, 2.5, 7) : NEUTRAL;
 
@@ -1188,8 +1212,11 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
   const kneeSc  = kneeOK && ankleOK ? scoreMetric(Math.abs(kneeAngle-90),0, THR.KNEE_ANGLE.ok, THR.KNEE_ANGLE.bad) : NEUTRAL;
   const spineSc = shOK && hipOK && earOK ? scoreMetric(spineAlign, 0, THR.SPINE_ALIGN.ok, THR.SPINE_ALIGN.bad) : NEUTRAL;
 
-  // Confidence-weighted overall (same principle as front camera)
-  const cw = (ok, w) => ok ? w : w * 0.30;
+  // Confidence-weighted overall (same principle as front camera):
+  // unreliable modules contribute 0 weight — their NEUTRAL placeholder score
+  // (90) must not inflate the result. The missing weight is redistributed
+  // through sideBase below, exactly like the front-camera W_ACTUAL fix.
+  const cw = (ok, w) => ok ? w : 0;
   const wN = cw(neckOK,           WEIGHTS_SIDE.neck);
   const wT = cw(shOK && hipOK,    WEIGHTS_SIDE.trunk);
   const wH = cw(hipOK && kneeOK,  WEIGHTS_SIDE.hip);
@@ -1226,7 +1253,7 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
       trunk_lean:     { value: Math.round(trunkLean), score: trunkSc, unit: "°",  label: "Trunk lean",        reliable: shOK && hipOK },
       hip_angle:      { value: Math.round(hipAngle),  score: hipSc,   unit: "°",  label: "Hip angle",         reliable: hipOK && kneeOK },
       knee_angle:     { value: Math.round(kneeAngle), score: kneeSc,  unit: "°",  label: "Knee angle",        reliable: kneeOK && ankleOK },
-      spine_align:    { value: Math.round(spineAlign),score: spineSc, unit: "%",  label: "Spine plumb-line",  reliable: shOK && ankleOK },
+      spine_align:    { value: Math.round(spineAlign),score: spineSc, unit: "°",  label: "Spine alignment",   reliable: shOK && hipOK && earOK },
     },
     bodyModules: { neck: { angle: Math.round(neckLean), score: neckSc, severity: classify(neckLean, SEV.NECK) },
                    trunk: { angle: Math.round(trunkLean), score: trunkSc }, hip: { angle: Math.round(hipAngle), score: hipSc },
