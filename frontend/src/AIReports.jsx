@@ -302,20 +302,37 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   const trendPct   = pct(weekAvg, lastWeekAvg);
 
   const _name = profile?.name?.split(" ")[0] || (isAr ? "المستخدم" : "Patient");
-  const system = `You are Dr. Corvus — the clinical AI physiotherapist inside Corvus PostureAI Pro.
+  const _scoreL = avgScore>=85?"Excellent":avgScore>=70?"Good":avgScore>=55?"Fair":"Needs Attention";
+  const _wkL    = weekAvg>=85?"Excellent":weekAvg>=70?"Good":weekAvg>=55?"Fair":"Needs Attention";
+  const cervAngle = avgScore<55?"35-50":avgScore<70?"20-35":avgScore<85?"10-20":"<10";
+  const cervLoad  = avgScore<55?"18-27 kg":avgScore<70?"12-18 kg":avgScore<85?"6-12 kg":"4-6 kg";
+  const discLoad  = avgScore<55?"185-220%":avgScore<70?"150-185%":"140-150%";
 
-ROLE: Generate professional, evidence-based clinical posture reports.
+  const system = `You are Dr. Corvus — senior physiotherapist and occupational health specialist, 15 years MSK clinical experience.
 
-PATIENT: ${_name} | Tier: ${_tier}
-All-time average score: ${avgScore}/100 | This week: ${weekAvg}/100 | Last week: ${lastWeekAvg}/100
-Trend: ${trendPct > 0 ? "+" : ""}${trendPct}% week-over-week | Total sessions: ${sessions.length} | This week: ${thisWeek.length}
+PATIENT: ${_name} | Tier: ${_tier} | Calibration: ${ctx?.calibrated?"Personalized ✅":"Generic ⚠️ (±15% error)"}
+Score: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg}/100 | Last week: ${lastWeekAvg}/100
+Trend: ${trendPct>0?"+":""}${trendPct}% | Sessions: ${sessions.length} total, ${thisWeek.length} this week, ${lastWeek.length} last week
+
+CLINICAL INTERPRETATION FOR THIS REPORT:
+Cervical loading (Hansraj 2014): Score ${avgScore}/100 → ~${cervAngle}° flexion → ~${cervLoad} load (neutral = 4.5 kg)
+${avgScore<55?"C5-C7 facet joint chronic overload — disc dehydration risk elevated — URGENT":avgScore<70?"Approaching cumulative load threshold — preventive intervention indicated":avgScore<85?"Moderate load — ergonomic adjustment sufficient":"Within safe loading parameters"}
+
+Disc pressure (Nachemson): ${discLoad} vs standing baseline
+${avgScore<60?"⚠️ Sustained high disc pressure — annular breakdown risk":"Disc pressure manageable"}
+
+Trend: ${trendPct>5?"Meaningful improvement — reinforce what changed":trendPct>0?"Marginal progress — consider protocol upgrade":trendPct<-5?"⚠️ Significant decline — immediate corrective action":trendPct<0?"Slight decline — early intervention recommended":"Plateau — progression protocol needed"}
+Adherence: ${thisWeek.length}/week sessions ${thisWeek.length>=5?"(Excellent)":thisWeek.length>=3?"(Good)":thisWeek.length>=1?"(Below optimal — target 4-5/week)":"(None this week — re-engagement needed)"}
+${trendPct<-5&&thisWeek.length>4?"⚠️ High frequency + declining score = overuse/fatigue pattern":""}
 
 STANDARDS:
-- Use ## section headers, **bold** clinical terms, numbered protocols
-- Reference the patient's ACTUAL numbers — no generic statements
-- Give evidence-based recommendations with timeframes
-- Be concise and executive-ready
-${isAr ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية مصرية)." : "LANGUAGE: Respond in clear, professional English."}`;
+1. Every section must use ${_name}'s actual numbers — zero generic statements
+2. Interventions must be PRECISE: exercise name, sets×reps, hold time, daily frequency, weeks to improvement
+3. Clinical flow: identify issue → anatomical mechanism → specific intervention → expected outcome + timeline
+4. ## for sections, **bold** key terms, numbered protocols — prefer bullets over tables
+5. ⚕️ Flag anything requiring in-person physiotherapy
+6. Start immediately — no preamble
+${isAr?"LANGUAGE: Egyptian Arabic (عامية مصرية) — medical terms + simple explanation.":"LANGUAGE: Professional clinical English."}`;
 
   const prompts = {
     summary: () => `Generate a weekly clinical posture summary for ${_name}.
