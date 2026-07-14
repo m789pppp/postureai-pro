@@ -222,7 +222,9 @@ const TIER_NORMALIZE={
   // Legacy B2C (deprecated)
   starter:"basic", growth:"professional", enterprise:"elite",
 };
-const normalizeTier=(t)=>TIER_NORMALIZE[t]||t||"standard";
+// Lowercase first — Firestore docs sometimes carry "Elite"/"ELITE"/"Professional",
+// which otherwise skip the map and break TIERS[...] lookups downstream.
+const normalizeTier=(t)=>{const k=String(t||"").toLowerCase().trim();return TIER_NORMALIZE[k]||k||"standard";};
 
 // ── Payment Methods — Automatic PayMob only ───────────────────────
 const PAY_METHODS = [
@@ -2457,7 +2459,7 @@ export default function App(){
             try { EmailAPI.sequence({email:u.email,name:u.displayName||u.email.split("@")[0],
               day:0,tier:"professional",session_count:0,avg_score:0}).catch(()=>{}); } catch{}
           } else {
-            try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked) setProfile(checked); }).catch(()=>{}); } catch{}
+            try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked){ setProfile(checked); if(checked.tier) setTier(normalizeTier(checked.tier)); } }).catch(()=>{}); } catch{}
             try { checkAndSendNurtureEmails(u.uid, p, API).catch(()=>{}); } catch{}
           }
           // Note: server-side middleware auto-elevates eligible emails to elite on every API
