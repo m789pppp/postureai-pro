@@ -5216,6 +5216,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     alerts_count:acRef.current?.total||0, mode, tier:effectiveTier,
                     score_history:hist.slice(-60), created_at:new Date(),
                     metrics:lastAnalRef.current?.metrics||{},
+                    worst_snapshots:worstSnapsRef.current.slice(0,3),
                   },
                   profile: { ...profile, tier: effectiveTier },
                   allSessions: userSessions,

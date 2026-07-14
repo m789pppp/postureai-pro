@@ -29,6 +29,42 @@ const METRIC_LABELS_AR = {
 };
 
 
+// ── Elite-extras helpers (goal progress / exercise plan / snapshots) ──
+const _exToMs = s => { try { return s.created_at?.toDate?.()?.getTime?.() || new Date(s.created_at||0).getTime(); } catch { return 0; } };
+
+function _exWeekKey(d = new Date()) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y = t.getUTCFullYear();
+  return `${y}-W${String(Math.ceil(((t - Date.UTC(y,0,1)) / 86400000 + 1) / 7)).padStart(2,"0")}`;
+}
+
+function _exWindowAvg(sessions, fromMs, toMs) {
+  const sc = (sessions||[]).filter(s => { const m=_exToMs(s); return m>=fromMs && m<toMs && (s.avg_score||0)>0; }).map(s=>s.avg_score);
+  return sc.length ? Math.round(sc.reduce((a,b)=>a+b,0)/sc.length) : null;
+}
+
+/** pts/day linear-regression slope over the last `days` days — mirrors EliteGoals.jsx */
+function _exSlopePerDay(sessions, days = 30) {
+  const cutoff = Date.now() - days*86400000;
+  const pts = (sessions||[]).map(s=>({t:_exToMs(s), y:s.avg_score||0})).filter(p=>p.t>=cutoff&&p.y>0).sort((a,b)=>a.t-b.t);
+  if (pts.length < 4) return null;
+  const xs = pts.map(p=>(p.t-pts[0].t)/86400000), ys = pts.map(p=>p.y), n = xs.length;
+  const sx = xs.reduce((a,b)=>a+b,0), sy = ys.reduce((a,b)=>a+b,0);
+  const sxy = xs.reduce((a,x,i)=>a+x*ys[i],0), sx2 = xs.reduce((a,x)=>a+x*x,0);
+  const denom = n*sx2 - sx*sx;
+  return Math.abs(denom) < 1e-6 ? null : (n*sxy - sx*sy) / denom;
+}
+
+// Exercise-plan area labels for the PDF (mirrors ExercisePlan.jsx LIB)
+const _EX_AREA_LABELS = {
+  neck:      { en: "Neck / Forward head",        ar: "الرقبة / تقدم الرأس" },
+  shoulders: { en: "Rounded shoulders / chest",  ar: "الأكتاف المدورة / الصدر" },
+  spine:     { en: "Spine / trunk",              ar: "العمود الفقري / الجذع" },
+  recovery:  { en: "Recovery & habits",          ar: "استشفاء وعادات" },
+};
+
 // ── Unified entry point (called from AIReports.jsx + App.jsx) ──────
 export async function exportPDFReport({ type, sessions, session, profile, aiSummary, lang="en" }) {
   // Always use the most recent session (first in array = most recent from Firestore)
@@ -1132,6 +1168,103 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-12);
     sf(7,"normal");tc(doc,...TEXT2);
     aiLines.slice(0,7).forEach((l,i)=>{if(y+16+i*5.5<H-14)doc.text(l,ml+5,y+16+i*5.5);});
+  }
+
+  // ═══ PAGE 3 — ELITE INSIGHTS: snapshots + weekly goal + exercise plan ═══
+  const _snaps   = Array.isArray(session.worst_snapshots) ? session.worst_snapshots.slice(0,3) : [];
+  const _goal    = Number(profile?.goal_score) || null;
+  const _plan    = profile?.exercise_plan?.week === _exWeekKey() ? profile.exercise_plan : null;
+  if (_snaps.length || _goal || _plan) {
+    doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
+    fc(doc,...BG2);doc.rect(0,0,W,15,"F");
+    _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("CORVUS",ml+13,8);
+    sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
+    sf(6,"normal");tc(doc,...TEXT3);doc.text(isAr?"رؤى Elite":"ELITE INSIGHTS",W-mr,10,{align:"right"});
+    fc(doc,...BORDER);doc.rect(0,15,W,.5,"F");
+    y=24;
+
+    // ── Worst-posture snapshots ──────────────────────────────────
+    if(_snaps.length){
+      sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"أسوأ لحظات الجلسة":"WORST POSTURE MOMENTS",ml,y);
+      sf(5.5,"normal");tc(doc,...TEXT3);doc.text(isAr?"لقطات تلقائية عند أدنى سكور":"Auto-captured at the lowest scores",ml,y+5.5);
+      y+=10;
+      const gap=6, iw=(cw-gap*2)/3, ih=iw*0.75;
+      _snaps.forEach((s,i)=>{
+        const sx=ml+i*(iw+gap);
+        dCard(sx-1,y-1,iw+2,ih+13,4);
+        try{ doc.addImage(s.img,"JPEG",sx,y,iw,ih); }catch{
+          sf(6,"normal");tc(doc,...TEXT3);doc.text("—",sx+iw/2,y+ih/2,{align:"center"});
+        }
+        const scol=s.score<40?[239,68,68]:[245,158,11];
+        sf(7.5,"bold");tc(doc,...scol);doc.text(`${s.score}/100`,sx+3,y+ih+8);
+        sf(5.5,"normal");tc(doc,...TEXT3);doc.text(String(s.time||""),sx+iw-3,y+ih+8,{align:"right"});
+      });
+      y+=(cw-12)/3*0.75+22;
+    }
+
+    // ── Weekly goal progress ─────────────────────────────────────
+    if(_goal){
+      const now=Date.now(), WK=7*86400000;
+      const cur7=_exWindowAvg(allSessions,now-WK,now+1);
+      const prev7=_exWindowAvg(allSessions,now-2*WK,now-WK);
+      const slope=_exSlopePerDay(allSessions);
+      const reached=cur7!=null&&cur7>=_goal;
+      const gh=34;
+      dCard(ml,y,cw,gh,5,CARD2);
+      sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"هدفك الأسبوعي":"WEEKLY GOAL",ml+5,y+8);
+      const gcol=reached?[34,197,94]:[37,99,235];
+      sf(11,"bold");tc(doc,...gcol);doc.text(`${cur7??"—"}`,ml+5,y+21);
+      sf(6.5,"normal");tc(doc,...TEXT3);doc.text(`/ ${_goal}`,ml+5+doc.getTextWidth(`${cur7??"—"}`)+2,y+21);
+      // Progress bar
+      const gbx=ml+45,gbw=cw-95;
+      fc(doc,...BORDER);rr(doc,gbx,y+16,gbw,5,2,"F");
+      fc(doc,...gcol);rr(doc,gbx,y+16,Math.max(gbw*Math.min(1,(cur7||0)/_goal),3),5,2,"F");
+      // Delta vs last week
+      if(cur7!=null&&prev7!=null){
+        const d=cur7-prev7,dcol=d>0?[34,197,94]:d<0?[239,68,68]:TEXT3;
+        sf(7,"bold");tc(doc,...dcol);
+        // "+/-" only — ▲▼ glyphs don't exist in jsPDF's built-in helvetica
+        doc.text(`${d>0?"+":d<0?"-":""}${Math.abs(d)}`,ml+cw-5,y+13,{align:"right"});
+        sf(5,"normal");tc(doc,...TEXT3);doc.text(isAr?"عن الأسبوع الماضي":"vs last week",ml+cw-5,y+18.5,{align:"right"});
+      }
+      // ETA line
+      let eta=reached?(isAr?"وصلت لهدفك — ثبّته أسبوعاً كاملاً":"Goal reached — hold it for a full week")
+        : slope!=null&&slope>0.05?(isAr?`بمعدلك الحالي (+${slope.toFixed(1)}/يوم) تصل خلال ~${Math.ceil((_goal-(cur7||0))/slope)} يوم`:`At +${slope.toFixed(1)} pts/day you'll reach it in ~${Math.ceil((_goal-(cur7||0))/slope)} days`)
+        : slope!=null&&slope<-0.05?(isAr?"الاتجاه نازل — راجع خطة التمارين":"Trending down — revisit the exercise plan")
+        : (isAr?"المعدل ثابت — جلسة إضافية يومياً تحرك المؤشر":"Flat trend — one extra daily session moves the needle");
+      sf(6,"normal");tc(doc,...TEXT2);doc.text(eta,ml+5,y+gh-5);
+      y+=gh+8;
+    }
+
+    // ── This week's exercise plan ────────────────────────────────
+    if(_plan?.days?.length){
+      let done=0,total=0;_plan.days.forEach(d=>d.exercises.forEach(e=>{total++;if(e.done)done++;}));
+      sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"خطة تمارين الأسبوع":"THIS WEEK'S EXERCISE PLAN",ml,y);
+      const pcol=done===total?[34,197,94]:[99,102,241];
+      sf(7,"bold");tc(doc,...pcol);doc.text(`${done}/${total}`,ml+cw,y,{align:"right"});
+      sf(5.5,"normal");tc(doc,...TEXT3);
+      doc.text((_plan.focus||[]).map(a=>_EX_AREA_LABELS[a]?.[isAr?"ar":"en"]||a).join("  •  "),ml,y+5.5);
+      y+=10;
+      _plan.days.forEach(d=>{
+        if(y>H-24){doc.addPage();fc(doc,...BG);doc.rect(0,0,W,H,"F");y=14;}
+        const rh=6+d.exercises.length*5.5;
+        dCard(ml,y,cw,rh,3);
+        const allDone=d.exercises.every(e=>e.done);
+        sf(6,"bold");tc(doc,...(allDone?[34,197,94]:TEXT2));
+        doc.text(isAr?`اليوم ${d.day}`:`Day ${d.day}`,ml+4,y+5.5);
+        sf(5,"normal");tc(doc,...TEXT3);
+        doc.text(_EX_AREA_LABELS[d.area]?.[isAr?"ar":"en"]||d.area,ml+4,y+rh-2.5);
+        d.exercises.forEach((e,i)=>{
+          const ey=y+4.5+i*5.5;
+          // Vector check circles — ✓/○ glyphs don't exist in helvetica
+          if(e.done){ fc(doc,34,197,94); doc.circle(ml+27,ey,1.6,"F"); }
+          else { dc(doc,...TEXT3); lw(doc,0.3); doc.circle(ml+27,ey,1.6,"S"); }
+          sf(6,"normal");tc(doc,...(e.done?TEXT3:TEXT2));
+          doc.text(doc.splitTextToSize(isAr?e.ar:e.en,cw-38)[0],ml+32,ey+1);
+        });
+        y+=rh+3;
+      });
+    }
   }
 
   // Footer p1
@@ -2348,7 +2481,42 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   doc.text(`${trendIcon}  ${trendText}`,ml+8,y+9.2);
   y+=22;
 
+  // ── ELITE: WEEKLY GOAL PROGRESS ─────────────────────────────
+  const _lgGoal = Number(profile?.goal_score) || null;
+  if (_lgGoal) {
+    if(y>H-45){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الهدف":"Goal",isAr);y=22;}
+    const _lgNow=Date.now(), _WK=7*86400000;
+    const _lgCur=_exWindowAvg(sessions,_lgNow-_WK,_lgNow+1);
+    const _lgPrev=_exWindowAvg(sessions,_lgNow-2*_WK,_lgNow-_WK);
+    const _lgSlope=_exSlopePerDay(sessions);
+    const _lgReached=_lgCur!=null&&_lgCur>=_lgGoal;
+    const _lgCol=_lgReached?PDF_TOKENS.success:PDF_TOKENS.primary;
+    fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,26,4,"F");
+    dc(doc,..._lgCol); lw(doc,0.25); rr(doc,ml,y,cw,26,4,"S"); lw(doc,0.3);
+    fc(doc,..._lgCol); doc.rect(ml,y,3,26,"F"); rr(doc,ml,y,3,26,1.5,"F");
+    font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
+    doc.text(isAr?"هدفك الأسبوعي":"Weekly Goal",ml+8,y+8);
+    font(doc,12,"bold"); tc(doc,..._lgCol);
+    doc.text(`${_lgCur??"—"} / ${_lgGoal}`,ml+8,y+19);
+    const _gbx=ml+cw*0.35,_gbw=cw*0.38;
+    fc(doc,...PDF_TOKENS.borderSoft); rr(doc,_gbx,y+13,_gbw,5,2,"F");
+    fc(doc,..._lgCol); rr(doc,_gbx,y+13,Math.max(_gbw*Math.min(1,(_lgCur||0)/_lgGoal),3),5,2,"F");
+    if(_lgCur!=null&&_lgPrev!=null){
+      const _d=_lgCur-_lgPrev,_dc=_d>0?PDF_TOKENS.success:_d<0?PDF_TOKENS.danger:PDF_TOKENS.muted;
+      font(doc,8,"bold"); tc(doc,..._dc);
+      doc.text(`${_d>0?"+":""}${_d} ${isAr?"عن الأسبوع الماضي":"vs last wk"}`,W-mr-5,y+9,{align:"right"});
+    }
+    const _eta=_lgReached?(isAr?"وصلت لهدفك — ثبّته":"Goal reached — hold it")
+      : _lgSlope!=null&&_lgSlope>0.05?(isAr?`متوقع الوصول خلال ~${Math.ceil((_lgGoal-(_lgCur||0))/_lgSlope)} يوم`:`ETA ~${Math.ceil((_lgGoal-(_lgCur||0))/_lgSlope)} days at current pace`)
+      : (isAr?"المعدل ثابت — زد عدد الجلسات":"Flat pace — add sessions");
+    font(doc,7,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
+    doc.text(_eta,W-mr-5,y+19,{align:"right"});
+    y+=32;
+  }
+
   // ── SCORE TRAJECTORY ────────────────────────────────────────
+  // Chart needs ~70mm — break first so it never clips the page bottom
+  if(y>H-75){doc.addPage();_hdr(doc,W,ml,mr,isAr?"مسار النقاط":"Trajectory",isAr);y=22;}
   _sh(doc,ml,y,isAr?"مسار النقاط":"Score Trajectory",isAr?"كل الجلسات بالترتيب الزمني":"All sessions in chronological order",_scoreColor(avgAll),isAr);
   y+=14;
   const th=42;
