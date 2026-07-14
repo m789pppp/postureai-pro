@@ -1192,7 +1192,147 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     aiLines.slice(0,7).forEach((l,i)=>{if(y+16+i*5.5<H-14)doc.text(l,ml+5,y+16+i*5.5);});
   }
 
-  // ═══ PAGE 3 — ELITE INSIGHTS: snapshots + weekly goal + exercise plan ═══
+  // ── Inner-page header for Elite exclusive pages ───────────────
+  const _ePage = (label) => {
+    doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
+    fc(doc,...BG2); doc.rect(0,0,W,15,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,1.6,"F");
+    _logo(doc,ml,3,9,_logoSm);
+    sf(7.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+13,8);
+    sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+13,13);
+    sf(6,"bold"); tc(doc,...tierCol); doc.text(String(label),W-mr,10,{align:"right"});
+    fc(doc,...BORDER); doc.rect(0,15,W,.5,"F");
+    return 24;
+  };
+  const _eSection = (yy,title,sub,col) => {
+    fc(doc,...(col||ACCENT)); rr(doc,ml,yy,2.4,sub?12:8,1.2,"F");
+    sf(12,"bold"); tc(doc,...TEXT); doc.text(String(title),ml+7,yy+(sub?5:6));
+    if(sub){ sf(6,"normal"); tc(doc,...TEXT2); doc.text(String(sub),ml+7,yy+11); }
+    return yy+(sub?18:12);
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // PRO stops here — Elite unlocks clinical + ergonomic + progress pages
+  // ══════════════════════════════════════════════════════════════
+  if (isPro && !isElite) {
+    if (y<H-32) {
+      const uy=H-30;
+      fc(doc,...CARD2); rr(doc,ml,uy,cw,18,4,"F");
+      dc(doc,...[34,197,94]); lw(doc,0.5); rr(doc,ml,uy,cw,18,4,"S"); lw(doc,0.3);
+      fc(doc,...[34,197,94]); doc.circle(ml+10,uy+9,4.5,"F");
+      sf(8.5,"bold"); tc(doc,...TEXT); doc.text(isAr?"رقّ إلى Elite لتقرير أعمق":"Upgrade to Elite for the full report",ml+20,uy+7.5);
+      sf(6.3,"normal"); tc(doc,...TEXT2);
+      doc.text(isAr?"خريطة العمود الفقري السريرية · بطاقة الإرجونوميكس · خطة تمارين أسبوعية · تتبّع الأهداف · لقطات الوضعية":"Clinical spinal map · Ergonomic scorecard · Weekly exercise plan · Goal tracking · Posture snapshots",ml+20,uy+13);
+    }
+    fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
+    doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(5.5,"normal");tc(doc,...TEXT3);doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
+    const ptot=doc.internal.getNumberOfPages();
+    for(let p=1;p<=ptot;p++){doc.setPage(p);sf(5.5,"normal");tc(doc,...TEXT3);doc.text(`${p} / ${ptot}`,W-mr,H-4.5,{align:"right"});}
+    await doc.save(`Corvus_Pro_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
+    return;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // ELITE EXCLUSIVE — CLINICAL SPINAL ZONE MAP
+  // ══════════════════════════════════════════════════════════════
+  {
+    let ey=_ePage(isAr?"الخريطة السريرية":"CLINICAL MAP");
+    ey=_eSection(ey,isAr?"خريطة مخاطر العمود الفقري":"Spinal Zone Risk Map",
+      isAr?"مشتقّة حسابياً من مقاييس الجلسة — ليست تشخيصاً طبياً":"Computed from this session's metrics — not a medical diagnosis",[239,68,68]);
+    ey+=4;
+    const zonal=_zonalRisk(metrics);
+    // Body silhouette (right column)
+    const bx=ml+cw*0.66, bw3=30, headR=9, bodyTop=ey+2;
+    dc(doc,...BORDER); lw(doc,0.5);
+    fc(doc,...CARD2); doc.circle(bx+bw3/2, bodyTop+headR, headR, "FD"); lw(doc,0.3);
+    const segs=[["cervical",bodyTop+headR*2,15],["thoracic",bodyTop+headR*2+15,28],["lumbar",bodyTop+headR*2+43,18]];
+    segs.forEach(([k,zy,zh])=>{
+      const c=_riskColor(zonal[k]||0);
+      fc(doc,...c); doc.setGState&&doc.setGState(new doc.GState({opacity:0.4}));
+      rr(doc,bx+4,zy,bw3-8,zh-2,2.5,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    });
+    sf(5,"normal"); tc(doc,...TEXT3); doc.text(isAr?"مُلوّنة حسب الخطر":"coloured by zone risk",bx+bw3/2,bodyTop+headR*2+68,{align:"center"});
+    // Zone cards (left column)
+    const zoneMeta=[
+      ["cervical","Cervical Spine (Neck)","الفقرات العنقية","C1–C7"],
+      ["thoracic","Thoracic Spine (Upper)","الفقرات الصدرية","T1–T12"],
+      ["lumbar","Lumbar Spine (Lower)","الفقرات القطنية","L1–S1"],
+    ];
+    const zcw=cw*0.60;
+    zoneMeta.forEach(([k,en,ar,seg],i)=>{
+      const risk=zonal[k]||0, c=_riskColor(risk), zy=ey+i*26, zh=22;
+      dCard(ml,zy,zcw,zh,4);
+      fc(doc,...c); rr(doc,ml,zy,2.4,zh,1.2,"F");
+      // risk disc
+      fc(doc,...c); doc.circle(ml+16,zy+zh/2,9,"F");
+      sf(10,"bold"); tc(doc,...[255,255,255]); doc.text(`${risk}%`,ml+16,zy+zh/2+1.5,{align:"center"});
+      sf(4.5,"normal"); tc(doc,...[255,255,255]); doc.text("RISK",ml+16,zy+zh/2+6,{align:"center"});
+      // labels
+      sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?ar:en,ml+30,zy+8);
+      sf(6.5,"bold"); tc(doc,...ACCENT); doc.text(seg,ml+30,zy+14);
+      const rl=_riskLabel(risk,isAr);
+      sf(6.5,"bold"); tc(doc,...c); doc.text(`${isAr?"مستوى الخطر":"Risk"}: ${rl}`,ml+30,zy+19.5);
+      // bar
+      const bbx=ml+zcw*0.60, bbw=zcw*0.34;
+      fc(doc,...BORDER); rr(doc,bbx,zy+zh/2-1.5,bbw,4,2,"F");
+      fc(doc,...c); rr(doc,bbx,zy+zh/2-1.5,Math.max(bbw*(risk/100),3),4,2,"F");
+    });
+    // page footer handled by global page-number loop at end
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // ELITE EXCLUSIVE — ERGONOMIC WORKSTATION SCORECARD
+  // ══════════════════════════════════════════════════════════════
+  {
+    let ey=_ePage(isAr?"بطاقة الإرجونوميكس":"ERGONOMICS");
+    ey=_eSection(ey,isAr?"بطاقة إعداد محطة العمل":"Ergonomic Workstation Scorecard",
+      isAr?"تقييم إعدادك الفيزيائي مقابل المعايير المكتبية":"Your physical setup vs. desk-ergonomics standards",[6,182,212]);
+    ey+=4;
+    const _mv=(k)=>metrics[k]||{};
+    const ergo=[
+      { key:"monitor_height", en:"Monitor Height", ar:"ارتفاع الشاشة",
+        fixEn:"Raise/lower the top of the screen to eye level.", fixAr:"اضبط أعلى الشاشة عند مستوى العين." },
+      { key:"screen_distance", en:"Screen Distance", ar:"مسافة الشاشة",
+        fixEn:"Sit an arm's length (50–70cm) from the screen.", fixAr:"اجلس على مسافة ذراع (50–70سم) من الشاشة." },
+      { key:"elbow_angle", en:"Elbow Angle", ar:"زاوية الكوع",
+        fixEn:"Keep elbows near 90–100° with forearms supported.", fixAr:"حافظ على زاوية الكوع 90–100° مع دعم الساعد." },
+      { key:"neck_lean", en:"Neck Position", ar:"وضعية الرقبة",
+        fixEn:"Stack ears over shoulders; tuck the chin slightly.", fixAr:"اجعل الأذن فوق الكتف؛ أدخل الذقن قليلاً." },
+    ];
+    ergo.forEach((e,i)=>{
+      const m=_mv(e.key), sc=Math.round(m.score??100), c=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
+      const pass=sc>=65, cy=ey+i*30, ch=26;
+      dCard(ml,cy,cw,ch,4);
+      fc(doc,...c); rr(doc,ml,cy,2.4,ch,1.2,"F");
+      // status pill
+      const stl=pass?(isAr?"جيد":"Good"):(isAr?"يحتاج ضبط":"Adjust");
+      const stw=doc.getTextWidth(stl)+10;
+      fc(doc,...c); doc.setGState&&doc.setGState(new doc.GState({opacity:.14})); rr(doc,ml+8,cy+6,stw,7,2,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(6,"bold"); tc(doc,...c); doc.text(stl,ml+8+stw/2,cy+10.7,{align:"center"});
+      // title + value — measure the title width at ITS font before switching
+      sf(9.5,"bold"); tc(doc,...TEXT); const _et=isAr?e.ar:e.en; doc.text(_et,ml+8,cy+21);
+      const _etw=doc.getTextWidth(_et);
+      if(m.value!==undefined&&m.value!==null){ sf(6.5,"normal"); tc(doc,...TEXT2); doc.text(`${Math.round(m.value*10)/10}${m.unit||""}`,ml+8+_etw+5,cy+21); }
+      // score number
+      sf(15,"bold"); tc(doc,...c); doc.text(String(sc),ml+cw*0.52,cy+15,{align:"right"});
+      sf(5,"normal"); tc(doc,...TEXT3); doc.text("/100",ml+cw*0.52+1,cy+15);
+      // recommendation
+      sf(6.3,"normal"); tc(doc,...TEXT2);
+      const fx=doc.splitTextToSize(isAr?e.fixAr:e.fixEn,cw*0.42);
+      fx.slice(0,2).forEach((l,j)=>doc.text(l,ml+cw*0.56,cy+9+j*5));
+    });
+    ey+=ergo.length*30+2;
+    // Overall ergonomic index
+    const eIdx=Math.round(ergo.reduce((a,e)=>a+(metrics[e.key]?.score??100),0)/ergo.length);
+    const eC=eIdx<40?[239,68,68]:eIdx<65?[245,158,11]:[34,197,94];
+    if(ey<H-24){
+      dCard(ml,ey,cw,16,4,CARD2);
+      sf(7,"bold"); tc(doc,...TEXT); doc.text(isAr?"مؤشر الإرجونوميكس العام":"Overall Ergonomic Index",ml+6,ey+10);
+      sf(13,"bold"); tc(doc,...eC); doc.text(`${eIdx}/100`,ml+cw-6,ey+11,{align:"right"});
+    }
+  }
+
+  // ═══ ELITE INSIGHTS: snapshots + weekly goal + exercise plan ═══
   const _snaps   = Array.isArray(session.worst_snapshots) ? session.worst_snapshots.slice(0,3) : [];
   const _goal    = Number(profile?.goal_score) || null;
   const _plan    = profile?.exercise_plan?.week === _exWeekKey() ? profile.exercise_plan : null;
@@ -1287,6 +1427,64 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
         y+=rh+3;
       });
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // ELITE EXCLUSIVE — ACHIEVEMENTS & CONSISTENCY
+  // ══════════════════════════════════════════════════════════════
+  {
+    const all=Array.isArray(allSessions)?allSessions:[];
+    const scores=all.map(s=>Math.round(s.avg_score||0)).filter(Boolean);
+    const totalSess=all.length||1;
+    const bestScore=scores.length?Math.max(...scores):avg;
+    const allAvg=scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length):avg;
+    const days=[...new Set(all.map(s=>{try{return(s.created_at?.toDate?.()||new Date(s.created_at||0)).toISOString().slice(0,10);}catch{return null;}}).filter(Boolean))].sort();
+    let strk=days.length?1:0;
+    for(let i=days.length-2;i>=0;i--){ if((new Date(days[i+1])-new Date(days[i]))/86400000<=1.6) strk++; else break; }
+    const spanDays=days.length>1?Math.max(1,(new Date(days[days.length-1])-new Date(days[0]))/86400000):1;
+    const perWeek=(totalSess/Math.max(spanDays/7,0.5)).toFixed(1);
+
+    let ey=_ePage(isAr?"الإنجازات":"ACHIEVEMENTS");
+    ey=_eSection(ey,isAr?"إنجازاتك والاستمرارية":"Achievements & Consistency",
+      isAr?"تقدّمك عبر كل الجلسات":"Your progress across every session",[139,92,246]);
+    ey+=4;
+    const tiles=[
+      [String(totalSess), isAr?"إجمالي الجلسات":"Total sessions",[99,102,241]],
+      [String(bestScore), isAr?"أفضل نتيجة":"Best score",[34,197,94]],
+      [`${strk}`, isAr?"سلسلة الأيام":"Day streak",[245,158,11]],
+      [`${allAvg}`, isAr?"المتوسط العام":"All-time avg",[6,182,212]],
+      [`${perWeek}`, isAr?"جلسة/أسبوع":"Per week",[139,92,246]],
+      [`${days.length}`, isAr?"أيام نشطة":"Active days",[236,72,153]],
+    ];
+    const tw=(cw-2*6)/3, th=26;
+    tiles.forEach(([v,l,c],i)=>{
+      const tx=ml+(i%3)*(tw+6), ty=ey+Math.floor(i/3)*(th+6);
+      dCard(tx,ty,tw,th,4);
+      fc(doc,...c); rr(doc,tx,ty,tw,2.6,1.3,"F"); doc.rect(tx,ty+1.3,tw,1.3,"F");
+      sf(15,"bold"); tc(doc,...c); doc.text(String(v),tx+tw/2,ty+15,{align:"center"});
+      sf(6,"bold"); tc(doc,...TEXT3); doc.text(String(l),tx+tw/2,ty+21.5,{align:"center"});
+    });
+    ey+=2*(th+6)+8;
+    ey=_eSection(ey,isAr?"الأوسمة":"Milestone Badges","",[139,92,246]); ey+=4;
+    const badges=[
+      [totalSess>=1,  isAr?"البداية":"First Step",   isAr?"أول جلسة":"1st session"],
+      [totalSess>=10, isAr?"منتظم":"Committed",       isAr?"10 جلسات":"10 sessions"],
+      [totalSess>=25, isAr?"مثابر":"Dedicated",       isAr?"25 جلسة":"25 sessions"],
+      [bestScore>=80, isAr?"تميّز":"Excellence",      isAr?"نتيجة 80+":"Scored 80+"],
+      [strk>=3,       isAr?"سلسلة":"On a Roll",        isAr?"3 أيام متتالية":"3-day streak"],
+      [strk>=7,       isAr?"أسبوع كامل":"Full Week",   isAr?"7 أيام متتالية":"7-day streak"],
+    ];
+    const bw4=(cw-2*6)/3, bh=24;
+    badges.forEach(([earned,title,sub],i)=>{
+      const bx4=ml+(i%3)*(bw4+6), by=ey+Math.floor(i/3)*(bh+6);
+      const c=earned?[139,92,246]:[203,213,225];
+      dCard(bx4,by,bw4,bh,4,earned?CARD:CARD2);
+      fc(doc,...c); doc.setGState&&doc.setGState(new doc.GState({opacity:earned?1:.35})); doc.circle(bx4+12,by+bh/2,6.5,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      fc(doc,...(earned?[255,255,255]:CARD2)); doc.circle(bx4+12,by+bh/2,2.6,"F");
+      sf(8,"bold"); tc(doc,...(earned?TEXT:TEXT3)); doc.text(String(title),bx4+22,by+bh/2-1);
+      sf(5.5,"normal"); tc(doc,...TEXT3); doc.text(String(sub),bx4+22,by+bh/2+5);
+      if(!earned){ sf(5,"bold"); tc(doc,...TEXT3); doc.text(isAr?"مقفل":"locked",bx4+bw4-4,by+5,{align:"right"}); }
+    });
   }
 
   // Footer p1
