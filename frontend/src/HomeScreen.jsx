@@ -6,6 +6,8 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { qualityFor } from "./lib/tierQuality.js";
+import EliteGoals from "./EliteGoals.jsx";
+import ExercisePlan from "./ExercisePlan.jsx";
 import { COLORS as C, TYPE as TY, SPACE as SP, RADIUS as R, SHADOW as SH,
          GLOBAL_CSS, scoreColor, scoreGrade, tierMeta, COMP } from "./DesignSystem.js";
 import { getUserSessions, getAllUsers, completeOnboardingStep,
@@ -657,6 +659,28 @@ export default function HomeScreen(props) {
             </div>
             <WeekBar days={last7} isAr={isAr}/>
           </div>
+        )}
+
+        {/* ── ELITE: WEEKLY GOAL + SMART PREDICTION ──────────────── */}
+        {userSessions.length>0&&(
+          <EliteGoals
+            profile={profile} setProfile={setProfile}
+            sessions={userSessions} uid={user?.uid}
+            isAr={isAr} effTier={tier||profile?.tier}
+            addToast={addToast}
+            onUpgrade={()=>setShowBilling?.(true)}
+          />
+        )}
+
+        {/* ── ELITE: WEEKLY CORRECTIVE EXERCISE PLAN ─────────────── */}
+        {userSessions.length>0&&(
+          <ExercisePlan
+            profile={profile} setProfile={setProfile}
+            sessions={userSessions} uid={user?.uid}
+            isAr={isAr} effTier={tier||profile?.tier}
+            addToast={addToast}
+            onUpgrade={()=>setShowBilling?.(true)}
+          />
         )}
 
         {/* ── AI INSIGHT ─────────────────────────────────────────── */}
