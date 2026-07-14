@@ -7,25 +7,40 @@
 import { tierAtLeast } from "./tierQuality.js";
 
 // ── Metric labels (used in PDF tables) ───────────────────────────
+// Keys must match the ACTUAL keys the posture engine emits (see
+// postureEngine.js metrics object): fhp_index, shoulder_level,
+// rounded_shoulders, elbow_angle, monitor_height, screen_distance …
+// Missing aliases previously fell through to a naive title-case that
+// produced wrong labels like "Fhp Index".
 const METRIC_LABELS = {
   neck_lean:"Neck Lean", neck_lean_side:"Neck Lean (Side)",
   head_tilt:"Head Tilt", head_yaw:"Head Rotation",
-  shoulder:"Shoulder Balance", spine_lean:"Spine Lean",
+  shoulder:"Shoulder Balance", shoulder_level:"Shoulder Level",
+  spine_lean:"Spine Lean",
   spine_align:"Spine Alignment", fhp:"Forward Head Posture",
-  fhp_side:"Forward Head (Side)", rounded:"Rounded Shoulders",
-  elbow:"Elbow Angle", monitor:"Monitor Height",
-  distance:"Viewing Distance", trunk_lean:"Trunk Lean",
+  fhp_index:"Forward Head Posture", fhp_side:"Forward Head (Side)",
+  rounded:"Rounded Shoulders", rounded_shoulders:"Rounded Shoulders",
+  elbow:"Elbow Angle", elbow_angle:"Elbow Angle",
+  monitor:"Monitor Height", monitor_height:"Monitor Height",
+  distance:"Viewing Distance", screen_distance:"Screen Distance",
+  trunk_lean:"Trunk Lean",
   hip_angle:"Hip Angle", knee_angle:"Knee Angle",
+  session_fatigue:"Fatigue Adjustment", confidence_val:"Detection Confidence",
 };
 const METRIC_LABELS_AR = {
   neck_lean:"ميل الرقبة", neck_lean_side:"ميل الرقبة (جانبي)",
   head_tilt:"انحناء الرأس", head_yaw:"دوران الرأس",
-  shoulder:"توازن الكتفين", spine_lean:"ميل العمود الفقري",
+  shoulder:"توازن الكتفين", shoulder_level:"مستوى الكتفين",
+  spine_lean:"ميل العمود الفقري",
   spine_align:"محاذاة العمود الفقري", fhp:"تقدم الرأس للأمام",
-  fhp_side:"تقدم الرأس (جانبي)", rounded:"تقريس الأكتاف",
-  elbow:"زاوية الكوع", monitor:"ارتفاع الشاشة",
-  distance:"مسافة المشاهدة", trunk_lean:"ميل الجذع",
+  fhp_index:"تقدم الرأس للأمام", fhp_side:"تقدم الرأس (جانبي)",
+  rounded:"تقوّس الأكتاف", rounded_shoulders:"تقوّس الأكتاف",
+  elbow:"زاوية الكوع", elbow_angle:"زاوية الكوع",
+  monitor:"ارتفاع الشاشة", monitor_height:"ارتفاع الشاشة",
+  distance:"مسافة المشاهدة", screen_distance:"مسافة الشاشة",
+  trunk_lean:"ميل الجذع",
   hip_angle:"زاوية الورك", knee_angle:"زاوية الركبة",
+  session_fatigue:"تعديل الإجهاد", confidence_val:"دقة الكشف",
 };
 
 
@@ -630,7 +645,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     sf(7,"bold"); tc(doc,...tierCol); doc.text(tbl,W-mr-tbw/2,13,{align:"center"});
     // Date right
     sf(6,"normal"); tc(doc,...TEXT3);
-    doc.text(`Generated: ${dateStr}`,W-mr,20,{align:"right"});
+    doc.text(`${isAr?"أُنشئ في":"Generated"}: ${_fmtDateLong(new Date(),isAr)}`,W-mr,20,{align:"right"});
     // Bottom border line
     fc(doc,...BORDER); doc.rect(0,22,W,.5,"F");
     let y=28;
@@ -752,7 +767,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     }
     // AI tip
     if(aiText){
-      const tipLines=doc.splitTextToSize("💡  "+(aiText.split('.')[0]+'.'),cw-12);
+      const tipLines=doc.splitTextToSize((aiText.split('.')[0]+'.'),cw-12);
       const tipH=tipLines.length*5+7;
       dCard(ml,y+47,cw,tipH,4,CARD2);
       sf(6.5,"normal"); tc(doc,...TEXT2);
@@ -952,7 +967,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   dc(doc,...tierCol); lw(doc,.5); rr(doc,W-mr-tbw2,4,tbw2,14,3,"S"); lw(doc,.3);
   sf(7,"bold"); tc(doc,...tierCol); doc.text(tierLbl,W-mr-tbw2/2,13,{align:"center"});
-  sf(6,"normal"); tc(doc,...TEXT3); doc.text(`Generated: ${dateStr}`,W-mr,20,{align:"right"});
+  sf(6,"normal"); tc(doc,...TEXT3); doc.text(`${isAr?"أُنشئ في":"Generated"}: ${_fmtDateLong(new Date(),isAr)}`,W-mr,20,{align:"right"});
   fc(doc,...BORDER); doc.rect(0,22,W,.5,"F");
   let y=28;
 
@@ -1040,7 +1055,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       .forEach((t,i)=>doc.text(t,gx+(i/4)*gw2,gy+gh+5,{align:"center"}));
   }
   if(aiText){
-    const tipLines=doc.splitTextToSize("💡  "+(aiText.split('.')[0]+'.'),cw-12);
+    const tipLines=doc.splitTextToSize((aiText.split('.')[0]+'.'),cw-12);
     const tipH=tipLines.length*5+7;
     dCard(ml,y+47,cw,tipH,4,CARD2);
     sf(6.5,"normal");tc(doc,...TEXT2);tipLines.forEach((l,i)=>doc.text(l,ml+5,y+47+6+i*5));
@@ -1319,7 +1334,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const gradeC  = _gc(avg);
   const zonal   = _zonalRisk(metrics);
   const now     = new Date();
-  const dateStr = isAr ? now.toLocaleDateString("ar-EG",{year:"numeric",month:"long",day:"numeric"}) : now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  // Clinical report is a helvetica/English document end-to-end — keep the
+  // date English so it never renders as garbled Arabic glyphs.
+  const dateStr = now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
 
   const realIndex = (() => {
     if (sessionIndex) return sessionIndex;
@@ -1334,6 +1351,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     .filter(([k])=>!k.startsWith("_") && metrics[k])
     .map(([k,v])=>{
       const sc  = typeof v==="number" ? v : (v?.score ?? 100);
+      // English labels — clinical report is rendered in helvetica which can't
+      // shape Arabic (METRIC_LABELS now includes the engine's real keys, so
+      // fhp_index → "Forward Head Posture" instead of "Fhp Index").
       const lbl = METRIC_LABELS[k] || v?.label || k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
       return { key:k, sc, lbl, value:v?.value, unit:v?.unit||"" };
     })
@@ -1366,20 +1386,29 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
   doc.text("PATIENT INFORMATION", ml+4, y+7);
   doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
+  // Interleaved left/right so Math.floor(i/2) maps each pair to one row —
+  // the old order was [left,left,right,right,...] which drew Email over
+  // Patient Name and the date over the session reference.
+  // NOTE: this clinical report is rendered entirely in helvetica (English),
+  // which cannot shape Arabic — so these labels stay English in every
+  // language (Arabic here rendered as garbage like "þåþªþûþ•").
   [
-    [`Patient Name:`, name, ml+4],
-    [`Email:`, email, ml+4],
-    [`Date of Assessment:`, dateStr, ml+cw/2+4],
-    [`Session Reference:`, `#${realIndex}`, ml+cw/2+4],
-    [`Session Duration:`, _fmtDur(dur), ml+4],
-    [`Recording Mode:`, session.mode||"Laptop Camera", ml+cw/2+4],
+    [`Patient Name:`,       name,                           ml+4],
+    [`Date of Assessment:`, dateStr,                        ml+cw/2+4],
+    [`Email:`,              email,                          ml+4],
+    [`Session Ref:`,        `#${realIndex}`,                ml+cw/2+4],
+    [`Session Duration:`,   _fmtDur(dur),                   ml+4],
+    [`Recording Mode:`,     session.mode||"Laptop Camera",  ml+cw/2+4],
   ].forEach(([lbl,val,x],i) => {
     const row = Math.floor(i/2);
     const yy = y+13+(row*8);
     doc.setFont("helvetica","bold"); doc.setTextColor(100,116,139); doc.setFontSize(7.5);
-    doc.text(lbl, x, yy);
+    doc.text(String(lbl), x, yy);
     doc.setFont("helvetica","normal"); doc.setTextColor(15,23,42); doc.setFontSize(8.5);
-    doc.text(val||"—", x+32, yy);
+    // Value sits after the label's real width (not a fixed 32mm) so long
+    // labels never collide with their value.
+    const lblW = doc.getTextWidth(String(lbl))+3;
+    doc.text(String(val||"—"), x+Math.max(30,lblW), yy);
   });
   y+=40;
 
@@ -1465,8 +1494,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     const rcol=_riskColor(risk);
     const rlbl=_riskLabel(risk,false);
 
-    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,52,3,3,"F");
-    doc.setDrawColor(...rcol); doc.setLineWidth(0.5); doc.roundedRect(ml,y,cw,52,3,3,"S"); doc.setLineWidth(0.3);
+    const cardH=58;
+    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,cardH,3,3,"F");
+    doc.setDrawColor(...rcol); doc.setLineWidth(0.5); doc.roundedRect(ml,y,cw,cardH,3,3,"S"); doc.setLineWidth(0.3);
 
     // Zone identifier
     doc.setFillColor(...rcol); doc.roundedRect(ml+2,y+2,22,22,2,2,"F");
@@ -1489,14 +1519,16 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     // Description
     doc.setFontSize(7.5); doc.setTextColor(51,65,85); doc.setFont("helvetica","normal");
     const descLines = doc.splitTextToSize(desc, cw-8);
-    descLines.slice(0,4).forEach((l,i)=>doc.text(l, ml+4, y+30+(i*5.5)));
+    descLines.slice(0,3).forEach((l,i)=>doc.text(l, ml+4, y+30+(i*5.5)));
 
-    // Metrics source
+    // Metrics source — kept inside the card (was drawn at y+53.5, past the
+    // old 52mm bottom edge, so it clipped through the border)
     doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
-    doc.text("Contributing metrics: ", ml+4, y+53.5);
-    doc.setFont("helvetica","normal"); doc.text(mlist, ml+38, y+53.5);
+    doc.text("Contributing metrics:", ml+4, y+cardH-4);
+    const cmW=doc.getTextWidth("Contributing metrics:")+3;
+    doc.setFont("helvetica","normal"); doc.text(String(mlist), ml+4+cmW, y+cardH-4);
 
-    y+=58;
+    y+=cardH+6;
   });
 
   // ── PAGE 3: Body Outline + Metrics Detail + Recommendations ─────
@@ -1702,7 +1734,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     doc.setPage(p);
     doc.setFillColor(15,23,42); doc.rect(0,H-8,W,8,"F");
     doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-    doc.text(`Corvus Posture Health — Clinical Report — ${dateStr} — Confidential`, ml, H-2.5);
+    // English date — this footer is helvetica and can't shape the Arabic dateStr
+    const _footDate = now.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});
+    doc.text(`Corvus Posture Health — Clinical Report — ${_footDate} — Confidential`, ml, H-2.5);
     doc.text(`${p} / ${totalPages2}`, W-mr, H-2.5, {align:"right"});
   }
 
@@ -1779,8 +1813,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 
   // Logo + brand
   _logo(doc,ml,16,26,_logoMd);
-  font(doc,13,"bold"); tc(doc,...PDF_TOKENS.card); doc.text("CORVUS",ml+34,28);
-  font(doc,7,"normal"); tc(doc,148,163,184); doc.text("Health Intelligence Platform",ml+34,36);
+  font(doc,13,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card); doc.text("CORVUS",ml+34,28);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184); doc.text("Health Intelligence Platform",ml+34,36);
 
   // Tier badge
   const tlw=doc.getTextWidth(tierLbl)+12;
@@ -1788,21 +1822,21 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
   rr(doc,ml+34,41,tlw,10,3,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,7.5,"bold"); tc(doc,...tierCol);
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...tierCol);
   doc.text(tierLbl,ml+34+tlw/2,48,{align:"center"});
 
   // Date right
-  font(doc,7,"normal"); tc(doc,148,163,184); doc.text(nowStr,W-mr,26,{align:"right"});
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184); doc.text(nowStr,W-mr,26,{align:"right"});
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text(`Session #${num1} vs #${num2}`,W-mr,36,{align:"right"});
 
   fc(doc,...deltaCol); doc.rect(0,69.5,W,2.5,"F");
 
   // Title
   let y=86;
-  font(doc,20,"bold"); tc(doc,...PDF_TOKENS.ink);
+  font(doc,20,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"تقرير المقارنة":"Session Comparison Report",ml,y); y+=9;
-  font(doc,9,"normal"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,9,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text(`${name} · ${isAr?"مقارنة جلستين":"Head-to-head session analysis"}`,ml,y); y+=16;
   hr(doc,ml,y,cw); y+=14;
 
@@ -1815,7 +1849,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   fc(doc,...g1); doc.rect(ml,y,half,3,"F"); rr(doc,ml,y,half,3,3,"F");
   // Session number chip
   const s1lbl=`Session #${num1}`;
-  font(doc,7,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g1); rr(doc,ml+6,y+8,half-12,10,2,"F");
   doc.text(s1lbl,ml+6+(half-12)/2,y+14.5,{align:"center"});
   // Score ring
@@ -1824,11 +1858,11 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
   doc.circle(ml+half/2,y+40,14.5,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,20,"bold"); tc(doc,...g1);
+  font(doc,20,"bold",isAr&&_cairoLoaded); tc(doc,...g1);
   doc.text(String(a1),ml+half/2,y+45,{align:"center"});
-  font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text("/100",ml+half/2,y+52,{align:"center"});
-  font(doc,8.5,"bold"); tc(doc,...g1);
+  font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...g1);
   doc.text(_scoreLabel(a1,isAr),ml+half/2,y+62,{align:"center"});
 
   // VS divider + delta
@@ -1841,10 +1875,10 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   dc(doc,...deltaCol); lw(doc,1); doc.circle(mx,y+35,10,"S"); lw(doc,0.3);
   // Bigger delta value — the up/down arrow glyph doesn't render in helvetica,
   // so the signed number (+16 / -9 / 0) carries the direction on its own.
-  font(doc,11,"bold"); tc(doc,...deltaCol);
+  font(doc,11,"bold",isAr&&_cairoLoaded); tc(doc,...deltaCol);
   doc.text(delta===0?"=":`${delta>0?"+":""}${delta}`,mx,y+38,{align:"center"});
   // VS label
-  font(doc,6.5,"bold"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text("VS",mx,y+52,{align:"center"});
 
   // Session 2 card
@@ -1853,7 +1887,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   dc(doc,...g2); lw(doc,0.3); rr(doc,rx,y,half,heroH,6,"S"); lw(doc,0.3);
   fc(doc,...g2); doc.rect(rx,y,half,3,"F"); rr(doc,rx,y,half,3,3,"F");
   const s2lbl=`Session #${num2}`;
-  font(doc,7,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g2); rr(doc,rx+6,y+8,half-12,10,2,"F");
   doc.text(s2lbl,rx+6+(half-12)/2,y+14.5,{align:"center"});
   // Score ring
@@ -1862,11 +1896,11 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
   doc.circle(rx+half/2,y+40,14.5,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,20,"bold"); tc(doc,...g2);
+  font(doc,20,"bold",isAr&&_cairoLoaded); tc(doc,...g2);
   doc.text(String(a2),rx+half/2,y+45,{align:"center"});
-  font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text("/100",rx+half/2,y+52,{align:"center"});
-  font(doc,8.5,"bold"); tc(doc,...g2);
+  font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...g2);
   doc.text(_scoreLabel(a2,isAr),rx+half/2,y+62,{align:"center"});
   y+=heroH+8;
 
@@ -1880,11 +1914,11 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   qStats.forEach(([lbl,v1,v2,col],i)=>{
     const qy=y+i*12;
     if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,qy,cw,12,"F");}
-    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(lbl,ml+4,qy+8);
-    font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v1,ml+cw*0.45,qy+8,{align:"right"});
+    font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text(lbl,ml+4,qy+8);
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...col); doc.text(String(v1),ml+cw*0.45,qy+8,{align:"right"});
     // Drawn chevron instead of the "→" glyph (absent from helvetica)
     _chevronR(doc,ml+cw*0.5-1.6,qy+6,PDF_TOKENS.muted);
-    font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v2,ml+cw*0.98,qy+8,{align:"right"});
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...col); doc.text(String(v2),ml+cw*0.98,qy+8,{align:"right"});
   });
   y+=qStats.length*12+10;
 
@@ -1897,7 +1931,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   fc(doc,...deltaBg); rr(doc,ml,y,cw,14,3,"F");
   dc(doc,...deltaCol); lw(doc,0.25); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
   fc(doc,...deltaCol); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-  font(doc,8.5,"bold"); tc(doc,...deltaCol);
+  font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...deltaCol);
   doc.text(insText,ml+8,y+9.5);
   y+=22;
 
@@ -1913,7 +1947,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // Column headers
   const colX=[ml+3,ml+cw*0.42,ml+cw*0.56,ml+cw*0.70,ml+cw*0.85];
   fc(doc,...PDF_TOKENS.slate); rr(doc,ml,y,cw,10,2,"F");
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   [isAr?"المقياس":"Metric",`#${num1}`,`#${num2}`,isAr?"الفرق":"Diff",isAr?"الاتجاه":"Trend"]
     .forEach((h,i)=>doc.text(h,colX[i],y+7));
   y+=12;
@@ -1929,11 +1963,11 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     // Score 1 with mini dot
     const c1=_scoreColor(sc1),c2=_scoreColor(sc2);
     fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
-    font(doc,8,"bold"); tc(doc,...c1); doc.text(String(Math.round(sc1)),colX[1]+2,y+7.5);
+    font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c1); doc.text(String(Math.round(sc1)),colX[1]+2,y+7.5);
     fc(doc,...c2); doc.circle(colX[2]-3,y+5.5,2.5,"F");
-    font(doc,8,"bold"); tc(doc,...c2); doc.text(String(Math.round(sc2)),colX[2]+2,y+7.5);
+    font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c2); doc.text(String(Math.round(sc2)),colX[2]+2,y+7.5);
     // Delta
-    font(doc,8.5,"bold"); tc(doc,...dC);
+    font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...dC);
     doc.text(`${d>0?"+":""}${d}`,colX[3],y+7.5);
     // Trend arrow pill — drawn triangle (glyph arrows don't render)
     fc(doc,...dC);
@@ -1966,18 +2000,18 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     fc(doc,...rc2); doc.rect(ml,y,3,zh,"F"); rr(doc,ml,y,3,zh,1.5,"F");
     // Zone label
     font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(isAr?ar:en,ml+9,y+10);
-    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+9,y+17);
+    font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+9,y+17);
     // Two risk bars side by side
     const bw2=(cw-24)/2, barY=y+22;
     // Session 1 bar
     fc(doc,...PDF_TOKENS.borderSoft); rr(doc,ml+9,barY,bw2,5,2,"F");
     fc(doc,...rc1); rr(doc,ml+9,barY,Math.max(bw2*(r1/100),3),5,2,"F");
-    font(doc,6.5,"bold"); tc(doc,...rc1);
+    font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...rc1);
     doc.text(`#${num1}: ${r1}%`,ml+9,barY+10);
     // Session 2 bar
     fc(doc,...PDF_TOKENS.borderSoft); rr(doc,ml+9+bw2+4,barY,bw2,5,2,"F");
     fc(doc,...rc2); rr(doc,ml+9+bw2+4,barY,Math.max(bw2*(r2/100),3),5,2,"F");
-    font(doc,6.5,"bold"); tc(doc,...rc2);
+    font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...rc2);
     doc.text(`#${num2}: ${r2}%`,ml+9+bw2+4,barY+10);
     // Delta badge top right
     const dzlbl=`${dz>0?"+":"-"}${Math.abs(dz)}%`;
@@ -1986,7 +2020,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
     rr(doc,W-mr-dzw-2,y+7,dzw,9,2,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    font(doc,7.5,"bold"); tc(doc,...dzC);
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...dzC);
     doc.text(dzlbl,W-mr-dzw/2-2,y+13,{align:"center"});
     y+=zh+7;
   });
@@ -2073,12 +2107,12 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     doc.circle(ml+16,y+14,9,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     dc(doc,...col); lw(doc,1); doc.circle(ml+16,y+14,9,"S"); lw(doc,0.3);
-    font(doc,10,"bold"); tc(doc,...col); doc.text(String(idx+1),ml+16,y+17.5,{align:"center"});
+    font(doc,10,"bold",isAr&&_cairoLoaded); tc(doc,...col); doc.text(String(idx+1),ml+16,y+17.5,{align:"center"});
     // Title
     font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,ml+30,y+12);
     font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
     steps.slice(0,3).forEach((s,i)=>{
-      font(doc,7.5,"bold"); tc(doc,...col);
+      font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...col);
       doc.text(`${i+1}.`,ml+30,y+22+(i*7));
       font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
       doc.text(doc.splitTextToSize(s,cw-38)[0],ml+36,y+22+(i*7));
@@ -2105,7 +2139,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,th3,4,"S"); lw(doc,0.3);
   // Header row
   fc(doc,...PDF_TOKENS.slate); doc.rect(ml,y,cw,9,"F"); rr(doc,ml,y,cw,9,2,"F"); doc.rect(ml,y+5,cw,4,"F");
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text(isAr?"البند":"Item",ml+5,y+6.5);
   doc.text(`Session #${num1}`,ml+cw*0.42,y+6.5,{align:"center"});
   doc.text(`Session #${num2}`,ml+cw*0.75,y+6.5,{align:"center"});
@@ -2305,7 +2339,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   for(let p=1;p<=tp;p++){
     doc.setPage(p);
     fc(doc,...PDF_TOKENS.ink); doc.rect(0,H-8,W,8,"F");
-    font(doc,6.5,"normal"); tc(doc,100,116,139);
+    sf(6.5,"normal"); tc(doc,100,116,139); // sf → Arabic font so nowStr/label don't garble
     doc.text(`Corvus — ${isAr?"تقرير الفريق — سري":"Team Report — Confidential"} · ${nowStr}`,ml,H-2.5);
     doc.text(`${p} / ${tp}`,W-mr,H-2.5,{align:"right"});
   }
@@ -2414,25 +2448,25 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
 
   // Logo + brand
   _logo(doc,ml,18,26,_logoMd);
-  font(doc,13,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,13,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text("CORVUS",ml+34,30);
-  font(doc,7,"normal"); tc(doc,148,163,184);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184);
   doc.text("Health Intelligence Platform",ml+34,38);
 
   // ELITE badge
-  const elbadge="* ELITE";
+  const elbadge="ELITE";
   const elw=doc.getTextWidth(elbadge)+12;
   fc(doc,...PDF_TOKENS.success);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
   rr(doc,ml+34,43,elw,10,3,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.success);
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.success);
   doc.text(elbadge,ml+34+elw/2,50,{align:"center"});
 
   // Date + session count right
-  font(doc,7,"normal"); tc(doc,148,163,184);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184);
   doc.text(nowStr,W-mr,27,{align:"right"});
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text(`${sessions.length} ${isAr?"جلسة":"sessions"} · ${weeksSpan} ${isAr?"أسبوع":"weeks"}`,W-mr,37,{align:"right"});
 
   // Bottom accent
@@ -2440,9 +2474,9 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
 
   // Report title block
   let y=96;
-  font(doc,22,"bold"); tc(doc,...PDF_TOKENS.ink);
+  font(doc,22,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"التقرير الطولي":"Longitudinal Health Report",ml,y); y+=10;
-  font(doc,10,"normal"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,10,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text(`${name} · ${isAr?"تحليل متعدد الجلسات":"Multi-session posture analysis"}`,ml,y); y+=16;
 
   // Thin divider
@@ -2465,16 +2499,15 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     // Top accent
     fc(doc,...col); rr(doc,kx,ky,kw,3,2,"F"); doc.rect(kx,ky+1.5,kw,1.5,"F");
     // Value
-    font(doc,16,"bold"); tc(doc,...col);
+    font(doc,16,"bold",isAr&&_cairoLoaded); tc(doc,...col);
     doc.text(v,kx+kw/2,ky+kh*0.58,{align:"center"});
     // Label
-    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.muted);
+    font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
     doc.text(l,kx+kw/2,ky+kh*0.82,{align:"center"});
   });
   y+=kh*2+6*2+12;
 
   // ── TREND BANNER ───────────────────────────────────────────
-  const trendIcon = improved?"[UP]":declined?"[DOWN]":"[STABLE]";
   const trendText = improved
     ? (isAr?`تحسّن مستمر +${trendDelta} نقطة منذ البداية — أنت على المسار الصحيح`:`Consistent improvement +${trendDelta}pts since start`)
     : declined
@@ -2483,8 +2516,10 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   fc(doc,...trendBg); rr(doc,ml,y,cw,14,3,"F");
   dc(doc,...trendCol); lw(doc,0.25); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
   fc(doc,...trendCol); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-  font(doc,8.5,"bold"); tc(doc,...trendCol);
-  doc.text(`${trendIcon}  ${trendText}`,ml+8,y+9.2);
+  // Drawn trend triangle instead of the "[UP]" text placeholder
+  _triangle(doc,ml+11,y+7,improved?"up":declined?"down":"flat",trendCol);
+  font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...trendCol);
+  doc.text(trendText,ml+17,y+9.2);
   y+=22;
 
   // ── ELITE: WEEKLY GOAL PROGRESS ─────────────────────────────
@@ -2502,14 +2537,14 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     fc(doc,..._lgCol); doc.rect(ml,y,3,26,"F"); rr(doc,ml,y,3,26,1.5,"F");
     font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
     doc.text(isAr?"هدفك الأسبوعي":"Weekly Goal",ml+8,y+8);
-    font(doc,12,"bold"); tc(doc,..._lgCol);
+    font(doc,12,"bold",isAr&&_cairoLoaded); tc(doc,..._lgCol);
     doc.text(`${_lgCur??"—"} / ${_lgGoal}`,ml+8,y+19);
     const _gbx=ml+cw*0.35,_gbw=cw*0.38;
     fc(doc,...PDF_TOKENS.borderSoft); rr(doc,_gbx,y+13,_gbw,5,2,"F");
     fc(doc,..._lgCol); rr(doc,_gbx,y+13,Math.max(_gbw*Math.min(1,(_lgCur||0)/_lgGoal),3),5,2,"F");
     if(_lgCur!=null&&_lgPrev!=null){
       const _d=_lgCur-_lgPrev,_dc=_d>0?PDF_TOKENS.success:_d<0?PDF_TOKENS.danger:PDF_TOKENS.muted;
-      font(doc,8,"bold"); tc(doc,..._dc);
+      font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,..._dc);
       doc.text(`${_d>0?"+":""}${_d} ${isAr?"عن الأسبوع الماضي":"vs last wk"}`,W-mr-5,y+9,{align:"right"});
     }
     const _eta=_lgReached?(isAr?"وصلت لهدفك — ثبّته":"Goal reached — hold it")
@@ -2538,7 +2573,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   [50,65,80].forEach(v=>{
     const gy=y+th-6-((v-30)/70)*(th-12);
     dc(doc,...PDF_TOKENS.border); lw(doc,0.12); doc.line(ml+3,gy,ml+cw-3,gy);
-    font(doc,5,"normal"); tc(doc,...PDF_TOKENS.light);
+    font(doc,5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.light);
     doc.text(String(v),ml+1,gy+1.5,{align:"right"});
   }); lw(doc,0.3);
 
@@ -2574,7 +2609,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     dc(doc,...lC); lw(doc,1); doc.circle(spts[0].px,spts[0].py,2.2,"S"); lw(doc,0.3);
     fc(doc,...lC); doc.circle(spts[spts.length-1].px,spts[spts.length-1].py,2.8,"F");
     // Score labels
-    font(doc,6,"bold"); tc(doc,...lC);
+    font(doc,6,"bold",isAr&&_cairoLoaded); tc(doc,...lC);
     doc.text(String(allScores[0]),spts[0].px,spts[0].py-4,{align:"center"});
     doc.text(String(allScores[allScores.length-1]),spts[spts.length-1].px,spts[spts.length-1].py-4,{align:"center"});
   }
@@ -2600,7 +2635,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     if(!avg){
       // No data — ghost bar
       fc(doc,...PDF_TOKENS.border); rr(doc,bx,y+barZoneH-12-4,barW2,4,1,"F");
-      font(doc,5.5,"normal"); tc(doc,...PDF_TOKENS.light);
+      font(doc,5.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.light);
       doc.text("—",bx+barW2/2,y+barZoneH-5.5,{align:"center"});
       doc.text(isAr?dayNamesAr[di]:dayNamesEn[di],bx+barW2/2,y+barZoneH-1.5,{align:"center"});
       return;
@@ -2613,10 +2648,10 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     rr(doc,bx,y+barZoneH-12-bh,barW2,bh,1.5,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     // Score label above bar
-    font(doc,6.5,"bold"); tc(doc,...bc);
+    font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...bc);
     doc.text(String(avg),bx+barW2/2,y+barZoneH-12-bh-2,{align:"center"});
     // Day label
-    font(doc,6,"bold"); tc(doc,...(di===bestDay?PDF_TOKENS.success:di===worstDay?PDF_TOKENS.danger:PDF_TOKENS.muted));
+    font(doc,6,"bold",isAr&&_cairoLoaded); tc(doc,...(di===bestDay?PDF_TOKENS.success:di===worstDay?PDF_TOKENS.danger:PDF_TOKENS.muted));
     doc.text(isAr?dayNamesAr[di]:dayNamesEn[di],bx+barW2/2,y+barZoneH-1.5,{align:"center"});
   });
   y+=barZoneH+8;
@@ -2626,7 +2661,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     const bdn=isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay];
     const wdn=isAr?dayNamesAr[worstDay]:dayNamesEn[worstDay];
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,11,2,"F");
-    font(doc,7.5,"normal"); tc(doc,...PDF_TOKENS.sub);
+    font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.sub);
     const ins=isAr
       ?`أفضل يوم: ${bdn} (${dayAvgs[bestDay]}) · أسوأ يوم: ${wdn} (${dayAvgs[worstDay]})`
       :`Best day: ${bdn} (${dayAvgs[bestDay]}) · Worst day: ${wdn} (${dayAvgs[worstDay]})`;
@@ -2653,12 +2688,12 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     fc(doc,...rc); doc.rect(ml,y,3,zh,"F"); rr(doc,ml,y,3,zh,1.5,"F");
     // Risk circle
     fc(doc,...rc); doc.circle(ml+18,y+zh/2,10,"F");
-    font(doc,9.5,"bold"); tc(doc,...PDF_TOKENS.card);
+    font(doc,9.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
     doc.text(`${risk}%`,ml+18,y+zh/2+3.5,{align:"center"});
     // Title + region
     font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
     doc.text(isAr?ar:en,ml+33,y+10);
-    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+33,y+17);
+    font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+33,y+17);
     // Risk label pill
     const rlbl=_riskLabel(risk,isAr);
     const rw=doc.getTextWidth(rlbl)+8;
@@ -2666,7 +2701,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
     rr(doc,W-mr-rw-2,y+6,rw,9,2,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    font(doc,7.5,"bold"); tc(doc,...rc);
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...rc);
     doc.text(rlbl,W-mr-rw/2-2,y+11.8,{align:"center"});
     // Progress bar
     const bx=ml+33, bw2=cw*0.42;
@@ -2684,8 +2719,8 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   _sh(doc,ml,y,isAr?"أفضل وأسوأ جلسة":"Best & Worst Sessions","",PDF_TOKENS.success,isAr);
   y+=14;
 
-  [[isAr?"* الجلسة الأفضل":"* Best Session",best,PDF_TOKENS.success],
-   [isAr?"! الجلسة الأسوأ":"! Worst Session",worst,PDF_TOKENS.danger]
+  [[isAr?"الجلسة الأفضل":"Best Session",best,PDF_TOKENS.success],
+   [isAr?"الجلسة الأسوأ":"Worst Session",worst,PDF_TOKENS.danger]
   ].forEach(([label,sess,col])=>{
     if(!sess||y>H-36){if(y>H-36){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;} else return;}
     const sh2=28;
@@ -2694,16 +2729,16 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     fc(doc,...col); doc.rect(ml,y,3,sh2,"F"); rr(doc,ml,y,3,sh2,1.5,"F");
     // Score badge
     fc(doc,...col); rr(doc,ml+7,y+5,18,18,3,"F");
-    font(doc,11,"bold"); tc(doc,...PDF_TOKENS.card);
+    font(doc,11,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
     doc.text(String(Math.round(sess.avg_score||0)),ml+16,y+16,{align:"center"});
     // Label
     font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(label,ml+30,y+11);
-    font(doc,7.5,"normal"); tc(doc,...PDF_TOKENS.muted);
+    font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
     doc.text(_fmtDate(sess.created_at,isAr),ml+30,y+19);
     // Right stats
-    font(doc,7.5,"bold"); tc(doc,...col);
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...col);
     doc.text(`${isAr?"المدة":"Duration"}: ${_fmtDur(sess.duration_s||sess.duration_sec||0)}`,W-mr-2,y+11,{align:"right"});
-    font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
+    font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
     doc.text(`${isAr?"تنبيهات":"Alerts"}: ${sess.alerts_count||0}`,W-mr-2,y+19,{align:"right"});
     y+=sh2+8;
   });
@@ -2793,7 +2828,7 @@ const programme=[
     rr(doc,ml+4,y+5,22,18,3,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     dc(doc,...PDF_TOKENS.primary); lw(doc,0.8); rr(doc,ml+4,y+5,22,18,3,"S"); lw(doc,0.3);
-    font(doc,6.5,"bold"); tc(doc,...PDF_TOKENS.primary);
+    font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.primary);
     doc.text("W",ml+15,y+11.5,{align:"center"});
     doc.text(wk,ml+15,y+17,{align:"center"});
     // Goal + action
