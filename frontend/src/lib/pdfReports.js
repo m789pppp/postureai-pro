@@ -65,6 +65,53 @@ const _EX_AREA_LABELS = {
   recovery:  { en: "Recovery & habits",          ar: "استشفاء وعادات" },
 };
 
+// ── Metric mini-card (session PDF) — label + value + score bar ─────
+// Redesigned to eliminate the Arabic/long-label collision with the old
+// right-side score ring: label is truncated to the free width, the score
+// number is right-aligned, and a horizontal bar sits along the bottom.
+function _metricMiniCard(doc,{mx,y,mw,mh,lbl,sc,val,unit,pri,isAr,sf,dCard,BORDER,TEXT,TEXT2,TEXT3}){
+  const round=(n)=>Math.round(n);
+  const iconC = sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
+  dCard(mx,y,mw,mh,5);
+  // Left accent bar
+  fc(doc,...iconC); rr(doc,mx,y,2.2,mh,1.1,"F");
+  // Label — truncated so it never reaches the right-aligned score
+  sf(8,"bold"); tc(doc,...TEXT);
+  const lblFit = doc.splitTextToSize(String(lbl), mw-26)[0];
+  doc.text(lblFit, mx+6, y+9);
+  // Value under label
+  if(val!==undefined&&val!==null){
+    sf(6.5,"normal"); tc(doc,...TEXT2);
+    doc.text(`${round(val*10)/10}${unit||""}`, mx+6, y+15.5);
+  }
+  // Score number (right)
+  sf(15,"bold"); tc(doc,...iconC); doc.text(String(round(sc)), mx+mw-6, y+13, {align:"right"});
+  sf(5,"normal"); tc(doc,...TEXT3); doc.text("/100", mx+mw-6, y+18, {align:"right"});
+  // Progress bar
+  const bx=mx+6, bw=mw-12;
+  fc(doc,...BORDER); rr(doc,bx,y+21,bw,4,2,"F");
+  fc(doc,...iconC); rr(doc,bx,y+21,Math.max(bw*(sc/100),3),4,2,"F");
+  // Priority badge
+  const pw=doc.getTextWidth(pri)+8;
+  fc(doc,...iconC); doc.setGState&&doc.setGState(new doc.GState({opacity:.13}));
+  rr(doc,mx+6,y+mh-9,pw,6.5,2,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  sf(5.5,"bold"); tc(doc,...iconC); doc.text(pri, mx+6+pw/2, y+mh-4.5, {align:"center"});
+}
+
+// ── Vector glyphs — jsPDF's built-in helvetica has no arrows/triangles,
+//    so we draw them (text glyphs render as garbage like "!'" or "Ø=ÜÈ") ──
+function _chevronR(doc,x,y,col){ // small right chevron, ~3mm
+  dc(doc,...col); lw(doc,0.8);
+  doc.line(x,y-1.6,x+2.4,y); doc.line(x+2.4,y,x,y+1.6); lw(doc,0.3);
+}
+function _triangle(doc,cx,cy,dir,col){ // dir: "up" | "down" | "flat"
+  fc(doc,...col);
+  if(dir==="flat"){ rr(doc,cx-2.2,cy-0.7,4.4,1.4,0.6,"F"); return; }
+  const s=2.2, d=dir==="up"?-1:1;
+  try{ doc.triangle(cx-s,cy-d*s*0.9, cx+s,cy-d*s*0.9, cx,cy+d*s*1.1, "F"); }
+  catch{ rr(doc,cx-2,cy-0.7,4,1.4,0.6,"F"); }
+}
+
 // ── Unified entry point (called from AIReports.jsx + App.jsx) ──────
 export async function exportPDFReport({ type, sessions, session, profile, aiSummary, lang="en" }) {
   // Always use the most recent session (first in array = most recent from Firestore)
@@ -533,23 +580,23 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       return{k,sc,lbl,val,unit,pri,priC};
     }).sort((a,b)=>a.sc-b.sc);
 
-  // ── DARK THEME COLORS ─────────────────────────────────────────
-  const BG     = [10,15,30];    // #0a0f1e
-  const BG2    = [16,23,45];    // #10172d
-  const CARD   = [20,28,55];    // #141c37
-  const CARD2  = [26,36,68];    // #1a2444
-  const BORDER = [40,55,95];    // #28375f
-  const TEXT   = [255,255,255];
-  const TEXT2  = [148,163,200]; // #94a3c8
-  const TEXT3  = [80,100,145];  // muted
+  // ── LIGHT THEME COLORS (Apple Health × Bloomberg — matches Clinical/
+  //    Comparison/Longitudinal reports so all PDFs share one look) ──────
+  const BG     = [247,249,252];  // page background — soft gray
+  const BG2    = [255,255,255];  // header bar — white
+  const CARD   = [255,255,255];  // cards — white
+  const CARD2  = [248,250,252];  // subtle inset panels
+  const BORDER = [226,232,240];  // hairline borders
+  const TEXT   = [15,23,42];      // primary ink
+  const TEXT2  = [100,116,139];   // secondary
+  const TEXT3  = [148,163,184];   // muted
+  const ACCENT = [37,99,235];     // brand blue (top strip)
 
-  // ── HELPER: dark rounded card ──────────────────────────────────
+  // ── HELPER: light rounded card with hairline border ────────────
   const dCard = (x,y,w,h,r=6,col=CARD) => {
     fc(doc,...col); rr(doc,x,y,w,h,r,"F");
-    fc(doc,...BORDER);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
+    dc(doc,...BORDER); lw(doc,0.4);
     rr(doc,x,y,w,h,r,"S");
-    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     lw(doc,0.3);
   };
 
@@ -567,7 +614,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     fc(doc,...BG); doc.rect(0,0,W,H,"F");
 
     // ── PAGE 1 HEADER ──────────────────────────────────────────
-    fc(doc,...BG2); doc.rect(0,0,W,22,"F");
+    fc(doc,...BG2); doc.rect(0,0,W,22,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,2,"F");
     _logo(doc,ml,5,12,_logoSm);
     sf(8.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+16,11.5);
     sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
@@ -627,12 +674,12 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     kpis.forEach(([label,val,icon,col],i)=>{
       const kx2=kx+(i%2)*(kw+4), ky2=y+(Math.floor(i/2))*(kh+4);
       dCard(kx2,ky2,kw,kh,5,CARD2);
-      // Icon circle
+      // Icon circle — solid dot (emoji/symbol glyphs don't render in helvetica)
       fc(doc,...col);
       doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
       doc.circle(kx2+10,ky2+10,8,"F");
       doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(8,"normal"); tc(doc,...col); doc.text(icon,kx2+10,ky2+13.5,{align:"center"});
+      fc(doc,...col); doc.circle(kx2+10,ky2+10,2.4,"F");
       sf(11,"bold"); tc(doc,...TEXT); doc.text(String(val),kx2+kw/2,ky2+kh*.6,{align:"center"});
       sf(5.5,"bold"); tc(doc,...TEXT3); doc.text(label,kx2+kw/2,ky2+kh*.82,{align:"center"});
     });
@@ -649,7 +696,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     ].forEach(([icon,lbl,val],i)=>{
       const ry=y+16+i*14;
       sf(5.5,"normal"); tc(doc,...TEXT3);
-      doc.text(icon+" "+lbl,ix+4,ry);
+      doc.text(String(lbl),ix+4,ry);
       sf(6,"bold"); tc(doc,...TEXT);
       doc.text(String(val),ix+4,ry+6.5);
       if(i<3){ fc(doc,...BORDER); doc.rect(ix+4,ry+9,infoW-8,.3,"F"); }
@@ -720,34 +767,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     const mshow=mEntries.slice(0,3);
     const mw=(cw-(mshow.length-1)*5)/mshow.length;
     mshow.forEach(({lbl,sc,val,unit,pri,priC},i)=>{
-      const mx=ml+i*(mw+5);
-      const mh=38;
-      dCard(mx,y,mw,mh,5);
-      // Priority icon
-      const iconC=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
-      fc(doc,...iconC);
-      doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-      rr(doc,mx+4,y+5,12,12,3,"F");
-      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(7,"bold"); tc(doc,...iconC); doc.text(sc<40?"↑":sc<65?"→":"✓",mx+10,y+13.5,{align:"center"});
-      // Metric name + value
-      sf(8,"bold"); tc(doc,...TEXT); doc.text(lbl,mx+20,y+10);
-      if(val!==undefined){
-        sf(6.5,"normal"); tc(doc,...TEXT2); doc.text(`${Math.round(val*10)/10}${unit}`,mx+20,y+17);
-      }
-      // Priority badge
-      const pw=doc.getTextWidth(pri)+8;
-      fc(doc,...iconC);
-      doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-      rr(doc,mx+4,y+mh-11,pw,8,2,"F");
-      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(5.5,"bold"); tc(doc,...iconC); doc.text(pri,mx+4+pw/2,y+mh-5.5,{align:"center"});
-      // Score ring (right side)
-      const rind=mx+mw-16, rcy=y+mh/2;
-      dc(doc,...BORDER); lw(doc,3); doc.circle(rind,rcy,10,"S");
-      dc(doc,...iconC); lw(doc,3); doc.circle(rind,rcy,10,"S"); lw(doc,.3);
-      sf(7.5,"bold"); tc(doc,...iconC); doc.text(String(Math.round(sc)),rind,rcy+2.5,{align:"center"});
-      sf(4.5,"normal"); tc(doc,...TEXT3); doc.text("/100",rind,rcy+7.5,{align:"center"});
+      const mx=ml+i*(mw+5); const mh=38;
+      _metricMiniCard(doc,{mx,y,mw,mh,lbl,sc,val,unit,pri,isAr,sf,dCard,BORDER,TEXT,TEXT2,TEXT3});
     });
     y+=mEntries.slice(0,3).length>0?45:0;
 
@@ -765,7 +786,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     // ══════════════════════════════════════════════════════════
     doc.addPage();
     fc(doc,...BG); doc.rect(0,0,W,H,"F");
-    fc(doc,...BG2); doc.rect(0,0,W,15,"F");
+    fc(doc,...BG2); doc.rect(0,0,W,15,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,1.6,"F");
     _logo(doc,ml,3,9,_logoSm);
     sf(7.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+13,8);
     sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+13,13);
@@ -884,19 +905,19 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
     rr(doc,ml+5,y+8,36,36,10,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(18,"bold"); tc(doc,...tierCol); doc.text("♛",ml+23,y+32,{align:"center"});
+    fc(doc,...tierCol); doc.circle(ml+23,y+26,4.5,"F"); // badge dot (crown glyph doesn't render)
     sf(10,"bold"); tc(doc,...TEXT); doc.text(isAr?"رقّي لـ Elite":"Upgrade to Elite",ml+50,y+18);
     sf(7,"normal"); tc(doc,...TEXT2); doc.text(isAr?"افتح تحليلات متقدمة وتقارير كاملة":"Unlock advanced insights and reports",ml+50,y+26);
-    // Feature icons
-    const feats=[["📋",isAr?"تحليل AI":"Detailed AI"],["📄","Full PDF"],["🫀",isAr?"توقع الألم":"Pain prediction"],["📊",isAr?"مقارنة":"Baseline"]];
-    feats.forEach(([ic,lb],i)=>{
+    // Feature list — colored dot + label (emoji don't render in helvetica)
+    const feats=[[isAr?"تحليل AI":"Detailed AI"],["Full PDF"],[isAr?"توقع الألم":"Pain prediction"],[isAr?"مقارنة":"Baseline"]];
+    feats.forEach(([lb],i)=>{
       const fx=ml+50+i*34;
-      sf(12,"normal"); tc(doc,...tierCol); doc.text(ic,fx+7,y+38,{align:"center"});
+      fc(doc,...tierCol); doc.circle(fx+7,y+37,1.8,"F");
       sf(5,"normal"); tc(doc,...TEXT2); doc.text(lb,fx+7,y+46,{align:"center"});
     });
     // CTA button
     fc(doc,...tierCol); rr(doc,W/2-30,y+40,60,12,4,"F");
-    sf(7,"bold"); tc(doc,...TEXT); doc.text(isAr?"♛ رقّي الآن":"♛ Upgrade Now",W/2,y+48,{align:"center"});
+    sf(7,"bold"); tc(doc,...[255,255,255]); doc.text(isAr?"رقّي الآن":"Upgrade Now",W/2,y+48,{align:"center"});
     y+=57;
 
     // Footer
@@ -918,7 +939,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   fc(doc,...BG); doc.rect(0,0,W,H,"F");
 
   // Header
-  fc(doc,...BG2); doc.rect(0,0,W,22,"F");
+  fc(doc,...BG2); doc.rect(0,0,W,22,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,2,"F");
   _logo(doc,ml,5,12,_logoSm);
   sf(8.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+16,11.5);
   sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
@@ -969,7 +990,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
     doc.circle(kx2b+10,ky2+10,8,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(8,"normal"); tc(doc,...col); doc.text(icon,kx2b+10,ky2+13.5,{align:"center"});
+    fc(doc,...col); doc.circle(kx2b+10,ky2+10,2.4,"F");
     sf(11,"bold"); tc(doc,...TEXT); doc.text(String(val),kx2b+kw/2,ky2+kh*.6,{align:"center"});
     sf(5.5,"bold"); tc(doc,...TEXT3); doc.text(label,kx2b+kw/2,ky2+kh*.82,{align:"center"});
   });
@@ -981,7 +1002,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
    ["🏢",isAr?"الشركة":"Company",company||"—"],["🔑","ID",`local_${session.id?.slice(-8)||"xxxxxxxx"}`]
   ].forEach(([icon,lbl,val],i)=>{
     const ry=y+16+i*14;
-    sf(5.5,"normal"); tc(doc,...TEXT3); doc.text(icon+" "+lbl,ix2+4,ry);
+    sf(5.5,"normal"); tc(doc,...TEXT3); doc.text(String(lbl),ix2+4,ry);
     sf(6,"bold"); tc(doc,...TEXT); doc.text(String(val),ix2+4,ry+6.5);
     if(i<3){fc(doc,...BORDER);doc.rect(ix2+4,ry+9,infoW-8,.3,"F");}
   });
@@ -1032,22 +1053,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const mw2=(cw-(mshow2.length-1)*5)/Math.max(mshow2.length,1);
   mshow2.forEach(({lbl,sc,val,unit,pri,priC},i)=>{
     const mx=ml+i*(mw2+5);const mh=38;
-    dCard(mx,y,mw2,mh,5);
-    const iconC=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
-    fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-    rr(doc,mx+4,y+5,12,12,3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(7,"bold");tc(doc,...iconC);doc.text(sc<40?"↑":sc<65?"→":"✓",mx+10,y+13.5,{align:"center"});
-    sf(8,"bold");tc(doc,...TEXT);doc.text(lbl,mx+20,y+10);
-    if(val!==undefined){sf(6.5,"normal");tc(doc,...TEXT2);doc.text(`${Math.round(val*10)/10}${unit}`,mx+20,y+17);}
-    const pw=doc.getTextWidth(pri)+8;
-    fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-    rr(doc,mx+4,y+mh-11,pw,8,2,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(5.5,"bold");tc(doc,...iconC);doc.text(pri,mx+4+pw/2,y+mh-5.5,{align:"center"});
-    const rind=mx+mw2-16,rcy=y+mh/2;
-    dc(doc,...BORDER);lw(doc,3);doc.circle(rind,rcy,10,"S");
-    dc(doc,...iconC);lw(doc,3);doc.circle(rind,rcy,10,"S");lw(doc,.3);
-    sf(7.5,"bold");tc(doc,...iconC);doc.text(String(Math.round(sc)),rind,rcy+2.5,{align:"center"});
-    sf(4.5,"normal");tc(doc,...TEXT3);doc.text("/100",rind,rcy+7.5,{align:"center"});
+    _metricMiniCard(doc,{mx,y,mw:mw2,mh,lbl,sc,val,unit,pri,isAr,sf,dCard,BORDER,TEXT,TEXT2,TEXT3});
   });
   y+=mshow2.length>0?45:0;
 
@@ -1059,7 +1065,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
   // PAGE 2 — full metrics + AI analysis
   doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
-  fc(doc,...BG2);doc.rect(0,0,W,15,"F");
+  fc(doc,...BG2);doc.rect(0,0,W,15,"F");fc(doc,...ACCENT);doc.rect(0,0,W,1.6,"F");
   _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("CORVUS",ml+13,8);
   sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
   sf(6,"normal");tc(doc,...TEXT3);doc.text(`Session #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
@@ -1143,7 +1149,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       dCard(ml,y,cw,mh,4);
       fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
       rr(doc,ml+4,y+4,10,10,2,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(6.5,"bold");tc(doc,...iconC);doc.text(sc<40?"↑":sc<65?"→":"✓",ml+9,y+11,{align:"center"});
+      // Solid status dot — arrow/check glyphs don't exist in helvetica
+      fc(doc,...iconC);doc.circle(ml+9,y+9,1.8,"F");
       sf(8.5,"bold");tc(doc,...TEXT);doc.text(lbl,ml+18,y+10);
       if(val!==undefined){sf(6.5,"normal");tc(doc,...TEXT2);doc.text(`${Math.round(val*10)/10}${unit}`,ml+18,y+17.5);}
       // Progress bar
@@ -1176,7 +1183,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const _plan    = profile?.exercise_plan?.week === _exWeekKey() ? profile.exercise_plan : null;
   if (_snaps.length || _goal || _plan) {
     doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
-    fc(doc,...BG2);doc.rect(0,0,W,15,"F");
+    fc(doc,...BG2);doc.rect(0,0,W,15,"F");fc(doc,...ACCENT);doc.rect(0,0,W,1.6,"F");
     _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("CORVUS",ml+13,8);
     sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
     sf(6,"normal");tc(doc,...TEXT3);doc.text(isAr?"رؤى Elite":"ELITE INSIGHTS",W-mr,10,{align:"right"});
@@ -1832,10 +1839,10 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   doc.circle(mx,y+35,10,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   dc(doc,...deltaCol); lw(doc,1); doc.circle(mx,y+35,10,"S"); lw(doc,0.3);
-  font(doc,9,"bold"); tc(doc,...deltaCol);
-  doc.text(delta===0?"=":(improved?"↑":"↓"),mx,y+33.5,{align:"center"});
-  font(doc,7,"bold"); tc(doc,...deltaCol);
-  doc.text(`${delta>0?"+":""}${delta}`,mx,y+41,{align:"center"});
+  // Bigger delta value — the up/down arrow glyph doesn't render in helvetica,
+  // so the signed number (+16 / -9 / 0) carries the direction on its own.
+  font(doc,11,"bold"); tc(doc,...deltaCol);
+  doc.text(delta===0?"=":`${delta>0?"+":""}${delta}`,mx,y+38,{align:"center"});
   // VS label
   font(doc,6.5,"bold"); tc(doc,...PDF_TOKENS.muted);
   doc.text("VS",mx,y+52,{align:"center"});
@@ -1875,17 +1882,18 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,qy,cw,12,"F");}
     font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(lbl,ml+4,qy+8);
     font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v1,ml+cw*0.45,qy+8,{align:"right"});
-    font(doc,7.5,"bold",false); tc(doc,...PDF_TOKENS.muted); doc.text("→",ml+cw*0.5,qy+8,{align:"center"});
+    // Drawn chevron instead of the "→" glyph (absent from helvetica)
+    _chevronR(doc,ml+cw*0.5-1.6,qy+6,PDF_TOKENS.muted);
     font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v2,ml+cw*0.98,qy+8,{align:"right"});
   });
   y+=qStats.length*12+10;
 
   // ── INSIGHT BANNER ────────────────────────────────────────────
   const insText=improved
-    ?(isAr?`📈 تحسّن +${delta} نقطة — ${_scoreLabel(a2,isAr)} مقارنةً بـ ${_scoreLabel(a1,isAr)}`:`📈 +${delta} point improvement — ${_scoreLabel(a2,isAr)} vs ${_scoreLabel(a1,isAr)}`)
+    ?(isAr?`تحسّن +${delta} نقطة — ${_scoreLabel(a2,isAr)} مقارنةً بـ ${_scoreLabel(a1,isAr)}`:`+${delta} point improvement — ${_scoreLabel(a2,isAr)} vs ${_scoreLabel(a1,isAr)}`)
     :declined
-    ?(isAr?`📉 انخفاض ${Math.abs(delta)} نقطة — راجع المقاييس المتراجعة أدناه`:`📉 ${Math.abs(delta)} point decline — review regressed metrics below`)
-    :(isAr?"📊 النتيجة مستقرة بين الجلستين":"📊 Score stable between sessions");
+    ?(isAr?`انخفاض ${Math.abs(delta)} نقطة — راجع المقاييس المتراجعة أدناه`:`${Math.abs(delta)} point decline — review regressed metrics below`)
+    :(isAr?"النتيجة مستقرة بين الجلستين":"Score stable between sessions");
   fc(doc,...deltaBg); rr(doc,ml,y,cw,14,3,"F");
   dc(doc,...deltaCol); lw(doc,0.25); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
   fc(doc,...deltaCol); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
@@ -1906,7 +1914,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const colX=[ml+3,ml+cw*0.42,ml+cw*0.56,ml+cw*0.70,ml+cw*0.85];
   fc(doc,...PDF_TOKENS.slate); rr(doc,ml,y,cw,10,2,"F");
   font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
-  [isAr?"المقياس":"Metric",`#${num1}`,`#${num2}`,isAr?"Δ":"Δ",isAr?"الاتجاه":"Trend"]
+  [isAr?"المقياس":"Metric",`#${num1}`,`#${num2}`,isAr?"الفرق":"Diff",isAr?"الاتجاه":"Trend"]
     .forEach((h,i)=>doc.text(h,colX[i],y+7));
   y+=12;
 
@@ -1927,14 +1935,12 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     // Delta
     font(doc,8.5,"bold"); tc(doc,...dC);
     doc.text(`${d>0?"+":""}${d}`,colX[3],y+7.5);
-    // Trend arrow pill
-    const arrow=d>2?"▲":d<-2?"▼":"–";
+    // Trend arrow pill — drawn triangle (glyph arrows don't render)
     fc(doc,...dC);
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
     rr(doc,colX[4]-2,y+2,14,7,2,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    font(doc,8.5,"bold"); tc(doc,...dC);
-    doc.text(arrow,colX[4]+5,y+7.5,{align:"center"});
+    _triangle(doc,colX[4]+5,y+5.5,d>2?"up":d<-2?"down":"flat",dC);
     y+=rowH;
   });
   y+=10;
@@ -1974,7 +1980,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     font(doc,6.5,"bold"); tc(doc,...rc2);
     doc.text(`#${num2}: ${r2}%`,ml+9+bw2+4,barY+10);
     // Delta badge top right
-    const dzlbl=`${dz>0?"↑":"↓"} ${Math.abs(dz)}%`;
+    const dzlbl=`${dz>0?"+":"-"}${Math.abs(dz)}%`;
     const dzw=doc.getTextWidth(dzlbl)+8;
     fc(doc,...dzC);
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
@@ -2004,7 +2010,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger); doc.text(lbl,ml+7,y+5.5);
       font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
       const bw2=cw*0.3;
       fc(doc,...PDF_TOKENS.danger);
       doc.setGState&&doc.setGState(new doc.GState({opacity:0.2}));
@@ -2026,7 +2032,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success); doc.text(lbl,ml+7,y+5.5);
       font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
       y+=18;
     });
     y+=6;
