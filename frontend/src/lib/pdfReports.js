@@ -1520,6 +1520,19 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const cairo = _cairoLoaded;
   const fnt = (size, style="normal") => cairo && isAr ? fontAr(doc,size,style,true) : font(doc,size,style);
 
+  // New clinical page WITH the navy header bar — the conditional page
+  // breaks used to call doc.addPage() bare, leaving continued pages
+  // (metrics table, recommendations) with no header at all.
+  const _clinPage = () => {
+    doc.addPage();
+    doc.setFillColor(15,23,42); doc.rect(0,0,W,12,"F");
+    doc.setFontSize(8); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
+    doc.text("Corvus Posture Health — Clinical Summary", ml, 8.5);
+    doc.setFontSize(7.5); doc.setTextColor(14,165,233); doc.setFont("helvetica","bold");
+    doc.text("PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
+    return 22;
+  };
+
   const avg     = Math.round(session.avg_score || 0);
   const dur     = session.duration_s || session.duration_sec || 0;
   const goodPct = session.good_pct || 0;
@@ -1687,7 +1700,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   ];
 
   clinicalZones.forEach(({key,region,title,desc,metrics:mlist})=>{
-    if(y>H-72){doc.addPage();y=22;}
+    if(y>H-72){y=_clinPage();}
     const risk=zonal[key]||0;
     const rcol=_riskColor(risk);
     const rlbl=_riskLabel(risk,false);
@@ -1790,7 +1803,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   y = Math.max(y+62, bodyTop+headR*2+56); y+=8;
 
   // ── Exercise Prescription ──────────────────────────────────────
-  if(y>H-80){doc.addPage();y=22;}
+  if(y>H-80){y=_clinPage();}
   doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
   doc.text("Exercise Prescription", ml, y); y+=5;
   doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
@@ -1819,13 +1832,13 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     .sort((a,b)=>(zonal[b]||0)-(zonal[a]||0));
 
   for(const zk of zonePriority.slice(0,3)){
-    if(y>H-55){doc.addPage();y=22;}
+    if(y>H-55){y=_clinPage();}
     const col = _riskColor(zonal[zk]||0);
     doc.setFillColor(...col); doc.roundedRect(ml,y,cw,9,2,2,"F");
     doc.setFontSize(9); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
     doc.text(`${zk.charAt(0).toUpperCase()+zk.slice(1)} Zone Exercises (Risk: ${_riskLabel(zonal[zk]||0,false)} ${zonal[zk]||0}%)`,ml+4,y+6.5); y+=13;
     for(const ex of EXERCISES[zk].slice(0,2)){
-      if(y>H-22){doc.addPage();y=22;}
+      if(y>H-22){y=_clinPage();}
       doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,16,2,2,"F");
       doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
       doc.text(`${ex.name} — ${ex.sets}`, ml+4, y+7);
@@ -1840,33 +1853,36 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
   doc.text("Posture Metrics Detail", ml, y); y+=7;
 
-  // Table header
-  doc.setFillColor(15,23,42); doc.roundedRect(ml,y,cw,9,2,2,"F");
-  doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  ["Measurement","Value","Score","Status"].forEach((h,i)=>{
-    const xs=[ml+3, ml+cw*0.38, ml+cw*0.56, ml+cw*0.72];
-    doc.text(h, xs[i], y+6);
-  });
-  y+=11;
+  // Table header — repeated whenever the table flows onto a new page
+  const _clinTblHead=()=>{
+    doc.setFillColor(15,23,42); doc.roundedRect(ml,y,cw,9,2,2,"F");
+    doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+    ["Measurement","Value","Score","Status"].forEach((h,i)=>{
+      const xs=[ml+3, ml+cw*0.38, ml+cw*0.58, ml+cw*0.74];
+      doc.text(h, xs[i], y+6);
+    });
+    y+=11;
+  };
+  _clinTblHead();
 
   metricEntries.forEach(({lbl,value,unit,sc},i)=>{
-    if(y>H-40){doc.addPage();y=22;}
+    if(y>H-16){ y=_clinPage(); _clinTblHead(); }
     doc.setFillColor(i%2===0?248:255, i%2===0?250:255, i%2===0?252:255);
     doc.rect(ml,y,cw,9,"F");
     const col=_gc(sc);
     doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
     doc.text(lbl, ml+3, y+6);
     doc.setTextColor(...col); doc.setFont("helvetica","bold");
-    if(value!==undefined&&value!==null) doc.text(`${Math.round(value*10)/10} ${unit||""}`, ml+cw*0.38, y+6);
-    doc.text(String(Math.round(sc)), ml+cw*0.56, y+6);
-    doc.setFontSize(7.5); doc.text(_gl(sc,false), ml+cw*0.72, y+6);
+    if(value!==undefined&&value!==null) doc.text(`${Math.round(value*10)/10}${unit||""}`, ml+cw*0.38, y+6);
+    doc.text(String(Math.round(sc)), ml+cw*0.58, y+6);
+    doc.setFontSize(7.5); doc.text(_gl(sc,false), ml+cw*0.74, y+6);
     y+=9;
   });
 
   y+=10;
 
   // Clinical recommendations
-  if(y>H-80){doc.addPage();y=22;}
+  if(y>H-80){y=_clinPage();}
   doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
   doc.text("Clinical Notes & Recommendations", ml, y); y+=5;
   doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
@@ -1890,7 +1906,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 ];
 
   clinicalRecos.forEach((rec,i)=>{
-    if(y>H-35){doc.addPage();y=22;}
+    if(y>H-35){y=_clinPage();}
     doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,22,2,2,"F");
     doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
     const zones2 = ["General Assessment","Cervical Focus","Thoracic Focus","Lumbar Focus"];
@@ -1903,7 +1919,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   // ── Disclaimer + Signature block ─────────────────────────────
   y+=8;
-  if(y>H-50){doc.addPage();y=22;}
+  if(y>H-50){y=_clinPage();}
   doc.setFillColor(254,243,199); doc.roundedRect(ml,y,cw,20,2,2,"F");
   doc.setFontSize(7.5); doc.setTextColor(146,64,14); doc.setFont("helvetica","bold");
   doc.text("IMPORTANT DISCLAIMER", ml+4, y+7);
@@ -2102,23 +2118,33 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   doc.text(_scoreLabel(a2,isAr),rx+half/2,y+62,{align:"center"});
   y+=heroH+8;
 
-  // ── QUICK STATS STRIP ─────────────────────────────────────────
+  // ── QUICK STATS — clean 3-column comparison table ─────────────
+  // Values are centred under two aligned columns (was label-left / v1 at
+  // 45% right-aligned / v2 at 98% right-aligned — which pushed the two
+  // numbers to opposite edges with a large empty gap between them).
   const qStats=[
-    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr),PDF_TOKENS.primary],
-    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2),PDF_TOKENS.indigo],
-    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`,PDF_TOKENS.success],
-    [isAr?"التنبيهات":"Alerts",String(al1),String(al2),PDF_TOKENS.warning],
+    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr)],
+    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2)],
+    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`],
+    [isAr?"التنبيهات":"Alerts",String(al1),String(al2)],
   ];
-  qStats.forEach(([lbl,v1,v2,col],i)=>{
-    const qy=y+i*12;
-    if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,qy,cw,12,"F");}
-    font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text(lbl,ml+4,qy+8);
-    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...col); doc.text(String(v1),ml+cw*0.45,qy+8,{align:"right"});
-    // Drawn chevron instead of the "→" glyph (absent from helvetica)
-    _chevronR(doc,ml+cw*0.5-1.6,qy+6,PDF_TOKENS.muted);
-    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...col); doc.text(String(v2),ml+cw*0.98,qy+8,{align:"right"});
+  const qc1=ml+cw*0.52, qc2=ml+cw*0.82; // centred value columns
+  const qRowH=11;
+  // header row
+  fc(doc,...PDF_TOKENS.slate); rr(doc,ml,y,cw,9,2,"F");
+  font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
+  doc.text(isAr?"المقياس":"Metric",ml+5,y+6);
+  doc.text(`#${num1}`,qc1,y+6,{align:"center"});
+  doc.text(`#${num2}`,qc2,y+6,{align:"center"});
+  y+=9;
+  qStats.forEach(([lbl,v1,v2],i)=>{
+    const qy=y+i*qRowH;
+    if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,qy,cw,qRowH,"F");}
+    font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text(String(lbl),ml+5,qy+7);
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.ink); doc.text(String(v1),qc1,qy+7,{align:"center"});
+    tc(doc,...PDF_TOKENS.ink); doc.text(String(v2),qc2,qy+7,{align:"center"});
   });
-  y+=qStats.length*12+10;
+  y+=qStats.length*qRowH+10;
 
   // ── INSIGHT BANNER ────────────────────────────────────────────
   const insText=improved
