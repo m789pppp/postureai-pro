@@ -1021,10 +1021,19 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   sf(21,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx2,cy2+3,{align:"center"});
   sf(6,"normal"); tc(doc,...TEXT3); doc.text("/100",cx2,cy2+9.5,{align:"center"});
   sf(9,"bold"); tc(doc,...gradeC); doc.text(gradeL,cx2,cy2+r2+9,{align:"center"});
-  if(painSum){
-    const tl2=doc.splitTextToSize(painSum.split('.')[0]+'.',scoreW-8);
-    sf(5.5,"normal"); tc(doc,...TEXT2);
-    tl2.slice(0,2).forEach((l,i)=>doc.text(l,ml+4,y+row1H-12+i*5.5));
+  // Trend vs previous session — a compact chip under the grade
+  {
+    const _prev=(Array.isArray(allSessions)?allSessions:[]).find(s=>(s.id||s.session_id)!==(session.id||session.session_id)&&(s.avg_score||0)>0);
+    if(_prev){
+      const _d=avg-Math.round(_prev.avg_score||0);
+      const _tc=_d>0?[34,197,94]:_d<0?[239,68,68]:[100,116,139];
+      const _lbl=`${_d>0?"+":""}${_d} ${isAr?"عن السابقة":"vs previous"}`;
+      const _tw=doc.getTextWidth(_lbl)+11, _ty=cy2+r2+13;
+      fc(doc,..._tc); doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
+      rr(doc,cx2-_tw/2,_ty,_tw,6.5,3,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      _triangle(doc,cx2-_tw/2+4,_ty+3.3,_d>0?"up":_d<0?"down":"flat",_tc);
+      sf(5.5,"bold"); tc(doc,..._tc); doc.text(_lbl,cx2+2,_ty+4.4,{align:"center"});
+    }
   }
   // KPIs
   const kx3=ml+scoreW+4;
