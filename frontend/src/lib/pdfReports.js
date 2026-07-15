@@ -127,6 +127,44 @@ function _triangle(doc,cx,cy,dir,col){ // dir: "up" | "down" | "flat"
   catch{ rr(doc,cx-2,cy-0.7,4,1.4,0.6,"F"); }
 }
 
+// ── Proportional arc gauge — a real progress arc (not a full ring) that
+//    sweeps clockwise from 12 o'clock by `frac` of a full turn. This is
+//    the single biggest premium upgrade over the old two-full-circles
+//    look. jsPDF has no arc primitive, so we stroke short segments. ──
+function _arcGauge(doc,cx,cy,r,frac,col,track,width=3.6){
+  frac=Math.max(0,Math.min(1,frac));
+  const cap = doc.setLineCap ? true : false;
+  // Track ring
+  dc(doc,...track); lw(doc,width); doc.circle(cx,cy,r,"S");
+  if(frac<=0){ lw(doc,0.3); return; }
+  // Progress arc
+  if(cap) doc.setLineCap("round");
+  dc(doc,...col); lw(doc,width);
+  const start=-Math.PI/2, end=start+frac*2*Math.PI;
+  const steps=Math.max(2,Math.round(frac*72));
+  let px=cx+r*Math.cos(start), py=cy+r*Math.sin(start);
+  for(let i=1;i<=steps;i++){
+    const a=start+(end-start)*(i/steps);
+    const nx=cx+r*Math.cos(a), ny=cy+r*Math.sin(a);
+    doc.line(px,py,nx,ny); px=nx; py=ny;
+  }
+  if(cap) doc.setLineCap("butt");
+  lw(doc,0.3);
+}
+
+// ── Simple vector KPI icons (helvetica has no usable symbol glyphs) ──
+function _icon(doc,type,cx,cy,col,s=3){
+  dc(doc,...col); fc(doc,...col); lw(doc,0.9);
+  const cap=doc.setLineCap?true:false; if(cap)doc.setLineCap("round");
+  if(type==="check"){ doc.line(cx-s*0.7,cy,cx-s*0.15,cy+s*0.6); doc.line(cx-s*0.15,cy+s*0.6,cx+s*0.8,cy-s*0.7); }
+  else if(type==="bell"){ doc.line(cx-s*0.8,cy+s*0.5,cx+s*0.8,cy+s*0.5); doc.line(cx-s*0.6,cy+s*0.5,cx-s*0.6,cy-s*0.1); doc.line(cx+s*0.6,cy+s*0.5,cx+s*0.6,cy-s*0.1); dc(doc,...col); doc.circle(cx,cy-s*0.4,s*0.55,"S"); doc.circle(cx,cy+s*0.95,s*0.22,"F"); }
+  else if(type==="clock"){ doc.circle(cx,cy,s*0.85,"S"); doc.line(cx,cy,cx,cy-s*0.5); doc.line(cx,cy,cx+s*0.4,cy+s*0.15); }
+  else if(type==="hash"){ doc.line(cx-s*0.5,cy-s*0.8,cx-s*0.8,cy+s*0.8); doc.line(cx+s*0.5,cy-s*0.8,cx+s*0.2,cy+s*0.8); doc.line(cx-s,cy-s*0.25,cx+s*0.9,cy-s*0.25); doc.line(cx-s,cy+s*0.3,cx+s*0.9,cy+s*0.3); }
+  else if(type==="target"){ doc.circle(cx,cy,s*0.9,"S"); doc.circle(cx,cy,s*0.45,"S"); fc(doc,...col); doc.circle(cx,cy,s*0.12,"F"); }
+  else { fc(doc,...col); doc.circle(cx,cy,s*0.5,"F"); }
+  if(cap)doc.setLineCap("butt"); lw(doc,0.3);
+}
+
 // ── Unified entry point (called from AIReports.jsx + App.jsx) ──────
 export async function exportPDFReport({ type, sessions, session, profile, aiSummary, lang="en" }) {
   // Always use the most recent session (first in array = most recent from Firestore)
@@ -356,15 +394,13 @@ function _sh(doc,ml,y,title,sub="",col=PDF_TOKENS.primary,isAr=false){
 // ── SCORE RING v5 — with inner glow simulation ─────────────────────
 function _ring(doc,cx,cy,r,score,isAr,showGrade=true){
   const col=_sc(score),lbl=_sl(score,isAr);
-  // Outer track
-  dc(doc,...PDF_TOKENS.borderSoft);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
   // Inner tint
   fc(doc,...col);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
   doc.circle(cx,cy,r-2,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Score arc
-  dc(doc,...col);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
+  // Proportional score arc (real gauge, not a full ring)
+  _arcGauge(doc,cx,cy,r,score/100,col,PDF_TOKENS.borderSoft,3.5);
   // Number
   font(doc,PDF_FLAGS.dataXl,"bold");tc(doc,...col);
   doc.text(String(score),cx,cy+4,{align:"center"});
@@ -657,17 +693,15 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     // Score card
     dCard(ml,y,scoreW,row1H);
     sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
-    // Score ring
-    const cx=ml+scoreW/2, cy=y+42, r1=22;
-    dc(doc,...BORDER); lw(doc,5); doc.circle(cx,cy,r1,"S");
-    // Colored arc (simulate with layered circles)
-    dc(doc,...gradeC); lw(doc,5); doc.circle(cx,cy,r1,"S"); lw(doc,.3);
+    // Score gauge (proportional arc)
+    const cx=ml+scoreW/2, cy=y+40, r1=21;
     fc(doc,...gradeC);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
-    doc.circle(cx,cy,r1-2,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.07}));
+    doc.circle(cx,cy,r1-2.5,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(20,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx,cy+3.5,{align:"center"});
-    sf(6.5,"normal"); tc(doc,...TEXT3); doc.text("/100",cx,cy+10,{align:"center"});
+    _arcGauge(doc,cx,cy,r1,avg/100,gradeC,BORDER,4);
+    sf(21,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx,cy+3,{align:"center"});
+    sf(6,"normal"); tc(doc,...TEXT3); doc.text("/100",cx,cy+9.5,{align:"center"});
     sf(9,"bold"); tc(doc,...gradeC); doc.text(gradeL,cx,cy+r1+9,{align:"center"});
     // Insight
     if(aiText||painSum){
@@ -976,15 +1010,16 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // Score
   dCard(ml,y,scoreW,row1H);
   sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
-  const cx2=ml+scoreW/2, cy2=y+42, r2=22;
-  dc(doc,...BORDER); lw(doc,5); doc.circle(cx2,cy2,r2,"S");
-  dc(doc,...gradeC); lw(doc,5); doc.circle(cx2,cy2,r2,"S"); lw(doc,.3);
+  const cx2=ml+scoreW/2, cy2=y+40, r2=21;
+  // Soft tint fill inside the gauge
   fc(doc,...gradeC);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
-  doc.circle(cx2,cy2,r2-2,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:.07}));
+  doc.circle(cx2,cy2,r2-2.5,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  sf(20,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx2,cy2+3.5,{align:"center"});
-  sf(6.5,"normal"); tc(doc,...TEXT3); doc.text("/100",cx2,cy2+10,{align:"center"});
+  // Proportional arc gauge
+  _arcGauge(doc,cx2,cy2,r2,avg/100,gradeC,BORDER,4);
+  sf(21,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx2,cy2+3,{align:"center"});
+  sf(6,"normal"); tc(doc,...TEXT3); doc.text("/100",cx2,cy2+9.5,{align:"center"});
   sf(9,"bold"); tc(doc,...gradeC); doc.text(gradeL,cx2,cy2+r2+9,{align:"center"});
   if(painSum){
     const tl2=doc.splitTextToSize(painSum.split('.')[0]+'.',scoreW-8);
@@ -993,19 +1028,19 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   }
   // KPIs
   const kx3=ml+scoreW+4;
-  [[isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`,"✓",[34,197,94]],
-   [isAr?"التنبيهات":"Alerts",String(alerts),"⚠",[245,158,11]],
-   [isAr?"الجلسة":"Session",`#${realIdx}`,"#",[99,102,241]],
-   [isAr?"المدة":"Duration",fmtDurShort(dur),"◷",[6,182,212]]
+  [[isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`,"check",[34,197,94]],
+   [isAr?"التنبيهات":"Alerts",String(alerts),"bell",[245,158,11]],
+   [isAr?"الجلسة":"Session",`#${realIdx}`,"hash",[99,102,241]],
+   [isAr?"المدة":"Duration",fmtDurShort(dur),"clock",[6,182,212]]
   ].forEach(([label,val,icon,col],i)=>{
     const kw=(kpiW-4)/2, kh=(row1H-4)/2;
     const kx2b=kx3+(i%2)*(kw+4), ky2=y+(Math.floor(i/2))*(kh+4);
     dCard(kx2b,ky2,kw,kh,5,CARD2);
     fc(doc,...col);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-    doc.circle(kx2b+10,ky2+10,8,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.13}));
+    doc.circle(kx2b+10,ky2+10,7.5,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    fc(doc,...col); doc.circle(kx2b+10,ky2+10,2.4,"F");
+    _icon(doc,icon,kx2b+10,ky2+10,col,3.4);
     sf(11,"bold"); tc(doc,...TEXT); doc.text(String(val),kx2b+kw/2,ky2+kh*.6,{align:"center"});
     sf(5.5,"bold"); tc(doc,...TEXT3); doc.text(label,kx2b+kw/2,ky2+kh*.82,{align:"center"});
   });
@@ -1630,11 +1665,14 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,36,3,3,"F");
   doc.setDrawColor(...gradeC); doc.setLineWidth(0.5); doc.roundedRect(ml,y,cw,36,3,3,"S"); doc.setLineWidth(0.3);
 
-  const cx2=ml+20, cy2=y+18;
-  doc.setFillColor(...gradeC); doc.circle(cx2,cy2,13,"F");
-  doc.setFontSize(15); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text(String(avg), cx2, cy2+5.5, {align:"center"});
-  doc.setFontSize(7); doc.text("/100", cx2, cy2+10.5, {align:"center"});
+  const cx2=ml+22, cy2=y+18;
+  // Proportional gauge (was a flat filled disc)
+  doc.setFillColor(...gradeC); doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
+  doc.circle(cx2,cy2,12,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  _arcGauge(doc,cx2,cy2,12,avg/100,gradeC,[226,232,240],3.2);
+  doc.setFontSize(14); doc.setTextColor(...gradeC); doc.setFont("helvetica","bold");
+  doc.text(String(avg), cx2, cy2+3, {align:"center"});
+  doc.setFontSize(6); doc.setTextColor(148,163,184); doc.text("/100", cx2, cy2+8, {align:"center"});
 
   const interpretation = avg>=80
     ? "Posture quality is consistently good. Preventive ergonomic advice appropriate."
@@ -2066,12 +2104,12 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g1); rr(doc,ml+6,y+8,half-12,10,2,"F");
   doc.text(s1lbl,ml+6+(half-12)/2,y+14.5,{align:"center"});
-  // Score ring
-  dc(doc,...g1); lw(doc,3); doc.circle(ml+half/2,y+40,16,"S"); lw(doc,0.3);
+  // Score gauge (proportional arc)
   fc(doc,...g1);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
-  doc.circle(ml+half/2,y+40,14.5,"F");
+  doc.circle(ml+half/2,y+40,14,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  _arcGauge(doc,ml+half/2,y+40,16,a1/100,g1,PDF_TOKENS.borderSoft,3);
   font(doc,20,"bold",isAr&&_cairoLoaded); tc(doc,...g1);
   doc.text(String(a1),ml+half/2,y+45,{align:"center"});
   font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
@@ -2104,12 +2142,12 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g2); rr(doc,rx+6,y+8,half-12,10,2,"F");
   doc.text(s2lbl,rx+6+(half-12)/2,y+14.5,{align:"center"});
-  // Score ring
-  dc(doc,...g2); lw(doc,3); doc.circle(rx+half/2,y+40,16,"S"); lw(doc,0.3);
+  // Score gauge (proportional arc)
   fc(doc,...g2);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
-  doc.circle(rx+half/2,y+40,14.5,"F");
+  doc.circle(rx+half/2,y+40,14,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  _arcGauge(doc,rx+half/2,y+40,16,a2/100,g2,PDF_TOKENS.borderSoft,3);
   font(doc,20,"bold",isAr&&_cairoLoaded); tc(doc,...g2);
   doc.text(String(a2),rx+half/2,y+45,{align:"center"});
   font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
