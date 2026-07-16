@@ -498,22 +498,20 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     }).sort((a,b)=>a.sc-b.sc);
 
   // ── DARK THEME COLORS ─────────────────────────────────────────
-  const BG     = [10,15,30];    // #0a0f1e
-  const BG2    = [16,23,45];    // #10172d
-  const CARD   = [20,28,55];    // #141c37
-  const CARD2  = [26,36,68];    // #1a2444
-  const BORDER = [40,55,95];    // #28375f
-  const TEXT   = [255,255,255];
-  const TEXT2  = [148,163,200]; // #94a3c8
-  const TEXT3  = [80,100,145];  // muted
+  const BG     = [247,249,252]; // white/light bg
+  const BG2    = [242,245,251]; // alt background
+  const CARD   = [255,255,255]; // pure white cards
+  const CARD2  = [250,251,255]; // subtle card alt
+  const BORDER = [224,229,240]; // soft border
+  const TEXT   = [11,17,32];    // near-black ink
+  const TEXT2  = [68,85,110];   // secondary text
+  const TEXT3  = [120,135,160]; // muted text
 
   // ── HELPER: dark rounded card ──────────────────────────────────
   const dCard = (x,y,w,h,r=6,col=CARD) => {
     fc(doc,...col); rr(doc,x,y,w,h,r,"F");
-    fc(doc,...BORDER);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
+    fc(doc,...BORDER); lw(doc,0.4);
     rr(doc,x,y,w,h,r,"S");
-    doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     lw(doc,0.3);
   };
 
@@ -528,12 +526,12 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // ══════════════════════════════════════════════════════════════
   if(!isElite && !isPro) {
     // Full dark background
-    fc(doc,...BG); doc.rect(0,0,W,H,"F");
+    fc(doc,...[255,255,255]); doc.rect(0,0,W,H,"F");
 
     // ── PAGE 1 HEADER ──────────────────────────────────────────
-    fc(doc,...BG2); doc.rect(0,0,W,22,"F");
+    fc(doc,...[37,99,235]); doc.rect(0,0,W,22,"F");
     _logo(doc,ml,5,12,_logoSm);
-    sf(8.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+16,11.5);
+    sf(8.5,"bold"); tc(doc,...[255,255,255]); doc.text("CORVUS",ml+16,11.5);
     sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
     sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?"تقرير تحليل الوضعية الشخصي":"Personal Posture Analysis Report",60,10);
     sf(6,"normal"); tc(doc,...TEXT3); doc.text("AI-POWERED POSTURE INSIGHTS",60,16);
@@ -658,7 +656,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       doc.setGState&&doc.setGState(new doc.GState({opacity:.9}));
       doc.circle(lp.px,lp.py,4,"F");
       doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(5.5,"bold"); tc(doc,...[10,15,30]); doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
+      sf(5.5,"bold"); tc(doc,...[11,17,32]); doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
       // Time labels
       sf(4.5,"normal"); tc(doc,...TEXT3);
       ["00:00",`00:${Math.floor(dur/4/60).toString().padStart(2,'0')}`,
@@ -977,7 +975,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     const lp=pts[pts.length-1];
     fc(doc,...gradeC);doc.setGState&&doc.setGState(new doc.GState({opacity:.9}));
     doc.circle(lp.px,lp.py,4,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(5.5,"bold");tc(doc,...[10,15,30]);doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
+    sf(5.5,"bold");tc(doc,...[11,17,32]);doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
     sf(4.5,"normal");tc(doc,...TEXT3);
     ["00:00",`00:${Math.floor(dur/4/60).toString().padStart(2,'0')}`,`00:${Math.floor(dur/2/60).toString().padStart(2,'0')}`,`00:${Math.floor(dur*3/4/60).toString().padStart(2,'0')}`,`${String(Math.floor(dur/60)).padStart(2,'0')}:${String(dur%60).padStart(2,'0')}`]
       .forEach((t,i)=>doc.text(t,gx+(i/4)*gw2,gy+gh+5,{align:"center"}));
@@ -2086,7 +2084,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
     // Table
     fc(doc,...PDF_TOKENS.ink); rr(doc,ml,y,cw,9,1,"F");
-    sf(7,"bold"); tc(doc,255,255,255);
+    sf(7,"bold"); tc(doc,11,17,32);
     doc.text(isAr?"الاسم":"Name",ml+3,y+6);
     doc.text(isAr?"النتيجة":"Score",ml+cw*0.55,y+6);
     doc.text(isAr?"آخر جلسة":"Last Session",ml+cw*0.72,y+6);
@@ -2115,7 +2113,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   doc.text(isAr?"تصنيف الأداء":"Performance Leaderboard",ml,y); y+=7;
   const sorted=[...activeUsers].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
   fc(doc,...PDF_TOKENS.ink); rr(doc,ml,y,cw,9,1,"F");
-  sf(7,"bold"); tc(doc,255,255,255);
+  sf(7,"bold"); tc(doc,11,17,32);
   doc.text("#",ml+3,y+6); doc.text(isAr?"الاسم":"Name",ml+14,y+6);
   doc.text(isAr?"النتيجة":"Score",ml+cw*0.65,y+6); doc.text(isAr?"التقييم":"Grade",ml+cw*0.82,y+6);
   y+=11;
