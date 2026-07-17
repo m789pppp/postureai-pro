@@ -1577,6 +1577,22 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     return 22;
   };
 
+  // Consistent, designed section header — accent bar + title (+ optional
+  // subtitle). Replaces the plain bold-text headings for a nicer, more
+  // deliberate typographic rhythm throughout the clinical report.
+  const _clinSec = (yy, title, sub, col=[14,165,233]) => {
+    doc.setFillColor(...col); doc.roundedRect(ml, yy-4.6, 2.6, sub?11:7.5, 1.2, 1.2, "F");
+    doc.setFontSize(12.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+    doc.text(String(title), ml+7, yy);
+    if(sub){ doc.setFontSize(7.5); doc.setTextColor(120,134,156); doc.setFont("helvetica","normal"); doc.text(String(sub), ml+7, yy+5); return yy+14; }
+    return yy+9;
+  };
+  // Small uppercase tracked label (section eyebrow / table captions)
+  const _clinLabel = (xx, yy, txt, col=[120,134,156]) => {
+    doc.setFontSize(6.5); doc.setTextColor(...col); doc.setFont("helvetica","bold");
+    doc.text(String(txt).toUpperCase(), xx, yy, { charSpace: 0.4 });
+  };
+
   const avg     = Math.round(session.avg_score || 0);
   const dur     = session.duration_s || session.duration_sec || 0;
   const goodPct = session.good_pct || 0;
@@ -1668,8 +1684,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   y+=40;
 
   // ── Overall score clinical interpretation ─────────────────────
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Overall Posture Score", ml, y); y+=6;
+  y=_clinSec(y+2,"Overall Posture Score","Session-level posture quality and clinical interpretation");
 
   doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,36,3,3,"F");
   doc.setDrawColor(...gradeC); doc.setLineWidth(0.5); doc.roundedRect(ml,y,cw,36,3,3,"S"); doc.setLineWidth(0.3);
@@ -1699,10 +1714,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   // ── Score timeline ────────────────────────────────────────────
   if (hist.length>2) {
-    doc.setFontSize(10); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-    doc.text("Posture Score Timeline (Full Session)", ml, y); y+=4;
-    doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-    doc.text("Continuous posture quality measurement from session start to end", ml, y); y+=5;
+    y=_clinSec(y,"Posture Score Timeline","Continuous posture quality from session start to end");
     const sh=28;
     doc.setFillColor(241,245,249); doc.roundedRect(ml,y,cw,sh,2,2,"F");
     [50,65,80,95].forEach(v=>{
@@ -1714,6 +1726,43 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     y+=sh+10;
   }
 
+  // ── KEY CLINICAL FINDINGS (fills the lower half of page 1) ─────
+  y=_clinSec(y,"Key Clinical Findings","The measurements furthest from the clinical norm this session");
+  y+=2;
+  const _findInterp={
+    neck_lean:"Forward neck flexion increases cervical disc load and is a common driver of tension headache.",
+    fhp_index:"Forward head posture — every 2.5cm of anterior translation adds ~4.5kg of effective load to the cervical spine.",
+    head_tilt:"Lateral head tilt suggests asymmetric muscle tone or an uneven working surface.",
+    head_yaw:"Sustained head rotation loads one side of the cervical spine; reposition the monitor to face the user.",
+    rounded_shoulders:"Protracted shoulders shorten pectorals and lengthen mid-trapezius, predisposing to thoracic kyphosis.",
+    shoulder_level:"Shoulder height asymmetry points to armrest or seat imbalance.",
+    spine_lean:"Trunk deviation from vertical increases paraspinal muscle demand and lumbar shear.",
+    spine_align:"Deviation of the shoulder from the ear–hip line indicates loss of neutral spinal curvature.",
+    elbow_angle:"Elbow angle outside 90–110° raises shoulder and forearm loading.",
+    monitor_height:"Monitor off eye level drives compensatory neck flexion or extension.",
+    screen_distance:"Viewing distance outside 50–70cm affects both posture and visual strain.",
+  };
+  const _worst=metricEntries.slice(0,3);
+  _worst.forEach(({lbl,value,unit,sc,key},i)=>{
+    const col=_gc(sc), rowH=17, ry=y+i*(rowH+3);
+    doc.setFillColor(248,250,252); doc.roundedRect(ml,ry,cw,rowH,3,3,"F");
+    doc.setFillColor(...col); doc.roundedRect(ml,ry,2.4,rowH,1.2,1.2,"F");
+    // rank number
+    doc.setFillColor(...col); doc.setGState&&doc.setGState(new doc.GState({opacity:.14})); doc.circle(ml+12,ry+rowH/2,5.5,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    doc.setFontSize(9); doc.setTextColor(...col); doc.setFont("helvetica","bold"); doc.text(String(i+1),ml+12,ry+rowH/2+3,{align:"center"});
+    // metric + value
+    doc.setFontSize(9); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold"); doc.text(String(lbl),ml+22,ry+7);
+    if(value!==undefined&&value!==null){ doc.setFontSize(7); doc.setTextColor(120,134,156); doc.setFont("helvetica","normal"); doc.text(`${Math.round(value*10)/10}${unit||""}`,ml+22,ry+13); }
+    // interpretation (kept clear of the right-hand score badge)
+    doc.setFontSize(7); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
+    const _txt=_findInterp[key]||"Deviation from the recommended range — see detailed metrics.";
+    doc.splitTextToSize(_txt,cw*0.48).slice(0,2).forEach((l,j)=>doc.text(l,ml+cw*0.36,ry+6.5+j*4.5));
+    // score badge
+    doc.setFontSize(11); doc.setTextColor(...col); doc.setFont("helvetica","bold"); doc.text(String(Math.round(sc)),ml+cw-5,ry+8,{align:"right"});
+    doc.setFontSize(5.5); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal"); doc.text("/100",ml+cw-5,ry+13,{align:"right"});
+  });
+  y+=_worst.length*20+6;
+
   // ── PAGE 2: Zonal Pain Map ────────────────────────────────────
   doc.addPage();
   doc.setFillColor(15,23,42); doc.rect(0,0,W,12,"F");
@@ -1723,10 +1772,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   doc.text("PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
   y=22;
 
-  doc.setFontSize(12); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Spinal Zone Risk Assessment", ml, y); y+=5;
-  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Risk percentages are derived computationally from posture metrics. They are not medical diagnoses.", ml, y); y+=9;
+  y=_clinSec(y,"Spinal Zone Risk Assessment","Risk % derived computationally from posture metrics — not a medical diagnosis",[239,68,68]);
 
   const clinicalZones = [
     {
@@ -1799,10 +1845,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   y=22;
 
   // ── Body Outline Diagram — zonal risk visualization ───────────
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Spinal Zone Risk — Visual Overview", ml, y); y+=6;
-  doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Risk zones derived computationally from posture measurements", ml, y); y+=8;
+  y=_clinSec(y,"Spinal Zone Risk — Visual Overview","Risk zones mapped onto the spine from posture measurements",[239,68,68]);
 
   // Draw simplified body silhouette
   const bx = ml+cw*0.55, bodyW=24, headR=7;
@@ -1851,10 +1894,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   // ── Exercise Prescription ──────────────────────────────────────
   if(y>H-80){y=_clinPage();}
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Exercise Prescription", ml, y); y+=5;
-  doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Evidence-based exercises targeting the highest-risk zones identified in this session", ml, y); y+=9;
+  y=_clinSec(y,"Exercise Prescription","Evidence-based exercises targeting the highest-risk zones",[34,197,94]);
 
   const EXERCISES = {
     cervical:[
@@ -1897,8 +1937,8 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   }
 
   // All metrics in clinical table style
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Posture Metrics Detail", ml, y); y+=7;
+  y=_clinSec(y,"Posture Metrics Detail","Every measured metric with its score and clinical status",[99,102,241]);
+  y+=1;
 
   // Table header — repeated whenever the table flows onto a new page
   const _clinTblHead=()=>{
@@ -1930,10 +1970,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   // Clinical recommendations
   if(y>H-80){y=_clinPage();}
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Clinical Notes & Recommendations", ml, y); y+=5;
-  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Suggested focus areas based on session measurements. Please apply clinical judgment.", ml, y); y+=9;
+  y=_clinSec(y,"Clinical Notes & Recommendations","Suggested focus areas — please apply clinical judgment",[99,102,241]);
 
   const clinicalRecos = [
   avg < 60
@@ -1964,8 +2001,49 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     y+=26;
   });
 
+  // ── RECOMMENDED ERGONOMIC ADJUSTMENTS (fills the final page) ──
+  y=_clinPage();
+  y=_clinSec(y,"Recommended Ergonomic Adjustments","Actionable workstation changes, prioritised for this user");
+  y+=2;
+  const _adj=[
+    ["Raise monitor to eye level","Top of the screen at or just below eye height — use a stand or riser.",(metrics.monitor_height?.score??100)<65],
+    ["Set viewing distance to 50–70cm","About an arm's length; enlarge on-screen text rather than leaning in.",(metrics.screen_distance?.score??100)<65],
+    ["Support elbows at 90–110°","Adjust chair and armrests so forearms rest level with the desk.",(metrics.elbow_angle?.score??100)<65],
+    ["Engage lumbar support","Sit fully back; use the chair's lumbar support or a cushion.",(zonal.lumbar||0)>=40],
+    ["Micro-break every 30 minutes","Stand, reset posture, and look 6m away for 20 seconds.",true],
+  ];
+  _adj.forEach(([t,d,flag],i)=>{
+    const ay=y+i*15, c=flag?[14,165,233]:[34,197,94];
+    doc.setFillColor(248,250,252); doc.roundedRect(ml,ay,cw,13,2.5,2.5,"F");
+    doc.setFillColor(...c); doc.roundedRect(ml,ay,2.2,13,1.1,1.1,"F");
+    doc.setDrawColor(...c); doc.setLineWidth(0.5); doc.roundedRect(ml+6,ay+3.5,6,6,1.2,1.2,"S"); doc.setLineWidth(0.3);
+    _icon(doc,"check",ml+9,ay+6.6,c,2.3);
+    doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold"); doc.text(t,ml+17,ay+6);
+    doc.setFontSize(7); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal"); doc.text(doc.splitTextToSize(d,cw-70)[0],ml+17,ay+11);
+    if(flag){ doc.setFontSize(5.5); doc.setTextColor(14,165,233); doc.setFont("helvetica","bold"); doc.text("PRIORITY",ml+cw-5,ay+7.5,{align:"right"}); }
+  });
+  y+=_adj.length*15+8;
+
+  // ── FOLLOW-UP & MONITORING PLAN (timeline) ────────────────────
+  y=_clinSec(y,"Follow-up & Monitoring Plan","Recommended re-assessment schedule");
+  y+=3;
+  const _fu=[
+    ["2 weeks","Re-scan after applying the adjustments above; expect early symptom relief.",[14,165,233]],
+    ["6 weeks","Progress review — corrective exercises should yield measurable metric gains.",[245,158,11]],
+    ["12 weeks","Full re-assessment; consolidate gains and update the exercise programme.",[34,197,94]],
+  ];
+  _fu.forEach(([w,d,c],i)=>{
+    const fy=y+i*16;
+    if(i<_fu.length-1){ doc.setDrawColor(203,213,225); doc.setLineWidth(0.6); doc.line(ml+6,fy+7,ml+6,fy+16); doc.setLineWidth(0.3); }
+    doc.setFillColor(...c); doc.circle(ml+6,fy+5,3.2,"F");
+    doc.setFillColor(255,255,255); doc.circle(ml+6,fy+5,1.2,"F");
+    doc.setFontSize(9); doc.setTextColor(...c); doc.setFont("helvetica","bold"); doc.text(w,ml+15,fy+4);
+    doc.setFontSize(7.5); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal"); doc.text(doc.splitTextToSize(d,cw-22)[0],ml+15,fy+10);
+  });
+  y+=_fu.length*16+8;
+
   // ── Disclaimer + Signature block ─────────────────────────────
-  y+=8;
+  y+=2;
   if(y>H-50){y=_clinPage();}
   doc.setFillColor(254,243,199); doc.roundedRect(ml,y,cw,20,2,2,"F");
   doc.setFontSize(7.5); doc.setTextColor(146,64,14); doc.setFont("helvetica","bold");
