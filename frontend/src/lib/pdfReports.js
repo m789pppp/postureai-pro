@@ -7,27 +7,163 @@
 import { tierAtLeast } from "./tierQuality.js";
 
 // ── Metric labels (used in PDF tables) ───────────────────────────
+// Keys must match the ACTUAL keys the posture engine emits (see
+// postureEngine.js metrics object): fhp_index, shoulder_level,
+// rounded_shoulders, elbow_angle, monitor_height, screen_distance …
+// Missing aliases previously fell through to a naive title-case that
+// produced wrong labels like "Fhp Index".
 const METRIC_LABELS = {
   neck_lean:"Neck Lean", neck_lean_side:"Neck Lean (Side)",
   head_tilt:"Head Tilt", head_yaw:"Head Rotation",
-  shoulder:"Shoulder Balance", spine_lean:"Spine Lean",
+  shoulder:"Shoulder Balance", shoulder_level:"Shoulder Level",
+  spine_lean:"Spine Lean",
   spine_align:"Spine Alignment", fhp:"Forward Head Posture",
-  fhp_side:"Forward Head (Side)", rounded:"Rounded Shoulders",
-  elbow:"Elbow Angle", monitor:"Monitor Height",
-  distance:"Viewing Distance", trunk_lean:"Trunk Lean",
+  fhp_index:"Forward Head Posture", fhp_side:"Forward Head (Side)",
+  rounded:"Rounded Shoulders", rounded_shoulders:"Rounded Shoulders",
+  elbow:"Elbow Angle", elbow_angle:"Elbow Angle",
+  monitor:"Monitor Height", monitor_height:"Monitor Height",
+  distance:"Viewing Distance", screen_distance:"Screen Distance",
+  trunk_lean:"Trunk Lean",
   hip_angle:"Hip Angle", knee_angle:"Knee Angle",
+  session_fatigue:"Fatigue Adjustment", confidence_val:"Detection Confidence",
 };
 const METRIC_LABELS_AR = {
   neck_lean:"ميل الرقبة", neck_lean_side:"ميل الرقبة (جانبي)",
   head_tilt:"انحناء الرأس", head_yaw:"دوران الرأس",
-  shoulder:"توازن الكتفين", spine_lean:"ميل العمود الفقري",
+  shoulder:"توازن الكتفين", shoulder_level:"مستوى الكتفين",
+  spine_lean:"ميل العمود الفقري",
   spine_align:"محاذاة العمود الفقري", fhp:"تقدم الرأس للأمام",
-  fhp_side:"تقدم الرأس (جانبي)", rounded:"تقريس الأكتاف",
-  elbow:"زاوية الكوع", monitor:"ارتفاع الشاشة",
-  distance:"مسافة المشاهدة", trunk_lean:"ميل الجذع",
+  fhp_index:"تقدم الرأس للأمام", fhp_side:"تقدم الرأس (جانبي)",
+  rounded:"تقوّس الأكتاف", rounded_shoulders:"تقوّس الأكتاف",
+  elbow:"زاوية الكوع", elbow_angle:"زاوية الكوع",
+  monitor:"ارتفاع الشاشة", monitor_height:"ارتفاع الشاشة",
+  distance:"مسافة المشاهدة", screen_distance:"مسافة الشاشة",
+  trunk_lean:"ميل الجذع",
   hip_angle:"زاوية الورك", knee_angle:"زاوية الركبة",
+  session_fatigue:"تعديل الإجهاد", confidence_val:"دقة الكشف",
 };
 
+
+// ── Elite-extras helpers (goal progress / exercise plan / snapshots) ──
+const _exToMs = s => { try { return s.created_at?.toDate?.()?.getTime?.() || new Date(s.created_at||0).getTime(); } catch { return 0; } };
+
+function _exWeekKey(d = new Date()) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y = t.getUTCFullYear();
+  return `${y}-W${String(Math.ceil(((t - Date.UTC(y,0,1)) / 86400000 + 1) / 7)).padStart(2,"0")}`;
+}
+
+function _exWindowAvg(sessions, fromMs, toMs) {
+  const sc = (sessions||[]).filter(s => { const m=_exToMs(s); return m>=fromMs && m<toMs && (s.avg_score||0)>0; }).map(s=>s.avg_score);
+  return sc.length ? Math.round(sc.reduce((a,b)=>a+b,0)/sc.length) : null;
+}
+
+/** pts/day linear-regression slope over the last `days` days — mirrors EliteGoals.jsx */
+function _exSlopePerDay(sessions, days = 30) {
+  const cutoff = Date.now() - days*86400000;
+  const pts = (sessions||[]).map(s=>({t:_exToMs(s), y:s.avg_score||0})).filter(p=>p.t>=cutoff&&p.y>0).sort((a,b)=>a.t-b.t);
+  if (pts.length < 4) return null;
+  const xs = pts.map(p=>(p.t-pts[0].t)/86400000), ys = pts.map(p=>p.y), n = xs.length;
+  const sx = xs.reduce((a,b)=>a+b,0), sy = ys.reduce((a,b)=>a+b,0);
+  const sxy = xs.reduce((a,x,i)=>a+x*ys[i],0), sx2 = xs.reduce((a,x)=>a+x*x,0);
+  const denom = n*sx2 - sx*sx;
+  return Math.abs(denom) < 1e-6 ? null : (n*sxy - sx*sy) / denom;
+}
+
+// Exercise-plan area labels for the PDF (mirrors ExercisePlan.jsx LIB)
+const _EX_AREA_LABELS = {
+  neck:      { en: "Neck / Forward head",        ar: "الرقبة / تقدم الرأس" },
+  shoulders: { en: "Rounded shoulders / chest",  ar: "الأكتاف المدورة / الصدر" },
+  spine:     { en: "Spine / trunk",              ar: "العمود الفقري / الجذع" },
+  recovery:  { en: "Recovery & habits",          ar: "استشفاء وعادات" },
+};
+
+// ── Metric mini-card (session PDF) — label + value + score bar ─────
+// Redesigned to eliminate the Arabic/long-label collision with the old
+// right-side score ring: label is truncated to the free width, the score
+// number is right-aligned, and a horizontal bar sits along the bottom.
+function _metricMiniCard(doc,{mx,y,mw,mh,lbl,sc,val,unit,pri,isAr,sf,dCard,BORDER,TEXT,TEXT2,TEXT3}){
+  const round=(n)=>Math.round(n);
+  const iconC = sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
+  dCard(mx,y,mw,mh,5);
+  // Left accent bar
+  fc(doc,...iconC); rr(doc,mx,y,2.2,mh,1.1,"F");
+  // Label — truncated so it never reaches the right-aligned score
+  sf(8,"bold"); tc(doc,...TEXT);
+  const lblFit = doc.splitTextToSize(String(lbl), mw-26)[0];
+  doc.text(lblFit, mx+6, y+9);
+  // Value under label
+  if(val!==undefined&&val!==null){
+    sf(6.5,"normal"); tc(doc,...TEXT2);
+    doc.text(`${round(val*10)/10}${unit||""}`, mx+6, y+15.5);
+  }
+  // Score number (right)
+  sf(15,"bold"); tc(doc,...iconC); doc.text(String(round(sc)), mx+mw-6, y+13, {align:"right"});
+  sf(5,"normal"); tc(doc,...TEXT3); doc.text("/100", mx+mw-6, y+18, {align:"right"});
+  // Progress bar
+  const bx=mx+6, bw=mw-12;
+  fc(doc,...BORDER); rr(doc,bx,y+21,bw,4,2,"F");
+  fc(doc,...iconC); rr(doc,bx,y+21,Math.max(bw*(sc/100),3),4,2,"F");
+  // Priority badge
+  const pw=doc.getTextWidth(pri)+8;
+  fc(doc,...iconC); doc.setGState&&doc.setGState(new doc.GState({opacity:.13}));
+  rr(doc,mx+6,y+mh-9,pw,6.5,2,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  sf(5.5,"bold"); tc(doc,...iconC); doc.text(pri, mx+6+pw/2, y+mh-4.5, {align:"center"});
+}
+
+// ── Vector glyphs — jsPDF's built-in helvetica has no arrows/triangles,
+//    so we draw them (text glyphs render as garbage like "!'" or "Ø=ÜÈ") ──
+function _chevronR(doc,x,y,col){ // small right chevron, ~3mm
+  dc(doc,...col); lw(doc,0.8);
+  doc.line(x,y-1.6,x+2.4,y); doc.line(x+2.4,y,x,y+1.6); lw(doc,0.3);
+}
+function _triangle(doc,cx,cy,dir,col){ // dir: "up" | "down" | "flat"
+  fc(doc,...col);
+  if(dir==="flat"){ rr(doc,cx-2.2,cy-0.7,4.4,1.4,0.6,"F"); return; }
+  const s=2.2, d=dir==="up"?-1:1;
+  try{ doc.triangle(cx-s,cy-d*s*0.9, cx+s,cy-d*s*0.9, cx,cy+d*s*1.1, "F"); }
+  catch{ rr(doc,cx-2,cy-0.7,4,1.4,0.6,"F"); }
+}
+
+// ── Proportional arc gauge — a real progress arc (not a full ring) that
+//    sweeps clockwise from 12 o'clock by `frac` of a full turn. This is
+//    the single biggest premium upgrade over the old two-full-circles
+//    look. jsPDF has no arc primitive, so we stroke short segments. ──
+function _arcGauge(doc,cx,cy,r,frac,col,track,width=3.6){
+  frac=Math.max(0,Math.min(1,frac));
+  const cap = doc.setLineCap ? true : false;
+  // Track ring
+  dc(doc,...track); lw(doc,width); doc.circle(cx,cy,r,"S");
+  if(frac<=0){ lw(doc,0.3); return; }
+  // Progress arc
+  if(cap) doc.setLineCap("round");
+  dc(doc,...col); lw(doc,width);
+  const start=-Math.PI/2, end=start+frac*2*Math.PI;
+  const steps=Math.max(2,Math.round(frac*72));
+  let px=cx+r*Math.cos(start), py=cy+r*Math.sin(start);
+  for(let i=1;i<=steps;i++){
+    const a=start+(end-start)*(i/steps);
+    const nx=cx+r*Math.cos(a), ny=cy+r*Math.sin(a);
+    doc.line(px,py,nx,ny); px=nx; py=ny;
+  }
+  if(cap) doc.setLineCap("butt");
+  lw(doc,0.3);
+}
+
+// ── Simple vector KPI icons (helvetica has no usable symbol glyphs) ──
+function _icon(doc,type,cx,cy,col,s=3){
+  dc(doc,...col); fc(doc,...col); lw(doc,0.9);
+  const cap=doc.setLineCap?true:false; if(cap)doc.setLineCap("round");
+  if(type==="check"){ doc.line(cx-s*0.7,cy,cx-s*0.15,cy+s*0.6); doc.line(cx-s*0.15,cy+s*0.6,cx+s*0.8,cy-s*0.7); }
+  else if(type==="bell"){ doc.line(cx-s*0.8,cy+s*0.5,cx+s*0.8,cy+s*0.5); doc.line(cx-s*0.6,cy+s*0.5,cx-s*0.6,cy-s*0.1); doc.line(cx+s*0.6,cy+s*0.5,cx+s*0.6,cy-s*0.1); dc(doc,...col); doc.circle(cx,cy-s*0.4,s*0.55,"S"); doc.circle(cx,cy+s*0.95,s*0.22,"F"); }
+  else if(type==="clock"){ doc.circle(cx,cy,s*0.85,"S"); doc.line(cx,cy,cx,cy-s*0.5); doc.line(cx,cy,cx+s*0.4,cy+s*0.15); }
+  else if(type==="hash"){ doc.line(cx-s*0.5,cy-s*0.8,cx-s*0.8,cy+s*0.8); doc.line(cx+s*0.5,cy-s*0.8,cx+s*0.2,cy+s*0.8); doc.line(cx-s,cy-s*0.25,cx+s*0.9,cy-s*0.25); doc.line(cx-s,cy+s*0.3,cx+s*0.9,cy+s*0.3); }
+  else if(type==="target"){ doc.circle(cx,cy,s*0.9,"S"); doc.circle(cx,cy,s*0.45,"S"); fc(doc,...col); doc.circle(cx,cy,s*0.12,"F"); }
+  else { fc(doc,...col); doc.circle(cx,cy,s*0.5,"F"); }
+  if(cap)doc.setLineCap("butt"); lw(doc,0.3);
+}
 
 // ── Unified entry point (called from AIReports.jsx + App.jsx) ──────
 export async function exportPDFReport({ type, sessions, session, profile, aiSummary, lang="en" }) {
@@ -139,7 +275,13 @@ function vl(doc,x,y,h,col=PDF_TOKENS.border){dc(doc,...col);lw(doc,0.18);doc.lin
 
 // ── Font helper ────────────────────────────────────────────────────
 let _cairoLoaded=false, _cairoCachedB64=null;
-async function _ensureCairoFont(doc){
+// isAr gate added: registering this font (even completely unused) adds
+// real weight to every generated PDF — measured ~50KB+ on a trivial doc,
+// and every English-only report was paying that cost with zero benefit
+// since Arabic glyphs are never drawn. Skip the load entirely when the
+// report isn't Arabic.
+async function _ensureCairoFont(doc,isAr=false){
+  if(!isAr) return;
   try{
     if(!_cairoCachedB64){const{CAIRO_B64}=await import("../assets/cairoFont.js");_cairoCachedB64=CAIRO_B64;}
     doc.addFileToVFS("Cairo-Regular.ttf",_cairoCachedB64);
@@ -149,7 +291,7 @@ async function _ensureCairoFont(doc){
     _cairoLoaded=true;
   }catch(e){console.warn("Cairo font failed:",e?.message||e);}
 }
-async function _loadCairo(doc){await _ensureCairoFont(doc);return _cairoLoaded;}
+async function _loadCairo(doc,isAr=false){await _ensureCairoFont(doc,isAr);return _cairoLoaded;}
 
 function font(doc,size,style="normal",isAr=false){
   doc.setFont(isAr&&_cairoLoaded?"cairo":"helvetica",style);
@@ -258,15 +400,13 @@ function _sh(doc,ml,y,title,sub="",col=PDF_TOKENS.primary,isAr=false){
 // ── SCORE RING v5 — with inner glow simulation ─────────────────────
 function _ring(doc,cx,cy,r,score,isAr,showGrade=true){
   const col=_sc(score),lbl=_sl(score,isAr);
-  // Outer track
-  dc(doc,...PDF_TOKENS.borderSoft);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
   // Inner tint
   fc(doc,...col);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.06}));
   doc.circle(cx,cy,r-2,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  // Score arc
-  dc(doc,...col);lw(doc,3.5);doc.circle(cx,cy,r,"S");lw(doc,0.3);
+  // Proportional score arc (real gauge, not a full ring)
+  _arcGauge(doc,cx,cy,r,score/100,col,PDF_TOKENS.borderSoft,3.5);
   // Number
   font(doc,PDF_FLAGS.dataXl,"bold");tc(doc,...col);
   doc.text(String(score),cx,cy+4,{align:"center"});
@@ -448,6 +588,8 @@ function _drawSparkline(doc,hist,x,y,w,h,col){_spark(doc,hist,x,y,w,h,col);}
 
 
 export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[], aiSummary="" }) {
+  const isAr0 = lang === "ar";
+  if (!session) throw new Error(isAr0 ? "لا توجد بيانات جلسة لعرضها في هذا التقرير." : "No session data available to generate this report.");
   const { jsPDF } = await import("jspdf");
   const isAr   = lang === "ar";
   const _rawTier = profile?.tier || session?.tier || "standard";
@@ -457,9 +599,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
                  : _rawTier;
   const isElite= tierAtLeast(tier,"elite");
   const isPro  = !isElite && tierAtLeast(tier,"professional");
-  console.log("[PDF] tier detection:", {_rawTier, tier, isElite, isPro});
   const doc    = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
 
   const W=210,H=297,ml=14,mr=14,cw=W-ml-mr;
   const sf = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
@@ -497,20 +638,22 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       return{k,sc,lbl,val,unit,pri,priC};
     }).sort((a,b)=>a.sc-b.sc);
 
-  // ── DARK THEME COLORS ─────────────────────────────────────────
-  const BG     = [247,249,252]; // white/light bg
-  const BG2    = [242,245,251]; // alt background
-  const CARD   = [255,255,255]; // pure white cards
-  const CARD2  = [250,251,255]; // subtle card alt
-  const BORDER = [224,229,240]; // soft border
-  const TEXT   = [11,17,32];    // near-black ink
-  const TEXT2  = [68,85,110];   // secondary text
-  const TEXT3  = [120,135,160]; // muted text
+  // ── LIGHT THEME COLORS (Apple Health × Bloomberg — matches Clinical/
+  //    Comparison/Longitudinal reports so all PDFs share one look) ──────
+  const BG     = [247,249,252];  // page background — soft gray
+  const BG2    = [255,255,255];  // header bar — white
+  const CARD   = [255,255,255];  // cards — white
+  const CARD2  = [248,250,252];  // subtle inset panels
+  const BORDER = [226,232,240];  // hairline borders
+  const TEXT   = [15,23,42];      // primary ink
+  const TEXT2  = [100,116,139];   // secondary
+  const TEXT3  = [148,163,184];   // muted
+  const ACCENT = [37,99,235];     // brand blue (top strip)
 
-  // ── HELPER: dark rounded card ──────────────────────────────────
+  // ── HELPER: light rounded card with hairline border ────────────
   const dCard = (x,y,w,h,r=6,col=CARD) => {
     fc(doc,...col); rr(doc,x,y,w,h,r,"F");
-    fc(doc,...BORDER); lw(doc,0.4);
+    dc(doc,...BORDER); lw(doc,0.4);
     rr(doc,x,y,w,h,r,"S");
     lw(doc,0.3);
   };
@@ -526,12 +669,12 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // ══════════════════════════════════════════════════════════════
   if(!isElite && !isPro) {
     // Full dark background
-    fc(doc,...[255,255,255]); doc.rect(0,0,W,H,"F");
+    fc(doc,...BG); doc.rect(0,0,W,H,"F");
 
     // ── PAGE 1 HEADER ──────────────────────────────────────────
-    fc(doc,...[37,99,235]); doc.rect(0,0,W,22,"F");
+    fc(doc,...BG2); doc.rect(0,0,W,22,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,2,"F");
     _logo(doc,ml,5,12,_logoSm);
-    sf(8.5,"bold"); tc(doc,...[255,255,255]); doc.text("CORVUS",ml+16,11.5);
+    sf(8.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+16,11.5);
     sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
     sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?"تقرير تحليل الوضعية الشخصي":"Personal Posture Analysis Report",60,10);
     sf(6,"normal"); tc(doc,...TEXT3); doc.text("AI-POWERED POSTURE INSIGHTS",60,16);
@@ -545,7 +688,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     sf(7,"bold"); tc(doc,...tierCol); doc.text(tbl,W-mr-tbw/2,13,{align:"center"});
     // Date right
     sf(6,"normal"); tc(doc,...TEXT3);
-    doc.text(`Generated: ${dateStr}`,W-mr,20,{align:"right"});
+    doc.text(`${isAr?"أُنشئ في":"Generated"}: ${_fmtDateLong(new Date(),isAr)}`,W-mr,20,{align:"right"});
     // Bottom border line
     fc(doc,...BORDER); doc.rect(0,22,W,.5,"F");
     let y=28;
@@ -557,17 +700,15 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     // Score card
     dCard(ml,y,scoreW,row1H);
     sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
-    // Score ring
-    const cx=ml+scoreW/2, cy=y+42, r1=22;
-    dc(doc,...BORDER); lw(doc,5); doc.circle(cx,cy,r1,"S");
-    // Colored arc (simulate with layered circles)
-    dc(doc,...gradeC); lw(doc,5); doc.circle(cx,cy,r1,"S"); lw(doc,.3);
+    // Score gauge (proportional arc)
+    const cx=ml+scoreW/2, cy=y+40, r1=21;
     fc(doc,...gradeC);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
-    doc.circle(cx,cy,r1-2,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.07}));
+    doc.circle(cx,cy,r1-2.5,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(20,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx,cy+3.5,{align:"center"});
-    sf(6.5,"normal"); tc(doc,...TEXT3); doc.text("/100",cx,cy+10,{align:"center"});
+    _arcGauge(doc,cx,cy,r1,avg/100,gradeC,BORDER,4);
+    sf(21,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx,cy+3,{align:"center"});
+    sf(6,"normal"); tc(doc,...TEXT3); doc.text("/100",cx,cy+9.5,{align:"center"});
     sf(9,"bold"); tc(doc,...gradeC); doc.text(gradeL,cx,cy+r1+9,{align:"center"});
     // Insight
     if(aiText||painSum){
@@ -589,12 +730,12 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     kpis.forEach(([label,val,icon,col],i)=>{
       const kx2=kx+(i%2)*(kw+4), ky2=y+(Math.floor(i/2))*(kh+4);
       dCard(kx2,ky2,kw,kh,5,CARD2);
-      // Icon circle
+      // Icon circle — solid dot (emoji/symbol glyphs don't render in helvetica)
       fc(doc,...col);
       doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
       doc.circle(kx2+10,ky2+10,8,"F");
       doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(8,"normal"); tc(doc,...col); doc.text(icon,kx2+10,ky2+13.5,{align:"center"});
+      fc(doc,...col); doc.circle(kx2+10,ky2+10,2.4,"F");
       sf(11,"bold"); tc(doc,...TEXT); doc.text(String(val),kx2+kw/2,ky2+kh*.6,{align:"center"});
       sf(5.5,"bold"); tc(doc,...TEXT3); doc.text(label,kx2+kw/2,ky2+kh*.82,{align:"center"});
     });
@@ -611,7 +752,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     ].forEach(([icon,lbl,val],i)=>{
       const ry=y+16+i*14;
       sf(5.5,"normal"); tc(doc,...TEXT3);
-      doc.text(icon+" "+lbl,ix+4,ry);
+      doc.text(String(lbl),ix+4,ry);
       sf(6,"bold"); tc(doc,...TEXT);
       doc.text(String(val),ix+4,ry+6.5);
       if(i<3){ fc(doc,...BORDER); doc.rect(ix+4,ry+9,infoW-8,.3,"F"); }
@@ -656,7 +797,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       doc.setGState&&doc.setGState(new doc.GState({opacity:.9}));
       doc.circle(lp.px,lp.py,4,"F");
       doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(5.5,"bold"); tc(doc,...[11,17,32]); doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
+      sf(5.5,"bold"); tc(doc,...[10,15,30]); doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
       // Time labels
       sf(4.5,"normal"); tc(doc,...TEXT3);
       ["00:00",`00:${Math.floor(dur/4/60).toString().padStart(2,'0')}`,
@@ -667,7 +808,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     }
     // AI tip
     if(aiText){
-      const tipLines=doc.splitTextToSize("💡  "+(aiText.split('.')[0]+'.'),cw-12);
+      const tipLines=doc.splitTextToSize((aiText.split('.')[0]+'.'),cw-12);
       const tipH=tipLines.length*5+7;
       dCard(ml,y+47,cw,tipH,4,CARD2);
       sf(6.5,"normal"); tc(doc,...TEXT2);
@@ -682,34 +823,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     const mshow=mEntries.slice(0,3);
     const mw=(cw-(mshow.length-1)*5)/mshow.length;
     mshow.forEach(({lbl,sc,val,unit,pri,priC},i)=>{
-      const mx=ml+i*(mw+5);
-      const mh=38;
-      dCard(mx,y,mw,mh,5);
-      // Priority icon
-      const iconC=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
-      fc(doc,...iconC);
-      doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-      rr(doc,mx+4,y+5,12,12,3,"F");
-      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(7,"bold"); tc(doc,...iconC); doc.text(sc<40?"↑":sc<65?"→":"✓",mx+10,y+13.5,{align:"center"});
-      // Metric name + value
-      sf(8,"bold"); tc(doc,...TEXT); doc.text(lbl,mx+20,y+10);
-      if(val!==undefined){
-        sf(6.5,"normal"); tc(doc,...TEXT2); doc.text(`${Math.round(val*10)/10}${unit}`,mx+20,y+17);
-      }
-      // Priority badge
-      const pw=doc.getTextWidth(pri)+8;
-      fc(doc,...iconC);
-      doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-      rr(doc,mx+4,y+mh-11,pw,8,2,"F");
-      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(5.5,"bold"); tc(doc,...iconC); doc.text(pri,mx+4+pw/2,y+mh-5.5,{align:"center"});
-      // Score ring (right side)
-      const rind=mx+mw-16, rcy=y+mh/2;
-      dc(doc,...BORDER); lw(doc,3); doc.circle(rind,rcy,10,"S");
-      dc(doc,...iconC); lw(doc,3); doc.circle(rind,rcy,10,"S"); lw(doc,.3);
-      sf(7.5,"bold"); tc(doc,...iconC); doc.text(String(Math.round(sc)),rind,rcy+2.5,{align:"center"});
-      sf(4.5,"normal"); tc(doc,...TEXT3); doc.text("/100",rind,rcy+7.5,{align:"center"});
+      const mx=ml+i*(mw+5); const mh=38;
+      _metricMiniCard(doc,{mx,y,mw,mh,lbl,sc,val,unit,pri,isAr,sf,dCard,BORDER,TEXT,TEXT2,TEXT3});
     });
     y+=mEntries.slice(0,3).length>0?45:0;
 
@@ -727,7 +842,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     // ══════════════════════════════════════════════════════════
     doc.addPage();
     fc(doc,...BG); doc.rect(0,0,W,H,"F");
-    fc(doc,...BG2); doc.rect(0,0,W,15,"F");
+    fc(doc,...BG2); doc.rect(0,0,W,15,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,1.6,"F");
     _logo(doc,ml,3,9,_logoSm);
     sf(7.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+13,8);
     sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+13,13);
@@ -846,19 +961,19 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
     rr(doc,ml+5,y+8,36,36,10,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(18,"bold"); tc(doc,...tierCol); doc.text("♛",ml+23,y+32,{align:"center"});
+    fc(doc,...tierCol); doc.circle(ml+23,y+26,4.5,"F"); // badge dot (crown glyph doesn't render)
     sf(10,"bold"); tc(doc,...TEXT); doc.text(isAr?"رقّي لـ Elite":"Upgrade to Elite",ml+50,y+18);
     sf(7,"normal"); tc(doc,...TEXT2); doc.text(isAr?"افتح تحليلات متقدمة وتقارير كاملة":"Unlock advanced insights and reports",ml+50,y+26);
-    // Feature icons
-    const feats=[["📋",isAr?"تحليل AI":"Detailed AI"],["📄","Full PDF"],["🫀",isAr?"توقع الألم":"Pain prediction"],["📊",isAr?"مقارنة":"Baseline"]];
-    feats.forEach(([ic,lb],i)=>{
+    // Feature list — colored dot + label (emoji don't render in helvetica)
+    const feats=[[isAr?"تحليل AI":"Detailed AI"],["Full PDF"],[isAr?"توقع الألم":"Pain prediction"],[isAr?"مقارنة":"Baseline"]];
+    feats.forEach(([lb],i)=>{
       const fx=ml+50+i*34;
-      sf(12,"normal"); tc(doc,...tierCol); doc.text(ic,fx+7,y+38,{align:"center"});
+      fc(doc,...tierCol); doc.circle(fx+7,y+37,1.8,"F");
       sf(5,"normal"); tc(doc,...TEXT2); doc.text(lb,fx+7,y+46,{align:"center"});
     });
     // CTA button
     fc(doc,...tierCol); rr(doc,W/2-30,y+40,60,12,4,"F");
-    sf(7,"bold"); tc(doc,...TEXT); doc.text(isAr?"♛ رقّي الآن":"♛ Upgrade Now",W/2,y+48,{align:"center"});
+    sf(7,"bold"); tc(doc,...[255,255,255]); doc.text(isAr?"رقّي الآن":"Upgrade Now",W/2,y+48,{align:"center"});
     y+=57;
 
     // Footer
@@ -880,7 +995,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   fc(doc,...BG); doc.rect(0,0,W,H,"F");
 
   // Header
-  fc(doc,...BG2); doc.rect(0,0,W,22,"F");
+  fc(doc,...BG2); doc.rect(0,0,W,22,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,2,"F");
   _logo(doc,ml,5,12,_logoSm);
   sf(8.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+16,11.5);
   sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
@@ -893,7 +1008,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   dc(doc,...tierCol); lw(doc,.5); rr(doc,W-mr-tbw2,4,tbw2,14,3,"S"); lw(doc,.3);
   sf(7,"bold"); tc(doc,...tierCol); doc.text(tierLbl,W-mr-tbw2/2,13,{align:"center"});
-  sf(6,"normal"); tc(doc,...TEXT3); doc.text(`Generated: ${dateStr}`,W-mr,20,{align:"right"});
+  sf(6,"normal"); tc(doc,...TEXT3); doc.text(`${isAr?"أُنشئ في":"Generated"}: ${_fmtDateLong(new Date(),isAr)}`,W-mr,20,{align:"right"});
   fc(doc,...BORDER); doc.rect(0,22,W,.5,"F");
   let y=28;
 
@@ -902,36 +1017,46 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // Score
   dCard(ml,y,scoreW,row1H);
   sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
-  const cx2=ml+scoreW/2, cy2=y+42, r2=22;
-  dc(doc,...BORDER); lw(doc,5); doc.circle(cx2,cy2,r2,"S");
-  dc(doc,...gradeC); lw(doc,5); doc.circle(cx2,cy2,r2,"S"); lw(doc,.3);
+  const cx2=ml+scoreW/2, cy2=y+40, r2=21;
+  // Soft tint fill inside the gauge
   fc(doc,...gradeC);
-  doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
-  doc.circle(cx2,cy2,r2-2,"F");
+  doc.setGState&&doc.setGState(new doc.GState({opacity:.07}));
+  doc.circle(cx2,cy2,r2-2.5,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  sf(20,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx2,cy2+3.5,{align:"center"});
-  sf(6.5,"normal"); tc(doc,...TEXT3); doc.text("/100",cx2,cy2+10,{align:"center"});
+  // Proportional arc gauge
+  _arcGauge(doc,cx2,cy2,r2,avg/100,gradeC,BORDER,4);
+  sf(21,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx2,cy2+3,{align:"center"});
+  sf(6,"normal"); tc(doc,...TEXT3); doc.text("/100",cx2,cy2+9.5,{align:"center"});
   sf(9,"bold"); tc(doc,...gradeC); doc.text(gradeL,cx2,cy2+r2+9,{align:"center"});
-  if(painSum){
-    const tl2=doc.splitTextToSize(painSum.split('.')[0]+'.',scoreW-8);
-    sf(5.5,"normal"); tc(doc,...TEXT2);
-    tl2.slice(0,2).forEach((l,i)=>doc.text(l,ml+4,y+row1H-12+i*5.5));
+  // Trend vs previous session — a compact chip under the grade
+  {
+    const _prev=(Array.isArray(allSessions)?allSessions:[]).find(s=>(s.id||s.session_id)!==(session.id||session.session_id)&&(s.avg_score||0)>0);
+    if(_prev){
+      const _d=avg-Math.round(_prev.avg_score||0);
+      const _tc=_d>0?[34,197,94]:_d<0?[239,68,68]:[100,116,139];
+      const _lbl=`${_d>0?"+":""}${_d} ${isAr?"عن السابقة":"vs previous"}`;
+      const _tw=doc.getTextWidth(_lbl)+11, _ty=cy2+r2+13;
+      fc(doc,..._tc); doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
+      rr(doc,cx2-_tw/2,_ty,_tw,6.5,3,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      _triangle(doc,cx2-_tw/2+4,_ty+3.3,_d>0?"up":_d<0?"down":"flat",_tc);
+      sf(5.5,"bold"); tc(doc,..._tc); doc.text(_lbl,cx2+2,_ty+4.4,{align:"center"});
+    }
   }
   // KPIs
   const kx3=ml+scoreW+4;
-  [[isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`,"✓",[34,197,94]],
-   [isAr?"التنبيهات":"Alerts",String(alerts),"⚠",[245,158,11]],
-   [isAr?"الجلسة":"Session",`#${realIdx}`,"#",[99,102,241]],
-   [isAr?"المدة":"Duration",fmtDurShort(dur),"◷",[6,182,212]]
+  [[isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`,"check",[34,197,94]],
+   [isAr?"التنبيهات":"Alerts",String(alerts),"bell",[245,158,11]],
+   [isAr?"الجلسة":"Session",`#${realIdx}`,"hash",[99,102,241]],
+   [isAr?"المدة":"Duration",fmtDurShort(dur),"clock",[6,182,212]]
   ].forEach(([label,val,icon,col],i)=>{
     const kw=(kpiW-4)/2, kh=(row1H-4)/2;
     const kx2b=kx3+(i%2)*(kw+4), ky2=y+(Math.floor(i/2))*(kh+4);
     dCard(kx2b,ky2,kw,kh,5,CARD2);
     fc(doc,...col);
-    doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-    doc.circle(kx2b+10,ky2+10,8,"F");
+    doc.setGState&&doc.setGState(new doc.GState({opacity:.13}));
+    doc.circle(kx2b+10,ky2+10,7.5,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(8,"normal"); tc(doc,...col); doc.text(icon,kx2b+10,ky2+13.5,{align:"center"});
+    _icon(doc,icon,kx2b+10,ky2+10,col,3.4);
     sf(11,"bold"); tc(doc,...TEXT); doc.text(String(val),kx2b+kw/2,ky2+kh*.6,{align:"center"});
     sf(5.5,"bold"); tc(doc,...TEXT3); doc.text(label,kx2b+kw/2,ky2+kh*.82,{align:"center"});
   });
@@ -943,7 +1068,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
    ["🏢",isAr?"الشركة":"Company",company||"—"],["🔑","ID",`local_${session.id?.slice(-8)||"xxxxxxxx"}`]
   ].forEach(([icon,lbl,val],i)=>{
     const ry=y+16+i*14;
-    sf(5.5,"normal"); tc(doc,...TEXT3); doc.text(icon+" "+lbl,ix2+4,ry);
+    sf(5.5,"normal"); tc(doc,...TEXT3); doc.text(String(lbl),ix2+4,ry);
     sf(6,"bold"); tc(doc,...TEXT); doc.text(String(val),ix2+4,ry+6.5);
     if(i<3){fc(doc,...BORDER);doc.rect(ix2+4,ry+9,infoW-8,.3,"F");}
   });
@@ -975,13 +1100,13 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     const lp=pts[pts.length-1];
     fc(doc,...gradeC);doc.setGState&&doc.setGState(new doc.GState({opacity:.9}));
     doc.circle(lp.px,lp.py,4,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(5.5,"bold");tc(doc,...[11,17,32]);doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
+    sf(5.5,"bold");tc(doc,...[10,15,30]);doc.text(String(avg),lp.px,lp.py+1.8,{align:"center"});
     sf(4.5,"normal");tc(doc,...TEXT3);
     ["00:00",`00:${Math.floor(dur/4/60).toString().padStart(2,'0')}`,`00:${Math.floor(dur/2/60).toString().padStart(2,'0')}`,`00:${Math.floor(dur*3/4/60).toString().padStart(2,'0')}`,`${String(Math.floor(dur/60)).padStart(2,'0')}:${String(dur%60).padStart(2,'0')}`]
       .forEach((t,i)=>doc.text(t,gx+(i/4)*gw2,gy+gh+5,{align:"center"}));
   }
   if(aiText){
-    const tipLines=doc.splitTextToSize("💡  "+(aiText.split('.')[0]+'.'),cw-12);
+    const tipLines=doc.splitTextToSize((aiText.split('.')[0]+'.'),cw-12);
     const tipH=tipLines.length*5+7;
     dCard(ml,y+47,cw,tipH,4,CARD2);
     sf(6.5,"normal");tc(doc,...TEXT2);tipLines.forEach((l,i)=>doc.text(l,ml+5,y+47+6+i*5));
@@ -994,22 +1119,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const mw2=(cw-(mshow2.length-1)*5)/Math.max(mshow2.length,1);
   mshow2.forEach(({lbl,sc,val,unit,pri,priC},i)=>{
     const mx=ml+i*(mw2+5);const mh=38;
-    dCard(mx,y,mw2,mh,5);
-    const iconC=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
-    fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-    rr(doc,mx+4,y+5,12,12,3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(7,"bold");tc(doc,...iconC);doc.text(sc<40?"↑":sc<65?"→":"✓",mx+10,y+13.5,{align:"center"});
-    sf(8,"bold");tc(doc,...TEXT);doc.text(lbl,mx+20,y+10);
-    if(val!==undefined){sf(6.5,"normal");tc(doc,...TEXT2);doc.text(`${Math.round(val*10)/10}${unit}`,mx+20,y+17);}
-    const pw=doc.getTextWidth(pri)+8;
-    fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.15}));
-    rr(doc,mx+4,y+mh-11,pw,8,2,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(5.5,"bold");tc(doc,...iconC);doc.text(pri,mx+4+pw/2,y+mh-5.5,{align:"center"});
-    const rind=mx+mw2-16,rcy=y+mh/2;
-    dc(doc,...BORDER);lw(doc,3);doc.circle(rind,rcy,10,"S");
-    dc(doc,...iconC);lw(doc,3);doc.circle(rind,rcy,10,"S");lw(doc,.3);
-    sf(7.5,"bold");tc(doc,...iconC);doc.text(String(Math.round(sc)),rind,rcy+2.5,{align:"center"});
-    sf(4.5,"normal");tc(doc,...TEXT3);doc.text("/100",rind,rcy+7.5,{align:"center"});
+    _metricMiniCard(doc,{mx,y,mw:mw2,mh,lbl,sc,val,unit,pri,isAr,sf,dCard,BORDER,TEXT,TEXT2,TEXT3});
   });
   y+=mshow2.length>0?45:0;
 
@@ -1021,7 +1131,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
   // PAGE 2 — full metrics + AI analysis
   doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
-  fc(doc,...BG2);doc.rect(0,0,W,15,"F");
+  fc(doc,...BG2);doc.rect(0,0,W,15,"F");fc(doc,...ACCENT);doc.rect(0,0,W,1.6,"F");
   _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("CORVUS",ml+13,8);
   sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
   sf(6,"normal");tc(doc,...TEXT3);doc.text(`Session #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
@@ -1105,7 +1215,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       dCard(ml,y,cw,mh,4);
       fc(doc,...iconC);doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
       rr(doc,ml+4,y+4,10,10,2,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(6.5,"bold");tc(doc,...iconC);doc.text(sc<40?"↑":sc<65?"→":"✓",ml+9,y+11,{align:"center"});
+      // Solid status dot — arrow/check glyphs don't exist in helvetica
+      fc(doc,...iconC);doc.circle(ml+9,y+9,1.8,"F");
       sf(8.5,"bold");tc(doc,...TEXT);doc.text(lbl,ml+18,y+10);
       if(val!==undefined){sf(6.5,"normal");tc(doc,...TEXT2);doc.text(`${Math.round(val*10)/10}${unit}`,ml+18,y+17.5);}
       // Progress bar
@@ -1132,6 +1243,301 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     aiLines.slice(0,7).forEach((l,i)=>{if(y+16+i*5.5<H-14)doc.text(l,ml+5,y+16+i*5.5);});
   }
 
+  // ── Inner-page header for Elite exclusive pages ───────────────
+  const _ePage = (label) => {
+    doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
+    fc(doc,...BG2); doc.rect(0,0,W,15,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,1.6,"F");
+    _logo(doc,ml,3,9,_logoSm);
+    sf(7.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+13,8);
+    sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+13,13);
+    sf(6,"bold"); tc(doc,...tierCol); doc.text(String(label),W-mr,10,{align:"right"});
+    fc(doc,...BORDER); doc.rect(0,15,W,.5,"F");
+    return 24;
+  };
+  const _eSection = (yy,title,sub,col) => {
+    fc(doc,...(col||ACCENT)); rr(doc,ml,yy,2.4,sub?12:8,1.2,"F");
+    sf(12,"bold"); tc(doc,...TEXT); doc.text(String(title),ml+7,yy+(sub?5:6));
+    if(sub){ sf(6,"normal"); tc(doc,...TEXT2); doc.text(String(sub),ml+7,yy+11); }
+    return yy+(sub?18:12);
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // PRO stops here — Elite unlocks clinical + ergonomic + progress pages
+  // ══════════════════════════════════════════════════════════════
+  if (isPro && !isElite) {
+    if (y<H-32) {
+      const uy=H-30;
+      fc(doc,...CARD2); rr(doc,ml,uy,cw,18,4,"F");
+      dc(doc,...[34,197,94]); lw(doc,0.5); rr(doc,ml,uy,cw,18,4,"S"); lw(doc,0.3);
+      fc(doc,...[34,197,94]); doc.circle(ml+10,uy+9,4.5,"F");
+      sf(8.5,"bold"); tc(doc,...TEXT); doc.text(isAr?"رقّ إلى Elite لتقرير أعمق":"Upgrade to Elite for the full report",ml+20,uy+7.5);
+      sf(6.3,"normal"); tc(doc,...TEXT2);
+      doc.text(isAr?"خريطة العمود الفقري السريرية · بطاقة الإرجونوميكس · خطة تمارين أسبوعية · تتبّع الأهداف · لقطات الوضعية":"Clinical spinal map · Ergonomic scorecard · Weekly exercise plan · Goal tracking · Posture snapshots",ml+20,uy+13);
+    }
+    fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
+    doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    sf(5.5,"normal");tc(doc,...TEXT3);doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
+    const ptot=doc.internal.getNumberOfPages();
+    for(let p=1;p<=ptot;p++){doc.setPage(p);sf(5.5,"normal");tc(doc,...TEXT3);doc.text(`${p} / ${ptot}`,W-mr,H-4.5,{align:"right"});}
+    await doc.save(`Corvus_Pro_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
+    return;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // ELITE EXCLUSIVE — CLINICAL SPINAL ZONE MAP
+  // ══════════════════════════════════════════════════════════════
+  {
+    let ey=_ePage(isAr?"الخريطة السريرية":"CLINICAL MAP");
+    ey=_eSection(ey,isAr?"خريطة مخاطر العمود الفقري":"Spinal Zone Risk Map",
+      isAr?"مشتقّة حسابياً من مقاييس الجلسة — ليست تشخيصاً طبياً":"Computed from this session's metrics — not a medical diagnosis",[239,68,68]);
+    ey+=4;
+    const zonal=_zonalRisk(metrics);
+    // Body silhouette (right column)
+    const bx=ml+cw*0.66, bw3=30, headR=9, bodyTop=ey+2;
+    dc(doc,...BORDER); lw(doc,0.5);
+    fc(doc,...CARD2); doc.circle(bx+bw3/2, bodyTop+headR, headR, "FD"); lw(doc,0.3);
+    const segs=[["cervical",bodyTop+headR*2,15],["thoracic",bodyTop+headR*2+15,28],["lumbar",bodyTop+headR*2+43,18]];
+    segs.forEach(([k,zy,zh])=>{
+      const c=_riskColor(zonal[k]||0);
+      fc(doc,...c); doc.setGState&&doc.setGState(new doc.GState({opacity:0.4}));
+      rr(doc,bx+4,zy,bw3-8,zh-2,2.5,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    });
+    sf(5,"normal"); tc(doc,...TEXT3); doc.text(isAr?"مُلوّنة حسب الخطر":"coloured by zone risk",bx+bw3/2,bodyTop+headR*2+68,{align:"center"});
+    // Zone cards (left column)
+    const zoneMeta=[
+      ["cervical","Cervical Spine (Neck)","الفقرات العنقية","C1–C7"],
+      ["thoracic","Thoracic Spine (Upper)","الفقرات الصدرية","T1–T12"],
+      ["lumbar","Lumbar Spine (Lower)","الفقرات القطنية","L1–S1"],
+    ];
+    const zcw=cw*0.60;
+    zoneMeta.forEach(([k,en,ar,seg],i)=>{
+      const risk=zonal[k]||0, c=_riskColor(risk), zy=ey+i*26, zh=22;
+      dCard(ml,zy,zcw,zh,4);
+      fc(doc,...c); rr(doc,ml,zy,2.4,zh,1.2,"F");
+      // risk disc
+      fc(doc,...c); doc.circle(ml+16,zy+zh/2,9,"F");
+      sf(10,"bold"); tc(doc,...[255,255,255]); doc.text(`${risk}%`,ml+16,zy+zh/2+1.5,{align:"center"});
+      sf(4.5,"normal"); tc(doc,...[255,255,255]); doc.text("RISK",ml+16,zy+zh/2+6,{align:"center"});
+      // labels
+      sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?ar:en,ml+30,zy+8);
+      sf(6.5,"bold"); tc(doc,...ACCENT); doc.text(seg,ml+30,zy+14);
+      const rl=_riskLabel(risk,isAr);
+      sf(6.5,"bold"); tc(doc,...c); doc.text(`${isAr?"مستوى الخطر":"Risk"}: ${rl}`,ml+30,zy+19.5);
+      // bar
+      const bbx=ml+zcw*0.60, bbw=zcw*0.34;
+      fc(doc,...BORDER); rr(doc,bbx,zy+zh/2-1.5,bbw,4,2,"F");
+      fc(doc,...c); rr(doc,bbx,zy+zh/2-1.5,Math.max(bbw*(risk/100),3),4,2,"F");
+    });
+    // page footer handled by global page-number loop at end
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // ELITE EXCLUSIVE — ERGONOMIC WORKSTATION SCORECARD
+  // ══════════════════════════════════════════════════════════════
+  {
+    let ey=_ePage(isAr?"بطاقة الإرجونوميكس":"ERGONOMICS");
+    ey=_eSection(ey,isAr?"بطاقة إعداد محطة العمل":"Ergonomic Workstation Scorecard",
+      isAr?"تقييم إعدادك الفيزيائي مقابل المعايير المكتبية":"Your physical setup vs. desk-ergonomics standards",[6,182,212]);
+    ey+=4;
+    const _mv=(k)=>metrics[k]||{};
+    const ergo=[
+      { key:"monitor_height", en:"Monitor Height", ar:"ارتفاع الشاشة",
+        fixEn:"Raise/lower the top of the screen to eye level.", fixAr:"اضبط أعلى الشاشة عند مستوى العين." },
+      { key:"screen_distance", en:"Screen Distance", ar:"مسافة الشاشة",
+        fixEn:"Sit an arm's length (50–70cm) from the screen.", fixAr:"اجلس على مسافة ذراع (50–70سم) من الشاشة." },
+      { key:"elbow_angle", en:"Elbow Angle", ar:"زاوية الكوع",
+        fixEn:"Keep elbows near 90–100° with forearms supported.", fixAr:"حافظ على زاوية الكوع 90–100° مع دعم الساعد." },
+      { key:"neck_lean", en:"Neck Position", ar:"وضعية الرقبة",
+        fixEn:"Stack ears over shoulders; tuck the chin slightly.", fixAr:"اجعل الأذن فوق الكتف؛ أدخل الذقن قليلاً." },
+    ];
+    ergo.forEach((e,i)=>{
+      const m=_mv(e.key), sc=Math.round(m.score??100), c=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
+      const pass=sc>=65, cy=ey+i*30, ch=26;
+      dCard(ml,cy,cw,ch,4);
+      fc(doc,...c); rr(doc,ml,cy,2.4,ch,1.2,"F");
+      // status pill
+      const stl=pass?(isAr?"جيد":"Good"):(isAr?"يحتاج ضبط":"Adjust");
+      const stw=doc.getTextWidth(stl)+10;
+      fc(doc,...c); doc.setGState&&doc.setGState(new doc.GState({opacity:.14})); rr(doc,ml+8,cy+6,stw,7,2,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      sf(6,"bold"); tc(doc,...c); doc.text(stl,ml+8+stw/2,cy+10.7,{align:"center"});
+      // title + value — measure the title width at ITS font before switching
+      sf(9.5,"bold"); tc(doc,...TEXT); const _et=isAr?e.ar:e.en; doc.text(_et,ml+8,cy+21);
+      const _etw=doc.getTextWidth(_et);
+      if(m.value!==undefined&&m.value!==null){ sf(6.5,"normal"); tc(doc,...TEXT2); doc.text(`${Math.round(m.value*10)/10}${m.unit||""}`,ml+8+_etw+5,cy+21); }
+      // score number
+      sf(15,"bold"); tc(doc,...c); doc.text(String(sc),ml+cw*0.52,cy+15,{align:"right"});
+      sf(5,"normal"); tc(doc,...TEXT3); doc.text("/100",ml+cw*0.52+1,cy+15);
+      // recommendation
+      sf(6.3,"normal"); tc(doc,...TEXT2);
+      const fx=doc.splitTextToSize(isAr?e.fixAr:e.fixEn,cw*0.42);
+      fx.slice(0,2).forEach((l,j)=>doc.text(l,ml+cw*0.56,cy+9+j*5));
+    });
+    ey+=ergo.length*30+2;
+    // Overall ergonomic index
+    const eIdx=Math.round(ergo.reduce((a,e)=>a+(metrics[e.key]?.score??100),0)/ergo.length);
+    const eC=eIdx<40?[239,68,68]:eIdx<65?[245,158,11]:[34,197,94];
+    if(ey<H-24){
+      dCard(ml,ey,cw,16,4,CARD2);
+      sf(7,"bold"); tc(doc,...TEXT); doc.text(isAr?"مؤشر الإرجونوميكس العام":"Overall Ergonomic Index",ml+6,ey+10);
+      sf(13,"bold"); tc(doc,...eC); doc.text(`${eIdx}/100`,ml+cw-6,ey+11,{align:"right"});
+    }
+  }
+
+  // ═══ ELITE INSIGHTS: snapshots + weekly goal + exercise plan ═══
+  const _snaps   = Array.isArray(session.worst_snapshots) ? session.worst_snapshots.slice(0,3) : [];
+  const _goal    = Number(profile?.goal_score) || null;
+  const _plan    = profile?.exercise_plan?.week === _exWeekKey() ? profile.exercise_plan : null;
+  if (_snaps.length || _goal || _plan) {
+    doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
+    fc(doc,...BG2);doc.rect(0,0,W,15,"F");fc(doc,...ACCENT);doc.rect(0,0,W,1.6,"F");
+    _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("CORVUS",ml+13,8);
+    sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
+    sf(6,"normal");tc(doc,...TEXT3);doc.text(isAr?"رؤى Elite":"ELITE INSIGHTS",W-mr,10,{align:"right"});
+    fc(doc,...BORDER);doc.rect(0,15,W,.5,"F");
+    y=24;
+
+    // ── Worst-posture snapshots ──────────────────────────────────
+    if(_snaps.length){
+      sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"أسوأ لحظات الجلسة":"WORST POSTURE MOMENTS",ml,y);
+      sf(5.5,"normal");tc(doc,...TEXT3);doc.text(isAr?"لقطات تلقائية عند أدنى سكور":"Auto-captured at the lowest scores",ml,y+5.5);
+      y+=10;
+      const gap=6, iw=(cw-gap*2)/3, ih=iw*0.75;
+      _snaps.forEach((s,i)=>{
+        const sx=ml+i*(iw+gap);
+        dCard(sx-1,y-1,iw+2,ih+13,4);
+        try{ doc.addImage(s.img,"JPEG",sx,y,iw,ih); }catch{
+          sf(6,"normal");tc(doc,...TEXT3);doc.text("—",sx+iw/2,y+ih/2,{align:"center"});
+        }
+        const scol=s.score<40?[239,68,68]:[245,158,11];
+        sf(7.5,"bold");tc(doc,...scol);doc.text(`${s.score}/100`,sx+3,y+ih+8);
+        sf(5.5,"normal");tc(doc,...TEXT3);doc.text(String(s.time||""),sx+iw-3,y+ih+8,{align:"right"});
+      });
+      y+=(cw-12)/3*0.75+22;
+    }
+
+    // ── Weekly goal progress ─────────────────────────────────────
+    if(_goal){
+      const now=Date.now(), WK=7*86400000;
+      const cur7=_exWindowAvg(allSessions,now-WK,now+1);
+      const prev7=_exWindowAvg(allSessions,now-2*WK,now-WK);
+      const slope=_exSlopePerDay(allSessions);
+      const reached=cur7!=null&&cur7>=_goal;
+      const gh=34;
+      dCard(ml,y,cw,gh,5,CARD2);
+      sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"هدفك الأسبوعي":"WEEKLY GOAL",ml+5,y+8);
+      const gcol=reached?[34,197,94]:[37,99,235];
+      sf(11,"bold");tc(doc,...gcol);doc.text(`${cur7??"—"}`,ml+5,y+21);
+      sf(6.5,"normal");tc(doc,...TEXT3);doc.text(`/ ${_goal}`,ml+5+doc.getTextWidth(`${cur7??"—"}`)+2,y+21);
+      // Progress bar
+      const gbx=ml+45,gbw=cw-95;
+      fc(doc,...BORDER);rr(doc,gbx,y+16,gbw,5,2,"F");
+      fc(doc,...gcol);rr(doc,gbx,y+16,Math.max(gbw*Math.min(1,(cur7||0)/_goal),3),5,2,"F");
+      // Delta vs last week
+      if(cur7!=null&&prev7!=null){
+        const d=cur7-prev7,dcol=d>0?[34,197,94]:d<0?[239,68,68]:TEXT3;
+        sf(7,"bold");tc(doc,...dcol);
+        // "+/-" only — ▲▼ glyphs don't exist in jsPDF's built-in helvetica
+        doc.text(`${d>0?"+":d<0?"-":""}${Math.abs(d)}`,ml+cw-5,y+13,{align:"right"});
+        sf(5,"normal");tc(doc,...TEXT3);doc.text(isAr?"عن الأسبوع الماضي":"vs last week",ml+cw-5,y+18.5,{align:"right"});
+      }
+      // ETA line
+      let eta=reached?(isAr?"وصلت لهدفك — ثبّته أسبوعاً كاملاً":"Goal reached — hold it for a full week")
+        : slope!=null&&slope>0.05?(isAr?`بمعدلك الحالي (+${slope.toFixed(1)}/يوم) تصل خلال ~${Math.ceil((_goal-(cur7||0))/slope)} يوم`:`At +${slope.toFixed(1)} pts/day you'll reach it in ~${Math.ceil((_goal-(cur7||0))/slope)} days`)
+        : slope!=null&&slope<-0.05?(isAr?"الاتجاه نازل — راجع خطة التمارين":"Trending down — revisit the exercise plan")
+        : (isAr?"المعدل ثابت — جلسة إضافية يومياً تحرك المؤشر":"Flat trend — one extra daily session moves the needle");
+      sf(6,"normal");tc(doc,...TEXT2);doc.text(eta,ml+5,y+gh-5);
+      y+=gh+8;
+    }
+
+    // ── This week's exercise plan ────────────────────────────────
+    if(_plan?.days?.length){
+      let done=0,total=0;_plan.days.forEach(d=>d.exercises.forEach(e=>{total++;if(e.done)done++;}));
+      sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"خطة تمارين الأسبوع":"THIS WEEK'S EXERCISE PLAN",ml,y);
+      const pcol=done===total?[34,197,94]:[99,102,241];
+      sf(7,"bold");tc(doc,...pcol);doc.text(`${done}/${total}`,ml+cw,y,{align:"right"});
+      sf(5.5,"normal");tc(doc,...TEXT3);
+      doc.text((_plan.focus||[]).map(a=>_EX_AREA_LABELS[a]?.[isAr?"ar":"en"]||a).join("  •  "),ml,y+5.5);
+      y+=10;
+      _plan.days.forEach(d=>{
+        if(y>H-24){doc.addPage();fc(doc,...BG);doc.rect(0,0,W,H,"F");y=14;}
+        const rh=6+d.exercises.length*5.5;
+        dCard(ml,y,cw,rh,3);
+        const allDone=d.exercises.every(e=>e.done);
+        sf(6,"bold");tc(doc,...(allDone?[34,197,94]:TEXT2));
+        doc.text(isAr?`اليوم ${d.day}`:`Day ${d.day}`,ml+4,y+5.5);
+        sf(5,"normal");tc(doc,...TEXT3);
+        doc.text(_EX_AREA_LABELS[d.area]?.[isAr?"ar":"en"]||d.area,ml+4,y+rh-2.5);
+        d.exercises.forEach((e,i)=>{
+          const ey=y+4.5+i*5.5;
+          // Vector check circles — ✓/○ glyphs don't exist in helvetica
+          if(e.done){ fc(doc,34,197,94); doc.circle(ml+27,ey,1.6,"F"); }
+          else { dc(doc,...TEXT3); lw(doc,0.3); doc.circle(ml+27,ey,1.6,"S"); }
+          sf(6,"normal");tc(doc,...(e.done?TEXT3:TEXT2));
+          doc.text(doc.splitTextToSize(isAr?e.ar:e.en,cw-38)[0],ml+32,ey+1);
+        });
+        y+=rh+3;
+      });
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // ELITE EXCLUSIVE — ACHIEVEMENTS & CONSISTENCY
+  // ══════════════════════════════════════════════════════════════
+  {
+    const all=Array.isArray(allSessions)?allSessions:[];
+    const scores=all.map(s=>Math.round(s.avg_score||0)).filter(Boolean);
+    const totalSess=all.length||1;
+    const bestScore=scores.length?Math.max(...scores):avg;
+    const allAvg=scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length):avg;
+    const days=[...new Set(all.map(s=>{try{return(s.created_at?.toDate?.()||new Date(s.created_at||0)).toISOString().slice(0,10);}catch{return null;}}).filter(Boolean))].sort();
+    let strk=days.length?1:0;
+    for(let i=days.length-2;i>=0;i--){ if((new Date(days[i+1])-new Date(days[i]))/86400000<=1.6) strk++; else break; }
+    const spanDays=days.length>1?Math.max(1,(new Date(days[days.length-1])-new Date(days[0]))/86400000):1;
+    const perWeek=(totalSess/Math.max(spanDays/7,0.5)).toFixed(1);
+
+    let ey=_ePage(isAr?"الإنجازات":"ACHIEVEMENTS");
+    ey=_eSection(ey,isAr?"إنجازاتك والاستمرارية":"Achievements & Consistency",
+      isAr?"تقدّمك عبر كل الجلسات":"Your progress across every session",[139,92,246]);
+    ey+=4;
+    const tiles=[
+      [String(totalSess), isAr?"إجمالي الجلسات":"Total sessions",[99,102,241]],
+      [String(bestScore), isAr?"أفضل نتيجة":"Best score",[34,197,94]],
+      [`${strk}`, isAr?"سلسلة الأيام":"Day streak",[245,158,11]],
+      [`${allAvg}`, isAr?"المتوسط العام":"All-time avg",[6,182,212]],
+      [`${perWeek}`, isAr?"جلسة/أسبوع":"Per week",[139,92,246]],
+      [`${days.length}`, isAr?"أيام نشطة":"Active days",[236,72,153]],
+    ];
+    const tw=(cw-2*6)/3, th=26;
+    tiles.forEach(([v,l,c],i)=>{
+      const tx=ml+(i%3)*(tw+6), ty=ey+Math.floor(i/3)*(th+6);
+      dCard(tx,ty,tw,th,4);
+      fc(doc,...c); rr(doc,tx,ty,tw,2.6,1.3,"F"); doc.rect(tx,ty+1.3,tw,1.3,"F");
+      sf(15,"bold"); tc(doc,...c); doc.text(String(v),tx+tw/2,ty+15,{align:"center"});
+      sf(6,"bold"); tc(doc,...TEXT3); doc.text(String(l),tx+tw/2,ty+21.5,{align:"center"});
+    });
+    ey+=2*(th+6)+8;
+    ey=_eSection(ey,isAr?"الأوسمة":"Milestone Badges","",[139,92,246]); ey+=4;
+    const badges=[
+      [totalSess>=1,  isAr?"البداية":"First Step",   isAr?"أول جلسة":"1st session"],
+      [totalSess>=10, isAr?"منتظم":"Committed",       isAr?"10 جلسات":"10 sessions"],
+      [totalSess>=25, isAr?"مثابر":"Dedicated",       isAr?"25 جلسة":"25 sessions"],
+      [bestScore>=80, isAr?"تميّز":"Excellence",      isAr?"نتيجة 80+":"Scored 80+"],
+      [strk>=3,       isAr?"سلسلة":"On a Roll",        isAr?"3 أيام متتالية":"3-day streak"],
+      [strk>=7,       isAr?"أسبوع كامل":"Full Week",   isAr?"7 أيام متتالية":"7-day streak"],
+    ];
+    const bw4=(cw-2*6)/3, bh=24;
+    badges.forEach(([earned,title,sub],i)=>{
+      const bx4=ml+(i%3)*(bw4+6), by=ey+Math.floor(i/3)*(bh+6);
+      const c=earned?[139,92,246]:[203,213,225];
+      dCard(bx4,by,bw4,bh,4,earned?CARD:CARD2);
+      fc(doc,...c); doc.setGState&&doc.setGState(new doc.GState({opacity:earned?1:.35})); doc.circle(bx4+12,by+bh/2,6.5,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      fc(doc,...(earned?[255,255,255]:CARD2)); doc.circle(bx4+12,by+bh/2,2.6,"F");
+      sf(8,"bold"); tc(doc,...(earned?TEXT:TEXT3)); doc.text(String(title),bx4+22,by+bh/2-1);
+      sf(5.5,"normal"); tc(doc,...TEXT3); doc.text(String(sub),bx4+22,by+bh/2+5);
+      if(!earned){ sf(5,"bold"); tc(doc,...TEXT3); doc.text(isAr?"مقفل":"locked",bx4+bw4-4,by+5,{align:"right"}); }
+    });
+  }
+
   // Footer p1
   fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
   doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
@@ -1151,19 +1557,49 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
 
 export async function generateClinicalPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[], aiSummary="" }) {
+  if (!session) throw new Error(lang==="ar" ? "لا توجد بيانات جلسة لعرضها في هذا التقرير." : "No session data available to generate this report.");
   const { jsPDF } = await import("jspdf");
-  const isAr  = lang === "ar";
   const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  // Clinical report is rendered entirely in helvetica/English regardless of
+  // `lang` (see date-formatting notes below) — Cairo is never used here, so
+  // it's never loaded. This alone was ~90% of this report's file size.
+  await _ensureLogo();
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
   const tier    = _t(profile?.tier || session?.tier || "standard");
   // Note: tier gate is enforced in App.jsx downloadPDF() before calling here.
   // We don't re-throw here to avoid silent failures from stale session.tier values.
 
-  // Cairo already loaded via _ensureCairoFont above
-  const cairo = _cairoLoaded;
-  const fnt = (size, style="normal") => cairo && isAr ? fontAr(doc,size,style,true) : font(doc,size,style);
+
+  // New clinical page WITH the navy header bar — the conditional page
+  // breaks used to call doc.addPage() bare, leaving continued pages
+  // (metrics table, recommendations) with no header at all.
+  const _clinPage = () => {
+    doc.addPage();
+    doc.setFillColor(15,23,42); doc.rect(0,0,W,12,"F");
+    doc.setFontSize(8); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
+    doc.text("Corvus Posture Health — Clinical Summary", ml, 8.5);
+    const _badgeColPg = tier==="elite" ? [180,141,60] : [14,165,233];
+    doc.setFontSize(7.5); doc.setTextColor(..._badgeColPg); doc.setFont("helvetica","bold");
+    doc.text(tier==="elite"?"ELITE PHYSIOTHERAPIST REPORT":"PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
+    return 22;
+  };
+
+  // Consistent, designed section header — accent bar + title (+ optional
+  // subtitle). Replaces the plain bold-text headings for a nicer, more
+  // deliberate typographic rhythm throughout the clinical report.
+  const _clinSec = (yy, title, sub, col=[14,165,233]) => {
+    doc.setFillColor(...col); doc.roundedRect(ml, yy-4.6, 2.6, sub?11:7.5, 1.2, 1.2, "F");
+    doc.setFontSize(12.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
+    doc.text(String(title), ml+7, yy);
+    if(sub){ doc.setFontSize(7.5); doc.setTextColor(120,134,156); doc.setFont("helvetica","normal"); doc.text(String(sub), ml+7, yy+5); return yy+14; }
+    return yy+9;
+  };
+  // Small uppercase tracked label (section eyebrow / table captions)
+  const _clinLabel = (xx, yy, txt, col=[120,134,156]) => {
+    doc.setFontSize(6.5); doc.setTextColor(...col); doc.setFont("helvetica","bold");
+    doc.text(String(txt).toUpperCase(), xx, yy, { charSpace: 0.4 });
+  };
 
   const avg     = Math.round(session.avg_score || 0);
   const dur     = session.duration_s || session.duration_sec || 0;
@@ -1177,7 +1613,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   const gradeC  = _gc(avg);
   const zonal   = _zonalRisk(metrics);
   const now     = new Date();
-  const dateStr = isAr ? now.toLocaleDateString("ar-EG",{year:"numeric",month:"long",day:"numeric"}) : now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  // Clinical report is a helvetica/English document end-to-end — keep the
+  // date English so it never renders as garbled Arabic glyphs.
+  const dateStr = now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
 
   const realIndex = (() => {
     if (sessionIndex) return sessionIndex;
@@ -1192,6 +1630,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     .filter(([k])=>!k.startsWith("_") && metrics[k])
     .map(([k,v])=>{
       const sc  = typeof v==="number" ? v : (v?.score ?? 100);
+      // English labels — clinical report is rendered in helvetica which can't
+      // shape Arabic (METRIC_LABELS now includes the engine's real keys, so
+      // fhp_index → "Forward Head Posture" instead of "Fhp Index").
       const lbl = METRIC_LABELS[k] || v?.label || k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
       return { key:k, sc, lbl, value:v?.value, unit:v?.unit||"" };
     })
@@ -1201,21 +1642,25 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   // ── PAGE 1: Clinical Header + Patient Info ────────────────────
   // Clinical header — formal white + navy
+  const _isElite = tier==="elite";
+  const _badgeCol = _isElite ? [180,141,60] : [14,165,233]; // gold for Elite, cyan otherwise
   doc.setFillColor(15,23,42); doc.rect(0,0,W,36,"F");
+  // Premium accent underline — thin brand rule beneath the navy band
+  doc.setFillColor(..._badgeCol); doc.rect(0,36,W,1,"F");
   doc.setFontSize(14); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
   doc.text("CORVUS POSTURE HEALTH", ml, 16);
   doc.setFontSize(8.5); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
   doc.text("AI-Assisted Workplace Ergonomics & Posture Assessment", ml, 23);
   doc.text("For Clinical Review — Not for Diagnostic Purposes", ml, 29.5);
 
-  // Document type badge
-  doc.setFillColor(14,165,233); doc.roundedRect(W-mr-42,10,42,14,2,2,"F");
+  // Document type badge — gold accent for Elite tier, cyan otherwise
+  doc.setFillColor(..._badgeCol); doc.roundedRect(W-mr-42,10,42,14,2,2,"F");
   doc.setFontSize(8); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text("CLINICAL SUMMARY", W-mr-21, 18.5, {align:"center"});
-  doc.setFontSize(6.5); doc.setTextColor(186,230,253); doc.setFont("helvetica","normal");
+  doc.text(_isElite?"ELITE CLINICAL":"CLINICAL SUMMARY", W-mr-21, 18.5, {align:"center"});
+  doc.setFontSize(6.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","normal");
   doc.text("PHYSIOTHERAPIST REPORT", W-mr-21, 23.5, {align:"center"});
 
-  y=46;
+  y=47;
 
   // Patient Info block
   doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,32,3,3,"F");
@@ -1224,35 +1669,46 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
   doc.text("PATIENT INFORMATION", ml+4, y+7);
   doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
+  // Interleaved left/right so Math.floor(i/2) maps each pair to one row —
+  // the old order was [left,left,right,right,...] which drew Email over
+  // Patient Name and the date over the session reference.
+  // NOTE: this clinical report is rendered entirely in helvetica (English),
+  // which cannot shape Arabic — so these labels stay English in every
+  // language (Arabic here rendered as garbage like "þåþªþûþ•").
   [
-    [`Patient Name:`, name, ml+4],
-    [`Email:`, email, ml+4],
-    [`Date of Assessment:`, dateStr, ml+cw/2+4],
-    [`Session Reference:`, `#${realIndex}`, ml+cw/2+4],
-    [`Session Duration:`, _fmtDur(dur), ml+4],
-    [`Recording Mode:`, session.mode||"Laptop Camera", ml+cw/2+4],
+    [`Patient Name:`,       name,                           ml+4],
+    [`Date of Assessment:`, dateStr,                        ml+cw/2+4],
+    [`Email:`,              email,                          ml+4],
+    [`Session Ref:`,        `#${realIndex}`,                ml+cw/2+4],
+    [`Session Duration:`,   _fmtDur(dur),                   ml+4],
+    [`Recording Mode:`,     session.mode||"Laptop Camera",  ml+cw/2+4],
   ].forEach(([lbl,val,x],i) => {
     const row = Math.floor(i/2);
     const yy = y+13+(row*8);
     doc.setFont("helvetica","bold"); doc.setTextColor(100,116,139); doc.setFontSize(7.5);
-    doc.text(lbl, x, yy);
+    doc.text(String(lbl), x, yy);
     doc.setFont("helvetica","normal"); doc.setTextColor(15,23,42); doc.setFontSize(8.5);
-    doc.text(val||"—", x+32, yy);
+    // Value sits after the label's real width (not a fixed 32mm) so long
+    // labels never collide with their value.
+    const lblW = doc.getTextWidth(String(lbl))+3;
+    doc.text(String(val||"—"), x+Math.max(30,lblW), yy);
   });
   y+=40;
 
   // ── Overall score clinical interpretation ─────────────────────
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Overall Posture Score", ml, y); y+=6;
+  y=_clinSec(y+2,"Overall Posture Score","Session-level posture quality and clinical interpretation");
 
   doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,36,3,3,"F");
   doc.setDrawColor(...gradeC); doc.setLineWidth(0.5); doc.roundedRect(ml,y,cw,36,3,3,"S"); doc.setLineWidth(0.3);
 
-  const cx2=ml+20, cy2=y+18;
-  doc.setFillColor(...gradeC); doc.circle(cx2,cy2,13,"F");
-  doc.setFontSize(15); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text(String(avg), cx2, cy2+5.5, {align:"center"});
-  doc.setFontSize(7); doc.text("/100", cx2, cy2+10.5, {align:"center"});
+  const cx2=ml+22, cy2=y+18;
+  // Proportional gauge (was a flat filled disc)
+  doc.setFillColor(...gradeC); doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
+  doc.circle(cx2,cy2,12,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+  _arcGauge(doc,cx2,cy2,12,avg/100,gradeC,[226,232,240],3.2);
+  doc.setFontSize(14); doc.setTextColor(...gradeC); doc.setFont("helvetica","bold");
+  doc.text(String(avg), cx2, cy2+3, {align:"center"});
+  doc.setFontSize(6); doc.setTextColor(148,163,184); doc.text("/100", cx2, cy2+8, {align:"center"});
 
   const interpretation = avg>=80
     ? "Posture quality is consistently good. Preventive ergonomic advice appropriate."
@@ -1270,10 +1726,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   // ── Score timeline ────────────────────────────────────────────
   if (hist.length>2) {
-    doc.setFontSize(10); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-    doc.text("Posture Score Timeline (Full Session)", ml, y); y+=4;
-    doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-    doc.text("Continuous posture quality measurement from session start to end", ml, y); y+=5;
+    y=_clinSec(y,"Posture Score Timeline","Continuous posture quality from session start to end");
     const sh=28;
     doc.setFillColor(241,245,249); doc.roundedRect(ml,y,cw,sh,2,2,"F");
     [50,65,80,95].forEach(v=>{
@@ -1285,6 +1738,43 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     y+=sh+10;
   }
 
+  // ── KEY CLINICAL FINDINGS (fills the lower half of page 1) ─────
+  y=_clinSec(y,"Key Clinical Findings","The measurements furthest from the clinical norm this session");
+  y+=2;
+  const _findInterp={
+    neck_lean:"Forward neck flexion increases cervical disc load and is a common driver of tension headache.",
+    fhp_index:"Forward head posture — every 2.5cm of anterior translation adds ~4.5kg of effective load to the cervical spine.",
+    head_tilt:"Lateral head tilt suggests asymmetric muscle tone or an uneven working surface.",
+    head_yaw:"Sustained head rotation loads one side of the cervical spine; reposition the monitor to face the user.",
+    rounded_shoulders:"Protracted shoulders shorten pectorals and lengthen mid-trapezius, predisposing to thoracic kyphosis.",
+    shoulder_level:"Shoulder height asymmetry points to armrest or seat imbalance.",
+    spine_lean:"Trunk deviation from vertical increases paraspinal muscle demand and lumbar shear.",
+    spine_align:"Deviation of the shoulder from the ear–hip line indicates loss of neutral spinal curvature.",
+    elbow_angle:"Elbow angle outside 90–110° raises shoulder and forearm loading.",
+    monitor_height:"Monitor off eye level drives compensatory neck flexion or extension.",
+    screen_distance:"Viewing distance outside 50–70cm affects both posture and visual strain.",
+  };
+  const _worst=metricEntries.slice(0,3);
+  _worst.forEach(({lbl,value,unit,sc,key},i)=>{
+    const col=_gc(sc), rowH=17, ry=y+i*(rowH+3);
+    doc.setFillColor(248,250,252); doc.roundedRect(ml,ry,cw,rowH,3,3,"F");
+    doc.setFillColor(...col); doc.roundedRect(ml,ry,2.4,rowH,1.2,1.2,"F");
+    // rank number
+    doc.setFillColor(...col); doc.setGState&&doc.setGState(new doc.GState({opacity:.14})); doc.circle(ml+12,ry+rowH/2,5.5,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+    doc.setFontSize(9); doc.setTextColor(...col); doc.setFont("helvetica","bold"); doc.text(String(i+1),ml+12,ry+rowH/2+3,{align:"center"});
+    // metric + value
+    doc.setFontSize(9); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold"); doc.text(String(lbl),ml+22,ry+7);
+    if(value!==undefined&&value!==null){ doc.setFontSize(7); doc.setTextColor(120,134,156); doc.setFont("helvetica","normal"); doc.text(`${Math.round(value*10)/10}${unit||""}`,ml+22,ry+13); }
+    // interpretation (kept clear of the right-hand score badge)
+    doc.setFontSize(7); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
+    const _txt=_findInterp[key]||"Deviation from the recommended range — see detailed metrics.";
+    doc.splitTextToSize(_txt,cw*0.48).slice(0,2).forEach((l,j)=>doc.text(l,ml+cw*0.36,ry+6.5+j*4.5));
+    // score badge
+    doc.setFontSize(11); doc.setTextColor(...col); doc.setFont("helvetica","bold"); doc.text(String(Math.round(sc)),ml+cw-5,ry+8,{align:"right"});
+    doc.setFontSize(5.5); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal"); doc.text("/100",ml+cw-5,ry+13,{align:"right"});
+  });
+  y+=_worst.length*20+6;
+
   // ── PAGE 2: Zonal Pain Map ────────────────────────────────────
   doc.addPage();
   doc.setFillColor(15,23,42); doc.rect(0,0,W,12,"F");
@@ -1294,10 +1784,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   doc.text("PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
   y=22;
 
-  doc.setFontSize(12); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Spinal Zone Risk Assessment", ml, y); y+=5;
-  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Risk percentages are derived computationally from posture metrics. They are not medical diagnoses.", ml, y); y+=9;
+  y=_clinSec(y,"Spinal Zone Risk Assessment","Risk % derived computationally from posture metrics — not a medical diagnosis",[239,68,68]);
 
   const clinicalZones = [
     {
@@ -1318,13 +1805,14 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   ];
 
   clinicalZones.forEach(({key,region,title,desc,metrics:mlist})=>{
-    if(y>H-72){doc.addPage();y=22;}
+    if(y>H-72){y=_clinPage();}
     const risk=zonal[key]||0;
     const rcol=_riskColor(risk);
     const rlbl=_riskLabel(risk,false);
 
-    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,52,3,3,"F");
-    doc.setDrawColor(...rcol); doc.setLineWidth(0.5); doc.roundedRect(ml,y,cw,52,3,3,"S"); doc.setLineWidth(0.3);
+    const cardH=58;
+    doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,cardH,3,3,"F");
+    doc.setDrawColor(...rcol); doc.setLineWidth(0.5); doc.roundedRect(ml,y,cw,cardH,3,3,"S"); doc.setLineWidth(0.3);
 
     // Zone identifier
     doc.setFillColor(...rcol); doc.roundedRect(ml+2,y+2,22,22,2,2,"F");
@@ -1347,14 +1835,16 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     // Description
     doc.setFontSize(7.5); doc.setTextColor(51,65,85); doc.setFont("helvetica","normal");
     const descLines = doc.splitTextToSize(desc, cw-8);
-    descLines.slice(0,4).forEach((l,i)=>doc.text(l, ml+4, y+30+(i*5.5)));
+    descLines.slice(0,3).forEach((l,i)=>doc.text(l, ml+4, y+30+(i*5.5)));
 
-    // Metrics source
+    // Metrics source — kept inside the card (was drawn at y+53.5, past the
+    // old 52mm bottom edge, so it clipped through the border)
     doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
-    doc.text("Contributing metrics: ", ml+4, y+53.5);
-    doc.setFont("helvetica","normal"); doc.text(mlist, ml+38, y+53.5);
+    doc.text("Contributing metrics:", ml+4, y+cardH-4);
+    const cmW=doc.getTextWidth("Contributing metrics:")+3;
+    doc.setFont("helvetica","normal"); doc.text(String(mlist), ml+4+cmW, y+cardH-4);
 
-    y+=58;
+    y+=cardH+6;
   });
 
   // ── PAGE 3: Body Outline + Metrics Detail + Recommendations ─────
@@ -1367,10 +1857,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   y=22;
 
   // ── Body Outline Diagram — zonal risk visualization ───────────
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Spinal Zone Risk — Visual Overview", ml, y); y+=6;
-  doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Risk zones derived computationally from posture measurements", ml, y); y+=8;
+  y=_clinSec(y,"Spinal Zone Risk — Visual Overview","Risk zones mapped onto the spine from posture measurements",[239,68,68]);
 
   // Draw simplified body silhouette
   const bx = ml+cw*0.55, bodyW=24, headR=7;
@@ -1418,11 +1905,8 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   y = Math.max(y+62, bodyTop+headR*2+56); y+=8;
 
   // ── Exercise Prescription ──────────────────────────────────────
-  if(y>H-80){doc.addPage();y=22;}
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Exercise Prescription", ml, y); y+=5;
-  doc.setFontSize(7.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Evidence-based exercises targeting the highest-risk zones identified in this session", ml, y); y+=9;
+  if(y>H-80){y=_clinPage();}
+  y=_clinSec(y,"Exercise Prescription","Evidence-based exercises targeting the highest-risk zones",[34,197,94]);
 
   const EXERCISES = {
     cervical:[
@@ -1447,13 +1931,13 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     .sort((a,b)=>(zonal[b]||0)-(zonal[a]||0));
 
   for(const zk of zonePriority.slice(0,3)){
-    if(y>H-55){doc.addPage();y=22;}
+    if(y>H-55){y=_clinPage();}
     const col = _riskColor(zonal[zk]||0);
     doc.setFillColor(...col); doc.roundedRect(ml,y,cw,9,2,2,"F");
     doc.setFontSize(9); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
     doc.text(`${zk.charAt(0).toUpperCase()+zk.slice(1)} Zone Exercises (Risk: ${_riskLabel(zonal[zk]||0,false)} ${zonal[zk]||0}%)`,ml+4,y+6.5); y+=13;
     for(const ex of EXERCISES[zk].slice(0,2)){
-      if(y>H-22){doc.addPage();y=22;}
+      if(y>H-22){y=_clinPage();}
       doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,16,2,2,"F");
       doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
       doc.text(`${ex.name} — ${ex.sets}`, ml+4, y+7);
@@ -1465,40 +1949,70 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   }
 
   // All metrics in clinical table style
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Posture Metrics Detail", ml, y); y+=7;
+  y=_clinSec(y,"Posture Metrics Detail","Every measured metric with its score and clinical status",[99,102,241]);
+  y+=1;
 
-  // Table header
-  doc.setFillColor(15,23,42); doc.roundedRect(ml,y,cw,9,2,2,"F");
-  doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  ["Measurement","Value","Score","Status"].forEach((h,i)=>{
-    const xs=[ml+3, ml+cw*0.38, ml+cw*0.56, ml+cw*0.72];
-    doc.text(h, xs[i], y+6);
-  });
-  y+=11;
+  // Table header — repeated whenever the table flows onto a new page
+  const _clinTblHead=()=>{
+    doc.setFillColor(15,23,42); doc.roundedRect(ml,y,cw,9,2,2,"F");
+    doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+    ["Measurement","Value","Score","Status"].forEach((h,i)=>{
+      const xs=[ml+3, ml+cw*0.38, ml+cw*0.58, ml+cw*0.74];
+      doc.text(h, xs[i], y+6);
+    });
+    y+=11;
+  };
+  _clinTblHead();
 
   metricEntries.forEach(({lbl,value,unit,sc},i)=>{
-    if(y>H-40){doc.addPage();y=22;}
+    if(y>H-16){ y=_clinPage(); _clinTblHead(); }
     doc.setFillColor(i%2===0?248:255, i%2===0?250:255, i%2===0?252:255);
     doc.rect(ml,y,cw,9,"F");
     const col=_gc(sc);
     doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","normal");
     doc.text(lbl, ml+3, y+6);
     doc.setTextColor(...col); doc.setFont("helvetica","bold");
-    if(value!==undefined&&value!==null) doc.text(`${Math.round(value*10)/10} ${unit||""}`, ml+cw*0.38, y+6);
-    doc.text(String(Math.round(sc)), ml+cw*0.56, y+6);
-    doc.setFontSize(7.5); doc.text(_gl(sc,false), ml+cw*0.72, y+6);
+    if(value!==undefined&&value!==null) doc.text(`${Math.round(value*10)/10}${unit||""}`, ml+cw*0.38, y+6);
+    doc.text(String(Math.round(sc)), ml+cw*0.58, y+6);
+    doc.setFontSize(7.5); doc.text(_gl(sc,false), ml+cw*0.74, y+6);
     y+=9;
   });
 
   y+=10;
 
+  // ── Industry Benchmark Comparison ─────────────────────────────
+  // Reference cohort figures — aggregated/estimated ranges, not a
+  // live population statistic. Relabel once real anonymized cohort
+  // volume backs these numbers.
+  if(y>H-90){y=_clinPage();}
+  y=_clinSec(y,"Industry Benchmark Comparison","This session's scores against reference cohort averages",[168,85,247]);
+  y+=1;
+
+  const CLINICAL_BENCHMARKS = [
+    { label:"This Session",              value:avg,               isUser:true },
+    { label:"Office Workers (avg.)",     value:61,                isUser:false },
+    { label:"Remote/Hybrid Workers (avg.)", value:57,             isUser:false },
+    { label:"Top 10% Corvus Users",      value:88,                isUser:false },
+  ];
+  const bLabelW = cw*0.42, bBarX = ml+bLabelW, bBarW = cw-bLabelW-16;
+  CLINICAL_BENCHMARKS.forEach(({label,value,isUser})=>{
+    const rc = isUser ? gradeC : [100,116,139];
+    doc.setFontSize(8); doc.setFont("helvetica", isUser?"bold":"normal"); doc.setTextColor(...(isUser?gradeC:[15,23,42]));
+    doc.text(label, ml, y+5.5);
+    doc.setFillColor(226,232,240); doc.roundedRect(bBarX,y+1.5,bBarW,4.6,1.2,1.2,"F");
+    const fillW = Math.max(2, bBarW*(Math.max(0,Math.min(100,value))/100));
+    doc.setFillColor(...rc); doc.roundedRect(bBarX,y+1.5,fillW,4.6,1.2,1.2,"F");
+    doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(15,23,42);
+    doc.text(String(Math.round(value)), bBarX+bBarW+3, y+5.2);
+    y+=9.5;
+  });
+  doc.setFontSize(6.5); doc.setTextColor(148,163,184); doc.setFont("helvetica","italic");
+  doc.text("Benchmark figures are reference cohort estimates and may vary with sample size and role.", ml, y+3);
+  y+=12;
+
   // Clinical recommendations
-  if(y>H-80){doc.addPage();y=22;}
-  doc.setFontSize(11); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
-  doc.text("Clinical Notes & Recommendations", ml, y); y+=5;
-  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text("Suggested focus areas based on session measurements. Please apply clinical judgment.", ml, y); y+=9;
+  if(y>H-80){y=_clinPage();}
+  y=_clinSec(y,"Clinical Notes & Recommendations","Suggested focus areas — please apply clinical judgment",[99,102,241]);
 
   const clinicalRecos = [
   avg < 60
@@ -1518,7 +2032,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 ];
 
   clinicalRecos.forEach((rec,i)=>{
-    if(y>H-35){doc.addPage();y=22;}
+    if(y>H-35){y=_clinPage();}
     doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,22,2,2,"F");
     doc.setFontSize(8); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
     const zones2 = ["General Assessment","Cervical Focus","Thoracic Focus","Lumbar Focus"];
@@ -1529,9 +2043,50 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     y+=26;
   });
 
+  // ── RECOMMENDED ERGONOMIC ADJUSTMENTS (fills the final page) ──
+  y=_clinPage();
+  y=_clinSec(y,"Recommended Ergonomic Adjustments","Actionable workstation changes, prioritised for this user");
+  y+=2;
+  const _adj=[
+    ["Raise monitor to eye level","Top of the screen at or just below eye height — use a stand or riser.",(metrics.monitor_height?.score??100)<65],
+    ["Set viewing distance to 50–70cm","About an arm's length; enlarge on-screen text rather than leaning in.",(metrics.screen_distance?.score??100)<65],
+    ["Support elbows at 90–110°","Adjust chair and armrests so forearms rest level with the desk.",(metrics.elbow_angle?.score??100)<65],
+    ["Engage lumbar support","Sit fully back; use the chair's lumbar support or a cushion.",(zonal.lumbar||0)>=40],
+    ["Micro-break every 30 minutes","Stand, reset posture, and look 6m away for 20 seconds.",true],
+  ];
+  _adj.forEach(([t,d,flag],i)=>{
+    const ay=y+i*15, c=flag?[14,165,233]:[34,197,94];
+    doc.setFillColor(248,250,252); doc.roundedRect(ml,ay,cw,13,2.5,2.5,"F");
+    doc.setFillColor(...c); doc.roundedRect(ml,ay,2.2,13,1.1,1.1,"F");
+    doc.setDrawColor(...c); doc.setLineWidth(0.5); doc.roundedRect(ml+6,ay+3.5,6,6,1.2,1.2,"S"); doc.setLineWidth(0.3);
+    _icon(doc,"check",ml+9,ay+6.6,c,2.3);
+    doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold"); doc.text(t,ml+17,ay+6);
+    doc.setFontSize(7); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal"); doc.text(doc.splitTextToSize(d,cw-70)[0],ml+17,ay+11);
+    if(flag){ doc.setFontSize(5.5); doc.setTextColor(14,165,233); doc.setFont("helvetica","bold"); doc.text("PRIORITY",ml+cw-5,ay+7.5,{align:"right"}); }
+  });
+  y+=_adj.length*15+8;
+
+  // ── FOLLOW-UP & MONITORING PLAN (timeline) ────────────────────
+  y=_clinSec(y,"Follow-up & Monitoring Plan","Recommended re-assessment schedule");
+  y+=3;
+  const _fu=[
+    ["2 weeks","Re-scan after applying the adjustments above; expect early symptom relief.",[14,165,233]],
+    ["6 weeks","Progress review — corrective exercises should yield measurable metric gains.",[245,158,11]],
+    ["12 weeks","Full re-assessment; consolidate gains and update the exercise programme.",[34,197,94]],
+  ];
+  _fu.forEach(([w,d,c],i)=>{
+    const fy=y+i*16;
+    if(i<_fu.length-1){ doc.setDrawColor(203,213,225); doc.setLineWidth(0.6); doc.line(ml+6,fy+7,ml+6,fy+16); doc.setLineWidth(0.3); }
+    doc.setFillColor(...c); doc.circle(ml+6,fy+5,3.2,"F");
+    doc.setFillColor(255,255,255); doc.circle(ml+6,fy+5,1.2,"F");
+    doc.setFontSize(9); doc.setTextColor(...c); doc.setFont("helvetica","bold"); doc.text(w,ml+15,fy+4);
+    doc.setFontSize(7.5); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal"); doc.text(doc.splitTextToSize(d,cw-22)[0],ml+15,fy+10);
+  });
+  y+=_fu.length*16+8;
+
   // ── Disclaimer + Signature block ─────────────────────────────
-  y+=8;
-  if(y>H-50){doc.addPage();y=22;}
+  y+=2;
+  if(y>H-50){y=_clinPage();}
   doc.setFillColor(254,243,199); doc.roundedRect(ml,y,cw,20,2,2,"F");
   doc.setFontSize(7.5); doc.setTextColor(146,64,14); doc.setFont("helvetica","bold");
   doc.text("IMPORTANT DISCLAIMER", ml+4, y+7);
@@ -1560,7 +2115,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     doc.setPage(p);
     doc.setFillColor(15,23,42); doc.rect(0,H-8,W,8,"F");
     doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-    doc.text(`Corvus Posture Health — Clinical Report — ${dateStr} — Confidential`, ml, H-2.5);
+    // English date — this footer is helvetica and can't shape the Arabic dateStr
+    const _footDate = now.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});
+    doc.text(`Corvus Posture Health — Clinical Report — ${_footDate} — Confidential`, ml, H-2.5);
     doc.text(`${p} / ${totalPages2}`, W-mr, H-2.5, {align:"right"});
   }
 
@@ -1576,7 +2133,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 export async function generateComparisonPDF({ session1, session2, sessions=[], profile, user, lang="en", allSessions=[], aiSummary="" }) {
   // Support both old API (session1,session2) and new API (sessions array)
   if (!session1 && sessions.length >= 2) { session1 = sessions[0]; session2 = sessions[1]; }
-  if (!session1 || !session2) { console.warn("[PDF] Comparison needs 2 sessions"); return; }
+  if (!session1 || !session2) {
+    throw new Error(lang==="ar" ? "محتاج جلستين على الأقل لإنشاء تقرير المقارنة." : "Need at least 2 sessions to generate a comparison report.");
+  }
 
   const { jsPDF } = await import("jspdf");
   const isAr = lang==="ar";
@@ -1584,7 +2143,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
   const sf  = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
   const now = new Date();
@@ -1637,8 +2196,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
 
   // Logo + brand
   _logo(doc,ml,16,26,_logoMd);
-  font(doc,13,"bold"); tc(doc,...PDF_TOKENS.card); doc.text("CORVUS",ml+34,28);
-  font(doc,7,"normal"); tc(doc,148,163,184); doc.text("Health Intelligence Platform",ml+34,36);
+  font(doc,13,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card); doc.text("CORVUS",ml+34,28);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184); doc.text("Health Intelligence Platform",ml+34,36);
 
   // Tier badge
   const tlw=doc.getTextWidth(tierLbl)+12;
@@ -1646,21 +2205,21 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
   rr(doc,ml+34,41,tlw,10,3,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,7.5,"bold"); tc(doc,...tierCol);
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...tierCol);
   doc.text(tierLbl,ml+34+tlw/2,48,{align:"center"});
 
   // Date right
-  font(doc,7,"normal"); tc(doc,148,163,184); doc.text(nowStr,W-mr,26,{align:"right"});
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184); doc.text(nowStr,W-mr,26,{align:"right"});
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text(`Session #${num1} vs #${num2}`,W-mr,36,{align:"right"});
 
   fc(doc,...deltaCol); doc.rect(0,69.5,W,2.5,"F");
 
   // Title
   let y=86;
-  font(doc,20,"bold"); tc(doc,...PDF_TOKENS.ink);
+  font(doc,20,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"تقرير المقارنة":"Session Comparison Report",ml,y); y+=9;
-  font(doc,9,"normal"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,9,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text(`${name} · ${isAr?"مقارنة جلستين":"Head-to-head session analysis"}`,ml,y); y+=16;
   hr(doc,ml,y,cw); y+=14;
 
@@ -1673,20 +2232,20 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   fc(doc,...g1); doc.rect(ml,y,half,3,"F"); rr(doc,ml,y,half,3,3,"F");
   // Session number chip
   const s1lbl=`Session #${num1}`;
-  font(doc,7,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g1); rr(doc,ml+6,y+8,half-12,10,2,"F");
   doc.text(s1lbl,ml+6+(half-12)/2,y+14.5,{align:"center"});
-  // Score ring
-  dc(doc,...g1); lw(doc,3); doc.circle(ml+half/2,y+40,16,"S"); lw(doc,0.3);
+  // Score gauge (proportional arc)
   fc(doc,...g1);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
-  doc.circle(ml+half/2,y+40,14.5,"F");
+  doc.circle(ml+half/2,y+40,14,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,20,"bold"); tc(doc,...g1);
+  _arcGauge(doc,ml+half/2,y+40,16,a1/100,g1,PDF_TOKENS.borderSoft,3);
+  font(doc,20,"bold",isAr&&_cairoLoaded); tc(doc,...g1);
   doc.text(String(a1),ml+half/2,y+45,{align:"center"});
-  font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text("/100",ml+half/2,y+52,{align:"center"});
-  font(doc,8.5,"bold"); tc(doc,...g1);
+  font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...g1);
   doc.text(_scoreLabel(a1,isAr),ml+half/2,y+62,{align:"center"});
 
   // VS divider + delta
@@ -1697,12 +2256,12 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   doc.circle(mx,y+35,10,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   dc(doc,...deltaCol); lw(doc,1); doc.circle(mx,y+35,10,"S"); lw(doc,0.3);
-  font(doc,9,"bold"); tc(doc,...deltaCol);
-  doc.text(delta===0?"=":(improved?"↑":"↓"),mx,y+33.5,{align:"center"});
-  font(doc,7,"bold"); tc(doc,...deltaCol);
-  doc.text(`${delta>0?"+":""}${delta}`,mx,y+41,{align:"center"});
+  // Bigger delta value — the up/down arrow glyph doesn't render in helvetica,
+  // so the signed number (+16 / -9 / 0) carries the direction on its own.
+  font(doc,11,"bold",isAr&&_cairoLoaded); tc(doc,...deltaCol);
+  doc.text(delta===0?"=":`${delta>0?"+":""}${delta}`,mx,y+38,{align:"center"});
   // VS label
-  font(doc,6.5,"bold"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text("VS",mx,y+52,{align:"center"});
 
   // Session 2 card
@@ -1711,50 +2270,61 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   dc(doc,...g2); lw(doc,0.3); rr(doc,rx,y,half,heroH,6,"S"); lw(doc,0.3);
   fc(doc,...g2); doc.rect(rx,y,half,3,"F"); rr(doc,rx,y,half,3,3,"F");
   const s2lbl=`Session #${num2}`;
-  font(doc,7,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g2); rr(doc,rx+6,y+8,half-12,10,2,"F");
   doc.text(s2lbl,rx+6+(half-12)/2,y+14.5,{align:"center"});
-  // Score ring
-  dc(doc,...g2); lw(doc,3); doc.circle(rx+half/2,y+40,16,"S"); lw(doc,0.3);
+  // Score gauge (proportional arc)
   fc(doc,...g2);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.08}));
-  doc.circle(rx+half/2,y+40,14.5,"F");
+  doc.circle(rx+half/2,y+40,14,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,20,"bold"); tc(doc,...g2);
+  _arcGauge(doc,rx+half/2,y+40,16,a2/100,g2,PDF_TOKENS.borderSoft,3);
+  font(doc,20,"bold",isAr&&_cairoLoaded); tc(doc,...g2);
   doc.text(String(a2),rx+half/2,y+45,{align:"center"});
-  font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text("/100",rx+half/2,y+52,{align:"center"});
-  font(doc,8.5,"bold"); tc(doc,...g2);
+  font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...g2);
   doc.text(_scoreLabel(a2,isAr),rx+half/2,y+62,{align:"center"});
   y+=heroH+8;
 
-  // ── QUICK STATS STRIP ─────────────────────────────────────────
+  // ── QUICK STATS — clean 3-column comparison table ─────────────
+  // Values are centred under two aligned columns (was label-left / v1 at
+  // 45% right-aligned / v2 at 98% right-aligned — which pushed the two
+  // numbers to opposite edges with a large empty gap between them).
   const qStats=[
-    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr),PDF_TOKENS.primary],
-    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2),PDF_TOKENS.indigo],
-    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`,PDF_TOKENS.success],
-    [isAr?"التنبيهات":"Alerts",String(al1),String(al2),PDF_TOKENS.warning],
+    [isAr?"التاريخ":"Date",_fmtDate(session1.created_at,isAr),_fmtDate(session2.created_at,isAr)],
+    [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2)],
+    [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`],
+    [isAr?"التنبيهات":"Alerts",String(al1),String(al2)],
   ];
-  qStats.forEach(([lbl,v1,v2,col],i)=>{
-    const qy=y+i*12;
-    if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,qy,cw,12,"F");}
-    font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(lbl,ml+4,qy+8);
-    font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v1,ml+cw*0.45,qy+8,{align:"right"});
-    font(doc,7.5,"bold",false); tc(doc,...PDF_TOKENS.muted); doc.text("→",ml+cw*0.5,qy+8,{align:"center"});
-    font(doc,7.5,"bold",false); tc(doc,...col); doc.text(v2,ml+cw*0.98,qy+8,{align:"right"});
+  const qc1=ml+cw*0.52, qc2=ml+cw*0.82; // centred value columns
+  const qRowH=11;
+  // header row
+  fc(doc,...PDF_TOKENS.slate); rr(doc,ml,y,cw,9,2,"F");
+  font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
+  doc.text(isAr?"المقياس":"Metric",ml+5,y+6);
+  doc.text(`#${num1}`,qc1,y+6,{align:"center"});
+  doc.text(`#${num2}`,qc2,y+6,{align:"center"});
+  y+=9;
+  qStats.forEach(([lbl,v1,v2],i)=>{
+    const qy=y+i*qRowH;
+    if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,qy,cw,qRowH,"F");}
+    font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text(String(lbl),ml+5,qy+7);
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.ink); doc.text(String(v1),qc1,qy+7,{align:"center"});
+    tc(doc,...PDF_TOKENS.ink); doc.text(String(v2),qc2,qy+7,{align:"center"});
   });
-  y+=qStats.length*12+10;
+  y+=qStats.length*qRowH+10;
 
   // ── INSIGHT BANNER ────────────────────────────────────────────
   const insText=improved
-    ?(isAr?`📈 تحسّن +${delta} نقطة — ${_scoreLabel(a2,isAr)} مقارنةً بـ ${_scoreLabel(a1,isAr)}`:`📈 +${delta} point improvement — ${_scoreLabel(a2,isAr)} vs ${_scoreLabel(a1,isAr)}`)
+    ?(isAr?`تحسّن +${delta} نقطة — ${_scoreLabel(a2,isAr)} مقارنةً بـ ${_scoreLabel(a1,isAr)}`:`+${delta} point improvement — ${_scoreLabel(a2,isAr)} vs ${_scoreLabel(a1,isAr)}`)
     :declined
-    ?(isAr?`📉 انخفاض ${Math.abs(delta)} نقطة — راجع المقاييس المتراجعة أدناه`:`📉 ${Math.abs(delta)} point decline — review regressed metrics below`)
-    :(isAr?"📊 النتيجة مستقرة بين الجلستين":"📊 Score stable between sessions");
+    ?(isAr?`انخفاض ${Math.abs(delta)} نقطة — راجع المقاييس المتراجعة أدناه`:`${Math.abs(delta)} point decline — review regressed metrics below`)
+    :(isAr?"النتيجة مستقرة بين الجلستين":"Score stable between sessions");
   fc(doc,...deltaBg); rr(doc,ml,y,cw,14,3,"F");
   dc(doc,...deltaCol); lw(doc,0.25); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
   fc(doc,...deltaCol); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-  font(doc,8.5,"bold"); tc(doc,...deltaCol);
+  font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...deltaCol);
   doc.text(insText,ml+8,y+9.5);
   y+=22;
 
@@ -1770,8 +2340,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // Column headers
   const colX=[ml+3,ml+cw*0.42,ml+cw*0.56,ml+cw*0.70,ml+cw*0.85];
   fc(doc,...PDF_TOKENS.slate); rr(doc,ml,y,cw,10,2,"F");
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
-  [isAr?"المقياس":"Metric",`#${num1}`,`#${num2}`,isAr?"Δ":"Δ",isAr?"الاتجاه":"Trend"]
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
+  [isAr?"المقياس":"Metric",`#${num1}`,`#${num2}`,isAr?"الفرق":"Diff",isAr?"الاتجاه":"Trend"]
     .forEach((h,i)=>doc.text(h,colX[i],y+7));
   y+=12;
 
@@ -1786,20 +2356,18 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     // Score 1 with mini dot
     const c1=_scoreColor(sc1),c2=_scoreColor(sc2);
     fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
-    font(doc,8,"bold"); tc(doc,...c1); doc.text(String(Math.round(sc1)),colX[1]+2,y+7.5);
+    font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c1); doc.text(String(Math.round(sc1)),colX[1]+2,y+7.5);
     fc(doc,...c2); doc.circle(colX[2]-3,y+5.5,2.5,"F");
-    font(doc,8,"bold"); tc(doc,...c2); doc.text(String(Math.round(sc2)),colX[2]+2,y+7.5);
+    font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c2); doc.text(String(Math.round(sc2)),colX[2]+2,y+7.5);
     // Delta
-    font(doc,8.5,"bold"); tc(doc,...dC);
+    font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...dC);
     doc.text(`${d>0?"+":""}${d}`,colX[3],y+7.5);
-    // Trend arrow pill
-    const arrow=d>2?"▲":d<-2?"▼":"–";
+    // Trend arrow pill — drawn triangle (glyph arrows don't render)
     fc(doc,...dC);
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
     rr(doc,colX[4]-2,y+2,14,7,2,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    font(doc,8.5,"bold"); tc(doc,...dC);
-    doc.text(arrow,colX[4]+5,y+7.5,{align:"center"});
+    _triangle(doc,colX[4]+5,y+5.5,d>2?"up":d<-2?"down":"flat",dC);
     y+=rowH;
   });
   y+=10;
@@ -1825,27 +2393,27 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     fc(doc,...rc2); doc.rect(ml,y,3,zh,"F"); rr(doc,ml,y,3,zh,1.5,"F");
     // Zone label
     font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(isAr?ar:en,ml+9,y+10);
-    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+9,y+17);
+    font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+9,y+17);
     // Two risk bars side by side
     const bw2=(cw-24)/2, barY=y+22;
     // Session 1 bar
     fc(doc,...PDF_TOKENS.borderSoft); rr(doc,ml+9,barY,bw2,5,2,"F");
     fc(doc,...rc1); rr(doc,ml+9,barY,Math.max(bw2*(r1/100),3),5,2,"F");
-    font(doc,6.5,"bold"); tc(doc,...rc1);
+    font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...rc1);
     doc.text(`#${num1}: ${r1}%`,ml+9,barY+10);
     // Session 2 bar
     fc(doc,...PDF_TOKENS.borderSoft); rr(doc,ml+9+bw2+4,barY,bw2,5,2,"F");
     fc(doc,...rc2); rr(doc,ml+9+bw2+4,barY,Math.max(bw2*(r2/100),3),5,2,"F");
-    font(doc,6.5,"bold"); tc(doc,...rc2);
+    font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...rc2);
     doc.text(`#${num2}: ${r2}%`,ml+9+bw2+4,barY+10);
     // Delta badge top right
-    const dzlbl=`${dz>0?"↑":"↓"} ${Math.abs(dz)}%`;
+    const dzlbl=`${dz>0?"+":"-"}${Math.abs(dz)}%`;
     const dzw=doc.getTextWidth(dzlbl)+8;
     fc(doc,...dzC);
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
     rr(doc,W-mr-dzw-2,y+7,dzw,9,2,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    font(doc,7.5,"bold"); tc(doc,...dzC);
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...dzC);
     doc.text(dzlbl,W-mr-dzw/2-2,y+13,{align:"center"});
     y+=zh+7;
   });
@@ -1869,7 +2437,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger); doc.text(lbl,ml+7,y+5.5);
       font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
       const bw2=cw*0.3;
       fc(doc,...PDF_TOKENS.danger);
       doc.setGState&&doc.setGState(new doc.GState({opacity:0.2}));
@@ -1891,7 +2459,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success); doc.text(lbl,ml+7,y+5.5);
       font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} → ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
       y+=18;
     });
     y+=6;
@@ -1932,12 +2500,12 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     doc.circle(ml+16,y+14,9,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     dc(doc,...col); lw(doc,1); doc.circle(ml+16,y+14,9,"S"); lw(doc,0.3);
-    font(doc,10,"bold"); tc(doc,...col); doc.text(String(idx+1),ml+16,y+17.5,{align:"center"});
+    font(doc,10,"bold",isAr&&_cairoLoaded); tc(doc,...col); doc.text(String(idx+1),ml+16,y+17.5,{align:"center"});
     // Title
     font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,ml+30,y+12);
     font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
     steps.slice(0,3).forEach((s,i)=>{
-      font(doc,7.5,"bold"); tc(doc,...col);
+      font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...col);
       doc.text(`${i+1}.`,ml+30,y+22+(i*7));
       font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
       doc.text(doc.splitTextToSize(s,cw-38)[0],ml+36,y+22+(i*7));
@@ -1964,7 +2532,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   dc(doc,...PDF_TOKENS.border); lw(doc,0.18); rr(doc,ml,y,cw,th3,4,"S"); lw(doc,0.3);
   // Header row
   fc(doc,...PDF_TOKENS.slate); doc.rect(ml,y,cw,9,"F"); rr(doc,ml,y,cw,9,2,"F"); doc.rect(ml,y+5,cw,4,"F");
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text(isAr?"البند":"Item",ml+5,y+6.5);
   doc.text(`Session #${num1}`,ml+cw*0.42,y+6.5,{align:"center"});
   doc.text(`Session #${num2}`,ml+cw*0.75,y+6.5,{align:"center"});
@@ -2006,7 +2574,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
-  const cairo = await _loadCairo(doc);
+  const cairo = await _loadCairo(doc,isAr);
   const sf = (sz,st="normal") => cairo&&isAr ? fontAr(doc,sz,st,true) : font(doc,sz,st);
 
   const now = new Date();
@@ -2084,7 +2652,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
     // Table
     fc(doc,...PDF_TOKENS.ink); rr(doc,ml,y,cw,9,1,"F");
-    sf(7,"bold"); tc(doc,11,17,32);
+    sf(7,"bold"); tc(doc,255,255,255);
     doc.text(isAr?"الاسم":"Name",ml+3,y+6);
     doc.text(isAr?"النتيجة":"Score",ml+cw*0.55,y+6);
     doc.text(isAr?"آخر جلسة":"Last Session",ml+cw*0.72,y+6);
@@ -2113,12 +2681,12 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   doc.text(isAr?"تصنيف الأداء":"Performance Leaderboard",ml,y); y+=7;
   const sorted=[...activeUsers].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
   fc(doc,...PDF_TOKENS.ink); rr(doc,ml,y,cw,9,1,"F");
-  sf(7,"bold"); tc(doc,11,17,32);
+  sf(7,"bold"); tc(doc,255,255,255);
   doc.text("#",ml+3,y+6); doc.text(isAr?"الاسم":"Name",ml+14,y+6);
   doc.text(isAr?"النتيجة":"Score",ml+cw*0.65,y+6); doc.text(isAr?"التقييم":"Grade",ml+cw*0.82,y+6);
   y+=11;
   for(const [i,u] of sorted.slice(0,10).entries()){
-    if(y>H-18){doc.addPage(); y=22;}
+    if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard"); y=22;}
     fc(doc,i%2===0?248:255,i%2===0?250:255,i%2===0?252:255); doc.rect(ml,y,cw,8,"F");
     const sc=Math.round(u.avg_score||0); const col=_scoreColor(sc);
     sf(8,"bold"); tc(doc,...(i<3?col:PDF_TOKENS.muted)); doc.text(String(i+1),ml+3,y+5.5);
@@ -2151,7 +2719,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
               :"No employees at excellent level — consider incentive program (points/rewards) to encourage improvement"),
   ];
   for(const rec of hrRecs){
-    if(y>H-22){doc.addPage(); y=22;}
+    if(y>H-22){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations"); y=22;}
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,16,2,"F");
     sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
     const lines=doc.splitTextToSize(rec,cw-8);
@@ -2164,7 +2732,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   for(let p=1;p<=tp;p++){
     doc.setPage(p);
     fc(doc,...PDF_TOKENS.ink); doc.rect(0,H-8,W,8,"F");
-    font(doc,6.5,"normal"); tc(doc,100,116,139);
+    sf(6.5,"normal"); tc(doc,100,116,139); // sf → Arabic font so nowStr/label don't garble
     doc.text(`Corvus — ${isAr?"تقرير الفريق — سري":"Team Report — Confidential"} · ${nowStr}`,ml,H-2.5);
     doc.text(`${p} / ${tp}`,W-mr,H-2.5,{align:"right"});
   }
@@ -2201,7 +2769,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
   const sf = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
   const _rawName4 = profile?.name||user?.displayName||(isAr?"مستخدم":"User");
@@ -2273,25 +2841,25 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
 
   // Logo + brand
   _logo(doc,ml,18,26,_logoMd);
-  font(doc,13,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,13,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text("CORVUS",ml+34,30);
-  font(doc,7,"normal"); tc(doc,148,163,184);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184);
   doc.text("Health Intelligence Platform",ml+34,38);
 
   // ELITE badge
-  const elbadge="* ELITE";
+  const elbadge="ELITE";
   const elw=doc.getTextWidth(elbadge)+12;
   fc(doc,...PDF_TOKENS.success);
   doc.setGState&&doc.setGState(new doc.GState({opacity:0.18}));
   rr(doc,ml+34,43,elw,10,3,"F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.success);
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.success);
   doc.text(elbadge,ml+34+elw/2,50,{align:"center"});
 
   // Date + session count right
-  font(doc,7,"normal"); tc(doc,148,163,184);
+  font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184);
   doc.text(nowStr,W-mr,27,{align:"right"});
-  font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.card);
+  font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text(`${sessions.length} ${isAr?"جلسة":"sessions"} · ${weeksSpan} ${isAr?"أسبوع":"weeks"}`,W-mr,37,{align:"right"});
 
   // Bottom accent
@@ -2299,9 +2867,9 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
 
   // Report title block
   let y=96;
-  font(doc,22,"bold"); tc(doc,...PDF_TOKENS.ink);
+  font(doc,22,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"التقرير الطولي":"Longitudinal Health Report",ml,y); y+=10;
-  font(doc,10,"normal"); tc(doc,...PDF_TOKENS.muted);
+  font(doc,10,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text(`${name} · ${isAr?"تحليل متعدد الجلسات":"Multi-session posture analysis"}`,ml,y); y+=16;
 
   // Thin divider
@@ -2324,16 +2892,15 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     // Top accent
     fc(doc,...col); rr(doc,kx,ky,kw,3,2,"F"); doc.rect(kx,ky+1.5,kw,1.5,"F");
     // Value
-    font(doc,16,"bold"); tc(doc,...col);
+    font(doc,16,"bold",isAr&&_cairoLoaded); tc(doc,...col);
     doc.text(v,kx+kw/2,ky+kh*0.58,{align:"center"});
     // Label
-    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.muted);
+    font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
     doc.text(l,kx+kw/2,ky+kh*0.82,{align:"center"});
   });
   y+=kh*2+6*2+12;
 
   // ── TREND BANNER ───────────────────────────────────────────
-  const trendIcon = improved?"[UP]":declined?"[DOWN]":"[STABLE]";
   const trendText = improved
     ? (isAr?`تحسّن مستمر +${trendDelta} نقطة منذ البداية — أنت على المسار الصحيح`:`Consistent improvement +${trendDelta}pts since start`)
     : declined
@@ -2342,11 +2909,48 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   fc(doc,...trendBg); rr(doc,ml,y,cw,14,3,"F");
   dc(doc,...trendCol); lw(doc,0.25); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
   fc(doc,...trendCol); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
-  font(doc,8.5,"bold"); tc(doc,...trendCol);
-  doc.text(`${trendIcon}  ${trendText}`,ml+8,y+9.2);
+  // Drawn trend triangle instead of the "[UP]" text placeholder
+  _triangle(doc,ml+11,y+7,improved?"up":declined?"down":"flat",trendCol);
+  font(doc,8.5,"bold",isAr&&_cairoLoaded); tc(doc,...trendCol);
+  doc.text(trendText,ml+17,y+9.2);
   y+=22;
 
+  // ── ELITE: WEEKLY GOAL PROGRESS ─────────────────────────────
+  const _lgGoal = Number(profile?.goal_score) || null;
+  if (_lgGoal) {
+    if(y>H-45){doc.addPage();_hdr(doc,W,ml,mr,isAr?"الهدف":"Goal",isAr);y=22;}
+    const _lgNow=Date.now(), _WK=7*86400000;
+    const _lgCur=_exWindowAvg(sessions,_lgNow-_WK,_lgNow+1);
+    const _lgPrev=_exWindowAvg(sessions,_lgNow-2*_WK,_lgNow-_WK);
+    const _lgSlope=_exSlopePerDay(sessions);
+    const _lgReached=_lgCur!=null&&_lgCur>=_lgGoal;
+    const _lgCol=_lgReached?PDF_TOKENS.success:PDF_TOKENS.primary;
+    fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,26,4,"F");
+    dc(doc,..._lgCol); lw(doc,0.25); rr(doc,ml,y,cw,26,4,"S"); lw(doc,0.3);
+    fc(doc,..._lgCol); doc.rect(ml,y,3,26,"F"); rr(doc,ml,y,3,26,1.5,"F");
+    font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
+    doc.text(isAr?"هدفك الأسبوعي":"Weekly Goal",ml+8,y+8);
+    font(doc,12,"bold",isAr&&_cairoLoaded); tc(doc,..._lgCol);
+    doc.text(`${_lgCur??"—"} / ${_lgGoal}`,ml+8,y+19);
+    const _gbx=ml+cw*0.35,_gbw=cw*0.38;
+    fc(doc,...PDF_TOKENS.borderSoft); rr(doc,_gbx,y+13,_gbw,5,2,"F");
+    fc(doc,..._lgCol); rr(doc,_gbx,y+13,Math.max(_gbw*Math.min(1,(_lgCur||0)/_lgGoal),3),5,2,"F");
+    if(_lgCur!=null&&_lgPrev!=null){
+      const _d=_lgCur-_lgPrev,_dc=_d>0?PDF_TOKENS.success:_d<0?PDF_TOKENS.danger:PDF_TOKENS.muted;
+      font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,..._dc);
+      doc.text(`${_d>0?"+":""}${_d} ${isAr?"عن الأسبوع الماضي":"vs last wk"}`,W-mr-5,y+9,{align:"right"});
+    }
+    const _eta=_lgReached?(isAr?"وصلت لهدفك — ثبّته":"Goal reached — hold it")
+      : _lgSlope!=null&&_lgSlope>0.05?(isAr?`متوقع الوصول خلال ~${Math.ceil((_lgGoal-(_lgCur||0))/_lgSlope)} يوم`:`ETA ~${Math.ceil((_lgGoal-(_lgCur||0))/_lgSlope)} days at current pace`)
+      : (isAr?"المعدل ثابت — زد عدد الجلسات":"Flat pace — add sessions");
+    font(doc,7,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
+    doc.text(_eta,W-mr-5,y+19,{align:"right"});
+    y+=32;
+  }
+
   // ── SCORE TRAJECTORY ────────────────────────────────────────
+  // Chart needs ~70mm — break first so it never clips the page bottom
+  if(y>H-75){doc.addPage();_hdr(doc,W,ml,mr,isAr?"مسار النقاط":"Trajectory",isAr);y=22;}
   _sh(doc,ml,y,isAr?"مسار النقاط":"Score Trajectory",isAr?"كل الجلسات بالترتيب الزمني":"All sessions in chronological order",_scoreColor(avgAll),isAr);
   y+=14;
   const th=42;
@@ -2362,7 +2966,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   [50,65,80].forEach(v=>{
     const gy=y+th-6-((v-30)/70)*(th-12);
     dc(doc,...PDF_TOKENS.border); lw(doc,0.12); doc.line(ml+3,gy,ml+cw-3,gy);
-    font(doc,5,"normal"); tc(doc,...PDF_TOKENS.light);
+    font(doc,5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.light);
     doc.text(String(v),ml+1,gy+1.5,{align:"right"});
   }); lw(doc,0.3);
 
@@ -2398,7 +3002,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     dc(doc,...lC); lw(doc,1); doc.circle(spts[0].px,spts[0].py,2.2,"S"); lw(doc,0.3);
     fc(doc,...lC); doc.circle(spts[spts.length-1].px,spts[spts.length-1].py,2.8,"F");
     // Score labels
-    font(doc,6,"bold"); tc(doc,...lC);
+    font(doc,6,"bold",isAr&&_cairoLoaded); tc(doc,...lC);
     doc.text(String(allScores[0]),spts[0].px,spts[0].py-4,{align:"center"});
     doc.text(String(allScores[allScores.length-1]),spts[spts.length-1].px,spts[spts.length-1].py-4,{align:"center"});
   }
@@ -2424,7 +3028,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     if(!avg){
       // No data — ghost bar
       fc(doc,...PDF_TOKENS.border); rr(doc,bx,y+barZoneH-12-4,barW2,4,1,"F");
-      font(doc,5.5,"normal"); tc(doc,...PDF_TOKENS.light);
+      font(doc,5.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.light);
       doc.text("—",bx+barW2/2,y+barZoneH-5.5,{align:"center"});
       doc.text(isAr?dayNamesAr[di]:dayNamesEn[di],bx+barW2/2,y+barZoneH-1.5,{align:"center"});
       return;
@@ -2437,10 +3041,10 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     rr(doc,bx,y+barZoneH-12-bh,barW2,bh,1.5,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     // Score label above bar
-    font(doc,6.5,"bold"); tc(doc,...bc);
+    font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...bc);
     doc.text(String(avg),bx+barW2/2,y+barZoneH-12-bh-2,{align:"center"});
     // Day label
-    font(doc,6,"bold"); tc(doc,...(di===bestDay?PDF_TOKENS.success:di===worstDay?PDF_TOKENS.danger:PDF_TOKENS.muted));
+    font(doc,6,"bold",isAr&&_cairoLoaded); tc(doc,...(di===bestDay?PDF_TOKENS.success:di===worstDay?PDF_TOKENS.danger:PDF_TOKENS.muted));
     doc.text(isAr?dayNamesAr[di]:dayNamesEn[di],bx+barW2/2,y+barZoneH-1.5,{align:"center"});
   });
   y+=barZoneH+8;
@@ -2450,7 +3054,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     const bdn=isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay];
     const wdn=isAr?dayNamesAr[worstDay]:dayNamesEn[worstDay];
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,11,2,"F");
-    font(doc,7.5,"normal"); tc(doc,...PDF_TOKENS.sub);
+    font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.sub);
     const ins=isAr
       ?`أفضل يوم: ${bdn} (${dayAvgs[bestDay]}) · أسوأ يوم: ${wdn} (${dayAvgs[worstDay]})`
       :`Best day: ${bdn} (${dayAvgs[bestDay]}) · Worst day: ${wdn} (${dayAvgs[worstDay]})`;
@@ -2477,12 +3081,12 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     fc(doc,...rc); doc.rect(ml,y,3,zh,"F"); rr(doc,ml,y,3,zh,1.5,"F");
     // Risk circle
     fc(doc,...rc); doc.circle(ml+18,y+zh/2,10,"F");
-    font(doc,9.5,"bold"); tc(doc,...PDF_TOKENS.card);
+    font(doc,9.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
     doc.text(`${risk}%`,ml+18,y+zh/2+3.5,{align:"center"});
     // Title + region
     font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
     doc.text(isAr?ar:en,ml+33,y+10);
-    font(doc,7,"bold"); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+33,y+17);
+    font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.primary); doc.text(r,ml+33,y+17);
     // Risk label pill
     const rlbl=_riskLabel(risk,isAr);
     const rw=doc.getTextWidth(rlbl)+8;
@@ -2490,7 +3094,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
     rr(doc,W-mr-rw-2,y+6,rw,9,2,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    font(doc,7.5,"bold"); tc(doc,...rc);
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...rc);
     doc.text(rlbl,W-mr-rw/2-2,y+11.8,{align:"center"});
     // Progress bar
     const bx=ml+33, bw2=cw*0.42;
@@ -2508,8 +3112,8 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   _sh(doc,ml,y,isAr?"أفضل وأسوأ جلسة":"Best & Worst Sessions","",PDF_TOKENS.success,isAr);
   y+=14;
 
-  [[isAr?"* الجلسة الأفضل":"* Best Session",best,PDF_TOKENS.success],
-   [isAr?"! الجلسة الأسوأ":"! Worst Session",worst,PDF_TOKENS.danger]
+  [[isAr?"الجلسة الأفضل":"Best Session",best,PDF_TOKENS.success],
+   [isAr?"الجلسة الأسوأ":"Worst Session",worst,PDF_TOKENS.danger]
   ].forEach(([label,sess,col])=>{
     if(!sess||y>H-36){if(y>H-36){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;} else return;}
     const sh2=28;
@@ -2518,16 +3122,16 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     fc(doc,...col); doc.rect(ml,y,3,sh2,"F"); rr(doc,ml,y,3,sh2,1.5,"F");
     // Score badge
     fc(doc,...col); rr(doc,ml+7,y+5,18,18,3,"F");
-    font(doc,11,"bold"); tc(doc,...PDF_TOKENS.card);
+    font(doc,11,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
     doc.text(String(Math.round(sess.avg_score||0)),ml+16,y+16,{align:"center"});
     // Label
     font(doc,9.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(label,ml+30,y+11);
-    font(doc,7.5,"normal"); tc(doc,...PDF_TOKENS.muted);
+    font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
     doc.text(_fmtDate(sess.created_at,isAr),ml+30,y+19);
     // Right stats
-    font(doc,7.5,"bold"); tc(doc,...col);
+    font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...col);
     doc.text(`${isAr?"المدة":"Duration"}: ${_fmtDur(sess.duration_s||sess.duration_sec||0)}`,W-mr-2,y+11,{align:"right"});
-    font(doc,7,"normal"); tc(doc,...PDF_TOKENS.muted);
+    font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
     doc.text(`${isAr?"تنبيهات":"Alerts"}: ${sess.alerts_count||0}`,W-mr-2,y+19,{align:"right"});
     y+=sh2+8;
   });
@@ -2617,7 +3221,7 @@ const programme=[
     rr(doc,ml+4,y+5,22,18,3,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     dc(doc,...PDF_TOKENS.primary); lw(doc,0.8); rr(doc,ml+4,y+5,22,18,3,"S"); lw(doc,0.3);
-    font(doc,6.5,"bold"); tc(doc,...PDF_TOKENS.primary);
+    font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.primary);
     doc.text("W",ml+15,y+11.5,{align:"center"});
     doc.text(wk,ml+15,y+17,{align:"center"});
     // Goal + action

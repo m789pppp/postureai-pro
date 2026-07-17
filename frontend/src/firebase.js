@@ -297,12 +297,21 @@ export async function checkAndDowngradeTrial(uid) {
   try {
     const snap = await getDoc(doc(db,"users",uid));
     if (!snap.exists()) return null;
-    const data = snap.data();
+    // Same shape + elite elevation as getUserProfile — App.jsx replaces the
+    // profile state with this return value, so a raw doc here silently
+    // stripped the elevation and locked Elite features right after login.
+    const data = _applyEliteElevation({ id: snap.id, ...snap.data() });
     if (!data.is_trial) return data;
     const expires = data.trial_expires_at?.toDate?.() || new Date(0);
     if (new Date() > expires) {
-      await updateDoc(doc(db,"users",uid), { tier:"standard", is_trial:false, trial_expires_at:null, updated_at:_serverTimestamp() });
-      return { ...data, tier:"standard", is_trial:false };
+      // End the trial experience, but NEVER wipe a paid/elevated tier —
+      // a stale is_trial flag on an elite/professional account must not
+      // hard-downgrade it to standard.
+      const stored   = String(data.tier||"standard").toLowerCase();
+      const keepTier = !["standard","basic",""].includes(stored);
+      const newTier  = _shouldElevateToElite(data.email) ? "elite" : (keepTier ? data.tier : "standard");
+      await updateDoc(doc(db,"users",uid), { tier:newTier, is_trial:false, trial_expires_at:null, updated_at:_serverTimestamp() });
+      return { ...data, tier:newTier, is_trial:false, trial_expires_at:null };
     }
     return data;
   } catch(e) { return null; }
@@ -337,15 +346,14 @@ function _shouldElevateToElite(email) {
   return _ELITE_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
 }
 
-export const getUserProfile = async (uid) => {
-  const s = await getDoc(doc(db, "users", uid));
-  if (!s.exists()) return null;
-  const data = { id: s.id, ...s.data() };
-  // Client-side elite elevation — mirrors backend middleware
-  // Only elevate UP, never downgrade a paying user
+// Client-side elite elevation — mirrors backend middleware.
+// Only elevates UP, never downgrades a paying user. Every function that
+// returns a profile doc to the app MUST pass it through here, otherwise
+// setProfile() with the raw doc strips Elite from elevated accounts.
+function _applyEliteElevation(data) {
+  if (!data) return data;
   const TIER_LEVEL = { standard:0, basic:1, professional:2, elite:3 };
-  const email = data.email || "";
-  if (_shouldElevateToElite(email)) {
+  if (_shouldElevateToElite(data.email || "")) {
     const current = TIER_LEVEL[String(data.tier||"standard").toLowerCase()] ?? 0;
     if (current < 3) {
       data.tier = "elite";
@@ -353,6 +361,12 @@ export const getUserProfile = async (uid) => {
     }
   }
   return data;
+}
+
+export const getUserProfile = async (uid) => {
+  const s = await getDoc(doc(db, "users", uid));
+  if (!s.exists()) return null;
+  return _applyEliteElevation({ id: s.id, ...s.data() });
 };
 export const updateUserProfile = async (uid, data) => {
   // Strip ALL protected fields that Firestore rules block client from changing

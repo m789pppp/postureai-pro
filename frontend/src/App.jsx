@@ -36,6 +36,7 @@ import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
+import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
@@ -223,7 +224,9 @@ const TIER_NORMALIZE={
   // Legacy B2C (deprecated)
   starter:"basic", growth:"professional", enterprise:"elite",
 };
-const normalizeTier=(t)=>TIER_NORMALIZE[t]||t||"standard";
+// Lowercase first — Firestore docs sometimes carry "Elite"/"ELITE"/"Professional",
+// which otherwise skip the map and break TIERS[...] lookups downstream.
+const normalizeTier=(t)=>{const k=String(t||"").toLowerCase().trim();return TIER_NORMALIZE[k]||k||"standard";};
 
 // ── Payment Methods — Automatic PayMob only ───────────────────────
 const PAY_METHODS = [
@@ -2130,6 +2133,8 @@ export default function App(){
   const[weeklyPattern,setWeeklyPattern]=useState(null); // #9 computed on session end
   const[showNotifCard,setShowNotifCard]=useState(false); // contextual notif permission
   const[sound,setSound]=useState(true);
+  // Elite voice coach — persisted preference; actual enablement is tier-gated below
+  const[voiceCoach,setVoiceCoach]=useState(()=>{try{return localStorage.getItem("corvus_voice_coach")==="1";}catch{return false;}});
   const playPostureAlert=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();[440,360].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=f;g.gain.setValueAtTime(0,ac.currentTime+i*.32);g.gain.linearRampToValueAtTime(.14,ac.currentTime+i*.32+.06);g.gain.linearRampToValueAtTime(0,ac.currentTime+i*.32+.3);o.start();o.stop(ac.currentTime+i*.32+.35);});}catch{}}; // local fallback
   const[sessionId,setSessionId]=useState(null);
   const[aiInsight,setAiInsight]=useState(null);
@@ -2345,6 +2350,8 @@ export default function App(){
   const histRef=useRef([]);const goodRef=useRef(0);const totalRef=useRef(0);
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
+  // Elite: worst-posture snapshots captured during the session (max 3, small JPEGs)
+  const worstSnapsRef=useRef([]);const lastSnapMsRef=useRef(0);
 
   // ── Effective tier — single source of truth ──────────────────
   // Rules:
@@ -2359,6 +2366,10 @@ export default function App(){
     return normalizeTier(tier || profile?.tier || "standard");
   })();
   const T_=TIERS[effectiveTier]||TIERS["standard"];
+
+  // Voice coach is Elite-only — sync the lib's enabled flag with both the
+  // user preference and the (possibly late-loading) tier
+  useEffect(()=>{ setVoiceCoachEnabled(voiceCoach && tierAtLeast(effectiveTier,"elite")); },[voiceCoach,effectiveTier]);
   // Normalize T_ so live dashboard always has .name and .color
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
   const MC={
@@ -2458,7 +2469,7 @@ export default function App(){
             try { EmailAPI.sequence({email:u.email,name:u.displayName||u.email.split("@")[0],
               day:0,tier:"professional",session_count:0,avg_score:0}).catch(()=>{}); } catch{}
           } else {
-            try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked) setProfile(checked); }).catch(()=>{}); } catch{}
+            try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked){ setProfile(checked); if(checked.tier) setTier(normalizeTier(checked.tier)); } }).catch(()=>{}); } catch{}
             try { checkAndSendNurtureEmails(u.uid, p, API).catch(()=>{}); } catch{}
           }
           // Note: server-side middleware auto-elevates eligible emails to elite on every API
@@ -2707,6 +2718,27 @@ export default function App(){
             }
 
             const gateScore=smoothed1||finalResult.overall;
+            // Elite: capture the worst 3 moments of the session as small JPEGs
+            // (≤20s apart; a new dip replaces the least-bad stored snapshot)
+            if(gateScore<60 && tierAtLeast(effectiveTier,"elite")){
+              try{
+                const _snow=Date.now();
+                const _v=vidRef.current;
+                const _snaps=worstSnapsRef.current;
+                if(_v && _v.readyState>=2 && _snow-lastSnapMsRef.current>20000 &&
+                   (_snaps.length<3 || finalResult.overall<Math.max(..._snaps.map(s=>s.score)))){
+                  const _sc=document.createElement("canvas");
+                  const _sw=320,_sh=Math.max(120,Math.round(320*(_v.videoHeight/Math.max(_v.videoWidth,1))))||240;
+                  _sc.width=_sw;_sc.height=_sh;
+                  _sc.getContext("2d").drawImage(_v,0,0,_sw,_sh);
+                  const _img=_sc.toDataURL("image/jpeg",0.6);
+                  lastSnapMsRef.current=_snow;
+                  _snaps.push({img:_img,score:finalResult.overall,time:new Date().toLocaleTimeString()});
+                  _snaps.sort((a,b)=>a.score-b.score);
+                  if(_snaps.length>3)_snaps.length=3;
+                }
+              }catch{}
+            }
             if(lightCheckRef.current.wasLow){
               // Don't trust score-based decisions in poor lighting — neither
               // accumulate nor reset the bad-streak timer, since we can't
@@ -2750,6 +2782,7 @@ export default function App(){
                   }
                   setAlerts([...alRef.current]);setAlertMsg({text:displayMsg,type:"warn"});
                   if(sound)playBeep(sev);
+                  speakCoach(displayMsg, isAr?"ar":"en"); // no-op unless Elite + toggle on
                   // Smart permission: show in-app card after first real alert
                   if("Notification" in window && Notification.permission==="default"){
                     setShowNotifCard(true);
@@ -2822,6 +2855,7 @@ export default function App(){
                 alRef.current=[{time:new Date().toLocaleTimeString(),msg:msgFb,score:smoothed},...alRef.current].slice(0,20);
                 setAlerts([...alRef.current]);setAlertMsg({text:msgFb,type:"warn"});
                 if(sound)playBeep();
+                speakCoach(msgFb, isAr?"ar":"en"); // no-op unless Elite + toggle on
                 sendDesktopNotif(msgFb,smoothed);
                 } // close if(_cool)
               } // close else if(badRef>15000)
@@ -2856,6 +2890,7 @@ export default function App(){
       distSmootherRef.current?.reset();
       resetProportions();
       insightsRef.current=null;setSessionInsights([]);
+      worstSnapsRef.current=[];lastSnapMsRef.current=0;
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
       try{
@@ -2912,6 +2947,7 @@ export default function App(){
   const[sessionResult,setSessionResult]=useState(null);
 
   async function stopCamera(){
+    stopSpeaking(); // cut any in-flight voice-coach cue
     lmSmootherRef.current?.reset();
     frameBufferRef.current?.clear();
     distSmootherRef.current?.reset();
@@ -3002,6 +3038,8 @@ export default function App(){
         if(painMins<90) return isAr?`~${Math.round(painMins)} دقيقة قبل الإزعاج المحتمل`:`~${Math.round(painMins)} min before likely discomfort`;
         return null;
       })(),
+      // Elite: worst-posture snapshots captured during the session
+      worst_snapshots: worstSnapsRef.current.slice(0,3),
     };
     setSessionResult(result);
       if((result.avg_score||0)>=70){
@@ -3036,6 +3074,8 @@ export default function App(){
         pain_summary:    result.pain_summary||null,
         pain_prediction: la.pain_prediction||null,
         trend:           result.trend||"stable",
+        // Elite: worst 3 posture moments (~20KB each, well under the 1MB doc cap)
+        ...(worstSnapsRef.current.length?{worst_snapshots:worstSnapsRef.current.slice(0,3)}:{}),
       }).then(()=>{
         addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
         // #9 Compute weekly pattern from this session's alert causes
@@ -3186,7 +3226,7 @@ export default function App(){
     addToast(isAr?"جاري إنشاء تقرير المقارنة...":"Generating comparison PDF...","info");
     try {
       const { generateComparisonPDF } = await import("./lib/pdfReports.js");
-      await generateComparisonPDF({ sessions: userSessions, profile, aiSummary: "" });
+      await generateComparisonPDF({ session1, session2, sessions: userSessions, profile, lang: isAr?"ar":"en", aiSummary: "" });
       addToast(isAr?"✅ تم تحميل تقرير المقارنة":"✅ Comparison PDF downloaded","success");
     } catch(e) {
       console.error("[Comparison PDF]", e);
@@ -4099,6 +4139,27 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 </div>
                 <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
                   {sessionResult.top_metric[1]?.label} — score {sessionResult.top_metric[1]?.score}/100
+                </div>
+              </div>
+            )}
+
+            {/* Elite: worst-posture snapshots */}
+            {sessionResult.worst_snapshots?.length>0&&(
+              <div style={{marginBottom:20,textAlign:"left"}}>
+                <div style={{fontSize:11,color:"#10b981",fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                  📸 {isAr?"أسوأ لحظات الجلسة":"Worst posture moments"}
+                  <span style={{fontSize:8,background:"rgba(16,185,129,.12)",border:"1px solid rgba(16,185,129,.25)",borderRadius:99,padding:"1px 6px"}}>ELITE</span>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  {sessionResult.worst_snapshots.map((s,i)=>(
+                    <div key={i} style={{flex:1,position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid rgba(239,68,68,.3)"}}>
+                      <img src={s.img} alt={`posture ${s.score}`} style={{width:"100%",display:"block",transform:"scaleX(-1)"}}/>
+                      <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,.65)",padding:"3px 6px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span style={{fontSize:10,fontWeight:800,color:s.score<40?"#ef4444":"#f59e0b"}}>{s.score}</span>
+                        <span style={{fontSize:8,color:"rgba(255,255,255,.6)"}}>{s.time}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -5104,6 +5165,38 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
               </button>
           }
+          {/* Alert sound + Elite voice coach toggles */}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setSound(s=>!s)} style={{
+              flex:1,background:sound?"rgba(26,86,219,.12)":"rgba(255,255,255,.04)",
+              border:`1px solid ${sound?"rgba(26,86,219,.35)":cs.border}`,borderRadius:9,
+              padding:"8px 0",fontSize:11,fontWeight:700,color:sound?"#60a5fa":cs.muted,cursor:"pointer",
+            }}>
+              {sound?"🔊":"🔇"} {isAr?"تنبيه صوتي":"Beep alerts"}
+            </button>
+            <button onClick={()=>{
+              if(!tierAtLeast(effectiveTier,"elite")){
+                addToast(isAr?"🎙️ المدرب الصوتي متاح لباقة Elite فقط":"🎙️ Voice coach is an Elite feature","warn");
+                setShowBilling(true);return;
+              }
+              setVoiceCoach(v=>{
+                const nv=!v;
+                try{localStorage.setItem("corvus_voice_coach",nv?"1":"0");}catch{}
+                if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{force:true});
+                else stopSpeaking();
+                return nv;
+              });
+            }} style={{
+              flex:1,background:voiceCoach&&tierAtLeast(effectiveTier,"elite")?"rgba(16,185,129,.12)":"rgba(255,255,255,.04)",
+              border:`1px solid ${voiceCoach&&tierAtLeast(effectiveTier,"elite")?"rgba(16,185,129,.4)":cs.border}`,borderRadius:9,
+              padding:"8px 0",fontSize:11,fontWeight:700,
+              color:voiceCoach&&tierAtLeast(effectiveTier,"elite")?"#34d399":cs.muted,cursor:"pointer",
+              display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+            }}>
+              🎙️ {isAr?"المدرب الصوتي":"Voice coach"}
+              {!tierAtLeast(effectiveTier,"elite")&&<span style={{fontSize:8,background:"rgba(16,185,129,.12)",border:"1px solid rgba(16,185,129,.25)",borderRadius:99,padding:"1px 6px",color:"#10b981"}}>ELITE</span>}
+            </button>
+          </div>
           {histRef.current?.length>0&&(
 <button onClick={async ()=>{
               // Same canonical gate — third direct generateSessionPDF() call that bypassed it.
@@ -5124,6 +5217,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     alerts_count:acRef.current?.total||0, mode, tier:effectiveTier,
                     score_history:hist.slice(-60), created_at:new Date(),
                     metrics:lastAnalRef.current?.metrics||{},
+                    worst_snapshots:worstSnapsRef.current.slice(0,3),
                   },
                   profile: { ...profile, tier: effectiveTier },
                   allSessions: userSessions,
