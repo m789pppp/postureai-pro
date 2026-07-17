@@ -28,6 +28,11 @@ const planRank   = p => PLAN_ORDER.indexOf(p);
 
 const money = n => n != null ? `${Number(n).toLocaleString()} EGP` : "—";
 const fmt   = d => d?.toDate?.()?.toLocaleDateString?.() || d?.split?.("T")?.[0] || "—";
+const daysLeft = ts => {
+  const ms = ts?.toDate?.()?.getTime?.() ?? (ts?.seconds ? ts.seconds*1000 : (ts ? new Date(ts).getTime() : NaN));
+  if (!ms || Number.isNaN(ms)) return null;
+  return Math.max(0, Math.ceil((ms - Date.now()) / 86400000));
+};
 
 // ─── sub-components ─────────────────────────────────────────────
 function Card({ title, sub, action, children, style }) {
@@ -381,6 +386,26 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
                     <Badge label="TRIAL" color={TOKENS.amber} bg={`${TOKENS.amber}10`}/>
                   )}
                 </div>
+                {profile?.is_trial && (() => {
+                  const d = daysLeft(profile?.trial_expires_at);
+                  if (d === null) return null;
+                  const urgent = d <= 2;
+                  return (
+                    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:SP[2],
+                      padding:"8px 12px", borderRadius:R.md,
+                      background: urgent ? `${TOKENS.red}12` : `${TOKENS.amber}10`,
+                      border:`1px solid ${urgent?TOKENS.red:TOKENS.amber}30` }}>
+                      <span style={{ fontSize:12.5, fontWeight:700, color: urgent?TOKENS.red:TOKENS.amber }}>
+                        {d === 0
+                          ? (isAr_ ? "تنتهي تجربتك المجانية اليوم" : "Your free trial ends today")
+                          : (isAr_ ? `باقي ${d} ${d===1?"يوم":"أيام"} على انتهاء التجربة المجانية` : `${d} day${d===1?"":"s"} left in your free trial`)}
+                      </span>
+                      <Btn onClick={()=>setTab("change")} size="sm">
+                        {isAr_?"ترقية الآن ←":"Upgrade Now →"}
+                      </Btn>
+                    </div>
+                  );
+                })()}
                 <div style={{ fontSize:12, color:TOKENS.muted, lineHeight:1.7 }}>
                   {isAr_
                     ? "للترقية أو تغيير خطتك، اضغط على تغيير الخطة"

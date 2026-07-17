@@ -10,6 +10,7 @@ import {
   getAuthToken,
 } from "./firebase.js";
 import { doc, getDoc } from "firebase/firestore";
+import { API_BASE_URL } from "./config/api.js";
 
 export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
   const [status, setStatus] = useState("loading"); // loading | found | accepted | consent | error
@@ -72,7 +73,7 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
       // backend validates the invite (exists, belongs to this company_id,
       // still pending) before performing the linkage with elevated privileges.
       const tok = await getAuthToken();
-      const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+      const API = API_BASE_URL;
       const resp = await fetch(`${API}/org/invite/accept`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
@@ -94,7 +95,7 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
     setConsentLoading(true);
     try {
       const tok = await getAuthToken();
-      const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+      const API = API_BASE_URL;
       await fetch(`${API}/employee/consent`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },

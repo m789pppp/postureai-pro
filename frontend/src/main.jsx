@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
+import BackendStatusBanner from "./BackendStatusBanner.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import "./index.css";
 
@@ -77,6 +78,7 @@ if (isSharedReport) {
   createRoot(document.getElementById("root")).render(
     <StrictMode>
       <ErrorBoundary>
+        <BackendStatusBanner />
         <App />
       </ErrorBoundary>
     </StrictMode>
