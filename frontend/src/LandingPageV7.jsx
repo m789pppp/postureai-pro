@@ -296,6 +296,10 @@ function GlobalStyle() {
         .lp-features-wrap{gap:24px}
         .lp-pricing-grid{grid-template-columns:1fr!important}
         .lp-how-grid{gap:20px}
+        .lp-cases-grid{grid-template-columns:1fr 1fr!important}
+        .lp-testi-grid,.lp-testi-inner{grid-template-columns:1fr 1fr!important}
+        .lp-popular-card{transform:none!important}
+        .lp-sp-row2{flex-direction:column;align-items:flex-start;gap:12px}
       }
 
       /* mobile */
@@ -1110,7 +1114,7 @@ function Features({ lang }) {
           <motion.div key={active}
             initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
             transition={{ duration:.35, ease:[0.22,1,0.36,1] }}
-            style={{ ...card(true), display:"flex", flexDirection:"column", gap:18, padding:"clamp(24px,2.5vw,40px)", minHeight:320 }}>
+            style={{ ...card(true), display:"flex", flexDirection:"column", gap:16, padding:"clamp(20px,2vw,36px)", minHeight:"auto" }}>
             <span style={{
               width:60, height:60, borderRadius:16, fontSize:28,
               display:"flex", alignItems:"center", justifyContent:"center",
@@ -1156,6 +1160,9 @@ function HowItWorks({ lang }) {
 
   return (
     <section id="how" className="lp-section" style={{ background:LPV7_TOKENS.bg1 }}>
+      <div className="lp-wrap">
+        <SectionHead eyebrow={ar ? "كيف يعمل" : "How It Works"}
+          title={ar ? "ابدأ في 3 خطوات بسيطة" : "Up and running in 3 simple steps"}
           sub={ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "Three simple steps to a healthier team"}/>
 
         <div style={{ position:"relative" }}>
@@ -1186,6 +1193,7 @@ function HowItWorks({ lang }) {
             ))}
           </Stagger>
         </div>
+      </div>
     </section>
   );
 }
