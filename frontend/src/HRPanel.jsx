@@ -2,6 +2,7 @@
  * Corvus — HRPanel v32 (B2B Complete)
  * Full HR dashboard: Overview · Departments · Employees · Billing · Invite
  */
+import { API_BASE_URL } from "./config/api.js";
 import { useState, useEffect, useRef } from "react";
 import {
   getDepartments, createDepartment, deleteDepartment,
@@ -13,7 +14,7 @@ import {
 
 const sc = v => v>=75?"#10b981":v>=50?"#f59e0b":"#ef4444";
 const grade = (v,ar) => v>=85?(ar?"ممتاز":"Excellent"):v>=70?(ar?"جيد":"Good"):v>=50?(ar?"مقبول":"Fair"):(ar?"ضعيف":"Poor");
-const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+const API = API_BASE_URL;
 
 // ── Mini components ────────────────────────────────────────────────
 function KPI({ icon, label, value, color, sub }) {
@@ -235,6 +236,9 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
   const [inviteRole, setInvRole]  = useState("employee");
   const [importEmps, setImportE]  = useState([]);
   const [sending,    setSending]  = useState(false);
+  const [alertMsg,      setAlertMsg]      = useState("");
+  const [alertSending,  setAlertSending]  = useState(false);
+  const [showAlertBox,  setShowAlertBox]  = useState(false);
   const [deptFilter, setDeptF]    = useState("all");
   const [search,     setSearch]   = useState("");
   const fileRef = useRef();
@@ -390,6 +394,27 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
     setSending(false);
   }
 
+  async function sendAtRiskAlert() {
+    if(!alertMsg.trim()) { addToast(isAr?"اكتب رسالة أولاً":"Write a message first","error"); return; }
+    setAlertSending(true);
+    try {
+      const tok = await getAuthToken();
+      const r = await fetch(`${API}/company/alert-employees`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json",...(tok?{Authorization:`Bearer ${tok}`}:{})},
+        body: JSON.stringify({ target:"at_risk", message:alertMsg.trim(), lang: isAr?"ar":"en" }),
+      });
+      const d = await r.json().catch(()=>({}));
+      if(r.ok) {
+        addToast(isAr?`تم إرسال التنبيه لـ ${d.sent||0} موظف`:`Alert sent to ${d.sent||0} employees`,"success");
+        setAlertMsg(""); setShowAlertBox(false);
+      } else {
+        addToast(d?.error||(isAr?"فشل إرسال التنبيه":"Failed to send alert"),"error");
+      }
+    } catch { addToast(isAr?"الباك اند مش شغال":"Backend not running","error"); }
+    setAlertSending(false);
+  }
+
   const dark = { bg:"#030b14", card:"#05101f", border:"rgba(255,255,255,.07)", text:"#f0f6ff", muted:"#64748b" };
 
   if(loading) return (
@@ -521,8 +546,16 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
                   ))}
                 </div>
                 <div style={{background:"rgba(239,68,68,.04)",border:"1px solid rgba(239,68,68,.15)",borderRadius:14,padding:18}}>
-                  <div style={{fontSize:12,fontWeight:700,color:"#ef4444",marginBottom:12}}>⚠️ {isAr?"يحتاجون اهتمام":"Need Attention"}</div>
-                  {employees.filter(e=>(e.avg_score||0)>0&&(e.avg_score||0)<50).slice(0,5).map((e,i)=>(
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#ef4444"}}>⚠️ {isAr?"يحتاجون اهتمام":"Need Attention"}</div>
+                    {employees.filter(e=>(e.avg_score||0)>0&&(e.avg_score||0)<50).length>0&&!showAlertBox&&(
+                      <button onClick={()=>setShowAlertBox(true)}
+                        style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.3)",borderRadius:7,padding:"4px 10px",fontSize:10.5,fontWeight:700,color:"#fca5a5",cursor:"pointer",whiteSpace:"nowrap"}}>
+                        📣 {isAr?"إرسال تنبيه":"Send Alert"}
+                      </button>
+                    )}
+                  </div>
+                  {employees.filter(e=>(e.avg_score||0)>0&&(e.avg_score||0)<50).map((e,i)=>(
                     <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                       <div style={{flex:1,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.name||e.email?.split("@")[0]}</div>
                       <span style={{fontSize:10,color:"#64748b"}}>{e.department||"—"}</span>
@@ -531,6 +564,24 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
                   ))}
                   {employees.filter(e=>(e.avg_score||0)>0&&(e.avg_score||0)<50).length===0&&(
                     <div style={{fontSize:12,color:"#64748b",textAlign:"center",padding:"16px 0"}}>✅ {isAr?"الكل بخير!":"All good!"}</div>
+                  )}
+                  {showAlertBox&&(
+                    <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid rgba(239,68,68,.15)"}}>
+                      <textarea value={alertMsg} onChange={e=>setAlertMsg(e.target.value)}
+                        placeholder={isAr?"اكتب رسالة التنبيه — هتوصل للموظفين اللي في خطر (Push notification)":"Write the alert message — sent as a push notification to at-risk employees"}
+                        rows={3}
+                        style={{width:"100%",background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.08)",borderRadius:9,padding:"10px 12px",fontSize:12,color:"#f0f6ff",outline:"none",fontFamily:"inherit",boxSizing:"border-box",resize:"vertical"}}/>
+                      <div style={{display:"flex",gap:8,marginTop:10}}>
+                        <button onClick={()=>{setShowAlertBox(false);setAlertMsg("");}} disabled={alertSending}
+                          style={{background:"rgba(148,163,184,.1)",border:"1px solid rgba(148,163,184,.2)",borderRadius:8,padding:"7px 14px",fontSize:11.5,color:"#94a3b8",cursor:"pointer",fontWeight:600}}>
+                          {isAr?"إلغاء":"Cancel"}
+                        </button>
+                        <button onClick={sendAtRiskAlert} disabled={alertSending||!alertMsg.trim()}
+                          style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.4)",borderRadius:8,padding:"7px 14px",fontSize:11.5,color:"#fca5a5",cursor:"pointer",fontWeight:700,opacity:(alertSending||!alertMsg.trim())?.5:1}}>
+                          {alertSending?"...":(isAr?`📣 إرسال لـ ${employees.filter(e=>(e.avg_score||0)>0&&(e.avg_score||0)<50).length} موظف`:`📣 Send to ${employees.filter(e=>(e.avg_score||0)>0&&(e.avg_score||0)<50).length} employees`)}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

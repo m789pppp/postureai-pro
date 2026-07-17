@@ -1,7 +1,8 @@
+import { API_BASE_URL } from "./config/api.js";
 import { useState, useEffect, useCallback } from "react";
 
 import { apiFetch } from "./services/api.js";
-const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+const API = API_BASE_URL;
 
 // ── XP Level colors ───────────────────────────────────────────────
 const LEVEL_COLORS = [
