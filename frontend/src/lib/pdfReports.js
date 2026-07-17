@@ -2677,7 +2677,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   doc.text(isAr?"النتيجة":"Score",ml+cw*0.65,y+6); doc.text(isAr?"التقييم":"Grade",ml+cw*0.82,y+6);
   y+=11;
   for(const [i,u] of sorted.slice(0,10).entries()){
-    if(y>H-18){doc.addPage(); y=22;}
+    if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard"); y=22;}
     fc(doc,i%2===0?248:255,i%2===0?250:255,i%2===0?252:255); doc.rect(ml,y,cw,8,"F");
     const sc=Math.round(u.avg_score||0); const col=_scoreColor(sc);
     sf(8,"bold"); tc(doc,...(i<3?col:PDF_TOKENS.muted)); doc.text(String(i+1),ml+3,y+5.5);
@@ -2710,7 +2710,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
               :"No employees at excellent level — consider incentive program (points/rewards) to encourage improvement"),
   ];
   for(const rec of hrRecs){
-    if(y>H-22){doc.addPage(); y=22;}
+    if(y>H-22){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations"); y=22;}
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,16,2,"F");
     sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
     const lines=doc.splitTextToSize(rec,cw-8);
