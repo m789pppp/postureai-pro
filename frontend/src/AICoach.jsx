@@ -219,8 +219,22 @@ export function AICoach({ profile, sessions = [], calibration, cs, lang = "en", 
   const [input,     setInput]     = useState("");
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState("");
+  const [msgCount,  setMsgCount]  = useState(0);  // msgs used this month
   const messagesRef = useRef([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // Load monthly coach message count from localStorage (fast, syncs with backend)
+  useEffect(() => {
+    try {
+      const uid = profile?.uid || "";
+      if (!uid) return;
+      const key = `corvus_coach_count_${uid}_${new Date().toISOString().slice(0,7)}`;
+      const stored = parseInt(localStorage.getItem(key) || "0", 10);
+      setMsgCount(stored);
+    } catch {}
+  }, [profile]);
+
+  const limitReached = coachLimit !== -1 && msgCount >= coachLimit;
   const [localAIReady,  setLocalAIReady]  = useState(false);
   const [localAIStatus, setLocalAIStatus] = useState({ loading:false, progress:0 });
 
@@ -228,7 +242,7 @@ export function AICoach({ profile, sessions = [], calibration, cs, lang = "en", 
   const inputRef  = useRef(null);
   const _tier = effectiveTier || (effectiveTier || profile?.tier || "standard");
   const quality   = qualityFor(_tier);
-  const coachLimit = quality.monthly_limit ?? 5;
+  const coachLimit = quality.aiCoach?.monthlyLimit ?? 5;
 
   // Build context
   const context = useMemo(() => {
@@ -419,6 +433,16 @@ LANGUAGE: Professional English.`;
         setMessages(prev => prev.map(m =>
           m.ts === streamingId ? { ...m, streaming: false } : m
         ));
+        // Increment monthly usage counter
+        try {
+          const uid = profile?.uid || "";
+          if (uid) {
+            const key = `corvus_coach_count_${uid}_${new Date().toISOString().slice(0,7)}`;
+            const newCount = msgCount + 1;
+            localStorage.setItem(key, String(newCount));
+            setMsgCount(newCount);
+          }
+        } catch {}
       } catch(streamErr) {
         // Streaming failed — fall back to non-streaming race (usually succeeds)
         console.warn("[CorvusAI] Stream failed, trying non-stream fallback:", streamErr.message);
@@ -440,7 +464,7 @@ LANGUAGE: Professional English.`;
   }, [input, loading, context, isAr, quality, lang]);
 
   const handleKey = e => {
-    if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); if (!limitReached) sendMessage(); }
   };
 
   const suggestions = SUGGESTIONS[lang]||SUGGESTIONS.en;
@@ -508,11 +532,10 @@ LANGUAGE: Professional English.`;
           </div>
 
           {/* Context pills */}
-          <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+          <div style={{ display:"flex", gap:6, flexShrink:0, flexWrap:"wrap" }}>
             {[
               `${context.avg_score}/100`,
               `${context.sessions_count} ${isAr?"جلسة":"sessions"}`,
-              _tier,
             ].map(label => (
               <div key={label} style={{
                 fontSize:10, color:COACH_TOKENS.subtle, background:"rgba(255,255,255,.04)",
@@ -520,6 +543,20 @@ LANGUAGE: Professional English.`;
                 padding:"3px 8px", whiteSpace:"nowrap",
               }}>{label}</div>
             ))}
+            {/* Message limit pill */}
+            <div style={{
+              fontSize:10, borderRadius:6, padding:"3px 8px", whiteSpace:"nowrap",
+              background: limitReached ? "rgba(239,68,68,.15)" : "rgba(255,255,255,.04)",
+              border: `0.5px solid ${limitReached ? "rgba(239,68,68,.4)" : COACH_TOKENS.border}`,
+              color: limitReached ? "#fca5a5" : COACH_TOKENS.subtle,
+            }}>
+              {coachLimit === -1
+                ? (isAr ? "∞ رسائل" : "∞ msgs")
+                : limitReached
+                  ? (isAr ? "انتهى الحد الشهري" : "Monthly limit reached")
+                  : (isAr ? `${coachLimit - msgCount} متبقي` : `${coachLimit - msgCount} left`)
+              }
+            </div>
           </div>
 
           <button onClick={onClose} style={{
@@ -601,6 +638,20 @@ LANGUAGE: Professional English.`;
           </div>
         )}
 
+        {/* Limit reached banner */}
+        {limitReached && (
+          <div style={{
+            padding:"10px 16px", flexShrink:0,
+            background:"rgba(239,68,68,.08)", borderTop:"0.5px solid rgba(239,68,68,.2)",
+            fontSize:12, color:"#fca5a5", textAlign:"center",
+          }}>
+            {isAr
+              ? `وصلت للحد الشهري (${coachLimit} رسائل). اترقّي للـ Elite للحصول على رسائل غير محدودة.`
+              : `Monthly limit of ${coachLimit} messages reached. Upgrade to Elite for unlimited messages.`
+            }
+          </div>
+        )}
+
         {/* Input */}
         <div style={{
           padding:"12px 14px", borderTop:`0.5px solid ${COACH_TOKENS.border}`,
@@ -614,7 +665,7 @@ LANGUAGE: Professional English.`;
             onChange={e => { setInput(e.target.value); e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,120)+"px"; }}
             onKeyDown={handleKey}
             placeholder={isAr?"اسأل Dr. Corvus…":"Ask Dr. Corvus anything…"}
-            disabled={loading}
+            disabled={loading || limitReached}
             rows={1}
             style={{
               flex:1, background:"rgba(255,255,255,.04)",
@@ -631,7 +682,7 @@ LANGUAGE: Professional English.`;
           <button
             className="corvus-send"
             onClick={() => sendMessage()}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || limitReached}
             style={{
               background: loading||!input.trim() ? "rgba(59,130,246,.25)" : COACH_TOKENS.blue,
               border:"none", borderRadius:12, width:44, height:44,
