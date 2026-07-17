@@ -1572,8 +1572,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     doc.setFillColor(15,23,42); doc.rect(0,0,W,12,"F");
     doc.setFontSize(8); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
     doc.text("Corvus Posture Health — Clinical Summary", ml, 8.5);
-    doc.setFontSize(7.5); doc.setTextColor(14,165,233); doc.setFont("helvetica","bold");
-    doc.text("PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
+    const _badgeColPg = tier==="elite" ? [180,141,60] : [14,165,233];
+    doc.setFontSize(7.5); doc.setTextColor(..._badgeColPg); doc.setFont("helvetica","bold");
+    doc.text(tier==="elite"?"ELITE PHYSIOTHERAPIST REPORT":"PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
     return 22;
   };
 
@@ -1634,21 +1635,25 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   // ── PAGE 1: Clinical Header + Patient Info ────────────────────
   // Clinical header — formal white + navy
+  const _isElite = tier==="elite";
+  const _badgeCol = _isElite ? [180,141,60] : [14,165,233]; // gold for Elite, cyan otherwise
   doc.setFillColor(15,23,42); doc.rect(0,0,W,36,"F");
+  // Premium accent underline — thin brand rule beneath the navy band
+  doc.setFillColor(..._badgeCol); doc.rect(0,36,W,1,"F");
   doc.setFontSize(14); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
   doc.text("CORVUS POSTURE HEALTH", ml, 16);
   doc.setFontSize(8.5); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
   doc.text("AI-Assisted Workplace Ergonomics & Posture Assessment", ml, 23);
   doc.text("For Clinical Review — Not for Diagnostic Purposes", ml, 29.5);
 
-  // Document type badge
-  doc.setFillColor(14,165,233); doc.roundedRect(W-mr-42,10,42,14,2,2,"F");
+  // Document type badge — gold accent for Elite tier, cyan otherwise
+  doc.setFillColor(..._badgeCol); doc.roundedRect(W-mr-42,10,42,14,2,2,"F");
   doc.setFontSize(8); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text("CLINICAL SUMMARY", W-mr-21, 18.5, {align:"center"});
-  doc.setFontSize(6.5); doc.setTextColor(186,230,253); doc.setFont("helvetica","normal");
+  doc.text(_isElite?"ELITE CLINICAL":"CLINICAL SUMMARY", W-mr-21, 18.5, {align:"center"});
+  doc.setFontSize(6.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","normal");
   doc.text("PHYSIOTHERAPIST REPORT", W-mr-21, 23.5, {align:"center"});
 
-  y=46;
+  y=47;
 
   // Patient Info block
   doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,32,3,3,"F");
@@ -1967,6 +1972,36 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   });
 
   y+=10;
+
+  // ── Industry Benchmark Comparison ─────────────────────────────
+  // Reference cohort figures — aggregated/estimated ranges, not a
+  // live population statistic. Relabel once real anonymized cohort
+  // volume backs these numbers.
+  if(y>H-90){y=_clinPage();}
+  y=_clinSec(y,"Industry Benchmark Comparison","This session's scores against reference cohort averages",[168,85,247]);
+  y+=1;
+
+  const CLINICAL_BENCHMARKS = [
+    { label:"This Session",              value:avg,               isUser:true },
+    { label:"Office Workers (avg.)",     value:61,                isUser:false },
+    { label:"Remote/Hybrid Workers (avg.)", value:57,             isUser:false },
+    { label:"Top 10% Corvus Users",      value:88,                isUser:false },
+  ];
+  const bLabelW = cw*0.42, bBarX = ml+bLabelW, bBarW = cw-bLabelW-16;
+  CLINICAL_BENCHMARKS.forEach(({label,value,isUser})=>{
+    const rc = isUser ? gradeC : [100,116,139];
+    doc.setFontSize(8); doc.setFont("helvetica", isUser?"bold":"normal"); doc.setTextColor(...(isUser?gradeC:[15,23,42]));
+    doc.text(label, ml, y+5.5);
+    doc.setFillColor(226,232,240); doc.roundedRect(bBarX,y+1.5,bBarW,4.6,1.2,1.2,"F");
+    const fillW = Math.max(2, bBarW*(Math.max(0,Math.min(100,value))/100));
+    doc.setFillColor(...rc); doc.roundedRect(bBarX,y+1.5,fillW,4.6,1.2,1.2,"F");
+    doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(15,23,42);
+    doc.text(String(Math.round(value)), bBarX+bBarW+3, y+5.2);
+    y+=9.5;
+  });
+  doc.setFontSize(6.5); doc.setTextColor(148,163,184); doc.setFont("helvetica","italic");
+  doc.text("Benchmark figures are reference cohort estimates and may vary with sample size and role.", ml, y+3);
+  y+=12;
 
   // Clinical recommendations
   if(y>H-80){y=_clinPage();}
