@@ -245,7 +245,7 @@ function GlobalStyle() {
       ::selection{background:rgba(79,124,249,.32);color:#fff}
 
       .lp-wrap{max-width:1200px;margin:0 auto;width:100%;padding:0 32px}
-      .lp-section{padding:72px 32px}
+      .lp-section{padding:60px 32px}
 
       /* cards */
       .lp-lift{transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s,border-color .28s}
@@ -284,15 +284,18 @@ function GlobalStyle() {
       .lp-cases-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
       .lp-pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
       .lp-testi-grid,.lp-testi-inner{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-      .lp-footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:40px 32px}
+      .lp-footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:32px 24px}
       .lp-sp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
       .lp-sp-row2{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px}
 
       /* tablet */
       @media(max-width:1024px){
-        .lp-wrap{padding:0 24px}.lp-section{padding:68px 24px}
-        .lp-footer-grid{grid-template-columns:1fr 1fr 1fr}
+        .lp-wrap{padding:0 20px}.lp-section{padding:56px 20px}
+        .lp-footer-grid{grid-template-columns:1fr 1fr;gap:28px 20px}
         .lp-stats-grid{grid-template-columns:repeat(2,1fr)}
+        .lp-features-wrap{gap:24px}
+        .lp-pricing-grid{grid-template-columns:1fr!important}
+        .lp-how-grid{gap:20px}
       }
 
       /* mobile */
@@ -584,7 +587,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
   return (
     <section style={{
       minHeight: "100vh", display:"flex", alignItems:"center",
-      padding:"clamp(80px,12vw,132px) 24px clamp(60px,8vw,90px)", position:"relative", overflow:"hidden",
+      padding:"clamp(68px,8vw,110px) 24px clamp(48px,5vw,72px)", position:"relative", overflow:"hidden",
     }}>
       {/* Ambient background */}
       <div style={{ position:"absolute", inset:0, pointerEvents:"none" }}>
@@ -744,7 +747,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
         {/* Right — Camera demo */}
         <Reveal delay={100} className="lp-hero-right">
-          <div style={{ position:"relative", paddingTop:20, paddingBottom:20 }}>
+          <div style={{ position:"relative", paddingTop:20, paddingBottom:20, minWidth:320 }}>
             {/* Main camera card */}
             <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
               {/* Browser chrome */}
@@ -1107,7 +1110,7 @@ function Features({ lang }) {
           <motion.div key={active}
             initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
             transition={{ duration:.35, ease:[0.22,1,0.36,1] }}
-            style={{ ...card(true), display:"flex", flexDirection:"column", gap:18, padding:"clamp(28px,3vw,44px)" }}>
+            style={{ ...card(true), display:"flex", flexDirection:"column", gap:18, padding:"clamp(24px,2.5vw,40px)", minHeight:320 }}>
             <span style={{
               width:60, height:60, borderRadius:16, fontSize:28,
               display:"flex", alignItems:"center", justifyContent:"center",
@@ -1497,7 +1500,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
           ))}
         </Stagger>
       </div>
-      <style>{`@media(max-width:1024px){.lp-pricing-grid{grid-template-columns:1fr 1fr!important}}
+      <style>{`
         @media(max-width:600px){.lp-pricing-grid{grid-template-columns:1fr!important}
         .lp-pricing-grid > div > div{transform:none!important}}`}</style>
     </section>
