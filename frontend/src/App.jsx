@@ -3225,7 +3225,7 @@ export default function App(){
     addToast(isAr?"جاري إنشاء تقرير المقارنة...":"Generating comparison PDF...","info");
     try {
       const { generateComparisonPDF } = await import("./lib/pdfReports.js");
-      await generateComparisonPDF({ sessions: userSessions, profile, aiSummary: "" });
+      await generateComparisonPDF({ session1, session2, sessions: userSessions, profile, lang: isAr?"ar":"en", aiSummary: "" });
       addToast(isAr?"✅ تم تحميل تقرير المقارنة":"✅ Comparison PDF downloaded","success");
     } catch(e) {
       console.error("[Comparison PDF]", e);
