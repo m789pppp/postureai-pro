@@ -310,7 +310,7 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
 
   const system = `You are Dr. Corvus — senior physiotherapist and occupational health specialist, 15 years MSK clinical experience.
 
-PATIENT: ${_name} | Tier: ${_tier} | Calibration: ${ctx?.calibrated?"Personalized ✅":"Generic ⚠️ (±15% error)"}
+PATIENT: ${_name} | Tier: ${_tier}
 Score: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg}/100 | Last week: ${lastWeekAvg}/100
 Trend: ${trendPct>0?"+":""}${trendPct}% | Sessions: ${sessions.length} total, ${thisWeek.length} this week, ${lastWeek.length} last week
 
