@@ -3561,16 +3561,30 @@ def analyze_side(image, tier="standard", session_id=None):
 
     # ── Neck lean — ear-to-shoulder (side view is geometrically exact) ──
     sh_width_px = abs(g(PL.L_SHOULDER).x * w - g(PL.R_SHOULDER).x * w)
-    sh_frac     = sh_width_px / max(w, 1)
-    sh_ratio    = max(0.7, min(1.3, sh_frac / 0.34))
+    # Distance proxy for threshold normalisation: full ear→shoulder span.
+    # The L-R shoulder width foreshortens to ~0 px in profile, so the old
+    # sh_frac/0.34 ratio always sat clamped at 0.70 regardless of distance.
+    _ear_sh_span_px = math.hypot(ear[0] - sh[0], ear[1] - sh[1])
+    sh_ratio    = max(0.7, min(1.3, (_ear_sh_span_px / max(w, 1)) / 0.14))
 
     neck_lean  = angle_vert(sh, ear)
     neck_ok    = max(5.0,  8.0 * sh_ratio)
     neck_bad   = max(16.0, 22.0 * sh_ratio)
     neck_sc    = score_m(neck_lean, 0, neck_ok, neck_bad)
-    # FHP from side: horizontal ear-to-shoulder offset in cm
-    _sh_w_cm      = 42.0
-    _cm_per_px_s  = _sh_w_cm / max(sh_width_px, 1)
+    # FHP from side: horizontal ear-to-shoulder offset in cm.
+    # cm ruler: the L-R shoulder width foreshortens to near-zero px in a
+    # true profile view, which exploded the conversion (an upright sitter
+    # could read 20+cm of "FHP"). Use spans that stay fully visible in
+    # profile instead: shoulder→hip (~46cm seated torso) when the hip is
+    # tracked, else ear→shoulder (~25cm). Shoulder width remains the last
+    # resort. Kept in sync with postureEngine.js analyzeSideMP().
+    _torso_px = math.hypot(sh[0] - hip[0], sh[1] - hip[1])
+    if _torso_px > 20 and vis_hip >= 0.5:
+        _cm_per_px_s = 46.0 / _torso_px
+    elif _ear_sh_span_px > 10:
+        _cm_per_px_s = 25.0 / _ear_sh_span_px
+    else:
+        _cm_per_px_s = 42.0 / max(sh_width_px, 1)
     _fhp_side_cm  = round(abs(ear[0] - sh[0]) * _cm_per_px_s, 1)
     _fhp_side_sc  = score_m(_fhp_side_cm, 0, 2.5, 7)
     if _fhp_side_cm > 5:
