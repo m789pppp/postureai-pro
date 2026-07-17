@@ -477,7 +477,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       display:"flex", alignItems:"flex-start", justifyContent:"center",
       fontFamily:"'Inter','IBM Plex Sans Arabic',system-ui,-apple-system,sans-serif",
       direction:isAr?"rtl":"ltr",
-      padding:"clamp(80px,10vw,100px) 16px clamp(32px,5vw,48px)",
+      padding:"clamp(24px,5vw,72px) 16px clamp(24px,4vw,40px)",
       position:"relative", overflowY:"auto",
     }}>
       <MeshBg dark={dark}/>
@@ -497,7 +497,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
 
       {/* Card */}
       <div style={{
-        width:"100%",maxWidth:view==="signup"?470:420,
+        width:"100%",maxWidth:view==="signup"?500:420,
         position:"relative",zIndex:1,
         background:t.card,border:`1px solid ${t.border}`,borderRadius:20,
         padding:"36px 32px",backdropFilter:"blur(24px)",
@@ -652,7 +652,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
 
               {/* Name row — signup only */}
               {view==="signup" && (
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}} className="auth-name-row">
                   <FloatInput id="fname" label={isAr?"الاسم الأول":"First name"}
                     value={fname} onChange={v=>{setFname(v);touch("fname");}}
                     autoComplete="given-name" required dark={dark} isRtl={isAr} t={t}
@@ -729,7 +729,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                       letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>
                       {isAr?"دورك في الشركة":"Your role"}
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
                       {[
                         {id:"hr_admin",icon:"👔",en:"HR / Admin",ar:"HR / مسؤول",desc:isAr?"أدير الفريق وأرى التقارير":"Manage team & view reports"},
                         {id:"employee",icon:"🧑‍💻",en:"Employee",ar:"موظف",desc:isAr?"أستخدم التطبيق شخصياً":"Use the app personally"},
@@ -838,6 +838,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
 
       <style>{`
         @keyframes spin      { to { transform:rotate(360deg) } }
+        @media(max-width:380px){.auth-name-row{grid-template-columns:1fr!important}}
         @keyframes slideDown { from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none} }
         @keyframes popIn     { from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)} }
         input::placeholder   { color:${dark?"rgba(255,255,255,.18)":"rgba(0,0,0,.22)"}!important }
