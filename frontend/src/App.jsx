@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -92,7 +93,7 @@ import EmbedWidget        from "./EmbedWidget.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
 // Example: VITE_API_URL=https://corvus-backend.railway.app/api
-const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+const API = API_BASE_URL;
 
 // ── i18n ──────────────────────────────────────────────────────────
 // ── i18n: translations loaded from lib/i18n.js ─────────────────
@@ -3226,7 +3227,7 @@ export default function App(){
     addToast(isAr?"جاري إنشاء تقرير المقارنة...":"Generating comparison PDF...","info");
     try {
       const { generateComparisonPDF } = await import("./lib/pdfReports.js");
-      await generateComparisonPDF({ sessions: userSessions, profile, aiSummary: "" });
+      await generateComparisonPDF({ session1, session2, sessions: userSessions, profile, lang: isAr?"ar":"en", aiSummary: "" });
       addToast(isAr?"✅ تم تحميل تقرير المقارنة":"✅ Comparison PDF downloaded","success");
     } catch(e) {
       console.error("[Comparison PDF]", e);

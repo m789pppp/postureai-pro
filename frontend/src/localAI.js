@@ -807,8 +807,43 @@ function cleanAIResponse(text) {
 
 
 // AI — race all 3 simultaneously, fastest response wins
-// Stream from Pollinations with real SSE — shows text as it arrives
+// Stream from Pollinations with real SSE — shows text as it arrives.
+// If the network stream fails outright (no connectivity, all providers
+// blocked/down), falls back to the fully-offline rule-based KB below
+// instead of throwing — this is the real "no internet / backend down"
+// safety net for the AI Coach.
 export async function localChatStream(messages, systemPrompt, maxTokens, onChunk) {
+  try {
+    return await _cloudChatStream(messages, systemPrompt, maxTokens, onChunk);
+  } catch (e) {
+    console.warn("[CorvusAI] Cloud stream failed, using offline rule-based KB:", e.message);
+    return _offlineStream(messages, systemPrompt, onChunk);
+  }
+}
+
+// Offline, zero-network reply — reuses the same rule-based KB that backs
+// localChat()'s fallback, but "streams" it word-by-word so the UI doesn't
+// look different from a live response.
+async function _offlineStream(messages, systemPrompt, onChunk) {
+  const d = parseData(systemPrompt);
+  const hist = analyzeHistory(messages);
+  const last = [...messages].reverse().find(m => m.role === "user");
+  const intent = detectIntent(last?.content || "");
+  const full = buildResponse(intent, last?.content || "", d, hist);
+
+  // Simulate streaming so the caller's onChunk-driven UI still feels live.
+  const words = full.split(" ");
+  let acc = "";
+  for (let i = 0; i < words.length; i++) {
+    acc += (i === 0 ? "" : " ") + words[i];
+    onChunk(acc);
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise(r => setTimeout(r, 12));
+  }
+  return full;
+}
+
+async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
   const allMsgs = [
     { role: "system", content: systemPrompt },
     ...messages.map(m => ({

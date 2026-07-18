@@ -275,7 +275,13 @@ function vl(doc,x,y,h,col=PDF_TOKENS.border){dc(doc,...col);lw(doc,0.18);doc.lin
 
 // ── Font helper ────────────────────────────────────────────────────
 let _cairoLoaded=false, _cairoCachedB64=null;
-async function _ensureCairoFont(doc){
+// isAr gate added: registering this font (even completely unused) adds
+// real weight to every generated PDF — measured ~50KB+ on a trivial doc,
+// and every English-only report was paying that cost with zero benefit
+// since Arabic glyphs are never drawn. Skip the load entirely when the
+// report isn't Arabic.
+async function _ensureCairoFont(doc,isAr=false){
+  if(!isAr) return;
   try{
     if(!_cairoCachedB64){const{CAIRO_B64}=await import("../assets/cairoFont.js");_cairoCachedB64=CAIRO_B64;}
     doc.addFileToVFS("Cairo-Regular.ttf",_cairoCachedB64);
@@ -285,7 +291,7 @@ async function _ensureCairoFont(doc){
     _cairoLoaded=true;
   }catch(e){console.warn("Cairo font failed:",e?.message||e);}
 }
-async function _loadCairo(doc){await _ensureCairoFont(doc);return _cairoLoaded;}
+async function _loadCairo(doc,isAr=false){await _ensureCairoFont(doc,isAr);return _cairoLoaded;}
 
 function font(doc,size,style="normal",isAr=false){
   doc.setFont(isAr&&_cairoLoaded?"cairo":"helvetica",style);
@@ -582,6 +588,8 @@ function _drawSparkline(doc,hist,x,y,w,h,col){_spark(doc,hist,x,y,w,h,col);}
 
 
 export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[], aiSummary="" }) {
+  const isAr0 = lang === "ar";
+  if (!session) throw new Error(isAr0 ? "لا توجد بيانات جلسة لعرضها في هذا التقرير." : "No session data available to generate this report.");
   const { jsPDF } = await import("jspdf");
   const isAr   = lang === "ar";
   const _rawTier = profile?.tier || session?.tier || "standard";
@@ -591,9 +599,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
                  : _rawTier;
   const isElite= tierAtLeast(tier,"elite");
   const isPro  = !isElite && tierAtLeast(tier,"professional");
-  console.log("[PDF] tier detection:", {_rawTier, tier, isElite, isPro});
   const doc    = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
 
   const W=210,H=297,ml=14,mr=14,cw=W-ml-mr;
   const sf = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
@@ -1550,19 +1557,19 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
 
 export async function generateClinicalPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[], aiSummary="" }) {
+  if (!session) throw new Error(lang==="ar" ? "لا توجد بيانات جلسة لعرضها في هذا التقرير." : "No session data available to generate this report.");
   const { jsPDF } = await import("jspdf");
-  const isAr  = lang === "ar";
   const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  // Clinical report is rendered entirely in helvetica/English regardless of
+  // `lang` (see date-formatting notes below) — Cairo is never used here, so
+  // it's never loaded. This alone was ~90% of this report's file size.
+  await _ensureLogo();
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
   const tier    = _t(profile?.tier || session?.tier || "standard");
   // Note: tier gate is enforced in App.jsx downloadPDF() before calling here.
   // We don't re-throw here to avoid silent failures from stale session.tier values.
 
-  // Cairo already loaded via _ensureCairoFont above
-  const cairo = _cairoLoaded;
-  const fnt = (size, style="normal") => cairo && isAr ? fontAr(doc,size,style,true) : font(doc,size,style);
 
   // New clinical page WITH the navy header bar — the conditional page
   // breaks used to call doc.addPage() bare, leaving continued pages
@@ -2126,7 +2133,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 export async function generateComparisonPDF({ session1, session2, sessions=[], profile, user, lang="en", allSessions=[], aiSummary="" }) {
   // Support both old API (session1,session2) and new API (sessions array)
   if (!session1 && sessions.length >= 2) { session1 = sessions[0]; session2 = sessions[1]; }
-  if (!session1 || !session2) { console.warn("[PDF] Comparison needs 2 sessions"); return; }
+  if (!session1 || !session2) {
+    throw new Error(lang==="ar" ? "محتاج جلستين على الأقل لإنشاء تقرير المقارنة." : "Need at least 2 sessions to generate a comparison report.");
+  }
 
   const { jsPDF } = await import("jspdf");
   const isAr = lang==="ar";
@@ -2134,7 +2143,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
   const sf  = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
   const now = new Date();
@@ -2565,7 +2574,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
-  const cairo = await _loadCairo(doc);
+  const cairo = await _loadCairo(doc,isAr);
   const sf = (sz,st="normal") => cairo&&isAr ? fontAr(doc,sz,st,true) : font(doc,sz,st);
 
   const now = new Date();
@@ -2677,7 +2686,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   doc.text(isAr?"النتيجة":"Score",ml+cw*0.65,y+6); doc.text(isAr?"التقييم":"Grade",ml+cw*0.82,y+6);
   y+=11;
   for(const [i,u] of sorted.slice(0,10).entries()){
-    if(y>H-18){doc.addPage(); y=22;}
+    if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard"); y=22;}
     fc(doc,i%2===0?248:255,i%2===0?250:255,i%2===0?252:255); doc.rect(ml,y,cw,8,"F");
     const sc=Math.round(u.avg_score||0); const col=_scoreColor(sc);
     sf(8,"bold"); tc(doc,...(i<3?col:PDF_TOKENS.muted)); doc.text(String(i+1),ml+3,y+5.5);
@@ -2710,7 +2719,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
               :"No employees at excellent level — consider incentive program (points/rewards) to encourage improvement"),
   ];
   for(const rec of hrRecs){
-    if(y>H-22){doc.addPage(); y=22;}
+    if(y>H-22){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations"); y=22;}
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,16,2,"F");
     sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
     const lines=doc.splitTextToSize(rec,cw-8);
@@ -2760,7 +2769,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
   const sf = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
   const _rawName4 = profile?.name||user?.displayName||(isAr?"مستخدم":"User");

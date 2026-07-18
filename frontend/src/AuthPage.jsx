@@ -95,7 +95,7 @@ function PwStrength({ pass, dark, isAr }) {
   if (!pass) return null;
   const col = colors[Math.min(score,5)];
   return (
-    <div style={{marginBottom:12,padding:"10px 12px",
+    <div style={{marginBottom:8,padding:"8px 12px",
       background:dark?"rgba(255,255,255,.03)":"rgba(0,0,0,.02)",
       border:`1px solid ${dark?"rgba(255,255,255,.07)":"rgba(0,0,0,.06)"}`,borderRadius:10}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
@@ -165,7 +165,7 @@ function Select({ label, value, onChange, options, required, error, dark, t, pla
     </div>
   );
 }
-const fieldErrMb = e => e ? 4 : 14;
+const fieldErrMb = e => e ? 4 : 11;
 
 // ── FloatInput ──────────────────────────────────────────────────────
 function FloatInput({ id, label, type="text", value, onChange, autoComplete,
@@ -257,7 +257,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   },[acctType]);
 
   const doShake = ()=>{ setShake(true); setTimeout(()=>setShake(false),600); };
-  const go = v => { setView(v); setErr(""); setOk(""); setSent(false); setTouched({}); };
+  const go = v => { setView(v); setErr(""); setOk(""); setSent(false); setTouched({}); try { window.scrollTo({top:0,behavior:"smooth"}); } catch {} };
   const touch = k => setTouched(p=>({...p,[k]:true}));
 
   // ── Validation ─────────────────────────────────────────────────────
@@ -483,7 +483,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       <MeshBg dark={dark}/>
 
       {/* Top controls */}
-      <div style={{position:"fixed",top:20,[isAr?"left":"right"]:20,display:"flex",gap:8,zIndex:10}}>
+      <div style={{position:"fixed",top:16,[isAr?"left":"right"]:16,display:"flex",gap:6,zIndex:10}}>
         <button onClick={()=>setLang(isAr?"en":"ar")} style={{
           background:t.pillBg,border:`1px solid ${t.pillBd}`,
           borderRadius:8,padding:"5px 11px",fontSize:12,fontWeight:500,
@@ -500,7 +500,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         width:"100%",maxWidth:view==="signup"?500:420,
         position:"relative",zIndex:1,
         background:t.card,border:`1px solid ${t.border}`,borderRadius:20,
-        padding:"36px 32px",backdropFilter:"blur(24px)",
+        padding:view==="signup"?"28px 28px":"36px 32px",backdropFilter:"blur(24px)",
         opacity:mounted?1:0,
         transform:`translateY(${mounted?0:20}px)${shake?" translateX(-4px)":""}`,
         transition:`opacity .4s,transform .4s${shake?", box-shadow .05s":""}`,
@@ -508,7 +508,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       }}>
 
         {/* Logo */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:22}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:view==="signup"?14:22}}>
           <div style={{
             width:38,height:38,borderRadius:10,flexShrink:0,
             background:"linear-gradient(135deg,#1a56db 0%,#0891b2 100%)",
@@ -574,7 +574,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         {view!=="forgot" && (
           <>
             {/* Tab Sign In / Sign Up */}
-            <div style={{display:"flex",background:t.faint,border:`1px solid ${t.border}`,borderRadius:11,padding:4,marginBottom:22,gap:4}}>
+            <div style={{display:"flex",background:t.faint,border:`1px solid ${t.border}`,borderRadius:11,padding:4,marginBottom:view==="signup"?14:22,gap:4}}>
               {[["login",isAr?"تسجيل الدخول":"Sign In"],["signup",isAr?"إنشاء حساب":"Sign Up"]].map(([v,l])=>(
                 <button key={v} onClick={()=>go(v)} style={{
                   flex:1,padding:"9px 0",fontSize:13.5,fontWeight:600,
@@ -588,7 +588,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
             </div>
 
             {/* Title */}
-            <div style={{textAlign:"center",marginBottom:view==="signup"?14:20}}>
+            <div style={{textAlign:"center",marginBottom:view==="signup"?10:18}}>
               <h1 style={{fontSize:20,fontWeight:800,color:t.text,letterSpacing:"-.02em",margin:"0 0 8px"}}>
                 {view==="signup"?(isAr?"ابدأ مجاناً":"Start for free"):(isAr?"أهلاً بعودتك":"Welcome back")}
               </h1>
@@ -610,7 +610,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
             {/* ── ACCOUNT TYPE TOGGLE (signup only) ── */}
             {view==="signup" && (
               <div style={{display:"flex",background:t.faint,border:`1px solid ${t.border}`,
-                borderRadius:10,padding:3,marginBottom:16,gap:3}}>
+                borderRadius:10,padding:3,marginBottom:12,gap:3}}>
                 {[
                   {id:"individual",en:"👤 Individual",ar:"👤 مستخدم فردي",color:"rgba(59,130,246,.4)",colorBg:"rgba(59,130,246,.14)",textColor:"#60a5fa"},
                   {id:"company",en:"🏢 Company / HR",ar:"🏢 شركة / فريق",color:"rgba(16,185,129,.4)",colorBg:"rgba(16,185,129,.14)",textColor:"#34d399"},
@@ -630,8 +630,32 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
               </div>
             )}
 
+            {/* Progress indicator — signup only */}
+            {view==="signup" && (
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
+                {[
+                  {n:1,label:isAr?"الحساب":"Account"},
+                  {n:2,label:isAr?"بيانات":"Details"},
+                ].map((step,i)=>(
+                  <div key={step.n} style={{display:"flex",alignItems:"center",gap:6,flex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5}}>
+                      <div style={{
+                        width:20,height:20,borderRadius:"50%",flexShrink:0,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:10,fontWeight:700,
+                        background:"rgba(26,86,219,.9)",
+                        color:"#fff",
+                      }}>{step.n}</div>
+                      <span style={{fontSize:11,color:t.textSub,fontWeight:500}}>{step.label}</span>
+                    </div>
+                    {i===0&&<div style={{flex:1,height:1.5,background:"rgba(26,86,219,.25)",borderRadius:2,margin:"0 4px"}}/>}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Social buttons */}
-            <div style={{display:"flex",gap:10,marginBottom:14}}>
+            <div style={{display:"flex",gap:8,marginBottom:view==="signup"?10:14}}>
               <SocialBtn icon={GoogleIcon} label="Google"
                 onClick={()=>withSocial("google",signInGoogle)}
                 loading={social==="google"} disabled={busy} dark={dark} t={t}/>
@@ -641,7 +665,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
             </div>
 
             {/* Divider */}
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:view==="signup"?12:16}}>
               <div style={{flex:1,height:1,background:t.divider}}/>
               <span style={{fontSize:11.5,color:t.muted,whiteSpace:"nowrap"}}>{isAr?"أو بالبريد الإلكتروني":"or with email"}</span>
               <div style={{flex:1,height:1,background:t.divider}}/>
@@ -652,7 +676,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
 
               {/* Name row — signup only */}
               {view==="signup" && (
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}} className="auth-name-row">
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}} className="auth-name-row">
                   <FloatInput id="fname" label={isAr?"الاسم الأول":"First name"}
                     value={fname} onChange={v=>{setFname(v);touch("fname");}}
                     autoComplete="given-name" required dark={dark} isRtl={isAr} t={t}
@@ -724,7 +748,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     placeholder={isAr?"اختر حجم الفريق":"Select team size"}/>
 
                   {/* Role in company */}
-                  <div style={{marginBottom:16}}>
+                  <div style={{marginBottom:8}}>
                     <div style={{fontSize:11.5,fontWeight:600,color:t.textSub,
                       letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>
                       {isAr?"دورك في الشركة":"Your role"}
@@ -736,15 +760,15 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                       ].map(r=>(
                         <button key={r.id} type="button" onClick={()=>setCompanyRole(r.id)}
                           style={{
-                            padding:"12px 10px",borderRadius:10,cursor:"pointer",
+                            padding:"10px 8px",borderRadius:10,cursor:"pointer",
                             background:companyRole===r.id?"rgba(26,86,219,.12)":t.faint,
                             border:`1.5px solid ${companyRole===r.id?"rgba(26,86,219,.5)":t.border}`,
                             textAlign:"center",transition:"all .18s",fontFamily:"inherit",
                             boxShadow:companyRole===r.id?"0 0 0 3px rgba(26,86,219,.1)":"none",
                           }}>
-                          <div style={{fontSize:20,marginBottom:4}}>{r.icon}</div>
+                          <div style={{fontSize:18,marginBottom:3}}>{r.icon}</div>
                           <div style={{fontSize:13,fontWeight:700,color:companyRole===r.id?"#60a5fa":t.text,marginBottom:2}}>{isAr?r.ar:r.en}</div>
-                          <div style={{fontSize:10.5,color:t.textSub,lineHeight:1.3}}>{r.desc}</div>
+                          <div style={{fontSize:12,color:t.textSub,lineHeight:1.4}}>{r.desc}</div>
                         </button>
                       ))}
                     </div>
@@ -752,9 +776,9 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                 </>)}
 
                 {/* Terms */}
-                <div style={{marginBottom:10}}>
+                <div style={{marginBottom:8}}>
                   <label style={{display:"flex",alignItems:"flex-start",gap:11,cursor:"pointer",
-                    padding:"11px 13px",borderRadius:10,
+                    padding:"9px 11px",borderRadius:10,
                     background:fieldErr.terms?"rgba(239,68,68,.05)":agreeTerms?"rgba(26,86,219,.04)":"transparent",
                     border:`1.5px solid ${fieldErr.terms?"rgba(239,68,68,.45)":agreeTerms?"rgba(26,86,219,.3)":t.border}`,
                     transition:"all .2s"}}>
@@ -779,11 +803,22 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                 </div>
 
                 {/* Newsletter */}
-                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginBottom:6}}>
-                  <input type="checkbox" checked={newsletter} onChange={e=>setNewsletter(e.target.checked)}
-                    style={{width:17,height:17,accentColor:t.acc,cursor:"pointer",flexShrink:0}}/>
-                  <span style={{fontSize:12.5,color:t.textSub}}>
-                    {isAr?"أريد تلقي نصائح وتحديثات Corvus":"Send me Corvus tips and updates"}
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginBottom:4,
+                  padding:"8px 11px",borderRadius:9,
+                  background:newsletter?"rgba(26,86,219,.05)":"transparent",
+                  border:`1px solid ${newsletter?"rgba(26,86,219,.2)":t.border}`,
+                  transition:"all .2s"}}>
+                  <div onClick={()=>setNewsletter(v=>!v)} style={{
+                    width:18,height:18,borderRadius:4,flexShrink:0,
+                    background:newsletter?"rgba(26,86,219,.9)":"transparent",
+                    border:`1.5px solid ${newsletter?t.acc:t.border}`,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    transition:"all .15s",cursor:"pointer",
+                  }}>
+                    {newsletter&&<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                  <span style={{fontSize:12.5,color:t.textSub,lineHeight:1.4}}>
+                    {isAr?"أريد تلقي نصائح وتحديثات Corvus 📬":"Send me Corvus tips and updates 📬"}
                   </span>
                 </label>
               </>)}
@@ -811,7 +846,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
 
               {/* Submit */}
               <button type="submit" disabled={busy} style={{
-                width:"100%",padding:"13px 0",marginBottom:12,
+                width:"100%",padding:"12px 0",marginBottom:10,
                 background:busy?"rgba(26,86,219,.4)":t.accBtn,
                 border:"none",borderRadius:10,fontSize:14.5,fontWeight:700,
                 color:"#fff",cursor:busy?"wait":"pointer",

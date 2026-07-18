@@ -367,6 +367,7 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
     lang,
   }), [profile, sessions, avgScore, weekAvg, fatigueScore, lang]);
 
+  const ctx = buildContext();
   const _scoreL = ctx.avgScore>=85?"Excellent":ctx.avgScore>=70?"Good":ctx.avgScore>=55?"Fair":"Needs Attention";
   const _neckL  = ctx.neckRisk>=70?"HIGH 🔴":ctx.neckRisk>=40?"MODERATE 🟡":"LOW 🟢";
   const systemPrompt = `You are Dr. Corvus — a senior clinical physiotherapist and ergonomics specialist with 15 years of MSK experience.
