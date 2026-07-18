@@ -3,7 +3,8 @@
  * Complete rewrite: proper role separation, working tools, real data, tier gates
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession } from "./firebase.js";
+import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession, getAuthToken, deleteAuthUser, logOut } from "./firebase.js";
+import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
@@ -1041,9 +1042,37 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   const [tab,     setTab]     = useState("profile");
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [addPwVisible, setAddPwVisible]   = useState(false);
+  const [showDeleteBox, setShowDeleteBox] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   // Track whether user has started editing (prevents useEffect overriding their input)
   const [nameDirty, setNameDirty] = useState(false);
+
+  async function deleteAccount() {
+    if (deleteConfirmText.trim().toUpperCase() !== "DELETE") {
+      addToast(isAr ? 'اكتب "DELETE" بالظبط للتأكيد' : 'Type "DELETE" exactly to confirm', "error");
+      return;
+    }
+    setDeleting(true);
+    try {
+      const tok = await getAuthToken();
+      const res = await fetch(`${API_BASE_URL}/user/delete-all-data`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.error || d?.message || "delete_failed");
+      if (!d.auth_deleted) { try { await deleteAuthUser(); } catch {} }
+      try { await logOut(); } catch {}
+      addToast(isAr ? "تم حذف الحساب وكل بياناتك نهائياً" : "Your account and all data have been permanently deleted", "info");
+      onSignOut?.();
+    } catch (e) {
+      addToast(isAr ? "حصل خطأ أثناء حذف الحساب — حاول تاني أو تواصل مع الدعم" : "Something went wrong deleting your account — try again or contact support", "error");
+    }
+    setDeleting(false);
+  }
 
   // Sync from profile ONLY on initial load or when not actively editing
   useEffect(()=>{
@@ -1609,6 +1638,56 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                   color:"#f87171", fontSize:12, fontWeight:600, cursor:"pointer" }}>
                 {isAr?"خروج":"Sign Out"}
               </button>
+            </div>
+
+            {/* Delete account — GDPR right to erasure */}
+            <div style={{ padding:"14px 16px", background:"rgba(239,68,68,.04)",
+              borderRadius:10, border:"1px solid rgba(239,68,68,.15)" }}>
+              <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+                <span style={{ fontSize:22 }}>⚠️</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:"#f87171" }}>
+                    {isAr?"حذف الحساب":"Delete Account"}
+                  </div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2, lineHeight:1.6 }}>
+                    {isAr
+                      ?"هيتم حذف كل بياناتك نهائياً (الجلسات، المدفوعات، الإشعارات، الملف الشخصي) طبقاً للحق في المحو (GDPR). الإجراء ده لا يمكن التراجع عنه."
+                      :"Permanently deletes all your data — sessions, payments, notifications, profile — per your GDPR right to erasure. This cannot be undone."}
+                  </div>
+                  {!showDeleteBox ? (
+                    <button onClick={()=>setShowDeleteBox(true)} style={{ marginTop:10, padding:"7px 14px",
+                      background:"rgba(239,68,68,.1)", border:"1px solid rgba(239,68,68,.25)",
+                      borderRadius:7, color:"#fca5a5", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                      {isAr?"حذف الحساب نهائياً":"Delete My Account"}
+                    </button>
+                  ) : (
+                    <div style={{ marginTop:12 }}>
+                      <div style={{ fontSize:11.5, fontWeight:600, color:"#fca5a5", marginBottom:8 }}>
+                        {isAr?'اكتب "DELETE" في الخانة تحت للتأكيد:':'Type "DELETE" below to confirm:'}
+                      </div>
+                      <input value={deleteConfirmText} onChange={e=>setDeleteConfirmText(e.target.value)} placeholder="DELETE"
+                        style={{ width:"100%", maxWidth:220, padding:"8px 10px", background:"rgba(255,255,255,.05)",
+                          border:"1px solid rgba(255,255,255,.1)", borderRadius:7, color:cs.text, fontSize:12,
+                          outline:"none", boxSizing:"border-box" }}/>
+                      <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                        <button onClick={()=>{setShowDeleteBox(false);setDeleteConfirmText("");}} disabled={deleting}
+                          style={{ padding:"7px 14px", background:"rgba(148,163,184,.1)",
+                            border:"1px solid rgba(148,163,184,.2)", borderRadius:7, color:cs.muted,
+                            fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                          {isAr?"إلغاء":"Cancel"}
+                        </button>
+                        <button onClick={deleteAccount} disabled={deleting||deleteConfirmText.trim().toUpperCase()!=="DELETE"}
+                          style={{ padding:"7px 14px", background:"rgba(239,68,68,.15)",
+                            border:"1px solid rgba(239,68,68,.4)", borderRadius:7, color:"#fca5a5",
+                            fontSize:12, fontWeight:700, cursor:"pointer",
+                            opacity:(deleting||deleteConfirmText.trim().toUpperCase()!=="DELETE")?.5:1 }}>
+                          {deleting?"...":(isAr?"تأكيد الحذف النهائي":"Confirm Permanent Delete")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
