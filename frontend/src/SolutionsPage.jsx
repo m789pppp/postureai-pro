@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import {
-  LPV7_TOKENS, FONT_DISPLAY, FONT_MONO, TYPE, card, CALENDLY_URL,
-  Reveal, Stagger, StaggerItem, AnimNum, SectionHead, LP_GLOBAL_CSS
+  LPV7_TOKENS, FONT_DISPLAY, FONT_MONO, TYPE, card, btn, CALENDLY_URL,
+  SUPPORT_EMAIL, Reveal, Stagger, StaggerItem, AnimNum, SectionHead, LP_GLOBAL_CSS
 } from "./lpShared.jsx";
-
-const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
 
 
 function Nav({ lang, setLang, onCTA }) {
