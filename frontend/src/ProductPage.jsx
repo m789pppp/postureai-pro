@@ -108,11 +108,11 @@ function FeatureBlock({ feature, index }) {
         display:"grid", gridTemplateColumns:"1fr 1fr", gap:64,
         alignItems:"center", padding:"72px 0",
         borderTop:"1px solid rgba(148,163,184,.06)",
-        direction: isEven ? "ltr" : "rtl",
+        
       }}>
 
       {/* Text side */}
-      <div style={{ direction:"ltr" }}>
+      <div>
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
           <div style={{
             padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700,
@@ -153,7 +153,7 @@ function FeatureBlock({ feature, index }) {
       </div>
 
       {/* Specs card */}
-      <div style={{ direction:"ltr" }}>
+      <div>
         <div style={{
           background:T.card, border:`1px solid ${feature.color}20`,
           borderRadius:20, overflow:"hidden",
@@ -279,7 +279,7 @@ export default function ProductPage() {
       </div>
 
       {/* ── Stats bar ── */}
-      <div style={{ borderTop:"1px solid rgba(148,163,184,.06)", borderBottom:"1px solid rgba(148,163,184,.06)", background:T.bg1 }}>
+      <div style={{ borderTop:"1px solid rgba(148,163,184,.06)", borderBottom:"1px solid rgba(148,163,184,.06)", background:T.bg1, marginTop:0 }}>
         <div className="prod-wrap">
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:0 }}>
             {[["478","Landmarks tracked"],["< 40ms","Analysis latency"],["96%","Accuracy rate"],["0","Video stored"]].map(([val,label],i)=>(
@@ -302,7 +302,7 @@ export default function ProductPage() {
             style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:64,
               alignItems:"center", padding:"72px 0",
               borderTop:"1px solid rgba(148,163,184,.06)",
-              direction: i%2===0 ? "ltr" : "rtl",
+              
             }}>
             <FeatureBlock feature={feature} index={i}/>
           </div>

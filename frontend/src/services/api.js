@@ -77,7 +77,7 @@ export async function apiFetch(path, options = {}) {
           const err = await retry.json().catch(() => ({}));
           throw Object.assign(new Error(err.error || `HTTP ${retry.status}`), { status: retry.status, upgrade: err.upgrade });
         }
-        return retry.json();
+        return _parseJsonOrThrow(retry);
       }
     }
 
@@ -90,12 +90,29 @@ export async function apiFetch(path, options = {}) {
       });
     }
 
-    return response.json();
+    return _parseJsonOrThrow(response);
   } catch (e) {
     clearTimeout(timerId);
     if (e.name === "AbortError") throw Object.assign(new Error("Backend request timed out — analysis will use local engine"), { isBackendDown: true });
     if (e instanceof TypeError && e.message.includes("fetch")) throw Object.assign(new Error("Backend unreachable — using local posture engine"), { isBackendDown: true });
     throw e;
+  }
+}
+
+// A 200-status response that isn't actually JSON almost always means the
+// request never reached the backend at all — e.g. VITE_API_URL is empty/
+// misconfigured so the fetch hit the frontend's own origin, and Vercel's
+// SPA rewrite served index.html (starts with "<!doctype html>") with a
+// 200 status instead of a 404. response.json() on that throws a raw,
+// user-facing "Unexpected token '<' ... is not valid JSON" SyntaxError —
+// this normalizes it to the same friendly isBackendDown error used for
+// network failures above, instead of leaking a JS parse error to the UI.
+async function _parseJsonOrThrow(response) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw Object.assign(new Error("Backend unreachable — using local posture engine"), { isBackendDown: true });
   }
 }
 
