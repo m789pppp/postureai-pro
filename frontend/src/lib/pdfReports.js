@@ -2460,7 +2460,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       dc(doc,...PDF_TOKENS.danger); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
       fc(doc,...PDF_TOKENS.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger); doc.text(lbl,ml+7,y+5.5);
-      font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
+      font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
       doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (${d} ${isAr?"نقطة":"pts"})`,ml+7,y+11);
       const bw2=cw*0.3;
       fc(doc,...PDF_TOKENS.danger);
@@ -2482,7 +2482,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       dc(doc,...PDF_TOKENS.success); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
       fc(doc,...PDF_TOKENS.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success); doc.text(lbl,ml+7,y+5.5);
-      font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
+      font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
       doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (+${d} ${isAr?"نقطة":"pts"})`,ml+7,y+11);
       y+=18;
     });
@@ -2564,7 +2564,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   sumRows.forEach(([k,v1,v2],i)=>{
     if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,9,"F");}
     font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(k,ml+5,y+6.5);
-    font(doc,7.5,"bold",false);
+    font(doc,7.5,"bold",isAr);
     tc(doc,...(i===6?deltaCol:PDF_TOKENS.ink)); doc.text(v1,ml+cw*0.42,y+6.5,{align:"center"});
     tc(doc,...(i===6?deltaCol:PDF_TOKENS.ink)); doc.text(v2,ml+cw*0.75,y+6.5,{align:"center"});
     y+=9;
@@ -3293,7 +3293,7 @@ const programme=[
   stats.forEach(([k,v],i)=>{
     if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8.5,"F");}
     font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(k,ml+5,y+5.8);
-    font(doc,7.5,"bold",false); tc(doc,...PDF_TOKENS.ink); doc.text(v,ml+cw-5,y+5.8,{align:"right"});
+    font(doc,7.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(v,ml+cw-5,y+5.8,{align:"right"});
     y+=8.5;
   });
 

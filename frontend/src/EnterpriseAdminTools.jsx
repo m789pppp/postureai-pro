@@ -92,7 +92,34 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
     demo: false,
   } : { name:"Firebase Firestore", status:"unknown", detail:"Checking…", demo:false };
 
-  const toggleFlag = (id) => setFlags(p => p.map(f => f.id===id ? { ...f, enabled:!f.enabled, rollout:!f.enabled?100:0 } : f));
+  // Real flags from the backend override the local enabled/rollout defaults —
+  // labels/descriptions/env stay local since the backend only stores the
+  // toggle state, not display metadata.
+  useEffect(() => {
+    apiFetch("/admin/feature-flags").then(d => {
+      const real = d?.flags || {};
+      if (Object.keys(real).length === 0) return; // nothing synced yet — keep local defaults
+      setFlags(prev => prev.map(f => real[f.id] ? {
+        ...f,
+        enabled: !!real[f.id].enabled,
+        rollout: real[f.id].rollout_pct ?? f.rollout,
+      } : f));
+    }).catch(() => {});
+  }, []);
+
+  const toggleFlag = (id) => {
+    const target = flags.find(f => f.id === id);
+    if (!target) return;
+    const nextEnabled = !target.enabled;
+    const nextRollout  = nextEnabled ? 100 : 0;
+    setFlags(p => p.map(f => f.id===id ? { ...f, enabled:nextEnabled, rollout:nextRollout } : f));
+    // Persist: PATCH if the backend already knows this flag, otherwise POST to create it.
+    apiFetch("/admin/feature-flags", { method:"PATCH", body:{ key:id, enabled:nextEnabled, rollout_pct:nextRollout } })
+      .catch(() => apiFetch("/admin/feature-flags", {
+        method:"POST",
+        body:{ key:id, enabled:nextEnabled, rollout_pct:nextRollout, tiers:[] },
+      }).catch(() => {}));
+  };
   const setRollout = (id, v) => setFlags(p => p.map(f => f.id===id ? { ...f, rollout:parseInt(v), enabled:parseInt(v)>0 } : f));
 
   const sendAnnouncement = () => {
