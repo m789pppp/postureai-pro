@@ -385,17 +385,17 @@ function Nav({ lang, setLang, onCTA }) {
   const ar = lang === "ar";
 
   const navItems = ar ? [
-    { label:"المنتج",    href:"/product",      page:true },
-    { label:"الحلول",   href:"/solutions",    page:true },
-    { label:"الأسعار",  href:"/pricing",      page:true },
-    { label:"كيف يعمل", href:"/how-it-works", page:true },
-    { label:"الأسئلة",  href:"/faq",          page:true },
+    { label:"المنتج",    href:"#features",     id:"features" },
+    { label:"الحلول",   href:"#casestudies",  id:"casestudies" },
+    { label:"الأسعار",  href:"#pricing",      id:"pricing" },
+    { label:"كيف يعمل", href:"#how",          id:"how" },
+    { label:"الأسئلة",  href:"#faq",          id:"faq" },
   ] : [
-    { label:"Product",     href:"/product",      page:true },
-    { label:"Solutions",   href:"/solutions",    page:true },
-    { label:"Pricing",     href:"/pricing",      page:true },
-    { label:"How it works",href:"/how-it-works", page:true },
-    { label:"FAQ",         href:"/faq",          page:true },
+    { label:"Product",     href:"#features",    id:"features" },
+    { label:"Solutions",   href:"#casestudies", id:"casestudies" },
+    { label:"Pricing",     href:"#pricing",     id:"pricing" },
+    { label:"How it works",href:"#how",         id:"how" },
+    { label:"FAQ",         href:"#faq",         id:"faq" },
   ];
 
   return (
@@ -431,8 +431,8 @@ function Nav({ lang, setLang, onCTA }) {
 
           {/* ── Center links ── */}
           <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:1, flex:1, justifyContent:"center" }}>
-            {navItems.map(({ label, href, page }) => {
-              const active = window.location.pathname === href;
+            {navItems.map(({ label, href, id }) => {
+              const active = activeSection === id;
               return (
                 <a key={label} href={href}
                   style={{
@@ -442,6 +442,11 @@ function Nav({ lang, setLang, onCTA }) {
                     fontSize:13.5, fontWeight: active ? 600 : 500,
                     transition:"color .2s",
                   }}
+                  onClick={e => {
+                    e.preventDefault();
+                    document.getElementById(id)?.scrollIntoView({ behavior:"smooth" });
+                    setMobileOpen(false);
+                  }}
                   onMouseEnter={e => e.currentTarget.style.color="#f1f5f9"}
                   onMouseLeave={e => e.currentTarget.style.color = active ? "#f1f5f9" : "#64748b"}>
                   {label}
@@ -449,7 +454,7 @@ function Nav({ lang, setLang, onCTA }) {
                     <span style={{
                       position:"absolute", bottom:2, left:"50%", transform:"translateX(-50%)",
                       width:20, height:2, borderRadius:2,
-                      background:"linear-gradient(90deg,#1a56db,#0891b2)",
+                      background:"linear-gradient(90deg,#4f7cf9,#22d3ee)",
                     }}/>
                   )}
                 </a>
