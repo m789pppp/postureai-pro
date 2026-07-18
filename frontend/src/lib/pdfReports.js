@@ -904,18 +904,18 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     dCard(inx,y,insW,rowH);
     sf(6,"bold"); tc(doc,...TEXT3); doc.text("POSTURE INSIGHTS",inx+4,y+6);
     const insights=mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
-      icon:sc<40?"🔴":sc<65?"🟡":"🟢",
       text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}${val!==undefined?` ${Math.round(val*10)/10}${unit}`:""}`,
       detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor and improve.":"Looking good — maintain this.",
       col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
     }));
-    insights.forEach(({icon,text,detail,col},i)=>{
+    insights.forEach(({text,detail,col},i)=>{
       const iy=y+12+i*28;
       fc(doc,...col);
       doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
       doc.circle(inx+10,iy+7,8,"F");
       doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(9,"normal"); tc(doc,...col); doc.text(icon,inx+10,iy+10.5,{align:"center"});
+      // Solid status dot — emoji (🔴🟡🟢) don't exist in jsPDF's built-in helvetica and render as mojibake
+      fc(doc,...col); doc.circle(inx+10,iy+7,2.4,"F");
       sf(7,"bold"); tc(doc,...TEXT);
       const tlines=doc.splitTextToSize(text,insW-28);
       doc.text(tlines[0],inx+21,iy+7);
@@ -1176,15 +1176,15 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   dCard(inx3,y,insW2,rowH2);
   sf(6,"bold");tc(doc,...TEXT3);doc.text("POSTURE INSIGHTS",inx3+4,y+6);
   mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
-    icon:sc<40?"🔴":sc<65?"🟡":"🟢",
     text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}`,
     detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor.":"Looking good.",
     col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
-  })).forEach(({icon,text,detail,col},i)=>{
+  })).forEach(({text,detail,col},i)=>{
     const iy=y+12+i*28;
     fc(doc,...col);doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
     doc.circle(inx3+10,iy+7,8,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(9,"normal");tc(doc,...col);doc.text(icon,inx3+10,iy+10.5,{align:"center"});
+    // Solid status dot — emoji (🔴🟡🟢) don't exist in jsPDF's built-in helvetica and render as mojibake
+    fc(doc,...col);doc.circle(inx3+10,iy+7,2.4,"F");
     sf(7,"bold");tc(doc,...TEXT);doc.text(text,inx3+21,iy+7);
     sf(6,"normal");tc(doc,...TEXT2);doc.text(detail,inx3+21,iy+13.5);
     if(i<2){fc(doc,...BORDER);doc.rect(inx3+4,iy+22,insW2-8,.25,"F");}
