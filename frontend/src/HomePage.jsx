@@ -1623,6 +1623,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   user, userSessions, setUserSessions, getAllUsers, setAllUsers,
   setShowCoach, setShowBilling, setShowGamification, setShowGrowthHub, setShowSecurityCenter,
   setShowAIInsights, setShowPredictiveAI, setShowCustomerSuccess, setShowChurnPrediction,
+  setShowSymptomCorrelation,
   setShowAPIMarketplace, setShowWhiteLabel, setShowMultiTenant, setShowAuditSystem,
   setShowAIReports, setShowSessionComparison, setShowTrendChart, setShowWorkforceAnalytics,
   setShowCalibWizard, setShowDashboard,
@@ -1696,6 +1697,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
     { id:"t-predict",  icon:"🔮", en:"Predictive AI", ar:"AI تنبؤي",
       locked:!elite, lockLabel:"ELITE",
       onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
+    { id:"t-symptoms", icon:"🩹", en:"Symptom Log",   ar:"سجل الأعراض",
+      onClick:()=>setShowSymptomCorrelation?.(true) },
     ...(isAdmin ? [
       { id:"t-growth",  icon:"🚀", en:"Growth Hub",   ar:"مركز النمو", onClick:()=>setShowGrowthHub?.(true) },
     ] : []),
@@ -1988,6 +1991,7 @@ export default function HomePage({
   setShowCalibWizard, setShowGamification,
   setShowSessionComparison, setShowTrendChart,
   setShowAIInsights, setShowGrowthHub, setShowSecurityCenter,
+  setShowSymptomCorrelation,
   setShowCustomerSuccess, setShowChurnPrediction,
   setShowAPIMarketplace, setShowWhiteLabel,
   setShowMultiTenant, setShowAuditSystem,
@@ -2060,6 +2064,8 @@ export default function HomePage({
       onClick:()=>setShowSecurityCenter?.(true) },
     { id:"t-marketplace", icon:"🩺", en:"Find a Physio", ar:"أخصائي علاج طبيعي",
       onClick:()=>setPage("marketplace") },
+    { id:"t-symptoms", icon:"🩹", en:"Symptom Log", ar:"سجل الأعراض",
+      onClick:()=>setShowSymptomCorrelation?.(true) },
     ...(isAdmin ? [
       { id:"t-mrr",    icon:"💰", en:"Revenue",     ar:"الإيرادات",
         onClick:()=>setShowMRR?.(true) },
@@ -2195,6 +2201,7 @@ export default function HomePage({
           setShowCoach={setShowCoach} setShowBilling={setShowBilling}
           setShowGamification={setShowGamification} setShowGrowthHub={setShowGrowthHub}
           setShowSecurityCenter={setShowSecurityCenter} setShowAIInsights={setShowAIInsights}
+          setShowSymptomCorrelation={setShowSymptomCorrelation}
           setShowPredictiveAI={setShowPredictiveAI} setShowCustomerSuccess={setShowCustomerSuccess}
           setShowChurnPrediction={setShowChurnPrediction} setShowAPIMarketplace={setShowAPIMarketplace}
           setShowWhiteLabel={setShowWhiteLabel} setShowMultiTenant={setShowMultiTenant}

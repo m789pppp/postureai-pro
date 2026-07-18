@@ -242,6 +242,16 @@ export const BillingAPI = {
   },
 };
 
+// ── Symptom Correlation API ─────────────────────────────────────────
+export const SymptomAPI = {
+  /** Log (or overwrite) a day's symptom check-in. symptoms: [{type, severity(1-5)}] */
+  log:         (data)   => apiFetch("/symptoms/log",              { method: "POST", body: data }),
+  /** History of the user's own check-ins. period: 7d|30d|90d */
+  history:     (period="30d") => apiFetch(`/symptoms/log?period=${period}`),
+  /** The correlation engine — posture metrics on symptom days vs. other days. */
+  correlation: (period="90d") => apiFetch(`/analytics/symptom-correlation?period=${period}`),
+};
+
 // ── Marketplace API (Physiotherapist directory + booking) ──────────
 export const MarketplaceAPI = {
   /** Patient-facing: browse active therapists, optional ?city=&specialty= filters. */

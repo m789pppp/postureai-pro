@@ -15,6 +15,7 @@ import {
 } from "./firebase.js";
 import { HRPanel } from "./HRPanel.jsx";
 import { TherapistMarketplace } from "./TherapistMarketplace.jsx";
+import { SymptomCorrelation } from "./SymptomCorrelation.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
 import { AnalyticsDashboard } from "./AnalyticsDashboard.jsx";
@@ -2208,6 +2209,7 @@ export default function App(){
   const[showGamification,setShowGamification]=useState(false);
   // AI Intelligence Layer
   const[showAIInsights,setShowAIInsights]=useState(false);
+  const[showSymptomCorrelation,setShowSymptomCorrelation]=useState(false);
   const[showPredictiveAI,setShowPredictiveAI]=useState(false);
   const[showAIReports,setShowAIReports]=useState(false);
   const[showWorkforceAnalytics,setShowWorkforceAnalytics]=useState(false);
@@ -3892,6 +3894,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
       {showChangelog&&isAdmin&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
       {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIInsights(false)}/>}
+      {showSymptomCorrelation&&<SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/>}
       {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/>}
       {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/>}
       {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
@@ -3917,6 +3920,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         setShowTrendChart={setShowTrendChart}
         setShowCalibWizard={setShowCalibWizard}
         setShowAIInsights={setShowAIInsights}
+        setShowSymptomCorrelation={setShowSymptomCorrelation}
         setShowGrowthHub={setShowGrowthHub}
         setShowSecurityCenter={setShowSecurityCenter}
         setShowCustomerSuccess={setShowCustomerSuccess}
