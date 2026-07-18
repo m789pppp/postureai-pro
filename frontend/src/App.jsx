@@ -65,7 +65,6 @@ import HomePage from "./HomePage.jsx";
 import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
-import ProfilePage from "./ProfilePage.jsx";
 import { NotFound } from "./ErrorPage.jsx";
 import { UsageBilling }     from "./UsageBilling.jsx";
 import { ChurnPrediction }  from "./ChurnPrediction.jsx";
