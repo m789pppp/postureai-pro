@@ -223,7 +223,9 @@ function WeekSummaryCard({ sessions, isAr }) {
     if (!weeks[wk]) weeks[wk] = [];
     weeks[wk].push(s.avg_score || 0);
   });
-  const sorted = Object.entries(weeks).slice(-6).map(([wk, scores]) => ({ wk, avg: avg(scores), count: scores.length }));
+  // weeks keys are inserted newest-first (sessions are newest-first) — take the
+  // FIRST 6 (most recent), not the last 6 (which were the oldest weeks).
+  const sorted = Object.entries(weeks).slice(0,6).map(([wk, scores]) => ({ wk, avg: avg(scores), count: scores.length }));
   return (
     <div>
       {sorted.reverse().map((w, i) => (
