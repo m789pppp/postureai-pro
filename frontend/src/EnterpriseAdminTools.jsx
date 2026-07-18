@@ -3,6 +3,7 @@
  * Super-admin: feature flags, system health, user impersonation, announcements, DB management
  */
 import { useState, useEffect } from "react";
+import { apiFetch } from "./services/api.js";
 
 const FEATURE_FLAGS = [
   { id:"ff_ai_coaching",       label:"AI Coaching",          desc:"Enable AI coach panel for all users",         enabled:true,  rollout:100, env:"all" },
@@ -20,16 +21,16 @@ const FEATURE_FLAGS = [
 ];
 
 const MOCK_HEALTH = {
+  // These specific rows are NOT live-checked yet — clearly marked as demo
+  // data in the UI rather than presented as real. WebSocket/Redis/Firestore
+  // below are replaced with a real check from /api/admin/system/health.
   services: [
-    { name:"API Gateway",        status:"healthy", latency:38,  uptime:99.98, load:42 },
-    { name:"Analysis Engine",    status:"healthy", latency:142, uptime:99.95, load:61 },
-    { name:"Local AI Engine",    status:"healthy", latency:890, uptime:99.80, load:35 },
-    { name:"Firebase Firestore", status:"healthy", latency:22,  uptime:99.99, load:28 },
-    { name:"Redis Cache",        status:"healthy", latency:4,   uptime:100,   load:19 },
-    { name:"Stripe Payments",    status:"healthy", latency:210, uptime:99.99, load:8 },
-    { name:"SendGrid Email",     status:"degraded",latency:1200,uptime:99.20, load:5 },
-    { name:"PDF Generator",      status:"healthy", latency:2100,uptime:99.90, load:12 },
-    { name:"WebSocket Server",   status:"healthy", latency:28,  uptime:99.97, load:47 },
+    { name:"API Gateway",        status:"healthy", latency:38,  uptime:99.98, load:42, demo:true },
+    { name:"Analysis Engine",    status:"healthy", latency:142, uptime:99.95, load:61, demo:true },
+    { name:"Local AI Engine",    status:"healthy", latency:890, uptime:99.80, load:35, demo:true },
+    { name:"Stripe Payments",    status:"healthy", latency:210, uptime:99.99, load:8,  demo:true },
+    { name:"SendGrid Email",     status:"degraded",latency:1200,uptime:99.20, load:5,  demo:true },
+    { name:"PDF Generator",      status:"healthy", latency:2100,uptime:99.90, load:12, demo:true },
   ],
   db: { reads:8420, writes:1240, errors:3, cacheHitRate:94 },
   queue: { pending:12, processing:4, failed:1, avgWait:"1.2s" },
@@ -48,6 +49,7 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
   const [tab, setTab]         = useState("flags");
   const [flags, setFlags]     = useState(FEATURE_FLAGS);
   const [health]              = useState(MOCK_HEALTH);
+  const [realHealth, setRealHealth] = useState(null); // /api/admin/system/health
   const [userSearch, setUserSearch] = useState("");
   const [impersonating, setImpersonating] = useState(null);
   const [announcement, setAnnouncement]   = useState({ title:"", body:"", type:"info", targets:"all" });
@@ -56,11 +58,39 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
   ]);
   const [tick, setTick] = useState(0);
 
-  // Simulate live metrics
+  // Simulate live metrics for the demo-data rows only (see MOCK_HEALTH note above)
   useEffect(() => {
     const t = setInterval(() => setTick(n => n+1), 3000);
     return () => clearInterval(t);
   }, []);
+
+  // Real system health — WebSocket / Redis / Firestore
+  useEffect(() => {
+    apiFetch("/admin/system/health").then(setRealHealth).catch(() => setRealHealth(null));
+  }, []);
+
+  const wsRow = realHealth ? {
+    name: "WebSocket Server",
+    status: realHealth.websocket.status,
+    detail: realHealth.websocket.enabled
+      ? (realHealth.websocket.initialized ? "Initialized" : (realHealth.websocket.error || "Init failed"))
+      : "Not enabled (SOCKETIO_ENABLED unset — no live client uses this yet)",
+    demo: false,
+  } : { name:"WebSocket Server", status:"unknown", detail:"Checking…", demo:false };
+
+  const redisRow = realHealth ? {
+    name: "Redis Cache",
+    status: realHealth.redis?.status === "healthy" ? "healthy" : realHealth.redis?.status === "not_configured" ? "disabled" : "down",
+    detail: realHealth.redis?.status || "unknown",
+    demo: false,
+  } : { name:"Redis Cache", status:"unknown", detail:"Checking…", demo:false };
+
+  const firestoreRow = realHealth ? {
+    name: "Firebase Firestore",
+    status: realHealth.firestore?.status || "unknown",
+    detail: realHealth.firestore?.status === "healthy" ? "Connected" : "Not connected",
+    demo: false,
+  } : { name:"Firebase Firestore", status:"unknown", detail:"Checking…", demo:false };
 
   const toggleFlag = (id) => setFlags(p => p.map(f => f.id===id ? { ...f, enabled:!f.enabled, rollout:!f.enabled?100:0 } : f));
   const setRollout = (id, v) => setFlags(p => p.map(f => f.id===id ? { ...f, rollout:parseInt(v), enabled:parseInt(v)>0 } : f));
@@ -178,6 +208,29 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                 ))}
               </div>
 
+              {/* Real, live-checked services — no fabricated numbers */}
+              <div style={{ background:cs.bg, borderRadius:14, border:`1px solid ${cs.border}`, padding:16, marginBottom:14 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:cs.textDim, marginBottom:10, textTransform:"uppercase", letterSpacing:".05em" }}>
+                  Live-Checked
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {[wsRow, redisRow, firestoreRow].map(s => (
+                    <div key={s.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                      padding:"8px 12px", background:"rgba(255,255,255,0.02)", borderRadius:8 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <div style={{ width:8, height:8, borderRadius:"50%",
+                          background: s.status==="healthy" ? "#10b981" : s.status==="disabled" ? "#64748b" : s.status==="unknown" ? "#64748b" : "#ef4444" }} />
+                        <span style={{ fontWeight:600, color:cs.text, fontSize:13 }}>{s.name}</span>
+                      </div>
+                      <span style={{ fontSize:11.5, color:cs.textDim }}>{s.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ fontSize:11, fontWeight:700, color:"#f59e0b", marginBottom:8, textTransform:"uppercase", letterSpacing:".05em" }}>
+                ⚠ Demo Data — not yet wired to live checks
+              </div>
               <div style={{ background:cs.bg, borderRadius:14, border:`1px solid ${cs.border}`, overflow:"hidden" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse" }}>
                   <thead>
@@ -218,6 +271,9 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
           {/* ── USER MANAGEMENT ── */}
           {tab==="users" && (
             <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#f59e0b", marginBottom:10, textTransform:"uppercase", letterSpacing:".05em" }}>
+                ⚠ Demo Data — sample users, not a live directory query yet
+              </div>
               <div style={{ display:"flex", gap:10, marginBottom:16, alignItems:"center" }}>
                 <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="🔍 Search users…" style={{ flex:1, background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"8px 13px", fontSize:13, outline:"none" }} />
                 <button style={{ background:"linear-gradient(135deg,#10b981,#6366f1)", border:"none", color:"#fff", borderRadius:9, padding:"8px 18px", cursor:"pointer", fontWeight:700, fontSize:13 }}>+ Create User</button>
