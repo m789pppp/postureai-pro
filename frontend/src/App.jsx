@@ -32,7 +32,7 @@ const STANDALONE_PAGE_ROUTES = {
   "/how-it-works": HowItWorksPage,
   "/product": ProductPage,
   "/solutions": SolutionsPage,
-  "/pricing-lp": PricingPageLP,
+  "/pricing": PricingPageLP,
 };
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
 import { AnalyticsDashboard } from "./AnalyticsDashboard.jsx";
