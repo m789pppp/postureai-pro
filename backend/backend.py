@@ -7724,6 +7724,31 @@ def admin_system_health():
         ws = dict(_SOCKETIO_STATUS)
         redis_status = redis_health() if REDIS_READY else {"status": "not_configured"}
         firestore_ok = db is not None
+
+        # Stripe — lightweight, read-only balance check confirms the key is
+        # live and reachable without touching any customer data.
+        stripe_status = {"status": "not_configured"}
+        if STRIPE_SECRET_KEY:
+            try:
+                r = req.get("https://api.stripe.com/v1/balance",
+                            headers={"Authorization": f"Bearer {STRIPE_SECRET_KEY}"}, timeout=5)
+                stripe_status = {"status": "healthy" if r.status_code == 200 else "error",
+                                  "http_status": r.status_code}
+            except Exception as e:
+                stripe_status = {"status": "down", "error": str(e)}
+
+        # SendGrid — /v3/scopes is a cheap authenticated no-op that confirms
+        # the API key is valid without sending anything.
+        sendgrid_status = {"status": "not_configured"}
+        if SENDGRID_API_KEY:
+            try:
+                r = req.get("https://api.sendgrid.com/v3/scopes",
+                            headers={"Authorization": f"Bearer {SENDGRID_API_KEY}"}, timeout=5)
+                sendgrid_status = {"status": "healthy" if r.status_code == 200 else "error",
+                                    "http_status": r.status_code}
+            except Exception as e:
+                sendgrid_status = {"status": "down", "error": str(e)}
+
         return jsonify({
             "websocket": {
                 "enabled":     ws["enabled"],
@@ -7732,8 +7757,14 @@ def admin_system_health():
                 "status": ("healthy" if ws["initialized"] else
                            "disabled" if not ws["enabled"] else "error"),
             },
-            "redis": redis_status,
-            "firestore": {"status": "healthy" if firestore_ok else "down"},
+            "redis":           redis_status,
+            "firestore":       {"status": "healthy" if firestore_ok else "down"},
+            "stripe":          stripe_status,
+            "sendgrid":        sendgrid_status,
+            "pdf_generator":   {"status": "healthy" if REPORTLAB_OK else "down"},
+            "analysis_engine": {"status": "healthy" if POSE_LITE is not None else "loading"},
+            "local_ai":        {"status": "healthy" if bool(OLLAMA_URL) else "not_configured"},
+            "api_gateway":     {"status": "healthy"},  # trivially true — this response proves it
         })
     except Exception as e:
         return safe_error(e)
