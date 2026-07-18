@@ -5,6 +5,8 @@ import {
   Reveal, Stagger, StaggerItem, AnimNum, SectionHead, LP_GLOBAL_CSS
 } from "./lpShared.jsx";
 
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
+
 
 function Nav({ lang, setLang, onCTA }) {
   const [scrolled,     setScrolled]     = useState(false);
