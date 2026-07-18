@@ -93,7 +93,7 @@ export function SharedNav({ lang, setLang, activePage }) {
         }
       `}</style>
 
-      <nav style={{
+      <nav dir="ltr" style={{
         position:"fixed", top:0, left:0, right:0, zIndex:1000,
         background: scrolled||open ? "rgba(3,8,18,.96)" : "rgba(3,8,18,.5)",
         backdropFilter:"blur(28px) saturate(180%)",
@@ -253,7 +253,7 @@ export function SharedFooter({ lang }) {
         }
       `}</style>
 
-      <footer style={{
+      <footer dir="ltr" style={{
         borderTop:`1px solid rgba(148,163,184,.07)`,
         background:T.bg1,
         padding:"64px 0 40px",
@@ -318,7 +318,7 @@ export function SharedFooter({ lang }) {
             display:"flex", alignItems:"center", justifyContent:"space-between",
             flexWrap:"wrap", gap:12,
           }}>
-            <span style={{ fontSize:12.5, color:"#334155" }}>
+            <span dir="ltr" style={{ fontSize:12.5, color:"#334155" }}>
               © 2025 Corvus Health Intelligence.{" "}
               {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
             </span>
@@ -356,10 +356,10 @@ export function PageShell({ lang, setLang, activePage, children }) {
           .lp-section { padding:44px 16px; }
         }
       `}</style>
-      <div style={{ background:T.bg, minHeight:"100vh", color:T.text,
+      <div dir={lang==="ar" ? "rtl" : "ltr"} style={{ background:T.bg, minHeight:"100vh", color:T.text,
         fontFamily:FD, display:"flex", flexDirection:"column" }}>
         <SharedNav lang={lang} setLang={setLang} activePage={activePage}/>
-        <main style={{ paddingTop:68, flex:1 }}>
+        <main style={{ paddingTop:68, flex:1, minHeight:0 }}>
           {children}
         </main>
         <SharedFooter lang={lang}/>
