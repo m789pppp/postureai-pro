@@ -16140,6 +16140,212 @@ def marketplace_my_bookings():
         return safe_error(e)
 
 
+# ════════════════════════════════════════════════════════════════════
+# Symptom Correlation Engine
+# Lets a user log how they actually felt on a given day (headache, neck
+# pain, etc.) and cross-references that against their real posture
+# session data for the same days — a self-reported ground truth layered
+# on top of the purely metric-based pain_prediction already computed
+# live during a session.
+# ════════════════════════════════════════════════════════════════════
+
+SYMPTOM_TYPES = {"headache","neck_pain","back_pain","shoulder_pain","eye_strain","wrist_pain","other"}
+
+
+@app.route("/api/symptoms/log", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def log_symptom():
+    """Upsert today's (or a given day's) symptom check-in. One doc per user per day —
+    logging again the same day overwrites rather than duplicates."""
+    try:
+        data = request.get_json(force=True) or {}
+        day  = (data.get("date") or datetime.utcnow().strftime("%Y-%m-%d")).strip()
+        try:
+            datetime.strptime(day, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "date must be YYYY-MM-DD"}), 400
+
+        symptoms_in = data.get("symptoms") or []
+        clean = []
+        for s in symptoms_in:
+            stype = (s.get("type") or "").strip().lower()
+            if stype not in SYMPTOM_TYPES:
+                continue
+            severity = max(1, min(5, int(s.get("severity") or 3)))
+            clean.append({"type": stype, "severity": severity})
+        if not clean:
+            return jsonify({"error": "at least one valid symptom required"}), 400
+
+        uid = g.uid
+        doc_id = f"{uid}_{day}"
+        db.collection("symptom_logs").document(doc_id).set({
+            "uid":       uid,
+            "date":      day,
+            "symptoms":  clean,
+            "notes":     (data.get("notes") or "").strip()[:500],
+            "updated_at": datetime.utcnow().isoformat()+"Z",
+        }, merge=False)
+        return jsonify({"ok": True, "date": day, "symptoms": clean})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/symptoms/log", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def get_symptom_log():
+    """History of the user's own symptom check-ins. ?period=7d|30d|90d"""
+    try:
+        uid    = g.uid
+        period = request.args.get("period", "30d")
+        days   = {"7d":7,"30d":30,"90d":90}.get(period, 30)
+        cutoff_day = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        docs = (db.collection("symptom_logs")
+                  .where("uid","==",uid)
+                  .where("date",">=",cutoff_day)
+                  .order_by("date", direction=firestore.Query.DESCENDING)
+                  .limit(200).stream())
+        return jsonify({"logs": [d.to_dict() for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+def _day_key(ts):
+    """Normalize a Firestore timestamp / datetime / iso-string into a YYYY-MM-DD key."""
+    if ts is None:
+        return None
+    if hasattr(ts, "strftime"):
+        return ts.strftime("%Y-%m-%d")
+    return str(ts)[:10]
+
+
+@app.route("/api/analytics/symptom-correlation", methods=["GET"])
+@require_auth
+@limiter.limit("20 per minute")
+@require_tier("standard")
+def symptom_correlation():
+    """
+    Core correlation engine. For each symptom type the user has logged at
+    least MIN_DAYS times, compares posture-session metrics on days that
+    symptom was reported (severity >= 3) vs. all other logged-session days,
+    and surfaces whichever alert cause / score gap is largest.
+
+    This is a plain mean-difference comparison, not a black-box model —
+    kept deliberately explainable so the result can be shown to the user
+    (and, per Mo's PT background, would hold up if a clinician looked at it).
+    """
+    MIN_DAYS = 3
+    try:
+        uid    = g.uid
+        period = request.args.get("period", "90d")
+        days   = {"30d":30,"90d":90,"180d":180}.get(period, 90)
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff_day = cutoff.strftime("%Y-%m-%d")
+
+        symptom_docs = list(db.collection("symptom_logs")
+                              .where("uid","==",uid)
+                              .where("date",">=",cutoff_day)
+                              .stream())
+        if len(symptom_docs) < MIN_DAYS:
+            return jsonify({"ok": True, "insights": [],
+                             "note": f"Log symptoms on at least {MIN_DAYS} different days to unlock correlations",
+                             "days_logged": len(symptom_docs)})
+
+        session_docs = list(db.collection("sessions")
+                              .where("uid","==",uid)
+                              .where("created_at",">=",cutoff)
+                              .limit(1000).stream())
+        if not session_docs:
+            return jsonify({"ok": True, "insights": [], "note": "No session data in this period"})
+
+        # Aggregate sessions by day
+        by_day: dict = {}
+        for s in session_docs:
+            d = s.to_dict()
+            day = _day_key(d.get("created_at"))
+            if not day:
+                continue
+            by_day.setdefault(day, []).append(d)
+
+        # Which symptom (severity>=3) was logged on which day
+        symptom_days: dict = {}   # symptom_type -> set(days)
+        all_logged_days = set()
+        for doc in symptom_docs:
+            d = doc.to_dict()
+            day = d.get("date")
+            all_logged_days.add(day)
+            for s in d.get("symptoms", []):
+                if s.get("severity", 0) >= 3:
+                    symptom_days.setdefault(s["type"], set()).add(day)
+
+        def day_avg_score(day):
+            scores = [s.get("avg_score") for s in by_day.get(day, []) if s.get("avg_score") is not None]
+            return sum(scores)/len(scores) if scores else None
+
+        def day_top_cause(day):
+            counts: dict = {}
+            for s in by_day.get(day, []):
+                for a in (s.get("alert_causes") or []):
+                    c = a.get("cause","posture")
+                    counts[c] = counts.get(c,0)+1
+            if not counts:
+                return None
+            return max(counts.items(), key=lambda kv: kv[1])[0]
+
+        # Baseline: all days with session data, regardless of symptoms
+        baseline_days = [d for d in by_day.keys()]
+        baseline_scores = [x for d in baseline_days for x in [day_avg_score(d)] if x is not None]
+        baseline_avg = sum(baseline_scores)/len(baseline_scores) if baseline_scores else None
+
+        insights = []
+        for stype, sdays in symptom_days.items():
+            relevant_days = [d for d in sdays if d in by_day]
+            if len(relevant_days) < MIN_DAYS:
+                continue
+            symptom_scores = [x for d in relevant_days for x in [day_avg_score(d)] if x is not None]
+            other_days     = [d for d in baseline_days if d not in sdays]
+            other_scores   = [x for d in other_days for x in [day_avg_score(d)] if x is not None]
+            if not symptom_scores or not other_scores:
+                continue
+            sym_avg   = sum(symptom_scores)/len(symptom_scores)
+            other_avg = sum(other_scores)/len(other_scores)
+            gap       = round(other_avg - sym_avg, 1)   # positive => worse posture score on symptom days
+
+            causes = [day_top_cause(d) for d in relevant_days]
+            causes = [c for c in causes if c]
+            top_cause = None
+            if causes:
+                cc: dict = {}
+                for c in causes: cc[c] = cc.get(c,0)+1
+                top_cause = max(cc.items(), key=lambda kv: kv[1])[0]
+
+            if abs(gap) >= 3 or top_cause:
+                insights.append({
+                    "symptom": stype,
+                    "days_logged": len(relevant_days),
+                    "avg_score_on_symptom_days": round(sym_avg,1),
+                    "avg_score_other_days": round(other_avg,1),
+                    "score_gap": gap,
+                    "dominant_alert_cause": top_cause,
+                    "direction": "worse" if gap > 0 else "better" if gap < 0 else "no_difference",
+                })
+
+        insights.sort(key=lambda i: abs(i["score_gap"]), reverse=True)
+        return jsonify({
+            "ok": True,
+            "insights": insights,
+            "days_logged": len(all_logged_days),
+            "baseline_avg_score": round(baseline_avg,1) if baseline_avg is not None else None,
+            "period": period,
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+
+
 
 
 
