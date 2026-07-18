@@ -2796,6 +2796,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
 
 export async function generateLongitudinalPDF({ sessions=[], profile, user, lang="en", aiSummary="" }) {
+  if (sessions.length === 0) throw new Error(lang==="ar" ? "لا توجد جلسات لإنشاء التقرير الطولي." : "No sessions available to generate a longitudinal report.");
   const { jsPDF } = await import("jspdf");
   if (sessions.length < 2) { console.warn("[PDF] Need more sessions for longitudinal"); }
   const isAr = lang==="ar";

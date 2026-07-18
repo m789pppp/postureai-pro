@@ -95,6 +95,7 @@
 | Variable | القيمة |
 |---|---|
 | `VITE_API_URL` | `https://YOUR-BACKEND.railway.app/api` |
+| `VITE_FIREBASE_VAPID_KEY` | من Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair. من غيرها زرار "تفعيل الإشعارات" هيرجع "push isn't fully configured yet" بدل ما يكسر. |
 | `APP_URL` | `https://corvus-omega-nine.vercel.app` |
 | `ALLOWED_ORIGINS` | `https://corvus-omega-nine.vercel.app` |
 | `FLASK_ENV` | `production` |

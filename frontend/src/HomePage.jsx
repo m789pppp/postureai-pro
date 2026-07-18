@@ -6,6 +6,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession } from "./firebase.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast } from "./lib/tierQuality.js";
+import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
+import { PushAPI } from "./services/api.js";
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -1135,6 +1137,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
     { id:"accounts", en:"Accounts",     ar:"الحسابات المرتبطة" },
     { id:"billing",  en:"Subscription", ar:"الاشتراك" },
     { id:"security", en:"Security",     ar:"الأمان" },
+    { id:"notifications", en:"Notifications", ar:"الإشعارات" },
   ];
 
   return (
@@ -1611,6 +1614,96 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
         </div>
       )}
 
+      {/* Tab: Notifications */}
+      {tab==="notifications"&&(
+        <PushNotificationSettings cs={cs} isAr={isAr} addToast={addToast} />
+      )}
+
+    </div>
+  );
+}
+
+// ── Push Notifications settings block ───────────────────────────────
+function PushNotificationSettings({ cs, isAr, addToast }) {
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy]       = useState(false);
+
+  useEffect(() => { setEnabled(isPushEnabled()); }, []);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      if (enabled) {
+        await disablePushNotifications();
+        setEnabled(false);
+        addToast?.(isAr ? "تم إيقاف الإشعارات" : "Notifications disabled", "success");
+      } else {
+        const res = await enablePushNotifications(isAr ? "ar" : "en");
+        if (res.ok) {
+          setEnabled(true);
+          addToast?.(isAr ? "تفعّلت الإشعارات ✓" : "Notifications enabled ✓", "success");
+        } else {
+          const msgs = {
+            permission_denied: isAr ? "الإذن اتمنع من إعدادات المتصفح" : "Permission denied in browser settings",
+            unsupported:       isAr ? "المتصفح ده مش بيدعم الإشعارات" : "This browser doesn't support push notifications",
+            no_vapid_key:      isAr ? "الإشعارات لسه مش متظبطة من ناحيتنا" : "Push isn't fully configured on our end yet",
+            no_token: isAr ? "حصل خطأ في التسجيل" : "Registration failed",
+            error:    isAr ? "حصل خطأ" : "Something went wrong",
+          };
+          addToast?.(msgs[res.reason] || msgs.error, "error");
+        }
+      }
+    } finally { setBusy(false); }
+  };
+
+  const sendTest = async () => {
+    try {
+      const r = await PushAPI.test();
+      addToast?.(isAr ? `اتبعت لـ ${r.sent||0} جهاز` : `Sent to ${r.sent||0} device(s)`, "success");
+    } catch (e) {
+      addToast?.(e.message || (isAr?"حصل خطأ":"Something went wrong"), "error");
+    }
+  };
+
+  return (
+    <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
+      <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:6 }}>
+        {isAr?"الإشعارات":"Notifications"}
+      </div>
+      <div style={{ fontSize:12, color:cs.muted, marginBottom:16, lineHeight:1.6 }}>
+        {isAr?"استقبل تنبيهات لما سلسلة الالتزام بتاعتك في خطر أو لما نكتشف نمط وضعية محتاج انتباه."
+             :"Get notified when your streak is at risk or when we detect a posture pattern worth your attention."}
+      </div>
+      <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+        borderRadius:10, border:`1px solid ${cs.border}`,
+        display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+        <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+          <span style={{ fontSize:22 }}>🔔</span>
+          <div>
+            <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+              {isAr?"إشعارات الدفع":"Push Notifications"}
+            </div>
+            <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+              {enabled ? (isAr?"مفعّلة على الجهاز ده":"Enabled on this device")
+                       : (isAr?"مش مفعّلة":"Not enabled")}
+            </div>
+          </div>
+        </div>
+        <button onClick={toggle} disabled={busy}
+          style={{ padding:"7px 16px", borderRadius:99, border:"none", cursor:"pointer",
+            fontSize:12, fontWeight:700,
+            background: enabled ? "rgba(239,68,68,.12)" : "rgba(16,185,129,.15)",
+            color: enabled ? "#f87171" : "#10b981" }}>
+          {busy ? "…" : enabled ? (isAr?"إيقاف":"Disable") : (isAr?"تفعيل":"Enable")}
+        </button>
+      </div>
+      {enabled && (
+        <button onClick={sendTest} style={{ width:"100%", padding:"9px",
+          background:"transparent", border:`1px solid ${cs.border}`, borderRadius:8,
+          color:cs.muted, fontSize:12, fontWeight:600, cursor:"pointer" }}>
+          {isAr?"بعت إشعار تجريبي":"Send test notification"}
+        </button>
+      )}
     </div>
   );
 }
