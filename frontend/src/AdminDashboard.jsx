@@ -428,6 +428,7 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
     { id:"billing",  label: isAr ? "تحليلات الفوترة" : "Billing Analytics", icon:"◈" },
     { id:"webhooks", label: isAr ? "Webhooks"    : "Webhooks",  icon:"⟳" },
     { id:"audit",    label: isAr ? "سجل المراجعة": "Audit Log", icon:"≡" },
+    { id:"scim",     label: isAr ? "SCIM (تزويد المستخدمين)" : "SCIM Provisioning", icon:"⇄" },
     { id:"system",   label: isAr ? "النظام"      : "System",    icon:"⚙" },
   ];
 
@@ -586,6 +587,8 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
             <BillingAnalyticsTab isAr={isAr} showToast={showToast}/>
           ) : tab === "audit" ? (
             <AuditTab auditLogs={auditLogs} isAr={isAr} />
+          ) : tab === "scim" ? (
+            <ScimTab isAr={isAr} showToast={showToast} />
           ) : tab === "system" ? (
             <SystemPanel health={health} lang={lang} adminProfile={adminProfile} onRefresh={loadAll} showToast={showToast} />
           ) : null}
@@ -850,7 +853,107 @@ function AuditTab({ auditLogs, isAr }) {
   );
 }
 
-// ── Webhook Manager ────────────────────────────────────────────────
+// ── SCIM Provisioning Tab ───────────────────────────────────────────
+function ScimTab({ isAr, showToast }) {
+  const [status, setStatus] = useState(null);
+  const [users, setUsers]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      apiFetch("/admin/scim/status").catch(() => null),
+      apiFetch("/admin/scim/users").catch(() => ({ users: [] })),
+    ]).then(([s, u]) => {
+      setStatus(s);
+      setUsers(u?.users || []);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const copy = (key, val) => {
+    navigator.clipboard?.writeText(val);
+    setCopiedKey(key);
+    showToast?.(isAr ? "تم النسخ" : "Copied", "success");
+    setTimeout(() => setCopiedKey(null), 1500);
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <Card title={isAr ? "حالة التزويد التلقائي (SCIM)" : "SCIM Provisioning Status"} style={{ padding:20 }}>
+        {loading ? (
+          <div style={{ color:TOKENS.muted, fontSize:12.5 }}>{isAr?"جاري التحميل…":"Loading…"}</div>
+        ) : (
+          <>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+              <span style={{ width:9, height:9, borderRadius:"50%",
+                background: status?.configured ? TOKENS.green : TOKENS.amber }} />
+              <span style={{ fontWeight:700, fontSize:13.5 }}>
+                {status?.configured
+                  ? (isAr ? "SCIM مفعّل" : "SCIM is configured")
+                  : (isAr ? "SCIM لسه مش متفعّل" : "SCIM is not configured yet")}
+              </span>
+            </div>
+            {!status?.configured && (
+              <div style={{ fontSize:12, color:TOKENS.muted, marginBottom:14, lineHeight:1.6 }}>
+                {isAr
+                  ? "لتفعيله: ضيف SCIM_BEARER_TOKEN (أي قيمة سرية طويلة) في environment variables بتاعة Railway، وبعدين استخدم الروابط دي لإعداد IdP (Okta / Azure AD / OneLogin)."
+                  : "To enable: add a SCIM_BEARER_TOKEN (any long secret value) to Railway's environment variables, then use the endpoints below to configure your IdP (Okta / Azure AD / OneLogin)."}
+              </div>
+            )}
+            <div style={{ fontSize:11, color:TOKENS.amber, background:"rgba(245,158,11,.08)",
+                          border:`1px solid rgba(245,158,11,.25)`, borderRadius:8, padding:"8px 12px", marginBottom:16 }}>
+              {isAr
+                ? "ملحوظة: التوكن حاليًا مشترك على مستوى المنصة كلها — مش لكل شركة توكن مستقل لسه."
+                : "Note: today this is one shared platform-wide token, not a separate token per enterprise customer yet."}
+            </div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {status?.endpoints && Object.entries(status.endpoints).map(([key, url]) => (
+                <div key={key} style={{ display:"flex", alignItems:"center", gap:8,
+                                         background:TOKENS.surface, border:`1px solid ${TOKENS.border}`,
+                                         borderRadius:8, padding:"8px 12px" }}>
+                  <span style={{ fontSize:10.5, color:TOKENS.muted, minWidth:150, textTransform:"uppercase", letterSpacing:".04em" }}>
+                    {key.replace(/_/g," ")}
+                  </span>
+                  <span style={{ flex:1, fontFamily:"DM Mono,monospace", fontSize:11.5, color:TOKENS.text,
+                                 overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{url}</span>
+                  <button onClick={()=>copy(key,url)} style={{
+                    background:"transparent", border:`1px solid ${TOKENS.border}`, borderRadius:6,
+                    color:TOKENS.sky, fontSize:10.5, fontWeight:600, padding:"4px 10px", cursor:"pointer" }}>
+                    {copiedKey===key ? (isAr?"اتنسخ ✓":"Copied ✓") : (isAr?"نسخ":"Copy")}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Card>
+
+      <Card title={isAr ? `المستخدمون المتزوّدون عبر SCIM (${users.length})` : `SCIM-Provisioned Users (${users.length})`} style={{ padding:0 }}>
+        <Table
+          cols={[
+            { key:"name",         label: isAr?"الاسم":"Name",       w:"1.4fr", render: u => <span style={{ fontWeight:600 }}>{u.name || "—"}</span> },
+            { key:"email",        label: isAr?"البريد":"Email",      w:"1.6fr", render: u => <span style={{ fontSize:11.5, color:TOKENS.muted }}>{u.email}</span> },
+            { key:"external_id",  label:"External ID",              w:"1.2fr", render: u => <span style={{ fontFamily:"DM Mono,monospace", fontSize:10.5, color:TOKENS.muted }}>{u.external_id}</span> },
+            { key:"company_name", label: isAr?"الشركة":"Company",    w:"1fr",   render: u => <span style={{ fontSize:11.5 }}>{u.company_name || "—"}</span> },
+            { key:"active",       label: isAr?"الحالة":"Status",     w:"0.8fr", render: u => (
+                <span style={{ fontSize:10.5, fontWeight:700, color: u.active ? TOKENS.green : TOKENS.muted }}>
+                  {u.active ? (isAr?"نشط":"Active") : (isAr?"موقوف":"Suspended")}
+                </span>
+              )},
+          ]}
+          rows={users}
+          emptyMsg={isAr ? "مفيش مستخدمين اتزوّدوا عبر SCIM لسه" : "No SCIM-provisioned users yet"}
+        />
+      </Card>
+    </div>
+  );
+}
+
+
 function WebhookManager({ webhooks, lang, onRefresh, showToast }) {
   const [form, setForm] = useState({ url:"", description:"", events:["posture.risk_alert"] });
   const [adding, setAdding] = useState(false);
