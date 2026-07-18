@@ -375,7 +375,7 @@ function _hdr(doc,W,ml,mr,label,isAr){
   _logo(doc,ml,3.5,8,_logoSm);
   font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.ink2);doc.text("Corvus",ml+12,10);
   font(doc,6.5,"normal");tc(doc,...PDF_TOKENS.muted);doc.text("Health Intelligence",ml+28,10);
-  font(doc,7,"bold");tc(doc,...PDF_TOKENS.primary);doc.text(label,W-mr,10,{align:"right"});
+  font(doc,7,"bold",isAr);tc(doc,...PDF_TOKENS.primary);doc.text(label,W-mr,10,{align:"right"});
 }
 
 // ── FOOTER ─────────────────────────────────────────────────────────
@@ -2655,7 +2655,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     {label:isAr?"ضعيف (<55)":"Poor (<55)",       col:PDF_TOKENS.danger,  users:atRisk},
   ];
   for(const {label,col,users:bu} of bands){
-    if(y>H-30){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"التوزيع":"Distribution"); y=22;}
+    if(y>H-30){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"التوزيع":"Distribution",isAr); y=22;}
     const pct=totalU>0?bu.length/totalU:0;
     fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8,"F");
     sf(7.5,"normal"); tc(doc,...PDF_TOKENS.ink); doc.text(label,ml+2,y+5.5);
@@ -2668,7 +2668,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
   // At-Risk Users list
   if(atRisk.length>0){
-    if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk Employees"); y=22;}
+    if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk Employees",isAr); y=22;}
     sf(10,"bold"); tc(doc,...PDF_TOKENS.danger);
     doc.text(isAr?`الموظفون في خطر (${atRisk.length})`:`At-Risk Employees (${atRisk.length})`,ml,y); y+=5;
     sf(7.5,"normal"); tc(doc,...PDF_TOKENS.muted);
@@ -2682,7 +2682,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     doc.text(isAr?"آخر جلسة":"Last Session",ml+cw*0.72,y+6);
     y+=11;
     for(const u of atRisk.slice(0,15)){
-      if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk"); y=22;}
+      if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk",isAr); y=22;}
       fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8,"F");
       sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
       doc.text(u.name||u.email||"—",ml+3,y+5.5);
@@ -2700,7 +2700,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
   // League table — top 10
   y+=6;
-  if(y>H-70){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard"); y=22;}
+  if(y>H-70){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard",isAr); y=22;}
   sf(10,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"تصنيف الأداء":"Performance Leaderboard",ml,y); y+=7;
   const sorted=[...activeUsers].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
@@ -2710,7 +2710,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   doc.text(isAr?"النتيجة":"Score",ml+cw*0.65,y+6); doc.text(isAr?"التقييم":"Grade",ml+cw*0.82,y+6);
   y+=11;
   for(const [i,u] of sorted.slice(0,10).entries()){
-    if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard"); y=22;}
+    if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard",isAr); y=22;}
     fc(doc,i%2===0?248:255,i%2===0?250:255,i%2===0?252:255); doc.rect(ml,y,cw,8,"F");
     const sc=Math.round(u.avg_score||0); const col=_scoreColor(sc);
     sf(8,"bold"); tc(doc,...(i<3?col:PDF_TOKENS.muted)); doc.text(String(i+1),ml+3,y+5.5);
@@ -2728,7 +2728,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
   // HR Recommendations
   y+=10;
-  if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations"); y=22;}
+  if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations",isAr); y=22;}
   sf(10,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"توصيات لمدير الموارد البشرية":"HR Recommendations",ml,y); y+=7;
   const hrRecs = totalU===0 ? [
@@ -2753,7 +2753,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
               :"No employees at excellent level — consider incentive program (points/rewards) to encourage improvement"),
   ];
   for(const rec of hrRecs){
-    if(y>H-22){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations"); y=22;}
+    if(y>H-22){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations",isAr); y=22;}
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,16,2,"F");
     sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
     const lines=doc.splitTextToSize(rec,cw-8);
@@ -3279,13 +3279,13 @@ const programme=[
 
   const stats=[
     [isAr?"إجمالي الجلسات":"Total sessions",         String(sessions.length)],
-    [isAr?"المدة الإجمالية":"Total duration",         `${Math.round(sessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60)} min`],
+    [isAr?"المدة الإجمالية":"Total duration",         `${Math.round(sessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60)} ${isAr?"دقيقة":"min"}`],
     [isAr?"متوسط الدرجة (الكل)":"All-time avg score",`${avgAll}/100`],
     [isAr?"متوسط الدرجة (90 يوم)":"90-day avg score",`${avg90}/100`],
     [isAr?"إجمالي التنبيهات":"Total alerts",          String(totalAlerts)],
     [isAr?"أعلى نقطة":"Best score",                   `${best?.avg_score||0}/100 · ${_fmtDate(best?.created_at,isAr)}`],
     [isAr?"أدنى نقطة":"Worst score",                  `${worst?.avg_score||0}/100 · ${_fmtDate(worst?.created_at,isAr)}`],
-    [isAr?"التغيّر الكلي":"Overall trend",             `${trendDelta>0?"+":""}${trendDelta} pts · ${improved?"Improving":declined?"Declining":"Stable"}`],
+    [isAr?"التغيّر الكلي":"Overall trend",             `${trendDelta>0?"+":""}${trendDelta} ${isAr?"نقطة":"pts"} · ${improved?(isAr?"تحسّن":"Improving"):declined?(isAr?"تراجع":"Declining"):(isAr?"مستقر":"Stable")}`],
   ];
   const th2=stats.length*8.5+2;
   fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,th2,4,"F");
