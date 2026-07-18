@@ -295,7 +295,7 @@ function GlobalStyle() {
         .lp-stats-grid{grid-template-columns:repeat(2,1fr)}
         .lp-features-wrap{gap:24px}
         .lp-pricing-grid{grid-template-columns:1fr!important}
-        .lp-how-grid{gap:20px}
+        .lp-how-grid{grid-template-columns:repeat(3,1fr);gap:16px}
         .lp-cases-grid{grid-template-columns:1fr 1fr!important}
         .lp-testi-grid,.lp-testi-inner{grid-template-columns:1fr 1fr!important}
         .lp-popular-card{transform:none!important}
@@ -385,17 +385,17 @@ function Nav({ lang, setLang, onCTA }) {
   const ar = lang === "ar";
 
   const navItems = ar ? [
-    { label:"المنتج",    href:"/product",      page:true },
-    { label:"الحلول",   href:"/solutions",    page:true },
-    { label:"الأسعار",  href:"/pricing",      page:true },
-    { label:"كيف يعمل", href:"/how-it-works", page:true },
-    { label:"الأسئلة",  href:"/faq",          page:true },
+    { label:"المنتج",    href:"#features",     id:"features" },
+    { label:"الحلول",   href:"#casestudies",  id:"casestudies" },
+    { label:"الأسعار",  href:"#pricing",      id:"pricing" },
+    { label:"كيف يعمل", href:"#how",          id:"how" },
+    { label:"الأسئلة",  href:"#faq",          id:"faq" },
   ] : [
-    { label:"Product",     href:"/product",      page:true },
-    { label:"Solutions",   href:"/solutions",    page:true },
-    { label:"Pricing",     href:"/pricing",      page:true },
-    { label:"How it works",href:"/how-it-works", page:true },
-    { label:"FAQ",         href:"/faq",          page:true },
+    { label:"Product",     href:"#features",    id:"features" },
+    { label:"Solutions",   href:"#casestudies", id:"casestudies" },
+    { label:"Pricing",     href:"#pricing",     id:"pricing" },
+    { label:"How it works",href:"#how",         id:"how" },
+    { label:"FAQ",         href:"#faq",         id:"faq" },
   ];
 
   return (
@@ -431,8 +431,8 @@ function Nav({ lang, setLang, onCTA }) {
 
           {/* ── Center links ── */}
           <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:1, flex:1, justifyContent:"center" }}>
-            {navItems.map(({ label, href, page }) => {
-              const active = window.location.pathname === href;
+            {navItems.map(({ label, href, id }) => {
+              const active = activeSection === id;
               return (
                 <a key={label} href={href}
                   style={{
@@ -442,6 +442,11 @@ function Nav({ lang, setLang, onCTA }) {
                     fontSize:13.5, fontWeight: active ? 600 : 500,
                     transition:"color .2s",
                   }}
+                  onClick={e => {
+                    e.preventDefault();
+                    document.getElementById(id)?.scrollIntoView({ behavior:"smooth" });
+                    setMobileOpen(false);
+                  }}
                   onMouseEnter={e => e.currentTarget.style.color="#f1f5f9"}
                   onMouseLeave={e => e.currentTarget.style.color = active ? "#f1f5f9" : "#64748b"}>
                   {label}
@@ -449,7 +454,7 @@ function Nav({ lang, setLang, onCTA }) {
                     <span style={{
                       position:"absolute", bottom:2, left:"50%", transform:"translateX(-50%)",
                       width:20, height:2, borderRadius:2,
-                      background:"linear-gradient(90deg,#1a56db,#0891b2)",
+                      background:"linear-gradient(90deg,#4f7cf9,#22d3ee)",
                     }}/>
                   )}
                 </a>
@@ -1177,42 +1182,51 @@ function HowItWorks({ lang }) {
           title={ar ? "ابدأ في 3 خطوات بسيطة" : "Up and running in 3 simple steps"}
           sub={ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "Three simple steps to a healthier team"}/>
 
-        <div style={{ position:"relative" }}>
-          {/* Connecting line — these steps are a real sequence, so the timeline earns its keep */}
-          <div className="lp-timeline-line" style={{
-            position:"absolute", top:0, left:"16.6%", right:"16.6%", height:2,
-            background:"linear-gradient(90deg,rgba(79,124,249,.45),rgba(34,211,238,.45),rgba(16,217,160,.45))",
-          }}/>
-          <Stagger key={String(ar)} className="lp-how-grid" gap={0.12} style={{ position:"relative" }}>
-            {steps.map((s) => (
+        <Stagger key={String(ar)} className="lp-how-grid" gap={0.12}>
+          {steps.map((s, i) => {
+            const cols = [LPV7_TOKENS.blue, LPV7_TOKENS.indigo, LPV7_TOKENS.green];
+            const col = cols[i];
+            return (
               <StaggerItem key={s.n}>
-                <div className="lp-lift" style={{ ...card(), textAlign:"center", paddingTop:48 }}>
-                  <div className="lp-timeline-node" style={{
-                    width:56, height:56, borderRadius:"50%", margin:"-76px auto 16px",
-                    background:LPV7_TOKENS.bg1, border:`2px solid rgba(79,124,249,.4)`,
+                <div className="lp-lift" style={{
+                  ...card(), textAlign:"center", padding:"36px 28px 32px",
+                  borderTop:`2px solid ${col}`,
+                  position:"relative", overflow:"hidden",
+                }}>
+                  {/* Glow bg */}
+                  <div style={{
+                    position:"absolute", top:0, left:0, right:0, height:80,
+                    background:`radial-gradient(ellipse at 50% 0%,${col}14,transparent 70%)`,
+                    pointerEvents:"none",
+                  }}/>
+                  {/* Step number */}
+                  <div style={{
+                    width:48, height:48, borderRadius:"50%", margin:"0 auto 16px",
+                    background:`${col}18`, border:`1.5px solid ${col}40`,
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    fontFamily:FONT_MONO, fontSize:18, fontWeight:700, color:LPV7_TOKENS.blue,
-                    boxShadow:"0 0 0 6px "+LPV7_TOKENS.bg1+", 0 4px 18px rgba(79,124,249,.25)",
+                    fontFamily:FONT_MONO, fontSize:16, fontWeight:700, color:col,
+                    position:"relative",
                   }}>{s.n}</div>
-                  <div style={{ fontSize:26, marginBottom:12 }}>{s.icon}</div>
-                  <h3 style={{ ...TYPE.h3, color:LPV7_TOKENS.text, margin:"0 0 8px", fontFamily:FONT_DISPLAY }}>
+                  {/* Icon */}
+                  <div style={{ fontSize:28, marginBottom:14 }}>{s.icon}</div>
+                  <h3 style={{ ...TYPE.h3, color:LPV7_TOKENS.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
                     {s.title}
                   </h3>
-                  <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:"0 0 14px" }}>
+                  <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:"0 0 18px", lineHeight:1.65 }}>
                     {s.desc}
                   </p>
                   <div style={{
                     display:"inline-flex", alignItems:"center", gap:5,
-                    background:"rgba(79,124,249,.08)", border:"1px solid rgba(79,124,249,.18)",
-                    borderRadius:99, padding:"4px 12px",
+                    background:`${col}10`, border:`1px solid ${col}28`,
+                    borderRadius:99, padding:"5px 14px",
                   }}>
-                    <span style={{ fontSize:11, color:LPV7_TOKENS.blue, fontWeight:600, fontFamily:FONT_MONO }}>⏱ {s.time}</span>
+                    <span style={{ fontSize:11.5, color:col, fontWeight:600, fontFamily:FONT_MONO }}>⏱ {s.time}</span>
                   </div>
                 </div>
               </StaggerItem>
-            ))}
-          </Stagger>
-        </div>
+            );
+          })}
+        </Stagger>
       </div>
     </section>
   );

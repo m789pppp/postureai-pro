@@ -904,18 +904,18 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     dCard(inx,y,insW,rowH);
     sf(6,"bold"); tc(doc,...TEXT3); doc.text("POSTURE INSIGHTS",inx+4,y+6);
     const insights=mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
-      icon:sc<40?"🔴":sc<65?"🟡":"🟢",
       text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}${val!==undefined?` ${Math.round(val*10)/10}${unit}`:""}`,
       detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor and improve.":"Looking good — maintain this.",
       col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
     }));
-    insights.forEach(({icon,text,detail,col},i)=>{
+    insights.forEach(({text,detail,col},i)=>{
       const iy=y+12+i*28;
       fc(doc,...col);
       doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
       doc.circle(inx+10,iy+7,8,"F");
       doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(9,"normal"); tc(doc,...col); doc.text(icon,inx+10,iy+10.5,{align:"center"});
+      // Solid status dot — emoji (🔴🟡🟢) don't exist in jsPDF's built-in helvetica and render as mojibake
+      fc(doc,...col); doc.circle(inx+10,iy+7,2.4,"F");
       sf(7,"bold"); tc(doc,...TEXT);
       const tlines=doc.splitTextToSize(text,insW-28);
       doc.text(tlines[0],inx+21,iy+7);
@@ -1176,15 +1176,15 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   dCard(inx3,y,insW2,rowH2);
   sf(6,"bold");tc(doc,...TEXT3);doc.text("POSTURE INSIGHTS",inx3+4,y+6);
   mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
-    icon:sc<40?"🔴":sc<65?"🟡":"🟢",
     text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}`,
     detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor.":"Looking good.",
     col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
-  })).forEach(({icon,text,detail,col},i)=>{
+  })).forEach(({text,detail,col},i)=>{
     const iy=y+12+i*28;
     fc(doc,...col);doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
     doc.circle(inx3+10,iy+7,8,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(9,"normal");tc(doc,...col);doc.text(icon,inx3+10,iy+10.5,{align:"center"});
+    // Solid status dot — emoji (🔴🟡🟢) don't exist in jsPDF's built-in helvetica and render as mojibake
+    fc(doc,...col);doc.circle(inx3+10,iy+7,2.4,"F");
     sf(7,"bold");tc(doc,...TEXT);doc.text(text,inx3+21,iy+7);
     sf(6,"normal");tc(doc,...TEXT2);doc.text(detail,inx3+21,iy+13.5);
     if(i<2){fc(doc,...BORDER);doc.rect(inx3+4,iy+22,insW2-8,.25,"F");}
@@ -2167,12 +2167,19 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const m1=session1.metrics||{}, m2=session2.metrics||{};
   const allKeys=[...new Set([...Object.keys(m1),...Object.keys(m2)])].filter(k=>!k.startsWith("_"));
   const metRows=allKeys.map(k=>{
-    const sc1=typeof m1[k]==="number"?m1[k]:(m1[k]?.score??100);
-    const sc2=typeof m2[k]==="number"?m2[k]:(m2[k]?.score??100);
-    const d=Math.round(sc2-sc1);
+    const has1 = m1[k]!=null, has2 = m2[k]!=null;
+    const sc1=typeof m1[k]==="number"?m1[k]:(m1[k]?.score??null);
+    const sc2=typeof m2[k]==="number"?m2[k]:(m2[k]?.score??null);
     const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+    // A metric tracked in only one session has no real delta — don't fabricate
+    // one by assuming a perfect 100 for the untracked side (that produced
+    // phantom "-60 point regression" style false alarms).
+    if(!has1||!has2){
+      return{k,lbl,sc1,sc2,d:null,isNew:!has1&&has2,isRemoved:has1&&!has2};
+    }
+    const d=Math.round(sc2-sc1);
     return{k,lbl,sc1,sc2,d};
-  }).sort((a,b)=>a.d-b.d);
+  }).sort((a,b)=>(a.d??0)-(b.d??0));
 
   const z1=_zonalRisk(m1), z2=_zonalRisk(m2);
   const d1=session1.duration_s||session1.duration_sec||0;
@@ -2345,14 +2352,31 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     .forEach((h,i)=>doc.text(h,colX[i],y+7));
   y+=12;
 
-  metRows.forEach(({lbl,sc1,sc2,d},idx)=>{
+  metRows.forEach(({lbl,sc1,sc2,d,isNew,isRemoved},idx)=>{
     if(y>H-28){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued",isAr);y=22;}
-    const dC=d>2?PDF_TOKENS.success:d<-2?PDF_TOKENS.danger:PDF_TOKENS.muted;
     const rowH=11;
     fc(doc,...(idx%2===0?PDF_TOKENS.bg:PDF_TOKENS.card)); doc.rect(ml,y,cw,rowH,"F");
+    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,colX[0]+2,y+7.5);
+
+    if(d===null){
+      // Metric tracked in only one session — showing a fabricated delta here
+      // previously produced false "-60 point regression" alarms. Show each
+      // side plainly and label it instead of comparing.
+      if(sc1!=null){ const c1=_scoreColor(sc1); fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
+        font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c1); doc.text(String(Math.round(sc1)),colX[1]+2,y+7.5); }
+      else { font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text("—",colX[1]+2,y+7.5); }
+      if(sc2!=null){ const c2=_scoreColor(sc2); fc(doc,...c2); doc.circle(colX[2]-3,y+5.5,2.5,"F");
+        font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c2); doc.text(String(Math.round(sc2)),colX[2]+2,y+7.5); }
+      else { font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text("—",colX[2]+2,y+7.5); }
+      font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
+      doc.text(isNew?(isAr?"جديد":"NEW"):(isAr?"غير متتبع":"N/T"),colX[3],y+7.5);
+      y+=rowH;
+      return;
+    }
+
+    const dC=d>2?PDF_TOKENS.success:d<-2?PDF_TOKENS.danger:PDF_TOKENS.muted;
     // Left accent for significant changes
     if(Math.abs(d)>5){ fc(doc,...dC); doc.rect(ml,y,2,rowH,"F"); }
-    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,colX[0]+2,y+7.5);
     // Score 1 with mini dot
     const c1=_scoreColor(sc1),c2=_scoreColor(sc2);
     fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
@@ -2695,13 +2719,23 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     sf(7.5,"normal"); doc.text(_scoreLabel(sc,isAr),ml+cw*0.82,y+5.5);
     y+=8;
   }
+  if(sorted.length===0){
+    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,14,2,"F");
+    sf(8,"normal"); tc(doc,...PDF_TOKENS.muted);
+    doc.text(isAr?"لا يوجد مستخدمون نشطون بعد — سيظهر الترتيب بمجرد بدء الفريق في تسجيل جلسات":"No active users yet — the leaderboard will populate once the team starts logging sessions",ml+cw/2,y+8,{align:"center"});
+    y+=18;
+  }
 
   // HR Recommendations
   y+=10;
   if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations"); y=22;}
   sf(10,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"توصيات لمدير الموارد البشرية":"HR Recommendations",ml,y); y+=7;
-  const hrRecs = [
+  const hrRecs = totalU===0 ? [
+    isAr
+      ? "لا يوجد مستخدمون نشطون في الفترة المحددة بعد — شارك رابط الدعوة مع الفريق لبدء تسجيل الجلسات"
+      : "No active users in this period yet — share the team invite link to get employees logging sessions",
+  ] : [
     atRisk.length>totalU*0.3
       ? (isAr?`${Math.round(atRisk.length/totalU*100)}% من الفريق في خطر — يُنصح بتدخل جماعي: ورشة ارغونوميكس وتقييم محطات العمل`
               :`${Math.round(atRisk.length/totalU*100)}% of team at-risk — recommend group intervention: ergonomics workshop + workstation audit`)
@@ -3050,7 +3084,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   y+=barZoneH+8;
 
   // Best/worst day insight strip
-  if(bestDay>=0&&worstDay>=0){
+  if(bestDay>=0&&worstDay>=0&&bestDay!==worstDay){
     const bdn=isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay];
     const wdn=isAr?dayNamesAr[worstDay]:dayNamesEn[worstDay];
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,11,2,"F");
@@ -3059,6 +3093,11 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
       ?`أفضل يوم: ${bdn} (${dayAvgs[bestDay]}) · أسوأ يوم: ${wdn} (${dayAvgs[worstDay]})`
       :`Best day: ${bdn} (${dayAvgs[bestDay]}) · Worst day: ${wdn} (${dayAvgs[worstDay]})`;
     doc.text(ins,ml+cw/2,y+7.5,{align:"center"});
+    y+=18;
+  } else if(bestDay>=0&&bestDay===worstDay){
+    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,11,2,"F");
+    font(doc,7.5,"italic",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
+    doc.text(isAr?"بيانات غير كافية لتحديد نمط أسبوعي — سجّل جلسات في أيام مختلفة لرؤية الاتجاه":"Not enough data across different days yet to identify a weekly pattern — log sessions on more days to see a trend",ml+cw/2,y+7.5,{align:"center"});
     y+=18;
   }
 
@@ -3155,8 +3194,8 @@ const highestRiskName = avgZonal.cervical >= avgZonal.thoracic && avgZonal.cervi
 const narrative=[
   improved
     ? (isAr
-      ? `عبر ${sessions.length} جلسة، حقق ${name} تحسناً مستمراً +${trendDelta} نقطة في جودة الوضعية. الاتجاه التصاعدي يؤكد تكوين عادات فعالة.${bestDay >= 0 ? ` جلسات يوم ${(isAr ? dayNamesAr[bestDay] : dayNamesEn[bestDay])} تتفوق باستمرار.` : ""} متوسط 90 يوم: ${avg90}/100.`
-      : `Over ${sessions.length} sessions, ${name} achieved a consistent +${trendDelta} point improvement. 90-day average: ${avg90}/100. Upward trajectory confirms effective habit formation.${bestDay >= 0 ? ` ${(isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay])} sessions consistently outperform others.` : ""}`)
+      ? `عبر ${sessions.length} جلسة، حقق ${name} تحسناً مستمراً +${trendDelta} نقطة في جودة الوضعية. الاتجاه التصاعدي يؤكد تكوين عادات فعالة.${bestDay >= 0 && bestDay !== worstDay ? ` جلسات يوم ${(isAr ? dayNamesAr[bestDay] : dayNamesEn[bestDay])} تتفوق باستمرار.` : ""} متوسط 90 يوم: ${avg90}/100.`
+      : `Over ${sessions.length} sessions, ${name} achieved a consistent +${trendDelta} point improvement. 90-day average: ${avg90}/100. Upward trajectory confirms effective habit formation.${bestDay >= 0 && bestDay !== worstDay ? ` ${(isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay])} sessions consistently outperform others.` : ""}`)
     : declined
     ? (isAr
       ? `عبر ${sessions.length} جلسة، لوحظ انخفاض ${Math.abs(trendDelta)} نقطة. هذا النمط يتبع عادةً زيادة في عبء العمل أو تغييرات في الإرغونوميكس. أعلى منطقة خطر: ${highestRiskName} (${highestRiskAll}%).`
