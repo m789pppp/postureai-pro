@@ -32,12 +32,30 @@ export const TYPE = {
 
 export const card = (glow = false) => ({
   background: LPV7_TOKENS.card,
-  border: `1px solid ${glow ? "rgba(79,124,249,.22)" : LPV7_TOKENS.border}`,
+  border: `1px solid ${glow ? "rgba(79,124,249,.25)" : LPV7_TOKENS.border}`,
   borderRadius: 20,
-  padding: "clamp(20px,2.5vw,32px)",
+  padding: 32,
   backdropFilter: "blur(12px)",
-  boxShadow: glow ? "0 0 0 1px rgba(79,124,249,.08), 0 8px 32px rgba(0,0,0,.35)" : "0 4px 24px rgba(0,0,0,.25)",
+  boxShadow: glow ? "0 0 40px rgba(79,124,249,.08),0 8px 32px rgba(0,0,0,.3)" : "0 4px 24px rgba(0,0,0,.25)",
 });
+
+export const btn = (variant = "primary", size = "md") => {
+  const sizes = { sm:{ h:40, pad:"0 18px", fs:14 }, md:{ h:46, pad:"0 24px", fs:15 }, lg:{ h:52, pad:"0 32px", fs:16.5 } };
+  const s = sizes[size];
+  const base = {
+    display:"inline-flex", alignItems:"center", justifyContent:"center", gap:8,
+    height:s.h, padding:s.pad, borderRadius:12, fontWeight:600,
+    fontSize:s.fs, cursor:"pointer",
+    transition:"transform .25s cubic-bezier(.16,1,.3,1), box-shadow .25s, background .25s, border-color .25s",
+    border:"none", textDecoration:"none", letterSpacing:"-.01em", whiteSpace:"nowrap",
+  };
+  if (variant === "primary") return { ...base, background:LPV7_TOKENS.gBlue, color:"#fff", boxShadow:"0 4px 24px rgba(79,124,249,.35)" };
+  if (variant === "ghost")   return { ...base, background:"rgba(255,255,255,.05)", color:LPV7_TOKENS.text, border:`1px solid ${LPV7_TOKENS.border}` };
+  if (variant === "outline") return { ...base, background:"transparent", color:LPV7_TOKENS.indigo, border:"1px solid rgba(129,140,248,.4)" };
+  return base;
+};
+
+export const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
 
 export function Reveal({ children, delay = 0, y = 28, style = {}, className }) {
   const ref = useRef(null);

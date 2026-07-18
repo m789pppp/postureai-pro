@@ -2695,13 +2695,23 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     sf(7.5,"normal"); doc.text(_scoreLabel(sc,isAr),ml+cw*0.82,y+5.5);
     y+=8;
   }
+  if(sorted.length===0){
+    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,14,2,"F");
+    sf(8,"normal"); tc(doc,...PDF_TOKENS.muted);
+    doc.text(isAr?"لا يوجد مستخدمون نشطون بعد — سيظهر الترتيب بمجرد بدء الفريق في تسجيل جلسات":"No active users yet — the leaderboard will populate once the team starts logging sessions",ml+cw/2,y+8,{align:"center"});
+    y+=18;
+  }
 
   // HR Recommendations
   y+=10;
   if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations"); y=22;}
   sf(10,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"توصيات لمدير الموارد البشرية":"HR Recommendations",ml,y); y+=7;
-  const hrRecs = [
+  const hrRecs = totalU===0 ? [
+    isAr
+      ? "لا يوجد مستخدمون نشطون في الفترة المحددة بعد — شارك رابط الدعوة مع الفريق لبدء تسجيل الجلسات"
+      : "No active users in this period yet — share the team invite link to get employees logging sessions",
+  ] : [
     atRisk.length>totalU*0.3
       ? (isAr?`${Math.round(atRisk.length/totalU*100)}% من الفريق في خطر — يُنصح بتدخل جماعي: ورشة ارغونوميكس وتقييم محطات العمل`
               :`${Math.round(atRisk.length/totalU*100)}% of team at-risk — recommend group intervention: ergonomics workshop + workstation audit`)
@@ -3050,7 +3060,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   y+=barZoneH+8;
 
   // Best/worst day insight strip
-  if(bestDay>=0&&worstDay>=0){
+  if(bestDay>=0&&worstDay>=0&&bestDay!==worstDay){
     const bdn=isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay];
     const wdn=isAr?dayNamesAr[worstDay]:dayNamesEn[worstDay];
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,11,2,"F");
@@ -3059,6 +3069,11 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
       ?`أفضل يوم: ${bdn} (${dayAvgs[bestDay]}) · أسوأ يوم: ${wdn} (${dayAvgs[worstDay]})`
       :`Best day: ${bdn} (${dayAvgs[bestDay]}) · Worst day: ${wdn} (${dayAvgs[worstDay]})`;
     doc.text(ins,ml+cw/2,y+7.5,{align:"center"});
+    y+=18;
+  } else if(bestDay>=0&&bestDay===worstDay){
+    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,11,2,"F");
+    font(doc,7.5,"italic",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
+    doc.text(isAr?"بيانات غير كافية لتحديد نمط أسبوعي — سجّل جلسات في أيام مختلفة لرؤية الاتجاه":"Not enough data across different days yet to identify a weekly pattern — log sessions on more days to see a trend",ml+cw/2,y+7.5,{align:"center"});
     y+=18;
   }
 
@@ -3155,8 +3170,8 @@ const highestRiskName = avgZonal.cervical >= avgZonal.thoracic && avgZonal.cervi
 const narrative=[
   improved
     ? (isAr
-      ? `عبر ${sessions.length} جلسة، حقق ${name} تحسناً مستمراً +${trendDelta} نقطة في جودة الوضعية. الاتجاه التصاعدي يؤكد تكوين عادات فعالة.${bestDay >= 0 ? ` جلسات يوم ${(isAr ? dayNamesAr[bestDay] : dayNamesEn[bestDay])} تتفوق باستمرار.` : ""} متوسط 90 يوم: ${avg90}/100.`
-      : `Over ${sessions.length} sessions, ${name} achieved a consistent +${trendDelta} point improvement. 90-day average: ${avg90}/100. Upward trajectory confirms effective habit formation.${bestDay >= 0 ? ` ${(isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay])} sessions consistently outperform others.` : ""}`)
+      ? `عبر ${sessions.length} جلسة، حقق ${name} تحسناً مستمراً +${trendDelta} نقطة في جودة الوضعية. الاتجاه التصاعدي يؤكد تكوين عادات فعالة.${bestDay >= 0 && bestDay !== worstDay ? ` جلسات يوم ${(isAr ? dayNamesAr[bestDay] : dayNamesEn[bestDay])} تتفوق باستمرار.` : ""} متوسط 90 يوم: ${avg90}/100.`
+      : `Over ${sessions.length} sessions, ${name} achieved a consistent +${trendDelta} point improvement. 90-day average: ${avg90}/100. Upward trajectory confirms effective habit formation.${bestDay >= 0 && bestDay !== worstDay ? ` ${(isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay])} sessions consistently outperform others.` : ""}`)
     : declined
     ? (isAr
       ? `عبر ${sessions.length} جلسة، لوحظ انخفاض ${Math.abs(trendDelta)} نقطة. هذا النمط يتبع عادةً زيادة في عبء العمل أو تغييرات في الإرغونوميكس. أعلى منطقة خطر: ${highestRiskName} (${highestRiskAll}%).`
