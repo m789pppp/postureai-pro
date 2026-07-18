@@ -7645,6 +7645,63 @@ def scim_service_provider_config():
     })
 
 
+# ── Admin-facing SCIM provisioning status ──────────────────────────
+# The routes above (/scim/v2/*) are the actual protocol endpoints an IdP
+# (Okta / Azure AD / OneLogin) calls directly with SCIM_BEARER_TOKEN.
+# That token is a server secret and must never reach the browser. These
+# two endpoints let the platform admin (normal Firebase auth) see setup
+# instructions and provisioning status without ever seeing the token.
+#
+# NOTE: SCIM_BEARER_TOKEN is currently a single platform-wide secret —
+# there is no per-organization token yet, so today this is effectively
+# single-tenant SCIM (fine for one enterprise IdP, not yet a true
+# multi-org self-serve provisioning story). Flagging this explicitly
+# rather than presenting it as more than it is.
+@app.route("/api/admin/scim/status", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_scim_status():
+    try:
+        configured = bool(SCIM_BEARER_TOKEN)
+        base = request.host_url.rstrip("/")
+        return jsonify({
+            "configured": configured,
+            "endpoints": {
+                "service_provider_config": f"{base}/scim/v2/ServiceProviderConfig",
+                "users":                   f"{base}/scim/v2/Users",
+            },
+            "scope": "platform-wide (single shared token — not per-organization yet)",
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/scim/users", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_scim_users():
+    """Users that have actually been provisioned via SCIM (have an external_id
+    set by the IdP), so the admin can confirm sync is really happening —
+    as opposed to all users, most of whom signed up directly."""
+    try:
+        docs = db.collection("users").where("external_id", "!=", "").limit(200).stream()
+        users = []
+        for d in docs:
+            u = d.to_dict()
+            users.append({
+                "id":          d.id,
+                "email":       u.get("email",""),
+                "name":        u.get("name",""),
+                "external_id": u.get("external_id",""),
+                "active":      u.get("active", True),
+                "company_name":u.get("company_name",""),
+                "updated_at":  u.get("updated_at", u.get("created_at","")),
+            })
+        return jsonify({"users": users, "count": len(users)})
+    except Exception as e:
+        return safe_error(e)
 
 
 @app.route("/api/user/activity", methods=["GET"])
