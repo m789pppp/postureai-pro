@@ -556,14 +556,19 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2MB max request — prevents OOM on large frames
 
 # ── Optional WebSocket / Socket.IO (enable with SOCKETIO_ENABLED=true) ────────
+_SOCKETIO_STATUS = {"enabled": False, "initialized": False, "error": None}
 if os.getenv("SOCKETIO_ENABLED", "false").lower() == "true":
+    _SOCKETIO_STATUS["enabled"] = True
     try:
         from services.websocket_server import init_socketio
         socketio = init_socketio(app)
+        _SOCKETIO_STATUS["initialized"] = True
         print("✅ WebSocket server initialized (Socket.IO)", flush=True)
     except ImportError as _ws_err:
+        _SOCKETIO_STATUS["error"] = str(_ws_err)
         print(f"⚠️  WebSocket init skipped: {_ws_err} — pip install flask-socketio gevent", file=sys.stderr)
     except Exception as _ws_err2:
+        _SOCKETIO_STATUS["error"] = str(_ws_err2)
         print(f"⚠️  WebSocket init error: {_ws_err2}", file=sys.stderr)
 
 @app.errorhandler(413)
@@ -7700,6 +7705,34 @@ def admin_scim_users():
                 "updated_at":  u.get("updated_at", u.get("created_at","")),
             })
         return jsonify({"users": users, "count": len(users)})
+    except Exception as e:
+        return safe_error(e)
+
+
+# ── Real (not hardcoded) system health for the admin observability panel ──
+# Only reports on services we can actually check from here. Other rows
+# the admin UI shows (Stripe, SendGrid, PDF generator, etc.) are not yet
+# live-checked and are labeled as such in the frontend rather than faked.
+@app.route("/api/admin/system/health", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_system_health():
+    try:
+        ws = dict(_SOCKETIO_STATUS)
+        redis_status = redis_health() if REDIS_READY else {"status": "not_configured"}
+        firestore_ok = db is not None
+        return jsonify({
+            "websocket": {
+                "enabled":     ws["enabled"],
+                "initialized": ws["initialized"],
+                "error":       ws["error"],
+                "status": ("healthy" if ws["initialized"] else
+                           "disabled" if not ws["enabled"] else "error"),
+            },
+            "redis": redis_status,
+            "firestore": {"status": "healthy" if firestore_ok else "down"},
+        })
     except Exception as e:
         return safe_error(e)
 

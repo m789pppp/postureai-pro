@@ -847,7 +847,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     sf(7.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+13,8);
     sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+13,13);
     sf(6,"normal"); tc(doc,...TEXT3);
-    doc.text(`Session #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
+    doc.text(`${isAr?"جلسة":"Session"} #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
     fc(doc,...BORDER); doc.rect(0,15,W,.5,"F");
     y=22;
 
@@ -1134,7 +1134,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   fc(doc,...BG2);doc.rect(0,0,W,15,"F");fc(doc,...ACCENT);doc.rect(0,0,W,1.6,"F");
   _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("CORVUS",ml+13,8);
   sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
-  sf(6,"normal");tc(doc,...TEXT3);doc.text(`Session #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
+  sf(6,"normal");tc(doc,...TEXT3);doc.text(`${isAr?"جلسة":"Session"} #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
   fc(doc,...BORDER);doc.rect(0,15,W,.5,"F");
   y=22;
 
@@ -2218,7 +2218,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // Date right
   font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184); doc.text(nowStr,W-mr,26,{align:"right"});
   font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
-  doc.text(`Session #${num1} vs #${num2}`,W-mr,36,{align:"right"});
+  doc.text(`${isAr?"جلسة":"Session"} #${num1} vs #${num2}`,W-mr,36,{align:"right"});
 
   fc(doc,...deltaCol); doc.rect(0,69.5,W,2.5,"F");
 
@@ -2238,7 +2238,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   dc(doc,...g1); lw(doc,0.3); rr(doc,ml,y,half,heroH,6,"S"); lw(doc,0.3);
   fc(doc,...g1); doc.rect(ml,y,half,3,"F"); rr(doc,ml,y,half,3,3,"F");
   // Session number chip
-  const s1lbl=`Session #${num1}`;
+  const s1lbl=`${isAr?"جلسة":"Session"} #${num1}`;
   font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g1); rr(doc,ml+6,y+8,half-12,10,2,"F");
   doc.text(s1lbl,ml+6+(half-12)/2,y+14.5,{align:"center"});
@@ -2276,7 +2276,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   fc(doc,...PDF_TOKENS.card); rr(doc,rx,y,half,heroH,6,"F");
   dc(doc,...g2); lw(doc,0.3); rr(doc,rx,y,half,heroH,6,"S"); lw(doc,0.3);
   fc(doc,...g2); doc.rect(rx,y,half,3,"F"); rr(doc,rx,y,half,3,3,"F");
-  const s2lbl=`Session #${num2}`;
+  const s2lbl=`${isAr?"جلسة":"Session"} #${num2}`;
   font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g2); rr(doc,rx+6,y+8,half-12,10,2,"F");
   doc.text(s2lbl,rx+6+(half-12)/2,y+14.5,{align:"center"});
@@ -2410,7 +2410,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   zones.forEach(({k,en,ar,r})=>{
     if(y>H-44){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
     const r1=z1[k]||0, r2=z2[k]||0, dz=r2-r1;
-    const rc1=_riskColor(r1), rc2=_riskColor(r2), dzC=dz>0?PDF_TOKENS.danger:PDF_TOKENS.success;
+    const rc1=_riskColor(r1), rc2=_riskColor(r2), dzC=dz>0?PDF_TOKENS.danger:dz<0?PDF_TOKENS.success:PDF_TOKENS.muted;
     const zh=36;
     fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,zh,4,"F");
     dc(doc,...rc2); lw(doc,0.25); rr(doc,ml,y,cw,zh,4,"S"); lw(doc,0.3);
@@ -2431,7 +2431,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...rc2);
     doc.text(`#${num2}: ${r2}%`,ml+9+bw2+4,barY+10);
     // Delta badge top right
-    const dzlbl=`${dz>0?"+":"-"}${Math.abs(dz)}%`;
+    const dzlbl=dz===0?"0%":`${dz>0?"+":"-"}${Math.abs(dz)}%`;
     const dzw=doc.getTextWidth(dzlbl)+8;
     fc(doc,...dzC);
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
@@ -2461,7 +2461,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger); doc.text(lbl,ml+7,y+5.5);
       font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (${d} ${isAr?"نقطة":"pts"})`,ml+7,y+11);
       const bw2=cw*0.3;
       fc(doc,...PDF_TOKENS.danger);
       doc.setGState&&doc.setGState(new doc.GState({opacity:0.2}));
@@ -2483,7 +2483,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success); doc.text(lbl,ml+7,y+5.5);
       font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (+${d} ${isAr?"نقطة":"pts"})`,ml+7,y+11);
       y+=18;
     });
     y+=6;
@@ -2549,7 +2549,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`],
     [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2)],
     [isAr?"التنبيهات":"Alerts",String(al1),String(al2)],
-    [isAr?"التغيّر":"Change","—",`${delta>0?"+":""}${delta} pts`],
+    [isAr?"التغيّر":"Change","—",`${delta>0?"+":""}${delta} ${isAr?"نقطة":"pts"}`],
   ];
   const th3=sumRows.length*9+3;
   fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,th3,4,"F");
@@ -2558,8 +2558,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   fc(doc,...PDF_TOKENS.slate); doc.rect(ml,y,cw,9,"F"); rr(doc,ml,y,cw,9,2,"F"); doc.rect(ml,y+5,cw,4,"F");
   font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text(isAr?"البند":"Item",ml+5,y+6.5);
-  doc.text(`Session #${num1}`,ml+cw*0.42,y+6.5,{align:"center"});
-  doc.text(`Session #${num2}`,ml+cw*0.75,y+6.5,{align:"center"});
+  doc.text(`${isAr?"جلسة":"Session"} #${num1}`,ml+cw*0.42,y+6.5,{align:"center"});
+  doc.text(`${isAr?"جلسة":"Session"} #${num2}`,ml+cw*0.75,y+6.5,{align:"center"});
   y+=9;
   sumRows.forEach(([k,v1,v2],i)=>{
     if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,9,"F");}

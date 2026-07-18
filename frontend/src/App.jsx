@@ -48,7 +48,6 @@ import { WhiteLabel }          from "./WhiteLabel.jsx";
 import { MultiTenantManager }  from "./MultiTenantManager.jsx";
 import { AuditSystem }         from "./AuditSystem.jsx";
 import { EnterpriseAdminTools }from "./EnterpriseAdminTools.jsx";
-import LandingPageLegacy from "./LandingPage.jsx";
 import LandingPageV7 from "./LandingPageV7.jsx";
 import { DemoWelcome, DemoDashboard, clearDemoOnExit } from "./DemoModeUI.jsx";
 import { saveDemoSession } from "./DemoMode.js";
