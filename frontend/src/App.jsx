@@ -5127,6 +5127,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         )}
 
+        {/* Personalised analysis indicator — shown while a calibrated session runs */}
+        {camActive&&mode!=="side"&&calibData?.tolerances&&(
+          <div style={{padding:"5px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6,background:"rgba(16,185,129,.05)"}}>
+            <span style={{fontSize:11,color:"#34d399",fontWeight:700}}>✓</span>
+            <span style={{fontSize:10.5,color:"#34d399",fontWeight:600}}>
+              {isAr?"التحليل مُخصّص لوضعيتك الطبيعية":"Analysis personalised to your natural posture"}
+            </span>
+          </div>
+        )}
+
         {/* Alert message — warn/bad/info only */}
         {(alertMsg.type==="warn"||alertMsg.type==="bad"||(alertMsg.type==="info"&&!scoreStatus))&&(
         <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`}}>
