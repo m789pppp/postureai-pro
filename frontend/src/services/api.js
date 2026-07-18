@@ -7,8 +7,9 @@
  * - Complete PaymentAPI + AIAPI surface
  */
 import { auth } from "../firebase.js";
+import { API_BASE_URL } from "../config/api.js";
 
-const BASE_URL      = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+const BASE_URL      = API_BASE_URL;
 const DEFAULT_TIMEOUT = 20000; // 20s
 
 // ── Token cache ────────────────────────────────────────────────────
@@ -239,6 +240,40 @@ export const BillingAPI = {
     if (!resp.ok) throw new Error(`Invoice PDF error: ${resp.status}`);
     return resp.blob();
   },
+};
+
+// ── Symptom Correlation API ─────────────────────────────────────────
+export const SymptomAPI = {
+  /** Log (or overwrite) a day's symptom check-in. symptoms: [{type, severity(1-5)}] */
+  log:         (data)   => apiFetch("/symptoms/log",              { method: "POST", body: data }),
+  /** History of the user's own check-ins. period: 7d|30d|90d */
+  history:     (period="30d") => apiFetch(`/symptoms/log?period=${period}`),
+  /** The correlation engine — posture metrics on symptom days vs. other days. */
+  correlation: (period="90d") => apiFetch(`/analytics/symptom-correlation?period=${period}`),
+};
+
+// ── Marketplace API (Physiotherapist directory + booking) ──────────
+export const MarketplaceAPI = {
+  /** Patient-facing: browse active therapists, optional ?city=&specialty= filters. */
+  listTherapists: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/marketplace/therapists${qs ? `?${qs}` : ""}`);
+  },
+  /** Patient-facing: single therapist profile. */
+  getTherapist:   (id)   => apiFetch(`/marketplace/therapists/${id}`),
+  /** Patient-facing: create a booking request (opens a PayMob payment). */
+  createBooking:  (data) => apiFetch("/marketplace/bookings",        { method: "POST", body: data }),
+  /** Patient-facing: my own booking history. */
+  myBookings:     ()     => apiFetch("/marketplace/bookings"),
+
+  /** Admin: full therapist list (including paused). */
+  adminListTherapists:  ()     => apiFetch("/admin/marketplace/therapists"),
+  /** Admin: add a new curated therapist profile. */
+  adminCreateTherapist: (data) => apiFetch("/admin/marketplace/therapists",        { method: "POST", body: data }),
+  /** Admin: edit or pause/activate a therapist. */
+  adminUpdateTherapist: (id, data) => apiFetch(`/admin/marketplace/therapists/${id}`, { method: "PATCH", body: data }),
+  /** Admin: all bookings across all patients. */
+  adminListBookings:    ()     => apiFetch("/admin/marketplace/bookings"),
 };
 
 export const AdminAPI = {

@@ -7284,11 +7284,23 @@ def gdpr_delete_all_data():
             "requested_at": datetime.utcnow().isoformat() + "Z",
         })
 
-        print(f"[gdpr] Erasure completed for uid={uid} counts={deleted_counts}", flush=True)
+        # Finally, delete the Firebase Auth account itself so the user can't
+        # log back in to a shell of a profile. Done last so a failure here
+        # doesn't block the data erasure above.
+        auth_deleted = False
+        if _fb_auth is not None:
+            try:
+                _fb_auth.delete_user(uid)
+                auth_deleted = True
+            except Exception as auth_err:
+                print(f"[gdpr] Auth user delete failed for uid={uid}: {auth_err}", flush=True)
+
+        print(f"[gdpr] Erasure completed for uid={uid} counts={deleted_counts} auth_deleted={auth_deleted}", flush=True)
         return jsonify({
             "ok": True,
             "message": "All personal data has been permanently deleted.",
             "deleted": deleted_counts,
+            "auth_deleted": auth_deleted,
         })
     except Exception as e:
         return safe_error(e, "GDPR erasure failed")
@@ -7633,6 +7645,63 @@ def scim_service_provider_config():
     })
 
 
+# ── Admin-facing SCIM provisioning status ──────────────────────────
+# The routes above (/scim/v2/*) are the actual protocol endpoints an IdP
+# (Okta / Azure AD / OneLogin) calls directly with SCIM_BEARER_TOKEN.
+# That token is a server secret and must never reach the browser. These
+# two endpoints let the platform admin (normal Firebase auth) see setup
+# instructions and provisioning status without ever seeing the token.
+#
+# NOTE: SCIM_BEARER_TOKEN is currently a single platform-wide secret —
+# there is no per-organization token yet, so today this is effectively
+# single-tenant SCIM (fine for one enterprise IdP, not yet a true
+# multi-org self-serve provisioning story). Flagging this explicitly
+# rather than presenting it as more than it is.
+@app.route("/api/admin/scim/status", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_scim_status():
+    try:
+        configured = bool(SCIM_BEARER_TOKEN)
+        base = request.host_url.rstrip("/")
+        return jsonify({
+            "configured": configured,
+            "endpoints": {
+                "service_provider_config": f"{base}/scim/v2/ServiceProviderConfig",
+                "users":                   f"{base}/scim/v2/Users",
+            },
+            "scope": "platform-wide (single shared token — not per-organization yet)",
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/scim/users", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_scim_users():
+    """Users that have actually been provisioned via SCIM (have an external_id
+    set by the IdP), so the admin can confirm sync is really happening —
+    as opposed to all users, most of whom signed up directly."""
+    try:
+        docs = db.collection("users").where("external_id", "!=", "").limit(200).stream()
+        users = []
+        for d in docs:
+            u = d.to_dict()
+            users.append({
+                "id":          d.id,
+                "email":       u.get("email",""),
+                "name":        u.get("name",""),
+                "external_id": u.get("external_id",""),
+                "active":      u.get("active", True),
+                "company_name":u.get("company_name",""),
+                "updated_at":  u.get("updated_at", u.get("created_at","")),
+            })
+        return jsonify({"users": users, "count": len(users)})
+    except Exception as e:
+        return safe_error(e)
 
 
 @app.route("/api/user/activity", methods=["GET"])
@@ -15855,6 +15924,482 @@ def llm_proxy():
 
     except Exception as e:
         return safe_error(e)
+
+
+# ════════════════════════════════════════════════════════════════════
+# Physiotherapist Marketplace
+# Therapist profiles are admin-curated (invite-only) for v1 — no public
+# self-serve signup yet. Bookings reuse the existing PayMob order flow,
+# priced from the therapist's own session_fee_cents rather than a
+# subscription tier.
+# ════════════════════════════════════════════════════════════════════
+
+def _therapist_public(doc):
+    """Strip internal/admin-only fields before returning a therapist to patients."""
+    d = doc.to_dict() or {}
+    return {
+        "id": doc.id,
+        "name": d.get("name", ""),
+        "photo_url": d.get("photo_url", ""),
+        "specialties": d.get("specialties", []),
+        "city": d.get("city", ""),
+        "bio": d.get("bio", ""),
+        "years_experience": d.get("years_experience", 0),
+        "session_fee_cents": d.get("session_fee_cents", 0),
+        "currency": d.get("currency", "EGP"),
+        "languages": d.get("languages", []),
+        "rating": d.get("rating"),
+        "review_count": d.get("review_count", 0),
+    }
+
+
+# ── Admin: manage therapist profiles ──────────────────────────────
+@app.route("/api/admin/marketplace/therapists", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("60 per minute")
+def admin_list_therapists():
+    try:
+        db   = firestore.client()
+        docs = db.collection("therapists").order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        ).get()
+        return jsonify({"therapists": [{**d.to_dict(), "id": d.id} for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/marketplace/therapists", methods=["POST"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_create_therapist():
+    try:
+        data = request.get_json(force=True) or {}
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "name required"}), 400
+        fee_cents = int(data.get("session_fee_cents") or 0)
+        if fee_cents <= 0:
+            return jsonify({"error": "session_fee_cents must be > 0"}), 400
+
+        db  = firestore.client()
+        doc = {
+            "name":              name,
+            "photo_url":         (data.get("photo_url") or "").strip(),
+            "specialties":       data.get("specialties") or [],
+            "city":              (data.get("city") or "").strip(),
+            "bio":               (data.get("bio") or "").strip(),
+            "years_experience":  int(data.get("years_experience") or 0),
+            "session_fee_cents": fee_cents,
+            "currency":          (data.get("currency") or "EGP").strip().upper(),
+            "languages":         data.get("languages") or [],
+            "contact_email":     (data.get("contact_email") or "").strip(),
+            "contact_phone":     (data.get("contact_phone") or "").strip(),
+            "status":            "active",          # active | paused
+            "rating":            None,
+            "review_count":      0,
+            "created_at":        datetime.utcnow().isoformat()+"Z",
+            "created_by_admin":  g.uid,
+        }
+        ref = db.collection("therapists").document()
+        ref.set(doc)
+        return jsonify({"ok": True, "id": ref.id})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/marketplace/therapists/<therapist_id>", methods=["PATCH"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_update_therapist(therapist_id):
+    try:
+        data = request.get_json(force=True) or {}
+        allowed = {"name","photo_url","specialties","city","bio","years_experience",
+                   "session_fee_cents","currency","languages","contact_email",
+                   "contact_phone","status"}
+        upd = {k: v for k, v in data.items() if k in allowed}
+        if not upd:
+            return jsonify({"error": "no valid fields to update"}), 400
+        upd["updated_at"]       = datetime.utcnow().isoformat()+"Z"
+        upd["updated_by_admin"] = g.uid
+        db = firestore.client()
+        ref = db.collection("therapists").document(therapist_id)
+        if not ref.get().exists:
+            return jsonify({"error": "therapist not found"}), 404
+        ref.update(upd)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/marketplace/bookings", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("60 per minute")
+def admin_list_bookings():
+    try:
+        db   = firestore.client()
+        docs = db.collection("marketplace_bookings").order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        ).limit(200).get()
+        return jsonify({"bookings": [{**d.to_dict(), "id": d.id} for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+# ── Patient-facing: browse + book ─────────────────────────────────
+@app.route("/api/marketplace/therapists", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def marketplace_list_therapists():
+    try:
+        db    = firestore.client()
+        query = db.collection("therapists").where("status", "==", "active")
+        city  = (request.args.get("city") or "").strip()
+        specialty = (request.args.get("specialty") or "").strip()
+        docs  = query.get()
+        out   = [_therapist_public(d) for d in docs]
+        if city:
+            out = [t for t in out if t["city"].lower() == city.lower()]
+        if specialty:
+            out = [t for t in out if specialty.lower() in [s.lower() for s in t["specialties"]]]
+        return jsonify({"therapists": out})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/therapists/<therapist_id>", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def marketplace_get_therapist(therapist_id):
+    try:
+        db  = firestore.client()
+        doc = db.collection("therapists").document(therapist_id).get()
+        if not doc.exists or doc.to_dict().get("status") != "active":
+            return jsonify({"error": "therapist not found"}), 404
+        return jsonify({"therapist": _therapist_public(doc)})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/bookings", methods=["POST"])
+@require_auth
+@limiter.limit("15 per minute")
+def marketplace_create_booking():
+    """Create a booking request and open a PayMob payment for the therapist's
+    session fee. Mirrors /api/paymob/create-payment's order flow, but priced
+    from the therapist doc instead of a subscription tier."""
+    try:
+        data          = request.get_json(force=True) or {}
+        therapist_id  = (data.get("therapist_id") or "").strip()
+        preferred_time= (data.get("preferred_time") or "").strip()
+        notes         = (data.get("notes") or "").strip()
+        billing_data  = data.get("billing_data", {})
+        if not therapist_id:
+            return jsonify({"error": "therapist_id required"}), 400
+
+        db   = firestore.client()
+        tdoc = db.collection("therapists").document(therapist_id).get()
+        if not tdoc.exists or tdoc.to_dict().get("status") != "active":
+            return jsonify({"error": "therapist not found or unavailable"}), 404
+        therapist = tdoc.to_dict()
+        amount_cents = int(therapist.get("session_fee_cents") or 0)
+        currency     = therapist.get("currency", "EGP")
+        if amount_cents <= 0:
+            return jsonify({"error": "therapist has no fee configured"}), 400
+
+        booking_ref = db.collection("marketplace_bookings").document()
+        booking = {
+            "therapist_id":   therapist_id,
+            "therapist_name": therapist.get("name", ""),
+            "user_id":        g.uid,
+            "preferred_time": preferred_time,
+            "notes":          notes,
+            "amount_cents":   amount_cents,
+            "currency":       currency,
+            "status":         "pending_payment",   # pending_payment | confirmed | cancelled
+            "created_at":     datetime.utcnow().isoformat()+"Z",
+        }
+
+        if not PAYMOB_SECRET_KEY:
+            # No payment configured — still record the request so admin can
+            # follow up manually, matching the "coming soon" card path.
+            booking["status"] = "pending_manual_followup"
+            booking_ref.set(booking)
+            return jsonify({"ok": True, "booking_id": booking_ref.id,
+                             "payment": None,
+                             "note": "PayMob not configured — booking recorded for manual follow-up"}), 200
+
+        headers   = {"Content-Type": "application/json"}
+        auth_resp = req.post("https://accept.paymob.com/api/auth/tokens",
+                              json={"api_key": PAYMOB_SECRET_KEY}, headers=headers, timeout=15)
+        auth_resp.raise_for_status()
+        auth_token = auth_resp.json().get("token")
+        if not auth_token:
+            return jsonify({"error": "PayMob auth failed"}), 502
+
+        order_resp = req.post("https://accept.paymob.com/api/ecommerce/orders",
+                               json={"auth_token": auth_token, "delivery_needed": False,
+                                     "amount_cents": amount_cents, "currency": currency,
+                                     "merchant_order_id": f"PAI-BOOK-{g.uid}-{booking_ref.id}-{int(time.time())}",
+                                     "items": [{"name": f"Session with {therapist.get('name','Therapist')}",
+                                                "amount_cents": amount_cents,
+                                                "description": f"PostureAI Marketplace — physiotherapy session booking",
+                                                "quantity": 1}]},
+                               headers=headers, timeout=15)
+        order_resp.raise_for_status()
+        order_id = order_resp.json().get("id")
+
+        pk_resp = req.post("https://accept.paymob.com/api/acceptance/payment_keys",
+                            json={"auth_token": auth_token, "amount_cents": amount_cents,
+                                  "expiration": 3600, "order_id": order_id, "currency": currency,
+                                  "integration_id": PAYMOB_INTEGRATIONS.get("card", ""),
+                                  "billing_data": {"email": billing_data.get("email","NA"),
+                                                   "first_name": billing_data.get("first_name","Customer"),
+                                                   "last_name": billing_data.get("last_name",""),
+                                                   "phone_number": billing_data.get("phone_number","NA"),
+                                                   "apartment":"NA","floor":"NA","street":"NA",
+                                                   "building":"NA","shipping_method":"NA",
+                                                   "postal_code":"NA","city":"Cairo","country":"EG","state":"Cairo"}},
+                            headers=headers, timeout=15)
+        pk_resp.raise_for_status()
+        payment_key = pk_resp.json().get("token")
+
+        booking["paymob_order_id"] = order_id
+        booking_ref.set(booking)
+
+        iframe_id = PAYMOB_IFRAME_ID if 'PAYMOB_IFRAME_ID' in globals() else os.getenv("PAYMOB_IFRAME_ID", "")
+        return jsonify({
+            "ok": True,
+            "booking_id": booking_ref.id,
+            "payment": {
+                "payment_key": payment_key,
+                "iframe_url": f"https://accept.paymob.com/api/acceptance/iframes/{iframe_id}?payment_token={payment_key}" if iframe_id else None,
+            }
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/bookings", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def marketplace_my_bookings():
+    try:
+        db   = firestore.client()
+        docs = db.collection("marketplace_bookings").where("user_id", "==", g.uid).order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        ).get()
+        return jsonify({"bookings": [{**d.to_dict(), "id": d.id} for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+# ════════════════════════════════════════════════════════════════════
+# Symptom Correlation Engine
+# Lets a user log how they actually felt on a given day (headache, neck
+# pain, etc.) and cross-references that against their real posture
+# session data for the same days — a self-reported ground truth layered
+# on top of the purely metric-based pain_prediction already computed
+# live during a session.
+# ════════════════════════════════════════════════════════════════════
+
+SYMPTOM_TYPES = {"headache","neck_pain","back_pain","shoulder_pain","eye_strain","wrist_pain","other"}
+
+
+@app.route("/api/symptoms/log", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def log_symptom():
+    """Upsert today's (or a given day's) symptom check-in. One doc per user per day —
+    logging again the same day overwrites rather than duplicates."""
+    try:
+        data = request.get_json(force=True) or {}
+        day  = (data.get("date") or datetime.utcnow().strftime("%Y-%m-%d")).strip()
+        try:
+            datetime.strptime(day, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "date must be YYYY-MM-DD"}), 400
+
+        symptoms_in = data.get("symptoms") or []
+        clean = []
+        for s in symptoms_in:
+            stype = (s.get("type") or "").strip().lower()
+            if stype not in SYMPTOM_TYPES:
+                continue
+            severity = max(1, min(5, int(s.get("severity") or 3)))
+            clean.append({"type": stype, "severity": severity})
+        if not clean:
+            return jsonify({"error": "at least one valid symptom required"}), 400
+
+        uid = g.uid
+        doc_id = f"{uid}_{day}"
+        db.collection("symptom_logs").document(doc_id).set({
+            "uid":       uid,
+            "date":      day,
+            "symptoms":  clean,
+            "notes":     (data.get("notes") or "").strip()[:500],
+            "updated_at": datetime.utcnow().isoformat()+"Z",
+        }, merge=False)
+        return jsonify({"ok": True, "date": day, "symptoms": clean})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/symptoms/log", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def get_symptom_log():
+    """History of the user's own symptom check-ins. ?period=7d|30d|90d"""
+    try:
+        uid    = g.uid
+        period = request.args.get("period", "30d")
+        days   = {"7d":7,"30d":30,"90d":90}.get(period, 30)
+        cutoff_day = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        docs = (db.collection("symptom_logs")
+                  .where("uid","==",uid)
+                  .where("date",">=",cutoff_day)
+                  .order_by("date", direction=firestore.Query.DESCENDING)
+                  .limit(200).stream())
+        return jsonify({"logs": [d.to_dict() for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+def _day_key(ts):
+    """Normalize a Firestore timestamp / datetime / iso-string into a YYYY-MM-DD key."""
+    if ts is None:
+        return None
+    if hasattr(ts, "strftime"):
+        return ts.strftime("%Y-%m-%d")
+    return str(ts)[:10]
+
+
+@app.route("/api/analytics/symptom-correlation", methods=["GET"])
+@require_auth
+@limiter.limit("20 per minute")
+@require_tier("standard")
+def symptom_correlation():
+    """
+    Core correlation engine. For each symptom type the user has logged at
+    least MIN_DAYS times, compares posture-session metrics on days that
+    symptom was reported (severity >= 3) vs. all other logged-session days,
+    and surfaces whichever alert cause / score gap is largest.
+
+    This is a plain mean-difference comparison, not a black-box model —
+    kept deliberately explainable so the result can be shown to the user
+    (and, per Mo's PT background, would hold up if a clinician looked at it).
+    """
+    MIN_DAYS = 3
+    try:
+        uid    = g.uid
+        period = request.args.get("period", "90d")
+        days   = {"30d":30,"90d":90,"180d":180}.get(period, 90)
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff_day = cutoff.strftime("%Y-%m-%d")
+
+        symptom_docs = list(db.collection("symptom_logs")
+                              .where("uid","==",uid)
+                              .where("date",">=",cutoff_day)
+                              .stream())
+        if len(symptom_docs) < MIN_DAYS:
+            return jsonify({"ok": True, "insights": [],
+                             "note": f"Log symptoms on at least {MIN_DAYS} different days to unlock correlations",
+                             "days_logged": len(symptom_docs)})
+
+        session_docs = list(db.collection("sessions")
+                              .where("uid","==",uid)
+                              .where("created_at",">=",cutoff)
+                              .limit(1000).stream())
+        if not session_docs:
+            return jsonify({"ok": True, "insights": [], "note": "No session data in this period"})
+
+        # Aggregate sessions by day
+        by_day: dict = {}
+        for s in session_docs:
+            d = s.to_dict()
+            day = _day_key(d.get("created_at"))
+            if not day:
+                continue
+            by_day.setdefault(day, []).append(d)
+
+        # Which symptom (severity>=3) was logged on which day
+        symptom_days: dict = {}   # symptom_type -> set(days)
+        all_logged_days = set()
+        for doc in symptom_docs:
+            d = doc.to_dict()
+            day = d.get("date")
+            all_logged_days.add(day)
+            for s in d.get("symptoms", []):
+                if s.get("severity", 0) >= 3:
+                    symptom_days.setdefault(s["type"], set()).add(day)
+
+        def day_avg_score(day):
+            scores = [s.get("avg_score") for s in by_day.get(day, []) if s.get("avg_score") is not None]
+            return sum(scores)/len(scores) if scores else None
+
+        def day_top_cause(day):
+            counts: dict = {}
+            for s in by_day.get(day, []):
+                for a in (s.get("alert_causes") or []):
+                    c = a.get("cause","posture")
+                    counts[c] = counts.get(c,0)+1
+            if not counts:
+                return None
+            return max(counts.items(), key=lambda kv: kv[1])[0]
+
+        # Baseline: all days with session data, regardless of symptoms
+        baseline_days = [d for d in by_day.keys()]
+        baseline_scores = [x for d in baseline_days for x in [day_avg_score(d)] if x is not None]
+        baseline_avg = sum(baseline_scores)/len(baseline_scores) if baseline_scores else None
+
+        insights = []
+        for stype, sdays in symptom_days.items():
+            relevant_days = [d for d in sdays if d in by_day]
+            if len(relevant_days) < MIN_DAYS:
+                continue
+            symptom_scores = [x for d in relevant_days for x in [day_avg_score(d)] if x is not None]
+            other_days     = [d for d in baseline_days if d not in sdays]
+            other_scores   = [x for d in other_days for x in [day_avg_score(d)] if x is not None]
+            if not symptom_scores or not other_scores:
+                continue
+            sym_avg   = sum(symptom_scores)/len(symptom_scores)
+            other_avg = sum(other_scores)/len(other_scores)
+            gap       = round(other_avg - sym_avg, 1)   # positive => worse posture score on symptom days
+
+            causes = [day_top_cause(d) for d in relevant_days]
+            causes = [c for c in causes if c]
+            top_cause = None
+            if causes:
+                cc: dict = {}
+                for c in causes: cc[c] = cc.get(c,0)+1
+                top_cause = max(cc.items(), key=lambda kv: kv[1])[0]
+
+            if abs(gap) >= 3 or top_cause:
+                insights.append({
+                    "symptom": stype,
+                    "days_logged": len(relevant_days),
+                    "avg_score_on_symptom_days": round(sym_avg,1),
+                    "avg_score_other_days": round(other_avg,1),
+                    "score_gap": gap,
+                    "dominant_alert_cause": top_cause,
+                    "direction": "worse" if gap > 0 else "better" if gap < 0 else "no_difference",
+                })
+
+        insights.sort(key=lambda i: abs(i["score_gap"]), reverse=True)
+        return jsonify({
+            "ok": True,
+            "insights": insights,
+            "days_logged": len(all_logged_days),
+            "baseline_avg_score": round(baseline_avg,1) if baseline_avg is not None else None,
+            "period": period,
+        })
+    except Exception as e:
+        return safe_error(e)
+
 
 
 
