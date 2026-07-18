@@ -2100,6 +2100,7 @@ export default function HomePage({
   downloadLongitudinalPDF,
   shareReport,
   AccountSwitcher, onSwitchAccount,
+  NavAvatarDropdown,
 }) {
   const [tab,    setTab]    = useState("home");
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
@@ -2329,10 +2330,24 @@ export default function HomePage({
                 color:"#60a5fa", fontSize:12, fontWeight:600, cursor:"pointer" }}>
               ▶ {isAr?"جلسة":"Session"}
             </button>
-            <button onClick={()=>setTab("settings")}
-              style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
-              <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={30}/>
-            </button>
+            {NavAvatarDropdown ? (
+              <NavAvatarDropdown
+                user={user} profile={profile} cs={cs} lang={lang} isAr={isAr}
+                isAdmin={isAdmin} isHRAdmin={isHRAdmin}
+                onProfile={()=>setTab("settings")}
+                onLeaderboard={()=>setPage("leaderboard")}
+                onHR={()=>setPage("hr")}
+                onAdmin={()=>setPage("admin")}
+                onSetup={()=>setPage("setup")}
+                onOnboarding={openCalib}
+                onSignOut={handleSignOut}
+              />
+            ) : (
+              <button onClick={()=>setTab("settings")}
+                style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={30}/>
+              </button>
+            )}
           </div>
         </header>
 
