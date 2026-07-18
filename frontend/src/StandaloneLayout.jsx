@@ -11,20 +11,20 @@ const FD = "'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif";
 const FM = "'IBM Plex Mono','Segoe UI',monospace";
 const SUPPORT = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
 
-// ── Nav links → all go to landing page anchors ────────────────────
+// ── Nav links → the dedicated standalone pages (matches LandingPageV7's nav) ──
 const NAV_EN = [
-  { label:"Product",      href:"/#features" },
-  { label:"Solutions",    href:"/#casestudies" },
-  { label:"Pricing",      href:"/#pricing" },
-  { label:"How it works", href:"/#how" },
-  { label:"FAQ",          href:"/#faq" },
+  { label:"Product",      href:"/product" },
+  { label:"Solutions",    href:"/solutions" },
+  { label:"Pricing",      href:"/pricing" },
+  { label:"How it works", href:"/how-it-works" },
+  { label:"FAQ",          href:"/faq" },
 ];
 const NAV_AR = [
-  { label:"المنتج",    href:"/#features" },
-  { label:"الحلول",   href:"/#casestudies" },
-  { label:"الأسعار",  href:"/#pricing" },
-  { label:"كيف يعمل", href:"/#how" },
-  { label:"الأسئلة",  href:"/#faq" },
+  { label:"المنتج",    href:"/product" },
+  { label:"الحلول",   href:"/solutions" },
+  { label:"الأسعار",  href:"/pricing" },
+  { label:"كيف يعمل", href:"/how-it-works" },
+  { label:"الأسئلة",  href:"/faq" },
 ];
 
 // ── CTA button style ──────────────────────────────────────────────
@@ -227,14 +227,14 @@ export function SharedFooter({ lang }) {
   const ar = lang === "ar";
 
   const cols = ar ? [
-    { title:"المنتج", links:[["المميزات","/#features"],["كيف يعمل","/#how"],["الأسعار","/#pricing"]] },
-    { title:"الحلول", links:[["للشركات","/#casestudies"],["للأفراد","/#pricing"],["شراكات",`mailto:${SUPPORT}?subject=Partnership`]] },
-    { title:"الدعم",  links:[["الأسئلة الشائعة","/#faq"],["تواصل معنا",`mailto:${SUPPORT}`],["حجز عرض",`mailto:${SUPPORT}?subject=Demo`]] },
+    { title:"المنتج", links:[["المميزات","/product"],["كيف يعمل","/how-it-works"],["الأسعار","/pricing"]] },
+    { title:"الحلول", links:[["للشركات","/solutions"],["للأفراد","/pricing"],["شراكات",`mailto:${SUPPORT}?subject=Partnership`]] },
+    { title:"الدعم",  links:[["الأسئلة الشائعة","/faq"],["تواصل معنا",`mailto:${SUPPORT}`],["حجز عرض",`mailto:${SUPPORT}?subject=Demo`]] },
     { title:"قانوني", links:[["الخصوصية",`mailto:${SUPPORT}?subject=Privacy`],["الشروط",`mailto:${SUPPORT}?subject=Terms`],["الأمان",`mailto:${SUPPORT}?subject=Security`]] },
   ] : [
-    { title:"Product",  links:[["Features","/#features"],["How it works","/#how"],["Pricing","/#pricing"]] },
-    { title:"Solutions",links:[["For Teams","/#casestudies"],["For Individuals","/#pricing"],["Partnerships",`mailto:${SUPPORT}?subject=Partnership`]] },
-    { title:"Support",  links:[["FAQ","/#faq"],["Contact us",`mailto:${SUPPORT}`],["Book a Demo",`mailto:${SUPPORT}?subject=Demo`]] },
+    { title:"Product",  links:[["Features","/product"],["How it works","/how-it-works"],["Pricing","/pricing"]] },
+    { title:"Solutions",links:[["For Teams","/solutions"],["For Individuals","/pricing"],["Partnerships",`mailto:${SUPPORT}?subject=Partnership`]] },
+    { title:"Support",  links:[["FAQ","/faq"],["Contact us",`mailto:${SUPPORT}`],["Book a Demo",`mailto:${SUPPORT}?subject=Demo`]] },
     { title:"Legal",    links:[["Privacy",`mailto:${SUPPORT}?subject=Privacy`],["Terms",`mailto:${SUPPORT}?subject=Terms`],["Security",`mailto:${SUPPORT}?subject=Security`]] },
   ];
 
