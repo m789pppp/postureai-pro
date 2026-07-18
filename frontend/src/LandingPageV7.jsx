@@ -385,17 +385,17 @@ function Nav({ lang, setLang, onCTA }) {
   const ar = lang === "ar";
 
   const navItems = ar ? [
-    { label:"المنتج",    href:"#features",     id:"features" },
-    { label:"الحلول",   href:"#casestudies",  id:"casestudies" },
-    { label:"الأسعار",  href:"#pricing",      id:"pricing" },
-    { label:"كيف يعمل", href:"#how",          id:"how" },
-    { label:"الأسئلة",  href:"#faq",          id:"faq" },
+    { label:"المنتج",    href:"/product",      page:true },
+    { label:"الحلول",   href:"/solutions",    page:true },
+    { label:"الأسعار",  href:"/pricing",      page:true },
+    { label:"كيف يعمل", href:"/how-it-works", page:true },
+    { label:"الأسئلة",  href:"/faq",          page:true },
   ] : [
-    { label:"Product",    href:"#features",    id:"features" },
-    { label:"Solutions",  href:"#casestudies", id:"casestudies" },
-    { label:"Pricing",    href:"#pricing",     id:"pricing" },
-    { label:"How it works",href:"#how",        id:"how" },
-    { label:"FAQ",        href:"#faq",         id:"faq" },
+    { label:"Product",     href:"/product",      page:true },
+    { label:"Solutions",   href:"/solutions",    page:true },
+    { label:"Pricing",     href:"/pricing",      page:true },
+    { label:"How it works",href:"/how-it-works", page:true },
+    { label:"FAQ",         href:"/faq",          page:true },
   ];
 
   return (
@@ -431,8 +431,8 @@ function Nav({ lang, setLang, onCTA }) {
 
           {/* ── Center links ── */}
           <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:1, flex:1, justifyContent:"center" }}>
-            {navItems.map(({ label, href, id }) => {
-              const active = activeSection === id;
+            {navItems.map(({ label, href, page }) => {
+              const active = window.location.pathname === href;
               return (
                 <a key={id} href={href}
                   style={{
