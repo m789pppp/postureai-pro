@@ -1,77 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, useInView } from "framer-motion";
+import {
+  SUPPORT_EMAIL, CALENDLY_URL, LPV7_TOKENS, FONT_DISPLAY, FONT_MONO,
+  TYPE, btn, card, Eyebrow, SectionHead, Reveal, Stagger, StaggerItem, AnimNum,
+} from "./sharedTokens.jsx";
 import { PageShell } from "./StandaloneLayout.jsx";
 
 
-const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
-const CALENDLY_URL  = import.meta.env.VITE_CALENDLY_URL  || `mailto:${import.meta.env.VITE_SUPPORT_EMAIL||"m789pppp@gmail.com"}?subject=Demo%20Request`;
-
-
-
-// Stagger container — wraps a group of children so they cascade in
-// one after another on scroll, instead of each needing its own delay.
-
-
-// ── Currency detection ──────────────────────────────────────────────
-// Real IP-based country lookup (not language!) — a Saudi visitor browsing
-// in Arabic still pays USD via Stripe; an Egyptian visitor browsing in
-// English still pays EGP via PayMob. Detected once per browser session,
-// cached, with a silent fallback to the language heuristic if the lookup
-// fails (ad-blockers, offline, slow network) — never breaks the page.
-function useCurrency(arFallback) {
-  const [country, setCountry] = useState(() => {
-    try { return sessionStorage.getItem("corvus_geo_country") || null; } catch { return null; }
-  });
-  const [override, setOverrideState] = useState(() => {
-    try { return sessionStorage.getItem("corvus_currency_override") || null; } catch { return null; }
-  });
-
-  useEffect(() => {
-    if (country) return; // already cached this session
-    let cancelled = false;
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 2500);
-    fetch("https://get.geojs.io/v1/ip/country.json", { signal: ctrl.signal })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (cancelled || !data?.country) return;
-        setCountry(data.country);
-        try { sessionStorage.setItem("corvus_geo_country", data.country); } catch {}
-      })
-      .catch(() => {}) // silent — falls back to language heuristic below
-      .finally(() => clearTimeout(t));
-    return () => { cancelled = true; ctrl.abort(); clearTimeout(t); };
-  }, [country]);
-
-  const setOverride = (code) => {
-    setOverrideState(code);
-    try { sessionStorage.setItem("corvus_currency_override", code); } catch {}
-  };
-
-  const isEgypt = override ? override === "EGP" : (country ? country === "EG" : arFallback);
-  return { isEgypt, setOverride };
-}
-
-
-
-
-// Eyebrow pill — used above most section headings
-
-// Section heading block — eyebrow + title + optional sub, centered
-
-// ── Global stylesheet ─────────────────────────────────────────────
-
-
-// ── Scroll progress bar ───────────────────────────────────────────
-
-// ── Navigation ────────────────────────────────────────────────────
-
-// ── Global stylesheet ─────────────────────────────────────────────
-
-
-// ── Scroll progress bar ───────────────────────────────────────────
-
-// ── Navigation ────────────────────────────────────────────────────
 
 function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) {
   const ar = lang === "ar";
@@ -340,36 +275,33 @@ export default function PricingPageStandalone() {
   const [lang, setLang] = useState(() => {
     try { return localStorage.getItem("lp_lang") || "en"; } catch { return "en"; }
   });
-  const onCTA = () => window.location.href = "/auth?mode=signup";
   return (
     <>
-      <style>{`
-.lp-features-wrap { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-.lp-how-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:28px; }
-.lp-cases-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:28px; }
-.lp-testi-grid,.lp-testi-inner { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
-.lp-pricing-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
-.lp-stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
-.lp-popular-card { transform:scale(1.035); }
+      <style>{`.lp-features-wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.lp-how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
+.lp-cases-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
+.lp-testi-grid,.lp-testi-inner{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.lp-pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.lp-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.lp-popular-card{transform:scale(1.035)}
 @media(max-width:1024px){
-  .lp-features-wrap { grid-template-columns:1fr 1fr; gap:16px; }
-  .lp-how-grid { grid-template-columns:repeat(3,1fr); gap:16px; }
-  .lp-cases-grid { grid-template-columns:1fr 1fr; gap:20px; }
-  .lp-testi-grid,.lp-testi-inner { grid-template-columns:1fr 1fr !important; }
-  .lp-pricing-grid { grid-template-columns:repeat(3,1fr) !important; gap:14px; }
-  .lp-stats-grid { grid-template-columns:repeat(2,1fr); }
-  .lp-popular-card { transform:scale(1.02); }
+  .lp-features-wrap{grid-template-columns:1fr 1fr;gap:16px}
+  .lp-how-grid{grid-template-columns:repeat(3,1fr);gap:16px}
+  .lp-cases-grid{grid-template-columns:1fr 1fr;gap:20px}
+  .lp-testi-grid,.lp-testi-inner{grid-template-columns:1fr 1fr!important}
+  .lp-pricing-grid{grid-template-columns:repeat(3,1fr)!important;gap:14px}
+  .lp-stats-grid{grid-template-columns:repeat(2,1fr)}
+  .lp-popular-card{transform:scale(1.02)}
 }
 @media(max-width:720px){
-  .lp-features-wrap,.lp-how-grid,.lp-cases-grid { grid-template-columns:1fr !important; }
-  .lp-testi-grid,.lp-testi-inner { grid-template-columns:1fr !important; }
-  .lp-pricing-grid { grid-template-columns:1fr !important; max-width:380px; margin:0 auto; }
-  .lp-stats-grid { grid-template-columns:1fr 1fr; }
-  .lp-popular-card { transform:none !important; }
-}
-`}</style>
+  .lp-features-wrap,.lp-how-grid,.lp-cases-grid{grid-template-columns:1fr!important}
+  .lp-testi-grid,.lp-testi-inner{grid-template-columns:1fr!important}
+  .lp-pricing-grid{grid-template-columns:1fr!important;max-width:380px;margin:0 auto}
+  .lp-stats-grid{grid-template-columns:1fr 1fr}
+  .lp-popular-card{transform:none!important}
+}`}</style>
       <PageShell lang={lang} setLang={setLang} activePage="pricing">
-        <Pricing lang={lang} onCTA={onCTA} isEgypt={false} setCurrencyOverride={()=>{}}/>
+        <Pricing lang={lang} onCTA={()=>window.location.href="/auth?mode=signup"} isEgypt={false} setCurrencyOverride={()=>{}}/>
       </PageShell>
     </>
   );
