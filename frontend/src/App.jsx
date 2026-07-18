@@ -3242,10 +3242,15 @@ export default function App(){
       addToast(isAr?"تقرير الفريق متاح لـ HR Admin فقط":"Team PDF requires HR Admin + Pro","warn");
       setShowBilling(true); return;
     }
+    if (!allUsers || allUsers.length===0) {
+      addToast(isAr?"لا يوجد أعضاء فريق محمّلين بعد":"No team members loaded yet","warn");
+      return;
+    }
     addToast(isAr?"جاري إنشاء تقرير الفريق...":"Generating team PDF...","info");
     try {
-      const { generateAIPDF } = await import("./lib/pdfReports.js");
-      await generateAIPDF({ sessions: userSessions, profile, aiSummary: "" });
+      const { generateTeamPDF } = await import("./lib/pdfReports.js");
+      const teamUsers = allUsers.map(u => ({ ...u, last_session: u.last_session_at || u.last_session }));
+      await generateTeamPDF({ users: teamUsers, company: profile?.company||profile?.company_name||(isAr?"الشركة":"Company"), dateRange: 30, profile, lang: isAr?"ar":"en" });
       addToast(isAr?"✅ تم تحميل تقرير الفريق":"✅ Team PDF downloaded","success");
     } catch(e) { addToast(`Team PDF error: ${e.message}`,"error"); }
   }
