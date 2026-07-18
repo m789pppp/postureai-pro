@@ -630,6 +630,30 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
               </div>
             )}
 
+            {/* Progress indicator — signup only */}
+            {view==="signup" && (
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
+                {[
+                  {n:1,label:isAr?"الحساب":"Account"},
+                  {n:2,label:isAr?"بيانات":"Details"},
+                ].map((step,i)=>(
+                  <div key={step.n} style={{display:"flex",alignItems:"center",gap:6,flex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5}}>
+                      <div style={{
+                        width:20,height:20,borderRadius:"50%",flexShrink:0,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:10,fontWeight:700,
+                        background:"rgba(26,86,219,.9)",
+                        color:"#fff",
+                      }}>{step.n}</div>
+                      <span style={{fontSize:11,color:t.textSub,fontWeight:500}}>{step.label}</span>
+                    </div>
+                    {i===0&&<div style={{flex:1,height:1.5,background:"rgba(26,86,219,.25)",borderRadius:2,margin:"0 4px"}}/>}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Social buttons */}
             <div style={{display:"flex",gap:8,marginBottom:view==="signup"?10:14}}>
               <SocialBtn icon={GoogleIcon} label="Google"
@@ -744,7 +768,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                           }}>
                           <div style={{fontSize:18,marginBottom:3}}>{r.icon}</div>
                           <div style={{fontSize:13,fontWeight:700,color:companyRole===r.id?"#60a5fa":t.text,marginBottom:2}}>{isAr?r.ar:r.en}</div>
-                          <div style={{fontSize:10.5,color:t.textSub,lineHeight:1.3}}>{r.desc}</div>
+                          <div style={{fontSize:12,color:t.textSub,lineHeight:1.4}}>{r.desc}</div>
                         </button>
                       ))}
                     </div>
@@ -779,11 +803,22 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                 </div>
 
                 {/* Newsletter */}
-                <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",marginBottom:4}}>
-                  <input type="checkbox" checked={newsletter} onChange={e=>setNewsletter(e.target.checked)}
-                    style={{width:17,height:17,accentColor:t.acc,cursor:"pointer",flexShrink:0}}/>
-                  <span style={{fontSize:12.5,color:t.textSub}}>
-                    {isAr?"أريد تلقي نصائح وتحديثات Corvus":"Send me Corvus tips and updates"}
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginBottom:4,
+                  padding:"8px 11px",borderRadius:9,
+                  background:newsletter?"rgba(26,86,219,.05)":"transparent",
+                  border:`1px solid ${newsletter?"rgba(26,86,219,.2)":t.border}`,
+                  transition:"all .2s"}}>
+                  <div onClick={()=>setNewsletter(v=>!v)} style={{
+                    width:18,height:18,borderRadius:4,flexShrink:0,
+                    background:newsletter?"rgba(26,86,219,.9)":"transparent",
+                    border:`1.5px solid ${newsletter?t.acc:t.border}`,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    transition:"all .15s",cursor:"pointer",
+                  }}>
+                    {newsletter&&<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                  <span style={{fontSize:12.5,color:t.textSub,lineHeight:1.4}}>
+                    {isAr?"أريد تلقي نصائح وتحديثات Corvus 📬":"Send me Corvus tips and updates 📬"}
                   </span>
                 </label>
               </>)}

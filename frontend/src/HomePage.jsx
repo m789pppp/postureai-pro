@@ -1623,6 +1623,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   user, userSessions, setUserSessions, getAllUsers, setAllUsers,
   setShowCoach, setShowBilling, setShowGamification, setShowGrowthHub, setShowSecurityCenter,
   setShowAIInsights, setShowPredictiveAI, setShowCustomerSuccess, setShowChurnPrediction,
+  setShowSymptomCorrelation,
   setShowAPIMarketplace, setShowWhiteLabel, setShowMultiTenant, setShowAuditSystem,
   setShowAIReports, setShowSessionComparison, setShowTrendChart, setShowWorkforceAnalytics,
   setShowCalibWizard, setShowDashboard,
@@ -1696,6 +1697,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
     { id:"t-predict",  icon:"🔮", en:"Predictive AI", ar:"AI تنبؤي",
       locked:!elite, lockLabel:"ELITE",
       onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
+    { id:"t-symptoms", icon:"🩹", en:"Symptom Log",   ar:"سجل الأعراض",
+      onClick:()=>setShowSymptomCorrelation?.(true) },
     ...(isAdmin ? [
       { id:"t-growth",  icon:"🚀", en:"Growth Hub",   ar:"مركز النمو", onClick:()=>setShowGrowthHub?.(true) },
     ] : []),
@@ -1760,6 +1763,16 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
               {isAr?"منصة المشرف":"Platform Admin"}
             </button>
           )}
+          <button onClick={()=>setPage("marketplace")}
+            onMouseEnter={()=>setHov("marketplace")} onMouseLeave={()=>setHov(null)}
+            style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
+              padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
+              borderLeft:"2px solid transparent",
+              background:hov==="marketplace"?"rgba(255,255,255,.04)":"transparent",
+              color:"rgba(255,255,255,.65)", fontSize:12.5, textAlign:"left" }}>
+            <span style={{ fontSize:14, width:18, textAlign:"center" }}>🩺</span>
+            {isAr?"أخصائيو العلاج الطبيعي":"Find a Physiotherapist"}
+          </button>
         </nav>
 
         {/* Start Session */}
@@ -1978,6 +1991,7 @@ export default function HomePage({
   setShowCalibWizard, setShowGamification,
   setShowSessionComparison, setShowTrendChart,
   setShowAIInsights, setShowGrowthHub, setShowSecurityCenter,
+  setShowSymptomCorrelation,
   setShowCustomerSuccess, setShowChurnPrediction,
   setShowAPIMarketplace, setShowWhiteLabel,
   setShowMultiTenant, setShowAuditSystem,
@@ -2048,6 +2062,10 @@ export default function HomePage({
       onClick:()=>isPro_&&setShowAIReports?.(true) },
     { id:"t-security", icon:"🔒", en:"Security",    ar:"الأمان",
       onClick:()=>setShowSecurityCenter?.(true) },
+    { id:"t-marketplace", icon:"🩺", en:"Find a Physio", ar:"أخصائي علاج طبيعي",
+      onClick:()=>setPage("marketplace") },
+    { id:"t-symptoms", icon:"🩹", en:"Symptom Log", ar:"سجل الأعراض",
+      onClick:()=>setShowSymptomCorrelation?.(true) },
     ...(isAdmin ? [
       { id:"t-mrr",    icon:"💰", en:"Revenue",     ar:"الإيرادات",
         onClick:()=>setShowMRR?.(true) },
@@ -2183,6 +2201,7 @@ export default function HomePage({
           setShowCoach={setShowCoach} setShowBilling={setShowBilling}
           setShowGamification={setShowGamification} setShowGrowthHub={setShowGrowthHub}
           setShowSecurityCenter={setShowSecurityCenter} setShowAIInsights={setShowAIInsights}
+          setShowSymptomCorrelation={setShowSymptomCorrelation}
           setShowPredictiveAI={setShowPredictiveAI} setShowCustomerSuccess={setShowCustomerSuccess}
           setShowChurnPrediction={setShowChurnPrediction} setShowAPIMarketplace={setShowAPIMarketplace}
           setShowWhiteLabel={setShowWhiteLabel} setShowMultiTenant={setShowMultiTenant}

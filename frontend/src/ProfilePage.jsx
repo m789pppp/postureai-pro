@@ -2,16 +2,22 @@
  * Corvus — ProfilePage v32
  * Full profile: edit info, stats, subscription, payments, password, referral
  */
+import { API_BASE_URL } from "./config/api.js";
 import { useState, useEffect } from "react";
 import {
   updateUserProfile, getUserSessions, SUPPORT_EMAIL, ADMIN_PHONE,
-  getAuthToken,
+  getAuthToken, deleteAuthUser, logOut,
 } from "./firebase.js";
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider, getAuth } from "firebase/auth";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 
 const sc = v => v>=75?"#10b981":v>=50?"#f59e0b":"#ef4444";
-const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+const daysLeft = ts => {
+  const ms = ts?.toDate?.()?.getTime?.() ?? (ts?.seconds ? ts.seconds*1000 : (ts ? new Date(ts).getTime() : NaN));
+  if (!ms || Number.isNaN(ms)) return null;
+  return Math.max(0, Math.ceil((ms - Date.now()) / 86400000));
+};
+const API = API_BASE_URL;
 
 function Card({ children, style={} }) {
   return <div style={{ background:"rgba(255,255,255,.03)", border:"1px solid rgba(255,255,255,.07)", borderRadius:16, padding:"20px 22px", marginBottom:14, ...style }}>{children}</div>;
@@ -48,6 +54,10 @@ export default function ProfilePage({ user, profile, sessions=[], cs, lang="en",
   const [loadingPay, setLoadingPay] = useState(false);
   const [cancelStep, setCancelStep] = useState(0);
   const [cancelling, setCancelling] = useState(false);
+  const [showDeleteBox, setShowDeleteBox] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState("");
 
   const avg = sessions.length
     ? Math.round(sessions.reduce((a,s)=>a+(s.avg_score||0),0)/sessions.length)
@@ -112,6 +122,36 @@ export default function ProfilePage({ user, profile, sessions=[], cs, lang="en",
       setCancelStep(2);
     } catch { addToast(isAr?"خطأ":"Error","error"); }
     setCancelling(false);
+  }
+
+  async function deleteAccount() {
+    if(deleteConfirmText.trim().toUpperCase()!=="DELETE") {
+      setDeleteErr(isAr?'اكتب "DELETE" بالظبط للتأكيد':'Type "DELETE" exactly to confirm');
+      return;
+    }
+    setDeleting(true); setDeleteErr("");
+    try {
+      const tok = await getAuthToken();
+      const res = await fetch(`${API}/user/delete-all-data`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json",...(tok?{Authorization:`Bearer ${tok}`}:{})},
+        body: JSON.stringify({ confirm:true }),
+      });
+      const d = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(d?.error||d?.message||"delete_failed");
+
+      // Backend already deleted the Firebase Auth user via Admin SDK. If for
+      // some reason that failed (auth_deleted:false), fall back to deleting
+      // the client-side session; either way sign the user out locally.
+      if(!d.auth_deleted) { try { await deleteAuthUser(); } catch {} }
+      try { await logOut(); } catch {}
+
+      addToast(isAr?"تم حذف الحساب وكل بياناتك نهائياً":"Your account and all data have been permanently deleted","info");
+      onSignOut?.();
+    } catch(e) {
+      setDeleteErr(isAr?"حصل خطأ أثناء حذف الحساب — حاول تاني أو تواصل مع الدعم":"Something went wrong deleting your account — try again or contact support");
+    }
+    setDeleting(false);
   }
 
   const tierColor = tierAtLeast(profile?.tier,"elite")?"#f59e0b":tierAtLeast(profile?.tier,"professional")?"#0ea5e9":"#6366f1";
@@ -252,6 +292,28 @@ export default function ProfilePage({ user, profile, sessions=[], cs, lang="en",
               <Row label={isAr?"تاريخ آخر دفع":"Last Payment Date"} value={profile?.last_payment_at?new Date(profile.last_payment_at).toLocaleDateString():undefined}/>
             </Card>
 
+            {/* Trial countdown */}
+            {profile?.is_trial && (() => {
+              const d = daysLeft(profile?.trial_expires_at);
+              if (d === null) return null;
+              const urgent = d <= 2;
+              return (
+                <Card style={{ background: urgent?"rgba(239,68,68,.06)":"rgba(245,158,11,.06)", border:`1px solid ${urgent?"rgba(239,68,68,.2)":"rgba(245,158,11,.2)"}` }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+                    <div style={{ fontSize:13, fontWeight:700, color: urgent?"#fca5a5":"#fcd34d" }}>
+                      {d === 0
+                        ? (isAr?"⏳ تنتهي تجربتك المجانية اليوم":"⏳ Your free trial ends today")
+                        : (isAr?`⏳ باقي ${d} ${d===1?"يوم":"أيام"} على انتهاء التجربة المجانية (${profile?.trial_tier||"professional"})`:`⏳ ${d} day${d===1?"":"s"} left in your free ${profile?.trial_tier||"professional"} trial`)}
+                    </div>
+                    <button onClick={()=>setPage("pricing")}
+                      style={{ background:"#1a56db",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",whiteSpace:"nowrap" }}>
+                      {isAr?"ترقية الآن ←":"Upgrade Now →"}
+                    </button>
+                  </div>
+                </Card>
+              );
+            })()}
+
             {/* Payment history */}
             <Card>
               <Label>{isAr?"سجل المدفوعات":"Payment History"}</Label>
@@ -340,6 +402,43 @@ export default function ProfilePage({ user, profile, sessions=[], cs, lang="en",
               <Row label={isAr?"المصادقة الثنائية":"2FA"} value={isAr?"غير مفعّل":"Not enabled"} color="#f59e0b"/>
               <Row label={isAr?"آخر تسجيل دخول":"Last Sign-in"} value={user.metadata?.lastSignInTime?new Date(user.metadata.lastSignInTime).toLocaleString():undefined}/>
             </div>
+          </Card>
+        )}
+
+        {/* ── DANGER ZONE: DELETE ACCOUNT ── */}
+        {tab==="security"&&(
+          <Card style={{ background:"rgba(239,68,68,.04)",border:"1px solid rgba(239,68,68,.15)" }}>
+            <Label>{isAr?"حذف الحساب":"Delete Account"}</Label>
+            <div style={{ fontSize:12,color:"#94a3b8",lineHeight:1.6,marginBottom:12 }}>
+              {isAr
+                ?"هيتم حذف كل بياناتك نهائياً (الجلسات، المدفوعات، الإشعارات، الملف الشخصي) طبقاً للحق في المحو (GDPR). الإجراء ده لا يمكن التراجع عنه."
+                :"This permanently deletes all your data — sessions, payments, notifications, profile — per your GDPR right to erasure. This action cannot be undone."}
+            </div>
+            {!showDeleteBox?(
+              <button onClick={()=>setShowDeleteBox(true)} style={{ background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.25)",borderRadius:9,padding:"8px 16px",fontSize:12,color:"#fca5a5",cursor:"pointer",fontWeight:600 }}>
+                {isAr?"حذف الحساب نهائياً":"Delete My Account"}
+              </button>
+            ):(
+              <div>
+                <div style={{ fontSize:12,fontWeight:600,color:"#fca5a5",marginBottom:10 }}>
+                  {isAr?'اكتب "DELETE" في الخانة تحت للتأكيد:':'Type "DELETE" below to confirm:'}
+                </div>
+                <Inp value={deleteConfirmText} onChange={setDeleteConfirmText} placeholder="DELETE"/>
+                {deleteErr&&(
+                  <div style={{ fontSize:11.5,color:"#fca5a5",marginTop:8 }}>{deleteErr}</div>
+                )}
+                <div style={{ display:"flex",gap:8,marginTop:12 }}>
+                  <button onClick={()=>{setShowDeleteBox(false);setDeleteConfirmText("");setDeleteErr("");}} disabled={deleting}
+                    style={{ background:"rgba(148,163,184,.1)",border:"1px solid rgba(148,163,184,.2)",borderRadius:8,padding:"8px 16px",fontSize:12,color:"#94a3b8",cursor:"pointer",fontWeight:600 }}>
+                    {isAr?"إلغاء":"Cancel"}
+                  </button>
+                  <button onClick={deleteAccount} disabled={deleting||deleteConfirmText.trim().toUpperCase()!=="DELETE"}
+                    style={{ background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.4)",borderRadius:8,padding:"8px 16px",fontSize:12,color:"#fca5a5",cursor:"pointer",fontWeight:700,opacity:(deleting||deleteConfirmText.trim().toUpperCase()!=="DELETE")?.5:1 }}>
+                    {deleting?"...":(isAr?"تأكيد الحذف النهائي":"Confirm Permanent Delete")}
+                  </button>
+                </div>
+              </div>
+            )}
           </Card>
         )}
 

@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { API_BASE_URL } from "./config/api.js";
 import {
   getAuth, signInWithPopup, signInWithRedirect, getRedirectResult,
   GoogleAuthProvider, OAuthProvider,
@@ -191,10 +192,10 @@ export async function createUserProfile(uid, data, referredBy = null) {
   if (referredBy) { try { await applyReferralCredit(referredBy, uid, data.email); } catch(e){} }
 
   // Fire welcome drip sequence — fire-and-forget, never blocks profile creation
-  const _API = import.meta.env.VITE_API_URL || "/api";
+  const _API = API_BASE_URL;
 
 // Top-level backend URL — single source of truth (used by invite, notify, email functions)
-const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+const BACKEND_URL = API_BASE_URL;
   try {
     const { getAuth } = await import("firebase/auth");
     const _tok = await getAuth().currentUser?.getIdToken?.();

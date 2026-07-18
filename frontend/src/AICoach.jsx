@@ -234,15 +234,15 @@ export function AICoach({ profile, sessions = [], calibration, cs, lang = "en", 
     } catch {}
   }, [profile]);
 
+  const _tier = effectiveTier || (effectiveTier || profile?.tier || "standard");
+  const quality   = qualityFor(_tier);
+  const coachLimit = quality.aiCoach?.monthlyLimit ?? 5;
   const limitReached = coachLimit !== -1 && msgCount >= coachLimit;
   const [localAIReady,  setLocalAIReady]  = useState(false);
   const [localAIStatus, setLocalAIStatus] = useState({ loading:false, progress:0 });
 
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
-  const _tier = effectiveTier || (effectiveTier || profile?.tier || "standard");
-  const quality   = qualityFor(_tier);
-  const coachLimit = quality.aiCoach?.monthlyLimit ?? 5;
 
   // Build context
   const context = useMemo(() => {

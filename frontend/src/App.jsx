@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -13,6 +14,8 @@ import {
   doc, updateDoc,
 } from "./firebase.js";
 import { HRPanel } from "./HRPanel.jsx";
+import { TherapistMarketplace } from "./TherapistMarketplace.jsx";
+import { SymptomCorrelation } from "./SymptomCorrelation.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
 import { AnalyticsDashboard } from "./AnalyticsDashboard.jsx";
@@ -91,7 +94,7 @@ import EmbedWidget        from "./EmbedWidget.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
 // Example: VITE_API_URL=https://corvus-backend.railway.app/api
-const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+const API = API_BASE_URL;
 
 // ── i18n ──────────────────────────────────────────────────────────
 // ── i18n: translations loaded from lib/i18n.js ─────────────────
@@ -2066,7 +2069,7 @@ export default function App(){
     return ()=>clearTimeout(t);
   },[]);
   // ── Hash-based routing — fixes back button & enables deep links ──
-  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report"]);
+  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace"]);
   const hashToPage = (h) => {
     const p = h.replace(/^#\/?/, "") || "landing";
     // Map known aliases
@@ -2206,6 +2209,7 @@ export default function App(){
   const[showGamification,setShowGamification]=useState(false);
   // AI Intelligence Layer
   const[showAIInsights,setShowAIInsights]=useState(false);
+  const[showSymptomCorrelation,setShowSymptomCorrelation]=useState(false);
   const[showPredictiveAI,setShowPredictiveAI]=useState(false);
   const[showAIReports,setShowAIReports]=useState(false);
   const[showWorkforceAnalytics,setShowWorkforceAnalytics]=useState(false);
@@ -2843,7 +2847,7 @@ export default function App(){
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000){
                 // Severity-aware cooldown: severe=5s, moderate=15s, mild=30s
-                const _sev=finalResult.overall<40?'severe':finalResult.overall<55?'moderate':'mild';
+                const _sev=result.overall<40?'severe':result.overall<55?'moderate':'mild';
                 const _cool=_sev==='severe'?5000:_sev==='moderate'?15000:30000;
                 if(now-lastAlRef.current>_cool){
                 lastAlRef.current=now;acRef.current.total++;
@@ -3274,6 +3278,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
     }
 
     const la=lastAnalRef.current||{};
+    const hist    = histRef.current || history || [];
+    const durS    = sessRef.current ? Math.floor((Date.now()-sessRef.current)/1000) : (sessionResult?.duration_s ?? 0);
+    const gPctPDF = totalRef.current ? Math.round(goodRef.current/totalRef.current*100) : (sessionResult?.good_pct ?? 0);
 
     if(!sessionOverride && hist.length===0 && !userSessions?.length){
       addToast(isAr?"ابدأ جلسة أولاً لتنزيل PDF":"No session data yet","warn"); return;
@@ -3625,6 +3632,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     </ErrorBoundary>
   );  if(page==="admin"&&isAdmin)return <ErrorBoundary><Admin {...shared} adminUser={user} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="hr"&&(isAdmin||isHRAdmin))return <ErrorBoundary><HRPanel {...shared} user={user} profile={profile} companyId={companyId||profile?.company_id} onBack={()=>setPage("home")}/></ErrorBoundary>;
+  if(page==="marketplace"&&user)return <ErrorBoundary><TherapistMarketplace {...shared} user={user} isAdmin={isAdmin} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="pricing") return(
     <ErrorBoundary>
       <PricingPage
@@ -3889,6 +3897,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
       {showChangelog&&isAdmin&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
       {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIInsights(false)}/>}
+      {showSymptomCorrelation&&<SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/>}
       {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/>}
       {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/>}
       {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
@@ -3914,6 +3923,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         setShowTrendChart={setShowTrendChart}
         setShowCalibWizard={setShowCalibWizard}
         setShowAIInsights={setShowAIInsights}
+        setShowSymptomCorrelation={setShowSymptomCorrelation}
         setShowGrowthHub={setShowGrowthHub}
         setShowSecurityCenter={setShowSecurityCenter}
         setShowCustomerSuccess={setShowCustomerSuccess}
