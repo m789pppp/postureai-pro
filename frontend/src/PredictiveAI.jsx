@@ -141,15 +141,16 @@ function MdText({ text }) {
 
 function avg(arr) { return arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0; }
 
-function detectAnomalies(scores) {
-  if (scores.length < 5) return [];
+function detectAnomalies(scoredSessions) {
+  if (scoredSessions.length < 5) return [];
+  const scores = scoredSessions.map(x => x.score);
   const m  = avg(scores);
   const sd = Math.sqrt(scores.reduce((s, v) => s + Math.pow(v - m, 2), 0) / scores.length);
-  return scores.map((v, i) => ({
-    index: i, value: v,
-    z: sd > 0 ? Math.abs((v - m) / sd) : 0,
-    isAnomaly: sd > 0 && Math.abs((v - m) / sd) > 1.8,
-    direction: v > m ? "high" : "low",
+  return scoredSessions.map((x, i) => ({
+    index: i, value: x.score, session: x.session,
+    z: sd > 0 ? Math.abs((x.score - m) / sd) : 0,
+    isAnomaly: sd > 0 && Math.abs((x.score - m) / sd) > 1.8,
+    direction: x.score > m ? "high" : "low",
   })).filter(p => p.isAnomaly);
 }
 
@@ -221,8 +222,8 @@ function RiskCard({ title, score, icon, color, desc }) {
 }
 
 // ── Anomaly row ──────────────────────────────────────────────────────
-function AnomalyRow({ anomaly, sessions, isAr }) {
-  const sess = sessions[sessions.length - 1 - anomaly.index];
+function AnomalyRow({ anomaly, isAr }) {
+  const sess = anomaly.session;
   const date = sess
     ? (sess.created_at?.toDate?.() || new Date(sess.created_at || 0))
         .toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "short", day: "numeric" })
@@ -417,9 +418,14 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   const [error, setError]     = useState("");
   const isAr = lang === "ar";
 
-  const allScores = sessions.map(s => s.avg_score || 0).filter(Boolean);
+  // sessions are newest-first (see getUserSessions: sorted tb-ta descending).
+  const scoredSessions = sessions.map(s => ({ session: s, score: s.avg_score || 0 })).filter(x => x.score > 0);
+  const allScores = scoredSessions.map(x => x.score); // still newest-first
   const avgScore  = avg(allScores);
-  const recent14  = allScores.slice(-14);
+  // Most recent 14 sessions, reordered oldest->newest for the regression in forecast(),
+  // which assumes index 0 = earliest. (allScores.slice(-14) would grab the OLDEST 14
+  // instead and feed them in reverse-chronological order — inverting the trend.)
+  const recent14  = allScores.slice(0, 14).slice().reverse();
 
   const thisWeek = sessions.filter(s =>
     (Date.now() - (s.created_at?.toDate?.() || new Date(s.created_at || 0))) < 7 * 86400000
@@ -433,8 +439,8 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
     (allScores.length > 0 && allScores[0] < allScores[allScores.length - 1] * 0.8 ? 15 : 0)
   ));
 
-  const anomalies    = detectAnomalies(allScores);
-  const fore         = forecast(recent14.length >= 3 ? recent14 : allScores);
+  const anomalies    = detectAnomalies(scoredSessions);
+  const fore         = forecast(recent14.length >= 3 ? recent14 : allScores.slice().reverse());
   const forecastTrend = fore?.trend || "stable";
 
   const riskScore = Math.min(100, Math.round(
@@ -736,7 +742,7 @@ Max 180 words. Start immediately.`,
                       {isAr ? "✅ لا توجد شذوذات في بياناتك" : "✅ No anomalies detected in your data"}
                     </div>
                   : anomalies.slice(0, 5).map((a, i) =>
-                      <AnomalyRow key={i} anomaly={a} sessions={sessions} isAr={isAr} />)
+                      <AnomalyRow key={i} anomaly={a} isAr={isAr} />)
                 }
               </div>
               <AIBlock loading={loading} data={aiText} error={error}
@@ -768,7 +774,7 @@ Max 180 words. Start immediately.`,
           {tab === "forecast" && sessions.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp4 }}>
               <ForecastChart
-                historical={recent14.length >= 3 ? recent14 : allScores.slice(-14)}
+                historical={recent14.length >= 3 ? recent14 : allScores.slice(0,14).slice().reverse()}
                 predicted={fore?.predicted || []} isAr={isAr} />
 
               {fore && (
