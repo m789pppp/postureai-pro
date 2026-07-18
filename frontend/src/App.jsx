@@ -2844,7 +2844,7 @@ export default function App(){
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000){
                 // Severity-aware cooldown: severe=5s, moderate=15s, mild=30s
-                const _sev=finalResult.overall<40?'severe':finalResult.overall<55?'moderate':'mild';
+                const _sev=result.overall<40?'severe':result.overall<55?'moderate':'mild';
                 const _cool=_sev==='severe'?5000:_sev==='moderate'?15000:30000;
                 if(now-lastAlRef.current>_cool){
                 lastAlRef.current=now;acRef.current.total++;
@@ -3275,6 +3275,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
     }
 
     const la=lastAnalRef.current||{};
+    const hist    = histRef.current || history || [];
+    const durS    = sessRef.current ? Math.floor((Date.now()-sessRef.current)/1000) : (sessionResult?.duration_s ?? 0);
+    const gPctPDF = totalRef.current ? Math.round(goodRef.current/totalRef.current*100) : (sessionResult?.good_pct ?? 0);
 
     if(!sessionOverride && hist.length===0 && !userSessions?.length){
       addToast(isAr?"ابدأ جلسة أولاً لتنزيل PDF":"No session data yet","warn"); return;
