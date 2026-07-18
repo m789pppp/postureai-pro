@@ -385,17 +385,17 @@ function Nav({ lang, setLang, onCTA }) {
   const ar = lang === "ar";
 
   const navItems = ar ? [
-    { label:"المنتج",    href:"#features",     id:"features" },
-    { label:"الحلول",   href:"#casestudies",  id:"casestudies" },
-    { label:"الأسعار",  href:"#pricing",      id:"pricing" },
-    { label:"كيف يعمل", href:"#how",          id:"how" },
-    { label:"الأسئلة",  href:"#faq",          id:"faq" },
+    { label:"المنتج",    href:"/product",       id:"features",     anchor:"#features" },
+    { label:"الحلول",   href:"/solutions",     id:"casestudies",  anchor:"#casestudies" },
+    { label:"الأسعار",  href:"/pricing",       id:"pricing",      anchor:"#pricing" },
+    { label:"كيف يعمل", href:"/how-it-works",  id:"how",          anchor:"#how" },
+    { label:"الأسئلة",  href:"/faq",           id:"faq",          anchor:"#faq" },
   ] : [
-    { label:"Product",     href:"#features",    id:"features" },
-    { label:"Solutions",   href:"#casestudies", id:"casestudies" },
-    { label:"Pricing",     href:"#pricing",     id:"pricing" },
-    { label:"How it works",href:"#how",         id:"how" },
-    { label:"FAQ",         href:"#faq",         id:"faq" },
+    { label:"Product",     href:"/product",      id:"features",    anchor:"#features" },
+    { label:"Solutions",   href:"/solutions",    id:"casestudies", anchor:"#casestudies" },
+    { label:"Pricing",     href:"/pricing",      id:"pricing",     anchor:"#pricing" },
+    { label:"How it works",href:"/how-it-works", id:"how",         anchor:"#how" },
+    { label:"FAQ",         href:"/faq",          id:"faq",         anchor:"#faq" },
   ];
 
   return (
@@ -431,7 +431,7 @@ function Nav({ lang, setLang, onCTA }) {
 
           {/* ── Center links ── */}
           <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:1, flex:1, justifyContent:"center" }}>
-            {navItems.map(({ label, href, id }) => {
+            {navItems.map(({ label, href, id, anchor }) => {
               const active = activeSection === id;
               return (
                 <a key={label} href={href}
@@ -441,11 +441,6 @@ function Nav({ lang, setLang, onCTA }) {
                     textDecoration:"none", padding:"8px 14px", borderRadius:8,
                     fontSize:13.5, fontWeight: active ? 600 : 500,
                     transition:"color .2s",
-                  }}
-                  onClick={e => {
-                    e.preventDefault();
-                    document.getElementById(id)?.scrollIntoView({ behavior:"smooth" });
-                    setMobileOpen(false);
                   }}
                   onMouseEnter={e => e.currentTarget.style.color="#f1f5f9"}
                   onMouseLeave={e => e.currentTarget.style.color = active ? "#f1f5f9" : "#64748b"}>
@@ -530,7 +525,7 @@ function Nav({ lang, setLang, onCTA }) {
           }}>
             <div style={{ padding:"12px 20px 24px", display:"flex", flexDirection:"column" }}>
               {navItems.map(({ label, href }) => (
-                <a key={href} href={href} onClick={()=>setMobileOpen(false)} style={{
+                <a key={label} href={href} onClick={()=>setMobileOpen(false)} style={{
                   color:"#94a3b8", textDecoration:"none", padding:"13px 4px",
                   fontSize:15, fontWeight:500, borderBottom:"1px solid rgba(255,255,255,.06)",
                   display:"flex", alignItems:"center", justifyContent:"space-between",
