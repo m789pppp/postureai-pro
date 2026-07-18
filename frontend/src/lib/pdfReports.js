@@ -5,6 +5,7 @@
  */
 
 import { tierAtLeast } from "./tierQuality.js";
+import { installArabicText } from "./arabicShaper.js";
 
 // ── Metric labels (used in PDF tables) ───────────────────────────
 // Keys must match the ACTUAL keys the posture engine emits (see
@@ -289,6 +290,11 @@ async function _ensureCairoFont(doc,isAr=false){
     doc.addFileToVFS("Cairo-Bold.ttf",_cairoCachedB64);
     doc.addFont("Cairo-Bold.ttf","cairo","bold");
     _cairoLoaded=true;
+    // Install the correct Arabic reshaper on this doc. jsPDF 4.x's built-in
+    // Arabic processor drops the definite-article alef and mangles lam-alef;
+    // our shaper pre-builds presentation forms in visual order, which jsPDF
+    // then renders verbatim. English strings pass through untouched.
+    installArabicText(doc);
   }catch(e){console.warn("Cairo font failed:",e?.message||e);}
 }
 async function _loadCairo(doc,isAr=false){await _ensureCairoFont(doc,isAr);return _cairoLoaded;}
@@ -633,7 +639,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       const sc=typeof v==="number"?v:(v?.score??100);
       const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
       const val=v?.value, unit=v?.unit||"";
-      const pri=sc<40?"High Priority":sc<65?"Medium Priority":"Low Priority";
+      const pri=isAr?(sc<40?"أولوية عالية":sc<65?"أولوية متوسطة":"أولوية منخفضة"):(sc<40?"High Priority":sc<65?"Medium Priority":"Low Priority");
       const priC=sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94];
       return{k,sc,lbl,val,unit,pri,priC};
     }).sort((a,b)=>a.sc-b.sc);
@@ -677,7 +683,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     sf(8.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+16,11.5);
     sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
     sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?"تقرير تحليل الوضعية الشخصي":"Personal Posture Analysis Report",60,10);
-    sf(6,"normal"); tc(doc,...TEXT3); doc.text("AI-POWERED POSTURE INSIGHTS",60,16);
+    sf(6,"normal"); tc(doc,...TEXT3); doc.text(isAr?"تحليل الوضعية بالذكاء الاصطناعي":"AI-POWERED POSTURE INSIGHTS",60,16);
     // Tier badge
     const tbl=tierLbl; const tbw=doc.getTextWidth(tbl)+10;
     fc(doc,...tierCol);
@@ -699,7 +705,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
     // Score card
     dCard(ml,y,scoreW,row1H);
-    sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
+    sf(6.5,"bold"); tc(doc,...TEXT3); doc.text(isAr?"النتيجة الكلية للوضعية":"OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
     // Score gauge (proportional arc)
     const cx=ml+scoreW/2, cy=y+40, r1=21;
     fc(doc,...gradeC);
@@ -710,13 +716,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     sf(21,"bold"); tc(doc,...gradeC); doc.text(String(avg),cx,cy+3,{align:"center"});
     sf(6,"normal"); tc(doc,...TEXT3); doc.text("/100",cx,cy+9.5,{align:"center"});
     sf(9,"bold"); tc(doc,...gradeC); doc.text(gradeL,cx,cy+r1+9,{align:"center"});
-    // Insight
-    if(aiText||painSum){
-      const tip=(painSum||aiText).split('.')[0]+'.';
-      const tipLines=doc.splitTextToSize(tip,scoreW-8);
-      sf(5.5,"normal"); tc(doc,...TEXT2);
-      tipLines.slice(0,2).forEach((l,i)=>doc.text(l,ml+4,y+row1H-12+i*5.5));
-    }
+    // (AI insight lives in its own card under the timeline below — a second
+    // copy here collided with the grade label in the narrow score card.)
 
     // KPI chips (2x2 grid)
     const kx=ml+scoreW+4;
@@ -743,7 +744,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     // Info card (right)
     const ix=kx+kpiW+4;
     dCard(ix,y,infoW,row1H);
-    sf(6,"bold"); tc(doc,...TEXT3); doc.text("YOUR INFORMATION",ix+4,y+7);
+    sf(6,"bold"); tc(doc,...TEXT3); doc.text(isAr?"بياناتك":"YOUR INFORMATION",ix+4,y+7);
     [
       ["👤",isAr?"الاسم":"Name",name],
       ["✉",isAr?"البريد":"Email",email.length>22?email.slice(0,22)+"…":email],
@@ -761,7 +762,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
     // ── SCORE TIMELINE ─────────────────────────────────────────
     dCard(ml,y,cw,46);
-    sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("SCORE TIMELINE",ml+4,y+7);
+    sf(6.5,"bold"); tc(doc,...TEXT3); doc.text(isAr?"تسلسل النتيجة زمنياً":"SCORE TIMELINE",ml+4,y+7);
     if(hist.length>1){
       const lo=Math.max(0,Math.min(...hist)-5),hi=Math.min(100,Math.max(...hist)+5),rng=hi-lo;
       const gx=ml+8,gw2=cw-16,gh=28,gy=y+13;
@@ -834,7 +835,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.rect(ml,H-9,cw,.3,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     sf(5.5,"normal"); tc(doc,...TEXT3);
-    doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
+    doc.text(isAr?"Corvus Health Intelligence · سري · ليس تشخيصاً طبياً":"Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
     doc.text("1 / 2",W-mr,H-4.5,{align:"right"});
 
     // ══════════════════════════════════════════════════════════
@@ -857,9 +858,9 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
     // Radar chart card (simplified polygon)
     dCard(ml,y,radarW,rowH);
-    sf(6,"bold"); tc(doc,...TEXT3); doc.text("POSTURE OVERVIEW",ml+4,y+6);
+    sf(6,"bold"); tc(doc,...TEXT3); doc.text(isAr?"نظرة عامة على الوضعية":"POSTURE OVERVIEW",ml+4,y+6);
     const rcx=ml+radarW/2, rcy2=y+rowH/2+6, rad=22;
-    const labels2=["Neck\nAlign.","Shoulder\nPosition","Spine\nAlign.","Sitting\nBalance","Screen\nErgonomics"];
+    const labels2=isAr?["الرقبة","الكتفين","العمود الفقري","الاتزان","وضع الشاشة"]:["Neck\nAlign.","Shoulder\nPosition","Spine\nAlign.","Sitting\nBalance","Screen\nErgonomics"];
     const angles=labels2.map((_,i)=>((i/labels2.length)*360-90)*Math.PI/180);
     // Optimal hexagon
     fc(doc,37,99,235);
@@ -896,16 +897,20 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       doc.text(labels2[i].replace('\n',' '),lx,ly,{align:"center"});
     });
     // Legend
-    sf(5,"normal"); tc(doc,37,99,235); doc.text("— You",ml+4,y+rowH-7);
-    tc(doc,...TEXT3); doc.text("  - - Optimal Range",ml+4,y+rowH-2.5);
+    sf(5,"normal"); tc(doc,37,99,235); doc.text(isAr?"— أنت":"— You",ml+4,y+rowH-7);
+    tc(doc,...TEXT3); doc.text(isAr?"  - - المعدل المثالي":"  - - Optimal Range",ml+4,y+rowH-2.5);
 
     // Insights card (center)
     const inx=ml+radarW+4;
     dCard(inx,y,insW,rowH);
-    sf(6,"bold"); tc(doc,...TEXT3); doc.text("POSTURE INSIGHTS",inx+4,y+6);
+    sf(6,"bold"); tc(doc,...TEXT3); doc.text(isAr?"أبرز الملاحظات":"POSTURE INSIGHTS",inx+4,y+6);
     const insights=mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
-      text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}${val!==undefined?` ${Math.round(val*10)/10}${unit}`:""}`,
-      detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor and improve.":"Looking good — maintain this.",
+      text:isAr
+        ? `${lbl}: ${sc<60?"يحتاج إلى انتباه":"ضمن المعدل"}${val!==undefined?` — ${Math.round(val*10)/10}${unit}`:""}`
+        : `Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}${val!==undefined?` ${Math.round(val*10)/10}${unit}`:""}`,
+      detail:isAr
+        ? (sc<40?"أولوية عالية — عالجها فوراً.":sc<65?"متوسطة — راقبها وحسّنها.":"جيد — حافظ على هذا الوضع.")
+        : (sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor and improve.":"Looking good — maintain this."),
       col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
     }));
     insights.forEach(({text,detail,col},i)=>{
@@ -927,15 +932,15 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     // Session summary table (right)
     const sx=inx+insW+4;
     dCard(sx,y,sumW,rowH);
-    sf(6,"bold"); tc(doc,...TEXT3); doc.text("SESSION SUMMARY",sx+4,y+6);
+    sf(6,"bold"); tc(doc,...TEXT3); doc.text(isAr?"ملخص الجلسة":"SESSION SUMMARY",sx+4,y+6);
     const sumRows=[
-      ["Overall Score",`${avg}/100`,gradeC],
-      ["Good Posture",`${goodPct}%`,[34,197,94]],
-      ["Alerts",String(alerts),[245,158,11]],
-      ["Duration",fmtDurShort(dur),[99,102,241]],
-      ["Session",`#${realIdx}`,[99,102,241]],
-      ["Date",dayStr.split(',')[0],[148,163,200]],
-      ["Time",timeStr,[148,163,200]],
+      [isAr?"النتيجة الكلية":"Overall Score",`${avg}/100`,gradeC],
+      [isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`,[34,197,94]],
+      [isAr?"التنبيهات":"Alerts",String(alerts),[245,158,11]],
+      [isAr?"المدة":"Duration",fmtDurShort(dur),[99,102,241]],
+      [isAr?"الجلسة":"Session",`#${realIdx}`,[99,102,241]],
+      [isAr?"التاريخ":"Date",dayStr.split(',')[0],[148,163,200]],
+      [isAr?"الوقت":"Time",timeStr,[148,163,200]],
     ];
     sumRows.forEach(([k,v,col],i)=>{
       const ry=y+10+i*12;
@@ -982,7 +987,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.rect(ml,H-9,cw,.3,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     sf(5.5,"normal"); tc(doc,...TEXT3);
-    doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
+    doc.text(isAr?"Corvus Health Intelligence · سري · ليس تشخيصاً طبياً":"Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
     doc.text("2 / 2",W-mr,H-4.5,{align:"right"});
 
     await doc.save(`Corvus_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
@@ -1000,7 +1005,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   sf(8.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+16,11.5);
   sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
   sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?"تقرير تحليل الوضعية الشخصي":"Personal Posture Analysis Report",60,10);
-  sf(6,"normal"); tc(doc,...TEXT3); doc.text("AI-POWERED POSTURE INSIGHTS",60,16);
+  sf(6,"normal"); tc(doc,...TEXT3); doc.text(isAr?"تحليل الوضعية بالذكاء الاصطناعي":"AI-POWERED POSTURE INSIGHTS",60,16);
   const tbw2=doc.getTextWidth(tierLbl)+10;
   fc(doc,...tierCol);
   doc.setGState&&doc.setGState(new doc.GState({opacity:.18}));
@@ -1016,7 +1021,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const scoreW=60, kpiW=85, infoW=cw-scoreW-kpiW-8, row1H=78;
   // Score
   dCard(ml,y,scoreW,row1H);
-  sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
+  sf(6.5,"bold"); tc(doc,...TEXT3); doc.text(isAr?"النتيجة الكلية للوضعية":"OVERALL POSTURE SCORE",ml+scoreW/2,y+7,{align:"center"});
   const cx2=ml+scoreW/2, cy2=y+40, r2=21;
   // Soft tint fill inside the gauge
   fc(doc,...gradeC);
@@ -1063,7 +1068,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // Info
   const ix2=kx3+kpiW+4;
   dCard(ix2,y,infoW,row1H);
-  sf(6,"bold"); tc(doc,...TEXT3); doc.text("YOUR INFORMATION",ix2+4,y+7);
+  sf(6,"bold"); tc(doc,...TEXT3); doc.text(isAr?"بياناتك":"YOUR INFORMATION",ix2+4,y+7);
   [["👤",isAr?"الاسم":"Name",name],["✉",isAr?"البريد":"Email",email.length>22?email.slice(0,22)+"…":email],
    ["🏢",isAr?"الشركة":"Company",company||"—"],["🔑","ID",`local_${session.id?.slice(-8)||"xxxxxxxx"}`]
   ].forEach(([icon,lbl,val],i)=>{
@@ -1076,7 +1081,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
   // Timeline
   dCard(ml,y,cw,46);
-  sf(6.5,"bold"); tc(doc,...TEXT3); doc.text("SCORE TIMELINE",ml+4,y+7);
+  sf(6.5,"bold"); tc(doc,...TEXT3); doc.text(isAr?"تسلسل النتيجة زمنياً":"SCORE TIMELINE",ml+4,y+7);
   if(hist.length>1){
     const lo=Math.max(0,Math.min(...hist)-5),hi=Math.min(100,Math.max(...hist)+5),rng=hi-lo;
     const gx=ml+8,gw2=cw-16,gh=28,gy=y+13;
@@ -1127,7 +1132,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
   doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   sf(5.5,"normal");tc(doc,...TEXT3);
-  doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);doc.text("1 / 2",W-mr,H-4.5,{align:"right"});
+  doc.text(isAr?"Corvus Health Intelligence · سري · ليس تشخيصاً طبياً":"Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);doc.text("1 / 2",W-mr,H-4.5,{align:"right"});
 
   // PAGE 2 — full metrics + AI analysis
   doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
@@ -1141,9 +1146,9 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // Radar + Insights + Summary
   const radarW2=60,insW2=75,sumW2=cw-radarW2-insW2-8,rowH2=100;
   dCard(ml,y,radarW2,rowH2);
-  sf(6,"bold");tc(doc,...TEXT3);doc.text("POSTURE OVERVIEW",ml+4,y+6);
+  sf(6,"bold");tc(doc,...TEXT3);doc.text(isAr?"نظرة عامة على الوضعية":"POSTURE OVERVIEW",ml+4,y+6);
   const rcx3=ml+radarW2/2,rcy3=y+rowH2/2+6,rad3=22;
-  const lbls3=["Neck\nAlign.","Shoulder\nPosition","Spine\nAlign.","Sitting\nBalance","Screen\nErgonomics"];
+  const lbls3=isAr?["الرقبة","الكتفين","العمود الفقري","الاتزان","وضع الشاشة"]:["Neck\nAlign.","Shoulder\nPosition","Spine\nAlign.","Sitting\nBalance","Screen\nErgonomics"];
   const ang3=lbls3.map((_,i)=>((i/lbls3.length)*360-90)*Math.PI/180);
   fc(doc,37,99,235);doc.setGState&&doc.setGState(new doc.GState({opacity:.08}));
   const op3=ang3.map(a=>({x:rcx3+Math.cos(a)*rad3,y:rcy3+Math.sin(a)*rad3}));
@@ -1168,16 +1173,20 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     const lx=rcx3+Math.cos(a)*(rad3+7),ly=rcy3+Math.sin(a)*(rad3+7);
     sf(4.5,"normal");tc(doc,...TEXT3);doc.text(lbls3[i].replace('\n',' '),lx,ly,{align:"center"});
   });
-  sf(5,"normal");tc(doc,37,99,235);doc.text("— You",ml+4,y+rowH2-7);
+  sf(5,"normal");tc(doc,37,99,235);doc.text(isAr?"— أنت":"— You",ml+4,y+rowH2-7);
   tc(doc,...TEXT3);doc.text("  - - Optimal",ml+4,y+rowH2-2.5);
 
   // Insights
   const inx3=ml+radarW2+4;
   dCard(inx3,y,insW2,rowH2);
-  sf(6,"bold");tc(doc,...TEXT3);doc.text("POSTURE INSIGHTS",inx3+4,y+6);
+  sf(6,"bold");tc(doc,...TEXT3);doc.text(isAr?"أبرز الملاحظات":"POSTURE INSIGHTS",inx3+4,y+6);
   mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
-    text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}`,
-    detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor.":"Looking good.",
+    text:isAr
+      ? `${lbl}: ${sc<60?"يحتاج إلى انتباه":"ضمن المعدل"}`
+      : `Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}`,
+    detail:isAr
+      ? (sc<40?"أولوية عالية — عالجها فوراً.":sc<65?"متوسطة — راقبها.":"جيد.")
+      : (sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor.":"Looking good."),
     col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
   })).forEach(({text,detail,col},i)=>{
     const iy=y+12+i*28;
@@ -1193,10 +1202,10 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   // Summary
   const sx3=inx3+insW2+4;
   dCard(sx3,y,sumW2,rowH2);
-  sf(6,"bold");tc(doc,...TEXT3);doc.text("SESSION SUMMARY",sx3+4,y+6);
-  [["Overall Score",`${avg}/100`,gradeC],["Good Posture",`${goodPct}%`,[34,197,94]],
-   ["Alerts",String(alerts),[245,158,11]],["Duration",fmtDurShort(dur),[99,102,241]],
-   ["Session",`#${realIdx}`,[99,102,241]],["Date",dayStr.split(',')[0],[148,163,200]],["Time",timeStr,[148,163,200]]
+  sf(6,"bold");tc(doc,...TEXT3);doc.text(isAr?"ملخص الجلسة":"SESSION SUMMARY",sx3+4,y+6);
+  [[isAr?"النتيجة الكلية":"Overall Score",`${avg}/100`,gradeC],[isAr?"وضعية جيدة":"Good Posture",`${goodPct}%`,[34,197,94]],
+   [isAr?"التنبيهات":"Alerts",String(alerts),[245,158,11]],[isAr?"المدة":"Duration",fmtDurShort(dur),[99,102,241]],
+   [isAr?"الجلسة":"Session",`#${realIdx}`,[99,102,241]],[isAr?"التاريخ":"Date",dayStr.split(',')[0],[148,163,200]],[isAr?"الوقت":"Time",timeStr,[148,163,200]]
   ].forEach(([k,v,col],i)=>{
     const ry=y+10+i*12;
     sf(6,"normal");tc(doc,...TEXT3);doc.text(k,sx3+4,ry+5);
@@ -1276,7 +1285,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     }
     fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
     doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(5.5,"normal");tc(doc,...TEXT3);doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
+    sf(5.5,"normal");tc(doc,...TEXT3);doc.text(isAr?"Corvus Health Intelligence · سري · ليس تشخيصاً طبياً":"Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
     const ptot=doc.internal.getNumberOfPages();
     for(let p=1;p<=ptot;p++){doc.setPage(p);sf(5.5,"normal");tc(doc,...TEXT3);doc.text(`${p} / ${ptot}`,W-mr,H-4.5,{align:"right"});}
     await doc.save(`Corvus_Pro_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
@@ -1542,7 +1551,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
   doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   sf(5.5,"normal");tc(doc,...TEXT3);
-  doc.text("Corvus Health Intelligence — Confidential",ml,H-4.5);
+  doc.text(isAr?"Corvus Health Intelligence · سري · ليس تشخيصاً طبياً":"Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
   // Page numbers
   const tot=doc.internal.getNumberOfPages();
   for(let p=1;p<=tot;p++){
