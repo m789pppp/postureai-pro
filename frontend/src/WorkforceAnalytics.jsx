@@ -268,13 +268,7 @@ function buildAnalytics(sessions=[], allUsers=[], profile={}) {
           return acc;
         },{})
       ).map(([name,{scores,count}])=>({name,avg:avg(scores),count,risk:Math.round((100-avg(scores))*0.6)}))
-    : [
-        {name:"Engineering",  avg:81, count:24, risk:18},
-        {name:"Marketing",    avg:63, count:14, risk:37},
-        {name:"Operations",   avg:74, count:18, risk:26},
-        {name:"HR",           avg:77, count:8,  risk:22},
-        {name:"Sales",        avg:58, count:20, risk:42},
-      ];
+    : []; // no fabricated fallback — an empty team should show an empty state, not fake numbers
 
   // Monthly trend (6 months)
   const monthly6 = Array.from({length:6},(_,i)=>{
@@ -607,7 +601,11 @@ function DeptComparison({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
   const sorted=[...data.depts].sort((a,b)=>b.avg-a.avg);
   return (
     <Sec title={isAr?"مقارنة الأقسام":"Department Comparison"} sub={isAr?"صحة وخطر كل قسم":"Health & risk per department"} accent="#0891b2">
-      {loading ? [1,2,3].map(i=><CardSkeleton key={i} h={40}/>) : (
+      {loading ? [1,2,3].map(i=><CardSkeleton key={i} h={40}/>) : sorted.length===0 ? (
+        <div style={{padding:"20px 0",textAlign:"center",fontSize:12,color:"var(--wa-text2)"}}>
+          {isAr?"لا يوجد أعضاء فريق محمّلين بعد — ستظهر مقارنة الأقسام هنا بمجرد توفر البيانات":"No team members loaded yet — department comparison will appear once data is available"}
+        </div>
+      ) : (
         <>
           <div style={{marginBottom:12}}>
             {sorted.map((d,i)=>(

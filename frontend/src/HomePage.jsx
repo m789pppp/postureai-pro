@@ -3,9 +3,12 @@
  * Complete rewrite: proper role separation, working tools, real data, tier gates
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession } from "./firebase.js";
+import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession, getAuthToken, deleteAuthUser, logOut } from "./firebase.js";
+import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast } from "./lib/tierQuality.js";
+import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
+import { PushAPI } from "./services/api.js";
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -1039,9 +1042,37 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   const [tab,     setTab]     = useState("profile");
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [addPwVisible, setAddPwVisible]   = useState(false);
+  const [showDeleteBox, setShowDeleteBox] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   // Track whether user has started editing (prevents useEffect overriding their input)
   const [nameDirty, setNameDirty] = useState(false);
+
+  async function deleteAccount() {
+    if (deleteConfirmText.trim().toUpperCase() !== "DELETE") {
+      addToast(isAr ? 'اكتب "DELETE" بالظبط للتأكيد' : 'Type "DELETE" exactly to confirm', "error");
+      return;
+    }
+    setDeleting(true);
+    try {
+      const tok = await getAuthToken();
+      const res = await fetch(`${API_BASE_URL}/user/delete-all-data`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.error || d?.message || "delete_failed");
+      if (!d.auth_deleted) { try { await deleteAuthUser(); } catch {} }
+      try { await logOut(); } catch {}
+      addToast(isAr ? "تم حذف الحساب وكل بياناتك نهائياً" : "Your account and all data have been permanently deleted", "info");
+      onSignOut?.();
+    } catch (e) {
+      addToast(isAr ? "حصل خطأ أثناء حذف الحساب — حاول تاني أو تواصل مع الدعم" : "Something went wrong deleting your account — try again or contact support", "error");
+    }
+    setDeleting(false);
+  }
 
   // Sync from profile ONLY on initial load or when not actively editing
   useEffect(()=>{
@@ -1135,6 +1166,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
     { id:"accounts", en:"Accounts",     ar:"الحسابات المرتبطة" },
     { id:"billing",  en:"Subscription", ar:"الاشتراك" },
     { id:"security", en:"Security",     ar:"الأمان" },
+    { id:"notifications", en:"Notifications", ar:"الإشعارات" },
   ];
 
   return (
@@ -1607,10 +1639,150 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 {isAr?"خروج":"Sign Out"}
               </button>
             </div>
+
+            {/* Delete account — GDPR right to erasure */}
+            <div style={{ padding:"14px 16px", background:"rgba(239,68,68,.04)",
+              borderRadius:10, border:"1px solid rgba(239,68,68,.15)" }}>
+              <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+                <span style={{ fontSize:22 }}>⚠️</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:"#f87171" }}>
+                    {isAr?"حذف الحساب":"Delete Account"}
+                  </div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2, lineHeight:1.6 }}>
+                    {isAr
+                      ?"هيتم حذف كل بياناتك نهائياً (الجلسات، المدفوعات، الإشعارات، الملف الشخصي) طبقاً للحق في المحو (GDPR). الإجراء ده لا يمكن التراجع عنه."
+                      :"Permanently deletes all your data — sessions, payments, notifications, profile — per your GDPR right to erasure. This cannot be undone."}
+                  </div>
+                  {!showDeleteBox ? (
+                    <button onClick={()=>setShowDeleteBox(true)} style={{ marginTop:10, padding:"7px 14px",
+                      background:"rgba(239,68,68,.1)", border:"1px solid rgba(239,68,68,.25)",
+                      borderRadius:7, color:"#fca5a5", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                      {isAr?"حذف الحساب نهائياً":"Delete My Account"}
+                    </button>
+                  ) : (
+                    <div style={{ marginTop:12 }}>
+                      <div style={{ fontSize:11.5, fontWeight:600, color:"#fca5a5", marginBottom:8 }}>
+                        {isAr?'اكتب "DELETE" في الخانة تحت للتأكيد:':'Type "DELETE" below to confirm:'}
+                      </div>
+                      <input value={deleteConfirmText} onChange={e=>setDeleteConfirmText(e.target.value)} placeholder="DELETE"
+                        style={{ width:"100%", maxWidth:220, padding:"8px 10px", background:"rgba(255,255,255,.05)",
+                          border:"1px solid rgba(255,255,255,.1)", borderRadius:7, color:cs.text, fontSize:12,
+                          outline:"none", boxSizing:"border-box" }}/>
+                      <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                        <button onClick={()=>{setShowDeleteBox(false);setDeleteConfirmText("");}} disabled={deleting}
+                          style={{ padding:"7px 14px", background:"rgba(148,163,184,.1)",
+                            border:"1px solid rgba(148,163,184,.2)", borderRadius:7, color:cs.muted,
+                            fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                          {isAr?"إلغاء":"Cancel"}
+                        </button>
+                        <button onClick={deleteAccount} disabled={deleting||deleteConfirmText.trim().toUpperCase()!=="DELETE"}
+                          style={{ padding:"7px 14px", background:"rgba(239,68,68,.15)",
+                            border:"1px solid rgba(239,68,68,.4)", borderRadius:7, color:"#fca5a5",
+                            fontSize:12, fontWeight:700, cursor:"pointer",
+                            opacity:(deleting||deleteConfirmText.trim().toUpperCase()!=="DELETE")?.5:1 }}>
+                          {deleting?"...":(isAr?"تأكيد الحذف النهائي":"Confirm Permanent Delete")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Tab: Notifications */}
+      {tab==="notifications"&&(
+        <PushNotificationSettings cs={cs} isAr={isAr} addToast={addToast} />
+      )}
+
+    </div>
+  );
+}
+
+// ── Push Notifications settings block ───────────────────────────────
+function PushNotificationSettings({ cs, isAr, addToast }) {
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy]       = useState(false);
+
+  useEffect(() => { setEnabled(isPushEnabled()); }, []);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      if (enabled) {
+        await disablePushNotifications();
+        setEnabled(false);
+        addToast?.(isAr ? "تم إيقاف الإشعارات" : "Notifications disabled", "success");
+      } else {
+        const res = await enablePushNotifications(isAr ? "ar" : "en");
+        if (res.ok) {
+          setEnabled(true);
+          addToast?.(isAr ? "تفعّلت الإشعارات ✓" : "Notifications enabled ✓", "success");
+        } else {
+          const msgs = {
+            permission_denied: isAr ? "الإذن اتمنع من إعدادات المتصفح" : "Permission denied in browser settings",
+            unsupported:       isAr ? "المتصفح ده مش بيدعم الإشعارات" : "This browser doesn't support push notifications",
+            no_vapid_key:      isAr ? "الإشعارات لسه مش متظبطة من ناحيتنا" : "Push isn't fully configured on our end yet",
+            no_token: isAr ? "حصل خطأ في التسجيل" : "Registration failed",
+            error:    isAr ? "حصل خطأ" : "Something went wrong",
+          };
+          addToast?.(msgs[res.reason] || msgs.error, "error");
+        }
+      }
+    } finally { setBusy(false); }
+  };
+
+  const sendTest = async () => {
+    try {
+      const r = await PushAPI.test();
+      addToast?.(isAr ? `اتبعت لـ ${r.sent||0} جهاز` : `Sent to ${r.sent||0} device(s)`, "success");
+    } catch (e) {
+      addToast?.(e.message || (isAr?"حصل خطأ":"Something went wrong"), "error");
+    }
+  };
+
+  return (
+    <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
+      <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:6 }}>
+        {isAr?"الإشعارات":"Notifications"}
+      </div>
+      <div style={{ fontSize:12, color:cs.muted, marginBottom:16, lineHeight:1.6 }}>
+        {isAr?"استقبل تنبيهات لما سلسلة الالتزام بتاعتك في خطر أو لما نكتشف نمط وضعية محتاج انتباه."
+             :"Get notified when your streak is at risk or when we detect a posture pattern worth your attention."}
+      </div>
+      <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+        borderRadius:10, border:`1px solid ${cs.border}`,
+        display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+        <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+          <span style={{ fontSize:22 }}>🔔</span>
+          <div>
+            <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+              {isAr?"إشعارات الدفع":"Push Notifications"}
+            </div>
+            <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+              {enabled ? (isAr?"مفعّلة على الجهاز ده":"Enabled on this device")
+                       : (isAr?"مش مفعّلة":"Not enabled")}
+            </div>
+          </div>
+        </div>
+        <button onClick={toggle} disabled={busy}
+          style={{ padding:"7px 16px", borderRadius:99, border:"none", cursor:"pointer",
+            fontSize:12, fontWeight:700,
+            background: enabled ? "rgba(239,68,68,.12)" : "rgba(16,185,129,.15)",
+            color: enabled ? "#f87171" : "#10b981" }}>
+          {busy ? "…" : enabled ? (isAr?"إيقاف":"Disable") : (isAr?"تفعيل":"Enable")}
+        </button>
+      </div>
+      {enabled && (
+        <button onClick={sendTest} style={{ width:"100%", padding:"9px",
+          background:"transparent", border:`1px solid ${cs.border}`, borderRadius:8,
+          color:cs.muted, fontSize:12, fontWeight:600, cursor:"pointer" }}>
+          {isAr?"بعت إشعار تجريبي":"Send test notification"}
+        </button>
+      )}
     </div>
   );
 }
@@ -1623,6 +1795,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   user, userSessions, setUserSessions, getAllUsers, setAllUsers,
   setShowCoach, setShowBilling, setShowGamification, setShowGrowthHub, setShowSecurityCenter,
   setShowAIInsights, setShowPredictiveAI, setShowCustomerSuccess, setShowChurnPrediction,
+  setShowSymptomCorrelation,
   setShowAPIMarketplace, setShowWhiteLabel, setShowMultiTenant, setShowAuditSystem,
   setShowAIReports, setShowSessionComparison, setShowTrendChart, setShowWorkforceAnalytics,
   setShowCalibWizard, setShowDashboard,
@@ -1696,6 +1869,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
     { id:"t-predict",  icon:"🔮", en:"Predictive AI", ar:"AI تنبؤي",
       locked:!elite, lockLabel:"ELITE",
       onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
+    { id:"t-symptoms", icon:"🩹", en:"Symptom Log",   ar:"سجل الأعراض",
+      onClick:()=>setShowSymptomCorrelation?.(true) },
     ...(isAdmin ? [
       { id:"t-growth",  icon:"🚀", en:"Growth Hub",   ar:"مركز النمو", onClick:()=>setShowGrowthHub?.(true) },
     ] : []),
@@ -1760,6 +1935,16 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
               {isAr?"منصة المشرف":"Platform Admin"}
             </button>
           )}
+          <button onClick={()=>setPage("marketplace")}
+            onMouseEnter={()=>setHov("marketplace")} onMouseLeave={()=>setHov(null)}
+            style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
+              padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
+              borderLeft:"2px solid transparent",
+              background:hov==="marketplace"?"rgba(255,255,255,.04)":"transparent",
+              color:"rgba(255,255,255,.65)", fontSize:12.5, textAlign:"left" }}>
+            <span style={{ fontSize:14, width:18, textAlign:"center" }}>🩺</span>
+            {isAr?"أخصائيو العلاج الطبيعي":"Find a Physiotherapist"}
+          </button>
         </nav>
 
         {/* Start Session */}
@@ -1978,6 +2163,7 @@ export default function HomePage({
   setShowCalibWizard, setShowGamification,
   setShowSessionComparison, setShowTrendChart,
   setShowAIInsights, setShowGrowthHub, setShowSecurityCenter,
+  setShowSymptomCorrelation,
   setShowCustomerSuccess, setShowChurnPrediction,
   setShowAPIMarketplace, setShowWhiteLabel,
   setShowMultiTenant, setShowAuditSystem,
@@ -1993,6 +2179,7 @@ export default function HomePage({
   downloadLongitudinalPDF,
   shareReport,
   AccountSwitcher, onSwitchAccount,
+  NavAvatarDropdown,
 }) {
   const [tab,    setTab]    = useState("home");
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
@@ -2048,6 +2235,10 @@ export default function HomePage({
       onClick:()=>isPro_&&setShowAIReports?.(true) },
     { id:"t-security", icon:"🔒", en:"Security",    ar:"الأمان",
       onClick:()=>setShowSecurityCenter?.(true) },
+    { id:"t-marketplace", icon:"🩺", en:"Find a Physio", ar:"أخصائي علاج طبيعي",
+      onClick:()=>setPage("marketplace") },
+    { id:"t-symptoms", icon:"🩹", en:"Symptom Log", ar:"سجل الأعراض",
+      onClick:()=>setShowSymptomCorrelation?.(true) },
     ...(isAdmin ? [
       { id:"t-mrr",    icon:"💰", en:"Revenue",     ar:"الإيرادات",
         onClick:()=>setShowMRR?.(true) },
@@ -2183,6 +2374,7 @@ export default function HomePage({
           setShowCoach={setShowCoach} setShowBilling={setShowBilling}
           setShowGamification={setShowGamification} setShowGrowthHub={setShowGrowthHub}
           setShowSecurityCenter={setShowSecurityCenter} setShowAIInsights={setShowAIInsights}
+          setShowSymptomCorrelation={setShowSymptomCorrelation}
           setShowPredictiveAI={setShowPredictiveAI} setShowCustomerSuccess={setShowCustomerSuccess}
           setShowChurnPrediction={setShowChurnPrediction} setShowAPIMarketplace={setShowAPIMarketplace}
           setShowWhiteLabel={setShowWhiteLabel} setShowMultiTenant={setShowMultiTenant}
@@ -2217,10 +2409,24 @@ export default function HomePage({
                 color:"#60a5fa", fontSize:12, fontWeight:600, cursor:"pointer" }}>
               ▶ {isAr?"جلسة":"Session"}
             </button>
-            <button onClick={()=>setTab("settings")}
-              style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
-              <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={30}/>
-            </button>
+            {NavAvatarDropdown ? (
+              <NavAvatarDropdown
+                user={user} profile={profile} cs={cs} lang={lang} isAr={isAr}
+                isAdmin={isAdmin} isHRAdmin={isHRAdmin}
+                onProfile={()=>setTab("settings")}
+                onLeaderboard={()=>setPage("leaderboard")}
+                onHR={()=>setPage("hr")}
+                onAdmin={()=>setPage("admin")}
+                onSetup={()=>setPage("setup")}
+                onOnboarding={openCalib}
+                onSignOut={handleSignOut}
+              />
+            ) : (
+              <button onClick={()=>setTab("settings")}
+                style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={30}/>
+              </button>
+            )}
           </div>
         </header>
 

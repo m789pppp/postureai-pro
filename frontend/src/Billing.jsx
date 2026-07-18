@@ -1,7 +1,8 @@
+import { API_BASE_URL } from "./config/api.js";
 import { useState, useEffect, useCallback } from "react";
 
 import { apiFetch, getAuthToken } from "./services/api.js";
-const API = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+const API = API_BASE_URL;
 const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 
 // ── Stripe loader ─────────────────────────────────────────────────
