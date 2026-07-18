@@ -2167,12 +2167,19 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const m1=session1.metrics||{}, m2=session2.metrics||{};
   const allKeys=[...new Set([...Object.keys(m1),...Object.keys(m2)])].filter(k=>!k.startsWith("_"));
   const metRows=allKeys.map(k=>{
-    const sc1=typeof m1[k]==="number"?m1[k]:(m1[k]?.score??100);
-    const sc2=typeof m2[k]==="number"?m2[k]:(m2[k]?.score??100);
-    const d=Math.round(sc2-sc1);
+    const has1 = m1[k]!=null, has2 = m2[k]!=null;
+    const sc1=typeof m1[k]==="number"?m1[k]:(m1[k]?.score??null);
+    const sc2=typeof m2[k]==="number"?m2[k]:(m2[k]?.score??null);
     const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+    // A metric tracked in only one session has no real delta — don't fabricate
+    // one by assuming a perfect 100 for the untracked side (that produced
+    // phantom "-60 point regression" style false alarms).
+    if(!has1||!has2){
+      return{k,lbl,sc1,sc2,d:null,isNew:!has1&&has2,isRemoved:has1&&!has2};
+    }
+    const d=Math.round(sc2-sc1);
     return{k,lbl,sc1,sc2,d};
-  }).sort((a,b)=>a.d-b.d);
+  }).sort((a,b)=>(a.d??0)-(b.d??0));
 
   const z1=_zonalRisk(m1), z2=_zonalRisk(m2);
   const d1=session1.duration_s||session1.duration_sec||0;
@@ -2345,14 +2352,31 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     .forEach((h,i)=>doc.text(h,colX[i],y+7));
   y+=12;
 
-  metRows.forEach(({lbl,sc1,sc2,d},idx)=>{
+  metRows.forEach(({lbl,sc1,sc2,d,isNew,isRemoved},idx)=>{
     if(y>H-28){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued",isAr);y=22;}
-    const dC=d>2?PDF_TOKENS.success:d<-2?PDF_TOKENS.danger:PDF_TOKENS.muted;
     const rowH=11;
     fc(doc,...(idx%2===0?PDF_TOKENS.bg:PDF_TOKENS.card)); doc.rect(ml,y,cw,rowH,"F");
+    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,colX[0]+2,y+7.5);
+
+    if(d===null){
+      // Metric tracked in only one session — showing a fabricated delta here
+      // previously produced false "-60 point regression" alarms. Show each
+      // side plainly and label it instead of comparing.
+      if(sc1!=null){ const c1=_scoreColor(sc1); fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
+        font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c1); doc.text(String(Math.round(sc1)),colX[1]+2,y+7.5); }
+      else { font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text("—",colX[1]+2,y+7.5); }
+      if(sc2!=null){ const c2=_scoreColor(sc2); fc(doc,...c2); doc.circle(colX[2]-3,y+5.5,2.5,"F");
+        font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c2); doc.text(String(Math.round(sc2)),colX[2]+2,y+7.5); }
+      else { font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text("—",colX[2]+2,y+7.5); }
+      font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
+      doc.text(isNew?(isAr?"جديد":"NEW"):(isAr?"غير متتبع":"N/T"),colX[3],y+7.5);
+      y+=rowH;
+      return;
+    }
+
+    const dC=d>2?PDF_TOKENS.success:d<-2?PDF_TOKENS.danger:PDF_TOKENS.muted;
     // Left accent for significant changes
     if(Math.abs(d)>5){ fc(doc,...dC); doc.rect(ml,y,2,rowH,"F"); }
-    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,colX[0]+2,y+7.5);
     // Score 1 with mini dot
     const c1=_scoreColor(sc1),c2=_scoreColor(sc2);
     fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
