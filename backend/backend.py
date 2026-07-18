@@ -6137,6 +6137,7 @@ def export_audit_logs():
 @app.route("/api/admin/tenants", methods=["POST"])
 @require_auth
 @require_admin
+@limiter.limit("10 per minute")
 def provision_tenant():
     """Provision a new tenant organization."""
     try:
@@ -6173,6 +6174,7 @@ def provision_tenant():
 @app.route("/api/admin/tenants/<org_id>", methods=["PATCH"])
 @require_auth
 @require_admin
+@limiter.limit("20 per minute")
 def update_tenant(org_id):
     """Update tenant plan, seats, or status."""
     try:
@@ -7724,6 +7726,31 @@ def admin_system_health():
         ws = dict(_SOCKETIO_STATUS)
         redis_status = redis_health() if REDIS_READY else {"status": "not_configured"}
         firestore_ok = db is not None
+
+        # Stripe — lightweight, read-only balance check confirms the key is
+        # live and reachable without touching any customer data.
+        stripe_status = {"status": "not_configured"}
+        if STRIPE_SECRET_KEY:
+            try:
+                r = req.get("https://api.stripe.com/v1/balance",
+                            headers={"Authorization": f"Bearer {STRIPE_SECRET_KEY}"}, timeout=5)
+                stripe_status = {"status": "healthy" if r.status_code == 200 else "error",
+                                  "http_status": r.status_code}
+            except Exception as e:
+                stripe_status = {"status": "down", "error": str(e)}
+
+        # SendGrid — /v3/scopes is a cheap authenticated no-op that confirms
+        # the API key is valid without sending anything.
+        sendgrid_status = {"status": "not_configured"}
+        if SENDGRID_API_KEY:
+            try:
+                r = req.get("https://api.sendgrid.com/v3/scopes",
+                            headers={"Authorization": f"Bearer {SENDGRID_API_KEY}"}, timeout=5)
+                sendgrid_status = {"status": "healthy" if r.status_code == 200 else "error",
+                                    "http_status": r.status_code}
+            except Exception as e:
+                sendgrid_status = {"status": "down", "error": str(e)}
+
         return jsonify({
             "websocket": {
                 "enabled":     ws["enabled"],
@@ -7732,8 +7759,14 @@ def admin_system_health():
                 "status": ("healthy" if ws["initialized"] else
                            "disabled" if not ws["enabled"] else "error"),
             },
-            "redis": redis_status,
-            "firestore": {"status": "healthy" if firestore_ok else "down"},
+            "redis":           redis_status,
+            "firestore":       {"status": "healthy" if firestore_ok else "down"},
+            "stripe":          stripe_status,
+            "sendgrid":        sendgrid_status,
+            "pdf_generator":   {"status": "healthy" if REPORTLAB_OK else "down"},
+            "analysis_engine": {"status": "healthy" if POSE_LITE is not None else "loading"},
+            "local_ai":        {"status": "healthy" if bool(OLLAMA_URL) else "not_configured"},
+            "api_gateway":     {"status": "healthy"},  # trivially true — this response proves it
         })
     except Exception as e:
         return safe_error(e)
@@ -11315,6 +11348,63 @@ def paymob_webhook():
         print(f"[Webhook] success={success} merchant_order_id={merch_id} amount={amount}", flush=True)
 
         if success:
+            # ── Marketplace booking payments use a DIFFERENT merchant_order_id
+            # shape (PAI-BOOK-{uid}-{bookingId}-{ts}) than subscription payments
+            # (PAI-{uid}-{tier}-{billing}-{ts}). Must be checked FIRST — otherwise
+            # the subscription parser below misreads "BOOK" as the uid and the
+            # booking is silently never marked paid despite a successful charge.
+            if merch_id.startswith("PAI-BOOK-"):
+                try:
+                    parts = merch_id.split("-")
+                    # PAI - BOOK - uid - bookingId - ts
+                    booking_id = parts[3] if len(parts) >= 5 else None
+                    db = firestore.client()
+                    paymob_order_id = order.get("id")
+
+                    if not booking_id:
+                        print(f"[Webhook] ⚠️ Could not parse booking_id from {merch_id}", flush=True)
+                    else:
+                        bref = db.collection("marketplace_bookings").document(booking_id)
+                        bdoc = bref.get()
+                        if not bdoc.exists:
+                            print(f"[Webhook] ⚠️ marketplace_bookings/{booking_id} not found", flush=True)
+                        else:
+                            booking = bdoc.to_dict()
+                            # Idempotency — PayMob can legitimately retry the webhook
+                            if booking.get("status") == "confirmed":
+                                print(f"[Webhook] Booking {booking_id} already confirmed — skipping duplicate", flush=True)
+                                return jsonify({"received": True, "note": "already processed"}), 200
+                            # Defense in depth — confirm the charged amount matches
+                            # what this booking was created for, same pattern used
+                            # for subscription payments above.
+                            if booking.get("amount_cents") != amount:
+                                print(f"🚨 [Webhook] Booking amount mismatch: expected={booking.get('amount_cents')} "
+                                      f"got={amount} booking_id={booking_id} — flagged for review", flush=True)
+                                send_admin_notification({
+                                    "user_name": fname, "user_email": email,
+                                    "tier": f"MARKETPLACE AMOUNT MISMATCH: booking {booking_id}", "amount": amount/100,
+                                    "method": "PayMob", "status": "flagged",
+                                })
+                                return jsonify({"received": True, "warning": "amount mismatch — flagged for review"}), 200
+
+                            bref.update({
+                                "status":            "confirmed",
+                                "paymob_order_id":   paymob_order_id,
+                                "confirmed_at":      datetime.utcnow().isoformat()+"Z",
+                            })
+                            print(f"[Webhook] ✅ Marketplace booking {booking_id} confirmed", flush=True)
+                            send_admin_notification({
+                                "user_name":           fname or booking.get("therapist_name",""),
+                                "user_email":          email,
+                                "tier":                f"Marketplace booking — {booking.get('therapist_name','therapist')}",
+                                "amount":              amount/100,
+                                "payment_method_name": "Card/Wallet",
+                                "ref_code":            str(paymob_order_id or ""),
+                            })
+                except Exception as booking_err:
+                    print(f"[Webhook] ❌ Marketplace booking update failed: {booking_err}", flush=True)
+                return jsonify({"received": True, "success": success})
+
             # ── Decode uid + tier from merchant_order_id ──────────────────
             # Format: PAI-{uid}-{tier}-{billing_prefix}-{timestamp}
             uid, tier, billing_type = None, None, "monthly"

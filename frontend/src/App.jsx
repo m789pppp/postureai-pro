@@ -302,10 +302,10 @@ async function initPayMob({amount_egp,tier,user_email,user_name,billing,payment_
 }
 
 // ── Local MediaPipe analysis (adapters for postureEngine result shape) ────
-function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm){
+function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,calib){
   // postureEngine returns {score, metrics, alerts, recommendations, detected, lms(named), raw}
   // App expects  {overall, distCm, lo, hi, metrics, lms(landmark refs), raw}
-  const eng = _engAnalyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm);
+  const eng = _engAnalyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,calib);
   if(!eng) return null;
   const dist = eng.metrics?.screen_distance;
   // lo/hi come from engine (no duplication)
@@ -322,6 +322,7 @@ function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm)
     qualityReason:      eng.qualityReason,
     confidence:         eng.confidence,
     calibrationStatus:  eng.calibrationStatus,
+    personalised:       eng.personalised,
     fatigue_adjusted_score: eng.fatigue_adjusted_score,
     // Rebuild lms refs for drawFront overlay
     lms: _buildLmsRefs(lms,W,H),
@@ -2677,7 +2678,7 @@ export default function App(){
           if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
-          const rawResult=mode==="side"?analyzeSideMP(lms,W,H,calibData?.knownDistCm):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm);
+          const rawResult=mode==="side"?analyzeSideMP(lms,W,H,calibData?.knownDistCm):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData);
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter
           if(rawResult?.distCm && distSmootherRef.current){
             const stableDistCm=distSmootherRef.current.push(rawResult.distCm);

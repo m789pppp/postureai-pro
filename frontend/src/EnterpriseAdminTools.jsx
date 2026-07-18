@@ -36,14 +36,7 @@ const MOCK_HEALTH = {
   queue: { pending:12, processing:4, failed:1, avgWait:"1.2s" },
 };
 
-const MOCK_USERS_SAMPLE = [
-  { uid:"u_s1", email:"sarah@acme.com",     name:"Sarah Johnson", plan:"enterprise", org:"Acme Corp",    lastSeen:"2m ago",    sessions:341 },
-  { uid:"u_m1", email:"m.ali@techv.io",     name:"Mohamed Ali",   plan:"scale",      org:"TechVentures", lastSeen:"1h ago",    sessions:89 },
-  { uid:"u_c1", email:"cto@startupxyz.com", name:"Chris Park",    plan:"growth",     org:"StartupXYZ",   lastSeen:"3h ago",    sessions:22 },
-  { uid:"u_o1", email:"ops@healthfirst.org",name:"Olivia Reyes",  plan:"enterprise", org:"HealthFirst",  lastSeen:"Yesterday", sessions:512 },
-];
-
-const STATUS_DOT = { healthy:"#10b981", degraded:"#f59e0b", down:"#ef4444" };
+const STATUS_DOT = { healthy:"#10b981", degraded:"#f59e0b", down:"#ef4444", disabled:"#64748b", unknown:"#64748b", not_configured:"#64748b" };
 
 export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
   const [tab, setTab]         = useState("flags");
@@ -51,6 +44,8 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
   const [health]              = useState(MOCK_HEALTH);
   const [realHealth, setRealHealth] = useState(null); // /api/admin/system/health
   const [userSearch, setUserSearch] = useState("");
+  const [realUsers, setRealUsers]   = useState([]);
+  const [usersLoading, setUsersLoading] = useState(true);
   const [impersonating, setImpersonating] = useState(null);
   const [announcement, setAnnouncement]   = useState({ title:"", body:"", type:"info", targets:"all" });
   const [announcements, setAnnouncements] = useState([
@@ -64,9 +59,25 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
     return () => clearInterval(t);
   }, []);
 
-  // Real system health — WebSocket / Redis / Firestore
+  // Real system health — WebSocket / Redis / Firestore / Stripe / SendGrid / etc.
   useEffect(() => {
     apiFetch("/admin/system/health").then(setRealHealth).catch(() => setRealHealth(null));
+  }, []);
+
+  // Real user directory — replaces the old hardcoded sample rows.
+  useEffect(() => {
+    apiFetch("/admin/users").then(d => {
+      const mapped = (d?.users || []).map(u => ({
+        uid:      u.id,
+        email:    u.email || "—",
+        name:     u.name || (u.email ? u.email.split("@")[0] : "Unknown"),
+        plan:     u.tier || "standard",
+        org:      u.company_name || "—",
+        lastSeen: u.updated_at ? new Date(u.updated_at).toLocaleDateString() : (u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"),
+        sessions: u.session_count ?? "—",
+      }));
+      setRealUsers(mapped);
+    }).catch(() => setRealUsers([])).finally(() => setUsersLoading(false));
   }, []);
 
   const wsRow = realHealth ? {
@@ -91,6 +102,38 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
     detail: realHealth.firestore?.status === "healthy" ? "Connected" : "Not connected",
     demo: false,
   } : { name:"Firebase Firestore", status:"unknown", detail:"Checking…", demo:false };
+
+  const stripeRow = realHealth ? {
+    name: "Stripe Payments",
+    status: realHealth.stripe?.status === "healthy" ? "healthy" : realHealth.stripe?.status === "not_configured" ? "disabled" : "down",
+    detail: realHealth.stripe?.status === "not_configured" ? "STRIPE_SECRET_KEY not set" : (realHealth.stripe?.status || "unknown"),
+  } : { name:"Stripe Payments", status:"unknown", detail:"Checking…" };
+
+  const sendgridRow = realHealth ? {
+    name: "SendGrid Email",
+    status: realHealth.sendgrid?.status === "healthy" ? "healthy" : realHealth.sendgrid?.status === "not_configured" ? "disabled" : "down",
+    detail: realHealth.sendgrid?.status === "not_configured" ? "SENDGRID_API_KEY not set" : (realHealth.sendgrid?.status || "unknown"),
+  } : { name:"SendGrid Email", status:"unknown", detail:"Checking…" };
+
+  const pdfRow = realHealth ? {
+    name: "PDF Generator",
+    status: realHealth.pdf_generator?.status || "unknown",
+    detail: realHealth.pdf_generator?.status === "healthy" ? "ReportLab loaded" : "ReportLab not available",
+  } : { name:"PDF Generator", status:"unknown", detail:"Checking…" };
+
+  const analysisRow = realHealth ? {
+    name: "Analysis Engine",
+    status: realHealth.analysis_engine?.status === "healthy" ? "healthy" : "degraded",
+    detail: realHealth.analysis_engine?.status === "healthy" ? "MediaPipe models loaded" : "Models still loading",
+  } : { name:"Analysis Engine", status:"unknown", detail:"Checking…" };
+
+  const localAiRow = realHealth ? {
+    name: "Local AI Engine",
+    status: realHealth.local_ai?.status === "healthy" ? "healthy" : "disabled",
+    detail: realHealth.local_ai?.status === "healthy" ? "Ollama configured" : "OLLAMA_URL not set — using client-side WebLLM fallback",
+  } : { name:"Local AI Engine", status:"unknown", detail:"Checking…" };
+
+  const gatewayRow = { name:"API Gateway", status:"healthy", detail:"This response is the check" };
 
   // Real flags from the backend override the local enabled/rollout defaults —
   // labels/descriptions/env stay local since the backend only stores the
@@ -128,9 +171,9 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
     setAnnouncement({ title:"", body:"", type:"info", targets:"all" });
   };
 
-  const filteredUsers = MOCK_USERS_SAMPLE.filter(u => {
+  const filteredUsers = realUsers.filter(u => {
     const q = userSearch.toLowerCase();
-    return !q || u.email.includes(q) || u.name.toLowerCase().includes(q) || u.org.toLowerCase().includes(q);
+    return !q || u.email.toLowerCase().includes(q) || u.name.toLowerCase().includes(q) || u.org.toLowerCase().includes(q);
   });
 
   const tabs = [
@@ -219,6 +262,29 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
           {/* ── SYSTEM HEALTH ── */}
           {tab==="health" && (
             <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+              {/* Live-checked services — every row here is a real backend check, no fabricated numbers.
+                  Latency/uptime/load aren't tracked yet, so this shows status + detail instead of pretending to have them. */}
+              <div style={{ background:cs.bg, borderRadius:14, border:`1px solid ${cs.border}`, padding:16 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:cs.textDim, marginBottom:10, textTransform:"uppercase", letterSpacing:".05em" }}>
+                  Service Status {!realHealth && "(checking…)"}
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {[wsRow, redisRow, firestoreRow, stripeRow, sendgridRow, pdfRow, analysisRow, localAiRow, gatewayRow].map(s => (
+                    <div key={s.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                      padding:"8px 12px", background:"rgba(255,255,255,0.02)", borderRadius:8 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <div style={{ width:8, height:8, borderRadius:"50%", background: STATUS_DOT[s.status] || STATUS_DOT.unknown }} />
+                        <span style={{ fontWeight:600, color:cs.text, fontSize:13 }}>{s.name}</span>
+                      </div>
+                      <span style={{ fontSize:11.5, color:cs.textDim }}>{s.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ fontSize:11, fontWeight:700, color:"#f59e0b", marginBottom:4, marginTop:4, textTransform:"uppercase", letterSpacing:".05em" }}>
+                ⚠ Demo Data — not backed by real counters yet
+              </div>
               <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
                 {[
                   { label:"DB Reads/min",  value:(health.db.reads + (tick%3)*12).toLocaleString(), color:"#0ea5e9" },
@@ -234,78 +300,23 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                   </div>
                 ))}
               </div>
-
-              {/* Real, live-checked services — no fabricated numbers */}
-              <div style={{ background:cs.bg, borderRadius:14, border:`1px solid ${cs.border}`, padding:16, marginBottom:14 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:cs.textDim, marginBottom:10, textTransform:"uppercase", letterSpacing:".05em" }}>
-                  Live-Checked
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {[wsRow, redisRow, firestoreRow].map(s => (
-                    <div key={s.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-                      padding:"8px 12px", background:"rgba(255,255,255,0.02)", borderRadius:8 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <div style={{ width:8, height:8, borderRadius:"50%",
-                          background: s.status==="healthy" ? "#10b981" : s.status==="disabled" ? "#64748b" : s.status==="unknown" ? "#64748b" : "#ef4444" }} />
-                        <span style={{ fontWeight:600, color:cs.text, fontSize:13 }}>{s.name}</span>
-                      </div>
-                      <span style={{ fontSize:11.5, color:cs.textDim }}>{s.detail}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ fontSize:11, fontWeight:700, color:"#f59e0b", marginBottom:8, textTransform:"uppercase", letterSpacing:".05em" }}>
-                ⚠ Demo Data — not yet wired to live checks
-              </div>
-              <div style={{ background:cs.bg, borderRadius:14, border:`1px solid ${cs.border}`, overflow:"hidden" }}>
-                <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                  <thead>
-                    <tr style={{ background:"rgba(255,255,255,0.02)" }}>
-                      {["Service","Status","Latency","Uptime","Load"].map(h => (
-                        <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, fontWeight:600, color:cs.textDim, borderBottom:`1px solid ${cs.border}` }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {health.services.map(s => (
-                      <tr key={s.name} style={{ borderBottom:`1px solid ${cs.border}` }}>
-                        <td style={{ padding:"12px 16px", fontWeight:600, color:cs.text, fontSize:13 }}>{s.name}</td>
-                        <td style={{ padding:"12px 16px" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                            <div style={{ width:8, height:8, borderRadius:"50%", background:STATUS_DOT[s.status], boxShadow:s.status==="healthy"?"0 0 6px #10b981":undefined }} />
-                            <span style={{ fontSize:12, color:STATUS_DOT[s.status], fontWeight:600 }}>{s.status}</span>
-                          </div>
-                        </td>
-                        <td style={{ padding:"12px 16px", fontSize:12, color:s.latency>1000?"#ef4444":s.latency>500?"#f59e0b":"#10b981", fontWeight:600 }}>{s.latency}ms</td>
-                        <td style={{ padding:"12px 16px", fontSize:12, color:cs.text }}>{s.uptime}%</td>
-                        <td style={{ padding:"12px 16px" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                            <div style={{ flex:1, height:6, background:"rgba(255,255,255,0.08)", borderRadius:3, minWidth:60 }}>
-                              <div style={{ height:"100%", borderRadius:3, background:s.load>80?"#ef4444":s.load>60?"#f59e0b":"#10b981", width:`${s.load + (tick % 7) - 3}%`, transition:"width .5s" }} />
-                            </div>
-                            <span style={{ fontSize:11, color:cs.textDim, width:28 }}>{s.load}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </div>
           )}
 
           {/* ── USER MANAGEMENT ── */}
           {tab==="users" && (
             <div>
-              <div style={{ fontSize:11, fontWeight:700, color:"#f59e0b", marginBottom:10, textTransform:"uppercase", letterSpacing:".05em" }}>
-                ⚠ Demo Data — sample users, not a live directory query yet
-              </div>
               <div style={{ display:"flex", gap:10, marginBottom:16, alignItems:"center" }}>
                 <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="🔍 Search users…" style={{ flex:1, background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"8px 13px", fontSize:13, outline:"none" }} />
                 <button style={{ background:"linear-gradient(135deg,#10b981,#6366f1)", border:"none", color:"#fff", borderRadius:9, padding:"8px 18px", cursor:"pointer", fontWeight:700, fontSize:13 }}>+ Create User</button>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {usersLoading && (
+                  <div style={{ textAlign:"center", padding:24, color:cs.textDim, fontSize:12.5 }}>Loading users…</div>
+                )}
+                {!usersLoading && filteredUsers.length === 0 && (
+                  <div style={{ textAlign:"center", padding:24, color:cs.textDim, fontSize:12.5 }}>No matching users</div>
+                )}
                 {filteredUsers.map(u => (
                   <div key={u.uid} style={{ background:cs.bg, borderRadius:12, padding:16, border:`1px solid ${cs.border}`, display:"flex", gap:14, alignItems:"center" }}>
                     <div style={{ width:40, height:40, borderRadius:"50%", background:"linear-gradient(135deg,#6366f1,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:"#fff", flexShrink:0 }}>
