@@ -1,9 +1,13 @@
 /**
  * SecurityCenter.jsx — Corvus
- * Client-side only — Firebase Auth metadata, no backend needed
+ * Combines live Firebase Auth metadata (providers, verification, last sign-in —
+ * available instantly, no round trip needed) with the backend's
+ * /api/security/* endpoints (server-computed score, API-key exposure,
+ * real session revocation) which the client can't know on its own.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { getAuth } from "firebase/auth";
+import { apiFetch } from "./services/api.js";
 
 const SEC_TOKENS = {
   bg:"#030711", card:"#0c1832", border:"rgba(99,102,241,.14)", text:"#e8eeff",
@@ -60,6 +64,35 @@ function Check({ ok, label, impact, action }) {
 
 export default function SecurityCenter({ user, onClose, onSignOut }) {
   const [tab, setTab] = useState("overview");
+  const [serverData, setServerData] = useState(null);   // /api/security/overview
+  const [sessions, setSessions]     = useState([]);      // /api/security/active-sessions
+  const [loading, setLoading]       = useState(true);
+  const [revoking, setRevoking]     = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      apiFetch("/security/overview").catch(() => null),
+      apiFetch("/security/active-sessions").catch(() => ({ sessions: [] })),
+    ]).then(([overview, active]) => {
+      if (cancelled) return;
+      setServerData(overview);
+      setSessions(active?.sessions || []);
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const signOutEverywhere = useCallback(async () => {
+    setRevoking(true);
+    try {
+      // Revoke server-side refresh tokens first (kills any other active sessions),
+      // then run the app's normal client sign-out for this device.
+      await apiFetch("/security/revoke-session", { method: "POST" }).catch(() => {});
+    } finally {
+      setRevoking(false);
+      onSignOut?.();
+    }
+  }, [onSignOut]);
 
   const auth = getAuth();
   const fu   = auth.currentUser;  // live Firebase user
@@ -71,7 +104,10 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
   const emailVerified = fu?.emailVerified ?? false;
   const hasBackup     = providers.length >= 2;
 
-  const score = useMemo(()=>{
+  // Prefer the backend's score (it knows things the client can't — active API
+  // keys, suspicious logins) — fall back to a client-only estimate if the
+  // request failed so the panel still renders something useful offline.
+  const clientScore = useMemo(()=>{
     let s = 30;
     if(emailVerified) s += 20;
     if(hasMFA)        s += 25;
@@ -80,6 +116,10 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
     if(providers.length>0) s += 5;
     return Math.min(100, s);
   },[emailVerified, hasMFA, hasGoogle, hasEmail, hasBackup, providers.length]);
+
+  const score = serverData?.score ?? clientScore;
+  const apiKeysActive = serverData?.checks?.api_keys_active ?? 0;
+
 
   const lastSignIn   = fu?.metadata?.lastSignInTime  ? new Date(fu.metadata.lastSignInTime).toLocaleString()  : "—";
   const createdAt    = fu?.metadata?.creationTime     ? new Date(fu.metadata.creationTime).toLocaleDateString() : "—";
@@ -154,6 +194,7 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
                 { k:"Email Verified", v:emailVerified?"Yes ✓":"No", c:emailVerified?SEC_TOKENS.green:SEC_TOKENS.red },
                 { k:"MFA", v:hasMFA?"Enabled ✓":"Not set", c:hasMFA?SEC_TOKENS.green:SEC_TOKENS.amber },
                 { k:"Linked methods", v:providers.length, c:SEC_TOKENS.sub },
+                { k:"Active API keys", v: loading ? "…" : apiKeysActive, c:SEC_TOKENS.sub },
               ].map((s,i)=>(
                 <div key={i} style={{ display:"flex", justifyContent:"space-between",
                   fontSize:12, padding:"5px 8px",
@@ -179,6 +220,9 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
                 <Check ok={hasMFA} label="Two-Factor Authentication"
                   impact="Enable MFA for maximum protection"/>
                 <Check ok={true} label="Account in Good Standing"/>
+                {(serverData?.recommendations||[]).map((r,i) => (
+                  <Check key={i} ok={false} label={r.title} impact={r.impact}/>
+                ))}
               </div>
 
               {/* Linked providers */}
@@ -206,11 +250,11 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
               </div>
 
               {/* Sign out */}
-              <button onClick={onSignOut}
+              <button onClick={signOutEverywhere} disabled={revoking}
                 style={{ padding:"12px", background:"rgba(239,68,68,.1)",
                   color:"#f87171", border:"1px solid rgba(239,68,68,.25)",
                   borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-                ⏻ Sign Out Everywhere
+                {revoking ? "…" : "⏻ Sign Out Everywhere"}
               </button>
             </div>
           </div>
@@ -219,37 +263,63 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
         {/* ── SESSIONS ── */}
         {tab==="sessions"&&(
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            {/* Current session */}
-            <div style={{ background:SEC_TOKENS.card, borderRadius:14, padding:20,
-              border:`1px solid ${SEC_TOKENS.green}44` }}>
-              <div style={{ fontSize:13, fontWeight:700, marginBottom:14 }}>Current Session</div>
-              <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-                <span style={{ fontSize:28 }}>💻</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:600 }}>
-                    {browser} on {os}
-                    <span style={{ marginLeft:10, fontSize:11, color:SEC_TOKENS.green,
-                      background:`${SEC_TOKENS.green}18`, padding:"2px 8px", borderRadius:4 }}>
-                      Current
-                    </span>
-                  </div>
-                  <div style={{ fontSize:12, color:SEC_TOKENS.sub, marginTop:4 }}>
-                    {fu?.email} · Last sign-in: {lastSignIn}
+            {loading && (
+              <div style={{ fontSize:12, color:SEC_TOKENS.sub }}>Loading sessions…</div>
+            )}
+            {!loading && sessions.length === 0 && (
+              <div style={{ background:SEC_TOKENS.card, borderRadius:14, padding:20,
+                border:`1px solid ${SEC_TOKENS.green}44` }}>
+                <div style={{ fontSize:13, fontWeight:700, marginBottom:14 }}>Current Session</div>
+                <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                  <span style={{ fontSize:28 }}>💻</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:600 }}>
+                      {browser} on {os}
+                      <span style={{ marginLeft:10, fontSize:11, color:SEC_TOKENS.green,
+                        background:`${SEC_TOKENS.green}18`, padding:"2px 8px", borderRadius:4 }}>
+                        Current
+                      </span>
+                    </div>
+                    <div style={{ fontSize:12, color:SEC_TOKENS.sub, marginTop:4 }}>
+                      {fu?.email} · Last sign-in: {lastSignIn}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
+            {sessions.map((s,i) => (
+              <div key={s.id||i} style={{ background:SEC_TOKENS.card, borderRadius:14, padding:20,
+                border:`1px solid ${s.is_current ? SEC_TOKENS.green+"44" : SEC_TOKENS.border}` }}>
+                <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                  <span style={{ fontSize:28 }}>💻</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:600 }}>
+                      {s.device || "Unknown device"}
+                      {s.is_current && (
+                        <span style={{ marginLeft:10, fontSize:11, color:SEC_TOKENS.green,
+                          background:`${SEC_TOKENS.green}18`, padding:"2px 8px", borderRadius:4 }}>
+                          Current
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize:12, color:SEC_TOKENS.sub, marginTop:4 }}>
+                      {s.ip ? `${s.ip} · ` : ""}{s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
             <div style={{ background:SEC_TOKENS.card, borderRadius:14, padding:18,
               border:`1px solid ${SEC_TOKENS.border}`,
               fontSize:13, color:SEC_TOKENS.sub, lineHeight:1.7 }}>
               💡 Multi-device session management is available on the <strong style={{color:SEC_TOKENS.text}}>Enterprise</strong> plan.
               To sign out from all devices now, use the button below.
             </div>
-            <button onClick={onSignOut}
+            <button onClick={signOutEverywhere} disabled={revoking}
               style={{ padding:"12px", background:"rgba(239,68,68,.1)",
                 color:"#f87171", border:"1px solid rgba(239,68,68,.25)",
                 borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-              ⏻ Sign Out Everywhere
+              {revoking ? "…" : "⏻ Sign Out Everywhere"}
             </button>
           </div>
         )}

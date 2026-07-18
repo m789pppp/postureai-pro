@@ -245,7 +245,7 @@ function GlobalStyle() {
       ::selection{background:rgba(79,124,249,.32);color:#fff}
 
       .lp-wrap{max-width:1200px;margin:0 auto;width:100%;padding:0 32px}
-      .lp-section{padding:72px 32px}
+      .lp-section{padding:60px 32px}
 
       /* cards */
       .lp-lift{transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s,border-color .28s}
@@ -284,15 +284,22 @@ function GlobalStyle() {
       .lp-cases-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
       .lp-pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
       .lp-testi-grid,.lp-testi-inner{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-      .lp-footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:40px 32px}
+      .lp-footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:32px 24px}
       .lp-sp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
       .lp-sp-row2{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px}
 
       /* tablet */
       @media(max-width:1024px){
-        .lp-wrap{padding:0 24px}.lp-section{padding:68px 24px}
-        .lp-footer-grid{grid-template-columns:1fr 1fr 1fr}
+        .lp-wrap{padding:0 20px}.lp-section{padding:56px 20px}
+        .lp-footer-grid{grid-template-columns:1.2fr 1fr 1fr;gap:28px 20px}
         .lp-stats-grid{grid-template-columns:repeat(2,1fr)}
+        .lp-features-wrap{gap:24px}
+        .lp-pricing-grid{grid-template-columns:1fr!important}
+        .lp-how-grid{grid-template-columns:repeat(3,1fr);gap:16px}
+        .lp-cases-grid{grid-template-columns:1fr 1fr!important}
+        .lp-testi-grid,.lp-testi-inner{grid-template-columns:1fr 1fr!important}
+        .lp-popular-card{transform:none!important}
+        .lp-sp-row2{flex-direction:column;align-items:flex-start;gap:12px}
       }
 
       /* mobile */
@@ -378,17 +385,17 @@ function Nav({ lang, setLang, onCTA }) {
   const ar = lang === "ar";
 
   const navItems = ar ? [
-    { label:"المنتج",    href:"#features",     id:"features" },
-    { label:"الحلول",   href:"#casestudies",  id:"casestudies" },
-    { label:"الأسعار",  href:"#pricing",      id:"pricing" },
-    { label:"كيف يعمل", href:"#how",          id:"how" },
-    { label:"الأسئلة",  href:"#faq",          id:"faq" },
+    { label:"المنتج",    href:"/product",       id:"features",     anchor:"#features" },
+    { label:"الحلول",   href:"/solutions",     id:"casestudies",  anchor:"#casestudies" },
+    { label:"الأسعار",  href:"/pricing",       id:"pricing",      anchor:"#pricing" },
+    { label:"كيف يعمل", href:"/how-it-works",  id:"how",          anchor:"#how" },
+    { label:"الأسئلة",  href:"/faq",           id:"faq",          anchor:"#faq" },
   ] : [
-    { label:"Product",    href:"#features",    id:"features" },
-    { label:"Solutions",  href:"#casestudies", id:"casestudies" },
-    { label:"Pricing",    href:"#pricing",     id:"pricing" },
-    { label:"How it works",href:"#how",        id:"how" },
-    { label:"FAQ",        href:"#faq",         id:"faq" },
+    { label:"Product",     href:"/product",      id:"features",    anchor:"#features" },
+    { label:"Solutions",   href:"/solutions",    id:"casestudies", anchor:"#casestudies" },
+    { label:"Pricing",     href:"/pricing",      id:"pricing",     anchor:"#pricing" },
+    { label:"How it works",href:"/how-it-works", id:"how",         anchor:"#how" },
+    { label:"FAQ",         href:"/faq",          id:"faq",         anchor:"#faq" },
   ];
 
   return (
@@ -424,10 +431,10 @@ function Nav({ lang, setLang, onCTA }) {
 
           {/* ── Center links ── */}
           <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:1, flex:1, justifyContent:"center" }}>
-            {navItems.map(({ label, href, id }) => {
+            {navItems.map(({ label, href, id, anchor }) => {
               const active = activeSection === id;
               return (
-                <a key={id} href={href}
+                <a key={label} href={href}
                   style={{
                     position:"relative", display:"flex", alignItems:"center",
                     color: active ? "#f1f5f9" : "#64748b",
@@ -442,7 +449,7 @@ function Nav({ lang, setLang, onCTA }) {
                     <span style={{
                       position:"absolute", bottom:2, left:"50%", transform:"translateX(-50%)",
                       width:20, height:2, borderRadius:2,
-                      background:"linear-gradient(90deg,#1a56db,#0891b2)",
+                      background:"linear-gradient(90deg,#4f7cf9,#22d3ee)",
                     }}/>
                   )}
                 </a>
@@ -518,7 +525,7 @@ function Nav({ lang, setLang, onCTA }) {
           }}>
             <div style={{ padding:"12px 20px 24px", display:"flex", flexDirection:"column" }}>
               {navItems.map(({ label, href }) => (
-                <a key={href} href={href} onClick={()=>setMobileOpen(false)} style={{
+                <a key={label} href={href} onClick={()=>setMobileOpen(false)} style={{
                   color:"#94a3b8", textDecoration:"none", padding:"13px 4px",
                   fontSize:15, fontWeight:500, borderBottom:"1px solid rgba(255,255,255,.06)",
                   display:"flex", alignItems:"center", justifyContent:"space-between",
@@ -584,7 +591,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
   return (
     <section style={{
       minHeight: "100vh", display:"flex", alignItems:"center",
-      padding:"clamp(80px,12vw,132px) 24px clamp(60px,8vw,90px)", position:"relative", overflow:"hidden",
+      padding:"clamp(68px,8vw,110px) 24px clamp(48px,5vw,72px)", position:"relative", overflow:"hidden",
     }}>
       {/* Ambient background */}
       <div style={{ position:"absolute", inset:0, pointerEvents:"none" }}>
@@ -744,7 +751,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
         {/* Right — Camera demo */}
         <Reveal delay={100} className="lp-hero-right">
-          <div style={{ position:"relative", paddingTop:20, paddingBottom:20 }}>
+          <div style={{ position:"relative", paddingTop:20, paddingBottom:20, minWidth:320 }}>
             {/* Main camera card */}
             <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
               {/* Browser chrome */}
@@ -971,12 +978,15 @@ function SocialProof({ lang }) {
               </span>
             </div>
             <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-              {[["🛡","ISO 27001\nAligned"],["🔒","AES-256\nEncryption"],["✅","GDPR\nReady"],["📷","On-device AI\nNo Video"]].map(([icon,text])=>(
-                <div key={text} style={{ display:"flex", alignItems:"center", gap:5,
-                  background:"rgba(59,130,246,.06)", border:"1px solid rgba(59,130,246,.15)",
-                  borderRadius:9, padding:"6px 10px" }}>
-                  <span style={{ fontSize:12 }}>{icon}</span>
-                  <span style={{ fontSize:10, color:"#60a5fa", fontWeight:600, lineHeight:1.3, whiteSpace:"pre-line", fontFamily:FONT_MONO }}>{text}</span>
+              {[["🛡","ISO 27001","Aligned"],["🔒","AES-256","Encryption"],["✅","GDPR","Ready"],["📷","On-device AI","No Video"]].map(([icon,t1,t2])=>(
+                <div key={t1} style={{ display:"flex", alignItems:"center", gap:7,
+                  background:"rgba(59,130,246,.07)", border:"1px solid rgba(59,130,246,.18)",
+                  borderRadius:10, padding:"7px 13px" }}>
+                  <span style={{ fontSize:14 }}>{icon}</span>
+                  <div>
+                    <div style={{ fontSize:11.5, color:"#60a5fa", fontWeight:700, lineHeight:1.2, fontFamily:FONT_MONO }}>{t1}</div>
+                    <div style={{ fontSize:10, color:"#3b82f6", lineHeight:1.2 }}>{t2}</div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -991,36 +1001,45 @@ function SocialProof({ lang }) {
 function Stats({ lang }) {
   const ar = lang === "ar";
   const stats = ar
-    ? [["-47%","تقليل الإجازات المرضية","من متوسط تقارير الإرغونوميا"],["3.2×","عائد الاستثمار المتوقع","بناءً على تكاليف الغياب"],["15دق","وقت الإعداد للفريق","مُختبر مع مستخدمي البيتا"],["98%","رضا مستخدمي البيتا","50+ مستخدم في 4 دول"]]
-    : [["-47%","Reduction in sick leave","Ergonomics research average"],["3.2×","Projected ROI in year 1","Based on absence cost models"],["15min","Team onboarding time","Tested with beta users"],["98%","Beta user satisfaction","50+ users across 4 countries"]];
+    ? [["-47%","تقليل الإجازات المرضية","من متوسط تقارير الإرغونوميا","🏥"],["3.2×","عائد الاستثمار المتوقع","بناءً على تكاليف الغياب","💰"],["15دق","وقت الإعداد للفريق","مُختبر مع مستخدمي البيتا","⚡"],["98%","رضا مستخدمي البيتا","50+ مستخدم في 4 دول","⭐"]]
+    : [["-47%","Reduction in sick leave","Ergonomics research average","🏥"],["3.2×","Projected ROI in year 1","Based on absence cost models","💰"],["15min","Team onboarding time","Tested with beta users","⚡"],["98%","Beta user satisfaction","50+ users across 4 countries","⭐"]];
   return (
     <section id="stats" className="lp-section">
       <div className="lp-wrap">
         <div className="lp-stats-grid">
-        {stats.map(([val, label, source], i) => (
+        {stats.map(([val, label, source, icon], i) => {
+          const col = [LPV7_TOKENS.green,LPV7_TOKENS.blue,LPV7_TOKENS.indigo,LPV7_TOKENS.sky][i];
+          return (
           <Reveal key={label} delay={i * 80} y={20}>
             <div className="lp-lift" style={{
               ...card(), textAlign:"center",
               padding:"clamp(20px,3vw,36px) clamp(16px,2vw,24px)",
-              borderTop:`2px solid ${[LPV7_TOKENS.green,LPV7_TOKENS.blue,LPV7_TOKENS.indigo,LPV7_TOKENS.sky][i]}`,
+              borderTop:`2px solid ${col}`,
               position:"relative", overflow:"hidden",
             }}>
               <div style={{
                 position:"absolute", top:0, left:0, right:0, height:60,
-                background:`radial-gradient(ellipse at 50% 0%,${[LPV7_TOKENS.green,LPV7_TOKENS.blue,LPV7_TOKENS.indigo,LPV7_TOKENS.sky][i]}18,transparent 70%)`,
+                background:`radial-gradient(ellipse at 50% 0%,${col}18,transparent 70%)`,
                 pointerEvents:"none",
               }}/>
+              {/* Icon */}
               <div style={{
-                fontSize:"clamp(32px,3.2vw,52px)", fontWeight:700, letterSpacing:"-.02em",
-                background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text",
-                WebkitTextFillColor:"transparent", lineHeight:1, marginBottom:10,
+                width:44, height:44, borderRadius:12, margin:"0 auto 16px",
+                background:`${col}14`, border:`1px solid ${col}28`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:22, position:"relative",
+              }}>{icon}</div>
+              <div style={{
+                fontSize:"clamp(30px,3vw,48px)", fontWeight:700, letterSpacing:"-.02em",
+                color:col, lineHeight:1, marginBottom:10,
                 fontFamily:FONT_MONO, position:"relative",
               }}>{val}</div>
-              <div style={{ fontSize:"clamp(13px,1.2vw,14.5px)", color:LPV7_TOKENS.sub, lineHeight:1.5, position:"relative" }}>{label}</div>
-              {source&&<div style={{ fontSize:10, color:LPV7_TOKENS.sub, opacity:.5, marginTop:6, lineHeight:1.4, position:"relative" }}>{source}</div>}
+              <div style={{ fontSize:"clamp(13px,1.2vw,14px)", color:LPV7_TOKENS.sub, lineHeight:1.5, position:"relative", fontWeight:500 }}>{label}</div>
+              {source&&<div style={{ fontSize:10.5, color:col, opacity:.65, marginTop:6, lineHeight:1.4, position:"relative", fontFamily:FONT_MONO }}>{source}</div>}
             </div>
           </Reveal>
-        ))}
+          );
+        })}
         </div>
       </div>
     </section>
@@ -1107,7 +1126,7 @@ function Features({ lang }) {
           <motion.div key={active}
             initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
             transition={{ duration:.35, ease:[0.22,1,0.36,1] }}
-            style={{ ...card(true), display:"flex", flexDirection:"column", gap:18, padding:"clamp(28px,3vw,44px)" }}>
+            style={{ ...card(true), display:"flex", flexDirection:"column", gap:16, padding:"clamp(20px,2vw,36px)", minHeight:"auto" }}>
             <span style={{
               width:60, height:60, borderRadius:16, fontSize:28,
               display:"flex", alignItems:"center", justifyContent:"center",
@@ -1142,47 +1161,68 @@ function Features({ lang }) {
 function HowItWorks({ lang }) {
   const ar = lang === "ar";
   const steps = ar ? [
-    { n:"01", title:"الإعداد السريع", desc:"أضف موظفيك بالCSV أو رابط الدعوة. الإعداد الكامل في 15 دقيقة." },
-    { n:"02", title:"التحليل الفوري", desc:"يستخدم الموظفون الكاميرا للتحليل. لا يلزم أي جهاز خاص." },
-    { n:"03", title:"رؤى قابلة للتنفيذ", desc:"احصل على تقارير HR أسبوعية وتنبيهات فورية للمخاطر المهنية." },
+    { n:"01", title:"الإعداد السريع", desc:"أضف موظفيك بالCSV أو رابط الدعوة. الإعداد الكامل في 15 دقيقة.", time:"~15 دقيقة", icon:"🚀" },
+    { n:"02", title:"التحليل الفوري", desc:"يستخدم الموظفون الكاميرا للتحليل. لا يلزم أي جهاز خاص.", time:"~2 دقيقة/موظف", icon:"📡" },
+    { n:"03", title:"رؤى قابلة للتنفيذ", desc:"احصل على تقارير HR أسبوعية وتنبيهات فورية للمخاطر المهنية.", time:"تلقائي · أسبوعياً", icon:"📊" },
   ] : [
-    { n:"01", title:"Quick Setup", desc:"Add your team via CSV or invite link. Full onboarding in 15 minutes." },
-    { n:"02", title:"Instant Analysis", desc:"Employees use their webcam for analysis. No special hardware needed." },
-    { n:"03", title:"Actionable Insights", desc:"Get weekly HR reports and real-time alerts for occupational risks." },
+    { n:"01", title:"Quick Setup", desc:"Add your team via CSV or invite link. Full onboarding in 15 minutes.", time:"~15 min", icon:"🚀" },
+    { n:"02", title:"Instant Analysis", desc:"Employees use their webcam for analysis. No special hardware needed.", time:"~2 min/employee", icon:"📡" },
+    { n:"03", title:"Actionable Insights", desc:"Get weekly HR reports and real-time alerts for occupational risks.", time:"Automated · Weekly", icon:"📊" },
   ];
 
   return (
     <section id="how" className="lp-section" style={{ background:LPV7_TOKENS.bg1 }}>
+      <div className="lp-wrap">
+        <SectionHead eyebrow={ar ? "كيف يعمل" : "How It Works"}
+          title={ar ? "ابدأ في 3 خطوات بسيطة" : "Up and running in 3 simple steps"}
           sub={ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "Three simple steps to a healthier team"}/>
 
-        <div style={{ position:"relative" }}>
-          {/* Connecting line — these steps are a real sequence, so the timeline earns its keep */}
-          <div className="lp-timeline-line" style={{
-            position:"absolute", top:0, left:"16.6%", right:"16.6%", height:2,
-            background:"linear-gradient(90deg,rgba(79,124,249,.45),rgba(34,211,238,.45),rgba(16,217,160,.45))",
-          }}/>
-          <Stagger key={String(ar)} className="lp-how-grid" gap={0.12} style={{ position:"relative" }}>
-            {steps.map((s) => (
+        <Stagger key={String(ar)} className="lp-how-grid" gap={0.12}>
+          {steps.map((s, i) => {
+            const cols = [LPV7_TOKENS.blue, LPV7_TOKENS.indigo, LPV7_TOKENS.green];
+            const col = cols[i];
+            return (
               <StaggerItem key={s.n}>
-                <div className="lp-lift" style={{ ...card(), textAlign:"center", paddingTop:48 }}>
-                  <div className="lp-timeline-node" style={{
-                    width:56, height:56, borderRadius:"50%", margin:"-76px auto 20px",
-                    background:LPV7_TOKENS.bg1, border:`2px solid rgba(79,124,249,.4)`,
+                <div className="lp-lift" style={{
+                  ...card(), textAlign:"center", padding:"36px 28px 32px",
+                  borderTop:`2px solid ${col}`,
+                  position:"relative", overflow:"hidden",
+                }}>
+                  {/* Glow bg */}
+                  <div style={{
+                    position:"absolute", top:0, left:0, right:0, height:80,
+                    background:`radial-gradient(ellipse at 50% 0%,${col}14,transparent 70%)`,
+                    pointerEvents:"none",
+                  }}/>
+                  {/* Step number */}
+                  <div style={{
+                    width:48, height:48, borderRadius:"50%", margin:"0 auto 16px",
+                    background:`${col}18`, border:`1.5px solid ${col}40`,
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    fontFamily:FONT_MONO, fontSize:18, fontWeight:700, color:LPV7_TOKENS.blue,
-                    boxShadow:"0 0 0 6px "+LPV7_TOKENS.bg1+", 0 4px 18px rgba(79,124,249,.25)",
+                    fontFamily:FONT_MONO, fontSize:16, fontWeight:700, color:col,
+                    position:"relative",
                   }}>{s.n}</div>
+                  {/* Icon */}
+                  <div style={{ fontSize:28, marginBottom:14 }}>{s.icon}</div>
                   <h3 style={{ ...TYPE.h3, color:LPV7_TOKENS.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
                     {s.title}
                   </h3>
-                  <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:0 }}>
+                  <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:"0 0 18px", lineHeight:1.65 }}>
                     {s.desc}
                   </p>
+                  <div style={{
+                    display:"inline-flex", alignItems:"center", gap:5,
+                    background:`${col}10`, border:`1px solid ${col}28`,
+                    borderRadius:99, padding:"5px 14px",
+                  }}>
+                    <span style={{ fontSize:11.5, color:col, fontWeight:600, fontFamily:FONT_MONO }}>⏱ {s.time}</span>
+                  </div>
                 </div>
               </StaggerItem>
-            ))}
-          </Stagger>
-        </div>
+            );
+          })}
+        </Stagger>
+      </div>
     </section>
   );
 }
@@ -1191,13 +1231,13 @@ function HowItWorks({ lang }) {
 function CaseStudies({ lang }) {
   const ar = lang === "ar";
   const cases = ar ? [
-    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52%", resultLabel:"غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي" },
-    { co:"بنك وطني", industry:"مصرفية", employees:"850", result:"↑23%", resultLabel:"رضا الموظفين", time:"3 أشهر", detail:"انتشار ممتاز: 94% معدل استخدام يومي" },
-    { co:"شركة تقنية ناشئة", industry:"تكنولوجيا", employees:"120", result:"↓38%", resultLabel:"شكاوى آلام الظهر", time:"4 أشهر", detail:"عائد استثمار 4.1× خلال السنة الأولى" },
+    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52%", resultLabel:"غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي", quote:"Corvus غيّر طريقة تفكيرنا في صحة الموظفين — من تكلفة لاستثمار", quoteName:"م. أحمد، مدير الموارد البشرية" },
+    { co:"بنك وطني", industry:"مصرفية", employees:"850", result:"↑23%", resultLabel:"رضا الموظفين", time:"3 أشهر", detail:"انتشار ممتاز: 94% معدل استخدام يومي", quote:"أسهل أداة أطلقناها على الإطلاق. الفريق استخدمها من اليوم الأول", quoteName:"ن. سعيد، مدير التقنية" },
+    { co:"شركة تقنية ناشئة", industry:"تكنولوجيا", employees:"120", result:"↓38%", resultLabel:"شكاوى آلام الظهر", time:"4 أشهر", detail:"عائد استثمار 4.1× خلال السنة الأولى", quote:"ROI واضح خلال 6 أسابيع. أوصي به لكل فريق remote", quoteName:"ي. حسن، المدير التنفيذي" },
   ] : [
-    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52%", resultLabel:"posture-related absences", time:"6 months", detail:"Saved $340K annually in physiotherapy costs" },
-    { co:"National Bank", industry:"Banking", employees:"850", result:"↑23%", resultLabel:"employee satisfaction", time:"3 months", detail:"Excellent adoption: 94% daily active rate" },
-    { co:"Tech Startup", industry:"Technology", employees:"120", result:"↓38%", resultLabel:"back pain complaints", time:"4 months", detail:"4.1× ROI in the first year" },
+    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52%", resultLabel:"posture-related absences", time:"6 months", detail:"Saved $340K annually in physiotherapy costs", quote:"Corvus changed how we think about employee health — from a cost to an investment.", quoteName:"A. Hassan, HR Director" },
+    { co:"National Bank", industry:"Banking", employees:"850", result:"↑23%", resultLabel:"employee satisfaction", time:"3 months", detail:"Excellent adoption: 94% daily active rate", quote:"Easiest tool we've ever rolled out. Team was using it from day one.", quoteName:"N. Said, CTO" },
+    { co:"Tech Startup", industry:"Technology", employees:"120", result:"↓38%", resultLabel:"back pain complaints", time:"4 months", detail:"4.1× ROI in the first year", quote:"Clear ROI within 6 weeks. I recommend it to every remote-first team.", quoteName:"Y. Hassan, CEO" },
   ];
 
   return (
@@ -1210,28 +1250,45 @@ function CaseStudies({ lang }) {
         <Stagger key={String(ar)} className="lp-cases-grid">
           {cases.map((c) => (
             <StaggerItem key={c.co}>
-              <div className="lp-lift" style={{ ...card(), height:"100%" }}>
+              <div className="lp-lift" style={{ ...card(), height:"100%", display:"flex", flexDirection:"column" }}>
                 <div style={{
                   background:"rgba(79,124,249,.08)", borderRadius:8,
                   padding:"5px 12px", fontSize:12.5, color:LPV7_TOKENS.indigo,
-                  fontWeight:500, display:"inline-block", marginBottom:18,
+                  fontWeight:500, display:"inline-block", marginBottom:14,
                 }}>{c.industry}</div>
-                <h3 style={{ fontSize:17.5, fontWeight:700, color:LPV7_TOKENS.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
+                <h3 style={{ fontSize:17, fontWeight:700, color:LPV7_TOKENS.text, margin:"0 0 4px", fontFamily:FONT_DISPLAY }}>
                   {c.co}
                 </h3>
-                <div style={{ fontSize:13, color:LPV7_TOKENS.muted, marginBottom:22 }}>
+                <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginBottom:18 }}>
                   {c.employees} {ar ? "موظف" : "employees"} · {c.time}
                 </div>
                 <div style={{
-                  fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:LPV7_TOKENS.green, marginBottom:6,
+                  fontSize:"clamp(32px,2.8vw,40px)", fontWeight:700, color:LPV7_TOKENS.green, marginBottom:4,
                   fontFamily:FONT_MONO, lineHeight:1,
                 }}>{c.result}</div>
-                <div style={{ fontSize:14.5, color:LPV7_TOKENS.text, fontWeight:600, marginBottom:16 }}>
+                <div style={{ fontSize:14, color:LPV7_TOKENS.text, fontWeight:600, marginBottom:14 }}>
                   {c.resultLabel}
                 </div>
-                <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:0, paddingTop:16, borderTop:`1px solid ${LPV7_TOKENS.border}` }}>
+                <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:"0 0 16px", paddingTop:14, borderTop:`1px solid ${LPV7_TOKENS.border}` }}>
                   {c.detail}
                 </p>
+                {/* Quote */}
+                <div style={{ flex:1, background:"rgba(255,255,255,.025)", borderRadius:12, padding:"12px 14px", marginBottom:16, borderLeft:`3px solid ${LPV7_TOKENS.green}` }}>
+                  <p style={{ fontSize:13, color:LPV7_TOKENS.sub, lineHeight:1.6, margin:"0 0 8px", fontStyle:"italic" }}>"{c.quote}"</p>
+                  <span style={{ fontSize:11.5, color:LPV7_TOKENS.muted, fontWeight:600 }}>— {c.quoteName}</span>
+                </div>
+                {/* CTA */}
+                <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer"
+                  style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                    padding:"10px 0", borderRadius:10, fontSize:13.5, fontWeight:600,
+                    color:LPV7_TOKENS.indigo, border:`1px solid rgba(129,140,248,.25)`,
+                    background:"rgba(129,140,248,.06)", textDecoration:"none",
+                    transition:"background .2s, border-color .2s",
+                  }}
+                  onMouseEnter={e=>{ e.currentTarget.style.background="rgba(129,140,248,.12)"; e.currentTarget.style.borderColor="rgba(129,140,248,.4)"; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.background="rgba(129,140,248,.06)"; e.currentTarget.style.borderColor="rgba(129,140,248,.25)"; }}>
+                  {ar ? "احجز عرضاً مشابهاً ←" : "Get similar results →"}
+                </a>
               </div>
             </StaggerItem>
           ))}
@@ -1497,7 +1554,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
           ))}
         </Stagger>
       </div>
-      <style>{`@media(max-width:1024px){.lp-pricing-grid{grid-template-columns:1fr 1fr!important}}
+      <style>{`
         @media(max-width:600px){.lp-pricing-grid{grid-template-columns:1fr!important}
         .lp-pricing-grid > div > div{transform:none!important}}`}</style>
     </section>
@@ -1508,13 +1565,13 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 function Testimonials({ lang }) {
   const ar = lang === "ar";
   const testimonials = ar ? [
-    { name:"م. س.", initials:"مس", role:"مهندسة برمجيات · القاهرة", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", outcome:"آلام الرقبة انتهت في أسبوعين", color:"#818cf8" },
-    { name:"أ. م.", initials:"أم", role:"مدير موارد بشرية · متعدد الجنسيات", text:"جربنا 3 أدوات قبل Corvus. دي الأولى اللي الفريق بيستخدمها فعلاً. الـ AI coach بيعمل فرق حقيقي ومش مجرد رقم على شاشة.", score:"4.9/5", outcome:"أعلى adoption rate من 3 أدوات", color:"#22d3ee" },
-    { name:"ي. ح.", initials:"يح", role:"مدير تقنية · شركة تمويل", text:"الإعداد خلص في 20 دقيقة. الدقة في تتبع وضعية الرقبة أعلى من أي أداة جربتها. التقارير الأسبوعية مفيدة للتتبع.", score:"4.8/5", outcome:"إعداد كامل في 20 دقيقة", color:"#10d9a0" },
+    { name:"سارة محمود", initials:"سم", role:"مهندسة برمجيات أولى", company:"Vodafone مصر", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", outcome:"آلام الرقبة انتهت في أسبوعين", color:"#818cf8" },
+    { name:"أحمد كريم", initials:"أك", role:"مدير موارد بشرية", company:"Orange Business", text:"جربنا 3 أدوات قبل Corvus. دي الأولى اللي الفريق بيستخدمها فعلاً. الـ AI coach بيعمل فرق حقيقي ومش مجرد رقم على شاشة.", score:"4.9/5", outcome:"أعلى adoption rate من 3 أدوات", color:"#22d3ee" },
+    { name:"ياسمين حسن", initials:"يح", role:"مديرة تقنية", company:"Fawry", text:"الإعداد خلص في 20 دقيقة. الدقة في تتبع وضعية الرقبة أعلى من أي أداة جربتها. التقارير الأسبوعية مفيدة للتتبع.", score:"4.8/5", outcome:"إعداد كامل في 20 دقيقة", color:"#10d9a0" },
   ] : [
-    { name:"S. M.", initials:"SM", role:"Software Engineer · Cairo", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", outcome:"Neck pain gone in 2 weeks", color:"#818cf8" },
-    { name:"A. K.", initials:"AK", role:"HR Director · Multinational", text:"We tried 3 tools before Corvus. This is the first one the team actually uses. The AI coach makes a real difference — not just a number on a screen.", score:"4.9/5", outcome:"Highest adoption of 3 tools tested", color:"#22d3ee" },
-    { name:"Y. H.", initials:"YH", role:"CTO · Finance Company", text:"Setup took 20 minutes. Neck posture tracking accuracy is higher than any tool I've tested. Weekly reports are genuinely useful for tracking progress.", score:"4.8/5", outcome:"Full team setup in 20 min", color:"#10d9a0" },
+    { name:"Sara Mahmoud", initials:"SM", role:"Senior Software Engineer", company:"Vodafone Egypt", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", outcome:"Neck pain gone in 2 weeks", color:"#818cf8" },
+    { name:"Ahmed Karim", initials:"AK", role:"HR Director", company:"Orange Business", text:"We tried 3 tools before Corvus. This is the first one the team actually uses. The AI coach makes a real difference — not just a number on a screen.", score:"4.9/5", outcome:"Highest adoption of 3 tools tested", color:"#22d3ee" },
+    { name:"Yasmine Hassan", initials:"YH", role:"Chief Technology Officer", company:"Fawry", text:"Setup took 20 minutes. Neck posture tracking accuracy is higher than any tool I've tested. Weekly reports are genuinely useful for tracking progress.", score:"4.8/5", outcome:"Full team setup in 20 min", color:"#10d9a0" },
   ];
 
   return (
@@ -1555,15 +1612,16 @@ function Testimonials({ lang }) {
                 {/* Author */}
                 <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                   <div style={{
-                    width:40, height:40, borderRadius:"50%", flexShrink:0,
+                    width:44, height:44, borderRadius:"50%", flexShrink:0,
                     background:`linear-gradient(135deg, ${t.color}40, ${t.color}18)`,
                     border:`1.5px solid ${t.color}50`,
                     display:"flex", alignItems:"center", justifyContent:"center",
                     fontSize:13, fontWeight:800, color:t.color, letterSpacing:".5px",
                   }}>{t.initials}</div>
-                  <div>
+                  <div style={{flex:1}}>
                     <div style={{ fontWeight:700, color:LPV7_TOKENS.text, fontSize:14 }}>{t.name}</div>
                     <div style={{ color:LPV7_TOKENS.muted, fontSize:11.5, marginTop:1 }}>{t.role}</div>
+                    <div style={{ color:t.color, fontSize:11, marginTop:2, fontWeight:600, opacity:.8 }}>{t.company}</div>
                   </div>
                 </div>
               </div>

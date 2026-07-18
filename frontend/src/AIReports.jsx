@@ -223,7 +223,9 @@ function WeekSummaryCard({ sessions, isAr }) {
     if (!weeks[wk]) weeks[wk] = [];
     weeks[wk].push(s.avg_score || 0);
   });
-  const sorted = Object.entries(weeks).slice(-6).map(([wk, scores]) => ({ wk, avg: avg(scores), count: scores.length }));
+  // weeks keys are inserted newest-first (sessions are newest-first) — take the
+  // FIRST 6 (most recent), not the last 6 (which were the oldest weeks).
+  const sorted = Object.entries(weeks).slice(0,6).map(([wk, scores]) => ({ wk, avg: avg(scores), count: scores.length }));
   return (
     <div>
       {sorted.reverse().map((w, i) => (
@@ -310,7 +312,7 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
 
   const system = `You are Dr. Corvus — senior physiotherapist and occupational health specialist, 15 years MSK clinical experience.
 
-PATIENT: ${_name} | Tier: ${_tier} | Calibration: ${ctx?.calibrated?"Personalized ✅":"Generic ⚠️ (±15% error)"}
+PATIENT: ${_name} | Tier: ${_tier}
 Score: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg}/100 | Last week: ${lastWeekAvg}/100
 Trend: ${trendPct>0?"+":""}${trendPct}% | Sessions: ${sessions.length} total, ${thisWeek.length} this week, ${lastWeek.length} last week
 

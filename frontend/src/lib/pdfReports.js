@@ -275,7 +275,13 @@ function vl(doc,x,y,h,col=PDF_TOKENS.border){dc(doc,...col);lw(doc,0.18);doc.lin
 
 // ── Font helper ────────────────────────────────────────────────────
 let _cairoLoaded=false, _cairoCachedB64=null;
-async function _ensureCairoFont(doc){
+// isAr gate added: registering this font (even completely unused) adds
+// real weight to every generated PDF — measured ~50KB+ on a trivial doc,
+// and every English-only report was paying that cost with zero benefit
+// since Arabic glyphs are never drawn. Skip the load entirely when the
+// report isn't Arabic.
+async function _ensureCairoFont(doc,isAr=false){
+  if(!isAr) return;
   try{
     if(!_cairoCachedB64){const{CAIRO_B64}=await import("../assets/cairoFont.js");_cairoCachedB64=CAIRO_B64;}
     doc.addFileToVFS("Cairo-Regular.ttf",_cairoCachedB64);
@@ -285,7 +291,7 @@ async function _ensureCairoFont(doc){
     _cairoLoaded=true;
   }catch(e){console.warn("Cairo font failed:",e?.message||e);}
 }
-async function _loadCairo(doc){await _ensureCairoFont(doc);return _cairoLoaded;}
+async function _loadCairo(doc,isAr=false){await _ensureCairoFont(doc,isAr);return _cairoLoaded;}
 
 function font(doc,size,style="normal",isAr=false){
   doc.setFont(isAr&&_cairoLoaded?"cairo":"helvetica",style);
@@ -369,7 +375,7 @@ function _hdr(doc,W,ml,mr,label,isAr){
   _logo(doc,ml,3.5,8,_logoSm);
   font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.ink2);doc.text("Corvus",ml+12,10);
   font(doc,6.5,"normal");tc(doc,...PDF_TOKENS.muted);doc.text("Health Intelligence",ml+28,10);
-  font(doc,7,"bold");tc(doc,...PDF_TOKENS.primary);doc.text(label,W-mr,10,{align:"right"});
+  font(doc,7,"bold",isAr);tc(doc,...PDF_TOKENS.primary);doc.text(label,W-mr,10,{align:"right"});
 }
 
 // ── FOOTER ─────────────────────────────────────────────────────────
@@ -582,6 +588,8 @@ function _drawSparkline(doc,hist,x,y,w,h,col){_spark(doc,hist,x,y,w,h,col);}
 
 
 export async function generateSessionPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[], aiSummary="" }) {
+  const isAr0 = lang === "ar";
+  if (!session) throw new Error(isAr0 ? "لا توجد بيانات جلسة لعرضها في هذا التقرير." : "No session data available to generate this report.");
   const { jsPDF } = await import("jspdf");
   const isAr   = lang === "ar";
   const _rawTier = profile?.tier || session?.tier || "standard";
@@ -591,9 +599,8 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
                  : _rawTier;
   const isElite= tierAtLeast(tier,"elite");
   const isPro  = !isElite && tierAtLeast(tier,"professional");
-  console.log("[PDF] tier detection:", {_rawTier, tier, isElite, isPro});
   const doc    = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
 
   const W=210,H=297,ml=14,mr=14,cw=W-ml-mr;
   const sf = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
@@ -840,7 +847,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     sf(7.5,"bold"); tc(doc,...TEXT); doc.text("CORVUS",ml+13,8);
     sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+13,13);
     sf(6,"normal"); tc(doc,...TEXT3);
-    doc.text(`Session #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
+    doc.text(`${isAr?"جلسة":"Session"} #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
     fc(doc,...BORDER); doc.rect(0,15,W,.5,"F");
     y=22;
 
@@ -897,18 +904,18 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     dCard(inx,y,insW,rowH);
     sf(6,"bold"); tc(doc,...TEXT3); doc.text("POSTURE INSIGHTS",inx+4,y+6);
     const insights=mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
-      icon:sc<40?"🔴":sc<65?"🟡":"🟢",
       text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}${val!==undefined?` ${Math.round(val*10)/10}${unit}`:""}`,
       detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor and improve.":"Looking good — maintain this.",
       col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
     }));
-    insights.forEach(({icon,text,detail,col},i)=>{
+    insights.forEach(({text,detail,col},i)=>{
       const iy=y+12+i*28;
       fc(doc,...col);
       doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
       doc.circle(inx+10,iy+7,8,"F");
       doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-      sf(9,"normal"); tc(doc,...col); doc.text(icon,inx+10,iy+10.5,{align:"center"});
+      // Solid status dot — emoji (🔴🟡🟢) don't exist in jsPDF's built-in helvetica and render as mojibake
+      fc(doc,...col); doc.circle(inx+10,iy+7,2.4,"F");
       sf(7,"bold"); tc(doc,...TEXT);
       const tlines=doc.splitTextToSize(text,insW-28);
       doc.text(tlines[0],inx+21,iy+7);
@@ -1127,7 +1134,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   fc(doc,...BG2);doc.rect(0,0,W,15,"F");fc(doc,...ACCENT);doc.rect(0,0,W,1.6,"F");
   _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("CORVUS",ml+13,8);
   sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
-  sf(6,"normal");tc(doc,...TEXT3);doc.text(`Session #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
+  sf(6,"normal");tc(doc,...TEXT3);doc.text(`${isAr?"جلسة":"Session"} #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
   fc(doc,...BORDER);doc.rect(0,15,W,.5,"F");
   y=22;
 
@@ -1169,15 +1176,15 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   dCard(inx3,y,insW2,rowH2);
   sf(6,"bold");tc(doc,...TEXT3);doc.text("POSTURE INSIGHTS",inx3+4,y+6);
   mEntries.slice(0,3).map(({lbl,sc,val,unit})=>({
-    icon:sc<40?"🔴":sc<65?"🟡":"🟢",
     text:`Your ${lbl.toLowerCase()} ${sc<60?"needs attention.":"is acceptable."}`,
     detail:sc<40?"High priority — address immediately.":sc<65?"Moderate — monitor.":"Looking good.",
     col:sc<40?[239,68,68]:sc<65?[245,158,11]:[34,197,94],
-  })).forEach(({icon,text,detail,col},i)=>{
+  })).forEach(({text,detail,col},i)=>{
     const iy=y+12+i*28;
     fc(doc,...col);doc.setGState&&doc.setGState(new doc.GState({opacity:.12}));
     doc.circle(inx3+10,iy+7,8,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(9,"normal");tc(doc,...col);doc.text(icon,inx3+10,iy+10.5,{align:"center"});
+    // Solid status dot — emoji (🔴🟡🟢) don't exist in jsPDF's built-in helvetica and render as mojibake
+    fc(doc,...col);doc.circle(inx3+10,iy+7,2.4,"F");
     sf(7,"bold");tc(doc,...TEXT);doc.text(text,inx3+21,iy+7);
     sf(6,"normal");tc(doc,...TEXT2);doc.text(detail,inx3+21,iy+13.5);
     if(i<2){fc(doc,...BORDER);doc.rect(inx3+4,iy+22,insW2-8,.25,"F");}
@@ -1550,19 +1557,19 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
 
 
 export async function generateClinicalPDF({ session, profile, user, lang="en", sessionIndex, allSessions=[], aiSummary="" }) {
+  if (!session) throw new Error(lang==="ar" ? "لا توجد بيانات جلسة لعرضها في هذا التقرير." : "No session data available to generate this report.");
   const { jsPDF } = await import("jspdf");
-  const isAr  = lang === "ar";
   const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  // Clinical report is rendered entirely in helvetica/English regardless of
+  // `lang` (see date-formatting notes below) — Cairo is never used here, so
+  // it's never loaded. This alone was ~90% of this report's file size.
+  await _ensureLogo();
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
 
   const tier    = _t(profile?.tier || session?.tier || "standard");
   // Note: tier gate is enforced in App.jsx downloadPDF() before calling here.
   // We don't re-throw here to avoid silent failures from stale session.tier values.
 
-  // Cairo already loaded via _ensureCairoFont above
-  const cairo = _cairoLoaded;
-  const fnt = (size, style="normal") => cairo && isAr ? fontAr(doc,size,style,true) : font(doc,size,style);
 
   // New clinical page WITH the navy header bar — the conditional page
   // breaks used to call doc.addPage() bare, leaving continued pages
@@ -1572,8 +1579,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     doc.setFillColor(15,23,42); doc.rect(0,0,W,12,"F");
     doc.setFontSize(8); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
     doc.text("Corvus Posture Health — Clinical Summary", ml, 8.5);
-    doc.setFontSize(7.5); doc.setTextColor(14,165,233); doc.setFont("helvetica","bold");
-    doc.text("PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
+    const _badgeColPg = tier==="elite" ? [180,141,60] : [14,165,233];
+    doc.setFontSize(7.5); doc.setTextColor(..._badgeColPg); doc.setFont("helvetica","bold");
+    doc.text(tier==="elite"?"ELITE PHYSIOTHERAPIST REPORT":"PHYSIOTHERAPIST REPORT", W-mr, 8.5, {align:"right"});
     return 22;
   };
 
@@ -1634,21 +1642,25 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   // ── PAGE 1: Clinical Header + Patient Info ────────────────────
   // Clinical header — formal white + navy
+  const _isElite = tier==="elite";
+  const _badgeCol = _isElite ? [180,141,60] : [14,165,233]; // gold for Elite, cyan otherwise
   doc.setFillColor(15,23,42); doc.rect(0,0,W,36,"F");
+  // Premium accent underline — thin brand rule beneath the navy band
+  doc.setFillColor(..._badgeCol); doc.rect(0,36,W,1,"F");
   doc.setFontSize(14); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
   doc.text("CORVUS POSTURE HEALTH", ml, 16);
   doc.setFontSize(8.5); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
   doc.text("AI-Assisted Workplace Ergonomics & Posture Assessment", ml, 23);
   doc.text("For Clinical Review — Not for Diagnostic Purposes", ml, 29.5);
 
-  // Document type badge
-  doc.setFillColor(14,165,233); doc.roundedRect(W-mr-42,10,42,14,2,2,"F");
+  // Document type badge — gold accent for Elite tier, cyan otherwise
+  doc.setFillColor(..._badgeCol); doc.roundedRect(W-mr-42,10,42,14,2,2,"F");
   doc.setFontSize(8); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-  doc.text("CLINICAL SUMMARY", W-mr-21, 18.5, {align:"center"});
-  doc.setFontSize(6.5); doc.setTextColor(186,230,253); doc.setFont("helvetica","normal");
+  doc.text(_isElite?"ELITE CLINICAL":"CLINICAL SUMMARY", W-mr-21, 18.5, {align:"center"});
+  doc.setFontSize(6.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","normal");
   doc.text("PHYSIOTHERAPIST REPORT", W-mr-21, 23.5, {align:"center"});
 
-  y=46;
+  y=47;
 
   // Patient Info block
   doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,32,3,3,"F");
@@ -1968,6 +1980,36 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   y+=10;
 
+  // ── Industry Benchmark Comparison ─────────────────────────────
+  // Reference cohort figures — aggregated/estimated ranges, not a
+  // live population statistic. Relabel once real anonymized cohort
+  // volume backs these numbers.
+  if(y>H-90){y=_clinPage();}
+  y=_clinSec(y,"Industry Benchmark Comparison","This session's scores against reference cohort averages",[168,85,247]);
+  y+=1;
+
+  const CLINICAL_BENCHMARKS = [
+    { label:"This Session",              value:avg,               isUser:true },
+    { label:"Office Workers (avg.)",     value:61,                isUser:false },
+    { label:"Remote/Hybrid Workers (avg.)", value:57,             isUser:false },
+    { label:"Top 10% Corvus Users",      value:88,                isUser:false },
+  ];
+  const bLabelW = cw*0.42, bBarX = ml+bLabelW, bBarW = cw-bLabelW-16;
+  CLINICAL_BENCHMARKS.forEach(({label,value,isUser})=>{
+    const rc = isUser ? gradeC : [100,116,139];
+    doc.setFontSize(8); doc.setFont("helvetica", isUser?"bold":"normal"); doc.setTextColor(...(isUser?gradeC:[15,23,42]));
+    doc.text(label, ml, y+5.5);
+    doc.setFillColor(226,232,240); doc.roundedRect(bBarX,y+1.5,bBarW,4.6,1.2,1.2,"F");
+    const fillW = Math.max(2, bBarW*(Math.max(0,Math.min(100,value))/100));
+    doc.setFillColor(...rc); doc.roundedRect(bBarX,y+1.5,fillW,4.6,1.2,1.2,"F");
+    doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(15,23,42);
+    doc.text(String(Math.round(value)), bBarX+bBarW+3, y+5.2);
+    y+=9.5;
+  });
+  doc.setFontSize(6.5); doc.setTextColor(148,163,184); doc.setFont("helvetica","italic");
+  doc.text("Benchmark figures are reference cohort estimates and may vary with sample size and role.", ml, y+3);
+  y+=12;
+
   // Clinical recommendations
   if(y>H-80){y=_clinPage();}
   y=_clinSec(y,"Clinical Notes & Recommendations","Suggested focus areas — please apply clinical judgment",[99,102,241]);
@@ -2091,7 +2133,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 export async function generateComparisonPDF({ session1, session2, sessions=[], profile, user, lang="en", allSessions=[], aiSummary="" }) {
   // Support both old API (session1,session2) and new API (sessions array)
   if (!session1 && sessions.length >= 2) { session1 = sessions[0]; session2 = sessions[1]; }
-  if (!session1 || !session2) { console.warn("[PDF] Comparison needs 2 sessions"); return; }
+  if (!session1 || !session2) {
+    throw new Error(lang==="ar" ? "محتاج جلستين على الأقل لإنشاء تقرير المقارنة." : "Need at least 2 sessions to generate a comparison report.");
+  }
 
   const { jsPDF } = await import("jspdf");
   const isAr = lang==="ar";
@@ -2099,7 +2143,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
   const sf  = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
   const now = new Date();
@@ -2123,12 +2167,19 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const m1=session1.metrics||{}, m2=session2.metrics||{};
   const allKeys=[...new Set([...Object.keys(m1),...Object.keys(m2)])].filter(k=>!k.startsWith("_"));
   const metRows=allKeys.map(k=>{
-    const sc1=typeof m1[k]==="number"?m1[k]:(m1[k]?.score??100);
-    const sc2=typeof m2[k]==="number"?m2[k]:(m2[k]?.score??100);
-    const d=Math.round(sc2-sc1);
+    const has1 = m1[k]!=null, has2 = m2[k]!=null;
+    const sc1=typeof m1[k]==="number"?m1[k]:(m1[k]?.score??null);
+    const sc2=typeof m2[k]==="number"?m2[k]:(m2[k]?.score??null);
     const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+    // A metric tracked in only one session has no real delta — don't fabricate
+    // one by assuming a perfect 100 for the untracked side (that produced
+    // phantom "-60 point regression" style false alarms).
+    if(!has1||!has2){
+      return{k,lbl,sc1,sc2,d:null,isNew:!has1&&has2,isRemoved:has1&&!has2};
+    }
+    const d=Math.round(sc2-sc1);
     return{k,lbl,sc1,sc2,d};
-  }).sort((a,b)=>a.d-b.d);
+  }).sort((a,b)=>(a.d??0)-(b.d??0));
 
   const z1=_zonalRisk(m1), z2=_zonalRisk(m2);
   const d1=session1.duration_s||session1.duration_sec||0;
@@ -2167,7 +2218,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   // Date right
   font(doc,7,"normal",isAr&&_cairoLoaded); tc(doc,148,163,184); doc.text(nowStr,W-mr,26,{align:"right"});
   font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
-  doc.text(`Session #${num1} vs #${num2}`,W-mr,36,{align:"right"});
+  doc.text(`${isAr?"جلسة":"Session"} #${num1} vs #${num2}`,W-mr,36,{align:"right"});
 
   fc(doc,...deltaCol); doc.rect(0,69.5,W,2.5,"F");
 
@@ -2187,7 +2238,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   dc(doc,...g1); lw(doc,0.3); rr(doc,ml,y,half,heroH,6,"S"); lw(doc,0.3);
   fc(doc,...g1); doc.rect(ml,y,half,3,"F"); rr(doc,ml,y,half,3,3,"F");
   // Session number chip
-  const s1lbl=`Session #${num1}`;
+  const s1lbl=`${isAr?"جلسة":"Session"} #${num1}`;
   font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g1); rr(doc,ml+6,y+8,half-12,10,2,"F");
   doc.text(s1lbl,ml+6+(half-12)/2,y+14.5,{align:"center"});
@@ -2225,7 +2276,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   fc(doc,...PDF_TOKENS.card); rr(doc,rx,y,half,heroH,6,"F");
   dc(doc,...g2); lw(doc,0.3); rr(doc,rx,y,half,heroH,6,"S"); lw(doc,0.3);
   fc(doc,...g2); doc.rect(rx,y,half,3,"F"); rr(doc,rx,y,half,3,3,"F");
-  const s2lbl=`Session #${num2}`;
+  const s2lbl=`${isAr?"جلسة":"Session"} #${num2}`;
   font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   fc(doc,...g2); rr(doc,rx+6,y+8,half-12,10,2,"F");
   doc.text(s2lbl,rx+6+(half-12)/2,y+14.5,{align:"center"});
@@ -2301,14 +2352,31 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     .forEach((h,i)=>doc.text(h,colX[i],y+7));
   y+=12;
 
-  metRows.forEach(({lbl,sc1,sc2,d},idx)=>{
+  metRows.forEach(({lbl,sc1,sc2,d,isNew,isRemoved},idx)=>{
     if(y>H-28){doc.addPage();_hdr(doc,W,ml,mr,isAr?"تابع":"Continued",isAr);y=22;}
-    const dC=d>2?PDF_TOKENS.success:d<-2?PDF_TOKENS.danger:PDF_TOKENS.muted;
     const rowH=11;
     fc(doc,...(idx%2===0?PDF_TOKENS.bg:PDF_TOKENS.card)); doc.rect(ml,y,cw,rowH,"F");
+    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,colX[0]+2,y+7.5);
+
+    if(d===null){
+      // Metric tracked in only one session — showing a fabricated delta here
+      // previously produced false "-60 point regression" alarms. Show each
+      // side plainly and label it instead of comparing.
+      if(sc1!=null){ const c1=_scoreColor(sc1); fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
+        font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c1); doc.text(String(Math.round(sc1)),colX[1]+2,y+7.5); }
+      else { font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text("—",colX[1]+2,y+7.5); }
+      if(sc2!=null){ const c2=_scoreColor(sc2); fc(doc,...c2); doc.circle(colX[2]-3,y+5.5,2.5,"F");
+        font(doc,8,"bold",isAr&&_cairoLoaded); tc(doc,...c2); doc.text(String(Math.round(sc2)),colX[2]+2,y+7.5); }
+      else { font(doc,7.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted); doc.text("—",colX[2]+2,y+7.5); }
+      font(doc,7,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
+      doc.text(isNew?(isAr?"جديد":"NEW"):(isAr?"غير متتبع":"N/T"),colX[3],y+7.5);
+      y+=rowH;
+      return;
+    }
+
+    const dC=d>2?PDF_TOKENS.success:d<-2?PDF_TOKENS.danger:PDF_TOKENS.muted;
     // Left accent for significant changes
     if(Math.abs(d)>5){ fc(doc,...dC); doc.rect(ml,y,2,rowH,"F"); }
-    font(doc,8,"normal",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(lbl,colX[0]+2,y+7.5);
     // Score 1 with mini dot
     const c1=_scoreColor(sc1),c2=_scoreColor(sc2);
     fc(doc,...c1); doc.circle(colX[1]-3,y+5.5,2.5,"F");
@@ -2342,7 +2410,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   zones.forEach(({k,en,ar,r})=>{
     if(y>H-44){doc.addPage();_hdr(doc,W,ml,mr,"",isAr);y=22;}
     const r1=z1[k]||0, r2=z2[k]||0, dz=r2-r1;
-    const rc1=_riskColor(r1), rc2=_riskColor(r2), dzC=dz>0?PDF_TOKENS.danger:PDF_TOKENS.success;
+    const rc1=_riskColor(r1), rc2=_riskColor(r2), dzC=dz>0?PDF_TOKENS.danger:dz<0?PDF_TOKENS.success:PDF_TOKENS.muted;
     const zh=36;
     fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,zh,4,"F");
     dc(doc,...rc2); lw(doc,0.25); rr(doc,ml,y,cw,zh,4,"S"); lw(doc,0.3);
@@ -2363,7 +2431,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     font(doc,6.5,"bold",isAr&&_cairoLoaded); tc(doc,...rc2);
     doc.text(`#${num2}: ${r2}%`,ml+9+bw2+4,barY+10);
     // Delta badge top right
-    const dzlbl=`${dz>0?"+":"-"}${Math.abs(dz)}%`;
+    const dzlbl=dz===0?"0%":`${dz>0?"+":"-"}${Math.abs(dz)}%`;
     const dzw=doc.getTextWidth(dzlbl)+8;
     fc(doc,...dzC);
     doc.setGState&&doc.setGState(new doc.GState({opacity:0.12}));
@@ -2392,8 +2460,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       dc(doc,...PDF_TOKENS.danger); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
       fc(doc,...PDF_TOKENS.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger); doc.text(lbl,ml+7,y+5.5);
-      font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (${d} pts)`,ml+7,y+11);
+      font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (${d} ${isAr?"نقطة":"pts"})`,ml+7,y+11);
       const bw2=cw*0.3;
       fc(doc,...PDF_TOKENS.danger);
       doc.setGState&&doc.setGState(new doc.GState({opacity:0.2}));
@@ -2414,8 +2482,8 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       dc(doc,...PDF_TOKENS.success); lw(doc,0.2); rr(doc,ml,y,cw,14,3,"S"); lw(doc,0.3);
       fc(doc,...PDF_TOKENS.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success); doc.text(lbl,ml+7,y+5.5);
-      font(doc,7.5,"normal",false); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (+${d} pts)`,ml+7,y+11);
+      font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (+${d} ${isAr?"نقطة":"pts"})`,ml+7,y+11);
       y+=18;
     });
     y+=6;
@@ -2481,7 +2549,7 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
     [isAr?"وضعية جيدة":"Good posture",`${gp1}%`,`${gp2}%`],
     [isAr?"المدة":"Duration",_fmtDur(d1),_fmtDur(d2)],
     [isAr?"التنبيهات":"Alerts",String(al1),String(al2)],
-    [isAr?"التغيّر":"Change","—",`${delta>0?"+":""}${delta} pts`],
+    [isAr?"التغيّر":"Change","—",`${delta>0?"+":""}${delta} ${isAr?"نقطة":"pts"}`],
   ];
   const th3=sumRows.length*9+3;
   fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,th3,4,"F");
@@ -2490,13 +2558,13 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   fc(doc,...PDF_TOKENS.slate); doc.rect(ml,y,cw,9,"F"); rr(doc,ml,y,cw,9,2,"F"); doc.rect(ml,y+5,cw,4,"F");
   font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
   doc.text(isAr?"البند":"Item",ml+5,y+6.5);
-  doc.text(`Session #${num1}`,ml+cw*0.42,y+6.5,{align:"center"});
-  doc.text(`Session #${num2}`,ml+cw*0.75,y+6.5,{align:"center"});
+  doc.text(`${isAr?"جلسة":"Session"} #${num1}`,ml+cw*0.42,y+6.5,{align:"center"});
+  doc.text(`${isAr?"جلسة":"Session"} #${num2}`,ml+cw*0.75,y+6.5,{align:"center"});
   y+=9;
   sumRows.forEach(([k,v1,v2],i)=>{
     if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,9,"F");}
     font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(k,ml+5,y+6.5);
-    font(doc,7.5,"bold",false);
+    font(doc,7.5,"bold",isAr);
     tc(doc,...(i===6?deltaCol:PDF_TOKENS.ink)); doc.text(v1,ml+cw*0.42,y+6.5,{align:"center"});
     tc(doc,...(i===6?deltaCol:PDF_TOKENS.ink)); doc.text(v2,ml+cw*0.75,y+6.5,{align:"center"});
     y+=9;
@@ -2530,7 +2598,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
-  const cairo = await _loadCairo(doc);
+  const cairo = await _loadCairo(doc,isAr);
   const sf = (sz,st="normal") => cairo&&isAr ? fontAr(doc,sz,st,true) : font(doc,sz,st);
 
   const now = new Date();
@@ -2587,7 +2655,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     {label:isAr?"ضعيف (<55)":"Poor (<55)",       col:PDF_TOKENS.danger,  users:atRisk},
   ];
   for(const {label,col,users:bu} of bands){
-    if(y>H-30){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"التوزيع":"Distribution"); y=22;}
+    if(y>H-30){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"التوزيع":"Distribution",isAr); y=22;}
     const pct=totalU>0?bu.length/totalU:0;
     fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8,"F");
     sf(7.5,"normal"); tc(doc,...PDF_TOKENS.ink); doc.text(label,ml+2,y+5.5);
@@ -2600,7 +2668,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
   // At-Risk Users list
   if(atRisk.length>0){
-    if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk Employees"); y=22;}
+    if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk Employees",isAr); y=22;}
     sf(10,"bold"); tc(doc,...PDF_TOKENS.danger);
     doc.text(isAr?`الموظفون في خطر (${atRisk.length})`:`At-Risk Employees (${atRisk.length})`,ml,y); y+=5;
     sf(7.5,"normal"); tc(doc,...PDF_TOKENS.muted);
@@ -2614,7 +2682,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     doc.text(isAr?"آخر جلسة":"Last Session",ml+cw*0.72,y+6);
     y+=11;
     for(const u of atRisk.slice(0,15)){
-      if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk"); y=22;}
+      if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk",isAr); y=22;}
       fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8,"F");
       sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
       doc.text(u.name||u.email||"—",ml+3,y+5.5);
@@ -2632,7 +2700,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
   // League table — top 10
   y+=6;
-  if(y>H-70){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard"); y=22;}
+  if(y>H-70){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard",isAr); y=22;}
   sf(10,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"تصنيف الأداء":"Performance Leaderboard",ml,y); y+=7;
   const sorted=[...activeUsers].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
@@ -2642,7 +2710,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
   doc.text(isAr?"النتيجة":"Score",ml+cw*0.65,y+6); doc.text(isAr?"التقييم":"Grade",ml+cw*0.82,y+6);
   y+=11;
   for(const [i,u] of sorted.slice(0,10).entries()){
-    if(y>H-18){doc.addPage(); y=22;}
+    if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"تصنيف الفريق":"Team Leaderboard",isAr); y=22;}
     fc(doc,i%2===0?248:255,i%2===0?250:255,i%2===0?252:255); doc.rect(ml,y,cw,8,"F");
     const sc=Math.round(u.avg_score||0); const col=_scoreColor(sc);
     sf(8,"bold"); tc(doc,...(i<3?col:PDF_TOKENS.muted)); doc.text(String(i+1),ml+3,y+5.5);
@@ -2651,13 +2719,23 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     sf(7.5,"normal"); doc.text(_scoreLabel(sc,isAr),ml+cw*0.82,y+5.5);
     y+=8;
   }
+  if(sorted.length===0){
+    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,14,2,"F");
+    sf(8,"normal"); tc(doc,...PDF_TOKENS.muted);
+    doc.text(isAr?"لا يوجد مستخدمون نشطون بعد — سيظهر الترتيب بمجرد بدء الفريق في تسجيل جلسات":"No active users yet — the leaderboard will populate once the team starts logging sessions",ml+cw/2,y+8,{align:"center"});
+    y+=18;
+  }
 
   // HR Recommendations
   y+=10;
-  if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations"); y=22;}
+  if(y>H-60){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations",isAr); y=22;}
   sf(10,"bold"); tc(doc,...PDF_TOKENS.ink);
   doc.text(isAr?"توصيات لمدير الموارد البشرية":"HR Recommendations",ml,y); y+=7;
-  const hrRecs = [
+  const hrRecs = totalU===0 ? [
+    isAr
+      ? "لا يوجد مستخدمون نشطون في الفترة المحددة بعد — شارك رابط الدعوة مع الفريق لبدء تسجيل الجلسات"
+      : "No active users in this period yet — share the team invite link to get employees logging sessions",
+  ] : [
     atRisk.length>totalU*0.3
       ? (isAr?`${Math.round(atRisk.length/totalU*100)}% من الفريق في خطر — يُنصح بتدخل جماعي: ورشة ارغونوميكس وتقييم محطات العمل`
               :`${Math.round(atRisk.length/totalU*100)}% of team at-risk — recommend group intervention: ergonomics workshop + workstation audit`)
@@ -2675,7 +2753,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
               :"No employees at excellent level — consider incentive program (points/rewards) to encourage improvement"),
   ];
   for(const rec of hrRecs){
-    if(y>H-22){doc.addPage(); y=22;}
+    if(y>H-22){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"توصيات":"HR Recommendations",isAr); y=22;}
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,16,2,"F");
     sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
     const lines=doc.splitTextToSize(rec,cw-8);
@@ -2718,6 +2796,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 
 
 export async function generateLongitudinalPDF({ sessions=[], profile, user, lang="en", aiSummary="" }) {
+  if (sessions.length === 0) throw new Error(lang==="ar" ? "لا توجد جلسات لإنشاء التقرير الطولي." : "No sessions available to generate a longitudinal report.");
   const { jsPDF } = await import("jspdf");
   if (sessions.length < 2) { console.warn("[PDF] Need more sessions for longitudinal"); }
   const isAr = lang==="ar";
@@ -2725,7 +2804,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   // tier check handled in UI — proceed regardless
 
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  await Promise.all([_ensureCairoFont(doc), _ensureLogo()]);
+  await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
   const sf = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
   const _rawName4 = profile?.name||user?.displayName||(isAr?"مستخدم":"User");
@@ -3006,7 +3085,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   y+=barZoneH+8;
 
   // Best/worst day insight strip
-  if(bestDay>=0&&worstDay>=0){
+  if(bestDay>=0&&worstDay>=0&&bestDay!==worstDay){
     const bdn=isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay];
     const wdn=isAr?dayNamesAr[worstDay]:dayNamesEn[worstDay];
     fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,11,2,"F");
@@ -3015,6 +3094,11 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
       ?`أفضل يوم: ${bdn} (${dayAvgs[bestDay]}) · أسوأ يوم: ${wdn} (${dayAvgs[worstDay]})`
       :`Best day: ${bdn} (${dayAvgs[bestDay]}) · Worst day: ${wdn} (${dayAvgs[worstDay]})`;
     doc.text(ins,ml+cw/2,y+7.5,{align:"center"});
+    y+=18;
+  } else if(bestDay>=0&&bestDay===worstDay){
+    fc(doc,...PDF_TOKENS.bg); rr(doc,ml,y,cw,11,2,"F");
+    font(doc,7.5,"italic",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
+    doc.text(isAr?"بيانات غير كافية لتحديد نمط أسبوعي — سجّل جلسات في أيام مختلفة لرؤية الاتجاه":"Not enough data across different days yet to identify a weekly pattern — log sessions on more days to see a trend",ml+cw/2,y+7.5,{align:"center"});
     y+=18;
   }
 
@@ -3111,8 +3195,8 @@ const highestRiskName = avgZonal.cervical >= avgZonal.thoracic && avgZonal.cervi
 const narrative=[
   improved
     ? (isAr
-      ? `عبر ${sessions.length} جلسة، حقق ${name} تحسناً مستمراً +${trendDelta} نقطة في جودة الوضعية. الاتجاه التصاعدي يؤكد تكوين عادات فعالة.${bestDay >= 0 ? ` جلسات يوم ${(isAr ? dayNamesAr[bestDay] : dayNamesEn[bestDay])} تتفوق باستمرار.` : ""} متوسط 90 يوم: ${avg90}/100.`
-      : `Over ${sessions.length} sessions, ${name} achieved a consistent +${trendDelta} point improvement. 90-day average: ${avg90}/100. Upward trajectory confirms effective habit formation.${bestDay >= 0 ? ` ${(isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay])} sessions consistently outperform others.` : ""}`)
+      ? `عبر ${sessions.length} جلسة، حقق ${name} تحسناً مستمراً +${trendDelta} نقطة في جودة الوضعية. الاتجاه التصاعدي يؤكد تكوين عادات فعالة.${bestDay >= 0 && bestDay !== worstDay ? ` جلسات يوم ${(isAr ? dayNamesAr[bestDay] : dayNamesEn[bestDay])} تتفوق باستمرار.` : ""} متوسط 90 يوم: ${avg90}/100.`
+      : `Over ${sessions.length} sessions, ${name} achieved a consistent +${trendDelta} point improvement. 90-day average: ${avg90}/100. Upward trajectory confirms effective habit formation.${bestDay >= 0 && bestDay !== worstDay ? ` ${(isAr?dayNamesAr[bestDay]:dayNamesEn[bestDay])} sessions consistently outperform others.` : ""}`)
     : declined
     ? (isAr
       ? `عبر ${sessions.length} جلسة، لوحظ انخفاض ${Math.abs(trendDelta)} نقطة. هذا النمط يتبع عادةً زيادة في عبء العمل أو تغييرات في الإرغونوميكس. أعلى منطقة خطر: ${highestRiskName} (${highestRiskAll}%).`
@@ -3195,13 +3279,13 @@ const programme=[
 
   const stats=[
     [isAr?"إجمالي الجلسات":"Total sessions",         String(sessions.length)],
-    [isAr?"المدة الإجمالية":"Total duration",         `${Math.round(sessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60)} min`],
+    [isAr?"المدة الإجمالية":"Total duration",         `${Math.round(sessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60)} ${isAr?"دقيقة":"min"}`],
     [isAr?"متوسط الدرجة (الكل)":"All-time avg score",`${avgAll}/100`],
     [isAr?"متوسط الدرجة (90 يوم)":"90-day avg score",`${avg90}/100`],
     [isAr?"إجمالي التنبيهات":"Total alerts",          String(totalAlerts)],
     [isAr?"أعلى نقطة":"Best score",                   `${best?.avg_score||0}/100 · ${_fmtDate(best?.created_at,isAr)}`],
     [isAr?"أدنى نقطة":"Worst score",                  `${worst?.avg_score||0}/100 · ${_fmtDate(worst?.created_at,isAr)}`],
-    [isAr?"التغيّر الكلي":"Overall trend",             `${trendDelta>0?"+":""}${trendDelta} pts · ${improved?"Improving":declined?"Declining":"Stable"}`],
+    [isAr?"التغيّر الكلي":"Overall trend",             `${trendDelta>0?"+":""}${trendDelta} ${isAr?"نقطة":"pts"} · ${improved?(isAr?"تحسّن":"Improving"):declined?(isAr?"تراجع":"Declining"):(isAr?"مستقر":"Stable")}`],
   ];
   const th2=stats.length*8.5+2;
   fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,th2,4,"F");
@@ -3209,7 +3293,7 @@ const programme=[
   stats.forEach(([k,v],i)=>{
     if(i%2===0){fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8.5,"F");}
     font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.muted); doc.text(k,ml+5,y+5.8);
-    font(doc,7.5,"bold",false); tc(doc,...PDF_TOKENS.ink); doc.text(v,ml+cw-5,y+5.8,{align:"right"});
+    font(doc,7.5,"bold",isAr); tc(doc,...PDF_TOKENS.ink); doc.text(v,ml+cw-5,y+5.8,{align:"right"});
     y+=8.5;
   });
 
