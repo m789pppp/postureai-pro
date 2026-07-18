@@ -43,16 +43,37 @@ function SimpleBar({ data, height = 80 }) {
 }
 
 export function MRRDashboard({ cs, lang, onClose }) {
-  const [data, setData]     = useState(null);
+  const [raw, setRaw]       = useState(null);
   const [loading, setLoad]  = useState(true);
   const [error, setError]   = useState("");
   const isAr = lang === "ar";
 
   useEffect(() => {
-    apiFetch("/metrics/revenue")
-      .then(d => { setData(d); setLoad(false); })
+    // NOTE: this previously called /metrics/revenue, which has never existed
+    // anywhere in the backend (confirmed by searching backend.py and every
+    // routes/*.py file, including ones since removed) — every load of this
+    // dashboard was silently failing to an error screen. /billing/analytics
+    // is the real, working endpoint; its response shape is narrower than
+    // what this dashboard originally expected (no LTV, churn rate, trial/paid
+    // split, or cohort retention yet), so those sections are marked "not yet
+    // tracked" below instead of showing fabricated numbers.
+    apiFetch("/billing/analytics")
+      .then(d => { setRaw(d); setLoad(false); })
       .catch(e => { setError(e.message); setLoad(false); });
   }, []);
+
+  // Adapt the real backend response to this dashboard's display shape.
+  const data = raw ? {
+    mrr: raw.mrr, arr: raw.arr, arpu: raw.arpu,
+    ltv: null, // not computed by the backend yet
+    monthly_churn: null, // backend tracks conversion_rate/failed_count, not a churn rate yet
+    paid_users: raw.unique_customers, trial_users: null,
+    revenue_chart: null, // backend returns monthly_revenue (last 6 months), not a daily series
+    monthly_revenue: raw.monthly_revenue || {},
+    revenue_by_plan_counts: raw.plan_distribution || {}, // counts, not $ amounts — labeled accordingly below
+    cohorts: null, // not computed by the backend yet
+    generated_at: null,
+  } : null;
 
   const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 };
   const box = { background: "#0b1120", border: "1px solid rgba(148,163,184,.12)", borderRadius: 20, padding: "28px 24px", maxWidth: 900, width: "100%", maxHeight: "90vh", overflowY: "auto" };
@@ -85,35 +106,35 @@ export function MRRDashboard({ cs, lang, onClose }) {
               <MetCard label="MRR" value={fmt(data.mrr)} sub={isAr ? "الإيراد الشهري المتكرر" : "Monthly recurring"} color="#10b981" icon="💰" />
               <MetCard label="ARR" value={fmt(data.arr)} sub={isAr ? "الإيراد السنوي" : "Annual run rate"} color="#6366f1" icon="📈" />
               <MetCard label="ARPU" value={fmt(data.arpu)} sub={isAr ? "متوسط إيراد المستخدم" : "Avg revenue/user"} color="#f59e0b" icon="👤" />
-              <MetCard label="LTV" value={fmt(data.ltv)} sub={isAr ? "قيمة العميل مدى الحياة" : "Lifetime value"} color="#0891b2" icon="♾️" />
-              <MetCard label={isAr ? "معدل الانسحاب" : "Monthly Churn"} value={pct(data.monthly_churn)} sub={isAr ? "انسحب هذا الشهر" : "Cancelled this month"} color={data.monthly_churn > 5 ? "#f87171" : "#10b981"} icon="📉" />
-              <MetCard label={isAr ? "المشتركون" : "Paid Users"} value={data.paid_users?.toLocaleString()} sub={`${data.trial_users} ${isAr ? "تجربة" : "trials"}`} color="#a78bfa" icon="💳" />
+              <MetCard label="LTV" value="—" sub={isAr ? "غير متتبع بعد" : "Not tracked yet"} color="#475569" icon="♾️" />
+              <MetCard label={isAr ? "معدل الانسحاب" : "Monthly Churn"} value="—" sub={isAr ? "غير متتبع بعد" : "Not tracked yet"} color="#475569" icon="📉" />
+              <MetCard label={isAr ? "المشتركون" : "Paid Users"} value={data.paid_users?.toLocaleString()} sub={isAr ? "عملاء فريدون" : "Unique paying customers"} color="#a78bfa" icon="💳" />
             </div>
 
-            {/* Revenue chart */}
-            {data.revenue_chart?.length > 0 && (
+            {/* Revenue by month (backend provides monthly totals, not a daily series) */}
+            {Object.keys(data.monthly_revenue).length > 0 && (
               <div style={{ background: "rgba(255,255,255,.02)", borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
                 <p style={{ margin: "0 0 12px", fontSize: 13, color: "#94a3b8" }}>
-                  {isAr ? "الإيرادات اليومية (آخر 30 يوم)" : "Daily revenue — last 30 days"}
+                  {isAr ? "الإيرادات الشهرية (آخر 6 أشهر)" : "Monthly revenue — last 6 months"}
                 </p>
-                <SimpleBar data={data.revenue_chart} height={90} />
+                <SimpleBar data={Object.entries(data.monthly_revenue).map(([month, amount]) => ({ date: month, amount }))} height={90} />
               </div>
             )}
 
-            {/* Revenue by plan */}
-            {data.revenue_by_plan && (
+            {/* Subscribers by plan (counts — the backend doesn't split $ revenue by plan yet) */}
+            {Object.keys(data.revenue_by_plan_counts).length > 0 && (
               <div style={{ marginBottom: 20 }}>
                 <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 12px" }}>
-                  {isAr ? "الإيراد حسب الخطة" : "Revenue by plan"}
+                  {isAr ? "المشتركون حسب الخطة" : "Subscribers by plan"}
                 </p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {Object.entries(data.revenue_by_plan)
+                  {Object.entries(data.revenue_by_plan_counts)
                     .filter(([,v]) => v > 0)
                     .sort(([,a],[,b]) => b - a)
-                    .map(([plan, amount]) => (
+                    .map(([plan, count]) => (
                       <div key={plan} style={{ background: "rgba(99,102,241,.1)", border: "1px solid rgba(99,102,241,.2)", borderRadius: 10, padding: "8px 14px", fontSize: 13 }}>
                         <span style={{ color: "#a5b4fc", fontWeight: 600, textTransform: "capitalize" }}>{plan}</span>
-                        <span style={{ color: "#64748b", marginLeft: 8 }}>{fmt(amount)}/mo</span>
+                        <span style={{ color: "#64748b", marginLeft: 8 }}>{count} {isAr ? "عميل" : "customers"}</span>
                       </div>
                     ))}
                 </div>
@@ -153,7 +174,7 @@ export function MRRDashboard({ cs, lang, onClose }) {
 
             {/* Footer */}
             <p style={{ textAlign: "center", color: "#334155", fontSize: 11, margin: "16px 0 0" }}>
-              {isAr ? "آخر تحديث:" : "Last updated:"} {new Date(data.generated_at).toLocaleString()}
+              {isAr ? "آخر تحديث:" : "Last updated:"} {new Date().toLocaleString()}
             </p>
           </>
         )}
