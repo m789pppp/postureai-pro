@@ -242,6 +242,12 @@ export const BillingAPI = {
   },
 };
 
+// ── Push Notifications API (register/unregister handled in push.js directly) ─
+export const PushAPI = {
+  /** Send a test push to the current user's registered devices. */
+  test: () => apiFetch("/push/test", { method: "POST" }),
+};
+
 // ── Symptom Correlation API ─────────────────────────────────────────
 export const SymptomAPI = {
   /** Log (or overwrite) a day's symptom check-in. symptoms: [{type, severity(1-5)}] */
