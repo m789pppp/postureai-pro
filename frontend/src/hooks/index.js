@@ -8,8 +8,9 @@ import {
   checkAndSendNurtureEmails, saveCalibration, getCalibration,
 } from "../firebase.js";
 import { clearTokenCache, AdminAPI } from "../services/api.js";
+import { API_BASE_URL } from "../config/api.js";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+const API_URL = API_BASE_URL;
 
 // ── useAuth ────────────────────────────────────────────────────────
 export function useAuth() {

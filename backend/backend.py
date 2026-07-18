@@ -7284,11 +7284,23 @@ def gdpr_delete_all_data():
             "requested_at": datetime.utcnow().isoformat() + "Z",
         })
 
-        print(f"[gdpr] Erasure completed for uid={uid} counts={deleted_counts}", flush=True)
+        # Finally, delete the Firebase Auth account itself so the user can't
+        # log back in to a shell of a profile. Done last so a failure here
+        # doesn't block the data erasure above.
+        auth_deleted = False
+        if _fb_auth is not None:
+            try:
+                _fb_auth.delete_user(uid)
+                auth_deleted = True
+            except Exception as auth_err:
+                print(f"[gdpr] Auth user delete failed for uid={uid}: {auth_err}", flush=True)
+
+        print(f"[gdpr] Erasure completed for uid={uid} counts={deleted_counts} auth_deleted={auth_deleted}", flush=True)
         return jsonify({
             "ok": True,
             "message": "All personal data has been permanently deleted.",
             "deleted": deleted_counts,
+            "auth_deleted": auth_deleted,
         })
     except Exception as e:
         return safe_error(e, "GDPR erasure failed")
