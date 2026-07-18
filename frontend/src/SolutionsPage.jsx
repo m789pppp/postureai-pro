@@ -85,7 +85,7 @@ function Nav({ lang, setLang, onCTA }) {
             {navItems.map(({ label, href, page }) => {
               const active = window.location.pathname === href;
               return (
-                <a key={id} href={href}
+                <a key={label} href={href}
                   style={{
                     position:"relative", display:"flex", alignItems:"center",
                     color: active ? "#f1f5f9" : "#64748b",
