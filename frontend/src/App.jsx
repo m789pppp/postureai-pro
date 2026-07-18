@@ -13,6 +13,7 @@ import {
   doc, updateDoc,
 } from "./firebase.js";
 import { HRPanel } from "./HRPanel.jsx";
+import { TherapistMarketplace } from "./TherapistMarketplace.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
 import { AnalyticsDashboard } from "./AnalyticsDashboard.jsx";
@@ -2066,7 +2067,7 @@ export default function App(){
     return ()=>clearTimeout(t);
   },[]);
   // ── Hash-based routing — fixes back button & enables deep links ──
-  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report"]);
+  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace"]);
   const hashToPage = (h) => {
     const p = h.replace(/^#\/?/, "") || "landing";
     // Map known aliases
@@ -3625,6 +3626,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     </ErrorBoundary>
   );  if(page==="admin"&&isAdmin)return <ErrorBoundary><Admin {...shared} adminUser={user} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="hr"&&(isAdmin||isHRAdmin))return <ErrorBoundary><HRPanel {...shared} user={user} profile={profile} companyId={companyId||profile?.company_id} onBack={()=>setPage("home")}/></ErrorBoundary>;
+  if(page==="marketplace"&&user)return <ErrorBoundary><TherapistMarketplace {...shared} user={user} isAdmin={isAdmin} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="pricing") return(
     <ErrorBoundary>
       <PricingPage

@@ -1760,6 +1760,16 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
               {isAr?"منصة المشرف":"Platform Admin"}
             </button>
           )}
+          <button onClick={()=>setPage("marketplace")}
+            onMouseEnter={()=>setHov("marketplace")} onMouseLeave={()=>setHov(null)}
+            style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
+              padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
+              borderLeft:"2px solid transparent",
+              background:hov==="marketplace"?"rgba(255,255,255,.04)":"transparent",
+              color:"rgba(255,255,255,.65)", fontSize:12.5, textAlign:"left" }}>
+            <span style={{ fontSize:14, width:18, textAlign:"center" }}>🩺</span>
+            {isAr?"أخصائيو العلاج الطبيعي":"Find a Physiotherapist"}
+          </button>
         </nav>
 
         {/* Start Session */}
@@ -2048,6 +2058,8 @@ export default function HomePage({
       onClick:()=>isPro_&&setShowAIReports?.(true) },
     { id:"t-security", icon:"🔒", en:"Security",    ar:"الأمان",
       onClick:()=>setShowSecurityCenter?.(true) },
+    { id:"t-marketplace", icon:"🩺", en:"Find a Physio", ar:"أخصائي علاج طبيعي",
+      onClick:()=>setPage("marketplace") },
     ...(isAdmin ? [
       { id:"t-mrr",    icon:"💰", en:"Revenue",     ar:"الإيرادات",
         onClick:()=>setShowMRR?.(true) },

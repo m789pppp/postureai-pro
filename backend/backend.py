@@ -15857,6 +15857,276 @@ def llm_proxy():
         return safe_error(e)
 
 
+# ════════════════════════════════════════════════════════════════════
+# Physiotherapist Marketplace
+# Therapist profiles are admin-curated (invite-only) for v1 — no public
+# self-serve signup yet. Bookings reuse the existing PayMob order flow,
+# priced from the therapist's own session_fee_cents rather than a
+# subscription tier.
+# ════════════════════════════════════════════════════════════════════
+
+def _therapist_public(doc):
+    """Strip internal/admin-only fields before returning a therapist to patients."""
+    d = doc.to_dict() or {}
+    return {
+        "id": doc.id,
+        "name": d.get("name", ""),
+        "photo_url": d.get("photo_url", ""),
+        "specialties": d.get("specialties", []),
+        "city": d.get("city", ""),
+        "bio": d.get("bio", ""),
+        "years_experience": d.get("years_experience", 0),
+        "session_fee_cents": d.get("session_fee_cents", 0),
+        "currency": d.get("currency", "EGP"),
+        "languages": d.get("languages", []),
+        "rating": d.get("rating"),
+        "review_count": d.get("review_count", 0),
+    }
+
+
+# ── Admin: manage therapist profiles ──────────────────────────────
+@app.route("/api/admin/marketplace/therapists", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("60 per minute")
+def admin_list_therapists():
+    try:
+        db   = firestore.client()
+        docs = db.collection("therapists").order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        ).get()
+        return jsonify({"therapists": [{**d.to_dict(), "id": d.id} for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/marketplace/therapists", methods=["POST"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_create_therapist():
+    try:
+        data = request.get_json(force=True) or {}
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "name required"}), 400
+        fee_cents = int(data.get("session_fee_cents") or 0)
+        if fee_cents <= 0:
+            return jsonify({"error": "session_fee_cents must be > 0"}), 400
+
+        db  = firestore.client()
+        doc = {
+            "name":              name,
+            "photo_url":         (data.get("photo_url") or "").strip(),
+            "specialties":       data.get("specialties") or [],
+            "city":              (data.get("city") or "").strip(),
+            "bio":               (data.get("bio") or "").strip(),
+            "years_experience":  int(data.get("years_experience") or 0),
+            "session_fee_cents": fee_cents,
+            "currency":          (data.get("currency") or "EGP").strip().upper(),
+            "languages":         data.get("languages") or [],
+            "contact_email":     (data.get("contact_email") or "").strip(),
+            "contact_phone":     (data.get("contact_phone") or "").strip(),
+            "status":            "active",          # active | paused
+            "rating":            None,
+            "review_count":      0,
+            "created_at":        datetime.utcnow().isoformat()+"Z",
+            "created_by_admin":  g.uid,
+        }
+        ref = db.collection("therapists").document()
+        ref.set(doc)
+        return jsonify({"ok": True, "id": ref.id})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/marketplace/therapists/<therapist_id>", methods=["PATCH"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_update_therapist(therapist_id):
+    try:
+        data = request.get_json(force=True) or {}
+        allowed = {"name","photo_url","specialties","city","bio","years_experience",
+                   "session_fee_cents","currency","languages","contact_email",
+                   "contact_phone","status"}
+        upd = {k: v for k, v in data.items() if k in allowed}
+        if not upd:
+            return jsonify({"error": "no valid fields to update"}), 400
+        upd["updated_at"]       = datetime.utcnow().isoformat()+"Z"
+        upd["updated_by_admin"] = g.uid
+        db = firestore.client()
+        ref = db.collection("therapists").document(therapist_id)
+        if not ref.get().exists:
+            return jsonify({"error": "therapist not found"}), 404
+        ref.update(upd)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/marketplace/bookings", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("60 per minute")
+def admin_list_bookings():
+    try:
+        db   = firestore.client()
+        docs = db.collection("marketplace_bookings").order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        ).limit(200).get()
+        return jsonify({"bookings": [{**d.to_dict(), "id": d.id} for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+# ── Patient-facing: browse + book ─────────────────────────────────
+@app.route("/api/marketplace/therapists", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def marketplace_list_therapists():
+    try:
+        db    = firestore.client()
+        query = db.collection("therapists").where("status", "==", "active")
+        city  = (request.args.get("city") or "").strip()
+        specialty = (request.args.get("specialty") or "").strip()
+        docs  = query.get()
+        out   = [_therapist_public(d) for d in docs]
+        if city:
+            out = [t for t in out if t["city"].lower() == city.lower()]
+        if specialty:
+            out = [t for t in out if specialty.lower() in [s.lower() for s in t["specialties"]]]
+        return jsonify({"therapists": out})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/therapists/<therapist_id>", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def marketplace_get_therapist(therapist_id):
+    try:
+        db  = firestore.client()
+        doc = db.collection("therapists").document(therapist_id).get()
+        if not doc.exists or doc.to_dict().get("status") != "active":
+            return jsonify({"error": "therapist not found"}), 404
+        return jsonify({"therapist": _therapist_public(doc)})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/bookings", methods=["POST"])
+@require_auth
+@limiter.limit("15 per minute")
+def marketplace_create_booking():
+    """Create a booking request and open a PayMob payment for the therapist's
+    session fee. Mirrors /api/paymob/create-payment's order flow, but priced
+    from the therapist doc instead of a subscription tier."""
+    try:
+        data          = request.get_json(force=True) or {}
+        therapist_id  = (data.get("therapist_id") or "").strip()
+        preferred_time= (data.get("preferred_time") or "").strip()
+        notes         = (data.get("notes") or "").strip()
+        billing_data  = data.get("billing_data", {})
+        if not therapist_id:
+            return jsonify({"error": "therapist_id required"}), 400
+
+        db   = firestore.client()
+        tdoc = db.collection("therapists").document(therapist_id).get()
+        if not tdoc.exists or tdoc.to_dict().get("status") != "active":
+            return jsonify({"error": "therapist not found or unavailable"}), 404
+        therapist = tdoc.to_dict()
+        amount_cents = int(therapist.get("session_fee_cents") or 0)
+        currency     = therapist.get("currency", "EGP")
+        if amount_cents <= 0:
+            return jsonify({"error": "therapist has no fee configured"}), 400
+
+        booking_ref = db.collection("marketplace_bookings").document()
+        booking = {
+            "therapist_id":   therapist_id,
+            "therapist_name": therapist.get("name", ""),
+            "user_id":        g.uid,
+            "preferred_time": preferred_time,
+            "notes":          notes,
+            "amount_cents":   amount_cents,
+            "currency":       currency,
+            "status":         "pending_payment",   # pending_payment | confirmed | cancelled
+            "created_at":     datetime.utcnow().isoformat()+"Z",
+        }
+
+        if not PAYMOB_SECRET_KEY:
+            # No payment configured — still record the request so admin can
+            # follow up manually, matching the "coming soon" card path.
+            booking["status"] = "pending_manual_followup"
+            booking_ref.set(booking)
+            return jsonify({"ok": True, "booking_id": booking_ref.id,
+                             "payment": None,
+                             "note": "PayMob not configured — booking recorded for manual follow-up"}), 200
+
+        headers   = {"Content-Type": "application/json"}
+        auth_resp = req.post("https://accept.paymob.com/api/auth/tokens",
+                              json={"api_key": PAYMOB_SECRET_KEY}, headers=headers, timeout=15)
+        auth_resp.raise_for_status()
+        auth_token = auth_resp.json().get("token")
+        if not auth_token:
+            return jsonify({"error": "PayMob auth failed"}), 502
+
+        order_resp = req.post("https://accept.paymob.com/api/ecommerce/orders",
+                               json={"auth_token": auth_token, "delivery_needed": False,
+                                     "amount_cents": amount_cents, "currency": currency,
+                                     "merchant_order_id": f"PAI-BOOK-{g.uid}-{booking_ref.id}-{int(time.time())}",
+                                     "items": [{"name": f"Session with {therapist.get('name','Therapist')}",
+                                                "amount_cents": amount_cents,
+                                                "description": f"PostureAI Marketplace — physiotherapy session booking",
+                                                "quantity": 1}]},
+                               headers=headers, timeout=15)
+        order_resp.raise_for_status()
+        order_id = order_resp.json().get("id")
+
+        pk_resp = req.post("https://accept.paymob.com/api/acceptance/payment_keys",
+                            json={"auth_token": auth_token, "amount_cents": amount_cents,
+                                  "expiration": 3600, "order_id": order_id, "currency": currency,
+                                  "integration_id": PAYMOB_INTEGRATIONS.get("card", ""),
+                                  "billing_data": {"email": billing_data.get("email","NA"),
+                                                   "first_name": billing_data.get("first_name","Customer"),
+                                                   "last_name": billing_data.get("last_name",""),
+                                                   "phone_number": billing_data.get("phone_number","NA"),
+                                                   "apartment":"NA","floor":"NA","street":"NA",
+                                                   "building":"NA","shipping_method":"NA",
+                                                   "postal_code":"NA","city":"Cairo","country":"EG","state":"Cairo"}},
+                            headers=headers, timeout=15)
+        pk_resp.raise_for_status()
+        payment_key = pk_resp.json().get("token")
+
+        booking["paymob_order_id"] = order_id
+        booking_ref.set(booking)
+
+        iframe_id = PAYMOB_IFRAME_ID if 'PAYMOB_IFRAME_ID' in globals() else os.getenv("PAYMOB_IFRAME_ID", "")
+        return jsonify({
+            "ok": True,
+            "booking_id": booking_ref.id,
+            "payment": {
+                "payment_key": payment_key,
+                "iframe_url": f"https://accept.paymob.com/api/acceptance/iframes/{iframe_id}?payment_token={payment_key}" if iframe_id else None,
+            }
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/bookings", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def marketplace_my_bookings():
+    try:
+        db   = firestore.client()
+        docs = db.collection("marketplace_bookings").where("user_id", "==", g.uid).order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        ).get()
+        return jsonify({"bookings": [{**d.to_dict(), "id": d.id} for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
 
 
 
