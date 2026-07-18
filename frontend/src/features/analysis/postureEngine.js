@@ -745,7 +745,7 @@ function analyzeShoulderLevel(lms, W, H, prop, calib = null) {
   // Signed: positive = right shoulder higher
   const signed   = (prop.rSh.y - prop.lSh.y) > 0 ? angle : -angle;
 
-  return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 90, reliable: true };
+  return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 90, reliable: true, personalised:t.personalised };
 }
 
 function analyzeSpineLean(lms, W, H, prop, roundedScore, calib = null) {
@@ -771,7 +771,7 @@ function analyzeSpineLean(lms, W, H, prop, roundedScore, calib = null) {
   return { angle: Math.round(angle), score, severity, confidence: 88, reliable: true, personalised:t.personalised };
 }
 
-function analyzeRoundedShoulders(lms, prop, H) {
+function analyzeRoundedShoulders(lms, prop, H, calib = null) {
   if (!prop.shOK) return { depth: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
   const g = i => lms[i];
@@ -809,15 +809,21 @@ function analyzeRoundedShoulders(lms, prop, H) {
   const midShYpx  = prop.midSh.y; // already in pixels
   const elevRatio = (midShYpx - midEarYpx) / Math.max(prop.shWidthPx, 1);
 
-  // Upright anatomical ratio ≈ 0.52; shoulders creeping toward the ears
-  // (rounding/shrugging) shrinks it. Scale ×45 maps typical rounding
-  // (ratio 0.30–0.42) onto the existing 0–30 "depth" range and thresholds.
-  const NEUTRAL_RATIO = 0.52;
+  // Neutral ear-to-shoulder ratio is ANATOMY-dependent (neck length): a
+  // naturally short-necked user has a lower ratio and would read as
+  // permanently "rounded" against a fixed constant. Prefer the user's own
+  // calibrated neutral ratio; fall back to the population value ≈0.52.
+  // Rounding/shrugging shrinks the ratio; ×45 maps the deviation onto the
+  // existing 0–30 "depth" range and thresholds.
+  const NEUTRAL_RATIO = (typeof calib?.rounded_neutral === "number" && calib.rounded_neutral > 0.2 && calib.rounded_neutral < 1.0)
+    ? calib.rounded_neutral
+    : 0.52;
+  const personalised = NEUTRAL_RATIO !== 0.52;
   const deviation = Math.max(0, NEUTRAL_RATIO - elevRatio) * 45;
 
   const score    = scoreMetric(deviation, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
   const severity = classify(deviation, SEV.ROUNDED);
-  return { depth: Math.round(deviation * 10) / 10, asymmetry: 0, score, severity, confidence: 80, reliable: true };
+  return { depth: Math.round(deviation * 10) / 10, asymmetry: 0, score, severity, confidence: 80, reliable: true, personalised };
 }
 
 function analyzeFHP(lms, W, H, prop) {
@@ -1004,7 +1010,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // pass it directly to spine. On skip frames, use the cached value.
   let rounded, fhp, elbow, monitor;
   if (!skipExpensive || !analyzeMP._cachedRounded) {
-    rounded = analyzeRoundedShoulders(lms, prop, H);
+    rounded = analyzeRoundedShoulders(lms, prop, H, calib);
     fhp     = analyzeFHP(lms, W, H, prop);
     elbow   = analyzeElbow(lms, W, H);
     monitor = analyzeMonitorHeight(lms, W, H, distCm);
@@ -1137,7 +1143,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     calibrationStatus: quality.reason,
     // True when the postural angles were scored against the user's own
     // calibrated neutral rather than population defaults.
-    personalised: !!(calib?.tolerances) && (neck.personalised || shoulder.personalised || headTilt.personalised || spine.personalised),
+    personalised: !!(calib?.tolerances) && (neck.personalised || shoulder.personalised || headTilt.personalised || spine.personalised || rounded.personalised),
   };
 }
 
