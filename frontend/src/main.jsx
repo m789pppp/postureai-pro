@@ -61,16 +61,28 @@ if ("Notification" in window && Notification.permission === "default") {
 // ── Render ────────────────────────────────────────────────────────
 // Route /report/:token → SharedReportPage (public, no login)
 // All other paths → normal App
-const isSharedReport = window.location.pathname.startsWith("/report/");
+const path = window.location.pathname;
 
-if (isSharedReport) {
+const STANDALONE_ROUTES = {
+  "/product":     () => import("./ProductPage.jsx"),
+  "/solutions":   () => import("./SolutionsPage.jsx"),
+  "/pricing":     () => import("./PricingPageLP.jsx"),
+  "/how-it-works":() => import("./HowItWorksPage.jsx"),
+  "/faq":         () => import("./FAQPage.jsx"),
+};
+
+const standaloneLoader = STANDALONE_ROUTES[path];
+
+if (path.startsWith("/report/")) {
   import("./SharedReportPage.jsx").then(({ default: SharedReportPage }) => {
     createRoot(document.getElementById("root")).render(
-      <StrictMode>
-        <ErrorBoundary>
-          <SharedReportPage />
-        </ErrorBoundary>
-      </StrictMode>
+      <StrictMode><ErrorBoundary><SharedReportPage /></ErrorBoundary></StrictMode>
+    );
+  });
+} else if (standaloneLoader) {
+  standaloneLoader().then(({ default: Page }) => {
+    createRoot(document.getElementById("root")).render(
+      <StrictMode><ErrorBoundary><Page /></ErrorBoundary></StrictMode>
     );
   });
 } else {
