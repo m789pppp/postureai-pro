@@ -6958,6 +6958,7 @@ def sso_provision_user():
 
 # ── Announcements, Security Center, Feature Flags, Onboarding Analytics ─────────
 @app.route("/api/admin/feature-flags", methods=["GET", "POST", "PATCH"])
+@require_auth
 @require_admin
 @limiter.limit("30 per minute")
 def admin_feature_flags():
@@ -7081,6 +7082,7 @@ _onboarding_events: list = []
 
 
 @app.route("/api/admin/analytics/onboarding", methods=["GET"])
+@require_auth
 @require_admin
 @limiter.limit("20 per minute")
 def admin_onboarding_analytics():

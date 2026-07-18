@@ -362,7 +362,8 @@ function HealthDot({ ok, label, sub }) {
 }
 
 // ── MAIN DASHBOARD ─────────────────────────────────────────────────
-export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
+export function AdminDashboard({ adminProfile, cs, lang = "en", onBack,
+  onOpenSecurityCenter, onOpenFeatureFlags, onOpenOnboardingAnalytics }) {
   const [tab, setTab]           = useState("overview");
   const [users, setUsers]       = useState([]);
   const [payments, setPayments] = useState([]);
@@ -564,6 +565,9 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
               activeUsers={activeUsers} trialUsers={trialUsers}
               eliteUsers={eliteUsers} proUsers={proUsers}
               isAr={isAr} setTab={setTab} setPaySt={setPaySt}
+              onOpenSecurityCenter={onOpenSecurityCenter}
+              onOpenFeatureFlags={onOpenFeatureFlags}
+              onOpenOnboardingAnalytics={onOpenOnboardingAnalytics}
             />
           ) : tab === "users" ? (
             <UsersTab
@@ -599,7 +603,8 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack }) {
 }
 
 // ── Overview Tab ───────────────────────────────────────────────────
-function OverviewTab({ users, payments, health, totalRevenue, pendingPayments, activeUsers, trialUsers, eliteUsers, proUsers, isAr, setTab, setPaySt }) {
+function OverviewTab({ users, payments, health, totalRevenue, pendingPayments, activeUsers, trialUsers, eliteUsers, proUsers, isAr, setTab, setPaySt,
+  onOpenSecurityCenter, onOpenFeatureFlags, onOpenOnboardingAnalytics }) {
   const confirmedRev = payments.filter(p => p.status === "confirmed").reduce((a,p) => a+(p.amount||0), 0);
   const mrr = Math.round(confirmedRev / Math.max(1, new Set(payments.filter(p=>p.status==="confirmed").map(p=>fmt(p.created_at).slice(0,7))).size));
 
@@ -614,6 +619,23 @@ function OverviewTab({ users, payments, health, totalRevenue, pendingPayments, a
         <KpiCard label={isAr?"مشتركون نشطون":"Active Intelligence Users"} value={activeUsers} sub={`${eliteUsers} Elite · ${proUsers} Pro`} icon="✦" accent={TOKENS.blue} />
         <KpiCard label={isAr?"تجربة مجانية":"Trial Users"} value={trialUsers} sub="Active trials" icon="◷" accent={TOKENS.amber} />
       </div>
+
+      {/* Quick tools */}
+      {(onOpenSecurityCenter || onOpenFeatureFlags || onOpenOnboardingAnalytics) && (
+        <Card title={isAr ? "أدوات سريعة" : "Quick Tools"} style={{ padding:16 }}>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+            {onOpenSecurityCenter && (
+              <Btn variant="ghost" size="sm" onClick={onOpenSecurityCenter}>🔒 {isAr?"مركز الأمان":"Security Center"}</Btn>
+            )}
+            {onOpenFeatureFlags && (
+              <Btn variant="ghost" size="sm" onClick={onOpenFeatureFlags}>🚩 {isAr?"أعلام الميزات":"Feature Flags"}</Btn>
+            )}
+            {onOpenOnboardingAnalytics && (
+              <Btn variant="ghost" size="sm" onClick={onOpenOnboardingAnalytics}>📈 {isAr?"تحليلات الإعداد":"Onboarding Analytics"}</Btn>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Revenue chart */}
       <Card title={isAr?"الإيرادات (آخر 14 يوم)":"Revenue — last 14 days"}
