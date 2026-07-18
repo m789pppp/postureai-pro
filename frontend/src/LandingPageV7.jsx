@@ -978,12 +978,15 @@ function SocialProof({ lang }) {
               </span>
             </div>
             <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-              {[["🛡","ISO 27001\nAligned"],["🔒","AES-256\nEncryption"],["✅","GDPR\nReady"],["📷","On-device AI\nNo Video"]].map(([icon,text])=>(
-                <div key={text} style={{ display:"flex", alignItems:"center", gap:5,
-                  background:"rgba(59,130,246,.06)", border:"1px solid rgba(59,130,246,.15)",
-                  borderRadius:9, padding:"6px 10px" }}>
-                  <span style={{ fontSize:12 }}>{icon}</span>
-                  <span style={{ fontSize:10, color:"#60a5fa", fontWeight:600, lineHeight:1.3, whiteSpace:"pre-line", fontFamily:FONT_MONO }}>{text}</span>
+              {[["🛡","ISO 27001","Aligned"],["🔒","AES-256","Encryption"],["✅","GDPR","Ready"],["📷","On-device AI","No Video"]].map(([icon,t1,t2])=>(
+                <div key={t1} style={{ display:"flex", alignItems:"center", gap:7,
+                  background:"rgba(59,130,246,.07)", border:"1px solid rgba(59,130,246,.18)",
+                  borderRadius:10, padding:"7px 13px" }}>
+                  <span style={{ fontSize:14 }}>{icon}</span>
+                  <div>
+                    <div style={{ fontSize:11.5, color:"#60a5fa", fontWeight:700, lineHeight:1.2, fontFamily:FONT_MONO }}>{t1}</div>
+                    <div style={{ fontSize:10, color:"#3b82f6", lineHeight:1.2 }}>{t2}</div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1202,13 +1205,13 @@ function HowItWorks({ lang }) {
 function CaseStudies({ lang }) {
   const ar = lang === "ar";
   const cases = ar ? [
-    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52%", resultLabel:"غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي" },
-    { co:"بنك وطني", industry:"مصرفية", employees:"850", result:"↑23%", resultLabel:"رضا الموظفين", time:"3 أشهر", detail:"انتشار ممتاز: 94% معدل استخدام يومي" },
-    { co:"شركة تقنية ناشئة", industry:"تكنولوجيا", employees:"120", result:"↓38%", resultLabel:"شكاوى آلام الظهر", time:"4 أشهر", detail:"عائد استثمار 4.1× خلال السنة الأولى" },
+    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52%", resultLabel:"غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي", quote:"Corvus غيّر طريقة تفكيرنا في صحة الموظفين — من تكلفة لاستثمار", quoteName:"م. أحمد، مدير الموارد البشرية" },
+    { co:"بنك وطني", industry:"مصرفية", employees:"850", result:"↑23%", resultLabel:"رضا الموظفين", time:"3 أشهر", detail:"انتشار ممتاز: 94% معدل استخدام يومي", quote:"أسهل أداة أطلقناها على الإطلاق. الفريق استخدمها من اليوم الأول", quoteName:"ن. سعيد، مدير التقنية" },
+    { co:"شركة تقنية ناشئة", industry:"تكنولوجيا", employees:"120", result:"↓38%", resultLabel:"شكاوى آلام الظهر", time:"4 أشهر", detail:"عائد استثمار 4.1× خلال السنة الأولى", quote:"ROI واضح خلال 6 أسابيع. أوصي به لكل فريق remote", quoteName:"ي. حسن، المدير التنفيذي" },
   ] : [
-    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52%", resultLabel:"posture-related absences", time:"6 months", detail:"Saved $340K annually in physiotherapy costs" },
-    { co:"National Bank", industry:"Banking", employees:"850", result:"↑23%", resultLabel:"employee satisfaction", time:"3 months", detail:"Excellent adoption: 94% daily active rate" },
-    { co:"Tech Startup", industry:"Technology", employees:"120", result:"↓38%", resultLabel:"back pain complaints", time:"4 months", detail:"4.1× ROI in the first year" },
+    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52%", resultLabel:"posture-related absences", time:"6 months", detail:"Saved $340K annually in physiotherapy costs", quote:"Corvus changed how we think about employee health — from a cost to an investment.", quoteName:"A. Hassan, HR Director" },
+    { co:"National Bank", industry:"Banking", employees:"850", result:"↑23%", resultLabel:"employee satisfaction", time:"3 months", detail:"Excellent adoption: 94% daily active rate", quote:"Easiest tool we've ever rolled out. Team was using it from day one.", quoteName:"N. Said, CTO" },
+    { co:"Tech Startup", industry:"Technology", employees:"120", result:"↓38%", resultLabel:"back pain complaints", time:"4 months", detail:"4.1× ROI in the first year", quote:"Clear ROI within 6 weeks. I recommend it to every remote-first team.", quoteName:"Y. Hassan, CEO" },
   ];
 
   return (
@@ -1221,28 +1224,45 @@ function CaseStudies({ lang }) {
         <Stagger key={String(ar)} className="lp-cases-grid">
           {cases.map((c) => (
             <StaggerItem key={c.co}>
-              <div className="lp-lift" style={{ ...card(), height:"100%" }}>
+              <div className="lp-lift" style={{ ...card(), height:"100%", display:"flex", flexDirection:"column" }}>
                 <div style={{
                   background:"rgba(79,124,249,.08)", borderRadius:8,
                   padding:"5px 12px", fontSize:12.5, color:LPV7_TOKENS.indigo,
-                  fontWeight:500, display:"inline-block", marginBottom:18,
+                  fontWeight:500, display:"inline-block", marginBottom:14,
                 }}>{c.industry}</div>
-                <h3 style={{ fontSize:17.5, fontWeight:700, color:LPV7_TOKENS.text, margin:"0 0 6px", fontFamily:FONT_DISPLAY }}>
+                <h3 style={{ fontSize:17, fontWeight:700, color:LPV7_TOKENS.text, margin:"0 0 4px", fontFamily:FONT_DISPLAY }}>
                   {c.co}
                 </h3>
-                <div style={{ fontSize:13, color:LPV7_TOKENS.muted, marginBottom:22 }}>
+                <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginBottom:18 }}>
                   {c.employees} {ar ? "موظف" : "employees"} · {c.time}
                 </div>
                 <div style={{
-                  fontSize:"clamp(34px,3vw,42px)", fontWeight:700, color:LPV7_TOKENS.green, marginBottom:6,
+                  fontSize:"clamp(32px,2.8vw,40px)", fontWeight:700, color:LPV7_TOKENS.green, marginBottom:4,
                   fontFamily:FONT_MONO, lineHeight:1,
                 }}>{c.result}</div>
-                <div style={{ fontSize:14.5, color:LPV7_TOKENS.text, fontWeight:600, marginBottom:16 }}>
+                <div style={{ fontSize:14, color:LPV7_TOKENS.text, fontWeight:600, marginBottom:14 }}>
                   {c.resultLabel}
                 </div>
-                <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:0, paddingTop:16, borderTop:`1px solid ${LPV7_TOKENS.border}` }}>
+                <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:"0 0 16px", paddingTop:14, borderTop:`1px solid ${LPV7_TOKENS.border}` }}>
                   {c.detail}
                 </p>
+                {/* Quote */}
+                <div style={{ flex:1, background:"rgba(255,255,255,.025)", borderRadius:12, padding:"12px 14px", marginBottom:16, borderLeft:`3px solid ${LPV7_TOKENS.green}` }}>
+                  <p style={{ fontSize:13, color:LPV7_TOKENS.sub, lineHeight:1.6, margin:"0 0 8px", fontStyle:"italic" }}>"{c.quote}"</p>
+                  <span style={{ fontSize:11.5, color:LPV7_TOKENS.muted, fontWeight:600 }}>— {c.quoteName}</span>
+                </div>
+                {/* CTA */}
+                <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer"
+                  style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                    padding:"10px 0", borderRadius:10, fontSize:13.5, fontWeight:600,
+                    color:LPV7_TOKENS.indigo, border:`1px solid rgba(129,140,248,.25)`,
+                    background:"rgba(129,140,248,.06)", textDecoration:"none",
+                    transition:"background .2s, border-color .2s",
+                  }}
+                  onMouseEnter={e=>{ e.currentTarget.style.background="rgba(129,140,248,.12)"; e.currentTarget.style.borderColor="rgba(129,140,248,.4)"; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.background="rgba(129,140,248,.06)"; e.currentTarget.style.borderColor="rgba(129,140,248,.25)"; }}>
+                  {ar ? "احجز عرضاً مشابهاً ←" : "Get similar results →"}
+                </a>
               </div>
             </StaggerItem>
           ))}
