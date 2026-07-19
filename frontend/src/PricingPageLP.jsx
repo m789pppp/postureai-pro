@@ -39,7 +39,7 @@ const IND_PLANS = [
     price:{ egp:0, usd:0 }, period:"forever",
     desc:"Try Corvus with no commitment.",
     features:[
-      { t:"Posture sessions", v:"5 / month" },
+      { t:"Sessions / month", v:"5" },
       { t:"AI Coach messages", v:"5 / day" },
       { t:"Session history", v:"7 days" },
       { t:"Basic score dashboard", v:true },
@@ -50,32 +50,47 @@ const IND_PLANS = [
     cta:"Get started free", href:"/auth?mode=signup",
   },
   {
-    name:"Pro", color:"#4f7cf9", popular:true,
-    price:{ egp:149, usd:9 }, period:"month",
-    desc:"For individuals serious about posture health.",
+    name:"Basic", color:"#94a3b8", popular:false,
+    price:{ egp:199, usd:9.99 }, period:"month",
+    desc:"For individuals building better posture habits.",
     features:[
-      { t:"Posture sessions", v:"Unlimited" },
+      { t:"Sessions / month", v:"Unlimited" },
       { t:"AI Coach messages", v:"Unlimited" },
       { t:"Session history", v:"90 days" },
-      { t:"Full analytics dashboard", v:true },
-      { t:"Weekly progress reports", v:true },
-      { t:"Stretch program library", v:true },
+      { t:"Weekly reports", v:true },
+      { t:"Export CSV / PDF", v:true },
+      { t:"Stretch programs", v:false },
+      { t:"Priority support", v:false },
+    ],
+    cta:"Start 14-day trial", href:"/auth?mode=signup",
+  },
+  {
+    name:"Pro", color:"#4f7cf9", popular:true,
+    price:{ egp:399, usd:19.99 }, period:"month",
+    desc:"For individuals serious about posture health.",
+    features:[
+      { t:"Sessions / month", v:"Unlimited" },
+      { t:"AI Coach messages", v:"Unlimited" },
+      { t:"Session history", v:"90 days" },
+      { t:"Advanced AI insights", v:true },
+      { t:"Custom stretch programs", v:true },
+      { t:"Anomaly alerts", v:true },
       { t:"Priority support", v:true },
     ],
     cta:"Start 14-day trial", href:"/auth?mode=signup",
   },
   {
-    name:"Clinical", color:"#10d9a0", popular:false,
-    price:{ egp:299, usd:19 }, period:"month",
-    desc:"For physios and health professionals.",
+    name:"Elite", color:"#10d9a0", popular:false,
+    price:{ egp:699, usd:39.99 }, period:"month",
+    desc:"For power users and health professionals.",
     features:[
-      { t:"Posture sessions", v:"Unlimited" },
-      { t:"AI Coach messages", v:"Unlimited" },
-      { t:"Client management", v:"Up to 20" },
-      { t:"Clinical posture reports", v:true },
-      { t:"PDF export (patient files)", v:true },
-      { t:"Advanced analytics", v:true },
+      { t:"Everything in Pro", v:true },
+      { t:"Predictive AI", v:true },
+      { t:"Clinical PDF report", v:true },
+      { t:"Advanced calibration", v:true },
+      { t:"Session narrative", v:true },
       { t:"Early feature access", v:true },
+      { t:"Dedicated onboarding", v:true },
     ],
     cta:"Start 14-day trial", href:"/auth?mode=signup",
   },
@@ -85,7 +100,7 @@ const IND_PLANS = [
 const CO_PLANS = [
   {
     name:"Team", color:"#4f7cf9", popular:false,
-    price:{ egp:89, usd:5 }, period:"user / month", min:10,
+    price:{ egp:249, usd:5 }, period:"user / month", min:10,
     desc:"For teams of 10–100 employees.",
     features:[
       { t:"Employees", v:"10–100" },
@@ -101,7 +116,7 @@ const CO_PLANS = [
   },
   {
     name:"Business", color:"#818cf8", popular:true,
-    price:{ egp:129, usd:8 }, period:"user / month", min:10,
+    price:{ egp:399, usd:8 }, period:"user / month", min:10,
     desc:"For mid-size companies that need more control.",
     features:[
       { t:"Employees", v:"10–5,000" },
@@ -136,22 +151,22 @@ const CO_PLANS = [
 // ── Compare table data ────────────────────────────────────────────
 const COMPARE = [
   { cat:"Core Analysis", rows:[
-    ["Sessions / month","5","Unlimited","Unlimited"],
-    ["Landmark tracking","478","478","478"],
-    ["Session history","7 days","90 days","90 days"],
-    ["Confidence scoring","✓","✓","✓"],
+    ["Sessions / month","5","Unlimited","Unlimited","Unlimited"],
+    ["Landmark tracking","478","478","478","478"],
+    ["Session history","7 days","90 days","90 days","90 days"],
+    ["Confidence scoring","✓","✓","✓","✓"],
   ]},
   { cat:"AI Coach", rows:[
-    ["Daily AI messages","5","Unlimited","Unlimited"],
-    ["Scientific citations","✗","✓","✓"],
-    ["Personalised programs","✗","✓","✓"],
-    ["Progress tracking","✗","✓","✓"],
+    ["Daily AI messages","5/day","Unlimited","Unlimited","Unlimited"],
+    ["Scientific citations","✗","✗","✓","✓"],
+    ["Custom stretch programs","✗","✗","✓","✓"],
+    ["Predictive AI","✗","✗","✗","✓"],
   ]},
-  { cat:"Reports", rows:[
-    ["Weekly reports","✗","✓","✓"],
-    ["PDF export","✗","✓","✓"],
-    ["Clinical format","✗","✗","✓"],
-    ["Client management","✗","✗","Up to 20"],
+  { cat:"Reports & Export", rows:[
+    ["Weekly reports","✗","✓","✓","✓"],
+    ["CSV / PDF export","✗","✓","✓","✓"],
+    ["Advanced AI insights","✗","✗","✓","✓"],
+    ["Clinical PDF report","✗","✗","✗","✓"],
   ]},
 ];
 
@@ -291,11 +306,11 @@ export default function PricingPageStandalone() {
       <style>{`
         body { background:#030b14; }
         .pr-wrap { max-width:1120px; margin:0 auto; padding:0 40px; }
-        .pr-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; align-items:start; }
-        .pr-compare-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; }
+        .pr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; align-items:start; }
+        .pr-compare-grid { display:grid; grid-template-columns:1.6fr 1fr 1fr 1fr 1fr; }
         @media(max-width:960px){
-          .pr-grid { grid-template-columns:1fr !important; max-width:420px; margin:0 auto; }
-          .pr-compare-grid { grid-template-columns:1.5fr 1fr 1fr 1fr; }
+          .pr-grid { grid-template-columns:1fr 1fr !important; max-width:720px; margin:0 auto; }
+          .pr-compare-grid { grid-template-columns:1.4fr 1fr 1fr 1fr 1fr; }
         }
         @media(max-width:700px){
           .pr-wrap { padding:0 20px; }
@@ -425,8 +440,8 @@ export default function PricingPageStandalone() {
                 background:"rgba(255,255,255,.025)", borderBottom:"1px solid rgba(148,163,184,.07)" }}>
                 <div style={{ padding:"18px 28px", fontSize:11.5, color:T.muted,
                   fontWeight:700, fontFamily:FM, textTransform:"uppercase", letterSpacing:".1em" }}>Feature</div>
-                {["Free","Pro","Clinical"].map((p,i)=>(
-                  <div key={p} style={{ padding:"18px 20px", textAlign:"center",
+                {["Free","Basic","Pro","Elite"].map((p,i)=>(
+                  <div key={p} style={{ padding:"18px 16px", textAlign:"center",
                     fontSize:14, fontWeight:800, color:IND_PLANS[i].color, fontFamily:FD }}>
                     {p}
                   </div>
@@ -450,7 +465,7 @@ export default function PricingPageStandalone() {
                     onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                       <div style={{ padding:"15px 28px", fontSize:14, color:T.sub }}>{label}</div>
                       {vals.map((v,vi)=>(
-                        <div key={vi} style={{ padding:"15px 20px", textAlign:"center" }}>
+                        <div key={vi} style={{ padding:"15px 16px", textAlign:"center" }}>
                           <Check val={v} color={IND_PLANS[vi].color}/>
                         </div>
                       ))}
