@@ -4846,6 +4846,53 @@ async function downloadPDF(sessionOverride, isClinical=false){
               shows in the on-video panel header and in the left column ring.) */}
         </div>
 
+        {/* Primary control — placed directly under the camera so Start / Stop
+            is always visible without scrolling past the metrics list. */}
+        <div style={{padding:"12px 14px 0"}}>
+          {!camActive
+            ? <button
+                onClick={cameraStatus==="no-device"||cameraStatus==="denied" ? undefined : startCamera}
+                disabled={cameraStatus==="requesting"}
+                style={{
+                  width:"100%",
+                  background: cameraStatus==="no-device"||cameraStatus==="denied"
+                    ? "rgba(239,68,68,.15)"
+                    : cameraStatus==="requesting"
+                    ? "rgba(148,163,184,.1)"
+                    : `linear-gradient(135deg,${TN?.color||"#1a56db"},${TN?.colorDim||"#0891b2"})`,
+                  border: cameraStatus==="no-device"||cameraStatus==="denied" ? "1px solid rgba(239,68,68,.4)" : "none",
+                  borderRadius:12, padding:"14px 0",
+                  fontSize:14, fontWeight:800,
+                  color: cameraStatus==="no-device"||cameraStatus==="denied" ? "#fca5a5"
+                    : cameraStatus==="requesting" ? cs.muted : "#fff",
+                  cursor: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied" ? "not-allowed" : "pointer",
+                  boxShadow: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied"
+                    ? "none" : `0 4px 20px ${TN?.color||"#1a56db"}50`,
+                  letterSpacing:"-.01em",
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                }}>
+                {cameraStatus==="requesting"
+                  ? <><span style={{animation:"spin 700ms linear infinite",display:"inline-block"}}>⟳</span> {isAr?"جاري الفتح...":"Opening camera..."}</>
+                  : cameraStatus==="denied"
+                  ? (isAr?"❌ الكاميرا محظورة — اسمح من الإعدادات":"❌ Camera blocked — allow in settings")
+                  : cameraStatus==="no-device"
+                  ? (isAr?"❌ لا توجد كاميرا":"❌ No camera found")
+                  : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
+              </button>
+            : <button onClick={stopCamera} style={{
+                width:"100%",
+                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                color:"#fca5a5",
+                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
+                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
+                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
+                letterSpacing:"-.01em",
+              }}>
+                {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
+              </button>
+          }
+        </div>
+
         {/* Score ring + user */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           {/* User row */}
@@ -5149,50 +5196,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
         )}
 
-        {/* Main controls */}
+        {/* Secondary controls (primary Start/Stop moved up under the camera) */}
         <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
-          {!camActive
-            ? <button
-                onClick={cameraStatus==="no-device"||cameraStatus==="denied" ? undefined : startCamera}
-                disabled={cameraStatus==="requesting"}
-                style={{
-                  width:"100%",
-                  background: cameraStatus==="no-device"||cameraStatus==="denied"
-                    ? "rgba(239,68,68,.15)"
-                    : cameraStatus==="requesting"
-                    ? "rgba(148,163,184,.1)"
-                    : `linear-gradient(135deg,${TN?.color||"#1a56db"},${TN?.colorDim||"#0891b2"})`,
-                  border: cameraStatus==="no-device"||cameraStatus==="denied" ? "1px solid rgba(239,68,68,.4)" : "none",
-                  borderRadius:12, padding:"14px 0",
-                  fontSize:14, fontWeight:800,
-                  color: cameraStatus==="no-device"||cameraStatus==="denied" ? "#fca5a5"
-                    : cameraStatus==="requesting" ? cs.muted : "#fff",
-                  cursor: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied" ? "not-allowed" : "pointer",
-                  boxShadow: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied"
-                    ? "none" : `0 4px 20px ${TN?.color||"#1a56db"}50`,
-                  letterSpacing:"-.01em",
-                  display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-                }}>
-                {cameraStatus==="requesting"
-                  ? <><span style={{animation:"spin 700ms linear infinite",display:"inline-block"}}>⟳</span> {isAr?"جاري الفتح...":"Opening camera..."}</>
-                  : cameraStatus==="denied"
-                  ? (isAr?"❌ الكاميرا محظورة — اسمح من الإعدادات":"❌ Camera blocked — allow in settings")
-                  : cameraStatus==="no-device"
-                  ? (isAr?"❌ لا توجد كاميرا":"❌ No camera found")
-                  : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
-              </button>
-            : <button onClick={stopCamera} style={{
-                width:"100%",
-                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
-                color:"#fca5a5",
-                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
-                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
-                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
-                letterSpacing:"-.01em",
-              }}>
-                {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
-              </button>
-          }
           {/* Alert sound + Elite voice coach toggles */}
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setSound(s=>!s)} style={{
