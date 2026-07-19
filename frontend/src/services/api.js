@@ -305,6 +305,9 @@ export const MarketplaceAPI = {
   /** Booking-scoped chat: patient (owner) or admin can read/post. */
   getMessages:  (bookingId)       => apiFetch(`/marketplace/bookings/${bookingId}/messages`),
   sendMessage:  (bookingId, text) => apiFetch(`/marketplace/bookings/${bookingId}/messages`, { method: "POST", body: { text } }),
+
+  /** Patient cancels their own booking. */
+  cancelBooking: (bookingId) => apiFetch(`/marketplace/bookings/${bookingId}/cancel`, { method: "POST" }),
 };
 
 export const AdminAPI = {
