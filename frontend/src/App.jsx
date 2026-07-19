@@ -2591,20 +2591,6 @@ export default function App(){
     return () => window.removeEventListener('spa:navigate', handler);
   }, []);
 
-  // Keep the analysis loop bound to the latest state. runLoop is a
-  // useCallback whose identity changes when mode / sound / faceBlur / calib
-  // change; without this, the self-rescheduling requestAnimationFrame keeps
-  // running the closure captured at session start and silently ignores
-  // mid-session changes (camera-mode switch, face-blur toggle, sound). This
-  // rebinds the RAF to the fresh closure whenever it changes. Buffers live in
-  // refs, so restarting a frame is harmless.
-  useEffect(() => {
-    if(!camActive) return;
-    if(rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(runLoop);
-    return () => { if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; } };
-  }, [runLoop, camActive]);
-
   // Cleanup on unmount — stop camera, cancel animation loop, release stream
   useEffect(() => {
     return () => {
@@ -2910,6 +2896,21 @@ export default function App(){
     }
     rafRef.current=requestAnimationFrame(runLoop);
   },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus,faceBlur]);
+
+  // Keep the analysis loop bound to the latest state. runLoop is a useCallback
+  // whose identity changes when mode / sound / faceBlur / calib change; without
+  // this, the self-rescheduling requestAnimationFrame keeps running the closure
+  // captured at session start and silently ignores mid-session changes (camera-
+  // mode switch, face-blur toggle, sound). Rebinds the RAF to the fresh closure
+  // whenever it changes. Buffers live in refs, so restarting a frame is harmless.
+  // NOTE: must be declared AFTER runLoop — its dep array reads runLoop, which
+  // is in the temporal dead zone until the useCallback above initialises it.
+  useEffect(() => {
+    if(!camActive) return;
+    if(rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(runLoop);
+    return () => { if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; } };
+  }, [runLoop, camActive]);
 
   async function startCamera(){
     // Health consent gate — block the very first analysis until the user has
