@@ -16449,6 +16449,53 @@ def marketplace_my_bookings():
         return safe_error(e)
 
 
+@app.route("/api/marketplace/bookings/<booking_id>/cancel", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def marketplace_cancel_booking(booking_id):
+    """Patient cancels their own booking. Works at any status except an
+    already-cancelled one. Cancelling an already-confirmed (paid) booking
+    is still allowed here — refunds aren't automated, so it's flagged for
+    admin follow-up rather than silently vanishing with money already
+    charged and no record of the cancellation request."""
+    try:
+        db   = firestore.client()
+        bref = db.collection("marketplace_bookings").document(booking_id)
+        bdoc = bref.get()
+        if not bdoc.exists:
+            return jsonify({"error": "booking not found"}), 404
+        booking = bdoc.to_dict()
+        if booking.get("user_id") != g.uid:
+            return jsonify({"error": "forbidden"}), 403
+        if booking.get("status") == "cancelled":
+            return jsonify({"ok": True, "note": "already cancelled"}), 200
+
+        was_paid = booking.get("status") == "confirmed"
+        bref.update({
+            "status": "cancelled",
+            "cancelled_at": datetime.utcnow().isoformat()+"Z",
+            "needs_refund_review": was_paid,
+        })
+        if was_paid:
+            amount_egp = (booking.get("amount_cents") or 0) / 100
+            html = f"""
+            <div style="font-family:Arial,sans-serif;max-width:480px;background:#fff;border-radius:10px;padding:24px">
+              <h2 style="color:#dc2626;margin-bottom:16px">🔁 Booking Cancelled — Refund Review Needed</h2>
+              <table style="width:100%;border-collapse:collapse">
+                <tr><td style="padding:6px 0;color:#666">Booking ID</td><td style="font-family:monospace">{booking_id}</td></tr>
+                <tr><td style="padding:6px 0;color:#666">Therapist</td><td style="font-weight:600">{booking.get("therapist_name","—")}</td></tr>
+                <tr><td style="padding:6px 0;color:#666">Amount paid</td><td style="font-weight:700;color:#dc2626;font-size:18px">{amount_egp:,.2f} {booking.get("currency","EGP")}</td></tr>
+              </table>
+              <div style="margin-top:20px;padding:12px;background:#fee2e2;border-radius:8px;font-size:13px">
+                ⚠️ This booking was already paid before the patient cancelled it. Refunds aren't automated — please process manually via PayMob and update the booking record.
+              </div>
+            </div>"""
+            send_email(ADMIN_EMAIL, f"🔁 Booking cancelled after payment — refund needed ({booking_id})", html)
+        return jsonify({"ok": True, "refund_pending": was_paid})
+    except Exception as e:
+        return safe_error(e)
+
+
 def _booking_chat_access_ok(booking_data):
     """Booking owner (patient) or a platform admin can read/post — not
     open to other patients, and not gated behind require_admin since
