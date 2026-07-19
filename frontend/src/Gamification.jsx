@@ -4,6 +4,120 @@ import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "./services/api.js";
 const API = API_BASE_URL;
 
+// ── Season boundaries (calendar quarter) ───────────────────────────
+// Seasons are simply calendar quarters — no new backend/DB schema needed,
+// deterministic from any date. Verified in isolation: Q1=Jan-Mar,
+// Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec, with correct elapsed/remaining days
+// including on quarter boundaries.
+export function getCurrentSeason(now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const qIndex = Math.floor(m / 3);
+  const qStartMonth = qIndex * 3;
+  const start = new Date(y, qStartMonth, 1, 0, 0, 0, 0);
+  const end = new Date(y, qStartMonth + 3, 0, 23, 59, 59, 999);
+  const totalDays = Math.round((end - start) / 86400000) + 1;
+  const daysElapsed = Math.min(totalDays, Math.floor((now - start) / 86400000) + 1);
+  const daysRemaining = Math.max(0, Math.round((end - now) / 86400000));
+  const quarterLabel = ["Q1","Q2","Q3","Q4"][qIndex];
+  return { name: `${quarterLabel} ${y}`, start, end, totalDays, daysElapsed, daysRemaining };
+}
+
+// Individual, achievable reward tiers based on this season's real activity —
+// not a fabricated ranking against other users we can't honestly compute
+// client-side (that would need per-employee session-date history we don't
+// have loaded). Thresholds are intentionally modest early-season and
+// tougher for Gold, mirroring the existing Bronze/Silver/Gold badge language
+// already used elsewhere in the app.
+const SEASON_TIERS = [
+  { id:"bronze", icon:"🥉", minSessions:5,  minAvg:0,  label:{en:"Bronze",ar:"برونزي"} },
+  { id:"silver", icon:"🥈", minSessions:15, minAvg:65, label:{en:"Silver",ar:"فضي"} },
+  { id:"gold",   icon:"🥇", minSessions:30, minAvg:75, label:{en:"Gold",ar:"ذهبي"} },
+];
+
+export function SeasonProgress({ sessions, cs, lang = "en" }) {
+  const DARK = cs || { border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", card: "#05101f" };
+  const isAr = lang === "ar";
+  const season = getCurrentSeason();
+
+  const seasonSessions = (sessions || []).filter(s => {
+    const d = s.created_at?.toDate?.() || new Date(s.created_at || 0);
+    return d >= season.start && d <= season.end;
+  });
+  const seasonCount = seasonSessions.length;
+  const seasonAvg = seasonCount
+    ? Math.round(seasonSessions.reduce((a, s) => a + (s.avg_score || 0), 0) / seasonCount)
+    : 0;
+
+  const currentTierIdx = SEASON_TIERS.reduce((acc, tier, i) =>
+    (seasonCount >= tier.minSessions && seasonAvg >= tier.minAvg) ? i : acc, -1);
+  const nextTier = SEASON_TIERS[currentTierIdx + 1];
+
+  const progressPct = Math.min(100, Math.round((season.daysElapsed / season.totalDays) * 100));
+
+  const t = isAr
+    ? { title:"الموسم الحالي", daysLeft:"يوم متبقي", sessionsThisSeason:"جلسات هذا الموسم", seasonAvg:"متوسط الموسم",
+        yourTier:"مستواك الحالي", none:"لسه مفيش", nextTier:"للمستوى التالي", need:"محتاج" }
+    : { title:"Current Season", daysLeft:"days left", sessionsThisSeason:"Sessions this season", seasonAvg:"Season avg",
+        yourTier:"Your tier", none:"None yet", nextTier:"Next tier", need:"Need" };
+
+  return (
+    <div>
+      {/* Season header */}
+      <div style={{ background:"linear-gradient(135deg,rgba(99,102,241,.1),rgba(34,211,238,.06))",
+        border:"0.5px solid rgba(99,102,241,.25)", borderRadius:12, padding:"14px 16px", marginBottom:16 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:DARK.text }}>🗓️ {t.title} — {season.name}</div>
+          <div style={{ fontSize:11, color:"#a5b4fc", fontWeight:600 }}>{season.daysRemaining} {t.daysLeft}</div>
+        </div>
+        <div style={{ background:"rgba(148,163,184,.12)", borderRadius:99, height:5, overflow:"hidden" }}>
+          <div style={{ height:"100%", borderRadius:99, width:`${progressPct}%`, background:"linear-gradient(90deg,#6366f1,#22d3ee)", transition:"width .8s ease" }} />
+        </div>
+      </div>
+
+      {/* Season stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+        <div style={{ background:"rgba(148,163,184,.04)", border:`0.5px solid ${DARK.border}`, borderRadius:10, padding:"12px 14px" }}>
+          <div style={{ fontSize:20, fontWeight:800, color:DARK.text }}>{seasonCount}</div>
+          <div style={{ fontSize:10, color:DARK.muted, marginTop:2 }}>{t.sessionsThisSeason}</div>
+        </div>
+        <div style={{ background:"rgba(148,163,184,.04)", border:`0.5px solid ${DARK.border}`, borderRadius:10, padding:"12px 14px" }}>
+          <div style={{ fontSize:20, fontWeight:800, color: seasonAvg>=75?"#10b981":seasonAvg>=50?"#f59e0b":DARK.text }}>{seasonCount ? seasonAvg : "—"}</div>
+          <div style={{ fontSize:10, color:DARK.muted, marginTop:2 }}>{t.seasonAvg}</div>
+        </div>
+      </div>
+
+      {/* Tiers */}
+      <div style={{ fontSize:11, fontWeight:600, color:DARK.muted, marginBottom:8 }}>{t.yourTier}</div>
+      <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+        {SEASON_TIERS.map((tier, i) => {
+          const earned = i <= currentTierIdx;
+          return (
+            <div key={tier.id} style={{
+              flex:1, textAlign:"center", padding:"10px 8px", borderRadius:10,
+              background: earned ? "rgba(99,102,241,.1)" : "rgba(148,163,184,.04)",
+              border:`0.5px solid ${earned ? "rgba(99,102,241,.3)" : DARK.border}`,
+              opacity: earned ? 1 : 0.5,
+            }}>
+              <div style={{ fontSize:20, marginBottom:2, filter: earned ? "none" : "grayscale(1)" }}>{tier.icon}</div>
+              <div style={{ fontSize:10, fontWeight:600, color:DARK.text }}>{tier.label[lang]||tier.label.en}</div>
+              <div style={{ fontSize:8.5, color:DARK.muted, marginTop:2 }}>{tier.minSessions}+ · {tier.minAvg||0}+</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {nextTier && (
+        <div style={{ fontSize:11, color:DARK.muted, background:"rgba(148,163,184,.04)", borderRadius:8, padding:"8px 12px" }}>
+          {t.need}: {Math.max(0, nextTier.minSessions - seasonCount)} {isAr?"جلسة كمان":"more sessions"}
+          {nextTier.minAvg > 0 && seasonAvg < nextTier.minAvg ? ` · ${isAr?"ومتوسط":"and avg"} ${nextTier.minAvg}+` : ""}
+          {" "}{t.nextTier}: {nextTier.label[lang]||nextTier.label.en} {nextTier.icon}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── XP Level colors ───────────────────────────────────────────────
 const LEVEL_COLORS = [
   "#64748b","#3b82f6","#10b981","#f59e0b",
@@ -279,7 +393,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
   const [tab, setTab]         = useState("progress");
 
   const DARK = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
-  const T = { en: { progress: "My Progress", achievements: "Achievements", heatmap: "Heatmap", leaderboard: "Leaderboard" }, ar: { progress: "تقدمي", achievements: "الإنجازات", heatmap: "الخريطة الحرارية", leaderboard: "لوحة الشرف" } };
+  const T = { en: { progress: "My Progress", achievements: "Achievements", heatmap: "Heatmap", leaderboard: "Leaderboard", season: "Season" }, ar: { progress: "تقدمي", achievements: "الإنجازات", heatmap: "الخريطة الحرارية", leaderboard: "لوحة الشرف", season: "الموسم" } };
   const t = T[lang] || T.en;
 
   useEffect(() => {
@@ -297,8 +411,8 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
     }).then(d => setGamData(d)).catch(() => {}).finally(() => setLoading(false));
   }, [profile, sessions, calibration]);
 
-  const TABS = [t.progress, t.achievements, t.heatmap, t.leaderboard];
-  const KEYS = ["progress", "achievements", "heatmap", "leaderboard"];
+  const TABS = [t.progress, t.achievements, t.season, t.heatmap, t.leaderboard];
+  const KEYS = ["progress", "achievements", "season", "heatmap", "leaderboard"];
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9300, backdropFilter: "blur(8px)" }}>
@@ -360,6 +474,8 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
             </div>
           ) : tab === "heatmap" ? (
             <PostureHeatmap sessions={sessions} cs={DARK} lang={lang} />
+          ) : tab === "season" ? (
+            <SeasonProgress sessions={sessions} cs={DARK} lang={lang} />
           ) : tab === "leaderboard" ? (
             <Leaderboard employees={employees || []} companyName={profile?.company || "Your Company"} cs={DARK} lang={lang} />
           ) : null}
