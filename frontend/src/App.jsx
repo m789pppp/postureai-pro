@@ -5326,8 +5326,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         )}
 
-        {/* Company setup nudge */}
-        {profile&&!profile.company_id&&(profile.tier==="professional"||profile.tier==="elite")&&(
+        {/* Company setup nudge — only for accounts that signed up as a
+            company/HR account and haven't finished linking to their org yet,
+            not individual paying customers on Pro/Elite */}
+        {profile&&profile.acct_type==="company"&&profile.user_type!=="employee"&&!profile.company_id&&(
           <div style={{margin:"10px 14px",background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.15)",borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
             <span style={{fontSize:11,color:cs.muted}}>🏢 {isAr?"إعداد مساحة الشركة":"Set up company workspace"}</span>
             <button onClick={()=>setShowCompanyOnboard(true)}
