@@ -63,6 +63,7 @@ import ChangePasswordPage    from "./ChangePasswordPage.jsx";
 import TrialExpiredPage      from "./TrialExpiredPage.jsx";
 import HomePage from "./HomePage.jsx";
 import BreakPage from "./BreakPage.jsx";
+import { drawFaceBlur } from "./lib/faceBlur.js";
 import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
@@ -2139,6 +2140,7 @@ export default function App(){
   const[sound,setSound]=useState(true);
   // Elite voice coach — persisted preference; actual enablement is tier-gated below
   const[voiceCoach,setVoiceCoach]=useState(()=>{try{return localStorage.getItem("corvus_voice_coach")==="1";}catch{return false;}});
+  const[faceBlur,setFaceBlur]=useState(()=>{try{return localStorage.getItem("corvus_face_blur")==="1";}catch{return false;}});
   const playPostureAlert=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();[440,360].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=f;g.gain.setValueAtTime(0,ac.currentTime+i*.32);g.gain.linearRampToValueAtTime(.14,ac.currentTime+i*.32+.06);g.gain.linearRampToValueAtTime(0,ac.currentTime+i*.32+.3);o.start();o.stop(ac.currentTime+i*.32+.35);});}catch{}}; // local fallback
   const[sessionId,setSessionId]=useState(null);
   const[aiInsight,setAiInsight]=useState(null);
@@ -2589,6 +2591,20 @@ export default function App(){
     return () => window.removeEventListener('spa:navigate', handler);
   }, []);
 
+  // Keep the analysis loop bound to the latest state. runLoop is a
+  // useCallback whose identity changes when mode / sound / faceBlur / calib
+  // change; without this, the self-rescheduling requestAnimationFrame keeps
+  // running the closure captured at session start and silently ignores
+  // mid-session changes (camera-mode switch, face-blur toggle, sound). This
+  // rebinds the RAF to the fresh closure whenever it changes. Buffers live in
+  // refs, so restarting a frame is harmless.
+  useEffect(() => {
+    if(!camActive) return;
+    if(rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(runLoop);
+    return () => { if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; } };
+  }, [runLoop, camActive]);
+
   // Cleanup on unmount — stop camera, cancel animation loop, release stream
   useEffect(() => {
     return () => {
@@ -2716,6 +2732,8 @@ export default function App(){
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
+            // Privacy: pixelate the face first so the skeleton draws on top of it.
+            if(faceBlur) drawFaceBlur(ctx,vid,lms,W,H);
             if(mode==="side")drawSide(ctx,finalResult,W,H,isAr);else drawFront(ctx,finalResult,W,H,isAr);
             const now=Date.now();
 
@@ -2891,7 +2909,7 @@ export default function App(){
         }).catch(e=>{ clearTimeout(_tmr); /* silent fail — local analysis continues */ });
     }
     rafRef.current=requestAnimationFrame(runLoop);
-  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus]);
+  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus,faceBlur]);
 
   async function startCamera(){
     // Health consent gate — block the very first analysis until the user has
@@ -4133,7 +4151,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     `}</style>
     <div dir={dir} style={{
       display:"grid",
-      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "440px 1fr" : "1fr 440px"),
+      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
       minHeight:"100vh",
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
@@ -5281,6 +5299,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {!tierAtLeast(effectiveTier,"elite")&&<span style={{fontSize:8,background:"rgba(16,185,129,.12)",border:"1px solid rgba(16,185,129,.25)",borderRadius:99,padding:"1px 6px",color:"#10b981"}}>ELITE</span>}
             </button>
           </div>
+          {/* Privacy: face blur toggle — pixelates the face on the analysis view */}
+          <button onClick={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }} style={{
+            background:faceBlur?"rgba(99,102,241,.12)":"rgba(255,255,255,.04)",
+            border:`1px solid ${faceBlur?"rgba(99,102,241,.4)":cs.border}`,borderRadius:9,
+            padding:"8px 0",fontSize:11,fontWeight:700,color:faceBlur?"#a5b4fc":cs.muted,cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+          }}>
+            {faceBlur?"🕶️":"👤"} {isAr?(faceBlur?"إخفاء الوجه: مُفعّل":"إخفاء الوجه (خصوصية)"):(faceBlur?"Face blur: ON":"Blur face (privacy)")}
+          </button>
           {histRef.current?.length>0&&(
 <button onClick={async ()=>{
               // Same canonical gate — third direct generateSessionPDF() call that bypassed it.
