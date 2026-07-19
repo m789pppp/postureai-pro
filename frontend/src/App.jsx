@@ -571,7 +571,9 @@ function drawFront(ctx,res,W,H,isAr=false){
   // Shoulder tilt angle
   if(valid(lm.lSh)&&valid(lm.rSh)){
     const[lx,ly]=px(lm.lSh),[rx,ry]=px(lm.rSh);
-    const tiltAng=Math.round(Math.abs(Math.atan2(ry-ly,rx-lx)*180/Math.PI));
+    // Prefer the engine's shoulder-tilt value so the on-video label matches
+    // the metrics panel instead of showing a separately-computed angle.
+    const tiltAng=metrics?.shoulder_level?.value ?? Math.round(Math.abs(Math.atan2(ry-ly,rx-lx)*180/Math.PI));
     const mx=(lx+rx)/2, my=(ly+ry)/2-14;
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(mx-20,my-12,42,16);
     ctx.fillStyle=shCol; ctx.fillText(`${tiltAng}°`,mx-18,my);
@@ -579,7 +581,7 @@ function drawFront(ctx,res,W,H,isAr=false){
 
   // Screen distance
   if(raw?.distCm){
-    const dc=raw.distCm>=raw.idealDistLo&&raw.distCm<=raw.idealDistHi?"#10b981":raw.distCm>=(raw.idealDistLo-15)?"#f59e0b":"#ef4444";
+    const dc=raw.distCm>=raw.lo&&raw.distCm<=raw.hi?"#10b981":raw.distCm>=(raw.lo-15)?"#f59e0b":"#ef4444";
     const[sx,sy]=px(lm.midEar||{x:.5,y:.1});
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(W-62,H-26,58,18);
     ctx.fillStyle=dc; ctx.font="bold 11px system-ui";
@@ -676,7 +678,7 @@ function drawFront(ctx,res,W,H,isAr=false){
     { label:isAr?"الرقبة":"Neck",     col:neckCol, score:neckScore, val: metrics?.neck_lean?.value, unit:"°" },
     { label:isAr?"الكتفين":"Shoulder", col:shCol,   score:shScore,   val: metrics?.shoulder_level?.value, unit:"°" },
     { label:isAr?"الظهر":"Back",       col:backCol, score:backScore, val: metrics?.spine_lean?.value, unit:"°" },
-    { label:isAr?"المسافة":"Dist",     col:raw?.distCm>=raw?.idealDistLo&&raw?.distCm<=raw?.idealDistHi?"#10b981":raw?.distCm>=(raw?.idealDistLo-15)?"#f59e0b":"#ef4444",
+    { label:isAr?"المسافة":"Dist",     col:raw?.distCm>=raw?.lo&&raw?.distCm<=raw?.hi?"#10b981":raw?.distCm>=(raw?.lo-15)?"#f59e0b":"#ef4444",
       score: metrics?.screen_distance?.score ?? 90,
       val: raw?.distCm, unit:"cm" },
   ];
