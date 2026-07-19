@@ -488,8 +488,34 @@ function _angle3pt(a,b,c){
   return Math.round(Math.acos(Math.min(1,Math.max(-1,dot/mag)))*180/Math.PI);
 }
 
-function drawFront(ctx,res,W,H,isAr=false){
+// Pick the single most actionable correction cue from the current analysis —
+// the worst-scoring metric that's genuinely off — and phrase it as a direct,
+// directional instruction ("Raise screen to eye level") instead of a number.
+// Returns null when posture is fine so no cue is shown.
+function postureCue(analysis, isAr){
+  const m=analysis?.metrics; if(!m) return null;
+  const raw=analysis.raw||{};
+  const cands=[];
+  const add=(k,en,ar,icon)=>{ const sc=m[k]?.score; if(typeof sc==="number"&&sc<55&&m[k]?.reliable!==false) cands.push({sc,en,ar,icon}); };
+  add("fhp_index","Tuck your chin back","أدخل ذقنك للخلف","⟲");
+  add("neck_lean","Raise screen to eye level","ارفع الشاشة لمستوى عينك","↑");
+  add("spine_lean","Sit up straight — support your back","اجلس مستقيماً واسند ظهرك","↑");
+  add("rounded_shoulders","Roll your shoulders back","افرد كتفيك للخلف","↔");
+  add("shoulder_level","Level your shoulders","سوِّ كتفيك","⇄");
+  add("head_tilt","Level your head","سوِّ رأسك","⟲");
+  if(typeof m.screen_distance?.score==="number" && m.screen_distance.score<55 && raw.distCm!=null && raw.lo!=null){
+    if(raw.distCm<raw.lo)      cands.push({sc:m.screen_distance.score,en:"Move back from the screen",ar:"ابعد عن الشاشة شوية",icon:"⟵"});
+    else if(raw.distCm>raw.hi) cands.push({sc:m.screen_distance.score,en:"Move closer to the screen",ar:"اقترب من الشاشة شوية",icon:"⟶"});
+  }
+  if(!cands.length) return null;
+  cands.sort((a,b)=>a.sc-b.sc);
+  const w=cands[0];
+  return { text:isAr?w.ar:w.en, icon:w.icon, col:w.sc<40?"#ef4444":"#f97316" };
+}
+
+function drawFront(ctx,res,W,H,isAr=false,opts={}){
   if(!res?.lms) return;
+  const showSkel=opts.skeleton!==false, showAng=opts.angles!==false;
   const{lms:lm,raw,overall,metrics}=res;
   const px=p=>p?[p.x*W,p.y*H]:[0,0];
   const valid=p=>p&&(p.visibility==null||p.visibility>0.5); // raised from 0.3 to match engine VIS_MIN
@@ -522,7 +548,7 @@ function drawFront(ctx,res,W,H,isAr=false){
     { pts:[lm.rSh,lm.rHip],        col:backCol, w:2 },
   ];
 
-  CONNECTIONS.forEach(({pts:[a,b],col,w})=>{
+  if(showSkel) CONNECTIONS.forEach(({pts:[a,b],col,w})=>{
     if(!valid(a)||!valid(b)) return;
     const[ax,ay]=px(a),[bx,by]=px(b);
     ctx.globalAlpha=.9; ctx.lineWidth=w; ctx.strokeStyle=col;
@@ -542,7 +568,7 @@ function drawFront(ctx,res,W,H,isAr=false){
     { p:lm.rEye, col:neckCol, r:3  },
   ];
 
-  JOINTS.forEach(({p,col,r})=>{
+  if(showSkel) JOINTS.forEach(({p,col,r})=>{
     if(!valid(p)) return;
     const[x,y]=px(p);
     // Glow
@@ -556,7 +582,8 @@ function drawFront(ctx,res,W,H,isAr=false){
     ctx.stroke();
   });
 
-  // ── Joint angles labels ───────────────────────────────────────
+  // ── Joint angles labels + HUD annotations (gated by showAng) ──
+  if(showAng){
   ctx.font="bold 10px system-ui"; ctx.globalAlpha=.95;
 
   // Neck angle (ear-shoulder vertical)
@@ -701,6 +728,7 @@ function drawFront(ctx,res,W,H,isAr=false){
       ctx.fillText(`${val}${unit}`,barX+barW+4,ry);
     }
   });
+  } // end showAng
 
   ctx.restore();
 }
@@ -714,8 +742,9 @@ function _roundRect(ctx,x,y,w,h,r){
   ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
 }
 
-function drawSide(ctx,res,W,H,isAr=false){
+function drawSide(ctx,res,W,H,isAr=false,opts={}){
   if(!res?.lms) return;
+  const showSkel=opts.skeleton!==false, showAng=opts.angles!==false;
   const{lms:lm,overall,metrics}=res;
   const px=p=>p?[p.x*W,p.y*H]:[0,0];
   const valid=p=>p&&(p.visibility==null||p.visibility>0.5); // raised from 0.3 to match engine VIS_MIN
@@ -736,7 +765,7 @@ function drawSide(ctx,res,W,H,isAr=false){
     {pts:[lm.hip,lm.knee], col:hipCol,   w:3},
     {pts:[lm.knee,lm.ankle],col:"#6366f1",w:2.5},
   ];
-  SIDE_CONN.forEach(({pts:[a,b],col,w})=>{
+  if(showSkel) SIDE_CONN.forEach(({pts:[a,b],col,w})=>{
     if(!valid(a)||!valid(b)) return;
     const[ax,ay]=px(a),[bx,by]=px(b);
     ctx.globalAlpha=.9; ctx.lineWidth=w; ctx.strokeStyle=col;
@@ -744,7 +773,7 @@ function drawSide(ctx,res,W,H,isAr=false){
   });
 
   // ── Joints ────────────────────────────────────────────────────
-  [{p:lm.ear,col:neckCol,r:5},{p:lm.sh,col:neckCol,r:7},
+  if(showSkel) [{p:lm.ear,col:neckCol,r:5},{p:lm.sh,col:neckCol,r:7},
    {p:lm.hip,col:hipCol,r:6},{p:lm.knee,col:"#6366f1",r:5},
    {p:lm.ankle,col:"#6366f1",r:4}].forEach(({p,col,r})=>{
     if(!valid(p)) return;
@@ -756,10 +785,11 @@ function drawSide(ctx,res,W,H,isAr=false){
     ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,.6)"; ctx.stroke();
   });
 
-  // ── Plumb-line (ear → ankle ideal vertical) ───────────────────
+  // ── Plumb-line + joint arcs + angle labels + risk panel (showAng) ──
   // In ideal seated posture the ear should be directly above the ankle.
   // Drawing this vertical reference lets the user see at a glance how
   // far forward their head has drifted relative to their base of support.
+  if(showAng){
   if(valid(lm.ear) && valid(lm.ankle)){
     const[ex,ey]=px(lm.ear),[ax,ay]=px(lm.ankle);
     ctx.save();
@@ -870,6 +900,7 @@ function drawSide(ctx,res,W,H,isAr=false){
     }
     ctx.font="bold 10px system-ui";
   });
+  } // end showAng
 
   ctx.restore();
 }
@@ -2141,6 +2172,8 @@ export default function App(){
   // Elite voice coach — persisted preference; actual enablement is tier-gated below
   const[voiceCoach,setVoiceCoach]=useState(()=>{try{return localStorage.getItem("corvus_voice_coach")==="1";}catch{return false;}});
   const[faceBlur,setFaceBlur]=useState(()=>{try{return localStorage.getItem("corvus_face_blur")==="1";}catch{return false;}});
+  const[showSkeleton,setShowSkeleton]=useState(()=>{try{return localStorage.getItem("corvus_show_skeleton")!=="0";}catch{return true;}});
+  const[showAngles,setShowAngles]=useState(()=>{try{return localStorage.getItem("corvus_show_angles")!=="0";}catch{return true;}});
   const playPostureAlert=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();[440,360].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=f;g.gain.setValueAtTime(0,ac.currentTime+i*.32);g.gain.linearRampToValueAtTime(.14,ac.currentTime+i*.32+.06);g.gain.linearRampToValueAtTime(0,ac.currentTime+i*.32+.3);o.start();o.stop(ac.currentTime+i*.32+.35);});}catch{}}; // local fallback
   const[sessionId,setSessionId]=useState(null);
   const[aiInsight,setAiInsight]=useState(null);
@@ -2720,7 +2753,8 @@ export default function App(){
             setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
             // Privacy: pixelate the face first so the skeleton draws on top of it.
             if(faceBlur) drawFaceBlur(ctx,vid,lms,W,H);
-            if(mode==="side")drawSide(ctx,finalResult,W,H,isAr);else drawFront(ctx,finalResult,W,H,isAr);
+            const _drawOpts={skeleton:showSkeleton,angles:showAngles};
+            if(mode==="side")drawSide(ctx,finalResult,W,H,isAr,_drawOpts);else drawFront(ctx,finalResult,W,H,isAr,_drawOpts);
             const now=Date.now();
 
             // Session-level pattern tracking (creep, chronic asymmetry, experimental breathing)
@@ -2895,7 +2929,7 @@ export default function App(){
         }).catch(e=>{ clearTimeout(_tmr); /* silent fail — local analysis continues */ });
     }
     rafRef.current=requestAnimationFrame(runLoop);
-  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus,faceBlur]);
+  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus,faceBlur,showSkeleton,showAngles]);
 
   // Keep the analysis loop bound to the latest state. runLoop is a useCallback
   // whose identity changes when mode / sound / faceBlur / calib change; without
@@ -4914,6 +4948,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
         )}
           {/* (Removed the redundant bottom-left score box — the score already
               shows in the on-video panel header and in the left column ring.) */}
+
+          {/* Big actionable correction cue — the single most useful "do this
+              now" instruction, shown over the video when a metric is clearly off. */}
+          {camActive && (()=>{
+            const cue=postureCue(analysis,isAr);
+            if(!cue) return null;
+            return (
+              <div style={{position:"absolute",left:8,right:8,bottom:8,
+                background:"rgba(2,8,16,.9)",backdropFilter:"blur(6px)",
+                border:`1.5px solid ${cue.col}`,borderRadius:12,
+                padding:"10px 12px",display:"flex",alignItems:"center",gap:10,
+                boxShadow:`0 4px 18px ${cue.col}55`,animation:"fadeUp .3s ease"}}>
+                <span style={{fontSize:24,color:cue.col,fontWeight:900,lineHeight:1,flexShrink:0}}>{cue.icon}</span>
+                <span style={{fontSize:13.5,fontWeight:800,color:"#fff",lineHeight:1.3}}>{cue.text}</span>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Primary control — placed directly under the camera so Start / Stop
@@ -5309,6 +5360,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
           }}>
             {faceBlur?"🕶️":"👤"} {isAr?(faceBlur?"إخفاء الوجه: مُفعّل":"إخفاء الوجه (خصوصية)"):(faceBlur?"Face blur: ON":"Blur face (privacy)")}
           </button>
+          {/* Overlay controls — show/hide the skeleton and angle labels on the video */}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{ setShowSkeleton(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_skeleton",nv?"1":"0");}catch{} return nv; }); }} style={{
+              flex:1,background:showSkeleton?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
+              border:`1px solid ${showSkeleton?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
+              padding:"8px 0",fontSize:11,fontWeight:700,color:showSkeleton?"#38bdf8":cs.muted,cursor:"pointer",
+            }}>
+              {showSkeleton?"🦴":"⬚"} {isAr?"الهيكل":"Skeleton"}
+            </button>
+            <button onClick={()=>{ setShowAngles(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_angles",nv?"1":"0");}catch{} return nv; }); }} style={{
+              flex:1,background:showAngles?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
+              border:`1px solid ${showAngles?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
+              padding:"8px 0",fontSize:11,fontWeight:700,color:showAngles?"#38bdf8":cs.muted,cursor:"pointer",
+            }}>
+              {showAngles?"📐":"⬚"} {isAr?"الزوايا":"Angles"}
+            </button>
+          </div>
           {histRef.current?.length>0&&(
 <button onClick={async ()=>{
               // Same canonical gate — third direct generateSessionPDF() call that bypassed it.
