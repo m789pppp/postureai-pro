@@ -9,6 +9,7 @@ import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
 import { PushAPI } from "./services/api.js";
+import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -1695,7 +1696,10 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
 
       {/* Tab: Notifications */}
       {tab==="notifications"&&(
-        <PushNotificationSettings cs={cs} isAr={isAr} addToast={addToast} />
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <PushNotificationSettings cs={cs} isAr={isAr} addToast={addToast} />
+          <VoiceCoachSettings cs={cs} isAr={isAr} lang={lang} addToast={addToast} />
+        </div>
       )}
 
     </div>
@@ -1706,8 +1710,13 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
 function PushNotificationSettings({ cs, isAr, addToast }) {
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy]       = useState(false);
+  const [prefs, setPrefsState] = useState(null);       // {categories, preferred_hour, computed_hour}
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
-  useEffect(() => { setEnabled(isPushEnabled()); }, []);
+  useEffect(() => {
+    setEnabled(isPushEnabled());
+    PushAPI.getPreferences().then(setPrefsState).catch(() => {});
+  }, []);
 
   const toggle = async () => {
     setBusy(true);
@@ -1744,6 +1753,29 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
     }
   };
 
+  const toggleCategory = async (key) => {
+    if (!prefs) return;
+    const nextCategories = { ...prefs.categories, [key]: !prefs.categories[key] };
+    setPrefsState(p => ({ ...p, categories: nextCategories }));
+    setSavingPrefs(true);
+    try { await PushAPI.setPreferences({ categories: nextCategories }); }
+    catch { /* non-critical */ }
+    finally { setSavingPrefs(false); }
+  };
+
+  const hourLabel = (h) => {
+    if (h == null) return "—";
+    const period = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return isAr ? `الساعة ${h12}:00 ${h>=12?"م":"ص"}` : `${h12}:00 ${period}`;
+  };
+
+  const CATEGORY_LABELS = {
+    streak:           { en:"Streak reminders",  ar:"تذكير سلسلة الالتزام" },
+    symptom_reminder: { en:"Symptom check-in",  ar:"تذكير تسجيل الأعراض" },
+    weekly_summary:   { en:"Weekly summary",    ar:"ملخص أسبوعي" },
+  };
+
   return (
     <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
       <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:6 }}>
@@ -1776,6 +1808,38 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
           {busy ? "…" : enabled ? (isAr?"إيقاف":"Disable") : (isAr?"تفعيل":"Enable")}
         </button>
       </div>
+
+      {enabled && prefs && (
+        <>
+          <div style={{ padding:"12px 14px", background:"rgba(99,102,241,.06)", border:"1px solid rgba(99,102,241,.2)",
+            borderRadius:10, marginBottom:12, fontSize:12, color:cs.text, lineHeight:1.6 }}>
+            🧠 {isAr
+              ? `بنفكرك في ${hourLabel(prefs.preferred_hour ?? prefs.computed_hour)} — الميعاد ده مبني على وقت جلساتك المعتادة.`
+              : `We'll remind you around ${hourLabel(prefs.preferred_hour ?? prefs.computed_hour)} — based on when you usually do sessions.`}
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:600, color:cs.muted, marginBottom:8, textTransform:"uppercase", letterSpacing:".04em" }}>
+              {isAr?"نوع الإشعارات":"Notification types"}
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                <div key={key} onClick={()=>toggleCategory(key)} style={{
+                  display:"flex", justifyContent:"space-between", alignItems:"center",
+                  padding:"8px 12px", background:"rgba(255,255,255,.02)", borderRadius:8, cursor:"pointer" }}>
+                  <span style={{ fontSize:12.5, color:cs.text }}>{isAr?label.ar:label.en}</span>
+                  <div style={{ width:36, height:20, borderRadius:99, position:"relative", transition:"background .15s",
+                    background: prefs.categories?.[key]!==false ? "#10b981" : "rgba(255,255,255,.12)" }}>
+                    <div style={{ width:16, height:16, borderRadius:"50%", background:"#fff", position:"absolute", top:2,
+                      left: prefs.categories?.[key]!==false ? 18 : 2, transition:"left .15s" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
       {enabled && (
         <button onClick={sendTest} style={{ width:"100%", padding:"9px",
           background:"transparent", border:`1px solid ${cs.border}`, borderRadius:8,
@@ -1787,7 +1851,103 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ── Voice Coach personalization block ───────────────────────────────
+function VoiceCoachSettings({ cs, isAr, lang, addToast }) {
+  const langKey = isAr ? "ar" : "en";
+  const [prefs, setPrefsState] = useState(() => getVoicePrefs());
+  const [voices, setVoices]    = useState([]);
+
+  useEffect(() => {
+    const load = () => setVoices(getAvailableVoices(langKey));
+    load();
+    // getVoices() can populate asynchronously in some browsers
+    window.speechSynthesis?.addEventListener?.("voiceschanged", load);
+    return () => window.speechSynthesis?.removeEventListener?.("voiceschanged", load);
+  }, [langKey]);
+
+  const locales = LOCALE_OPTIONS[langKey] || LOCALE_OPTIONS.en;
+  const currentLocale = prefs.locale || locales[0].code;
+
+  const update = (partial) => setPrefsState(setVoicePrefs(partial));
+
+  const preview = () => {
+    const text = isAr ? "كده صوتي هيبقى وأنت بتستخدم المدرب الصوتي." : "This is how I'll sound during your voice coaching sessions.";
+    const ok = speakCoach(text, langKey, { force: true });
+    if (!ok) addToast?.(isAr ? "المتصفح ده مش بيدعم الأصوات" : "This browser doesn't support speech voices", "error");
+  };
+
+  return (
+    <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
+      <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:6 }}>
+        {isAr?"صوت المدرب":"Voice Coach"}
+      </div>
+      <div style={{ fontSize:12, color:cs.muted, marginBottom:16, lineHeight:1.6 }}>
+        {isAr?"اختار اللهجة والصوت اللي يناسبك أثناء الجلسات المباشرة (خطة Elite)."
+             :"Choose the accent and voice you'd like during live sessions (Elite plan)."}
+      </div>
+
+      <div style={{ marginBottom:14 }}>
+        <div style={{ fontSize:11, fontWeight:600, color:cs.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:".04em" }}>
+          {isAr?"اللهجة":"Accent"}
+        </div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          {locales.map(l => (
+            <button key={l.code} onClick={()=>update({ locale:l.code, voiceURI:null })}
+              style={{ padding:"7px 14px", borderRadius:99, cursor:"pointer", fontSize:12, fontWeight:600,
+                border: currentLocale===l.code ? "1px solid rgba(16,185,129,.4)" : `1px solid ${cs.border}`,
+                background: currentLocale===l.code ? "rgba(16,185,129,.12)" : "transparent",
+                color: currentLocale===l.code ? "#10b981" : cs.muted }}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {voices.length > 0 && (
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:11, fontWeight:600, color:cs.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:".04em" }}>
+            {isAr?"الصوت":"Voice"}
+          </div>
+          <select value={prefs.voiceURI || ""} onChange={e=>update({ voiceURI: e.target.value || null })}
+            style={{ width:"100%", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`,
+              borderRadius:8, color:cs.text, padding:"8px 10px", fontSize:12.5 }}>
+            <option value="">{isAr?"تلقائي (أفضل مطابقة)":"Automatic (best match)"}</option>
+            {voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:16, marginBottom:16 }}>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:11, fontWeight:600, color:cs.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:".04em" }}>
+            {isAr?"السرعة":"Speed"}: {(prefs.rate ?? (isAr?0.95:1.0)).toFixed(2)}x
+          </div>
+          <input type="range" min="0.6" max="1.4" step="0.05"
+            value={prefs.rate ?? (isAr?0.95:1.0)}
+            onChange={e=>update({ rate: parseFloat(e.target.value) })}
+            style={{ width:"100%" }} />
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:11, fontWeight:600, color:cs.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:".04em" }}>
+            {isAr?"طبقة الصوت":"Pitch"}: {(prefs.pitch ?? 1.0).toFixed(2)}
+          </div>
+          <input type="range" min="0.6" max="1.4" step="0.05"
+            value={prefs.pitch ?? 1.0}
+            onChange={e=>update({ pitch: parseFloat(e.target.value) })}
+            style={{ width:"100%" }} />
+        </div>
+      </div>
+
+      <button onClick={preview} style={{ width:"100%", padding:"9px",
+        background:"rgba(16,185,129,.1)", border:"1px solid rgba(16,185,129,.25)", borderRadius:8,
+        color:"#10b981", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+        🔊 {isAr?"تجربة الصوت":"Preview voice"}
+      </button>
+    </div>
+  );
+}
+
+
 // SIDEBAR (desktop)
 // ══════════════════════════════════════════════════════════════════
 function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamera,
