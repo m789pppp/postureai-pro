@@ -2393,9 +2393,9 @@ export default function App(){
   // Normalize T_ so live dashboard always has .name and .color
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
   const MC={
-    laptop:{id:"laptop",label:"Laptop",color:"#6366f1",optDist:[50,80]},
-    phone:{id:"phone",label:"Phone",color:"#f59e0b",optDist:[60,90]},
-    side:{id:"side",label:"Side",color:"#10b981",optDist:[80,120]}
+    laptop:{id:"laptop",label:isAr?"لابتوب":"Laptop",icon:"💻",color:"#6366f1",optDist:[50,80]},
+    phone:{id:"phone",label:isAr?"موبايل":"Phone",icon:"📱",color:"#f59e0b",optDist:[60,90]},
+    side:{id:"side",label:isAr?"جانبي":"Side",icon:"🎥",color:"#10b981",optDist:[80,120]}
   };
   const M_=mode?MC[mode]:null;
 
@@ -3139,6 +3139,27 @@ export default function App(){
       addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
   } // end stopCamera
+
+  // ── Switch camera mode from the live page ───────────────────────
+  // Previously the mode (laptop/phone/side) could only be chosen on the
+  // setup screen — users had to leave the session to change it. This lets
+  // them switch on the fly; when a session is running we reset the analysis
+  // buffers so the new mode (front vs side use different maths) starts clean.
+  function switchMode(m){
+    if(!m || m===mode) return;
+    setMode(m);
+    if(camActive){
+      lmSmootherRef.current?.reset();
+      frameBufferRef.current?.clear();
+      distSmootherRef.current?.reset();
+      resetProportions();
+      histRef.current=[]; setHistory([]);
+      goodRef.current=0; setGoodF(0);
+      totalRef.current=0; setTotalF(0);
+      setAnalysis(null);
+      addToast(isAr?`تم التبديل إلى ${MC[m]?.label||m}`:`Switched to ${MC[m]?.label||m}`,"info");
+    }
+  }
 
   // ── Multi-Account Switch ────────────────────────────────────────
   async function handleSwitchAccount(linkedAccount) {
@@ -4681,6 +4702,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
               ? (isAr?`جاري تحميل مدرب AI... ${aiCoachStatus.progress}%`:`Loading AI Coach... ${aiCoachStatus.progress}%`)
               : (isAr?"مدرب AI (يبدأ عند الفتح)":"AI Coach (loads on open)")}
           </span>
+        </div>
+
+        {/* ── Camera-mode switcher — change laptop / phone / side without
+            leaving the session (was only selectable on the setup screen) ── */}
+        <div style={{padding:"8px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:10,color:cs.muted,flexShrink:0,marginInlineEnd:2}}>{isAr?"الوضع":"Mode"}</span>
+          <div style={{display:"flex",gap:5,flex:1}}>
+            {Object.values(MC).map(mc=>{
+              const active=mode===mc.id;
+              return (
+                <button key={mc.id} onClick={()=>switchMode(mc.id)} style={{
+                  flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,
+                  background:active?`${mc.color}1e`:"rgba(148,163,184,.06)",
+                  border:`1px solid ${active?`${mc.color}66`:cs.border}`,
+                  borderRadius:8,padding:"6px 0",fontSize:10.5,fontWeight:active?700:500,
+                  color:active?mc.color:cs.muted,cursor:"pointer",
+                }}>
+                  <span style={{fontSize:12}}>{mc.icon}</span>{mc.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Quick Start Banner (for users who skipped onboarding) ─── */}
