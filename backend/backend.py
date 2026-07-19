@@ -6,9 +6,17 @@ Accuracy: Standard ~88% | Professional ~93% | Elite ~96%
 Auto PDF download via ReportLab
 Fixed: WORK_HOURS_START, SUPPORT_EMAIL, ADMIN_PHONE, localhost links, Auth middleware
 """
+# Must be the first statement: makes type annotations lazy (PEP 563) so a
+# type hint like `np.ndarray` doesn't crash at import time before cv2/numpy
+# have been lazy-loaded by _ensure_models().
+from __future__ import annotations
 import base64, math, io, os, time, sys, requests as req, threading
 # cv2 and numpy loaded lazily inside _ensure_models() to save ~130MB per worker at startup
 cv2 = None
+# Cascade classifiers depend on cv2 — also lazy, initialized in _ensure_models()
+face_c = None
+eye_c  = None
+prof_c = None
 np  = None
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 _ai_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gemini")
@@ -459,7 +467,7 @@ _models_lock = __import__("threading").Lock()
 
 def _ensure_models():
     """Initialize MediaPipe models + cv2/numpy on first call. Thread-safe."""
-    global _mp_pose, _mp_face, _mp_drawing, POSE_LITE, POSE_FULL, FACE_MESH, cv2, np
+    global _mp_pose, _mp_face, _mp_drawing, POSE_LITE, POSE_FULL, FACE_MESH, cv2, np, face_c, eye_c, prof_c
     if POSE_LITE is not None:
         return True
     with _models_lock:
@@ -471,6 +479,13 @@ def _ensure_models():
             import numpy as _np
             cv2 = _cv2
             np  = _np
+            # Cascade classifiers only need cv2 (not MediaPipe) — init them here
+            # so the fallback path in analyze_front_cascade() always has them
+            # ready once _ensure_models() has run once, regardless of whether
+            # MediaPipe itself loads successfully below.
+            face_c = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            eye_c  = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+            prof_c = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
             # Init MODEL_3D now that numpy is available
             global MODEL_3D
             MODEL_3D = _np.array(_MODEL_3D_RAW, dtype=_np.float64)
@@ -3751,9 +3766,10 @@ def analyze_side(image, tier="standard", session_id=None):
     return out
 
 # ── CASCADE FALLBACK ───────────────────────────────────────────────
-face_c = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-eye_c  = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-prof_c = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
+# face_c/eye_c/prof_c are lazy-initialized in _ensure_models() alongside cv2 —
+# see the placeholders near the top of the file. They used to be initialized
+# here at module level, which crashed on every cold start (cv2 is still None
+# at import time, before _ensure_models() has ever run).
 
 def analyze_front_cascade(image, mode, out):
     """
@@ -6962,27 +6978,48 @@ def sso_provision_user():
 @require_admin
 @limiter.limit("30 per minute")
 def admin_feature_flags():
-    """Admin: list, create, or update feature flags."""
-    global _feature_flags
-    if request.method == "GET":
-        return jsonify({"flags": _feature_flags})
-    data = request.get_json(force=True) or {}
-    if request.method == "POST":
-        key = data.get("key", "").strip().lower().replace(" ", "_")
-        if not key or key in _feature_flags:
-            return jsonify({"error": "Invalid or duplicate flag key"}), 400
-        _feature_flags[key] = {
-            "enabled":     data.get("enabled", False),
-            "rollout_pct": int(data.get("rollout_pct", 0)),
-            "tiers":       data.get("tiers", []),
-        }
-        return jsonify({"success": True, "flag": key})
-    # PATCH
-    key = data.get("key", "")
-    if key not in _feature_flags:
-        return jsonify({"error": "Flag not found"}), 404
-    _feature_flags[key].update({k: v for k, v in data.items() if k != "key"})
-    return jsonify({"success": True})
+    """Admin: list, create, or update feature flags.
+    Persisted in Firestore (collection: feature_flags) rather than an
+    in-memory dict — a plain module global wouldn't survive across
+    gunicorn's multiple worker processes; each worker would see its own
+    separate flags, silently diverging from what the admin actually set."""
+    try:
+        if request.method == "GET":
+            docs = db.collection("feature_flags").stream()
+            flags = {d.id: d.to_dict() for d in docs}
+            return jsonify({"flags": flags})
+
+        data = request.get_json(force=True) or {}
+        if request.method == "POST":
+            key = data.get("key", "").strip().lower().replace(" ", "_")
+            if not key:
+                return jsonify({"error": "key required"}), 400
+            ref = db.collection("feature_flags").document(key)
+            if ref.get().exists:
+                return jsonify({"error": "Invalid or duplicate flag key"}), 400
+            flag = {
+                "enabled":     data.get("enabled", False),
+                "rollout_pct": int(data.get("rollout_pct", 0)),
+                "tiers":       data.get("tiers", []),
+                "updated_at":  datetime.utcnow().isoformat()+"Z",
+                "updated_by":  g.uid,
+            }
+            ref.set(flag)
+            return jsonify({"success": True, "flag": key})
+
+        # PATCH
+        key = data.get("key", "")
+        ref = db.collection("feature_flags").document(key)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({"error": "Flag not found"}), 404
+        upd = {k: v for k, v in data.items() if k != "key"}
+        upd["updated_at"] = datetime.utcnow().isoformat()+"Z"
+        upd["updated_by"] = g.uid
+        ref.update(upd)
+        return jsonify({"success": True})
+    except Exception as e:
+        return safe_error(e)
 
 
 # ── Security Center ────────────────────────────────────────────────
