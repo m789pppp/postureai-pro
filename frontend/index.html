@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!-- ═══ SEO ═══════════════════════════════════════════════════ -->
-    <title>Corvus — AI Posture Coaching for MENA Teams | تحليل الوضعية بالذكاء الاصطناعي</title>
-    <meta name="description" content="Cut sick leave 47% with AI posture coaching. Real-time analysis for enterprise teams in Egypt & MENA. Free 7-day trial. | قلّل إجازات الأمراض بنسبة 47% مع تحليل الوضعية بالذكاء الاصطناعي." />
-    <meta name="keywords" content="posture analysis, AI posture, workforce health, HR analytics, Egypt, MENA, وضعية, الذكاء الاصطناعي, صحة الموظفين, mediapipe, posture correction" />
+    <title>Corvus — Cut Sick Leave 47% with AI Posture Coaching</title>
+    <meta name="description" content="Corvus monitors your team's posture in real time using any laptop camera — no hardware, no video stored. Free 14-day trial. Trusted by teams in Egypt and MENA." />
+    <meta name="keywords" content="AI posture analysis, workplace health, HR analytics, ergonomics software, Egypt, MENA, posture monitoring, back pain prevention, workforce health, mediapipe posture" />
     <meta name="author" content="Corvus" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://postureai-pro-omega-nine.vercel.app/" />
@@ -15,18 +15,18 @@
     <!-- ═══ Open Graph ════════════════════════════════════════════ -->
     <meta property="og:type"        content="website" />
     <meta property="og:url"         content="https://postureai-pro-omega-nine.vercel.app/" />
-    <meta property="og:site_name"   content="Corvus PostureAI" />
+    <meta property="og:site_name"   content="Corvus" />
     <meta property="og:title"       content="Corvus — Cut Sick Leave 47% with AI Posture Coaching" />
-    <meta property="og:description" content="Real-time AI posture coaching for MENA enterprise teams. Free 7-day trial, no credit card." />
+    <meta property="og:description" content="Corvus monitors your team's posture in real time using any laptop camera — no hardware, no video stored. Free 14-day trial. Trusted by teams in Egypt and MENA." />
     <meta property="og:image"       content="https://postureai-pro-omega-nine.vercel.app/og-image.png" />
-    <meta property="og:locale"      content="ar_EG" />
-    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:locale"      content="en_US" />
+    <meta property="og:locale:alternate" content="ar_EG" />
 
     <!-- ═══ Twitter Card ═════════════════════════════════════════ -->
     <meta name="twitter:card"        content="summary_large_image" />
     <meta name="twitter:site"        content="@CorvusHealth" />
-    <meta name="twitter:title"       content="Corvus — AI Workforce Health" />
-    <meta name="twitter:description" content="AI-powered posture analysis for Egyptian enterprise teams. Free 7-day trial." />
+    <meta name="twitter:title"       content="Corvus — Cut Sick Leave 47% with AI Posture Coaching" />
+    <meta name="twitter:description" content="Corvus monitors your team's posture in real time using any laptop camera — no hardware, no video stored. Free 14-day trial. Trusted by teams in Egypt and MENA." />
     <meta name="twitter:image"       content="https://postureai-pro-omega-nine.vercel.app/og-image.png" />
 
     <!-- ═══ Security / Trust ══════════════════════════════════════ -->
@@ -52,14 +52,14 @@
       "@type": "SoftwareApplication",
       "name": "Corvus",
       "url": "https://postureai-pro-omega-nine.vercel.app",
-      "description": "AI-powered workforce health intelligence platform for MENA enterprise teams",
+      "description": "AI posture coaching platform that cuts sick leave 47% using any laptop camera. No hardware, no video storage.",
       "applicationCategory": "BusinessApplication",
       "operatingSystem": "Web, iOS, Android",
       "offers": {
         "@type": "Offer",
         "price": "0",
         "priceCurrency": "EGP",
-        "description": "Free 7-day trial"
+        "description": "Free 14-day trial, no credit card required"
       },
       "creator": {
         "@type": "Organization",
@@ -68,6 +68,35 @@
         "telephone": "+201210271841"
       }
     }
+    </script>
+
+
+    <!-- ═══ Per-route meta ════════════════════════════════════════ -->
+    <script>
+      (function() {
+        var PAGE_META = {
+          '/product':       { title: 'Corvus Product — AI Posture Analysis Engine', desc: 'Explore the 5 layers of Corvus: 478-landmark AI analysis, HR dashboard, Groq AI coach, enterprise integrations, and AES-256 security.' },
+          '/solutions':     { title: 'Corvus Solutions — For Every Industry & Team Size', desc: 'See how Corvus fits banking, tech, telecoms, and healthcare teams. Case studies with real results from Egypt and MENA.' },
+          '/pricing':       { title: 'Corvus Pricing — Start Free, Scale with Your Team', desc: 'Free plan, Pro at $9/month, and enterprise plans for 500+ employees. Egyptian Pound pricing available. 14-day free trial.' },
+          '/how-it-works':  { title: 'How Corvus Works — From Signup to Insights in 15 Minutes', desc: 'Five steps: create org, onboard team, daily 60-second sessions, auto HR reports, always-on AI coach. No hardware needed.' },
+          '/faq':           { title: 'Corvus FAQ — Everything You Need to Know', desc: 'Answers to 25+ questions on privacy, pricing, technical setup, HR integrations, and Arabic support.' },
+        };
+        var path = window.location.pathname;
+        var meta = PAGE_META[path];
+        if (meta) {
+          document.title = meta.title;
+          var d = document.querySelector('meta[name="description"]');
+          if (d) d.setAttribute('content', meta.desc);
+          var og = document.querySelector('meta[property="og:title"]');
+          if (og) og.setAttribute('content', meta.title);
+          var ogd = document.querySelector('meta[property="og:description"]');
+          if (ogd) ogd.setAttribute('content', meta.desc);
+          var tw = document.querySelector('meta[name="twitter:title"]');
+          if (tw) tw.setAttribute('content', meta.title);
+          var twd = document.querySelector('meta[name="twitter:description"]');
+          if (twd) twd.setAttribute('content', meta.desc);
+        }
+      })();
     </script>
 
     <!-- ═══ Preconnect ════════════════════════════════════════════ -->
