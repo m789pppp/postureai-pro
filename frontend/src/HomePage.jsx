@@ -1982,58 +1982,97 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const isHR  = userRole==="hr_admin"||userRole==="platform_admin";
   const uid   = user?.uid;
 
-  const tools = isHR ? [
-    // ── Company / HR tools ────────────────────────────────────────
-    { id:"t-workforce", icon:"🏭", en:"Workforce",      ar:"قوى العمل",
-      onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
-    { id:"t-reports",   icon:"📋", en:"Team Reports",   ar:"تقارير الفريق",
-      locked:!pro, lockLabel:"PRO",
-      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
-    { id:"t-insights",  icon:"🧠", en:"AI Insights",    ar:"رؤى AI",
-      locked:!elite, lockLabel:"ELITE",
-      onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
-    { id:"t-predict",   icon:"🔮", en:"Burnout AI",     ar:"AI إرهاق",
-      locked:!elite, lockLabel:"ELITE",
-      onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
-    { id:"t-audit",     icon:"📜", en:"Audit Log",      ar:"سجل المراجعة",
-      onClick:()=>setShowAuditSystem?.(true) },
-    { id:"t-api",       icon:"🔌", en:"API Market",     ar:"سوق API",
-      onClick:()=>setShowAPIMarketplace?.(true) },
-    { id:"t-wl",        icon:"🏷️", en:"White-label",    ar:"علامتي التجارية",
-      onClick:()=>setShowWhiteLabel?.(true) },
-    ...(isAdmin ? [
-      { id:"t-growth",   icon:"🚀", en:"Growth Hub",    ar:"مركز النمو",    onClick:()=>setShowGrowthHub?.(true) },
-      { id:"t-success",  icon:"💡", en:"Cust. Success", ar:"نجاح العملاء", onClick:()=>setShowCustomerSuccess?.(true) },
-      { id:"t-churn",    icon:"📉", en:"Churn AI",      ar:"توقع التسرب",  onClick:()=>setShowChurnPrediction?.(true) },
-      { id:"t-tenant",   icon:"🏢", en:"Multi-tenant",  ar:"متعدد المستأجرين", onClick:()=>setShowMultiTenant?.(true) },
-    ] : []),
+  // Grouped by purpose instead of one flat list — Track/Improve (everyday,
+  // free), Analytics & AI (deeper insight, tier-gated), Care (external
+  // booking), Admin (elevated access only). Admin/Marketplace used to be
+  // one-off buttons with their own styling wedged between the main nav and
+  // Start Session — now they're regular entries in the same list, same style.
+  const toolGroups = isHR ? [
+    {
+      id: "analytics",
+      header: { en:"Analytics & AI", ar:"التحليلات والذكاء الاصطناعي" },
+      items: [
+        { id:"t-workforce", icon:"🏭", en:"Workforce",      ar:"قوى العمل",
+          onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
+        { id:"t-reports",   icon:"📋", en:"Team Reports",   ar:"تقارير الفريق",
+          locked:!pro, lockLabel:"PRO",
+          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
+        { id:"t-insights",  icon:"🧠", en:"AI Insights",    ar:"رؤى AI",
+          locked:!elite, lockLabel:"ELITE",
+          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
+        { id:"t-predict",   icon:"🔮", en:"Burnout AI",     ar:"AI إرهاق",
+          locked:!elite, lockLabel:"ELITE",
+          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
+      ],
+    },
+    {
+      id: "enterprise",
+      header: { en:"Enterprise", ar:"المؤسسات" },
+      items: [
+        { id:"t-audit", icon:"📜", en:"Audit Log",   ar:"سجل المراجعة", onClick:()=>setShowAuditSystem?.(true) },
+        { id:"t-api",   icon:"🔌", en:"API Market",  ar:"سوق API",      onClick:()=>setShowAPIMarketplace?.(true) },
+        { id:"t-wl",    icon:"🏷️", en:"White-label", ar:"علامتي التجارية", onClick:()=>setShowWhiteLabel?.(true) },
+      ],
+    },
+    ...(isAdmin ? [{
+      id: "admin",
+      header: { en:"Platform Admin", ar:"إدارة المنصة" },
+      items: [
+        { id:"t-growth",  icon:"🚀", en:"Growth Hub",    ar:"مركز النمو",     onClick:()=>setShowGrowthHub?.(true) },
+        { id:"t-success", icon:"💡", en:"Cust. Success", ar:"نجاح العملاء",   onClick:()=>setShowCustomerSuccess?.(true) },
+        { id:"t-churn",   icon:"📉", en:"Churn AI",      ar:"توقع التسرب",   onClick:()=>setShowChurnPrediction?.(true) },
+        { id:"t-tenant",  icon:"🏢", en:"Multi-tenant",  ar:"متعدد المستأجرين", onClick:()=>setShowMultiTenant?.(true) },
+      ],
+    }] : []),
   ] : [
-    // ── Individual / personal tools ───────────────────────────────
-    { id:"t-progress", icon:"🏆", en:"Progress",      ar:"التقدم",
-      onClick:()=>setShowGamification?.(true) },
-    { id:"t-coach",    icon:"🤖", en:"AI Coach",      ar:"AI Coach",
-      locked:!pro, lockLabel:"PRO",
-      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
-    { id:"t-reports",  icon:"📋", en:"AI Reports",    ar:"تقارير AI",
-      locked:!pro, lockLabel:"PRO",
-      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
-    { id:"t-compare",  icon:"📊", en:"Compare",       ar:"مقارنة الجلسات",
-      locked:!pro, lockLabel:"PRO",
-      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowSessionComparison?.(true); } else setShowBilling?.(true); }},
-    { id:"t-trend",    icon:"📈", en:"Trend",         ar:"مسار التحسن",
-      locked:!pro, lockLabel:"PRO",
-      onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowTrendChart?.(true); } else setShowBilling?.(true); }},
-    { id:"t-insights", icon:"🧠", en:"AI Insights",   ar:"رؤى AI",
-      locked:!elite, lockLabel:"ELITE",
-      onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
-    { id:"t-predict",  icon:"🔮", en:"Predictive AI", ar:"AI تنبؤي",
-      locked:!elite, lockLabel:"ELITE",
-      onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
-    { id:"t-symptoms", icon:"🩹", en:"Symptom Log",   ar:"سجل الأعراض",
-      onClick:()=>setShowSymptomCorrelation?.(true) },
-    ...(isAdmin ? [
-      { id:"t-growth",  icon:"🚀", en:"Growth Hub",   ar:"مركز النمو", onClick:()=>setShowGrowthHub?.(true) },
-    ] : []),
+    {
+      id: "track",
+      header: { en:"Track & Improve", ar:"المتابعة والتحسين" },
+      items: [
+        { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم", onClick:()=>setShowGamification?.(true) },
+        { id:"t-symptoms", icon:"🩹", en:"Symptom Log", ar:"سجل الأعراض", onClick:()=>setShowSymptomCorrelation?.(true) },
+      ],
+    },
+    {
+      id: "analytics",
+      header: { en:"Analytics & AI", ar:"التحليلات والذكاء الاصطناعي" },
+      items: [
+        { id:"t-coach",    icon:"🤖", en:"AI Coach",      ar:"AI Coach",
+          locked:!pro, lockLabel:"PRO",
+          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
+        { id:"t-reports",  icon:"📋", en:"AI Reports",    ar:"تقارير AI",
+          locked:!pro, lockLabel:"PRO",
+          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
+        { id:"t-compare",  icon:"📊", en:"Compare",       ar:"مقارنة الجلسات",
+          locked:!pro, lockLabel:"PRO",
+          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowSessionComparison?.(true); } else setShowBilling?.(true); }},
+        { id:"t-trend",    icon:"📈", en:"Trend",         ar:"مسار التحسن",
+          locked:!pro, lockLabel:"PRO",
+          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowTrendChart?.(true); } else setShowBilling?.(true); }},
+        { id:"t-insights", icon:"🧠", en:"AI Insights",   ar:"رؤى AI",
+          locked:!elite, lockLabel:"ELITE",
+          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
+        { id:"t-predict",  icon:"🔮", en:"Predictive AI", ar:"AI تنبؤي",
+          locked:!elite, lockLabel:"ELITE",
+          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
+      ],
+    },
+    {
+      id: "care",
+      header: { en:"Care", ar:"الرعاية" },
+      items: [
+        { id:"t-marketplace", icon:"🩺", en:"Find a Physiotherapist", ar:"أخصائيو العلاج الطبيعي",
+          onClick:()=>setPage("marketplace") },
+      ],
+    },
+    ...(isAdmin ? [{
+      id: "admin",
+      header: { en:"Platform Admin", ar:"إدارة المنصة" },
+      items: [
+        { id:"t-admin",  icon:"🔧", en:"Platform Admin", ar:"منصة المشرف", onClick:()=>setPage("admin") },
+        { id:"t-growth", icon:"🚀", en:"Growth Hub",     ar:"مركز النمو",  onClick:()=>setShowGrowthHub?.(true) },
+      ],
+    }] : []),
   ];
 
   const [hov, setHov] = useState(null);
@@ -2084,30 +2123,10 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
                 fontWeight:700, borderRadius:99, padding:"1px 5px", minWidth:16, textAlign:"center" }}>{item.badge}</span>}
             </button>
           ))}
-          {isAdmin&&(
-            <button onClick={()=>setPage("admin")}
-              onMouseEnter={()=>setHov("admin")} onMouseLeave={()=>setHov(null)}
-              style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
-                padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
-                background:hov==="admin"?"rgba(255,255,255,.04)":"transparent",
-                color:"rgba(255,255,255,.4)", fontSize:12.5, textAlign:"left" }}>
-              <span style={{ fontSize:14, width:18, textAlign:"center" }}>🔧</span>
-              {isAr?"منصة المشرف":"Platform Admin"}
-            </button>
-          )}
-          <button onClick={()=>setPage("marketplace")}
-            onMouseEnter={()=>setHov("marketplace")} onMouseLeave={()=>setHov(null)}
-            style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
-              padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
-              borderLeft:"2px solid transparent",
-              background:hov==="marketplace"?"rgba(255,255,255,.04)":"transparent",
-              color:"rgba(255,255,255,.65)", fontSize:12.5, textAlign:"left" }}>
-            <span style={{ fontSize:14, width:18, textAlign:"center" }}>🩺</span>
-            {isAr?"أخصائيو العلاج الطبيعي":"Find a Physiotherapist"}
-          </button>
         </nav>
 
-        {/* Start Session */}
+        {/* Start Session — the primary action, right under the main nav so it's
+            never buried behind auxiliary links like Admin or Marketplace */}
         <div style={{ padding:"4px 8px 8px" }}>
           <button onClick={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}
             style={{ width:"100%", padding:"9px", border:"none", borderRadius:8,
@@ -2119,39 +2138,43 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
           </button>
         </div>
 
-        {/* Tools divider */}
-        <div style={{ borderTop:`1px solid ${cs.border}`, margin:"0 8px", padding:"8px 3px 4px" }}>
-          <div style={{ fontSize:9, fontWeight:700, color:"rgba(255,255,255,.22)",
-            textTransform:"uppercase", letterSpacing:".1em", paddingLeft:8 }}>
-            {isAr?"الأدوات":"Tools"}
+        {/* Grouped tool sections — each with its own header, instead of one
+            flat undifferentiated list mixing free/Pro/Elite and admin-only
+            items together */}
+        {toolGroups.map(group=>(
+          <div key={group.id}>
+            <div style={{ borderTop:`1px solid ${cs.border}`, margin:"0 8px", padding:"8px 3px 4px" }}>
+              <div style={{ fontSize:9, fontWeight:700, color:"rgba(255,255,255,.22)",
+                textTransform:"uppercase", letterSpacing:".1em", paddingLeft:8 }}>
+                {isAr?group.header.ar:group.header.en}
+              </div>
+            </div>
+            <div style={{ padding:"2px 8px 8px", display:"flex", flexDirection:"column", gap:1 }}>
+              {group.items.map(tool=>(
+                <button key={tool.id} onClick={tool.onClick}
+                  onMouseEnter={()=>setHov(tool.id)} onMouseLeave={()=>setHov(null)}
+                  style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
+                    padding:"7px 11px", border:"none", borderRadius:7, cursor:"pointer",
+                    background:hov===tool.id&&!tool.locked?"rgba(255,255,255,.05)":"transparent",
+                    color:tool.locked?"rgba(255,255,255,.28)":"rgba(255,255,255,.72)",
+                    fontSize:12, fontWeight:500, textAlign:"left", transition:"all .1s" }}>
+                  <span style={{ fontSize:13, width:18, textAlign:"center", opacity:tool.locked?.45:1 }}>{tool.icon}</span>
+                  <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {isAr&&tool.ar ? tool.ar : tool.en}
+                  </span>
+                  {tool.locked&&(
+                    <span style={{ fontSize:8,
+                      background:tool.lockLabel==="ELITE"?"rgba(168,85,247,.18)":"rgba(245,158,11,.18)",
+                      color:tool.lockLabel==="ELITE"?"#c084fc":"#f59e0b",
+                      padding:"1px 5px", borderRadius:3, fontWeight:700, flexShrink:0 }}>
+                      {tool.lockLabel}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-
-        {/* Tools list */}
-        <div style={{ padding:"2px 8px 12px", display:"flex", flexDirection:"column", gap:1 }}>
-          {tools.map(tool=>(
-            <button key={tool.id} onClick={tool.onClick}
-              onMouseEnter={()=>setHov(tool.id)} onMouseLeave={()=>setHov(null)}
-              style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
-                padding:"7px 11px", border:"none", borderRadius:7, cursor:"pointer",
-                background:hov===tool.id&&!tool.locked?"rgba(255,255,255,.05)":"transparent",
-                color:tool.locked?"rgba(255,255,255,.28)":"rgba(255,255,255,.72)",
-                fontSize:12, fontWeight:500, textAlign:"left", transition:"all .1s" }}>
-              <span style={{ fontSize:13, width:18, textAlign:"center", opacity:tool.locked?.45:1 }}>{tool.icon}</span>
-              <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                {isAr&&tool.ar ? tool.ar : tool.en}
-              </span>
-              {tool.locked&&(
-                <span style={{ fontSize:8,
-                  background:tool.lockLabel==="ELITE"?"rgba(168,85,247,.18)":"rgba(245,158,11,.18)",
-                  color:tool.lockLabel==="ELITE"?"#c084fc":"#f59e0b",
-                  padding:"1px 5px", borderRadius:3, fontWeight:700, flexShrink:0 }}>
-                  {tool.lockLabel}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+        ))}
       </div>
 
       {/* Footer — Settings entry point */}
