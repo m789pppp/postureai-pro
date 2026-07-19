@@ -5,12 +5,16 @@ import { PageShell } from "./StandaloneLayout.jsx";
 const T = {
   bg:"#030b14", bg1:"#040d18", card:"#0d1f33",
   border:"rgba(148,163,184,.08)",
-  text:"#e8f0ff", sub:"#94a3b8", muted:"#475569",
+  text:"#e8f0ff", sub:"#94a3b8", muted:"#8896ac",
   blue:"#4f7cf9", indigo:"#818cf8", sky:"#22d3ee", green:"#10d9a0",
   gHero:"linear-gradient(130deg,#818cf8 0%,#22d3ee 45%,#10d9a0 100%)",
 };
 const FD = "'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif";
 const FM = "'IBM Plex Mono','Segoe UI',monospace";
+// #4f7cf9 only reaches ~4.4:1 as small bold text on this card background —
+// just under WCAG AA's 4.5:1. Badges/borders/glows keep the original brand
+// blue; this lightened variant is for text specifically.
+const _txtSafe = (c) => c === "#4f7cf9" ? "#6b8ffa" : c;
 
 function Reveal({ children, delay=0, y=24 }) {
   const ref = useRef(null);
@@ -85,8 +89,9 @@ export default function SolutionsPage() {
         .sol-industry-tab:hover{border-color:rgba(255,255,255,.2)!important;color:#e8f0ff!important}
         .sol-persona-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
         @media(max-width:1024px){.sol-persona-grid{grid-template-columns:1fr 1fr}}
-        @media(max-width:640px){.sol-persona-grid{grid-template-columns:1fr}.sol-wrap{padding:0 16px}}
+        @media(max-width:640px){.sol-persona-grid{grid-template-columns:1fr}.sol-wrap{padding:0 16px}.sol-results-grid{grid-template-columns:1fr!important}}
         @media(max-width:860px){.sol-wrap{padding:0 20px}}
+        .sol-results-grid{min-width:0}.sol-results-grid>*{min-width:0}
       `}</style>
 
       {/* ── Hero ── */}
@@ -160,7 +165,7 @@ export default function SolutionsPage() {
               margin:"0 0 8px", fontFamily:FD, letterSpacing:"-.02em" }}>
               {ind.name}
             </h2>
-            <div style={{ fontSize:12, color:ind.color, fontWeight:600, fontFamily:FM,
+            <div style={{ fontSize:12, color:_txtSafe(ind.color), fontWeight:600, fontFamily:FM,
               letterSpacing:".06em", textTransform:"uppercase", marginBottom:24 }}>
               {ind.clients}
             </div>
@@ -181,11 +186,11 @@ export default function SolutionsPage() {
             <div style={{ background:T.card, border:`1px solid ${ind.color}20`,
               borderRadius:20, padding:32, marginBottom:20,
               boxShadow:`0 0 60px ${ind.color}08` }}>
-              <div style={{ fontSize:13, fontWeight:700, color:ind.color, fontFamily:FM,
+              <div style={{ fontSize:13, fontWeight:700, color:_txtSafe(ind.color), fontFamily:FM,
                 letterSpacing:".06em", textTransform:"uppercase", marginBottom:24 }}>
                 Measured Results
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+              <div className="sol-results-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
                 {ind.results.map(([val, label]) => (
                   <div key={label} style={{ textAlign:"center",
                     background:`${ind.color}08`, borderRadius:12, padding:"20px 12px",
