@@ -275,6 +275,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     const neckAngles = [], headTilts = [], shoulderTilts = [], spineAngles = [];
     const neckAngles_s = [], headTilts_s = [], shoulderTilts_s = [], spineAngles_s = []; // signed
     const ipdFracs = []; // for distance calibration
+    const roundedRatios = []; // neutral ear→shoulder elevation ratio (rounded-shoulder baseline)
     // Convert to PIXEL space (×W, ×H) so angles match postureEngine.js.
     const { W: Wd, H: Hd } = dimsRef.current;
     collected.forEach(lms0 => {
@@ -293,6 +294,10 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       headTilts.push(angleH(lEye, rEye));
       shoulderTilts.push(angleH(lSh, rSh));
       spineAngles.push(angleV(midHip, midSh));
+      // Rounded-shoulder neutral ratio — must match postureEngine.js:
+      // (midShoulderY − midEarY) / shoulderWidthPx, in pixel space.
+      const shWpx = Math.abs(rSh.x - lSh.x);
+      if (shWpx > 1) roundedRatios.push((midSh.y - midEar.y) / shWpx);
       // Signed for asymmetric offset detection
       neckAngles_s.push(angleV_signed(midSh, neckRef));
       headTilts_s.push(angleH_signed(lEye, rEye));
@@ -345,6 +350,8 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       // Backend uses these to widen tolerance in natural lean direction
       offsets: signedOffsets,
       asymmetric_correction: true,
+      // Personal neutral ear→shoulder ratio for rounded-shoulder scoring
+      ...(roundedRatios.length >= 5 ? { rounded_neutral: Math.round(avg(roundedRatios) * 1000) / 1000 } : {}),
     };
 
     // Distance calibration: distCalibFactor = knownDistanceCm * ipdFraction.

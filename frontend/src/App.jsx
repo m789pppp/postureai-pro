@@ -17,26 +17,9 @@ import { HRPanel } from "./HRPanel.jsx";
 import { TherapistMarketplace } from "./TherapistMarketplace.jsx";
 import { SymptomCorrelation } from "./SymptomCorrelation.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
-import { lazy, Suspense } from "react";
-// Standalone marketing pages (self-contained: own nav/footer via StandaloneLayout's
-// PageShell) — reached by real URL path, not the app's internal #hash router, since
-// Vercel's catch-all rewrite ("/(.*)" -> "/index.html") already serves index.html for
-// any path. Lazy-loaded so they don't add weight to the main app bundle.
-const FAQPage         = lazy(() => import("./FAQPage.jsx"));
-const HowItWorksPage  = lazy(() => import("./HowItWorksPage.jsx"));
-const ProductPage     = lazy(() => import("./ProductPage.jsx"));
-const SolutionsPage   = lazy(() => import("./SolutionsPage.jsx"));
-const PricingPageLP   = lazy(() => import("./PricingPageLP.jsx"));
-const STANDALONE_PAGE_ROUTES = {
-  "/faq": FAQPage,
-  "/how-it-works": HowItWorksPage,
-  "/product": ProductPage,
-  "/solutions": SolutionsPage,
-  "/pricing-lp": PricingPageLP,
-};
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
 import { AnalyticsDashboard } from "./AnalyticsDashboard.jsx";
-import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback } from "./PostureUtils.jsx";
+import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
 import { AICoach } from "./AICoach.jsx";
 import { AIInsights } from "./AIInsights.jsx";
 import { PredictiveAI } from "./PredictiveAI.jsx";
@@ -2221,6 +2204,7 @@ export default function App(){
   // Sound feedback
   const[muted,setMuted]=useState(false);
   const { alertIfNeeded } = useSoundFeedback(muted);
+  const { update: updatePainPrediction, reset: resetPainPrediction } = usePainPrediction();
   const[showCoach,setShowCoach]=useState(false);
   const[showGamification,setShowGamification]=useState(false);
   // AI Intelligence Layer
@@ -2256,6 +2240,18 @@ export default function App(){
     }
   },[showOnboardingAnalytics,authToken]);
   const[showLegalCompliance,setShowLegalCompliance]=useState(false);
+  // Health consent gate — must be accepted once before the first analysis.
+  // Corvus is a wellness/awareness tool, NOT a medical device; explicit
+  // informed consent protects the user and limits liability.
+  const[showHealthConsent,setShowHealthConsent]=useState(false);
+  const healthConsentRef=useRef((()=>{try{return localStorage.getItem("corvus_health_consent_v1")==="1";}catch{return false;}})());
+  function acceptHealthConsent(){
+    try{localStorage.setItem("corvus_health_consent_v1","1");}catch{}
+    healthConsentRef.current=true;
+    setShowHealthConsent(false);
+    if(user?.uid){ updateDoc(doc(db,"users",user.uid),{healthDisclaimerAcceptedAt:new Date().toISOString()}).catch(()=>{}); }
+    startCamera();
+  }
   const[showAccountActivity,setShowAccountActivity]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   // Phase 12 — Enterprise Scale
@@ -2711,6 +2707,7 @@ export default function App(){
             const smoothed1=pushScore(finalResult.overall);
             const displayScore = smoothed1 ?? finalResult.overall;
             alertIfNeeded(displayScore);
+            finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
@@ -2853,6 +2850,7 @@ export default function App(){
             const rawScore = d.overall;
             const smoothed = pushScore(rawScore) || rawScore; // same 15s window as local MP
             const result={...d, overall: smoothed};
+            result.pain_prediction = updatePainPrediction(smoothed, result.metrics);
             totalRef.current++;setTotalF(totalRef.current);
             if(smoothed>=65){goodRef.current++;setGoodF(goodRef.current);}
             histRef.current.push(smoothed);
@@ -2891,6 +2889,10 @@ export default function App(){
   },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus]);
 
   async function startCamera(){
+    // Health consent gate — block the very first analysis until the user has
+    // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
+    // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
+    if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
     setCameraStatus("requesting");
     try{
       const facingMode=mode==="phone"?"environment":"user";
@@ -3052,7 +3054,7 @@ export default function App(){
       // Pain prediction
       pain_summary: (()=>{
         const painMins=la.pain_prediction?.minutes_to_pain;
-        if(!painMins) return null;
+        if(painMins==null) return null;
         if(painMins<30) return isAr?`⚠️ توقع إزعاج خلال ${Math.round(painMins)} دقيقة — خذ استراحة الآن`:`⚠️ Discomfort likely in ${Math.round(painMins)} min — take a break now`;
         if(painMins<90) return isAr?`~${Math.round(painMins)} دقيقة قبل الإزعاج المحتمل`:`~${Math.round(painMins)} min before likely discomfort`;
         return null;
@@ -3461,20 +3463,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
       </div>
     </div>
   );
-
-  // Standalone marketing pages reached by real URL path (/faq, /product, etc.)
-  // rather than the app's internal #hash router. Checked first since these
-  // pages are fully self-contained and must render regardless of auth/loading state.
-  const _StandalonePage = STANDALONE_PAGE_ROUTES[window.location.pathname];
-  if (_StandalonePage) {
-    return (
-      <ErrorBoundary>
-        <Suspense fallback={null}>
-          <_StandalonePage />
-        </Suspense>
-      </ErrorBoundary>
-    );
-  }
 
   if(paymentResult)return <PaymentResultScreen result={paymentResult} cs={cs} lang={lang} onContinue={()=>setPaymentResult(null)}/>;
   if(page==="landing")return <ErrorBoundary><Landing {...shared} onStart={()=>setPage(user?"setup":"auth")} lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}/></ErrorBoundary>;
@@ -3941,6 +3929,39 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showFeatureFlags&&isAdmin&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
       {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
       {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
+      {showHealthConsent&&(
+        <div dir={dir} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000,padding:20}}>
+          <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,maxWidth:460,width:"100%",padding:0,overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,.4)"}}>
+            <div style={{background:"linear-gradient(135deg,#3b82f6,#2563eb)",padding:"22px 26px",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{fontSize:26,lineHeight:1}}>🩺</div>
+              <div>
+                <div style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:.2}}>{isAr?"قبل ما نبدأ التحليل":"Before we start"}</div>
+                <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:2}}>{isAr?"إقرار سريع لمرة واحدة":"A one-time acknowledgement"}</div>
+              </div>
+            </div>
+            <div style={{padding:"22px 26px"}}>
+              <p style={{color:cs.text,fontSize:13.5,lineHeight:1.7,margin:"0 0 14px"}}>
+                {isAr
+                  ? "Corvus أداة توعية بوضعية الجسم للاستخدام العام — وليست جهازاً طبياً ولا بديلاً عن استشارة أخصائي. القياسات والتقارير تقريبية والغرض منها التوعية فقط."
+                  : "Corvus is a general wellness tool for posture awareness — not a medical device and not a substitute for professional advice. Measurements and reports are approximate and for informational purposes only."}
+              </p>
+              <ul style={{color:cs.muted,fontSize:12.5,lineHeight:1.6,margin:"0 0 16px",paddingInlineStart:18}}>
+                <li>{isAr?"لو عندك ألم أو حالة طبية، استشر طبيباً أو أخصائي علاج طبيعي.":"If you have pain or a medical condition, consult a doctor or physiotherapist."}</li>
+                <li>{isAr?"لا تعتمد على النتائج في اتخاذ قرارات طبية.":"Do not rely on results for medical decisions."}</li>
+                <li>{isAr?"معالجة الفيديو تتم على جهازك في الوقت اللحظي.":"Video is processed on your device in real time."}</li>
+              </ul>
+              <div style={{display:"flex",gap:10,flexDirection:isAr?"row-reverse":"row"}}>
+                <button onClick={acceptHealthConsent} style={{flex:1,background:"linear-gradient(135deg,#3b82f6,#2563eb)",border:"none",borderRadius:11,padding:"13px 18px",fontSize:13.5,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                  {isAr?"أوافق وابدأ":"I agree — start"}
+                </button>
+                <button onClick={()=>setShowHealthConsent(false)} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,padding:"13px 18px",fontSize:13,color:cs.muted,cursor:"pointer"}}>
+                  {isAr?"إلغاء":"Cancel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
       <HomePage
         user={user} profile={profile} cs={cs} lang={lang} isAr={isAr} dir={dir}
@@ -5154,6 +5175,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{width:8,height:8,borderRadius:"50%",background:"#10b981",flexShrink:0,boxShadow:"0 0 6px #10b981"}}/>
             <span style={{fontSize:11,color:"#6ee7b7",fontWeight:600}}>
               {isAr?`النتيجة ${scoreStatus.score}/100 — ${scoreStatus.grade}`:`Score ${scoreStatus.score}/100 — ${scoreStatus.grade}`}
+            </span>
+          </div>
+        )}
+
+        {/* Personalised analysis indicator — shown while a calibrated session runs */}
+        {camActive&&mode!=="side"&&calibData?.tolerances&&(
+          <div style={{padding:"5px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6,background:"rgba(16,185,129,.05)"}}>
+            <span style={{fontSize:11,color:"#34d399",fontWeight:700}}>✓</span>
+            <span style={{fontSize:10.5,color:"#34d399",fontWeight:600}}>
+              {isAr?"التحليل مُخصّص لوضعيتك الطبيعية":"Analysis personalised to your natural posture"}
             </span>
           </div>
         )}
