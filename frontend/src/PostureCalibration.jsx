@@ -36,9 +36,15 @@ const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 // calibration baseline ("ideal" neck angle) is measured one way while
 // the live engine measures neck_lean a different way, and the two
 // never line up even when sitting in the exact calibrated posture.
+// MUST match postureEngine.js analyzeNeckLean exactly, otherwise the
+// calibrated neutral neck angle is measured with a different reference
+// point than the runtime engine and personalised scoring is offset.
+// The engine is ear-dominant (nose weight 0.15 when clearly visible,
+// else 0 — the ear midpoint is the reliable reference; the nose sits
+// anterior/inferior and only lightly de-biases yaw).
 function neckRefPoint(nose, midEar, noseVis) {
-  const earWeight  = (noseVis ?? 1) > 0.7 ? 0.15 : 0.50;
-  const noseWeight = 1 - earWeight;
+  const noseWeight = (noseVis ?? 0) > 0.7 ? 0.15 : 0.0;
+  const earWeight  = 1 - noseWeight;
   return {
     point: { x: nose.x * noseWeight + midEar.x * earWeight, y: nose.y * noseWeight + midEar.y * earWeight },
     correction: 5.0 * noseWeight,
@@ -69,6 +75,10 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
   const mpRef     = useRef(null);
   const timerRef  = useRef(null);
   const frameRef  = useRef([]);
+  // Video pixel dimensions — captured so calibration angles are computed in
+  // the SAME pixel space as postureEngine.js (angles differ between
+  // normalised and pixel space on non-square frames).
+  const dimsRef   = useRef({ W: 1280, H: 720 });
 
   const T = {
     en: {
@@ -169,6 +179,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       const { videoWidth: W, videoHeight: H } = videoRef.current;
       canvasRef.current.width  = W || 640;
       canvasRef.current.height = H || 480;
+      if (W && H) dimsRef.current = { W, H };
       ctx.clearRect(0, 0, W, H);
       // Alignment guide
       ctx.strokeStyle = lms ? "#10b981" : "rgba(245,158,11,.7)";
@@ -264,12 +275,17 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     const neckAngles = [], headTilts = [], shoulderTilts = [], spineAngles = [];
     const neckAngles_s = [], headTilts_s = [], shoulderTilts_s = [], spineAngles_s = []; // signed
     const ipdFracs = []; // for distance calibration
-    collected.forEach(lms => {
-      const lSh = lms[LM.L_SHOULDER], rSh = lms[LM.R_SHOULDER];
-      const lEar = lms[LM.L_EAR],    rEar = lms[LM.R_EAR];
-      const lEye = lms[LM.L_EYE],    rEye = lms[LM.R_EYE];
-      const lHip = lms[23],           rHip = lms[24];
-      const nose = lms[LM.NOSE];
+    const roundedRatios = []; // neutral ear→shoulder elevation ratio (rounded-shoulder baseline)
+    // Convert to PIXEL space (×W, ×H) so angles match postureEngine.js.
+    const { W: Wd, H: Hd } = dimsRef.current;
+    collected.forEach(lms0 => {
+      const P = i => ({ x: (lms0[i]?.x ?? 0) * Wd, y: (lms0[i]?.y ?? 0) * Hd, visibility: lms0[i]?.visibility });
+      const lms = lms0; // keep raw for visibility/IPD checks below
+      const lSh = P(LM.L_SHOULDER), rSh = P(LM.R_SHOULDER);
+      const lEar = P(LM.L_EAR),    rEar = P(LM.R_EAR);
+      const lEye = P(LM.L_EYE),    rEye = P(LM.R_EYE);
+      const lHip = P(23),           rHip = P(24);
+      const nose = { ...P(LM.NOSE), visibility: lms0[LM.NOSE]?.visibility };
       const midSh  = { x: (lSh.x + rSh.x) / 2,   y: (lSh.y + rSh.y) / 2 };
       const midEar = { x: (lEar.x + rEar.x) / 2,  y: (lEar.y + rEar.y) / 2 };
       const midHip = { x: (lHip.x + rHip.x) / 2,  y: (lHip.y + rHip.y) / 2 };
@@ -278,15 +294,20 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       headTilts.push(angleH(lEye, rEye));
       shoulderTilts.push(angleH(lSh, rSh));
       spineAngles.push(angleV(midHip, midSh));
+      // Rounded-shoulder neutral ratio — must match postureEngine.js:
+      // (midShoulderY − midEarY) / shoulderWidthPx, in pixel space.
+      const shWpx = Math.abs(rSh.x - lSh.x);
+      if (shWpx > 1) roundedRatios.push((midSh.y - midEar.y) / shWpx);
       // Signed for asymmetric offset detection
       neckAngles_s.push(angleV_signed(midSh, neckRef));
       headTilts_s.push(angleH_signed(lEye, rEye));
       shoulderTilts_s.push(angleH_signed(lSh, rSh));
       spineAngles_s.push(angleV_signed(midHip, midSh));
-      // IPD as a fraction of frame width (these landmarks are already
-      // normalized 0-1, so no need to multiply by frame width here)
-      if ((lEye.visibility ?? 1) > 0.5 && (rEye.visibility ?? 1) > 0.5) {
-        ipdFracs.push(Math.abs(rEye.x - lEye.x));
+      // IPD as a fraction of frame width — use RAW normalised coords
+      // (lEye/rEye above are now in pixels for the angle maths).
+      const lEyeN = lms0[LM.L_EYE], rEyeN = lms0[LM.R_EYE];
+      if ((lEyeN?.visibility ?? 1) > 0.5 && (rEyeN?.visibility ?? 1) > 0.5) {
+        ipdFracs.push(Math.abs(rEyeN.x - lEyeN.x));
       }
     });
 
@@ -329,6 +350,8 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       // Backend uses these to widen tolerance in natural lean direction
       offsets: signedOffsets,
       asymmetric_correction: true,
+      // Personal neutral ear→shoulder ratio for rounded-shoulder scoring
+      ...(roundedRatios.length >= 5 ? { rounded_neutral: Math.round(avg(roundedRatios) * 1000) / 1000 } : {}),
     };
 
     // Distance calibration: distCalibFactor = knownDistanceCm * ipdFraction.

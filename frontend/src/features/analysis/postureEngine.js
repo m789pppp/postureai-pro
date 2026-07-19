@@ -232,6 +232,29 @@ function classify(value, thresholds) {
   return "normal";
 }
 
+/**
+ * Resolve scoring thresholds for a metric, personalised from the user's
+ * calibration when available, else the supplied population defaults.
+ *
+ * This is the core of accurate front-mode analysis: instead of scoring
+ * everyone against a fixed "ideal = 0°", we score deviation from THIS
+ * user's own measured neutral posture, with their own tolerance band.
+ * A person with a naturally 6° resting neck angle or a slightly uneven
+ * shoulder line is no longer penalised for their anatomy.
+ *
+ * calibKey maps to PostureCalibration.jsx tolerance keys:
+ *   neck_angle · head_tilt · shoulder_tilt · spine_angle
+ */
+function resolveThr(calib, calibKey, defIdeal, defOk, defBad) {
+  const t = calib?.tolerances?.[calibKey];
+  if (t && typeof t.ideal === "number" && typeof t.ok === "number" && typeof t.bad === "number") {
+    const ok  = Math.max(2, t.ok);
+    const bad = Math.max(ok + 2, t.bad);
+    return { ideal: t.ideal, ok, bad, personalised: true };
+  }
+  return { ideal: defIdeal, ok: defOk, bad: defBad, personalised: false };
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // GRADE / COLOR HELPERS
 // ═══════════════════════════════════════════════════════════════════
@@ -639,7 +662,7 @@ function checkFrameQuality(lms, W, H) {
 // Each returns { angle, score, severity, confidence, reliable }
 // ═══════════════════════════════════════════════════════════════════
 
-function analyzeNeckLean(lms, W, H, prop) {
+function analyzeNeckLean(lms, W, H, prop, calib = null) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
 
@@ -681,14 +704,20 @@ function analyzeNeckLean(lms, W, H, prop) {
   const okAdj  = Math.max(5.0,  6.0  * prop.shRatio);
   const badAdj = Math.max(12.0, 17.0 * prop.shRatio);
 
-  const score     = scoreMetric(angle, 0, okAdj, badAdj);
-  const severity  = classify(angle, SEV.NECK);
+  // Personalised scoring: deviation from the user's own neutral neck angle
+  // (from calibration) using their tolerance band; else distance-normalised
+  // defaults. Severity is measured as deviation-from-neutral so a naturally
+  // slight resting lean is not repeatedly flagged.
+  const t = resolveThr(calib, "neck_angle", 0, okAdj, badAdj);
+  const dev = Math.abs(angle - t.ideal);
+  const score     = scoreMetric(angle, t.ideal, t.ok, t.bad);
+  const severity  = classify(dev, SEV.NECK);
   const confidence = Math.round(70 + (vis(PL.L_EAR) ? 15 : 0) + (noseOK ? 10 : 0) + (shOK ? 5 : 0));
 
-  return { angle: Math.round(angle), score, severity, confidence, reliable, okAdj, badAdj };
+  return { angle: Math.round(angle), score, severity, confidence, reliable, okAdj:t.ok, badAdj:t.bad, personalised:t.personalised };
 }
 
-function analyzeHeadTilt(lms, W, H) {
+function analyzeHeadTilt(lms, W, H, calib = null) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
   const reliable = vis(PL.L_EYE) && vis(PL.R_EYE);
@@ -698,24 +727,28 @@ function analyzeHeadTilt(lms, W, H) {
   const lEye = { x: g(PL.L_EYE).x * W, y: g(PL.L_EYE).y * H };
   const rEye = { x: g(PL.R_EYE).x * W, y: g(PL.R_EYE).y * H };
   const angle    = angleHoriz(lEye, rEye);
-  const score    = scoreMetric(angle, 0, THR.HEAD_TILT.ok, THR.HEAD_TILT.bad);
-  const severity = classify(angle, { mild: 3, moderate: 7, severe: 10 });
-  return { angle: Math.round(angle), score, severity, confidence: 85, reliable };
+  const t = resolveThr(calib, "head_tilt", 0, THR.HEAD_TILT.ok, THR.HEAD_TILT.bad);
+  const dev = Math.abs(angle - t.ideal);
+  const score    = scoreMetric(angle, t.ideal, t.ok, t.bad);
+  const severity = classify(dev, { mild: 3, moderate: 7, severe: 10 });
+  return { angle: Math.round(angle), score, severity, confidence: 85, reliable, personalised:t.personalised };
 }
 
-function analyzeShoulderLevel(lms, W, H, prop) {
+function analyzeShoulderLevel(lms, W, H, prop, calib = null) {
   if (!prop.shOK) return { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
   const angle    = angleHoriz(prop.lSh, prop.rSh);
-  const score    = scoreMetric(angle, 0, THR.SH_TILT.ok, THR.SH_TILT.bad);
-  const severity = classify(angle, SEV.SHOULDER);
+  const t = resolveThr(calib, "shoulder_tilt", 0, THR.SH_TILT.ok, THR.SH_TILT.bad);
+  const dev = Math.abs(angle - t.ideal);
+  const score    = scoreMetric(angle, t.ideal, t.ok, t.bad);
+  const severity = classify(dev, SEV.SHOULDER);
   // Signed: positive = right shoulder higher
   const signed   = (prop.rSh.y - prop.lSh.y) > 0 ? angle : -angle;
 
-  return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 90, reliable: true };
+  return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 90, reliable: true, personalised:t.personalised };
 }
 
-function analyzeSpineLean(lms, W, H, prop, roundedScore) {
+function analyzeSpineLean(lms, W, H, prop, roundedScore, calib = null) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
   const hipOK = vis(PL.L_HIP) && vis(PL.R_HIP);
@@ -731,12 +764,14 @@ function analyzeSpineLean(lms, W, H, prop, roundedScore) {
   const rHip = { x: g(PL.R_HIP).x * W, y: g(PL.R_HIP).y * H };
   const midHip = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
   const angle   = angleVert(midHip, prop.midSh);
-  const score   = scoreMetric(angle, 0, THR.SPINE_LEAN.ok, THR.SPINE_LEAN.bad);
-  const severity = classify(angle, SEV.SPINE);
-  return { angle: Math.round(angle), score, severity, confidence: 88, reliable: true };
+  const t = resolveThr(calib, "spine_angle", 0, THR.SPINE_LEAN.ok, THR.SPINE_LEAN.bad);
+  const dev = Math.abs(angle - t.ideal);
+  const score   = scoreMetric(angle, t.ideal, t.ok, t.bad);
+  const severity = classify(dev, SEV.SPINE);
+  return { angle: Math.round(angle), score, severity, confidence: 88, reliable: true, personalised:t.personalised };
 }
 
-function analyzeRoundedShoulders(lms, prop, H) {
+function analyzeRoundedShoulders(lms, prop, H, calib = null) {
   if (!prop.shOK) return { depth: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
   const g = i => lms[i];
@@ -774,15 +809,21 @@ function analyzeRoundedShoulders(lms, prop, H) {
   const midShYpx  = prop.midSh.y; // already in pixels
   const elevRatio = (midShYpx - midEarYpx) / Math.max(prop.shWidthPx, 1);
 
-  // Upright anatomical ratio ≈ 0.52; shoulders creeping toward the ears
-  // (rounding/shrugging) shrinks it. Scale ×45 maps typical rounding
-  // (ratio 0.30–0.42) onto the existing 0–30 "depth" range and thresholds.
-  const NEUTRAL_RATIO = 0.52;
+  // Neutral ear-to-shoulder ratio is ANATOMY-dependent (neck length): a
+  // naturally short-necked user has a lower ratio and would read as
+  // permanently "rounded" against a fixed constant. Prefer the user's own
+  // calibrated neutral ratio; fall back to the population value ≈0.52.
+  // Rounding/shrugging shrinks the ratio; ×45 maps the deviation onto the
+  // existing 0–30 "depth" range and thresholds.
+  const NEUTRAL_RATIO = (typeof calib?.rounded_neutral === "number" && calib.rounded_neutral > 0.2 && calib.rounded_neutral < 1.0)
+    ? calib.rounded_neutral
+    : 0.52;
+  const personalised = NEUTRAL_RATIO !== 0.52;
   const deviation = Math.max(0, NEUTRAL_RATIO - elevRatio) * 45;
 
   const score    = scoreMetric(deviation, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
   const severity = classify(deviation, SEV.ROUNDED);
-  return { depth: Math.round(deviation * 10) / 10, asymmetry: 0, score, severity, confidence: 80, reliable: true };
+  return { depth: Math.round(deviation * 10) / 10, asymmetry: 0, score, severity, confidence: 80, reliable: true, personalised };
 }
 
 function analyzeFHP(lms, W, H, prop) {
@@ -922,7 +963,7 @@ function buildAlerts(modules, distCm, lo, hi) {
 // MAIN FRONT-CAMERA ANALYSIS
 // ═══════════════════════════════════════════════════════════════════
 
-export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartMs = null, calibKnownDistCm = null) {
+export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartMs = null, calibKnownDistCm = null, calib = null) {
   if (!lms || lms.length < 25) return null;
 
   // Quality gate
@@ -955,10 +996,12 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const distCm  = estimateDistanceCm(lms, W, H, headYaw, distCalibFactor);
   const distSc  = distanceScore(distCm, lo, hi);
 
-  // Body module analysis — quick metrics run every frame, expensive every 3rd
-  const neck     = analyzeNeckLean(lms, W, H, prop);
-  const headTilt = analyzeHeadTilt(lms, W, H);
-  const shoulder = analyzeShoulderLevel(lms, W, H, prop);
+  // Body module analysis — quick metrics run every frame, expensive every 3rd.
+  // `calib` personalises neck/tilt/shoulder/spine scoring to the user's own
+  // neutral posture measured during calibration.
+  const neck     = analyzeNeckLean(lms, W, H, prop, calib);
+  const headTilt = analyzeHeadTilt(lms, W, H, calib);
+  const shoulder = analyzeShoulderLevel(lms, W, H, prop, calib);
   const yaw      = analyzeHeadYawModule(lms, W, H);
 
   // Expensive metrics — cached between frames.
@@ -967,7 +1010,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // pass it directly to spine. On skip frames, use the cached value.
   let rounded, fhp, elbow, monitor;
   if (!skipExpensive || !analyzeMP._cachedRounded) {
-    rounded = analyzeRoundedShoulders(lms, prop, H);
+    rounded = analyzeRoundedShoulders(lms, prop, H, calib);
     fhp     = analyzeFHP(lms, W, H, prop);
     elbow   = analyzeElbow(lms, W, H);
     monitor = analyzeMonitorHeight(lms, W, H, distCm);
@@ -982,7 +1025,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     monitor = analyzeMP._cachedMonitor;
   }
   // Spine runs every frame (fast) but depends on rounded.score from above
-  const spine = analyzeSpineLean(lms, W, H, prop, rounded.score);
+  const spine = analyzeSpineLean(lms, W, H, prop, rounded.score, calib);
 
   // Confidence-weighted overall score.
   // Previous: unreliable modules contributed at a fixed 30% weight, meaning
@@ -1098,6 +1141,9 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     detected: true,
     fatigue_adjusted_score: Math.max(0, overall - fatiguePenalty),
     calibrationStatus: quality.reason,
+    // True when the postural angles were scored against the user's own
+    // calibrated neutral rather than population defaults.
+    personalised: !!(calib?.tolerances) && (neck.personalised || shoulder.personalised || headTilt.personalised || spine.personalised || rounded.personalised),
   };
 }
 
