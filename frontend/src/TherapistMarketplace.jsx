@@ -24,8 +24,9 @@ function Tab({ active, onClick, children }) {
   );
 }
 
-function money(cents, currency) {
-  if (!cents) return "—";
+function money(cents, currency, isAr) {
+  if (cents == null) return "—";
+  if (cents === 0) return isAr ? "مجانية" : "Free";
   return `${(cents/100).toLocaleString()} ${currency||"EGP"}`;
 }
 
@@ -40,6 +41,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
   const [booking, setBooking]   = useState(false);
   const [myBookings, setMyBookings] = useState([]);
   const [chatBooking, setChatBooking] = useState(null); // booking whose chat thread is open
+  const [cancellingId, setCancellingId] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true); setErr(null);
@@ -77,6 +79,25 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
       addToast?.(e.message || (isAr ? "حصل خطأ" : "Something went wrong"), "error");
     } finally {
       setBooking(false);
+    }
+  };
+
+  const cancelBooking = async (b) => {
+    const wasPaid = b.status === "confirmed";
+    const msg = wasPaid
+      ? (isAr ? "الحجز ده مدفوع بالفعل — لو ألغيته، فريقنا هيتواصل معاك بخصوص الاسترداد. تأكيد الإلغاء؟"
+              : "This booking is already paid — cancelling will flag it for our team to process a refund. Confirm cancellation?")
+      : (isAr ? "تأكيد إلغاء الحجز؟" : "Confirm cancelling this booking?");
+    if (!window.confirm(msg)) return;
+    setCancellingId(b.id);
+    try {
+      await MarketplaceAPI.cancelBooking(b.id);
+      setMyBookings(prev => prev.map(x => x.id === b.id ? { ...x, status: "cancelled" } : x));
+      addToast?.(isAr ? "تم إلغاء الحجز" : "Booking cancelled", "success");
+    } catch (e) {
+      addToast?.(e.message || (isAr ? "تعذر الإلغاء" : "Couldn't cancel"), "error");
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -134,7 +155,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
                 )}
                 {th.bio && <div style={{ fontSize:12.5, color:"#94a3b8", marginBottom:12, lineHeight:1.5 }}>{th.bio}</div>}
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div style={{ fontWeight:800, fontSize:14, color:"#5eead4" }}>{money(th.session_fee_cents, th.currency)}</div>
+                  <div style={{ fontWeight:800, fontSize:14, color:"#5eead4" }}>{money(th.session_fee_cents, th.currency, isAr)}</div>
                   <button style={btnPrimary} onClick={()=>setSelected(th)}>{isAr ? "احجز" : "Book"}</button>
                 </div>
               </div>
@@ -154,15 +175,21 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
                   <div style={{ fontSize:12, color:"#64748b" }}>{b.preferred_time || (isAr ? "الميعاد لسه مش متحدد" : "Time not set")}</div>
                 </div>
                 <div style={{ textAlign:"right" }}>
-                  <div style={{ fontWeight:700, color:"#5eead4" }}>{money(b.amount_cents, b.currency)}</div>
+                  <div style={{ fontWeight:700, color:"#5eead4" }}>{money(b.amount_cents, b.currency, isAr)}</div>
                   <div style={{ fontSize:11, color:"#94a3b8", textTransform:"capitalize" }}>{b.status?.replace(/_/g," ")}</div>
                 </div>
               </div>
-              <div style={{ marginTop:12, borderTop:border, paddingTop:12 }}>
+              <div style={{ marginTop:12, borderTop:border, paddingTop:12, display:"flex", gap:8 }}>
                 <button style={{ ...btnGhost, fontSize:12, padding:"6px 14px" }}
                         onClick={()=>setChatBooking(chatBooking?.id===b.id ? null : b)}>
                   {chatBooking?.id===b.id ? (isAr?"إغلاق المحادثة":"Close chat") : `💬 ${isAr?"محادثة":"Chat"}`}
                 </button>
+                {b.status !== "cancelled" && (
+                  <button style={{ ...btnGhost, fontSize:12, padding:"6px 14px", color:"#f87171", borderColor:"rgba(248,113,113,.3)" }}
+                          onClick={()=>cancelBooking(b)} disabled={cancellingId===b.id}>
+                    {cancellingId===b.id ? "…" : (isAr?"إلغاء الحجز":"Cancel booking")}
+                  </button>
+                )}
               </div>
               {chatBooking?.id === b.id && (
                 <BookingChat bookingId={b.id} isAr={isAr} currentUid={user?.uid} addToast={addToast} />
@@ -269,7 +296,7 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
                   alignItems:"center", justifyContent:"center", zIndex:1000, padding:20 }}>
       <div style={{ ...card, width:"100%", maxWidth:420, background:"#111827" }}>
         <div style={{ fontWeight:800, fontSize:16, marginBottom:4 }}>{isAr ? "حجز جلسة مع" : "Book a session with"} {therapist.name}</div>
-        <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:16 }}>{money(therapist.session_fee_cents, therapist.currency)}</div>
+        <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:16 }}>{money(therapist.session_fee_cents, therapist.currency, isAr)}</div>
 
         <div style={{ marginBottom:12 }}>
           <div style={label}>{isAr ? "الميعاد المفضل" : "Preferred time"}</div>
@@ -332,7 +359,7 @@ function AdminBookingsManager({ isAr, addToast, adminUid }) {
               <div style={{ fontSize:12, color:"#64748b" }}>{b.preferred_time || (isAr?"الميعاد لسه مش متحدد":"Time not set")} · {b.user_id?.slice(0,8)}…</div>
             </div>
             <div style={{ textAlign:"right" }}>
-              <div style={{ fontWeight:700, color:"#5eead4" }}>{money(b.amount_cents, b.currency)}</div>
+              <div style={{ fontWeight:700, color:"#5eead4" }}>{money(b.amount_cents, b.currency, isAr)}</div>
               <div style={{ fontSize:11, color:"#94a3b8", textTransform:"capitalize" }}>{b.status?.replace(/_/g," ")}</div>
             </div>
           </div>
@@ -416,7 +443,7 @@ function AdminTherapistManager({ isAr, addToast }) {
           <div key={th.id} style={{ ...card, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div>
               <div style={{ fontWeight:700 }}>{th.name} <span style={{ fontSize:11, color: th.status==="active"?"#5eead4":"#f87171" }}>({th.status})</span></div>
-              <div style={{ fontSize:12, color:"#64748b" }}>{th.city} · {money(th.session_fee_cents, th.currency)}</div>
+              <div style={{ fontSize:12, color:"#64748b" }}>{th.city} · {money(th.session_fee_cents, th.currency, isAr)}</div>
             </div>
             <button style={btnGhost} onClick={()=>toggleStatus(th)}>
               {th.status === "active" ? (isAr?"إيقاف":"Pause") : (isAr?"تفعيل":"Activate")}
