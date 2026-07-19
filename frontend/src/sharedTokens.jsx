@@ -141,7 +141,7 @@ const LPV7_TOKENS = {
   borderM:"rgba(148,163,184,.16)",
   text:  "#e8f0ff",
   sub:   "#94a3b8",
-  muted: "#475569",
+  muted: "#8896ac",
   blue:  "#4f7cf9",
   indigo:"#818cf8",
   sky:   "#22d3ee",
