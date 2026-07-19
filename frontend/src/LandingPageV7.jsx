@@ -1314,55 +1314,63 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
   //    Billing.jsx PLANS/B2B_PLANS, and PricingPage.jsx exactly ──
   const b2cPlans = [
     {
+      id:"free", name: ar?"مجاني":"Free",
+      priceUSD:{ monthly:0, yearly:0 }, priceEGP:{ monthly:0, yearly:0 },
+      color:LPV7_TOKENS.muted,
+      features: ar
+        ? ["5 جلسات / شهر","مدرب AI (5 رسائل/يوم)","لوحة نتائج أساسية","سجل 7 أيام"]
+        : ["5 sessions / month","AI Coach (5 msgs/day)","Basic score dashboard","7-day history"],
+    },
+    {
       id:"basic", name: ar?"أساسي":"Basic",
-      priceUSD:{ monthly:9.99, yearly:79.99 }, priceEGP:{ monthly:199, yearly:1590 },
+      priceUSD:{ monthly:9.99, yearly:95.9 }, priceEGP:{ monthly:199, yearly:1910 },
       color:LPV7_TOKENS.sub,
       features: ar
-        ? ["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","سلسلة وأهداف","توقع الألم","المتصدرين","بطاقة مشاركة"]
-        : ["Unlimited sessions","AI Coach (10 msgs/mo)","Streak & Goals","Pain prediction","Leaderboard","Share card"],
+        ? ["جلسات غير محدودة","مدرب AI (غير محدود)","سجل 90 يوم","تقارير أسبوعية","تصدير CSV/PDF","دعم بريد إلكتروني"]
+        : ["Unlimited sessions","AI Coach (unlimited)","90-day history","Weekly reports","Export CSV/PDF","Email support"],
     },
     {
       id:"professional", name: ar?"احترافي":"Pro",
-      priceUSD:{ monthly:19.99, yearly:159.99 }, priceEGP:{ monthly:399, yearly:3190 },
+      priceUSD:{ monthly:19.99, yearly:191.9 }, priceEGP:{ monthly:399, yearly:3830 },
       popular:true, color:LPV7_TOKENS.blue,
       features: ar
-        ? ["كل Basic","رؤى AI","تقارير كاملة","مقارنة الجلسات","تصدير CSV/PDF","تقرير أسبوعي","تنبيهات الشذوذ"]
-        : ["Everything in Basic","AI Insights","Full Reports","Session compare","Export CSV/PDF","Weekly report","Anomaly alerts"],
+        ? ["كل Basic","رؤى AI متقدمة","مقارنة الجلسات","تنبيهات الشذوذ","برامج تمدد مخصصة","دعم أولوية"]
+        : ["Everything in Basic","Advanced AI insights","Session compare","Anomaly alerts","Custom stretch programs","Priority support"],
     },
     {
       id:"elite", name: ar?"إيليت":"Elite",
-      priceUSD:{ monthly:39.99, yearly:299.99 }, priceEGP:{ monthly:699, yearly:5590 },
+      priceUSD:{ monthly:39.99, yearly:383.9 }, priceEGP:{ monthly:699, yearly:6710 },
       color:LPV7_TOKENS.green,
       features: ar
-        ? ["كل Pro","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية","معايرة","سرد الجلسة"]
-        : ["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support","Calibration","Session narrative"],
+        ? ["كل Pro","AI تنبؤي","تقرير PDF سريري","معايرة متقدمة","سرد الجلسة","وصول مبكر للمميزات"]
+        : ["Everything in Pro","Predictive AI","Clinical PDF report","Advanced calibration","Session narrative","Early feature access"],
     },
   ];
 
   const b2bPlans = [
     {
-      id:"b2b_starter", name: ar?"ستارتر":"Starter",
-      priceUSD:{ monthly:79, yearly:758 }, priceEGP:{ monthly:2499, yearly:23990 },
-      color:LPV7_TOKENS.sub,
+      id:"b2b_team", name: ar?"تيم":"Team",
+      priceUSD:{ monthly:5, yearly:48 }, priceEGP:{ monthly:249, yearly:2390 },
+      perUser:true, color:LPV7_TOKENS.sub,
       features: ar
-        ? ["حتى 30 موظف","كشف 33 نقطة بالـAI","تقارير PDF","لوحة تحليلات HR","تجربة مجانية 7 أيام","دعم بالبريد"]
-        : ["Up to 30 employees","33-point AI pose detection","PDF reports","HR analytics dashboard","7-day free trial","Email support"],
+        ? ["10–100 موظف","لوحة HR","إدارة الأقسام","تقارير أسبوعية تلقائية","تنبيهات Slack/Teams","استيراد CSV","وصول API"]
+        : ["10–100 employees","HR dashboard","Department management","Weekly auto-reports","Slack/Teams alerts","CSV import","API access"],
     },
     {
-      id:"b2b_growth", name: ar?"جروث":"Growth",
-      priceUSD:{ monthly:199, yearly:1910 }, priceEGP:{ monthly:6999, yearly:67190 },
-      popular:true, color:LPV7_TOKENS.blue,
+      id:"b2b_business", name: ar?"بيزنس":"Business",
+      priceUSD:{ monthly:8, yearly:77 }, priceEGP:{ monthly:399, yearly:3830 },
+      perUser:true, popular:true, color:LPV7_TOKENS.blue,
       features: ar
-        ? ["حتى 100 موظف","FaceMesh 478 نقطة","وضع رأس ثلاثي الأبعاد","تنبيهات Slack/Teams","تقرير HR تنفيذي","دعم أولوية + SLA"]
-        : ["Up to 100 employees","FaceMesh 478 landmarks","3D head pose","Slack/Teams alerts","Executive HR reports","Priority support + SLA"],
+        ? ["10–5,000 موظف","كل Team","SSO / SAML 2.0","عتبات مخاطرة مخصصة","موصلات SAP / Workday","تأهيل مخصص","SLA 99.9%"]
+        : ["10–5,000 employees","Everything in Team","SSO / SAML 2.0","Custom risk thresholds","SAP / Workday connectors","Dedicated onboarding","SLA 99.9%"],
     },
     {
       id:"b2b_enterprise", name: ar?"إنتربرايز":"Enterprise",
-      priceUSD:{ monthly:null, yearly:null, startingAt:499 }, priceEGP:{ monthly:null, yearly:null },
+      priceUSD:{ monthly:null, yearly:null }, priceEGP:{ monthly:null, yearly:null },
       isEnterprise:true, color:LPV7_TOKENS.green,
       features: ar
-        ? ["موظفون غير محدودون","AI clinical narrative","SAML SSO / Azure AD","White-label","SLA مخصص","مدير نجاح مخصص"]
-        : ["Unlimited employees","AI clinical narrative","SAML SSO / Azure AD","White-label","Custom SLA","Dedicated success manager"],
+        ? ["موظفون غير محدودون","كل Business","خيار on-premise","SLA مخصص","مدير نجاح مخصص","تسعير مخصص","حزمة قانونية"]
+        : ["Unlimited employees","Everything in Business","On-premise option","Custom SLA","Dedicated CSM","Volume pricing","Legal & compliance pack"],
     },
   ];
 
