@@ -30,6 +30,25 @@ try {
   document.body.classList.add(isDark ? "dark" : "light");
 } catch {}
 
+// ── Stale-deployment chunk recovery ────────────────────────────────
+// Vite fires this on window whenever a dynamic import() 404s — almost
+// always because a new deploy went out after this tab loaded, so the
+// chunk hash the page is asking for (e.g. jspdf.es.min-DKZHkEAz.js) no
+// longer exists on the server. Without this, the raw "Failed to fetch
+// dynamically imported module" error surfaces straight to the user
+// (e.g. mid-PDF-download) instead of just picking up the new build.
+// Guarded with a one-shot sessionStorage flag so a *genuinely* broken
+// chunk (not just a stale deploy) can't reload-loop forever.
+window.addEventListener("vite:preloadError", (e) => {
+  e.preventDefault();
+  const key = "corvus_chunk_reload_at";
+  const last = Number(sessionStorage.getItem(key) || 0);
+  if (Date.now() - last > 10000) {
+    sessionStorage.setItem(key, String(Date.now()));
+    window.location.reload();
+  }
+});
+
 // ── Sentry: init before render ────────────────────────────────────
 import { initSentry } from "./Observability.jsx";
 initSentry().catch(() => {});

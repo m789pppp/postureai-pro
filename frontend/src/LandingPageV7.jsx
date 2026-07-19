@@ -147,7 +147,7 @@ const LPV7_TOKENS = {
   borderM:"rgba(148,163,184,.16)",
   text:  "#e8f0ff",
   sub:   "#94a3b8",
-  muted: "#475569",
+  muted: "#8896ac",
   blue:  "#4f7cf9",
   indigo:"#818cf8",
   sky:   "#22d3ee",
@@ -271,13 +271,29 @@ function GlobalStyle() {
       :focus-visible{outline:2px solid #4f7cf9;outline-offset:3px;border-radius:4px}
 
       /* hero */
-      .lp-hero-grid{display:grid;grid-template-columns:1fr 1.05fr;gap:clamp(32px,4vw,64px);align-items:center}
+      .lp-hero-grid{display:grid;grid-template-columns:1fr 1.05fr;gap:clamp(32px,4vw,64px);align-items:center;min-width:0}
+      .lp-hero-grid>*{min-width:0}
       @media(max-width:900px){.lp-hero-grid{grid-template-columns:1fr}.lp-hero-right{display:none!important}}
 
       /* nav */
       @media(max-width:860px){.lp-nav-links,.lp-nav-actions{display:none!important}.lp-nav-burger{display:flex!important}}
 
       /* grids */
+      /* min-width:0 on every grid + its direct children: by default a 1fr
+         track (or flex item) refuses to shrink below its content's
+         min-content size, which is how one long unbreakable string (a
+         button label, a badge, a stat) can silently force the whole
+         column — and the page — wider than the viewport on mobile. This
+         is the general fix for the bug class that caused the hero
+         overflow above, applied to every grid on the page, not just
+         the hero, since it can just as easily resurface in e.g. the
+         testimonial cards' outcome-badge text. */
+      .lp-stats-grid,.lp-features-wrap,.lp-how-grid,.lp-cases-grid,
+      .lp-pricing-grid,.lp-testi-grid,.lp-testi-inner,.lp-footer-grid,
+      .lp-sp-stats{min-width:0}
+      .lp-stats-grid>*,.lp-features-wrap>*,.lp-how-grid>*,.lp-cases-grid>*,
+      .lp-pricing-grid>*,.lp-testi-grid>*,.lp-testi-inner>*,.lp-footer-grid>*,
+      .lp-sp-stats>*{min-width:0}
       .lp-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
       .lp-features-wrap{display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:start}
       .lp-how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
@@ -317,6 +333,12 @@ function GlobalStyle() {
         .lp-pricing-grid{grid-template-columns:1fr;max-width:400px;margin:0 auto}
         .lp-footer-grid{grid-template-columns:1fr 1fr}
         .lp-sp-stats{grid-template-columns:repeat(2,1fr)}
+        /* CTA button text (e.g. "Free 7-Day Trial — For My Team") can't fit
+           on one line at this width; white-space:nowrap forced a ~376px
+           min-content size that the 1fr hero grid track had to honor,
+           pushing the whole hero column past the viewport edge. Let long
+           CTAs wrap to two lines instead of forcing horizontal overflow. */
+        .lp-btn{white-space:normal!important;height:auto!important;min-height:46px;line-height:1.3;text-align:center}
       }
 
       @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.lp-btn::after{display:none}}
@@ -425,7 +447,7 @@ function Nav({ lang, setLang, onCTA }) {
             }}>◈</div>
             <div style={{ lineHeight:1.15 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Corvus</div>
-              <div style={{ fontSize:9, color:"#475569", letterSpacing:".06em", textTransform:"uppercase", marginTop:1 }}>AI Posture Coaching</div>
+              <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".06em", textTransform:"uppercase", marginTop:1 }}>AI Posture Coaching</div>
             </div>
           </a>
 
@@ -437,13 +459,13 @@ function Nav({ lang, setLang, onCTA }) {
                 <a key={label} href={href}
                   style={{
                     position:"relative", display:"flex", alignItems:"center",
-                    color: active ? "#f1f5f9" : "#64748b",
+                    color: active ? "#f1f5f9" : "#8896ac",
                     textDecoration:"none", padding:"8px 14px", borderRadius:8,
                     fontSize:13.5, fontWeight: active ? 600 : 500,
                     transition:"color .2s",
                   }}
                   onMouseEnter={e => e.currentTarget.style.color="#f1f5f9"}
-                  onMouseLeave={e => e.currentTarget.style.color = active ? "#f1f5f9" : "#64748b"}>
+                  onMouseLeave={e => e.currentTarget.style.color = active ? "#f1f5f9" : "#8896ac"}>
                   {label}
                   {active && (
                     <span style={{
@@ -462,12 +484,12 @@ function Nav({ lang, setLang, onCTA }) {
             {/* Language toggle */}
             <button onClick={() => setLang(ar ? "en" : "ar")} style={{
               background:"rgba(255,255,255,.05)", border:"1px solid rgba(255,255,255,.09)",
-              color:"#64748b", padding:"6px 12px", borderRadius:8,
+              color:"#8896ac", padding:"6px 12px", borderRadius:8,
               cursor:"pointer", fontSize:12.5, fontWeight:500, fontFamily:"inherit",
               transition:"all .18s",
             }}
             onMouseEnter={e=>{e.currentTarget.style.color="#f1f5f9";e.currentTarget.style.borderColor="rgba(255,255,255,.18)"}}
-            onMouseLeave={e=>{e.currentTarget.style.color="#64748b";e.currentTarget.style.borderColor="rgba(255,255,255,.09)"}}>
+            onMouseLeave={e=>{e.currentTarget.style.color="#8896ac";e.currentTarget.style.borderColor="rgba(255,255,255,.09)"}}>
               {ar ? "EN" : "عربي"}
             </button>
             {/* Log in */}
@@ -534,7 +556,7 @@ function Nav({ lang, setLang, onCTA }) {
                 onMouseEnter={e=>e.currentTarget.style.color="#f1f5f9"}
                 onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
                   {label}
-                  <span style={{ fontSize:12, color:"#334155" }}>›</span>
+                  <span style={{ fontSize:12, color:"#8896ac" }}>›</span>
                 </a>
               ))}
               <div style={{ display:"flex", gap:10, marginTop:18 }}>
@@ -554,7 +576,7 @@ function Nav({ lang, setLang, onCTA }) {
               </div>
               <button onClick={() => setLang(ar ? "en" : "ar")} style={{
                 marginTop:12, background:"transparent", border:"none",
-                color:"#475569", fontSize:12.5, cursor:"pointer", textAlign:"center",
+                color:"#8896ac", fontSize:12.5, cursor:"pointer", textAlign:"center",
                 fontFamily:"inherit",
               }}>{ar ? "Switch to English" : "التبديل للعربية"}</button>
             </div>
@@ -1314,55 +1336,63 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
   //    Billing.jsx PLANS/B2B_PLANS, and PricingPage.jsx exactly ──
   const b2cPlans = [
     {
+      id:"free", name: ar?"مجاني":"Free",
+      priceUSD:{ monthly:0, yearly:0 }, priceEGP:{ monthly:0, yearly:0 },
+      color:LPV7_TOKENS.muted,
+      features: ar
+        ? ["5 جلسات / شهر","مدرب AI (5 رسائل/يوم)","لوحة نتائج أساسية","سجل 7 أيام"]
+        : ["5 sessions / month","AI Coach (5 msgs/day)","Basic score dashboard","7-day history"],
+    },
+    {
       id:"basic", name: ar?"أساسي":"Basic",
-      priceUSD:{ monthly:9.99, yearly:79.99 }, priceEGP:{ monthly:199, yearly:1590 },
+      priceUSD:{ monthly:9.99, yearly:95.9 }, priceEGP:{ monthly:199, yearly:1910 },
       color:LPV7_TOKENS.sub,
       features: ar
-        ? ["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","سلسلة وأهداف","توقع الألم","المتصدرين","بطاقة مشاركة"]
-        : ["Unlimited sessions","AI Coach (10 msgs/mo)","Streak & Goals","Pain prediction","Leaderboard","Share card"],
+        ? ["جلسات غير محدودة","مدرب AI (غير محدود)","سجل 90 يوم","تقارير أسبوعية","تصدير CSV/PDF","دعم بريد إلكتروني"]
+        : ["Unlimited sessions","AI Coach (unlimited)","90-day history","Weekly reports","Export CSV/PDF","Email support"],
     },
     {
       id:"professional", name: ar?"احترافي":"Pro",
-      priceUSD:{ monthly:19.99, yearly:159.99 }, priceEGP:{ monthly:399, yearly:3190 },
+      priceUSD:{ monthly:19.99, yearly:191.9 }, priceEGP:{ monthly:399, yearly:3830 },
       popular:true, color:LPV7_TOKENS.blue,
       features: ar
-        ? ["كل Basic","رؤى AI","تقارير كاملة","مقارنة الجلسات","تصدير CSV/PDF","تقرير أسبوعي","تنبيهات الشذوذ"]
-        : ["Everything in Basic","AI Insights","Full Reports","Session compare","Export CSV/PDF","Weekly report","Anomaly alerts"],
+        ? ["كل Basic","رؤى AI متقدمة","مقارنة الجلسات","تنبيهات الشذوذ","برامج تمدد مخصصة","دعم أولوية"]
+        : ["Everything in Basic","Advanced AI insights","Session compare","Anomaly alerts","Custom stretch programs","Priority support"],
     },
     {
       id:"elite", name: ar?"إيليت":"Elite",
-      priceUSD:{ monthly:39.99, yearly:299.99 }, priceEGP:{ monthly:699, yearly:5590 },
+      priceUSD:{ monthly:39.99, yearly:383.9 }, priceEGP:{ monthly:699, yearly:6710 },
       color:LPV7_TOKENS.green,
       features: ar
-        ? ["كل Pro","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية","معايرة","سرد الجلسة"]
-        : ["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support","Calibration","Session narrative"],
+        ? ["كل Pro","AI تنبؤي","تقرير PDF سريري","معايرة متقدمة","سرد الجلسة","وصول مبكر للمميزات"]
+        : ["Everything in Pro","Predictive AI","Clinical PDF report","Advanced calibration","Session narrative","Early feature access"],
     },
   ];
 
   const b2bPlans = [
     {
-      id:"b2b_starter", name: ar?"ستارتر":"Starter",
-      priceUSD:{ monthly:79, yearly:758 }, priceEGP:{ monthly:2499, yearly:23990 },
-      color:LPV7_TOKENS.sub,
+      id:"b2b_team", name: ar?"تيم":"Team",
+      priceUSD:{ monthly:5, yearly:48 }, priceEGP:{ monthly:249, yearly:2390 },
+      perUser:true, color:LPV7_TOKENS.sub,
       features: ar
-        ? ["حتى 30 موظف","كشف 33 نقطة بالـAI","تقارير PDF","لوحة تحليلات HR","تجربة مجانية 7 أيام","دعم بالبريد"]
-        : ["Up to 30 employees","33-point AI pose detection","PDF reports","HR analytics dashboard","7-day free trial","Email support"],
+        ? ["10–100 موظف","لوحة HR","إدارة الأقسام","تقارير أسبوعية تلقائية","تنبيهات Slack/Teams","استيراد CSV","وصول API"]
+        : ["10–100 employees","HR dashboard","Department management","Weekly auto-reports","Slack/Teams alerts","CSV import","API access"],
     },
     {
-      id:"b2b_growth", name: ar?"جروث":"Growth",
-      priceUSD:{ monthly:199, yearly:1910 }, priceEGP:{ monthly:6999, yearly:67190 },
-      popular:true, color:LPV7_TOKENS.blue,
+      id:"b2b_business", name: ar?"بيزنس":"Business",
+      priceUSD:{ monthly:8, yearly:77 }, priceEGP:{ monthly:399, yearly:3830 },
+      perUser:true, popular:true, color:LPV7_TOKENS.blue,
       features: ar
-        ? ["حتى 100 موظف","FaceMesh 478 نقطة","وضع رأس ثلاثي الأبعاد","تنبيهات Slack/Teams","تقرير HR تنفيذي","دعم أولوية + SLA"]
-        : ["Up to 100 employees","FaceMesh 478 landmarks","3D head pose","Slack/Teams alerts","Executive HR reports","Priority support + SLA"],
+        ? ["10–5,000 موظف","كل Team","SSO / SAML 2.0","عتبات مخاطرة مخصصة","موصلات SAP / Workday","تأهيل مخصص","SLA 99.9%"]
+        : ["10–5,000 employees","Everything in Team","SSO / SAML 2.0","Custom risk thresholds","SAP / Workday connectors","Dedicated onboarding","SLA 99.9%"],
     },
     {
       id:"b2b_enterprise", name: ar?"إنتربرايز":"Enterprise",
-      priceUSD:{ monthly:null, yearly:null, startingAt:499 }, priceEGP:{ monthly:null, yearly:null },
+      priceUSD:{ monthly:null, yearly:null }, priceEGP:{ monthly:null, yearly:null },
       isEnterprise:true, color:LPV7_TOKENS.green,
       features: ar
-        ? ["موظفون غير محدودون","AI clinical narrative","SAML SSO / Azure AD","White-label","SLA مخصص","مدير نجاح مخصص"]
-        : ["Unlimited employees","AI clinical narrative","SAML SSO / Azure AD","White-label","Custom SLA","Dedicated success manager"],
+        ? ["موظفون غير محدودون","كل Business","خيار on-premise","SLA مخصص","مدير نجاح مخصص","تسعير مخصص","حزمة قانونية"]
+        : ["Unlimited employees","Everything in Business","On-premise option","Custom SLA","Dedicated CSM","Volume pricing","Legal & compliance pack"],
     },
   ];
 
@@ -1876,12 +1906,12 @@ function Footer({ lang }) {
               }}>◈</div>
               <div style={{ lineHeight:1.2 }}>
                 <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Corvus</div>
-                <div style={{ fontSize:9, color:"#334155", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+                <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>
               </div>
             </div>
 
             {/* Tagline */}
-            <p style={{ fontSize:13, color:"#475569", lineHeight:1.8, maxWidth:200, margin:"0 0 20px" }}>
+            <p style={{ fontSize:13, color:"#8896ac", lineHeight:1.8, maxWidth:200, margin:"0 0 20px" }}>
               {ar
                 ? "قلّل إجازات الأمراض وارفع إنتاجية فريقك. مبني لفرق MENA."
                 : "Cut sick leave 47% and boost team productivity. Built for MENA teams."}
@@ -1897,7 +1927,7 @@ function Footer({ lang }) {
                     background:"rgba(255,255,255,.04)",
                     border:"1px solid rgba(255,255,255,.08)",
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    color:"#475569", textDecoration:"none",
+                    color:"#8896ac", textDecoration:"none",
                     transition:"all .2s",
                   }}
                   onMouseEnter={e=>{
@@ -1906,7 +1936,7 @@ function Footer({ lang }) {
                     e.currentTarget.style.borderColor="rgba(255,255,255,.16)";
                   }}
                   onMouseLeave={e=>{
-                    e.currentTarget.style.color="#475569";
+                    e.currentTarget.style.color="#8896ac";
                     e.currentTarget.style.background="rgba(255,255,255,.04)";
                     e.currentTarget.style.borderColor="rgba(255,255,255,.08)";
                   }}>
@@ -1919,7 +1949,7 @@ function Footer({ lang }) {
             <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:18 }}>
               {["ISO 27001","AES-256","GDPR"].map(b=>(
                 <span key={b} style={{
-                  fontSize:9.5, color:"#334155", padding:"3px 8px",
+                  fontSize:9.5, color:"#8896ac", padding:"3px 8px",
                   border:"1px solid rgba(255,255,255,.07)", borderRadius:99,
                   fontFamily:FONT_MONO, fontWeight:600,
                 }}>{b}</span>
@@ -1932,7 +1962,7 @@ function Footer({ lang }) {
             <div key={col.title}>
               <div style={{
                 fontSize:10.5, fontWeight:700, letterSpacing:".08em",
-                textTransform:"uppercase", color:"#334155", marginBottom:16,
+                textTransform:"uppercase", color:"#8896ac", marginBottom:16,
               }}>{col.title}</div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {col.links.map(({ label, href, anchor }) => (
@@ -1941,20 +1971,20 @@ function Footer({ lang }) {
                         onClick={() => scrollTo(href)}
                         style={{
                           background:"none", border:"none", padding:0, cursor:"pointer",
-                          textAlign: ar ? "right" : "left", color:"#475569",
+                          textAlign: ar ? "right" : "left", color:"#8896ac",
                           fontSize:13.5, fontWeight:400, fontFamily:"inherit",
                           transition:"color .18s",
                         }}
                         onMouseEnter={e=>e.currentTarget.style.color="#94a3b8"}
-                        onMouseLeave={e=>e.currentTarget.style.color="#475569"}>
+                        onMouseLeave={e=>e.currentTarget.style.color="#8896ac"}>
                         {label}
                       </button>
                     : <a key={label} href={href}
                         target={href.startsWith("http") ? "_blank" : undefined}
                         rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
-                        style={{ color:"#475569", fontSize:13.5, textDecoration:"none", transition:"color .18s" }}
+                        style={{ color:"#8896ac", fontSize:13.5, textDecoration:"none", transition:"color .18s" }}
                         onMouseEnter={e=>e.currentTarget.style.color="#94a3b8"}
-                        onMouseLeave={e=>e.currentTarget.style.color="#475569"}>
+                        onMouseLeave={e=>e.currentTarget.style.color="#8896ac"}>
                         {label}
                       </a>
                 ))}
@@ -1967,18 +1997,18 @@ function Footer({ lang }) {
       {/* Bottom bar */}
       <div style={{ borderTop:"1px solid rgba(255,255,255,.05)" }}>
         <div className="lp-wrap" style={{ padding:"18px 32px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
-          <span style={{ fontSize:12, color:"#334155" }}>
+          <span style={{ fontSize:12, color:"#8896ac" }}>
             © {new Date().getFullYear()} Corvus Health Intelligence.{" "}
             {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
           </span>
           <div style={{ display:"flex", gap:20, alignItems:"center" }}>
             <a href={`mailto:${SUPPORT_EMAIL}`}
-              style={{ fontSize:12, color:"#334155", textDecoration:"none", transition:"color .18s" }}
-              onMouseEnter={e=>e.currentTarget.style.color="#64748b"}
-              onMouseLeave={e=>e.currentTarget.style.color="#334155"}>
+              style={{ fontSize:12, color:"#8896ac", textDecoration:"none", transition:"color .18s" }}
+              onMouseEnter={e=>e.currentTarget.style.color="#8896ac"}
+              onMouseLeave={e=>e.currentTarget.style.color="#8896ac"}>
               {SUPPORT_EMAIL}
             </a>
-            <span style={{ fontSize:11.5, color:"#334155" }}>
+            <span style={{ fontSize:11.5, color:"#8896ac" }}>
               {ar ? "صُنع بـ ❤ في مصر" : "Made with ❤ in Egypt"}
             </span>
           </div>

@@ -6,9 +6,18 @@ Accuracy: Standard ~88% | Professional ~93% | Elite ~96%
 Auto PDF download via ReportLab
 Fixed: WORK_HOURS_START, SUPPORT_EMAIL, ADMIN_PHONE, localhost links, Auth middleware
 """
+# Must be the first statement: makes type annotations lazy (PEP 563) so a
+# type hint like `np.ndarray` doesn't crash at import time before cv2/numpy
+# have been lazy-loaded by _ensure_models().
+from __future__ import annotations
 import base64, math, io, os, time, sys, requests as req, threading
+from collections import Counter
 # cv2 and numpy loaded lazily inside _ensure_models() to save ~130MB per worker at startup
 cv2 = None
+# Cascade classifiers depend on cv2 — also lazy, initialized in _ensure_models()
+face_c = None
+eye_c  = None
+prof_c = None
 np  = None
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 _ai_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gemini")
@@ -459,7 +468,7 @@ _models_lock = __import__("threading").Lock()
 
 def _ensure_models():
     """Initialize MediaPipe models + cv2/numpy on first call. Thread-safe."""
-    global _mp_pose, _mp_face, _mp_drawing, POSE_LITE, POSE_FULL, FACE_MESH, cv2, np
+    global _mp_pose, _mp_face, _mp_drawing, POSE_LITE, POSE_FULL, FACE_MESH, cv2, np, face_c, eye_c, prof_c
     if POSE_LITE is not None:
         return True
     with _models_lock:
@@ -471,6 +480,13 @@ def _ensure_models():
             import numpy as _np
             cv2 = _cv2
             np  = _np
+            # Cascade classifiers only need cv2 (not MediaPipe) — init them here
+            # so the fallback path in analyze_front_cascade() always has them
+            # ready once _ensure_models() has run once, regardless of whether
+            # MediaPipe itself loads successfully below.
+            face_c = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            eye_c  = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+            prof_c = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
             # Init MODEL_3D now that numpy is available
             global MODEL_3D
             MODEL_3D = _np.array(_MODEL_3D_RAW, dtype=_np.float64)
@@ -3751,9 +3767,10 @@ def analyze_side(image, tier="standard", session_id=None):
     return out
 
 # ── CASCADE FALLBACK ───────────────────────────────────────────────
-face_c = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-eye_c  = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-prof_c = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
+# face_c/eye_c/prof_c are lazy-initialized in _ensure_models() alongside cv2 —
+# see the placeholders near the top of the file. They used to be initialized
+# here at module level, which crashed on every cold start (cv2 is still None
+# at import time, before _ensure_models() has ever run).
 
 def analyze_front_cascade(image, mode, out):
     """
@@ -6964,27 +6981,48 @@ def sso_provision_user():
 @require_admin
 @limiter.limit("30 per minute")
 def admin_feature_flags():
-    """Admin: list, create, or update feature flags."""
-    global _feature_flags
-    if request.method == "GET":
-        return jsonify({"flags": _feature_flags})
-    data = request.get_json(force=True) or {}
-    if request.method == "POST":
-        key = data.get("key", "").strip().lower().replace(" ", "_")
-        if not key or key in _feature_flags:
-            return jsonify({"error": "Invalid or duplicate flag key"}), 400
-        _feature_flags[key] = {
-            "enabled":     data.get("enabled", False),
-            "rollout_pct": int(data.get("rollout_pct", 0)),
-            "tiers":       data.get("tiers", []),
-        }
-        return jsonify({"success": True, "flag": key})
-    # PATCH
-    key = data.get("key", "")
-    if key not in _feature_flags:
-        return jsonify({"error": "Flag not found"}), 404
-    _feature_flags[key].update({k: v for k, v in data.items() if k != "key"})
-    return jsonify({"success": True})
+    """Admin: list, create, or update feature flags.
+    Persisted in Firestore (collection: feature_flags) rather than an
+    in-memory dict — a plain module global wouldn't survive across
+    gunicorn's multiple worker processes; each worker would see its own
+    separate flags, silently diverging from what the admin actually set."""
+    try:
+        if request.method == "GET":
+            docs = db.collection("feature_flags").stream()
+            flags = {d.id: d.to_dict() for d in docs}
+            return jsonify({"flags": flags})
+
+        data = request.get_json(force=True) or {}
+        if request.method == "POST":
+            key = data.get("key", "").strip().lower().replace(" ", "_")
+            if not key:
+                return jsonify({"error": "key required"}), 400
+            ref = db.collection("feature_flags").document(key)
+            if ref.get().exists:
+                return jsonify({"error": "Invalid or duplicate flag key"}), 400
+            flag = {
+                "enabled":     data.get("enabled", False),
+                "rollout_pct": int(data.get("rollout_pct", 0)),
+                "tiers":       data.get("tiers", []),
+                "updated_at":  datetime.utcnow().isoformat()+"Z",
+                "updated_by":  g.uid,
+            }
+            ref.set(flag)
+            return jsonify({"success": True, "flag": key})
+
+        # PATCH
+        key = data.get("key", "")
+        ref = db.collection("feature_flags").document(key)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({"error": "Flag not found"}), 404
+        upd = {k: v for k, v in data.items() if k != "key"}
+        upd["updated_at"] = datetime.utcnow().isoformat()+"Z"
+        upd["updated_by"] = g.uid
+        ref.update(upd)
+        return jsonify({"success": True})
+    except Exception as e:
+        return safe_error(e)
 
 
 # ── Security Center ────────────────────────────────────────────────
@@ -9063,12 +9101,84 @@ def _get_user_tokens(uid: str) -> list:
         return []
 
 
+def _compute_preferred_hour(uid):
+    """Most common hour-of-day (server/UTC) this user actually does sessions,
+    from their last 30 sessions. Falls back to 19:00 (7pm) with too little
+    data to be meaningful — matches the old fixed-time behavior."""
+    try:
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .order_by("created_at", direction="DESCENDING")
+                  .limit(30).stream())
+        hours = []
+        for d in docs:
+            ts = d.to_dict().get("created_at")
+            if ts and hasattr(ts, "hour"):
+                hours.append(ts.hour)
+        if len(hours) < 5:
+            return 19
+        return Counter(hours).most_common(1)[0][0]
+    except Exception:
+        return 19
+
+
+def _get_push_categories(uid):
+    """Per-user notification category preferences. All default to enabled —
+    a user who never touched this setting still gets reminders, matching
+    the pre-existing behavior before this preference existed."""
+    try:
+        doc = db.collection("push_preferences").document(uid).get()
+        if doc.exists:
+            return doc.to_dict().get("categories", {})
+    except Exception:
+        pass
+    return {}
+
+
+@app.route("/api/push/preferences", methods=["GET", "POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def push_preferences():
+    """User-facing: view/set which notification categories they want, and
+    optionally override the auto-computed 'smart' reminder hour."""
+    try:
+        uid = g.uid
+        if request.method == "GET":
+            prefs = {}
+            doc = db.collection("push_preferences").document(uid).get()
+            if doc.exists:
+                prefs = doc.to_dict()
+            return jsonify({
+                "categories": prefs.get("categories", {"streak": True, "symptom_reminder": True, "weekly_summary": True}),
+                "preferred_hour": prefs.get("preferred_hour_override"),
+                "computed_hour": _compute_preferred_hour(uid),
+            })
+        data = request.get_json(force=True) or {}
+        upd = {"updated_at": datetime.utcnow().isoformat()+"Z"}
+        if "categories" in data:
+            upd["categories"] = {k: bool(v) for k, v in data["categories"].items()
+                                  if k in ("streak", "symptom_reminder", "weekly_summary")}
+        if "preferred_hour_override" in data:
+            h = data["preferred_hour_override"]
+            upd["preferred_hour_override"] = int(h) if h is not None else None
+        db.collection("push_preferences").document(uid).set(upd, merge=True)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return safe_error(e)
+
+
 @app.route("/api/push/streak-reminder", methods=["POST"])
-@limiter.limit("5 per minute")
+@limiter.limit("30 per minute")
 def push_streak_reminder():
     """
-    Cron job endpoint — call daily at 19:00 user local time.
-    Sends streak reminder to users who haven't done a session today.
+    Cron job endpoint — intended to be called once per hour (see
+    services/celery_beat.py: smart-streak-reminders). Each run only
+    targets users whose own computed usual-session hour (or manual
+    override) matches the `hour` passed in, and who haven't disabled
+    the "streak" notification category. Pass `hour` explicitly so the
+    cron caller controls what "now" means; omit it to send to everyone
+    regardless of hour (the old fixed-time behavior, still useful for
+    manual/testing calls).
     Secured by CRON_SECRET env var (not user auth).
     """
     try:
@@ -9086,6 +9196,7 @@ def push_streak_reminder():
 
         data     = request.get_json(force=True) or {}
         min_streak = int(data.get("min_streak", 2))   # only remind users with streak >= 2
+        target_hour = data.get("hour")  # None = send regardless of hour (legacy behavior)
         today    = datetime.utcnow().date()
         today_str = str(today)
 
@@ -9104,6 +9215,22 @@ def push_streak_reminder():
             if not uid or not tok or uid in uids_seen:
                 continue
             uids_seen.add(uid)
+
+            # Smart scheduling: only send to this user during their own
+            # usual session hour, unless the caller wants every hour sent
+            # regardless (target_hour omitted).
+            if target_hour is not None:
+                prefs = db.collection("push_preferences").document(uid).get()
+                pdata = prefs.to_dict() if prefs.exists else {}
+                if not pdata.get("categories", {}).get("streak", True):
+                    reminders_skipped += 1
+                    continue
+                user_hour = pdata.get("preferred_hour_override")
+                if user_hour is None:
+                    user_hour = _compute_preferred_hour(uid)
+                if int(user_hour) != int(target_hour):
+                    reminders_skipped += 1
+                    continue
 
             # Check if user already had a session today
             today_sessions = (db.collection("sessions")
@@ -16318,6 +16445,120 @@ def marketplace_my_bookings():
             "created_at", direction=firestore.Query.DESCENDING
         ).get()
         return jsonify({"bookings": [{**d.to_dict(), "id": d.id} for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/bookings/<booking_id>/cancel", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def marketplace_cancel_booking(booking_id):
+    """Patient cancels their own booking. Works at any status except an
+    already-cancelled one. Cancelling an already-confirmed (paid) booking
+    is still allowed here — refunds aren't automated, so it's flagged for
+    admin follow-up rather than silently vanishing with money already
+    charged and no record of the cancellation request."""
+    try:
+        db   = firestore.client()
+        bref = db.collection("marketplace_bookings").document(booking_id)
+        bdoc = bref.get()
+        if not bdoc.exists:
+            return jsonify({"error": "booking not found"}), 404
+        booking = bdoc.to_dict()
+        if booking.get("user_id") != g.uid:
+            return jsonify({"error": "forbidden"}), 403
+        if booking.get("status") == "cancelled":
+            return jsonify({"ok": True, "note": "already cancelled"}), 200
+
+        was_paid = booking.get("status") == "confirmed"
+        bref.update({
+            "status": "cancelled",
+            "cancelled_at": datetime.utcnow().isoformat()+"Z",
+            "needs_refund_review": was_paid,
+        })
+        if was_paid:
+            amount_egp = (booking.get("amount_cents") or 0) / 100
+            html = f"""
+            <div style="font-family:Arial,sans-serif;max-width:480px;background:#fff;border-radius:10px;padding:24px">
+              <h2 style="color:#dc2626;margin-bottom:16px">🔁 Booking Cancelled — Refund Review Needed</h2>
+              <table style="width:100%;border-collapse:collapse">
+                <tr><td style="padding:6px 0;color:#666">Booking ID</td><td style="font-family:monospace">{booking_id}</td></tr>
+                <tr><td style="padding:6px 0;color:#666">Therapist</td><td style="font-weight:600">{booking.get("therapist_name","—")}</td></tr>
+                <tr><td style="padding:6px 0;color:#666">Amount paid</td><td style="font-weight:700;color:#dc2626;font-size:18px">{amount_egp:,.2f} {booking.get("currency","EGP")}</td></tr>
+              </table>
+              <div style="margin-top:20px;padding:12px;background:#fee2e2;border-radius:8px;font-size:13px">
+                ⚠️ This booking was already paid before the patient cancelled it. Refunds aren't automated — please process manually via PayMob and update the booking record.
+              </div>
+            </div>"""
+            send_email(ADMIN_EMAIL, f"🔁 Booking cancelled after payment — refund needed ({booking_id})", html)
+        return jsonify({"ok": True, "refund_pending": was_paid})
+    except Exception as e:
+        return safe_error(e)
+
+
+def _booking_chat_access_ok(booking_data):
+    """Booking owner (patient) or a platform admin can read/post — not
+    open to other patients, and not gated behind require_admin since
+    patients need their own thread too."""
+    is_admin = getattr(g, "role", {}).get("is_admin", False)
+    return is_admin or booking_data.get("user_id") == g.uid
+
+
+@app.route("/api/marketplace/bookings/<booking_id>/messages", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def marketplace_get_messages(booking_id):
+    """Booking-scoped chat thread — lets a patient ask questions about their
+    booking and an admin (there's no separate therapist login yet — see
+    the 'no public self-serve therapist signup' note above) reply. Simple
+    polling, not websockets: matches this app's existing patterns (no
+    other real-time feature uses a persistent connection either)."""
+    try:
+        db   = firestore.client()
+        bdoc = db.collection("marketplace_bookings").document(booking_id).get()
+        if not bdoc.exists:
+            return jsonify({"error": "booking not found"}), 404
+        if not _booking_chat_access_ok(bdoc.to_dict()):
+            return jsonify({"error": "forbidden"}), 403
+        msgs = db.collection("marketplace_bookings").document(booking_id) \
+                 .collection("messages").order_by("created_at").limit(200).get()
+        return jsonify({"messages": [{**m.to_dict(), "id": m.id} for m in msgs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/bookings/<booking_id>/messages", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def marketplace_send_message(booking_id):
+    try:
+        data = request.get_json(force=True) or {}
+        text = (data.get("text") or "").strip()
+        if not text:
+            return jsonify({"error": "text required"}), 400
+        if len(text) > 2000:
+            return jsonify({"error": "message too long (2000 char max)"}), 400
+
+        db   = firestore.client()
+        bref = db.collection("marketplace_bookings").document(booking_id)
+        bdoc = bref.get()
+        if not bdoc.exists:
+            return jsonify({"error": "booking not found"}), 404
+        booking_data = bdoc.to_dict()
+        if not _booking_chat_access_ok(booking_data):
+            return jsonify({"error": "forbidden"}), 403
+
+        is_admin = getattr(g, "role", {}).get("is_admin", False)
+        msg_ref = bref.collection("messages").document()
+        msg = {
+            "text":       text,
+            "sender_uid": g.uid,
+            "sender_role": "admin" if is_admin else "patient",
+            "created_at": datetime.utcnow().isoformat()+"Z",
+        }
+        msg_ref.set(msg)
+        bref.update({"last_message_at": msg["created_at"], "has_unread": True})
+        return jsonify({"ok": True, "message": {**msg, "id": msg_ref.id}})
     except Exception as e:
         return safe_error(e)
 

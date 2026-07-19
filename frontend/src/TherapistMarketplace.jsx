@@ -24,8 +24,9 @@ function Tab({ active, onClick, children }) {
   );
 }
 
-function money(cents, currency) {
-  if (!cents) return "—";
+function money(cents, currency, isAr) {
+  if (cents == null) return "—";
+  if (cents === 0) return isAr ? "مجانية" : "Free";
   return `${(cents/100).toLocaleString()} ${currency||"EGP"}`;
 }
 
@@ -39,6 +40,8 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
   const [selected, setSelected] = useState(null);      // therapist being booked
   const [booking, setBooking]   = useState(false);
   const [myBookings, setMyBookings] = useState([]);
+  const [chatBooking, setChatBooking] = useState(null); // booking whose chat thread is open
+  const [cancellingId, setCancellingId] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true); setErr(null);
@@ -76,6 +79,25 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
       addToast?.(e.message || (isAr ? "حصل خطأ" : "Something went wrong"), "error");
     } finally {
       setBooking(false);
+    }
+  };
+
+  const cancelBooking = async (b) => {
+    const wasPaid = b.status === "confirmed";
+    const msg = wasPaid
+      ? (isAr ? "الحجز ده مدفوع بالفعل — لو ألغيته، فريقنا هيتواصل معاك بخصوص الاسترداد. تأكيد الإلغاء؟"
+              : "This booking is already paid — cancelling will flag it for our team to process a refund. Confirm cancellation?")
+      : (isAr ? "تأكيد إلغاء الحجز؟" : "Confirm cancelling this booking?");
+    if (!window.confirm(msg)) return;
+    setCancellingId(b.id);
+    try {
+      await MarketplaceAPI.cancelBooking(b.id);
+      setMyBookings(prev => prev.map(x => x.id === b.id ? { ...x, status: "cancelled" } : x));
+      addToast?.(isAr ? "تم إلغاء الحجز" : "Booking cancelled", "success");
+    } catch (e) {
+      addToast?.(e.message || (isAr ? "تعذر الإلغاء" : "Couldn't cancel"), "error");
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -133,7 +155,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
                 )}
                 {th.bio && <div style={{ fontSize:12.5, color:"#94a3b8", marginBottom:12, lineHeight:1.5 }}>{th.bio}</div>}
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div style={{ fontWeight:800, fontSize:14, color:"#5eead4" }}>{money(th.session_fee_cents, th.currency)}</div>
+                  <div style={{ fontWeight:800, fontSize:14, color:"#5eead4" }}>{money(th.session_fee_cents, th.currency, isAr)}</div>
                   <button style={btnPrimary} onClick={()=>setSelected(th)}>{isAr ? "احجز" : "Book"}</button>
                 </div>
               </div>
@@ -146,26 +168,122 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {myBookings.length === 0 && <div style={{ ...card, textAlign:"center", color:"#64748b" }}>{isAr ? "مفيش حجوزات لسه" : "No bookings yet"}</div>}
           {myBookings.map(b => (
-            <div key={b.id} style={{ ...card, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div>
-                <div style={{ fontWeight:700 }}>{b.therapist_name}</div>
-                <div style={{ fontSize:12, color:"#64748b" }}>{b.preferred_time || (isAr ? "الميعاد لسه مش متحدد" : "Time not set")}</div>
+            <div key={b.id} style={card}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontWeight:700 }}>{b.therapist_name}</div>
+                  <div style={{ fontSize:12, color:"#64748b" }}>{b.preferred_time || (isAr ? "الميعاد لسه مش متحدد" : "Time not set")}</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontWeight:700, color:"#5eead4" }}>{money(b.amount_cents, b.currency, isAr)}</div>
+                  <div style={{ fontSize:11, color:"#94a3b8", textTransform:"capitalize" }}>{b.status?.replace(/_/g," ")}</div>
+                </div>
               </div>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontWeight:700, color:"#5eead4" }}>{money(b.amount_cents, b.currency)}</div>
-                <div style={{ fontSize:11, color:"#94a3b8", textTransform:"capitalize" }}>{b.status?.replace(/_/g," ")}</div>
+              <div style={{ marginTop:12, borderTop:border, paddingTop:12, display:"flex", gap:8 }}>
+                <button style={{ ...btnGhost, fontSize:12, padding:"6px 14px" }}
+                        onClick={()=>setChatBooking(chatBooking?.id===b.id ? null : b)}>
+                  {chatBooking?.id===b.id ? (isAr?"إغلاق المحادثة":"Close chat") : `💬 ${isAr?"محادثة":"Chat"}`}
+                </button>
+                {b.status !== "cancelled" && (
+                  <button style={{ ...btnGhost, fontSize:12, padding:"6px 14px", color:"#f87171", borderColor:"rgba(248,113,113,.3)" }}
+                          onClick={()=>cancelBooking(b)} disabled={cancellingId===b.id}>
+                    {cancellingId===b.id ? "…" : (isAr?"إلغاء الحجز":"Cancel booking")}
+                  </button>
+                )}
               </div>
+              {chatBooking?.id === b.id && (
+                <BookingChat bookingId={b.id} isAr={isAr} currentUid={user?.uid} addToast={addToast} />
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {tab === "admin" && isAdmin && <AdminTherapistManager isAr={isAr} addToast={addToast} />}
+      {tab === "admin" && isAdmin && <AdminMarketplaceManager isAr={isAr} addToast={addToast} adminUid={user?.uid} />}
 
       {selected && (
         <BookingModal therapist={selected} isAr={isAr} loading={booking}
                       onClose={()=>setSelected(null)} onSubmit={submitBooking} />
       )}
+    </div>
+  );
+}
+
+function BookingChat({ bookingId, isAr, currentUid, addToast }) {
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  const load = useCallback(() => {
+    MarketplaceAPI.getMessages(bookingId)
+      .then(d => setMessages(d?.messages || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [bookingId]);
+
+  useEffect(() => {
+    load();
+    // Simple polling while the thread is open — matches this app's existing
+    // pattern of not using websockets for any other feature either.
+    const iv = setInterval(load, 8000);
+    return () => clearInterval(iv);
+  }, [load]);
+
+  const send = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+    setSending(true);
+    try {
+      await MarketplaceAPI.sendMessage(bookingId, trimmed);
+      setText("");
+      load();
+    } catch (e) {
+      addToast?.(e.message || (isAr ? "تعذر إرسال الرسالة" : "Couldn't send message"), "error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop:12, borderTop:border, paddingTop:12 }}>
+      <div style={{ maxHeight:220, overflowY:"auto", display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
+        {loading && <div style={{ fontSize:12, color:"#64748b" }}>{isAr?"جاري التحميل…":"Loading…"}</div>}
+        {!loading && messages.length === 0 && (
+          <div style={{ fontSize:12, color:"#64748b", textAlign:"center", padding:"12px 0" }}>
+            {isAr ? "ابدأ المحادثة — اسأل أي سؤال عن الحجز ده" : "Start the conversation — ask anything about this booking"}
+          </div>
+        )}
+        {messages.map(m => {
+          const mine = m.sender_uid === currentUid;
+          return (
+            <div key={m.id} style={{ display:"flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
+              <div style={{
+                maxWidth:"78%", padding:"8px 12px", borderRadius:12,
+                background: mine ? "rgba(15,118,110,.22)" : "rgba(255,255,255,.06)",
+                border: mine ? "1px solid rgba(15,118,110,.35)" : border,
+              }}>
+                {!mine && (
+                  <div style={{ fontSize:9.5, color:"#5eead4", fontWeight:700, marginBottom:2, textTransform:"uppercase" }}>
+                    {m.sender_role === "admin" ? (isAr?"فريق الدعم":"Support team") : (isAr?"المريض":"Patient")}
+                  </div>
+                )}
+                <div style={{ fontSize:13, color:"#e2e8f0", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{m.text}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display:"flex", gap:8 }}>
+        <input style={{ ...input, flex:1 }}
+               placeholder={isAr ? "اكتب رسالتك…" : "Type a message…"}
+               value={text}
+               onChange={e=>setText(e.target.value)}
+               onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }} />
+        <button style={{ ...btnPrimary, padding:"9px 16px" }} onClick={send} disabled={sending || !text.trim()}>
+          {isAr ? "إرسال" : "Send"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -178,7 +296,7 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
                   alignItems:"center", justifyContent:"center", zIndex:1000, padding:20 }}>
       <div style={{ ...card, width:"100%", maxWidth:420, background:"#111827" }}>
         <div style={{ fontWeight:800, fontSize:16, marginBottom:4 }}>{isAr ? "حجز جلسة مع" : "Book a session with"} {therapist.name}</div>
-        <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:16 }}>{money(therapist.session_fee_cents, therapist.currency)}</div>
+        <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:16 }}>{money(therapist.session_fee_cents, therapist.currency, isAr)}</div>
 
         <div style={{ marginBottom:12 }}>
           <div style={label}>{isAr ? "الميعاد المفضل" : "Preferred time"}</div>
@@ -197,6 +315,66 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AdminMarketplaceManager({ isAr, addToast, adminUid }) {
+  const [subTab, setSubTab] = useState("therapists"); // therapists | bookings
+  return (
+    <div>
+      <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+        <Tab active={subTab==="therapists"} onClick={()=>setSubTab("therapists")}>{isAr?"الأخصائيون":"Therapists"}</Tab>
+        <Tab active={subTab==="bookings"}   onClick={()=>setSubTab("bookings")}>{isAr?"الحجوزات":"Bookings"}</Tab>
+      </div>
+      {subTab === "therapists"
+        ? <AdminTherapistManager isAr={isAr} addToast={addToast} />
+        : <AdminBookingsManager isAr={isAr} addToast={addToast} adminUid={adminUid} />}
+    </div>
+  );
+}
+
+function AdminBookingsManager({ isAr, addToast, adminUid }) {
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [chatBooking, setChatBooking] = useState(null);
+
+  useEffect(() => {
+    MarketplaceAPI.adminListBookings()
+      .then(d => setBookings(d?.bookings || []))
+      .catch(e => addToast?.(e.message, "error"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ color:"#64748b" }}>{isAr?"جاري التحميل…":"Loading…"}</div>;
+  if (bookings.length === 0) return <div style={{ ...card, textAlign:"center", color:"#64748b" }}>{isAr?"مفيش حجوزات لسه":"No bookings yet"}</div>;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      {bookings.map(b => (
+        <div key={b.id} style={card}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <div style={{ fontWeight:700 }}>{b.therapist_name}</div>
+              <div style={{ fontSize:12, color:"#64748b" }}>{b.preferred_time || (isAr?"الميعاد لسه مش متحدد":"Time not set")} · {b.user_id?.slice(0,8)}…</div>
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontWeight:700, color:"#5eead4" }}>{money(b.amount_cents, b.currency, isAr)}</div>
+              <div style={{ fontSize:11, color:"#94a3b8", textTransform:"capitalize" }}>{b.status?.replace(/_/g," ")}</div>
+            </div>
+          </div>
+          {b.notes && <div style={{ fontSize:12.5, color:"#94a3b8", marginTop:8 }}>📝 {b.notes}</div>}
+          <div style={{ marginTop:12, borderTop:border, paddingTop:12 }}>
+            <button style={{ ...btnGhost, fontSize:12, padding:"6px 14px" }}
+                    onClick={()=>setChatBooking(chatBooking?.id===b.id ? null : b)}>
+              {chatBooking?.id===b.id ? (isAr?"إغلاق المحادثة":"Close chat") : `💬 ${isAr?"محادثة":"Chat"}`}
+            </button>
+          </div>
+          {chatBooking?.id === b.id && (
+            <BookingChat bookingId={b.id} isAr={isAr} currentUid={adminUid} addToast={addToast} />
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -265,7 +443,7 @@ function AdminTherapistManager({ isAr, addToast }) {
           <div key={th.id} style={{ ...card, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div>
               <div style={{ fontWeight:700 }}>{th.name} <span style={{ fontSize:11, color: th.status==="active"?"#5eead4":"#f87171" }}>({th.status})</span></div>
-              <div style={{ fontSize:12, color:"#64748b" }}>{th.city} · {money(th.session_fee_cents, th.currency)}</div>
+              <div style={{ fontSize:12, color:"#64748b" }}>{th.city} · {money(th.session_fee_cents, th.currency, isAr)}</div>
             </div>
             <button style={btnGhost} onClick={()=>toggleStatus(th)}>
               {th.status === "active" ? (isAr?"إيقاف":"Pause") : (isAr?"تفعيل":"Activate")}

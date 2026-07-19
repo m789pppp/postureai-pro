@@ -19,7 +19,7 @@ import { SymptomCorrelation } from "./SymptomCorrelation.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
 import { AnalyticsDashboard } from "./AnalyticsDashboard.jsx";
-import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback } from "./PostureUtils.jsx";
+import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
 import { AICoach } from "./AICoach.jsx";
 import { AIInsights } from "./AIInsights.jsx";
 import { PredictiveAI } from "./PredictiveAI.jsx";
@@ -2163,7 +2163,7 @@ export default function App(){
     if(!user||!profile||page!=="home") return;
     const done = (profile.onboarding_done?.length||0) > 0;
     if(done) return;
-    if(profile.acct_type==="company" && !profile.company_id){
+    if(profile.acct_type==="company" && profile.user_type!=="employee" && !profile.company_id){
       const t=setTimeout(()=>setShowCompanyOnboard(true),800);
       return()=>clearTimeout(t);
     }
@@ -2172,7 +2172,7 @@ export default function App(){
       return()=>clearTimeout(t);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[user?.uid, profile?.onboarding_done?.length, profile?.acct_type, profile?.company_id, page]);
+  },[user?.uid, profile?.onboarding_done?.length, profile?.acct_type, profile?.user_type, profile?.company_id, page]);
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
@@ -2204,6 +2204,7 @@ export default function App(){
   // Sound feedback
   const[muted,setMuted]=useState(false);
   const { alertIfNeeded } = useSoundFeedback(muted);
+  const { update: updatePainPrediction, reset: resetPainPrediction } = usePainPrediction();
   const[showCoach,setShowCoach]=useState(false);
   const[showGamification,setShowGamification]=useState(false);
   // AI Intelligence Layer
@@ -2706,6 +2707,7 @@ export default function App(){
             const smoothed1=pushScore(finalResult.overall);
             const displayScore = smoothed1 ?? finalResult.overall;
             alertIfNeeded(displayScore);
+            finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
@@ -2848,6 +2850,7 @@ export default function App(){
             const rawScore = d.overall;
             const smoothed = pushScore(rawScore) || rawScore; // same 15s window as local MP
             const result={...d, overall: smoothed};
+            result.pain_prediction = updatePainPrediction(smoothed, result.metrics);
             totalRef.current++;setTotalF(totalRef.current);
             if(smoothed>=65){goodRef.current++;setGoodF(goodRef.current);}
             histRef.current.push(smoothed);
@@ -3051,7 +3054,7 @@ export default function App(){
       // Pain prediction
       pain_summary: (()=>{
         const painMins=la.pain_prediction?.minutes_to_pain;
-        if(!painMins) return null;
+        if(painMins==null) return null;
         if(painMins<30) return isAr?`⚠️ توقع إزعاج خلال ${Math.round(painMins)} دقيقة — خذ استراحة الآن`:`⚠️ Discomfort likely in ${Math.round(painMins)} min — take a break now`;
         if(painMins<90) return isAr?`~${Math.round(painMins)} دقيقة قبل الإزعاج المحتمل`:`~${Math.round(painMins)} min before likely discomfort`;
         return null;

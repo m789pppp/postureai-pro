@@ -268,3 +268,89 @@ export function useSoundFeedback(muted = false) {
 
   return { alertIfNeeded, playSuccessChime: muted ? () => {} : playSuccessChime };
 }
+
+// ── usePainPrediction hook ──────────────────────────────────────────
+/**
+ * Real-time predictive discomfort model.
+ *
+ * BACKSTORY: App.jsx already reads `la.pain_prediction?.minutes_to_pain`
+ * and shows a "⚠️ Discomfort in ~N min" warning during live sessions —
+ * but nothing ever computed that field, so it was always null and the
+ * warning never fired. This hook is the actual computation.
+ *
+ * MODEL (heuristic, not a clinical/validated prediction — framed as an
+ * estimate in the UI, same spirit as the "not a medical diagnosis"
+ * disclaimers already used elsewhere in the app):
+ *
+ * Cumulative strain accumulates over time, faster the worse the current
+ * posture score is below a "safe" threshold (65/100 — matches the
+ * existing alert threshold in useSoundFeedback). This mirrors the
+ * standard ergonomics idea that sustained/severe poor posture predicts
+ * discomfort onset — a brief dip barely moves the needle, but sustained
+ * poor posture accumulates and eventually crosses a discomfort threshold.
+ * We then linearly project forward at the *current* strain rate to
+ * estimate minutes remaining until that threshold — i.e. "if this
+ * continues, expect discomfort in about N minutes", not a fixed timer.
+ *
+ * Returns { update(score, metrics), reset() }. update() should be called
+ * once per analysis tick with the same displayed score and metrics object
+ * already computed that tick; it returns either null (no near-term risk —
+ * posture is currently fine) or:
+ *   { minutes_to_pain, confidence: "low"|"medium"|"high", primary_driver, strain }
+ */
+export function usePainPrediction(safeThreshold = 60, strainThreshold = 12) {
+  const strainRef       = useRef(0);
+  const lastTickRef     = useRef(0);
+  const sessionStartRef = useRef(null);
+
+  const update = useCallback((score, metrics) => {
+    if (score == null) return null;
+    const now = Date.now();
+    if (sessionStartRef.current == null) sessionStartRef.current = now;
+    const dtMin = lastTickRef.current ? Math.min(5/60, (now - lastTickRef.current) / 60000) : 0;
+    lastTickRef.current = now;
+
+    // 0 at/above the safe threshold, ramping to 1.0 at score=0.
+    // strainThreshold is calibrated in "minutes at maximum severity (score=0)
+    // to reach discomfort" — e.g. strainThreshold=12 means ~12 min of the
+    // worst possible posture, or roughly ~2x longer at half that severity,
+    // before the model flags near-term risk. This is a heuristic estimate,
+    // not a clinically validated prediction.
+    const strainRate = Math.max(0, (safeThreshold - score) / safeThreshold); // 0..1 per minute
+    strainRef.current += strainRate * dtMin;
+
+    // Not currently accruing meaningful strain → nothing to predict.
+    if (strainRate <= 0.02) return null;
+
+    // Which tracked metric is worst right now (excludes non-postural entries).
+    let worst = null;
+    if (metrics) {
+      for (const [key, m] of Object.entries(metrics)) {
+        if (typeof m?.score !== "number") continue;
+        if (key === "session_fatigue" || key === "confidence_val") continue;
+        if (!worst || m.score < worst.score) worst = { key, label: m.label || key, score: m.score };
+      }
+    }
+
+    const remaining = strainThreshold - strainRef.current;
+    const minutesToPain = remaining / strainRate; // at the *current* rate — a countdown, not a fixed timer
+
+    // Confidence grows with how much of this session we've actually observed —
+    // an estimate 30s into a session is much shakier than one after 10+ minutes.
+    const sessionSec = (now - sessionStartRef.current) / 1000;
+    const confidence = sessionSec > 600 ? "high" : sessionSec > 180 ? "medium" : "low";
+
+    return {
+      minutes_to_pain: Math.round(Math.min(180, Math.max(0, minutesToPain))),
+      confidence,
+      primary_driver: worst?.label || null,
+      strain: Math.round(strainRef.current * 10) / 10,
+    };
+  }, [safeThreshold, strainThreshold]);
+
+  const reset = useCallback(() => {
+    strainRef.current = 0; lastTickRef.current = 0; sessionStartRef.current = null;
+  }, []);
+
+  return { update, reset };
+}
