@@ -50,6 +50,12 @@ export function getDemoBookings() {
   return read(BOOKINGS_KEY, []);
 }
 
+export function updateDemoBooking(bookingId, updates) {
+  const bookings = getDemoBookings().map(b => b.id === bookingId ? { ...b, ...updates } : b);
+  write(BOOKINGS_KEY, bookings);
+  return bookings;
+}
+
 export function createDemoBooking({ therapist, preferredTime, notes }) {
   const bookings = getDemoBookings();
   const booking = {
