@@ -263,6 +263,10 @@ export const BillingAPI = {
 export const PushAPI = {
   /** Send a test push to the current user's registered devices. */
   test: () => apiFetch("/push/test", { method: "POST" }),
+  /** Get category preferences + the auto-computed smart reminder hour. */
+  getPreferences: () => apiFetch("/push/preferences"),
+  /** Set category preferences and/or override the smart reminder hour. */
+  setPreferences: (data) => apiFetch("/push/preferences", { method: "POST", body: data }),
 };
 
 // ── Symptom Correlation API ─────────────────────────────────────────
@@ -297,6 +301,13 @@ export const MarketplaceAPI = {
   adminUpdateTherapist: (id, data) => apiFetch(`/admin/marketplace/therapists/${id}`, { method: "PATCH", body: data }),
   /** Admin: all bookings across all patients. */
   adminListBookings:    ()     => apiFetch("/admin/marketplace/bookings"),
+
+  /** Booking-scoped chat: patient (owner) or admin can read/post. */
+  getMessages:  (bookingId)       => apiFetch(`/marketplace/bookings/${bookingId}/messages`),
+  sendMessage:  (bookingId, text) => apiFetch(`/marketplace/bookings/${bookingId}/messages`, { method: "POST", body: { text } }),
+
+  /** Patient cancels their own booking. */
+  cancelBooking: (bookingId) => apiFetch(`/marketplace/bookings/${bookingId}/cancel`, { method: "POST" }),
 };
 
 export const AdminAPI = {

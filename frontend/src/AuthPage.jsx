@@ -4,10 +4,12 @@
  * All Firestore fields consistent with role detection
  */
 import { useState, useCallback, useEffect, useRef } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { API_BASE_URL } from "./config/api.js";
 import {
   signInGoogle, signInMicrosoft, signInEmail, signUpEmail, resetPassword,
   getUserProfile, createUserProfile, SUPPORT_EMAIL, setRememberMe,
-  deleteAuthUser,
+  deleteAuthUser, db, getAuthToken,
 } from "./firebase.js";
 
 // ── Error messages ──────────────────────────────────────────────────
@@ -229,6 +231,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [companyName, setCompanyName]= useState("");
   const [teamSize,    setTeamSize]   = useState("");
   const [companyRole, setCompanyRole]= useState("hr_admin"); // "hr_admin"|"employee"
+  const [inviteCode,  setInviteCode] = useState(""); // for employee joining via invite
   // UI
   const [agreeTerms,  setAgreeTerms] = useState(false);
   const [newsletter,  setNewsletter] = useState(true);
@@ -270,7 +273,8 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   // Individual specific
   const countryValid = !isCompany ? country.length > 0 : true;
   // Company specific
-  const companyValid   = isCompany ? companyName.trim().length >= 2 : true;
+  const companyValid   = isCompany && companyRole === "hr_admin" ? companyName.trim().length >= 2 : true;
+  const inviteValid    = isCompany && companyRole === "employee" ? inviteCode.trim().length >= 4 : true;
   const teamSizeValid  = isCompany ? teamSize.length > 0 : true;
 
   const fieldErr = {
@@ -282,6 +286,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     terms:       touched.terms       && !termsValid    ? (isAr?"يجب الموافقة على الشروط":"You must agree to the terms") : "",
     country:     touched.country     && !countryValid  ? (isAr?"اختر الدولة":"Select your country") : "",
     companyName: touched.companyName && !companyValid  ? (isAr?"اسم الشركة مطلوب":"Company name required") : "",
+    inviteCode:  touched.inviteCode  && !inviteValid   ? (isAr?"كود الدعوة مطلوب":"Invite code required") : "",
     teamSize:    touched.teamSize    && !teamSizeValid ? (isAr?"اختر حجم الفريق":"Select team size") : "",
   };
 
@@ -305,8 +310,9 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         user_type:    companyRole,           // "hr_admin" or "employee"
         is_org_owner: companyRole === "hr_admin",
         is_hr:        companyRole === "hr_admin",
-        company:      companyName.trim(),
-        team_size:    teamSize,
+        company:      companyRole === "hr_admin" ? companyName.trim() : "",
+        team_size:    companyRole === "hr_admin" ? teamSize : "",
+        invite_code:  companyRole === "employee" ? inviteCode.trim() : "",
         country:      "",
         profession:   "",
       };
@@ -357,7 +363,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         ...(isCompany?{companyName:true,teamSize:true}:{country:true})};
       setTouched(allTouched);
       const valid = emailValid&&passValid&&pass2Valid&&fnameValid&&lnameValid&&termsValid
-        &&companyValid&&teamSizeValid&&countryValid;
+        &&companyValid&&inviteValid&&teamSizeValid&&countryValid;
       if (!valid) { doShake(); return; }
     }
     if (!rateOk()) { setErr(isAr?"انتظر دقيقة":"Too many attempts"); return; }
@@ -376,6 +382,39 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
           try { await deleteAuthUser(); } catch {}
           throw profileErr;
         }
+        // Employee joining via a typed invite code — this previously just
+        // stored the typed string on the profile with no effect (confirmed
+        // by grepping the whole codebase: nothing ever read invite_code back
+        // out to link a company_id). Actually redeem it now, the same way
+        // InviteAccept.jsx does for the ?invite=TOKEN link flow: look up the
+        // invite doc to get its company_id, then call the same secured
+        // backend endpoint. A failure here is non-fatal to the signup itself
+        // (the account still exists) but the user needs to know they aren't
+        // actually linked to their company yet.
+        if (isCompany && companyRole === "employee" && inviteCode.trim()) {
+          try {
+            const inviteSnap = await getDoc(doc(db, "invites", inviteCode.trim()));
+            if (!inviteSnap.exists()) {
+              throw new Error(isAr ? "كود الدعوة غير صحيح أو منتهي الصلاحية" : "Invite code is invalid or expired");
+            }
+            const inviteData = inviteSnap.data();
+            const tok = await getAuthToken();
+            const resp = await fetch(`${API_BASE_URL}/org/invite/accept`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+              body: JSON.stringify({ token: inviteCode.trim(), company_id: inviteData.company_id }),
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) throw new Error(result.error || (isAr ? "تعذر قبول الدعوة" : "Couldn't accept the invite"));
+          } catch (inviteErr) {
+            console.warn("[Auth] invite redemption failed:", inviteErr?.message);
+            setErr((isAr
+              ? "تم إنشاء حسابك، لكن كود الدعوة لم يعمل: "
+              : "Your account was created, but the invite code didn't work: ") + inviteErr.message);
+            onAuth(c.user, true);
+            return;
+          }
+        }
         onAuth(c.user, true);
       }
     } catch(e) {
@@ -384,7 +423,19 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     } finally { setLoading(false); }
   },[view,email,pass,pass2,fname,lname,emailValid,passValid,pass2Valid,fnameValid,lnameValid,
      termsValid,companyValid,teamSizeValid,countryValid,isCompany,isAr,onAuth,remember,
-     companyName,teamSize,profession,country,companyRole,newsletter,acctType]);
+     companyName,teamSize,profession,country,companyRole,newsletter,acctType,inviteCode,inviteValid]);
+
+  // ── Pre-fill invite code from URL ────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("invite") || params.get("code") || params.get("token");
+    if (code) {
+      setInviteCode(code);
+      setAcctType("company");
+      setCompanyRole("employee");
+      setView("signup");
+    }
+  }, []);
 
   // ── Forgot password ─────────────────────────────────────────────────
   const handleForgot = useCallback(async e => {
@@ -612,8 +663,8 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
               <div style={{display:"flex",background:t.faint,border:`1px solid ${t.border}`,
                 borderRadius:10,padding:3,marginBottom:12,gap:3}}>
                 {[
-                  {id:"individual",en:"👤 Individual",ar:"👤 مستخدم فردي",color:"rgba(59,130,246,.4)",colorBg:"rgba(59,130,246,.14)",textColor:"#60a5fa"},
-                  {id:"company",en:"🏢 Company / HR",ar:"🏢 شركة / فريق",color:"rgba(16,185,129,.4)",colorBg:"rgba(16,185,129,.14)",textColor:"#34d399"},
+                  {id:"individual",en:"👤 Personal Use",ar:"👤 استخدام شخصي",color:"rgba(59,130,246,.4)",colorBg:"rgba(59,130,246,.14)",textColor:"#60a5fa"},
+                  {id:"company",en:"🏢 Company / Team",ar:"🏢 شركة / فريق",color:"rgba(16,185,129,.4)",colorBg:"rgba(16,185,129,.14)",textColor:"#34d399"},
                 ].map(m=>(
                   <button key={m.id} type="button" onClick={()=>setAcctType(m.id)}
                     style={{
@@ -733,46 +784,88 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
 
                 {/* ══ COMPANY FIELDS ═════════════════════════════════ */}
                 {isCompany && (<>
-                  {/* Company name */}
-                  <FloatInput id="companyName" label={isAr?"اسم الشركة":"Company name"}
-                    value={companyName} onChange={v=>{setCompanyName(v);touch("companyName");}}
-                    autoComplete="organization" required dark={dark} isRtl={isAr} t={t}
-                    error={fieldErr.companyName} valid={companyValid&&touched.companyName}/>
 
-                  {/* Team size */}
-                  <Select
-                    label={isAr?"حجم الفريق":"Team size"}
-                    value={teamSize} onChange={v=>{setTeamSize(v);touch("teamSize");}}
-                    options={TEAM_SIZES} required error={fieldErr.teamSize}
-                    dark={dark} t={t}
-                    placeholder={isAr?"اختر حجم الفريق":"Select team size"}/>
-
-                  {/* Role in company */}
-                  <div style={{marginBottom:8}}>
+                  {/* Role selector — HR or Employee */}
+                  <div style={{marginBottom:12}}>
                     <div style={{fontSize:11.5,fontWeight:600,color:t.textSub,
                       letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>
-                      {isAr?"دورك في الشركة":"Your role"}
+                      {isAr?"أنا...":"I am..."}
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                       {[
-                        {id:"hr_admin",icon:"👔",en:"HR / Admin",ar:"HR / مسؤول",desc:isAr?"أدير الفريق وأرى التقارير":"Manage team & view reports"},
-                        {id:"employee",icon:"🧑‍💻",en:"Employee",ar:"موظف",desc:isAr?"أستخدم التطبيق شخصياً":"Use the app personally"},
+                        {id:"hr_admin", icon:"👔",
+                          en:"Setting up my company", ar:"أنشئ حساب الشركة",
+                          sub:isAr?"HR Admin — أنشئ workspace وأدعو الفريق":"HR Admin — create workspace & invite team"},
+                        {id:"employee", icon:"🧑‍💻",
+                          en:"Joining my team", ar:"أنضم لفريقي",
+                          sub:isAr?"عندي كود دعوة من HR":"I have an invite code from HR"},
                       ].map(r=>(
-                        <button key={r.id} type="button" onClick={()=>setCompanyRole(r.id)}
+                        <button key={r.id} type="button" onClick={()=>{setCompanyRole(r.id);}}
                           style={{
-                            padding:"10px 8px",borderRadius:10,cursor:"pointer",
-                            background:companyRole===r.id?"rgba(26,86,219,.12)":t.faint,
+                            padding:"14px 12px",borderRadius:12,cursor:"pointer",textAlign:"left",
+                            background:companyRole===r.id?"rgba(26,86,219,.1)":t.faint,
                             border:`1.5px solid ${companyRole===r.id?"rgba(26,86,219,.5)":t.border}`,
-                            textAlign:"center",transition:"all .18s",fontFamily:"inherit",
-                            boxShadow:companyRole===r.id?"0 0 0 3px rgba(26,86,219,.1)":"none",
+                            transition:"all .18s",fontFamily:"inherit",
+                            boxShadow:companyRole===r.id?"0 0 0 3px rgba(26,86,219,.08)":"none",
                           }}>
-                          <div style={{fontSize:18,marginBottom:3}}>{r.icon}</div>
-                          <div style={{fontSize:13,fontWeight:700,color:companyRole===r.id?"#60a5fa":t.text,marginBottom:2}}>{isAr?r.ar:r.en}</div>
-                          <div style={{fontSize:12,color:t.textSub,lineHeight:1.4}}>{r.desc}</div>
+                          <div style={{fontSize:20,marginBottom:6}}>{r.icon}</div>
+                          <div style={{fontSize:13.5,fontWeight:700,color:companyRole===r.id?"#60a5fa":t.text,marginBottom:4,lineHeight:1.3}}>
+                            {isAr?r.ar:r.en}
+                          </div>
+                          <div style={{fontSize:11.5,color:t.textSub,lineHeight:1.4}}>{r.sub}</div>
                         </button>
                       ))}
                     </div>
                   </div>
+
+                  {/* HR Admin fields */}
+                  {companyRole==="hr_admin" && (<>
+                    <FloatInput id="companyName" label={isAr?"اسم الشركة":"Company name"}
+                      value={companyName} onChange={v=>{setCompanyName(v);touch("companyName");}}
+                      autoComplete="organization" required dark={dark} isRtl={isAr} t={t}
+                      error={fieldErr.companyName} valid={companyValid&&touched.companyName}/>
+                    <Select
+                      label={isAr?"حجم الفريق":"Team size"}
+                      value={teamSize} onChange={v=>{setTeamSize(v);touch("teamSize");}}
+                      options={TEAM_SIZES} required error={fieldErr.teamSize}
+                      dark={dark} t={t}
+                      placeholder={isAr?"اختر حجم الفريق":"Select team size"}/>
+                    {/* Info banner */}
+                    <div style={{
+                      display:"flex",alignItems:"flex-start",gap:10,
+                      padding:"11px 13px",borderRadius:10,marginBottom:4,
+                      background:"rgba(16,217,160,.06)",border:"1px solid rgba(16,217,160,.2)",
+                    }}>
+                      <span style={{fontSize:15,flexShrink:0}}>💡</span>
+                      <p style={{fontSize:12,color:"#6ee7b7",lineHeight:1.6,margin:0}}>
+                        {isAr
+                          ? "بعد التسجيل هتلاقي invite link في الـ HR dashboard تبعتهولي فريقك."
+                          : "After signup you'll get an invite link in your HR dashboard to share with your team."}
+                      </p>
+                    </div>
+                  </>)}
+
+                  {/* Employee invite code field */}
+                  {companyRole==="employee" && (<>
+                    <FloatInput id="inviteCode" label={isAr?"كود الدعوة":"Invite code"}
+                      value={inviteCode} onChange={v=>{setInviteCode(v.trim());touch("inviteCode");}}
+                      autoComplete="off" required dark={dark} isRtl={isAr} t={t}
+                      error={fieldErr.inviteCode} valid={inviteValid&&touched.inviteCode}/>
+                    {/* Info banner */}
+                    <div style={{
+                      display:"flex",alignItems:"flex-start",gap:10,
+                      padding:"11px 13px",borderRadius:10,marginBottom:4,
+                      background:"rgba(79,124,249,.06)",border:"1px solid rgba(79,124,249,.2)",
+                    }}>
+                      <span style={{fontSize:15,flexShrink:0}}>📨</span>
+                      <p style={{fontSize:12,color:"#93c5fd",lineHeight:1.6,margin:0}}>
+                        {isAr
+                          ? "الكود موجود في الإيميل اللي بعتهولك الـ HR أو مسؤول الشركة."
+                          : "Find your invite code in the email sent by your HR admin or company manager."}
+                      </p>
+                    </div>
+                  </>)}
+
                 </>)}
 
                 {/* Terms */}
