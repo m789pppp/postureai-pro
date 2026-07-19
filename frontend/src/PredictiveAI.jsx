@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
 import { getCached, setCache } from "./aiPreloader.js";
+import { SymptomAPI } from "./services/api.js";
 
 async function callGemini(prompt, system, maxTokens = 900) {
   try {
@@ -157,17 +158,41 @@ function detectAnomalies(scoredSessions) {
 function forecast(scores, days = 7) {
   if (!scores || scores.length < 3) return null;
   const n = scores.length;
-  const xMean = (n - 1) / 2;
-  const yMean = avg(scores);
-  const num = scores.reduce((s, y, x) => s + (x - xMean) * (y - yMean), 0);
-  const den = scores.reduce((s, _, x) => s + Math.pow(x - xMean, 2), 0);
+  // Exponentially-weighted regression: recent sessions influence the trend
+  // more than old ones, so a sudden recent change shows up faster than in
+  // a plain unweighted OLS fit.
+  const HALF_LIFE = 5; // sessions
+  const weights = scores.map((_, i) => Math.pow(0.5, (n - 1 - i) / HALF_LIFE));
+  const wSum   = weights.reduce((a, w) => a + w, 0);
+  const xMean  = scores.reduce((s, _, x) => s + x * weights[x], 0) / wSum;
+  const yMean  = scores.reduce((s, y, x) => s + y * weights[x], 0) / wSum;
+  const num = scores.reduce((s, y, x) => s + weights[x] * (x - xMean) * (y - yMean), 0);
+  const den = scores.reduce((s, _, x) => s + weights[x] * Math.pow(x - xMean, 2), 0);
   const slope = den ? num / den : 0;
   const intercept = yMean - slope * xMean;
-  const predicted = Array.from({ length: days }, (_, i) =>
-    Math.round(Math.max(0, Math.min(100, intercept + slope * (n + i))))
-  );
+
+  // Confidence band from the weighted residual spread — wider band the
+  // noisier the recent history has been, narrower when scores are steady.
+  const residuals = scores.map((y, x) => y - (intercept + slope * x));
+  const wResidVar = residuals.reduce((s, r, x) => s + weights[x] * r * r, 0) / wSum;
+  const stdErr = Math.sqrt(Math.max(0, wResidVar));
+
+  const predicted  = [];
+  const upperBound  = [];
+  const lowerBound  = [];
+  for (let i = 0; i < days; i++) {
+    const point = intercept + slope * (n + i);
+    // Uncertainty grows the further out the forecast reaches
+    const spread = stdErr * (1 + i * 0.15);
+    predicted.push(Math.round(Math.max(0, Math.min(100, point))));
+    upperBound.push(Math.round(Math.max(0, Math.min(100, point + spread))));
+    lowerBound.push(Math.round(Math.max(0, Math.min(100, point - spread))));
+  }
   const trend = slope > 0.3 ? "improving" : slope < -0.3 ? "declining" : "stable";
-  return { slope: Math.round(slope * 100) / 100, predicted, trend };
+  // Simple confidence label from how wide the 7-day band is relative to the scale
+  const bandWidth = (upperBound[days-1] || 0) - (lowerBound[days-1] || 0);
+  const confidence = bandWidth <= 10 ? "high" : bandWidth <= 25 ? "medium" : "low";
+  return { slope: Math.round(slope * 100) / 100, predicted, upperBound, lowerBound, trend, confidence };
 }
 
 // ── Metric chip ─────────────────────────────────────────────────────
@@ -265,10 +290,54 @@ function AnomalyRow({ anomaly, isAr }) {
   );
 }
 
+// ── Risk factor breakdown ────────────────────────────────────────────
+function RiskBreakdown({ factors, total, isAr }) {
+  if (!factors?.length) return null;
+  return (
+    <div style={{ background: TOKENS.surface, border: `1px solid ${TOKENS.border}`,
+      borderRadius: 14, padding: TOKENS.sp4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: TOKENS.sp3 }}>
+        <div style={{ fontSize: TOKENS.base, fontWeight: TOKENS.bold, color: TOKENS.text }}>
+          {isAr ? "تفصيل مؤشر الخطر" : "Risk Score Breakdown"}
+        </div>
+        <div style={{ fontSize: TOKENS.base, fontWeight: TOKENS.bold, color: riskColor(total) }}>
+          {total}/100
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp3 }}>
+        {factors.map(f => {
+          const contribution = Math.round(f.raw * f.weight);
+          return (
+            <div key={f.key}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: TOKENS.xs, color: TOKENS.textSub, fontWeight: TOKENS.semibold }}>
+                  {f.label} <span style={{ color: TOKENS.textMuted }}>({Math.round(f.weight*100)}%)</span>
+                </span>
+                <span style={{ fontSize: TOKENS.xs, color: riskColor(f.raw), fontWeight: TOKENS.bold }}>
+                  +{contribution}
+                </span>
+              </div>
+              <div style={{ height: 5, background: "rgba(148,163,184,.12)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${Math.min(100, f.raw)}%`,
+                  background: riskColor(f.raw), borderRadius: 99, transition: "width .3s" }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted, marginTop: TOKENS.sp3, lineHeight: 1.6 }}>
+        {isAr
+          ? "\"ربط الأعراض الحقيقي\" مبني على تسجيلاتك الفعلية في محرك ربط الأعراض، مش بس زوايا الوضعية."
+          : "\"Real symptom correlation\" is based on your actual check-ins in the Symptom Correlation Engine, not just posture angles."}
+      </div>
+    </div>
+  );
+}
+
 // ── Forecast chart ───────────────────────────────────────────────────
-function ForecastChart({ historical, predicted, isAr }) {
+function ForecastChart({ historical, predicted, upperBound, lowerBound, confidence, isAr }) {
   if (!historical?.length || !predicted?.length) return null;
-  const all   = [...historical.slice(-14), ...predicted];
+  const all   = [...historical.slice(-14), ...predicted, ...(upperBound||[]), ...(lowerBound||[])];
   const maxV  = Math.max(...all, 1);
   const minV  = Math.max(0, Math.min(...all) - 5);
   const range = maxV - minV || 1;
@@ -290,12 +359,35 @@ function ForecastChart({ historical, predicted, isAr }) {
     return `${x},${y}`;
   }).join(" ");
 
+  // Confidence band as a closed polygon: upper bound out, lower bound back —
+  // starts/ends at the last historical point so it doesn't float disconnected.
+  const bandPolygon = (upperBound && lowerBound) ? (() => {
+    const upPts = upperBound.map((v, i) => {
+      const x = histW + (i / Math.max(upperBound.length - 1, 1)) * predW;
+      const y = H - ((v - minV) / range) * H;
+      return `${x},${y}`;
+    });
+    const downPts = lowerBound.map((v, i) => {
+      const x = histW + (i / Math.max(lowerBound.length - 1, 1)) * predW;
+      const y = H - ((v - minV) / range) * H;
+      return `${x},${y}`;
+    }).reverse();
+    return [`${lastX},${lastY}`, ...upPts, ...downPts, `${lastX},${lastY}`].join(" ");
+  })() : null;
+
+  const CONF_LABEL = {
+    high:   { en: "High confidence",   ar: "ثقة عالية",   color: "#10b981" },
+    medium: { en: "Medium confidence", ar: "ثقة متوسطة",  color: "#f59e0b" },
+    low:    { en: "Low confidence",    ar: "ثقة منخفضة",  color: "#ef4444" },
+  };
+  const confMeta = CONF_LABEL[confidence] || null;
+
   return (
     <div style={{ background: TOKENS.surface, border: `1px solid ${TOKENS.border}`,
       borderRadius: 14, padding: TOKENS.sp4 }}>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: TOKENS.sp4, marginBottom: TOKENS.sp3 }}>
+      <div style={{ display: "flex", gap: TOKENS.sp4, marginBottom: TOKENS.sp3, alignItems: "center", flexWrap: "wrap" }}>
         {[
           { color: "#1a56db", label: isAr ? "السجل" : "Historical", dashed: false },
           { color: "#0891b2", label: isAr ? "التوقع" : "Forecast",   dashed: true },
@@ -308,6 +400,12 @@ function ForecastChart({ historical, predicted, isAr }) {
             <span style={{ fontSize: TOKENS.xs, color: TOKENS.textSub, fontWeight: TOKENS.semibold }}>{label}</span>
           </div>
         ))}
+        {confMeta && (
+          <div style={{ marginInlineStart: "auto", fontSize: TOKENS.xs, fontWeight: TOKENS.bold,
+            color: confMeta.color, background: `${confMeta.color}15`, padding: "2px 8px", borderRadius: 99 }}>
+            {isAr ? confMeta.ar : confMeta.en}
+          </div>
+        )}
       </div>
 
       <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none"
@@ -319,6 +417,10 @@ function ForecastChart({ historical, predicted, isAr }) {
             stroke={ref >= 80 ? "rgba(16,185,129,.18)" : "rgba(245,158,11,.18)"}
             strokeWidth=".6" strokeDasharray="3,3" />;
         })}
+        {/* Confidence band — drawn before the lines so it sits underneath */}
+        {bandPolygon && (
+          <polygon points={bandPolygon} fill="#0891b2" fillOpacity="0.12" stroke="none" />
+        )}
         {/* Historical line */}
         <polyline points={histPts} fill="none" stroke="#1a56db"
           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -337,8 +439,8 @@ function ForecastChart({ historical, predicted, isAr }) {
         </span>
         <span style={{ fontSize: TOKENS.xs, color: "#0891b2", fontWeight: TOKENS.bold }}>
           {isAr
-            ? `التوقع بعد 7 أيام: ${predicted[predicted.length - 1]}/100`
-            : `7-day forecast: ${predicted[predicted.length - 1]}/100`}
+            ? `التوقع بعد 7 أيام: ${predicted[predicted.length - 1]}/100${upperBound ? ` (${lowerBound[lowerBound.length-1]}–${upperBound[upperBound.length-1]})` : ""}`
+            : `7-day forecast: ${predicted[predicted.length - 1]}/100${upperBound ? ` (${lowerBound[lowerBound.length-1]}–${upperBound[upperBound.length-1]})` : ""}`}
         </span>
         <span style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted }}>+7d</span>
       </div>
@@ -416,7 +518,12 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   const [aiText, setAiText]   = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
+  const [symptomInsights, setSymptomInsights] = useState(null); // from the symptom correlation engine
   const isAr = lang === "ar";
+
+  useEffect(() => {
+    SymptomAPI.correlation("90d").then(d => setSymptomInsights(d?.insights || [])).catch(() => setSymptomInsights([]));
+  }, []);
 
   // sessions are newest-first (see getUserSessions: sorted tb-ta descending).
   const scoredSessions = sessions.map(s => ({ session: s, score: s.avg_score || 0 })).filter(x => x.score > 0);
@@ -443,11 +550,23 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   const fore         = forecast(recent14.length >= 3 ? recent14 : allScores.slice().reverse());
   const forecastTrend = fore?.trend || "stable";
 
-  const riskScore = Math.min(100, Math.round(
-    (100 - avgScore) * 0.6 +
-    burnoutScore * 0.3 +
-    anomalies.filter(a => a.direction === "low").length * 5
-  ));
+  // Risk scoring — a weighted sum of explainable factors rather than one
+  // opaque number. The "symptom correlation" factor pulls in the real
+  // self-reported data from the Symptom Correlation Engine (a separate
+  // feature) instead of only inferring risk from posture-angle metrics —
+  // two different signals corroborating each other are more trustworthy
+  // than posture data alone.
+  const worstSymptomGap = symptomInsights?.length
+    ? Math.max(0, ...symptomInsights.filter(i => i.direction === "worse").map(i => i.score_gap))
+    : 0;
+  const riskFactors = [
+    { key: "avgScore",  label: isAr ? "متوسط السكور" : "Average score",       weight: 0.40, raw: Math.max(0, 100 - avgScore) },
+    { key: "burnout",   label: isAr ? "مؤشر الإرهاق" : "Burnout indicator",   weight: 0.25, raw: burnoutScore },
+    { key: "anomalies", label: isAr ? "شذوذ مكتشف" : "Detected anomalies",    weight: 0.15, raw: Math.min(100, anomalies.filter(a => a.direction === "low").length * 20) },
+    { key: "trend",     label: isAr ? "اتجاه التوقع" : "Forecast trend",      weight: 0.10, raw: forecastTrend === "declining" ? 100 : forecastTrend === "stable" ? 40 : 0 },
+    { key: "symptoms",  label: isAr ? "ربط الأعراض الحقيقي" : "Real symptom correlation", weight: 0.10, raw: Math.min(100, worstSymptomGap * 4) },
+  ];
+  const riskScore = Math.min(100, Math.round(riskFactors.reduce((s, f) => s + f.raw * f.weight, 0)));
 
   const _scoreL = avgScore>=85?"Excellent":avgScore>=70?"Good":avgScore>=55?"Fair":"Needs Attention";
   const _cervAngle = riskScore>=70?"35-50":riskScore>=40?"20-35":"<20";
@@ -709,6 +828,7 @@ Max 180 words. Start immediately.`,
                   color="#60a5fa"
                   desc={`${thisWeek.length} ${isAr ? "جلسة هذا الأسبوع" : "sessions this week"}`} />
               </div>
+              <RiskBreakdown factors={riskFactors} total={riskScore} isAr={isAr} />
               <AIBlock loading={loading} data={aiText} error={error}
                 onRetry={() => loadAI(tab)} isAr={isAr} />
             </div>
@@ -775,7 +895,9 @@ Max 180 words. Start immediately.`,
             <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp4 }}>
               <ForecastChart
                 historical={recent14.length >= 3 ? recent14 : allScores.slice(0,14).slice().reverse()}
-                predicted={fore?.predicted || []} isAr={isAr} />
+                predicted={fore?.predicted || []}
+                upperBound={fore?.upperBound} lowerBound={fore?.lowerBound}
+                confidence={fore?.confidence} isAr={isAr} />
 
               {fore && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: TOKENS.sp2 }}>
