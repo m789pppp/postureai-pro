@@ -4102,7 +4102,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     `}</style>
     <div dir={dir} style={{
       display:"grid",
-      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "300px 1fr" : "1fr 300px"),
+      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "440px 1fr" : "1fr 440px"),
       minHeight:"100vh",
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
@@ -4371,9 +4371,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
                 {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
               </div>
+              {/* Model-ready state lives in the sidebar status row; here we
+                  show session guidance instead of repeating it. */}
               <div style={{fontSize:10.5,color:cs.muted,marginTop:1}}>
                 {mpStatus==="ready"
-                  ? (isAr?"نموذج AI جاهز — 33 نقطة نشطة":"AI model ready — 33 landmarks active")
+                  ? (M_ ? (isAr?`المسافة المثلى ${M_.optDist[0]}–${M_.optDist[1]} سم`:`Optimal distance ${M_.optDist[0]}–${M_.optDist[1]}cm`) : (isAr?"جاهز للتحليل":"Ready to analyse"))
                   : (isAr?"جاري تحميل النموذج...":"Loading AI model...")}
               </div>
             </div>
@@ -4785,16 +4787,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               },
               {
                 label:    isAr?"الظهر":"Back",
-                score:    analysis?.metrics?.spine_lean?.score ?? analysis?.metrics?.spine_upper?.score,
+                score:    analysis?.metrics?.spine_lean?.score,
                 value:    analysis?.metrics?.spine_lean?.value,
                 unit:     "°",
               },
-              {
-                label:    isAr?"المسافة":"Distance",
-                score:    analysis?.metrics?.screen_distance?.score,
-                value:    analysis?.distCm,
-                unit:     "cm",
-              },
+              // Distance intentionally omitted here — it has its own dedicated
+              // bar in the left column; a second copy on the video was noise.
             ].map(({label,score:s,value,unit},i)=>{
               const col = s==null?"#475569":s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
               const risk= s==null?(isAr?"—":"—"):s>=80?(isAr?"منخفض":"Low"):s>=60?(isAr?"متوسط":"Med"):(isAr?"مرتفع":"High");
@@ -4813,16 +4811,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 </div>
               );
             })}
-
-            {/* Pain prediction */}
-            {analysis?.pain_bar?.urgency && analysis.pain_bar.urgency !== "none" && (
-              <div style={{marginTop:8,paddingTop:8,
-                borderTop:"1px solid rgba(255,255,255,.06)"}}>
-                <div style={{fontSize:9,color:analysis.pain_bar.color,fontWeight:700}}>
-                  {isAr ? analysis.pain_bar.label_ar : analysis.pain_bar.label}
-                </div>
-              </div>
-            )}
 
             {/* Session baseline comparison — "better/worse than your first sessions" */}
             {(()=>{
@@ -4850,38 +4838,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
               );
             })()}
 
-            {/* Limited accuracy badge — shown when backend used Haar fallback instead of MediaPipe */}
-            {analysis?.limited_accuracy && (
-              <div style={{
-                marginTop:8, paddingTop:8,
-                borderTop:"1px solid rgba(255,255,255,.06)",
-                display:"flex", alignItems:"center", gap:5,
-              }}>
-                <span style={{fontSize:11}}>⚠️</span>
-                <div style={{fontSize:9, color:"#f59e0b", fontWeight:600, lineHeight:1.3}}>
-                  {isAr
-                    ? "دقة محدودة — تحسين الإضاءة"
-                    : isAr?"دقة محدودة — تحسين الإضاءة":"Limited accuracy — improve lighting"}
-                </div>
-              </div>
-            )}
           </div>
         )}
-          {score>0&&(
-            <div style={{
-              position:"absolute",bottom:8,right:isAr?"auto":8,left:isAr?8:"auto",
-              background:"rgba(2,8,16,.92)",borderRadius:10,
-              padding:"8px 12px",textAlign:"center",
-              border:`2px solid ${sc(score)}60`,
-              backdropFilter:"blur(8px)",
-            }}>
-              <div style={{fontSize:28,fontWeight:900,color:sc(score),lineHeight:1}}>{score}</div>
-              <div style={{fontSize:9,color:sc(score),marginTop:2,fontWeight:600,opacity:.7}}>/100</div>
-              <div style={{fontSize:8,color:"rgba(255,255,255,.5)",marginTop:1}}>
-                {score>=80?(isAr?"ممتاز":"Excellent"):score>=60?(isAr?"جيد":"Good"):(isAr?"ضعيف":"Poor")}
-              </div>
-            </div>
-          )}
+          {/* (Removed the redundant bottom-left score box — the score already
+              shows in the on-video panel header and in the left column ring.) */}
         </div>
 
         {/* Score ring + user */}
@@ -4940,46 +4900,37 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
 
-        {/* Percentile badge */}
-        {analysis?.percentile != null && (
-          <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`,
-            background:"rgba(99,102,241,.06)",display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:16}}>🏆</span>
-            <div style={{flex:1}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#a5b4fc"}}>
-                {isAr
-                  ? `أحسن من ${analysis.percentile}% من المستخدمين`
-                  : `Better than ${analysis.percentile}% of users`}
+        {/* Strain / discomfort prediction — wired to the real pain_prediction
+            data (minutes_to_pain / primary_driver / confidence). Previously
+            this section read analysis.pain_bar, which nothing ever set, so it
+            never appeared and the computed prediction was thrown away. */}
+        {analysis?.pain_prediction?.minutes_to_pain != null && (()=>{
+          const pp=analysis.pain_prediction, m=pp.minutes_to_pain;
+          const col=m<=10?"#ef4444":m<=30?"#f97316":"#f59e0b";
+          const icon=m<=10?"🔴":m<=30?"🟠":"🟡";
+          const pct=Math.max(4,Math.min(100,100-(m/60)*100)); // nearer to strain = fuller
+          const conf=isAr?(pp.confidence==="high"?"عالية":pp.confidence==="medium"?"متوسطة":"منخفضة"):pp.confidence;
+          return (
+            <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,
+              background:`${col}12`,borderLeft:`3px solid ${col}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                <span style={{fontSize:13}}>{icon}</span>
+                <div style={{fontSize:10,fontWeight:700,color:col}}>
+                  {isAr?`احتمال إجهاد خلال ~${m} دقيقة`:`Discomfort likely in ~${m} min`}
+                  {pp.primary_driver?` · ${pp.primary_driver}`:""}
+                </div>
+              </div>
+              <div style={{height:3,borderRadius:99,background:"rgba(255,255,255,.08)"}}>
+                <div style={{height:"100%",borderRadius:99,width:`${pct}%`,
+                  background:col,transition:"width .5s ease"}}/>
+              </div>
+              <div style={{fontSize:8.5,color:cs.muted,marginTop:3}}>
+                {isAr?`الثقة: ${conf} — تقدير توعوي، ليس تشخيصاً طبياً`
+                     :`Confidence: ${conf} — awareness estimate, not a medical diagnosis`}
               </div>
             </div>
-            <div style={{fontSize:18,fontWeight:900,color:"#818cf8"}}>
-              {analysis.percentile}%
-            </div>
-          </div>
-        )}
-
-        {/* Pain bar */}
-        {analysis?.pain_bar && analysis.pain_bar.urgency !== "none" && (
-          <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,
-            background:`${analysis.pain_bar.color}12`,
-            borderLeft:`3px solid ${analysis.pain_bar.color}`}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
-              <span style={{fontSize:13}}>
-                {analysis.pain_bar.urgency==="imminent"?"🔴":
-                 analysis.pain_bar.urgency==="soon"?"🟠":"🟡"}
-              </span>
-              <div style={{fontSize:10,fontWeight:700,color:analysis.pain_bar.color}}>
-                {isAr ? analysis.pain_bar.label_ar : analysis.pain_bar.label}
-              </div>
-            </div>
-            <div style={{height:3,borderRadius:99,background:"rgba(255,255,255,.08)"}}>
-              <div style={{height:"100%",borderRadius:99,
-                width:`${Math.min(100,analysis.pain_bar.pct||0)}%`,
-                background:analysis.pain_bar.color,
-                transition:"width .5s ease"}}/>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Live metrics */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
@@ -5319,8 +5270,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Tools moved to Dashboard — see HomePage tools tab */}
 
-        {/* Calibration active badge */}
-        {calibData&&(
+        {/* Calibration active badge — hidden when the more specific
+            "personalised analysis" badge above is already showing, so the two
+            don't stack during a calibrated front-mode session. */}
+        {calibData&&!(camActive&&mode!=="side"&&calibData?.tolerances)&&(
           <div style={{margin:"10px 14px 0",background:"rgba(16,185,129,.07)",border:"1px solid rgba(16,185,129,.2)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#10b981",fontWeight:500}}>
             ✓ {isAr?"المعايرة الشخصية نشطة":"Personal calibration active"}
           </div>
