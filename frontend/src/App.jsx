@@ -17,23 +17,6 @@ import { HRPanel } from "./HRPanel.jsx";
 import { TherapistMarketplace } from "./TherapistMarketplace.jsx";
 import { SymptomCorrelation } from "./SymptomCorrelation.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
-import { lazy, Suspense } from "react";
-// Standalone marketing pages (self-contained: own nav/footer via StandaloneLayout's
-// PageShell) — reached by real URL path, not the app's internal #hash router, since
-// Vercel's catch-all rewrite ("/(.*)" -> "/index.html") already serves index.html for
-// any path. Lazy-loaded so they don't add weight to the main app bundle.
-const FAQPage         = lazy(() => import("./FAQPage.jsx"));
-const HowItWorksPage  = lazy(() => import("./HowItWorksPage.jsx"));
-const ProductPage     = lazy(() => import("./ProductPage.jsx"));
-const SolutionsPage   = lazy(() => import("./SolutionsPage.jsx"));
-const PricingPageLP   = lazy(() => import("./PricingPageLP.jsx"));
-const STANDALONE_PAGE_ROUTES = {
-  "/faq": FAQPage,
-  "/how-it-works": HowItWorksPage,
-  "/product": ProductPage,
-  "/solutions": SolutionsPage,
-  "/pricing": PricingPageLP,
-};
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
 import { AnalyticsDashboard } from "./AnalyticsDashboard.jsx";
 import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback } from "./PostureUtils.jsx";
@@ -3461,20 +3444,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
       </div>
     </div>
   );
-
-  // Standalone marketing pages reached by real URL path (/faq, /product, etc.)
-  // rather than the app's internal #hash router. Checked first since these
-  // pages are fully self-contained and must render regardless of auth/loading state.
-  const _StandalonePage = STANDALONE_PAGE_ROUTES[window.location.pathname];
-  if (_StandalonePage) {
-    return (
-      <ErrorBoundary>
-        <Suspense fallback={null}>
-          <_StandalonePage />
-        </Suspense>
-      </ErrorBoundary>
-    );
-  }
 
   if(paymentResult)return <PaymentResultScreen result={paymentResult} cs={cs} lang={lang} onContinue={()=>setPaymentResult(null)}/>;
   if(page==="landing")return <ErrorBoundary><Landing {...shared} onStart={()=>setPage(user?"setup":"auth")} lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}/></ErrorBoundary>;

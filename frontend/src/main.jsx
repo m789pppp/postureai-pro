@@ -4,6 +4,25 @@ import App from "./App.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import "./index.css";
 
+// ── Stale-deployment recovery ──────────────────────────────────────
+// Vite fires this event whenever a dynamic import() (PDF export, a
+// lazy-loaded standalone page, etc.) fails to fetch its chunk because
+// the tab was left open across a newer deployment — the old hashed
+// filename the running page still references no longer exists on the
+// server. A single forced reload fetches the current index.html with
+// correct references and fully resolves it, instead of surfacing a
+// raw "Failed to fetch dynamically imported module" error to the user.
+// Guarded with sessionStorage so a genuinely broken/offline case can't
+// reload-loop forever.
+window.addEventListener("vite:preloadError", (event) => {
+  event.preventDefault();
+  const key = "corvus_reload_on_chunk_error";
+  if (!sessionStorage.getItem(key)) {
+    sessionStorage.setItem(key, "1");
+    window.location.reload();
+  }
+});
+
 // ── Apply dark class immediately to prevent flash ─────────────────
 try {
   const dark = localStorage.getItem("darkMode");
