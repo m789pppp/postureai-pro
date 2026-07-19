@@ -10,6 +10,7 @@ Or combined:
   celery -A services.celery_beat worker --beat --loglevel=info --concurrency=2
 """
 import os, logging
+from datetime import datetime
 from celery import Celery
 from celery.schedules import crontab
 
@@ -54,6 +55,14 @@ app.conf.beat_schedule = {
     "org-health-refresh": {
         "task":     "services.celery_beat.refresh_org_health",
         "schedule": crontab(minute=15, hour="*/4"),
+    },
+    # Smart streak reminders — runs every hour; the task itself passes the
+    # current hour to /api/push/streak-reminder, which only actually
+    # notifies users whose own computed usual-session hour matches. This
+    # replaces a single fixed 19:00-for-everyone send with a per-user time.
+    "smart-streak-reminders": {
+        "task":     "services.celery_beat.run_smart_streak_reminders",
+        "schedule": crontab(minute=0, hour="*"),
     },
 }
 
@@ -225,3 +234,79 @@ def refresh_org_health():
     except Exception as e:
         log.error("[beat] health refresh failed: %s", e)
         return {"error": str(e)}
+
+
+@app.task(bind=True, max_retries=2)
+def run_smart_streak_reminders(self):
+    """
+    Runs hourly. Sends a streak reminder only to users whose own computed
+    usual-session hour (from their session history, or a manual override
+    in push_preferences) matches the current UTC hour — replacing a single
+    fixed 19:00-for-everyone send with a per-user smart time, and
+    respecting each user's "streak" notification category preference.
+    """
+    from collections import Counter
+    try:
+        import firebase_admin
+        from firebase_admin import firestore as fb_firestore, messaging as fb_messaging
+        db = fb_firestore.client()
+        current_hour = datetime.utcnow().hour
+        today = datetime.utcnow().date()
+
+        def compute_preferred_hour(uid):
+            docs = (db.collection("sessions").where("uid", "==", uid)
+                      .order_by("created_at", direction=fb_firestore.Query.DESCENDING)
+                      .limit(30).stream())
+            hours = [d.to_dict().get("created_at").hour for d in docs
+                     if d.to_dict().get("created_at") and hasattr(d.to_dict().get("created_at"), "hour")]
+            if len(hours) < 5:
+                return 19
+            return Counter(hours).most_common(1)[0][0]
+
+        token_docs = db.collection("push_tokens").where("active", "==", True).limit(1000).stream()
+        uids_seen, sent, skipped = set(), 0, 0
+
+        for tdoc in token_docs:
+            td = tdoc.to_dict()
+            uid, tok, lang = td.get("uid"), td.get("token"), td.get("lang", "en")
+            if not uid or not tok or uid in uids_seen:
+                continue
+            uids_seen.add(uid)
+
+            pref_doc = db.collection("push_preferences").document(uid).get()
+            pdata = pref_doc.to_dict() if pref_doc.exists else {}
+            if not pdata.get("categories", {}).get("streak", True):
+                skipped += 1
+                continue
+            user_hour = pdata.get("preferred_hour_override")
+            if user_hour is None:
+                user_hour = compute_preferred_hour(uid)
+            if int(user_hour) != current_hour:
+                skipped += 1
+                continue
+
+            today_sessions = (db.collection("sessions").where("uid", "==", uid)
+                                 .where("created_at", ">=", datetime.utcnow().replace(hour=0, minute=0, second=0))
+                                 .limit(1).stream())
+            if any(True for _ in today_sessions):
+                skipped += 1
+                continue
+
+            is_ar = lang == "ar"
+            title = "💪 تحقق من وضعيتك اليوم" if is_ar else "💪 Check your posture today"
+            body  = "حافظ على سلسلتك اليومية" if is_ar else "Keep your daily streak going"
+            try:
+                msg = fb_messaging.Message(
+                    notification=fb_messaging.Notification(title=title, body=body),
+                    data={"type": "streak_reminder"}, token=tok,
+                )
+                fb_messaging.send(msg)
+                sent += 1
+            except Exception:
+                pass
+
+        log.info("[beat] Smart streak reminders — sent:%d skipped:%d hour:%d", sent, skipped, current_hour)
+        return {"sent": sent, "skipped": skipped, "hour": current_hour}
+    except Exception as exc:
+        log.error("[beat] smart streak reminders failed: %s", exc)
+        raise self.retry(exc=exc)
