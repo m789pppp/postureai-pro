@@ -11,6 +11,7 @@ Fixed: WORK_HOURS_START, SUPPORT_EMAIL, ADMIN_PHONE, localhost links, Auth middl
 # have been lazy-loaded by _ensure_models().
 from __future__ import annotations
 import base64, math, io, os, time, sys, requests as req, threading
+from collections import Counter
 # cv2 and numpy loaded lazily inside _ensure_models() to save ~130MB per worker at startup
 cv2 = None
 # Cascade classifiers depend on cv2 — also lazy, initialized in _ensure_models()
@@ -9100,12 +9101,84 @@ def _get_user_tokens(uid: str) -> list:
         return []
 
 
+def _compute_preferred_hour(uid):
+    """Most common hour-of-day (server/UTC) this user actually does sessions,
+    from their last 30 sessions. Falls back to 19:00 (7pm) with too little
+    data to be meaningful — matches the old fixed-time behavior."""
+    try:
+        docs = (db.collection("sessions")
+                  .where("uid", "==", uid)
+                  .order_by("created_at", direction="DESCENDING")
+                  .limit(30).stream())
+        hours = []
+        for d in docs:
+            ts = d.to_dict().get("created_at")
+            if ts and hasattr(ts, "hour"):
+                hours.append(ts.hour)
+        if len(hours) < 5:
+            return 19
+        return Counter(hours).most_common(1)[0][0]
+    except Exception:
+        return 19
+
+
+def _get_push_categories(uid):
+    """Per-user notification category preferences. All default to enabled —
+    a user who never touched this setting still gets reminders, matching
+    the pre-existing behavior before this preference existed."""
+    try:
+        doc = db.collection("push_preferences").document(uid).get()
+        if doc.exists:
+            return doc.to_dict().get("categories", {})
+    except Exception:
+        pass
+    return {}
+
+
+@app.route("/api/push/preferences", methods=["GET", "POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def push_preferences():
+    """User-facing: view/set which notification categories they want, and
+    optionally override the auto-computed 'smart' reminder hour."""
+    try:
+        uid = g.uid
+        if request.method == "GET":
+            prefs = {}
+            doc = db.collection("push_preferences").document(uid).get()
+            if doc.exists:
+                prefs = doc.to_dict()
+            return jsonify({
+                "categories": prefs.get("categories", {"streak": True, "symptom_reminder": True, "weekly_summary": True}),
+                "preferred_hour": prefs.get("preferred_hour_override"),
+                "computed_hour": _compute_preferred_hour(uid),
+            })
+        data = request.get_json(force=True) or {}
+        upd = {"updated_at": datetime.utcnow().isoformat()+"Z"}
+        if "categories" in data:
+            upd["categories"] = {k: bool(v) for k, v in data["categories"].items()
+                                  if k in ("streak", "symptom_reminder", "weekly_summary")}
+        if "preferred_hour_override" in data:
+            h = data["preferred_hour_override"]
+            upd["preferred_hour_override"] = int(h) if h is not None else None
+        db.collection("push_preferences").document(uid).set(upd, merge=True)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return safe_error(e)
+
+
 @app.route("/api/push/streak-reminder", methods=["POST"])
-@limiter.limit("5 per minute")
+@limiter.limit("30 per minute")
 def push_streak_reminder():
     """
-    Cron job endpoint — call daily at 19:00 user local time.
-    Sends streak reminder to users who haven't done a session today.
+    Cron job endpoint — intended to be called once per hour (see
+    services/celery_beat.py: smart-streak-reminders). Each run only
+    targets users whose own computed usual-session hour (or manual
+    override) matches the `hour` passed in, and who haven't disabled
+    the "streak" notification category. Pass `hour` explicitly so the
+    cron caller controls what "now" means; omit it to send to everyone
+    regardless of hour (the old fixed-time behavior, still useful for
+    manual/testing calls).
     Secured by CRON_SECRET env var (not user auth).
     """
     try:
@@ -9123,6 +9196,7 @@ def push_streak_reminder():
 
         data     = request.get_json(force=True) or {}
         min_streak = int(data.get("min_streak", 2))   # only remind users with streak >= 2
+        target_hour = data.get("hour")  # None = send regardless of hour (legacy behavior)
         today    = datetime.utcnow().date()
         today_str = str(today)
 
@@ -9141,6 +9215,22 @@ def push_streak_reminder():
             if not uid or not tok or uid in uids_seen:
                 continue
             uids_seen.add(uid)
+
+            # Smart scheduling: only send to this user during their own
+            # usual session hour, unless the caller wants every hour sent
+            # regardless (target_hour omitted).
+            if target_hour is not None:
+                prefs = db.collection("push_preferences").document(uid).get()
+                pdata = prefs.to_dict() if prefs.exists else {}
+                if not pdata.get("categories", {}).get("streak", True):
+                    reminders_skipped += 1
+                    continue
+                user_hour = pdata.get("preferred_hour_override")
+                if user_hour is None:
+                    user_hour = _compute_preferred_hour(uid)
+                if int(user_hour) != int(target_hour):
+                    reminders_skipped += 1
+                    continue
 
             # Check if user already had a session today
             today_sessions = (db.collection("sessions")
