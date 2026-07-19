@@ -16359,6 +16359,73 @@ def marketplace_my_bookings():
         return safe_error(e)
 
 
+def _booking_chat_access_ok(booking_data):
+    """Booking owner (patient) or a platform admin can read/post — not
+    open to other patients, and not gated behind require_admin since
+    patients need their own thread too."""
+    is_admin = getattr(g, "role", {}).get("is_admin", False)
+    return is_admin or booking_data.get("user_id") == g.uid
+
+
+@app.route("/api/marketplace/bookings/<booking_id>/messages", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def marketplace_get_messages(booking_id):
+    """Booking-scoped chat thread — lets a patient ask questions about their
+    booking and an admin (there's no separate therapist login yet — see
+    the 'no public self-serve therapist signup' note above) reply. Simple
+    polling, not websockets: matches this app's existing patterns (no
+    other real-time feature uses a persistent connection either)."""
+    try:
+        db   = firestore.client()
+        bdoc = db.collection("marketplace_bookings").document(booking_id).get()
+        if not bdoc.exists:
+            return jsonify({"error": "booking not found"}), 404
+        if not _booking_chat_access_ok(bdoc.to_dict()):
+            return jsonify({"error": "forbidden"}), 403
+        msgs = db.collection("marketplace_bookings").document(booking_id) \
+                 .collection("messages").order_by("created_at").limit(200).get()
+        return jsonify({"messages": [{**m.to_dict(), "id": m.id} for m in msgs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/bookings/<booking_id>/messages", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def marketplace_send_message(booking_id):
+    try:
+        data = request.get_json(force=True) or {}
+        text = (data.get("text") or "").strip()
+        if not text:
+            return jsonify({"error": "text required"}), 400
+        if len(text) > 2000:
+            return jsonify({"error": "message too long (2000 char max)"}), 400
+
+        db   = firestore.client()
+        bref = db.collection("marketplace_bookings").document(booking_id)
+        bdoc = bref.get()
+        if not bdoc.exists:
+            return jsonify({"error": "booking not found"}), 404
+        booking_data = bdoc.to_dict()
+        if not _booking_chat_access_ok(booking_data):
+            return jsonify({"error": "forbidden"}), 403
+
+        is_admin = getattr(g, "role", {}).get("is_admin", False)
+        msg_ref = bref.collection("messages").document()
+        msg = {
+            "text":       text,
+            "sender_uid": g.uid,
+            "sender_role": "admin" if is_admin else "patient",
+            "created_at": datetime.utcnow().isoformat()+"Z",
+        }
+        msg_ref.set(msg)
+        bref.update({"last_message_at": msg["created_at"], "has_unread": True})
+        return jsonify({"ok": True, "message": {**msg, "id": msg_ref.id}})
+    except Exception as e:
+        return safe_error(e)
+
+
 # ════════════════════════════════════════════════════════════════════
 # Symptom Correlation Engine
 # Lets a user log how they actually felt on a given day (headache, neck
