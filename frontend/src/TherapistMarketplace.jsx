@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { MarketplaceAPI } from "./services/api.js";
+import { DEMO_THERAPISTS, getDemoBookings, createDemoBooking, getDemoMessages, addDemoMessage } from "./marketplaceDemo.js";
 
 const border = "1px solid rgba(255,255,255,.08)";
 const card   = { background:"rgba(255,255,255,.03)", border, borderRadius:16, padding:20 };
@@ -40,26 +41,50 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
   const [booking, setBooking]   = useState(false);
   const [myBookings, setMyBookings] = useState([]);
   const [chatBooking, setChatBooking] = useState(null); // booking whose chat thread is open
+  const [demoMode, setDemoMode] = useState(false); // true once we've fallen back to local demo data
 
   const load = useCallback(() => {
     setLoading(true); setErr(null);
     MarketplaceAPI.listTherapists(cityFilter ? { city: cityFilter } : {})
-      .then(d => setTherapists(d?.therapists || []))
-      .catch(e => setErr(e.message || "Failed to load"))
+      .then(d => { setTherapists(d?.therapists || []); setDemoMode(false); })
+      .catch(e => {
+        if (e.isBackendDown) {
+          // Backend unreachable — fall back to local demo data instead of
+          // showing an error, so the feature is still showcaseable.
+          const filtered = cityFilter
+            ? DEMO_THERAPISTS.filter(t => t.city.toLowerCase().includes(cityFilter.toLowerCase()))
+            : DEMO_THERAPISTS;
+          setTherapists(filtered);
+          setDemoMode(true);
+        } else {
+          setErr(e.message || "Failed to load");
+        }
+      })
       .finally(() => setLoading(false));
   }, [cityFilter]);
 
   useEffect(() => { if (tab === "browse") load(); }, [tab, load]);
   useEffect(() => {
     if (tab === "mine") {
-      MarketplaceAPI.myBookings().then(d => setMyBookings(d?.bookings || [])).catch(()=>{});
+      if (demoMode) { setMyBookings(getDemoBookings()); return; }
+      MarketplaceAPI.myBookings()
+        .then(d => setMyBookings(d?.bookings || []))
+        .catch(e => { if (e.isBackendDown) { setDemoMode(true); setMyBookings(getDemoBookings()); } });
     }
-  }, [tab]);
+  }, [tab, demoMode]);
 
   const submitBooking = async (preferredTime, notes) => {
     if (!selected) return;
     setBooking(true);
     try {
+      if (demoMode) {
+        // Simulate a confirmed booking locally — no real payment, no real
+        // therapist notified. Purely for showcasing the flow end-to-end.
+        createDemoBooking({ therapist: selected, preferredTime, notes });
+        addToast?.(isAr ? "✓ حجز تجريبي اتأكد (Demo — من غير دفع حقيقي)" : "✓ Demo booking confirmed (no real payment taken)", "success");
+        setSelected(null);
+        return;
+      }
       const res = await MarketplaceAPI.createBooking({
         therapist_id: selected.id,
         preferred_time: preferredTime,
@@ -74,7 +99,15 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
       }
       setSelected(null);
     } catch (e) {
-      addToast?.(e.message || (isAr ? "حصل خطأ" : "Something went wrong"), "error");
+      if (e.isBackendDown) {
+        // Retry as a demo booking rather than just showing an error
+        setDemoMode(true);
+        createDemoBooking({ therapist: selected, preferredTime, notes });
+        addToast?.(isAr ? "✓ حجز تجريبي اتأكد (Demo — من غير دفع حقيقي)" : "✓ Demo booking confirmed (no real payment taken)", "success");
+        setSelected(null);
+      } else {
+        addToast?.(e.message || (isAr ? "حصل خطأ" : "Something went wrong"), "error");
+      }
     } finally {
       setBooking(false);
     }
@@ -84,7 +117,15 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
     <div style={{ maxWidth: 980, margin: "0 auto", padding: "24px 20px", color: "#e2e8f0" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
         <div>
-          <div style={{ fontSize:22, fontWeight:900 }}>{isAr ? "🩺 دليل أخصائيي العلاج الطبيعي" : "🩺 Physiotherapist Marketplace"}</div>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ fontSize:22, fontWeight:900 }}>{isAr ? "🩺 دليل أخصائيي العلاج الطبيعي" : "🩺 Physiotherapist Marketplace"}</div>
+            {demoMode && (
+              <span style={{ fontSize:10.5, fontWeight:700, color:"#f59e0b", background:"rgba(245,158,11,.12)",
+                border:"1px solid rgba(245,158,11,.3)", borderRadius:6, padding:"3px 8px" }}>
+                {isAr ? "⚠ وضع تجريبي — الباك إند مش متاح" : "⚠ Demo Mode — backend unreachable"}
+              </span>
+            )}
+          </div>
           <div style={{ fontSize:13, color:"#64748b", marginTop:4 }}>
             {isAr ? "احجز جلسة مع أخصائي معتمد" : "Book a session with a vetted physiotherapist"}
           </div>
