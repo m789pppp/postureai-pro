@@ -16496,6 +16496,91 @@ def marketplace_cancel_booking(booking_id):
         return safe_error(e)
 
 
+@app.route("/api/marketplace/bookings/<booking_id>/review", methods=["POST"])
+@require_auth
+@limiter.limit("15 per minute")
+def marketplace_review_booking(booking_id):
+    """Patient rates a completed session (1-5 stars + optional comment).
+    Recomputes the therapist's aggregate rating/review_count from all
+    reviews left on their bookings — a simple running average, not a
+    separate reviews collection, since bookings are already the natural
+    one-review-per-booking unit and we don't need review edit history."""
+    try:
+        data = request.get_json(force=True) or {}
+        rating = data.get("rating")
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            return jsonify({"error": "rating must be an integer 1-5"}), 400
+        if rating < 1 or rating > 5:
+            return jsonify({"error": "rating must be between 1 and 5"}), 400
+        comment = (data.get("comment") or "").strip()[:500]
+
+        db   = firestore.client()
+        bref = db.collection("marketplace_bookings").document(booking_id)
+        bdoc = bref.get()
+        if not bdoc.exists:
+            return jsonify({"error": "booking not found"}), 404
+        booking = bdoc.to_dict()
+        if booking.get("user_id") != g.uid:
+            return jsonify({"error": "forbidden"}), 403
+        if booking.get("status") == "cancelled":
+            return jsonify({"error": "cannot review a cancelled booking"}), 400
+        if booking.get("rating"):
+            return jsonify({"error": "this booking already has a review"}), 400
+
+        bref.update({
+            "rating":      rating,
+            "review_text": comment,
+            "reviewed_at": datetime.utcnow().isoformat()+"Z",
+        })
+
+        # Recompute the therapist's aggregate from every rated booking they have
+        therapist_id = booking.get("therapist_id")
+        if therapist_id:
+            rated = list(db.collection("marketplace_bookings")
+                           .where("therapist_id", "==", therapist_id)
+                           .where("rating", ">", 0).stream())
+            ratings = [d.to_dict().get("rating") for d in rated if d.to_dict().get("rating")]
+            if ratings:
+                avg_rating = round(sum(ratings) / len(ratings), 1)
+                db.collection("therapists").document(therapist_id).update({
+                    "rating": avg_rating,
+                    "review_count": len(ratings),
+                })
+        return jsonify({"ok": True, "rating": rating})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/therapists/<therapist_id>/reviews", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def marketplace_therapist_reviews(therapist_id):
+    """Public (any logged-in user): recent written reviews for a therapist —
+    shown on their profile card. Only bookings with a non-empty comment,
+    newest first, capped at 20."""
+    try:
+        db   = firestore.client()
+        docs = (db.collection("marketplace_bookings")
+                  .where("therapist_id", "==", therapist_id)
+                  .where("rating", ">", 0)
+                  .order_by("rating", direction=firestore.Query.DESCENDING)
+                  .limit(20).stream())
+        reviews = []
+        for d in docs:
+            b = d.to_dict()
+            if b.get("review_text"):
+                reviews.append({
+                    "rating":      b.get("rating"),
+                    "comment":     b.get("review_text"),
+                    "reviewed_at": b.get("reviewed_at"),
+                })
+        return jsonify({"reviews": reviews})
+    except Exception as e:
+        return safe_error(e)
+
+
 def _booking_chat_access_ok(booking_data):
     """Booking owner (patient) or a platform admin can read/post — not
     open to other patients, and not gated behind require_admin since

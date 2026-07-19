@@ -308,6 +308,10 @@ export const MarketplaceAPI = {
 
   /** Patient cancels their own booking. */
   cancelBooking: (bookingId) => apiFetch(`/marketplace/bookings/${bookingId}/cancel`, { method: "POST" }),
+  /** Rate a completed session (1-5 stars + optional comment). */
+  reviewBooking: (bookingId, data) => apiFetch(`/marketplace/bookings/${bookingId}/review`, { method: "POST", body: data }),
+  /** Written reviews for a therapist's profile. */
+  therapistReviews: (therapistId) => apiFetch(`/marketplace/therapists/${therapistId}/reviews`),
 };
 
 export const AdminAPI = {

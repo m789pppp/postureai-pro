@@ -5,7 +5,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { MarketplaceAPI } from "./services/api.js";
-import { DEMO_THERAPISTS, getDemoBookings, createDemoBooking, getDemoMessages, addDemoMessage } from "./marketplaceDemo.js";
+import { DEMO_THERAPISTS, getDemoBookings, createDemoBooking, updateDemoBooking, getDemoMessages, addDemoMessage } from "./marketplaceDemo.js";
 
 const border = "1px solid rgba(255,255,255,.08)";
 const card   = { background:"rgba(255,255,255,.03)", border, borderRadius:16, padding:20 };
@@ -134,6 +134,30 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
     }
   };
 
+  const [ratingBookingId, setRatingBookingId] = useState(null); // booking currently showing the rating form
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const submitReview = async (booking, rating, comment) => {
+    setSubmittingReview(true);
+    try {
+      if (booking.is_demo) {
+        // Demo bookings live only in localStorage — update them there directly.
+        const all = updateDemoBooking(booking.id, { rating, review_text: comment });
+        setMyBookings(all);
+      } else {
+        await MarketplaceAPI.reviewBooking(booking.id, { rating, comment });
+        setMyBookings(prev => prev.map(x => x.id === booking.id ? { ...x, rating, review_text: comment } : x));
+      }
+      addToast?.(isAr ? "شكرًا على تقييمك" : "Thanks for your review", "success");
+      setRatingBookingId(null);
+    } catch (e) {
+      addToast?.(e.message || (isAr ? "تعذر إرسال التقييم" : "Couldn't submit review"), "error");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: "24px 20px", color: "#e2e8f0" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
@@ -185,6 +209,12 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
                   <div>
                     <div style={{ fontWeight:800, fontSize:15 }}>{th.name}</div>
                     <div style={{ fontSize:12, color:"#64748b" }}>{th.city}{th.years_experience ? ` · ${th.years_experience}${isAr?" سنة خبرة":"y exp"}` : ""}</div>
+                    {th.rating && (
+                      <div style={{ fontSize:11.5, color:"#fbbf24", marginTop:2 }}>
+                        {"★".repeat(Math.round(th.rating))}{"☆".repeat(5-Math.round(th.rating))}
+                        <span style={{ color:"#64748b", marginLeft:4 }}>{th.rating} ({th.review_count})</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {th.specialties?.length > 0 && (
@@ -220,7 +250,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
                   <div style={{ fontSize:11, color:"#94a3b8", textTransform:"capitalize" }}>{b.status?.replace(/_/g," ")}</div>
                 </div>
               </div>
-              <div style={{ marginTop:12, borderTop:border, paddingTop:12, display:"flex", gap:8 }}>
+              <div style={{ marginTop:12, borderTop:border, paddingTop:12, display:"flex", gap:8, flexWrap:"wrap" }}>
                 <button style={{ ...btnGhost, fontSize:12, padding:"6px 14px" }}
                         onClick={()=>setChatBooking(chatBooking?.id===b.id ? null : b)}>
                   {chatBooking?.id===b.id ? (isAr?"إغلاق المحادثة":"Close chat") : `💬 ${isAr?"محادثة":"Chat"}`}
@@ -231,7 +261,23 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
                     {cancellingId===b.id ? "…" : (isAr?"إلغاء الحجز":"Cancel booking")}
                   </button>
                 )}
+                {b.status !== "cancelled" && !b.rating && (
+                  <button style={{ ...btnGhost, fontSize:12, padding:"6px 14px", color:"#fbbf24", borderColor:"rgba(251,191,36,.3)" }}
+                          onClick={()=>setRatingBookingId(ratingBookingId===b.id ? null : b.id)}>
+                    ⭐ {isAr?"قيّم الجلسة":"Rate this session"}
+                  </button>
+                )}
+                {b.rating && (
+                  <div style={{ fontSize:12, color:"#fbbf24", padding:"6px 4px" }}>
+                    {"★".repeat(b.rating)}{"☆".repeat(5-b.rating)}
+                  </div>
+                )}
               </div>
+              {ratingBookingId === b.id && (
+                <ReviewForm booking={b} isAr={isAr} submitting={submittingReview}
+                            onCancel={()=>setRatingBookingId(null)}
+                            onSubmit={(rating, comment)=>submitReview(b, rating, comment)} />
+              )}
               {chatBooking?.id === b.id && (
                 <BookingChat bookingId={b.id} isAr={isAr} currentUid={user?.uid} addToast={addToast} />
               )}
@@ -246,6 +292,41 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
         <BookingModal therapist={selected} isAr={isAr} loading={booking}
                       onClose={()=>setSelected(null)} onSubmit={submitBooking} />
       )}
+    </div>
+  );
+}
+
+function ReviewForm({ booking, isAr, submitting, onCancel, onSubmit }) {
+  const [rating, setRating] = useState(0);
+  const [hover, setHover]   = useState(0);
+  const [comment, setComment] = useState("");
+
+  return (
+    <div style={{ marginTop:10, padding:14, background:"rgba(251,191,36,.05)",
+                  border:"1px solid rgba(251,191,36,.2)", borderRadius:10 }}>
+      <div style={{ fontSize:12.5, color:"#e2e8f0", marginBottom:8, fontWeight:600 }}>
+        {isAr ? `تقييمك لجلستك مع ${booking.therapist_name}` : `Rate your session with ${booking.therapist_name}`}
+      </div>
+      <div style={{ display:"flex", gap:4, marginBottom:10 }}>
+        {[1,2,3,4,5].map(n => (
+          <button key={n} onClick={()=>setRating(n)}
+            onMouseEnter={()=>setHover(n)} onMouseLeave={()=>setHover(0)}
+            style={{ background:"none", border:"none", cursor:"pointer", fontSize:24, padding:0,
+                     color: n <= (hover||rating) ? "#fbbf24" : "#475569" }}>
+            {n <= (hover||rating) ? "★" : "☆"}
+          </button>
+        ))}
+      </div>
+      <textarea value={comment} onChange={e=>setComment(e.target.value)}
+        placeholder={isAr ? "احكيلنا عن تجربتك (اختياري)" : "Tell us about your experience (optional)"}
+        style={{ ...input, minHeight:60, resize:"vertical", marginBottom:10 }} />
+      <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+        <button style={btnGhost} onClick={onCancel} disabled={submitting}>{isAr?"إلغاء":"Cancel"}</button>
+        <button style={btnPrimary} disabled={submitting || rating===0}
+                onClick={()=>onSubmit(rating, comment)}>
+          {submitting ? (isAr?"جاري الإرسال…":"Submitting…") : (isAr?"إرسال التقييم":"Submit review")}
+        </button>
+      </div>
     </div>
   );
 }
