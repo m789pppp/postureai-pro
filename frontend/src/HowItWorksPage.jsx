@@ -5,7 +5,7 @@ import { PageShell } from "./StandaloneLayout.jsx";
 const T = {
   bg:"#030b14", bg1:"#040d18", card:"#0d1f33",
   border:"rgba(148,163,184,.08)",
-  text:"#e8f0ff", sub:"#94a3b8", muted:"#475569",
+  text:"#e8f0ff", sub:"#94a3b8", muted:"#8896ac",
   blue:"#4f7cf9", indigo:"#818cf8", sky:"#22d3ee", green:"#10d9a0",
   gHero:"linear-gradient(130deg,#818cf8 0%,#22d3ee 45%,#10d9a0 100%)",
 };
@@ -93,7 +93,8 @@ export default function HowItWorksPage() {
         .hiw-code{font-family:'IBM Plex Mono','Segoe UI',monospace;font-size:12.5px;
           line-height:1.7;color:#94a3b8;white-space:pre;overflow-x:auto}
         @media(max-width:860px){.hiw-wrap{padding:0 20px}.hiw-step-grid{grid-template-columns:1fr!important;gap:32px!important}}
-        @media(max-width:600px){.hiw-wrap{padding:0 16px}}
+        @media(max-width:600px){.hiw-wrap{padding:0 16px}.hiw-stack-grid{grid-template-columns:1fr!important}}
+        .hiw-stack-grid{min-width:0}.hiw-stack-grid>*{min-width:0}
       `}</style>
 
       {/* ── Hero ── */}
@@ -218,7 +219,7 @@ export default function HowItWorksPage() {
               Under the hood
             </h2>
           </Reveal>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+          <div className="hiw-stack-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
             {[
               { icon:"📡", color:"#4f7cf9", title:"On-device AI", desc:"MediaPipe runs entirely in the browser. 478 landmarks, zero video upload, < 40ms latency." },
               { icon:"🧠", color:"#22d3ee", title:"Groq LLM", desc:"llama-3.1-8b-instant powers the AI coach. Responses in < 2 seconds with scientific citation support." },

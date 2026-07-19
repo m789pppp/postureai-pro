@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 const T = {
   bg:"#030b14", bg1:"#040d18", card:"#0d1f33",
   border:"rgba(148,163,184,.08)", borderM:"rgba(148,163,184,.16)",
-  text:"#e8f0ff", sub:"#94a3b8", muted:"#475569",
+  text:"#e8f0ff", sub:"#94a3b8", muted:"#8896ac",
   blue:"#4f7cf9", indigo:"#818cf8", sky:"#22d3ee", green:"#10d9a0",
 };
 const FD = "'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif";
@@ -67,7 +67,7 @@ export function SharedNav({ lang, setLang, activePage }) {
   return (
     <>
       <style>{`
-        .sn-link { color:#64748b; text-decoration:none; padding:8px 13px; border-radius:8px;
+        .sn-link { color:#8896ac; text-decoration:none; padding:8px 13px; border-radius:8px;
           font-size:13.5px; font-weight:500; transition:color .18s; position:relative;
           display:flex; align-items:center; }
         .sn-link:hover { color:#f1f5f9 !important; }
@@ -115,7 +115,7 @@ export function SharedNav({ lang, setLang, activePage }) {
             }}>◈</div>
             <div style={{ lineHeight:1.2 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FD }}>Corvus</div>
-              <div style={{ fontSize:9, color:"#475569", letterSpacing:".06em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+              <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".06em", textTransform:"uppercase" }}>AI Posture Coaching</div>
             </div>
           </a>
 
@@ -137,12 +137,12 @@ export function SharedNav({ lang, setLang, activePage }) {
             <button onClick={() => { setLang(ar?"en":"ar"); try{localStorage.setItem("lp_lang",ar?"en":"ar");}catch{} }}
               style={{
                 background:"rgba(255,255,255,.05)", border:"1px solid rgba(255,255,255,.09)",
-                color:"#64748b", padding:"6px 12px", borderRadius:8,
+                color:"#8896ac", padding:"6px 12px", borderRadius:8,
                 cursor:"pointer", fontSize:12.5, fontWeight:500, fontFamily:"inherit",
                 transition:"all .18s",
               }}
               onMouseEnter={e=>{e.currentTarget.style.color="#f1f5f9";e.currentTarget.style.borderColor="rgba(255,255,255,.2)"}}
-              onMouseLeave={e=>{e.currentTarget.style.color="#64748b";e.currentTarget.style.borderColor="rgba(255,255,255,.09)"}}>
+              onMouseLeave={e=>{e.currentTarget.style.color="#8896ac";e.currentTarget.style.borderColor="rgba(255,255,255,.09)"}}>
               {ar?"EN":"عربي"}
             </button>
             {/* Log in */}
@@ -193,7 +193,7 @@ export function SharedNav({ lang, setLang, activePage }) {
                 onMouseEnter={e=>e.currentTarget.style.color="#f1f5f9"}
                 onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
                   {label}
-                  <span style={{color:"#334155",fontSize:13}}>›</span>
+                  <span style={{color:"#8896ac",fontSize:13}}>›</span>
                 </a>
               ))}
               <div style={{ display:"flex", gap:10, marginTop:20 }}>
@@ -210,7 +210,7 @@ export function SharedNav({ lang, setLang, activePage }) {
               </div>
               <button onClick={()=>setLang(ar?"en":"ar")} style={{
                 marginTop:14, background:"transparent", border:"none",
-                color:"#475569", fontSize:12.5, cursor:"pointer", fontFamily:"inherit",
+                color:"#8896ac", fontSize:12.5, cursor:"pointer", fontFamily:"inherit",
               }}>{ar?"Switch to English":"التبديل للعربية"}</button>
             </div>
           </div>
@@ -243,7 +243,7 @@ export function SharedFooter({ lang }) {
       <style>{`
         .sf-wrap { max-width:1180px; margin:0 auto; padding:0 32px; }
         .sf-grid { display:grid; grid-template-columns:1.6fr 1fr 1fr 1fr; gap:40px 32px; }
-        .sf-link { color:#475569; text-decoration:none; font-size:13.5px; display:block;
+        .sf-link { color:#8896ac; text-decoration:none; font-size:13.5px; display:block;
           margin-bottom:10px; transition:color .18s; line-height:1.5; }
         .sf-link:hover { color:#94a3b8 !important; }
         @media(max-width:1024px){ .sf-grid { grid-template-columns:1fr 1fr 1fr; gap:28px 20px; } }
@@ -274,10 +274,10 @@ export function SharedFooter({ lang }) {
                 }}>◈</div>
                 <div>
                   <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.02em", fontFamily:FD }}>Corvus</div>
-                  <div style={{ fontSize:9, color:"#334155", letterSpacing:".06em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+                  <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".06em", textTransform:"uppercase" }}>AI Posture Coaching</div>
                 </div>
               </a>
-              <p style={{ fontSize:13.5, color:"#475569", lineHeight:1.7, maxWidth:220, marginBottom:24 }}>
+              <p style={{ fontSize:13.5, color:"#8896ac", lineHeight:1.7, maxWidth:220, marginBottom:24 }}>
                 {ar
                   ? "منصة ذكاء اصطناعي لمراقبة وضعية الجسم في بيئات العمل."
                   : "AI-powered workplace posture monitoring for healthier, more productive teams."}
@@ -300,7 +300,7 @@ export function SharedFooter({ lang }) {
             {/* ── Link columns ── */}
             {cols.map(col => (
               <div key={col.title}>
-                <div style={{ fontSize:11, fontWeight:700, color:"#334155", letterSpacing:".08em",
+                <div style={{ fontSize:11, fontWeight:700, color:"#8896ac", letterSpacing:".08em",
                   textTransform:"uppercase", marginBottom:18, fontFamily:FM }}>
                   {col.title}
                 </div>
@@ -318,11 +318,11 @@ export function SharedFooter({ lang }) {
             display:"flex", alignItems:"center", justifyContent:"space-between",
             flexWrap:"wrap", gap:12,
           }}>
-            <span dir="ltr" style={{ fontSize:12.5, color:"#334155" }}>
+            <span dir="ltr" style={{ fontSize:12.5, color:"#8896ac" }}>
               © 2025 Corvus Health Intelligence.{" "}
               {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
             </span>
-            <span style={{ fontSize:12, color:"#1e3a5f", fontWeight:500 }}>
+            <span style={{ fontSize:12, color:"#7590aa", fontWeight:500 }}>
               {ar ? "صُنع بـ ❤️ في مصر" : "Made with ❤️ in Egypt"}
             </span>
           </div>
