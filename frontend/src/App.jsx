@@ -2163,7 +2163,7 @@ export default function App(){
     if(!user||!profile||page!=="home") return;
     const done = (profile.onboarding_done?.length||0) > 0;
     if(done) return;
-    if(profile.acct_type==="company" && !profile.company_id){
+    if(profile.acct_type==="company" && profile.user_type!=="employee" && !profile.company_id){
       const t=setTimeout(()=>setShowCompanyOnboard(true),800);
       return()=>clearTimeout(t);
     }
@@ -2172,7 +2172,7 @@ export default function App(){
       return()=>clearTimeout(t);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[user?.uid, profile?.onboarding_done?.length, profile?.acct_type, profile?.company_id, page]);
+  },[user?.uid, profile?.onboarding_done?.length, profile?.acct_type, profile?.user_type, profile?.company_id, page]);
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
