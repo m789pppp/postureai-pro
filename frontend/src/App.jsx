@@ -2239,6 +2239,18 @@ export default function App(){
     }
   },[showOnboardingAnalytics,authToken]);
   const[showLegalCompliance,setShowLegalCompliance]=useState(false);
+  // Health consent gate — must be accepted once before the first analysis.
+  // Corvus is a wellness/awareness tool, NOT a medical device; explicit
+  // informed consent protects the user and limits liability.
+  const[showHealthConsent,setShowHealthConsent]=useState(false);
+  const healthConsentRef=useRef((()=>{try{return localStorage.getItem("corvus_health_consent_v1")==="1";}catch{return false;}})());
+  function acceptHealthConsent(){
+    try{localStorage.setItem("corvus_health_consent_v1","1");}catch{}
+    healthConsentRef.current=true;
+    setShowHealthConsent(false);
+    if(user?.uid){ updateDoc(doc(db,"users",user.uid),{healthDisclaimerAcceptedAt:new Date().toISOString()}).catch(()=>{}); }
+    startCamera();
+  }
   const[showAccountActivity,setShowAccountActivity]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   // Phase 12 — Enterprise Scale
@@ -2874,6 +2886,10 @@ export default function App(){
   },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus]);
 
   async function startCamera(){
+    // Health consent gate — block the very first analysis until the user has
+    // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
+    // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
+    if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
     setCameraStatus("requesting");
     try{
       const facingMode=mode==="phone"?"environment":"user";
@@ -3910,6 +3926,39 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showFeatureFlags&&isAdmin&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
       {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
       {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
+      {showHealthConsent&&(
+        <div dir={dir} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000,padding:20}}>
+          <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,maxWidth:460,width:"100%",padding:0,overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,.4)"}}>
+            <div style={{background:"linear-gradient(135deg,#3b82f6,#2563eb)",padding:"22px 26px",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{fontSize:26,lineHeight:1}}>🩺</div>
+              <div>
+                <div style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:.2}}>{isAr?"قبل ما نبدأ التحليل":"Before we start"}</div>
+                <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:2}}>{isAr?"إقرار سريع لمرة واحدة":"A one-time acknowledgement"}</div>
+              </div>
+            </div>
+            <div style={{padding:"22px 26px"}}>
+              <p style={{color:cs.text,fontSize:13.5,lineHeight:1.7,margin:"0 0 14px"}}>
+                {isAr
+                  ? "Corvus أداة توعية بوضعية الجسم للاستخدام العام — وليست جهازاً طبياً ولا بديلاً عن استشارة أخصائي. القياسات والتقارير تقريبية والغرض منها التوعية فقط."
+                  : "Corvus is a general wellness tool for posture awareness — not a medical device and not a substitute for professional advice. Measurements and reports are approximate and for informational purposes only."}
+              </p>
+              <ul style={{color:cs.muted,fontSize:12.5,lineHeight:1.6,margin:"0 0 16px",paddingInlineStart:18}}>
+                <li>{isAr?"لو عندك ألم أو حالة طبية، استشر طبيباً أو أخصائي علاج طبيعي.":"If you have pain or a medical condition, consult a doctor or physiotherapist."}</li>
+                <li>{isAr?"لا تعتمد على النتائج في اتخاذ قرارات طبية.":"Do not rely on results for medical decisions."}</li>
+                <li>{isAr?"معالجة الفيديو تتم على جهازك في الوقت اللحظي.":"Video is processed on your device in real time."}</li>
+              </ul>
+              <div style={{display:"flex",gap:10,flexDirection:isAr?"row-reverse":"row"}}>
+                <button onClick={acceptHealthConsent} style={{flex:1,background:"linear-gradient(135deg,#3b82f6,#2563eb)",border:"none",borderRadius:11,padding:"13px 18px",fontSize:13.5,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                  {isAr?"أوافق وابدأ":"I agree — start"}
+                </button>
+                <button onClick={()=>setShowHealthConsent(false)} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,padding:"13px 18px",fontSize:13,color:cs.muted,cursor:"pointer"}}>
+                  {isAr?"إلغاء":"Cancel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
       <HomePage
         user={user} profile={profile} cs={cs} lang={lang} isAr={isAr} dir={dir}
@@ -5123,6 +5172,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{width:8,height:8,borderRadius:"50%",background:"#10b981",flexShrink:0,boxShadow:"0 0 6px #10b981"}}/>
             <span style={{fontSize:11,color:"#6ee7b7",fontWeight:600}}>
               {isAr?`النتيجة ${scoreStatus.score}/100 — ${scoreStatus.grade}`:`Score ${scoreStatus.score}/100 — ${scoreStatus.grade}`}
+            </span>
+          </div>
+        )}
+
+        {/* Personalised analysis indicator — shown while a calibrated session runs */}
+        {camActive&&mode!=="side"&&calibData?.tolerances&&(
+          <div style={{padding:"5px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6,background:"rgba(16,185,129,.05)"}}>
+            <span style={{fontSize:11,color:"#34d399",fontWeight:700}}>✓</span>
+            <span style={{fontSize:10.5,color:"#34d399",fontWeight:600}}>
+              {isAr?"التحليل مُخصّص لوضعيتك الطبيعية":"Analysis personalised to your natural posture"}
             </span>
           </div>
         )}
