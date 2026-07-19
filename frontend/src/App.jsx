@@ -62,6 +62,7 @@ import EmailVerificationPage from "./EmailVerificationPage.jsx";
 import ChangePasswordPage    from "./ChangePasswordPage.jsx";
 import TrialExpiredPage      from "./TrialExpiredPage.jsx";
 import HomePage from "./HomePage.jsx";
+import BreakPage from "./BreakPage.jsx";
 import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
@@ -2070,7 +2071,7 @@ export default function App(){
     return ()=>clearTimeout(t);
   },[]);
   // ── Hash-based routing — fixes back button & enables deep links ──
-  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace"]);
+  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace","break"]);
   const hashToPage = (h) => {
     const p = h.replace(/^#\/?/, "") || "landing";
     // Map known aliases
@@ -2185,6 +2186,8 @@ export default function App(){
   const[showAcctSelect,setShowAcctSelect]=useState(false);
   const[showDeviceSelect,setShowDeviceSelect]=useState(false);
   const[breakReminder,setBreakReminder]=useState(true);
+  const[breakReturnPage,setBreakReturnPage]=useState("live"); // where the break page returns to
+  const goToBreak=useCallback(()=>{ setBreakReturnPage(page==="break"?"live":page); setPage("break"); },[page]);
   const[breakIntervalMin,setBreakIntervalMin]=useState(25);
   const[breakTimerSec,setBreakTimerSec]=useState(0);
   const setBreakTimer = setBreakTimerSec; // alias for legacy references
@@ -3489,6 +3492,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
     </ErrorBoundary>
   );
   if(page==="embed")return <EmbedWidget/>;
+  if(page==="break")return(
+    <ErrorBoundary>
+      <BreakPage cs={cs} lang={lang} muted={muted} onExit={()=>setPage(breakReturnPage||"live")}/>
+    </ErrorBoundary>
+  );
 
   // ── Trial expired gate ──────────────────────────────────────────────
   const trialExpired = user && profile && !profile.is_trial &&
@@ -5309,7 +5317,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?"وضعيتك وحشة أكتر من دقيقتين. خذ استراحة صغيرة؟":"Poor posture for 2+ min. Take a quick break to protect it?"}
             </div>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>{setStreakAlert(false);}} style={{
+              <button onClick={()=>{setStreakAlert(false);goToBreak();}} style={{
                 flex:1,background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.35)",
                 borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
                 {isAr?"استراحة الآن 🧘":"Break now 🧘"}
@@ -5355,9 +5363,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?`${breakIntervalMin} دقيقة مرت — استرح دقيقتين`:`${breakIntervalMin} min passed — take a 2-min stretch`}
             </div>
             <div style={{display:"flex",gap:6,justifyContent:"center"}}>
-              <button onClick={dismissBreak}
-                style={{background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.3)",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,color:"#fcd34d",cursor:"pointer"}}>
-                {isAr?"تم ✓":"Done ✓"}
+              <button onClick={()=>{dismissBreak();goToBreak();}}
+                style={{background:"rgba(245,158,11,.18)",border:"1px solid rgba(245,158,11,.4)",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
+                {isAr?"ابدأ الاستراحة 🧘":"Start break 🧘"}
               </button>
               <button onClick={()=>snoozeBreak(5)}
                 style={{background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:500,color:cs.muted,cursor:"pointer"}}>
@@ -5380,6 +5388,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
             ))}
           </div>
         )}
+
+        {/* Manual break entry — the guided break is always one tap away */}
+        <div style={{padding:"10px 14px 0"}}>
+          <button onClick={goToBreak} style={{
+            width:"100%",background:"rgba(14,165,233,.08)",border:"1px solid rgba(14,165,233,.25)",
+            borderRadius:10,padding:"10px 0",fontSize:12,fontWeight:700,color:"#38bdf8",cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            🧘 {isAr?"خذ استراحة حركة":"Take a movement break"}
+          </button>
+        </div>
 
         <div style={{padding:"10px 14px",fontSize:9.5,color:cs.muted,textAlign:"center"}}>
           {isAr ? "☁ تم الحفظ · ⚡ مدعوم بالذكاء الاصطناعي" : "☁ Data saved · ⚡ AI powered"}
