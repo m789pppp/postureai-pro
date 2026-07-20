@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, Suspense, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
@@ -18,20 +18,13 @@ import { TherapistMarketplace } from "./TherapistMarketplace.jsx";
 import { SymptomCorrelation } from "./SymptomCorrelation.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
-import { AnalyticsDashboard } from "./AnalyticsDashboard.jsx";
 import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
 import { AICoach } from "./AICoach.jsx";
-import { AIInsights } from "./AIInsights.jsx";
-import { PredictiveAI } from "./PredictiveAI.jsx";
-import { AIReports } from "./AIReports.jsx";
 import { preloadAIInsights } from "./aiPreloader.js";
-import { WorkforceAnalytics } from "./WorkforceAnalytics.jsx";
-import { EnterpriseRBAC } from "./EnterpriseRBAC.jsx";
 import { NotificationsHub, useNotifications } from "./NotificationsHub.jsx";
 import { OnboardingWizard } from "./OnboardingWizard.jsx";
 import { GamificationPanel } from "./Gamification.jsx";
 import { BillingModal, PLANS } from "./Billing.jsx";
-import { BillingDashboard } from "./BillingDashboard.jsx";
 import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, apiFetch } from "./services/api.js";
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
@@ -43,16 +36,11 @@ import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
 // ── Phase 12: Enterprise Scale ────────────────────────────────────
-import { APIMarketplace }      from "./APIMarketplace.jsx";
-import { WhiteLabel }          from "./WhiteLabel.jsx";
-import { MultiTenantManager }  from "./MultiTenantManager.jsx";
-import { AuditSystem }         from "./AuditSystem.jsx";
 import { EnterpriseAdminTools }from "./EnterpriseAdminTools.jsx";
 import LandingPageV7 from "./LandingPageV7.jsx";
 import { DemoWelcome, DemoDashboard, clearDemoOnExit } from "./DemoModeUI.jsx";
 import { saveDemoSession } from "./DemoMode.js";
 const Landing = LandingPageV7; // alias so <Landing> works
-import { AdminDashboard } from "./AdminDashboard.jsx";
 import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
 import { handleSSORedirect } from "./EnterpriseSSO.jsx";
 // initSentry moved to sentry.js (V12)
@@ -68,18 +56,11 @@ import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
 import { NotFound } from "./ErrorPage.jsx";
-import { UsageBilling }     from "./UsageBilling.jsx";
-import { ChurnPrediction }  from "./ChurnPrediction.jsx";
-import { CustomerSuccess }  from "./CustomerSuccess.jsx";
-import { GrowthHub }        from "./GrowthHub.jsx";
 import SessionComparison    from "./SessionComparison.jsx";
 import TrendChart           from "./TrendChart.jsx";
 import { ShareCard }        from "./ShareCard.jsx";
 import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
-import { IntegrationsHub }  from "./IntegrationsHub.jsx";
-import { ReferralProgram }  from "./ReferralProgram.jsx";
 import { ProductTour, TourTrigger } from "./ProductTour.jsx";
-import { MFASetup }         from "./MFASetup.jsx";
 import AnnouncementsBar    from "./AnnouncementsBar.jsx";
 import SecurityCenter       from "./SecurityCenter.jsx";
 import FeatureFlags         from "./FeatureFlags.jsx";
@@ -87,7 +68,6 @@ import OnboardingAnalytics  from "./OnboardingAnalytics.jsx";
 import { initSentry, identifyUser, captureError } from "./sentry.js";
 import { AccountActivity } from "./AccountActivity.jsx";
 // ── Merged from v13 & v18 ─────────────────────────────────────────
-import { MRRDashboard }   from "./MRRDashboard.jsx";
 import { HelpCenter }     from "./HelpCenter.jsx";
 import { APIChangelog }   from "./APIChangelog.jsx";
 import EmbedWidget        from "./EmbedWidget.jsx";
@@ -2087,6 +2067,28 @@ function DeviceSelect({cs,t,lang,onSelect}){
 let _oauthInProgress = !!(function() {
   try { return sessionStorage.getItem("__pendingOAuth") === "1"; } catch { return false; }
 })();
+
+// ── Lazy-loaded components ──────────────────────────────────────
+const AnalyticsDashboard = React.lazy(() => import("./AnalyticsDashboard.jsx"));
+const WorkforceAnalytics = React.lazy(() => import("./WorkforceAnalytics.jsx"));
+const AIReports = React.lazy(() => import("./AIReports.jsx"));
+const PredictiveAI = React.lazy(() => import("./PredictiveAI.jsx"));
+const AIInsights = React.lazy(() => import("./AIInsights.jsx"));
+const EnterpriseRBAC = React.lazy(() => import("./EnterpriseRBAC.jsx"));
+const WhiteLabel = React.lazy(() => import("./WhiteLabel.jsx"));
+const MultiTenantManager = React.lazy(() => import("./MultiTenantManager.jsx"));
+const APIMarketplace = React.lazy(() => import("./APIMarketplace.jsx"));
+const IntegrationsHub = React.lazy(() => import("./IntegrationsHub.jsx"));
+const AuditSystem = React.lazy(() => import("./AuditSystem.jsx"));
+const MFASetup = React.lazy(() => import("./MFASetup.jsx"));
+const ChurnPrediction = React.lazy(() => import("./ChurnPrediction.jsx"));
+const CustomerSuccess = React.lazy(() => import("./CustomerSuccess.jsx"));
+const GrowthHub = React.lazy(() => import("./GrowthHub.jsx"));
+const ReferralProgram = React.lazy(() => import("./ReferralProgram.jsx"));
+const MRRDashboard = React.lazy(() => import("./MRRDashboard.jsx"));
+const AdminDashboard = React.lazy(() => import("./AdminDashboard.jsx"));
+const BillingDashboard = React.lazy(() => import("./BillingDashboard.jsx"));
+const UsageBilling = React.lazy(() => import("./UsageBilling.jsx"));
 
 export default function App(){
   const[user,setUser]=useState(null);
