@@ -2454,7 +2454,14 @@ export default function App(){
     const inviteToken = params.get("invite");
     if(inviteToken) {
       window.__invite_token = inviteToken;
+      try{ sessionStorage.setItem("pending_invite", inviteToken); }catch{}
       setPage("invite");
+      // Clean the URL immediately — sessionStorage (above) is the resume
+      // mechanism if the page reloads mid-flow, so the token never needs
+      // to live in the URL itself, where it would otherwise resurface on
+      // ANY later, unrelated page reload (manual refresh, SW update, the
+      // stale-chunk auto-reload, etc.) and replay this whole flow again.
+      window.history.replaceState({}, "", window.location.pathname + window.location.hash);
     }
     // Handle pending invite after login
     const pendingInvite = sessionStorage.getItem("pending_invite");
@@ -3683,12 +3690,21 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onAccepted={({company_id,role})=>{
           sessionStorage.removeItem("pending_invite");
           delete window.__invite_token;
+          // Clear ?invite=TOKEN from the URL — otherwise ANY later reload
+          // (manual refresh, SW update, or the stale-chunk auto-reload)
+          // re-reads the same URL and replays this entire consent flow
+          // again, unprompted, however far into the app the user is by then.
+          window.history.replaceState({}, "", window.location.pathname + window.location.hash);
           setCompanyId(company_id);
           if(profile) setProfile(p=>({...p,company_id,role}));
           setPage("home");
           addToast(isAr?"✅ انضممت للفريق!":"✅ Joined the team!","success");
         }}
-        onError={()=>setPage("home")}
+        onError={()=>{
+          delete window.__invite_token;
+          window.history.replaceState({}, "", window.location.pathname + window.location.hash);
+          setPage("home");
+        }}
       />
     </ErrorBoundary>
   );
