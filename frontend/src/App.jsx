@@ -4050,7 +4050,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <button onClick={acceptHealthConsent} style={{flex:1,background:"linear-gradient(135deg,#3b82f6,#2563eb)",border:"none",borderRadius:11,padding:"13px 18px",fontSize:13.5,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                   {isAr?"أوافق وابدأ":"I agree — start"}
                 </button>
-                <button onClick={()=>setShowHealthConsent(false)} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,padding:"13px 18px",fontSize:13,color:cs.muted,cursor:"pointer"}}>
+                <button onClick={()=>{setShowHealthConsent(false); if(page==="live") setPage("home");}} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,padding:"13px 18px",fontSize:13,color:cs.muted,cursor:"pointer"}}>
                   {isAr?"إلغاء":"Cancel"}
                 </button>
               </div>
