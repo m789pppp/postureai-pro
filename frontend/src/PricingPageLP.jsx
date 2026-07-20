@@ -5,7 +5,7 @@ import { PageShell } from "./StandaloneLayout.jsx";
 const T = {
   bg:"#030b14", bg1:"#040d18", card:"#0d1f33",
   border:"rgba(148,163,184,.08)",
-  text:"#e8f0ff", sub:"#94a3b8", muted:"#475569",
+  text:"#e8f0ff", sub:"#94a3b8", muted:"#8896ac",
   blue:"#4f7cf9", indigo:"#818cf8", sky:"#22d3ee", green:"#10d9a0",
   amber:"#f59e0b",
   gHero:"linear-gradient(130deg,#818cf8 0%,#22d3ee 45%,#10d9a0 100%)",
@@ -33,9 +33,15 @@ function Reveal({ children, delay=0, y=20 }) {
 }
 
 // ── Individual Plans ──────────────────────────────────────────────
+// #4f7cf9 (brand blue) only reaches ~4.2:1 on these card backgrounds — just
+// under WCAG AA's 4.5:1 for normal-size text. Badges/borders/backgrounds
+// keep the original brand blue; this lightened variant is for BLUE TEXT
+// specifically, so contrast is fixed without changing the brand accent.
+const _txtSafe = (c) => c === "#4f7cf9" ? "#6b8ffa" : c;
+
 const IND_PLANS = [
   {
-    name:"Free", color:"#64748b", popular:false,
+    name:"Free", color:"#8896ac", popular:false,
     price:{ egp:0, usd:0 }, period:"forever",
     desc:"Try Corvus with no commitment.",
     features:[
@@ -172,7 +178,7 @@ const COMPARE = [
 
 function Check({ val, color }) {
   if (val === true)  return <span style={{ color:"#10d9a0", fontWeight:700, fontSize:16 }}>✓</span>;
-  if (val === false) return <span style={{ color:"#334155", fontSize:15 }}>—</span>;
+  if (val === false) return <span style={{ color:"#8896ac", fontSize:15 }}>—</span>;
   return <span style={{ color:T.text, fontFamily:FM, fontSize:13 }}>{val}</span>;
 }
 
@@ -306,7 +312,8 @@ export default function PricingPageStandalone() {
       <style>{`
         body { background:#030b14; }
         .pr-wrap { max-width:1120px; margin:0 auto; padding:0 40px; }
-        .pr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; align-items:start; }
+        .pr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; align-items:start; min-width:0; }
+        .pr-grid > * { min-width:0; }
         .pr-compare-grid { display:grid; grid-template-columns:1.6fr 1fr 1fr 1fr 1fr; }
         @media(max-width:960px){
           .pr-grid { grid-template-columns:1fr 1fr !important; max-width:720px; margin:0 auto; }
@@ -315,6 +322,7 @@ export default function PricingPageStandalone() {
         @media(max-width:700px){
           .pr-wrap { padding:0 20px; }
           .pr-compare-grid { display:none; }
+          .pr-grid { grid-template-columns:1fr !important; max-width:420px; }
         }
         @media(max-width:480px){ .pr-wrap { padding:0 16px; } }
       `}</style>
@@ -442,7 +450,7 @@ export default function PricingPageStandalone() {
                   fontWeight:700, fontFamily:FM, textTransform:"uppercase", letterSpacing:".1em" }}>Feature</div>
                 {["Free","Basic","Pro","Elite"].map((p,i)=>(
                   <div key={p} style={{ padding:"18px 16px", textAlign:"center",
-                    fontSize:14, fontWeight:800, color:IND_PLANS[i].color, fontFamily:FD }}>
+                    fontSize:14, fontWeight:800, color:_txtSafe(IND_PLANS[i].color), fontFamily:FD }}>
                     {p}
                   </div>
                 ))}

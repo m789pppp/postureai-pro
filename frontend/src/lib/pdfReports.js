@@ -1243,13 +1243,15 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     y+=4;
   }
 
-  // AI Analysis
+  // AI Analysis — card height fits the text (was fixed at 60mm, which left a
+  // large empty box under short summaries).
   if(aiText&&y<H-60){
-    dCard(ml,y,cw,Math.min(60,H-y-12),5,CARD2);
+    const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-12).slice(0,7);
+    const aiCardH=Math.min(H-y-12, Math.max(24, 15+aiLines.length*5.5));
+    dCard(ml,y,cw,aiCardH,5,CARD2);
     sf(7,"bold");tc(doc,...TEXT);doc.text(isAr?"تحليل Corvus AI":"Corvus AI Analysis",ml+5,y+8);
-    const aiLines=doc.splitTextToSize(aiText.replace(/[#*`]/g,"").trim(),cw-12);
     sf(7,"normal");tc(doc,...TEXT2);
-    aiLines.slice(0,7).forEach((l,i)=>{if(y+16+i*5.5<H-14)doc.text(l,ml+5,y+16+i*5.5);});
+    aiLines.forEach((l,i)=>{if(y+16+i*5.5<H-14)doc.text(l,ml+5,y+16+i*5.5);});
   }
 
   // ── Inner-page header for Elite exclusive pages ───────────────
@@ -2542,12 +2544,13 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.danger); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.danger); doc.text(lbl,ml+7,y+5.5);
       font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (${d} ${isAr?"نقطة":"pts"})`,ml+7,y+11);
-      const bw2=cw*0.3;
-      fc(doc,...PDF_TOKENS.danger);
-      doc.setGState&&doc.setGState(new doc.GState({opacity:0.2}));
-      rr(doc,W-mr-bw2-2,y+3,bw2*(Math.abs(d)/30),8,2,"F");
-      doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)}`,ml+7,y+11);
+      // Delta chip (right-aligned, solid) — replaces a faint partial bar that
+      // read as an empty placeholder box.
+      const dl=`${d} ${isAr?"نقطة":"pts"}`;
+      const dw=doc.getTextWidth(dl)+9;
+      fc(doc,...PDF_TOKENS.danger); doc.setGState&&doc.setGState(new doc.GState({opacity:0.14})); rr(doc,W-mr-dw-2,y+3,dw,8,2,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.danger); doc.text(dl,W-mr-dw/2-2,y+8.4,{align:"center"});
       y+=18;
     });
     y+=6;
@@ -2564,7 +2567,11 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
       fc(doc,...PDF_TOKENS.success); doc.rect(ml,y,3,14,"F"); rr(doc,ml,y,3,14,1.5,"F");
       font(doc,8.5,"bold",isAr); tc(doc,...PDF_TOKENS.success); doc.text(lbl,ml+7,y+5.5);
       font(doc,7.5,"normal",isAr); tc(doc,...PDF_TOKENS.sub);
-      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)} (+${d} ${isAr?"نقطة":"pts"})`,ml+7,y+11);
+      doc.text(`${Math.round(sc1)} -> ${Math.round(sc2)}`,ml+7,y+11);
+      const gl=`+${d} ${isAr?"نقطة":"pts"}`;
+      const gw=doc.getTextWidth(gl)+9;
+      fc(doc,...PDF_TOKENS.success); doc.setGState&&doc.setGState(new doc.GState({opacity:0.14})); rr(doc,W-mr-gw-2,y+3,gw,8,2,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
+      font(doc,7.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.success); doc.text(gl,W-mr-gw/2-2,y+8.4,{align:"center"});
       y+=18;
     });
     y+=6;

@@ -5,7 +5,7 @@ import { PageShell } from "./StandaloneLayout.jsx";
 const T = {
   bg:"#030b14", bg1:"#040d18", card:"#0d1f33",
   border:"rgba(148,163,184,.08)",
-  text:"#e8f0ff", sub:"#94a3b8", muted:"#475569",
+  text:"#e8f0ff", sub:"#94a3b8", muted:"#8896ac",
   blue:"#4f7cf9", indigo:"#818cf8", sky:"#22d3ee", green:"#10d9a0",
   gHero:"linear-gradient(130deg,#818cf8 0%,#22d3ee 45%,#10d9a0 100%)",
 };

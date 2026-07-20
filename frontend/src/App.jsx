@@ -62,6 +62,8 @@ import EmailVerificationPage from "./EmailVerificationPage.jsx";
 import ChangePasswordPage    from "./ChangePasswordPage.jsx";
 import TrialExpiredPage      from "./TrialExpiredPage.jsx";
 import HomePage from "./HomePage.jsx";
+import BreakPage from "./BreakPage.jsx";
+import { drawFaceBlur } from "./lib/faceBlur.js";
 import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
@@ -486,8 +488,34 @@ function _angle3pt(a,b,c){
   return Math.round(Math.acos(Math.min(1,Math.max(-1,dot/mag)))*180/Math.PI);
 }
 
-function drawFront(ctx,res,W,H,isAr=false){
+// Pick the single most actionable correction cue from the current analysis —
+// the worst-scoring metric that's genuinely off — and phrase it as a direct,
+// directional instruction ("Raise screen to eye level") instead of a number.
+// Returns null when posture is fine so no cue is shown.
+function postureCue(analysis, isAr){
+  const m=analysis?.metrics; if(!m) return null;
+  const raw=analysis.raw||{};
+  const cands=[];
+  const add=(k,en,ar,icon)=>{ const sc=m[k]?.score; if(typeof sc==="number"&&sc<55&&m[k]?.reliable!==false) cands.push({sc,en,ar,icon}); };
+  add("fhp_index","Tuck your chin back","أدخل ذقنك للخلف","⟲");
+  add("neck_lean","Raise screen to eye level","ارفع الشاشة لمستوى عينك","↑");
+  add("spine_lean","Sit up straight — support your back","اجلس مستقيماً واسند ظهرك","↑");
+  add("rounded_shoulders","Roll your shoulders back","افرد كتفيك للخلف","↔");
+  add("shoulder_level","Level your shoulders","سوِّ كتفيك","⇄");
+  add("head_tilt","Level your head","سوِّ رأسك","⟲");
+  if(typeof m.screen_distance?.score==="number" && m.screen_distance.score<55 && raw.distCm!=null && raw.lo!=null){
+    if(raw.distCm<raw.lo)      cands.push({sc:m.screen_distance.score,en:"Move back from the screen",ar:"ابعد عن الشاشة شوية",icon:"⟵"});
+    else if(raw.distCm>raw.hi) cands.push({sc:m.screen_distance.score,en:"Move closer to the screen",ar:"اقترب من الشاشة شوية",icon:"⟶"});
+  }
+  if(!cands.length) return null;
+  cands.sort((a,b)=>a.sc-b.sc);
+  const w=cands[0];
+  return { text:isAr?w.ar:w.en, icon:w.icon, col:w.sc<40?"#ef4444":"#f97316" };
+}
+
+function drawFront(ctx,res,W,H,isAr=false,opts={}){
   if(!res?.lms) return;
+  const showSkel=opts.skeleton!==false, showAng=opts.angles!==false;
   const{lms:lm,raw,overall,metrics}=res;
   const px=p=>p?[p.x*W,p.y*H]:[0,0];
   const valid=p=>p&&(p.visibility==null||p.visibility>0.5); // raised from 0.3 to match engine VIS_MIN
@@ -520,7 +548,7 @@ function drawFront(ctx,res,W,H,isAr=false){
     { pts:[lm.rSh,lm.rHip],        col:backCol, w:2 },
   ];
 
-  CONNECTIONS.forEach(({pts:[a,b],col,w})=>{
+  if(showSkel) CONNECTIONS.forEach(({pts:[a,b],col,w})=>{
     if(!valid(a)||!valid(b)) return;
     const[ax,ay]=px(a),[bx,by]=px(b);
     ctx.globalAlpha=.9; ctx.lineWidth=w; ctx.strokeStyle=col;
@@ -540,7 +568,7 @@ function drawFront(ctx,res,W,H,isAr=false){
     { p:lm.rEye, col:neckCol, r:3  },
   ];
 
-  JOINTS.forEach(({p,col,r})=>{
+  if(showSkel) JOINTS.forEach(({p,col,r})=>{
     if(!valid(p)) return;
     const[x,y]=px(p);
     // Glow
@@ -554,7 +582,8 @@ function drawFront(ctx,res,W,H,isAr=false){
     ctx.stroke();
   });
 
-  // ── Joint angles labels ───────────────────────────────────────
+  // ── Joint angles labels + HUD annotations (gated by showAng) ──
+  if(showAng){
   ctx.font="bold 10px system-ui"; ctx.globalAlpha=.95;
 
   // Neck angle (ear-shoulder vertical)
@@ -571,7 +600,9 @@ function drawFront(ctx,res,W,H,isAr=false){
   // Shoulder tilt angle
   if(valid(lm.lSh)&&valid(lm.rSh)){
     const[lx,ly]=px(lm.lSh),[rx,ry]=px(lm.rSh);
-    const tiltAng=Math.round(Math.abs(Math.atan2(ry-ly,rx-lx)*180/Math.PI));
+    // Prefer the engine's shoulder-tilt value so the on-video label matches
+    // the metrics panel instead of showing a separately-computed angle.
+    const tiltAng=metrics?.shoulder_level?.value ?? Math.round(Math.abs(Math.atan2(ry-ly,rx-lx)*180/Math.PI));
     const mx=(lx+rx)/2, my=(ly+ry)/2-14;
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(mx-20,my-12,42,16);
     ctx.fillStyle=shCol; ctx.fillText(`${tiltAng}°`,mx-18,my);
@@ -579,7 +610,7 @@ function drawFront(ctx,res,W,H,isAr=false){
 
   // Screen distance
   if(raw?.distCm){
-    const dc=raw.distCm>=raw.idealDistLo&&raw.distCm<=raw.idealDistHi?"#10b981":raw.distCm>=(raw.idealDistLo-15)?"#f59e0b":"#ef4444";
+    const dc=raw.distCm>=raw.lo&&raw.distCm<=raw.hi?"#10b981":raw.distCm>=(raw.lo-15)?"#f59e0b":"#ef4444";
     const[sx,sy]=px(lm.midEar||{x:.5,y:.1});
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(W-62,H-26,58,18);
     ctx.fillStyle=dc; ctx.font="bold 11px system-ui";
@@ -676,7 +707,7 @@ function drawFront(ctx,res,W,H,isAr=false){
     { label:isAr?"الرقبة":"Neck",     col:neckCol, score:neckScore, val: metrics?.neck_lean?.value, unit:"°" },
     { label:isAr?"الكتفين":"Shoulder", col:shCol,   score:shScore,   val: metrics?.shoulder_level?.value, unit:"°" },
     { label:isAr?"الظهر":"Back",       col:backCol, score:backScore, val: metrics?.spine_lean?.value, unit:"°" },
-    { label:isAr?"المسافة":"Dist",     col:raw?.distCm>=raw?.idealDistLo&&raw?.distCm<=raw?.idealDistHi?"#10b981":raw?.distCm>=(raw?.idealDistLo-15)?"#f59e0b":"#ef4444",
+    { label:isAr?"المسافة":"Dist",     col:raw?.distCm>=raw?.lo&&raw?.distCm<=raw?.hi?"#10b981":raw?.distCm>=(raw?.lo-15)?"#f59e0b":"#ef4444",
       score: metrics?.screen_distance?.score ?? 90,
       val: raw?.distCm, unit:"cm" },
   ];
@@ -697,6 +728,7 @@ function drawFront(ctx,res,W,H,isAr=false){
       ctx.fillText(`${val}${unit}`,barX+barW+4,ry);
     }
   });
+  } // end showAng
 
   ctx.restore();
 }
@@ -710,8 +742,9 @@ function _roundRect(ctx,x,y,w,h,r){
   ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
 }
 
-function drawSide(ctx,res,W,H,isAr=false){
+function drawSide(ctx,res,W,H,isAr=false,opts={}){
   if(!res?.lms) return;
+  const showSkel=opts.skeleton!==false, showAng=opts.angles!==false;
   const{lms:lm,overall,metrics}=res;
   const px=p=>p?[p.x*W,p.y*H]:[0,0];
   const valid=p=>p&&(p.visibility==null||p.visibility>0.5); // raised from 0.3 to match engine VIS_MIN
@@ -732,7 +765,7 @@ function drawSide(ctx,res,W,H,isAr=false){
     {pts:[lm.hip,lm.knee], col:hipCol,   w:3},
     {pts:[lm.knee,lm.ankle],col:"#6366f1",w:2.5},
   ];
-  SIDE_CONN.forEach(({pts:[a,b],col,w})=>{
+  if(showSkel) SIDE_CONN.forEach(({pts:[a,b],col,w})=>{
     if(!valid(a)||!valid(b)) return;
     const[ax,ay]=px(a),[bx,by]=px(b);
     ctx.globalAlpha=.9; ctx.lineWidth=w; ctx.strokeStyle=col;
@@ -740,7 +773,7 @@ function drawSide(ctx,res,W,H,isAr=false){
   });
 
   // ── Joints ────────────────────────────────────────────────────
-  [{p:lm.ear,col:neckCol,r:5},{p:lm.sh,col:neckCol,r:7},
+  if(showSkel) [{p:lm.ear,col:neckCol,r:5},{p:lm.sh,col:neckCol,r:7},
    {p:lm.hip,col:hipCol,r:6},{p:lm.knee,col:"#6366f1",r:5},
    {p:lm.ankle,col:"#6366f1",r:4}].forEach(({p,col,r})=>{
     if(!valid(p)) return;
@@ -752,10 +785,11 @@ function drawSide(ctx,res,W,H,isAr=false){
     ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,.6)"; ctx.stroke();
   });
 
-  // ── Plumb-line (ear → ankle ideal vertical) ───────────────────
+  // ── Plumb-line + joint arcs + angle labels + risk panel (showAng) ──
   // In ideal seated posture the ear should be directly above the ankle.
   // Drawing this vertical reference lets the user see at a glance how
   // far forward their head has drifted relative to their base of support.
+  if(showAng){
   if(valid(lm.ear) && valid(lm.ankle)){
     const[ex,ey]=px(lm.ear),[ax,ay]=px(lm.ankle);
     ctx.save();
@@ -866,6 +900,7 @@ function drawSide(ctx,res,W,H,isAr=false){
     }
     ctx.font="bold 10px system-ui";
   });
+  } // end showAng
 
   ctx.restore();
 }
@@ -2068,7 +2103,7 @@ export default function App(){
     return ()=>clearTimeout(t);
   },[]);
   // ── Hash-based routing — fixes back button & enables deep links ──
-  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace"]);
+  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace","break"]);
   const hashToPage = (h) => {
     const p = h.replace(/^#\/?/, "") || "landing";
     // Map known aliases
@@ -2105,9 +2140,16 @@ export default function App(){
   const[sessionInsights,setSessionInsights]=useState([]);
   useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); distSmootherRef.current?.reset(); resetProportions(); },[mode]);
   const[tier,setTier]=useState(null);
-  const[acctType,setAcctType]=useState(null); // always null on setup — user must choose
-  // Sync acctType when profile loads (only if NOT on setup page)
-  useEffect(()=>{ if(profile?.acct_type&&!acctType&&page!=="setup") setAcctType(profile.acct_type); },[profile?.acct_type,acctType,page]); // "company" | "individual"
+  const[acctType,setAcctType]=useState(null); // always null on setup — user must choose (except employees, see below)
+  // Sync acctType when profile loads (only if NOT on setup page) — EXCEPT an
+  // employee (joined via a valid company invite) skips the picker entirely,
+  // since picking "Company/Team" here used to silently overwrite their role
+  // to hr_admin/is_org_owner — every invited employee would end up looking
+  // like an org owner over their own company after their first login.
+  useEffect(()=>{
+    if(profile?.acct_type&&!acctType&&page!=="setup") setAcctType(profile.acct_type);
+    if(page==="setup"&&profile?.user_type==="employee"&&!acctType) setAcctType("company");
+  },[profile?.acct_type,profile?.user_type,acctType,page]); // "company" | "individual"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
@@ -2136,6 +2178,9 @@ export default function App(){
   const[sound,setSound]=useState(true);
   // Elite voice coach — persisted preference; actual enablement is tier-gated below
   const[voiceCoach,setVoiceCoach]=useState(()=>{try{return localStorage.getItem("corvus_voice_coach")==="1";}catch{return false;}});
+  const[faceBlur,setFaceBlur]=useState(()=>{try{return localStorage.getItem("corvus_face_blur")==="1";}catch{return false;}});
+  const[showSkeleton,setShowSkeleton]=useState(()=>{try{return localStorage.getItem("corvus_show_skeleton")!=="0";}catch{return true;}});
+  const[showAngles,setShowAngles]=useState(()=>{try{return localStorage.getItem("corvus_show_angles")!=="0";}catch{return true;}});
   const playPostureAlert=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();[440,360].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=f;g.gain.setValueAtTime(0,ac.currentTime+i*.32);g.gain.linearRampToValueAtTime(.14,ac.currentTime+i*.32+.06);g.gain.linearRampToValueAtTime(0,ac.currentTime+i*.32+.3);o.start();o.stop(ac.currentTime+i*.32+.35);});}catch{}}; // local fallback
   const[sessionId,setSessionId]=useState(null);
   const[aiInsight,setAiInsight]=useState(null);
@@ -2163,7 +2208,7 @@ export default function App(){
     if(!user||!profile||page!=="home") return;
     const done = (profile.onboarding_done?.length||0) > 0;
     if(done) return;
-    if(profile.acct_type==="company" && !profile.company_id){
+    if(profile.acct_type==="company" && profile.user_type!=="employee" && !profile.company_id){
       const t=setTimeout(()=>setShowCompanyOnboard(true),800);
       return()=>clearTimeout(t);
     }
@@ -2172,7 +2217,7 @@ export default function App(){
       return()=>clearTimeout(t);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[user?.uid, profile?.onboarding_done?.length, profile?.acct_type, profile?.company_id, page]);
+  },[user?.uid, profile?.onboarding_done?.length, profile?.acct_type, profile?.user_type, profile?.company_id, page]);
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
@@ -2183,6 +2228,8 @@ export default function App(){
   const[showAcctSelect,setShowAcctSelect]=useState(false);
   const[showDeviceSelect,setShowDeviceSelect]=useState(false);
   const[breakReminder,setBreakReminder]=useState(true);
+  const[breakReturnPage,setBreakReturnPage]=useState("live"); // where the break page returns to
+  const goToBreak=useCallback(()=>{ setBreakReturnPage(page==="break"?"live":page); setPage("break"); },[page]);
   const[breakIntervalMin,setBreakIntervalMin]=useState(25);
   const[breakTimerSec,setBreakTimerSec]=useState(0);
   const setBreakTimer = setBreakTimerSec; // alias for legacy references
@@ -2388,9 +2435,9 @@ export default function App(){
   // Normalize T_ so live dashboard always has .name and .color
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
   const MC={
-    laptop:{id:"laptop",label:"Laptop",color:"#6366f1",optDist:[50,80]},
-    phone:{id:"phone",label:"Phone",color:"#f59e0b",optDist:[60,90]},
-    side:{id:"side",label:"Side",color:"#10b981",optDist:[80,120]}
+    laptop:{id:"laptop",label:isAr?"لابتوب":"Laptop",icon:"💻",color:"#6366f1",optDist:[50,80]},
+    phone:{id:"phone",label:isAr?"موبايل":"Phone",icon:"📱",color:"#f59e0b",optDist:[60,90]},
+    side:{id:"side",label:isAr?"جانبي":"Side",icon:"🎥",color:"#10b981",optDist:[80,120]}
   };
   const M_=mode?MC[mode]:null;
 
@@ -2711,7 +2758,10 @@ export default function App(){
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
-            if(mode==="side")drawSide(ctx,finalResult,W,H,isAr);else drawFront(ctx,finalResult,W,H,isAr);
+            // Privacy: pixelate the face first so the skeleton draws on top of it.
+            if(faceBlur) drawFaceBlur(ctx,vid,lms,W,H);
+            const _drawOpts={skeleton:showSkeleton,angles:showAngles};
+            if(mode==="side")drawSide(ctx,finalResult,W,H,isAr,_drawOpts);else drawFront(ctx,finalResult,W,H,isAr,_drawOpts);
             const now=Date.now();
 
             // Session-level pattern tracking (creep, chronic asymmetry, experimental breathing)
@@ -2886,7 +2936,22 @@ export default function App(){
         }).catch(e=>{ clearTimeout(_tmr); /* silent fail — local analysis continues */ });
     }
     rafRef.current=requestAnimationFrame(runLoop);
-  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus]);
+  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus,faceBlur,showSkeleton,showAngles]);
+
+  // Keep the analysis loop bound to the latest state. runLoop is a useCallback
+  // whose identity changes when mode / sound / faceBlur / calib change; without
+  // this, the self-rescheduling requestAnimationFrame keeps running the closure
+  // captured at session start and silently ignores mid-session changes (camera-
+  // mode switch, face-blur toggle, sound). Rebinds the RAF to the fresh closure
+  // whenever it changes. Buffers live in refs, so restarting a frame is harmless.
+  // NOTE: must be declared AFTER runLoop — its dep array reads runLoop, which
+  // is in the temporal dead zone until the useCallback above initialises it.
+  useEffect(() => {
+    if(!camActive) return;
+    if(rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(runLoop);
+    return () => { if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; } };
+  }, [runLoop, camActive]);
 
   async function startCamera(){
     // Health consent gate — block the very first analysis until the user has
@@ -3134,6 +3199,27 @@ export default function App(){
       addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
   } // end stopCamera
+
+  // ── Switch camera mode from the live page ───────────────────────
+  // Previously the mode (laptop/phone/side) could only be chosen on the
+  // setup screen — users had to leave the session to change it. This lets
+  // them switch on the fly; when a session is running we reset the analysis
+  // buffers so the new mode (front vs side use different maths) starts clean.
+  function switchMode(m){
+    if(!m || m===mode) return;
+    setMode(m);
+    if(camActive){
+      lmSmootherRef.current?.reset();
+      frameBufferRef.current?.clear();
+      distSmootherRef.current?.reset();
+      resetProportions();
+      histRef.current=[]; setHistory([]);
+      goodRef.current=0; setGoodF(0);
+      totalRef.current=0; setTotalF(0);
+      setAnalysis(null);
+      addToast(isAr?`تم التبديل إلى ${MC[m]?.label||m}`:`Switched to ${MC[m]?.label||m}`,"info");
+    }
+  }
 
   // ── Multi-Account Switch ────────────────────────────────────────
   async function handleSwitchAccount(linkedAccount) {
@@ -3487,6 +3573,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
     </ErrorBoundary>
   );
   if(page==="embed")return <EmbedWidget/>;
+  if(page==="break")return(
+    <ErrorBoundary>
+      <BreakPage cs={cs} lang={lang} muted={muted} onExit={()=>setPage(breakReturnPage||"live")}/>
+    </ErrorBoundary>
+  );
 
   // ── Trial expired gate ──────────────────────────────────────────────
   const trialExpired = user && profile && !profile.is_trial &&
@@ -3791,24 +3882,29 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 if(!devicePref){addToast(isAr?"اختار جهازك الأول 👆":"Choose your device first 👆","warn");return;}
                 const defaultMode=devicePref==="laptop"?"laptop":"phone";
                 setMode(defaultMode);
+                // An employee's role/company link comes from their invite (see
+                // AuthPage.jsx signup + org_invite_accept), never from this
+                // generic individual/company picker — preserve it exactly.
+                const isEmployee = profile?.user_type==="employee";
+                const roleFields = isEmployee
+                  ? { user_type: "employee", acct_type: "company", is_org_owner: false }
+                  : { user_type: acctType==="company"?"hr_admin":"individual", acct_type: acctType==="company"?"company":"individual", is_org_owner: acctType==="company" };
                 // Save user_type to Firestore so role detection works
                 if(user?.uid){
                   try{
                     await updateDoc(doc(db,"users",user.uid),{
-                      user_type: acctType==="company"?"hr_admin":"individual",
-                      acct_type: acctType==="company"?"company":"individual",
-                      is_org_owner: acctType==="company",
+                      ...roleFields,
                       setup_complete: true,
                       device_pref: devicePref,
                       updated_at: serverTimestamp(),
                     });
-                    setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", acct_type: acctType==="company"?"company":"individual", is_org_owner: acctType==="company", setup_complete:true}));
+                    setProfile(p=>({...p, ...roleFields, setup_complete:true}));
                   }catch(e){ console.warn("setup save failed",e); }
                 }
                 const freshP=user?.uid?await getUserProfile(user.uid).catch(()=>null):null;
                 if(freshP){setProfile(freshP);if(freshP.tier)setTier(normalizeTier(freshP.tier));if(freshP.company_id)setCompanyId(freshP.company_id);}
-                else{setProfile(p=>({...p,user_type:acctType==="company"?"hr_admin":"individual",acct_type:acctType==="company"?"company":"individual",is_org_owner:acctType==="company",setup_complete:true}));}
-                if(acctType==="company"){setShowCompanyOnboard(true);}
+                else{setProfile(p=>({...p,...roleFields,setup_complete:true}));}
+                if(acctType==="company"&&!isEmployee){setShowCompanyOnboard(true);}
                 else{setTimeout(()=>setShowOnboard(true),800);}
                 setPage("home");
               }}
@@ -3954,7 +4050,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <button onClick={acceptHealthConsent} style={{flex:1,background:"linear-gradient(135deg,#3b82f6,#2563eb)",border:"none",borderRadius:11,padding:"13px 18px",fontSize:13.5,fontWeight:700,color:"#fff",cursor:"pointer"}}>
                   {isAr?"أوافق وابدأ":"I agree — start"}
                 </button>
-                <button onClick={()=>setShowHealthConsent(false)} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,padding:"13px 18px",fontSize:13,color:cs.muted,cursor:"pointer"}}>
+                <button onClick={()=>{setShowHealthConsent(false); if(page==="live") setPage("home");}} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,padding:"13px 18px",fontSize:13,color:cs.muted,cursor:"pointer"}}>
                   {isAr?"إلغاء":"Cancel"}
                 </button>
               </div>
@@ -3968,7 +4064,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         userSessions={userSessions} setUserSessions={setUserSessions}
         allUsers={allUsers} setAllUsers={setAllUsers}
         tier={tier} setTier={setTier} mode={mode} setMode={setMode}
-        setPage={setPage} startCamera={startCamera} addToast={addToast}
+        setPage={setPage} startCamera={startCamera} addToast={addToast} goToBreak={goToBreak}
         setShowDashboard={setShowDashboard} setShowCoach={setShowCoach}
         setShowGamification={setShowGamification} setShowBilling={setShowBilling}
         setShowCompanyOnboard={setShowCompanyOnboard} setShowAdmin={setShowAdmin}
@@ -4102,7 +4198,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     `}</style>
     <div dir={dir} style={{
       display:"grid",
-      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "300px 1fr" : "1fr 300px"),
+      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
       minHeight:"100vh",
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
@@ -4371,9 +4467,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
                 {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
               </div>
+              {/* Model-ready state lives in the sidebar status row; here we
+                  show session guidance instead of repeating it. */}
               <div style={{fontSize:10.5,color:cs.muted,marginTop:1}}>
                 {mpStatus==="ready"
-                  ? (isAr?"نموذج AI جاهز — 33 نقطة نشطة":"AI model ready — 33 landmarks active")
+                  ? (M_ ? (isAr?`المسافة المثلى ${M_.optDist[0]}–${M_.optDist[1]} سم`:`Optimal distance ${M_.optDist[0]}–${M_.optDist[1]}cm`) : (isAr?"جاهز للتحليل":"Ready to analyse"))
                   : (isAr?"جاري تحميل النموذج...":"Loading AI model...")}
               </div>
             </div>
@@ -4671,6 +4769,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </span>
         </div>
 
+        {/* ── Camera-mode switcher — change laptop / phone / side without
+            leaving the session (was only selectable on the setup screen) ── */}
+        <div style={{padding:"8px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:10,color:cs.muted,flexShrink:0,marginInlineEnd:2}}>{isAr?"الوضع":"Mode"}</span>
+          <div style={{display:"flex",gap:5,flex:1}}>
+            {Object.values(MC).map(mc=>{
+              const active=mode===mc.id;
+              return (
+                <button key={mc.id} onClick={()=>switchMode(mc.id)} style={{
+                  flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,
+                  background:active?`${mc.color}1e`:"rgba(148,163,184,.06)",
+                  border:`1px solid ${active?`${mc.color}66`:cs.border}`,
+                  borderRadius:8,padding:"6px 0",fontSize:10.5,fontWeight:active?700:500,
+                  color:active?mc.color:cs.muted,cursor:"pointer",
+                }}>
+                  <span style={{fontSize:12}}>{mc.icon}</span>{mc.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* ── Quick Start Banner (for users who skipped onboarding) ─── */}
         {profile?.onboarding_done?.[0]==="skipped" && !score && (
           <div style={{margin:"10px 14px",background:"rgba(26,86,219,.08)",border:"1px solid rgba(26,86,219,.2)",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
@@ -4785,16 +4905,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               },
               {
                 label:    isAr?"الظهر":"Back",
-                score:    analysis?.metrics?.spine_lean?.score ?? analysis?.metrics?.spine_upper?.score,
+                score:    analysis?.metrics?.spine_lean?.score,
                 value:    analysis?.metrics?.spine_lean?.value,
                 unit:     "°",
               },
-              {
-                label:    isAr?"المسافة":"Distance",
-                score:    analysis?.metrics?.screen_distance?.score,
-                value:    analysis?.distCm,
-                unit:     "cm",
-              },
+              // Distance intentionally omitted here — it has its own dedicated
+              // bar in the left column; a second copy on the video was noise.
             ].map(({label,score:s,value,unit},i)=>{
               const col = s==null?"#475569":s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
               const risk= s==null?(isAr?"—":"—"):s>=80?(isAr?"منخفض":"Low"):s>=60?(isAr?"متوسط":"Med"):(isAr?"مرتفع":"High");
@@ -4813,16 +4929,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 </div>
               );
             })}
-
-            {/* Pain prediction */}
-            {analysis?.pain_bar?.urgency && analysis.pain_bar.urgency !== "none" && (
-              <div style={{marginTop:8,paddingTop:8,
-                borderTop:"1px solid rgba(255,255,255,.06)"}}>
-                <div style={{fontSize:9,color:analysis.pain_bar.color,fontWeight:700}}>
-                  {isAr ? analysis.pain_bar.label_ar : analysis.pain_bar.label}
-                </div>
-              </div>
-            )}
 
             {/* Session baseline comparison — "better/worse than your first sessions" */}
             {(()=>{
@@ -4850,38 +4956,74 @@ async function downloadPDF(sessionOverride, isClinical=false){
               );
             })()}
 
-            {/* Limited accuracy badge — shown when backend used Haar fallback instead of MediaPipe */}
-            {analysis?.limited_accuracy && (
-              <div style={{
-                marginTop:8, paddingTop:8,
-                borderTop:"1px solid rgba(255,255,255,.06)",
-                display:"flex", alignItems:"center", gap:5,
-              }}>
-                <span style={{fontSize:11}}>⚠️</span>
-                <div style={{fontSize:9, color:"#f59e0b", fontWeight:600, lineHeight:1.3}}>
-                  {isAr
-                    ? "دقة محدودة — تحسين الإضاءة"
-                    : isAr?"دقة محدودة — تحسين الإضاءة":"Limited accuracy — improve lighting"}
-                </div>
-              </div>
-            )}
           </div>
         )}
-          {score>0&&(
-            <div style={{
-              position:"absolute",bottom:8,right:isAr?"auto":8,left:isAr?8:"auto",
-              background:"rgba(2,8,16,.92)",borderRadius:10,
-              padding:"8px 12px",textAlign:"center",
-              border:`2px solid ${sc(score)}60`,
-              backdropFilter:"blur(8px)",
-            }}>
-              <div style={{fontSize:28,fontWeight:900,color:sc(score),lineHeight:1}}>{score}</div>
-              <div style={{fontSize:9,color:sc(score),marginTop:2,fontWeight:600,opacity:.7}}>/100</div>
-              <div style={{fontSize:8,color:"rgba(255,255,255,.5)",marginTop:1}}>
-                {score>=80?(isAr?"ممتاز":"Excellent"):score>=60?(isAr?"جيد":"Good"):(isAr?"ضعيف":"Poor")}
+          {/* (Removed the redundant bottom-left score box — the score already
+              shows in the on-video panel header and in the left column ring.) */}
+
+          {/* Big actionable correction cue — the single most useful "do this
+              now" instruction, shown over the video when a metric is clearly off. */}
+          {camActive && (()=>{
+            const cue=postureCue(analysis,isAr);
+            if(!cue) return null;
+            return (
+              <div style={{position:"absolute",left:8,right:8,bottom:8,
+                background:"rgba(2,8,16,.9)",backdropFilter:"blur(6px)",
+                border:`1.5px solid ${cue.col}`,borderRadius:12,
+                padding:"10px 12px",display:"flex",alignItems:"center",gap:10,
+                boxShadow:`0 4px 18px ${cue.col}55`,animation:"fadeUp .3s ease"}}>
+                <span style={{fontSize:24,color:cue.col,fontWeight:900,lineHeight:1,flexShrink:0}}>{cue.icon}</span>
+                <span style={{fontSize:13.5,fontWeight:800,color:"#fff",lineHeight:1.3}}>{cue.text}</span>
               </div>
-            </div>
-          )}
+            );
+          })()}
+        </div>
+
+        {/* Primary control — placed directly under the camera so Start / Stop
+            is always visible without scrolling past the metrics list. */}
+        <div style={{padding:"12px 14px 0"}}>
+          {!camActive
+            ? <button
+                onClick={cameraStatus==="no-device"||cameraStatus==="denied" ? undefined : startCamera}
+                disabled={cameraStatus==="requesting"}
+                style={{
+                  width:"100%",
+                  background: cameraStatus==="no-device"||cameraStatus==="denied"
+                    ? "rgba(239,68,68,.15)"
+                    : cameraStatus==="requesting"
+                    ? "rgba(148,163,184,.1)"
+                    : `linear-gradient(135deg,${TN?.color||"#1a56db"},${TN?.colorDim||"#0891b2"})`,
+                  border: cameraStatus==="no-device"||cameraStatus==="denied" ? "1px solid rgba(239,68,68,.4)" : "none",
+                  borderRadius:12, padding:"14px 0",
+                  fontSize:14, fontWeight:800,
+                  color: cameraStatus==="no-device"||cameraStatus==="denied" ? "#fca5a5"
+                    : cameraStatus==="requesting" ? cs.muted : "#fff",
+                  cursor: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied" ? "not-allowed" : "pointer",
+                  boxShadow: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied"
+                    ? "none" : `0 4px 20px ${TN?.color||"#1a56db"}50`,
+                  letterSpacing:"-.01em",
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                }}>
+                {cameraStatus==="requesting"
+                  ? <><span style={{animation:"spin 700ms linear infinite",display:"inline-block"}}>⟳</span> {isAr?"جاري الفتح...":"Opening camera..."}</>
+                  : cameraStatus==="denied"
+                  ? (isAr?"❌ الكاميرا محظورة — اسمح من الإعدادات":"❌ Camera blocked — allow in settings")
+                  : cameraStatus==="no-device"
+                  ? (isAr?"❌ لا توجد كاميرا":"❌ No camera found")
+                  : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
+              </button>
+            : <button onClick={stopCamera} style={{
+                width:"100%",
+                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                color:"#fca5a5",
+                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
+                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
+                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
+                letterSpacing:"-.01em",
+              }}>
+                {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
+              </button>
+          }
         </div>
 
         {/* Score ring + user */}
@@ -4940,46 +5082,37 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
 
-        {/* Percentile badge */}
-        {analysis?.percentile != null && (
-          <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`,
-            background:"rgba(99,102,241,.06)",display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:16}}>🏆</span>
-            <div style={{flex:1}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#a5b4fc"}}>
-                {isAr
-                  ? `أحسن من ${analysis.percentile}% من المستخدمين`
-                  : `Better than ${analysis.percentile}% of users`}
+        {/* Strain / discomfort prediction — wired to the real pain_prediction
+            data (minutes_to_pain / primary_driver / confidence). Previously
+            this section read analysis.pain_bar, which nothing ever set, so it
+            never appeared and the computed prediction was thrown away. */}
+        {analysis?.pain_prediction?.minutes_to_pain != null && (()=>{
+          const pp=analysis.pain_prediction, m=pp.minutes_to_pain;
+          const col=m<=10?"#ef4444":m<=30?"#f97316":"#f59e0b";
+          const icon=m<=10?"🔴":m<=30?"🟠":"🟡";
+          const pct=Math.max(4,Math.min(100,100-(m/60)*100)); // nearer to strain = fuller
+          const conf=isAr?(pp.confidence==="high"?"عالية":pp.confidence==="medium"?"متوسطة":"منخفضة"):pp.confidence;
+          return (
+            <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,
+              background:`${col}12`,borderLeft:`3px solid ${col}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                <span style={{fontSize:13}}>{icon}</span>
+                <div style={{fontSize:10,fontWeight:700,color:col}}>
+                  {isAr?`احتمال إجهاد خلال ~${m} دقيقة`:`Discomfort likely in ~${m} min`}
+                  {pp.primary_driver?` · ${pp.primary_driver}`:""}
+                </div>
+              </div>
+              <div style={{height:3,borderRadius:99,background:"rgba(255,255,255,.08)"}}>
+                <div style={{height:"100%",borderRadius:99,width:`${pct}%`,
+                  background:col,transition:"width .5s ease"}}/>
+              </div>
+              <div style={{fontSize:8.5,color:cs.muted,marginTop:3}}>
+                {isAr?`الثقة: ${conf} — تقدير توعوي، ليس تشخيصاً طبياً`
+                     :`Confidence: ${conf} — awareness estimate, not a medical diagnosis`}
               </div>
             </div>
-            <div style={{fontSize:18,fontWeight:900,color:"#818cf8"}}>
-              {analysis.percentile}%
-            </div>
-          </div>
-        )}
-
-        {/* Pain bar */}
-        {analysis?.pain_bar && analysis.pain_bar.urgency !== "none" && (
-          <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,
-            background:`${analysis.pain_bar.color}12`,
-            borderLeft:`3px solid ${analysis.pain_bar.color}`}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
-              <span style={{fontSize:13}}>
-                {analysis.pain_bar.urgency==="imminent"?"🔴":
-                 analysis.pain_bar.urgency==="soon"?"🟠":"🟡"}
-              </span>
-              <div style={{fontSize:10,fontWeight:700,color:analysis.pain_bar.color}}>
-                {isAr ? analysis.pain_bar.label_ar : analysis.pain_bar.label}
-              </div>
-            </div>
-            <div style={{height:3,borderRadius:99,background:"rgba(255,255,255,.08)"}}>
-              <div style={{height:"100%",borderRadius:99,
-                width:`${Math.min(100,analysis.pain_bar.pct||0)}%`,
-                background:analysis.pain_bar.color,
-                transition:"width .5s ease"}}/>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Live metrics */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
@@ -5196,50 +5329,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
         )}
 
-        {/* Main controls */}
+        {/* Secondary controls (primary Start/Stop moved up under the camera) */}
         <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
-          {!camActive
-            ? <button
-                onClick={cameraStatus==="no-device"||cameraStatus==="denied" ? undefined : startCamera}
-                disabled={cameraStatus==="requesting"}
-                style={{
-                  width:"100%",
-                  background: cameraStatus==="no-device"||cameraStatus==="denied"
-                    ? "rgba(239,68,68,.15)"
-                    : cameraStatus==="requesting"
-                    ? "rgba(148,163,184,.1)"
-                    : `linear-gradient(135deg,${TN?.color||"#1a56db"},${TN?.colorDim||"#0891b2"})`,
-                  border: cameraStatus==="no-device"||cameraStatus==="denied" ? "1px solid rgba(239,68,68,.4)" : "none",
-                  borderRadius:12, padding:"14px 0",
-                  fontSize:14, fontWeight:800,
-                  color: cameraStatus==="no-device"||cameraStatus==="denied" ? "#fca5a5"
-                    : cameraStatus==="requesting" ? cs.muted : "#fff",
-                  cursor: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied" ? "not-allowed" : "pointer",
-                  boxShadow: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied"
-                    ? "none" : `0 4px 20px ${TN?.color||"#1a56db"}50`,
-                  letterSpacing:"-.01em",
-                  display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-                }}>
-                {cameraStatus==="requesting"
-                  ? <><span style={{animation:"spin 700ms linear infinite",display:"inline-block"}}>⟳</span> {isAr?"جاري الفتح...":"Opening camera..."}</>
-                  : cameraStatus==="denied"
-                  ? (isAr?"❌ الكاميرا محظورة — اسمح من الإعدادات":"❌ Camera blocked — allow in settings")
-                  : cameraStatus==="no-device"
-                  ? (isAr?"❌ لا توجد كاميرا":"❌ No camera found")
-                  : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
-              </button>
-            : <button onClick={stopCamera} style={{
-                width:"100%",
-                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
-                color:"#fca5a5",
-                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
-                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
-                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
-                letterSpacing:"-.01em",
-              }}>
-                {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
-              </button>
-          }
           {/* Alert sound + Elite voice coach toggles */}
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setSound(s=>!s)} style={{
@@ -5270,6 +5361,32 @@ async function downloadPDF(sessionOverride, isClinical=false){
             }}>
               🎙️ {isAr?"المدرب الصوتي":"Voice coach"}
               {!tierAtLeast(effectiveTier,"elite")&&<span style={{fontSize:8,background:"rgba(16,185,129,.12)",border:"1px solid rgba(16,185,129,.25)",borderRadius:99,padding:"1px 6px",color:"#10b981"}}>ELITE</span>}
+            </button>
+          </div>
+          {/* Privacy: face blur toggle — pixelates the face on the analysis view */}
+          <button onClick={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }} style={{
+            background:faceBlur?"rgba(99,102,241,.12)":"rgba(255,255,255,.04)",
+            border:`1px solid ${faceBlur?"rgba(99,102,241,.4)":cs.border}`,borderRadius:9,
+            padding:"8px 0",fontSize:11,fontWeight:700,color:faceBlur?"#a5b4fc":cs.muted,cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+          }}>
+            {faceBlur?"🕶️":"👤"} {isAr?(faceBlur?"إخفاء الوجه: مُفعّل":"إخفاء الوجه (خصوصية)"):(faceBlur?"Face blur: ON":"Blur face (privacy)")}
+          </button>
+          {/* Overlay controls — show/hide the skeleton and angle labels on the video */}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{ setShowSkeleton(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_skeleton",nv?"1":"0");}catch{} return nv; }); }} style={{
+              flex:1,background:showSkeleton?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
+              border:`1px solid ${showSkeleton?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
+              padding:"8px 0",fontSize:11,fontWeight:700,color:showSkeleton?"#38bdf8":cs.muted,cursor:"pointer",
+            }}>
+              {showSkeleton?"🦴":"⬚"} {isAr?"الهيكل":"Skeleton"}
+            </button>
+            <button onClick={()=>{ setShowAngles(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_angles",nv?"1":"0");}catch{} return nv; }); }} style={{
+              flex:1,background:showAngles?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
+              border:`1px solid ${showAngles?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
+              padding:"8px 0",fontSize:11,fontWeight:700,color:showAngles?"#38bdf8":cs.muted,cursor:"pointer",
+            }}>
+              {showAngles?"📐":"⬚"} {isAr?"الزوايا":"Angles"}
             </button>
           </div>
           {histRef.current?.length>0&&(
@@ -5319,15 +5436,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Tools moved to Dashboard — see HomePage tools tab */}
 
-        {/* Calibration active badge */}
-        {calibData&&(
+        {/* Calibration active badge — hidden when the more specific
+            "personalised analysis" badge above is already showing, so the two
+            don't stack during a calibrated front-mode session. */}
+        {calibData&&!(camActive&&mode!=="side"&&calibData?.tolerances)&&(
           <div style={{margin:"10px 14px 0",background:"rgba(16,185,129,.07)",border:"1px solid rgba(16,185,129,.2)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#10b981",fontWeight:500}}>
             ✓ {isAr?"المعايرة الشخصية نشطة":"Personal calibration active"}
           </div>
         )}
 
-        {/* Company setup nudge */}
-        {profile&&!profile.company_id&&(profile.tier==="professional"||profile.tier==="elite")&&(
+        {/* Company setup nudge — only for accounts that signed up as a
+            company/HR account and haven't finished linking to their org yet,
+            not individual paying customers on Pro/Elite */}
+        {profile&&profile.acct_type==="company"&&profile.user_type!=="employee"&&!profile.company_id&&(
           <div style={{margin:"10px 14px",background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.15)",borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
             <span style={{fontSize:11,color:cs.muted}}>🏢 {isAr?"إعداد مساحة الشركة":"Set up company workspace"}</span>
             <button onClick={()=>setShowCompanyOnboard(true)}
@@ -5347,7 +5468,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?"وضعيتك وحشة أكتر من دقيقتين. خذ استراحة صغيرة؟":"Poor posture for 2+ min. Take a quick break to protect it?"}
             </div>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>{setStreakAlert(false);}} style={{
+              <button onClick={()=>{setStreakAlert(false);goToBreak();}} style={{
                 flex:1,background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.35)",
                 borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
                 {isAr?"استراحة الآن 🧘":"Break now 🧘"}
@@ -5393,9 +5514,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?`${breakIntervalMin} دقيقة مرت — استرح دقيقتين`:`${breakIntervalMin} min passed — take a 2-min stretch`}
             </div>
             <div style={{display:"flex",gap:6,justifyContent:"center"}}>
-              <button onClick={dismissBreak}
-                style={{background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.3)",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,color:"#fcd34d",cursor:"pointer"}}>
-                {isAr?"تم ✓":"Done ✓"}
+              <button onClick={()=>{dismissBreak();goToBreak();}}
+                style={{background:"rgba(245,158,11,.18)",border:"1px solid rgba(245,158,11,.4)",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
+                {isAr?"ابدأ الاستراحة 🧘":"Start break 🧘"}
               </button>
               <button onClick={()=>snoozeBreak(5)}
                 style={{background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:500,color:cs.muted,cursor:"pointer"}}>
@@ -5418,6 +5539,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
             ))}
           </div>
         )}
+
+        {/* Manual break entry — the guided break is always one tap away */}
+        <div style={{padding:"10px 14px 0"}}>
+          <button onClick={goToBreak} style={{
+            width:"100%",background:"rgba(14,165,233,.08)",border:"1px solid rgba(14,165,233,.25)",
+            borderRadius:10,padding:"10px 0",fontSize:12,fontWeight:700,color:"#38bdf8",cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            🧘 {isAr?"خذ استراحة حركة":"Take a movement break"}
+          </button>
+        </div>
 
         <div style={{padding:"10px 14px",fontSize:9.5,color:cs.muted,textAlign:"center"}}>
           {isAr ? "☁ تم الحفظ · ⚡ مدعوم بالذكاء الاصطناعي" : "☁ Data saved · ⚡ AI powered"}

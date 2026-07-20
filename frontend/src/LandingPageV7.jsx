@@ -147,7 +147,7 @@ const LPV7_TOKENS = {
   borderM:"rgba(148,163,184,.16)",
   text:  "#e8f0ff",
   sub:   "#94a3b8",
-  muted: "#475569",
+  muted: "#8896ac",
   blue:  "#4f7cf9",
   indigo:"#818cf8",
   sky:   "#22d3ee",
@@ -271,13 +271,29 @@ function GlobalStyle() {
       :focus-visible{outline:2px solid #4f7cf9;outline-offset:3px;border-radius:4px}
 
       /* hero */
-      .lp-hero-grid{display:grid;grid-template-columns:1fr 1.05fr;gap:clamp(32px,4vw,64px);align-items:center}
+      .lp-hero-grid{display:grid;grid-template-columns:1fr 1.05fr;gap:clamp(32px,4vw,64px);align-items:center;min-width:0}
+      .lp-hero-grid>*{min-width:0}
       @media(max-width:900px){.lp-hero-grid{grid-template-columns:1fr}.lp-hero-right{display:none!important}}
 
       /* nav */
       @media(max-width:860px){.lp-nav-links,.lp-nav-actions{display:none!important}.lp-nav-burger{display:flex!important}}
 
       /* grids */
+      /* min-width:0 on every grid + its direct children: by default a 1fr
+         track (or flex item) refuses to shrink below its content's
+         min-content size, which is how one long unbreakable string (a
+         button label, a badge, a stat) can silently force the whole
+         column — and the page — wider than the viewport on mobile. This
+         is the general fix for the bug class that caused the hero
+         overflow above, applied to every grid on the page, not just
+         the hero, since it can just as easily resurface in e.g. the
+         testimonial cards' outcome-badge text. */
+      .lp-stats-grid,.lp-features-wrap,.lp-how-grid,.lp-cases-grid,
+      .lp-pricing-grid,.lp-testi-grid,.lp-testi-inner,.lp-footer-grid,
+      .lp-sp-stats{min-width:0}
+      .lp-stats-grid>*,.lp-features-wrap>*,.lp-how-grid>*,.lp-cases-grid>*,
+      .lp-pricing-grid>*,.lp-testi-grid>*,.lp-testi-inner>*,.lp-footer-grid>*,
+      .lp-sp-stats>*{min-width:0}
       .lp-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
       .lp-features-wrap{display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:start}
       .lp-how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
@@ -317,6 +333,12 @@ function GlobalStyle() {
         .lp-pricing-grid{grid-template-columns:1fr;max-width:400px;margin:0 auto}
         .lp-footer-grid{grid-template-columns:1fr 1fr}
         .lp-sp-stats{grid-template-columns:repeat(2,1fr)}
+        /* CTA button text (e.g. "Free 7-Day Trial — For My Team") can't fit
+           on one line at this width; white-space:nowrap forced a ~376px
+           min-content size that the 1fr hero grid track had to honor,
+           pushing the whole hero column past the viewport edge. Let long
+           CTAs wrap to two lines instead of forcing horizontal overflow. */
+        .lp-btn{white-space:normal!important;height:auto!important;min-height:46px;line-height:1.3;text-align:center}
       }
 
       @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.lp-btn::after{display:none}}
@@ -425,7 +447,7 @@ function Nav({ lang, setLang, onCTA }) {
             }}>◈</div>
             <div style={{ lineHeight:1.15 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Corvus</div>
-              <div style={{ fontSize:9, color:"#475569", letterSpacing:".06em", textTransform:"uppercase", marginTop:1 }}>AI Posture Coaching</div>
+              <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".06em", textTransform:"uppercase", marginTop:1 }}>AI Posture Coaching</div>
             </div>
           </a>
 
@@ -437,13 +459,13 @@ function Nav({ lang, setLang, onCTA }) {
                 <a key={label} href={href}
                   style={{
                     position:"relative", display:"flex", alignItems:"center",
-                    color: active ? "#f1f5f9" : "#64748b",
+                    color: active ? "#f1f5f9" : "#8896ac",
                     textDecoration:"none", padding:"8px 14px", borderRadius:8,
                     fontSize:13.5, fontWeight: active ? 600 : 500,
                     transition:"color .2s",
                   }}
                   onMouseEnter={e => e.currentTarget.style.color="#f1f5f9"}
-                  onMouseLeave={e => e.currentTarget.style.color = active ? "#f1f5f9" : "#64748b"}>
+                  onMouseLeave={e => e.currentTarget.style.color = active ? "#f1f5f9" : "#8896ac"}>
                   {label}
                   {active && (
                     <span style={{
@@ -462,12 +484,12 @@ function Nav({ lang, setLang, onCTA }) {
             {/* Language toggle */}
             <button onClick={() => setLang(ar ? "en" : "ar")} style={{
               background:"rgba(255,255,255,.05)", border:"1px solid rgba(255,255,255,.09)",
-              color:"#64748b", padding:"6px 12px", borderRadius:8,
+              color:"#8896ac", padding:"6px 12px", borderRadius:8,
               cursor:"pointer", fontSize:12.5, fontWeight:500, fontFamily:"inherit",
               transition:"all .18s",
             }}
             onMouseEnter={e=>{e.currentTarget.style.color="#f1f5f9";e.currentTarget.style.borderColor="rgba(255,255,255,.18)"}}
-            onMouseLeave={e=>{e.currentTarget.style.color="#64748b";e.currentTarget.style.borderColor="rgba(255,255,255,.09)"}}>
+            onMouseLeave={e=>{e.currentTarget.style.color="#8896ac";e.currentTarget.style.borderColor="rgba(255,255,255,.09)"}}>
               {ar ? "EN" : "عربي"}
             </button>
             {/* Log in */}
@@ -534,7 +556,7 @@ function Nav({ lang, setLang, onCTA }) {
                 onMouseEnter={e=>e.currentTarget.style.color="#f1f5f9"}
                 onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
                   {label}
-                  <span style={{ fontSize:12, color:"#334155" }}>›</span>
+                  <span style={{ fontSize:12, color:"#8896ac" }}>›</span>
                 </a>
               ))}
               <div style={{ display:"flex", gap:10, marginTop:18 }}>
@@ -554,7 +576,7 @@ function Nav({ lang, setLang, onCTA }) {
               </div>
               <button onClick={() => setLang(ar ? "en" : "ar")} style={{
                 marginTop:12, background:"transparent", border:"none",
-                color:"#475569", fontSize:12.5, cursor:"pointer", textAlign:"center",
+                color:"#8896ac", fontSize:12.5, cursor:"pointer", textAlign:"center",
                 fontFamily:"inherit",
               }}>{ar ? "Switch to English" : "التبديل للعربية"}</button>
             </div>
@@ -1884,12 +1906,12 @@ function Footer({ lang }) {
               }}>◈</div>
               <div style={{ lineHeight:1.2 }}>
                 <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Corvus</div>
-                <div style={{ fontSize:9, color:"#334155", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+                <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>
               </div>
             </div>
 
             {/* Tagline */}
-            <p style={{ fontSize:13, color:"#475569", lineHeight:1.8, maxWidth:200, margin:"0 0 20px" }}>
+            <p style={{ fontSize:13, color:"#8896ac", lineHeight:1.8, maxWidth:200, margin:"0 0 20px" }}>
               {ar
                 ? "قلّل إجازات الأمراض وارفع إنتاجية فريقك. مبني لفرق MENA."
                 : "Cut sick leave 47% and boost team productivity. Built for MENA teams."}
@@ -1905,7 +1927,7 @@ function Footer({ lang }) {
                     background:"rgba(255,255,255,.04)",
                     border:"1px solid rgba(255,255,255,.08)",
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    color:"#475569", textDecoration:"none",
+                    color:"#8896ac", textDecoration:"none",
                     transition:"all .2s",
                   }}
                   onMouseEnter={e=>{
@@ -1914,7 +1936,7 @@ function Footer({ lang }) {
                     e.currentTarget.style.borderColor="rgba(255,255,255,.16)";
                   }}
                   onMouseLeave={e=>{
-                    e.currentTarget.style.color="#475569";
+                    e.currentTarget.style.color="#8896ac";
                     e.currentTarget.style.background="rgba(255,255,255,.04)";
                     e.currentTarget.style.borderColor="rgba(255,255,255,.08)";
                   }}>
@@ -1927,7 +1949,7 @@ function Footer({ lang }) {
             <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:18 }}>
               {["ISO 27001","AES-256","GDPR"].map(b=>(
                 <span key={b} style={{
-                  fontSize:9.5, color:"#334155", padding:"3px 8px",
+                  fontSize:9.5, color:"#8896ac", padding:"3px 8px",
                   border:"1px solid rgba(255,255,255,.07)", borderRadius:99,
                   fontFamily:FONT_MONO, fontWeight:600,
                 }}>{b}</span>
@@ -1940,7 +1962,7 @@ function Footer({ lang }) {
             <div key={col.title}>
               <div style={{
                 fontSize:10.5, fontWeight:700, letterSpacing:".08em",
-                textTransform:"uppercase", color:"#334155", marginBottom:16,
+                textTransform:"uppercase", color:"#8896ac", marginBottom:16,
               }}>{col.title}</div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {col.links.map(({ label, href, anchor }) => (
@@ -1949,20 +1971,20 @@ function Footer({ lang }) {
                         onClick={() => scrollTo(href)}
                         style={{
                           background:"none", border:"none", padding:0, cursor:"pointer",
-                          textAlign: ar ? "right" : "left", color:"#475569",
+                          textAlign: ar ? "right" : "left", color:"#8896ac",
                           fontSize:13.5, fontWeight:400, fontFamily:"inherit",
                           transition:"color .18s",
                         }}
                         onMouseEnter={e=>e.currentTarget.style.color="#94a3b8"}
-                        onMouseLeave={e=>e.currentTarget.style.color="#475569"}>
+                        onMouseLeave={e=>e.currentTarget.style.color="#8896ac"}>
                         {label}
                       </button>
                     : <a key={label} href={href}
                         target={href.startsWith("http") ? "_blank" : undefined}
                         rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
-                        style={{ color:"#475569", fontSize:13.5, textDecoration:"none", transition:"color .18s" }}
+                        style={{ color:"#8896ac", fontSize:13.5, textDecoration:"none", transition:"color .18s" }}
                         onMouseEnter={e=>e.currentTarget.style.color="#94a3b8"}
-                        onMouseLeave={e=>e.currentTarget.style.color="#475569"}>
+                        onMouseLeave={e=>e.currentTarget.style.color="#8896ac"}>
                         {label}
                       </a>
                 ))}
@@ -1975,18 +1997,18 @@ function Footer({ lang }) {
       {/* Bottom bar */}
       <div style={{ borderTop:"1px solid rgba(255,255,255,.05)" }}>
         <div className="lp-wrap" style={{ padding:"18px 32px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
-          <span style={{ fontSize:12, color:"#334155" }}>
+          <span style={{ fontSize:12, color:"#8896ac" }}>
             © {new Date().getFullYear()} Corvus Health Intelligence.{" "}
             {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
           </span>
           <div style={{ display:"flex", gap:20, alignItems:"center" }}>
             <a href={`mailto:${SUPPORT_EMAIL}`}
-              style={{ fontSize:12, color:"#334155", textDecoration:"none", transition:"color .18s" }}
-              onMouseEnter={e=>e.currentTarget.style.color="#64748b"}
-              onMouseLeave={e=>e.currentTarget.style.color="#334155"}>
+              style={{ fontSize:12, color:"#8896ac", textDecoration:"none", transition:"color .18s" }}
+              onMouseEnter={e=>e.currentTarget.style.color="#8896ac"}
+              onMouseLeave={e=>e.currentTarget.style.color="#8896ac"}>
               {SUPPORT_EMAIL}
             </a>
-            <span style={{ fontSize:11.5, color:"#334155" }}>
+            <span style={{ fontSize:11.5, color:"#8896ac" }}>
               {ar ? "صُنع بـ ❤ في مصر" : "Made with ❤ in Egypt"}
             </span>
           </div>

@@ -4,10 +4,12 @@
  * All Firestore fields consistent with role detection
  */
 import { useState, useCallback, useEffect, useRef } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { API_BASE_URL } from "./config/api.js";
 import {
   signInGoogle, signInMicrosoft, signInEmail, signUpEmail, resetPassword,
   getUserProfile, createUserProfile, SUPPORT_EMAIL, setRememberMe,
-  deleteAuthUser,
+  deleteAuthUser, db, getAuthToken,
 } from "./firebase.js";
 
 // ── Error messages ──────────────────────────────────────────────────
@@ -379,6 +381,39 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
           console.error("[Auth] profile creation failed:", profileErr?.message);
           try { await deleteAuthUser(); } catch {}
           throw profileErr;
+        }
+        // Employee joining via a typed invite code — this previously just
+        // stored the typed string on the profile with no effect (confirmed
+        // by grepping the whole codebase: nothing ever read invite_code back
+        // out to link a company_id). Actually redeem it now, the same way
+        // InviteAccept.jsx does for the ?invite=TOKEN link flow: look up the
+        // invite doc to get its company_id, then call the same secured
+        // backend endpoint. A failure here is non-fatal to the signup itself
+        // (the account still exists) but the user needs to know they aren't
+        // actually linked to their company yet.
+        if (isCompany && companyRole === "employee" && inviteCode.trim()) {
+          try {
+            const inviteSnap = await getDoc(doc(db, "invites", inviteCode.trim()));
+            if (!inviteSnap.exists()) {
+              throw new Error(isAr ? "كود الدعوة غير صحيح أو منتهي الصلاحية" : "Invite code is invalid or expired");
+            }
+            const inviteData = inviteSnap.data();
+            const tok = await getAuthToken();
+            const resp = await fetch(`${API_BASE_URL}/org/invite/accept`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+              body: JSON.stringify({ token: inviteCode.trim(), company_id: inviteData.company_id }),
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) throw new Error(result.error || (isAr ? "تعذر قبول الدعوة" : "Couldn't accept the invite"));
+          } catch (inviteErr) {
+            console.warn("[Auth] invite redemption failed:", inviteErr?.message);
+            setErr((isAr
+              ? "تم إنشاء حسابك، لكن كود الدعوة لم يعمل: "
+              : "Your account was created, but the invite code didn't work: ") + inviteErr.message);
+            onAuth(c.user, true);
+            return;
+          }
         }
         onAuth(c.user, true);
       }
