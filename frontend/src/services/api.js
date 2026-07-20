@@ -288,6 +288,8 @@ export const MarketplaceAPI = {
   },
   /** Patient-facing: single therapist profile. */
   getTherapist:   (id)   => apiFetch(`/marketplace/therapists/${id}`),
+  /** Real bookable time slots for a therapist over the next N days (empty array + has_template:false if they have no weekly template set). */
+  getSlots:       (id, days=14) => apiFetch(`/marketplace/therapists/${id}/slots?days=${days}`),
   /** Patient-facing: create a booking request (opens a PayMob payment). */
   createBooking:  (data) => apiFetch("/marketplace/bookings",        { method: "POST", body: data }),
   /** Patient-facing: my own booking history. */
@@ -301,6 +303,10 @@ export const MarketplaceAPI = {
   adminUpdateTherapist: (id, data) => apiFetch(`/admin/marketplace/therapists/${id}`, { method: "PATCH", body: data }),
   /** Admin: all bookings across all patients. */
   adminListBookings:    ()     => apiFetch("/admin/marketplace/bookings"),
+  /** Admin: amounts owed to each therapist from confirmed, unpaid bookings. */
+  adminPayouts:         ()     => apiFetch("/admin/marketplace/payouts"),
+  /** Admin: mark a batch of bookings as paid out. */
+  adminMarkPaid:        (bookingIds) => apiFetch("/admin/marketplace/payouts/mark-paid", { method: "POST", body: { booking_ids: bookingIds } }),
 
   /** Booking-scoped chat: patient (owner) or admin can read/post. */
   getMessages:  (bookingId)       => apiFetch(`/marketplace/bookings/${bookingId}/messages`),
@@ -308,6 +314,10 @@ export const MarketplaceAPI = {
 
   /** Patient cancels their own booking. */
   cancelBooking: (bookingId) => apiFetch(`/marketplace/bookings/${bookingId}/cancel`, { method: "POST" }),
+  /** Rate a completed session (1-5 stars + optional comment). */
+  reviewBooking: (bookingId, data) => apiFetch(`/marketplace/bookings/${bookingId}/review`, { method: "POST", body: data }),
+  /** Written reviews for a therapist's profile. */
+  therapistReviews: (therapistId) => apiFetch(`/marketplace/therapists/${therapistId}/reviews`),
 };
 
 export const AdminAPI = {
