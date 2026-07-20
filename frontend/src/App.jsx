@@ -2975,6 +2975,8 @@ export default function App(){
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
       resetProportions();
+      resetScore();
+      resetPainPrediction();
       insightsRef.current=null;setSessionInsights([]);
       worstSnapsRef.current=[];lastSnapMsRef.current=0;
       // Notification permission requested contextually after first alert (not cold on start)
@@ -3213,6 +3215,7 @@ export default function App(){
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
       resetProportions();
+      resetScore();
       histRef.current=[]; setHistory([]);
       goodRef.current=0; setGoodF(0);
       totalRef.current=0; setTotalF(0);
