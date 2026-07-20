@@ -16055,6 +16055,56 @@ def weekly_summary():
 
 # ── Send invite email ─────────────────────────────────────────────
 @require_auth
+
+@app.route("/api/org/create-invite", methods=["POST"])
+@require_auth
+@limiter.limit("30 per hour")
+def org_create_invite():
+    """Generate a reusable invite token for an organisation."""
+    import secrets, datetime
+    try:
+        data       = request.get_json(force=True) or {}
+        company_id = (data.get("company_id") or getattr(g,"company_id","")).strip()
+        role       = data.get("role","employee")
+        expires_days = int(data.get("expires_days",7))
+        uid        = getattr(g,"uid","")
+
+        if not company_id:
+            return jsonify({"error":"company_id required"}),400
+
+        # Only HR admins can create invites for their own company
+        role_doc = getattr(g,"role",{})
+        if role_doc.get("company_id") != company_id and not role_doc.get("is_org_owner"):
+            return jsonify({"error":"Not authorised for this company"}),403
+
+        db = firestore.client()
+
+        # Check if there's an active link-based invite already
+        existing = db.collection("invites").where("company_id","==",company_id)                     .where("type","==","link").where("status","==","active").limit(1).get()
+        if existing:
+            inv = existing[0].to_dict()
+            inv["invite_id"] = existing[0].id
+            inv["token"] = existing[0].id
+            return jsonify(inv)
+
+        # Create new invite token
+        token = secrets.token_urlsafe(20)
+        expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=expires_days)
+        invite_data = {
+            "company_id":  company_id,
+            "created_by":  uid,
+            "role":        role,
+            "type":        "link",
+            "status":      "active",
+            "created_at":  datetime.datetime.utcnow().isoformat(),
+            "expires_at":  expires_at.isoformat(),
+            "uses":        0,
+        }
+        db.collection("invites").document(token).set(invite_data)
+        return jsonify({"token": token, "invite_id": token, **invite_data})
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
+
 @app.route("/api/org/send-invite", methods=["POST"])
 @limiter.limit("100 per hour")
 @optional_auth
@@ -16251,6 +16301,10 @@ def admin_create_therapist():
             "status":            "active",          # active | paused
             "rating":            None,
             "review_count":      0,
+            # Weekly recurring availability: {"mon":["09:00","11:00"], "wed":[...]}
+            # Empty/absent means "no fixed slots" — booking falls back to the
+            # freeform preferred_time text field for that therapist.
+            "availability_template": data.get("availability_template") or {},
             "created_at":        datetime.utcnow().isoformat()+"Z",
             "created_by_admin":  g.uid,
         }
@@ -16270,7 +16324,7 @@ def admin_update_therapist(therapist_id):
         data = request.get_json(force=True) or {}
         allowed = {"name","photo_url","specialties","city","bio","years_experience",
                    "session_fee_cents","currency","languages","contact_email",
-                   "contact_phone","status"}
+                   "contact_phone","status","availability_template"}
         upd = {k: v for k, v in data.items() if k in allowed}
         if not upd:
             return jsonify({"error": "no valid fields to update"}), 400
@@ -16297,6 +16351,73 @@ def admin_list_bookings():
             "created_at", direction=firestore.Query.DESCENDING
         ).limit(200).get()
         return jsonify({"bookings": [{**d.to_dict(), "id": d.id} for d in docs]})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/marketplace/payouts", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_marketplace_payouts():
+    """Aggregates what's owed to each therapist: confirmed (paid-by-patient)
+    bookings whose payout_status is still 'pending', grouped by therapist.
+    commission_pct/payout_amount_cents were snapshotted at booking time, so
+    this reflects the rate that applied when each booking was made."""
+    try:
+        db   = firestore.client()
+        docs = (db.collection("marketplace_bookings")
+                  .where("status", "==", "confirmed")
+                  .where("payout_status", "==", "pending")
+                  .limit(500).stream())
+        by_therapist = {}
+        for d in docs:
+            b = d.to_dict()
+            tid = b.get("therapist_id")
+            if not tid:
+                continue
+            g_ = by_therapist.setdefault(tid, {
+                "therapist_id": tid,
+                "therapist_name": b.get("therapist_name", ""),
+                "currency": b.get("currency", "EGP"),
+                "booking_count": 0,
+                "gross_cents": 0,
+                "payout_cents": 0,
+                "booking_ids": [],
+            })
+            g_["booking_count"]  += 1
+            g_["gross_cents"]    += b.get("amount_cents", 0)
+            g_["payout_cents"]   += b.get("payout_amount_cents", 0)
+            g_["booking_ids"].append(d.id)
+        return jsonify({"payouts": list(by_therapist.values())})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/marketplace/payouts/mark-paid", methods=["POST"])
+@require_auth
+@require_admin
+@limiter.limit("20 per minute")
+def admin_marketplace_mark_paid():
+    """Marks a batch of bookings (normally: everything owed to one
+    therapist right now) as paid out, in one Firestore batch write so a
+    partial failure can't leave some bookings marked paid and others not."""
+    try:
+        data = request.get_json(force=True) or {}
+        booking_ids = data.get("booking_ids") or []
+        if not booking_ids or not isinstance(booking_ids, list):
+            return jsonify({"error": "booking_ids (array) required"}), 400
+        if len(booking_ids) > 500:
+            return jsonify({"error": "too many booking_ids in one batch (max 500)"}), 400
+
+        db    = firestore.client()
+        batch = db.batch()
+        paid_at = datetime.utcnow().isoformat()+"Z"
+        for bid in booking_ids:
+            ref = db.collection("marketplace_bookings").document(bid)
+            batch.update(ref, {"payout_status": "paid", "paid_out_at": paid_at, "paid_out_by": g.uid})
+        batch.commit()
+        return jsonify({"ok": True, "marked": len(booking_ids)})
     except Exception as e:
         return safe_error(e)
 
@@ -16336,6 +16457,63 @@ def marketplace_get_therapist(therapist_id):
         return safe_error(e)
 
 
+_WEEKDAY_KEYS = ["mon","tue","wed","thu","fri","sat","sun"]
+
+
+@app.route("/api/marketplace/therapists/<therapist_id>/slots", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def marketplace_therapist_slots(therapist_id):
+    """Expands the therapist's weekly availability_template into concrete,
+    bookable datetimes for the next `days` days, excluding slots already
+    taken by a non-cancelled booking. Returns [] (not an error) for
+    therapists with no template set — the frontend falls back to the
+    freeform preferred_time text field in that case."""
+    try:
+        days = min(30, max(1, int(request.args.get("days", 14))))
+        db   = firestore.client()
+        tdoc = db.collection("therapists").document(therapist_id).get()
+        if not tdoc.exists:
+            return jsonify({"error": "therapist not found"}), 404
+        template = tdoc.to_dict().get("availability_template") or {}
+        if not template:
+            return jsonify({"slots": [], "has_template": False})
+
+        now = datetime.utcnow()
+        candidates = []
+        for i in range(days):
+            day = now + timedelta(days=i)
+            key = _WEEKDAY_KEYS[day.weekday()]
+            for time_str in template.get(key, []):
+                try:
+                    hh, mm = [int(x) for x in time_str.split(":")]
+                except (ValueError, AttributeError):
+                    continue
+                slot_dt = day.replace(hour=hh, minute=mm, second=0, microsecond=0)
+                if slot_dt > now:  # never offer a slot that's already passed today
+                    candidates.append(slot_dt)
+        candidates.sort()
+
+        # Exclude already-booked slots for this therapist in the same window
+        window_end = now + timedelta(days=days)
+        booked_docs = (db.collection("marketplace_bookings")
+                         .where("therapist_id", "==", therapist_id)
+                         .where("slot_datetime", ">=", now)
+                         .where("slot_datetime", "<=", window_end)
+                         .stream())
+        taken = {d.to_dict().get("slot_datetime") for d in booked_docs
+                 if d.to_dict().get("status") != "cancelled" and d.to_dict().get("slot_datetime")}
+        taken_iso = {t.isoformat() if hasattr(t, "isoformat") else str(t) for t in taken}
+
+        free = [c for c in candidates if c.isoformat() not in taken_iso]
+        return jsonify({
+            "slots": [s.isoformat()+"Z" for s in free],
+            "has_template": True,
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
 @app.route("/api/marketplace/bookings", methods=["POST"])
 @require_auth
 @limiter.limit("15 per minute")
@@ -16347,6 +16525,7 @@ def marketplace_create_booking():
         data          = request.get_json(force=True) or {}
         therapist_id  = (data.get("therapist_id") or "").strip()
         preferred_time= (data.get("preferred_time") or "").strip()
+        slot_iso      = (data.get("slot_datetime") or "").strip()
         notes         = (data.get("notes") or "").strip()
         billing_data  = data.get("billing_data", {})
         if not therapist_id:
@@ -16362,17 +16541,41 @@ def marketplace_create_booking():
         if amount_cents <= 0:
             return jsonify({"error": "therapist has no fee configured"}), 400
 
+        slot_dt = None
+        if slot_iso:
+            try:
+                slot_dt = datetime.fromisoformat(slot_iso.replace("Z", ""))
+            except ValueError:
+                return jsonify({"error": "invalid slot_datetime"}), 400
+            if slot_dt <= datetime.utcnow():
+                return jsonify({"error": "that slot has already passed"}), 400
+            # Re-check the slot is still free right before booking — closes
+            # the race window between the patient loading slots and clicking book.
+            clash = (db.collection("marketplace_bookings")
+                       .where("therapist_id", "==", therapist_id)
+                       .where("slot_datetime", "==", slot_dt)
+                       .stream())
+            if any(d.to_dict().get("status") != "cancelled" for d in clash):
+                return jsonify({"error": "that slot was just booked by someone else — please pick another"}), 409
+
         booking_ref = db.collection("marketplace_bookings").document()
+        commission_pct = float(os.getenv("MARKETPLACE_COMMISSION_PCT", "20"))
         booking = {
             "therapist_id":   therapist_id,
             "therapist_name": therapist.get("name", ""),
             "user_id":        g.uid,
-            "preferred_time": preferred_time,
+            "preferred_time": preferred_time or (slot_dt.strftime("%a %b %d, %H:%M") if slot_dt else ""),
+            "slot_datetime":  slot_dt,
             "notes":          notes,
             "amount_cents":   amount_cents,
             "currency":       currency,
             "status":         "pending_payment",   # pending_payment | confirmed | cancelled
             "created_at":     datetime.utcnow().isoformat()+"Z",
+            # Snapshotted at booking time so a later commission-rate change
+            # doesn't retroactively alter what's owed on old bookings.
+            "commission_pct":     commission_pct,
+            "payout_amount_cents": round(amount_cents * (1 - commission_pct/100)),
+            "payout_status":      "pending",   # pending | paid — only meaningful once status=confirmed
         }
 
         if not PAYMOB_SECRET_KEY:
@@ -16492,6 +16695,91 @@ def marketplace_cancel_booking(booking_id):
             </div>"""
             send_email(ADMIN_EMAIL, f"🔁 Booking cancelled after payment — refund needed ({booking_id})", html)
         return jsonify({"ok": True, "refund_pending": was_paid})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/bookings/<booking_id>/review", methods=["POST"])
+@require_auth
+@limiter.limit("15 per minute")
+def marketplace_review_booking(booking_id):
+    """Patient rates a completed session (1-5 stars + optional comment).
+    Recomputes the therapist's aggregate rating/review_count from all
+    reviews left on their bookings — a simple running average, not a
+    separate reviews collection, since bookings are already the natural
+    one-review-per-booking unit and we don't need review edit history."""
+    try:
+        data = request.get_json(force=True) or {}
+        rating = data.get("rating")
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            return jsonify({"error": "rating must be an integer 1-5"}), 400
+        if rating < 1 or rating > 5:
+            return jsonify({"error": "rating must be between 1 and 5"}), 400
+        comment = (data.get("comment") or "").strip()[:500]
+
+        db   = firestore.client()
+        bref = db.collection("marketplace_bookings").document(booking_id)
+        bdoc = bref.get()
+        if not bdoc.exists:
+            return jsonify({"error": "booking not found"}), 404
+        booking = bdoc.to_dict()
+        if booking.get("user_id") != g.uid:
+            return jsonify({"error": "forbidden"}), 403
+        if booking.get("status") == "cancelled":
+            return jsonify({"error": "cannot review a cancelled booking"}), 400
+        if booking.get("rating"):
+            return jsonify({"error": "this booking already has a review"}), 400
+
+        bref.update({
+            "rating":      rating,
+            "review_text": comment,
+            "reviewed_at": datetime.utcnow().isoformat()+"Z",
+        })
+
+        # Recompute the therapist's aggregate from every rated booking they have
+        therapist_id = booking.get("therapist_id")
+        if therapist_id:
+            rated = list(db.collection("marketplace_bookings")
+                           .where("therapist_id", "==", therapist_id)
+                           .where("rating", ">", 0).stream())
+            ratings = [d.to_dict().get("rating") for d in rated if d.to_dict().get("rating")]
+            if ratings:
+                avg_rating = round(sum(ratings) / len(ratings), 1)
+                db.collection("therapists").document(therapist_id).update({
+                    "rating": avg_rating,
+                    "review_count": len(ratings),
+                })
+        return jsonify({"ok": True, "rating": rating})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/marketplace/therapists/<therapist_id>/reviews", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def marketplace_therapist_reviews(therapist_id):
+    """Public (any logged-in user): recent written reviews for a therapist —
+    shown on their profile card. Only bookings with a non-empty comment,
+    newest first, capped at 20."""
+    try:
+        db   = firestore.client()
+        docs = (db.collection("marketplace_bookings")
+                  .where("therapist_id", "==", therapist_id)
+                  .where("rating", ">", 0)
+                  .order_by("rating", direction=firestore.Query.DESCENDING)
+                  .limit(20).stream())
+        reviews = []
+        for d in docs:
+            b = d.to_dict()
+            if b.get("review_text"):
+                reviews.append({
+                    "rating":      b.get("rating"),
+                    "comment":     b.get("review_text"),
+                    "reviewed_at": b.get("reviewed_at"),
+                })
+        return jsonify({"reviews": reviews})
     except Exception as e:
         return safe_error(e)
 
@@ -16763,6 +17051,151 @@ def symptom_correlation():
             "baseline_avg_score": round(baseline_avg,1) if baseline_avg is not None else None,
             "period": period,
         })
+    except Exception as e:
+        return safe_error(e)
+
+
+def _compute_symptom_insights(uid, days=90):
+    """Same algorithm as the /api/analytics/symptom-correlation endpoint,
+    factored out so the proactive alert cron job below can reuse it
+    without duplicating the correlation logic in a second place."""
+    MIN_DAYS = 3
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff_day = cutoff.strftime("%Y-%m-%d")
+
+    symptom_docs = list(db.collection("symptom_logs")
+                          .where("uid","==",uid).where("date",">=",cutoff_day).stream())
+    if len(symptom_docs) < MIN_DAYS:
+        return []
+    session_docs = list(db.collection("sessions")
+                          .where("uid","==",uid).where("created_at",">=",cutoff).limit(1000).stream())
+    if not session_docs:
+        return []
+
+    by_day = {}
+    for s in session_docs:
+        d = s.to_dict()
+        day = _day_key(d.get("created_at"))
+        if day:
+            by_day.setdefault(day, []).append(d)
+
+    symptom_days = {}
+    for doc in symptom_docs:
+        d = doc.to_dict()
+        day = d.get("date")
+        for s in d.get("symptoms", []):
+            if s.get("severity", 0) >= 3:
+                symptom_days.setdefault(s["type"], set()).add(day)
+
+    def day_avg_score(day):
+        scores = [s.get("avg_score") for s in by_day.get(day, []) if s.get("avg_score") is not None]
+        return sum(scores)/len(scores) if scores else None
+
+    baseline_days = list(by_day.keys())
+    insights = []
+    for stype, sdays in symptom_days.items():
+        relevant_days = [d for d in sdays if d in by_day]
+        if len(relevant_days) < MIN_DAYS:
+            continue
+        symptom_scores = [x for d in relevant_days for x in [day_avg_score(d)] if x is not None]
+        other_days     = [d for d in baseline_days if d not in sdays]
+        other_scores   = [x for d in other_days for x in [day_avg_score(d)] if x is not None]
+        if not symptom_scores or not other_scores:
+            continue
+        sym_avg, other_avg = sum(symptom_scores)/len(symptom_scores), sum(other_scores)/len(other_scores)
+        gap = round(other_avg - sym_avg, 1)
+        if abs(gap) >= 3:
+            insights.append({"symptom": stype, "score_gap": gap,
+                              "direction": "worse" if gap > 0 else "better"})
+    insights.sort(key=lambda i: abs(i["score_gap"]), reverse=True)
+    return insights
+
+
+_SYMPTOM_LABEL = {
+    "headache": {"en":"headaches", "ar":"الصداع"}, "neck_pain": {"en":"neck pain", "ar":"ألم الرقبة"},
+    "back_pain": {"en":"back pain", "ar":"ألم الظهر"}, "shoulder_pain": {"en":"shoulder pain", "ar":"ألم الكتف"},
+    "eye_strain": {"en":"eye strain", "ar":"إجهاد العين"}, "wrist_pain": {"en":"wrist pain", "ar":"ألم المعصم"},
+}
+
+
+@app.route("/api/push/symptom-pattern-alerts", methods=["POST"])
+@limiter.limit("10 per minute")
+def push_symptom_pattern_alerts():
+    """
+    Cron job endpoint — intended to run roughly weekly (patterns don't
+    change hour to hour like streaks do). For each user with a registered
+    push token, re-runs their symptom correlation and — if the strongest
+    finding is a real "worse" pattern (score_gap >= ALERT_THRESHOLD) they
+    haven't already been alerted about in the last COOLDOWN_DAYS — sends a
+    push suggesting they check the Physiotherapist Marketplace, tying the
+    Symptom Correlation Engine and the Marketplace together instead of
+    leaving the insight sitting unseen in a tab the user has to remember
+    to open.
+    Secured by CRON_SECRET, same as /api/push/streak-reminder.
+    """
+    ALERT_THRESHOLD = 6
+    COOLDOWN_DAYS = 14
+    try:
+        import hmac as _hmac
+        cron_secret = os.getenv("CRON_SECRET", "")
+        secret      = request.headers.get("X-Cron-Secret", "")
+        if not cron_secret:
+            return jsonify({"error": "Cron endpoint not configured"}), 503
+        if not secret or not _hmac.compare_digest(secret, cron_secret):
+            return jsonify({"error": "Unauthorized"}), 401
+
+        token_docs = db.collection("push_tokens").where("active","==",True).limit(1000).stream()
+        uids_seen, sent, skipped = set(), 0, 0
+
+        for tdoc in token_docs:
+            td  = tdoc.to_dict()
+            uid, tok, lang = td.get("uid"), td.get("token"), td.get("lang", "en")
+            if not uid or not tok or uid in uids_seen:
+                continue
+            uids_seen.add(uid)
+
+            pref_doc = db.collection("push_preferences").document(uid).get()
+            pdata = pref_doc.to_dict() if pref_doc.exists else {}
+            if not pdata.get("categories", {}).get("symptom_reminder", True):
+                skipped += 1
+                continue
+
+            last_alert = pdata.get("last_pattern_alert_at")
+            last_symptom = pdata.get("last_pattern_alert_symptom")
+            insights = _compute_symptom_insights(uid)
+            worse = [i for i in insights if i["direction"] == "worse" and i["score_gap"] >= ALERT_THRESHOLD]
+            if not worse:
+                skipped += 1
+                continue
+            top = worse[0]
+            if top["symptom"] == last_symptom and last_alert:
+                try:
+                    last_dt = datetime.fromisoformat(last_alert.replace("Z",""))
+                    if (datetime.utcnow() - last_dt).days < COOLDOWN_DAYS:
+                        skipped += 1
+                        continue
+                except ValueError:
+                    pass
+
+            is_ar = lang == "ar"
+            label = _SYMPTOM_LABEL.get(top["symptom"], {}).get("ar" if is_ar else "en", top["symptom"])
+            title = "🩹 لاحظنا نمط في بياناتك" if is_ar else "🩹 We noticed a pattern in your data"
+            body  = (f"وضعيتك أسوأ بوضوح في الأيام اللي حسيت فيها بـ{label} — يستاهل تشوف أخصائي علاج طبيعي"
+                     if is_ar else
+                     f"Your posture is notably worse on days you report {label} — might be worth seeing a physiotherapist")
+            try:
+                _send_fcm(tok, title, body, data={"type": "symptom_pattern_alert", "deep_link": "marketplace"})
+                db.collection("push_preferences").document(uid).set({
+                    "last_pattern_alert_at": datetime.utcnow().isoformat()+"Z",
+                    "last_pattern_alert_symptom": top["symptom"],
+                }, merge=True)
+                sent += 1
+            except Exception:
+                pass
+
+        log_msg = f"[cron] Symptom pattern alerts — sent:{sent} skipped:{skipped}"
+        print(log_msg, flush=True)
+        return jsonify({"sent": sent, "skipped": skipped})
     except Exception as e:
         return safe_error(e)
 
