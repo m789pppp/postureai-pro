@@ -16251,6 +16251,10 @@ def admin_create_therapist():
             "status":            "active",          # active | paused
             "rating":            None,
             "review_count":      0,
+            # Weekly recurring availability: {"mon":["09:00","11:00"], "wed":[...]}
+            # Empty/absent means "no fixed slots" — booking falls back to the
+            # freeform preferred_time text field for that therapist.
+            "availability_template": data.get("availability_template") or {},
             "created_at":        datetime.utcnow().isoformat()+"Z",
             "created_by_admin":  g.uid,
         }
@@ -16270,7 +16274,7 @@ def admin_update_therapist(therapist_id):
         data = request.get_json(force=True) or {}
         allowed = {"name","photo_url","specialties","city","bio","years_experience",
                    "session_fee_cents","currency","languages","contact_email",
-                   "contact_phone","status"}
+                   "contact_phone","status","availability_template"}
         upd = {k: v for k, v in data.items() if k in allowed}
         if not upd:
             return jsonify({"error": "no valid fields to update"}), 400
@@ -16336,6 +16340,63 @@ def marketplace_get_therapist(therapist_id):
         return safe_error(e)
 
 
+_WEEKDAY_KEYS = ["mon","tue","wed","thu","fri","sat","sun"]
+
+
+@app.route("/api/marketplace/therapists/<therapist_id>/slots", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def marketplace_therapist_slots(therapist_id):
+    """Expands the therapist's weekly availability_template into concrete,
+    bookable datetimes for the next `days` days, excluding slots already
+    taken by a non-cancelled booking. Returns [] (not an error) for
+    therapists with no template set — the frontend falls back to the
+    freeform preferred_time text field in that case."""
+    try:
+        days = min(30, max(1, int(request.args.get("days", 14))))
+        db   = firestore.client()
+        tdoc = db.collection("therapists").document(therapist_id).get()
+        if not tdoc.exists:
+            return jsonify({"error": "therapist not found"}), 404
+        template = tdoc.to_dict().get("availability_template") or {}
+        if not template:
+            return jsonify({"slots": [], "has_template": False})
+
+        now = datetime.utcnow()
+        candidates = []
+        for i in range(days):
+            day = now + timedelta(days=i)
+            key = _WEEKDAY_KEYS[day.weekday()]
+            for time_str in template.get(key, []):
+                try:
+                    hh, mm = [int(x) for x in time_str.split(":")]
+                except (ValueError, AttributeError):
+                    continue
+                slot_dt = day.replace(hour=hh, minute=mm, second=0, microsecond=0)
+                if slot_dt > now:  # never offer a slot that's already passed today
+                    candidates.append(slot_dt)
+        candidates.sort()
+
+        # Exclude already-booked slots for this therapist in the same window
+        window_end = now + timedelta(days=days)
+        booked_docs = (db.collection("marketplace_bookings")
+                         .where("therapist_id", "==", therapist_id)
+                         .where("slot_datetime", ">=", now)
+                         .where("slot_datetime", "<=", window_end)
+                         .stream())
+        taken = {d.to_dict().get("slot_datetime") for d in booked_docs
+                 if d.to_dict().get("status") != "cancelled" and d.to_dict().get("slot_datetime")}
+        taken_iso = {t.isoformat() if hasattr(t, "isoformat") else str(t) for t in taken}
+
+        free = [c for c in candidates if c.isoformat() not in taken_iso]
+        return jsonify({
+            "slots": [s.isoformat()+"Z" for s in free],
+            "has_template": True,
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
 @app.route("/api/marketplace/bookings", methods=["POST"])
 @require_auth
 @limiter.limit("15 per minute")
@@ -16347,6 +16408,7 @@ def marketplace_create_booking():
         data          = request.get_json(force=True) or {}
         therapist_id  = (data.get("therapist_id") or "").strip()
         preferred_time= (data.get("preferred_time") or "").strip()
+        slot_iso      = (data.get("slot_datetime") or "").strip()
         notes         = (data.get("notes") or "").strip()
         billing_data  = data.get("billing_data", {})
         if not therapist_id:
@@ -16362,12 +16424,30 @@ def marketplace_create_booking():
         if amount_cents <= 0:
             return jsonify({"error": "therapist has no fee configured"}), 400
 
+        slot_dt = None
+        if slot_iso:
+            try:
+                slot_dt = datetime.fromisoformat(slot_iso.replace("Z", ""))
+            except ValueError:
+                return jsonify({"error": "invalid slot_datetime"}), 400
+            if slot_dt <= datetime.utcnow():
+                return jsonify({"error": "that slot has already passed"}), 400
+            # Re-check the slot is still free right before booking — closes
+            # the race window between the patient loading slots and clicking book.
+            clash = (db.collection("marketplace_bookings")
+                       .where("therapist_id", "==", therapist_id)
+                       .where("slot_datetime", "==", slot_dt)
+                       .stream())
+            if any(d.to_dict().get("status") != "cancelled" for d in clash):
+                return jsonify({"error": "that slot was just booked by someone else — please pick another"}), 409
+
         booking_ref = db.collection("marketplace_bookings").document()
         booking = {
             "therapist_id":   therapist_id,
             "therapist_name": therapist.get("name", ""),
             "user_id":        g.uid,
-            "preferred_time": preferred_time,
+            "preferred_time": preferred_time or (slot_dt.strftime("%a %b %d, %H:%M") if slot_dt else ""),
+            "slot_datetime":  slot_dt,
             "notes":          notes,
             "amount_cents":   amount_cents,
             "currency":       currency,
