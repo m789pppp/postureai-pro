@@ -75,7 +75,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
     }
   }, [tab, demoMode]);
 
-  const submitBooking = async (preferredTime, notes) => {
+  const submitBooking = async (preferredTime, notes, slotDatetime) => {
     if (!selected) return;
     setBooking(true);
     try {
@@ -90,6 +90,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
       const res = await MarketplaceAPI.createBooking({
         therapist_id: selected.id,
         preferred_time: preferredTime,
+        slot_datetime: slotDatetime || undefined,
         notes,
         billing_data: { email: user?.email || "" },
       });
@@ -413,18 +414,79 @@ function BookingChat({ bookingId, isAr, currentUid, addToast }) {
 function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
   const [preferredTime, setPreferredTime] = useState("");
   const [notes, setNotes] = useState("");
+  const [slots, setSlots] = useState(null);       // null = loading, [] = none/no template
+  const [hasTemplate, setHasTemplate] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState(null); // ISO string
+
+  useEffect(() => {
+    MarketplaceAPI.getSlots(therapist.id)
+      .then(d => { setSlots(d?.slots || []); setHasTemplate(!!d?.has_template); })
+      .catch(() => { setSlots([]); setHasTemplate(false); });
+  }, [therapist.id]);
+
+  // Group slots by calendar day for a readable picker
+  const slotsByDay = {};
+  (slots || []).forEach(iso => {
+    const d = new Date(iso);
+    const dayKey = d.toDateString();
+    (slotsByDay[dayKey] = slotsByDay[dayKey] || []).push(iso);
+  });
+
+  const fmtDay = (dayKey) => new Date(dayKey).toLocaleDateString(isAr ? "ar-EG" : "en-US", { weekday: "short", month: "short", day: "numeric" });
+  const fmtTime = (iso) => new Date(iso).toLocaleTimeString(isAr ? "ar-EG" : "en-US", { hour: "numeric", minute: "2-digit" });
+
+  const canSubmit = hasTemplate ? !!selectedSlot : true;
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", display:"flex",
                   alignItems:"center", justifyContent:"center", zIndex:1000, padding:20 }}>
-      <div style={{ ...card, width:"100%", maxWidth:420, background:"#111827" }}>
+      <div style={{ ...card, width:"100%", maxWidth:460, background:"#111827", maxHeight:"85vh", overflowY:"auto" }}>
         <div style={{ fontWeight:800, fontSize:16, marginBottom:4 }}>{isAr ? "حجز جلسة مع" : "Book a session with"} {therapist.name}</div>
         <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:16 }}>{money(therapist.session_fee_cents, therapist.currency, isAr)}</div>
 
-        <div style={{ marginBottom:12 }}>
-          <div style={label}>{isAr ? "الميعاد المفضل" : "Preferred time"}</div>
-          <input style={input} placeholder={isAr ? "مثال: الخميس بعد الظهر" : "e.g. Thursday afternoon"}
-                 value={preferredTime} onChange={e=>setPreferredTime(e.target.value)} />
-        </div>
+        {slots === null && (
+          <div style={{ fontSize:12.5, color:"#64748b", marginBottom:16 }}>{isAr?"جاري تحميل المواعيد المتاحة…":"Loading available times…"}</div>
+        )}
+
+        {slots !== null && hasTemplate && (
+          <div style={{ marginBottom:16 }}>
+            <div style={label}>{isAr ? "اختار ميعاد متاح" : "Choose an available time"}</div>
+            {Object.keys(slotsByDay).length === 0 ? (
+              <div style={{ fontSize:12.5, color:"#94a3b8" }}>{isAr?"مفيش مواعيد متاحة قريبًا":"No available slots coming up"}</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:220, overflowY:"auto" }}>
+                {Object.entries(slotsByDay).map(([dayKey, times]) => (
+                  <div key={dayKey}>
+                    <div style={{ fontSize:11, color:"#64748b", fontWeight:700, marginBottom:5 }}>{fmtDay(dayKey)}</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                      {times.map(iso => (
+                        <button key={iso} onClick={()=>setSelectedSlot(iso)}
+                          style={{ padding:"6px 12px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer",
+                            border: selectedSlot===iso ? "1px solid rgba(15,118,110,.6)" : border,
+                            background: selectedSlot===iso ? "rgba(15,118,110,.25)" : "rgba(255,255,255,.03)",
+                            color: selectedSlot===iso ? "#5eead4" : "#cbd5e1" }}>
+                          {fmtTime(iso)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {slots !== null && !hasTemplate && (
+          <div style={{ marginBottom:12 }}>
+            <div style={label}>{isAr ? "الميعاد المفضل" : "Preferred time"}</div>
+            <input style={input} placeholder={isAr ? "مثال: الخميس بعد الظهر" : "e.g. Thursday afternoon"}
+                   value={preferredTime} onChange={e=>setPreferredTime(e.target.value)} />
+            <div style={{ fontSize:11, color:"#64748b", marginTop:4 }}>
+              {isAr ? "المعالج ده لسه مسجلش مواعيد ثابتة — هيتواصل معاك لتحديد الميعاد" : "This therapist hasn't set fixed availability yet — they'll follow up to confirm a time"}
+            </div>
+          </div>
+        )}
+
         <div style={{ marginBottom:16 }}>
           <div style={label}>{isAr ? "ملاحظات (اختياري)" : "Notes (optional)"}</div>
           <textarea style={{ ...input, minHeight:70, resize:"vertical" }}
@@ -432,7 +494,8 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
         </div>
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <button style={btnGhost} onClick={onClose} disabled={loading}>{isAr ? "إلغاء" : "Cancel"}</button>
-          <button style={btnPrimary} onClick={()=>onSubmit(preferredTime, notes)} disabled={loading}>
+          <button style={{ ...btnPrimary, opacity: canSubmit ? 1 : .5 }} disabled={loading || !canSubmit}
+                  onClick={()=>onSubmit(hasTemplate ? fmtDay(new Date(selectedSlot).toDateString())+" "+fmtTime(selectedSlot) : preferredTime, notes, selectedSlot)}>
             {loading ? (isAr ? "جاري الحجز…" : "Booking…") : (isAr ? "تأكيد الحجز والدفع" : "Confirm & Pay")}
           </button>
         </div>
@@ -505,7 +568,23 @@ function AdminTherapistManager({ isAr, addToast }) {
   const [list, setList] = useState([]);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name:"", city:"", bio:"", specialties:"", session_fee_cents:"", currency:"EGP", years_experience:"" });
+  const [availability, setAvailability] = useState({}); // {mon:["09:00",...], ...}
   const [saving, setSaving] = useState(false);
+
+  const DAYS = [
+    { key:"mon", en:"Mon", ar:"إثنين" }, { key:"tue", en:"Tue", ar:"ثلاثاء" },
+    { key:"wed", en:"Wed", ar:"أربعاء" }, { key:"thu", en:"Thu", ar:"خميس" },
+    { key:"fri", en:"Fri", ar:"جمعة" }, { key:"sat", en:"Sat", ar:"سبت" }, { key:"sun", en:"Sun", ar:"أحد" },
+  ];
+  const SLOT_TIMES = ["09:00","11:00","13:00","15:00","17:00","19:00"];
+
+  const toggleSlot = (day, time) => {
+    setAvailability(prev => {
+      const cur = prev[day] || [];
+      const next = cur.includes(time) ? cur.filter(t=>t!==time) : [...cur, time].sort();
+      return { ...prev, [day]: next };
+    });
+  };
 
   const load = () => MarketplaceAPI.adminListTherapists().then(d=>setList(d?.therapists||[])).catch(()=>{});
   useEffect(() => { load(); }, []);
@@ -522,8 +601,10 @@ function AdminTherapistManager({ isAr, addToast }) {
         session_fee_cents: Math.round(parseFloat(form.session_fee_cents) * 100),
         years_experience: parseInt(form.years_experience) || 0,
         specialties: form.specialties.split(",").map(s=>s.trim()).filter(Boolean),
+        availability_template: Object.fromEntries(Object.entries(availability).filter(([,v])=>v.length>0)),
       });
       setForm({ name:"", city:"", bio:"", specialties:"", session_fee_cents:"", currency:"EGP", years_experience:"" });
+      setAvailability({});
       setShowNew(false);
       load();
       addToast?.(isAr ? "تمت الإضافة" : "Therapist added", "success");
@@ -554,6 +635,33 @@ function AdminTherapistManager({ isAr, addToast }) {
           <div><div style={label}>{isAr?"سنوات الخبرة":"Years experience"}</div><input style={input} type="number" value={form.years_experience} onChange={e=>setForm(f=>({...f,years_experience:e.target.value}))}/></div>
           <div style={{ gridColumn:"1 / -1" }}><div style={label}>{isAr?"التخصصات (مفصولة بفاصلة)":"Specialties (comma-separated)"}</div><input style={input} value={form.specialties} onChange={e=>setForm(f=>({...f,specialties:e.target.value}))}/></div>
           <div style={{ gridColumn:"1 / -1" }}><div style={label}>{isAr?"نبذة":"Bio"}</div><textarea style={{...input,minHeight:60}} value={form.bio} onChange={e=>setForm(f=>({...f,bio:e.target.value}))}/></div>
+          <div style={{ gridColumn:"1 / -1" }}>
+            <div style={label}>{isAr?"المواعيد المتاحة أسبوعيًا (اختياري)":"Weekly availability (optional)"}</div>
+            <div style={{ fontSize:11, color:"#64748b", marginBottom:8 }}>
+              {isAr?"من غير ده، المريض هيكتب ميعاده المفضل نص حر وهيتم التواصل معاه.":"Without this, patients type a free-text preferred time and get followed up with instead."}
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {DAYS.map(d => (
+                <div key={d.key} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ width:44, fontSize:11.5, color:"#94a3b8", flexShrink:0 }}>{isAr?d.ar:d.en}</div>
+                  <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                    {SLOT_TIMES.map(t => {
+                      const active = (availability[d.key]||[]).includes(t);
+                      return (
+                        <button key={t} type="button" onClick={()=>toggleSlot(d.key,t)}
+                          style={{ padding:"3px 8px", borderRadius:6, fontSize:10.5, fontWeight:600, cursor:"pointer",
+                            border: active ? "1px solid rgba(15,118,110,.5)" : border,
+                            background: active ? "rgba(15,118,110,.2)" : "transparent",
+                            color: active ? "#5eead4" : "#64748b" }}>
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
           <div style={{ gridColumn:"1 / -1", textAlign:"right" }}>
             <button style={btnPrimary} onClick={save} disabled={saving}>{saving ? "…" : (isAr?"حفظ":"Save")}</button>
           </div>

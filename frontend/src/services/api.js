@@ -288,6 +288,8 @@ export const MarketplaceAPI = {
   },
   /** Patient-facing: single therapist profile. */
   getTherapist:   (id)   => apiFetch(`/marketplace/therapists/${id}`),
+  /** Real bookable time slots for a therapist over the next N days (empty array + has_template:false if they have no weekly template set). */
+  getSlots:       (id, days=14) => apiFetch(`/marketplace/therapists/${id}/slots?days=${days}`),
   /** Patient-facing: create a booking request (opens a PayMob payment). */
   createBooking:  (data) => apiFetch("/marketplace/bookings",        { method: "POST", body: data }),
   /** Patient-facing: my own booking history. */
