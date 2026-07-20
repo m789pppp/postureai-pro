@@ -2393,7 +2393,18 @@ export default function App(){
     document.title=titles[page]||"Corvus";
   },[page]);
 
-  const vidRef=useRef();const ovRef=useRef();const canvRef=useRef();
+  const vidRef=useRef();const ovRef=useRef();const canvRef=useRef();const camWrapRef=useRef();
+  const[isFs,setIsFs]=useState(false);
+  useEffect(()=>{
+    const onFs=()=>setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange",onFs);
+    return ()=>document.removeEventListener("fullscreenchange",onFs);
+  },[]);
+  const toggleFullscreen=()=>{
+    const el=camWrapRef.current; if(!el) return;
+    if(document.fullscreenElement) document.exitFullscreen?.();
+    else el.requestFullscreen?.().catch(()=>{});
+  };
   const streamRef=useRef();const timerRef=useRef();const rafRef=useRef();
   const mpRef=useRef();const badRef=useRef(null);const lastAlRef=useRef(0);
   const lmSmootherRef   = useRef(null);
@@ -4799,11 +4810,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
         )}
 
         {/* Camera feed */}
-        <div style={{position:"relative",aspectRatio:"4/3",background:"#020810",flexShrink:0}}>
+        <div ref={camWrapRef} style={{position:"relative",background:"#020810",flexShrink:0,
+          ...(isFs?{width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}:{aspectRatio:"4/3"})}}>
           <video ref={vidRef} autoPlay muted playsInline
-            style={{width:"100%",height:"100%",objectFit:"cover",transform:"scaleX(-1)",display:"block"}}/>
-          <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)"}}/>
+            style={{width:"100%",height:"100%",objectFit:isFs?"contain":"cover",transform:"scaleX(-1)",display:"block"}}/>
+          <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)",objectFit:isFs?"contain":"cover"}}/>
           <canvas ref={canvRef} style={{display:"none"}}/>
+          {/* Fullscreen / focus-mode toggle */}
+          <button onClick={toggleFullscreen} title={isAr?"ملء الشاشة":"Fullscreen"} style={{
+            position:"absolute",bottom:8,right:8,zIndex:20,
+            width:32,height:32,borderRadius:8,
+            background:"rgba(2,8,16,.8)",border:"1px solid rgba(255,255,255,.15)",
+            backdropFilter:"blur(6px)",color:"#e2e8f0",cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
+          }}>{isFs?"🗗":"⛶"}</button>
 
           {/* Idle-state visual cue — previously the camera area was just a black box
               with no indication a click was needed. First-time users had no way to
@@ -4955,7 +4975,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             const cue=postureCue(analysis,isAr);
             if(!cue) return null;
             return (
-              <div style={{position:"absolute",left:8,right:8,bottom:8,
+              <div style={{position:"absolute",left:8,right:46,bottom:8,
                 background:"rgba(2,8,16,.9)",backdropFilter:"blur(6px)",
                 border:`1.5px solid ${cue.col}`,borderRadius:12,
                 padding:"10px 12px",display:"flex",alignItems:"center",gap:10,
@@ -5377,6 +5397,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {showAngles?"📐":"⬚"} {isAr?"الزوايا":"Angles"}
             </button>
           </div>
+          {/* Calibrate for accuracy — personalises scoring to the user's own
+              neutral posture; reachable straight from the live session. */}
+          <button onClick={()=>setShowCalibWizard(true)} style={{
+            background:calibData?"rgba(148,163,184,.06)":"rgba(16,185,129,.1)",
+            border:`1px solid ${calibData?cs.border:"rgba(16,185,129,.4)"}`,borderRadius:10,
+            padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:"#34d399",cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+          }}>
+            🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
+          </button>
           {histRef.current?.length>0&&(
 <button onClick={async ()=>{
               // Same canonical gate — third direct generateSessionPDF() call that bypassed it.
