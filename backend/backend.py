@@ -17005,6 +17005,151 @@ def symptom_correlation():
         return safe_error(e)
 
 
+def _compute_symptom_insights(uid, days=90):
+    """Same algorithm as the /api/analytics/symptom-correlation endpoint,
+    factored out so the proactive alert cron job below can reuse it
+    without duplicating the correlation logic in a second place."""
+    MIN_DAYS = 3
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff_day = cutoff.strftime("%Y-%m-%d")
+
+    symptom_docs = list(db.collection("symptom_logs")
+                          .where("uid","==",uid).where("date",">=",cutoff_day).stream())
+    if len(symptom_docs) < MIN_DAYS:
+        return []
+    session_docs = list(db.collection("sessions")
+                          .where("uid","==",uid).where("created_at",">=",cutoff).limit(1000).stream())
+    if not session_docs:
+        return []
+
+    by_day = {}
+    for s in session_docs:
+        d = s.to_dict()
+        day = _day_key(d.get("created_at"))
+        if day:
+            by_day.setdefault(day, []).append(d)
+
+    symptom_days = {}
+    for doc in symptom_docs:
+        d = doc.to_dict()
+        day = d.get("date")
+        for s in d.get("symptoms", []):
+            if s.get("severity", 0) >= 3:
+                symptom_days.setdefault(s["type"], set()).add(day)
+
+    def day_avg_score(day):
+        scores = [s.get("avg_score") for s in by_day.get(day, []) if s.get("avg_score") is not None]
+        return sum(scores)/len(scores) if scores else None
+
+    baseline_days = list(by_day.keys())
+    insights = []
+    for stype, sdays in symptom_days.items():
+        relevant_days = [d for d in sdays if d in by_day]
+        if len(relevant_days) < MIN_DAYS:
+            continue
+        symptom_scores = [x for d in relevant_days for x in [day_avg_score(d)] if x is not None]
+        other_days     = [d for d in baseline_days if d not in sdays]
+        other_scores   = [x for d in other_days for x in [day_avg_score(d)] if x is not None]
+        if not symptom_scores or not other_scores:
+            continue
+        sym_avg, other_avg = sum(symptom_scores)/len(symptom_scores), sum(other_scores)/len(other_scores)
+        gap = round(other_avg - sym_avg, 1)
+        if abs(gap) >= 3:
+            insights.append({"symptom": stype, "score_gap": gap,
+                              "direction": "worse" if gap > 0 else "better"})
+    insights.sort(key=lambda i: abs(i["score_gap"]), reverse=True)
+    return insights
+
+
+_SYMPTOM_LABEL = {
+    "headache": {"en":"headaches", "ar":"الصداع"}, "neck_pain": {"en":"neck pain", "ar":"ألم الرقبة"},
+    "back_pain": {"en":"back pain", "ar":"ألم الظهر"}, "shoulder_pain": {"en":"shoulder pain", "ar":"ألم الكتف"},
+    "eye_strain": {"en":"eye strain", "ar":"إجهاد العين"}, "wrist_pain": {"en":"wrist pain", "ar":"ألم المعصم"},
+}
+
+
+@app.route("/api/push/symptom-pattern-alerts", methods=["POST"])
+@limiter.limit("10 per minute")
+def push_symptom_pattern_alerts():
+    """
+    Cron job endpoint — intended to run roughly weekly (patterns don't
+    change hour to hour like streaks do). For each user with a registered
+    push token, re-runs their symptom correlation and — if the strongest
+    finding is a real "worse" pattern (score_gap >= ALERT_THRESHOLD) they
+    haven't already been alerted about in the last COOLDOWN_DAYS — sends a
+    push suggesting they check the Physiotherapist Marketplace, tying the
+    Symptom Correlation Engine and the Marketplace together instead of
+    leaving the insight sitting unseen in a tab the user has to remember
+    to open.
+    Secured by CRON_SECRET, same as /api/push/streak-reminder.
+    """
+    ALERT_THRESHOLD = 6
+    COOLDOWN_DAYS = 14
+    try:
+        import hmac as _hmac
+        cron_secret = os.getenv("CRON_SECRET", "")
+        secret      = request.headers.get("X-Cron-Secret", "")
+        if not cron_secret:
+            return jsonify({"error": "Cron endpoint not configured"}), 503
+        if not secret or not _hmac.compare_digest(secret, cron_secret):
+            return jsonify({"error": "Unauthorized"}), 401
+
+        token_docs = db.collection("push_tokens").where("active","==",True).limit(1000).stream()
+        uids_seen, sent, skipped = set(), 0, 0
+
+        for tdoc in token_docs:
+            td  = tdoc.to_dict()
+            uid, tok, lang = td.get("uid"), td.get("token"), td.get("lang", "en")
+            if not uid or not tok or uid in uids_seen:
+                continue
+            uids_seen.add(uid)
+
+            pref_doc = db.collection("push_preferences").document(uid).get()
+            pdata = pref_doc.to_dict() if pref_doc.exists else {}
+            if not pdata.get("categories", {}).get("symptom_reminder", True):
+                skipped += 1
+                continue
+
+            last_alert = pdata.get("last_pattern_alert_at")
+            last_symptom = pdata.get("last_pattern_alert_symptom")
+            insights = _compute_symptom_insights(uid)
+            worse = [i for i in insights if i["direction"] == "worse" and i["score_gap"] >= ALERT_THRESHOLD]
+            if not worse:
+                skipped += 1
+                continue
+            top = worse[0]
+            if top["symptom"] == last_symptom and last_alert:
+                try:
+                    last_dt = datetime.fromisoformat(last_alert.replace("Z",""))
+                    if (datetime.utcnow() - last_dt).days < COOLDOWN_DAYS:
+                        skipped += 1
+                        continue
+                except ValueError:
+                    pass
+
+            is_ar = lang == "ar"
+            label = _SYMPTOM_LABEL.get(top["symptom"], {}).get("ar" if is_ar else "en", top["symptom"])
+            title = "🩹 لاحظنا نمط في بياناتك" if is_ar else "🩹 We noticed a pattern in your data"
+            body  = (f"وضعيتك أسوأ بوضوح في الأيام اللي حسيت فيها بـ{label} — يستاهل تشوف أخصائي علاج طبيعي"
+                     if is_ar else
+                     f"Your posture is notably worse on days you report {label} — might be worth seeing a physiotherapist")
+            try:
+                _send_fcm(tok, title, body, data={"type": "symptom_pattern_alert", "deep_link": "marketplace"})
+                db.collection("push_preferences").document(uid).set({
+                    "last_pattern_alert_at": datetime.utcnow().isoformat()+"Z",
+                    "last_pattern_alert_symptom": top["symptom"],
+                }, merge=True)
+                sent += 1
+            except Exception:
+                pass
+
+        log_msg = f"[cron] Symptom pattern alerts — sent:{sent} skipped:{skipped}"
+        print(log_msg, flush=True)
+        return jsonify({"sent": sent, "skipped": skipped})
+    except Exception as e:
+        return safe_error(e)
+
+
 
 
 
