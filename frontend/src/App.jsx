@@ -2105,9 +2105,16 @@ export default function App(){
   const[sessionInsights,setSessionInsights]=useState([]);
   useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); distSmootherRef.current?.reset(); resetProportions(); },[mode]);
   const[tier,setTier]=useState(null);
-  const[acctType,setAcctType]=useState(null); // always null on setup — user must choose
-  // Sync acctType when profile loads (only if NOT on setup page)
-  useEffect(()=>{ if(profile?.acct_type&&!acctType&&page!=="setup") setAcctType(profile.acct_type); },[profile?.acct_type,acctType,page]); // "company" | "individual"
+  const[acctType,setAcctType]=useState(null); // always null on setup — user must choose (except employees, see below)
+  // Sync acctType when profile loads (only if NOT on setup page) — EXCEPT an
+  // employee (joined via a valid company invite) skips the picker entirely,
+  // since picking "Company/Team" here used to silently overwrite their role
+  // to hr_admin/is_org_owner — every invited employee would end up looking
+  // like an org owner over their own company after their first login.
+  useEffect(()=>{
+    if(profile?.acct_type&&!acctType&&page!=="setup") setAcctType(profile.acct_type);
+    if(page==="setup"&&profile?.user_type==="employee"&&!acctType) setAcctType("company");
+  },[profile?.acct_type,profile?.user_type,acctType,page]); // "company" | "individual"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
@@ -3791,24 +3798,29 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 if(!devicePref){addToast(isAr?"اختار جهازك الأول 👆":"Choose your device first 👆","warn");return;}
                 const defaultMode=devicePref==="laptop"?"laptop":"phone";
                 setMode(defaultMode);
+                // An employee's role/company link comes from their invite (see
+                // AuthPage.jsx signup + org_invite_accept), never from this
+                // generic individual/company picker — preserve it exactly.
+                const isEmployee = profile?.user_type==="employee";
+                const roleFields = isEmployee
+                  ? { user_type: "employee", acct_type: "company", is_org_owner: false }
+                  : { user_type: acctType==="company"?"hr_admin":"individual", acct_type: acctType==="company"?"company":"individual", is_org_owner: acctType==="company" };
                 // Save user_type to Firestore so role detection works
                 if(user?.uid){
                   try{
                     await updateDoc(doc(db,"users",user.uid),{
-                      user_type: acctType==="company"?"hr_admin":"individual",
-                      acct_type: acctType==="company"?"company":"individual",
-                      is_org_owner: acctType==="company",
+                      ...roleFields,
                       setup_complete: true,
                       device_pref: devicePref,
                       updated_at: serverTimestamp(),
                     });
-                    setProfile(p=>({...p, user_type: acctType==="company"?"hr_admin":"individual", acct_type: acctType==="company"?"company":"individual", is_org_owner: acctType==="company", setup_complete:true}));
+                    setProfile(p=>({...p, ...roleFields, setup_complete:true}));
                   }catch(e){ console.warn("setup save failed",e); }
                 }
                 const freshP=user?.uid?await getUserProfile(user.uid).catch(()=>null):null;
                 if(freshP){setProfile(freshP);if(freshP.tier)setTier(normalizeTier(freshP.tier));if(freshP.company_id)setCompanyId(freshP.company_id);}
-                else{setProfile(p=>({...p,user_type:acctType==="company"?"hr_admin":"individual",acct_type:acctType==="company"?"company":"individual",is_org_owner:acctType==="company",setup_complete:true}));}
-                if(acctType==="company"){setShowCompanyOnboard(true);}
+                else{setProfile(p=>({...p,...roleFields,setup_complete:true}));}
+                if(acctType==="company"&&!isEmployee){setShowCompanyOnboard(true);}
                 else{setTimeout(()=>setShowOnboard(true),800);}
                 setPage("home");
               }}
