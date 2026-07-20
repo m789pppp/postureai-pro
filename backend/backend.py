@@ -16055,6 +16055,56 @@ def weekly_summary():
 
 # ── Send invite email ─────────────────────────────────────────────
 @require_auth
+
+@app.route("/api/org/create-invite", methods=["POST"])
+@require_auth
+@limiter.limit("30 per hour")
+def org_create_invite():
+    """Generate a reusable invite token for an organisation."""
+    import secrets, datetime
+    try:
+        data       = request.get_json(force=True) or {}
+        company_id = (data.get("company_id") or getattr(g,"company_id","")).strip()
+        role       = data.get("role","employee")
+        expires_days = int(data.get("expires_days",7))
+        uid        = getattr(g,"uid","")
+
+        if not company_id:
+            return jsonify({"error":"company_id required"}),400
+
+        # Only HR admins can create invites for their own company
+        role_doc = getattr(g,"role",{})
+        if role_doc.get("company_id") != company_id and not role_doc.get("is_org_owner"):
+            return jsonify({"error":"Not authorised for this company"}),403
+
+        db = firestore.client()
+
+        # Check if there's an active link-based invite already
+        existing = db.collection("invites").where("company_id","==",company_id)                     .where("type","==","link").where("status","==","active").limit(1).get()
+        if existing:
+            inv = existing[0].to_dict()
+            inv["invite_id"] = existing[0].id
+            inv["token"] = existing[0].id
+            return jsonify(inv)
+
+        # Create new invite token
+        token = secrets.token_urlsafe(20)
+        expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=expires_days)
+        invite_data = {
+            "company_id":  company_id,
+            "created_by":  uid,
+            "role":        role,
+            "type":        "link",
+            "status":      "active",
+            "created_at":  datetime.datetime.utcnow().isoformat(),
+            "expires_at":  expires_at.isoformat(),
+            "uses":        0,
+        }
+        db.collection("invites").document(token).set(invite_data)
+        return jsonify({"token": token, "invite_id": token, **invite_data})
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
+
 @app.route("/api/org/send-invite", methods=["POST"])
 @limiter.limit("100 per hour")
 @optional_auth
