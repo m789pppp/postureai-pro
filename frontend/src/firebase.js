@@ -172,7 +172,23 @@ export async function createUserProfile(uid, data, referredBy = null) {
     uid, email: data.email||"", name: data.name||"",
     company: data.company||(isCoDom?data.email.split("@")[1]:""),
     tier: baseTier,
-    acct_type: isCoDom?"company":"personal",
+    // Respect the caller's explicit signup choice (AuthPage.jsx's buildProfile
+    // sets these based on what the user actually picked — individual vs
+    // company, hr_admin vs employee) — only fall back to the email-domain
+    // guess when the caller didn't provide it at all (e.g. the minimal
+    // {email,name,company,setup_complete} object used as a last-resort
+    // fallback for an orphaned auth user with no profile and no signup data).
+    acct_type:    data.acct_type    ?? (isCoDom?"company":"personal"),
+    user_type:    data.user_type    ?? (isCoDom?"hr_admin":"individual"),
+    is_org_owner: data.is_org_owner ?? false,
+    is_hr:        data.is_hr        ?? false,
+    team_size:    data.team_size    || "",
+    invite_code:  data.invite_code  || "",
+    country:      data.country      || "",
+    profession:   data.profession   || "",
+    first_name:   data.first_name   || "",
+    last_name:    data.last_name    || "",
+    newsletter:   data.newsletter   ?? false,
     is_admin: isAdmin, auto_approved: isAuto,
     is_trial: !isAuto,
     trial_tier: "professional",  // what they experience during trial
