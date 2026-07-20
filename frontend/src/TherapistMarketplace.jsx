@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { MarketplaceAPI } from "./services/api.js";
+import { DEMO_THERAPISTS, getDemoBookings, createDemoBooking, updateDemoBooking, getDemoMessages, addDemoMessage } from "./marketplaceDemo.js";
 
 const border = "1px solid rgba(255,255,255,.08)";
 const card   = { background:"rgba(255,255,255,.03)", border, borderRadius:16, padding:20 };
@@ -41,30 +42,55 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
   const [booking, setBooking]   = useState(false);
   const [myBookings, setMyBookings] = useState([]);
   const [chatBooking, setChatBooking] = useState(null); // booking whose chat thread is open
+  const [demoMode, setDemoMode] = useState(false); // true once we've fallen back to local demo data
   const [cancellingId, setCancellingId] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true); setErr(null);
     MarketplaceAPI.listTherapists(cityFilter ? { city: cityFilter } : {})
-      .then(d => setTherapists(d?.therapists || []))
-      .catch(e => setErr(e.message || "Failed to load"))
+      .then(d => { setTherapists(d?.therapists || []); setDemoMode(false); })
+      .catch(e => {
+        if (e.isBackendDown) {
+          // Backend unreachable — fall back to local demo data instead of
+          // showing an error, so the feature is still showcaseable.
+          const filtered = cityFilter
+            ? DEMO_THERAPISTS.filter(t => t.city.toLowerCase().includes(cityFilter.toLowerCase()))
+            : DEMO_THERAPISTS;
+          setTherapists(filtered);
+          setDemoMode(true);
+        } else {
+          setErr(e.message || "Failed to load");
+        }
+      })
       .finally(() => setLoading(false));
   }, [cityFilter]);
 
   useEffect(() => { if (tab === "browse") load(); }, [tab, load]);
   useEffect(() => {
     if (tab === "mine") {
-      MarketplaceAPI.myBookings().then(d => setMyBookings(d?.bookings || [])).catch(()=>{});
+      if (demoMode) { setMyBookings(getDemoBookings()); return; }
+      MarketplaceAPI.myBookings()
+        .then(d => setMyBookings(d?.bookings || []))
+        .catch(e => { if (e.isBackendDown) { setDemoMode(true); setMyBookings(getDemoBookings()); } });
     }
-  }, [tab]);
+  }, [tab, demoMode]);
 
-  const submitBooking = async (preferredTime, notes) => {
+  const submitBooking = async (preferredTime, notes, slotDatetime) => {
     if (!selected) return;
     setBooking(true);
     try {
+      if (demoMode) {
+        // Simulate a confirmed booking locally — no real payment, no real
+        // therapist notified. Purely for showcasing the flow end-to-end.
+        createDemoBooking({ therapist: selected, preferredTime, notes });
+        addToast?.(isAr ? "✓ حجز تجريبي اتأكد (Demo — من غير دفع حقيقي)" : "✓ Demo booking confirmed (no real payment taken)", "success");
+        setSelected(null);
+        return;
+      }
       const res = await MarketplaceAPI.createBooking({
         therapist_id: selected.id,
         preferred_time: preferredTime,
+        slot_datetime: slotDatetime || undefined,
         notes,
         billing_data: { email: user?.email || "" },
       });
@@ -76,7 +102,15 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
       }
       setSelected(null);
     } catch (e) {
-      addToast?.(e.message || (isAr ? "حصل خطأ" : "Something went wrong"), "error");
+      if (e.isBackendDown) {
+        // Retry as a demo booking rather than just showing an error
+        setDemoMode(true);
+        createDemoBooking({ therapist: selected, preferredTime, notes });
+        addToast?.(isAr ? "✓ حجز تجريبي اتأكد (Demo — من غير دفع حقيقي)" : "✓ Demo booking confirmed (no real payment taken)", "success");
+        setSelected(null);
+      } else {
+        addToast?.(e.message || (isAr ? "حصل خطأ" : "Something went wrong"), "error");
+      }
     } finally {
       setBooking(false);
     }
@@ -101,11 +135,43 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
     }
   };
 
+  const [ratingBookingId, setRatingBookingId] = useState(null); // booking currently showing the rating form
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const submitReview = async (booking, rating, comment) => {
+    setSubmittingReview(true);
+    try {
+      if (booking.is_demo) {
+        // Demo bookings live only in localStorage — update them there directly.
+        const all = updateDemoBooking(booking.id, { rating, review_text: comment });
+        setMyBookings(all);
+      } else {
+        await MarketplaceAPI.reviewBooking(booking.id, { rating, comment });
+        setMyBookings(prev => prev.map(x => x.id === booking.id ? { ...x, rating, review_text: comment } : x));
+      }
+      addToast?.(isAr ? "شكرًا على تقييمك" : "Thanks for your review", "success");
+      setRatingBookingId(null);
+    } catch (e) {
+      addToast?.(e.message || (isAr ? "تعذر إرسال التقييم" : "Couldn't submit review"), "error");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: "24px 20px", color: "#e2e8f0" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
         <div>
-          <div style={{ fontSize:22, fontWeight:900 }}>{isAr ? "🩺 دليل أخصائيي العلاج الطبيعي" : "🩺 Physiotherapist Marketplace"}</div>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ fontSize:22, fontWeight:900 }}>{isAr ? "🩺 دليل أخصائيي العلاج الطبيعي" : "🩺 Physiotherapist Marketplace"}</div>
+            {demoMode && (
+              <span style={{ fontSize:10.5, fontWeight:700, color:"#f59e0b", background:"rgba(245,158,11,.12)",
+                border:"1px solid rgba(245,158,11,.3)", borderRadius:6, padding:"3px 8px" }}>
+                {isAr ? "⚠ وضع تجريبي — الباك إند مش متاح" : "⚠ Demo Mode — backend unreachable"}
+              </span>
+            )}
+          </div>
           <div style={{ fontSize:13, color:"#64748b", marginTop:4 }}>
             {isAr ? "احجز جلسة مع أخصائي معتمد" : "Book a session with a vetted physiotherapist"}
           </div>
@@ -144,6 +210,12 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
                   <div>
                     <div style={{ fontWeight:800, fontSize:15 }}>{th.name}</div>
                     <div style={{ fontSize:12, color:"#64748b" }}>{th.city}{th.years_experience ? ` · ${th.years_experience}${isAr?" سنة خبرة":"y exp"}` : ""}</div>
+                    {th.rating && (
+                      <div style={{ fontSize:11.5, color:"#fbbf24", marginTop:2 }}>
+                        {"★".repeat(Math.round(th.rating))}{"☆".repeat(5-Math.round(th.rating))}
+                        <span style={{ color:"#64748b", marginLeft:4 }}>{th.rating} ({th.review_count})</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {th.specialties?.length > 0 && (
@@ -179,7 +251,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
                   <div style={{ fontSize:11, color:"#94a3b8", textTransform:"capitalize" }}>{b.status?.replace(/_/g," ")}</div>
                 </div>
               </div>
-              <div style={{ marginTop:12, borderTop:border, paddingTop:12, display:"flex", gap:8 }}>
+              <div style={{ marginTop:12, borderTop:border, paddingTop:12, display:"flex", gap:8, flexWrap:"wrap" }}>
                 <button style={{ ...btnGhost, fontSize:12, padding:"6px 14px" }}
                         onClick={()=>setChatBooking(chatBooking?.id===b.id ? null : b)}>
                   {chatBooking?.id===b.id ? (isAr?"إغلاق المحادثة":"Close chat") : `💬 ${isAr?"محادثة":"Chat"}`}
@@ -190,7 +262,23 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
                     {cancellingId===b.id ? "…" : (isAr?"إلغاء الحجز":"Cancel booking")}
                   </button>
                 )}
+                {b.status !== "cancelled" && !b.rating && (
+                  <button style={{ ...btnGhost, fontSize:12, padding:"6px 14px", color:"#fbbf24", borderColor:"rgba(251,191,36,.3)" }}
+                          onClick={()=>setRatingBookingId(ratingBookingId===b.id ? null : b.id)}>
+                    ⭐ {isAr?"قيّم الجلسة":"Rate this session"}
+                  </button>
+                )}
+                {b.rating && (
+                  <div style={{ fontSize:12, color:"#fbbf24", padding:"6px 4px" }}>
+                    {"★".repeat(b.rating)}{"☆".repeat(5-b.rating)}
+                  </div>
+                )}
               </div>
+              {ratingBookingId === b.id && (
+                <ReviewForm booking={b} isAr={isAr} submitting={submittingReview}
+                            onCancel={()=>setRatingBookingId(null)}
+                            onSubmit={(rating, comment)=>submitReview(b, rating, comment)} />
+              )}
               {chatBooking?.id === b.id && (
                 <BookingChat bookingId={b.id} isAr={isAr} currentUid={user?.uid} addToast={addToast} />
               )}
@@ -205,6 +293,41 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
         <BookingModal therapist={selected} isAr={isAr} loading={booking}
                       onClose={()=>setSelected(null)} onSubmit={submitBooking} />
       )}
+    </div>
+  );
+}
+
+function ReviewForm({ booking, isAr, submitting, onCancel, onSubmit }) {
+  const [rating, setRating] = useState(0);
+  const [hover, setHover]   = useState(0);
+  const [comment, setComment] = useState("");
+
+  return (
+    <div style={{ marginTop:10, padding:14, background:"rgba(251,191,36,.05)",
+                  border:"1px solid rgba(251,191,36,.2)", borderRadius:10 }}>
+      <div style={{ fontSize:12.5, color:"#e2e8f0", marginBottom:8, fontWeight:600 }}>
+        {isAr ? `تقييمك لجلستك مع ${booking.therapist_name}` : `Rate your session with ${booking.therapist_name}`}
+      </div>
+      <div style={{ display:"flex", gap:4, marginBottom:10 }}>
+        {[1,2,3,4,5].map(n => (
+          <button key={n} onClick={()=>setRating(n)}
+            onMouseEnter={()=>setHover(n)} onMouseLeave={()=>setHover(0)}
+            style={{ background:"none", border:"none", cursor:"pointer", fontSize:24, padding:0,
+                     color: n <= (hover||rating) ? "#fbbf24" : "#475569" }}>
+            {n <= (hover||rating) ? "★" : "☆"}
+          </button>
+        ))}
+      </div>
+      <textarea value={comment} onChange={e=>setComment(e.target.value)}
+        placeholder={isAr ? "احكيلنا عن تجربتك (اختياري)" : "Tell us about your experience (optional)"}
+        style={{ ...input, minHeight:60, resize:"vertical", marginBottom:10 }} />
+      <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+        <button style={btnGhost} onClick={onCancel} disabled={submitting}>{isAr?"إلغاء":"Cancel"}</button>
+        <button style={btnPrimary} disabled={submitting || rating===0}
+                onClick={()=>onSubmit(rating, comment)}>
+          {submitting ? (isAr?"جاري الإرسال…":"Submitting…") : (isAr?"إرسال التقييم":"Submit review")}
+        </button>
+      </div>
     </div>
   );
 }
@@ -291,18 +414,79 @@ function BookingChat({ bookingId, isAr, currentUid, addToast }) {
 function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
   const [preferredTime, setPreferredTime] = useState("");
   const [notes, setNotes] = useState("");
+  const [slots, setSlots] = useState(null);       // null = loading, [] = none/no template
+  const [hasTemplate, setHasTemplate] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState(null); // ISO string
+
+  useEffect(() => {
+    MarketplaceAPI.getSlots(therapist.id)
+      .then(d => { setSlots(d?.slots || []); setHasTemplate(!!d?.has_template); })
+      .catch(() => { setSlots([]); setHasTemplate(false); });
+  }, [therapist.id]);
+
+  // Group slots by calendar day for a readable picker
+  const slotsByDay = {};
+  (slots || []).forEach(iso => {
+    const d = new Date(iso);
+    const dayKey = d.toDateString();
+    (slotsByDay[dayKey] = slotsByDay[dayKey] || []).push(iso);
+  });
+
+  const fmtDay = (dayKey) => new Date(dayKey).toLocaleDateString(isAr ? "ar-EG" : "en-US", { weekday: "short", month: "short", day: "numeric" });
+  const fmtTime = (iso) => new Date(iso).toLocaleTimeString(isAr ? "ar-EG" : "en-US", { hour: "numeric", minute: "2-digit" });
+
+  const canSubmit = hasTemplate ? !!selectedSlot : true;
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", display:"flex",
                   alignItems:"center", justifyContent:"center", zIndex:1000, padding:20 }}>
-      <div style={{ ...card, width:"100%", maxWidth:420, background:"#111827" }}>
+      <div style={{ ...card, width:"100%", maxWidth:460, background:"#111827", maxHeight:"85vh", overflowY:"auto" }}>
         <div style={{ fontWeight:800, fontSize:16, marginBottom:4 }}>{isAr ? "حجز جلسة مع" : "Book a session with"} {therapist.name}</div>
         <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:16 }}>{money(therapist.session_fee_cents, therapist.currency, isAr)}</div>
 
-        <div style={{ marginBottom:12 }}>
-          <div style={label}>{isAr ? "الميعاد المفضل" : "Preferred time"}</div>
-          <input style={input} placeholder={isAr ? "مثال: الخميس بعد الظهر" : "e.g. Thursday afternoon"}
-                 value={preferredTime} onChange={e=>setPreferredTime(e.target.value)} />
-        </div>
+        {slots === null && (
+          <div style={{ fontSize:12.5, color:"#64748b", marginBottom:16 }}>{isAr?"جاري تحميل المواعيد المتاحة…":"Loading available times…"}</div>
+        )}
+
+        {slots !== null && hasTemplate && (
+          <div style={{ marginBottom:16 }}>
+            <div style={label}>{isAr ? "اختار ميعاد متاح" : "Choose an available time"}</div>
+            {Object.keys(slotsByDay).length === 0 ? (
+              <div style={{ fontSize:12.5, color:"#94a3b8" }}>{isAr?"مفيش مواعيد متاحة قريبًا":"No available slots coming up"}</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:220, overflowY:"auto" }}>
+                {Object.entries(slotsByDay).map(([dayKey, times]) => (
+                  <div key={dayKey}>
+                    <div style={{ fontSize:11, color:"#64748b", fontWeight:700, marginBottom:5 }}>{fmtDay(dayKey)}</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                      {times.map(iso => (
+                        <button key={iso} onClick={()=>setSelectedSlot(iso)}
+                          style={{ padding:"6px 12px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer",
+                            border: selectedSlot===iso ? "1px solid rgba(15,118,110,.6)" : border,
+                            background: selectedSlot===iso ? "rgba(15,118,110,.25)" : "rgba(255,255,255,.03)",
+                            color: selectedSlot===iso ? "#5eead4" : "#cbd5e1" }}>
+                          {fmtTime(iso)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {slots !== null && !hasTemplate && (
+          <div style={{ marginBottom:12 }}>
+            <div style={label}>{isAr ? "الميعاد المفضل" : "Preferred time"}</div>
+            <input style={input} placeholder={isAr ? "مثال: الخميس بعد الظهر" : "e.g. Thursday afternoon"}
+                   value={preferredTime} onChange={e=>setPreferredTime(e.target.value)} />
+            <div style={{ fontSize:11, color:"#64748b", marginTop:4 }}>
+              {isAr ? "المعالج ده لسه مسجلش مواعيد ثابتة — هيتواصل معاك لتحديد الميعاد" : "This therapist hasn't set fixed availability yet — they'll follow up to confirm a time"}
+            </div>
+          </div>
+        )}
+
         <div style={{ marginBottom:16 }}>
           <div style={label}>{isAr ? "ملاحظات (اختياري)" : "Notes (optional)"}</div>
           <textarea style={{ ...input, minHeight:70, resize:"vertical" }}
@@ -310,7 +494,8 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
         </div>
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <button style={btnGhost} onClick={onClose} disabled={loading}>{isAr ? "إلغاء" : "Cancel"}</button>
-          <button style={btnPrimary} onClick={()=>onSubmit(preferredTime, notes)} disabled={loading}>
+          <button style={{ ...btnPrimary, opacity: canSubmit ? 1 : .5 }} disabled={loading || !canSubmit}
+                  onClick={()=>onSubmit(hasTemplate ? fmtDay(new Date(selectedSlot).toDateString())+" "+fmtTime(selectedSlot) : preferredTime, notes, selectedSlot)}>
             {loading ? (isAr ? "جاري الحجز…" : "Booking…") : (isAr ? "تأكيد الحجز والدفع" : "Confirm & Pay")}
           </button>
         </div>
@@ -320,16 +505,75 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
 }
 
 function AdminMarketplaceManager({ isAr, addToast, adminUid }) {
-  const [subTab, setSubTab] = useState("therapists"); // therapists | bookings
+  const [subTab, setSubTab] = useState("therapists"); // therapists | bookings | payouts
   return (
     <div>
       <div style={{ display:"flex", gap:8, marginBottom:16 }}>
         <Tab active={subTab==="therapists"} onClick={()=>setSubTab("therapists")}>{isAr?"الأخصائيون":"Therapists"}</Tab>
         <Tab active={subTab==="bookings"}   onClick={()=>setSubTab("bookings")}>{isAr?"الحجوزات":"Bookings"}</Tab>
+        <Tab active={subTab==="payouts"}    onClick={()=>setSubTab("payouts")}>{isAr?"المستحقات":"Payouts"}</Tab>
       </div>
-      {subTab === "therapists"
-        ? <AdminTherapistManager isAr={isAr} addToast={addToast} />
-        : <AdminBookingsManager isAr={isAr} addToast={addToast} adminUid={adminUid} />}
+      {subTab === "therapists" && <AdminTherapistManager isAr={isAr} addToast={addToast} />}
+      {subTab === "bookings"   && <AdminBookingsManager isAr={isAr} addToast={addToast} adminUid={adminUid} />}
+      {subTab === "payouts"    && <AdminPayoutsManager isAr={isAr} addToast={addToast} />}
+    </div>
+  );
+}
+
+function AdminPayoutsManager({ isAr, addToast }) {
+  const [payouts, setPayouts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [payingId, setPayingId] = useState(null);
+
+  const load = () => {
+    setLoading(true);
+    MarketplaceAPI.adminPayouts()
+      .then(d => setPayouts(d?.payouts || []))
+      .catch(e => addToast?.(e.message, "error"))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
+
+  const markPaid = async (p) => {
+    if (!window.confirm(isAr
+      ? `تأكيد إنك دفعت ${money(p.payout_cents, p.currency, isAr)} لـ ${p.therapist_name}؟`
+      : `Confirm you've paid ${money(p.payout_cents, p.currency, isAr)} to ${p.therapist_name}?`)) return;
+    setPayingId(p.therapist_id);
+    try {
+      await MarketplaceAPI.adminMarkPaid(p.booking_ids);
+      addToast?.(isAr ? "اتسجل الدفع" : "Marked as paid", "success");
+      load();
+    } catch (e) {
+      addToast?.(e.message, "error");
+    } finally { setPayingId(null); }
+  };
+
+  if (loading) return <div style={{ color:"#64748b" }}>{isAr?"جاري التحميل…":"Loading…"}</div>;
+  if (payouts.length === 0) return <div style={{ ...card, textAlign:"center", color:"#64748b" }}>{isAr?"مفيش مستحقات معلقة":"No pending payouts"}</div>;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ fontSize:11.5, color:"#64748b", marginBottom:2 }}>
+        {isAr ? "المبالغ دي محسوبة بعد خصم عمولة المنصة، ومش بتتحول تلقائيًا — لازم تحوّلها يدويًا ثم تعلّمها كمدفوعة."
+              : "Amounts are net of the platform commission and aren't auto-transferred — pay the therapist manually, then mark it paid here."}
+      </div>
+      {payouts.map(p => (
+        <div key={p.therapist_id} style={{ ...card, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontWeight:700 }}>{p.therapist_name}</div>
+            <div style={{ fontSize:12, color:"#64748b" }}>
+              {p.booking_count} {isAr?"جلسة":"session(s)"} · {isAr?"إجمالي":"gross"} {money(p.gross_cents, p.currency, isAr)}
+            </div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontWeight:800, color:"#5eead4", fontSize:16 }}>{money(p.payout_cents, p.currency, isAr)}</div>
+            <button style={{ ...btnPrimary, fontSize:11.5, padding:"5px 12px", marginTop:6 }}
+                    onClick={()=>markPaid(p)} disabled={payingId===p.therapist_id}>
+              {payingId===p.therapist_id ? "…" : (isAr?"تم الدفع":"Mark as paid")}
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -383,7 +627,23 @@ function AdminTherapistManager({ isAr, addToast }) {
   const [list, setList] = useState([]);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name:"", city:"", bio:"", specialties:"", session_fee_cents:"", currency:"EGP", years_experience:"" });
+  const [availability, setAvailability] = useState({}); // {mon:["09:00",...], ...}
   const [saving, setSaving] = useState(false);
+
+  const DAYS = [
+    { key:"mon", en:"Mon", ar:"إثنين" }, { key:"tue", en:"Tue", ar:"ثلاثاء" },
+    { key:"wed", en:"Wed", ar:"أربعاء" }, { key:"thu", en:"Thu", ar:"خميس" },
+    { key:"fri", en:"Fri", ar:"جمعة" }, { key:"sat", en:"Sat", ar:"سبت" }, { key:"sun", en:"Sun", ar:"أحد" },
+  ];
+  const SLOT_TIMES = ["09:00","11:00","13:00","15:00","17:00","19:00"];
+
+  const toggleSlot = (day, time) => {
+    setAvailability(prev => {
+      const cur = prev[day] || [];
+      const next = cur.includes(time) ? cur.filter(t=>t!==time) : [...cur, time].sort();
+      return { ...prev, [day]: next };
+    });
+  };
 
   const load = () => MarketplaceAPI.adminListTherapists().then(d=>setList(d?.therapists||[])).catch(()=>{});
   useEffect(() => { load(); }, []);
@@ -400,8 +660,10 @@ function AdminTherapistManager({ isAr, addToast }) {
         session_fee_cents: Math.round(parseFloat(form.session_fee_cents) * 100),
         years_experience: parseInt(form.years_experience) || 0,
         specialties: form.specialties.split(",").map(s=>s.trim()).filter(Boolean),
+        availability_template: Object.fromEntries(Object.entries(availability).filter(([,v])=>v.length>0)),
       });
       setForm({ name:"", city:"", bio:"", specialties:"", session_fee_cents:"", currency:"EGP", years_experience:"" });
+      setAvailability({});
       setShowNew(false);
       load();
       addToast?.(isAr ? "تمت الإضافة" : "Therapist added", "success");
@@ -432,6 +694,33 @@ function AdminTherapistManager({ isAr, addToast }) {
           <div><div style={label}>{isAr?"سنوات الخبرة":"Years experience"}</div><input style={input} type="number" value={form.years_experience} onChange={e=>setForm(f=>({...f,years_experience:e.target.value}))}/></div>
           <div style={{ gridColumn:"1 / -1" }}><div style={label}>{isAr?"التخصصات (مفصولة بفاصلة)":"Specialties (comma-separated)"}</div><input style={input} value={form.specialties} onChange={e=>setForm(f=>({...f,specialties:e.target.value}))}/></div>
           <div style={{ gridColumn:"1 / -1" }}><div style={label}>{isAr?"نبذة":"Bio"}</div><textarea style={{...input,minHeight:60}} value={form.bio} onChange={e=>setForm(f=>({...f,bio:e.target.value}))}/></div>
+          <div style={{ gridColumn:"1 / -1" }}>
+            <div style={label}>{isAr?"المواعيد المتاحة أسبوعيًا (اختياري)":"Weekly availability (optional)"}</div>
+            <div style={{ fontSize:11, color:"#64748b", marginBottom:8 }}>
+              {isAr?"من غير ده، المريض هيكتب ميعاده المفضل نص حر وهيتم التواصل معاه.":"Without this, patients type a free-text preferred time and get followed up with instead."}
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {DAYS.map(d => (
+                <div key={d.key} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ width:44, fontSize:11.5, color:"#94a3b8", flexShrink:0 }}>{isAr?d.ar:d.en}</div>
+                  <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                    {SLOT_TIMES.map(t => {
+                      const active = (availability[d.key]||[]).includes(t);
+                      return (
+                        <button key={t} type="button" onClick={()=>toggleSlot(d.key,t)}
+                          style={{ padding:"3px 8px", borderRadius:6, fontSize:10.5, fontWeight:600, cursor:"pointer",
+                            border: active ? "1px solid rgba(15,118,110,.5)" : border,
+                            background: active ? "rgba(15,118,110,.2)" : "transparent",
+                            color: active ? "#5eead4" : "#64748b" }}>
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
           <div style={{ gridColumn:"1 / -1", textAlign:"right" }}>
             <button style={btnPrimary} onClick={save} disabled={saving}>{saving ? "…" : (isAr?"حفظ":"Save")}</button>
           </div>

@@ -197,3 +197,17 @@ FLASK_ENV=production
 5. **Email:** سجّل account جديد → لو وصل welcome email → OK
 6. **PDF:** اضغط Download PDF بعد session → لو نزل PDF → OK
 
+---
+
+## ⏰ Cron Jobs (خارجية — مش Celery)
+
+الـ endpoints دي مصممة تتنادى من cron خارجي (زي cron-job.org أو Railway's built-in cron) مش من كود التطبيق نفسه — عشان كده لازم تتظبط يدويًا بعد الـ deploy:
+
+| Endpoint | التكرار المقترح | الغرض |
+|---|---|---|
+| `POST /api/push/streak-reminder` | كل ساعة | تذكير المستخدم بسلسلة الالتزام في وقته المعتاد (smart scheduling) |
+| `POST /api/push/symptom-pattern-alerts` | أسبوعيًا | لو محرك ربط الأعراض لقى نمط واضح، يقترح حجز مع معالج |
+
+**الأمان**: الاتنين محميين بـ header `X-Cron-Secret` لازم يطابق قيمة `CRON_SECRET` في Railway env vars. من غير الهيدر ده، الـ endpoint بيرفض الطلب (401) أو بيقول "مش متظبط" (503) لو `CRON_SECRET` نفسه مش متظبط.
+
+مثال إعداد على cron-job.org: URL = `https://YOUR-BACKEND.railway.app/api/push/symptom-pattern-alerts`, Method = POST, Header = `X-Cron-Secret: <نفس قيمة CRON_SECRET>`.
