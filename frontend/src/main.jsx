@@ -1,6 +1,5 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import "./index.css";
 
@@ -124,13 +123,15 @@ if (path.startsWith("/report/")) {
     );
   });
 } else {
-  createRoot(document.getElementById("root")).render(
-    <StrictMode>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </StrictMode>
-  );
+  import("./App.jsx").then(({ default: App }) => {
+    createRoot(document.getElementById("root")).render(
+      <StrictMode>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </StrictMode>
+    );
+  });
 }
 
 // ── PostHog Product Analytics ─────────────────────────────────────
