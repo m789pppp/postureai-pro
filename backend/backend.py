@@ -4421,7 +4421,7 @@ def generate_pdf_en(sd):
     for lbl, val, col in kpi_items:
         kpi_cells.append(Paragraph(
             f'<font color="#94a3b8" size="7">{lbl}</font><br/>'
-            f'<b><font size="14" color="#{col.hexval()[1:]}">{val}</font></b>',
+            f'<b><font size="14" color="#{col.hexval()[2:]}">{val}</font></b>',
             ps(f"kpi{lbl}", leading=18, alignment=TA_CENTER)))
 
     ov_row = Table([[ring, Table([kpi_cells], colWidths=[uw*.145]*5)]],
@@ -4976,8 +4976,8 @@ def enhance_low_light(img_bgr: np.ndarray) -> tuple:
 
 # ── API ENDPOINTS ──────────────────────────────────────────────────
 
-@require_auth
 @app.route("/api/session/snapshot", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 def add_snapshot():
     try:
@@ -5512,8 +5512,8 @@ def analyze():
         import traceback
         return safe_error(e)
 
-@require_auth
 @app.route("/api/analyze/job/<job_id>", methods=["GET"])
+@require_auth
 @require_auth
 @limiter.limit("120 per minute")
 def analyze_job_status(job_id):
@@ -5603,8 +5603,8 @@ def pdf_endpoint():
         import traceback
         return safe_error(e)
 
-@require_auth
 @app.route("/api/session/start", methods=["POST"])
+@require_auth
 @limiter.limit("60 per minute")
 def start_session():
     try:
@@ -5680,8 +5680,8 @@ def start_session():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/session/<sid>", methods=["GET"])
+@require_auth
 @limiter.limit("120 per minute")
 def get_session(sid):
     try:
@@ -5769,8 +5769,8 @@ def get_session(sid):
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/notify/slack", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 def notify_slack():
     try:
@@ -5780,8 +5780,8 @@ def notify_slack():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/notify/teams", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 def notify_teams():
     try:
@@ -5791,8 +5791,8 @@ def notify_teams():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/notify/whatsapp", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 def notify_whatsapp():
     try:
@@ -6559,7 +6559,6 @@ def mark_tour_complete():
 
 
 # ── Merged from v10 ─────────────────────────────────────────────
-@require_auth
 
 
 
@@ -10750,8 +10749,8 @@ def referral_status():
     except Exception as e:
         return safe_error(e)
 
-@app.route("/api/system/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
+@app.route("/api/system/health", methods=["GET"])
 def health():
     # Fast liveness probe — do NOT call external APIs here
     local_llm_ok = bool(OLLAMA_URL)
@@ -11363,8 +11362,8 @@ def _record_latency(ms: float):
         pass
 
 
-@require_auth
 @app.route("/api/paymob/create-payment", methods=["POST"])
+@require_auth
 @limiter.limit("15 per minute")
 def paymob_create_payment():
     try:
@@ -11657,8 +11656,8 @@ def paymob_webhook():
         print(f"[Webhook] Error: {e}\n{traceback.format_exc()}", flush=True)
         return safe_error(e)
 
-@require_auth
 @app.route("/api/notify/payment", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 def notify_payment():
     try:
@@ -11668,8 +11667,8 @@ def notify_payment():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/notify/confirmed", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 def notify_confirmed():
     try:
@@ -11679,8 +11678,8 @@ def notify_confirmed():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/hr/import-employees", methods=["POST"])
+@require_auth
 @require_auth
 @require_hr
 @limiter.limit("10 per minute")
@@ -11853,8 +11852,8 @@ def parse_csv_preview():
         return safe_error(e)
 
 
-@require_auth
 @app.route("/api/hr/monthly-report", methods=["POST"])
+@require_auth
 @limiter.limit("5 per minute")
 @require_hr
 def monthly_hr_report():
@@ -12136,8 +12135,8 @@ def _send_email_smtp(to_email:str, subject:str, html_body:str):
         return False
 
 
-@require_auth
 @app.route("/api/coupon/validate", methods=["POST"])
+@require_auth
 @limiter.limit("20 per minute")
 def coupon_validate():
     try:
@@ -12150,8 +12149,8 @@ def coupon_validate():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/coupon/use", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 def coupon_use():
     try:
@@ -12168,8 +12167,8 @@ def coupon_use():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/work-hours", methods=["GET"])
+@require_auth
 @limiter.limit("60 per minute")
 def work_hours():
     now = datetime.now()
@@ -12182,8 +12181,8 @@ def work_hours():
         "is_weekday":    now.weekday() < 5,
     })
 
-@require_auth
 @app.route("/api/gemini", methods=["POST"])
+@require_auth
 @limiter.limit("20 per minute")
 def gemini_proxy():
     """
@@ -12222,8 +12221,8 @@ def gemini_proxy():
         return jsonify({"error":str(e),"text":None}), 500
 
 
-@require_auth
 @app.route("/api/gemini/job/<job_id>", methods=["GET"])
+@require_auth
 @limiter.limit("120 per minute")
 def gemini_job_status(job_id):
     """Poll for Gemini job result. Returns {status, text} or {status, error}."""
@@ -12237,8 +12236,8 @@ def gemini_job_status(job_id):
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
-@require_auth
 @app.route("/api/gemini/sync", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 def gemini_proxy_sync():
     """
@@ -12258,8 +12257,8 @@ def gemini_proxy_sync():
     except Exception as e:
         return jsonify({"error":str(e),"text":None}), 500
 
-@require_auth
 @app.route("/api/user/export", methods=["POST"])
+@require_auth
 @limiter.limit("5 per hour")
 def user_export():
     try:
@@ -12272,8 +12271,8 @@ def user_export():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/session/delete", methods=["POST"])
+@require_auth
 @limiter.limit("60 per minute")
 def delete_session():
     try:
@@ -12286,8 +12285,8 @@ def delete_session():
         return safe_error(e)
 
 
-@require_auth
 @app.route("/api/session/sync", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 def sync_offline_sessions():
     """Sync sessions captured offline by the service worker.
@@ -12331,8 +12330,8 @@ def sync_offline_sessions():
     })
 
 
-@require_auth
 @app.route("/api/email/invoice", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 def send_invoice_ep():
     try:
@@ -12349,8 +12348,8 @@ def send_invoice_ep():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/email/welcome", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 def send_welcome_ep():
     try:
@@ -12590,8 +12589,8 @@ def admin_delete_coupon(code):
 
 
 # ── User payments history ─────────────────────────────────────────
-@require_auth
 @app.route("/api/user/payments", methods=["GET"])
+@require_auth
 @limiter.limit("30 per minute")
 @require_auth
 def user_payments():
@@ -12606,8 +12605,8 @@ def user_payments():
 
 
 # ── Cancel subscription ────────────────────────────────────────────
-@require_auth
 @app.route("/api/subscription/cancel", methods=["POST"])
+@require_auth
 @limiter.limit("5 per hour")
 @require_auth
 def subscription_cancel():
@@ -13116,8 +13115,8 @@ def _check_risk_threshold(uid: str, score: int, threshold: int = 45, duration_s:
     else:
         _risk_tracker.pop(uid, None)
 
-@require_auth
 @app.route("/api/webhooks", methods=["GET"])
+@require_auth
 @require_auth
 @limiter.limit("60 per minute")
 def list_webhooks():
@@ -13125,8 +13124,8 @@ def list_webhooks():
     user_hooks = {k: v for k,v in _webhooks.items() if v.get("uid") == uid}
     return jsonify({"webhooks": list(user_hooks.values())})
 
-@require_auth
 @app.route("/api/webhooks", methods=["POST"])
+@require_auth
 @limiter.limit("20 per minute")
 def create_webhook():
     try:
@@ -13150,8 +13149,8 @@ def create_webhook():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/webhooks/<wid>", methods=["DELETE"])
+@require_auth
 @limiter.limit("20 per minute")
 def delete_webhook(wid):
     if wid in _webhooks:
@@ -13159,8 +13158,8 @@ def delete_webhook(wid):
         return jsonify({"ok": True})
     return jsonify({"error": "Not found"}), 404
 
-@require_auth
 @app.route("/api/webhooks/<wid>/test", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 def test_webhook(wid):
     wh = _webhooks.get(wid)
@@ -13174,8 +13173,8 @@ def test_webhook(wid):
     _threading.Thread(target=_deliver_webhook, args=[wh, payload], daemon=True).start()
     return jsonify({"ok": True, "message": "Test delivery queued"})
 
-@require_auth
 @app.route("/api/webhooks/logs", methods=["GET"])
+@require_auth
 @limiter.limit("60 per minute")
 def webhook_logs():
     limit_n = min(int(request.args.get("limit", 50)), 200)
@@ -13183,8 +13182,8 @@ def webhook_logs():
     logs    = [l for l in _webhook_logs if not wid or l.get("webhook_id") == wid]
     return jsonify({"logs": list(reversed(logs))[:limit_n], "total": len(logs)})
 
-@require_auth
 @app.route("/api/webhooks/risk-check", methods=["POST"])
+@require_auth
 @limiter.limit("200 per minute")
 def risk_check():
     """Call this after every analysis frame to trigger threshold webhooks."""
@@ -13245,8 +13244,8 @@ try:
 except Exception as _e:
     print(f"⚠️  Custom domain routes skipped: {_e}")
 
-@require_auth
 @app.route("/api/audit/log", methods=["POST"])
+@require_auth
 @limiter.limit("200 per minute")
 def audit_log_ep():
     try:
@@ -13262,8 +13261,8 @@ def audit_log_ep():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/audit/logs", methods=["GET"])
+@require_auth
 @limiter.limit("30 per minute")
 @require_admin
 def get_audit_logs():
@@ -13294,8 +13293,8 @@ def get_audit_logs():
         return safe_error(e)
 
 # ── Admin: Set Firebase custom claims (admin/hr) ──────────────────
-@require_auth
 @app.route("/api/admin/set-claims", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 @require_admin
 def set_user_claims():
@@ -13324,8 +13323,8 @@ def set_user_claims():
 # ══════════════════════════════════════════════════════════════════
 # AI POSTURE COACH — Gemini Streaming Proxy
 # ══════════════════════════════════════════════════════════════════
-@require_auth
 @app.route("/api/coach/chat", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 def coach_chat():
     try:
@@ -13547,8 +13546,8 @@ ACHIEVEMENTS = [
     {"id": "perfect_week",    "name": "Perfect Week",     "name_ar": "أسبوع مثالي",         "icon": "✨", "xp": 350, "req": {"perfect_week": True}},
 ]
 
-@require_auth
 @app.route("/api/gamification/compute", methods=["POST"])
+@require_auth
 @limiter.limit("60 per minute")
 def compute_gamification():
     try:
@@ -13623,8 +13622,8 @@ def compute_gamification():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/gamification/leaderboard", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 def compute_leaderboard():
     """Compute leaderboard from submitted employee data."""
@@ -13681,7 +13680,6 @@ def compute_leaderboard():
 # ══════════════════════════════════════════════════════════════════
 # HEATMAP ANALYTICS
 # ══════════════════════════════════════════════════════════════════
-@require_auth
 
 
 @app.route("/api/explain", methods=["POST"])
@@ -14286,8 +14284,8 @@ def _require_api_key(f):
         return f(*args, **kwargs)
     return decorated
 
-@require_auth
 @app.route("/api/keys/create", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 @require_admin
 def create_api_key():
@@ -14313,16 +14311,16 @@ def create_api_key():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/v1/posture/analyze", methods=["POST"])
+@require_auth
 @limiter.limit("100 per minute")
 @_require_api_key
 def api_v1_analyze():
     """Public API endpoint — same as /api/analyze but requires API key."""
     return analyze()
 
-@require_auth
 @app.route("/api/v1/reports/summary", methods=["GET"])
+@require_auth
 @limiter.limit("60 per minute")
 @_require_api_key
 def api_v1_summary():
@@ -14339,8 +14337,8 @@ def api_v1_summary():
 # ══════════════════════════════════════════════════════════════════
 # WEEKLY EMAIL — automated
 # ══════════════════════════════════════════════════════════════════
-@require_auth
 @app.route("/api/email/weekly-progress", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 def weekly_progress_email():
     try:
@@ -14422,8 +14420,8 @@ def weekly_progress_email():
 # ══════════════════════════════════════════════════════════════════
 # HEATMAP PDF SECTION (add to existing PDF)
 # ══════════════════════════════════════════════════════════════════
-@require_auth
 @app.route("/api/analytics/posture-insights", methods=["POST"])
+@require_auth
 @limiter.limit("20 per minute")
 @require_tier("standard")
 def posture_insights():
@@ -14596,8 +14594,8 @@ def _compute_posture_stats(sessions: list) -> dict:
     }
 
 
-@require_auth
 @app.route("/api/ai/executive-summary", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 @require_tier("professional")
 def ai_executive_summary():
@@ -14666,8 +14664,8 @@ Return ONLY valid JSON (no markdown):
         return safe_error(e)
 
 
-@require_auth
 @app.route("/api/ai/predictive", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 @require_tier("professional")
 def ai_predictive():
@@ -14739,8 +14737,8 @@ Return ONLY JSON:
         return safe_error(e)
 
 
-@require_auth
 @app.route("/api/ai/weekly-insights", methods=["POST"])
+@require_auth
 @limiter.limit("20 per minute")
 @require_tier("professional")
 def ai_weekly_insights():
@@ -14813,8 +14811,8 @@ Return ONLY JSON:
         return safe_error(e)
 
 
-@require_auth
 @app.route("/api/ai/department-report", methods=["POST"])
+@require_auth
 @limiter.limit("5 per minute")
 @require_tier("professional")
 def ai_department_report():
@@ -14910,8 +14908,8 @@ Return ONLY JSON:
         return safe_error(e)
 
 
-@require_auth
 @app.route("/api/ai/fatigue-analysis", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 @require_tier("professional")
 def ai_fatigue_analysis():
@@ -14990,8 +14988,8 @@ Return ONLY JSON:
 STRIPE_SECRET_KEY     = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
-@require_auth
 @app.route("/api/stripe/create-session", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 def stripe_create_session():
     try:
@@ -15038,8 +15036,8 @@ def stripe_create_session():
     except Exception as e:
         return safe_error(e)
 
-@require_auth
 @app.route("/api/stripe/portal", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 def stripe_portal():
     try:
@@ -15285,9 +15283,9 @@ def _compute_billing_analytics(payments: list) -> dict:
 
 
 # ── Dunning: failed payment recovery ────────────────────────────
+@app.route("/api/billing/dunning/send", methods=["POST"])
 @require_auth
 @require_admin
-@app.route("/api/billing/dunning/send", methods=["POST"])
 @limiter.limit("20 per minute")
 def billing_dunning_send():
     """
@@ -15365,8 +15363,8 @@ def billing_dunning_send():
 
 
 # ── Proration calculator ─────────────────────────────────────────
-@require_auth
 @app.route("/api/billing/prorate", methods=["POST"])
+@require_auth
 @limiter.limit("30 per minute")
 def billing_prorate():
     """
@@ -15406,8 +15404,8 @@ def billing_prorate():
 
 
 # ── Usage-based billing tracker ──────────────────────────────────
-@require_auth
 @app.route("/api/billing/usage", methods=["GET"])
+@require_auth
 @limiter.limit("60 per minute")
 def billing_usage():
     """
@@ -15482,8 +15480,8 @@ def billing_usage():
 
 
 # ── Increment usage counter ──────────────────────────────────────
-@require_auth
 @app.route("/api/billing/usage/increment", methods=["POST"])
+@require_auth
 @limiter.limit("120 per minute")
 def billing_usage_increment():
     """Increment a usage counter for the authenticated user."""
@@ -15514,9 +15512,9 @@ def billing_usage_increment():
 
 
 # ── Billing analytics (admin) ────────────────────────────────────
+@app.route("/api/billing/analytics", methods=["GET"])
 @require_auth
 @require_admin
-@app.route("/api/billing/analytics", methods=["GET"])
 @limiter.limit("30 per minute")
 def billing_analytics():
     """
@@ -15535,8 +15533,8 @@ def billing_analytics():
 
 
 # ── Invoice PDF generator ────────────────────────────────────────
-@require_auth
 @app.route("/api/billing/invoice/pdf", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 @require_tier("standard")
 def billing_invoice_pdf():
@@ -15711,8 +15709,8 @@ def billing_invoice_pdf():
 
 
 # ── Subscription upgrade/downgrade mid-cycle ─────────────────────
-@require_auth
 @app.route("/api/billing/change-plan", methods=["POST"])
+@require_auth
 @limiter.limit("5 per minute")
 def billing_change_plan():
     """
@@ -15837,8 +15835,8 @@ def add_security_headers(response):
 # ══════════════════════════════════════════════════════════════════
 # ADVANCED REPORTS SYSTEM
 # ══════════════════════════════════════════════════════════════════
-@require_auth
 @app.route("/api/reports/user", methods=["POST"])
+@require_auth
 @limiter.limit("10 per minute")
 @require_auth
 def user_report():
@@ -16027,8 +16025,8 @@ Focus on actionable recommendations. {"Respond in Arabic." if lang=="ar" else "B
         import traceback
         return safe_error(e)
 
-@require_auth
 @app.route("/api/reports/weekly-summary", methods=["POST"])
+@require_auth
 @limiter.limit("20 per minute")
 def weekly_summary():
     """JSON endpoint for weekly summary — used by email system."""
@@ -16054,7 +16052,6 @@ def weekly_summary():
         return safe_error(e)
 
 # ── Send invite email ─────────────────────────────────────────────
-@require_auth
 
 @app.route("/api/org/create-invite", methods=["POST"])
 @require_auth
@@ -16172,7 +16169,7 @@ def llm_proxy():
     Used by AI Coach, AI Insights, Predictive AI.
     No auth required — rate limited by IP via Vercel.
     """
-    if req.method == "OPTIONS":
+    if request.method == "OPTIONS":
         resp = jsonify({})
         resp.headers["Access-Control-Allow-Origin"]  = "*"
         resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
@@ -16180,7 +16177,7 @@ def llm_proxy():
         return resp, 204
 
     try:
-        data = req.get_json(force=True) or {}
+        data = request.get_json(force=True) or {}
         messages     = data.get("messages", [])
         system_prompt = data.get("system_prompt", "You are Dr. Corvus, a clinical physiotherapy AI.")
         max_tokens   = int(data.get("max_tokens", 700))
