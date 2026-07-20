@@ -303,6 +303,10 @@ export const MarketplaceAPI = {
   adminUpdateTherapist: (id, data) => apiFetch(`/admin/marketplace/therapists/${id}`, { method: "PATCH", body: data }),
   /** Admin: all bookings across all patients. */
   adminListBookings:    ()     => apiFetch("/admin/marketplace/bookings"),
+  /** Admin: amounts owed to each therapist from confirmed, unpaid bookings. */
+  adminPayouts:         ()     => apiFetch("/admin/marketplace/payouts"),
+  /** Admin: mark a batch of bookings as paid out. */
+  adminMarkPaid:        (bookingIds) => apiFetch("/admin/marketplace/payouts/mark-paid", { method: "POST", body: { booking_ids: bookingIds } }),
 
   /** Booking-scoped chat: patient (owner) or admin can read/post. */
   getMessages:  (bookingId)       => apiFetch(`/marketplace/bookings/${bookingId}/messages`),
