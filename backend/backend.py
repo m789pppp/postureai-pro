@@ -16305,6 +16305,73 @@ def admin_list_bookings():
         return safe_error(e)
 
 
+@app.route("/api/admin/marketplace/payouts", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("30 per minute")
+def admin_marketplace_payouts():
+    """Aggregates what's owed to each therapist: confirmed (paid-by-patient)
+    bookings whose payout_status is still 'pending', grouped by therapist.
+    commission_pct/payout_amount_cents were snapshotted at booking time, so
+    this reflects the rate that applied when each booking was made."""
+    try:
+        db   = firestore.client()
+        docs = (db.collection("marketplace_bookings")
+                  .where("status", "==", "confirmed")
+                  .where("payout_status", "==", "pending")
+                  .limit(500).stream())
+        by_therapist = {}
+        for d in docs:
+            b = d.to_dict()
+            tid = b.get("therapist_id")
+            if not tid:
+                continue
+            g_ = by_therapist.setdefault(tid, {
+                "therapist_id": tid,
+                "therapist_name": b.get("therapist_name", ""),
+                "currency": b.get("currency", "EGP"),
+                "booking_count": 0,
+                "gross_cents": 0,
+                "payout_cents": 0,
+                "booking_ids": [],
+            })
+            g_["booking_count"]  += 1
+            g_["gross_cents"]    += b.get("amount_cents", 0)
+            g_["payout_cents"]   += b.get("payout_amount_cents", 0)
+            g_["booking_ids"].append(d.id)
+        return jsonify({"payouts": list(by_therapist.values())})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/marketplace/payouts/mark-paid", methods=["POST"])
+@require_auth
+@require_admin
+@limiter.limit("20 per minute")
+def admin_marketplace_mark_paid():
+    """Marks a batch of bookings (normally: everything owed to one
+    therapist right now) as paid out, in one Firestore batch write so a
+    partial failure can't leave some bookings marked paid and others not."""
+    try:
+        data = request.get_json(force=True) or {}
+        booking_ids = data.get("booking_ids") or []
+        if not booking_ids or not isinstance(booking_ids, list):
+            return jsonify({"error": "booking_ids (array) required"}), 400
+        if len(booking_ids) > 500:
+            return jsonify({"error": "too many booking_ids in one batch (max 500)"}), 400
+
+        db    = firestore.client()
+        batch = db.batch()
+        paid_at = datetime.utcnow().isoformat()+"Z"
+        for bid in booking_ids:
+            ref = db.collection("marketplace_bookings").document(bid)
+            batch.update(ref, {"payout_status": "paid", "paid_out_at": paid_at, "paid_out_by": g.uid})
+        batch.commit()
+        return jsonify({"ok": True, "marked": len(booking_ids)})
+    except Exception as e:
+        return safe_error(e)
+
+
 # ── Patient-facing: browse + book ─────────────────────────────────
 @app.route("/api/marketplace/therapists", methods=["GET"])
 @require_auth
@@ -16442,6 +16509,7 @@ def marketplace_create_booking():
                 return jsonify({"error": "that slot was just booked by someone else — please pick another"}), 409
 
         booking_ref = db.collection("marketplace_bookings").document()
+        commission_pct = float(os.getenv("MARKETPLACE_COMMISSION_PCT", "20"))
         booking = {
             "therapist_id":   therapist_id,
             "therapist_name": therapist.get("name", ""),
@@ -16453,6 +16521,11 @@ def marketplace_create_booking():
             "currency":       currency,
             "status":         "pending_payment",   # pending_payment | confirmed | cancelled
             "created_at":     datetime.utcnow().isoformat()+"Z",
+            # Snapshotted at booking time so a later commission-rate change
+            # doesn't retroactively alter what's owed on old bookings.
+            "commission_pct":     commission_pct,
+            "payout_amount_cents": round(amount_cents * (1 - commission_pct/100)),
+            "payout_status":      "pending",   # pending | paid — only meaningful once status=confirmed
         }
 
         if not PAYMOB_SECRET_KEY:

@@ -505,16 +505,75 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
 }
 
 function AdminMarketplaceManager({ isAr, addToast, adminUid }) {
-  const [subTab, setSubTab] = useState("therapists"); // therapists | bookings
+  const [subTab, setSubTab] = useState("therapists"); // therapists | bookings | payouts
   return (
     <div>
       <div style={{ display:"flex", gap:8, marginBottom:16 }}>
         <Tab active={subTab==="therapists"} onClick={()=>setSubTab("therapists")}>{isAr?"الأخصائيون":"Therapists"}</Tab>
         <Tab active={subTab==="bookings"}   onClick={()=>setSubTab("bookings")}>{isAr?"الحجوزات":"Bookings"}</Tab>
+        <Tab active={subTab==="payouts"}    onClick={()=>setSubTab("payouts")}>{isAr?"المستحقات":"Payouts"}</Tab>
       </div>
-      {subTab === "therapists"
-        ? <AdminTherapistManager isAr={isAr} addToast={addToast} />
-        : <AdminBookingsManager isAr={isAr} addToast={addToast} adminUid={adminUid} />}
+      {subTab === "therapists" && <AdminTherapistManager isAr={isAr} addToast={addToast} />}
+      {subTab === "bookings"   && <AdminBookingsManager isAr={isAr} addToast={addToast} adminUid={adminUid} />}
+      {subTab === "payouts"    && <AdminPayoutsManager isAr={isAr} addToast={addToast} />}
+    </div>
+  );
+}
+
+function AdminPayoutsManager({ isAr, addToast }) {
+  const [payouts, setPayouts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [payingId, setPayingId] = useState(null);
+
+  const load = () => {
+    setLoading(true);
+    MarketplaceAPI.adminPayouts()
+      .then(d => setPayouts(d?.payouts || []))
+      .catch(e => addToast?.(e.message, "error"))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
+
+  const markPaid = async (p) => {
+    if (!window.confirm(isAr
+      ? `تأكيد إنك دفعت ${money(p.payout_cents, p.currency, isAr)} لـ ${p.therapist_name}؟`
+      : `Confirm you've paid ${money(p.payout_cents, p.currency, isAr)} to ${p.therapist_name}?`)) return;
+    setPayingId(p.therapist_id);
+    try {
+      await MarketplaceAPI.adminMarkPaid(p.booking_ids);
+      addToast?.(isAr ? "اتسجل الدفع" : "Marked as paid", "success");
+      load();
+    } catch (e) {
+      addToast?.(e.message, "error");
+    } finally { setPayingId(null); }
+  };
+
+  if (loading) return <div style={{ color:"#64748b" }}>{isAr?"جاري التحميل…":"Loading…"}</div>;
+  if (payouts.length === 0) return <div style={{ ...card, textAlign:"center", color:"#64748b" }}>{isAr?"مفيش مستحقات معلقة":"No pending payouts"}</div>;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ fontSize:11.5, color:"#64748b", marginBottom:2 }}>
+        {isAr ? "المبالغ دي محسوبة بعد خصم عمولة المنصة، ومش بتتحول تلقائيًا — لازم تحوّلها يدويًا ثم تعلّمها كمدفوعة."
+              : "Amounts are net of the platform commission and aren't auto-transferred — pay the therapist manually, then mark it paid here."}
+      </div>
+      {payouts.map(p => (
+        <div key={p.therapist_id} style={{ ...card, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontWeight:700 }}>{p.therapist_name}</div>
+            <div style={{ fontSize:12, color:"#64748b" }}>
+              {p.booking_count} {isAr?"جلسة":"session(s)"} · {isAr?"إجمالي":"gross"} {money(p.gross_cents, p.currency, isAr)}
+            </div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontWeight:800, color:"#5eead4", fontSize:16 }}>{money(p.payout_cents, p.currency, isAr)}</div>
+            <button style={{ ...btnPrimary, fontSize:11.5, padding:"5px 12px", marginTop:6 }}
+                    onClick={()=>markPaid(p)} disabled={payingId===p.therapist_id}>
+              {payingId===p.therapist_id ? "…" : (isAr?"تم الدفع":"Mark as paid")}
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
