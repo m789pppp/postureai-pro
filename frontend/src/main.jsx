@@ -101,6 +101,30 @@ if ("Notification" in window && Notification.permission === "default") {
 // All other paths → normal App
 const path = window.location.pathname;
 
+// ── Preload hints for faster navigation ──────────────────────────
+function preloadChunk(href) {
+  const link = document.createElement('link');
+  link.rel = 'modulepreload';
+  link.href = href;
+  document.head.appendChild(link);
+}
+
+// Prefetch firebase-auth on all pages (always needed after login)
+// Use requestIdleCallback to not block initial render
+if ('requestIdleCallback' in window) {
+  requestIdleCallback(() => {
+    // Preconnect to Firebase
+    ['https://firestore.googleapis.com',
+     'https://identitytoolkit.googleapis.com',
+     'https://securetoken.googleapis.com'].forEach(url => {
+      const l = document.createElement('link');
+      l.rel = 'preconnect';
+      l.href = url;
+      document.head.appendChild(l);
+    });
+  }, { timeout: 2000 });
+}
+
 const STANDALONE_ROUTES = {
   "/product":     () => import("./ProductPage.jsx"),
   "/solutions":   () => import("./SolutionsPage.jsx"),
