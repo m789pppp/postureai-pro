@@ -6,6 +6,18 @@
   "devCommand": "npm run dev",
   "rewrites": [
     {
+      "source": "/api/llm",
+      "destination": "/api/llm.js"
+    },
+    {
+      "source": "/api/ai-chat",
+      "destination": "/api/llm.js"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://postureai-backend.up.railway.app/api/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
