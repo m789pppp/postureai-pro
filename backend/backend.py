@@ -16600,7 +16600,7 @@ def marketplace_create_booking():
         booking["paymob_order_id"] = order_id
         booking_ref.set(booking)
 
-        iframe_id = PAYMOB_IFRAME_ID if 'PAYMOB_IFRAME_ID' in globals() else os.getenv("PAYMOB_IFRAME_ID", "")
+        iframe_id = os.getenv("PAYMOB_IFRAME_ID", "")
         return jsonify({
             "ok": True,
             "booking_id": booking_ref.id,
