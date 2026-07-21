@@ -86,7 +86,7 @@ export function speakCoach(text, lang = "en", { force = false } = {}) {
   try {
     const synth = window.speechSynthesis;
     synth.cancel(); // never queue up a backlog of stale cues
-    const clean = String(text || "").replace(/[⚠✓✗▶⏹🔴🟡🟢🔊🔇🎙️™️]|️/g, "").trim();
+    const clean = String(text || "").replace(/⚠|✓|✗|▶|⏹|🔴|🟡|🟢|🔊|🔇|🎙️|™️/gu, "").trim();
     if (!clean) return false;
     const prefs  = loadPrefs();
     const locale = prefs.locale || (lang === "ar" ? "ar-EG" : "en-US");
