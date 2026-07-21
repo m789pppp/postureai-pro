@@ -379,7 +379,7 @@ export default function PricingPageStandalone() {
                   borderRadius:99, padding:"6px 16px" }}>
                   {["monthly","yearly"].map(b=>(
                     <button key={b} onClick={()=>setBilling(b)} style={{
-                      background:"none", border:"none", cursor:"pointer", padding:"4px 12px",
+                      border:"none", cursor:"pointer", padding:"4px 12px",
                       borderRadius:99, fontSize:13.5, fontWeight: billing===b ? 700 : 500,
                       color: billing===b ? T.text : T.muted, fontFamily:FD,
                       background: billing===b ? "rgba(255,255,255,.07)" : "transparent",

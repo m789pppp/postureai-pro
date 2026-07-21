@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageShell } from "./StandaloneLayout.jsx";
 
@@ -11,12 +11,6 @@ const T = {
 };
 const FD = "'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif";
 const FM = "'IBM Plex Mono','Segoe UI',monospace";
-
-function Reveal({ children, delay=0 }) {
-  const ref = useRef(null);
-  const inView = React.useInView ? React.useInView(ref, { once:true }) : true;
-  return <div ref={ref}>{children}</div>;
-}
 
 const CATEGORIES = [
   {
