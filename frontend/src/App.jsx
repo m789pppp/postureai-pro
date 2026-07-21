@@ -2280,14 +2280,15 @@ export default function App(){
   const[showFeatureFlags,setShowFeatureFlags]=useState(false);
   const[showOnboardingAnalytics,setShowOnboardingAnalytics]=useState(false);
   const[authToken,setAuthToken]=useState(null);
-  // Lazily fetch the Firebase ID token only when the admin-only Onboarding
-  // Analytics panel is actually opened — avoids an unnecessary token refresh
-  // on every render for a panel most users never see.
+  // Fetch the Firebase ID token once a user is on the home page (needed for
+  // AnnouncementsBar, which every user sees) or when the admin-only
+  // Onboarding Analytics panel is opened — avoids an unnecessary token
+  // refresh on every render for users who never reach either.
   useEffect(()=>{
-    if(showOnboardingAnalytics&&!authToken){
+    if((page==="home"||showOnboardingAnalytics)&&user&&!authToken){
       import("./services/api.js").then(({getAuthToken})=>getAuthToken().then(setAuthToken));
     }
-  },[showOnboardingAnalytics,authToken]);
+  },[page,showOnboardingAnalytics,user,authToken]);
   const[showLegalCompliance,setShowLegalCompliance]=useState(false);
   // Health consent gate — must be accepted once before the first analysis.
   // Corvus is a wellness/awareness tool, NOT a medical device; explicit
@@ -4091,6 +4092,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
       )}
       {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
+      {authToken && (
+        <div style={{maxWidth:960,margin:"0 auto",padding:"12px 20px 0"}}>
+          <AnnouncementsBar token={authToken}/>
+        </div>
+      )}
       <HomePage
         user={user} profile={profile} cs={cs} lang={lang} isAr={isAr} dir={dir}
         userSessions={userSessions} setUserSessions={setUserSessions}
