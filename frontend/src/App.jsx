@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, Suspense, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
@@ -18,20 +18,13 @@ import { TherapistMarketplace } from "./TherapistMarketplace.jsx";
 import { SymptomCorrelation } from "./SymptomCorrelation.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
-import { AnalyticsDashboard } from "./AnalyticsDashboard.jsx";
 import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
 import { AICoach } from "./AICoach.jsx";
-import { AIInsights } from "./AIInsights.jsx";
-import { PredictiveAI } from "./PredictiveAI.jsx";
-import { AIReports } from "./AIReports.jsx";
 import { preloadAIInsights } from "./aiPreloader.js";
-import { WorkforceAnalytics } from "./WorkforceAnalytics.jsx";
-import { EnterpriseRBAC } from "./EnterpriseRBAC.jsx";
 import { NotificationsHub, useNotifications } from "./NotificationsHub.jsx";
 import { OnboardingWizard } from "./OnboardingWizard.jsx";
 import { GamificationPanel } from "./Gamification.jsx";
 import { BillingModal, PLANS } from "./Billing.jsx";
-import { BillingDashboard } from "./BillingDashboard.jsx";
 import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, apiFetch } from "./services/api.js";
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
@@ -43,16 +36,11 @@ import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
 // ── Phase 12: Enterprise Scale ────────────────────────────────────
-import { APIMarketplace }      from "./APIMarketplace.jsx";
-import { WhiteLabel }          from "./WhiteLabel.jsx";
-import { MultiTenantManager }  from "./MultiTenantManager.jsx";
-import { AuditSystem }         from "./AuditSystem.jsx";
 import { EnterpriseAdminTools }from "./EnterpriseAdminTools.jsx";
 import LandingPageV7 from "./LandingPageV7.jsx";
 import { DemoWelcome, DemoDashboard, clearDemoOnExit } from "./DemoModeUI.jsx";
 import { saveDemoSession } from "./DemoMode.js";
 const Landing = LandingPageV7; // alias so <Landing> works
-import { AdminDashboard } from "./AdminDashboard.jsx";
 import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
 import { handleSSORedirect } from "./EnterpriseSSO.jsx";
 // initSentry moved to sentry.js (V12)
@@ -68,18 +56,11 @@ import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
 import { NotFound } from "./ErrorPage.jsx";
-import { UsageBilling }     from "./UsageBilling.jsx";
-import { ChurnPrediction }  from "./ChurnPrediction.jsx";
-import { CustomerSuccess }  from "./CustomerSuccess.jsx";
-import { GrowthHub }        from "./GrowthHub.jsx";
 import SessionComparison    from "./SessionComparison.jsx";
 import TrendChart           from "./TrendChart.jsx";
 import { ShareCard }        from "./ShareCard.jsx";
 import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
-import { IntegrationsHub }  from "./IntegrationsHub.jsx";
-import { ReferralProgram }  from "./ReferralProgram.jsx";
 import { ProductTour, TourTrigger } from "./ProductTour.jsx";
-import { MFASetup }         from "./MFASetup.jsx";
 import AnnouncementsBar    from "./AnnouncementsBar.jsx";
 import SecurityCenter       from "./SecurityCenter.jsx";
 import FeatureFlags         from "./FeatureFlags.jsx";
@@ -87,7 +68,6 @@ import OnboardingAnalytics  from "./OnboardingAnalytics.jsx";
 import { initSentry, identifyUser, captureError } from "./sentry.js";
 import { AccountActivity } from "./AccountActivity.jsx";
 // ── Merged from v13 & v18 ─────────────────────────────────────────
-import { MRRDashboard }   from "./MRRDashboard.jsx";
 import { HelpCenter }     from "./HelpCenter.jsx";
 import { APIChangelog }   from "./APIChangelog.jsx";
 import EmbedWidget        from "./EmbedWidget.jsx";
@@ -2088,6 +2068,28 @@ let _oauthInProgress = !!(function() {
   try { return sessionStorage.getItem("__pendingOAuth") === "1"; } catch { return false; }
 })();
 
+// ── Lazy-loaded components ──────────────────────────────────────
+const AnalyticsDashboard = React.lazy(() => import("./AnalyticsDashboard.jsx"));
+const WorkforceAnalytics = React.lazy(() => import("./WorkforceAnalytics.jsx"));
+const AIReports = React.lazy(() => import("./AIReports.jsx"));
+const PredictiveAI = React.lazy(() => import("./PredictiveAI.jsx"));
+const AIInsights = React.lazy(() => import("./AIInsights.jsx"));
+const EnterpriseRBAC = React.lazy(() => import("./EnterpriseRBAC.jsx"));
+const WhiteLabel = React.lazy(() => import("./WhiteLabel.jsx"));
+const MultiTenantManager = React.lazy(() => import("./MultiTenantManager.jsx"));
+const APIMarketplace = React.lazy(() => import("./APIMarketplace.jsx"));
+const IntegrationsHub = React.lazy(() => import("./IntegrationsHub.jsx"));
+const AuditSystem = React.lazy(() => import("./AuditSystem.jsx"));
+const MFASetup = React.lazy(() => import("./MFASetup.jsx"));
+const ChurnPrediction = React.lazy(() => import("./ChurnPrediction.jsx"));
+const CustomerSuccess = React.lazy(() => import("./CustomerSuccess.jsx"));
+const GrowthHub = React.lazy(() => import("./GrowthHub.jsx"));
+const ReferralProgram = React.lazy(() => import("./ReferralProgram.jsx"));
+const MRRDashboard = React.lazy(() => import("./MRRDashboard.jsx"));
+const AdminDashboard = React.lazy(() => import("./AdminDashboard.jsx"));
+const BillingDashboard = React.lazy(() => import("./BillingDashboard.jsx"));
+const UsageBilling = React.lazy(() => import("./UsageBilling.jsx"));
+
 export default function App(){
   const[user,setUser]=useState(null);
   const[backendDown,setBackendDown]=useState(false);
@@ -2400,7 +2402,18 @@ export default function App(){
     document.title=titles[page]||"Corvus";
   },[page]);
 
-  const vidRef=useRef();const ovRef=useRef();const canvRef=useRef();
+  const vidRef=useRef();const ovRef=useRef();const canvRef=useRef();const camWrapRef=useRef();
+  const[isFs,setIsFs]=useState(false);
+  useEffect(()=>{
+    const onFs=()=>setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange",onFs);
+    return ()=>document.removeEventListener("fullscreenchange",onFs);
+  },[]);
+  const toggleFullscreen=()=>{
+    const el=camWrapRef.current; if(!el) return;
+    if(document.fullscreenElement) document.exitFullscreen?.();
+    else el.requestFullscreen?.().catch(()=>{});
+  };
   const streamRef=useRef();const timerRef=useRef();const rafRef=useRef();
   const mpRef=useRef();const badRef=useRef(null);const lastAlRef=useRef(0);
   const lmSmootherRef   = useRef(null);
@@ -2454,7 +2467,14 @@ export default function App(){
     const inviteToken = params.get("invite");
     if(inviteToken) {
       window.__invite_token = inviteToken;
+      try{ sessionStorage.setItem("pending_invite", inviteToken); }catch{}
       setPage("invite");
+      // Clean the URL immediately — sessionStorage (above) is the resume
+      // mechanism if the page reloads mid-flow, so the token never needs
+      // to live in the URL itself, where it would otherwise resurface on
+      // ANY later, unrelated page reload (manual refresh, SW update, the
+      // stale-chunk auto-reload, etc.) and replay this whole flow again.
+      window.history.replaceState({}, "", window.location.pathname + window.location.hash);
     }
     // Handle pending invite after login
     const pendingInvite = sessionStorage.getItem("pending_invite");
@@ -2975,6 +2995,8 @@ export default function App(){
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
       resetProportions();
+      resetScore();
+      resetPainPrediction();
       insightsRef.current=null;setSessionInsights([]);
       worstSnapsRef.current=[];lastSnapMsRef.current=0;
       // Notification permission requested contextually after first alert (not cold on start)
@@ -3213,6 +3235,7 @@ export default function App(){
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
       resetProportions();
+      resetScore();
       histRef.current=[]; setHistory([]);
       goodRef.current=0; setGoodF(0);
       totalRef.current=0; setTotalF(0);
@@ -3683,12 +3706,21 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onAccepted={({company_id,role})=>{
           sessionStorage.removeItem("pending_invite");
           delete window.__invite_token;
+          // Clear ?invite=TOKEN from the URL — otherwise ANY later reload
+          // (manual refresh, SW update, or the stale-chunk auto-reload)
+          // re-reads the same URL and replays this entire consent flow
+          // again, unprompted, however far into the app the user is by then.
+          window.history.replaceState({}, "", window.location.pathname + window.location.hash);
           setCompanyId(company_id);
           if(profile) setProfile(p=>({...p,company_id,role}));
           setPage("home");
           addToast(isAr?"✅ انضممت للفريق!":"✅ Joined the team!","success");
         }}
-        onError={()=>setPage("home")}
+        onError={()=>{
+          delete window.__invite_token;
+          window.history.replaceState({}, "", window.location.pathname + window.location.hash);
+          setPage("home");
+        }}
       />
     </ErrorBoundary>
   );
@@ -4811,11 +4843,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
         )}
 
         {/* Camera feed */}
-        <div style={{position:"relative",aspectRatio:"4/3",background:"#020810",flexShrink:0}}>
+        <div ref={camWrapRef} style={{position:"relative",background:"#020810",flexShrink:0,
+          ...(isFs?{width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}:{aspectRatio:"4/3"})}}>
           <video ref={vidRef} autoPlay muted playsInline
-            style={{width:"100%",height:"100%",objectFit:"cover",transform:"scaleX(-1)",display:"block"}}/>
-          <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)"}}/>
+            style={{width:"100%",height:"100%",objectFit:isFs?"contain":"cover",transform:"scaleX(-1)",display:"block"}}/>
+          <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)",objectFit:isFs?"contain":"cover"}}/>
           <canvas ref={canvRef} style={{display:"none"}}/>
+          {/* Fullscreen / focus-mode toggle */}
+          <button onClick={toggleFullscreen} title={isAr?"ملء الشاشة":"Fullscreen"} style={{
+            position:"absolute",bottom:8,right:8,zIndex:20,
+            width:32,height:32,borderRadius:8,
+            background:"rgba(2,8,16,.8)",border:"1px solid rgba(255,255,255,.15)",
+            backdropFilter:"blur(6px)",color:"#e2e8f0",cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
+          }}>{isFs?"🗗":"⛶"}</button>
 
           {/* Idle-state visual cue — previously the camera area was just a black box
               with no indication a click was needed. First-time users had no way to
@@ -4967,7 +5008,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             const cue=postureCue(analysis,isAr);
             if(!cue) return null;
             return (
-              <div style={{position:"absolute",left:8,right:8,bottom:8,
+              <div style={{position:"absolute",left:8,right:46,bottom:8,
                 background:"rgba(2,8,16,.9)",backdropFilter:"blur(6px)",
                 border:`1.5px solid ${cue.col}`,borderRadius:12,
                 padding:"10px 12px",display:"flex",alignItems:"center",gap:10,
@@ -5389,6 +5430,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {showAngles?"📐":"⬚"} {isAr?"الزوايا":"Angles"}
             </button>
           </div>
+          {/* Calibrate for accuracy — personalises scoring to the user's own
+              neutral posture; reachable straight from the live session. */}
+          <button onClick={()=>setShowCalibWizard(true)} style={{
+            background:calibData?"rgba(148,163,184,.06)":"rgba(16,185,129,.1)",
+            border:`1px solid ${calibData?cs.border:"rgba(16,185,129,.4)"}`,borderRadius:10,
+            padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:"#34d399",cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+          }}>
+            🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
+          </button>
           {histRef.current?.length>0&&(
 <button onClick={async ()=>{
               // Same canonical gate — third direct generateSessionPDF() call that bypassed it.
