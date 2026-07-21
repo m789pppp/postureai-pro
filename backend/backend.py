@@ -12750,7 +12750,13 @@ def emr_session_observation(session_id):
     Accept: application/fhir+json (default) or application/json
     """
     try:
-        uid = verify_firebase_token(request)
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing Authorization header", "code": 401}), 401
+        user = verify_firebase_token(auth_header[7:].strip())
+        if not user or not user.get("uid"):
+            return jsonify({"error": "Invalid or expired token", "code": 401}), 401
+        uid = user["uid"]
         # Fetch session from Firestore
         sess_ref = db.collection("sessions").document(session_id)
         snap = sess_ref.get()
@@ -12790,7 +12796,13 @@ def emr_patient_summary(patient_uid):
       format=fhir|json (default fhir)
     """
     try:
-        caller_uid = verify_firebase_token(request)
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing Authorization header", "code": 401}), 401
+        user = verify_firebase_token(auth_header[7:].strip())
+        if not user or not user.get("uid"):
+            return jsonify({"error": "Invalid or expired token", "code": 401}), 401
+        caller_uid = user["uid"]
         days = min(int(request.args.get("days", 30)), 365)
         cutoff = datetime.utcnow() - timedelta(days=days)
 
