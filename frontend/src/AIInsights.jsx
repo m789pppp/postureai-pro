@@ -53,6 +53,7 @@ function MdText({ text }) {
   };
 
   const inlineFormat = s => s
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/\*\*(.+?)\*\*/g, `<strong style="color:#e2eaf6;font-weight:700">$1</strong>`)
     .replace(/\*(.+?)\*/g, `<em style="color:#94a3b8">$1</em>`);
 
