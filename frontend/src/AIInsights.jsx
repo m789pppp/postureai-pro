@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
-import { getCached, setCache } from "./aiPreloader.js";
+import { getCached, setCache, getCachedAsync, setFirestoreCache } from "./aiPreloader.js";
 
 // ── AI call via offline engine ──────────────────────────────────────
 // NOTE: previously routed through geminiChat() -> /api/coach/chat, but
@@ -403,25 +403,48 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
   const tabPrompts = {    executive: (ctx) => {      const load = ctx.avgScore<55?"18-27 kg":ctx.avgScore<70?"12-18 kg":ctx.avgScore<85?"6-12 kg":"4-6 kg";      const ang  = ctx.avgScore<55?"35-50":ctx.avgScore<70?"20-35":ctx.avgScore<85?"10-20":"<10";      return `Write a clinical executive report for ${ctx.name||"Patient"}.DATA (reference ALL):Score: ${ctx.avgScore}/100 → cervical angle ~${ang}° → load ~${load} (Hansraj 2014)This week: ${ctx.weekAvg}/100 | Last week: ${ctx.lastWeekAvg}/100 | Trend: ${ctx.trendPct>0?"+":""}${ctx.trendPct}%Sessions: ${ctx.totalSessions} total, ${ctx.thisWeekSessions} this week | Streak: ${ctx.streak} daysCervical risk: ${ctx.neckRisk}% | Fatigue: ${ctx.fatigueScore}% | Burnout: ${ctx.burnoutRisk}%Calibration: ${ctx.calibrated?"Personalized":"Generic (±15% error)"}Alerts: ${ctx.topAlerts?.join(", ")||"none recorded"}## Performance Snapshot[Interpret ${ctx.avgScore}/100 as cervical load (${load}) — which structures at risk? Trend clinical significance.]## Primary Risk Factors1. [Most urgent: exact %, anatomical structure, consequence if ignored]2. [Second risk: same format]3. [Third risk or positive indicator]## This Week's Protocol1. [Exercise: name, sets×reps, hold time, target muscle, why helps ${ctx.name||"this patient"}]2. [Exercise: same format]3. [Ergonomic/behavioral change: specific, measurable]Max 240 words. Zero generic statements.`;    },    trends: (ctx) => {      const lNow  = ctx.weekAvg<55?"~22kg":ctx.weekAvg<70?"~15kg":"~8kg";      const lLast = ctx.lastWeekAvg<55?"~22kg":ctx.lastWeekAvg<70?"~15kg":"~8kg";      return `Clinical trend analysis for ${ctx.name||"Patient"}.DATA:This week: ${ctx.weekAvg}/100 (${lNow} cervical load) | Last week: ${ctx.lastWeekAvg}/100 (${lLast})Change: ${ctx.trendPct>0?"+":""}${ctx.trendPct}% | 30-day avg: ${ctx.avgScore}/100 | Sessions: ${ctx.thisWeekSessions}/weekAlerts: ${ctx.topAlerts?.join(", ")||"none"}## MSK Load Change[${ctx.trendPct}% score change = specific cervical load change. What does this trajectory mean in 4 weeks?]## Root Cause[Link to actual alerts: ${ctx.topAlerts?.slice(0,2).join(", ")||"postural patterns"}. Behavioral + anatomical mechanism — NOT "poor habits".]## Forecast[Predicted score range next 2 weeks. What variable changes the trajectory most.]## Acceleration Protocol1. [Targets root cause: mechanism + timeline]2. [Different approach: mechanism + timeline]Max 210 words.`;    },    fatigue: (ctx) => `Clinical fatigue assessment for ${ctx.name||"Patient"}.DATA:Fatigue: ${ctx.fatigueScore}% | Burnout: ${ctx.burnoutRisk}% | Score: ${ctx.avgScore}/100Sessions: ${ctx.thisWeekSessions}/week | Streak: ${ctx.streak} daysBurnout ${ctx.burnoutRisk}% → ${ctx.burnoutRisk>=70?"2.3×":ctx.burnoutRisk>=40?"1.4×":"1.1×"} elevated MSK injury risk (Holtermann 2018)## Fatigue Profile[Acute or chronic? At ${ctx.fatigueScore}% + ${ctx.avgScore}/100 — which muscles are in guarding/inhibition? Physiological state.]## Warning Signs1. [Specific to this patient's data — fatigue + posture + burnout → clinical outcome]2. [Different mechanism]3. [Recovery window estimate]## Recovery Protocol1. [Intervention + duration + frequency + days/weeks to improvement]2. [Different modality]3. [Lifestyle/recovery factor]${ctx.fatigueScore>=70||ctx.burnoutRisk>=70?"⚕️ HIGH RISK: Refer for in-person physiotherapy this week.":"⚕️ Monitor weekly. Seek evaluation if fatigue >75% or score <45/100."}Max 230 words.`,    recommendations: (ctx) => {      const ang  = ctx.avgScore<55?"35-50":ctx.avgScore<70?"20-35":"<20";      const load = ctx.avgScore<55?"18-27 kg":ctx.avgScore<70?"12-18 kg":"<12 kg";      return `Personalized intervention plan for ${ctx.name||"Patient"}.STARTING POINT:Score: ${ctx.avgScore}/100 | Cervical angle: ~${ang}° | Load: ~${load}Cervical risk: ${ctx.neckRisk}% | Fatigue: ${ctx.fatigueScore}% | Alerts: ${ctx.topAlerts?.slice(0,3).join(", ")||"none"}Calibration: ${ctx.calibrated?"Personalized — use precise measurements":"Generic — use standard population norms"}## Immediate Interventions (Days 1-7)1. **[Exercise]** — targets: [specific alert or deficit] | sets×reps: ___ | hold: ___s | ___×/day | mechanism: [why this specifically]2. **[Exercise]** — same format, different muscle group3. **[Ergonomic fix]** — monitor height, chair angle, keyboard distance (specific measurements)## Progressive Protocol (Weeks 2-4)[Week-by-week progression. Score target before advancing each week.]## Workstation Setup${ctx.calibrated?"Personalized:":"Standard ISO 11226:"}- Monitor: top at eye level | Chair: 0-5° forward tilt | Keyboard: elbows 90-100°## Expected Milestones- Week 1: target ${Math.min(ctx.avgScore+5,100)}/100- Week 2: target ${Math.min(ctx.avgScore+10,100)}/100- Week 4: target ${Math.min(ctx.avgScore+18,100)}/100Max 290 words. Specific to ${ctx.name||"this patient"}'s actual data.`;    },  };
   const loadInsight = useCallback(async (tabKey) => {
     if (!sessions.length) return;
-    // ── Check cache first (pre-generated on login) ──
-    const cached = uid ? getCached(uid, tabKey, lang) : null;
-    if (cached) { setData(cached); setLoading(false); return; }
+
+    // ── L1: Check memory + sessionStorage first (instant) ────────
+    const memCached = uid ? getCached(uid, tabKey, lang) : null;
+    if (memCached) { setData(memCached); setLoading(false); return; }
+
+    // Show loading while checking Firestore
     setLoading(true);
     setError("");
     setData(null);
+
+    // ── L2: Check Firestore (persistent across reloads) ───────────
+    if (uid) {
+      try {
+        const fsCached = await getCachedAsync(uid, tabKey, lang, sessions.length);
+        if (fsCached) {
+          setData(fsCached);
+          setLoading(false);
+          return; // Served from Firestore — no AI call needed
+        }
+      } catch {}
+    }
+
+    // ── L3: Generate fresh (only if nothing cached) ───────────────
     try {
       const ctx    = buildContext();
       const prompt = tabPrompts[tabKey]?.(ctx);
       if (!prompt) return;
       const text = await callGemini(prompt, systemPrompt);
-      if (text && uid) setCache(uid, tabKey, lang, text);
+      if (text && uid) {
+        setCache(uid, tabKey, lang, text);
+        // Also persist to Firestore for next reload
+        try {
+          await setFirestoreCache(uid, tabKey, lang, text, sessions.length);
+        } catch {}
+      }
       setData(text);
     } catch (e) {
       setError(e.message || "Failed to generate insight");
     } finally {
       setLoading(false);
     }
-  }, [buildContext, sessions.length, profile, lang]);
+  }, [buildContext, sessions.length, profile, lang, uid]);
 
   // Auto-load when tab changes
   useEffect(() => {
