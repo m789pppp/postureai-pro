@@ -20,6 +20,7 @@ const SPRING = "cubic-bezier(0.16,1,0.3,1)";
 /* ── Markdown renderer ────────────────────────────────────────────── */
 function Md({ text }) {
   const html=(text||"")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
     .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
     .replace(/\*(.+?)\*/g,"<em>$1</em>")
     .replace(/^### (.+)$/gm,"<h4 style='margin:9px 0 4px;font-size:13px;font-weight:700;color:var(--wa-text)'>$1</h4>")
