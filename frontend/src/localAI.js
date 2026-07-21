@@ -881,12 +881,20 @@ async function _puterStream(messages, systemPrompt, maxTokens, onChunk) {
     stream: true,
   });
 
-  for await (const part of stream) {
-    const token = part?.text || part?.choices?.[0]?.delta?.content || "";
-    if (token) {
-      full += token;
-      onChunk(full);
+  try {
+    for await (const part of stream) {
+      const token = part?.text || part?.choices?.[0]?.delta?.content || "";
+      if (token) {
+        full += token;
+        onChunk(full);
+      }
     }
+  } catch (streamErr) {
+    // Stream interrupted — if we got some content, use it
+    if (full && full.length > 30) {
+      return full;
+    }
+    throw new Error("puter_stream_interrupted: " + streamErr.message);
   }
 
   if (!full || full.length < 10) throw new Error("puter_empty");
