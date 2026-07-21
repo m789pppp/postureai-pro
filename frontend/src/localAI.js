@@ -843,7 +843,65 @@ async function _offlineStream(messages, systemPrompt, onChunk) {
   return full;
 }
 
+async function _puterStream(messages, systemPrompt, maxTokens, onChunk) {
+  // Load puter.js from CDN if not already loaded
+  if (!window.puter) {
+    await new Promise((resolve, reject) => {
+      if (document.querySelector('script[src*="puter.js"]')) {
+        const check = setInterval(() => { if (window.puter) { clearInterval(check); resolve(); } }, 100);
+        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 8000);
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = "https://js.puter.com/v2/";
+      s.async = true;
+      s.onload = () => {
+        const check = setInterval(() => { if (window.puter) { clearInterval(check); resolve(); } }, 50);
+        setTimeout(() => { clearInterval(check); reject(new Error("puter_load_timeout")); }, 5000);
+      };
+      s.onerror = () => reject(new Error("puter_load_failed"));
+      document.head.appendChild(s);
+    });
+  }
+
+  const allMsgs = [
+    { role: "system", content: systemPrompt },
+    ...messages.map(m => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: String(m.content || ""),
+    })),
+  ];
+
+  // Use gpt-4o-mini — free on Puter, high quality
+  const model = "gpt-4o-mini";
+  let full = "";
+
+  const stream = await window.puter.ai.chat(allMsgs, {
+    model,
+    stream: true,
+  });
+
+  for await (const part of stream) {
+    const token = part?.text || part?.choices?.[0]?.delta?.content || "";
+    if (token) {
+      full += token;
+      onChunk(full);
+    }
+  }
+
+  if (!full || full.length < 10) throw new Error("puter_empty");
+  return full;
+}
+
 async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
+  // ── 1. Puter.ai (primary — free, no API key, gpt-4o-mini) ────────
+  try {
+    return await _puterStream(messages, systemPrompt, maxTokens, onChunk);
+  } catch (e) {
+    console.warn("[CorvusAI] Puter stream failed, trying Pollinations:", e.message);
+  }
+
+  // ── 2. Pollinations streaming (backup) ───────────────────────────
   const allMsgs = [
     { role: "system", content: systemPrompt },
     ...messages.map(m => ({
@@ -855,28 +913,21 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 14000);
 
-  // Try Pollinations streaming (fastest first-token)
   const res = await fetch("https://text.pollinations.ai/", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Origin": "https://postureai-pro-omega-nine.vercel.app",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "openai",
       messages: allMsgs,
       max_tokens: Math.min(maxTokens || 500, 500),
       temperature: 0.4,
       stream: true,
-      private: true,  // skip caching → faster first token
+      private: true,
     }),
     signal: ctrl.signal,
   });
 
-  if (!res.ok) {
-    clearTimeout(timer);
-    throw new Error(`stream_${res.status}`);
-  }
+  if (!res.ok) { clearTimeout(timer); throw new Error(`stream_${res.status}`); }
 
   const reader  = res.body.getReader();
   const decoder = new TextDecoder();
@@ -886,21 +937,16 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-
     buf += decoder.decode(value, { stream: true });
     const lines = buf.split("\n");
-    buf = lines.pop(); // keep incomplete line
-
+    buf = lines.pop();
     for (const line of lines) {
       if (!line.startsWith("data:")) continue;
       const raw = line.slice(5).trim();
       if (raw === "[DONE]") { clearTimeout(timer); return full; }
       try {
         const token = JSON.parse(raw)?.choices?.[0]?.delta?.content || "";
-        if (token) {
-          full += token;
-          onChunk(full); // fire immediately — don't buffer
-        }
+        if (token) { full += token; onChunk(full); }
       } catch {}
     }
   }
@@ -911,7 +957,7 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
 }
 
 
-// Fallback: non-streaming race (if streaming fails)
+// Fallback: non-streaming (if streaming fails)
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
   const allMsgs = [
     { role: "system", content: systemPrompt },
@@ -935,57 +981,33 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
       });
   };
 
-  const orHeaders = {
-    "Content-Type": "application/json",
-    "HTTP-Referer": "https://postureai-pro-omega-nine.vercel.app",
-    "X-Title": "Corvus PostureAI",
-  };
-  const parseOR = async r => {
-    const d = await r.json();
-    return d?.choices?.[0]?.message?.content?.trim();
-  };
-  const parsePOST = async r => {
-    const d = await r.json();
-    return d?.choices?.[0]?.message?.content?.trim();
-  };
+  const parsePOST = async r => (await r.json())?.choices?.[0]?.message?.content?.trim();
 
-  // 5 endpoints race simultaneously — first valid response wins
+  // ── 1. Puter.ai (non-streaming) — primary ────────────────────────
+  try {
+    if (window.puter) {
+      const resp = await window.puter.ai.chat(allMsgs, { model: "gpt-4o-mini" });
+      const text = resp?.message?.content?.[0]?.text || resp?.text || "";
+      if (text && text.length > 15) return cleanAIResponse(text);
+    }
+  } catch (e) {
+    console.warn("[CorvusAI] Puter non-stream failed:", e.message);
+  }
+
+  // ── 2. Pollinations + OpenRouter race ─────────────────────────────
   return Promise.any([
-
-    // 1. Pollinations POST — gpt-4o quality, usually fastest
     go("https://text.pollinations.ai/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: toks, temperature: 0.45, private: true }),
     }, parsePOST, 14000),
 
-    // 2. OpenRouter llama-3.1-8b free — reliable fallback
     go("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: orHeaders,
+      headers: { "Content-Type": "application/json", "HTTP-Referer": "https://postureai-pro-omega-nine.vercel.app", "X-Title": "Corvus PostureAI" },
       body: JSON.stringify({ model: "meta-llama/llama-3.1-8b-instruct:free", messages: allMsgs, max_tokens: toks }),
-    }, parseOR, 14000),
-
-    // 3. OpenRouter gemma-3-4b free — second OR model
-    go("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: orHeaders,
-      body: JSON.stringify({ model: "google/gemma-3-4b-it:free", messages: allMsgs, max_tokens: toks }),
-    }, parseOR, 14000),
-
-    // 4. Pollinations GET — simplest endpoint, different server path
-    go(`https://text.pollinations.ai/${encodeURIComponent(
-      allMsgs.map(m => `${m.role}: ${m.content}`).join("\n")
-    )}?model=openai&private=true`, { method: "GET" }, async r => (await r.text()).trim(), 14000),
-
-    // 5. Pollinations mistral — different model on same infra
-    go("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "mistral", messages: allMsgs, max_tokens: toks, temperature: 0.45 }),
     }, parsePOST, 14000),
-
-  ]).catch(() => { throw new Error("all_free_apis_failed"); });
+  ]).catch(() => { throw new Error("all_providers_failed"); });
 }
 
 
