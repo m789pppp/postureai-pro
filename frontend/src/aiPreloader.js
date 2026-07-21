@@ -1,33 +1,116 @@
 /**
  * Corvus AI Preloader — background generation on login
- * Generates all AI insights silently, stores in sessionStorage
- * Components read cache first → instant display
+ * Cache hierarchy:
+ *   1. Memory (fastest — in-process, survives re-renders)
+ *   2. Firestore (persistent — survives reloads, tab close, browser restart)
+ *   3. SessionStorage (fallback when Firestore unavailable)
+ * Invalidation: only when session count changes (new posture session recorded)
  */
 import { geminiAnalysis } from "./gemini.js";
+import { db } from "./firebase.js";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
-const CACHE_TTL = 20 * 60 * 1000; // 20 min
+// ── TTLs ─────────────────────────────────────────────────────────
+const FIRESTORE_TTL = 24 * 60 * 60 * 1000; // 24 hours — persist across days
+const MEMORY_TTL    = 60 * 60 * 1000;       // 1 hour in-memory cache
+
+// ── In-memory L1 cache (fastest, per-session) ──────────────────
+const _memCache = new Map();
 
 function cacheKey(uid, tab, lang) {
   return `corvus_ai_${uid}_${tab}_${lang}`;
 }
 
-function getCached(uid, tab, lang) {
+// ── Memory cache ───────────────────────────────────────────────
+function getMemCached(uid, tab, lang) {
+  const key = cacheKey(uid, tab, lang);
+  const entry = _memCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > MEMORY_TTL) { _memCache.delete(key); return null; }
+  return entry.text;
+}
+
+function setMemCache(uid, tab, lang, text) {
+  _memCache.set(cacheKey(uid, tab, lang), { text, ts: Date.now() });
+}
+
+// ── SessionStorage L2 fallback ─────────────────────────────────
+function getSessionCached(uid, tab, lang) {
   try {
     const raw = sessionStorage.getItem(cacheKey(uid, tab, lang));
     if (!raw) return null;
     const { text, ts } = JSON.parse(raw);
-    if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(cacheKey(uid, tab, lang)); return null; }
+    if (Date.now() - ts > FIRESTORE_TTL) { sessionStorage.removeItem(cacheKey(uid, tab, lang)); return null; }
     return text;
   } catch { return null; }
 }
 
-function setCache(uid, tab, lang, text) {
+function setSessionCache(uid, tab, lang, text) {
   try {
     sessionStorage.setItem(cacheKey(uid, tab, lang), JSON.stringify({ text, ts: Date.now() }));
   } catch {}
 }
 
-export { getCached, setCache, cacheKey };
+// ── Firestore L3 cache (persistent) ───────────────────────────
+async function getFirestoreCached(uid, tab, lang, sessionCount) {
+  try {
+    const ref = doc(db, "users", uid, "ai_insights", `${tab}_${lang}`);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    const { text, ts, session_count } = snap.data();
+    // Invalidate if: expired OR session count changed
+    if (Date.now() - ts > FIRESTORE_TTL) return null;
+    if (session_count !== undefined && session_count !== sessionCount) return null;
+    return text;
+  } catch { return null; }
+}
+
+async function setFirestoreCache(uid, tab, lang, text, sessionCount) {
+  try {
+    const ref = doc(db, "users", uid, "ai_insights", `${tab}_${lang}`);
+    await setDoc(ref, {
+      text,
+      ts: Date.now(),
+      session_count: sessionCount,
+      generated_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.warn("[AIPreloader] Firestore write failed:", e.message);
+  }
+}
+
+// ── Unified getCached — checks all 3 layers ────────────────────
+async function getCachedAsync(uid, tab, lang, sessionCount) {
+  // L1: memory
+  const mem = getMemCached(uid, tab, lang);
+  if (mem) return mem;
+
+  // L2: sessionStorage
+  const sess = getSessionCached(uid, tab, lang);
+  if (sess) { setMemCache(uid, tab, lang, sess); return sess; }
+
+  // L3: Firestore
+  const fs = await getFirestoreCached(uid, tab, lang, sessionCount);
+  if (fs) {
+    setMemCache(uid, tab, lang, fs);
+    setSessionCache(uid, tab, lang, fs);
+    return fs;
+  }
+
+  return null;
+}
+
+// Sync version (memory + session only — for immediate reads)
+function getCached(uid, tab, lang) {
+  return getMemCached(uid, tab, lang) || getSessionCached(uid, tab, lang);
+}
+
+function setCache(uid, tab, lang, text) {
+  setMemCache(uid, tab, lang, text);
+  setSessionCache(uid, tab, lang, text);
+}
+
+export { getCached, setCache, cacheKey, getCachedAsync, setFirestoreCache };
 
 // ── Build context for preloader ─────────────────────────────────────
 function buildCtx(profile, sessions, calibration, effectiveTier) {
@@ -129,53 +212,54 @@ let _preloading = false;
 
 export async function preloadAIInsights(uid, profile, sessions, calibration, effectiveTier, lang = "en") {
   if (!uid || !sessions?.length || sessions.length < 1) return;
-
-  // Invalidate cache if session count changed (new session recorded)
-  const countKey = `corvus_ai_count_${uid}`;
-  const prevCount = sessionStorage.getItem(countKey);
-  const currCount = String(sessions.length);
-  if (prevCount && prevCount !== currCount) {
-    // Clear old cache so new data gets generated
-    ["executive","trends","fatigue","recommendations"].forEach(t => {
-      sessionStorage.removeItem(`corvus_ai_${uid}_${t}_${lang}`);
-    });
-    console.info("[AIPreloader] Cache invalidated — session count changed");
-  }
-  sessionStorage.setItem(countKey, currCount);
-
   if (_preloading) return;
 
-  // Check if all tabs already cached
+  const sessionCount = sessions.length;
   const tabs = ["executive", "trends", "fatigue", "recommendations"];
-  const allCached = tabs.every(t => getCached(uid, t, lang));
-  if (allCached) { console.info("[AIPreloader] All tabs cached ✓"); return; }
 
+  // ── Check Firestore cache first (all 3 layers) ────────────────
+  const cachedResults = await Promise.all(
+    tabs.map(t => getCachedAsync(uid, t, lang, sessionCount))
+  );
+  const allCached = cachedResults.every(r => r !== null);
+  if (allCached) {
+    console.info("[AIPreloader] All tabs served from cache ✓ (no generation needed)");
+    return;
+  }
+
+  // ── Generate missing tabs only ────────────────────────────────
   _preloading = true;
-  console.info("[AIPreloader] Starting background generation...");
+  console.info("[AIPreloader] Generating missing tabs...");
 
   const ctx     = buildCtx(profile, sessions, calibration, effectiveTier);
   const prompts = buildPrompts(ctx, lang);
 
-  // Generate all tabs in parallel (background, non-blocking)
-  tabs.forEach(async (tab) => {
-    if (getCached(uid, tab, lang)) return; // skip if already cached
+  tabs.forEach(async (tab, i) => {
+    // Skip if already cached
+    if (cachedResults[i] !== null) return;
+
     try {
-      await new Promise(r => setTimeout(r, tab === "executive" ? 0 : 
-        tab === "trends" ? 800 : tab === "fatigue" ? 1600 : 2400)); // stagger
+      // Stagger requests to avoid rate limits
+      await new Promise(r => setTimeout(r, i * 800));
+
       const text = await geminiAnalysis(prompts[tab], {
         systemPrompt: prompts._system,
         lang,
         maxTokens: 500,
       });
+
       if (text && text.length > 30) {
-        setCache(uid, tab, lang, text);
-        console.info(`[AIPreloader] ✅ ${tab} cached (${text.length} chars)`);
+        // Save to all cache layers
+        setMemCache(uid, tab, lang, text);
+        setSessionCache(uid, tab, lang, text);
+        // Save to Firestore (persists across reloads)
+        await setFirestoreCache(uid, tab, lang, text, sessionCount);
+        console.info(`[AIPreloader] ✅ ${tab} generated + saved to Firestore`);
       }
     } catch(e) {
       console.warn(`[AIPreloader] ${tab} failed:`, e.message);
     }
   });
 
-  // Reset flag after all done (approximate)
   setTimeout(() => { _preloading = false; }, 15000);
 }
