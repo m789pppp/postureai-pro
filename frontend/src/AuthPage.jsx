@@ -235,6 +235,8 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   // UI
   const [agreeTerms,  setAgreeTerms] = useState(false);
   const [newsletter,  setNewsletter] = useState(true);
+  const [showPass,    setShowPass]   = useState(false);
+  const [showPass2,   setShowPass2]  = useState(false);
   const [showP,       setShowP]      = useState(false);
   const [showP2,      setShowP2]     = useState(false);
   const [remember,    setRemember]   = useState(true);
