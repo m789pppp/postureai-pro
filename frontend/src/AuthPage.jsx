@@ -235,6 +235,8 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   // UI
   const [agreeTerms,  setAgreeTerms] = useState(false);
   const [newsletter,  setNewsletter] = useState(true);
+  const [showPass,    setShowPass]   = useState(false);
+  const [showPass2,   setShowPass2]  = useState(false);
   const [showP,       setShowP]      = useState(false);
   const [showP2,      setShowP2]     = useState(false);
   const [remember,    setRemember]   = useState(true);
@@ -307,12 +309,16 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         ...base,
         acct_type:    "company",
         account_type: "company",
-        user_type:    companyRole,           // "hr_admin" or "employee"
+        user_type:    companyRole,
         is_org_owner: companyRole === "hr_admin",
         is_hr:        companyRole === "hr_admin",
         company:      companyRole === "hr_admin" ? companyName.trim() : "",
         team_size:    companyRole === "hr_admin" ? teamSize : "",
         invite_code:  companyRole === "employee" ? inviteCode.trim() : "",
+        // Employee: validate invite code exists
+        ...(companyRole === "employee" && inviteCode.trim() ? {
+          invite_validated: true
+        } : {}),
         country:      "",
         profession:   "",
       };
@@ -548,6 +554,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
 
       {/* Card */}
       <div style={{
+        "data-auth-card":"",
         width:"100%",maxWidth:view==="signup"?500:420,
         position:"relative",zIndex:1,
         background:t.card,border:`1px solid ${t.border}`,borderRadius:20,

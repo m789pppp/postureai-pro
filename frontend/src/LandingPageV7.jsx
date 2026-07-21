@@ -1478,13 +1478,13 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
         <Stagger key={`${localMode}-${billing}`} className="lp-pricing-grid" style={{ alignItems:"start" }}>
           {plans.map((p) => (
             <StaggerItem key={p.id}>
-              <div className={p.popular ? "lp-lift lp-glow" : "lp-lift"} style={{
+              <div className={p.popular ? "lp-lift lp-glow lp-popular-card" : "lp-lift"} style={{
                 ...card(p.popular),
                 border: p.popular ? `1px solid rgba(79,124,249,.45)` : `1px solid ${LPV7_TOKENS.border}`,
                 position:"relative", height:"100%", display:"flex", flexDirection:"column",
                 padding:"clamp(28px,2.6vw,36px)",
                 transform: p.popular ? "scale(1.035)" : "none",
-              }} className={p.popular ? "lp-lift lp-popular-card" : "lp-lift"}>
+              }}>
                 {p.popular && (
                   <div style={{
                     position:"absolute", top:-14, left:"50%", transform:"translateX(-50%)",
