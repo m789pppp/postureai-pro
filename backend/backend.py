@@ -12961,28 +12961,6 @@ def emr_webhook_receiver():
     except Exception as e:
         return safe_error(e)
 
-
-
-    import threading as _th; _th.Thread(target=_ensure_models, daemon=True).start()
-    import atexit as _ae
-    _ae.register(lambda: _ai_executor.shutdown(wait=False))
-    os.makedirs("reports", exist_ok=True)
-    print("="*60, flush=True)
-    print("  PostureAI Pro Backend v15", flush=True)
-    print(f"  MediaPipe {_mp.__version__ if _mp else '(lazy-loaded on first request)'} — Pose + FaceMesh + solvePnP + Blink Detection", flush=True)
-    _ai_label = ('✅ Ollama (' + LOCAL_LLM_MODEL + ')') if OLLAMA_URL else '⚠️  No server AI backend (set OLLAMA_URL) — note: client uses local WebLLM regardless'
-    print(f"  AI:  {_ai_label}", flush=True)
-    print(f"  PDF: {'✅ ReportLab ready' if REPORTLAB_OK else '⚠️  pip install reportlab'}", flush=True)
-    print(f"  APP_URL: {APP_URL}", flush=True)
-    print("  PORT: 5050  →  http://localhost:5050", flush=True)
-    if not os.getenv("PAYMOB_HMAC_SECRET",""):
-        print("⚠️  WARNING: PAYMOB_HMAC_SECRET not set — webhook verification DISABLED", flush=True)
-    if not AI_CONFIGURED:
-        print("ℹ️  No server-side AI backend configured — server AI endpoints disabled (client uses local WebLLM regardless).", flush=True)
-    print("="*60, flush=True)
-    sys.stdout.flush()
-    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True, use_reloader=False)
-
 # ══════════════════════════════════════════════════════════════════
 # ENTERPRISE WEBHOOK ENGINE
 # ══════════════════════════════════════════════════════════════════
@@ -17198,6 +17176,43 @@ def push_symptom_pattern_alerts():
         return jsonify({"sent": sent, "skipped": skipped})
     except Exception as e:
         return safe_error(e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# Entry point — only runs when this file is executed directly
+# (`python backend.py`, per railway.json's startCommand). When gunicorn
+# imports this module instead (`gunicorn ... backend:app`, per Procfile /
+# Dockerfile.prod), __name__ is "backend", not "__main__", so this block
+# is skipped entirely and gunicorn manages the actual server loop — app.run()
+# below is Flask's own blocking dev server and must never run inside a
+# gunicorn worker, or under plain import, at all.
+#
+# NOTE: this block was previously mis-indented as the tail end of
+# emr_webhook_receiver() above (a stray dedent got lost), so none of it —
+# including app.run() itself — ever executed under normal conditions.
+# Nothing ever bound to port 5050, so every cold-start health check found
+# no listener and failed immediately, looking exactly like a crash.
+# ══════════════════════════════════════════════════════════════════
+if __name__ == "__main__":
+    import threading as _th; _th.Thread(target=_ensure_models, daemon=True).start()
+    import atexit as _ae
+    _ae.register(lambda: _ai_executor.shutdown(wait=False))
+    os.makedirs("reports", exist_ok=True)
+    print("="*60, flush=True)
+    print("  PostureAI Pro Backend v15", flush=True)
+    print(f"  MediaPipe {_mp.__version__ if _mp else '(lazy-loaded on first request)'} — Pose + FaceMesh + solvePnP + Blink Detection", flush=True)
+    _ai_label = ('✅ Ollama (' + LOCAL_LLM_MODEL + ')') if OLLAMA_URL else '⚠️  No server AI backend (set OLLAMA_URL) — note: client uses local WebLLM regardless'
+    print(f"  AI:  {_ai_label}", flush=True)
+    print(f"  PDF: {'✅ ReportLab ready' if REPORTLAB_OK else '⚠️  pip install reportlab'}", flush=True)
+    print(f"  APP_URL: {APP_URL}", flush=True)
+    print("  PORT: 5050  →  http://localhost:5050", flush=True)
+    if not os.getenv("PAYMOB_HMAC_SECRET",""):
+        print("⚠️  WARNING: PAYMOB_HMAC_SECRET not set — webhook verification DISABLED", flush=True)
+    if not AI_CONFIGURED:
+        print("ℹ️  No server-side AI backend configured — server AI endpoints disabled (client uses local WebLLM regardless).", flush=True)
+    print("="*60, flush=True)
+    sys.stdout.flush()
+    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True, use_reloader=False)
 
 
 
