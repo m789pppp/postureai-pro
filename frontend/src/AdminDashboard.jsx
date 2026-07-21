@@ -430,6 +430,7 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack,
     { id:"webhooks", label: isAr ? "Webhooks"    : "Webhooks",  icon:"⟳" },
     { id:"audit",    label: isAr ? "سجل المراجعة": "Audit Log", icon:"≡" },
     { id:"scim",     label: isAr ? "SCIM (تزويد المستخدمين)" : "SCIM Provisioning", icon:"⇄" },
+    { id:"announcements", label: isAr ? "الإعلانات" : "Announcements", icon:"📣" },
     { id:"system",   label: isAr ? "النظام"      : "System",    icon:"⚙" },
   ];
 
@@ -593,6 +594,8 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack,
             <AuditTab auditLogs={auditLogs} isAr={isAr} />
           ) : tab === "scim" ? (
             <ScimTab isAr={isAr} showToast={showToast} />
+          ) : tab === "announcements" ? (
+            <AnnouncementsTab isAr={isAr} showToast={showToast} />
           ) : tab === "system" ? (
             <SystemPanel health={health} lang={lang} adminProfile={adminProfile} onRefresh={loadAll} showToast={showToast} />
           ) : null}
@@ -876,6 +879,93 @@ function AuditTab({ auditLogs, isAr }) {
 }
 
 // ── SCIM Provisioning Tab ───────────────────────────────────────────
+function AnnouncementsTab({ isAr, showToast }) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [type, setType] = useState("feature");
+  const [expiresInDays, setExpiresInDays] = useState(7);
+  const [tiers, setTiers] = useState({ starter: true, professional: true, elite: true });
+  const [creating, setCreating] = useState(false);
+
+  const TYPE_OPTS = [
+    { id:"feature",  label: isAr?"ميزة جديدة":"New feature",  icon:"🚀" },
+    { id:"security", label: isAr?"أمان":"Security",           icon:"🔐" },
+    { id:"tip",      label: isAr?"نصيحة":"Tip",                icon:"💡" },
+    { id:"warning",  label: isAr?"تحذير":"Warning",            icon:"⚠️" },
+  ];
+
+  const create = async () => {
+    if (!body.trim()) { showToast?.(isAr?"النص مطلوب":"Body text required","warn"); return; }
+    const selectedTiers = Object.entries(tiers).filter(([,v])=>v).map(([k])=>k);
+    if (selectedTiers.length === 0) { showToast?.(isAr?"اختار باقة واحدة على الأقل":"Select at least one tier","warn"); return; }
+    setCreating(true);
+    try {
+      await apiFetch("/announcements", {
+        method: "POST",
+        body: { title: title.trim(), body: body.trim(), type, expires_in_days: Number(expiresInDays)||7, tier: selectedTiers },
+      });
+      showToast?.(isAr?"✅ تم نشر الإعلان":"✅ Announcement published","success");
+      setTitle(""); setBody("");
+    } catch (e) {
+      showToast?.(e.message || (isAr?"فشل النشر":"Failed to publish"), "error");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const inputStyle = { width:"100%", padding:"10px 12px", borderRadius:8, border:`1px solid ${TOKENS.border}`, background:TOKENS.surface, color:TOKENS.text, fontSize:13 };
+
+  return (
+    <div style={{ maxWidth:560 }}>
+      <h3 style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>{isAr?"نشر إعلان جديد":"Publish a new announcement"}</h3>
+      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+        <div>
+          <label style={{ fontSize:12, color:TOKENS.muted, marginBottom:4, display:"block" }}>{isAr?"العنوان (اختياري)":"Title (optional)"}</label>
+          <input style={inputStyle} value={title} onChange={e=>setTitle(e.target.value)} placeholder={isAr?"مثلاً: ميزة جديدة!":"e.g. New feature!"} maxLength={120} />
+        </div>
+        <div>
+          <label style={{ fontSize:12, color:TOKENS.muted, marginBottom:4, display:"block" }}>{isAr?"النص":"Body"}</label>
+          <textarea style={{ ...inputStyle, minHeight:70, resize:"vertical" }} value={body} onChange={e=>setBody(e.target.value)} maxLength={500} placeholder={isAr?"نص الإعلان...":"Announcement text..."} />
+        </div>
+        <div>
+          <label style={{ fontSize:12, color:TOKENS.muted, marginBottom:6, display:"block" }}>{isAr?"النوع":"Type"}</label>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            {TYPE_OPTS.map(o => (
+              <button key={o.id} onClick={()=>setType(o.id)} style={{
+                padding:"6px 12px", borderRadius:8, fontSize:12, cursor:"pointer",
+                border:`1px solid ${type===o.id?TOKENS.blue:TOKENS.border}`,
+                background: type===o.id ? TOKENS.blueBg : "transparent",
+                color: type===o.id ? TOKENS.blueHover : TOKENS.text,
+              }}>{o.icon} {o.label}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize:12, color:TOKENS.muted, marginBottom:6, display:"block" }}>{isAr?"يظهر لباقات":"Visible to tiers"}</label>
+          <div style={{ display:"flex", gap:14 }}>
+            {["starter","professional","elite"].map(t => (
+              <label key={t} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12.5, cursor:"pointer" }}>
+                <input type="checkbox" checked={tiers[t]} onChange={e=>setTiers(p=>({...p,[t]:e.target.checked}))} />
+                {t}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize:12, color:TOKENS.muted, marginBottom:4, display:"block" }}>{isAr?"مدة الظهور (أيام)":"Expires in (days)"}</label>
+          <input type="number" min="1" max="90" style={{ ...inputStyle, width:100 }} value={expiresInDays} onChange={e=>setExpiresInDays(e.target.value)} />
+        </div>
+        <button onClick={create} disabled={creating} style={{
+          padding:"11px 20px", borderRadius:9, border:"none", cursor:"pointer",
+          background:TOKENS.blue, color:"#fff", fontWeight:700, fontSize:13.5, marginTop:4,
+        }}>
+          {creating ? "…" : (isAr?"نشر الإعلان":"Publish announcement")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ScimTab({ isAr, showToast }) {
   const [status, setStatus] = useState(null);
   const [users, setUsers]   = useState([]);

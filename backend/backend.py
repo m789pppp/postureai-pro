@@ -7152,18 +7152,33 @@ def admin_onboarding_analytics():
 # ── API Usage Dashboard ────────────────────────────────────────────
 
 
-# In-memory system announcements (e.g. "Scheduled maintenance Friday 2am").
-# Empty by default — populate via a future admin endpoint if needed.
-_announcements = []
-
 @app.route("/api/announcements", methods=["GET"])
 @require_auth
 @limiter.limit("60 per minute")
 def get_announcements():
-    """Return active announcements for the user's tier."""
+    """Return active, non-expired, non-dismissed announcements for the user's tier."""
     try:
+        if not _firebase_ok:
+            return jsonify({"announcements": []})
+        db   = firestore.client()
         tier = g.role.get("tier", "starter")
-        relevant = [a for a in _announcements if a["active"] and tier in a.get("tier", [])]
+        now  = datetime.utcnow().isoformat() + "Z"
+
+        udoc = db.collection("users").document(getattr(g, "uid", "")).get()
+        dismissed = set((udoc.to_dict() or {}).get("dismissed_announcements", [])) if udoc.exists else set()
+
+        docs = db.collection("announcements").where("active", "==", True).limit(50).get()
+        relevant = []
+        for d in docs:
+            if d.id in dismissed:
+                continue
+            a = d.to_dict()
+            if a.get("expires_at") and a["expires_at"] < now:
+                continue
+            if tier not in a.get("tier", []):
+                continue
+            relevant.append({**a, "id": d.id})
+        relevant.sort(key=lambda a: a.get("created_at", ""), reverse=True)
         return jsonify({"announcements": relevant})
     except Exception as e:
         return safe_error(e, "Announcements failed")
@@ -7193,17 +7208,22 @@ def create_announcement():
     """Admin: create a new in-app announcement."""
     try:
         data    = request.get_json(force=True) or {}
-        msg     = str(data.get("message", "")).strip()[:500]
+        title   = str(data.get("title", "")).strip()[:120]
+        body    = str(data.get("body", data.get("message", ""))).strip()[:500]
         ann_type= data.get("type", "feature")   # feature / security / tip / warning
         expires = data.get("expires_in_days", 7)
-        if not msg:
-            return jsonify({"error": "message required"}), 400
+        # Which tiers see this — default to everyone if the admin didn't specify.
+        tiers   = data.get("tier") or ["starter", "professional", "elite"]
+        if not body:
+            return jsonify({"error": "body required"}), 400
         if not _firebase_ok:
             return jsonify({"error": "Firebase unavailable"}), 503
         db = firestore.client()
         doc = db.collection("announcements").add({
-            "message":    msg,
+            "title":      title or body[:40],
+            "body":       body,
             "type":       ann_type,
+            "tier":       tiers,
             "active":     True,
             "created_at": datetime.utcnow().isoformat() + "Z",
             "expires_at": (datetime.utcnow() + timedelta(days=int(expires))).isoformat() + "Z",
@@ -10642,6 +10662,7 @@ def weekly_report_opt_in():
 def generate_referral():
     """Generate a unique referral code for the user."""
     try:
+        db  = firestore.client()
         uid = getattr(g,"uid","")
         # Check if code already exists
         doc = db.collection("referrals").document(uid).get()
@@ -10673,6 +10694,7 @@ def generate_referral():
 def redeem_referral():
     """Redeem a referral code on signup — gives both users 1 month free."""
     try:
+        db   = firestore.client()
         uid  = getattr(g,"uid","")
         data = request.get_json(force=True) or {}
         code = data.get("code","").strip().upper()
@@ -10734,6 +10756,7 @@ def redeem_referral():
 def referral_status():
     """Get referral stats for the user."""
     try:
+        db  = firestore.client()
         uid = getattr(g,"uid","")
         doc = db.collection("referrals").document(uid).get()
         if not doc.exists:
