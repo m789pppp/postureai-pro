@@ -263,29 +263,36 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       const amount = billing === "yearly" ? plan.priceEGP.yearly : plan.priceEGP.monthly;
       if (!amount) { setError("Contact sales for Enterprise pricing"); setLoading(null); return; }
       const tok3 = await getAuthToken();
-      const resp = await fetch(`${API}/paymob/create-payment`, {
+      // Use Vercel serverless function (works without Railway)
+      const resp = await fetch("/api/paymob/create-order", {
         method:  "POST",
-        headers: { "Content-Type": "application/json", ...(tok3 ? { Authorization: `Bearer ${tok3}` } : {}) },
+        headers: { "Content-Type": "application/json", ...(tok3 ? { Authorization: "Bearer " + tok3 } : {}) },
         body: JSON.stringify({
-          amount_cents:  amount * 100,
-          currency:      "EGP",
           tier:          planId,
           billing,
           payment_type:  "card",
+          uid:           profile?.uid || profile?.id || "",
+          user_count:    profile?.team_size_num || 1,
           billing_data:  {
             email:      profile?.email || "",
-            first_name: profile?.name?.split(" ")[0] || "Customer",
-            last_name:  profile?.name?.split(" ").slice(1).join(" ") || "",
+            first_name: (profile?.name || "Customer").split(" ")[0],
+            last_name:  (profile?.name || "").split(" ").slice(1).join(" ") || "",
+            phone_number: profile?.phone || "NA",
           },
         }),
       });
       const data = await resp.json();
-      if (data.payment_key) {
-        const iframeId = import.meta.env.VITE_PAYMOB_IFRAME_ID;
-        if (iframeId) window.location.href = `https://accept.paymob.com/api/acceptance/iframes/${iframeId}?payment_token=${data.payment_key}`;
-        else setError("PayMob iframe ID not configured");
+      if (data.iframe_url) {
+        window.location.href = data.iframe_url;
+      } else if (data.payment_key) {
+        const iframeId = data.iframe_id || import.meta.env.VITE_PAYMOB_IFRAME_ID;
+        if (iframeId) {
+          window.location.href = "https://accept.paymob.com/api/acceptance/iframes/" + iframeId + "?payment_token=" + data.payment_key;
+        } else {
+          setError("PayMob iframe ID not configured — add PAYMOB_IFRAME_ID to Vercel env vars");
+        }
       } else {
-        setError(data.error || "PayMob error");
+        setError(data.error || "PayMob error — check Vercel env vars");
       }
     } catch (e) {
       setError(e.message);
