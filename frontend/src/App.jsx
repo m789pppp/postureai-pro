@@ -1170,7 +1170,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
   const[company,setCompany]=useState(profile?.company||"");
   const[saving,setSaving]=useState(false);
   const refLink=`${window.location.origin}?ref=${user.uid.slice(0,8)}&plan=professional`;
-  const avgScore=sessions.length?Math.round(sessions.reduce((a,s)=>a+(s.avg_score||0),0)/sessions.length):0;
+  const avgScore=sessions?.length?Math.round(sessions?.reduce((a,s)=>a+(s.avg_score||0),0)/sessions?.length):0;
   const inp={width:"100%",background:cs.inp,border:`0.5px solid ${cs.inpB}`,borderRadius:9,padding:"11px 14px",fontSize:13,color:cs.text,outline:"none",boxSizing:"border-box",marginBottom:12};
   async function save(){
     setSaving(true);
@@ -1197,7 +1197,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
         </div>
         <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20}}>
           <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:14}}>{t.profileStats||"Statistics"}</div>
-          {[[t.totalSess,sessions.length],[t.avgScore,avgScore+"/100"],[t.planLabel||"Plan",qualityFor(profile?.tier).label[isAr?"ar":"en"]],[t.memberSince,profile?.created_at?.toDate?.()?.toLocaleDateString?.()||"—"]].map(([k,v])=>(
+          {[[t.totalSess,sessions?.length],[t.avgScore,avgScore+"/100"],[t.planLabel||"Plan",qualityFor(profile?.tier).label[isAr?"ar":"en"]],[t.memberSince,profile?.created_at?.toDate?.()?.toLocaleDateString?.()||"—"]].map(([k,v])=>(
             <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`0.5px solid ${cs.border}`}}>
               <span style={{fontSize:12,color:cs.muted}}>{k}</span><span style={{fontSize:12,fontWeight:600,color:cs.text}}>{v}</span>
             </div>
@@ -1214,11 +1214,11 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
           <Btn cs={cs} onClick={()=>{navigator.clipboard.writeText(refLink);addToast(t.copied,"success");}} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{t.copyLink}</Btn>
         </div>
       </div>
-      {sessions.length>0&&<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
+      {sessions?.length>0&&<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
         <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:13}}>{t.sessionHist||"Session History"}</div>
-        <BarChart data={sessions.slice(-10).map((s,i)=>({l:`S${i+1}`,v:s.avg_score||0}))} color="#1a56db" cs={cs}/>
+        <BarChart data={sessions?.slice(-10).map((s,i)=>({l:`S${i+1}`,v:s.avg_score||0}))} color="#1a56db" cs={cs}/>
         <div style={{marginTop:13,display:"grid",gap:5}}>
-          {sessions.slice(0,5).map((s,i)=>(
+          {sessions?.slice(0,5).map((s,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"6px 0",borderBottom:`0.5px solid ${cs.border}`}}>
               <div style={{width:7,height:7,borderRadius:"50%",background:sc(s.avg_score||0),flexShrink:0}}/>
               <span style={{fontSize:10,color:cs.muted,flex:1}}>{s.created_at?.toDate?.()?.toLocaleDateString?.()}</span>
@@ -2570,7 +2570,7 @@ export default function App(){
             const unsubSessions = onUserSessions(u.uid, sessions=>{
               setUserSessions(sessions);
               // Re-trigger preloader when sessions arrive (has real data now)
-              if (sessions.length > 0) {
+              if (sessions?.length > 0) {
                 setTimeout(() => {
                   preloadAIInsights(u.uid, p, sessions, null, p?.is_trial ? p?.trial_tier : p?.tier, lang);
                 }, 1500);
