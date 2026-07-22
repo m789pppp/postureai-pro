@@ -66,12 +66,24 @@
       "dest": "/assets/$1"
     },
     {
+      "src": "/api/paymob/create-order",
+      "dest": "/api/paymob/create-order.js"
+    },
+    {
+      "src": "/api/paymob/webhook",
+      "dest": "/api/paymob/webhook.js"
+    },
+    {
+      "src": "/api/account/delete",
+      "dest": "/api/account/delete.js"
+    },
+    {
       "src": "/api/llm",
-      "dest": "/frontend/api/llm.js"
+      "dest": "/api/llm.js"
     },
     {
       "src": "/api/ai-chat",
-      "dest": "/frontend/api/llm.js"
+      "dest": "/api/llm.js"
     },
     {
       "src": "/api/(.*)",
@@ -81,5 +93,16 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/paymob/create-order.js": {
+      "maxDuration": 30
+    },
+    "api/paymob/webhook.js": {
+      "maxDuration": 30
+    },
+    "api/account/delete.js": {
+      "maxDuration": 30
+    }
+  }
 }
