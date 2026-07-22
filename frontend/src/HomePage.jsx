@@ -1058,14 +1058,16 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
     setDeleting(true);
     try {
       const tok = await getAuthToken();
-      const res = await fetch(`${API_BASE_URL}/user/delete-all-data`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
-        body: JSON.stringify({ confirm: true }),
+      // Use Vercel serverless function — works without Railway
+      const res = await fetch("/api/account/delete", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(tok ? { Authorization: "Bearer " + tok } : {}),
+        },
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d?.error || d?.message || "delete_failed");
-      if (!d.auth_deleted) { try { await deleteAuthUser(); } catch {} }
+      if (!res.ok) throw new Error(d?.error || "delete_failed");
       try { await logOut(); } catch {}
       addToast(isAr ? "تم حذف الحساب وكل بياناتك نهائياً" : "Your account and all data have been permanently deleted", "info");
       onSignOut?.();
