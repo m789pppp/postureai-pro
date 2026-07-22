@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import "./index.css";
@@ -151,7 +151,14 @@ if (path.startsWith("/report/")) {
     createRoot(document.getElementById("root")).render(
       <StrictMode>
         <ErrorBoundary>
-          <App />
+          <Suspense fallback={
+            <div style={{ position:"fixed", inset:0, display:"flex", alignItems:"center",
+              justifyContent:"center", background:"#030b14", color:"#64748b", fontSize:14 }}>
+              Loading…
+            </div>
+          }>
+            <App />
+          </Suspense>
         </ErrorBoundary>
       </StrictMode>
     );
