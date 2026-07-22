@@ -2069,26 +2069,26 @@ let _oauthInProgress = !!(function() {
 })();
 
 // ── Lazy-loaded components ──────────────────────────────────────
-const AnalyticsDashboard = React.lazy(() => import("./AnalyticsDashboard.jsx"));
-const WorkforceAnalytics = React.lazy(() => import("./WorkforceAnalytics.jsx"));
-const AIReports = React.lazy(() => import("./AIReports.jsx"));
-const PredictiveAI = React.lazy(() => import("./PredictiveAI.jsx"));
-const AIInsights = React.lazy(() => import("./AIInsights.jsx"));
-const EnterpriseRBAC = React.lazy(() => import("./EnterpriseRBAC.jsx"));
-const WhiteLabel = React.lazy(() => import("./WhiteLabel.jsx"));
-const MultiTenantManager = React.lazy(() => import("./MultiTenantManager.jsx"));
-const APIMarketplace = React.lazy(() => import("./APIMarketplace.jsx"));
-const IntegrationsHub = React.lazy(() => import("./IntegrationsHub.jsx"));
-const AuditSystem = React.lazy(() => import("./AuditSystem.jsx"));
-const MFASetup = React.lazy(() => import("./MFASetup.jsx"));
-const ChurnPrediction = React.lazy(() => import("./ChurnPrediction.jsx"));
-const CustomerSuccess = React.lazy(() => import("./CustomerSuccess.jsx"));
-const GrowthHub = React.lazy(() => import("./GrowthHub.jsx"));
-const ReferralProgram = React.lazy(() => import("./ReferralProgram.jsx"));
-const MRRDashboard = React.lazy(() => import("./MRRDashboard.jsx"));
-const AdminDashboard = React.lazy(() => import("./AdminDashboard.jsx"));
-const BillingDashboard = React.lazy(() => import("./BillingDashboard.jsx"));
-const UsageBilling = React.lazy(() => import("./UsageBilling.jsx"));
+const AnalyticsDashboard = React.lazy(() => import("./AnalyticsDashboard.jsx").then(m => ({ default: m.AnalyticsDashboard })));
+const WorkforceAnalytics = React.lazy(() => import("./WorkforceAnalytics.jsx").then(m => ({ default: m.WorkforceAnalytics })));
+const AIReports = React.lazy(() => import("./AIReports.jsx").then(m => ({ default: m.AIReports })));
+const PredictiveAI = React.lazy(() => import("./PredictiveAI.jsx").then(m => ({ default: m.PredictiveAI })));
+const AIInsights = React.lazy(() => import("./AIInsights.jsx").then(m => ({ default: m.AIInsights })));
+const EnterpriseRBAC = React.lazy(() => import("./EnterpriseRBAC.jsx").then(m => ({ default: m.EnterpriseRBAC })));
+const WhiteLabel = React.lazy(() => import("./WhiteLabel.jsx").then(m => ({ default: m.WhiteLabel })));
+const MultiTenantManager = React.lazy(() => import("./MultiTenantManager.jsx").then(m => ({ default: m.MultiTenantManager })));
+const APIMarketplace = React.lazy(() => import("./APIMarketplace.jsx").then(m => ({ default: m.APIMarketplace })));
+const IntegrationsHub = React.lazy(() => import("./IntegrationsHub.jsx").then(m => ({ default: m.IntegrationsHub })));
+const AuditSystem = React.lazy(() => import("./AuditSystem.jsx").then(m => ({ default: m.AuditSystem })));
+const MFASetup = React.lazy(() => import("./MFASetup.jsx").then(m => ({ default: m.MFASetup })));
+const ChurnPrediction = React.lazy(() => import("./ChurnPrediction.jsx").then(m => ({ default: m.ChurnPrediction })));
+const CustomerSuccess = React.lazy(() => import("./CustomerSuccess.jsx").then(m => ({ default: m.CustomerSuccess })));
+const GrowthHub = React.lazy(() => import("./GrowthHub.jsx").then(m => ({ default: m.GrowthHub })));
+const ReferralProgram = React.lazy(() => import("./ReferralProgram.jsx").then(m => ({ default: m.ReferralProgram })));
+const MRRDashboard = React.lazy(() => import("./MRRDashboard.jsx").then(m => ({ default: m.MRRDashboard })));
+const AdminDashboard = React.lazy(() => import("./AdminDashboard.jsx").then(m => ({ default: m.AdminDashboard })));
+const BillingDashboard = React.lazy(() => import("./BillingDashboard.jsx").then(m => ({ default: m.BillingDashboard })));
+const UsageBilling = React.lazy(() => import("./UsageBilling.jsx").then(m => ({ default: m.UsageBilling })));
 
 export default function App(){
   const[user,setUser]=useState(null);
