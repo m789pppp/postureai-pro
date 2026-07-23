@@ -15,12 +15,20 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-// Public routes reachable without auth. Add to this list as new public
-// pages ship — authenticated routes (dashboard, live session, HR panel,
-// etc.) need a logged-in fixture and belong in a separate spec.
+// Public routes reachable without auth. Note this app mixes two routing
+// systems (found while investigating the #306 production crash):
+//  - main.jsx STANDALONE_ROUTES: real static paths (/pricing, /product,
+//    /solutions, /how-it-works, /faq) that load standalone marketing
+//    pages directly — no hash involved.
+//  - App.jsx hashToPage(): once inside the main SPA, in-app views are
+//    addressed by hash (#auth, #home, #live, etc). "/" with no hash
+//    defaults to the "landing" view.
+// Add to this list as new public pages ship — authenticated routes
+// (dashboard, live session, HR panel, etc.) need a logged-in fixture
+// and belong in a separate spec.
 const PUBLIC_ROUTES = [
-  { path: "/#landing", name: "Landing" },
-  { path: "/#pricing", name: "Pricing" },
+  { path: "/", name: "Landing" },
+  { path: "/pricing", name: "Pricing (standalone marketing page)" },
   { path: "/#auth", name: "Auth (Sign in / Sign up)" },
 ];
 
@@ -120,7 +128,7 @@ test.describe("Manual accessibility checks (beyond axe)", () => {
   });
 
   test("focus-visible outline actually renders (not silently killed by inline outline:none)", async ({ page }) => {
-    await page.goto("/#pricing");
+    await page.goto("/pricing");
     await page.waitForLoadState("networkidle");
     const firstInput = page.locator("input, select, textarea, button").first();
     if (await firstInput.count()) {
