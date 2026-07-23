@@ -812,12 +812,38 @@ function cleanAIResponse(text) {
 // blocked/down), falls back to the fully-offline rule-based KB below
 // instead of throwing — this is the real "no internet / backend down"
 // safety net for the AI Coach.
+// Global abort controller for the current stream — lets UI cancel in-flight calls
+let _activeStreamAbort = null;
+
+export function abortCurrentStream() {
+  if (_activeStreamAbort) {
+    _activeStreamAbort.abort();
+    _activeStreamAbort = null;
+  }
+}
+
 export async function localChatStream(messages, systemPrompt, maxTokens, onChunk) {
+  // Cancel any previous in-flight stream
+  abortCurrentStream();
+  const ctrl = new AbortController();
+  _activeStreamAbort = ctrl;
+
+  // Hard ceiling: 28 seconds total — if nothing finishes by then, fall back offline
+  const hardTimeout = new Promise((_, rej) =>
+    setTimeout(() => rej(new Error("stream_global_timeout_28s")), 28000)
+  );
+
   try {
-    return await _cloudChatStream(messages, systemPrompt, maxTokens, onChunk);
+    await Promise.race([
+      _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, ctrl.signal),
+      hardTimeout,
+    ]);
   } catch (e) {
+    if (ctrl.signal.aborted) return; // user sent a new message — silently discard
     console.warn("[CorvusAI] Cloud stream failed, using offline rule-based KB:", e.message);
-    return _offlineStream(messages, systemPrompt, onChunk);
+    await _offlineStream(messages, systemPrompt, onChunk);
+  } finally {
+    if (_activeStreamAbort === ctrl) _activeStreamAbort = null;
   }
 }
 
@@ -843,7 +869,7 @@ async function _offlineStream(messages, systemPrompt, onChunk) {
   return full;
 }
 
-async function _puterStream(messages, systemPrompt, maxTokens, onChunk) {
+async function _puterStream(messages, systemPrompt, maxTokens, onChunk, signal) {
   // Load puter.js from CDN if not already loaded
   if (!window.puter) {
     await new Promise((resolve, reject) => {
@@ -864,6 +890,8 @@ async function _puterStream(messages, systemPrompt, maxTokens, onChunk) {
     });
   }
 
+  if (signal?.aborted) throw new Error("aborted");
+
   const allMsgs = [
     { role: "system", content: systemPrompt },
     ...messages.map(m => ({
@@ -876,13 +904,16 @@ async function _puterStream(messages, systemPrompt, maxTokens, onChunk) {
   const model = "gpt-4o-mini";
   let full = "";
 
-  const stream = await window.puter.ai.chat(allMsgs, {
-    model,
-    stream: true,
-  });
+  // Puter chat with 15s timeout to get the stream object
+  const streamPromise = window.puter.ai.chat(allMsgs, { model, stream: true });
+  const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("puter_chat_timeout_15s")), 15000));
+  const stream = await Promise.race([streamPromise, timeoutPromise]);
+
+  if (signal?.aborted) throw new Error("aborted");
 
   try {
     for await (const part of stream) {
+      if (signal?.aborted) break;
       const token = part?.text || part?.choices?.[0]?.delta?.content || "";
       if (token) {
         full += token;
@@ -897,15 +928,17 @@ async function _puterStream(messages, systemPrompt, maxTokens, onChunk) {
     throw new Error("puter_stream_interrupted: " + streamErr.message);
   }
 
+  if (signal?.aborted) throw new Error("aborted");
   if (!full || full.length < 10) throw new Error("puter_empty");
   return full;
 }
 
-async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
+async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, signal) {
   // ── 1. Puter.ai (primary — free, no API key, gpt-4o-mini) ────────
   try {
-    return await _puterStream(messages, systemPrompt, maxTokens, onChunk);
+    return await _puterStream(messages, systemPrompt, maxTokens, onChunk, signal);
   } catch (e) {
+    if (signal?.aborted) throw new Error("aborted");
     console.warn("[CorvusAI] Puter stream failed, trying Pollinations:", e.message);
   }
 
@@ -918,8 +951,10 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
     })),
   ];
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 14000);
+  // Combine caller signal + per-request timeout (12s to connect + 10s idle between tokens)
+  const localCtrl = new AbortController();
+  const connectTimer = setTimeout(() => localCtrl.abort(), 12000);
+  if (signal) signal.addEventListener("abort", () => localCtrl.abort(), { once: true });
 
   const res = await fetch("https://text.pollinations.ai/", {
     method: "POST",
@@ -932,10 +967,11 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
       stream: true,
       private: true,
     }),
-    signal: ctrl.signal,
-  });
+    signal: localCtrl.signal,
+  }).finally(() => clearTimeout(connectTimer));
 
-  if (!res.ok) { clearTimeout(timer); throw new Error(`stream_${res.status}`); }
+  if (signal?.aborted) throw new Error("aborted");
+  if (!res.ok) throw new Error("stream_" + res.status);
 
   const reader  = res.body.getReader();
   const decoder = new TextDecoder();
@@ -943,7 +979,23 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
   let buf  = "";
 
   while (true) {
-    const { done, value } = await reader.read();
+    if (signal?.aborted) { reader.cancel().catch(()=>{}); throw new Error("aborted"); }
+
+    // 10s idle timeout between tokens — prevents hanging on stalled streams
+    const idleCtrl = new AbortController();
+    const idleTimer = setTimeout(() => idleCtrl.abort(), 10000);
+
+    let chunk;
+    try {
+      chunk = await Promise.race([
+        reader.read(),
+        new Promise((_, rej) => idleCtrl.signal.addEventListener("abort", () => rej(new Error("idle_timeout")))),
+      ]);
+    } finally {
+      clearTimeout(idleTimer);
+    }
+
+    const { done, value } = chunk;
     if (done) break;
     buf += decoder.decode(value, { stream: true });
     const lines = buf.split("\n");
@@ -951,7 +1003,7 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
     for (const line of lines) {
       if (!line.startsWith("data:")) continue;
       const raw = line.slice(5).trim();
-      if (raw === "[DONE]") { clearTimeout(timer); return full; }
+      if (raw === "[DONE]") return full;
       try {
         const token = JSON.parse(raw)?.choices?.[0]?.delta?.content || "";
         if (token) { full += token; onChunk(full); }
@@ -959,7 +1011,6 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk) {
     }
   }
 
-  clearTimeout(timer);
   if (!full || full.length < 10) throw new Error("stream_empty");
   return full;
 }
@@ -994,7 +1045,11 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
   // ── 1. Puter.ai (non-streaming) — primary ────────────────────────
   try {
     if (window.puter) {
-      const resp = await window.puter.ai.chat(allMsgs, { model: "gpt-4o-mini" });
+      const puterTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("puter_nonstream_timeout")), 12000));
+      const resp = await Promise.race([
+        window.puter.ai.chat(allMsgs, { model: "gpt-4o-mini" }),
+        puterTimeout,
+      ]);
       const text = resp?.message?.content?.[0]?.text || resp?.text || "";
       if (text && text.length > 15) return cleanAIResponse(text);
     }
@@ -1140,18 +1195,27 @@ export async function localChat(messages, {systemPrompt=""} = {}) {
     ? systemPrompt
     : buildLLMSystemPrompt(systemPrompt, false);
 
-  // Try twice before falling back
+  // Hard ceiling: 20s total for non-streaming chat
+  const hardDeadline = Date.now() + 20000;
+
   for (let attempt = 0; attempt < 2; attempt++) {
+    const remaining = hardDeadline - Date.now();
+    if (remaining <= 500) break; // not enough time for another attempt
     try {
-      const text = await callLLM7Direct(messages, sp, 700);
+      const text = await Promise.race([
+        callLLM7Direct(messages, sp, 700),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("localChat_deadline")), remaining)),
+      ]);
       if (text) return text;
     } catch(e) {
-      console.warn(`[CorvusAI] chat attempt ${attempt+1} failed:`, e.message);
-      if (attempt === 0) await new Promise(r => setTimeout(r, 600));
+      console.warn("[CorvusAI] chat attempt " + (attempt+1) + " failed:", e.message);
+      if (attempt === 0 && Date.now() + 600 < hardDeadline) {
+        await new Promise(r => setTimeout(r, 600));
+      }
     }
   }
 
-  // Rule-based KB (only if both attempts fail)
+  // Rule-based KB (only if both attempts fail or deadline reached)
   console.warn("[CorvusAI] Using rule-based KB fallback");
   const hist = analyzeHistory(messages);
   const last = [...messages].reverse().find(m => m.role === "user");
@@ -1164,18 +1228,27 @@ export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
     ? systemPrompt
     : buildLLMSystemPrompt(systemPrompt + " " + prompt, true);
 
-  // Try twice (race is fast, occasional network hiccup shouldn't mean fallback)
+  // Hard ceiling: 22s total for analysis
+  const hardDeadline = Date.now() + 22000;
+
   for (let attempt = 0; attempt < 2; attempt++) {
+    const remaining = hardDeadline - Date.now();
+    if (remaining <= 500) break;
     try {
-      const text = await callLLM7Direct([{ role: "user", content: prompt }], sp, 800);
+      const text = await Promise.race([
+        callLLM7Direct([{ role: "user", content: prompt }], sp, 800),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("localAnalysis_deadline")), remaining)),
+      ]);
       if (text) return text;
     } catch(e) {
-      console.warn(`[CorvusAI] analysis attempt ${attempt+1} failed:`, e.message);
-      if (attempt === 0) await new Promise(r => setTimeout(r, 800)); // brief pause before retry
+      console.warn("[CorvusAI] analysis attempt " + (attempt+1) + " failed:", e.message);
+      if (attempt === 0 && Date.now() + 800 < hardDeadline) {
+        await new Promise(r => setTimeout(r, 800));
+      }
     }
   }
 
-  // True fallback — rule-based (only if both attempts fail)
+  // True fallback — rule-based (only if both attempts fail or deadline reached)
   console.warn("[CorvusAI] Using rule-based fallback for analysis");
   return runAnalysis(prompt, systemPrompt);
 }
