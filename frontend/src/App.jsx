@@ -2064,26 +2064,55 @@ let _oauthInProgress = !!(function() {
 })();
 
 // ── Lazy-loaded components ──────────────────────────────────────
-const AnalyticsDashboard = React.lazy(() => import("./AnalyticsDashboard.jsx").then(m => ({ default: m.AnalyticsDashboard })));
-const WorkforceAnalytics = React.lazy(() => import("./WorkforceAnalytics.jsx").then(m => ({ default: m.WorkforceAnalytics })));
-const AIReports = React.lazy(() => import("./AIReports.jsx").then(m => ({ default: m.AIReports })));
-const PredictiveAI = React.lazy(() => import("./PredictiveAI.jsx").then(m => ({ default: m.PredictiveAI })));
-const AIInsights = React.lazy(() => import("./AIInsights.jsx").then(m => ({ default: m.AIInsights })));
-const EnterpriseRBAC = React.lazy(() => import("./EnterpriseRBAC.jsx").then(m => ({ default: m.EnterpriseRBAC })));
-const WhiteLabel = React.lazy(() => import("./WhiteLabel.jsx").then(m => ({ default: m.WhiteLabel })));
-const MultiTenantManager = React.lazy(() => import("./MultiTenantManager.jsx").then(m => ({ default: m.MultiTenantManager })));
-const APIMarketplace = React.lazy(() => import("./APIMarketplace.jsx").then(m => ({ default: m.APIMarketplace })));
-const IntegrationsHub = React.lazy(() => import("./IntegrationsHub.jsx").then(m => ({ default: m.IntegrationsHub })));
-const AuditSystem = React.lazy(() => import("./AuditSystem.jsx").then(m => ({ default: m.AuditSystem })));
-const MFASetup = React.lazy(() => import("./MFASetup.jsx").then(m => ({ default: m.MFASetup })));
-const ChurnPrediction = React.lazy(() => import("./ChurnPrediction.jsx").then(m => ({ default: m.ChurnPrediction })));
-const CustomerSuccess = React.lazy(() => import("./CustomerSuccess.jsx").then(m => ({ default: m.CustomerSuccess })));
-const GrowthHub = React.lazy(() => import("./GrowthHub.jsx").then(m => ({ default: m.GrowthHub })));
-const ReferralProgram = React.lazy(() => import("./ReferralProgram.jsx").then(m => ({ default: m.ReferralProgram })));
-const MRRDashboard = React.lazy(() => import("./MRRDashboard.jsx").then(m => ({ default: m.MRRDashboard })));
-const AdminDashboard = React.lazy(() => import("./AdminDashboard.jsx").then(m => ({ default: m.AdminDashboard })));
-const BillingDashboard = React.lazy(() => import("./BillingDashboard.jsx").then(m => ({ default: m.BillingDashboard })));
-const UsageBilling = React.lazy(() => import("./UsageBilling.jsx").then(m => ({ default: m.UsageBilling })));
+// lazyNamed(): wraps React.lazy() so that if the dynamic import DOES
+// resolve (no network failure — that's already handled by the
+// vite:preloadError listener in main.jsx) but the named export we
+// expect isn't on the module, we don't feed `undefined` into
+// React.lazy — which is exactly what produces the minified React
+// error #306 ("Element type is invalid. Received a promise that
+// resolves to: undefined.") that crashed the app in production.
+// This happens when a tab is left open across a new deploy and the
+// CDN briefly serves a stale/mismatched chunk for the same hashed
+// filename. Instead of crashing, force one guarded reload — same
+// recovery pattern as the preloadError handler — so the user just
+// gets the current build instead of a dead error screen.
+function lazyNamed(importFn, exportName) {
+  return React.lazy(() =>
+    importFn().then(m => {
+      const Comp = m && m[exportName];
+      if (typeof Comp !== "function" && typeof Comp !== "object") {
+        console.error(`[lazyNamed] "${exportName}" missing from chunk — forcing reload to recover`);
+        const key = "corvus_stale_export_reload";
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, "1");
+          window.location.reload();
+        }
+        return { default: () => null }; // inert placeholder while reload kicks in
+      }
+      return { default: Comp };
+    })
+  );
+}
+const AnalyticsDashboard = lazyNamed(() => import("./AnalyticsDashboard.jsx"), "AnalyticsDashboard");
+const WorkforceAnalytics = lazyNamed(() => import("./WorkforceAnalytics.jsx"), "WorkforceAnalytics");
+const AIReports = lazyNamed(() => import("./AIReports.jsx"), "AIReports");
+const PredictiveAI = lazyNamed(() => import("./PredictiveAI.jsx"), "PredictiveAI");
+const AIInsights = lazyNamed(() => import("./AIInsights.jsx"), "AIInsights");
+const EnterpriseRBAC = lazyNamed(() => import("./EnterpriseRBAC.jsx"), "EnterpriseRBAC");
+const WhiteLabel = lazyNamed(() => import("./WhiteLabel.jsx"), "WhiteLabel");
+const MultiTenantManager = lazyNamed(() => import("./MultiTenantManager.jsx"), "MultiTenantManager");
+const APIMarketplace = lazyNamed(() => import("./APIMarketplace.jsx"), "APIMarketplace");
+const IntegrationsHub = lazyNamed(() => import("./IntegrationsHub.jsx"), "IntegrationsHub");
+const AuditSystem = lazyNamed(() => import("./AuditSystem.jsx"), "AuditSystem");
+const MFASetup = lazyNamed(() => import("./MFASetup.jsx"), "MFASetup");
+const ChurnPrediction = lazyNamed(() => import("./ChurnPrediction.jsx"), "ChurnPrediction");
+const CustomerSuccess = lazyNamed(() => import("./CustomerSuccess.jsx"), "CustomerSuccess");
+const GrowthHub = lazyNamed(() => import("./GrowthHub.jsx"), "GrowthHub");
+const ReferralProgram = lazyNamed(() => import("./ReferralProgram.jsx"), "ReferralProgram");
+const MRRDashboard = lazyNamed(() => import("./MRRDashboard.jsx"), "MRRDashboard");
+const AdminDashboard = lazyNamed(() => import("./AdminDashboard.jsx"), "AdminDashboard");
+const BillingDashboard = lazyNamed(() => import("./BillingDashboard.jsx"), "BillingDashboard");
+const UsageBilling = lazyNamed(() => import("./UsageBilling.jsx"), "UsageBilling");
 
 export default function App(){
   const[user,setUser]=useState(null);
@@ -2105,11 +2134,34 @@ export default function App(){
     const p = h.replace(/^#\/?/, "") || "landing";
     // Map known aliases
     const ALIAS = { settings:"home", analytics:"home", dashboard:"home", billing:"home", subscription:"home" };
+    // Landing-page in-page section anchors (e.g. "/#casestudies" linked
+    // from ProductPage.jsx) aren't separate app pages — they were
+    // falling through to the "home" dashboard fallback below, a dead
+    // end for a logged-out visitor. Route them back to "landing";
+    // LandingPageV7's own mount effect scrolls to the anchor.
+    const LANDING_SECTIONS = new Set(["features","casestudies","how","faq"]);
+    if (LANDING_SECTIONS.has(p)) return "landing";
     return ALIAS[p] || (VALID_PAGES.has(p) ? p : "home");
   };
   const [page, setPageRaw] = useState(() => {
     const h = window.location.hash;
-    return h ? hashToPage(h) : "landing";
+    if (h) return hashToPage(h);
+    // BUG FIX: every standalone marketing page (Product/Solutions/Pricing/
+    // HowItWorks/FAQ + their shared StandaloneLayout header) links Sign In
+    // and Sign Up as real paths — href="/auth" and href="/auth?mode=signup"
+    // — not hashes. Those paths aren't in main.jsx's STANDALONE_ROUTES, so
+    // they fall through to loading this App with an empty hash, which
+    // always defaulted to "landing" and silently dropped the user back on
+    // the homepage instead of the sign-in/sign-up form they clicked for.
+    // This was effectively breaking every conversion CTA on the marketing
+    // site. Recognize the real path here too, then normalize to the hash
+    // form so back/forward and the rest of the app's hash-based routing
+    // keep working exactly as before.
+    if (/^\/auth\/?$/.test(window.location.pathname)) {
+      window.history.replaceState({}, "", "#auth");
+      return "auth";
+    }
+    return "landing";
   });
   // Firebase action URLs (password reset / email verify from email links)
   const _fbp = new URLSearchParams(window.location.search);
