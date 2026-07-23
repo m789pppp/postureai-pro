@@ -96,6 +96,11 @@ except ImportError as _pe:
     def get_paymob_amount(tier, billing): return None
     def get_stripe_amount(tier, billing): return None
     def validate_plan_request(tier, billing): return (True, "")
+    # Fallback uses the same canonical tier-id scheme as config/pricing.py
+    # ("b2b_starter"/"b2b_growth"/"b2b_enterprise") so seat-limit lookups
+    # elsewhere in the file keep working even if the config import fails.
+    SEAT_LIMITS = {"basic": -1, "professional": -1, "elite": -1,
+                   "b2b_starter": 30, "b2b_growth": 100, "b2b_enterprise": -1}
 
 # ── Tier-based analysis/AI-coach quality (single source of truth) ──
 try:
@@ -11933,7 +11938,13 @@ def monthly_hr_report():
 
 
 # ── Company: add member with seat check ────────────────────────────
-SEAT_LIMITS = {"starter":25,"standard":25,"growth":100,"professional":100,"business":500,"elite":-1,"enterprise":-1}
+# SECURITY/BUG FIX: this used to redefine SEAT_LIMITS locally with a different
+# key scheme ("starter","standard","growth",...) than the canonical dict
+# imported from config/pricing.py ("b2b_starter","b2b_growth","b2b_enterprise").
+# The local dict silently overwrote the import at module load time, so any
+# real B2B plan lookup below (SEAT_LIMITS.get(plan, -1)) missed and fell back
+# to -1 (unlimited seats) — seat limits were never actually enforced for the
+# real tier IDs. Now uses the single canonical SEAT_LIMITS from config.pricing.
 
 @app.route("/api/org/invite/accept", methods=["POST"])
 @require_auth
@@ -12949,7 +12960,9 @@ def emr_patient_summary(patient_uid):
         resp = jsonify(report)
         resp.headers["Content-Type"] = "application/fhir+json; fhirVersion=4.0"
         resp.headers["X-Corvus-FHIR-Version"] = "R4"
-        resp.headers["Access-Control-Allow-Origin"] = "*"
+        # SECURITY: no wildcard CORS here — this endpoint returns Bearer-token-gated
+        # patient health data (FHIR DiagnosticReport). CORS is governed by the
+        # app-wide flask-cors policy (allowed origins only), not overridden per-route.
         resp.headers["X-Corvus-API-Version"] = "v1"
         return resp, 200
 
@@ -16176,11 +16189,12 @@ def org_send_invite():
         return safe_error(e)
 
 @app.route("/api/llm", methods=["POST", "OPTIONS"])
+@limiter.limit("20 per minute")
 def llm_proxy():
     """
     LLM proxy — forwards requests to LLM7.io server-side (no CORS issues).
     Used by AI Coach, AI Insights, Predictive AI.
-    No auth required — rate limited by IP via Vercel.
+    No auth required — rate limited by IP (flask-limiter, enforced server-side).
     """
     if request.method == "OPTIONS":
         resp = jsonify({})
