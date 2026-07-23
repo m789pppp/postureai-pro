@@ -1,13 +1,13 @@
 /**
  * Vercel Serverless — PayMob Webhook
  * POST /api/paymob/webhook?hmac=xxx
- * Verifies HMAC, updates Firestore subscription
+ * Verifies HMAC using PayMob's concatenated-fields method, updates Firestore
  */
 import crypto from "crypto";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
-// ── Firebase Admin (server-side) ─────────────────────────────────
+// ── Firebase Admin ────────────────────────────────────────────────
 function getAdminDb() {
   if (!getApps().length) {
     initializeApp({
@@ -21,11 +21,57 @@ function getAdminDb() {
   return getFirestore();
 }
 
+// ── PayMob HMAC: concatenate specific fields in exact order ───────
+// Ref: https://docs.paymob.com/docs/hmac-calculation
+function computePaymobHmac(obj, secret) {
+  const t = obj || {};
+  const order = t.order || {};
+  const billingData = t.billing_data || {};
+
+  const fields = [
+    t.amount_cents,
+    t.created_at,
+    t.currency,
+    t.error_occured,
+    t.has_parent_transaction,
+    t.id,
+    t.integration_id,
+    t.is_3d_secure,
+    t.is_auth,
+    t.is_capture,
+    t.is_refunded,
+    t.is_standalone_payment,
+    t.is_voided,
+    order.id,
+    order.created_at,
+    t.owner,
+    t.pending,
+    billingData.apartment,
+    billingData.city,
+    billingData.country,
+    billingData.email,
+    billingData.first_name,
+    billingData.floor,
+    billingData.last_name,
+    billingData.phone_number,
+    billingData.postal_code,
+    billingData.shipping_method,
+    billingData.state,
+    billingData.street,
+    t.source_data?.pan,
+    t.source_data?.sub_type,
+    t.source_data?.type,
+    t.success,
+  ];
+
+  const concatenated = fields.map(v => (v === undefined || v === null) ? "" : String(v)).join("");
+  return crypto.createHmac("sha512", secret).update(concatenated).digest("hex");
+}
+
 // ── Tier mapping from merchant_order_id ──────────────────────────
 // Format: CORVUS-{uid8}-{tier}-{billingChar}-{timestamp}
 function parseMerchantId(merchant_order_id) {
   const parts = (merchant_order_id || "").split("-");
-  // CORVUS - uid8 - tier - billingChar - ts
   if (parts.length >= 5 && parts[0] === "CORVUS") {
     return {
       uid_prefix: parts[1],
@@ -39,29 +85,32 @@ function parseMerchantId(merchant_order_id) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const HMAC_SECRET = process.env.PAYMOB_HMAC_SECRET || "";
-  const received_hmac = req.query.hmac || "";
+  const HMAC_SECRET    = process.env.PAYMOB_HMAC_SECRET || "";
+  const received_hmac  = req.query.hmac || "";
 
   try {
-    // ── HMAC verification ─────────────────────────────────────────
+    const payload = req.body || {};
+    const obj     = payload.obj || {};
+
+    // ── HMAC verification (PayMob field-concatenation method) ─────
     if (HMAC_SECRET) {
-      const raw = req.body ? JSON.stringify(req.body) : "";
-      const computed = crypto
-        .createHmac("sha512", HMAC_SECRET)
-        .update(raw)
-        .digest("hex");
-      if (!crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(received_hmac))) {
-        console.error("[Webhook] Invalid HMAC — possible spoofing");
+      if (!received_hmac) {
+        console.error("[Webhook] No HMAC in query string");
+        return res.status(403).json({ error: "Missing HMAC" });
+      }
+      const computed = computePaymobHmac(obj, HMAC_SECRET);
+      // timingSafeEqual requires same length buffers
+      const a = Buffer.from(computed,       "hex");
+      const b = Buffer.from(received_hmac,  "hex");
+      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+        console.error("[Webhook] HMAC mismatch — possible spoofing");
         return res.status(403).json({ error: "Invalid HMAC" });
       }
     } else {
       console.warn("[Webhook] PAYMOB_HMAC_SECRET not set — skipping HMAC check");
     }
 
-    const payload = req.body || {};
-    const obj     = payload.obj || {};
     const success = obj.success === true;
-
     if (!success) {
       console.log("[Webhook] Payment not successful — ignoring");
       return res.json({ received: true, action: "ignored" });
@@ -73,7 +122,7 @@ export default async function handler(req, res) {
     const email          = obj.billing_data?.email || "";
     const transaction_id = String(obj.id || "");
 
-    console.log(`[Webhook] ✅ Payment success — ${merchant_id} — ${amount_cents} EGP`);
+    console.log(`[Webhook] Payment success — ${merchant_id} — ${amount_cents} EGP cents`);
 
     const parsed = parseMerchantId(merchant_id);
     if (!parsed) {
@@ -82,21 +131,17 @@ export default async function handler(req, res) {
     }
 
     const { tier, billing } = parsed;
-
-    // ── Update Firestore ──────────────────────────────────────────
     const db = getAdminDb();
 
-    // Find user by email (since we have email from billing_data)
+    // Find user by email
     if (email && email !== "NA") {
-      const usersRef = db.collection("users");
-      const snap = await usersRef.where("email", "==", email).limit(1).get();
+      const snap = await db.collection("users").where("email", "==", email).limit(1).get();
 
       if (!snap.empty) {
         const userDoc = snap.docs[0];
-        const uid = userDoc.id;
-
-        const now = new Date();
-        const expiry = new Date(now);
+        const uid     = userDoc.id;
+        const now     = new Date();
+        const expiry  = new Date(now);
         if (billing === "yearly") {
           expiry.setFullYear(expiry.getFullYear() + 1);
         } else {
@@ -116,7 +161,6 @@ export default async function handler(req, res) {
           updated_at:           now.toISOString(),
         });
 
-        // Also write to payments subcollection for audit trail
         await db.collection("users").doc(uid)
           .collection("payments").doc(transaction_id).set({
             tier, billing, amount_cents,
@@ -126,7 +170,7 @@ export default async function handler(req, res) {
             created_at: now.toISOString(),
           });
 
-        console.log(`[Webhook] ✅ Updated user ${uid} → tier=${tier} billing=${billing}`);
+        console.log(`[Webhook] Updated user ${uid} => tier=${tier} billing=${billing}`);
         return res.json({ received: true, action: "subscription_activated", uid, tier });
       } else {
         console.warn(`[Webhook] No user found with email: ${email}`);
@@ -137,7 +181,7 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error("[Webhook] Error:", err);
-    // Always return 200 to PayMob so they don't retry
+    // Always 200 so PayMob doesn't retry
     return res.status(200).json({ received: true, error: err.message });
   }
 }

@@ -141,12 +141,15 @@ export default async function handler(req, res) {
     }
 
     // ── Card: return key + iframe info ────────────────────────────
+    if (!PAYMOB_IFRAME_ID) {
+      return res.status(503).json({ error: "PayMob not fully configured — add PAYMOB_IFRAME_ID to Vercel env vars" });
+    }
     return res.json({
       payment_key,
       order_id,
       merchant_order_id,
       iframe_id: PAYMOB_IFRAME_ID,
-      iframe_url: `https://accept.paymob.com/api/acceptance/iframes/${PAYMOB_IFRAME_ID}?payment_token=${payment_key}`,
+      iframe_url: "https://accept.paymob.com/api/acceptance/iframes/" + PAYMOB_IFRAME_ID + "?payment_token=" + payment_key,
       payment_type: "card",
     });
 
