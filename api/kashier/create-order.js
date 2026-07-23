@@ -12,8 +12,14 @@
 import crypto from "crypto";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
 
-function getAdminAuth() {
+const KASHIER_MERCHANT_ID  = process.env.KASHIER_MERCHANT_ID  || "";
+const KASHIER_API_KEY      = process.env.KASHIER_API_KEY      || "";
+const KASHIER_MODE         = process.env.KASHIER_MODE         || "live";   // "test" | "live"
+const APP_URL              = process.env.VITE_APP_URL         || "https://postureai-pro-omega-nine.vercel.app";
+
+function getAdminApp() {
   if (!getApps().length) {
     initializeApp({
       credential: cert({
@@ -23,13 +29,29 @@ function getAdminAuth() {
       }),
     });
   }
-  return getAuth();
 }
+function getAdminAuth() { getAdminApp(); return getAuth(); }
+function getAdminDb()   { getAdminApp(); return getFirestore(); }
 
-const KASHIER_MERCHANT_ID  = process.env.KASHIER_MERCHANT_ID  || "";
-const KASHIER_API_KEY      = process.env.KASHIER_API_KEY      || "";
-const KASHIER_MODE         = process.env.KASHIER_MODE         || "live";   // "test" | "live"
-const APP_URL              = process.env.VITE_APP_URL         || "https://postureai-pro-omega-nine.vercel.app";
+// Referral credit (EGP) applied as a checkout discount. Not deducted from
+// the balance here — only once the webhook confirms the payment actually
+// succeeded, so an abandoned/failed checkout doesn't burn it. See
+// api/kashier/webhook.js for the reconciliation step.
+async function applyReferralDiscount(db, uid, amount, minChargeEGP = 1) {
+  if (!uid || uid === "anon") return { amount, creditAppliedEGP: 0 };
+  try {
+    const userDoc = await db.collection("users").doc(uid).get();
+    const credits = Number(userDoc.exists ? (userDoc.data().referral_credits || 0) : 0);
+    if (credits <= 0) return { amount, creditAppliedEGP: 0 };
+    const maxDiscount = Math.max(0, amount - minChargeEGP);
+    const creditAppliedEGP = Math.min(Math.floor(credits), Math.floor(maxDiscount));
+    if (creditAppliedEGP <= 0) return { amount, creditAppliedEGP: 0 };
+    return { amount: amount - creditAppliedEGP, creditAppliedEGP };
+  } catch (e) {
+    console.error("[Kashier create-order] referral discount lookup failed:", e);
+    return { amount, creditAppliedEGP: 0 };
+  }
+}
 
 // ── Prices (EGP) ─────────────────────────────────────────────────
 const PRICES = {
@@ -116,10 +138,24 @@ export default async function handler(req, res) {
     amount = Math.max(1, amount);
 
     // Kashier expects amount as string with 2 decimal places
-    const amountStr  = amount.toFixed(2);
+    const db = getAdminDb();
+    const { amount: discountedAmount, creditAppliedEGP } = await applyReferralDiscount(db, uid, amount);
+    const amountStr  = discountedAmount.toFixed(2);
     const currency   = "EGP";
     const orderId    = "CORVUS-" + uid.slice(0, 8) + "-" + tier + "-" + (billing[0]) + "-" + Date.now();
     const hash       = kashierSignature(KASHIER_MERCHANT_ID, orderId, amountStr, currency, KASHIER_API_KEY);
+
+    if (creditAppliedEGP > 0) {
+      try {
+        await db.collection("pending_orders").doc(orderId).set({
+          uid, tier, billing, credit_applied_egp: creditAppliedEGP,
+          base_amount_egp: amount,
+          created_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error("[Kashier create-order] failed to record pending order credit:", e);
+      }
+    }
 
     const successUrl  = APP_URL + "/payment/success";
     const failureUrl  = APP_URL + "/payment/failure";
@@ -158,6 +194,7 @@ export default async function handler(req, res) {
       merchant_order_id: orderId,
       amount: amountStr,
       currency,
+      credit_applied_egp: creditAppliedEGP,
     });
 
   } catch (err) {
