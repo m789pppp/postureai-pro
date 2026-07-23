@@ -2043,6 +2043,18 @@ export default function LandingPage({ onNavigate }) {
     document.documentElement.lang = lang;
   }, [lang]);
 
+  // Deep-link support: /#casestudies (from ProductPage.jsx etc.) should
+  // land the visitor on that section, not just the top of the page.
+  // Runs once on mount, after the sections below have painted.
+  useEffect(() => {
+    const h = window.location.hash.replace(/^#\/?/, "");
+    if (!h) return;
+    const t = setTimeout(() => {
+      document.getElementById(h)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <div style={{ background:LPV7_TOKENS.bg, minHeight:"100vh", color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
       <GlobalStyle/>

@@ -2129,11 +2129,34 @@ export default function App(){
     const p = h.replace(/^#\/?/, "") || "landing";
     // Map known aliases
     const ALIAS = { settings:"home", analytics:"home", dashboard:"home", billing:"home", subscription:"home" };
+    // Landing-page in-page section anchors (e.g. "/#casestudies" linked
+    // from ProductPage.jsx) aren't separate app pages — they were
+    // falling through to the "home" dashboard fallback below, a dead
+    // end for a logged-out visitor. Route them back to "landing";
+    // LandingPageV7's own mount effect scrolls to the anchor.
+    const LANDING_SECTIONS = new Set(["features","casestudies","how","faq"]);
+    if (LANDING_SECTIONS.has(p)) return "landing";
     return ALIAS[p] || (VALID_PAGES.has(p) ? p : "home");
   };
   const [page, setPageRaw] = useState(() => {
     const h = window.location.hash;
-    return h ? hashToPage(h) : "landing";
+    if (h) return hashToPage(h);
+    // BUG FIX: every standalone marketing page (Product/Solutions/Pricing/
+    // HowItWorks/FAQ + their shared StandaloneLayout header) links Sign In
+    // and Sign Up as real paths — href="/auth" and href="/auth?mode=signup"
+    // — not hashes. Those paths aren't in main.jsx's STANDALONE_ROUTES, so
+    // they fall through to loading this App with an empty hash, which
+    // always defaulted to "landing" and silently dropped the user back on
+    // the homepage instead of the sign-in/sign-up form they clicked for.
+    // This was effectively breaking every conversion CTA on the marketing
+    // site. Recognize the real path here too, then normalize to the hash
+    // form so back/forward and the rest of the app's hash-based routing
+    // keep working exactly as before.
+    if (/^\/auth\/?$/.test(window.location.pathname)) {
+      window.history.replaceState({}, "", "#auth");
+      return "auth";
+    }
+    return "landing";
   });
   // Firebase action URLs (password reset / email verify from email links)
   const _fbp = new URLSearchParams(window.location.search);
