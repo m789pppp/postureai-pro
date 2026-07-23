@@ -21,7 +21,7 @@ const ROADMAP_ITEMS = [
 
 const CHANGELOG = [
   { version:"v50.0", date:"2026-06-01", type:"major",   title:"Phase 12 — Enterprise Scale", items:["API Marketplace with 15 endpoints","White-Label configuration panel","Multi-Tenant Manager for super-admins","Audit System (SOC2/HIPAA/GDPR/ISO)","Enterprise Admin Tools with feature flags"] },
-  { version:"v43.0", date:"2026-04-15", type:"major",   title:"Phase 11 — Billing & Design", items:["Billing Dashboard with Stripe","Design System tokens","Advanced Analytics (808-line rebuild)","PayMob v2 integration for MENA"] },
+  { version:"v43.0", date:"2026-04-15", type:"major",   title:"Phase 11 — Billing & Design", items:["Billing Dashboard with Stripe","Design System tokens","Advanced Analytics (808-line rebuild)","Kashier v2 integration for MENA"] },
   { version:"v12.0", date:"2026-02-20", type:"major",   title:"Phase 10 — AI Layer",         items:["OnboardingWizard multi-step","AIInsights real-time panel","PredictiveAI risk modeling","WorkforceAnalytics for HR","EnterpriseRBAC & SSO"] },
   { version:"v8.4",  date:"2026-01-10", type:"minor",   title:"Performance & Fixes",         items:["50% faster frame analysis","Fixed calibration on ultrawide","Redis cache hit rate improved to 94%"] },
   { version:"v8.0",  date:"2025-12-01", type:"major",   title:"Gamification",                items:["Leaderboards & streaks","Achievement badges system","Team challenges"] },

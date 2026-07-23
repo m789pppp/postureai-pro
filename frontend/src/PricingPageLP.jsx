@@ -497,7 +497,7 @@ export default function PricingPageStandalone() {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 64px" }}>
           {[
             ["Can I switch plans anytime?","Yes. Upgrades are instant and pro-rated. Downgrades take effect at end of billing period. No penalties."],
-            ["What payment methods?","Credit/debit cards, Vodafone Cash, Fawry, and bank transfer for annual plans. EGP accepted via PayMob."],
+            ["What payment methods?","Credit/debit cards, Vodafone Cash, Fawry, and bank transfer for annual plans. EGP accepted via Kashier."],
             ["What happens after the trial?","You choose a paid plan or move to Free automatically. All your data and history is preserved either way."],
             ["Discounts for NGOs or universities?","Yes — 50% off for verified educational institutions and NGOs. Contact us with your organisation details."],
             ["Is the company plan per active user?","Yes, you're billed only for active users each month. Inactive accounts don't count toward your bill."],

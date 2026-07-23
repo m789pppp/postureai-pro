@@ -1,0 +1,12 @@
+{
+  "name": "posmoz-postureai-pro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Posmoz PostureAI Pro — root package for Vercel serverless functions",
+  "dependencies": {
+    "firebase-admin": "^12.2.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

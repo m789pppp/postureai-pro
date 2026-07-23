@@ -169,8 +169,8 @@ export const AIAPI = {
 
 // ── Payment API ────────────────────────────────────────────────────
 export const PaymentAPI = {
-  /** Create a PayMob payment intent (card or mobile wallet). */
-  createPayMobPayment: (data) => apiFetch("/paymob/create-payment", { method: "POST", body: data }),
+  /** Create a Kashier payment order. */
+  createKashierPayment: (data) => apiFetch("/kashier/create-order", { method: "POST", body: data }),
 
   /** Stripe checkout session. */
   createStripe:    (data) => apiFetch("/stripe/create-session",  { method: "POST", body: data }),
@@ -290,7 +290,7 @@ export const MarketplaceAPI = {
   getTherapist:   (id)   => apiFetch(`/marketplace/therapists/${id}`),
   /** Real bookable time slots for a therapist over the next N days (empty array + has_template:false if they have no weekly template set). */
   getSlots:       (id, days=14) => apiFetch(`/marketplace/therapists/${id}/slots?days=${days}`),
-  /** Patient-facing: create a booking request (opens a PayMob payment). */
+  /** Patient-facing: create a booking request (opens a Kashier payment). */
   createBooking:  (data) => apiFetch("/marketplace/bookings",        { method: "POST", body: data }),
   /** Patient-facing: my own booking history. */
   myBookings:     ()     => apiFetch("/marketplace/bookings"),
