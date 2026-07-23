@@ -564,7 +564,7 @@ LANGUAGE: Professional English.`;
             background:"rgba(255,255,255,.04)", color:COACH_TOKENS.muted, cursor:"pointer",
             display:"flex", alignItems:"center", justifyContent:"center", fontSize:13,
             flexShrink:0, transition:"all .15s",
-          }}>✕</button>
+          }} aria-label="Close">✕</button>
         </div>
 
         {/* Messages */}

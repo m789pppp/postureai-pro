@@ -1129,7 +1129,7 @@ export function EnterpriseRBAC({ orgId, adminUid, profile, members=[], cs, lang=
               ))}
               <button onClick={onClose} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,.06)",
                 border:`1px solid ${RBAC_TOKENS.border}`,color:RBAC_TOKENS.muted,cursor:"pointer",fontSize:14,
-                display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Close">✕</button>
             </div>
           </div>
         </div>

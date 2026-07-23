@@ -1979,7 +1979,7 @@ function UpgradePrompt({cs,t,reason,onUpgrade,onDismiss,onClose,lang}){
       onClick={e=>{ if(e.target===e.currentTarget) close(); }}
     >
       <div style={{background:cs.card||"#0f1e2e",border:`1px solid rgba(99,102,241,.4)`,borderRadius:16,padding:"24px 24px 20px",maxWidth:360,width:"calc(100% - 48px)",position:"relative"}}>
-        <button onClick={close} style={{position:"absolute",top:12,right:12,background:"none",border:"none",color:cs.muted||"#64748b",fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
+        <button onClick={close} style={{position:"absolute",top:12,right:12,background:"none",border:"none",color:cs.muted||"#64748b",fontSize:18,cursor:"pointer",lineHeight:1}} aria-label="Close">✕</button>
         <div style={{fontSize:28,marginBottom:12}}>🚀</div>
         <div style={{fontSize:15,fontWeight:700,color:cs.text||"#f1f5f9",marginBottom:6}}>{isAr?"ترقية للاستمرار":"Upgrade to continue"}</div>
         <div style={{fontSize:12,color:cs.muted||"#94a3b8",marginBottom:20,lineHeight:1.6}}>{reason||(isAr?"افتح المميزات المتقدمة بخطة أعلى":"Unlock advanced features with a higher tier")}</div>
@@ -5078,7 +5078,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {/* User row */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
             {profile?.photoURL
-              ? <img src={profile.photoURL} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
+              ? <img src={profile.photoURL} alt={profile?.name || (isAr?"صورة الملف الشخصي":"Profile photo")} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
               : (() => {
                   // #16: use actual first name for initials — if profile?.name looks
                   // like an email address/prefix, fall back to "?" not the raw email.
