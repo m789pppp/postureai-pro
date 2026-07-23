@@ -368,6 +368,20 @@ function _shouldElevateToElite(email) {
 function _applyEliteElevation(data) {
   if (!data) return data;
   const TIER_LEVEL = { standard:0, basic:1, professional:2, elite:3 };
+
+  // ── Subscription expiry check ─────────────────────────────────────
+  // If paid subscription has expired, downgrade to standard (client-side guard)
+  // Webhook sets subscription_expiry; if past and subscription_status is active,
+  // the user should be on standard until they renew.
+  if (data.subscription_expiry && data.subscription_status === "active" && !data.is_trial) {
+    const expiry = new Date(data.subscription_expiry);
+    if (!isNaN(expiry) && expiry < new Date()) {
+      data.tier = "standard";
+      data.subscription_status = "expired";
+    }
+  }
+
+  // ── Elite auto-elevation (domain/email whitelist) ─────────────────
   if (_shouldElevateToElite(data.email || "")) {
     const current = TIER_LEVEL[String(data.tier||"standard").toLowerCase()] ?? 0;
     if (current < 3) {
