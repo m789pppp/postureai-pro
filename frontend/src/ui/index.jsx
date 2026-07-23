@@ -977,15 +977,22 @@ export function BarChart({ data, color = "#6366f1", cs, height = 44 }) {
   if (!data?.length) return null;
   const max = Math.max(...data.map(d=>d.v||0), 1);
   return (
-    <div style={{ display:"flex", alignItems:"flex-end", gap:4, height }}>
+    // direction:"ltr" is intentional: this is a time-series chart, and
+    // chronological order (oldest→newest, left→right) must stay fixed
+    // regardless of UI language. Without it, this flex row inherits
+    // direction:rtl from the Arabic UI and the browser auto-mirrors the
+    // bars — the most recent session (last item, e.g. "S10") ends up on
+    // the visual LEFT instead of the chart's chronological end, making
+    // Session History read backwards for Arabic users.
+    <div dir="ltr" style={{ display:"flex", alignItems:"flex-end", gap:4, height }}>
       {data.map((d,i) => (
         <div key={i} style={{ flex:1, display:"flex", flexDirection:"column",
           alignItems:"center", gap:3 }}>
           <div style={{
             width:"100%", borderRadius:"3px 3px 0 0", background:color,
-            height:Math.max(2, Math.round((d.v/max)*height)),
+            height:Math.max(2, Math.round(((d.v||0)/max)*height)),
             transition:"height .5s ease", opacity:.85,
-          }} title={`${d.l}: ${d.v}`}/>
+          }} title={`${d.l}: ${d.v||0}`}/>
           {d.l&&<div style={{ fontSize:7, color:cs?.muted||UI_TOKENS.muted,
             overflow:"hidden", whiteSpace:"nowrap" }}>{d.l}</div>}
         </div>
