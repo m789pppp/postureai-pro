@@ -204,7 +204,7 @@ export async function createUserProfile(uid, data, referredBy = null) {
     created_at: _serverTimestamp(), updated_at: _serverTimestamp(),
   };
   await setDoc(doc(db,"users",uid), profile);
-  if (referredBy) { try { await applyReferralCredit(referredBy, uid, data.email); } catch(e){} }
+  if (referredBy) { try { await trackReferral(referredBy, uid, data.email); } catch(e){} }
 
   // Fire welcome drip sequence — fire-and-forget, never blocks profile creation
   const _API = API_BASE_URL;
@@ -226,54 +226,47 @@ const BACKEND_URL = API_BASE_URL;
 }
 
 // ── Referral ──────────────────────────────────────────────────────
-export async function applyReferralCredit(referrerUid, newUserUid, newUserEmail) {
-  const q = query(collection(db,"users"), where("uid","==",referrerUid), limit(1));
-  const snaps = await getDocs(q);
-  if (snaps.empty) return { ok:false };
-  const referrerDoc = snaps.docs[0];
-  const referrer    = referrerDoc.data();
-  const existQ = query(collection(db,"referrals"), where("referred_uid","==",newUserUid), limit(1));
-  const existing = await getDocs(existQ);
-  if (!existing.empty) return { ok:false, reason:"Already credited" };
-  const batch = writeBatch(db);
-  batch.set(doc(collection(db,"referrals")), {
-    referrer_uid: referrerUid, referrer_email: referrer.email||"",
-    referred_uid: newUserUid, referred_email: newUserEmail,
-    status: "pending", discount_pct: 20, commission_egp: 0,
-    created_at: _serverTimestamp(),
-  });
-  batch.update(doc(db,"users",referrerDoc.id), { referral_count: increment(1), updated_at: _serverTimestamp() });
-  await batch.commit();
-  return { ok:true, discount_pct:20 };
-}
-
-export async function convertReferral(newUserUid, amountPaid) {
-  const q = query(collection(db,"referrals"), where("referred_uid","==",newUserUid), where("status","==","pending"), limit(1));
-  const snaps = await getDocs(q);
-  if (snaps.empty) return;
-  const refDoc = snaps.docs[0]; const referral = refDoc.data();
-  const commission = Math.round(amountPaid * 0.10);
-  const batch = writeBatch(db);
-  batch.update(doc(db,"referrals",refDoc.id), { status:"converted", commission_egp:commission, converted_at:_serverTimestamp() });
-  batch.update(doc(db,"users",referral.referrer_uid), { referral_credits:increment(commission), updated_at:_serverTimestamp() });
-  await batch.commit();
+// Backed by the consolidated Flask referral system (see backend.py —
+// /api/referral/stats, /track, /convert). Previously this file wrote
+// straight to Firestore with its own separate, incompatible referral
+// pipeline (queried a `uid` field using a value that was actually a
+// referral *code*, so it could never match) — replaced 2026-07-23.
+export async function trackReferral(refCode, newUserUid, newUserEmail) {
+  if (!refCode || !newUserUid) return { ok:false };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/referral/track`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref_code: refCode, uid: newUserUid, email: newUserEmail || "" }),
+    });
+    return await res.json();
+  } catch (e) {
+    return { ok:false, reason: String(e) };
+  }
 }
 
 export async function getReferralStats(uid) {
-  const q = query(collection(db,"referrals"), where("referrer_uid","==",uid), orderBy("created_at","desc"), limit(50));
-  const snaps = await getDocs(q);
-  const refs  = snaps.docs.map(d=>({id:d.id,...d.data()}));
-  return { total:refs.length, converted:refs.filter(r=>r.status==="converted").length,
-           pending:refs.filter(r=>r.status==="pending").length,
-           earned:refs.reduce((a,r)=>a+(r.commission_egp||0),0), referrals:refs };
-}
-
-export async function getReferralDiscount(referralCode) {
-  if (!referralCode) return null;
-  const q = query(collection(db,"users"), where("referral_code","==",referralCode), limit(1));
-  const snaps = await getDocs(q);
-  if (snaps.empty) return null;
-  return { discount_pct:20, referrer_uid:snaps.docs[0].data().uid };
+  try {
+    const { getAuth } = await import("firebase/auth");
+    const tok = await getAuth().currentUser?.getIdToken?.();
+    const res = await fetch(`${API_BASE_URL}/api/referral/stats`, {
+      headers: tok ? { "Authorization": `Bearer ${tok}` } : {},
+    });
+    const d = await res.json();
+    if (!d.ok) return { total:0, converted:0, pending:0, earned:0, credits:0, referrals:[], ref_code:null };
+    const refs = d.referrals || [];
+    return {
+      total: d.count || 0,
+      converted: refs.filter(r=>r.status==="active").length,
+      pending: refs.filter(r=>r.status==="pending").length,
+      earned: d.total_earned || 0,
+      credits: d.credits || 0,
+      referrals: refs,
+      ref_code: d.ref_code,
+    };
+  } catch (e) {
+    return { total:0, converted:0, pending:0, earned:0, credits:0, referrals:[], ref_code:null };
+  }
 }
 
 // ── Email Nurture ─────────────────────────────────────────────────
@@ -522,7 +515,17 @@ export async function recordPayment(uid, data) {
 export async function confirmPayment(paymentId, uid, tier, months) {
   await updateDoc(doc(db,"payments",paymentId), { status:"confirmed", confirmed_at:_serverTimestamp(), updated_at:_serverTimestamp() });
   await updateUserTier(uid, tier, months);
-  try { const p=(await getDoc(doc(db,"payments",paymentId))).data(); await convertReferral(uid, p?.amount||0); } catch(e){}
+  try {
+    const { getAuth } = await import("firebase/auth");
+    const tok = await getAuth().currentUser?.getIdToken?.();
+    if (tok) {
+      await fetch(`${API_BASE_URL}/api/referral/convert`, {
+        method: "POST",
+        headers: { "Content-Type":"application/json", "Authorization": `Bearer ${tok}` },
+        body: JSON.stringify({ uid, plan: tier }),
+      });
+    }
+  } catch(e){}
 }
 export async function rejectPayment(paymentId, reason) {
   await updateDoc(doc(db,"payments",paymentId), { status:"rejected", reject_reason:reason||"Not verified", rejected_at:_serverTimestamp(), updated_at:_serverTimestamp() });
