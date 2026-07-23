@@ -1,6 +1,6 @@
 /**
  * Corvus — Physiotherapist Marketplace v1
- * Admin-curated therapist directory + booking flow (PayMob per-session payment).
+ * Admin-curated therapist directory + booking flow (Kashier per-session payment).
  * No public self-serve therapist signup yet — see admin "Manage Therapists" tab.
  */
 import { useState, useEffect, useCallback } from "react";

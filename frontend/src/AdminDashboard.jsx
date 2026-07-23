@@ -662,7 +662,7 @@ function OverviewTab({ users, payments, health, totalRevenue, pendingPayments, a
             {health ? [
               { label:"Backend API", ok: health.status === "ok", sub: `v${health.version}` },
               { label:"Corvus Offline AI", ok: true, sub: "Instant, no downloads" },
-              { label:"PayMob",      ok: health.integrations?.paymob?.configured, sub: "Billing" },
+              { label:"Kashier",      ok: health.integrations?.kashier?.configured, sub: "Billing" },
               { label:"PDF Engine",  ok: health.pdf_available, sub: "ReportLab" },
               { label:"Redis",       ok: health.redis?.status === "ok", sub: "Cache & sessions" },
             ].map((item, i) => <HealthDot key={i} {...item} />)

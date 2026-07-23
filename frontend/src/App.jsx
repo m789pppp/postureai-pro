@@ -6,7 +6,7 @@ import {
   updateUserTier, saveSession, recordPayment, confirmPayment,
   rejectPayment, listenToPayment, getAllPayments, getAllUsers,
   isHREmail, isCompanyDomain, isAutoApproveEmail,
-  SUPPORT_EMAIL, ADMIN_PHONE, PAYMOB_IFRAME_ID,
+  SUPPORT_EMAIL, ADMIN_PHONE,
   AUTO_APPROVE_DOMAIN, serverTimestamp,
   notifyPaymentPending, notifyPaymentConfirmed,
   getCompany, createCompany, getUserSessions, onUserSessions, updateUserProfile,
@@ -86,13 +86,13 @@ const TR = {
 
 // ══════════════════════════════════════════════════════════════════
 // CORVUS — Single Source of Truth for Pricing
-// EGP = Egypt market (PayMob) · USD = Gulf/International market (Stripe)
+// EGP = Egypt market (Kashier) · USD = Gulf/International market (Stripe)
 // Annual = 20% discount (2 months free) — applied at checkout, not stored here
 // ══════════════════════════════════════════════════════════════════
 const COUPONS = {}; // Coupons validated server-side via /api/coupon/validate
 
 // ── B2C Pricing (Egypt + Gulf) ────────────────────────────────────
-// Egypt: PayMob in EGP | Gulf/Global: Stripe in USD
+// Egypt: Kashier in EGP | Gulf/Global: Stripe in USD
 // Amounts stored in CENTS (EGP cents / USD cents)
 const TIERS = {
   standard:{
@@ -135,7 +135,7 @@ for(const k in TIERS){
 // B2B TIERS — Companies only. Completely separate from B2C TIERS.
 // IDs: b2b_starter / b2b_growth / b2b_enterprise
 // FLAT-RATE pricing — one price for the whole plan up to a seat cap, NOT
-// per-seat. Egypt: PayMob EGP | Gulf: Stripe USD.
+// per-seat. Egypt: Kashier EGP | Gulf: Stripe USD.
 // !! Never mix these IDs with B2C IDs (standard/basic/professional/elite) !!
 // ══════════════════════════════════════════════════════════════════
 const B2B_TIERS = {
@@ -210,7 +210,7 @@ const TIER_NORMALIZE={
 // which otherwise skip the map and break TIERS[...] lookups downstream.
 const normalizeTier=(t)=>{const k=String(t||"").toLowerCase().trim();return TIER_NORMALIZE[k]||k||"standard";};
 
-// ── Payment Methods — Automatic PayMob only ───────────────────────
+// ── Payment Methods — Kashier ─────────────────────────────────────
 const PAY_METHODS = [
   {id:"visa_card",   name:"Visa / Mastercard", nameAr:"فيزا / ماستركارد",
    icon:"💳", color:"#1a56db", instant:true,
@@ -219,8 +219,8 @@ const PAY_METHODS = [
    type:"card"},
   {id:"vodafone_cash", name:"Vodafone Cash",  nameAr:"Vodafone Cash",
    icon:"📱", color:"#e4002b", instant:true,
-   desc:"Pay via PayMob Vodafone Cash wallet",
-   descAr:"ادفع عبر Vodafone Cash بـ PayMob",
+   desc:"Pay via Kashier Vodafone Cash wallet",
+   descAr:"ادفع عبر Vodafone Cash بـ Kashier",
    type:"wallet"},
 ];
 
@@ -249,20 +249,23 @@ async function askGemini(prompt){
   }catch{return null;}
 }
 
-async function initPayMob({amount_egp,tier,user_email,user_name,billing,payment_type="card",wallet_number=""}){
+async function initKashier({tier,user_email,user_name,billing,uid=""}){
   try{
-    const { PaymentAPI } = await import("./services/api.js");
-    const r = await PaymentAPI.createPayMobPayment({
-      amount_cents: amount_egp*100, currency:"EGP", tier, billing,
-      payment_type, wallet_number,
-      billing_data:{email:user_email,first_name:user_name?.split(" ")[0]||"Customer",
-        last_name:user_name?.split(" ")[1]||"",phone_number:wallet_number||"N/A",
-        apartment:"NA",floor:"NA",street:"NA",building:"NA",shipping_method:"NA",
-        postal_code:"NA",city:"Cairo",country:"EG",state:"Cairo"}
+    const r = await fetch("/api/kashier/create-order",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        tier, billing, uid,
+        billing_data:{
+          email:user_email,
+          first_name:user_name?.split(" ")[0]||"Customer",
+          last_name:user_name?.split(" ").slice(1).join(" ")||"",
+        }
+      })
     });
-    if(payment_type==="mobile_wallet"&&r?.redirect_url) return{type:"wallet",url:r.redirect_url};
-    if(r?.payment_key) return{type:"card",url:`https://accept.paymob.com/api/acceptance/iframes/${PAYMOB_IFRAME_ID}?payment_token=${r.payment_key}`};
-  }catch(e){console.error("PayMob:",e);}
+    const d = await r.json();
+    if(d?.redirect_url) return{type:"redirect",url:d.redirect_url};
+  }catch(e){console.error("Kashier:",e);}
   return null;
 }
 
@@ -1571,7 +1574,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
   </div>;
 }
 
-// ── Pricing Page — Automatic PayMob only ─────────────────────────
+// ── Pricing Page — Automatic Kashier only ───────────────────────────
 // ⚠️ DEAD CODE — this component is defined but never rendered anywhere in
 // this file (no <Pricing .../> usage exists). The actual pricing UI used in
 // production is PricingPage.jsx (a separate file), reached via page==="pricing".
@@ -1587,7 +1590,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
   const[paymentId,setPaymentId]=useState(null);
   const[proc,setProc]=useState(false);
   const[aiTip,setAiTip]=useState(null);
-  const[paymobUrl,setPaymobUrl]=useState(null);
+  const[kashierUrl,setKashierUrl]=useState(null);
   const[walletNumber,setWalletNumber]=useState("");
   const[walletStep,setWalletStep]=useState(false);
   const[coupon,setCoupon]=useState("");
@@ -1596,11 +1599,11 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
   const[couponChecking,setCouponChecking]=useState(false);
   const[referralDiscount,setReferralDiscount]=useState(null);
 
-  // Persist paymob URL across accidental back-navigations
+  // Persist kashier URL across accidental back-navigations
   useEffect(()=>{
-    const saved=sessionStorage.getItem("paymob_pending_url");
-    const savedStep=sessionStorage.getItem("paymob_pending_step");
-    if(saved&&savedStep==="paymob"){setPaymobUrl(saved);setStep("paymob");}
+    const saved=sessionStorage.getItem("kashier_pending_url");
+    const savedStep=sessionStorage.getItem("kashier_pending_step");
+    if(saved&&savedStep==="kashier"){setKashierUrl(saved);setStep("kashier");}
   },[]);
 
   // Auto-apply referral discount from URL
@@ -1657,46 +1660,31 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
     setCouponChecking(false);
   }
 
-  async function doPayMob(){
+  async function doKashier(){
     setProc(true);
-    if(payMethod==="vodafone_cash"&&!walletNumber){setWalletStep(true);setProc(false);return;}
-    const payType=payMethod==="vodafone_cash"?"mobile_wallet":"card";
-    const result=await initPayMob({
-      amount_egp:price,tier:selTier,user_email:user.email,
-      user_name:profile?.name||"",billing,payment_type:payType,
-      wallet_number:walletNumber,seats});
-    if(result?.type==="wallet"&&result?.url){
-      window.open(result.url,"_blank");
-      const pid=await recordPayment(user.uid,{
-        tier:selTier,amount:price,currency:"EGP",billing_cycle:billing,
-        payment_method:payMethod,ref_code:"AUTO-"+Date.now(),
-        user_email:user.email,user_name:profile?.name||"",
-        company:profile?.company||"",coupon:couponData?.label||null,seats,
-        status:"pending",auto:true});
-      setPaymentId(pid);
-      PaymentAPI.notifyPayment({tier:selTier,amount:price,user_email:user.email,
-          payment_method:payMethod,auto:true,seats}).catch(()=>{});
-      setStep("waiting");
-    }else if(result?.type==="card"&&result?.url){
-      // Save to sessionStorage so Back button doesn't lose state
-      sessionStorage.setItem("paymob_pending_url",result.url);
-      sessionStorage.setItem("paymob_pending_step","paymob");
-      setPaymobUrl(result.url);setStep("paymob");
+    const result=await initKashier({
+      tier:selTier,user_email:user.email,
+      user_name:profile?.name||"",billing,
+      uid:user?.uid||""});
+    if(result?.type==="redirect"&&result?.url){
+      sessionStorage.setItem("kashier_pending_url",result.url);
+      sessionStorage.setItem("kashier_pending_step","kashier");
+      setKashierUrl(result.url);setStep("kashier");
     }else{
-      addToast(isAr?"تأكد من ضبط PayMob في الباك اند":"PayMob not configured — check backend/.env","error");
+      addToast(isAr?"تأكد من ضبط Kashier في Vercel":"Kashier not configured — check Vercel env vars","error");
     }
     setProc(false);
   }
 
   if(step==="waiting")return <Waiting paymentId={paymentId} payMethod={payMethod} amount={price}
-    tier={selTier} refCode={""} onSuccess={()=>{sessionStorage.removeItem("paymob_pending_url");sessionStorage.removeItem("paymob_pending_step");onPaid();}} cs={cs} t={t}/>;
+    tier={selTier} refCode={""} onSuccess={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");onPaid();}} cs={cs} t={t}/>;
 
-  if(step==="paymob")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
-    <div style={{padding:"12px 18px",borderBottom:`0.5px solid ${cs.border}`,display:"flex",alignItems:"center",gap:11,background:cs.card}}>
-      <button onClick={()=>{sessionStorage.removeItem("paymob_pending_url");sessionStorage.removeItem("paymob_pending_step");setStep("method");}} style={{background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>← {isAr?"رجوع":"Back"}</button>
-      <div style={{fontSize:12,fontWeight:600,color:cs.text}}>🔒 {isAr?"دفع آمن عبر PayMob":"Secure payment via PayMob"} — {price?.toLocaleString()} EGP</div>
+  if(step==="kashier")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
+    <div style={{padding:"12px 18px",borderBottom:"0.5px solid "+cs.border,display:"flex",alignItems:"center",gap:11,background:cs.card}}>
+      <button onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{"← "}{isAr?"رجوع":"Back"}</button>
+      <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{"🔒 "}{isAr?"دفع آمن عبر Kashier":"Secure payment via Kashier"}{" — "}{price?.toLocaleString()}{" EGP"}</div>
     </div>
-    <iframe src={paymobUrl} style={{flex:1,border:"none",width:"100%"}} title="PayMob Checkout"/>
+    <iframe src={kashierUrl} style={{flex:1,border:"none",width:"100%"}} title="Kashier Checkout"/>
   </div>;
 
   return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
@@ -1715,7 +1703,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
         const steps=[
           {key:"plan",   label:isAr?"اختار الباقة":"Choose Plan"},
           {key:"method", label:isAr?"طريقة الدفع":"Payment"},
-          {key:"paymob", label:isAr?"إتمام الدفع":"Checkout"},
+          {key:"kashier", label:isAr?"إتمام الدفع":"Checkout"},
         ];
         const currentIdx=steps.findIndex(s=>s.key===step);
         return <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:0,marginBottom:22}}>
@@ -1836,7 +1824,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
         <Btn cs={cs} style={{width:"100%",padding:"14px 0",fontSize:13}} disabled={!price}
           onClick={()=>setStep("method")}>{t.continuePay}</Btn>
         <div style={{textAlign:"center",marginTop:12,fontSize:10,color:cs.muted}}>
-          {isAr?"دفع آمن عبر PayMob · SSL محمي · لا تُحفَظ بيانات البطاقة":"Secure payment via PayMob · SSL encrypted · Card data never stored"}
+          {isAr?"دفع آمن عبر Kashier · SSL محمي · لا تُحفَظ بيانات البطاقة":"Secure payment via Kashier · SSL encrypted · Card data never stored"}
         </div>
       </>}
 
@@ -1874,10 +1862,10 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
         </div>}
 
         <Btn cs={cs} style={{width:"100%",padding:"14px 0",fontSize:13}} disabled={proc}
-          onClick={doPayMob}>{proc?"...":(isAr?`ادفع ${price?.toLocaleString()} EGP`:`Pay ${price?.toLocaleString()} EGP`)}</Btn>
+          onClick={doKashier}>{proc?"...":(isAr?`ادفع ${price?.toLocaleString()} EGP`:`Pay ${price?.toLocaleString()} EGP`)}</Btn>
 
         <div style={{textAlign:"center",marginTop:14,fontSize:10,color:cs.muted}}>
-          🔒 {isAr?"مؤمّن بـ PayMob Egypt — PCI DSS compliant":"Secured by PayMob Egypt — PCI DSS compliant"}
+          🔒 {isAr?"مؤمّن بـ Kashier — PCI DSS compliant":"Secured by Kashier — PCI DSS compliant"}
         </div>
       </>}
     </div>
@@ -2358,7 +2346,7 @@ export default function App(){
   },[]);
   // Sentry already init in main.jsx; just handle SSO redirect
   useEffect(()=>{ handleSSORedirect().catch(()=>{}); },[]);
-  // Handle payment redirect from PayMob/Stripe
+  // Handle payment redirect from Kashier/Stripe
   const [paymentResult, setPaymentResult] = useState(null); // null | "success" | "cancelled"
   useEffect(()=>{
     const p=new URLSearchParams(window.location.search);

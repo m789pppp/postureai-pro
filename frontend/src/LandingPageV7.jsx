@@ -99,7 +99,7 @@ function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
 // ── Currency detection ──────────────────────────────────────────────
 // Real IP-based country lookup (not language!) — a Saudi visitor browsing
 // in Arabic still pays USD via Stripe; an Egyptian visitor browsing in
-// English still pays EGP via PayMob. Detected once per browser session,
+// English still pays EGP via Kashier. Detected once per browser session,
 // cached, with a silent fallback to the language heuristic if the lookup
 // fails (ad-blockers, offline, slow network) — never breaks the page.
 function useCurrency(arFallback) {
