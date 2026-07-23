@@ -251,9 +251,14 @@ async function askGemini(prompt){
 
 async function initKashier({tier,user_email,user_name,billing,uid=""}){
   try{
+    const { getAuthToken } = await import("./services/api.js");
+    const idToken = await getAuthToken().catch(()=>null);
     const r = await fetch("/api/kashier/create-order",{
       method:"POST",
-      headers:{"Content-Type":"application/json"},
+      headers:{
+        "Content-Type":"application/json",
+        ...(idToken ? { Authorization: "Bearer " + idToken } : {}),
+      },
       body:JSON.stringify({
         tier, billing, uid,
         billing_data:{
