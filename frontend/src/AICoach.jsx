@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { geminiChat, buildCoachContext, friendlyError } from "./gemini.js";
-import { getLocalAIStatus, onLocalAIStatus, localChatStream } from "./localAI.js";
+import { getLocalAIStatus, onLocalAIStatus, localChatStream, abortCurrentStream } from "./localAI.js";
 import { qualityFor, coachLimitLabel as tierCoachLimitLabel } from "./lib/tierQuality.js";
 
 // ── Design tokens ─────────────────────────────────────────────────
@@ -409,6 +409,9 @@ ${!context.has_calibration?"⚠️ No calibration — measurements may be 15-20%
 - Start answer immediately — no "Great question!" or "Of course!"
 - Max 220 words for conversation, up to 400 for full plans
 LANGUAGE: Professional English.`;
+
+    // Cancel any previous in-flight request before starting a new one
+    abortCurrentStream();
 
     const streamingId = Date.now();
     // Add empty AI message immediately — will fill as tokens arrive
