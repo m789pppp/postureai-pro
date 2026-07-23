@@ -143,7 +143,7 @@ export default function TrendChart({ sessions = [], cs, lang, onClose }) {
             <div style={{ fontSize:17,fontWeight:800,color:"#f0f6ff" }}>{isAr?"مسار الـ 30 يوم":"30-Day Trend"}</div>
             <div style={{ fontSize:12,color:"#64748b",marginTop:2 }}>{isAr?"متوسط النقاط اليومي + خط الاتجاه":"Daily avg score + regression trend line"}</div>
           </div>
-          <button onClick={onClose} style={{ width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",color:"#94a3b8",fontSize:16,cursor:"pointer" }}>✕</button>
+          <button onClick={onClose} style={{ width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",color:"#94a3b8",fontSize:16,cursor:"pointer" }} aria-label="Close">✕</button>
         </div>
 
         <div style={{ overflowY:"auto",padding:"20px 24px 28px" }}>

@@ -149,7 +149,7 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
         <button onClick={onClose}
           style={{ position:"absolute", top:16, right:16, background:"rgba(255,255,255,.08)",
             border:"none", borderRadius:8, width:32, height:32, cursor:"pointer",
-            color:SEC_TOKENS.text, fontSize:18, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+            color:SEC_TOKENS.text, fontSize:18, display:"flex", alignItems:"center", justifyContent:"center" }} aria-label="Close">✕</button>
 
         {/* Header */}
         <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:24 }}>

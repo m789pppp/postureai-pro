@@ -82,7 +82,7 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
                   <div style={{ fontSize:10, color:cs.textDim }}>{m.label}</div>
                 </div>
               ))}
-              <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }}>✕</button>
+              <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }} aria-label="Close">✕</button>
             </div>
           </div>
           <div style={{ display:"flex", gap:4 }}>

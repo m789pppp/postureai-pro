@@ -1070,7 +1070,7 @@ export function NotificationsHub({ orgId, profile, sessions=[], allUsers=[], cs,
                 <StatusDot status="connected"/>
                 <span style={{fontSize:10,fontWeight:700,color:NHUB_TOKENS.green}}>{globalQueue.pending.length} {isAr?"في الطابور":"in queue"}</span>
               </div>
-              <button onClick={onClose} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,.06)",border:`1px solid ${NHUB_TOKENS.border}`,color:NHUB_TOKENS.muted,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              <button onClick={onClose} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,.06)",border:`1px solid ${NHUB_TOKENS.border}`,color:NHUB_TOKENS.muted,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Close">✕</button>
             </div>
           </div>
 

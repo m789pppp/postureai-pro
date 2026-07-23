@@ -782,7 +782,7 @@ export function BottomSheet({ open, onClose, children, title, maxH = "82vh" }) {
             justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:15, fontWeight:700, color:UI_TOKENS.text }}>{title}</span>
             <button onClick={close} style={{ background:"none", border:"none",
-              color:UI_TOKENS.muted, cursor:"pointer", fontSize:20, lineHeight:1 }}>×</button>
+              color:UI_TOKENS.muted, cursor:"pointer", fontSize:20, lineHeight:1 }} aria-label="Close">×</button>
           </div>
         )}
         {children}
@@ -832,7 +832,7 @@ export function Modal({ children, onClose, cs, maxWidth = 500, title }) {
             display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:15, fontWeight:700, color:UI_TOKENS.text }}>{title}</span>
             <button onClick={close} style={{ background:"none", border:"none",
-              color:UI_TOKENS.muted, cursor:"pointer", fontSize:20, lineHeight:1 }}>×</button>
+              color:UI_TOKENS.muted, cursor:"pointer", fontSize:20, lineHeight:1 }} aria-label="Close">×</button>
           </div>
         )}
         {children}

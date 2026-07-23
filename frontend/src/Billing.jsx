@@ -316,7 +316,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                 </button>
               ))}
             </div>
-            <button onClick={onClose} style={{ background: "none", border: `0.5px solid ${DARK.border}`, borderRadius: 8, padding: "5px 12px", fontSize: 11, color: DARK.muted, cursor: "pointer" }}>✕</button>
+            <button onClick={onClose} style={{ background: "none", border: `0.5px solid ${DARK.border}`, borderRadius: 8, padding: "5px 12px", fontSize: 11, color: DARK.muted, cursor: "pointer" }} aria-label="Close">✕</button>
           </div>
         </div>
 

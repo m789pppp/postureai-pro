@@ -837,7 +837,7 @@ Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bul
                 </div>
               </div>
             </div>
-            <button onClick={onClose} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.08)",color:"var(--wa-muted)",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            <button onClick={onClose} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.08)",color:"var(--wa-muted)",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Close">✕</button>
           </div>
 
           {/* Top KPI strip */}
