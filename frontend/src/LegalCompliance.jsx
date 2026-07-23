@@ -11,6 +11,7 @@ export function CookieConsent({ cs }) {
   const [show, setShow]     = useState(false);
   const [detail, setDetail] = useState(false);
   const [prefs, setPrefs]   = useState({ necessary: true, analytics: false, marketing: false });
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   useEffect(() => {
     const stored = (()=>{try{return localStorage.getItem(COOKIE_KEY);}catch(e){return null;}})();
@@ -42,8 +43,9 @@ export function CookieConsent({ cs }) {
         <div style={{ fontWeight: 700, color: cs?.text || "#fff", marginBottom: 8, fontSize: 15 }}>🍪 Cookie Preferences</div>
         <p style={{ fontSize: 13, color: cs?.textDim || "#94a3b8", marginBottom: 14, lineHeight: 1.6 }}>
           We use cookies to analyse usage and improve your experience. Necessary cookies cannot be disabled. See our{" "}
-          <a href="/privacy" style={{ color: "#6366f1" }}>Privacy Policy</a>.
+          <button onClick={() => setShowPrivacy(true)} style={{ background: "none", border: "none", padding: 0, color: "#6366f1", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>Privacy Policy</button>.
         </p>
+        {showPrivacy && <LegalModal doc="privacy" cs={cs} onClose={() => setShowPrivacy(false)} />}
 
         {detail && (
           <div style={{ marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
