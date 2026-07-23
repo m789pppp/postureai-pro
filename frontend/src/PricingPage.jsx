@@ -5,9 +5,9 @@ import React, { useState } from "react";
 // B2C: basic/professional/elite (199/399/699 EGP | $9.99/$19.99/$39.99)
 // B2B: b2b_starter/b2b_growth/b2b_enterprise — FLAT-RATE platform fee
 //      (2,499/6,999 EGP | $79/$199), NOT per-seat. Enterprise = Custom from $499/mo.
-// Egypt: PayMob EGP | Gulf/Global: Stripe USD
+// Egypt: Kashier EGP | Gulf/Global: Stripe USD
 // !! DO NOT change prices here without updating App.jsx TIERS/B2B_TIERS and
-//    Billing.jsx PLANS/B2B_PLANS and backend _PAYMOB_PRICES/_STRIPE_PRICES !!
+//    Billing.jsx PLANS/B2B_PLANS and backend _KASHIER_PRICES/_STRIPE_PRICES !!
 // ═══════════════════════════════════════════════════════════════════
 
 const PAID_PLANS = [
@@ -249,7 +249,7 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSe
       {/* Region toggle */}
       <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 20 }}>
         {[
-          { id: "egypt", label: "🇪🇬 مصر", sub: "EGP / PayMob" },
+          { id: "egypt", label: "🇪🇬 مصر", sub: "EGP / Kashier" },
           { id: "gulf",  label: "🇸🇦🇦🇪 الخليج", sub: "USD / Stripe" },
         ].map(r => (
           <button key={r.id} onClick={() => setRegion(r.id)} style={{
