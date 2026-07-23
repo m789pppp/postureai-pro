@@ -13119,7 +13119,6 @@ def _check_risk_threshold(uid: str, score: int, threshold: int = 45, duration_s:
 
 @app.route("/api/webhooks", methods=["GET"])
 @require_auth
-@require_auth
 @limiter.limit("60 per minute")
 def list_webhooks():
     uid = getattr(g, "uid", None)
@@ -13132,12 +13131,16 @@ def list_webhooks():
 def create_webhook():
     try:
         import uuid, secrets
+        uid  = getattr(g, "uid", None)
         data = request.get_json(force=True) or {}
         url  = data.get("url", "").strip()
         if not url or not url.startswith("http"):
             return jsonify({"error": "Valid URL required"}), 400
         wh = {
             "id":          str(uuid.uuid4())[:12],
+            "uid":         uid,  # BUG FIX: was missing — list_webhooks filters
+                                  # by uid, so a freshly-created webhook could
+                                  # never appear in the creator's own list
             "url":         url,
             "secret":      data.get("secret") or secrets.token_hex(24),
             "events":      data.get("events", ["posture.risk_alert", "session.complete", "report.ready"]),
@@ -13155,17 +13158,28 @@ def create_webhook():
 @require_auth
 @limiter.limit("20 per minute")
 def delete_webhook(wid):
-    if wid in _webhooks:
-        del _webhooks[wid]
-        return jsonify({"ok": True})
-    return jsonify({"error": "Not found"}), 404
+    uid = getattr(g, "uid", None)
+    wh  = _webhooks.get(wid)
+    if not wh:
+        return jsonify({"error": "Not found"}), 404
+    # BUG FIX: previously any authenticated user who knew/guessed a webhook id
+    # could delete someone else's webhook — no ownership check at all.
+    if wh.get("uid") != uid and not get_user_role(uid).get("is_admin"):
+        return jsonify({"error": "Forbidden"}), 403
+    del _webhooks[wid]
+    return jsonify({"ok": True})
 
 @app.route("/api/webhooks/<wid>/test", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")
 def test_webhook(wid):
+    uid = getattr(g, "uid", None)
     wh = _webhooks.get(wid)
     if not wh: return jsonify({"error": "Webhook not found"}), 404
+    # Same ownership check as delete — don't let anyone trigger a test
+    # delivery to a webhook URL they don't own.
+    if wh.get("uid") != uid and not get_user_role(uid).get("is_admin"):
+        return jsonify({"error": "Forbidden"}), 403
     import uuid
     payload = {
         "event": "webhook.test", "delivery_id": str(uuid.uuid4())[:12],
@@ -14289,29 +14303,106 @@ def _require_api_key(f):
 @app.route("/api/keys/create", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")
-@require_admin
 def create_api_key():
+    """
+    Self-serve API key creation. Any authenticated user creates a key for
+    their own account, scoped to their actual subscription tier (not a
+    client-supplied plan, which could otherwise be used to claim a higher
+    rate limit than paid for). A platform admin may create a key on behalf
+    of another uid by passing "uid" in the body — this preserves the
+    original admin-provisioning use case.
+    Persists to Firestore (single source of truth, matches what account
+    deletion and the health-check already query) with a Redis/in-memory
+    cache for fast per-request validation in _require_api_key.
+    """
     try:
-        data = request.get_json(force=True) or {}
-        uid  = data.get("uid", "")
-        plan = data.get("plan", "standard")
-        name = data.get("name", "My API Key")
-        if not uid: return jsonify({"error": "uid required"}), 400
+        data      = request.get_json(force=True) or {}
+        caller_uid = getattr(g, "uid", None)
+        role       = get_user_role(caller_uid)
+
+        target_uid = data.get("uid", "").strip()
+        if target_uid and target_uid != caller_uid:
+            if not role.get("is_admin"):
+                return jsonify({"error": "Only admins may create a key for another account"}), 403
+            uid  = target_uid
+            requested_plan = data.get("plan", "standard")
+            plan = requested_plan if requested_plan in ALL_TIERS else "standard"
+        else:
+            uid  = caller_uid
+            plan = role.get("tier", "standard")  # self-serve: always the caller's real tier
+
+        name = (data.get("name") or "My API Key")[:60]
+
         raw_key  = "pai_" + _secrets.token_urlsafe(32)
         key_hash = _hashlib.sha256(raw_key.encode()).hexdigest()[:32]
-        _api_keys[key_hash] = {
+        meta = {
             "uid":        uid,
             "plan":       plan,
             "name":       name,
             "usage":      0,
             "created_at": datetime.now().isoformat(),
             "last_used":  None,
+            "revoked":    False,
             "rate_limit": 1000 if plan == "enterprise" else 100,
         }
+        _api_keys[key_hash] = meta  # fast-lookup cache used by _require_api_key
+
+        if db:
+            db.collection("api_keys").document(key_hash).set({
+                **meta,
+                "key_preview": raw_key[:7] + "…" + raw_key[-4:],  # for display only — never the full key
+            })
+
         audit(uid, "api_key_created", "api_keys", {"plan": plan})
         return jsonify({"api_key": raw_key, "plan": plan, "note": "Save this key — it won't be shown again"}), 201
     except Exception as e:
         return safe_error(e)
+
+@app.route("/api/keys", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def list_api_keys():
+    """Self-serve — list the caller's own API keys (never returns the raw key)."""
+    uid = getattr(g, "uid", None)
+    if not db:
+        return jsonify({"api_keys": []})
+    docs = db.collection("api_keys").where("uid", "==", uid).get()
+    keys = []
+    for doc in docs:
+        d = doc.to_dict()
+        keys.append({
+            "id":           doc.id,
+            "name":         d.get("name"),
+            "plan":         d.get("plan"),
+            "key_preview":  d.get("key_preview", "pai_••••••"),
+            "created_at":   d.get("created_at"),
+            "last_used":    d.get("last_used"),
+            "usage":        d.get("usage", 0),
+            "revoked":      d.get("revoked", False),
+            "rate_limit":   d.get("rate_limit"),
+        })
+    return jsonify({"api_keys": keys})
+
+@app.route("/api/keys/<key_id>", methods=["DELETE"])
+@require_auth
+@limiter.limit("20 per minute")
+def revoke_api_key(key_id):
+    """Self-serve revoke — owner only (or a platform admin)."""
+    uid  = getattr(g, "uid", None)
+    role = get_user_role(uid)
+    if not db:
+        return jsonify({"error": "Not available"}), 503
+    doc_ref = db.collection("api_keys").document(key_id)
+    doc     = doc_ref.get()
+    if not doc.exists:
+        return jsonify({"error": "Not found"}), 404
+    owner_uid = doc.to_dict().get("uid")
+    if owner_uid != uid and not role.get("is_admin"):
+        return jsonify({"error": "Forbidden"}), 403
+    doc_ref.update({"revoked": True, "revoked_at": datetime.now().isoformat()})
+    _api_keys.delete(key_id)  # invalidate the fast-lookup cache immediately
+    audit(uid, "api_key_revoked", "api_keys", {"key_id": key_id})
+    return jsonify({"ok": True})
 
 @app.route("/api/v1/posture/analyze", methods=["POST"])
 @require_auth

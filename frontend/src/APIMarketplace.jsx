@@ -3,6 +3,7 @@
  * Full API marketplace: key management, docs, usage analytics, webhooks, SDKs
  */
 import { useState, useEffect, useCallback } from "react";
+import { apiFetch } from "./services/api.js";
 
 const PLANS_API = [
   { id:"api_free", name:"Free", price:0, reqs:1000, rps:2, color:"#6366f1", features:["REST API","Basic endpoints","Email support","1 webhook"] },
@@ -43,22 +44,21 @@ const SDK_LANGS = [
 const METHOD_COLORS = { GET:"#10b981", POST:"#6366f1", DELETE:"#ef4444", PUT:"#f59e0b", PATCH:"#0ea5e9" };
 
 function fmtNum(n){ return n<0?"∞":n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(0)+"K":n; }
-function genKey(){ return "pak_live_"+Math.random().toString(36).slice(2,12)+Math.random().toString(36).slice(2,12); }
 
 export function APIMarketplace({ profile, cs, lang, onClose }) {
   const isAr = lang==="ar";
   const [tab, setTab] = useState("overview");
-  const [apiKeys, setApiKeys] = useState([
-    { id:"k1", name:"Production", key:genKey(), created:"2026-05-01", lastUsed:"2026-05-31", requests:12840, plan:"growth", active:true },
-    { id:"k2", name:"Staging",    key:genKey(), created:"2026-04-15", lastUsed:"2026-05-28", requests:3210,  plan:"starter", active:true },
-  ]);
-  const [showKey, setShowKey] = useState({});
+  // Real data — fetched from the backend, not fabricated client-side.
+  const [apiKeys, setApiKeys] = useState([]);
+  const [keysLoading, setKeysLoading] = useState(true);
+  const [keysError, setKeysError] = useState("");
+  const [creatingKey, setCreatingKey] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [showNewKey, setShowNewKey] = useState(false);
-  const [createdKey, setCreatedKey] = useState(null);
-  const [webhooks, setWebhooks] = useState([
-    { id:"w1", url:"https://myapp.com/hooks/posture", events:["session.completed","alert.triggered"], active:true, lastDelivery:"2026-05-31 14:22", failures:0 },
-  ]);
+  const [createdKey, setCreatedKey] = useState(null); // { name, plan, key } — raw key only exists right after creation
+  const [webhooks, setWebhooks] = useState([]);
+  const [whLoading, setWhLoading] = useState(true);
+  const [whError, setWhError] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookEvents, setWebhookEvents] = useState([]);
   const [selectedEndpoint, setSelectedEndpoint] = useState(null);
@@ -67,7 +67,36 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
   const [usagePeriod, setUsagePeriod] = useState("7d");
   const [selectedPlan, setSelectedPlan] = useState("growth");
 
-  // Mock usage data
+  const loadKeys = useCallback(async () => {
+    setKeysLoading(true);
+    try {
+      const d = await apiFetch("/keys");
+      setApiKeys(d.api_keys || []);
+      setKeysError("");
+    } catch (e) {
+      setKeysError(isAr?"تعذر تحميل مفاتيح الـ API":"Couldn't load API keys");
+    } finally {
+      setKeysLoading(false);
+    }
+  }, [isAr]);
+
+  const loadWebhooks = useCallback(async () => {
+    setWhLoading(true);
+    try {
+      const d = await apiFetch("/webhooks");
+      setWebhooks(d.webhooks || []);
+      setWhError("");
+    } catch (e) {
+      setWhError(isAr?"تعذر تحميل الـ webhooks":"Couldn't load webhooks");
+    } finally {
+      setWhLoading(false);
+    }
+  }, [isAr]);
+
+  useEffect(() => { loadKeys(); loadWebhooks(); }, [loadKeys, loadWebhooks]);
+
+  // Mock usage data — kept as illustrative placeholder for the usage chart;
+  // no backend endpoint for per-day request counts exists yet.
   const usageData = [820,940,1100,880,1250,1380,1520,1200,1680,1750,1900,2100,1950,2300];
 
   const copy = (text, id) => {
@@ -76,21 +105,49 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
     setTimeout(()=>setCopied(""),1800);
   };
 
-  const createKey = () => {
-    if(!newKeyName.trim()) return;
-    const k = { id:"k"+Date.now(), name:newKeyName.trim(), key:genKey(), created:new Date().toISOString().slice(0,10), lastUsed:"—", requests:0, plan:"starter", active:true };
-    setApiKeys(prev=>[...prev,k]);
-    setCreatedKey(k);
-    setNewKeyName("");
-    setShowNewKey(false);
+  const createKey = async () => {
+    if(!newKeyName.trim() || creatingKey) return;
+    setCreatingKey(true);
+    try {
+      const d = await apiFetch("/keys/create", { method:"POST", body:{ name:newKeyName.trim() } });
+      setCreatedKey({ name:newKeyName.trim(), plan:d.plan, key:d.api_key });
+      setNewKeyName("");
+      setShowNewKey(false);
+      await loadKeys();
+    } catch (e) {
+      setKeysError(e.message || (isAr?"تعذر إنشاء المفتاح":"Couldn't create key"));
+    } finally {
+      setCreatingKey(false);
+    }
   };
 
-  const revokeKey = (id) => setApiKeys(prev=>prev.map(k=>k.id===id?{...k,active:false}:k));
+  const revokeKey = async (id) => {
+    try {
+      await apiFetch(`/keys/${id}`, { method:"DELETE" });
+      await loadKeys();
+    } catch (e) {
+      setKeysError(e.message || (isAr?"تعذر إلغاء المفتاح":"Couldn't revoke key"));
+    }
+  };
 
-  const addWebhook = () => {
+  const addWebhook = async () => {
     if(!webhookUrl || webhookEvents.length===0) return;
-    setWebhooks(prev=>[...prev,{ id:"w"+Date.now(), url:webhookUrl, events:webhookEvents, active:true, lastDelivery:"—", failures:0 }]);
-    setWebhookUrl(""); setWebhookEvents([]);
+    try {
+      await apiFetch("/webhooks", { method:"POST", body:{ url:webhookUrl, events:webhookEvents } });
+      setWebhookUrl(""); setWebhookEvents([]);
+      await loadWebhooks();
+    } catch (e) {
+      setWhError(e.message || (isAr?"تعذر إضافة الـ webhook":"Couldn't add webhook"));
+    }
+  };
+
+  const deleteWebhook = async (id) => {
+    try {
+      await apiFetch(`/webhooks/${id}`, { method:"DELETE" });
+      await loadWebhooks();
+    } catch (e) {
+      setWhError(e.message || (isAr?"تعذر حذف الـ webhook":"Couldn't delete webhook"));
+    }
   };
 
   const tabs = [
@@ -218,22 +275,29 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                   <div style={{ fontWeight:600, color:cs.text, marginBottom:10 }}>New API Key</div>
                   <div style={{ display:"flex", gap:8 }}>
                     <input value={newKeyName} onChange={e=>setNewKeyName(e.target.value)} placeholder="Key name (e.g. Production)" style={{ flex:1, background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none" }} onKeyDown={e=>e.key==="Enter"&&createKey()} />
-                    <button onClick={createKey} style={{ background:"#6366f1", border:"none", color:"#fff", borderRadius:8, padding:"8px 18px", cursor:"pointer", fontWeight:700 }}>Create</button>
+                    <button onClick={createKey} disabled={creatingKey} style={{ background:"#6366f1", border:"none", color:"#fff", borderRadius:8, padding:"8px 18px", cursor:creatingKey?"default":"pointer", fontWeight:700, opacity:creatingKey?0.6:1 }}>{creatingKey?(isAr?"جاري الإنشاء...":"Creating..."):"Create"}</button>
                     <button onClick={()=>setShowNewKey(false)} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:8, padding:"8px 14px", cursor:"pointer" }}>Cancel</button>
                   </div>
                 </div>
               )}
 
-              {apiKeys.map(k=>(
-                <div key={k.id} style={{ background:cs.bg, borderRadius:14, padding:18, border:`1px solid ${k.active?cs.border:"rgba(239,68,68,0.3)"}`, opacity:k.active?1:0.6 }}>
+              {keysError && <div style={{ color:"#ef4444", fontSize:13 }}>{keysError}</div>}
+              {keysLoading ? (
+                <div style={{ color:cs.textDim, fontSize:13 }}>{isAr?"جاري التحميل...":"Loading..."}</div>
+              ) : apiKeys.length===0 && !showNewKey ? (
+                <div style={{ color:cs.textDim, fontSize:13, textAlign:"center", padding:"24px 0" }}>
+                  {isAr?"لسه معملتش أي مفتاح API":"You haven't created any API key yet"}
+                </div>
+              ) : apiKeys.map(k=>(
+                <div key={k.id} style={{ background:cs.bg, borderRadius:14, padding:18, border:`1px solid ${!k.revoked?cs.border:"rgba(239,68,68,0.3)"}`, opacity:!k.revoked?1:0.6 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
                     <div>
                       <div style={{ fontWeight:700, color:cs.text, fontSize:15 }}>{k.name}</div>
-                      <div style={{ fontSize:11, color:cs.textDim, marginTop:2 }}>Created {k.created} · Last used {k.lastUsed}</div>
+                      <div style={{ fontSize:11, color:cs.textDim, marginTop:2 }}>Created {(k.created_at||"").slice(0,10)||"—"} · Last used {k.last_used?String(k.last_used).slice(0,10):"—"}</div>
                     </div>
                     <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                      <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:k.plan==="growth"?"rgba(14,165,233,0.15)":"rgba(99,102,241,0.15)", color:k.plan==="growth"?"#0ea5e9":"#6366f1", fontWeight:600 }}>{k.plan}</span>
-                      {k.active ? (
+                      <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:"rgba(99,102,241,0.15)", color:"#6366f1", fontWeight:600 }}>{k.plan}</span>
+                      {!k.revoked ? (
                         <button onClick={()=>revokeKey(k.id)} style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", color:"#ef4444", borderRadius:8, padding:"4px 12px", cursor:"pointer", fontSize:12, fontWeight:600 }}>Revoke</button>
                       ) : (
                         <span style={{ color:"#ef4444", fontSize:12, fontWeight:600 }}>Revoked</span>
@@ -241,14 +305,15 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                     </div>
                   </div>
                   <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    {/* Only the preview is ever available for existing keys — the
+                        full key is shown once, at creation, and never again
+                        (same principle as GitHub/Stripe token pages). */}
                     <code style={{ flex:1, background:"rgba(0,0,0,0.2)", padding:"8px 12px", borderRadius:8, color:cs.textDim, fontSize:12, letterSpacing:1 }}>
-                      {showKey[k.id] ? k.key : k.key.slice(0,14)+"•".repeat(24)+k.key.slice(-4)}
+                      {k.key_preview || "pai_••••••"}
                     </code>
-                    <button onClick={()=>setShowKey(p=>({...p,[k.id]:!p[k.id]}))} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:8, padding:"6px 12px", cursor:"pointer", fontSize:12 }}>{showKey[k.id]?"Hide":"Show"}</button>
-                    <button onClick={()=>copy(k.key,"key_"+k.id)} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:8, padding:"6px 12px", cursor:"pointer", fontSize:12 }}>{copied==="key_"+k.id?"✓ Copied":"Copy"}</button>
                   </div>
                   <div style={{ marginTop:10, display:"flex", gap:16 }}>
-                    <div style={{ fontSize:12, color:cs.textDim }}><b style={{ color:cs.text }}>{fmtNum(k.requests)}</b> requests this month</div>
+                    <div style={{ fontSize:12, color:cs.textDim }}><b style={{ color:cs.text }}>{fmtNum(k.usage||0)}</b> requests total</div>
                   </div>
                 </div>
               ))}
@@ -324,17 +389,28 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                   <button onClick={addWebhook} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"10px 20px", cursor:"pointer", fontWeight:700, fontSize:13, alignSelf:"flex-start" }}>Add Webhook</button>
                 </div>
               </div>
-              {webhooks.map(wh=>(
+              {whError && <div style={{ color:"#ef4444", fontSize:13 }}>{whError}</div>}
+              {whLoading ? (
+                <div style={{ color:cs.textDim, fontSize:13 }}>{isAr?"جاري التحميل...":"Loading..."}</div>
+              ) : webhooks.length===0 ? (
+                <div style={{ color:cs.textDim, fontSize:13, textAlign:"center", padding:"24px 0" }}>
+                  {isAr?"لسه مفيش webhooks مسجلة":"No webhooks registered yet"}
+                </div>
+              ) : webhooks.map(wh=>(
                 <div key={wh.id} style={{ background:cs.bg, borderRadius:14, padding:18, border:`1px solid ${cs.border}` }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
                     <div>
                       <code style={{ fontSize:13, color:cs.text }}>{wh.url}</code>
-                      <div style={{ fontSize:11, color:cs.textDim, marginTop:4 }}>Last delivery: {wh.lastDelivery} · Failures: {wh.failures}</div>
+                      <div style={{ fontSize:11, color:cs.textDim, marginTop:4 }}>Created {(wh.created_at||"").slice(0,10)||"—"}</div>
                     </div>
-                    <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:"rgba(16,185,129,0.1)", color:"#10b981", fontWeight:600 }}>Active</span>
+                    <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                      <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:"rgba(16,185,129,0.1)", color:"#10b981", fontWeight:600 }}>Active</span>
+                      <button onClick={async()=>{ try{ await apiFetch(`/webhooks/${wh.id}/test`,{method:"POST"}); }catch(e){ setWhError(e.message); } }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:11 }}>{isAr?"اختبار":"Test"}</button>
+                      <button onClick={()=>deleteWebhook(wh.id)} style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", color:"#ef4444", borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:11, fontWeight:600 }}>{isAr?"حذف":"Delete"}</button>
+                    </div>
                   </div>
                   <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                    {wh.events.map(ev=>(
+                    {(wh.events||[]).map(ev=>(
                       <span key={ev} style={{ fontSize:11, padding:"2px 9px", borderRadius:20, background:"rgba(99,102,241,0.1)", color:"#6366f1" }}>{ev}</span>
                     ))}
                   </div>
