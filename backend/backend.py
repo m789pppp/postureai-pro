@@ -8860,6 +8860,27 @@ def goals_progress():
                     if (s.get("pain_bar",{}) or {}).get("urgency","low") in ("low","none"))
                 progress = min(100, int((pain_free_days / target) * 100))
                 current_val = pain_free_days
+            elif gtype == "metric":
+                # BUG FIX: this branch was missing entirely, so any goal of
+                # type "metric" (e.g. "neck_fix" — Fix Neck Posture) fell
+                # through to the `else` below and stayed stuck at
+                # progress=0/current_value=0 forever, regardless of how much
+                # the user's actual posture improved. Uses the best per-zone
+                # metric score across recent sessions, same pattern as the
+                # "score" goal type above.
+                metric_key = g_data.get("metric", "")
+                metric_scores = []
+                for s in sessions_list:
+                    m = (s.get("metrics", {}) or {}).get(metric_key)
+                    if isinstance(m, dict):
+                        v = m.get("score")
+                    else:
+                        v = m
+                    if isinstance(v, (int, float)):
+                        metric_scores.append(v)
+                best_metric = max(metric_scores) if metric_scores else 0
+                progress = min(100, int((best_metric / target) * 100)) if target else 0
+                current_val = best_metric
             else:
                 current_val = 0
 
