@@ -93,12 +93,11 @@ function _metricMiniCard(doc,{mx,y,mw,mh,lbl,sc,val,unit,pri,isAr,sf,dCard,BORDE
   fc(doc,...iconC); rr(doc,mx,y,2.2,mh,1.1,"F");
   // Label — truncated so it never reaches the right-aligned score
   sf(8,"bold"); tc(doc,...TEXT);
-  const lblFit = doc.splitTextToSize(String(lbl), mw-26)[0];
-  doc.text(lblFit, mx+6, y+9);
+  doc.text(_fit(doc,lbl,mw-26), mx+6, y+9);
   // Value under label
   if(val!==undefined&&val!==null){
     sf(6.5,"normal"); tc(doc,...TEXT2);
-    doc.text(`${round(val*10)/10}${unit||""}`, mx+6, y+15.5);
+    doc.text(_fit(doc,`${round(val*10)/10}${unit||""}`,mw-14), mx+6, y+15.5);
   }
   // Score number (right)
   sf(15,"bold"); tc(doc,...iconC); doc.text(String(round(sc)), mx+mw-6, y+13, {align:"right"});
@@ -274,6 +273,17 @@ function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
 function hr(doc,x,y,w,col=PDF_TOKENS.border,thickness=0.18){dc(doc,...col);lw(doc,thickness);doc.line(x,y,x+w,y);lw(doc,0.3);}
 function vl(doc,x,y,h,col=PDF_TOKENS.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x,y+h);lw(doc,0.3);}
 
+// Truncate a single-line string with "…" so it never overflows a fixed-width
+// slot (table cell, footer strip, badge) — must be called AFTER the font
+// for that text has been set (doc.getTextWidth depends on the active font).
+function _fit(doc,text,maxW){
+  text = String(text ?? "");
+  if (maxW<=0 || doc.getTextWidth(text)<=maxW) return text;
+  let t = text;
+  while (t.length>1 && doc.getTextWidth(t+"…")>maxW) t = t.slice(0,-1);
+  return t.length<=1 ? t : t+"…";
+}
+
 // ── Font helper ────────────────────────────────────────────────────
 let _cairoLoaded=false, _cairoCachedB64=null;
 // isAr gate added: registering this font (even completely unused) adds
@@ -368,8 +378,8 @@ function _coverV5(doc,W,ml,tier,tierCol,name,label,sub,now){
   doc.text(tier.toUpperCase(),ml+36+tw/2,49.5,{align:"center"});
   // Right: date + label
   font(doc,6.5,"normal");tc(doc,130,148,180);doc.text(now,W-ml,27,{align:"right"});
-  font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.card);doc.text(label,W-ml,37,{align:"right"});
-  if(sub){font(doc,6.5,"normal");tc(doc,130,148,180);doc.text(sub,W-ml,45,{align:"right"});}
+  font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.card);doc.text(_fit(doc,label,W-2*ml-90),W-ml,37,{align:"right"});
+  if(sub){font(doc,6.5,"normal");tc(doc,130,148,180);doc.text(_fit(doc,sub,W-2*ml-90),W-ml,45,{align:"right"});}
   // Bottom divider
   fc(doc,...tierCol);doc.rect(0,73.5,W,2.5,"F");
 }
@@ -381,7 +391,7 @@ function _hdr(doc,W,ml,mr,label,isAr){
   _logo(doc,ml,3.5,8,_logoSm);
   font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.ink2);doc.text("Corvus",ml+12,10);
   font(doc,6.5,"normal");tc(doc,...PDF_TOKENS.muted);doc.text("Health Intelligence",ml+28,10);
-  font(doc,7,"bold",isAr);tc(doc,...PDF_TOKENS.primary);doc.text(label,W-mr,10,{align:"right"});
+  font(doc,7,"bold",isAr);tc(doc,...PDF_TOKENS.primary);doc.text(_fit(doc,label,W-mr-ml-62),W-mr,10,{align:"right"});
 }
 
 // ── FOOTER ─────────────────────────────────────────────────────────
@@ -391,15 +401,15 @@ function _ftr(doc,W,ml,mr,H,p,total,name){
   font(doc,PDF_FLAGS.micro,"normal");tc(doc,...PDF_TOKENS.ghost);
   doc.text("Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-3.5);
   font(doc,PDF_FLAGS.micro,"bold");tc(doc,...PDF_TOKENS.muted);
-  doc.text(name,W/2,H-3.5,{align:"center"});
+  doc.text(_fit(doc,name,W*0.4),W/2,H-3.5,{align:"center"});
   doc.text(`${p} / ${total}`,W-mr,H-3.5,{align:"right"});
 }
 
 // ── SECTION HEADING with left accent ─────────────────────────────
-function _sh(doc,ml,y,title,sub="",col=PDF_TOKENS.primary,isAr=false){
+function _sh(doc,ml,y,title,sub="",col=PDF_TOKENS.primary,isAr=false,maxW=175){
   fc(doc,...col);doc.rect(ml,y,2.2,sub?14:9.5,"F");
-  font(doc,PDF_FLAGS.h2,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(title,ml+7,y+(sub?7:7));
-  if(sub){font(doc,PDF_FLAGS.small,"normal",isAr);tc(doc,...PDF_TOKENS.light);doc.text(sub,ml+7,y+13);}
+  font(doc,PDF_FLAGS.h2,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(_fit(doc,title,maxW),ml+7,y+(sub?7:7));
+  if(sub){font(doc,PDF_FLAGS.small,"normal",isAr);tc(doc,...PDF_TOKENS.light);doc.text(_fit(doc,sub,maxW),ml+7,y+13);}
   return y+(sub?21:14);
 }
 
@@ -433,7 +443,7 @@ function _mRow(doc,x,y,w,lbl,value,unit,score,isAr,idx=0){
   font(doc,8.5,"bold");tc(doc,...col);
   doc.text(String(Math.round(score)),x+14,y+12.5,{align:"center"});
   // Label
-  font(doc,9,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(lbl,x+27,y+9.5);
+  font(doc,9,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(_fit(doc,lbl,w*0.52-31),x+27,y+9.5);
   // Value
   if(value!==undefined&&value!==null){
     font(doc,7.5,"normal");tc(doc,...PDF_TOKENS.muted);
@@ -462,11 +472,11 @@ function _kpi(doc,x,y,w,h,val,label,col,sub=""){
   fc(doc,...col);rr(doc,x,y,w,3,2,"F");doc.rect(x,y+1.5,w,1.5,"F");
   // Value
   font(doc,PDF_FLAGS.dataLg,"bold");tc(doc,...col);
-  doc.text(String(val),x+w/2,y+h*.56,{align:"center"});
+  doc.text(_fit(doc,String(val),w-8),x+w/2,y+h*.56,{align:"center"});
   // Label
   font(doc,PDF_FLAGS.small,"bold");tc(doc,...PDF_TOKENS.muted);
-  doc.text(label,x+w/2,y+h*.78,{align:"center"});
-  if(sub){font(doc,PDF_FLAGS.micro,"normal");tc(doc,...PDF_TOKENS.light);doc.text(sub,x+w/2,y+h*.9,{align:"center"});}
+  doc.text(_fit(doc,label,w-8),x+w/2,y+h*.78,{align:"center"});
+  if(sub){font(doc,PDF_FLAGS.micro,"normal");tc(doc,...PDF_TOKENS.light);doc.text(_fit(doc,sub,w-8),x+w/2,y+h*.9,{align:"center"});}
 }
 
 // ── SPARKLINE v5 ─────────────────────────────────────────────────
@@ -529,7 +539,7 @@ function _step(doc,x,y,w,num,title,score,steps,isAr){
   dc(doc,...col);lw(doc,.8);doc.circle(x+15,y+14,9,"S");lw(doc,0.3);
   font(doc,10,"bold");tc(doc,...col);doc.text(String(num),x+15,y+17.5,{align:"center"});
   // Title + score
-  font(doc,10,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(title,x+30,y+12);
+  font(doc,10,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(_fit(doc,title,w*0.62),x+30,y+12);
   const sb=`${Math.round(score)}/100`;const sw=doc.getTextWidth(sb)+7;
   fc(doc,...col);
   doc.setGState&&doc.setGState(new doc.GState({opacity:.1}));
@@ -541,7 +551,7 @@ function _step(doc,x,y,w,num,title,score,steps,isAr){
   steps.slice(0,3).forEach((s,i)=>{
     font(doc,7.5,"bold");tc(doc,...col);doc.text(`${i+1}.`,x+30,y+22+(i*7));
     font(doc,7.5,"normal",isAr);tc(doc,...PDF_TOKENS.sub);
-    doc.text(doc.splitTextToSize(s,w-40)[0],x+36,y+22+(i*7));
+    doc.text(_fit(doc,s,w-46),x+36,y+22+(i*7));
   });
   return y+h+8;
 }
@@ -558,8 +568,8 @@ function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
   fc(doc,...col);doc.circle(x+18,y+h/2,11,"F");
   font(doc,9.5,"bold");tc(doc,...PDF_TOKENS.card);doc.text(`${risk}%`,x+18,y+h/2+3.5,{align:"center"});
   // Title
-  font(doc,10,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(name,x+35,y+12);
-  font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.primary);doc.text(region,x+35,y+19);
+  font(doc,10,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(_fit(doc,name,w*0.5),x+35,y+12);
+  font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.primary);doc.text(_fit(doc,region,w*0.5),x+35,y+19);
   // Risk label
   const rlbl=_riskLabel(risk,isAr);
   const rw=doc.getTextWidth(rlbl)+8;
@@ -2011,13 +2021,16 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     doc.setFontSize(9); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
     doc.text(`${zk.charAt(0).toUpperCase()+zk.slice(1)} Zone Exercises (Risk: ${_riskLabel(zonal[zk]||0,false)} ${zonal[zk]||0}%)`,ml+4,y+6.5); y+=13;
     for(const ex of EXERCISES[zk].slice(0,2)){
-      if(y>H-22){y=_clinPage();}
-      doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,16,2,2,"F");
+      if(y>H-24){y=_clinPage();}
+      doc.setFontSize(7.5); doc.setFont("helvetica","normal");
+      const descLines = doc.splitTextToSize(ex.desc, cw-8).slice(0,2);
+      const cardH = descLines.length>1 ? 21 : 16;
+      doc.setFillColor(248,250,252); doc.roundedRect(ml,y,cw,cardH,2,2,"F");
       doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
       doc.text(`${ex.name} — ${ex.sets}`, ml+4, y+7);
       doc.setFontSize(7.5); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
-      doc.text(ex.desc, ml+4, y+13);
-      y+=19;
+      descLines.forEach((l,i)=>doc.text(l, ml+4, y+13+(i*4.5)));
+      y+=cardH+3;
     }
     y+=4;
   }
@@ -2791,7 +2804,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
       if(y>H-18){doc.addPage(); await _hdr(doc,W,ml,mr,isAr?"الموظفون في خطر":"At-Risk",isAr); y=22;}
       fc(doc,...PDF_TOKENS.bg); doc.rect(ml,y,cw,8,"F");
       sf(8,"normal"); tc(doc,...PDF_TOKENS.ink);
-      doc.text(u.name||u.email||"—",ml+3,y+5.5);
+      doc.text(_fit(doc,u.name||u.email||"—",cw*0.55-6),ml+3,y+5.5);
       sf(8,"bold"); tc(doc,...PDF_TOKENS.danger);
       doc.text(String(Math.round(u.avg_score||0)),ml+cw*0.55,y+5.5);
       sf(7.5,"normal"); tc(doc,...PDF_TOKENS.muted);
@@ -2820,7 +2833,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     fc(doc,i%2===0?248:255,i%2===0?250:255,i%2===0?252:255); doc.rect(ml,y,cw,8,"F");
     const sc=Math.round(u.avg_score||0); const col=_scoreColor(sc);
     sf(8,"bold"); tc(doc,...(i<3?col:PDF_TOKENS.muted)); doc.text(String(i+1),ml+3,y+5.5);
-    sf(8,"normal"); tc(doc,...PDF_TOKENS.ink); doc.text(u.name||u.email||"—",ml+14,y+5.5);
+    sf(8,"normal"); tc(doc,...PDF_TOKENS.ink); doc.text(_fit(doc,u.name||u.email||"—",cw*0.65-17),ml+14,y+5.5);
     sf(8,"bold"); tc(doc,...col); doc.text(String(sc),ml+cw*0.65,y+5.5);
     sf(7.5,"normal"); doc.text(_scoreLabel(sc,isAr),ml+cw*0.82,y+5.5);
     y+=8;
