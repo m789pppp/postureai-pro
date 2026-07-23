@@ -249,13 +249,17 @@ async function askGemini(prompt){
   }catch{return null;}
 }
 
-async function initKashier({tier,user_email,user_name,billing,uid=""}){
+async function initKashier({tier,user_email,user_name,billing,uid="",coupon_code,discount_pct=0}){
   try{
+    const {getAuthToken} = await import("./firebase.js");
+    const tok = await getAuthToken().catch(()=>null);
     const r = await fetch("/api/kashier/create-order",{
       method:"POST",
-      headers:{"Content-Type":"application/json"},
+      headers:{"Content-Type":"application/json",...(tok?{Authorization:"Bearer "+tok}:{})},
       body:JSON.stringify({
         tier, billing, uid,
+        coupon_code: coupon_code||undefined,
+        discount_pct: discount_pct||0,
         billing_data:{
           email:user_email,
           first_name:user_name?.split(" ")[0]||"Customer",
@@ -265,6 +269,7 @@ async function initKashier({tier,user_email,user_name,billing,uid=""}){
     });
     const d = await r.json();
     if(d?.redirect_url) return{type:"redirect",url:d.redirect_url};
+    if(d?.error) console.error("Kashier error:",d.error);
   }catch(e){console.error("Kashier:",e);}
   return null;
 }
@@ -1665,7 +1670,9 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
     const result=await initKashier({
       tier:selTier,user_email:user.email,
       user_name:profile?.name||"",billing,
-      uid:user?.uid||""});
+      uid:user?.uid||"",
+      coupon_code: couponData ? coupon.trim().toUpperCase() : undefined,
+      discount_pct: disc || 0});
     if(result?.type==="redirect"&&result?.url){
       sessionStorage.setItem("kashier_pending_url",result.url);
       sessionStorage.setItem("kashier_pending_step","kashier");

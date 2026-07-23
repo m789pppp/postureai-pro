@@ -59,14 +59,14 @@ export default async function handler(req, res) {
     const rawBody = JSON.stringify(req.body || {});
     const receivedSig = req.headers["x-kashier-signature"] || "";
 
-    // Verify signature
-    if (KASHIER_API_KEY) {
-      if (!verifyKashierSignature(rawBody, receivedSig, KASHIER_API_KEY)) {
-        console.error("[Kashier Webhook] Invalid signature — possible spoofing");
-        return res.status(403).json({ error: "Invalid signature" });
-      }
-    } else {
-      console.warn("[Kashier Webhook] KASHIER_API_KEY not set — skipping signature check");
+    // Verify signature — ALWAYS required (never skip in production)
+    if (!KASHIER_API_KEY) {
+      console.error("[Kashier Webhook] KASHIER_API_KEY not set — rejecting all webhook calls");
+      return res.status(503).json({ error: "Webhook not configured" });
+    }
+    if (!verifyKashierSignature(rawBody, receivedSig, KASHIER_API_KEY)) {
+      console.error("[Kashier Webhook] Invalid signature — possible spoofing");
+      return res.status(403).json({ error: "Invalid signature" });
     }
 
     const payload  = req.body || {};

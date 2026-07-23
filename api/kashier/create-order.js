@@ -10,6 +10,21 @@
  *   3. Redirect user to Kashier hosted page
  */
 import crypto from "crypto";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+
+function getAdminAuth() {
+  if (!getApps().length) {
+    initializeApp({
+      credential: cert({
+        projectId:   process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey:  (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+      }),
+    });
+  }
+  return getAuth();
+}
 
 const KASHIER_MERCHANT_ID  = process.env.KASHIER_MERCHANT_ID  || "";
 const KASHIER_API_KEY      = process.env.KASHIER_API_KEY      || "";
@@ -56,6 +71,18 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST")   return res.status(405).json({ error: "Method not allowed" });
 
+  // Require Firebase auth token
+  const idToken = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (!idToken) return res.status(401).json({ error: "Authentication required" });
+  try {
+    const decoded = await getAdminAuth().verifyIdToken(idToken);
+    // Inject verified uid (don't trust client-supplied uid)
+    if (req.body) req.body.uid = decoded.uid;
+    if (req.body) req.body.user_email = decoded.email || req.body.billing_data?.email || "";
+  } catch (e) {
+    return res.status(401).json({ error: "Invalid or expired session — please log in again" });
+  }
+
   if (!KASHIER_MERCHANT_ID || !KASHIER_API_KEY) {
     return res.status(503).json({ error: "Kashier not configured — add KASHIER_MERCHANT_ID and KASHIER_API_KEY to Vercel env vars" });
   }
@@ -65,14 +92,28 @@ export default async function handler(req, res) {
       tier,
       billing     = "monthly",
       uid         = "anon",
-      user_count  = 1,
+      user_count   = 1,
+      coupon_code  = "",
+      discount_pct = 0,
       billing_data = {},
     } = req.body || {};
 
     if (!tier) return res.status(400).json({ error: "tier is required" });
 
-    const amount = getPrice(tier, billing, user_count);
+    // Sanitize user_count: must be positive integer, cap at 10000
+    const safeUserCount = Math.min(10000, Math.max(1, Math.floor(Number(user_count) || 1)));
+
+    let amount = getPrice(tier, billing, safeUserCount);
     if (!amount) return res.status(400).json({ error: "Unknown tier: " + tier });
+
+    // Apply discount — cap at 50% (prevent abuse even if coupon API is hacked)
+    const safeDsc = Math.min(50, Math.max(0, Number(discount_pct) || 0));
+    if (safeDsc > 0) {
+      amount = Math.round(amount * (1 - safeDsc / 100));
+    }
+
+    // Minimum charge: 1 EGP (Kashier rejects 0)
+    amount = Math.max(1, amount);
 
     // Kashier expects amount as string with 2 decimal places
     const amountStr  = amount.toFixed(2);
