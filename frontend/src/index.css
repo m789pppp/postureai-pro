@@ -184,9 +184,15 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
 
 /* ── FOCUS ─────────────────────────────────────────────────────── */
+/* !important is required here: ~77 inputs/selects/textareas across the
+   enterprise/admin panels (WhiteLabel, EnterpriseAdminTools, GrowthHub, etc.)
+   set inline style={{outline:"none"}} with no focus replacement, which
+   silently defeats this rule for keyboard users (inline styles normally
+   beat an external stylesheet unless it's !important). Found during the
+   accessibility audit — WCAG 2.4.7 Focus Visible. */
 button:focus-visible, a:focus-visible, input:focus-visible,
 select:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent) !important;
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }

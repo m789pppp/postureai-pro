@@ -194,7 +194,7 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
             <button onClick={onClose} style={{ width:36, height:36, borderRadius:"50%",
               background:"rgba(255,255,255,.07)", border:`1px solid ${CS_TOKENS.border}`,
               color:CS_TOKENS.sub, fontSize:20, cursor:"pointer",
-              display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
+              display:"flex", alignItems:"center", justifyContent:"center" }} aria-label="Close">×</button>
           </div>
         </div>
 

@@ -146,7 +146,7 @@ export function LegalModal({ doc, cs, onClose }) {
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => window.print?.()} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: cs?.textDim || "#94a3b8", borderRadius: 9, padding: "7px 14px", cursor: "pointer", fontSize: 12 }}>🖨 Print</button>
-            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: cs?.text || "#fff", borderRadius: 9, padding: "7px 14px", cursor: "pointer", fontSize: 13 }}>✕</button>
+            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: cs?.text || "#fff", borderRadius: 9, padding: "7px 14px", cursor: "pointer", fontSize: 13 }} aria-label="Close">✕</button>
           </div>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 32px" }}>
