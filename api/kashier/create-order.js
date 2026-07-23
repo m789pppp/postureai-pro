@@ -1,20 +1,62 @@
 /**
  * Vercel Serverless — Kashier Create Order
  * POST /api/kashier/create-order
- * Body: { tier, billing, uid, user_count, billing_data }
+ * Headers: Authorization: Bearer <Firebase ID token>  (optional — anonymous checkout allowed)
+ * Body: { tier, billing, user_count, billing_data }
  * Returns: { redirect_url, order_id, merchant_order_id }
  *
  * Kashier hosted-payment flow:
  *   1. Build order params
  *   2. Generate SHA-256 hash signature
  *   3. Redirect user to Kashier hosted page
+ *
+ * SECURITY HARDENING: the uid and email embedded in the order (and later
+ * used by /api/kashier/webhook to decide which account gets upgraded) used
+ * to come straight from the client-supplied `uid` / `billing_data.email`
+ * fields with no verification — anyone could claim to be any uid or email.
+ * The webhook's uid8 cross-check is only meaningful if the uid was verified
+ * here, so a signed-in caller's uid/email are now taken from their verified
+ * Firebase ID token, not from the request body. Anonymous checkout (no
+ * Authorization header) is still allowed and falls back to the "anon"
+ * placeholder, which the webhook explicitly exempts from the uid check.
  */
 import crypto from "crypto";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 
 const KASHIER_MERCHANT_ID  = process.env.KASHIER_MERCHANT_ID  || "";
 const KASHIER_API_KEY      = process.env.KASHIER_API_KEY      || "";
 const KASHIER_MODE         = process.env.KASHIER_MODE         || "live";   // "test" | "live"
 const APP_URL              = process.env.VITE_APP_URL         || "https://postureai-pro-omega-nine.vercel.app";
+
+function getAdminAuth() {
+  if (!getApps().length) {
+    initializeApp({
+      credential: cert({
+        projectId:   process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey:  (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+      }),
+    });
+  }
+  return getAuth();
+}
+
+/** Verify the caller's Firebase ID token, if one was supplied. Returns
+ *  { uid, email } for a verified caller, or null for anonymous checkout. */
+async function resolveCaller(req) {
+  const authHeader = req.headers["authorization"] || "";
+  if (!authHeader.startsWith("Bearer ")) return null;
+  const idToken = authHeader.slice(7).trim();
+  if (!idToken) return null;
+  try {
+    const decoded = await getAdminAuth().verifyIdToken(idToken);
+    return { uid: decoded.uid, email: decoded.email || "" };
+  } catch (err) {
+    console.warn("[Kashier create-order] Invalid/expired ID token:", err.message);
+    return null;
+  }
+}
 
 // ── Prices (EGP) ─────────────────────────────────────────────────
 const PRICES = {
@@ -63,9 +105,8 @@ export default async function handler(req, res) {
   try {
     const {
       tier,
-      billing     = "monthly",
-      uid         = "anon",
-      user_count  = 1,
+      billing      = "monthly",
+      user_count   = 1,
       billing_data = {},
     } = req.body || {};
 
@@ -73,6 +114,12 @@ export default async function handler(req, res) {
 
     const amount = getPrice(tier, billing, user_count);
     if (!amount) return res.status(400).json({ error: "Unknown tier: " + tier });
+
+    // Verified caller identity — never trust a client-supplied uid/email for
+    // the account that will receive the tier upgrade.
+    const caller = await resolveCaller(req);
+    const uid    = caller ? caller.uid   : "anon";
+    const email  = caller ? caller.email : (billing_data.email || "");
 
     // Kashier expects amount as string with 2 decimal places
     const amountStr  = amount.toFixed(2);
@@ -103,7 +150,7 @@ export default async function handler(req, res) {
       description:  "Corvus PostureAI — " + tier + " plan (" + billing + ")",
       // Shopper info (optional but improves UX)
       shopperReference: uid,
-      ...(billing_data.email && { email: billing_data.email }),
+      ...(email && { email }),
     });
 
     // Pass mode param for test environment
