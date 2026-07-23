@@ -23,7 +23,7 @@ async function getStripe() {
 }
 
 // ── Pricing config — B2C Egypt + Gulf ────────────────────────────
-// Egypt: PayMob EGP | Gulf/Global: Stripe USD
+// Egypt: Kashier EGP | Gulf/Global: Stripe USD
 // Amounts in CENTS
 export const PLANS = {
   standard: {
@@ -81,7 +81,7 @@ export const PLANS = {
 // B2B_PLANS — Companies only. IDs start with "b2b_"
 // Never merge with PLANS — completely separate checkout flows.
 // FLAT-RATE pricing — one price for the whole plan up to a seat cap, NOT per-seat.
-// Egypt: PayMob EGP | Gulf: Stripe USD.
+// Egypt: Kashier EGP | Gulf: Stripe USD.
 // ══════════════════════════════════════════════════════════════════
 export const B2B_PLANS = {
   b2b_starter: {
@@ -219,8 +219,8 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   };
 
   const T = {
-    en: { title: "Choose your plan", billing: "Billing", monthly: "Monthly", yearly: "Yearly", save: "Save 20%", current: "Current plan", upgrade: "Upgrade", downgrade: "Downgrade", contact: "Contact sales", free: "Free forever", perMonth: "/mo", perYear: "/yr", stripeNote: "Secure payment via Stripe — cancel anytime", paymobNote: "Secure payment via PayMob — Egypt cards & wallets", or: "or pay with" },
-    ar: { title: "اختر خطتك", billing: "الفوترة", monthly: "شهري", yearly: "سنوي", save: "وفر 20%", current: "خطتك الحالية", upgrade: "ترقية", downgrade: "تخفيض", contact: "تواصل مع المبيعات", free: "مجاني للأبد", perMonth: "/شهر", perYear: "/سنة", stripeNote: "دفع آمن عبر Stripe — إلغاء في أي وقت", paymobNote: "دفع آمن عبر PayMob — بطاقات ومحافظ مصرية", or: "أو ادفع بـ" },
+    en: { title: "Choose your plan", billing: "Billing", monthly: "Monthly", yearly: "Yearly", save: "Save 20%", current: "Current plan", upgrade: "Upgrade", downgrade: "Downgrade", contact: "Contact sales", free: "Free forever", perMonth: "/mo", perYear: "/yr", stripeNote: "Secure payment via Stripe — cancel anytime", kashierNote: "Secure payment via Kashier — Egypt cards & wallets", or: "or pay with" },
+    ar: { title: "اختر خطتك", billing: "الفوترة", monthly: "شهري", yearly: "سنوي", save: "وفر 20%", current: "خطتك الحالية", upgrade: "ترقية", downgrade: "تخفيض", contact: "تواصل مع المبيعات", free: "مجاني للأبد", perMonth: "/شهر", perYear: "/سنة", stripeNote: "دفع آمن عبر Stripe — إلغاء في أي وقت", kashierNote: "دفع آمن عبر Kashier — بطاقات ومحافظ مصرية", or: "أو ادفع بـ" },
   };
   const t = T[lang] || T.en;
 
@@ -247,52 +247,42 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       });
     } catch (e) {
       setError(e.message);
-      // Fallback to PayMob if Stripe not configured
+      // Fallback to Kashier if Stripe not configured
       if (e.message.includes("not configured")) {
-        setError("Stripe not set up — use PayMob below ↓");
+        setError("Stripe not set up — use Kashier below ↓");
       }
     } finally {
       setLoading(null);
     }
   }, [billing, profile, lang]);
 
-  const handlePayMob = useCallback(async (planId) => {
-    setError(""); setLoading(`pm_${planId}`);
+  const handleKashier = useCallback(async (planId) => {
+    setError(""); setLoading("ks_" + planId);
     try {
       const plan   = activePlans[planId];
       const amount = billing === "yearly" ? plan.priceEGP.yearly : plan.priceEGP.monthly;
       if (!amount) { setError("Contact sales for Enterprise pricing"); setLoading(null); return; }
       const tok3 = await getAuthToken();
-      // Use Vercel serverless function (works without Railway)
-      const resp = await fetch("/api/paymob/create-order", {
+      const resp = await fetch("/api/kashier/create-order", {
         method:  "POST",
         headers: { "Content-Type": "application/json", ...(tok3 ? { Authorization: "Bearer " + tok3 } : {}) },
         body: JSON.stringify({
-          tier:          planId,
+          tier:       planId,
           billing,
-          payment_type:  "card",
-          uid:           profile?.uid || profile?.id || "",
-          user_count:    profile?.team_size_num || 1,
-          billing_data:  {
+          uid:        profile?.uid || profile?.id || "",
+          user_count: profile?.team_size_num || 1,
+          billing_data: {
             email:      profile?.email || "",
             first_name: (profile?.name || "Customer").split(" ")[0],
             last_name:  (profile?.name || "").split(" ").slice(1).join(" ") || "",
-            phone_number: profile?.phone || "NA",
           },
         }),
       });
       const data = await resp.json();
-      if (data.iframe_url) {
-        window.location.href = data.iframe_url;
-      } else if (data.payment_key) {
-        const iframeId = data.iframe_id || import.meta.env.VITE_PAYMOB_IFRAME_ID;
-        if (iframeId) {
-          window.location.href = "https://accept.paymob.com/api/acceptance/iframes/" + iframeId + "?payment_token=" + data.payment_key;
-        } else {
-          setError("PayMob iframe ID not configured — add PAYMOB_IFRAME_ID to Vercel env vars");
-        }
+      if (data.redirect_url) {
+        window.location.href = data.redirect_url;
       } else {
-        setError(data.error || "PayMob error — check Vercel env vars");
+        setError(data.error || "Kashier error — check Vercel env vars");
       }
     } catch (e) {
       setError(e.message);
@@ -422,9 +412,9 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                         💳 {isAr ? "بطاقة ائتمان — قريباً" : "Credit Card — Coming Soon"}
                       </button>
                     )}
-                    {/* PayMob button */}
-                    <button onClick={() => handlePayMob(planId)} disabled={loading === `pm_${planId}`} style={{ width: "100%", background: loading === `pm_${planId}` ? "rgba(16,185,129,.3)" : "rgba(16,185,129,.08)", border: "1px solid rgba(16,185,129,.3)", borderRadius: 9, padding: "9px 0", fontSize: 11, fontWeight: 600, color: "#10b981", cursor: "pointer" }}>
-                      {loading === `pm_${planId}` ? "..." : `PayMob 🇪🇬 (${isAr ? "بطاقة/محفظة" : "Card/Wallet"})`}
+                    {/* Kashier button */}
+                    <button onClick={() => handleKashier(planId)} disabled={loading === ("ks_" + planId)} style={{ width: "100%", background: loading === ("ks_" + planId) ? "rgba(16,185,129,.3)" : "rgba(16,185,129,.08)", border: "1px solid rgba(16,185,129,.3)", borderRadius: 9, padding: "9px 0", fontSize: 11, fontWeight: 600, color: "#10b981", cursor: "pointer" }}>
+                      {loading === ("ks_" + planId) ? "..." : "Kashier \uD83C\uDDEA\uD83C\uDDEC (" + (isAr ? "\u0628\u0637\u0627\u0642\u0629/\u0645\u062D\u0641\u0638\u0629" : "Card/Wallet") + ")"}
                     </button>
                   </div>
                 )}
@@ -441,7 +431,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
 
         <div style={{ padding: "12px 20px 20px", display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", borderTop: `0.5px solid ${DARK.border}` }}>
           <div style={{ fontSize: 10, color: DARK.muted, display: "flex", gap: 6, alignItems: "center" }}>
-            🔒 {STRIPE_KEY ? t.stripeNote : t.paymobNote}
+            🔒 {STRIPE_KEY ? t.stripeNote : t.kashierNote}
           </div>
           <div style={{ fontSize: 10, color: DARK.muted }}>
             {isAr ? "الأسعار شاملة الضريبة • إلغاء في أي وقت" : "Prices include VAT • Cancel anytime"}

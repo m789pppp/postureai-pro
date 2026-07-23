@@ -69,10 +69,10 @@ const CHANGELOG = [
     version: "v1.1.0",
     date: "2026-02-01",
     type: "minor",
-    title: "Billing + PayMob",
+    title: "Billing + Kashier",
     breaking: false,
     items: [
-      { type: "new",        text: "POST /api/billing/paymob/create-order — EGP payments" },
+      { type: "new",        text: "POST /api/billing/kashier/create-order — EGP payments" },
       { type: "new",        text: "POST /api/stripe/webhook — Stripe subscription management" },
       { type: "improved",   text: "All plan amounts now computed server-side (no client trust)" },
     ],

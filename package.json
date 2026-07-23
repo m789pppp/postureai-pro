@@ -1,0 +1,12 @@
+{
+  "name": "corvus-postureai-pro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Corvus PostureAI Pro — root package for Vercel serverless functions",
+  "dependencies": {
+    "firebase-admin": "^12.2.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -2368,7 +2368,7 @@ export default function HomePage({
 }) {
   const [tab,    setTab]    = useState("home");
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
-  // Default currency by timezone — Egypt → EGP (PayMob), everyone else → USD (Stripe).
+  // Default currency by timezone — Egypt → EGP (Kashier), everyone else → USD (Stripe).
   // Matches the same Egypt/Gulf split documented in Billing.jsx. User can still toggle.
   const [currency, setCurrency] = useState(()=>{
     try {

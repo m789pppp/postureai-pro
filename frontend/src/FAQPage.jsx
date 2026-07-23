@@ -49,7 +49,7 @@ const CATEGORIES = [
       ["What's the difference between Individual and Company plans?","Individual plans are for single users. Company (HR) plans add the HR dashboard, team management, department reporting, bulk user import, weekly auto-reports, and API access."],
       ["Can I change plans later?","Yes. You can upgrade or downgrade at any time. Downgrades take effect at the end of your billing period. Upgrades are instant with pro-rated billing."],
       ["Do you offer discounts for NGOs or universities?","Yes. We offer 50% discounts for verified educational institutions and NGOs. Contact us with your organisation details to apply."],
-      ["What payment methods are accepted?","We accept all major credit cards, Vodafone Cash, Fawry, and bank transfer for annual plans. Egyptian customers can pay in EGP via PayMob."],
+      ["What payment methods are accepted?","We accept all major credit cards, Vodafone Cash, Fawry, and bank transfer for annual plans. Egyptian customers can pay in EGP via Kashier."],
     ],
   },
   {

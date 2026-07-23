@@ -17,7 +17,7 @@ const FEATURE_FLAGS = [
   { id:"ff_3d_posture",        label:"3D Posture Model",     desc:"Three.js 3D avatar posture visualization",    enabled:false, rollout:0,   env:"beta" },
   { id:"ff_mobile_app",        label:"Mobile App Mode",      desc:"Responsive mobile-first layout",              enabled:true,  rollout:100, env:"all" },
   { id:"ff_new_onboarding",    label:"New Onboarding v2",    desc:"Redesigned onboarding wizard",                enabled:true,  rollout:30,  env:"all" },
-  { id:"ff_paymob_v3",         label:"PayMob API v3",        desc:"Upgrade to PayMob v3 payment API",            enabled:false, rollout:0,   env:"staging" },
+  { id:"ff_kashier_v3",         label:"Kashier API v3",        desc:"Upgrade to Kashier v3 payment API",            enabled:false, rollout:0,   env:"staging" },
 ];
 
 const MOCK_HEALTH = {
