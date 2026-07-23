@@ -208,7 +208,19 @@ service cloud.firestore {
 
     // ── Invites ──────────────────────────────────────────────────
     match /invites/{inviteId} {
-      allow read: if isAuthenticated();
+      // SECURITY: previously `allow read: if isAuthenticated()` let ANY signed-in
+      // user — from any company — query the entire invites collection, leaking
+      // other companies' invited emails, roles, and company_id (cross-tenant
+      // data leak). Read is now scoped to: platform admins, the HR admin of the
+      // same company as the invite, or the invited user themselves (matched by
+      // email, since the invite has no accepter uid until accepted).
+      allow read: if isAuthenticated() && (
+        getUserData().get('is_admin', false) == true ||
+        (getUserData().get('is_hr', false) == true &&
+         isSameCompany(resource.data.get('company_id', ''))) ||
+        resource.data.get('email', null) == getUserData().get('email', null) ||
+        resource.data.get('accepted_by', null) == request.auth.uid
+      );
       // SECURITY: isHR() alone only checks is_hr/is_admin — it does NOT verify
       // the invite being created belongs to the HR's own company. Without the
       // isSameCompany() check, any HR admin at Company A could create invite

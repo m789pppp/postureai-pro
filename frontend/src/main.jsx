@@ -11,13 +11,15 @@ import "./index.css";
 // server. A single forced reload fetches the current index.html with
 // correct references and fully resolves it, instead of surfacing a
 // raw "Failed to fetch dynamically imported module" error to the user.
-// Guarded with sessionStorage so a genuinely broken/offline case can't
-// reload-loop forever.
-window.addEventListener("vite:preloadError", (event) => {
-  event.preventDefault();
-  const key = "corvus_reload_on_chunk_error";
-  if (!sessionStorage.getItem(key)) {
-    sessionStorage.setItem(key, "1");
+// Guarded with a timestamp (not just a one-shot flag) so a *genuinely*
+// broken/offline case can't reload-loop forever, while still allowing
+// recovery from more than one stale chunk per session if needed.
+window.addEventListener("vite:preloadError", (e) => {
+  e.preventDefault();
+  const key = "corvus_chunk_reload_at";
+  const last = Number(sessionStorage.getItem(key) || 0);
+  if (Date.now() - last > 10000) {
+    sessionStorage.setItem(key, String(Date.now()));
     window.location.reload();
   }
 });
@@ -28,25 +30,6 @@ try {
   const isDark = dark !== null ? dark === "true" : true;
   document.body.classList.add(isDark ? "dark" : "light");
 } catch {}
-
-// ── Stale-deployment chunk recovery ────────────────────────────────
-// Vite fires this on window whenever a dynamic import() 404s — almost
-// always because a new deploy went out after this tab loaded, so the
-// chunk hash the page is asking for (e.g. jspdf.es.min-DKZHkEAz.js) no
-// longer exists on the server. Without this, the raw "Failed to fetch
-// dynamically imported module" error surfaces straight to the user
-// (e.g. mid-PDF-download) instead of just picking up the new build.
-// Guarded with a one-shot sessionStorage flag so a *genuinely* broken
-// chunk (not just a stale deploy) can't reload-loop forever.
-window.addEventListener("vite:preloadError", (e) => {
-  e.preventDefault();
-  const key = "corvus_chunk_reload_at";
-  const last = Number(sessionStorage.getItem(key) || 0);
-  if (Date.now() - last > 10000) {
-    sessionStorage.setItem(key, String(Date.now()));
-    window.location.reload();
-  }
-});
 
 // ── Sentry: init before render ────────────────────────────────────
 import { initSentry } from "./Observability.jsx";
@@ -134,20 +117,39 @@ const STANDALONE_ROUTES = {
 
 const standaloneLoader = STANDALONE_ROUTES[path];
 
+// If a top-level entry chunk resolves but its default export is missing
+// (stale CDN chunk after a new deploy — same class of bug as the
+// vite:preloadError case above, just caught one step later since the
+// fetch itself succeeded), force one guarded reload instead of calling
+// createRoot().render(<undefined/>), which is what threw the minified
+// React error #306 in production.
+function reloadOnceForStaleChunk() {
+  const key = "corvus_stale_entry_reload";
+  if (!sessionStorage.getItem(key)) {
+    sessionStorage.setItem(key, "1");
+    window.location.reload();
+    return true;
+  }
+  return false;
+}
+
 if (path.startsWith("/report/")) {
   import("./SharedReportPage.jsx").then(({ default: SharedReportPage }) => {
+    if (!SharedReportPage) { if (reloadOnceForStaleChunk()) return; }
     createRoot(document.getElementById("root")).render(
       <StrictMode><ErrorBoundary><SharedReportPage /></ErrorBoundary></StrictMode>
     );
   });
 } else if (standaloneLoader) {
   standaloneLoader().then(({ default: Page }) => {
+    if (!Page) { if (reloadOnceForStaleChunk()) return; }
     createRoot(document.getElementById("root")).render(
       <StrictMode><ErrorBoundary><Page /></ErrorBoundary></StrictMode>
     );
   });
 } else {
   import("./App.jsx").then(({ default: App }) => {
+    if (!App) { if (reloadOnceForStaleChunk()) return; }
     createRoot(document.getElementById("root")).render(
       <StrictMode>
         <ErrorBoundary>

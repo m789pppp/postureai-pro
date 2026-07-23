@@ -124,7 +124,7 @@ export function APIChangelog({ cs, onClose }) {
               <div style={{ fontSize:12, color:cs.textDim }}>Corvus API v1.5.0 · Current stable</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }}>✕</button>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }} aria-label="Close">✕</button>
         </div>
 
         <div style={{ flex:1, overflowY:"auto", padding:24 }}>

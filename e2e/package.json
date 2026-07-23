@@ -3,18 +3,19 @@
   "version": "1.0.0",
   "description": "PostureAI Pro — Playwright E2E Test Suite",
   "scripts": {
-    "test":         "playwright test",
-    "test:headed":  "playwright test --headed",
-    "test:ui":      "playwright test --ui",
-    "test:chrome":  "playwright test --project=chromium",
-    "test:security":"playwright test tests/07-security.spec.ts",
-    "test:api":     "playwright test tests/10-api-backend.spec.ts",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:chrome": "playwright test --project=chromium",
+    "test:security": "playwright test tests/07-security.spec.ts",
+    "test:api": "playwright test tests/10-api-backend.spec.ts",
     "test:landing": "playwright test tests/01-landing.spec.ts",
-    "report":       "playwright show-report",
-    "install":      "playwright install chromium firefox webkit"
+    "report": "playwright show-report",
+    "install": "playwright install chromium firefox webkit"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.45.0",
-    "typescript":       "^5.4.0"
+    "typescript": "^5.4.0"
   }
 }

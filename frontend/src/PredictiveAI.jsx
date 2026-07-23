@@ -752,7 +752,7 @@ Max 180 words. Start immediately.`,
               background: TOKENS.surfaceL, border: `1px solid ${TOKENS.border}`,
               color: TOKENS.textSub, cursor: "pointer", fontSize: 15,
               display: "flex", alignItems: "center", justifyContent: "center",
-            }}>✕</button>
+            }} aria-label="Close">✕</button>
           </div>
 
           {/* Metric chips */}
