@@ -1179,6 +1179,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
   const[saving,setSaving]=useState(false);
   const[refStats,setRefStats]=useState(null);
   const[showReferralProgram,setShowReferralProgram]=useState(false);
+  const[showIntegrationsHub,setShowIntegrationsHub]=useState(false);
   useEffect(()=>{ getReferralStats(user.uid).then(setRefStats).catch(()=>{}); },[user.uid]);
   const refLink=refStats?.ref_code?`${window.location.origin}?ref=${refStats.ref_code}`:"";
   const avgScore=sessions?.length?Math.round(sessions?.reduce((a,s)=>a+(s.avg_score||0),0)/sessions?.length):0;
@@ -1228,6 +1229,16 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
         {refStats?.credits>0&&<div style={{fontSize:11,color:"#10b981",fontWeight:700}}>💰 {refStats.credits} EGP {isAr?"رصيد متاح":"credit available"}</div>}
       </div>
       {showReferralProgram&&<Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense>}
+      <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:9}}>
+            <span style={{fontSize:20}}>🔌</span>
+            <div><div style={{fontSize:12,fontWeight:700,color:cs.text}}>{isAr?"التكاملات":"Integrations"}</div><div style={{fontSize:11,color:cs.muted}}>{isAr?"Slack، Teams، Zapier، Webhooks وأكتر":"Slack, Teams, Zapier, Webhooks & more"}</div></div>
+          </div>
+          <Btn cs={cs} onClick={()=>setShowIntegrationsHub(true)} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{isAr?"فتح":"Open"}</Btn>
+        </div>
+      </div>
+      {showIntegrationsHub&&<Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense>}
       {sessions?.length>0&&<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
         <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:13}}>{t.sessionHist||"Session History"}</div>
         <BarChart data={sessions?.slice(-10).map((s,i)=>({l:`S${i+1}`,v:s.avg_score||0}))} color="#1a56db" cs={cs}/>
