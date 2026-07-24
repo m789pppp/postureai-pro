@@ -403,7 +403,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
       body: {
         sessions_count:      sessions?.length || 0,
         avg_score:           avg,
-        streak:              profile?.streak  || 0,
+        streak:              profile?.streak_days || 0,
         referral_count:      profile?.referral_count || 0,
         has_calibration:     !!calibration,
         earned_achievements: profile?.achievements || [],
@@ -438,7 +438,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
             <>
               <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
                 {gamData && <XPBar xp={gamData.xp} level={gamData.level} xpCurrent={gamData.xp_current} xpNext={gamData.xp_to_next} levelLabel={gamData.level_label} cs={DARK} />}
-                <StreakDisplay streak={profile?.streak || 0} cs={DARK} />
+                <StreakDisplay streak={profile?.streak_days || 0} cs={DARK} />
               </div>
               {/* Daily Goal */}
               {gamData?.daily_goal && (

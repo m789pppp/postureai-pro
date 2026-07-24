@@ -447,7 +447,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
                     justifyContent:"center", fontSize:16, fontWeight:800, color:col }}>{sc||"—"}</div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
-                      {isAr?`جلسة #${userSessions.length-i}`:`Session #${userSessions.length-i}`}
+                      {isAr?`جلسة #${s.session_number||(userSessions.length-i)}`:`Session #${s.session_number||(userSessions.length-i)}`}
                     </div>
                     <div style={{ fontSize:11, color:cs.muted }}>
                       {d.toLocaleDateString(isAr?"ar-EG":"en-US",{weekday:"short",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}
@@ -752,7 +752,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
-function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false }) {
+function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
 
@@ -764,8 +764,8 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
 
   const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
   const grade = (s,ar) => s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"ضعيف":"Poor");
-  const totalSessions = userSessions.length;
-  const avgScore  = Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/totalSessions);
+  const totalSessions = profile?.sessions_count || userSessions.length;
+  const avgScore  = profile?.avg_score || Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length);
   const bestScore = Math.max(...userSessions.map(s=>s.avg_score||0));
   const totalMins = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
 
@@ -938,7 +938,7 @@ function PanelSessions({ userSessions, cs, isAr, setPage, startCamera, onDownloa
               {/* Info */}
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:13, fontWeight:600, color:cs.text, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                  {isAr ? `جلسة #${totalSessions-i}` : `Session #${totalSessions-i}`}
+                  {isAr ? `جلسة #${s.session_number||(totalSessions-i)}` : `Session #${s.session_number||(totalSessions-i)}`}
                   {s.mode && <span style={{ fontSize:10, color:cs.muted,
                     background:"rgba(255,255,255,.06)", padding:"1px 7px", borderRadius:99 }}>
                     {s.mode}
@@ -2496,7 +2496,7 @@ export default function HomePage({
           cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera} onCoach={openCoach}/>
       );
       if(tab==="sessions") return (
-        <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
+        <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
           setPage={setPage} startCamera={startCamera}
           onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
           onDeleteSession={handleDeleteSession}
@@ -2506,7 +2506,7 @@ export default function HomePage({
 
     // Individual
     if(tab==="sessions") return (
-      <PanelSessions userSessions={userSessions} cs={cs} isAr={isAr}
+      <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
         setPage={setPage} startCamera={startCamera}
         onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
         onDeleteSession={handleDeleteSession}
