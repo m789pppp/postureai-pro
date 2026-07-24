@@ -3829,6 +3829,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       <AuthPage
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
+        initialView={new URLSearchParams(window.location.search).get("mode")==="signup" ? "signup" : "login"}
         onAuth={(u,isNew)=>{
           setUser(u);
           if(isNew){ /* onAuthStateChanged will route to setup */ return;}
