@@ -103,7 +103,7 @@ def _verify_token(id_token: str) -> dict | None:
         # Allow dev-mode with a fixed test user ONLY when not production
         if os.getenv("FLASK_ENV", "development") != "production":
             # Return a fixed dev user — never decode an unverified JWT
-            dev_user = {"uid": "dev-user-local", "email": "dev@local.test", "email_verified": True}
+            dev_user = {"uid": "dev-user-local", "email": "dev@local.test", "email_verified": True, "auth_time": int(time.time())}
             with _token_lock:
                 _token_cache[h] = {"user": dev_user, "exp": time.time() + TOKEN_TTL}
             return dev_user
@@ -118,6 +118,12 @@ def _verify_token(id_token: str) -> dict | None:
             "uid":            decoded.get("uid", ""),
             "email":          decoded.get("email", ""),
             "email_verified": decoded.get("email_verified", False),
+            # When the user actually authenticated (password/OAuth), not
+            # when this token was minted/refreshed — refreshing a session
+            # doesn't advance this. Used to require a *fresh* sign-in for
+            # sensitive actions (e.g. disabling MFA) rather than trusting
+            # an old, silently-refreshed session indefinitely.
+            "auth_time":      decoded.get("auth_time", 0),
         }
     except _fb_auth.RevokedIdTokenError:
         print("[auth] Token revoked — access denied", file=sys.stderr)
