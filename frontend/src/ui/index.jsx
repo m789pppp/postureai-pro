@@ -1084,6 +1084,139 @@ export function SectionHeader({ title, sub, action, style = {} }) {
 }
 
 
+// ─────────────────────────────────────────────────────────────────
+// SESSION DETAIL — full per-session data (view + JSON download)
+// ─────────────────────────────────────────────────────────────────
+export function downloadJSON(data, filename) {
+  try {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  } catch (e) { console.warn("downloadJSON:", e); return false; }
+}
+
+const _SESSION_METRIC_LABELS = {
+  neck_lean: "Neck Lean", neck_lean_side: "Neck Lean (Side)", head_tilt: "Head Tilt",
+  head_yaw: "Head Rotation", shoulder: "Shoulder Balance", spine_lean: "Spine Lean",
+  spine_align: "Spine Alignment", fhp: "Forward Head Posture", fhp_side: "Forward Head (Side)",
+  rounded: "Rounded Shoulders", elbow: "Elbow Angle", monitor: "Monitor Height",
+  distance: "Viewing Distance", trunk_lean: "Trunk Lean", hip_angle: "Hip Angle", knee_angle: "Knee Angle",
+};
+const _SESSION_METRIC_LABELS_AR = {
+  neck_lean: "ميل الرقبة", neck_lean_side: "ميل الرقبة (جانبي)", head_tilt: "انحناء الرأس",
+  head_yaw: "دوران الرأس", shoulder: "توازن الكتفين", spine_lean: "ميل العمود الفقري",
+  spine_align: "محاذاة العمود الفقري", fhp: "تقدم الرأس للأمام", fhp_side: "تقدم الرأس (جانبي)",
+  rounded: "تقريس الأكتاف", elbow: "زاوية الكوع", monitor: "ارتفاع الشاشة",
+  distance: "مسافة المشاهدة", trunk_lean: "ميل الجذع", hip_angle: "زاوية الورك", knee_angle: "زاوية الركبة",
+};
+function _fmtDurShort(s) {
+  s = Number(s) || 0;
+  const m = Math.floor(s / 60), r = Math.round(s % 60);
+  return m > 0 ? `${m}m ${r}s` : `${r}s`;
+}
+function SessionSummaryItem({ label, value }) {
+  return (
+    <div style={{ background: "rgba(148,163,184,.06)", borderRadius: 10, padding: "8px 10px" }}>
+      <div style={{ fontSize: 9.5, color: UI_TOKENS.muted, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: UI_TOKENS.text }}>{value}</div>
+    </div>
+  );
+}
+function SessionTextBlock({ label, text }) {
+  if (!text) return null;
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: UI_TOKENS.muted, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 12, color: UI_TOKENS.text, lineHeight: 1.5,
+        background: "rgba(148,163,184,.06)", borderRadius: 10, padding: 10 }}>{text}</div>
+    </div>
+  );
+}
+
+export function SessionDetailModal({ session, cs, isAr = false, onClose }) {
+  if (!session) return null;
+  const labels = isAr ? _SESSION_METRIC_LABELS_AR : _SESSION_METRIC_LABELS;
+  const metrics = session.metrics || {};
+  const dateStr = session.created_at?.toDate?.()?.toLocaleString?.() || "—";
+  const chartData = (session.score_history || []).slice(-30).map((v, i) => ({ l: String(i + 1), v }));
+  const dur = session.duration_s ?? session.duration_sec;
+
+  return (
+    <Modal cs={cs} onClose={onClose} maxWidth={580}
+      title={isAr ? `تفاصيل الجلسة${session.session_number ? " #" + session.session_number : ""}` : `Session${session.session_number ? " #" + session.session_number : ""} Details`}>
+      <div style={{ padding: "16px 20px 20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+          <SessionSummaryItem label={isAr ? "التاريخ" : "Date"} value={dateStr} />
+          <SessionSummaryItem label={isAr ? "المدة" : "Duration"} value={_fmtDurShort(dur)} />
+          <SessionSummaryItem label={isAr ? "النتيجة" : "Avg Score"} value={`${session.avg_score || 0}/100`} />
+          <SessionSummaryItem label={isAr ? "وضع جيد" : "Good %"} value={`${session.good_pct || 0}%`} />
+          <SessionSummaryItem label={isAr ? "التنبيهات" : "Alerts"} value={session.alerts_count || 0} />
+          <SessionSummaryItem label={isAr ? "الجهاز" : "Mode"} value={session.mode || "—"} />
+        </div>
+
+        {chartData.length > 1 && <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: UI_TOKENS.muted, marginBottom: 8 }}>
+            {isAr ? "سجل النتيجة خلال الجلسة" : "In-Session Score History"}
+          </div>
+          <BarChart data={chartData} color="#1a56db" cs={cs} />
+        </div>}
+
+        {Object.keys(metrics).length > 0 && <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: UI_TOKENS.muted, marginBottom: 4 }}>
+            {isAr ? "تفاصيل القياسات" : "Metric Breakdown"}
+          </div>
+          {Object.entries(metrics).map(([k, v]) => (
+            <MetRow key={k} label={labels[k] || k}
+              value={typeof v === "number" ? Math.round(v) : v}
+              score={typeof v === "number" ? v : 0} cs={cs} />
+          ))}
+        </div>}
+
+        {session.alert_causes?.length > 0 && <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: UI_TOKENS.muted, marginBottom: 6 }}>
+            {isAr ? "أسباب التنبيهات" : "Alert Causes"}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {session.alert_causes.map((a, i) => (
+              <span key={i} style={{ fontSize: 10.5, background: "rgba(239,68,68,.1)", color: "#f87171",
+                borderRadius: 99, padding: "4px 10px" }}>{a.cause} · {a.hour}:00 · {a.severity}</span>
+            ))}
+          </div>
+        </div>}
+
+        <SessionTextBlock label={isAr ? "ملخص الألم" : "Pain Summary"} text={session.pain_summary} />
+        <SessionTextBlock label={isAr ? "نصيحة AI" : "AI Tip"} text={session.ai_tip} />
+        <SessionTextBlock label={isAr ? "نصيحة التحسين" : "Improvement Tip"} text={session.improvement_tip} />
+
+        {session.worst_snapshots?.length > 0 && <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: UI_TOKENS.muted, marginBottom: 8 }}>
+            {isAr ? "أسوأ لحظات الوضعية (Elite)" : "Worst Posture Moments (Elite)"}
+          </div>
+          <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+            {session.worst_snapshots.map((snap, i) => (
+              <div key={i} style={{ flexShrink: 0 }}>
+                <img src={snap.img} alt={isAr ? `لقطة ${i + 1} — نتيجة ${snap.score}` : `Snapshot ${i + 1} — score ${snap.score}`}
+                  style={{ width: 110, height: 82, objectFit: "cover", borderRadius: 8, display: "block" }} />
+                <div style={{ fontSize: 9, color: UI_TOKENS.muted, textAlign: "center", marginTop: 3 }}>{snap.score}/100 · {snap.time}</div>
+              </div>
+            ))}
+          </div>
+        </div>}
+
+        <button onClick={() => downloadJSON(session, `corvus_session_${session.session_number || session.id || "data"}.json`)}
+          style={{ width: "100%", marginTop: 4, padding: "11px 14px", borderRadius: 10, border: "none",
+            background: "#1a56db", color: "white", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+          {isAr ? "⬇️ تحميل كل البيانات (JSON)" : "⬇️ Download All Data (JSON)"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Re-exports from interactions.jsx ─────────────────────────────
 export {
   ConfettiCanvas, RippleBtn, AnimatedNumber, ScorePulse, HoverCard, StreakFlame, ScoreReveal, PageTransition, SwipeHint, LiveDot, useToast, useAchievement,
