@@ -2135,8 +2135,77 @@ const AdminDashboard = lazyNamed(() => import("./AdminDashboard.jsx"), "AdminDas
 const BillingDashboard = lazyNamed(() => import("./BillingDashboard.jsx"), "BillingDashboard");
 const UsageBilling = lazyNamed(() => import("./UsageBilling.jsx"), "UsageBilling");
 
+// MFA login gate — shown after a successful Firebase sign-in when the
+// account has 2FA enabled. This is new: previously nothing anywhere
+// checked mfa_enabled at sign-in at all, so 2FA gave no real protection.
+function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
+  const isAr = lang === "ar";
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [smsSent, setSmsSent] = useState(false);
+  const method = profile?.mfa_method === "sms" ? "sms" : "totp";
+
+  const sendSms = async () => {
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/auth/mfa/sms/send", { method:"POST", body:{ phone: profile?.mfa_phone||"" } });
+      setSmsSent(true);
+    } catch(e) { setError(e?.message || (isAr?"تعذر إرسال الكود":"Couldn't send code")); }
+    setBusy(false);
+  };
+
+  const verify = async () => {
+    if (code.trim().length < 6) { setError(isAr?"أدخل الكود كاملاً":"Enter the full code"); return; }
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/auth/mfa/login-verify", { method:"POST", body:{ code: code.trim() } });
+      onVerified();
+    } catch(e) {
+      setError(e?.message || (isAr?"كود غير صحيح":"Invalid code"));
+      setCode("");
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:cs.bg, zIndex:3000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div style={{ width:"100%", maxWidth:400, background:cs.card, border:`1px solid ${cs.border}`, borderRadius:18, padding:28, textAlign:"center" }}>
+        <div style={{ fontSize:40, marginBottom:10 }}>🛡</div>
+        <div style={{ fontWeight:800, fontSize:18, color:cs.text, marginBottom:6 }}>{isAr?"تأكيد الدخول":"Verify it's you"}</div>
+        <div style={{ fontSize:13, color:cs.textDim, marginBottom:20, lineHeight:1.6 }}>
+          {method==="sms"
+            ? (isAr?`أرسلنا كود لرقمك المسجل. اضغط "إرسال كود" لو محتاج واحد جديد.`:`We'll text a code to your registered number. Tap "Send code" if you need a new one.`)
+            : (isAr?"افتح تطبيق المصادقة وادخل الكود المكون من 6 أرقام":"Open your authenticator app and enter the 6-digit code")}
+        </div>
+        {method==="sms" && (
+          <button onClick={sendSms} disabled={busy} style={{ marginBottom:14, background:"rgba(255,255,255,0.06)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"8px 16px", cursor:"pointer", fontWeight:600, fontSize:12 }}>
+            {smsSent ? (isAr?"✓ اتبعت — ابعت تاني":"✓ Sent — resend") : (isAr?"إرسال كود":"Send code")}
+          </button>
+        )}
+        <input
+          value={code}
+          onChange={e=>setCode(e.target.value.replace(/[^0-9A-Za-z-]/g,""))}
+          onKeyDown={e=>e.key==="Enter"&&verify()}
+          placeholder={isAr?"الكود":"Code"}
+          maxLength={11}
+          style={{ width:"100%", boxSizing:"border-box", textAlign:"center", fontSize:20, letterSpacing:3, fontWeight:700, background:"rgba(255,255,255,0.05)", border:`1.5px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"12px", outline:"none", marginBottom:12 }}
+          autoFocus
+        />
+        {error && <div style={{ color:"#ef4444", fontSize:12, marginBottom:12 }}>{error}</div>}
+        <button onClick={verify} disabled={busy} style={{ width:"100%", background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"13px", cursor:"pointer", fontWeight:800, fontSize:15, marginBottom:10 }}>
+          {busy ? (isAr?"جاري التحقق…":"Verifying…") : (isAr?"تأكيد":"Verify")}
+        </button>
+        <div style={{ fontSize:11, color:cs.textDim, marginBottom:14 }}>{isAr?"مش عندك وصول للتطبيق أو الرقم؟ استخدم أحد أكواد النسخ الاحتياطي":"Lost access to your app or phone? Use one of your backup codes instead"}</div>
+        <button onClick={onSignOut} style={{ background:"transparent", border:"none", color:cs.textDim, cursor:"pointer", fontSize:12, textDecoration:"underline" }}>{isAr?"تسجيل خروج":"Sign out"}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   const[user,setUser]=useState(null);
+  const[mfaChallengePending,setMfaChallengePending]=useState(false);
   const[backendDown,setBackendDown]=useState(false);
   const[profile,setProfile]=useState(null);
   const[authChecked,setAuthChecked]=useState(false);
@@ -2630,6 +2699,17 @@ export default function App(){
             setProfile(p);
             if(p.tier)       setTier(normalizeTier(p.tier));
             if(p.company_id) setCompanyId(p.company_id);
+            // MFA login gate — a Firebase sign-in only proves password;
+            // if this account has 2FA enabled, hold the app behind a
+            // challenge screen until a valid code/backup code is verified.
+            // (See mfaChallengePending render gate near the AuthPage
+            // return below.) sessionStorage flag lets a page refresh in
+            // the same tab skip re-challenging every reload.
+            if(p.mfa_enabled && sessionStorage.getItem(`mfa_verified_${u.uid}`)!=="1"){
+              setMfaChallengePending(true);
+            } else {
+              setMfaChallengePending(false);
+            }
           }
 
           // Real-time sessions listener
@@ -2688,6 +2768,7 @@ export default function App(){
           setUser(null);
           setProfile(null);
           setUserSessions([]);
+          setMfaChallengePending(false);
           setPage("landing");
         }
       } catch(e) {
@@ -3846,6 +3927,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
         }}
       />
     </ErrorBoundary>
+  );
+
+  if(mfaChallengePending)return(
+    <ErrorBoundary>
+      <MFALoginChallenge
+        user={user} profile={profile} cs={cs} lang={lang}
+        onVerified={()=>{
+          try{ sessionStorage.setItem(`mfa_verified_${user.uid}`,"1"); }catch{}
+          setMfaChallengePending(false);
+        }}
+        onSignOut={()=>{ logOut(); setUser(null); setProfile(null); setMfaChallengePending(false); }}
+      />
+    </ErrorBoundary>
   );  if(page==="admin"&&isAdmin)return <ErrorBoundary><Admin {...shared} adminUser={user} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="hr"&&(isAdmin||isHRAdmin))return <ErrorBoundary><HRPanel {...shared} user={user} profile={profile} companyId={companyId||profile?.company_id} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="marketplace"&&user)return <ErrorBoundary><TherapistMarketplace {...shared} user={user} isAdmin={isAdmin} onBack={()=>setPage("home")}/></ErrorBoundary>;
@@ -4355,7 +4449,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
       {showSecurityCenter&&<SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }
-      {showMFASetup&&<MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)}/>}
+      {showMFASetup&&<MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/>}
       {showBillingDashboard&&<BillingDashboard profile={profile} user={user} cs={cs} lang={lang} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}
       {/* Phase 12 — Enterprise Scale */}
       {showEnterpriseAdmin&&isAdmin&&<EnterpriseAdminTools profile={profile} cs={cs} lang={lang} onClose={()=>setShowEnterpriseAdmin(false)}/>}
