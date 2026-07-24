@@ -6695,6 +6695,7 @@ def user_onboard():
             return jsonify({"ok": True, "skipped": "already_onboarded"})
 
         # Fire welcome email
+        welcome_sent = False
         try:
             from services.email_sequences import send_email as drip_send, EmailContext
             ctx = EmailContext(
@@ -6703,21 +6704,27 @@ def user_onboard():
                 data={"plan_display": plan.title(), "first_session_url": f"{APP_URL}/#camera"},
             )
             drip_send(ctx)
+            welcome_sent = True
         except ImportError:
             # Fallback to basic send_email if SendGrid templates not configured
-            send_email(email, f"Welcome to PostureAI Pro 👋",
+            welcome_sent = send_email(email, f"Welcome to PostureAI Pro 👋",
                 f"<p>Hi {name},</p><p>Your account is ready. <a href=\"{APP_URL}\">Start your first session →</a></p>")
         except Exception as drip_err:
             print(f"[onboard] Drip email error: {drip_err}", file=sys.stderr)
 
-        # Mark onboarded
-        ref.update({
-            "onboard_email_sent": True,
-            "onboarded_at": datetime.utcnow().isoformat() + "Z",
-        })
+        # BUG FIX: this used to unconditionally mark onboard_email_sent=True
+        # even when the send above raised/failed — permanently losing the
+        # welcome email with no retry path if Railway/SendGrid/SMTP had any
+        # transient issue at that exact moment. Only mark it sent on actual
+        # success; otherwise the next /api/user/onboard call (idempotency
+        # guard above) will naturally retry.
+        update_fields = {"onboarded_at": datetime.utcnow().isoformat() + "Z"}
+        if welcome_sent:
+            update_fields["onboard_email_sent"] = True
+        ref.update(update_fields)
 
         audit(uid, "user_onboarded", "lifecycle", {"email": email, "plan": plan})
-        return jsonify({"ok": True, "welcome_email": "queued"})
+        return jsonify({"ok": True, "welcome_email": "sent" if welcome_sent else "failed_will_retry"})
 
     except Exception as e:
         return safe_error(e, "Onboarding failed")

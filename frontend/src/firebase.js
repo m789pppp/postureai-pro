@@ -282,16 +282,34 @@ export async function checkAndSendNurtureEmails(uid, profile, apiUrl) {
   const daysSince = Math.floor((Date.now() - created) / 86400000);
   const send = async (day, flag) => {
     if (profile[flag]) return; // already sent (Firestore flag)
-    try {
-      await fetch(`${apiUrl}/email/sequence`, {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ email:profile.email, name:profile.name||"there",
-          day, avg_score:profile.avg_score||0, session_count:profile.sessions_count||0,
-          tier:profile.tier||"professional",
-          upgrade_url:`${window.location.origin}?plan=professional` }),
-      });
-      await updateDoc(doc(db,"users",uid), { [flag]:true, updated_at:_serverTimestamp() });
-    } catch(e) { console.warn(`Email day ${day}:`, e); }
+    // BUG FIX: fetch() only rejects on network failure, never on HTTP error
+    // status — a 500 from the backend or a 502 from the Vercel→Railway proxy
+    // (exactly what happens when Railway itself is down) used to fall
+    // through to the "mark as sent" line below anyway. That permanently lost
+    // the email: the flag blocks all future retries, even once Railway is
+    // back up. One retry after a short delay absorbs transient blips
+    // (Railway cold start, brief restart) without needing a durable queue.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(`${apiUrl}/email/sequence`, {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ email:profile.email, name:profile.name||"there",
+            day, avg_score:profile.avg_score||0, session_count:profile.sessions_count||0,
+            tier:profile.tier||"professional",
+            upgrade_url:`${window.location.origin}?plan=professional` }),
+        });
+        if (res.ok) {
+          await updateDoc(doc(db,"users",uid), { [flag]:true, updated_at:_serverTimestamp() });
+          return;
+        }
+        console.warn(`Email day ${day}: HTTP ${res.status} — will retry next visit`);
+      } catch(e) {
+        console.warn(`Email day ${day} (attempt ${attempt+1}):`, e);
+      }
+      if (attempt === 0) await new Promise(r=>setTimeout(r, 1500));
+    }
+    // Both attempts failed — leave the flag unset so the next time this
+    // user opens the app (daysSince still >= day), it tries again.
   };
   if (daysSince>=2)  await send(2,  "email_day2_sent");
   if (daysSince>=5)  await send(5,  "email_day5_sent");
