@@ -1,8 +1,27 @@
 /**
- * IntegrationsHub.jsx — Corvus Phase 15
+ * IntegrationsHub.jsx — Corvus
  * Native connectors: Slack, Microsoft Teams, Zapier, Make.com, Google Sheets, Webhooks
+ *
+ * Wired to the real backend 2026-07-24 — this modal existed and looked
+ * complete, but nothing rendered it anywhere in the app, and its
+ * "Connect" button was a fake 900ms setTimeout that never called any
+ * API. Now: GET /api/integrations loads real connection state, POST
+ * saves a config (that endpoint didn't exist before either), DELETE
+ * disconnects. "Custom Webhooks" is backed by the separate, older
+ * /api/webhooks CRUD instead, since that's what already exists for it.
+ *
+ * Honesty note carried into the UI below: of these connectors, only
+ * Slack and Custom Webhooks actually deliver anything today (Slack via
+ * a per-org webhook URL you set here; generic webhooks via /api/webhooks,
+ * though that store is in-memory on the backend and doesn't survive a
+ * server restart yet). Teams has real send code server-side, but it's
+ * wired to a single global env var, not to what you configure per-org
+ * here. Zapier / Make / Google Sheets / HR Systems / Jira only persist
+ * the config you enter — there's no sync/automation logic behind them
+ * yet. That's flagged inline rather than pretending otherwise.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { apiFetch } from "./services/api.js";
 
 const INTEGRATIONS = [
   {
@@ -11,6 +30,7 @@ const INTEGRATIONS = [
     features:["Real-time alerts when score drops below threshold","Monday weekly team digest","Monthly leaderboard announcement","@mention on streak milestones"],
     setupSteps:["Connect your Slack workspace","Choose a channel for alerts","Set your score threshold","Choose which events to send"],
     configFields:[
+      { key:"webhook_url", label:"Slack Incoming Webhook URL", placeholder:"https://hooks.slack.com/services/...", type:"text" },
       { key:"channel",   label:"Slack Channel",     placeholder:"#posture-alerts",    type:"text" },
       { key:"threshold", label:"Alert Threshold",   placeholder:"70",                  type:"number" },
       { key:"weekly",    label:"Weekly Digest",      placeholder:"",                    type:"toggle" },
@@ -19,7 +39,7 @@ const INTEGRATIONS = [
     color:"#4A154B", docs:"https://docs.corvus.com/integrations/slack",
   },
   {
-    id:"teams", name:"Microsoft Teams", icon:"🟦", category:"messaging", status:"available",
+    id:"teams", name:"Microsoft Teams", icon:"🟦", category:"messaging", status:"beta",
     desc:"Post posture insights and alerts directly to your Microsoft Teams channels.",
     features:["Adaptive card alerts","Weekly health summary","HR compliance reports","Direct messages to at-risk employees"],
     setupSteps:["Add Corvus app to your Teams","Authenticate with Microsoft","Choose target team and channel","Configure alert rules"],
@@ -28,9 +48,10 @@ const INTEGRATIONS = [
       { key:"threshold",  label:"Alert Threshold",   placeholder:"70",    type:"number" },
     ],
     color:"#5558AF", docs:"https://docs.corvus.com/integrations/teams",
+    note:"Saves your config for our team to wire up — delivery isn't automated per-org yet.",
   },
   {
-    id:"zapier", name:"Zapier", icon:"⚡", category:"automation", status:"available",
+    id:"zapier", name:"Zapier", icon:"⚡", category:"automation", status:"beta",
     desc:"Connect Corvus to 5,000+ apps. Trigger workflows on posture events without code.",
     features:["Trigger on score drop","New session completed","Alert triggered","Weekly report ready","User joined org"],
     setupSteps:["Search 'Corvus' on Zapier","Choose a trigger event","Connect your Corvus account","Build your Zap"],
@@ -39,9 +60,10 @@ const INTEGRATIONS = [
     ],
     zapierUrl:"https://zapier.com/apps/corvus",
     color:"#FF4A00", docs:"https://docs.corvus.com/integrations/zapier",
+    note:"Saves your config for our team to wire up — no live Zapier app yet.",
   },
   {
-    id:"make", name:"Make.com", icon:"🟣", category:"automation", status:"available",
+    id:"make", name:"Make.com", icon:"🟣", category:"automation", status:"beta",
     desc:"Visual automation scenarios for Corvus. More powerful than Zapier for complex flows.",
     features:["All Zapier triggers +","Batch data processing","Multi-step scenarios","Data transformation","Error handling"],
     setupSteps:["Install Corvus module on Make","Add API credentials","Build your scenario"],
@@ -50,9 +72,10 @@ const INTEGRATIONS = [
     ],
     makeUrl:"https://make.com/en/integrations/corvus",
     color:"#6D00CC", docs:"https://docs.corvus.com/integrations/make",
+    note:"Saves your config for our team to wire up — no live Make module yet.",
   },
   {
-    id:"sheets", name:"Google Sheets", icon:"📊", category:"data", status:"available",
+    id:"sheets", name:"Google Sheets", icon:"📊", category:"data", status:"beta",
     desc:"Auto-export session data to Google Sheets for custom reporting and HR dashboards.",
     features:["Daily session export","Real-time score updates","Team analytics sheet","Custom column mapping"],
     setupSteps:["Connect your Google account","Choose or create a spreadsheet","Map data columns","Set export frequency"],
@@ -61,6 +84,7 @@ const INTEGRATIONS = [
       { key:"frequency", label:"Export Frequency",  placeholder:"daily",         type:"select", options:["realtime","hourly","daily","weekly"] },
     ],
     color:"#34A853", docs:"https://docs.corvus.com/integrations/sheets",
+    note:"Saves your config for our team to wire up — export isn't automated yet.",
   },
   {
     id:"hr_systems", name:"HR Systems", icon:"👔", category:"enterprise", status:"enterprise",
@@ -73,6 +97,7 @@ const INTEGRATIONS = [
       { key:"api_key",    label:"HRIS API Key",  placeholder:"•••••",                    type:"password" },
     ],
     color:"#0F4C81", docs:"https://docs.corvus.com/integrations/hr",
+    note:"Saves your details for our sales/onboarding team to follow up on.",
   },
   {
     id:"jira", name:"Jira / Linear", icon:"🔵", category:"productivity", status:"beta",
@@ -84,6 +109,7 @@ const INTEGRATIONS = [
       { key:"token",    label:"API Token",    placeholder:"•••••",                         type:"password" },
     ],
     color:"#0052CC", docs:"https://docs.corvus.com/integrations/jira",
+    note:"Saves your config for our team to wire up — ticket creation isn't automated yet.",
   },
   {
     id:"webhooks", name:"Custom Webhooks", icon:"🔗", category:"developer", status:"available",
@@ -91,7 +117,6 @@ const INTEGRATIONS = [
     features:["15 event types","HMAC signature verification","Retry on failure (3x)","Event payload explorer"],
     configFields:[
       { key:"url",    label:"Endpoint URL",  placeholder:"https://yourapp.com/webhooks/posture", type:"text" },
-      { key:"secret", label:"Signing Secret",placeholder:"auto-generated",                        type:"text" },
     ],
     color:"#6366F1", docs:"https://docs.corvus.com/integrations/webhooks",
   },
@@ -102,26 +127,88 @@ const STATUS_COLORS = { available:"#10b981", enterprise:"#f59e0b", beta:"#8b5cf6
 
 export function IntegrationsHub({ profile, cs, lang, onClose }) {
   const [selected,    setSelected]    = useState(null);
-  const [connected,   setConnected]   = useState({ slack: false, sheets: false });
+  const [connected,   setConnected]   = useState({});
   const [configs,     setConfigs]     = useState({});
+  const [webhookId,   setWebhookId]   = useState(null); // real id from /api/webhooks, for the "webhooks" card
   const [catFilter,   setCatFilter]   = useState("all");
   const [saving,      setSaving]      = useState(false);
   const [savedId,     setSavedId]     = useState(null);
+  const [testStatus,  setTestStatus]  = useState(null);
+  const [loading,     setLoading]     = useState(true);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const [intData, whData] = await Promise.all([
+          apiFetch("/integrations", { method:"GET" }).catch(() => ({ integrations:{} })),
+          apiFetch("/webhooks",     { method:"GET" }).catch(() => ({ webhooks:[] })),
+        ]);
+        if (!live) return;
+        const saved = intData?.integrations || {};
+        const conn = {}, cfg = {};
+        for (const id of Object.keys(saved)) { conn[id] = true; cfg[id] = saved[id]; }
+        const myHook = (whData?.webhooks || [])[0]; // first webhook, if any
+        if (myHook) { conn.webhooks = true; cfg.webhooks = { url: myHook.url }; setWebhookId(myHook.id); }
+        setConnected(conn);
+        setConfigs(cfg);
+      } finally {
+        if (live) setLoading(false);
+      }
+    })();
+    return () => { live = false; };
+  }, []);
 
   const filtered = catFilter === "all" ? INTEGRATIONS : INTEGRATIONS.filter(i => i.category === catFilter);
 
   const handleSave = async (id) => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 900));
-    setConnected(p => ({ ...p, [id]: true }));
-    setSavedId(id);
-    setSaving(false);
-    setTimeout(() => setSavedId(null), 2500);
+    try {
+      const cfg = configs[id] || {};
+      if (id === "webhooks") {
+        if (!cfg.url || !cfg.url.startsWith("http")) { setSaving(false); return; }
+        const r = await apiFetch("/webhooks", { method:"POST", body:{ url:cfg.url } });
+        if (r?.webhook?.id) {
+          setWebhookId(r.webhook.id);
+          setConfigs(p => ({ ...p, webhooks:{ ...cfg, secret:r.webhook.secret } }));
+          setConnected(p => ({ ...p, webhooks:true }));
+          setSavedId(id);
+        }
+      } else {
+        await apiFetch(`/integrations/${id}`, { method:"POST", body:cfg });
+        setConnected(p => ({ ...p, [id]:true }));
+        setSavedId(id);
+      }
+    } catch (e) {
+      console.error("[IntegrationsHub] save failed:", e);
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSavedId(null), 2500);
+    }
   };
 
-  const handleDisconnect = (id) => {
+  const handleDisconnect = async (id) => {
+    try {
+      if (id === "webhooks" && webhookId) {
+        await apiFetch(`/webhooks/${webhookId}`, { method:"DELETE" });
+        setWebhookId(null);
+      } else {
+        await apiFetch(`/integrations/${id}`, { method:"DELETE" });
+      }
+    } catch (e) {
+      console.error("[IntegrationsHub] disconnect failed:", e);
+    }
     setConnected(p => ({ ...p, [id]: false }));
     setConfigs(p => { const n = { ...p }; delete n[id]; return n; });
+  };
+
+  const handleTestSlack = async () => {
+    setTestStatus("sending");
+    try {
+      const r = await apiFetch("/integrations/slack/send", { method:"POST", body:{ text:"✅ Corvus test message — your Slack integration is connected." } });
+      setTestStatus(r?.ok ? "sent" : "failed");
+    } catch { setTestStatus("failed"); }
+    setTimeout(() => setTestStatus(null), 3000);
   };
 
   return (
@@ -160,7 +247,8 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
 
             {/* Integration cards */}
             <div style={{ flex:1, overflowY:"auto", padding:16, display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:12, alignContent:"start" }}>
-              {filtered.map(intg => {
+              {loading && <div style={{ gridColumn:"1/-1", textAlign:"center", padding:20, fontSize:12, color:cs.textDim }}>Loading…</div>}
+              {!loading && filtered.map(intg => {
                 const isConnected = connected[intg.id];
                 return (
                   <div key={intg.id} onClick={() => setSelected(intg)} style={{ background:cs.bg, borderRadius:14, padding:16, border:`2px solid ${selected?.id===intg.id?intg.color:cs.border}`, cursor:"pointer", transition:"all .15s", position:"relative" }}>
@@ -210,6 +298,12 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                   ))}
                 </div>
 
+                {selected.note && (
+                  <div style={{ marginBottom:16, padding:"10px 12px", background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:10, fontSize:11, color:"#f59e0b", lineHeight:1.5 }}>
+                    ⚠️ {selected.note}
+                  </div>
+                )}
+
                 {/* Config */}
                 <div style={{ marginBottom:16 }}>
                   <div style={{ fontWeight:700, color:cs.text, fontSize:13, marginBottom:10 }}>Configuration</div>
@@ -231,6 +325,12 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                       )}
                     </div>
                   ))}
+                  {selected.id === "webhooks" && connected.webhooks && configs.webhooks?.secret && (
+                    <div style={{ marginBottom:12 }}>
+                      <label style={{ fontSize:11, fontWeight:600, color:cs.textDim, display:"block", marginBottom:4 }}>Signing Secret (save this — shown once)</label>
+                      <code style={{ display:"block", background:"rgba(0,0,0,0.25)", padding:"8px 12px", borderRadius:8, color:"#a5f3fc", fontSize:11, wordBreak:"break-all" }}>{configs.webhooks.secret}</code>
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions */}
@@ -244,6 +344,11 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                       <div style={{ textAlign:"center", padding:"10px", background:"rgba(16,185,129,0.1)", borderRadius:10, color:"#10b981", fontWeight:700, fontSize:13 }}>
                         {savedId === selected.id ? "✓ Connected successfully!" : "✓ Connected"}
                       </div>
+                      {selected.id === "slack" && (
+                        <button onClick={handleTestSlack} disabled={testStatus==="sending"} style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"10px", cursor:"pointer", fontWeight:600, fontSize:13 }}>
+                          {testStatus==="sending"?"Sending…":testStatus==="sent"?"✓ Sent!":testStatus==="failed"?"✗ Failed — check webhook URL":"Send Test Message"}
+                        </button>
+                      )}
                       <button onClick={() => handleDisconnect(selected.id)} style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", color:"#ef4444", borderRadius:10, padding:"10px", cursor:"pointer", fontWeight:600, fontSize:13 }}>Disconnect</button>
                     </>
                   )}

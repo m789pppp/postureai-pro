@@ -6506,6 +6506,33 @@ def list_integrations():
 
 
 
+VALID_INTEGRATION_IDS = {"slack","teams","zapier","make","sheets","hr_systems","jira"}
+
+@app.route("/api/integrations/<integration_id>", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def save_integration(integration_id):
+    """Save/connect an integration's config for the current org.
+    (This endpoint didn't exist before — GET and DELETE were the only
+    verbs implemented, so there was no way to actually connect anything;
+    the frontend's "Connect" button just faked a 900ms delay.)"""
+    try:
+        if integration_id not in VALID_INTEGRATION_IDS:
+            return jsonify({"error":"unknown integration id"}), 400
+        db     = firestore.client()
+        org_id = getattr(g,"company_id","") or g.uid
+        config = request.get_json(force=True) or {}
+        # Never let a client store nothing — an empty save is a no-op, not a connect
+        if not config:
+            return jsonify({"error":"config required"}), 400
+        config = {**config, "connected_at": datetime.utcnow().isoformat(), "connected_by": g.uid}
+        db.collection("integrations").document(org_id).set({integration_id: config}, merge=True)
+        audit(g.uid, f"integration_{integration_id}_connected", "integrations", {"org_id":org_id})
+        return jsonify({"ok":True, "integration_id":integration_id})
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
+
+
 @app.route("/api/integrations/<integration_id>", methods=["DELETE"])
 @require_auth
 def disconnect_integration(integration_id):
