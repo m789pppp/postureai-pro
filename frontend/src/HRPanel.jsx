@@ -317,26 +317,28 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
     if (!companyId) { addToast(isAr?"مفيش company ID":"No company ID","error"); return; }
     setLinkLoading(true);
     try {
-      const BACKEND = import.meta.env.VITE_BACKEND_URL || "https://postureai-backend.up.railway.app";
       const token = await user.getIdToken();
-      const res = await fetch(BACKEND + "/api/org/create-invite", {
+      const res = await fetch(API + "/org/create-invite", {
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":"Bearer " + token},
         body: JSON.stringify({ company_id: companyId, role: "employee", expires_days: 7 }),
       });
-      const data = await res.json();
-      if (data.token || data.invite_id) {
+      const data = await res.json().catch(()=>({}));
+      if (res.ok && (data.token || data.invite_id)) {
         const code = data.token || data.invite_id;
         const link = window.location.origin + "/auth?invite=" + code;
         setInviteLink(link);
-      } else if (data.error) {
-        const link = window.location.origin + "/auth?company=" + companyId + "&role=employee";
-        setInviteLink(link);
+      } else {
+        // BUG FIX: this used to silently fall back to a fake link
+        // (?company=X&role=employee) that nothing in the app actually
+        // reads — an HR admin would share it with employees and it would
+        // just do nothing on signup, with zero indication of failure.
+        setInviteLink("");
+        addToast(isAr?"تعذر إنشاء رابط الدعوة — جرب تاني":"Couldn't create invite link — try again","error");
       }
     } catch {
-      // Fallback link
-      const link = window.location.origin + "/auth?company=" + companyId + "&role=employee";
-      setInviteLink(link);
+      setInviteLink("");
+      addToast(isAr?"تعذر إنشاء رابط الدعوة — جرب تاني":"Couldn't create invite link — try again","error");
     }
     setLinkLoading(false);
   };
