@@ -101,6 +101,12 @@ service cloud.firestore {
       allow update, delete: if isOwner(uid) || isAdmin();
     }
 
+    // ── User Notifications Subcollection ────────────────────────
+    match /users/{uid}/notifications/{notifId} {
+      allow read, update: if isOwner(uid) || isAdmin();
+      allow create, delete: if false; // Admin SDK only (dispatch serverless)
+    }
+
     // ── Sessions Collection ─────────────────────────────────────
     match /sessions/{sessionId} {
       // Read: own sessions OR admin OR HR in same company
@@ -299,6 +305,19 @@ service cloud.firestore {
                   && request.auth.token.admin == true;
       allow create: if false; // backend only via Admin SDK
       allow update, delete: if false;
+    }
+
+    // ── Notification Logs (server-written audit trail) ──────────
+    match /notification_logs/{logId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // Admin SDK only
+    }
+
+    // ── Org Notifications (broadcast) ────────────────────────────
+    match /orgs/{orgId}/notifications/{notifId} {
+      allow read: if isAuthenticated() && (isAdmin() || isHR());
+      allow update: if isAuthenticated(); // mark as read
+      allow create, delete: if false; // Admin SDK only
     }
 
     // ── Deny everything else ─────────────────────────────────────
