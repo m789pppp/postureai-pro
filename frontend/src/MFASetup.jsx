@@ -15,6 +15,7 @@
  */
 import { useState, useEffect } from "react";
 import { apiFetch } from "./services/api.js";
+import { reauthenticate, getReauthMethod } from "./firebase.js";
 
 export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChange }) {
   const isAr = lang === "ar";
@@ -87,8 +88,11 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
     setCode("");
   };
 
-  const disableMFA = async (method) => {
-    if (!window.confirm(isAr?"متأكد إنك عايز تلغي المصادقة الثنائية؟ حسابك هيبقى محمي بالباسورد بس.":"Are you sure you want to disable 2FA? Your account will only be protected by your password.")) return;
+  const [reauthPrompt,  setReauthPrompt]  = useState(false);
+  const [reauthPassword,setReauthPassword]= useState("");
+  const [reauthError,   setReauthError]   = useState("");
+
+  const finishDisable = async () => {
     setVerifying(true); setError("");
     try {
       await apiFetch("/auth/mfa/disable", { method:"POST" });
@@ -96,7 +100,40 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
       setBackupCodes([]);
       setTotpStep(1); setSmsStep(1); setSecret(""); setTotpUri("");
       onProfileChange?.({ mfa_enabled:false, mfa_method:null });
-    } catch(e) { setError(e?.message || (isAr?"تعذر الإلغاء":"Couldn't disable")); }
+    } catch(e) {
+      if (e?.status === 401 && e?.upgrade !== undefined) { /* not our case, keep generic below */ }
+      setError(e?.message || (isAr?"تعذر الإلغاء":"Couldn't disable"));
+    }
+    setVerifying(false);
+  };
+
+  const disableMFA = () => {
+    if (!window.confirm(isAr?"متأكد إنك عايز تلغي المصادقة الثنائية؟ حسابك هيبقى محمي بالباسورد بس.":"Are you sure you want to disable 2FA? Your account will only be protected by your password.")) return;
+    const method = getReauthMethod();
+    if (method === "password") {
+      setReauthPassword(""); setReauthError(""); setReauthPrompt(true);
+    } else if (method === "google" || method === "microsoft") {
+      (async () => {
+        setVerifying(true); setError("");
+        try { await reauthenticate(); await finishDisable(); }
+        catch(e) { setError(isAr?"لغيت إعادة التأكيد":"Re-authentication was cancelled"); }
+        setVerifying(false);
+      })();
+    } else {
+      setError(isAr?"سجّل خروج ورجع سجّل دخول تاني عشان تكمل":"Please sign out and back in to continue");
+    }
+  };
+
+  const confirmReauthPassword = async () => {
+    if (!reauthPassword) { setReauthError(isAr?"أدخل كلمة السر":"Enter your password"); return; }
+    setVerifying(true); setReauthError("");
+    try {
+      await reauthenticate(reauthPassword);
+      setReauthPrompt(false);
+      await finishDisable();
+    } catch(e) {
+      setReauthError(isAr?"كلمة السر غير صحيحة":"Incorrect password");
+    }
     setVerifying(false);
   };
 
@@ -329,6 +366,29 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
           )}
         </div>
       </div>
+
+      {reauthPrompt && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:2100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ width:"100%", maxWidth:360, background:cs.card, border:`1px solid ${cs.border}`, borderRadius:16, padding:24 }}>
+            <div style={{ fontWeight:800, fontSize:16, color:cs.text, marginBottom:6 }}>{isAr?"أكّد كلمة السر":"Confirm your password"}</div>
+            <p style={{ fontSize:12, color:cs.textDim, lineHeight:1.6, marginBottom:16 }}>{isAr?"عشان نتأكد إنك إنت اللي بتلغي المصادقة الثنائية":"To confirm it's really you disabling two-factor authentication"}</p>
+            <input
+              type="password"
+              value={reauthPassword}
+              onChange={e=>setReauthPassword(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&confirmReauthPassword()}
+              placeholder={isAr?"كلمة السر":"Password"}
+              style={{ width:"100%", boxSizing:"border-box", background:"rgba(255,255,255,0.06)", border:`1.5px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"11px 14px", fontSize:14, outline:"none", marginBottom:10 }}
+              autoFocus
+            />
+            {reauthError && <div style={{ color:"#ef4444", fontSize:12, marginBottom:10 }}>{reauthError}</div>}
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={()=>setReauthPrompt(false)} style={{ flex:1, background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:9, padding:"11px", cursor:"pointer", fontWeight:600, fontSize:13 }}>{isAr?"إلغاء":"Cancel"}</button>
+              <button onClick={confirmReauthPassword} disabled={verifying} style={{ flex:1, background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:9, padding:"11px", cursor:"pointer", fontWeight:700, fontSize:13 }}>{verifying?(isAr?"…":"…"):(isAr?"تأكيد":"Confirm")}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
