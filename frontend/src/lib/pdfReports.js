@@ -284,6 +284,17 @@ function _fit(doc,text,maxW){
   return t.length<=1 ? t : t+"…";
 }
 
+// Sanitize free-form text (company name, etc.) for safe use in a filename
+// across Windows/macOS/Linux and browser download/upload flows — keeps
+// alnum/dash/underscore, collapses everything else to "_", caps length.
+function _safeFilename(s){
+  return String(s||"")
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g,"") // strip accents, keep Arabic as-is
+    .replace(/[^\p{L}\p{N}_-]+/gu,"_")
+    .replace(/_+/g,"_").replace(/^_|_$/g,"")
+    .slice(0,60) || "Report";
+}
+
 // ── Font helper ────────────────────────────────────────────────────
 let _cairoLoaded=false, _cairoCachedB64=null;
 // isAr gate added: registering this font (even completely unused) adds
@@ -1000,8 +1011,9 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.text(isAr?"Corvus Health Intelligence · سري · ليس تشخيصاً طبياً":"Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
     doc.text("2 / 2",W-mr,H-4.5,{align:"right"});
 
-    await doc.save(`Corvus_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
-    return;
+    const _fn = `Corvus_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`;
+    await doc.save(_fn, {returnPromise:true});
+    return _fn;
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -1300,8 +1312,9 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     sf(5.5,"normal");tc(doc,...TEXT3);doc.text(isAr?"Corvus Health Intelligence · سري · ليس تشخيصاً طبياً":"Corvus Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
     const ptot=doc.internal.getNumberOfPages();
     for(let p=1;p<=ptot;p++){doc.setPage(p);sf(5.5,"normal");tc(doc,...TEXT3);doc.text(`${p} / ${ptot}`,W-mr,H-4.5,{align:"right"});}
-    await doc.save(`Corvus_Pro_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
-    return;
+    const _fn = `Corvus_Pro_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`;
+    await doc.save(_fn, {returnPromise:true});
+    return _fn;
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -1630,7 +1643,9 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.text(`${p} / ${tot}`,W-mr,H-4.5,{align:"right"});
   }
 
-  await doc.save(`Corvus_Elite_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`, {returnPromise:true});
+  const _fn = `Corvus_Elite_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`;
+  await doc.save(_fn, {returnPromise:true});
+  return _fn;
 }
 
 
@@ -1773,9 +1788,15 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     doc.text(String(lbl), x, yy);
     doc.setFont("helvetica","normal"); doc.setTextColor(15,23,42); doc.setFontSize(8.5);
     // Value sits after the label's real width (not a fixed 32mm) so long
-    // labels never collide with their value.
+    // labels never collide with their value — and is capped to the
+    // column's own width so a long value (patient name, email) can't run
+    // into the adjacent column's label (verified overlap via pdftotext
+    // -bbox: a long name's "Ibrahim Hassan Al-Masri" was literally drawn
+    // through "Date of Assessment:" before this cap was added).
     const lblW = doc.getTextWidth(String(lbl))+3;
-    doc.text(String(val||"—"), x+Math.max(30,lblW), yy);
+    const valX = x+Math.max(30,lblW);
+    const colEndX = ml+cw - (x < ml+cw/2 ? cw/2 : 0) - 4; // right edge of this value's own column
+    doc.text(_fit(doc,String(val||"—"),colEndX-valX), valX, yy);
   });
   y+=40;
 
@@ -2890,7 +2911,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     doc.text(`${p} / ${tp}`,W-mr,H-2.5,{align:"right"});
   }
 
-  const filename=`Corvus_Team_Report_${(company||"Team").replace(/\s/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`;
+  const filename=`Corvus_Team_Report_${_safeFilename(company)}_${new Date().toISOString().slice(0,10)}.pdf`;
   await doc.save(filename, {returnPromise:true});
   return filename;
 }
@@ -2914,7 +2935,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
 // ═══════════════════════════════════════════════════════════════════
 
 
-export async function generateLongitudinalPDF({ sessions=[], profile, user, lang="en", aiSummary="" }) {
+export async function generateLongitudinalPDF({ sessions=[], profile, user, lang="en", aiSummary="", reportKind="longitudinal" }) {
   if (sessions.length === 0) throw new Error(lang==="ar" ? "لا توجد جلسات لإنشاء التقرير الطولي." : "No sessions available to generate a longitudinal report.");
   const { jsPDF } = await import("jspdf");
   if (sessions.length < 2) { console.warn("[PDF] Need more sessions for longitudinal"); }
@@ -3022,7 +3043,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   // Report title block
   let y=96;
   font(doc,22,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.ink);
-  doc.text(isAr?"التقرير الطولي":"Longitudinal Health Report",ml,y); y+=10;
+  doc.text(reportKind==="ai" ? (isAr?"تقرير AI التنفيذي":"AI Executive Report") : (isAr?"التقرير الطولي":"Longitudinal Health Report"),ml,y); y+=10;
   font(doc,10,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
   doc.text(`${name} · ${isAr?"تحليل متعدد الجلسات":"Multi-session posture analysis"}`,ml,y); y+=16;
 
@@ -3446,12 +3467,22 @@ const programme=[
     _ftr(doc,W,ml,mr,H,p,tp,name);
   }
 
-  const filename=`Corvus_Longitudinal_${now.toISOString().slice(0,10)}.pdf`;
+  const filename=`Corvus_${reportKind==="ai"?"AI_Executive":"Longitudinal"}_${now.toISOString().slice(0,10)}.pdf`;
   await doc.save(filename, {returnPromise:true});
   return filename;
 }
 
 // ── AI Executive Report — alias for Longitudinal ─────────────────
+// NOTE: generateAIPDF is currently a pure alias of generateLongitudinalPDF —
+// same content, same "Longitudinal Health Report" title printed on the PDF
+// cover. The UI (AIReports.jsx PDF_TYPES) markets "AI Executive" as a
+// separate, non-elite-gated report distinct from "Longitudinal" (elite-only),
+// so a Professional-tier user who picks "AI Executive" currently gets a PDF
+// that says "Longitudinal Health Report" on it. At minimum this fixes the
+// filename collision (same-day downloads of both were overwriting each
+// other); the deeper question of whether AI Executive needs genuinely
+// distinct content/branding is a product decision, not just a bug fix.
 export async function generateAIPDF({ sessions=[], profile, aiSummary="", lang="en" }) {
-  return generateLongitudinalPDF({ sessions, profile, lang, aiSummary });
+  const res = await generateLongitudinalPDF({ sessions, profile, lang, aiSummary, reportKind:"ai" });
+  return res; // TODO: still same underlying content as Longitudinal — see note above generateLongitudinalPDF's reportKind param
 }
