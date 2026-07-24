@@ -1241,7 +1241,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
       {showIntegrationsHub&&<Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense>}
       {sessions?.length>0&&<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
         <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:13}}>{t.sessionHist||"Session History"}</div>
-        <BarChart data={sessions?.slice(-10).map((s,i)=>({l:`S${i+1}`,v:s.avg_score||0}))} color="#1a56db" cs={cs}/>
+        <BarChart data={sessions?.slice(0,10).reverse().map((s,i)=>({l:`S${i+1}`,v:s.avg_score||0}))} color="#1a56db" cs={cs}/>
         <div style={{marginTop:13,display:"grid",gap:5}}>
           {sessions?.slice(0,5).map((s,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"6px 0",borderBottom:`0.5px solid ${cs.border}`}}>
