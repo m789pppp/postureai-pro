@@ -6488,6 +6488,19 @@ def convert_referral():
 
 
 # ── Integrations / Webhooks ───────────────────────────────────────────
+# Canonical storage: orgs/{org_id}/settings/integrations, shape
+# {[integration_id]: {field_values: {...}, enabled, connected_at}}.
+# This is NOT the shape/location this endpoint originally used
+# (integrations/{org_id}, flat fields) — moved 2026-07-24 to match
+# frontend/src/NotificationsHub.jsx and api/notify/dispatch.js, which
+# were built independently in a concurrent session and already read/
+# write this exact path. Two disconnected integration-settings stores
+# meant a Slack connection made in one UI (IntegrationsHub) silently
+# didn't exist to the other (NotificationsHub's real dispatch path) —
+# unified here so there's one source of truth.
+
+def _integrations_doc_ref(db, org_id):
+    return db.collection("orgs").document(org_id).collection("settings").document("integrations")
 
 
 @app.route("/api/integrations", methods=["GET"])
@@ -6497,8 +6510,10 @@ def list_integrations():
     try:
         db  = firestore.client()
         org_id = getattr(g,"company_id","") or g.uid
-        snap = db.collection("integrations").document(org_id).get()
-        data = snap.to_dict() if snap.exists else {}
+        snap = _integrations_doc_ref(db, org_id).get()
+        raw = snap.to_dict() if snap.exists else {}
+        # Flatten field_values back out for callers that want plain config dicts
+        data = {k: (v.get("field_values", v) if isinstance(v, dict) else v) for k, v in raw.items()}
         return jsonify({"ok":True,"integrations":data})
     except Exception as e:
         return jsonify({"error":str(e)}),500
@@ -6521,12 +6536,17 @@ def save_integration(integration_id):
             return jsonify({"error":"unknown integration id"}), 400
         db     = firestore.client()
         org_id = getattr(g,"company_id","") or g.uid
-        config = request.get_json(force=True) or {}
+        field_values = request.get_json(force=True) or {}
         # Never let a client store nothing — an empty save is a no-op, not a connect
-        if not config:
+        if not field_values:
             return jsonify({"error":"config required"}), 400
-        config = {**config, "connected_at": datetime.utcnow().isoformat(), "connected_by": g.uid}
-        db.collection("integrations").document(org_id).set({integration_id: config}, merge=True)
+        entry = {
+            "field_values": field_values,
+            "enabled": True,
+            "connected_at": datetime.utcnow().isoformat(),
+            "connected_by": g.uid,
+        }
+        _integrations_doc_ref(db, org_id).set({integration_id: entry}, merge=True)
         audit(g.uid, f"integration_{integration_id}_connected", "integrations", {"org_id":org_id})
         return jsonify({"ok":True, "integration_id":integration_id})
     except Exception as e:
@@ -6540,7 +6560,7 @@ def disconnect_integration(integration_id):
     try:
         db  = firestore.client()
         org_id = getattr(g,"company_id","") or g.uid
-        db.collection("integrations").document(org_id).update({integration_id:firestore.DELETE_FIELD})
+        _integrations_doc_ref(db, org_id).update({integration_id:firestore.DELETE_FIELD})
         audit(g.uid,f"integration_{integration_id}_disconnected","integrations",{"org_id":org_id})
         return jsonify({"ok":True})
     except Exception as e:
@@ -6558,8 +6578,8 @@ def send_slack_message():
         db   = firestore.client()
         data = request.get_json(force=True) or {}
         org_id = getattr(g,"company_id","") or g.uid
-        snap   = db.collection("integrations").document(org_id).get()
-        cfg    = (snap.to_dict() or {}).get("slack",{})
+        snap   = _integrations_doc_ref(db, org_id).get()
+        cfg    = (snap.to_dict() or {}).get("slack",{}).get("field_values",{})
         webhook= cfg.get("webhook_url") or data.get("webhook_url","")
         if not webhook:
             return jsonify({"error":"Slack not connected — no webhook URL"}),400
