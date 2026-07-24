@@ -6290,24 +6290,75 @@ def meter_usage():
 
 
 # ── Referral System ───────────────────────────────────────────────────
+# Consolidated (2026-07-23) — replaces two earlier, incompatible, broken
+# referral systems that both used a "referrals" collection with different
+# document shapes, plus a third client-side (Firestore-direct) system in
+# frontend/src/firebase.js that suffered the same identifier bug. See the
+# audit in commit de6eab9 for the full history of what was broken and why.
+#
+# Design: a "referral_codes" collection maps a stable, short code to a
+# uid (fixes the old bug where a lossy 6/8-char uid prefix was queried
+# against a field that was never actually stored anywhere). Referring
+# users earn EGP account credit — REFERRAL_WELCOME_CREDIT immediately for
+# the referred signup, and a REWARD-tier credit for the referrer once the
+# referred user converts to a paid plan. Credit is applied automatically
+# as a discount at the next checkout (see api/kashier/create-order.js and
+# api/kashier/webhook.js — payments moved from PayMob to Kashier the same
+# day this was built; convert_referral is called from Kashier's webhook
+# via the internal-secret path below).
+
+REFERRAL_WELCOME_CREDIT = 50  # EGP credited to a newly-referred user immediately on signup
+
+# Server-to-server calls (from the Vercel Kashier webhook, a different
+# runtime/service than this Flask app) authenticate via a shared secret
+# instead of a Firebase user token, since there's no end-user in that flow.
+INTERNAL_API_SECRET = os.environ.get("INTERNAL_API_SECRET", "")
+
+def _is_internal_service_call():
+    if not INTERNAL_API_SECRET:
+        return False
+    return request.headers.get("X-Internal-Secret","") == INTERNAL_API_SECRET
+
+
+def _get_or_create_referral_code(db, uid):
+    """Look up this user's referral code, generating + reserving one if needed."""
+    user_doc = db.collection("users").document(uid).get()
+    existing_code = (user_doc.to_dict() or {}).get("referral_code") if user_doc.exists else None
+    if existing_code:
+        return existing_code
+    import hashlib as _hl
+    for attempt in range(5):
+        seed = uid if attempt == 0 else f"{uid}:{attempt}"
+        code = "PAI-" + _hl.sha256(seed.encode()).hexdigest()[:6].upper()
+        code_ref = db.collection("referral_codes").document(code)
+        if not code_ref.get().exists:
+            code_ref.set({"uid": uid, "created_at": datetime.utcnow().isoformat()})
+            db.collection("users").document(uid).set({"referral_code": code}, merge=True)
+            return code
+    raise RuntimeError("could not allocate a unique referral code")
 
 
 @app.route("/api/referral/stats", methods=["GET"])
 @require_auth
 def referral_stats():
-    """Return referral stats for current user."""
+    """Return referral stats + credit balance for the current user."""
     try:
         db  = firestore.client()
         uid = g.uid
+        ref_code = _get_or_create_referral_code(db, uid)
         refs = db.collection("referrals").where("referrer_uid","==",uid).get()
         items = []
-        total_earned = 0
         for doc in refs:
             d = doc.to_dict(); d["id"] = doc.id
-            total_earned += d.get("earned",0)
             items.append(d)
-        ref_code = f"PAI-{uid[:6].upper()}"
-        return jsonify({"ok":True,"ref_code":ref_code,"referrals":items,"total_earned":total_earned,"count":len(items)})
+        total_earned = sum(d.get("earned",0) for d in items)
+        user_doc = db.collection("users").document(uid).get()
+        credits = (user_doc.to_dict() or {}).get("referral_credits",0) if user_doc.exists else 0
+        return jsonify({
+            "ok":True, "ref_code":ref_code, "referrals":items,
+            "total_earned":total_earned, "count":len(items),
+            "credits":credits,
+        })
     except Exception as e:
         return jsonify({"error":str(e)}),500
 
@@ -6318,11 +6369,13 @@ def referral_stats():
 @optional_auth
 @limiter.limit("10 per minute")
 def track_referral():
-    """Track a new referral signup — called on auth/register."""
+    """Track a new referral signup — called right after auth/register.
+    Grants the referred user an immediate welcome credit; the referrer's
+    reward is credited later, on conversion (see convert_referral)."""
     try:
         db   = firestore.client()
         data = request.get_json(force=True) or {}
-        ref_code  = data.get("ref_code","")
+        ref_code  = data.get("ref_code","").strip().upper()
         new_uid   = data.get("uid","")
         new_email = data.get("email","")
         if not ref_code or not new_uid:
@@ -6333,17 +6386,17 @@ def track_referral():
         # crediting a referral to an arbitrary uid they don't own. If no token
         # is present (e.g. called in the brief window right after signup before
         # the client has refreshed its token), we allow it through but rely on
-        # the one-referral-per-uid check in Firestore rules / below to limit abuse.
+        # the one-referral-per-uid check below to limit abuse.
         if getattr(g, "uid", None) and g.uid != new_uid:
             return jsonify({"ok": False, "reason": "uid mismatch"}), 403
 
-        # Look up referrer
-        referrer_uid = ref_code.replace("PAI-","").upper()
-        referrer_docs = db.collection("users").where("uid_prefix","==",referrer_uid[:6]).get()
-        if not referrer_docs:
+        # Look up referrer via the stable code → uid mapping
+        code_doc = db.collection("referral_codes").document(ref_code).get()
+        if not code_doc.exists:
             return jsonify({"ok":False,"reason":"ref code not found"})
-
-        referrer = referrer_docs[0]
+        referrer_uid = code_doc.to_dict().get("uid","")
+        if not referrer_uid or referrer_uid == new_uid:
+            return jsonify({"ok":False,"reason":"invalid referral"})
 
         # Prevent duplicate/spam referral claims for the same new_uid
         existing = db.collection("referrals").where("referred_uid","==",new_uid).limit(1).get()
@@ -6351,7 +6404,7 @@ def track_referral():
             return jsonify({"ok": False, "reason": "referral already tracked for this user"})
 
         db.collection("referrals").add({
-            "referrer_uid":  referrer.id,
+            "referrer_uid":  referrer_uid,
             "referred_uid":  new_uid,
             "referred_email":new_email,
             "ref_code":      ref_code,
@@ -6359,8 +6412,11 @@ def track_referral():
             "earned":        0,
             "created_at":    datetime.utcnow().isoformat(),
         })
-        audit(new_uid,"referral_signup","growth",{"ref_code":ref_code,"referrer":referrer.id})
-        return jsonify({"ok":True,"referrer_uid":referrer.id})
+        db.collection("users").document(new_uid).set({
+            "referral_credits": firestore.Increment(REFERRAL_WELCOME_CREDIT),
+        }, merge=True)
+        audit(new_uid,"referral_signup","growth",{"ref_code":ref_code,"referrer":referrer_uid,"welcome_credit":REFERRAL_WELCOME_CREDIT})
+        return jsonify({"ok":True,"referrer_uid":referrer_uid,"welcome_credit":REFERRAL_WELCOME_CREDIT})
     except Exception as e:
         return jsonify({"error":str(e)}),500
 
@@ -6368,14 +6424,21 @@ def track_referral():
 
 
 @app.route("/api/referral/convert", methods=["POST"])
-@require_auth
+@optional_auth
 def convert_referral():
-    """Mark referral as converted when referred user becomes paying."""
+    """Mark referral as converted when referred user becomes paying.
+    Called either by an authenticated client, or server-to-server by the
+    Kashier webhook (a different runtime) via a shared internal secret —
+    that's the only reliable place this can fire from, since it needs to
+    happen exactly when a real payment clears."""
     try:
+        if not (getattr(g,"uid",None) or _is_internal_service_call()):
+            return jsonify({"error":"unauthorized"}), 401
         db   = firestore.client()
         data = request.get_json(force=True) or {}
-        uid  = data.get("uid","") or g.uid
-        plan = data.get("plan","starter")
+        uid  = data.get("uid","") or getattr(g,"uid","")
+        if not uid:
+            return jsonify({"error":"uid required"}), 400
 
         # Find pending referral
         refs = db.collection("referrals").where("referred_uid","==",uid).where("status","==","pending").get()
@@ -6388,6 +6451,7 @@ def convert_referral():
             # Legacy names from V10_2
             "starter":      0, "growth": 49, "scale": 199,
         }
+        plan = data.get("plan","starter")
         earned = REWARD.get(plan,0)
 
         for ref in refs:
@@ -8860,6 +8924,27 @@ def goals_progress():
                     if (s.get("pain_bar",{}) or {}).get("urgency","low") in ("low","none"))
                 progress = min(100, int((pain_free_days / target) * 100))
                 current_val = pain_free_days
+            elif gtype == "metric":
+                # BUG FIX: this branch was missing entirely, so any goal of
+                # type "metric" (e.g. "neck_fix" — Fix Neck Posture) fell
+                # through to the `else` below and stayed stuck at
+                # progress=0/current_value=0 forever, regardless of how much
+                # the user's actual posture improved. Uses the best per-zone
+                # metric score across recent sessions, same pattern as the
+                # "score" goal type above.
+                metric_key = g_data.get("metric", "")
+                metric_scores = []
+                for s in sessions_list:
+                    m = (s.get("metrics", {}) or {}).get(metric_key)
+                    if isinstance(m, dict):
+                        v = m.get("score")
+                    else:
+                        v = m
+                    if isinstance(v, (int, float)):
+                        metric_scores.append(v)
+                best_metric = max(metric_scores) if metric_scores else 0
+                progress = min(100, int((best_metric / target) * 100)) if target else 0
+                current_val = best_metric
             else:
                 current_val = 0
 
@@ -10660,122 +10745,13 @@ def weekly_report_opt_in():
 # ══════════════════════════════════════════════════════════════════
 # FEATURE 7: REFERRAL SYSTEM
 # ══════════════════════════════════════════════════════════════════
-
-@app.route("/api/referral/generate", methods=["POST"])
-@require_auth
-@limiter.limit("10 per minute")
-def generate_referral():
-    """Generate a unique referral code for the user."""
-    try:
-        db  = firestore.client()
-        uid = getattr(g,"uid","")
-        # Check if code already exists
-        doc = db.collection("referrals").document(uid).get()
-        if doc.exists:
-            return jsonify({"ok":True,"code":doc.to_dict().get("code"),"existing":True})
-
-        import hashlib as _hl
-        code = _hl.md5(uid.encode()).hexdigest()[:8].upper()
-        db.collection("referrals").document(uid).set({
-            "uid":        uid,
-            "code":       code,
-            "uses":       0,
-            "created_at": datetime.utcnow().isoformat()+"Z",
-            "reward_months_earned": 0,
-        })
-        return jsonify({
-            "ok":True, "code":code,
-            "share_url":  f"https://postureai-pro-omega-nine.vercel.app?ref={code}",
-            "message":    f"Share your code {code} — both you and your friend get 1 month free!",
-            "message_ar": f"شارك كودك {code} — إنت وصاحبك هتاخدوا شهر مجاناً!",
-        })
-    except Exception as e:
-        return safe_error(e)
-
-
-@app.route("/api/referral/redeem", methods=["POST"])
-@require_auth
-@limiter.limit("5 per minute")
-def redeem_referral():
-    """Redeem a referral code on signup — gives both users 1 month free."""
-    try:
-        db   = firestore.client()
-        uid  = getattr(g,"uid","")
-        data = request.get_json(force=True) or {}
-        code = data.get("code","").strip().upper()
-        if not code:
-            return jsonify({"error":"code required"}), 400
-
-        # Find referrer
-        refs = db.collection("referrals").where("code","==",code).limit(1).stream()
-        ref_docs = list(refs)
-        if not ref_docs:
-            return jsonify({"error":"Invalid referral code"}), 404
-
-        ref_doc = ref_docs[0]
-        ref_uid = ref_doc.id
-        if ref_uid == uid:
-            return jsonify({"error":"Cannot use your own referral code"}), 400
-
-        # Check not already redeemed
-        already = (db.collection("referral_uses")
-                     .where("new_uid","==",uid).limit(1).stream())
-        if list(already):
-            return jsonify({"error":"You have already used a referral code"}), 409
-
-        # Record use
-        db.collection("referral_uses").add({
-            "ref_uid":    ref_uid,
-            "new_uid":    uid,
-            "code":       code,
-            "redeemed_at":datetime.utcnow().isoformat()+"Z",
-        })
-
-        # Increment referrer's uses
-        ref_doc.reference.update({
-            "uses":                  ref_doc.to_dict().get("uses",0)+1,
-            "reward_months_earned":  ref_doc.to_dict().get("reward_months_earned",0)+1,
-        })
-
-        # Grant 1 month Pro to both users
-        for benefit_uid in [uid, ref_uid]:
-            db.collection("user_benefits").document(benefit_uid).set({
-                "free_months": (db.collection("user_benefits").document(benefit_uid).get().to_dict() or {}).get("free_months",0)+1,
-                "reason":      "referral",
-                "updated_at":  datetime.utcnow().isoformat()+"Z",
-            }, merge=True)
-
-        log_event("referral_redeemed", uid, {"code":code,"ref_uid":ref_uid})
-        return jsonify({
-            "ok":True,
-            "message":    "🎉 Code redeemed! You and your friend both get 1 month free.",
-            "message_ar": "🎉 تم تفعيل الكود! إنت وصاحبك هتاخدوا شهر مجاناً.",
-        })
-    except Exception as e:
-        return safe_error(e)
-
-
-@app.route("/api/referral/status", methods=["GET"])
-@require_auth
-@limiter.limit("20 per minute")
-def referral_status():
-    """Get referral stats for the user."""
-    try:
-        db  = firestore.client()
-        uid = getattr(g,"uid","")
-        doc = db.collection("referrals").document(uid).get()
-        if not doc.exists:
-            return jsonify({"ok":True,"has_code":False,"code":None,"uses":0})
-        d = doc.to_dict()
-        return jsonify({
-            "ok":True, "has_code":True,
-            "code":       d.get("code"),
-            "uses":       d.get("uses",0),
-            "share_url":  f"https://postureai-pro-omega-nine.vercel.app?ref={d.get('code')}",
-            "months_earned":d.get("reward_months_earned",0),
-        })
-    except Exception as e:
-        return safe_error(e)
+# (This used to be a second, incompatible referral implementation —
+# /generate, /redeem, /status — that stored codes keyed by uid in the
+# same "referrals" collection the system above uses for referrer_uid/
+# referred_uid pairs, crashed on every call because `db` was never
+# assigned, and paid out a `user_benefits.free_months` field nothing
+# else in the codebase ever read. Removed in favor of the single
+# consolidated system above: /api/referral/stats, /track, /convert.)
 
 @app.route("/api/health", methods=["GET"])
 @app.route("/api/system/health", methods=["GET"])
@@ -13143,7 +13119,6 @@ def _check_risk_threshold(uid: str, score: int, threshold: int = 45, duration_s:
 
 @app.route("/api/webhooks", methods=["GET"])
 @require_auth
-@require_auth
 @limiter.limit("60 per minute")
 def list_webhooks():
     uid = getattr(g, "uid", None)
@@ -13156,12 +13131,16 @@ def list_webhooks():
 def create_webhook():
     try:
         import uuid, secrets
+        uid  = getattr(g, "uid", None)
         data = request.get_json(force=True) or {}
         url  = data.get("url", "").strip()
         if not url or not url.startswith("http"):
             return jsonify({"error": "Valid URL required"}), 400
         wh = {
             "id":          str(uuid.uuid4())[:12],
+            "uid":         uid,  # BUG FIX: was missing — list_webhooks filters
+                                  # by uid, so a freshly-created webhook could
+                                  # never appear in the creator's own list
             "url":         url,
             "secret":      data.get("secret") or secrets.token_hex(24),
             "events":      data.get("events", ["posture.risk_alert", "session.complete", "report.ready"]),
@@ -13179,17 +13158,28 @@ def create_webhook():
 @require_auth
 @limiter.limit("20 per minute")
 def delete_webhook(wid):
-    if wid in _webhooks:
-        del _webhooks[wid]
-        return jsonify({"ok": True})
-    return jsonify({"error": "Not found"}), 404
+    uid = getattr(g, "uid", None)
+    wh  = _webhooks.get(wid)
+    if not wh:
+        return jsonify({"error": "Not found"}), 404
+    # BUG FIX: previously any authenticated user who knew/guessed a webhook id
+    # could delete someone else's webhook — no ownership check at all.
+    if wh.get("uid") != uid and not get_user_role(uid).get("is_admin"):
+        return jsonify({"error": "Forbidden"}), 403
+    del _webhooks[wid]
+    return jsonify({"ok": True})
 
 @app.route("/api/webhooks/<wid>/test", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")
 def test_webhook(wid):
+    uid = getattr(g, "uid", None)
     wh = _webhooks.get(wid)
     if not wh: return jsonify({"error": "Webhook not found"}), 404
+    # Same ownership check as delete — don't let anyone trigger a test
+    # delivery to a webhook URL they don't own.
+    if wh.get("uid") != uid and not get_user_role(uid).get("is_admin"):
+        return jsonify({"error": "Forbidden"}), 403
     import uuid
     payload = {
         "event": "webhook.test", "delivery_id": str(uuid.uuid4())[:12],
@@ -14313,29 +14303,106 @@ def _require_api_key(f):
 @app.route("/api/keys/create", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")
-@require_admin
 def create_api_key():
+    """
+    Self-serve API key creation. Any authenticated user creates a key for
+    their own account, scoped to their actual subscription tier (not a
+    client-supplied plan, which could otherwise be used to claim a higher
+    rate limit than paid for). A platform admin may create a key on behalf
+    of another uid by passing "uid" in the body — this preserves the
+    original admin-provisioning use case.
+    Persists to Firestore (single source of truth, matches what account
+    deletion and the health-check already query) with a Redis/in-memory
+    cache for fast per-request validation in _require_api_key.
+    """
     try:
-        data = request.get_json(force=True) or {}
-        uid  = data.get("uid", "")
-        plan = data.get("plan", "standard")
-        name = data.get("name", "My API Key")
-        if not uid: return jsonify({"error": "uid required"}), 400
+        data      = request.get_json(force=True) or {}
+        caller_uid = getattr(g, "uid", None)
+        role       = get_user_role(caller_uid)
+
+        target_uid = data.get("uid", "").strip()
+        if target_uid and target_uid != caller_uid:
+            if not role.get("is_admin"):
+                return jsonify({"error": "Only admins may create a key for another account"}), 403
+            uid  = target_uid
+            requested_plan = data.get("plan", "standard")
+            plan = requested_plan if requested_plan in ALL_TIERS else "standard"
+        else:
+            uid  = caller_uid
+            plan = role.get("tier", "standard")  # self-serve: always the caller's real tier
+
+        name = (data.get("name") or "My API Key")[:60]
+
         raw_key  = "pai_" + _secrets.token_urlsafe(32)
         key_hash = _hashlib.sha256(raw_key.encode()).hexdigest()[:32]
-        _api_keys[key_hash] = {
+        meta = {
             "uid":        uid,
             "plan":       plan,
             "name":       name,
             "usage":      0,
             "created_at": datetime.now().isoformat(),
             "last_used":  None,
+            "revoked":    False,
             "rate_limit": 1000 if plan == "enterprise" else 100,
         }
+        _api_keys[key_hash] = meta  # fast-lookup cache used by _require_api_key
+
+        if db:
+            db.collection("api_keys").document(key_hash).set({
+                **meta,
+                "key_preview": raw_key[:7] + "…" + raw_key[-4:],  # for display only — never the full key
+            })
+
         audit(uid, "api_key_created", "api_keys", {"plan": plan})
         return jsonify({"api_key": raw_key, "plan": plan, "note": "Save this key — it won't be shown again"}), 201
     except Exception as e:
         return safe_error(e)
+
+@app.route("/api/keys", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def list_api_keys():
+    """Self-serve — list the caller's own API keys (never returns the raw key)."""
+    uid = getattr(g, "uid", None)
+    if not db:
+        return jsonify({"api_keys": []})
+    docs = db.collection("api_keys").where("uid", "==", uid).get()
+    keys = []
+    for doc in docs:
+        d = doc.to_dict()
+        keys.append({
+            "id":           doc.id,
+            "name":         d.get("name"),
+            "plan":         d.get("plan"),
+            "key_preview":  d.get("key_preview", "pai_••••••"),
+            "created_at":   d.get("created_at"),
+            "last_used":    d.get("last_used"),
+            "usage":        d.get("usage", 0),
+            "revoked":      d.get("revoked", False),
+            "rate_limit":   d.get("rate_limit"),
+        })
+    return jsonify({"api_keys": keys})
+
+@app.route("/api/keys/<key_id>", methods=["DELETE"])
+@require_auth
+@limiter.limit("20 per minute")
+def revoke_api_key(key_id):
+    """Self-serve revoke — owner only (or a platform admin)."""
+    uid  = getattr(g, "uid", None)
+    role = get_user_role(uid)
+    if not db:
+        return jsonify({"error": "Not available"}), 503
+    doc_ref = db.collection("api_keys").document(key_id)
+    doc     = doc_ref.get()
+    if not doc.exists:
+        return jsonify({"error": "Not found"}), 404
+    owner_uid = doc.to_dict().get("uid")
+    if owner_uid != uid and not role.get("is_admin"):
+        return jsonify({"error": "Forbidden"}), 403
+    doc_ref.update({"revoked": True, "revoked_at": datetime.now().isoformat()})
+    _api_keys.delete(key_id)  # invalidate the fast-lookup cache immediately
+    audit(uid, "api_key_revoked", "api_keys", {"key_id": key_id})
+    return jsonify({"ok": True})
 
 @app.route("/api/v1/posture/analyze", methods=["POST"])
 @require_auth

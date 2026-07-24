@@ -6,7 +6,10 @@
  */
 import crypto from "crypto";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+
+const BACKEND_URL = process.env.VITE_API_URL || process.env.BACKEND_URL || "";
+const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET || "";
 
 function getAdminDb() {
   if (!getApps().length) {
@@ -132,6 +135,29 @@ export default async function handler(req, res) {
           });
 
         console.log("[Kashier Webhook] Updated user", uid, "=> tier=" + tier + " billing=" + billing);
+
+        // ── Referral reconciliation (best-effort — never blocks the webhook) ──
+        try {
+          const pendingRef  = db.collection("pending_orders").doc(orderId);
+          const pendingSnap = await pendingRef.get();
+          if (pendingSnap.exists) {
+            const creditApplied = Number(pendingSnap.data().credit_applied_egp || 0);
+            if (creditApplied > 0) {
+              await userDoc.ref.update({ referral_credits: FieldValue.increment(-creditApplied) });
+            }
+            await pendingRef.delete();
+          }
+          if (BACKEND_URL && INTERNAL_API_SECRET) {
+            await fetch(`${BACKEND_URL}/api/referral/convert`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Internal-Secret": INTERNAL_API_SECRET },
+              body: JSON.stringify({ uid, plan: tier }),
+            }).catch(e => console.error("[Kashier Webhook] referral convert call failed:", e));
+          }
+        } catch (refErr) {
+          console.error("[Kashier Webhook] referral reconciliation error:", refErr);
+        }
+
         return res.json({ received: true, action: "subscription_activated", uid, tier });
       } else {
         console.warn("[Kashier Webhook] No user found with email:", email);

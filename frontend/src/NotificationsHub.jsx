@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
+import { getAuthToken } from "./firebase.js";
 import { db, collection, addDoc, getDocs, query, orderBy, limit,
          where, updateDoc, doc, setDoc, getDoc, serverTimestamp } from "./firebase.js";
 
@@ -97,9 +98,32 @@ class NotificationQueue {
   }
 
   async _dispatch(entry) {
-    // Simulate dispatch (real implementation calls backend API)
-    await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
-    // In production: await fetch("/api/notify/dispatch", {method:"POST", body:JSON.stringify(entry)})
+    // Get Firebase auth token
+    let token = null;
+    try { token = await getAuthToken(); } catch (_) {}
+
+    const res = await fetch("/api/notify/dispatch", {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        ...(token ? { Authorization: "Bearer " + token } : {}),
+      },
+      body: JSON.stringify(entry),
+      signal: AbortSignal.timeout(14000),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "http_" + res.status }));
+      throw new Error(err.error || "dispatch_failed_" + res.status);
+    }
+
+    const data = await res.json();
+    // Log individual channel failures as warnings (don't throw — partial success is OK)
+    if (data.results) {
+      data.results.filter(r => !r.ok).forEach(r => {
+        console.warn("[NotifHub] Channel " + r.channel + " failed:", r.error);
+      });
+    }
   }
 
   get all() { return [...this._q]; }
@@ -179,42 +203,11 @@ const INTEGRATIONS_META = {
 };
 
 /* ── API send functions ──────────────────────────────────────────── */
-async function sendToSlack(config, message) {
-  const payload = {
-    channel: config.channel,
-    username: config.bot_name || "Corvus Bot",
-    icon_emoji: ":health:",
-    blocks: [
-      { type:"section", text:{ type:"mrkdwn", text: `*Corvus Alert*\n${message.text}` } },
-      message.score != null ? {
-        type:"context", elements:[{type:"mrkdwn", text:`Score: *${message.score}/100* | ${new Date().toLocaleString()}`}]
-      } : null,
-      { type:"divider" },
-    ].filter(Boolean),
-  };
-  // Real: return fetch(config.webhook_url, {method:"POST", body:JSON.stringify(payload)})
-  return { ok: true, simulated: true };
-}
-
-async function sendToTeams(config, message) {
-  const payload = {
-    "@type":"MessageCard", "@context":"http://schema.org/extensions",
-    themeColor: message.color || "1A56DB",
-    summary: "Corvus Notification",
-    sections:[{ activityTitle:"Corvus Workforce Intelligence",
-      activitySubtitle: message.subtitle || new Date().toLocaleString(),
-      activityText: message.text, markdown:true }],
-    potentialAction:[{ "@type":"OpenUri", name:"Open Dashboard",
-      targets:[{os:"default", uri:"https://app.corvus.io"}] }],
-  };
-  // Real: return fetch(config.webhook_url, {method:"POST", body:JSON.stringify(payload)})
-  return { ok: true, simulated: true };
-}
-
-async function createJiraTicket(config, issue) {
-  // Real: POST /rest/api/3/issue with Basic auth
-  return { ok: true, key:`${config.project_key}-${Math.floor(Math.random()*999)}`, simulated: true };
-}
+// Channel dispatchers are now handled server-side via /api/notify/dispatch
+// These client-side functions are kept as no-ops (real dispatch goes through the queue)
+async function sendToSlack(_config, _message) { return { ok: true }; }
+async function sendToTeams(_config, _message) { return { ok: true }; }
+async function createJiraTicket(_config, _issue) { return { ok: true }; }
 
 /* ── UI primitives ────────────────────────────────────────────────── */
 function Skel({w="100%",h=12,r=6}) {
@@ -680,10 +673,27 @@ function IntegrationsPanel({orgId,profile,isAr}) {
 
   const testConnection=async(intId)=>{
     setTesting(intId); setStatuses(prev=>({...prev,[intId]:"testing"}));
-    const cfg=configs[intId]?.field_values||{};
-    await new Promise(r=>setTimeout(r,1400+Math.random()*800));
-    const ok=Object.values(cfg).some(v=>v&&v.length>3);
-    setStatuses(prev=>({...prev,[intId]:ok?"connected":"error"}));
+    try {
+      const token = await getAuthToken().catch(()=>null);
+      const testEntry = {
+        id: "test_" + Date.now(),
+        type: "ai_insight",
+        channels: [intId],
+        payload: { text: "Corvus connection test — " + new Date().toLocaleString("en-GB") },
+      };
+      const res = await fetch("/api/notify/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
+        body: JSON.stringify(testEntry),
+        signal: AbortSignal.timeout(12000),
+      });
+      const data = await res.json().catch(()=>({}));
+      const channelResult = (data.results||[]).find(r=>r.channel===intId);
+      const ok = res.ok && (channelResult?.ok !== false);
+      setStatuses(prev=>({...prev,[intId]:ok?"connected":"error"}));
+    } catch(e) {
+      setStatuses(prev=>({...prev,[intId]:"error"}));
+    }
     setTesting(null);
   };
 

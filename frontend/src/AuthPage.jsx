@@ -348,7 +348,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       try {
         const existing = await getUserProfile(r.user.uid);
         if (!existing) {
-          await createUserProfile(r.user.uid, buildProfile(r.user, r.user.displayName));
+          await createUserProfile(r.user.uid, buildProfile(r.user, r.user.displayName), window.__referral_code||null);
         }
       } catch(profileErr) {
         console.warn("[Auth] social profile error (non-fatal):", profileErr?.message);

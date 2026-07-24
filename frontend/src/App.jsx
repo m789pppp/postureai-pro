@@ -10,7 +10,7 @@ import {
   AUTO_APPROVE_DOMAIN, serverTimestamp,
   notifyPaymentPending, notifyPaymentConfirmed,
   getCompany, createCompany, getUserSessions, onUserSessions, updateUserProfile,
-  checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, getReferralDiscount, checkAndSendNurtureEmails,
+  checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, checkAndSendNurtureEmails,
   doc, updateDoc,
 } from "./firebase.js";
 import { HRPanel } from "./HRPanel.jsx";
@@ -268,7 +268,7 @@ async function initKashier({tier,user_email,user_name,billing,uid="",coupon_code
       })
     });
     const d = await r.json();
-    if(d?.redirect_url) return{type:"redirect",url:d.redirect_url};
+    if(d?.redirect_url) return{type:"redirect",url:d.redirect_url,creditApplied:d.credit_applied_egp||0};
     if(d?.error) console.error("Kashier error:",d.error);
   }catch(e){console.error("Kashier:",e);}
   return null;
@@ -1177,7 +1177,10 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
   const[name,setName]=useState(profile?.name||"");
   const[company,setCompany]=useState(profile?.company||"");
   const[saving,setSaving]=useState(false);
-  const refLink=`${window.location.origin}?ref=${user.uid.slice(0,8)}&plan=professional`;
+  const[refStats,setRefStats]=useState(null);
+  const[showReferralProgram,setShowReferralProgram]=useState(false);
+  useEffect(()=>{ getReferralStats(user.uid).then(setRefStats).catch(()=>{}); },[user.uid]);
+  const refLink=refStats?.ref_code?`${window.location.origin}?ref=${refStats.ref_code}`:"";
   const avgScore=sessions?.length?Math.round(sessions?.reduce((a,s)=>a+(s.avg_score||0),0)/sessions?.length):0;
   const inp={width:"100%",background:cs.inp,border:`0.5px solid ${cs.inpB}`,borderRadius:9,padding:"11px 14px",fontSize:13,color:cs.text,outline:"none",boxSizing:"border-box",marginBottom:12};
   async function save(){
@@ -1217,11 +1220,14 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
           <span style={{fontSize:20}}>🤝</span>
           <div><div style={{fontSize:12,fontWeight:700,color:cs.text}}>{t.referral}</div><div style={{fontSize:11,color:cs.muted}}>{t.referralDesc}</div></div>
         </div>
-        <div style={{display:"flex",gap:7}}>
-          <div style={{flex:1,background:cs.inp,border:`0.5px solid ${cs.inpB}`,borderRadius:8,padding:"8px 11px",fontSize:10,color:cs.muted,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{refLink}</div>
-          <Btn cs={cs} onClick={()=>{navigator.clipboard.writeText(refLink);addToast(t.copied,"success");}} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{t.copyLink}</Btn>
+        <div style={{display:"flex",gap:7,marginBottom:refStats?.credits>0?8:0}}>
+          <div style={{flex:1,background:cs.inp,border:`0.5px solid ${cs.inpB}`,borderRadius:8,padding:"8px 11px",fontSize:10,color:cs.muted,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{refLink||"…"}</div>
+          <Btn cs={cs} onClick={()=>{navigator.clipboard.writeText(refLink);addToast(t.copied,"success");}} disabled={!refLink} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{t.copyLink}</Btn>
+          <Btn cs={cs} onClick={()=>setShowReferralProgram(true)} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{isAr?"التفاصيل":"Details"}</Btn>
         </div>
+        {refStats?.credits>0&&<div style={{fontSize:11,color:"#10b981",fontWeight:700}}>💰 {refStats.credits} EGP {isAr?"رصيد متاح":"credit available"}</div>}
       </div>
+      {showReferralProgram&&<Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense>}
       {sessions?.length>0&&<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
         <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:13}}>{t.sessionHist||"Session History"}</div>
         <BarChart data={sessions?.slice(-10).map((s,i)=>({l:`S${i+1}`,v:s.avg_score||0}))} color="#1a56db" cs={cs}/>
@@ -1602,22 +1608,16 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
   const[couponData,setCouponData]=useState(null);
   const[couponErr,setCouponErr]=useState("");
   const[couponChecking,setCouponChecking]=useState(false);
-  const[referralDiscount,setReferralDiscount]=useState(null);
+  // Referral credit (EGP, from a prior /api/referral/track welcome credit or
+  // a converted referral) is applied automatically server-side in
+  // /api/kashier/create-order — no client-side discount math needed here.
+  const[referralCreditApplied,setReferralCreditApplied]=useState(0);
 
   // Persist kashier URL across accidental back-navigations
   useEffect(()=>{
     const saved=sessionStorage.getItem("kashier_pending_url");
     const savedStep=sessionStorage.getItem("kashier_pending_step");
     if(saved&&savedStep==="kashier"){setKashierUrl(saved);setStep("kashier");}
-  },[]);
-
-  // Auto-apply referral discount from URL
-  useEffect(()=>{
-    if(window.__referral_code){
-      getReferralDiscount(window.__referral_code).then(d=>{
-        if(d){setReferralDiscount(d);addToast("✓ Referral discount applied: 20% off","success");}
-      }).catch(()=>{});
-    }
   },[]);
 
   // Debounced coupon validation — fires 600ms after user stops typing
@@ -1640,7 +1640,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
   const basePrice=billing==="monthly"?tier.price_monthly:tier.price_yearly;
   // B2C: no seat-based pricing
   const subtotal=basePrice?Math.round(basePrice):null;
-  const disc=couponData?couponData.discount:(referralDiscount?referralDiscount.discount_pct:0);
+  const disc=couponData?couponData.discount:0;
   const price=subtotal?Math.round(subtotal*(1-disc/100)):null;
   const seatAddon=0; // B2C: no seat addon
 
@@ -1673,6 +1673,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
       uid:user?.uid||"",
       coupon_code: couponData ? coupon.trim().toUpperCase() : undefined,
       discount_pct: disc || 0});
+    if(result?.creditApplied) setReferralCreditApplied(result.creditApplied);
     if(result?.type==="redirect"&&result?.url){
       sessionStorage.setItem("kashier_pending_url",result.url);
       sessionStorage.setItem("kashier_pending_step","kashier");
@@ -1806,7 +1807,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
           </div>
           {couponErr&&<div style={{fontSize:11,color:"#ef4444",marginTop:4}}>{couponErr}</div>}
           {couponData&&<div style={{fontSize:11,color:"#10b981",marginTop:4}}>✓ {couponData.label} {isAr?"مطبّق":"applied"}</div>}
-          {referralDiscount&&!couponData&&<div style={{fontSize:11,color:"#10b981",marginTop:4}}>🔗 {isAr?"خصم الإحالة 20% مطبّق":"Referral discount: 20% off applied"}</div>}
+          {referralCreditApplied>0&&<div style={{fontSize:11,color:"#10b981",marginTop:4}}>🔗 {isAr?`تم تطبيق ${referralCreditApplied} جنيه من رصيد الإحالة`:`${referralCreditApplied} EGP referral credit applied`}</div>}
         </div>
 
         {/* Price summary */}
