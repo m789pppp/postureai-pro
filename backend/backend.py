@@ -5929,9 +5929,19 @@ def mfa_login_verify():
 @require_auth
 @limiter.limit("3 per hour")
 def mfa_disable():
-    """Disable MFA. Requires re-confirmation of UID (frontend confirms via Firebase re-auth)."""
+    """Disable MFA. Requires a *fresh* sign-in — Firebase's auth_time
+    claim (when the user actually authenticated, not just when this
+    token was refreshed) must be within the last 5 minutes. The
+    frontend re-authenticates (password re-entry, or a provider popup
+    for Google/Microsoft accounts) right before calling this — see
+    firebase.js's reauthenticate(). This used to be a comment-only
+    intention ('requires re-confirmation... frontend confirms via
+    re-auth') with nothing actually enforcing it server-side."""
     try:
         uid = g.uid
+        auth_time = (getattr(g,"user",{}) or {}).get("auth_time", 0)
+        if time.time() - auth_time > 300:
+            return jsonify({"error":"Recent sign-in required", "code":"REAUTH_REQUIRED"}), 401
         if db:
             db.collection("users").document(uid).update({
                 "mfa_enabled":     False,
