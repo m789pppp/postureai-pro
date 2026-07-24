@@ -6,22 +6,22 @@ Covers: auth, analysis, billing, webhooks, audit, admin, AI routes
 import sys, os, math, json, time, hmac, hashlib, unittest
 from unittest.mock import patch, MagicMock, AsyncMock
 
-# ── Pure functions re-imported inline (no Flask/MediaPipe needed) ────────────
-def score_m(v, ideal, ok, bad):
-    d = abs(v - ideal)
-    if d <= ok:  return max(0, int(100 - (d / max(ok, .1)) * 25))
-    if d <= bad: return max(0, int(75  - ((d - ok) / max(bad - ok, .1)) * 45))
-    return max(0, int(30 - (d - bad) * 1.8))
+# Import the REAL production implementation instead of a hand-copied
+# duplicate (see tests/test_analysis.py and scoring_utils.py for the full
+# story — the duplicate had silently drifted from backend.py's actual
+# beyond-bad formula and floor value).
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from scoring_utils import score_m, angle_vert, angle_horiz
 
-def angle_vert(p1, p2):
-    dx, dy = abs(p2[0]-p1[0]), abs(p2[1]-p1[1])
-    if dy < 0.5: return 90.0
-    return abs(math.degrees(math.atan2(dx, dy)))
-
-def angle_horiz(p1, p2):
-    dx, dy = abs(p2[0]-p1[0]), abs(p2[1]-p1[1])
-    if dx < 0.5: return 90.0
-    return abs(math.degrees(math.atan2(dy, dx)))
+# ── NOTE: the functions below (compute_posture_score, grade,
+# build_alert_list, validate_stripe_webhook_sig, sanitize_export_range,
+# compute_org_health, prorate_amount, dunning_next_action, mask_api_key,
+# validate_webhook_url) are simplified test doubles — there is no
+# same-named function in backend.py, so these tests check that the general
+# *shape* of the logic is sane, not actual production behavior. Treat their
+# passing as much weaker evidence than the score_m/angle_vert/angle_horiz
+# tests above. Wiring these to the real backend.py logic (where it exists
+# under different names/inline in route handlers) is follow-up work.
 
 def compute_posture_score(neck_tilt, shoulder_tilt, lean_angle, head_forward):
     s_neck      = score_m(neck_tilt,      0, 5, 20)
