@@ -4,26 +4,15 @@ Run: cd backend && pip install pytest && pytest tests/ -v
 """
 import sys, os, math
 
-# Import only pure functions — avoid loading Flask/MediaPipe
-# We re-define the functions here to test them in isolation
-def score_m(v, ideal, ok, bad):
-    """Smooth piecewise scoring: 100 at ideal → 75 at ok → 30 at bad → 0 beyond."""
-    d = abs(v - ideal)
-    if d <= ok:  return max(0, int(100 - (d / max(ok, .1)) * 25))
-    if d <= bad: return max(0, int(75  - ((d - ok) / max(bad - ok, .1)) * 45))
-    return max(0, int(30 - (d - bad) * 1.8))
-
-def angle_vert(p1, p2):
-    dx = abs(p2[0] - p1[0])
-    dy = abs(p2[1] - p1[1])
-    if dy < 0.5: return 90.0
-    return abs(math.degrees(math.atan2(dx, dy)))
-
-def angle_horiz(p1, p2):
-    dx = abs(p2[0] - p1[0])
-    dy = abs(p2[1] - p1[1])
-    if dx < 0.5: return 90.0
-    return abs(math.degrees(math.atan2(dy, dx)))
+# Import the REAL production implementation (scoring_utils.py has zero heavy
+# deps — no Flask/MediaPipe — so this doesn't need any mocking). This used
+# to be a hand-copied duplicate of score_m/angle_vert/angle_horiz that had
+# quietly drifted from the real backend.py implementation (different
+# beyond-bad formula, no floor-of-5, no swapped-ok/bad guard) — meaning
+# these tests were passing while checking behavior production didn't
+# actually have. See scoring_utils.py for the shared source of truth.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from scoring_utils import score_m, angle_vert, angle_horiz
 
 # ════════════════════════════════════════════════════════════════
 # score_m tests
@@ -57,8 +46,8 @@ class TestScoreM:
         assert 0 <= s < 30
 
     def test_never_negative(self):
-        """Score should never go below 0"""
-        assert score_m(1000, 0, 10, 25) == 0
+        """Score should never go below 5 (the real function's floor for extreme deviations)"""
+        assert score_m(1000, 0, 10, 25) == 5
 
     def test_never_above_100(self):
         """Score uses abs(d) so negative values same as positive"""
