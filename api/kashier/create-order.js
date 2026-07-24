@@ -157,8 +157,15 @@ export default async function handler(req, res) {
       }
     }
 
-    const successUrl  = APP_URL + "/payment/success";
-    const failureUrl  = APP_URL + "/payment/failure";
+    // BUG FIX: was "/payment/success" / "/payment/failure" (path-based),
+    // but App.jsx's payment-redirect handler only ever checks for a
+    // ?payment=success|cancelled query string on the root path — the same
+    // convention Billing.jsx's Stripe checkout already uses. A real Kashier
+    // payment completing successfully never showed any confirmation toast,
+    // never refreshed the user's tier, and likely didn't even resolve to a
+    // valid SPA route.
+    const successUrl  = APP_URL + "/?payment=success";
+    const failureUrl  = APP_URL + "/?payment=cancelled";
     const webhookUrl  = APP_URL + "/api/kashier/webhook";
 
     // Build Kashier hosted-payment URL
