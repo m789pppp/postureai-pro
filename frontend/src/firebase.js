@@ -7,7 +7,7 @@ import {
   onAuthStateChanged as _onAuthStateChanged,
   sendPasswordResetEmail, sendEmailVerification,
   confirmPasswordReset, verifyPasswordResetCode, applyActionCode,
-  updatePassword, reauthenticateWithCredential, EmailAuthProvider,
+  updatePassword, reauthenticateWithCredential, reauthenticateWithPopup, EmailAuthProvider,
   browserLocalPersistence, browserSessionPersistence, setPersistence,
   deleteUser as _deleteAuthUser,
 } from "firebase/auth";
@@ -141,6 +141,38 @@ export const changePassword = async (currentPass, newPass) => {
   const cred = EmailAuthProvider.credential(user.email, currentPass);
   await reauthenticateWithCredential(user, cred);
   await updatePassword(user, newPass);
+};
+
+// Which re-auth method applies to the current user — password accounts need
+// a password prompt; Google/Microsoft-only accounts re-auth via a provider
+// popup instead (they have no password to re-enter).
+export const getReauthMethod = () => {
+  const user = auth.currentUser;
+  if (!user) return null;
+  const providers = (user.providerData||[]).map(p=>p.providerId);
+  if (providers.includes("password"))     return "password";
+  if (providers.includes("google.com"))   return "google";
+  if (providers.includes("microsoft.com"))return "microsoft";
+  return null;
+};
+
+// Generic re-auth gate for sensitive actions (disabling MFA, etc).
+// password: required only when getReauthMethod() === "password".
+export const reauthenticate = async (password) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not authenticated");
+  const method = getReauthMethod();
+  if (method === "password") {
+    if (!password) throw new Error("Password required");
+    const cred = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, cred);
+  } else if (method === "google") {
+    await reauthenticateWithPopup(user, gProvider);
+  } else if (method === "microsoft") {
+    await reauthenticateWithPopup(user, msProvider);
+  } else {
+    throw new Error("No supported re-authentication method for this account");
+  }
 };
 
 // Persistence — remember me
