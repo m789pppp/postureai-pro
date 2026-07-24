@@ -86,6 +86,10 @@
       "dest": "/api/kashier/webhook.js"
     },
     {
+      "src": "/api/notify/dispatch",
+      "dest": "/api/notify/dispatch.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
@@ -103,6 +107,9 @@
     },
     "api/kashier/webhook.js": {
       "maxDuration": 30
+    },
+    "api/notify/dispatch.js": {
+      "maxDuration": 15
     }
   }
 }
