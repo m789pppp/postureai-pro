@@ -2695,6 +2695,7 @@ export default function App(){
           // Note: server-side middleware auto-elevates eligible emails to elite on every API
           // call via _should_elevate_to_elite() — no client-side overrides needed here.
 
+          let mfaPending = false;
           if(p){
             setProfile(p);
             if(p.tier)       setTier(normalizeTier(p.tier));
@@ -2705,14 +2706,18 @@ export default function App(){
             // (See mfaChallengePending render gate near the AuthPage
             // return below.) sessionStorage flag lets a page refresh in
             // the same tab skip re-challenging every reload.
-            if(p.mfa_enabled && sessionStorage.getItem(`mfa_verified_${u.uid}`)!=="1"){
-              setMfaChallengePending(true);
-            } else {
-              setMfaChallengePending(false);
-            }
+            mfaPending = p.mfa_enabled && sessionStorage.getItem(`mfa_verified_${u.uid}`)!=="1";
+            setMfaChallengePending(mfaPending);
           }
 
           // Real-time sessions listener
+          // BUG FIX: this used to start unconditionally, so a user's session
+          // history (posture/health data) was already pulled into browser
+          // memory before they'd verified their MFA second factor — the
+          // challenge screen only gated what rendered, not what was fetched.
+          // Now it waits until MFA is verified (see the onVerified handler
+          // on MFALoginChallenge, which starts it once verification succeeds).
+          if(!mfaPending){
           try {
             if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; }
             const unsubSessions = onUserSessions(u.uid, sessions=>{
@@ -2726,13 +2731,16 @@ export default function App(){
             });
             window.__unsubSessions = unsubSessions;
           } catch(e){ console.warn("[Auth] sessions:",e?.code); }
+          }
 
           // Load team members
+          if(!mfaPending){
           try {
             if(p?.company_id||p?.is_org_owner){
               getAllUsers(p.company_id||null,false).then(setAllUsers).catch(()=>{});
             }
           } catch{}
+          }
 
           try { const lm=localStorage.getItem("last_mode"); if(lm) setMode(lm); } catch{}
 
@@ -3936,6 +3944,24 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onVerified={()=>{
           try{ sessionStorage.setItem(`mfa_verified_${user.uid}`,"1"); }catch{}
           setMfaChallengePending(false);
+          // Data fetches were held back at sign-in until MFA verification —
+          // start them now that the second factor is confirmed.
+          try {
+            if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; }
+            window.__unsubSessions = onUserSessions(user.uid, sessions=>{
+              setUserSessions(sessions);
+              if (sessions?.length > 0) {
+                setTimeout(() => {
+                  preloadAIInsights(user.uid, profile, sessions, null, profile?.is_trial ? profile?.trial_tier : profile?.tier, lang);
+                }, 1500);
+              }
+            });
+          } catch(e){ console.warn("[Auth] sessions:",e?.code); }
+          try {
+            if(profile?.company_id||profile?.is_org_owner){
+              getAllUsers(profile.company_id||null,false).then(setAllUsers).catch(()=>{});
+            }
+          } catch{}
         }}
         onSignOut={()=>{ logOut(); setUser(null); setProfile(null); setMfaChallengePending(false); }}
       />
