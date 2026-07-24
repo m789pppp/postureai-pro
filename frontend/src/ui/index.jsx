@@ -1137,7 +1137,34 @@ function SessionTextBlock({ label, text }) {
   );
 }
 
-export function SessionDetailModal({ session, cs, isAr = false, onClose }) {
+async function _downloadSessionPdf(kind, session, allSessions, profile, isAr, addToast) {
+  addToast?.(isAr ? "جاري إنشاء الملف..." : "Generating PDF...", "info");
+  try {
+    const { generateSessionPDF, generateClinicalPDF, generateComparisonPDF } = await import("../lib/pdfReports.js");
+    const lang = isAr ? "ar" : "en";
+    if (kind === "clinical") {
+      await generateClinicalPDF({ session, profile, allSessions, lang, aiSummary: session.ai_tip || "" });
+    } else if (kind === "comparison") {
+      // allSessions is newest-first (see onUserSessions() sort in firebase.js),
+      // so the chronologically-previous session sits at the NEXT index.
+      const idx = allSessions?.findIndex(s => s.id === session.id) ?? -1;
+      const prev = idx >= 0 ? allSessions[idx + 1] : null;
+      if (!prev) {
+        addToast?.(isAr ? "مفيش جلسة سابقة للمقارنة بها" : "No earlier session to compare with", "error");
+        return;
+      }
+      await generateComparisonPDF({ session1: prev, session2: session, sessions: allSessions, profile, lang, aiSummary: "" });
+    } else {
+      await generateSessionPDF({ session, profile, allSessions, lang, aiSummary: session.ai_tip || "" });
+    }
+    addToast?.(isAr ? "✅ تم التحميل" : "✅ Downloaded", "success");
+  } catch (e) {
+    console.error("Session PDF error:", e);
+    addToast?.(isAr ? `خطأ: ${e.message}` : `Error: ${e.message}`, "error");
+  }
+}
+
+export function SessionDetailModal({ session, allSessions = [], profile, cs, isAr = false, addToast, onClose }) {
   if (!session) return null;
   const labels = isAr ? _SESSION_METRIC_LABELS_AR : _SESSION_METRIC_LABELS;
   const metrics = session.metrics || {};
@@ -1207,6 +1234,24 @@ export function SessionDetailModal({ session, cs, isAr = false, onClose }) {
           </div>
         </div>}
 
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+          <button onClick={() => _downloadSessionPdf("session", session, allSessions, profile, isAr, addToast)}
+            style={{ padding: "10px 12px", borderRadius: 10, border: `0.5px solid ${cs.border}`,
+              background: "transparent", color: cs.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            {isAr ? "📄 تقرير الجلسة" : "📄 Session PDF"}
+          </button>
+          <button onClick={() => _downloadSessionPdf("clinical", session, allSessions, profile, isAr, addToast)}
+            style={{ padding: "10px 12px", borderRadius: 10, border: `0.5px solid ${cs.border}`,
+              background: "transparent", color: cs.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            {isAr ? "🏥 التقرير الطبي" : "🏥 Clinical PDF"}
+          </button>
+        </div>
+        <button onClick={() => _downloadSessionPdf("comparison", session, allSessions, profile, isAr, addToast)}
+          style={{ width: "100%", marginBottom: 8, padding: "10px 12px", borderRadius: 10,
+            border: `0.5px solid ${cs.border}`, background: "transparent", color: cs.text,
+            fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          {isAr ? "⚖️ قارن بالجلسة السابقة" : "⚖️ Compare vs Previous Session"}
+        </button>
         <button onClick={() => downloadJSON(session, `corvus_session_${session.session_number || session.id || "data"}.json`)}
           style={{ width: "100%", marginTop: 4, padding: "11px 14px", borderRadius: 10, border: "none",
             background: "#1a56db", color: "white", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
