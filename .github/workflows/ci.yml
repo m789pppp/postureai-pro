@@ -1,0 +1,98 @@
+name: CI
+
+# Runs on every push and every PR targeting main. This did not exist before —
+# every commit was going straight to production (via Vercel/Railway
+# auto-deploy on push to main) with only manual, ad-hoc local checks as a
+# gate. This workflow is the automated gate.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    name: Backend unit tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Intentionally NOT installing the full backend/requirements.txt here.
+      # The test suite (tests/test_analysis.py, tests/test_comprehensive.py)
+      # only imports scoring_utils.py, which has zero heavy dependencies
+      # (no Flask/MediaPipe/Firebase) by design — that's what lets these
+      # tests run in seconds instead of minutes. If future tests need real
+      # Flask/Firebase app context, add a separate job that installs
+      # requirements.txt rather than slowing this one down.
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Run backend tests
+        working-directory: backend
+        run: pytest tests/ -v
+
+  frontend-build:
+    name: Frontend production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npx vite build
+
+  e2e-smoke:
+    name: E2E smoke tests (Playwright, chromium only)
+    runs-on: ubuntu-latest
+    # This only runs against E2E_BASE_URL if it's configured as a repo
+    # secret/variable pointing at a real staging deployment. Running the
+    # full billing/security suite against PRODUCTION on every push would
+    # risk triggering real payment flows — so until a staging URL exists,
+    # this job is a no-op rather than something unsafe or perpetually red.
+    if: ${{ vars.E2E_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke tests
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+        run: npx playwright test --project=chromium tests/01-landing.spec.ts tests/07-security.spec.ts
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
