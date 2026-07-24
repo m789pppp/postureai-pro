@@ -1261,7 +1261,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
           ))}
         </div>
       </div>}
-      {viewSession&&<SessionDetailModal session={viewSession} cs={cs} isAr={isAr} onClose={()=>setViewSession(null)}/>}
+      {viewSession&&<SessionDetailModal session={viewSession} allSessions={sessions} profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setViewSession(null)}/>}
       {/* Cancel Subscription */}
       {profile?.tier&&profile.tier!=="standard"&&<CancelSubscriptionCard profile={profile} user={user} cs={cs} addToast={addToast} isAr={isAr}/>}
     </div>
