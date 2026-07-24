@@ -428,6 +428,18 @@ ADMIN_PHONE    = os.getenv("ADMIN_PHONE", "")
 WORK_HOURS_START = int(os.getenv("WORK_HOURS_START", "9"))
 WORK_HOURS_END   = int(os.getenv("WORK_HOURS_END", "18"))
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
+
+# LLM7.io: falls back to "unused" (anonymous, no-signup access) if this isn't
+# set. Anonymous access is a SHARED global pool (~30 requests/minute across
+# every app and tutorial that points people at "unused" — see
+# docs.llm7.io/quickstart) — not a quota reserved for this app. That means
+# every AI feature (Coach, Insights, the /api/llm proxy) can go from "worked
+# fine yesterday" to "completely dead" with zero code change on our end,
+# purely because other anonymous traffic exhausted the shared pool. A free
+# personal token from https://dash.llm7.io gives this app its own dedicated
+# daily quota instead of competing with the whole internet's anonymous
+# traffic. Set LLM7_API_KEY in Railway once registered.
+LLM7_API_KEY = os.getenv("LLM7_API_KEY", "unused")
 SMTP_HOST   = os.getenv("SMTP_HOST", "smtp.gmail.com")
 # HIGH-02: Gmail is rate-limited to ~500/day — use SendGrid/Resend in production
 if SMTP_HOST == "smtp.gmail.com" and os.getenv("FLASK_ENV") == "production":
@@ -10153,7 +10165,7 @@ def ai_analyze():
                 _msgs.append({"role": "user", "content": prompt})
                 _r = req.post(
                     "https://api.llm7.io/v1/chat/completions",
-                    headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {LLM7_API_KEY}"},
                     json={"model": "gpt-4o-mini", "messages": _msgs, "max_tokens": max_tokens, "temperature": 0.5},
                     timeout=20,
                 )
@@ -13626,7 +13638,7 @@ CONVERSATION STYLE:
             try:
                 llm7_resp = req.post(
                     "https://api.llm7.io/v1/chat/completions",
-                    headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {LLM7_API_KEY}"},
                     json={"model": "gpt-4o-mini", "messages": ollama_msgs,
                           "max_tokens": _max_tok, "temperature": _temperature},
                     timeout=20,
@@ -13637,7 +13649,7 @@ CONVERSATION STYLE:
                     # Rate limited — try DeepSeek
                     llm7_resp2 = req.post(
                         "https://api.llm7.io/v1/chat/completions",
-                        headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {LLM7_API_KEY}"},
                         json={"model": "deepseek/deepseek-r1", "messages": ollama_msgs,
                               "max_tokens": _max_tok, "temperature": _temperature},
                         timeout=20,
@@ -16435,7 +16447,7 @@ def llm_proxy():
             try:
                 r = _req.post(
                     "https://api.llm7.io/v1/chat/completions",
-                    headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {LLM7_API_KEY}"},
                     json={"model": model, "messages": llm_messages,
                           "max_tokens": max_tokens, "temperature": temperature},
                     timeout=25,
