@@ -1438,6 +1438,12 @@ def score_m(v, ideal, ok, bad):
     Mirrors ergonomic research: MSK injury risk is non-linear.
     """
     d = abs(v - ideal)
+    if bad < ok:
+        # Defensive: a swapped ok/bad call (like the shoulder-elevation bug
+        # this was written to prevent from recurring) would otherwise skip
+        # the middle "attention needed" zone entirely and produce a scoring
+        # cliff — auto-correct the order instead of failing silently.
+        ok, bad = bad, ok
     if d <= ok:
         return max(0, int(100 - (d / max(ok, .1)) * 25))
     if d <= bad:
@@ -2206,7 +2212,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         _sh_elev_pct = round(_sh_elev * 100, 1)       # % of frame height
 
         # Score: ideal gap 12-25%, too close = elevated shoulders
-        _sh_elev_sc = score_m(_sh_elev_pct, 18, 8, 4)
+        _sh_elev_sc = score_m(_sh_elev_pct, 18, 4, 8)
         out["metrics"]["shoulder_elevation"] = {
             "value":      _sh_elev_pct,
             "score":      _sh_elev_sc,
