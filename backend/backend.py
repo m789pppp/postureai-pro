@@ -5930,6 +5930,58 @@ def mfa_sms_verify():
         return safe_error(e, "SMS verification failed")
 
 
+@app.route("/api/auth/mfa/login-verify", methods=["POST"])
+@require_auth
+@limiter.limit("10 per 15 minutes")
+def mfa_login_verify():
+    """Second-factor check after a Firebase sign-in, for accounts with
+    MFA enabled. This is the piece that was missing entirely before:
+    /totp/verify, /sms/verify etc. only ever ran during MFA *setup* —
+    nothing anywhere checked mfa_enabled at sign-in, so having MFA
+    'on' provided no actual protection. A Firebase sign-in only proves
+    the password; this proves the second factor, gating access to the
+    app in the frontend (see App.jsx's mfaChallengePending gate)."""
+    try:
+        from auth.mfa import verify_totp, verify_sms_code, hash_backup_code
+        uid  = g.uid
+        data = request.get_json(force=True) or {}
+        code = str(data.get("code","")).strip()
+        if not code:
+            return jsonify({"error":"code required"}), 400
+        if not db:
+            return jsonify({"error":"unavailable"}), 503
+        udoc = db.collection("users").document(uid).get()
+        u    = udoc.to_dict() if udoc.exists else {}
+        if not u.get("mfa_enabled"):
+            return jsonify({"ok":True, "note":"mfa not enabled"})
+
+        verified = False
+        secret = u.get("mfa_totp_secret")
+        if secret and verify_totp(secret, code):
+            verified = True
+        elif u.get("mfa_method") == "sms" and verify_sms_code(uid, code):
+            verified = True
+        else:
+            # Fall back to a one-time backup code
+            hashed = hash_backup_code(code)
+            backup_codes = u.get("mfa_backup_codes") or []
+            if hashed in backup_codes:
+                verified = True
+                db.collection("users").document(uid).update({
+                    "mfa_backup_codes": [c for c in backup_codes if c != hashed],
+                })
+                audit(uid, "mfa_backup_code_used", "auth", {})
+
+        if not verified:
+            audit(uid, "mfa_login_verify_failed", "auth", {})
+            return jsonify({"error":"Invalid code"}), 400
+
+        audit(uid, "mfa_login_verify_success", "auth", {})
+        return jsonify({"ok":True})
+    except Exception as e:
+        return safe_error(e, "MFA login verification failed")
+
+
 @app.route("/api/auth/mfa/disable", methods=["POST"])
 @require_auth
 @limiter.limit("3 per hour")
