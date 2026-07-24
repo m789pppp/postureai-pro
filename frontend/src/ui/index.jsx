@@ -984,7 +984,8 @@ export function BarChart({ data, color = "#6366f1", cs, height = 44 }) {
     // bars — the most recent session (last item, e.g. "S10") ends up on
     // the visual LEFT instead of the chart's chronological end, making
     // Session History read backwards for Arabic users.
-    <div dir="ltr" style={{ display:"flex", alignItems:"flex-end", gap:4, height }}>
+    <div dir="ltr" role="img" aria-label={data.map(d=>`${d.l}: ${d.v||0}`).join(", ")}
+      style={{ display:"flex", alignItems:"flex-end", gap:4, height }}>
       {data.map((d,i) => (
         <div key={i} style={{ flex:1, display:"flex", flexDirection:"column",
           alignItems:"center", gap:3 }}>
