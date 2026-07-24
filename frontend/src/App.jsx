@@ -29,7 +29,7 @@ import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, Payme
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
-import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner } from "./ui/index.jsx";
+import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
 import { getT } from "./lib/i18n.js";
@@ -1180,6 +1180,8 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
   const[refStats,setRefStats]=useState(null);
   const[showReferralProgram,setShowReferralProgram]=useState(false);
   const[showIntegrationsHub,setShowIntegrationsHub]=useState(false);
+  const[viewSession,setViewSession]=useState(null);
+  const isElite=tierAtLeast(profile?.tier,"elite");
   useEffect(()=>{ getReferralStats(user.uid).then(setRefStats).catch(()=>{}); },[user.uid]);
   const refLink=refStats?.ref_code?`${window.location.origin}?ref=${refStats.ref_code}`:"";
   const avgScore=sessions?.length?Math.round(sessions?.reduce((a,s)=>a+(s.avg_score||0),0)/sessions?.length):0;
@@ -1249,10 +1251,17 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
               <span style={{fontSize:10,color:cs.muted,flex:1}}>{s.created_at?.toDate?.()?.toLocaleDateString?.()}</span>
               <span style={{fontSize:10,color:cs.muted}}>{s.mode} · {s.tier}</span>
               <span style={{fontSize:11,fontWeight:700,color:sc(s.avg_score||0)}}>{s.avg_score||0}/100</span>
+              {isElite
+                ? <button onClick={()=>setViewSession(s)} title={isAr?"كل بيانات الجلسة":"Full session data"}
+                    style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:13,padding:2}}
+                    aria-label={isAr?"عرض تفاصيل الجلسة":"View session details"}>ℹ️</button>
+                : <span title={isAr?"متاح لأعضاء Elite فقط":"Elite members only"}
+                    style={{fontSize:11,opacity:.35}}>🔒</span>}
             </div>
           ))}
         </div>
       </div>}
+      {viewSession&&<SessionDetailModal session={viewSession} cs={cs} isAr={isAr} onClose={()=>setViewSession(null)}/>}
       {/* Cancel Subscription */}
       {profile?.tier&&profile.tier!=="standard"&&<CancelSubscriptionCard profile={profile} user={user} cs={cs} addToast={addToast} isAr={isAr}/>}
     </div>
