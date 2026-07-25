@@ -320,6 +320,32 @@ service cloud.firestore {
       allow create, delete: if false; // Admin SDK only
     }
 
+    // ── MFA Pending (server-written) ─────────────────────────────
+    match /mfa_pending/{uid} {
+      allow read, delete: if isOwner(uid) || isAdmin();
+      allow create, update: if false; // Admin SDK only
+    }
+
+    // ── MFA OTP (server-written) ──────────────────────────────────
+    match /mfa_otp/{uid} {
+      allow read, delete: if isOwner(uid) || isAdmin();
+      allow create, update: if false; // Admin SDK only
+    }
+
+    // ── Invites ───────────────────────────────────────────────────
+    match /invites/{inviteId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() || isHR();
+      allow update: if false; // Admin SDK only (accept flow)
+      allow delete: if isAdmin();
+    }
+
+    // ── Company Members Subcollection ─────────────────────────────
+    match /companies/{companyId}/members/{uid} {
+      allow read: if isAdmin() || isHR();
+      allow create, update, delete: if false; // Admin SDK only
+    }
+
     // ── Deny everything else ─────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

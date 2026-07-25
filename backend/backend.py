@@ -11647,6 +11647,9 @@ def paymob_webhook():
                             "last_payment_amount":  amount // 100,
                             "last_payment_at":      datetime.utcnow().isoformat()+"Z",
                             "updated_at":           datetime.utcnow().isoformat()+"Z",
+                            # Feeds ChurnPrediction's health score (payment_ok, 15% weight)
+                            "payment_ok":           True,
+                            "payment_failed_at":    None,
                         })
                         print(f"[Webhook] ✅ Updated uid={uid} → tier={tier} billing={billing_type}", flush=True)
 
@@ -15329,6 +15332,11 @@ def stripe_webhook():
                             "subscription_billing": billing,
                             "stripe_session_id":  obj.get("id", ""),
                             "updated_at":         datetime.utcnow().isoformat() + "Z",
+                            # Feeds ChurnPrediction's health score (15% weight) — this
+                            # field previously was never written anywhere, so it was
+                            # permanently undefined for every customer.
+                            "payment_ok":         True,
+                            "payment_failed_at":  None,
                         })
                         invalidate_user_cache(uid)
                         print(f"[stripe] ✅ Updated uid={uid} → tier={plan}", flush=True)
@@ -15377,6 +15385,19 @@ def stripe_webhook():
         elif etype == "invoice.payment_failed":
             uid   = obj.get("metadata", {}).get("uid", "")
             email = obj.get("customer_email", "")
+            # BUG FIX: this used to only write to the audit log — the actual
+            # user document (which ChurnPrediction's health score reads
+            # payment_ok from) was never touched, so a failed payment was
+            # invisible to the churn-risk calculation entirely.
+            if uid:
+                try:
+                    firestore.client().collection("users").document(uid).update({
+                        "payment_ok": False,
+                        "payment_failed_at": datetime.utcnow().isoformat() + "Z",
+                    })
+                    invalidate_user_cache(uid)
+                except Exception as fs_err:
+                    print(f"[stripe] payment_failed flag error: {fs_err}", file=sys.stderr)
             audit(uid or "stripe", "stripe_payment_failed", "billing", {"email": email})
 
         return jsonify({"received": True})

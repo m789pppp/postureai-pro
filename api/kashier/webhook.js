@@ -122,6 +122,9 @@ export default async function handler(req, res) {
           last_payment_date:   now.toISOString(),
           last_transaction_id: transactionId,
           updated_at:          now.toISOString(),
+          // Feeds ChurnPrediction's health score (payment_ok, 15% weight)
+          payment_ok:          true,
+          payment_failed_at:   null,
         });
 
         await db.collection("users").doc(uid)
