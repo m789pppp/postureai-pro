@@ -783,166 +783,8 @@ function runAnalysis(prompt,sp) {
   }
 }
 
-// ── Puter.js AI (free, no API key, 400+ models) ───────────────────
-// ── Vercel AI Proxy helpers ──────────────────────────────────────
-
-
-
-// Strip Pollinations watermark from responses
-function cleanAIResponse(text) {
-  if (!text) return text;
-  return text
-    // Pollinations ad blocks (various formats)
-    .replace(/\n*-{2,}\n*🌸[\s\S]*?🌸[\s\S]*?(?=\n|$)/gm, "")
-    .replace(/\n*🌸[\s\S]*?🌸[\s\S]*?(?=\n|$)/gm, "")
-    .replace(/\n*[-–]{2,}\n*[\s\S]*?[Pp]ollinations[\s\S]*?(?:\n|$)/gm, "")
-    .replace(/\n*[Ss]upport [Pp]ollinations[\s\S]*?(?:\n\n|$)/gm, "")
-    .replace(/\n*[Pp]owered by [Pp]ollinations[\s\S]*?(?:\n\n|$)/gm, "")
-    .replace(/\n*\[[Ss]upport our mission\][\s\S]*?(?:\n|$)/gm, "")
-    .replace(/\n*[Aa]d 🌸[\s\S]*?(?:\n|$)/gm, "")
-    .replace(/\n*https?:\/\/pollinations\.ai[^\s]*/gm, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-
-// AI — race all 3 simultaneously, fastest response wins
-// Stream from Pollinations with real SSE — shows text as it arrives.
-// If the network stream fails outright (no connectivity, all providers
-// blocked/down), falls back to the fully-offline rule-based KB below
-// instead of throwing — this is the real "no internet / backend down"
-// safety net for the AI Coach.
-// Global abort controller for the current stream — lets UI cancel in-flight calls
-let _activeStreamAbort = null;
-
-export function abortCurrentStream() {
-  if (_activeStreamAbort) {
-    _activeStreamAbort.abort();
-    _activeStreamAbort = null;
-  }
-}
-
-export async function localChatStream(messages, systemPrompt, maxTokens, onChunk) {
-  // Cancel any previous in-flight stream
-  abortCurrentStream();
-  const ctrl = new AbortController();
-  _activeStreamAbort = ctrl;
-
-  // Hard ceiling: 28 seconds total — if nothing finishes by then, fall back offline
-  const hardTimeout = new Promise((_, rej) =>
-    setTimeout(() => rej(new Error("stream_global_timeout_28s")), 28000)
-  );
-
-  try {
-    await Promise.race([
-      _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, ctrl.signal),
-      hardTimeout,
-    ]);
-  } catch (e) {
-    if (ctrl.signal.aborted) return; // user sent a new message — silently discard
-    console.warn("[CorvusAI] Cloud stream failed, using offline rule-based KB:", e.message);
-    await _offlineStream(messages, systemPrompt, onChunk);
-  } finally {
-    if (_activeStreamAbort === ctrl) _activeStreamAbort = null;
-  }
-}
-
-// Offline, zero-network reply — reuses the same rule-based KB that backs
-// localChat()'s fallback, but "streams" it word-by-word so the UI doesn't
-// look different from a live response.
-async function _offlineStream(messages, systemPrompt, onChunk) {
-  const d = parseData(systemPrompt);
-  const hist = analyzeHistory(messages);
-  const last = [...messages].reverse().find(m => m.role === "user");
-  const intent = detectIntent(last?.content || "");
-  const full = buildResponse(intent, last?.content || "", d, hist);
-
-  // Simulate streaming so the caller's onChunk-driven UI still feels live.
-  const words = full.split(" ");
-  let acc = "";
-  for (let i = 0; i < words.length; i++) {
-    acc += (i === 0 ? "" : " ") + words[i];
-    onChunk(acc);
-    // eslint-disable-next-line no-await-in-loop
-    await new Promise(r => setTimeout(r, 12));
-  }
-  return full;
-}
-
-async function _puterStream(messages, systemPrompt, maxTokens, onChunk, signal) {
-  // Load puter.js from CDN if not already loaded
-  if (!window.puter) {
-    await new Promise((resolve, reject) => {
-      if (document.querySelector('script[src*="puter.js"]')) {
-        const check = setInterval(() => { if (window.puter) { clearInterval(check); resolve(); } }, 100);
-        setTimeout(() => { clearInterval(check); reject(new Error("puter_timeout")); }, 8000);
-        return;
-      }
-      const s = document.createElement("script");
-      s.src = "https://js.puter.com/v2/";
-      s.async = true;
-      s.onload = () => {
-        const check = setInterval(() => { if (window.puter) { clearInterval(check); resolve(); } }, 50);
-        setTimeout(() => { clearInterval(check); reject(new Error("puter_load_timeout")); }, 5000);
-      };
-      s.onerror = () => reject(new Error("puter_load_failed"));
-      document.head.appendChild(s);
-    });
-  }
-
-  if (signal?.aborted) throw new Error("aborted");
-
-  const allMsgs = [
-    { role: "system", content: systemPrompt },
-    ...messages.map(m => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: String(m.content || ""),
-    })),
-  ];
-
-  // Use gpt-4o-mini — free on Puter, high quality
-  const model = "gpt-4o-mini";
-  let full = "";
-
-  // Puter chat with 15s timeout to get the stream object
-  const streamPromise = window.puter.ai.chat(allMsgs, { model, stream: true });
-  const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("puter_chat_timeout_15s")), 15000));
-  const stream = await Promise.race([streamPromise, timeoutPromise]);
-
-  if (signal?.aborted) throw new Error("aborted");
-
-  try {
-    for await (const part of stream) {
-      if (signal?.aborted) break;
-      const token = part?.text || part?.choices?.[0]?.delta?.content || "";
-      if (token) {
-        full += token;
-        onChunk(full);
-      }
-    }
-  } catch (streamErr) {
-    // Stream interrupted — if we got some content, use it
-    if (full && full.length > 30) {
-      return full;
-    }
-    throw new Error("puter_stream_interrupted: " + streamErr.message);
-  }
-
-  if (signal?.aborted) throw new Error("aborted");
-  if (!full || full.length < 10) throw new Error("puter_empty");
-  return full;
-}
-
 async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, signal) {
-  // ── 1. Puter.ai (primary — free, no API key, gpt-4o-mini) ────────
-  try {
-    return await _puterStream(messages, systemPrompt, maxTokens, onChunk, signal);
-  } catch (e) {
-    if (signal?.aborted) throw new Error("aborted");
-    console.warn("[CorvusAI] Puter stream failed, trying Pollinations:", e.message);
-  }
-
-  // ── 2. Pollinations streaming (backup) ───────────────────────────
+  // ── 1. Pollinations streaming (primary) ──────────────────────────
   const allMsgs = [
     { role: "system", content: systemPrompt },
     ...messages.map(m => ({
@@ -1042,22 +884,7 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
 
   const parsePOST = async r => (await r.json())?.choices?.[0]?.message?.content?.trim();
 
-  // ── 1. Puter.ai (non-streaming) — primary ────────────────────────
-  try {
-    if (window.puter) {
-      const puterTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("puter_nonstream_timeout")), 12000));
-      const resp = await Promise.race([
-        window.puter.ai.chat(allMsgs, { model: "gpt-4o-mini" }),
-        puterTimeout,
-      ]);
-      const text = resp?.message?.content?.[0]?.text || resp?.text || "";
-      if (text && text.length > 15) return cleanAIResponse(text);
-    }
-  } catch (e) {
-    console.warn("[CorvusAI] Puter non-stream failed:", e.message);
-  }
-
-  // ── 2. Pollinations + OpenRouter race ─────────────────────────────
+  // ── 1. Pollinations + OpenRouter race (primary) ─────────────────
   return Promise.any([
     go("https://text.pollinations.ai/", {
       method: "POST",
@@ -1187,6 +1014,40 @@ CONVERSATION STYLE:
 - Respond to what was actually asked — don't give a template.
 - Pain reports: assess clinically (location, character, radiation, aggravating/relieving factors).
 - End with ONE focused follow-up question when clinically appropriate — not every message.`;
+}
+
+// ── Abort controller — lets UI cancel in-flight streams ──────────
+let _activeStreamAbort = null;
+
+export function abortCurrentStream() {
+  if (_activeStreamAbort) {
+    _activeStreamAbort.abort();
+    _activeStreamAbort = null;
+  }
+}
+
+export async function localChatStream(messages, systemPrompt, maxTokens, onChunk) {
+  abortCurrentStream();
+  const ctrl = new AbortController();
+  _activeStreamAbort = ctrl;
+
+  // 28s hard ceiling before falling back to offline KB
+  const hardTimeout = new Promise((_, rej) =>
+    setTimeout(() => rej(new Error("stream_global_timeout_28s")), 28000)
+  );
+
+  try {
+    await Promise.race([
+      _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, ctrl.signal),
+      hardTimeout,
+    ]);
+  } catch (e) {
+    if (ctrl.signal.aborted) return;
+    console.warn("[CorvusAI] Stream failed, using offline KB:", e.message);
+    await _offlineStream(messages, systemPrompt, onChunk);
+  } finally {
+    if (_activeStreamAbort === ctrl) _activeStreamAbort = null;
+  }
 }
 
 export async function localChat(messages, {systemPrompt=""} = {}) {
