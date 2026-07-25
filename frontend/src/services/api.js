@@ -248,6 +248,8 @@ export const BillingAPI = {
   prorate:        (data) => apiFetch("/billing/prorate",            { method:"POST", body:data }),
   /** Current usage vs plan limits */
   usage:          ()     => apiFetch("/billing/usage"),
+  /** Real payment/invoice history for the current user */
+  payments:       ()     => apiFetch("/billing/payments"),
   /** Increment a usage counter */
   incrementUsage: (data) => apiFetch("/billing/usage/increment",    { method:"POST", body:data }),
   /** Change plan mid-cycle (upgrade/downgrade) */
