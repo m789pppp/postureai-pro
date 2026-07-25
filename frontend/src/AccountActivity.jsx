@@ -1,24 +1,18 @@
 /**
  * AccountActivity.jsx — Corvus Enterprise
  * Full account activity timeline: actions, logins, billing events, team changes
+ *
+ * Fixed 2026-07-25 — both API calls here had a doubled "/api" prefix
+ * (apiFetch already prepends it), so they 404'd on every single call,
+ * 100% of the time, for every user. The failure was swallowed by an
+ * empty catch block, so this silently fell back to MOCK_ACTIVITY
+ * forever — fabricated logins, a fake device location ("Giza, Egypt"),
+ * a fake MFA-enabled event, fake invoice amounts — shown to every user
+ * as if it were their own real history. Nobody could ever have seen
+ * their real activity log through this screen.
  */
 import { useState, useEffect, useCallback } from "react";
-import { apiFetch } from "./services/api.js";
-
-const MOCK_ACTIVITY = [
-  { id:"a1",  ts:"2026-06-04 09:14", type:"login",    icon:"🔐", title:"Signed in",              detail:"Chrome · Cairo, Egypt",           severity:"info" },
-  { id:"a2",  ts:"2026-06-04 08:30", type:"analysis", icon:"📷", title:"Session analyzed",        detail:"Score: 84 · 22 frames · 22 min",  severity:"info" },
-  { id:"a3",  ts:"2026-06-03 17:22", type:"billing",  icon:"💳", title:"Invoice paid",            detail:"$49.00 · Professional plan",      severity:"success" },
-  { id:"a4",  ts:"2026-06-03 14:10", type:"security", icon:"🛡", title:"New device login",        detail:"Safari · iPhone · Alexandria",    severity:"warning" },
-  { id:"a5",  ts:"2026-06-03 11:05", type:"team",     icon:"👥", title:"Invited team member",     detail:"ahmed@company.com",               severity:"info" },
-  { id:"a6",  ts:"2026-06-02 16:45", type:"security", icon:"🔑", title:"API key created",         detail:"Key: pak_live_••••3f9a",         severity:"info" },
-  { id:"a7",  ts:"2026-06-02 10:30", type:"analysis", icon:"📷", title:"Session analyzed",        detail:"Score: 71 · 14 frames · 14 min",  severity:"info" },
-  { id:"a8",  ts:"2026-06-01 15:20", type:"profile",  icon:"👤", title:"Profile updated",         detail:"Changed display name",            severity:"info" },
-  { id:"a9",  ts:"2026-06-01 09:00", type:"security", icon:"🛡", title:"MFA enabled (TOTP)",      detail:"Google Authenticator configured", severity:"success" },
-  { id:"a10", ts:"2026-05-31 14:11", type:"billing",  icon:"💳", title:"Plan upgraded",           detail:"Starter → Professional",          severity:"success" },
-  { id:"a11", ts:"2026-05-30 11:44", type:"team",     icon:"👥", title:"Team member joined",      detail:"sara@startup.io accepted invite",  severity:"info" },
-  { id:"a12", ts:"2026-05-29 09:22", type:"security", icon:"⚠️",  title:"Login from new location", detail:"Giza, Egypt · Marked as trusted", severity:"warning" },
-];
+import { apiFetch, exportAuditLogCsv } from "./services/api.js";
 
 const TYPE_COLORS = {
   login:"#6366f1", analysis:"#0ea5e9", billing:"#f59e0b",
@@ -28,15 +22,18 @@ const SEV_COLORS = { info:"#64748b", success:"#10b981", warning:"#f59e0b", error
 
 export function AccountActivity({ profile, cs, lang, onClose }) {
   const [filter, setFilter]     = useState("all");
-  const [activity, setActivity] = useState(MOCK_ACTIVITY);
-  const [loading, setLoading]   = useState(false);
+  const [activity, setActivity] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const fetchActivity = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setLoadError(false);
     try {
-      const data = await apiFetch("/api/user/activity");
-      if (data?.ok && data.events?.length) {
-        setActivity(data.events.map(e => ({
+      const data = await apiFetch("/user/activity");
+      if (data?.ok) {
+        setActivity((data.events||[]).map(e => ({
           id: e.id || e.ts, ts: e.ts,
           type: e.category || "info",
           icon: { login:"🔐", analysis:"📷", billing:"💳", security:"🛡", team:"👥", profile:"👤" }[e.category] || "📌",
@@ -45,11 +42,24 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
           severity: e.severity || "info",
         })));
       }
-    } catch(_) {}
+    } catch(_) { setLoadError(true); }
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchActivity(); }, [fetchActivity]);
+
+  const exportCsv = async () => {
+    setExporting(true); setExportError("");
+    try {
+      const blob = await exportAuditLogCsv();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url; a.download = `activity_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch(e) { setExportError(e?.message || "Export failed"); }
+    setExporting(false);
+  };
 
   const types = ["all","login","analysis","billing","security","team","profile"];
   const filtered = filter === "all" ? activity : activity.filter(a => a.type === filter);
@@ -79,8 +89,9 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
         </div>
         <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
           {loading && <div style={{ textAlign:"center", color:cs.textDim, padding:40 }}>Loading activity…</div>}
+          {!loading && loadError && <div style={{ textAlign:"center", color:"#ef4444", padding:40 }}>Couldn't load your activity log — try again later.</div>}
           <div style={{ display:"flex", flexDirection:"column" }}>
-            {filtered.map((event, i) => (
+            {!loading && !loadError && filtered.map((event, i) => (
               <div key={event.id} style={{ display:"flex", gap:14 }}>
                 <div style={{ display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0, paddingTop:4 }}>
                   <div style={{ width:32, height:32, borderRadius:"50%", background:`${TYPE_COLORS[event.type]||"#6366f1"}18`, border:`2px solid ${TYPE_COLORS[event.type]||"#6366f1"}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>
@@ -107,10 +118,11 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
               </div>
             ))}
           </div>
-          {!loading && filtered.length === 0 && <div style={{ textAlign:"center", color:cs.textDim, padding:40 }}>No {filter} activity found</div>}
+          {!loading && !loadError && filtered.length === 0 && <div style={{ textAlign:"center", color:cs.textDim, padding:40 }}>No {filter} activity found</div>}
         </div>
         <div style={{ padding:"12px 20px", borderTop:`1px solid ${cs.border}`, fontSize:11, color:cs.textDim, textAlign:"center" }}>
-          Activity log retained for 90 days · <span style={{ color:"#6366f1", cursor:"pointer" }} onClick={async()=>{ try{ const r=await apiFetch("/api/audit/export", { method: "POST", body: {} }); }catch(_){} }}>Export as CSV</span>
+          Activity log retained for 90 days · <span style={{ color: exporting?cs.textDim:"#6366f1", cursor: exporting?"default":"pointer" }} onClick={exporting?undefined:exportCsv}>{exporting?"Exporting…":"Export as CSV"}</span>
+          {exportError && <div style={{ color:"#ef4444", marginTop:6 }}>{exportError}</div>}
         </div>
       </div>
     </div>
