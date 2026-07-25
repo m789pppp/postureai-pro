@@ -187,7 +187,7 @@ function FallbackCard({ score, isAr }) {
 }
 
 // ── Main component ────────────────────────────────────────────────
-export function ShareCard({ score, sessions, avgScore, streak, name, lang, onClose }) {
+export function ShareCard({ score, sessions, avgScore, streak, name, lang, onClose, addToast }) {
   const canvasRef  = useRef(null);
   const [copied,   setCopied]   = useState(false);
   const [sharing,  setSharing]  = useState(false);
@@ -216,7 +216,11 @@ export function ShareCard({ score, sessions, avgScore, streak, name, lang, onClo
 
   const download = () => {
     const url = getDataURL();
-    if (!url) { alert(isAr ? "تعذّر تصدير الصورة" : "Could not export image"); return; }
+    if (!url) {
+      const msg = isAr ? "تعذّر تصدير الصورة" : "Could not export image";
+      if (addToast) addToast(msg, "error"); else alert(msg);
+      return;
+    }
     const a  = document.createElement("a");
     a.href   = url;
     a.download = `corvus-score-${score}.png`;

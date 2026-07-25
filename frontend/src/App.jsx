@@ -3460,7 +3460,7 @@ export default function App(){
     } catch (err) {
       if (err.code !== "auth/popup-closed-by-user") {
         console.error("Switch account error:", err);
-        addToast(isAr ? `خطأ في التبديل: ${err.message}` : `Switch error: ${err.message}`, "error");
+        addToast(isAr ? "تعذر تبديل الحساب — جرب تاني" : "Couldn't switch accounts — try again", "error");
       }
     }
   }
@@ -3485,7 +3485,10 @@ export default function App(){
       addToast(isAr?`✅ الرابط جاهز — تم النسخ! (صالح 30 يوم)`:`✅ Link ready — copied! (expires in 30 days)`,"success");
       // Also open the report in a new tab
       window.open(url,"_blank","noopener");
-    } catch(e) { addToast(`Share error: ${e.message}`,"error"); }
+    } catch(e) {
+      console.error("[Share]", e);
+      addToast(isAr?"تعذر إنشاء الرابط — جرب تاني":"Couldn't create the link — try again","error");
+    }
   }
 
   async function downloadLongitudinalPDF() {
@@ -3504,7 +3507,7 @@ export default function App(){
       addToast(isAr?"✅ تم تحميل التقرير الطولي":"✅ Longitudinal PDF downloaded","success");
     } catch(e) {
       console.error("[Longitudinal PDF]", e);
-      addToast(`Longitudinal PDF error: ${e.message || e}`, "error");
+      addToast(isAr?"تعذر إنشاء التقرير الطولي — جرب تاني":"Couldn't generate the longitudinal report — try again", "error");
     }
   }
 
@@ -3524,7 +3527,7 @@ export default function App(){
       addToast(isAr?"✅ تم تحميل تقرير المقارنة":"✅ Comparison PDF downloaded","success");
     } catch(e) {
       console.error("[Comparison PDF]", e);
-      addToast(`Comparison PDF error: ${e.message || e}`, "error");
+      addToast(isAr?"تعذر إنشاء تقرير المقارنة — جرب تاني":"Couldn't generate the comparison report — try again", "error");
     }
   }
 
@@ -3543,7 +3546,10 @@ export default function App(){
       const teamUsers = allUsers.map(u => ({ ...u, last_session: u.last_session_at || u.last_session }));
       await generateTeamPDF({ users: teamUsers, company: profile?.company||profile?.company_name||(isAr?"الشركة":"Company"), dateRange: 30, profile, lang: isAr?"ar":"en" });
       addToast(isAr?"✅ تم تحميل تقرير الفريق":"✅ Team PDF downloaded","success");
-    } catch(e) { addToast(`Team PDF error: ${e.message}`,"error"); }
+    } catch(e) {
+      console.error("[Team PDF]", e);
+      addToast(isAr?"تعذر إنشاء تقرير الفريق — جرب تاني":"Couldn't generate the team report — try again","error");
+    }
   }
 
 async function downloadPDF(sessionOverride, isClinical=false){
@@ -3646,7 +3652,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         : (isAr?"✅ تم تحميل الـ PDF":"✅ PDF downloaded"), "success");
     }catch(err){
       console.error("PDF error:",err);
-      addToast(isAr?`خطأ PDF: ${err.message}`:`PDF error: ${err.message}`,"error");
+      addToast(isAr?"تعذر تحميل الـ PDF — جرب تاني":"Couldn't download the PDF — try again","error");
     }
   }
 
@@ -4195,7 +4201,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   if(page==="home") return(
     <ErrorBoundary key="page-home">
       {/* ── ALL MODALS — shown on home page too ────────────────── */}
-      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
+      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
       {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={async()=>{
         setShowOnboard(false);
         // Persist skip so wizard never shows again on next login
@@ -4383,7 +4389,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showShareCard&&shareCardData&&(
       <ShareCard score={shareCardData.score} grade={shareCardData.grade}
         streak={shareCardData.streak||0} percentile={null}
-        lang={lang} cs={cs} onClose={()=>setShowShareCard(false)}/>
+        lang={lang} cs={cs} addToast={addToast} onClose={()=>setShowShareCard(false)}/>
     )}
     {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
       {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}

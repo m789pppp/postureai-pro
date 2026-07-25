@@ -15,7 +15,7 @@ import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 const API = API_BASE_URL;
 
 // ── Company Setup Wizard ──────────────────────────────────────────
-export function CompanyOnboarding({ profile, cs, lang = "en", onComplete }) {
+export function CompanyOnboarding({ profile, cs, lang = "en", onComplete, addToast }) {
   const [step,    setStep]    = useState(1); // 1=info, 2=depts, 3=invite, 4=done
   const [company, setCompany] = useState({ name: "", industry: "", size: "", website: "", country: "Egypt" });
   const [depts,   setDepts]   = useState([{ name: "Engineering", manager: "" }, { name: "HR", manager: "" }]);
@@ -85,7 +85,8 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete }) {
     } catch (e) {
       console.error("[CompanyOnboard] createCompany failed:", e);
       // Show user-friendly error instead of silent fail
-      alert(lang === "ar" ? "حدث خطأ أثناء إنشاء الشركة، حاول مرة أخرى" : "Failed to create company — please try again");
+      const msg = lang === "ar" ? "حدث خطأ أثناء إنشاء الشركة، حاول مرة أخرى" : "Failed to create company — please try again";
+      if (addToast) addToast(msg, "error"); else alert(msg);
     }
     finally { setLoading(false); }
   };
@@ -105,7 +106,8 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete }) {
   const saveStep3 = async () => {
     // FIX M-04: guard against null companyId — step 1 must have succeeded
     if (!companyId) {
-      alert(lang === "ar" ? "لم يتم إنشاء الشركة بعد — عد للخطوة الأولى" : "Company not created yet — please go back to step 1");
+      const msg = lang === "ar" ? "لم يتم إنشاء الشركة بعد — عد للخطوة الأولى" : "Company not created yet — please go back to step 1";
+      if (addToast) addToast(msg, "warn"); else alert(msg);
       setStep(1); return;
     }
     setLoading(true);
