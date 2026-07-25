@@ -15,6 +15,7 @@ import time
 import hashlib
 import threading
 import functools
+from datetime import datetime, timezone
 from flask import request, jsonify, g
 
 # ── Firebase Admin SDK init ────────────────────────────────────────
@@ -238,6 +239,35 @@ def _get_user_role(uid: str) -> dict:
                     "_exp":          time.time() + PROFILE_TTL,
                     "_uid":          uid,
                 }
+
+                # ── Subscription-expiry enforcement ────────────────────
+                # Kashier (the primary payment gateway) has no native
+                # recurring subscription concept — a payment just sets
+                # tier + subscription_expiry once. Nothing anywhere ever
+                # checked that timestamp again, so once a user paid,
+                # their paid tier never actually expired even if they
+                # never paid again. There's no cron/scheduler in this
+                # project, so this is checked lazily here — this function
+                # already runs on every authenticated request (cached for
+                # PROFILE_TTL seconds), so it's a natural, low-cost place
+                # to enforce it without new infrastructure.
+                expiry_raw = data.get("subscription_expiry")
+                if (not role_data["is_trial"]) and expiry_raw and role_data["tier"] not in ("standard", "free"):
+                    try:
+                        expiry_dt = datetime.fromisoformat(str(expiry_raw).replace("Z", "+00:00"))
+                        if expiry_dt.tzinfo is None:
+                            expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+                        if expiry_dt < datetime.now(timezone.utc):
+                            role_data["tier"] = "standard"
+                            try:
+                                db.collection("users").document(uid).update({
+                                    "tier": "standard",
+                                    "subscription_status": "expired",
+                                })
+                            except Exception as _dg_err:
+                                print(f"[auth] subscription-expiry downgrade write failed for {uid}: {_dg_err}", file=sys.stderr)
+                    except Exception as _exp_err:
+                        print(f"[auth] subscription_expiry parse error for {uid}: {_exp_err}", file=sys.stderr)
 
                 # ── Domain / email auto-elevation ──────────────────────
                 # Elevate to elite if the user's email qualifies.
