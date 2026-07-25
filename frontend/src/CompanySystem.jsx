@@ -99,7 +99,16 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete, addToa
         await createDepartment({ name: dept.name.trim(), manager: dept.manager, company_id: companyId });
       }
       setStep(3);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("[CompanyOnboard] createDepartment failed:", e);
+      const msg = lang === "ar"
+        ? "تعذر حفظ بعض الأقسام — ممكن تضيفهم تاني بعدين من لوحة HR"
+        : "Couldn't save some departments — you can add them again later from the HR panel";
+      if (addToast) addToast(msg, "error"); else alert(msg);
+      // Same reasoning as saveStep3: don't strand the user on this step for
+      // a non-critical piece (departments) when the company itself exists.
+      setStep(3);
+    }
     finally { setLoading(false); }
   };
 
@@ -122,6 +131,14 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete, addToa
       setStep(4);
     } catch (e) {
       console.error("[CompanyOnboard] bulkInvite failed:", e);
+      const msg = lang === "ar"
+        ? "تعذر إرسال دعوات الموظفين — الشركة اتعملت بنجاح، بس محتاج تبعت الدعوات تاني من لوحة HR"
+        : "Couldn't send the employee invites — your company was created successfully, but you'll need to invite your team again from the HR panel";
+      if (addToast) addToast(msg, "error"); else alert(msg);
+      // Don't strand the user on step 3 with a dead spinner — the company
+      // itself was created fine (step 1 already succeeded), so let them
+      // finish onboarding and invite teammates later from HRPanel instead.
+      setStep(4);
     }
     finally { setLoading(false); }
   };
