@@ -2676,6 +2676,12 @@ export default function App(){
           let p = null;
           try { p = await getUserProfile(u.uid); } catch(e){ console.warn("[Auth] profile:",e?.code); }
 
+          // Real login tracking — feeds ChurnPrediction's health score
+          // (login recency, 25% weight — the single biggest factor). Nothing
+          // anywhere wrote this before, so every customer was scored as if
+          // they hadn't logged in for 30 days, regardless of actual activity.
+          try { updateUserProfile(u.uid, { last_login_at: new Date().toISOString() }); } catch{}
+
           if(!p){
             // Profile might not be written yet (race with AuthPage signup) — wait & retry once
             await new Promise(r=>setTimeout(r,1200));
