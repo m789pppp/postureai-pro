@@ -90,6 +90,50 @@
       "dest": "/api/notify/dispatch.js"
     },
     {
+      "src": "/api/auth/mfa/totp/setup",
+      "dest": "/api/auth/mfa.js"
+    },
+    {
+      "src": "/api/auth/mfa/totp/verify",
+      "dest": "/api/auth/mfa.js"
+    },
+    {
+      "src": "/api/auth/mfa/sms/send",
+      "dest": "/api/auth/mfa.js"
+    },
+    {
+      "src": "/api/auth/mfa/sms/verify",
+      "dest": "/api/auth/mfa.js"
+    },
+    {
+      "src": "/api/auth/mfa/disable",
+      "dest": "/api/auth/mfa.js"
+    },
+    {
+      "src": "/api/auth/mfa/backup-codes/regenerate",
+      "dest": "/api/auth/mfa.js"
+    },
+    {
+      "src": "/api/auth/mfa/login-verify",
+      "dest": "/api/auth/mfa.js"
+    },
+    {
+      "src": "/api/org/invite/accept",
+      "dest": "/api/org/invite.js"
+    },
+    {
+      "src": "/api/org/invite/consent",
+      "dest": "/api/org/invite.js"
+    },
+    {
+      "src": "/api/employee/consent",
+      "dest": "/api/org/invite.js"
+    },
+    {
+      "src": "/api/org/create-invite",
+      "dest": "/api/org/invite.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
@@ -109,6 +153,12 @@
       "maxDuration": 30
     },
     "api/notify/dispatch.js": {
+      "maxDuration": 15
+    },
+    "api/auth/mfa.js": {
+      "maxDuration": 15
+    },
+    "api/org/invite.js": {
       "maxDuration": 15
     }
   }
