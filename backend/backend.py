@@ -13632,6 +13632,7 @@ ACHIEVEMENTS = [
 @limiter.limit("60 per minute")
 def compute_gamification():
     try:
+        db            = firestore.client()
         data          = request.get_json(force=True) or {}
         sessions_n    = int(data.get("sessions_count", 0))
         avg_score     = int(data.get("avg_score", 0))
@@ -13687,6 +13688,19 @@ def compute_gamification():
             "label_ar":        "حافظ على 75+ لمدة 30 دقيقة",
             "xp_reward":       50,
         }
+
+        # Persist newly-earned achievements so they aren't re-shown as "new"
+        # on every future visit. Previously this endpoint was fully
+        # stateless — existing_ach came from profile.achievements, which no
+        # frontend code ever wrote — so every qualifying achievement was
+        # returned as new_achievements on literally every call.
+        if new_achievements:
+            try:
+                db.collection("users").document(g.uid).set(
+                    {"achievements": all_earned}, merge=True
+                )
+            except Exception as e:
+                print(f"[gamification] failed to persist achievements uid={g.uid}: {e}", file=sys.stderr)
 
         return jsonify({
             "xp":                xp,
