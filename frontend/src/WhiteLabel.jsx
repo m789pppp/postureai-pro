@@ -2,7 +2,8 @@
  * WhiteLabel.jsx — Corvus Phase 12
  * Complete white-label configuration: branding, domain, colors, emails, login page
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { BrandingAPI } from "./services/api.js";
 
 const DEFAULT_CONFIG = {
   companyName: "Corvus",
@@ -42,15 +43,41 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
   const [config, setConfig] = useState({ ...DEFAULT_CONFIG, companyName: profile?.company || "Corvus" });
   const [tab, setTab] = useState("branding");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
   const logoRef = useRef();
   const faviconRef = useRef();
 
+  useEffect(() => {
+    let cancelled = false;
+    BrandingAPI.get()
+      .then(d => {
+        if (cancelled) return;
+        const saved = d?.branding || {};
+        if (Object.keys(saved).length) {
+          setConfig(prev => ({ ...prev, ...saved }));
+        }
+      })
+      .catch(() => {}) // no saved config yet, or not authorized — keep defaults
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
 
-  const save = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const save = async () => {
+    setSaving(true); setSaveError("");
+    try {
+      await BrandingAPI.save(config);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      setSaveError(e?.message || "Couldn't save — try again");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const applyPreset = (t) => {
@@ -109,9 +136,10 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
               <button onClick={() => setPreviewMode(p => !p)} style={{ background: previewMode ? "rgba(139,92,246,0.15)" : "transparent", border: `1px solid ${previewMode ? "#8b5cf6" : cs.border}`, color: previewMode ? "#8b5cf6" : cs.text, borderRadius: 10, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
                 {previewMode ? "✓ Preview On" : "👁 Preview"}
               </button>
-              <button onClick={save} style={{ background: saved ? "#10b981" : "linear-gradient(135deg,#8b5cf6,#ec4899)", border: "none", color: "#fff", borderRadius: 10, padding: "8px 20px", cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "background .3s" }}>
-                {saved ? "✓ Saved!" : "Save Changes"}
+              <button onClick={save} disabled={saving} style={{ background: saved ? "#10b981" : "linear-gradient(135deg,#8b5cf6,#ec4899)", border: "none", color: "#fff", borderRadius: 10, padding: "8px 20px", cursor: saving?"default":"pointer", fontWeight: 700, fontSize: 13, transition: "background .3s", opacity: saving?0.7:1 }}>
+                {saving ? "Saving..." : saved ? "✓ Saved!" : "Save Changes"}
               </button>
+              {saveError && <div style={{ color:"#ef4444", fontSize:12, alignSelf:"center" }}>{saveError}</div>}
               <button onClick={onClose} style={{ background: "rgba(255,255,255,0.07)", border: `1px solid ${cs.border}`, color: cs.text, borderRadius: 10, padding: "8px 14px", cursor: "pointer", fontSize: 13 }} aria-label="Close">✕</button>
             </div>
           </div>
