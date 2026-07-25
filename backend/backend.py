@@ -6256,78 +6256,13 @@ def update_tenant(org_id):
 
 
 # ── Usage Metering ────────────────────────────────────────────────────
-
-
-@app.route("/api/billing/usage/summary", methods=["GET"])
-@require_auth
-def usage_summary():
-    """Return current month's metered usage for a user/org."""
-    try:
-        db  = firestore.client()
-        uid = g.uid
-        now = datetime.utcnow()
-        cycle_start = now.replace(day=1,hour=0,minute=0,second=0,microsecond=0)
-
-        ref  = db.collection("usage").document(f"{uid}_{cycle_start.strftime('%Y%m')}")
-        snap = ref.get()
-        usage = snap.to_dict() if snap.exists else {}
-
-        # Plan limits
-        user = db.collection("users").document(uid).get().to_dict() or {}
-        plan = user.get("plan","starter")
-        LIMITS = {
-            "starter":    {"analysis_frames":10000,"ai_reports":50,"api_calls":5000,"pdf_exports":20,"seats":10,"storage_gb":5},
-            "growth":     {"analysis_frames":50000,"ai_reports":200,"api_calls":25000,"pdf_exports":100,"seats":30,"storage_gb":20},
-            "scale":      {"analysis_frames":250000,"ai_reports":1000,"api_calls":150000,"pdf_exports":500,"seats":100,"storage_gb":100},
-            "enterprise": {"analysis_frames":-1,"ai_reports":-1,"api_calls":-1,"pdf_exports":-1,"seats":-1,"storage_gb":-1},
-        }
-        limits = LIMITS.get(plan, LIMITS["starter"])
-        rates  = {"analysis_frames":0.002,"ai_reports":0.15,"api_calls":0.0004,"pdf_exports":0.05,"seats":4.0,"storage_gb":0.08}
-
-        meters = {}
-        overage_total = 0.0
-        for meter, limit in limits.items():
-            used = usage.get(meter, 0)
-            over = max(0, used - limit) if limit >= 0 else 0
-            cost = round(over * rates.get(meter,0), 2)
-            overage_total += cost
-            meters[meter] = {"used":used,"included":limit,"overage":over,"overage_cost":cost}
-
-        return jsonify({
-            "ok":True,"plan":plan,"cycle_start":cycle_start.isoformat(),
-            "meters":meters,"overage_total":round(overage_total,2),
-            "base_price":{"starter":0,"growth":49,"scale":199,"enterprise":0}.get(plan,0),
-        })
-    except Exception as e:
-        return jsonify({"error":str(e)}),500
-
-
-
-
-@app.route("/api/billing/usage/meter", methods=["POST"])
-@require_auth
-def meter_usage():
-    """Increment a usage meter (called internally by other routes)."""
-    try:
-        db   = firestore.client()
-        data = request.get_json(force=True) or {}
-        uid  = g.uid
-        now  = datetime.utcnow()
-        cycle_key = f"{uid}_{now.strftime('%Y%m')}"
-        meter = data.get("meter","api_calls")
-        qty   = int(data.get("qty",1))
-
-        allowed_meters = ["analysis_frames","ai_reports","api_calls","pdf_exports","seats","storage_gb"]
-        if meter not in allowed_meters:
-            return jsonify({"error":"invalid meter"}),400
-
-        db.collection("usage").document(cycle_key).set(
-            {meter: firestore.Increment(qty), "uid":uid, "updated_at":now.isoformat()},
-            merge=True
-        )
-        return jsonify({"ok":True,"meter":meter,"qty":qty})
-    except Exception as e:
-        return jsonify({"error":str(e)}),500
+# (This used to be a second usage-tracking system — /summary + /meter,
+# Firestore-backed, with its own plan/limit table using old tier names.
+# It looked like the real thing but nothing anywhere ever called /meter
+# to increment it, so it would only ever report zero usage. The actual,
+# live system — used for real session-limit enforcement, not just
+# display — is /api/billing/usage below, Redis-backed. Removed 2026-07-25
+# rather than wire a UI to a meter that was never fed any data.)
 
 
 # ── Referral System ───────────────────────────────────────────────────
@@ -15780,6 +15715,44 @@ def billing_analytics():
 
 
 # ── Invoice PDF generator ────────────────────────────────────────
+# ── Payment history (real, per-user) ──────────────────────────────
+@app.route("/api/billing/payments", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def billing_payments():
+    """List the current user's real payment history — reads
+    users/{uid}/payments, which api/kashier/webhook.js writes to on
+    every confirmed payment. Shaped for direct use with
+    /api/billing/invoice/pdf below (ref_code, user_name, user_email,
+    payment_method_name added here so the frontend doesn't have to)."""
+    try:
+        db   = firestore.client()
+        uid  = g.uid
+        user = db.collection("users").document(uid).get().to_dict() or {}
+        docs = db.collection("users").document(uid).collection("payments") \
+                 .order_by("created_at", direction=firestore.Query.DESCENDING).limit(100).stream()
+        method_names = {"kashier":"Kashier","paymob":"PayMob","manual":"Manual/Bank Transfer"}
+        status_map   = {"success":"confirmed"}  # Kashier webhook writes "success"; the
+                                                  # billing UI's vocabulary is confirmed/pending/rejected/failed
+        payments = []
+        for d in docs:
+            p = d.to_dict()
+            payments.append({
+                **p,
+                "id":                  d.id,
+                "uid":                 uid,
+                "ref_code":            d.id,
+                "status":              status_map.get(p.get("status",""), p.get("status","")),
+                "user_name":           user.get("name",""),
+                "user_email":          user.get("email",""),
+                "billing_cycle":       p.get("billing",""),
+                "payment_method_name": method_names.get(p.get("payment_method",""), p.get("payment_method","")),
+            })
+        return jsonify({"ok":True, "payments":payments})
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
+
+
 @app.route("/api/billing/invoice/pdf", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")

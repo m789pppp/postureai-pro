@@ -20,7 +20,7 @@ const CHANGELOG = [
       { type: "new",        text: "POST /api/admin/users/bulk-import — HR CSV import" },
       { type: "new",        text: "GET  /api/ai/usage — AI meter tracking per plan" },
       { type: "improved",   text: "POST /api/analyze — Result HMAC signing added (_sig field)" },
-      { type: "improved",   text: "POST /api/billing/usage/meter — Stripe metered billing integrated" },
+      { type: "improved",   text: "GET /api/billing/usage & /api/billing/payments — real usage limits and invoice history" },
     ],
   },
   {
