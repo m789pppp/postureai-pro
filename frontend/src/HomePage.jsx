@@ -173,7 +173,7 @@ function TierBadge({ tier }) {
 }
 
 // ─── Analytics Inline Section ─────────────────────────────────────
-function AnalyticsInline({ userSessions = [], cs, isAr, tier, onOpenFull, onCompare, onTrend }) {
+function AnalyticsInline({ userSessions = [], profile, cs, isAr, tier, onOpenFull, onCompare, onTrend }) {
   const hasData = userSessions.length > 0;
 
   // Compute per-day averages for last 14 days
@@ -255,7 +255,7 @@ function AnalyticsInline({ userSessions = [], cs, isAr, tier, onOpenFull, onComp
               { label:isAr?"أفضل نتيجة":"Best Score", val:best||"—", col:"#10b981" },
               { label:isAr?"أسوأ نتيجة":"Worst Score", val:worst||"—", col:"#ef4444" },
               { label:isAr?"الاتجاه":"Trend", val:trend>0?`+${trend}`:trend===0?"—":trend, col:trend>0?"#10b981":trend<0?"#ef4444":"#64748b" },
-              { label:isAr?"إجمالي الجلسات":"Sessions", val:userSessions.length, col:"#a855f7" },
+              { label:isAr?"إجمالي الجلسات":"Sessions", val:profile?.sessions_count||userSessions.length, col:"#a855f7" },
             ].map((k,i)=>(
               <div key={i} style={{ padding:"12px 14px",
                 borderRight:i<3?`1px solid ${cs.border}`:"none",
@@ -337,7 +337,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
   setShowMRR, setShowChangelog, setShowNotificationsHub, setShowEnterpriseRBAC }) {
 
   const last   = userSessions[0]?.avg_score||0;
-  const avg    = userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0;
+  const avg    = profile?.avg_score || (userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0);
   const month  = userSessions.filter(s=>{ const d=s.created_at?.toDate?.()??new Date(s.created_at||0); const n=new Date(); return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear(); }).length;
   const streak = profile?.streak_days||0;
   const pro    = isPro(tier);
@@ -422,7 +422,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 
       {/* Analytics section — inline rich view */}
       <AnalyticsInline
-        userSessions={userSessions} cs={cs} isAr={isAr} tier={tier}
+        userSessions={userSessions} profile={profile} cs={cs} isAr={isAr} tier={tier}
         onOpenFull={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}
         onCompare={userSessions.length>=2?()=>{getUserSessions(user.uid).then(setUserSessions);setShowSessionComparison(true);}:null}
         onTrend={userSessions.length>=3?()=>{getUserSessions(user.uid).then(setUserSessions);setShowTrendChart(true);}:null}
@@ -477,7 +477,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 // ══════════════════════════════════════════════════════════════════
 function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage, startCamera, onCoach }) {
   const last   = userSessions[0]?.avg_score||0;
-  const avg    = userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0;
+  const avg    = profile?.avg_score || (userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0);
   const streak = profile?.streak_days||0;
   const rank   = useMemo(()=>{
     if(!allUsers?.length) return null;
@@ -523,7 +523,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
         <StatCard label={isAr?"متوسطك":"Your Avg"} value={avg||"—"} color="#3b82f6" cs={cs}/>
         <StatCard label={isAr?"التواصل":"Streak"} value={streak?`${streak}d`:"—"} color="#10b981" cs={cs}/>
         {rank&&<StatCard label={isAr?"ترتيبك":"Rank"} value={`#${rank.pos}`} sub={`of ${rank.total}`} color="#f59e0b" cs={cs}/>}
-        <StatCard label={isAr?"الجلسات":"Sessions"} value={userSessions.length||"—"} color="#a855f7" cs={cs}/>
+        <StatCard label={isAr?"الجلسات":"Sessions"} value={profile?.sessions_count||userSessions.length||"—"} color="#a855f7" cs={cs}/>
       </div>
 
       {userSessions.length>0&&(
