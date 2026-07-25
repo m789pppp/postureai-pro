@@ -783,6 +783,24 @@ function runAnalysis(prompt,sp) {
   }
 }
 
+async function _offlineStream(messages, systemPrompt, onChunk) {
+  const d    = parseData(systemPrompt);
+  const hist = analyzeHistory(messages);
+  const last = [...messages].reverse().find(m => m.role === "user");
+  const intent = detectIntent(last?.content || "");
+  const full   = buildResponse(intent, last?.content || "", d, hist);
+
+  // Simulate token-by-token streaming so onChunk UI stays alive
+  const words = full.split(" ");
+  let acc = "";
+  for (let i = 0; i < words.length; i++) {
+    acc += (i === 0 ? "" : " ") + words[i];
+    onChunk(acc);
+    await new Promise(r => setTimeout(r, 12));
+  }
+  return full;
+}
+
 async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, signal) {
   // ── 1. Pollinations streaming (primary) ──────────────────────────
   const allMsgs = [
