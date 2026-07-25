@@ -340,13 +340,13 @@ export function AICoach({ profile, sessions=[], calibration, cs, lang="en", effe
       });
     });
     const topAlerts=Object.entries(ac).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k])=>k);
-    const avgScore=avg(scores);
+    const avgScore=profile?.avg_score||avg(scores);
     const fatigue=Math.min(100,Math.max(0,Math.round((100-wAvg)*.6+(sessions?.length<5?30:10))));
     const neck=Math.min(100,Math.round(100-avgScore+(avgScore<60?20:0)));
     const burnout=Math.min(100,Math.round(fatigue*.8+(thisWk.length>5?15:0)));
     return {
       avg_score:avgScore,week_avg:wAvg,last_week_avg:lAvg,trend_pct:trendPct,
-      sessions_count:sessions?.length||0,week_sessions:thisWk.length,
+      sessions_count:profile?.sessions_count||sessions?.length||0,week_sessions:thisWk.length,
       has_calibration:!!calibration,tier:_tier,neck_risk:neck,
       fatigue_score:fatigue,burnout_risk:burnout,streak_days:profile?.streak_days||0,
       user_name:profile?.name?.split(" ")[0]||"",top_alerts:topAlerts,
