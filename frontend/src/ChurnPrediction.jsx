@@ -20,15 +20,16 @@ const CP_TOKENS = {
 };
 
 // ── Health score calculator ─────────────────────────────────────────
-// STATUS (see git history for the full audit): last_login_at and
-// payment_ok are now real, tracked fields (login on every sign-in;
-// payment_ok set by the Stripe/PayMob/Kashier success & failure webhook
-// handlers) — that's 40% of the weight below on genuine signal.
-// sessions_this_month, score_trend_30d, and features_used are still
-// undefined on every user document — those 3 inputs (35% of the weight)
-// remain flagged, not fixed: they need either a scheduled aggregation job
-// or a dedicated backend endpoint that computes them from real session
-// history, not something to patch here without that infrastructure.
+// STATUS (see git history for the full audit): all 6 inputs are now
+// backed by real data. last_login_at: written on every sign-in.
+// payment_ok: written directly by the Stripe/PayMob webhook handlers on
+// actual payment success/failure (primary signal here), with a
+// subscription_status/expiry-based fallback for accounts with no
+// payment event yet. sessions_this_month & score_trend_30d: tracked in
+// saveSession() (firebase.js), keyed/anchored by calendar month/30-day
+// window respectively. features_used: derived from real adoption
+// signals (calibration, referrals, AI Coach/PDF usage this month)
+// rather than a literal single tracked counter.
 function calcHealth(u) {
   const now    = Date.now();
   const msDay  = 86400000;
@@ -57,15 +58,18 @@ function calcHealth(u) {
     (u.pdf_exports_this_month > 0 ? 1 : 0);
   const featScore  = Math.min(100, features * 15);
 
-  // Payment history — payment_ok was never written anywhere either.
-  // subscription_status/subscription_expiry ARE real (set by the Kashier
-  // webhook, already relied on elsewhere for tier gating) — a trial user
-  // isn't a payment problem, but an expired non-trial subscription is.
+  // Payment history — payment_ok is now a real field: the Stripe and
+  // PayMob webhook handlers write it directly from actual payment
+  // success/failure events (see backend.py). Prefer that authoritative
+  // signal; fall back to inferring from subscription_status/expiry only
+  // for accounts that haven't had a payment event since that fix shipped
+  // (e.g. free-tier users, or a Kashier-only subscription with no
+  // Stripe/PayMob event yet).
   const isExpired = !u.is_trial && u.subscription_status === "expired";
   const isPastDue = !u.is_trial && u.subscription_expiry
     ? new Date(u.subscription_expiry) < new Date() && u.subscription_status !== "active"
     : false;
-  const paymentOk  = !isExpired && !isPastDue;
+  const paymentOk  = u.payment_ok !== undefined ? u.payment_ok !== false : (!isExpired && !isPastDue);
   const payScore   = paymentOk ? 100 : 40;
 
   const health = Math.round(
