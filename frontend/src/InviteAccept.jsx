@@ -20,7 +20,7 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
   const isAr = lang === "ar";
 
   useEffect(() => {
-    if (!token) { setStatus("error"); setErr("No invite token"); return; }
+    if (!token) { setStatus("error"); setErr(isAr ? "رابط الدعوة غير صحيح" : "Invalid invite link"); return; }
     loadInvite();
   }, [token]);
 
@@ -42,8 +42,9 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
       setInvite({ id: token, ...data });
       setStatus("found");
     } catch (e) {
+      console.error("[InviteAccept] loadInvite failed:", e.message);
       setStatus("error");
-      setErr(e.message);
+      setErr(isAr ? "تعذر تحميل الدعوة. حاول تاني بعد لحظات" : "Couldn't load this invite. Please try again in a moment");
     }
   }
 
@@ -85,8 +86,9 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
 
       setStatus("consent"); // Show consent screen before redirecting
     } catch (e) {
+      console.error("[InviteAccept] acceptInvite failed:", e.message);
       setStatus("error");
-      setErr(e.message);
+      setErr(isAr ? "تعذر قبول الدعوة. حاول تاني بعد لحظات أو اطلب رابط دعوة جديد" : "Couldn't accept this invite. Please try again in a moment, or ask for a new invite link");
     }
   }
 
