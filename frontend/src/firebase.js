@@ -498,11 +498,16 @@ export async function saveSession(uid, data) {
 }
 
 export async function getUserSessions(uid) {
-  // Simple query — no orderBy, no composite index needed
-  // Sort client-side instead
+  // BUG FIX: this used to have no orderBy, with a comment saying "sort
+  // client-side instead" — but that doesn't work: limit(50) truncates to
+  // whatever arbitrary-order subset Firestore returns BEFORE any
+  // client-side sort runs, so sorting afterward can't recover the true
+  // most-recent-50 from an already-wrong subset. Same fix and same
+  // existing composite index as onUserSessions() above.
   const q = query(
     collection(db,"sessions"),
     where("uid","==",uid),
+    orderBy("created_at","desc"),
     limit(50)
   );
   const snaps = await getDocs(q);
@@ -521,9 +526,17 @@ export async function deleteSession(sessionId) {
 
 // Real-time listener version — keeps sessions always fresh
 export function onUserSessions(uid, callback) {
+  // BUG FIX: this query had no orderBy, so Firestore's limit(50) returned
+  // an arbitrary/undefined-order subset of matching docs — not necessarily
+  // the 50 most recent sessions. Any user with more than 50 total sessions
+  // could have been looking at stale/old data across Session History,
+  // Season Progress, and dashboard stats instead of their recent activity.
+  // The composite index this needs (uid ASC + created_at DESC) already
+  // existed in firestore.indexes.json — it just wasn't being used.
   const q = query(
     collection(db,"sessions"),
     where("uid","==",uid),
+    orderBy("created_at","desc"),
     limit(50)
   );
   return onSnapshot(q, snap => {
