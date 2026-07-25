@@ -1037,6 +1037,7 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
+  onBillingHistory, onReferral, onIntegrations,
   lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
@@ -1331,6 +1332,36 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
         </div>
       )}
 
+      {tab==="profile"&&(
+        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px", marginTop:16 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:14 }}>
+            {isAr?"النمو والتكاملات":"Growth & Integrations"}
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <button onClick={onReferral} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
+              <span style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontSize:18 }}>🤝</span>
+                <span>
+                  <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"برنامج الإحالة":"Referral Program"}</div>
+                  <div style={{ fontSize:11, color:cs.muted }}>{isAr?"اكسب رصيد لما أصحابك يشتركوا":"Earn credit when friends sign up"}</div>
+                </span>
+              </span>
+              <span style={{ color:cs.muted }}>›</span>
+            </button>
+            <button onClick={onIntegrations} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
+              <span style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontSize:18 }}>🔌</span>
+                <span>
+                  <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"التكاملات":"Integrations"}</div>
+                  <div style={{ fontSize:11, color:cs.muted }}>Slack, Teams, Zapier, Webhooks…</div>
+                </span>
+              </span>
+              <span style={{ color:cs.muted }}>›</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tab: Accounts */}
       {tab==="accounts"&&(
         <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
@@ -1441,6 +1472,13 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             </div>
             <TierBadge tier={tier}/>
           </div>
+          <button onClick={onBillingHistory} style={{ width:"100%", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+            <span style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:18 }}>📄</span>
+              <span style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"الفواتير والاستخدام":"Invoices & Usage"}</span>
+            </span>
+            <span style={{ color:cs.muted }}>›</span>
+          </button>
           {!isPro(tier)&&(
             <>
               {/* ── Upgrade Plans ── */}
@@ -2354,6 +2392,7 @@ export default function HomePage({
   setShowMultiTenant, setShowAuditSystem,
   setShowPredictiveAI, setShowMRR, setShowChangelog,
   setShowNotificationsHub, setShowEnterpriseRBAC,
+  setShowBillingDashboard, setShowReferralProgram, setShowIntegrationsHub,
   isAdmin, isHRAdmin, companyId,
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,
@@ -2445,6 +2484,9 @@ export default function HomePage({
     <PanelSettings user={user} profile={profile} setProfile={setProfile}
       cs={cs} isAr={isAr} addToast={addToast} onSignOut={handleSignOut}
       tier={tier} onBilling={openBilling}
+      onBillingHistory={()=>setShowBillingDashboard?.(true)}
+      onReferral={()=>setShowReferralProgram?.(true)}
+      onIntegrations={()=>setShowIntegrationsHub?.(true)}
       lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}
       AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}/>
   ) : null;
