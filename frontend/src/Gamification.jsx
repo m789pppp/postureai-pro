@@ -387,7 +387,7 @@ export function Leaderboard({ employees, companyName, cs, lang = "en" }) {
 }
 
 // ── Main Gamification Panel ───────────────────────────────────────
-export function GamificationPanel({ profile, sessions, calibration, employees, cs, lang = "en", onClose }) {
+export function GamificationPanel({ profile, sessions, calibration, employees, cs, lang = "en", onAchievementsUpdate, onClose }) {
   const [gamData, setGamData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab]         = useState("progress");
@@ -397,18 +397,31 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
   const t = T[lang] || T.en;
 
   useEffect(() => {
-    const avg  = sessions?.length ? Math.round(sessions.reduce((a,s) => a+(s.avg_score||0),0)/sessions.length) : 0;
+    // profile.avg_score is the true lifetime running average (see
+    // saveSession() in firebase.js); recomputing from `sessions` alone
+    // undercounts it for anyone with more than the 50-session fetch cap.
+    // Only fall back to the local recompute if the profile hasn't loaded
+    // an avg_score yet at all.
+    const avg = profile?.avg_score || (sessions?.length ? Math.round(sessions.reduce((a,s) => a+(s.avg_score||0),0)/sessions.length) : 0);
     apiFetch("/gamification/compute", {
       method: "POST",
       body: {
-        sessions_count:      sessions?.length || 0,
+        sessions_count:      profile?.sessions_count || sessions?.length || 0,
         avg_score:           avg,
         streak:              profile?.streak_days || 0,
         referral_count:      profile?.referral_count || 0,
         has_calibration:     !!calibration,
         earned_achievements: profile?.achievements || [],
       },
-    }).then(d => setGamData(d)).catch(() => {}).finally(() => setLoading(false));
+    }).then(d => {
+      setGamData(d);
+      // Backend now persists all_achievements to Firestore once something
+      // new is earned — mirror that into the in-memory profile too, so
+      // reopening this panel later in the *same* session (profile isn't
+      // live-subscribed, just fetched once at sign-in) doesn't keep
+      // re-showing the same achievements as newly unlocked.
+      if (d?.new_achievements?.length) onAchievementsUpdate?.(d.all_achievements);
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [profile, sessions, calibration]);
 
   const TABS = [t.progress, t.achievements, t.season, t.heatmap, t.leaderboard];

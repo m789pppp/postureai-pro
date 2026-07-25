@@ -43,7 +43,7 @@ export function clearTokenCache() {
 
 // ── Core fetch wrapper ─────────────────────────────────────────────
 export async function apiFetch(path, options = {}) {
-  const { timeout = DEFAULT_TIMEOUT, skipAuth = false, ...rest } = options;
+  const { timeout = DEFAULT_TIMEOUT, skipAuth = false, treat404AsDown = false, ...rest } = options;
   const controller = new AbortController();
   const timerId    = setTimeout(() => controller.abort(), timeout);
 
@@ -75,6 +75,9 @@ export async function apiFetch(path, options = {}) {
         });
         if (!retry.ok) {
           const err = await retry.json().catch(() => ({}));
+          if (retry.status === 404 && treat404AsDown) {
+            throw Object.assign(new Error("Backend unreachable — using local posture engine"), { isBackendDown: true, status: 404 });
+          }
           throw Object.assign(new Error(err.error || `HTTP ${retry.status}`), { status: retry.status, upgrade: err.upgrade });
         }
         return _parseJsonOrThrow(retry);
@@ -83,6 +86,13 @@ export async function apiFetch(path, options = {}) {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
+      // Some list endpoints (see e.g. MarketplaceAPI) opt into this: a 404
+      // there means "route not deployed yet on the backend", not "this
+      // specific resource doesn't exist" — so it's treated like
+      // isBackendDown and degrades to demo data instead of a raw "HTTP 404".
+      if (response.status === 404 && treat404AsDown) {
+        throw Object.assign(new Error("Backend unreachable — using local posture engine"), { isBackendDown: true, status: 404 });
+      }
       throw Object.assign(new Error(err.error || `HTTP ${response.status}`), {
         status:   response.status,
         upgrade:  err.upgrade,
@@ -284,7 +294,7 @@ export const MarketplaceAPI = {
   /** Patient-facing: browse active therapists, optional ?city=&specialty= filters. */
   listTherapists: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return apiFetch(`/marketplace/therapists${qs ? `?${qs}` : ""}`);
+    return apiFetch(`/marketplace/therapists${qs ? `?${qs}` : ""}`, { treat404AsDown: true });
   },
   /** Patient-facing: single therapist profile. */
   getTherapist:   (id)   => apiFetch(`/marketplace/therapists/${id}`),
@@ -293,7 +303,7 @@ export const MarketplaceAPI = {
   /** Patient-facing: create a booking request (opens a Kashier payment). */
   createBooking:  (data) => apiFetch("/marketplace/bookings",        { method: "POST", body: data }),
   /** Patient-facing: my own booking history. */
-  myBookings:     ()     => apiFetch("/marketplace/bookings"),
+  myBookings:     ()     => apiFetch("/marketplace/bookings", { treat404AsDown: true }),
 
   /** Admin: full therapist list (including paused). */
   adminListTherapists:  ()     => apiFetch("/admin/marketplace/therapists"),
