@@ -5236,7 +5236,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         <div style={{padding:"12px 14px 0"}}>
           {!camActive
             ? <button
-                onClick={cameraStatus==="no-device"||cameraStatus==="denied" ? undefined : startCamera}
+                onClick={cameraStatus==="requesting" ? undefined : startCamera}
                 disabled={cameraStatus==="requesting"}
                 style={{
                   width:"100%",
@@ -5250,7 +5250,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   fontSize:14, fontWeight:800,
                   color: cameraStatus==="no-device"||cameraStatus==="denied" ? "#fca5a5"
                     : cameraStatus==="requesting" ? cs.muted : "#fff",
-                  cursor: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied" ? "not-allowed" : "pointer",
+                  cursor: cameraStatus==="requesting" ? "not-allowed" : "pointer",
                   boxShadow: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied"
                     ? "none" : `0 4px 20px ${TN?.color||"#1a56db"}50`,
                   letterSpacing:"-.01em",
@@ -5259,9 +5259,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 {cameraStatus==="requesting"
                   ? <><span style={{animation:"spin 700ms linear infinite",display:"inline-block"}}>⟳</span> {isAr?"جاري الفتح...":"Opening camera..."}</>
                   : cameraStatus==="denied"
-                  ? (isAr?"❌ الكاميرا محظورة — اسمح من الإعدادات":"❌ Camera blocked — allow in settings")
+                  ? (isAr?"🔄 حاول تاني — لو سمحت للكاميرا":"🔄 Retry — if you've allowed the camera")
                   : cameraStatus==="no-device"
-                  ? (isAr?"❌ لا توجد كاميرا":"❌ No camera found")
+                  ? (isAr?"🔄 حاول تاني — لو وصّلت كاميرا":"🔄 Retry — if you've connected one")
                   : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
               </button>
             : <button onClick={stopCamera} style={{
