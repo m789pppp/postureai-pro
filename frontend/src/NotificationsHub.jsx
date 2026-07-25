@@ -955,23 +955,46 @@ function AlertsTab({ sessions=[], allUsers=[], isAr }) {
       severity:"warning", enabled:false, triggered:5, lastAt:"09 Jan 14:20" },
   ]);
 
-  const [aiOutput,  setAiOutput]  = useState("");
+  const [aiRules,   setAiRules]   = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError,   setAiError]   = useState("");
   const [addOpen,   setAddOpen]   = useState(false);
   const [newRule,   setNewRule]   = useState({ name:"", condition:"", action:"notify:in_app", severity:"warning" });
 
   const SC = { critical:C.red, high:C.amber, warning:"#fbbf24", info:C.blue };
 
   const generateRules = async () => {
-    setAiLoading(true); setAiOutput("");
+    setAiLoading(true); setAiRules([]); setAiError("");
     try {
       const avgScore = sessions.length
         ? Math.round(sessions.reduce((a,s)=>a+(s.avg_score||0),0)/sessions.length) : 72;
-      const prompt = `Generate 3 smart alert rules for Corvus PostureAI. Context: ${sessions.length} sessions, ${allUsers.length} employees, avg posture score ${avgScore}/100. Language: ${isAr?"Arabic":"English"}. Format each rule as: NAME | CONDITION | ACTION | SEVERITY (critical/high/warning/info) | RATIONALE`;
-      const t = await geminiAnalysis(prompt, { lang:isAr?"ar":"en", maxTokens:600 });
-      setAiOutput(t);
-    } catch { setAiOutput(isAr ? "⚠️ خطأ في التوليد — جرب مرة أخرى" : "⚠️ Generation failed — try again"); }
+      const prompt = `Generate exactly 3 smart alert rules for Corvus PostureAI workforce health platform.
+Context: ${sessions.length} sessions, ${allUsers.length} employees, avg posture score ${avgScore}/100.
+Respond ONLY with a valid JSON array (no markdown, no explanation):
+[
+  {
+    "name": "rule name (${isAr?"in Arabic":"in English"})",
+    "condition": "e.g. burnout_risk > 70 or avg_score < 55 or week_sessions < 2",
+    "action": "notify:slack,in_app",
+    "severity": "critical|high|warning|info",
+    "rationale": "one sentence why (${isAr?"in Arabic":"in English"})"
+  }
+]`;
+      const raw = await geminiAnalysis(prompt, { lang:isAr?"ar":"en", maxTokens:600 });
+      // Strip possible markdown fences
+      const clean = raw.replace(/^```json\s*/i,"").replace(/^```\s*/i,"").replace(/```\s*$/,"").trim();
+      const parsed = JSON.parse(clean);
+      if (Array.isArray(parsed)) setAiRules(parsed.slice(0,3));
+      else setAiError(isAr?"صيغة غير صحيحة":"Invalid format from AI");
+    } catch(e) {
+      setAiError(isAr ? "⚠️ خطأ في التوليد — جرب مرة أخرى" : "⚠️ Generation failed — try again");
+    }
     setAiLoading(false);
+  };
+
+  const addAiRule = (r) => {
+    setRules(p => [...p, { ...r, id:"ai_"+Date.now(), enabled:true, triggered:0, lastAt:"—" }]);
+    setAiRules(p => p.filter(x => x.name !== r.name));
   };
 
   const addRule = () => {
@@ -999,12 +1022,60 @@ function AlertsTab({ sessions=[], allUsers=[], isAr }) {
             {isAr ? "توليد" : "Generate"}
           </NBtn>
         </div>
-        {aiLoading && <Shimmer lines={4}/>}
-        {aiOutput && !aiLoading && (
-          <div style={{ background:"rgba(255,255,255,.03)", border:`1px solid ${C.border}`, borderRadius:10,
-            padding:"13px 15px", fontSize:12, color:C.text2, lineHeight:1.75, whiteSpace:"pre-wrap",
-            maxHeight:220, overflowY:"auto", animation:"nhFd 200ms" }} className="nh-scroll">
-            {aiOutput}
+        {aiLoading && (
+          <div style={{ marginTop:14 }}>
+            <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>
+              {isAr ? "Corvus يحلل بياناتك..." : "Analyzing your workforce data..."}
+            </div>
+            <Shimmer lines={4}/>
+          </div>
+        )}
+        {aiError && !aiLoading && (
+          <div style={{ marginTop:12, fontSize:11, color:C.red,
+            background:"rgba(248,81,73,.06)", border:"1px solid rgba(248,81,73,.15)",
+            borderRadius:9, padding:"9px 13px", animation:"nhFd 200ms" }}>
+            {aiError}
+          </div>
+        )}
+        {aiRules.length > 0 && !aiLoading && (
+          <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase",
+              letterSpacing:".06em", marginBottom:2 }}>
+              {isAr ? "قواعد مقترحة — اضغط + لإضافة" : "Suggested rules — click + to add"}
+            </div>
+            {aiRules.map((r, i) => (
+              <div key={i} style={{ background:"rgba(167,139,250,.06)", border:"1px solid rgba(167,139,250,.2)",
+                borderRadius:11, padding:"12px 14px", display:"flex", gap:12, alignItems:"flex-start",
+                animation:`nhFd 200ms ${i*70}ms both` }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:5, flexWrap:"wrap" }}>
+                    <span style={{ fontFamily:"Syne,system-ui,sans-serif", fontSize:12, fontWeight:800, color:C.text }}>{r.name}</span>
+                    <span style={{ fontSize:9, padding:"2px 8px", borderRadius:99, fontWeight:700,
+                      background:`${SC[r.severity]||C.blue}18`, border:`1px solid ${SC[r.severity]||C.blue}30`,
+                      color:SC[r.severity]||C.blue }}>{(r.severity||"info").toUpperCase()}</span>
+                  </div>
+                  <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:5 }}>
+                    <span style={{ fontSize:10, color:C.muted }}>
+                      <span style={{ color:C.text2 }}>if </span>
+                      <code style={{ fontFamily:"monospace", fontSize:10, color:"#a78bfa" }}>{r.condition}</code>
+                    </span>
+                    <span style={{ fontSize:10, color:C.muted }}>
+                      <span style={{ color:C.text2 }}>→ </span>{r.action}
+                    </span>
+                  </div>
+                  {r.rationale && (
+                    <div style={{ fontSize:11, color:C.muted, fontStyle:"italic" }}>{r.rationale}</div>
+                  )}
+                </div>
+                <button onClick={() => addAiRule(r)} style={{
+                  width:32, height:32, borderRadius:8, flexShrink:0,
+                  background:"linear-gradient(135deg,#1158c7,#0891b2)",
+                  border:"none", color:"#fff", fontSize:17, cursor:"pointer",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  boxShadow:"0 3px 10px rgba(17,88,199,.4)", transition:"all 150ms",
+                }} title={isAr?"إضافة":"Add rule"}>+</button>
+              </div>
+            ))}
           </div>
         )}
       </div>
