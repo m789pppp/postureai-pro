@@ -277,6 +277,19 @@ export const BillingAPI = {
   },
 };
 
+/** Export the current user's own audit/activity log as a CSV file
+ * (admins can pass org_id to export org-wide instead of just their own). */
+export async function exportAuditLogCsv(org_id) {
+  const tok  = await getAuthToken();
+  const resp = await fetch(`${BASE_URL}/audit/export`, {
+    method:  "POST",
+    headers: { "Content-Type":"application/json", ...(tok?{Authorization:`Bearer ${tok}`}:{}) },
+    body:    JSON.stringify(org_id ? { org_id } : {}),
+  });
+  if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
+  return resp.blob();
+}
+
 // ── Push Notifications API (register/unregister handled in push.js directly) ─
 export const PushAPI = {
   /** Send a test push to the current user's registered devices. */

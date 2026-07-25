@@ -6141,18 +6141,25 @@ def query_audit_logs():
 
 @app.route("/api/audit/export", methods=["POST"])
 @require_auth
-@require_admin
 def export_audit_logs():
-    """Export audit logs as CSV (for compliance downloads)."""
+    """Export audit logs as CSV. Admins can export org-wide logs (org_id
+    param); everyone else can only ever export their own — this used to
+    be @require_admin only, but the frontend (AccountActivity.jsx) framed
+    it as a personal 'export my activity' button available to any user,
+    which would have 403'd for non-admins even before the URL-prefix bug
+    that made it unreachable regardless."""
     try:
         import csv, io as sio
-        db   = firestore.client()
-        data = request.get_json(force=True) or {}
-        org_id = data.get("org_id","")
+        db      = firestore.client()
+        data    = request.get_json(force=True) or {}
+        org_id  = data.get("org_id","")
+        is_admin = get_user_role(g.uid).get("is_admin", False)
 
         q = db.collection("audit_logs")
-        if org_id:
+        if is_admin and org_id:
             q = q.where("org_id","==",org_id)
+        else:
+            q = q.where("uid","==",g.uid)
         q = q.order_by("ts",direction=firestore.Query.DESCENDING).limit(5000)
         docs = q.get()
 
