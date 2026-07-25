@@ -37,12 +37,27 @@ function calcHealth(u) {
   const trend      = u.score_trend_30d || 0; // positive = improving
   const trendScore = 50 + Math.min(50, Math.max(-50, trend * 2));
 
-  // Feature depth
-  const features   = u.features_used || 0;
+  // Feature depth — features_used was never tracked anywhere as a single
+  // counter; approximate it from real, already-tracked adoption signals
+  // (calibration completed, referral program used, AI Coach/PDF usage
+  // this month) rather than reading a field that's always undefined.
+  const features   =
+    (u.has_calibration || u.calibrated_at ? 1 : 0) +
+    (u.referral_count > 0 ? 1 : 0) +
+    (u.ai_coach_this_month > 0 ? 1 : 0) +
+    (u.pdf_exports_this_month > 0 ? 1 : 0);
   const featScore  = Math.min(100, features * 15);
 
-  // Payment history
-  const payScore   = u.payment_ok === false ? 40 : 100;
+  // Payment history — payment_ok was never written anywhere either.
+  // subscription_status/subscription_expiry ARE real (set by the Kashier
+  // webhook, already relied on elsewhere for tier gating) — a trial user
+  // isn't a payment problem, but an expired non-trial subscription is.
+  const isExpired = !u.is_trial && u.subscription_status === "expired";
+  const isPastDue = !u.is_trial && u.subscription_expiry
+    ? new Date(u.subscription_expiry) < new Date() && u.subscription_status !== "active"
+    : false;
+  const paymentOk  = !isExpired && !isPastDue;
+  const payScore   = paymentOk ? 100 : 40;
 
   const health = Math.round(
     loginScore * 0.25 + sessScore * 0.20 + trendScore * 0.15 +
@@ -55,6 +70,7 @@ function calcHealth(u) {
     churnRisk,
     stage: health >= 85 ? "champion" : health >= 70 ? "healthy" :
            health >= 50 ? "at_risk"  : "critical",
+    paymentOk, featuresUsed: features,
     signals: { loginScore, sessScore, trendScore, featScore, payScore, daysSince },
   };
 }
@@ -141,7 +157,6 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
         sessions:  u.sessions_this_month || 0,
         trend:     u.score_trend_30d || 0,
         teamSize:  u.team_size || 1,
-        paymentOk: u.payment_ok !== false,
         ...calcHealth(u),
       }));
 

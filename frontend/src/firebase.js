@@ -375,6 +375,18 @@ export async function checkAndDowngradeTrial(uid) {
   } catch(e) { return null; }
 }
 
+// ── Login tracking ───────────────────────────────────────────────
+// Was never written anywhere — ChurnPrediction.jsx's health score reads
+// last_login_at directly from Firestore and always got undefined,
+// silently contributing the worst possible "days since login" score
+// for every single customer regardless of actual activity. Fire-and-
+// forget, called once per sign-in from App.jsx's onAuthStateChanged.
+export async function updateLastLogin(uid) {
+  try {
+    await setDoc(doc(db,"users",uid), { last_login_at: new Date().toISOString() }, { merge: true });
+  } catch(e) { /* non-critical — never block login on this */ }
+}
+
 // ── Calibration ───────────────────────────────────────────────────
 export async function saveCalibration(uid, calibData) {
   await setDoc(doc(db,"calibrations",uid), { uid, ...calibData, calibrated_at:_serverTimestamp() });
@@ -488,9 +500,32 @@ export async function saveSession(uid, data) {
       const last = prof.last_session_at.toDate ? prof.last_session_at.toDate() : new Date(prof.last_session_at);
       return (Date.now()-last.getTime()) < 1.5*86400000 ? (prof.streak_days||0)+1 : 1;
     })() : 1;
+
+    // Monthly session count — feeds ChurnPrediction.jsx's health score,
+    // which previously read this from a field that was never written to
+    // Firestore anywhere (only a same-named Redis rate-limit counter
+    // existed, for a completely different endpoint). Reset when the
+    // calendar month rolls over.
+    const monthKey = new Date().toISOString().slice(0,7); // "2026-07"
+    const sessionsThisMonth = prof?.sessions_this_month_key === monthKey
+      ? (prof?.sessions_this_month||0)+1 : 1;
+
+    // 30-day score trend — same situation, never persisted before. Anchors
+    // to the avg_score as of the start of the current ~30-day window and
+    // refreshes that anchor once the window rolls over, rather than
+    // needing a full historical snapshot series.
+    const prevAt      = prof?.avg_score_anchor_at?.toDate?.() || new Date(0);
+    const daysSinceAnchor = (Date.now()-prevAt.getTime())/86400000;
+    const anchorStale = daysSinceAnchor >= 30 || !prof?.avg_score_anchor_at;
+    const avgScoreAnchor = anchorStale ? newAvg : (prof?.avg_score_anchor ?? newAvg);
+    const scoreTrend30d  = newAvg - avgScoreAnchor;
+
     // setDoc merge — works even if user doc doesn't exist yet
     await setDoc(doc(db,"users",uid), {
       sessions_count: newCount, avg_score: newAvg, streak_days: streak,
+      sessions_this_month: sessionsThisMonth, sessions_this_month_key: monthKey,
+      score_trend_30d: scoreTrend30d,
+      ...(anchorStale ? { avg_score_anchor: avgScoreAnchor, avg_score_anchor_at: _serverTimestamp() } : {}),
       last_session_at: _serverTimestamp(), updated_at: _serverTimestamp(),
     }, { merge: true });
   } catch(e) { console.warn("saveSession stats:", e.code||e.message); }
