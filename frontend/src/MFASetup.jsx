@@ -14,11 +14,27 @@
  * mean anything without that.
  */
 import { useState, useEffect } from "react";
-import { apiFetch } from "./services/api.js";
+import { getAuthToken } from "./firebase.js";
 import { reauthenticate, getReauthMethod } from "./firebase.js";
 
 export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChange }) {
   const isAr = lang === "ar";
+
+  const mfaFetch = async (path, body = null) => {
+    const tok = await getAuthToken().catch(() => "");
+    const res = await fetch("/api/auth/mfa" + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = Object.assign(new Error(d.error || "Request failed"), { status: res.status });
+      throw err;
+    }
+    return d;
+  };
+
   const [tab,        setTab]       = useState("overview");
   const [totpStep,   setTotpStep]  = useState(1);  // 1=scan, 2=verify, 3=done
   const [smsStep,    setSmsStep]   = useState(1);  // 1=phone, 2=verify, 3=done
@@ -38,7 +54,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
   const startTotpSetup = async () => {
     setLoadingSetup(true); setError("");
     try {
-      const r = await apiFetch("/auth/mfa/totp/setup", { method:"POST" });
+      const r = await mfaFetch("/totp/setup");
       setSecret(r.secret); setTotpUri(r.uri);
       setTotpStep(1);
     } catch(e) { setError(e?.message || (isAr?"تعذر بدء الإعداد":"Couldn't start setup")); }
@@ -51,7 +67,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
     if (code.trim().length < 6) { setError(isAr?"أدخل الكود من 6 أرقام":"Enter the 6-digit code"); return; }
     setVerifying(true); setError("");
     try {
-      const r = await apiFetch("/auth/mfa/totp/verify", { method:"POST", body:{ code: code.trim() } });
+      const r = await mfaFetch("/totp/verify", { code: code.trim() });
       setMfaEnabled(true); setMfaMethod("totp");
       setBackupCodes(r.backup_codes||[]);
       setTotpStep(3);
@@ -65,7 +81,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
     if (!phone.trim()) return;
     setVerifying(true); setError(""); setSmsUnavailable(false);
     try {
-      await apiFetch("/auth/mfa/sms/send", { method:"POST", body:{ phone: phone.trim() } });
+      await mfaFetch("/sms/send", { phone: phone.trim() });
       setSmsStep(2);
     } catch(e) {
       if (e?.status === 503) setSmsUnavailable(true);
@@ -78,7 +94,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
     if (code.trim().length < 6) { setError(isAr?"أدخل الكود من 6 أرقام":"Enter the 6-digit code"); return; }
     setVerifying(true); setError("");
     try {
-      const r = await apiFetch("/auth/mfa/sms/verify", { method:"POST", body:{ code: code.trim(), phone: phone.trim() } });
+      const r = await mfaFetch("/sms/verify", { code: code.trim(), phone: phone.trim() });
       setMfaEnabled(true); setMfaMethod("sms");
       setBackupCodes(r.backup_codes||[]);
       setSmsStep(3);
@@ -95,7 +111,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
   const finishDisable = async () => {
     setVerifying(true); setError("");
     try {
-      await apiFetch("/auth/mfa/disable", { method:"POST" });
+      await mfaFetch("/disable");
       setMfaEnabled(false);
       setBackupCodes([]);
       setTotpStep(1); setSmsStep(1); setSecret(""); setTotpUri("");
@@ -140,7 +156,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
   const regenerateBackupCodes = async () => {
     setVerifying(true); setError("");
     try {
-      const r = await apiFetch("/auth/mfa/backup-codes/regenerate", { method:"POST" });
+      const r = await mfaFetch("/backup-codes/regenerate");
       setBackupCodes(r.backup_codes||[]);
     } catch(e) { setError(e?.message || (isAr?"تعذر إنشاء أكواد جديدة":"Couldn't regenerate codes")); }
     setVerifying(false);

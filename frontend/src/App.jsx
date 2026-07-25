@@ -2148,7 +2148,7 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
   const sendSms = async () => {
     setBusy(true); setError("");
     try {
-      await apiFetch("/auth/mfa/sms/send", { method:"POST", body:{ phone: profile?.mfa_phone||"" } });
+      await fetch("/api/auth/mfa/sms/send", {method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+(await getAuthToken().catch(()=>""))},body:JSON.stringify({phone:profile?.mfa_phone||""})});
       setSmsSent(true);
     } catch(e) { setError(e?.message || (isAr?"تعذر إرسال الكود":"Couldn't send code")); }
     setBusy(false);
@@ -2158,7 +2158,7 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
     if (code.trim().length < 6) { setError(isAr?"أدخل الكود كاملاً":"Enter the full code"); return; }
     setBusy(true); setError("");
     try {
-      await apiFetch("/auth/mfa/login-verify", { method:"POST", body:{ code: code.trim() } });
+      await fetch("/api/auth/mfa/login-verify", {method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+(await getAuthToken().catch(()=>""))},body:JSON.stringify({code:code.trim()})});
       onVerified();
     } catch(e) {
       setError(e?.message || (isAr?"كود غير صحيح":"Invalid code"));

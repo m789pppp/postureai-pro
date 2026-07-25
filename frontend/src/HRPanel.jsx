@@ -318,7 +318,7 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
     setLinkLoading(true);
     try {
       const token = await user.getIdToken();
-      const res = await fetch(API + "/org/create-invite", {
+      const res = await fetch("/api/org/create-invite", {
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":"Bearer " + token},
         body: JSON.stringify({ company_id: companyId, role: "employee", expires_days: 7 }),
