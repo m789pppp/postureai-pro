@@ -220,6 +220,12 @@ export const EmailAPI = {
   weeklyProgress: (data) => apiFetch("/email/weekly-progress", { method: "POST", body: data }),
 };
 
+// ── White-label branding API ────────────────────────────────────────
+export const BrandingAPI = {
+  get:  ()     => apiFetch("/company/branding"),
+  save: (data) => apiFetch("/company/branding", { method: "POST", body: data }),
+};
+
 // ── Enterprise API ─────────────────────────────────────────────────
 export const EnterpriseAPI = {
   importCSV: async (file, companyId) => {
