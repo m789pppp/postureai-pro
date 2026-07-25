@@ -171,9 +171,10 @@ function ProrationCard({ currentPlan, newPlan, prorate, isAr }) {
 }
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────
-export function BillingDashboard({ profile, user, payments=[], isAr, onClose, isAdmin=false, onUpgrade }) {
+export function BillingDashboard({ profile, user, payments:initialPayments=[], isAr, onClose, isAdmin=false, onUpgrade }) {
   const [tab, setTab]         = useState("overview");
   const [usage, setUsage]     = useState(null);
+  const [fetchedPayments, setFetchedPayments] = useState(null);
   const [analytics, setAnaly] = useState(null);
   const [prorate, setProrate] = useState(null);
   const [loading, setLoading] = useState({});
@@ -182,6 +183,11 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
   const [daysUsed, setDaysUsed]= useState(15);
   const [toast, setToast]     = useState("");
   const [invoiceLoading, setInvoiceLoading] = useState({});
+
+  // If the caller didn't pass real payments (App.jsx doesn't — there was
+  // never a real data source wired up before /api/billing/payments), fetch
+  // them here instead of silently rendering "No invoices yet" for everyone.
+  const payments = initialPayments?.length ? initialPayments : (fetchedPayments || []);
 
   const tier  = profile?.tier || "standard";
   const isAr_ = isAr;
@@ -205,6 +211,16 @@ export function BillingDashboard({ profile, user, payments=[], isAr, onClose, is
       .then(d => setUsage(d))
       .catch(()=>{})
       .finally(()=>setLoading(p=>({...p,usage:false})));
+  }, []);
+
+  // Load real payment history on mount, unless the caller already supplied it
+  useEffect(() => {
+    if (initialPayments?.length) return;
+    setLoading(p=>({...p,payments:true}));
+    BillingAPI.payments()
+      .then(d => setFetchedPayments(d.payments||[]))
+      .catch(()=>setFetchedPayments([]))
+      .finally(()=>setLoading(p=>({...p,payments:false})));
   }, []);
 
   // Load analytics when admin opens that tab

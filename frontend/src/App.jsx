@@ -2133,7 +2133,6 @@ const ReferralProgram = lazyNamed(() => import("./ReferralProgram.jsx"), "Referr
 const MRRDashboard = lazyNamed(() => import("./MRRDashboard.jsx"), "MRRDashboard");
 const AdminDashboard = lazyNamed(() => import("./AdminDashboard.jsx"), "AdminDashboard");
 const BillingDashboard = lazyNamed(() => import("./BillingDashboard.jsx"), "BillingDashboard");
-const UsageBilling = lazyNamed(() => import("./UsageBilling.jsx"), "UsageBilling");
 
 // MFA login gate — shown after a successful Firebase sign-in when the
 // account has 2FA enabled. This is new: previously nothing anywhere
@@ -2403,7 +2402,6 @@ export default function App(){
   const[showNotificationsHub,setShowNotificationsHub]=useState(false);
   const[showNPS,setShowNPS]=useState(false);
   const[showAnnualUpsell,setShowAnnualUpsell]=useState(false);
-  const[showUsageBilling,setShowUsageBilling]=useState(false);
   const[showChurnPrediction,setShowChurnPrediction]=useState(false);
   const[showCustomerSuccess,setShowCustomerSuccess]=useState(false);
   const[showGrowthHub,setShowGrowthHub]=useState(false);
@@ -2441,6 +2439,8 @@ export default function App(){
   }
   const[showAccountActivity,setShowAccountActivity]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
+  const[showReferralProgram,setShowReferralProgram]=useState(false);
+  const[showIntegrationsHub,setShowIntegrationsHub]=useState(false);
   // Phase 12 — Enterprise Scale
   const[showAPIMarketplace,setShowAPIMarketplace]=useState(false);
   const[showWhiteLabel,setShowWhiteLabel]=useState(false);
@@ -4316,6 +4316,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
         setShowChangelog={setShowChangelog}
         setShowNotificationsHub={setShowNotificationsHub}
         setShowEnterpriseRBAC={setShowEnterpriseRBAC}
+        setShowBillingDashboard={setShowBillingDashboard}
+        setShowReferralProgram={setShowReferralProgram}
+        setShowIntegrationsHub={setShowIntegrationsHub}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin} companyId={companyId}
         darkMode={darkMode} setDarkMode={setDarkMode} setLang={setLang}
         t={t} logOut={logOut} setUser={setUser} setProfile={setProfile}
@@ -4471,12 +4474,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       )}
-      {showUsageBilling&&<UsageBilling profile={profile} cs={cs} lang={lang} onClose={()=>setShowUsageBilling(false)}/>}
       {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
       {showSecurityCenter&&<SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }
       {showMFASetup&&<MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/>}
-      {showBillingDashboard&&<BillingDashboard profile={profile} user={user} cs={cs} lang={lang} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}
+      {showBillingDashboard&&<BillingDashboard profile={profile} user={user} isAr={lang==="ar"} isAdmin={isAdmin} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}
+      {showReferralProgram&&<Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense>}
+      {showIntegrationsHub&&<Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense>}
       {/* Phase 12 — Enterprise Scale */}
       {showEnterpriseAdmin&&isAdmin&&<EnterpriseAdminTools profile={profile} cs={cs} lang={lang} onClose={()=>setShowEnterpriseAdmin(false)}/>}
 
