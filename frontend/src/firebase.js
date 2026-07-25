@@ -375,18 +375,6 @@ export async function checkAndDowngradeTrial(uid) {
   } catch(e) { return null; }
 }
 
-// ── Login tracking ───────────────────────────────────────────────
-// Was never written anywhere — ChurnPrediction.jsx's health score reads
-// last_login_at directly from Firestore and always got undefined,
-// silently contributing the worst possible "days since login" score
-// for every single customer regardless of actual activity. Fire-and-
-// forget, called once per sign-in from App.jsx's onAuthStateChanged.
-export async function updateLastLogin(uid) {
-  try {
-    await setDoc(doc(db,"users",uid), { last_login_at: new Date().toISOString() }, { merge: true });
-  } catch(e) { /* non-critical — never block login on this */ }
-}
-
 // ── Calibration ───────────────────────────────────────────────────
 export async function saveCalibration(uid, calibData) {
   await setDoc(doc(db,"calibrations",uid), { uid, ...calibData, calibrated_at:_serverTimestamp() });

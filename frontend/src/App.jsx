@@ -10,7 +10,7 @@ import {
   AUTO_APPROVE_DOMAIN, serverTimestamp,
   notifyPaymentPending, notifyPaymentConfirmed,
   getCompany, createCompany, getUserSessions, onUserSessions, updateUserProfile,
-  checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, checkAndSendNurtureEmails, updateLastLogin,
+  checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, checkAndSendNurtureEmails,
   doc, updateDoc,
 } from "./firebase.js";
 import { HRPanel } from "./HRPanel.jsx";
@@ -2697,7 +2697,6 @@ export default function App(){
           } else {
             try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked){ setProfile(checked); if(checked.tier) setTier(normalizeTier(checked.tier)); } }).catch(()=>{}); } catch{}
             try { checkAndSendNurtureEmails(u.uid, p, API).catch(()=>{}); } catch{}
-            try { updateLastLogin(u.uid).catch(()=>{}); } catch{}
           }
           // Note: server-side middleware auto-elevates eligible emails to elite on every API
           // call via _should_elevate_to_elite() — no client-side overrides needed here.
