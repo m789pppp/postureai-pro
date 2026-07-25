@@ -19,7 +19,16 @@ const CP_TOKENS = {
   primary:"#6366f1", green:"#10b981", amber:"#f59e0b", red:"#ef4444", sky:"#38bdf8",
 };
 
-// ── Health score calculator (real signals) ─────────────────────────
+// ── Health score calculator ─────────────────────────────────────────
+// STATUS (see git history for the full audit): last_login_at and
+// payment_ok are now real, tracked fields (login on every sign-in;
+// payment_ok set by the Stripe/PayMob/Kashier success & failure webhook
+// handlers) — that's 40% of the weight below on genuine signal.
+// sessions_this_month, score_trend_30d, and features_used are still
+// undefined on every user document — those 3 inputs (35% of the weight)
+// remain flagged, not fixed: they need either a scheduled aggregation job
+// or a dedicated backend endpoint that computes them from real session
+// history, not something to patch here without that infrastructure.
 function calcHealth(u) {
   const now    = Date.now();
   const msDay  = 86400000;
