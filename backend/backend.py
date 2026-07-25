@@ -16273,6 +16273,50 @@ def weekly_summary():
 
 # ── Send invite email ─────────────────────────────────────────────
 
+# White-label branding config — was entirely fake before: the WhiteLabel.jsx
+# UI's save() just flipped a "Saved!" toast for 2.5s with zero persistence
+# anywhere. A paying enterprise customer configuring their branding would
+# see confirmation, then lose everything on refresh, with no indication
+# anything was wrong.
+_WHITELABEL_FIELDS = {
+    "companyName","tagline","primaryColor","accentColor","bgColor","logoUrl",
+    "faviconUrl","customDomain","supportEmail","privacyUrl","termsUrl",
+    "hideCorvusBranding","customLoginBg","emailFromName","emailFromAddress",
+    "footerText","welcomeMessage","loginBtnText","fontFamily","borderRadius",
+    "showPoweredBy",
+}
+
+@app.route("/api/company/branding", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def get_company_branding():
+    role = get_user_role(g.uid)
+    company_id = role.get("company_id")
+    if not company_id:
+        return jsonify({"branding": {}})
+    doc = firestore.client().collection("companies").document(company_id).get()
+    return jsonify({"branding": (doc.to_dict() or {}).get("branding", {}) if doc.exists else {}})
+
+@app.route("/api/company/branding", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def save_company_branding():
+    role = get_user_role(g.uid)
+    company_id = role.get("company_id")
+    if not company_id:
+        return jsonify({"error": "No company associated with this account"}), 400
+    if not (role.get("is_hr") or role.get("is_admin")):
+        return jsonify({"error": "Only HR admins can update company branding"}), 403
+    data = request.get_json(force=True) or {}
+    # Whitelist fields — don't let arbitrary keys get written from client input
+    branding = {k: v for k, v in data.items() if k in _WHITELABEL_FIELDS}
+    firestore.client().collection("companies").document(company_id).set(
+        {"branding": branding, "branding_updated_at": datetime.utcnow().isoformat()},
+        merge=True,
+    )
+    audit(g.uid, "branding_updated", "company", {"company_id": company_id})
+    return jsonify({"ok": True})
+
 @app.route("/api/org/create-invite", methods=["POST"])
 @require_auth
 @limiter.limit("30 per hour")
