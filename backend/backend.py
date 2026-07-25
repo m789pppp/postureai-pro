@@ -6167,6 +6167,24 @@ def export_audit_logs():
 # ── Multi-Tenant Management ───────────────────────────────────────────
 
 
+@app.route("/api/admin/tenants", methods=["GET"])
+@require_auth
+@require_admin
+@limiter.limit("60 per minute")
+def list_tenants():
+    """List provisioned tenant organizations. (POST/PATCH existed before
+    this — provisioning and editing worked — but there was no way to
+    ever list them back, so MultiTenantManager.jsx had nothing real to
+    render and showed a hardcoded mock list instead.)"""
+    try:
+        db = firestore.client()
+        docs = db.collection("companies").stream()
+        tenants = [{**d.to_dict(), "org_id": d.id} for d in docs]
+        return jsonify({"ok":True, "tenants":tenants, "count":len(tenants)})
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
+
+
 @app.route("/api/admin/tenants", methods=["POST"])
 @require_auth
 @require_admin
@@ -6213,7 +6231,7 @@ def update_tenant(org_id):
     try:
         db   = firestore.client()
         data = request.get_json(force=True) or {}
-        allowed = ["plan","seats","status","white_label_domain","region"]
+        allowed = ["plan","seats","status","white_label_domain","region","trial_days","admin_email"]
         update  = {k:v for k,v in data.items() if k in allowed}
         if not update:
             return jsonify({"error":"No valid fields to update"}),400
@@ -13054,9 +13072,17 @@ def emr_webhook_receiver():
 # ══════════════════════════════════════════════════════════════════
 import hmac as _hmac, hashlib as _hashlib, threading as _threading
 
-# In-memory webhook store (replace with DB in production)
-_webhooks: dict = {}          # webhook_id -> config
-_webhook_logs: list = []      # delivery log
+# Webhook config and delivery logs live in Firestore (webhooks/{id},
+# webhook_logs/{auto-id}) — moved 2026-07-25. Previously these were
+# module-level Python dicts/lists ("replace with DB in production" was
+# a comment left in place, never done), which meant every webhook a
+# user configured — and its whole delivery history — was silently
+# wiped on every server restart/redeploy, with zero warning to anyone.
+# _risk_tracker and _trend_buffer below stay in-memory on purpose:
+# they're transient per-session analysis state, not user configuration —
+# losing them on restart just resets an in-progress alert window, which
+# is a much smaller and more acceptable risk than losing a configured
+# webhook entirely.
 _risk_tracker: dict = {}      # uid -> {score, since}
 
 def _sign_payload(secret: str, body: str) -> str:
@@ -13075,6 +13101,7 @@ def _deliver_webhook(wh: dict, payload: dict, attempt: int = 1):
     }
     log_entry = {
         "webhook_id":   wh["id"],
+        "uid":          wh.get("uid",""),
         "url":          wh["url"],
         "event":        payload.get("event"),
         "status":       None,
@@ -13086,7 +13113,7 @@ def _deliver_webhook(wh: dict, payload: dict, attempt: int = 1):
         r = req.post(wh["url"], data=body, headers=headers, timeout=12)
         log_entry["status"] = r.status_code
         log_entry["ok"]     = r.status_code < 300
-        _webhook_logs.append(log_entry)
+        _log_webhook_delivery(log_entry)
         if r.status_code >= 300 and attempt < 4:
             delay = 2 ** attempt * 3   # 6s, 12s, 24s
             _threading.Timer(delay, _deliver_webhook, args=[wh, payload, attempt + 1]).start()
@@ -13094,16 +13121,34 @@ def _deliver_webhook(wh: dict, payload: dict, attempt: int = 1):
         log_entry["status"] = 0
         log_entry["ok"]     = False
         log_entry["error"]  = str(e)
-        _webhook_logs.append(log_entry)
+        _log_webhook_delivery(log_entry)
         if attempt < 4:
             delay = 2 ** attempt * 3
             _threading.Timer(delay, _deliver_webhook, args=[wh, payload, attempt + 1]).start()
 
+def _log_webhook_delivery(log_entry: dict):
+    try:
+        firestore.client().collection("webhook_logs").add(log_entry)
+    except Exception as e:
+        print(f"[webhooks] failed to persist delivery log: {e}", file=sys.stderr)
+
 def _fire_webhooks(event: str, data: dict):
     import uuid
-    for wh in _webhooks.values():
-        if not wh.get("active", True): continue
-        if event not in wh.get("events", [event]): continue
+    db = firestore.client()
+    try:
+        docs = list(db.collection("webhooks").where("active","==",True).where("events","array_contains",event).stream())
+    except Exception:
+        # Composite index not deployed yet (see firestore.indexes.json) —
+        # fetch all active webhooks and filter in Python instead of failing
+        # to fire real-time alerts entirely.
+        try:
+            docs = [d for d in db.collection("webhooks").where("active","==",True).stream()
+                    if event in d.to_dict().get("events",[])]
+        except Exception as e:
+            print(f"[webhooks] failed to query webhooks for event {event}: {e}", file=sys.stderr)
+            return
+    for doc in docs:
+        wh = doc.to_dict()
         payload = {
             "event":       event,
             "delivery_id": str(uuid.uuid4())[:12],
@@ -13187,8 +13232,8 @@ def _check_risk_threshold(uid: str, score: int, threshold: int = 45, duration_s:
 @limiter.limit("60 per minute")
 def list_webhooks():
     uid = getattr(g, "uid", None)
-    user_hooks = {k: v for k,v in _webhooks.items() if v.get("uid") == uid}
-    return jsonify({"webhooks": list(user_hooks.values())})
+    docs = firestore.client().collection("webhooks").where("uid","==",uid).stream()
+    return jsonify({"webhooks": [d.to_dict() for d in docs]})
 
 @app.route("/api/webhooks", methods=["POST"])
 @require_auth
@@ -13203,9 +13248,7 @@ def create_webhook():
             return jsonify({"error": "Valid URL required"}), 400
         wh = {
             "id":          str(uuid.uuid4())[:12],
-            "uid":         uid,  # BUG FIX: was missing — list_webhooks filters
-                                  # by uid, so a freshly-created webhook could
-                                  # never appear in the creator's own list
+            "uid":         uid,
             "url":         url,
             "secret":      data.get("secret") or secrets.token_hex(24),
             "events":      data.get("events", ["posture.risk_alert", "session.complete", "report.ready"]),
@@ -13214,7 +13257,7 @@ def create_webhook():
             "active":      True,
             "created_at":  datetime.now().isoformat(),
         }
-        _webhooks[wh["id"]] = wh
+        firestore.client().collection("webhooks").document(wh["id"]).set(wh)
         return jsonify({"webhook": wh}), 201
     except Exception as e:
         return safe_error(e)
@@ -13224,14 +13267,15 @@ def create_webhook():
 @limiter.limit("20 per minute")
 def delete_webhook(wid):
     uid = getattr(g, "uid", None)
-    wh  = _webhooks.get(wid)
-    if not wh:
+    db  = firestore.client()
+    ref = db.collection("webhooks").document(wid)
+    snap = ref.get()
+    if not snap.exists:
         return jsonify({"error": "Not found"}), 404
-    # BUG FIX: previously any authenticated user who knew/guessed a webhook id
-    # could delete someone else's webhook — no ownership check at all.
+    wh = snap.to_dict()
     if wh.get("uid") != uid and not get_user_role(uid).get("is_admin"):
         return jsonify({"error": "Forbidden"}), 403
-    del _webhooks[wid]
+    ref.delete()
     return jsonify({"ok": True})
 
 @app.route("/api/webhooks/<wid>/test", methods=["POST"])
@@ -13239,10 +13283,9 @@ def delete_webhook(wid):
 @limiter.limit("10 per minute")
 def test_webhook(wid):
     uid = getattr(g, "uid", None)
-    wh = _webhooks.get(wid)
-    if not wh: return jsonify({"error": "Webhook not found"}), 404
-    # Same ownership check as delete — don't let anyone trigger a test
-    # delivery to a webhook URL they don't own.
+    snap = firestore.client().collection("webhooks").document(wid).get()
+    if not snap.exists: return jsonify({"error": "Webhook not found"}), 404
+    wh = snap.to_dict()
     if wh.get("uid") != uid and not get_user_role(uid).get("is_admin"):
         return jsonify({"error": "Forbidden"}), 403
     import uuid
@@ -13258,10 +13301,30 @@ def test_webhook(wid):
 @require_auth
 @limiter.limit("60 per minute")
 def webhook_logs():
+    """Delivery logs — scoped to the caller's own webhooks. (Previously
+    this had no ownership check at all: any authenticated user calling
+    it without a webhook_id got every user's delivery logs, including
+    other people's target URLs.)"""
+    uid     = getattr(g, "uid", None)
     limit_n = min(int(request.args.get("limit", 50)), 200)
     wid     = request.args.get("webhook_id")
-    logs    = [l for l in _webhook_logs if not wid or l.get("webhook_id") == wid]
-    return jsonify({"logs": list(reversed(logs))[:limit_n], "total": len(logs)})
+    db      = firestore.client()
+    q = db.collection("webhook_logs").where("uid","==",uid)
+    if wid:
+        # Confirm this webhook actually belongs to the caller before filtering by it
+        wh_snap = db.collection("webhooks").document(wid).get()
+        if not wh_snap.exists or (wh_snap.to_dict().get("uid") != uid and not get_user_role(uid).get("is_admin")):
+            return jsonify({"error": "Forbidden"}), 403
+        q = q.where("webhook_id","==",wid)
+    try:
+        docs = list(q.order_by("ts", direction=firestore.Query.DESCENDING).limit(limit_n).stream())
+        logs = [d.to_dict() for d in docs]
+    except Exception:
+        # Composite index not deployed yet (see firestore.indexes.json) —
+        # fetch unordered and sort in Python rather than 500ing.
+        docs = list(q.limit(500).stream())
+        logs = sorted([d.to_dict() for d in docs], key=lambda l: l.get("ts",""), reverse=True)[:limit_n]
+    return jsonify({"logs": logs, "total": len(logs)})
 
 @app.route("/api/webhooks/risk-check", methods=["POST"])
 @require_auth

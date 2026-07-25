@@ -1,24 +1,34 @@
 /**
- * MultiTenantManager.jsx — Corvus Phase 12
+ * MultiTenantManager.jsx — Corvus
  * Manage all tenants/organizations from one super-admin panel
+ *
+ * Wired to the real backend 2026-07-25. Previously this was 100% mock
+ * data (MOCK_TENANTS, a fake action log, a Provision button with no
+ * onClick at all). The backend already had POST/PATCH /api/admin/tenants
+ * for provisioning and editing, but no GET — nothing could ever list
+ * tenants back, so this screen had nothing real to render. Added the
+ * missing list endpoint and wired everything here to it.
+ *
+ * Honesty note: seat activity, health score, storage, and API-call
+ * volume per tenant have no real data source anywhere in the backend —
+ * rather than invent numbers, those columns/fields are left out
+ * entirely. Suspend/Activate, Add Seats, and Extend Trial call the
+ * real PATCH endpoint. Email Admin / Reset SSO / Export Data / Delete
+ * Org have no backend implementation yet, so they're shown disabled
+ * with a note instead of silently doing nothing.
  */
-import { useState, useMemo } from "react";
-
-const MOCK_TENANTS = [
-  { id:"t1", name:"Acme Corp",       domain:"acme.com",       plan:"enterprise", seats:240, activeSeats:198, health:94, status:"active",   region:"us-east",   mrr:4800, admin:"sarah@acme.com",     created:"2025-01-12", storage:"4.2GB", apiCalls:182400 },
-  { id:"t2", name:"TechVentures",   domain:"techventures.io", plan:"scale",      seats:80,  activeSeats:67,  health:88, status:"active",   region:"eu-west",   mrr:1590, admin:"m.ali@techv.io",     created:"2025-03-05", storage:"1.8GB", apiCalls:49200 },
-  { id:"t3", name:"HealthFirst",    domain:"healthfirst.org", plan:"enterprise", seats:500, activeSeats:412, health:91, status:"active",   region:"us-west",   mrr:9200, admin:"ops@healthfirst.org", created:"2024-11-20", storage:"11.4GB", apiCalls:394000 },
-  { id:"t4", name:"StartupXYZ",     domain:"startupxyz.com", plan:"growth",     seats:15,  activeSeats:14,  health:97, status:"active",   region:"us-east",   mrr:199,  admin:"cto@startupxyz.com",  created:"2026-02-14", storage:"0.3GB", apiCalls:8100 },
-  { id:"t5", name:"GlobalLogistics",domain:"globallog.com",  plan:"enterprise", seats:180, activeSeats:102, health:71, status:"at_risk",  region:"ap-south",  mrr:3800, admin:"it@globallog.com",    created:"2025-06-08", storage:"3.1GB", apiCalls:72100 },
-  { id:"t6", name:"MediCare Plus",  domain:"medicareplus.io",plan:"scale",      seats:60,  activeSeats:0,   health:0,  status:"suspended",region:"eu-west",   mrr:0,    admin:"admin@medicareplus.io",created:"2025-09-01", storage:"0.9GB", apiCalls:0 },
-  { id:"t7", name:"RetailChain Co", domain:"retailchain.com",plan:"enterprise", seats:320, activeSeats:289, health:96, status:"active",   region:"us-east",   mrr:6400, admin:"hr@retailchain.com",  created:"2024-08-30", storage:"7.8GB", apiCalls:256000 },
-];
+import { useState, useMemo, useEffect } from "react";
+import { apiFetch } from "./services/api.js";
 
 const PLAN_COLORS = { starter:"#64748b", growth:"#6366f1", scale:"#0ea5e9", enterprise:"#f59e0b" };
 const STATUS_COLORS = { active:"#10b981", at_risk:"#f59e0b", suspended:"#ef4444", trial:"#8b5cf6" };
 const REGIONS = ["all","us-east","us-west","eu-west","ap-south"];
+const NOT_WIRED = ["Email Admin","Reset SSO","Export Data","Delete Org"];
 
 export function MultiTenantManager({ profile, cs, lang, onClose }) {
+  const [tenants, setTenants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState("all");
   const [regionFilter, setRegionFilter] = useState("all");
@@ -26,37 +36,75 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
   const [sortBy, setSortBy] = useState("mrr");
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [tab, setTab] = useState("tenants");
-  const [actionLog, setActionLog] = useState([
-    { id:1, ts:"2026-06-02 08:14", tenant:"Acme Corp",    action:"Seat limit increased 200→240",  by:"admin@corvus.com" },
-    { id:2, ts:"2026-06-01 17:33", tenant:"MediCare Plus",action:"Tenant suspended (payment fail)",by:"billing-bot" },
-    { id:3, ts:"2026-06-01 11:20", tenant:"HealthFirst",  action:"Plan upgraded scale→enterprise", by:"admin@corvus.com" },
-    { id:4, ts:"2026-05-31 09:05", tenant:"StartupXYZ",  action:"Trial extended 14 days",         by:"admin@corvus.com" },
-  ]);
+  const [actionLog, setActionLog] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  const [form, setForm] = useState({ name:"", domain:"", admin_email:"", plan:"growth", seats:50, region:"us-east", white_label_domain:"", trial_days:14 });
+  const [provisionError, setProvisionError] = useState("");
+  const [provisionOk, setProvisionOk] = useState(false);
+
+  const loadTenants = () => {
+    setLoading(true); setLoadError("");
+    apiFetch("/admin/tenants", { method:"GET" })
+      .then(r => setTenants(r.tenants||[]))
+      .catch(e => setLoadError(e?.message || "Couldn't load tenants"))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { loadTenants(); }, []);
 
   const filtered = useMemo(() => {
-    return MOCK_TENANTS
+    return tenants
       .filter(t => {
         const q = search.toLowerCase();
-        return (!q || t.name.toLowerCase().includes(q) || t.domain.includes(q) || t.admin.includes(q))
+        return (!q || (t.name||"").toLowerCase().includes(q) || (t.domain||"").includes(q) || (t.admin_email||"").includes(q))
           && (planFilter === "all" || t.plan === planFilter)
           && (regionFilter === "all" || t.region === regionFilter)
           && (statusFilter === "all" || t.status === statusFilter);
       })
       .sort((a, b) => {
-        if (sortBy === "mrr") return b.mrr - a.mrr;
-        if (sortBy === "seats") return b.seats - a.seats;
-        if (sortBy === "health") return b.health - a.health;
-        if (sortBy === "name") return a.name.localeCompare(b.name);
+        if (sortBy === "mrr") return (b.mrr||0) - (a.mrr||0);
+        if (sortBy === "seats") return (b.seats||0) - (a.seats||0);
+        if (sortBy === "name") return (a.name||"").localeCompare(b.name||"");
         return 0;
       });
-  }, [search, planFilter, regionFilter, statusFilter, sortBy]);
+  }, [tenants, search, planFilter, regionFilter, statusFilter, sortBy]);
 
-  const totalMRR = MOCK_TENANTS.reduce((s, t) => s + t.mrr, 0);
-  const totalSeats = MOCK_TENANTS.reduce((s, t) => s + t.seats, 0);
-  const activeCount = MOCK_TENANTS.filter(t => t.status === "active").length;
+  const totalMRR = tenants.reduce((s, t) => s + (t.mrr||0), 0);
+  const totalSeats = tenants.reduce((s, t) => s + (t.seats||0), 0);
+  const activeCount = tenants.filter(t => t.status === "active").length;
 
-  const doAction = (tenant, action) => {
+  const logAction = (tenant, action) => {
     setActionLog(p => [{ id: Date.now(), ts: new Date().toISOString().slice(0,16).replace("T"," "), tenant: tenant.name, action, by: profile?.email || "super-admin" }, ...p]);
+  };
+
+  const patchTenant = async (tenant, patch, actionLabel) => {
+    setBusy(true);
+    try {
+      await apiFetch(`/admin/tenants/${tenant.org_id}`, { method:"PATCH", body:patch });
+      setTenants(prev => prev.map(t => t.org_id===tenant.org_id ? { ...t, ...patch } : t));
+      logAction(tenant, actionLabel);
+    } catch(e) {
+      logAction(tenant, `Failed: ${actionLabel} (${e?.message||"error"})`);
+    }
+    setBusy(false);
+  };
+
+  const submitProvision = async () => {
+    setProvisionError(""); setProvisionOk(false);
+    if (!form.name || !form.domain || !form.admin_email) { setProvisionError("Name, domain, and admin email are required"); return; }
+    setBusy(true);
+    try {
+      await apiFetch("/admin/tenants", { method:"POST", body:{
+        name:form.name, domain:form.domain, admin_email:form.admin_email,
+        plan:form.plan, seats:Number(form.seats)||50, region:form.region,
+        white_label_domain:form.white_label_domain, trial_days:Number(form.trial_days)||0,
+      }});
+      setProvisionOk(true);
+      setForm({ name:"", domain:"", admin_email:"", plan:"growth", seats:50, region:"us-east", white_label_domain:"", trial_days:14 });
+      loadTenants();
+      setTimeout(()=>setProvisionOk(false), 3000);
+    } catch(e) { setProvisionError(e?.message || "Couldn't provision tenant"); }
+    setBusy(false);
   };
 
   const tabs = [
@@ -83,7 +131,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
             <div style={{ display:"flex", gap:10, alignItems:"center" }}>
               {[
                 { label:"Total MRR", value:`$${(totalMRR/1000).toFixed(1)}K`, color:"#f59e0b" },
-                { label:"Organizations", value:MOCK_TENANTS.length, color:"#10b981" },
+                { label:"Organizations", value:tenants.length, color:"#10b981" },
                 { label:"Total Seats", value:totalSeats, color:"#0ea5e9" },
               ].map(m => (
                 <div key={m.label} style={{ textAlign:"center", padding:"6px 14px", background:"rgba(255,255,255,0.04)", borderRadius:10 }}>
@@ -109,14 +157,13 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
           {/* ── TENANTS TABLE ── */}
           {tab==="tenants" && (
             <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-              {/* Filters */}
               <div style={{ display:"flex", gap:8, padding:"14px 20px", borderBottom:`1px solid ${cs.border}`, flexWrap:"wrap" }}>
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search name, domain, admin…" style={{ flex:1, minWidth:200, background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"7px 12px", fontSize:13, outline:"none" }} />
                 {[
                   { label:"Plan", value:planFilter, set:setPlanFilter, opts:["all","starter","growth","scale","enterprise"] },
                   { label:"Status", value:statusFilter, set:setStatusFilter, opts:["all","active","at_risk","suspended","trial"] },
                   { label:"Region", value:regionFilter, set:setRegionFilter, opts:REGIONS },
-                  { label:"Sort", value:sortBy, set:setSortBy, opts:["mrr","seats","health","name"] },
+                  { label:"Sort", value:sortBy, set:setSortBy, opts:["mrr","seats","name"] },
                 ].map(f => (
                   <select key={f.label} value={f.value} onChange={e => f.set(e.target.value)} style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"7px 11px", fontSize:12, outline:"none", cursor:"pointer" }}>
                     {f.opts.map(o => <option key={o} value={o} style={{ background:"#1e293b" }}>{f.label}: {o}</option>)}
@@ -124,49 +171,42 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                 ))}
               </div>
 
-              {/* Table */}
               <div style={{ flex:1, overflowY:"auto" }}>
+                {loading && <div style={{ padding:24, textAlign:"center", fontSize:12, color:cs.textDim }}>Loading…</div>}
+                {!loading && loadError && <div style={{ padding:24, textAlign:"center", fontSize:12, color:"#ef4444" }}>{loadError}</div>}
+                {!loading && !loadError && filtered.length===0 && <div style={{ padding:24, textAlign:"center", fontSize:12, color:cs.textDim }}>No organizations yet — provision one to get started</div>}
+                {!loading && !loadError && filtered.length>0 && (
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
                     <tr style={{ background:"rgba(255,255,255,0.03)", position:"sticky", top:0 }}>
-                      {["Organization","Plan","Status","Seats","Health","MRR","Region","Actions"].map(h => (
+                      {["Organization","Plan","Status","Seats","MRR","Region","Actions"].map(h => (
                         <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontWeight:600, color:cs.textDim, fontSize:11, borderBottom:`1px solid ${cs.border}`, whiteSpace:"nowrap" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map(t => (
-                      <tr key={t.id} onClick={() => setSelectedTenant(t)} style={{ borderBottom:`1px solid ${cs.border}`, cursor:"pointer", background:selectedTenant?.id===t.id?"rgba(245,158,11,0.06)":"transparent", transition:"background .1s" }}>
+                      <tr key={t.org_id} onClick={() => setSelectedTenant(t)} style={{ borderBottom:`1px solid ${cs.border}`, cursor:"pointer", background:selectedTenant?.org_id===t.org_id?"rgba(245,158,11,0.06)":"transparent", transition:"background .1s" }}>
                         <td style={{ padding:"12px 14px" }}>
                           <div style={{ fontWeight:700, color:cs.text }}>{t.name}</div>
-                          <div style={{ fontSize:11, color:cs.textDim }}>{t.domain} · {t.admin}</div>
+                          <div style={{ fontSize:11, color:cs.textDim }}>{t.domain} · {t.admin_email}</div>
                         </td>
                         <td style={{ padding:"12px 14px" }}>
-                          <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:`${PLAN_COLORS[t.plan]}22`, color:PLAN_COLORS[t.plan] }}>{t.plan}</span>
+                          <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:`${PLAN_COLORS[t.plan]||cs.border}22`, color:PLAN_COLORS[t.plan]||cs.textDim }}>{t.plan}</span>
                         </td>
                         <td style={{ padding:"12px 14px" }}>
-                          <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:`${STATUS_COLORS[t.status]}18`, color:STATUS_COLORS[t.status] }}>{t.status.replace("_"," ")}</span>
+                          <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:`${STATUS_COLORS[t.status]||cs.border}18`, color:STATUS_COLORS[t.status]||cs.textDim }}>{(t.status||"").replace("_"," ")}</span>
                         </td>
-                        <td style={{ padding:"12px 14px", color:cs.text }}>
-                          <div>{t.activeSeats}/{t.seats}</div>
-                          <div style={{ height:4, background:"rgba(255,255,255,0.08)", borderRadius:2, marginTop:4, width:60 }}>
-                            <div style={{ height:"100%", borderRadius:2, background:t.activeSeats/t.seats>0.8?"#10b981":"#f59e0b", width:`${(t.activeSeats/t.seats)*100}%` }} />
-                          </div>
-                        </td>
-                        <td style={{ padding:"12px 14px" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                            <div style={{ fontSize:14, fontWeight:700, color:t.health>90?"#10b981":t.health>70?"#f59e0b":"#ef4444" }}>{t.health}%</div>
-                          </div>
-                        </td>
-                        <td style={{ padding:"12px 14px", fontWeight:700, color:cs.text }}>${t.mrr.toLocaleString()}</td>
+                        <td style={{ padding:"12px 14px", color:cs.text }}>{t.seats}</td>
+                        <td style={{ padding:"12px 14px", fontWeight:700, color:cs.text }}>${(t.mrr||0).toLocaleString()}</td>
                         <td style={{ padding:"12px 14px", color:cs.textDim, fontSize:11 }}>{t.region}</td>
                         <td style={{ padding:"12px 14px" }}>
                           <div style={{ display:"flex", gap:4 }}>
                             <button onClick={e => { e.stopPropagation(); setSelectedTenant(t); }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:6, padding:"4px 9px", cursor:"pointer", fontSize:11 }}>View</button>
                             {t.status==="active" ? (
-                              <button onClick={e => { e.stopPropagation(); doAction(t,"Tenant suspended"); }} style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", color:"#ef4444", borderRadius:6, padding:"4px 9px", cursor:"pointer", fontSize:11 }}>Suspend</button>
+                              <button onClick={e => { e.stopPropagation(); patchTenant(t,{status:"suspended"},"Tenant suspended"); }} disabled={busy} style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", color:"#ef4444", borderRadius:6, padding:"4px 9px", cursor:"pointer", fontSize:11 }}>Suspend</button>
                             ) : (
-                              <button onClick={e => { e.stopPropagation(); doAction(t,"Tenant reactivated"); }} style={{ background:"rgba(16,185,129,0.08)", border:"1px solid rgba(16,185,129,0.25)", color:"#10b981", borderRadius:6, padding:"4px 9px", cursor:"pointer", fontSize:11 }}>Activate</button>
+                              <button onClick={e => { e.stopPropagation(); patchTenant(t,{status:"active"},"Tenant reactivated"); }} disabled={busy} style={{ background:"rgba(16,185,129,0.08)", border:"1px solid rgba(16,185,129,0.25)", color:"#10b981", borderRadius:6, padding:"4px 9px", cursor:"pointer", fontSize:11 }}>Activate</button>
                             )}
                           </div>
                         </td>
@@ -174,6 +214,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                     ))}
                   </tbody>
                 </table>
+                )}
               </div>
             </div>
           )}
@@ -185,10 +226,8 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                 {[
                   { label:"Monthly Revenue",  value:`$${totalMRR.toLocaleString()}`, icon:"💰", color:"#f59e0b" },
                   { label:"Active Orgs",       value:activeCount, icon:"✅", color:"#10b981" },
-                  { label:"At Risk",           value:MOCK_TENANTS.filter(t=>t.status==="at_risk").length, icon:"⚠️", color:"#f59e0b" },
-                  { label:"Suspended",         value:MOCK_TENANTS.filter(t=>t.status==="suspended").length, icon:"🚫", color:"#ef4444" },
-                  { label:"Total API Calls",   value:`${(MOCK_TENANTS.reduce((s,t)=>s+t.apiCalls,0)/1000).toFixed(0)}K`, icon:"📡", color:"#0ea5e9" },
-                  { label:"Total Storage",     value:"29.5GB", icon:"💾", color:"#8b5cf6" },
+                  { label:"At Risk",           value:tenants.filter(t=>t.status==="at_risk").length, icon:"⚠️", color:"#f59e0b" },
+                  { label:"Suspended",         value:tenants.filter(t=>t.status==="suspended").length, icon:"🚫", color:"#ef4444" },
                 ].map(m => (
                   <div key={m.label} style={{ background:cs.bg, borderRadius:14, padding:16, border:`1px solid ${cs.border}` }}>
                     <div style={{ fontSize:24 }}>{m.icon}</div>
@@ -198,12 +237,11 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                 ))}
               </div>
 
-              {/* Plan breakdown */}
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}`, marginBottom:16 }}>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:14, fontSize:15 }}>Plan Distribution</div>
                 {["enterprise","scale","growth","starter"].map(plan => {
-                  const count = MOCK_TENANTS.filter(t => t.plan===plan).length;
-                  const pct = Math.round((count/MOCK_TENANTS.length)*100);
+                  const count = tenants.filter(t => t.plan===plan).length;
+                  const pct = tenants.length ? Math.round((count/tenants.length)*100) : 0;
                   return (
                     <div key={plan} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
                       <div style={{ width:90, fontSize:12, fontWeight:600, color:PLAN_COLORS[plan], textTransform:"capitalize" }}>{plan}</div>
@@ -216,19 +254,16 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                 })}
               </div>
 
-              {/* Health warnings */}
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:14, fontSize:15 }}>⚠️ Needs Attention</div>
-                {MOCK_TENANTS.filter(t => t.health < 80 || t.status !== "active").map(t => (
-                  <div key={t.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${cs.border}` }}>
+                {tenants.filter(t => t.status !== "active").length===0 && <div style={{ fontSize:12, color:cs.textDim }}>Nothing needs attention right now</div>}
+                {tenants.filter(t => t.status !== "active").map(t => (
+                  <div key={t.org_id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${cs.border}` }}>
                     <div>
                       <div style={{ fontWeight:700, color:cs.text, fontSize:13 }}>{t.name}</div>
-                      <div style={{ fontSize:11, color:cs.textDim }}>{t.domain} · {t.status.replace("_"," ")}</div>
+                      <div style={{ fontSize:11, color:cs.textDim }}>{t.domain} · {(t.status||"").replace("_"," ")}</div>
                     </div>
-                    <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                      <span style={{ fontSize:12, fontWeight:700, color:STATUS_COLORS[t.status] }}>{t.health}% health</span>
-                      <button onClick={() => { setTab("tenants"); setSelectedTenant(t); }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:7, padding:"4px 11px", cursor:"pointer", fontSize:11 }}>View</button>
-                    </div>
+                    <button onClick={() => { setTab("tenants"); setSelectedTenant(t); }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:7, padding:"4px 11px", cursor:"pointer", fontSize:11 }}>View</button>
                   </div>
                 ))}
               </div>
@@ -240,52 +275,52 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
             <div style={{ flex:1, overflowY:"auto", padding:24, maxWidth:600 }}>
               <div style={{ fontWeight:700, color:cs.text, fontSize:16, marginBottom:20 }}>➕ Provision New Tenant</div>
               {[
-                { label:"Organization Name *", placeholder:"Acme Corp" },
-                { label:"Primary Domain *",    placeholder:"acme.com" },
-                { label:"Admin Email *",       placeholder:"admin@acme.com" },
-                { label:"Phone / Contact",     placeholder:"+1 555 000 0000" },
+                { key:"name",        label:"Organization Name *", placeholder:"Acme Corp" },
+                { key:"domain",      label:"Primary Domain *",    placeholder:"acme.com" },
+                { key:"admin_email", label:"Admin Email *",       placeholder:"admin@acme.com" },
               ].map(f => (
-                <div key={f.label} style={{ marginBottom:14 }}>
+                <div key={f.key} style={{ marginBottom:14 }}>
                   <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>{f.label}</label>
-                  <input placeholder={f.placeholder} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
+                  <input value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
                 </div>
               ))}
 
               <div style={{ marginBottom:14 }}>
                 <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Plan</label>
-                <select style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none" }}>
+                <select value={form.plan} onChange={e=>setForm(p=>({...p,plan:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none" }}>
                   {["starter","growth","scale","enterprise"].map(p => <option key={p} value={p} style={{ background:"#1e293b", textTransform:"capitalize" }}>{p}</option>)}
                 </select>
               </div>
 
               <div style={{ marginBottom:14 }}>
                 <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Seats Limit</label>
-                <input type="number" defaultValue={50} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
+                <input type="number" value={form.seats} onChange={e=>setForm(p=>({...p,seats:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
               </div>
 
               <div style={{ marginBottom:14 }}>
                 <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Region</label>
-                <select style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none" }}>
+                <select value={form.region} onChange={e=>setForm(p=>({...p,region:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none" }}>
                   {["us-east","us-west","eu-west","ap-south"].map(r => <option key={r} value={r} style={{ background:"#1e293b" }}>{r}</option>)}
                 </select>
               </div>
 
               <div style={{ marginBottom:14 }}>
                 <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>White-label Domain (optional)</label>
-                <input placeholder="app.acmecorp.com" style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
+                <input value={form.white_label_domain} onChange={e=>setForm(p=>({...p,white_label_domain:e.target.value}))} placeholder="app.acmecorp.com" style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
               </div>
 
               <div style={{ marginBottom:20 }}>
                 <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Trial Period (days, 0 = no trial)</label>
-                <input type="number" defaultValue={14} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
+                <input type="number" value={form.trial_days} onChange={e=>setForm(p=>({...p,trial_days:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
               </div>
 
-              <button style={{ background:"linear-gradient(135deg,#f59e0b,#10b981)", border:"none", color:"#fff", borderRadius:12, padding:"12px 28px", cursor:"pointer", fontWeight:800, fontSize:14 }}>
-                🚀 Provision Tenant
+              {provisionError && <div style={{ color:"#ef4444", fontSize:12, marginBottom:12 }}>{provisionError}</div>}
+              <button onClick={submitProvision} disabled={busy} style={{ background:provisionOk?"#10b981":"linear-gradient(135deg,#f59e0b,#10b981)", border:"none", color:"#fff", borderRadius:12, padding:"12px 28px", cursor:"pointer", fontWeight:800, fontSize:14 }}>
+                {provisionOk ? "✓ Provisioned!" : busy ? "Provisioning…" : "🚀 Provision Tenant"}
               </button>
 
               <div style={{ marginTop:16, padding:14, background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:10, fontSize:12, color:cs.textDim, lineHeight:1.7 }}>
-                Provisioning will: create Firestore org, send admin welcome email, configure SSO domain allowlist, initialize billing in Stripe, and set up isolated data namespace.
+                This creates the org record in Firestore and returns its org_id — it does not yet send an admin welcome email, configure SSO, or set up billing automatically.
               </div>
             </div>
           )}
@@ -293,7 +328,9 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
           {/* ── ACTION LOG ── */}
           {tab==="audit" && (
             <div style={{ flex:1, overflowY:"auto", padding:24 }}>
-              <div style={{ fontWeight:700, color:cs.text, fontSize:16, marginBottom:16 }}>📋 Super-Admin Action Log</div>
+              <div style={{ fontWeight:700, color:cs.text, fontSize:16, marginBottom:16 }}>📋 This Session's Actions</div>
+              <div style={{ fontSize:12, color:cs.textDim, marginBottom:16 }}>Provision and update calls are also recorded server-side in the admin audit log — this is just a local view of what you've done this session.</div>
+              {actionLog.length===0 && <div style={{ fontSize:12, color:cs.textDim }}>No actions yet this session</div>}
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 {actionLog.map(log => (
                   <div key={log.id} style={{ background:cs.bg, borderRadius:10, padding:"12px 16px", border:`1px solid ${cs.border}`, display:"flex", gap:14, alignItems:"flex-start" }}>
@@ -320,13 +357,13 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
 
               {[
                 ["Domain",   selectedTenant.domain],
-                ["Admin",    selectedTenant.admin],
+                ["Admin",    selectedTenant.admin_email],
                 ["Plan",     selectedTenant.plan],
                 ["Region",   selectedTenant.region],
-                ["Created",  selectedTenant.created],
-                ["Storage",  selectedTenant.storage],
-                ["API Calls",selectedTenant.apiCalls.toLocaleString()],
-                ["MRR",      `$${selectedTenant.mrr.toLocaleString()}`],
+                ["Created",  (selectedTenant.created_at||"").slice(0,10)],
+                ["Seats",    selectedTenant.seats],
+                ["Trial days", selectedTenant.trial_days ?? "—"],
+                ["MRR",      `$${(selectedTenant.mrr||0).toLocaleString()}`],
               ].map(([k,v]) => (
                 <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${cs.border}`, fontSize:13 }}>
                   <span style={{ color:cs.textDim }}>{k}</span>
@@ -334,24 +371,13 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                 </div>
               ))}
 
-              <div style={{ margin:"16px 0 10px", fontWeight:700, color:cs.text, fontSize:13 }}>Seat Usage</div>
-              <div style={{ height:8, background:"rgba(255,255,255,0.08)", borderRadius:4, marginBottom:6 }}>
-                <div style={{ height:"100%", borderRadius:4, background: selectedTenant.activeSeats/selectedTenant.seats>0.8?"#10b981":"#f59e0b", width:`${Math.min(100,(selectedTenant.activeSeats/selectedTenant.seats)*100)}%` }} />
-              </div>
-              <div style={{ fontSize:12, color:cs.textDim }}>{selectedTenant.activeSeats} of {selectedTenant.seats} seats active</div>
-
               <div style={{ margin:"16px 0 10px", fontWeight:700, color:cs.text, fontSize:13 }}>Actions</div>
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {[
-                  { label:"📧 Email Admin",  action:"Admin emailed" },
-                  { label:"🔑 Reset SSO",    action:"SSO reset triggered" },
-                  { label:"💺 Add Seats",    action:"Seat limit +10" },
-                  { label:"⏱ Extend Trial", action:"Trial extended 7 days" },
-                  { label:"📊 Export Data", action:"Data export requested" },
-                  { label:"🗑 Delete Org",  action:"Org deletion initiated", danger:true },
-                ].map(a => (
-                  <button key={a.label} onClick={() => doAction(selectedTenant, a.action)} style={{ background:a.danger?"rgba(239,68,68,0.08)":"rgba(255,255,255,0.04)", border:`1px solid ${a.danger?"rgba(239,68,68,0.3)":cs.border}`, color:a.danger?"#ef4444":cs.text, borderRadius:8, padding:"8px 12px", cursor:"pointer", fontSize:12, fontWeight:600, textAlign:"left" }}>
-                    {a.label}
+                <button onClick={() => patchTenant(selectedTenant, { seats:(selectedTenant.seats||0)+10 }, "Seat limit +10")} disabled={busy} style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, padding:"8px 12px", cursor:"pointer", fontSize:12, fontWeight:600, textAlign:"left" }}>💺 Add 10 Seats</button>
+                <button onClick={() => patchTenant(selectedTenant, { trial_days:(selectedTenant.trial_days||0)+7 }, "Trial extended 7 days")} disabled={busy} style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, padding:"8px 12px", cursor:"pointer", fontSize:12, fontWeight:600, textAlign:"left" }}>⏱ Extend Trial +7 days</button>
+                {NOT_WIRED.map(label => (
+                  <button key={label} disabled title="Not implemented yet" style={{ background:"rgba(255,255,255,0.02)", border:`1px dashed ${cs.border}`, color:cs.textDim, borderRadius:8, padding:"8px 12px", cursor:"not-allowed", fontSize:12, fontWeight:600, textAlign:"left", opacity:0.6 }}>
+                    {label==="Email Admin"?"📧":label==="Reset SSO"?"🔑":label==="Export Data"?"📊":"🗑"} {label} <span style={{fontSize:10}}>— not wired yet</span>
                   </button>
                 ))}
               </div>
