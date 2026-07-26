@@ -12,7 +12,8 @@
  * their real activity log through this screen.
  */
 import { useState, useEffect, useCallback } from "react";
-import { apiFetch, exportAuditLogCsv } from "./services/api.js";
+import { db, auth } from "./firebase.js";
+import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
 
 const TYPE_COLORS = {
   login:"#6366f1", analysis:"#0ea5e9", billing:"#f59e0b",
@@ -31,18 +32,33 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
   const fetchActivity = useCallback(async () => {
     setLoading(true); setLoadError(false);
     try {
-      const data = await apiFetch("/user/activity");
-      if (data?.ok) {
-        setActivity((data.events||[]).map(e => ({
-          id: e.id || e.ts, ts: e.ts,
+      const uid = auth.currentUser?.uid;
+      if (!uid) { setLoadError(true); return; }
+      // Read from audit_logs collection (written by serverless functions)
+      const snap = await getDocs(
+        query(collection(db, "audit_logs"), where("uid","==",uid), orderBy("timestamp","desc"), limit(100))
+      );
+      const ICONS = { login:"🔐", analysis:"📷", billing:"💳", security:"🛡", team:"👥", profile:"👤" };
+      const events = snap.docs.map(d => {
+        const e = d.data();
+        return {
+          id: d.id, ts: e.timestamp || e.created_at || "",
           type: e.category || "info",
-          icon: { login:"🔐", analysis:"📷", billing:"💳", security:"🛡", team:"👥", profile:"👤" }[e.category] || "📌",
-          title: (e.action||"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()),
+          icon: ICONS[e.category] || "📌",
+          title: (e.action||"").replace(/_/g," ").replace(/\w/g,c=>c.toUpperCase()),
           detail: e.detail || "",
           severity: e.severity || "info",
-        })));
+        };
+      });
+      setActivity(events);
+      if (events.length === 0) {
+        // Seed a welcome event if no audit log yet
+        setActivity([{
+          id:"welcome", ts: new Date().toISOString(), type:"info", icon:"🎉",
+          title:"Account Created", detail:"Welcome to Corvus PostureAI!", severity:"info",
+        }]);
       }
-    } catch(_) { setLoadError(true); }
+    } catch(e) { console.warn("[AccountActivity]", e.message); setLoadError(true); }
     setLoading(false);
   }, []);
 
