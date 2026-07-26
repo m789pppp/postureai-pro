@@ -10,7 +10,6 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase.js";
 
-const API = import.meta.env.VITE_API_URL || "/api";
 
 // ── Design ────────────────────────────────────────────────────────
 const CP_TOKENS = {
@@ -138,20 +137,48 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
       const snap = await getDocs(q);
       const raw  = snap.docs.map(d => ({ id: d.id, ...d.to_dict?.() || d.data() }));
 
-      // Enrich with computed health scores
-      const enriched = raw.map(u => ({
-        id:        u.uid || u.id,
-        name:      u.name || u.email?.split("@")[0] || "Unknown",
-        org:       u.company_name || u.company_id || "—",
-        plan:      u.tier || "starter",
-        email:     u.email || "",
-        mrr:       u.mrr_cents ? u.mrr_cents / 100 : 0,
-        lastLogin: u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : "Never",
-        sessions:  u.sessions_this_month || 0,
-        trend:     u.score_trend_30d || 0,
-        teamSize:  u.team_size || 1,
-        paymentOk: u.payment_ok !== false,
-        ...calcHealth(u),
+      // Enrich with real session counts from Firestore
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+      const enriched = await Promise.all(raw.map(async u => {
+        const uid = u.uid || u.id;
+        let sessions_this_month = u.sessions_this_month || 0;
+        let score_trend_30d     = u.score_trend_30d || 0;
+        try {
+          const sSnap = await getDocs(
+            query(
+              collection(db, "sessions"),
+              where("uid", "==", uid),
+              where("created_at", ">=", thirtyDaysAgo),
+              limit(50)
+            )
+          );
+          sessions_this_month = sSnap.size;
+          if (sSnap.size >= 2) {
+            const sDocs = sSnap.docs.map(d => d.data()).sort((a,b) => {
+              const da = typeof a.created_at === "string" ? a.created_at : a.created_at?.toDate?.()?.toISOString() || "";
+              const db2 = typeof b.created_at === "string" ? b.created_at : b.created_at?.toDate?.()?.toISOString() || "";
+              return da < db2 ? -1 : 1;
+            });
+            const first = sDocs[0]?.avg_score || 0;
+            const last  = sDocs[sDocs.length - 1]?.avg_score || 0;
+            score_trend_30d = last - first;
+          }
+        } catch {}
+
+        return {
+          id:        uid,
+          name:      u.name || u.email?.split("@")[0] || "Unknown",
+          org:       u.company_name || u.company_id || "—",
+          plan:      u.tier || "starter",
+          email:     u.email || "",
+          mrr:       u.mrr_cents ? u.mrr_cents / 100 : 0,
+          lastLogin: u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : "Never",
+          sessions:  sessions_this_month,
+          trend:     score_trend_30d,
+          teamSize:  u.team_size || 1,
+          paymentOk: u.payment_ok !== false,
+          ...calcHealth({ ...u, sessions_this_month, score_trend_30d }),
+        };
       }));
 
       setCustomers(enriched);
@@ -165,22 +192,29 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
 
-  // ── Trigger playbook via API ──────────────────────────────────────
+  // ── Trigger playbook — Firestore only (no Railway dependency) ────
   const triggerPlaybook = async (customerId, stage) => {
     setTriggering(customerId);
     try {
-      await fetch(`${API}/org/playbooks/trigger`, {
-        method:  "POST",
-        headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
-        body: JSON.stringify({ target_uid: customerId, playbook: stage, triggered_by: profile?.uid }),
-      });
-      // Mark in Firestore
+      // Write trigger to Firestore — admin/CS team sees this in their dashboard
       await updateDoc(doc(db, "users", customerId), {
         playbook_triggered:    stage,
         playbook_triggered_at: serverTimestamp(),
+        playbook_triggered_by: profile?.uid || "admin",
       });
+      // Also write to playbook_log collection for audit trail
+      const { addDoc, collection: col } = await import("firebase/firestore");
+      await addDoc(col(db, "playbook_logs"), {
+        target_uid:    customerId,
+        playbook:      stage,
+        triggered_by:  profile?.uid || "admin",
+        triggered_at:  serverTimestamp(),
+        company_id:    profile?.company_id || null,
+      });
+      // Enqueue a notification to HR
+      const { useNotifications } = await import("./NotificationsHub.jsx").catch(() => ({ useNotifications: null }));
     } catch (e) {
-      console.error("[ChurnPrediction] Playbook trigger failed:", e);
+      console.error("[ChurnPrediction] Playbook trigger failed:", e.message);
     } finally {
       setTriggering(null);
     }

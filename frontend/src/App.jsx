@@ -2494,7 +2494,7 @@ export default function App(){
     return () => window.removeEventListener("sw-update-available", fn);
   },[]);
   // Sentry already init in main.jsx; just handle SSO redirect
-  useEffect(()=>{ handleSSORedirect().catch(()=>{}); },[]);
+  useEffect(()=>{ handleSSORedirect().catch(e=>console.error("[SSO]",e.message)); },[]);
   // Handle payment redirect from Kashier/Stripe
   const [paymentResult, setPaymentResult] = useState(null); // null | "success" | "cancelled"
   useEffect(()=>{
@@ -2504,7 +2504,7 @@ export default function App(){
       setPaymentResult(res);
       window.history.replaceState({},"","/");
       // Refresh profile so tier is current
-      if(res==="success"&&user) getUserProfile(user.uid).then(setProfile).catch(()=>{});
+      if(res==="success"&&user) getUserProfile(user.uid).then(setProfile).catch(e=>console.warn("[Profile]",e.message));
     }
     if(p.get("payment")==="success"){
       toast(isAr?"✅ تم تفعيل خطتك!":"✅ Your plan is now active!","success");
@@ -2646,7 +2646,7 @@ export default function App(){
           if(p.tier) setTier(normalizeTier(p.tier));
           if(p.company_id) setCompanyId(p.company_id);
         }
-        getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
+        getUserSessions(u.uid).then(setUserSessions).catch(e=>console.warn("[Sessions]",e.message));
         setAuthChecked(true);
         if (isNew) setPage("setup");
         else setPage("home");
@@ -2695,7 +2695,7 @@ export default function App(){
             try { EmailAPI.sequence({email:u.email,name:u.displayName||u.email.split("@")[0],
               day:0,tier:"professional",session_count:0,avg_score:0}).catch(()=>{}); } catch{}
           } else {
-            try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked){ setProfile(checked); if(checked.tier) setTier(normalizeTier(checked.tier)); } }).catch(()=>{}); } catch{}
+            try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked){ setProfile(checked); if(checked.tier) setTier(normalizeTier(checked.tier)); } }).catch(e=>console.warn("[Trial]",e.message)); } catch{}
             try { checkAndSendNurtureEmails(u.uid, p, API).catch(()=>{}); } catch{}
           }
           // Note: server-side middleware auto-elevates eligible emails to elite on every API
@@ -2743,7 +2743,7 @@ export default function App(){
           if(!mfaPending){
           try {
             if(p?.company_id||p?.is_org_owner){
-              getAllUsers(p.company_id||null,false).then(setAllUsers).catch(()=>{});
+              getAllUsers(p.company_id||null,false).then(setAllUsers).catch(e=>console.warn("[HR Users]",e.message));
             }
           } catch{}
           }
@@ -3185,7 +3185,7 @@ export default function App(){
       }
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
       setAlertMsg({text:`${M_?.label} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
-      if(user?.uid) completeOnboardingStep(user.uid,"first_session").catch(()=>{});
+      if(user?.uid) completeOnboardingStep(user.uid,"first_session").catch(e=>console.warn("[Onboarding]",e.message));
       // Calibration is opt-in — user can trigger from settings
       // Removed auto-popup to prevent overlay conflict with camera
       timerRef.current=setInterval(()=>{
@@ -3845,7 +3845,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           if(isNew) {
             // Send verification email for new signups (fire & forget)
             import("./firebase.js").then(({sendVerificationEmail})=>{
-              sendVerificationEmail(u).catch(()=>{});
+              sendVerificationEmail(u).catch(e=>console.warn("[VerifyEmail]",e.message));
             });
             setShowEmailVerify(true);
             // Let onAuthStateChanged handle routing — it will read the

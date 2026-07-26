@@ -89,6 +89,12 @@ service cloud.firestore {
       allow create, update, delete: if false; // Admin SDK only (webhook)
     }
 
+    // ── User AI Usage (message counters, tamper-proof) ──────────
+    match /users/{uid}/ai_usage/{month} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid) || isAdmin(); // user increments their own counter
+    }
+
     // ── User AI Insights Subcollection ───────────────────────────
     match /users/{uid}/ai_insights/{insightId} {
       allow read, create, update: if isOwner(uid) || isAdmin();
@@ -305,6 +311,13 @@ service cloud.firestore {
                   && request.auth.token.admin == true;
       allow create: if false; // backend only via Admin SDK
       allow update, delete: if false;
+    }
+
+    // ── Playbook Logs (CS action audit trail) ────────────────────
+    match /playbook_logs/{logId} {
+      allow read: if isAdmin() || isHR();
+      allow create: if isAuthenticated() && (isAdmin() || isHR());
+      allow update, delete: if isAdmin();
     }
 
     // ── Notification Logs (server-written audit trail) ──────────
