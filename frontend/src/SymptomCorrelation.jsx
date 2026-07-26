@@ -34,7 +34,7 @@ function todayStr() {
 
 export function SymptomCorrelation({ cs, lang="en", onClose }) {
   const isAr = lang === "ar";
-  const [tab, setTab] = useState("checkin"); // checkin | insights
+  const [tab, setTab] = useState("checkin"); // checkin | history | insights
   const [selected, setSelected] = useState({}); // {type: severity}
   const [saving, setSaving] = useState(false);
   const [savedToday, setSavedToday] = useState(false);
@@ -42,6 +42,10 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
   const [insights, setInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [note, setNote] = useState(null);
+
+  const [history, setHistory] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyPeriod, setHistoryPeriod] = useState("30d");
 
   const toggleSymptom = (type) => {
     setSelected(prev => {
@@ -75,7 +79,16 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
       .finally(() => setLoadingInsights(false));
   }, []);
 
+  const loadHistory = useCallback((period) => {
+    setLoadingHistory(true);
+    SymptomAPI.history(period)
+      .then(d => setHistory(d?.logs || []))
+      .catch(() => setHistory([]))
+      .finally(() => setLoadingHistory(false));
+  }, []);
+
   useEffect(() => { if (tab === "insights") loadInsights(); }, [tab, loadInsights]);
+  useEffect(() => { if (tab === "history") loadHistory(historyPeriod); }, [tab, historyPeriod, loadHistory]);
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", zIndex:900,
@@ -95,6 +108,11 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
             color: tab==="checkin" ? "#5eead4" : "#94a3b8",
             border: tab==="checkin" ? "1px solid rgba(15,118,110,.4)" : border,
           }}>{isAr ? "تسجيل اليوم" : "Today's Check-in"}</button>
+          <button onClick={()=>setTab("history")} style={{
+            ...btnGhost, background: tab==="history" ? "rgba(15,118,110,.18)" : "transparent",
+            color: tab==="history" ? "#5eead4" : "#94a3b8",
+            border: tab==="history" ? "1px solid rgba(15,118,110,.4)" : border,
+          }}>{isAr ? "السجل" : "History"}</button>
           <button onClick={()=>setTab("insights")} style={{
             ...btnGhost, background: tab==="insights" ? "rgba(15,118,110,.18)" : "transparent",
             color: tab==="insights" ? "#5eead4" : "#94a3b8",
@@ -148,6 +166,49 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {tab === "history" && (
+          <div>
+            <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+              {["7d","30d","90d"].map(p => (
+                <button key={p} onClick={()=>setHistoryPeriod(p)} style={{
+                  ...btnGhost, padding:"6px 12px", fontSize:12,
+                  background: historyPeriod===p ? "rgba(15,118,110,.18)" : "transparent",
+                  color: historyPeriod===p ? "#5eead4" : "#94a3b8",
+                  border: historyPeriod===p ? "1px solid rgba(15,118,110,.4)" : border,
+                }}>{p}</button>
+              ))}
+            </div>
+            {loadingHistory && <div style={{ color:"#64748b" }}>{isAr?"جاري التحميل…":"Loading…"}</div>}
+            {!loadingHistory && history && history.length === 0 && (
+              <div style={{ ...card, textAlign:"center", color:"#64748b" }}>
+                {isAr ? "لسه مفيش تسجيلات في الفترة دي" : "No check-ins logged in this period yet"}
+              </div>
+            )}
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {(history||[]).map((log, i) => (
+                <div key={i} style={card}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                    <span style={{ fontWeight:800, color:"#e2e8f0", fontSize:13 }}>{log.date}</span>
+                  </div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                    {(log.symptoms||[]).map((s, j) => {
+                      const sDef = SYMPTOMS.find(d=>d.type===s.type);
+                      return (
+                        <span key={j} style={{ display:"inline-flex", alignItems:"center", gap:5,
+                          background:"rgba(255,255,255,.05)", borderRadius:20, padding:"4px 10px", fontSize:12, color:"#cbd5e1" }}>
+                          {sDef?.icon || "🩹"} {sDef ? (isAr?sDef.ar:sDef.en) : s.type}
+                          <span style={{ color:"#5eead4", fontWeight:700 }}>{s.severity}/5</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {log.notes && <div style={{ fontSize:12, color:"#94a3b8", marginTop:8 }}>{log.notes}</div>}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
