@@ -19,15 +19,14 @@ const CP_TOKENS = {
 };
 
 // ── Health score calculator ─────────────────────────────────────────
-// STATUS (see git history for the full audit): last_login_at and
-// payment_ok are now real, tracked fields (login on every sign-in;
-// payment_ok set by the Stripe/PayMob/Kashier success & failure webhook
-// handlers) — that's 40% of the weight below on genuine signal.
-// sessions_this_month, score_trend_30d, and features_used are still
-// undefined on every user document — those 3 inputs (35% of the weight)
-// remain flagged, not fixed: they need either a scheduled aggregation job
-// or a dedicated backend endpoint that computes them from real session
-// history, not something to patch here without that infrastructure.
+// STATUS (see git history for the full audit): all 6 inputs are real.
+// last_login_at: set on every sign-in. payment_ok: set by the Stripe/
+// PayMob/Kashier webhook handlers on actual payment success/failure.
+// sessions_this_month/score_trend_30d: computed live from real session
+// history at read time (see the enrichment query above calcHealth's
+// call site), not read from a static field. features_used: derived
+// below from real adoption signals (calibration, referrals, AI Coach/
+// PDF usage this month) rather than a literal single tracked counter.
 function calcHealth(u) {
   const now    = Date.now();
   const msDay  = 86400000;
@@ -45,8 +44,15 @@ function calcHealth(u) {
   const trend      = u.score_trend_30d || 0; // positive = improving
   const trendScore = 50 + Math.min(50, Math.max(-50, trend * 2));
 
-  // Feature depth
-  const features   = u.features_used || 0;
+  // Feature depth — features_used is never written anywhere in the
+  // codebase (confirmed by grep), so reading it directly always
+  // contributed 0 regardless of actual usage. Approximate from real,
+  // already-tracked adoption signals instead.
+  const features   =
+    (u.has_calibration || u.calibrated_at ? 1 : 0) +
+    (u.referral_count > 0 ? 1 : 0) +
+    (u.ai_coach_this_month > 0 ? 1 : 0) +
+    (u.pdf_exports_this_month > 0 ? 1 : 0);
   const featScore  = Math.min(100, features * 15);
 
   // Payment history
