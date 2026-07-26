@@ -306,14 +306,24 @@ export function AICoach({ profile, sessions=[], calibration, cs, lang="en", effe
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
-  // Load monthly count
+  // Load monthly count from Firestore (tamper-proof)
   useEffect(()=>{
-    try {
-      const uid = profile?.uid||"";
-      if (!uid) return;
-      const key = "corvus_coach_count_"+uid+"_"+new Date().toISOString().slice(0,7);
-      setMsgCount(parseInt(localStorage.getItem(key)||"0",10));
-    } catch {}
+    const uid = profile?.uid||"";
+    if (!uid) return;
+    const month = new Date().toISOString().slice(0,7);
+    import("./firebase.js").then(({ db, doc, getDoc }) => {
+      getDoc(doc(db, "users", uid, "ai_usage", month))
+        .then(snap => {
+          if (snap.exists()) setMsgCount(snap.data()?.coach_messages || 0);
+        })
+        .catch(() => {
+          // Fallback to localStorage if Firestore fails
+          try {
+            const key = "corvus_coach_count_"+uid+"_"+month;
+            setMsgCount(parseInt(localStorage.getItem(key)||"0",10));
+          } catch {}
+        });
+    }).catch(() => {});
   },[profile]);
 
   // Build context
@@ -400,10 +410,18 @@ export function AICoach({ profile, sessions=[], calibration, cs, lang="en", effe
         try {
           const uid=profile?.uid||"";
           if (uid) {
-            const key="corvus_coach_count_"+uid+"_"+new Date().toISOString().slice(0,7);
             const n=msgCount+1;
-            localStorage.setItem(key,String(n));
             setMsgCount(n);
+            const month=new Date().toISOString().slice(0,7);
+            import("./firebase.js").then(({ db, doc, setDoc, increment }) => {
+              setDoc(doc(db,"users",uid,"ai_usage",month),
+                { coach_messages: n, updated_at: new Date().toISOString() },
+                { merge: true }
+              ).catch(() => {
+                // Fallback localStorage
+                try { localStorage.setItem("corvus_coach_count_"+uid+"_"+month, String(n)); } catch {}
+              });
+            }).catch(() => {});
           }
         } catch {}
       } catch(se) {

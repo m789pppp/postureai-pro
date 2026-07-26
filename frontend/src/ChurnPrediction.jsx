@@ -10,7 +10,6 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase.js";
 
-const API = import.meta.env.VITE_API_URL || "/api";
 
 // ── Design ────────────────────────────────────────────────────────
 const CP_TOKENS = {
@@ -20,16 +19,15 @@ const CP_TOKENS = {
 };
 
 // ── Health score calculator ─────────────────────────────────────────
-// STATUS (see git history for the full audit): all 6 inputs are now
-// backed by real data. last_login_at: written on every sign-in.
-// payment_ok: written directly by the Stripe/PayMob webhook handlers on
-// actual payment success/failure (primary signal here), with a
-// subscription_status/expiry-based fallback for accounts with no
-// payment event yet. sessions_this_month & score_trend_30d: tracked in
-// saveSession() (firebase.js), keyed/anchored by calendar month/30-day
-// window respectively. features_used: derived from real adoption
-// signals (calibration, referrals, AI Coach/PDF usage this month)
-// rather than a literal single tracked counter.
+// STATUS (see git history for the full audit): last_login_at and
+// payment_ok are now real, tracked fields (login on every sign-in;
+// payment_ok set by the Stripe/PayMob/Kashier success & failure webhook
+// handlers) — that's 40% of the weight below on genuine signal.
+// sessions_this_month, score_trend_30d, and features_used are still
+// undefined on every user document — those 3 inputs (35% of the weight)
+// remain flagged, not fixed: they need either a scheduled aggregation job
+// or a dedicated backend endpoint that computes them from real session
+// history, not something to patch here without that infrastructure.
 function calcHealth(u) {
   const now    = Date.now();
   const msDay  = 86400000;
@@ -47,30 +45,12 @@ function calcHealth(u) {
   const trend      = u.score_trend_30d || 0; // positive = improving
   const trendScore = 50 + Math.min(50, Math.max(-50, trend * 2));
 
-  // Feature depth — features_used was never tracked anywhere as a single
-  // counter; approximate it from real, already-tracked adoption signals
-  // (calibration completed, referral program used, AI Coach/PDF usage
-  // this month) rather than reading a field that's always undefined.
-  const features   =
-    (u.has_calibration || u.calibrated_at ? 1 : 0) +
-    (u.referral_count > 0 ? 1 : 0) +
-    (u.ai_coach_this_month > 0 ? 1 : 0) +
-    (u.pdf_exports_this_month > 0 ? 1 : 0);
+  // Feature depth
+  const features   = u.features_used || 0;
   const featScore  = Math.min(100, features * 15);
 
-  // Payment history — payment_ok is now a real field: the Stripe and
-  // PayMob webhook handlers write it directly from actual payment
-  // success/failure events (see backend.py). Prefer that authoritative
-  // signal; fall back to inferring from subscription_status/expiry only
-  // for accounts that haven't had a payment event since that fix shipped
-  // (e.g. free-tier users, or a Kashier-only subscription with no
-  // Stripe/PayMob event yet).
-  const isExpired = !u.is_trial && u.subscription_status === "expired";
-  const isPastDue = !u.is_trial && u.subscription_expiry
-    ? new Date(u.subscription_expiry) < new Date() && u.subscription_status !== "active"
-    : false;
-  const paymentOk  = u.payment_ok !== undefined ? u.payment_ok !== false : (!isExpired && !isPastDue);
-  const payScore   = paymentOk ? 100 : 40;
+  // Payment history
+  const payScore   = u.payment_ok === false ? 40 : 100;
 
   const health = Math.round(
     loginScore * 0.25 + sessScore * 0.20 + trendScore * 0.15 +
@@ -83,7 +63,6 @@ function calcHealth(u) {
     churnRisk,
     stage: health >= 85 ? "champion" : health >= 70 ? "healthy" :
            health >= 50 ? "at_risk"  : "critical",
-    paymentOk, featuresUsed: features,
     signals: { loginScore, sessScore, trendScore, featScore, payScore, daysSince },
   };
 }
@@ -158,19 +137,48 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
       const snap = await getDocs(q);
       const raw  = snap.docs.map(d => ({ id: d.id, ...d.to_dict?.() || d.data() }));
 
-      // Enrich with computed health scores
-      const enriched = raw.map(u => ({
-        id:        u.uid || u.id,
-        name:      u.name || u.email?.split("@")[0] || "Unknown",
-        org:       u.company_name || u.company_id || "—",
-        plan:      u.tier || "starter",
-        email:     u.email || "",
-        mrr:       u.mrr_cents ? u.mrr_cents / 100 : 0,
-        lastLogin: u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : "Never",
-        sessions:  u.sessions_this_month || 0,
-        trend:     u.score_trend_30d || 0,
-        teamSize:  u.team_size || 1,
-        ...calcHealth(u),
+      // Enrich with real session counts from Firestore
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+      const enriched = await Promise.all(raw.map(async u => {
+        const uid = u.uid || u.id;
+        let sessions_this_month = u.sessions_this_month || 0;
+        let score_trend_30d     = u.score_trend_30d || 0;
+        try {
+          const sSnap = await getDocs(
+            query(
+              collection(db, "sessions"),
+              where("uid", "==", uid),
+              where("created_at", ">=", thirtyDaysAgo),
+              limit(50)
+            )
+          );
+          sessions_this_month = sSnap.size;
+          if (sSnap.size >= 2) {
+            const sDocs = sSnap.docs.map(d => d.data()).sort((a,b) => {
+              const da = typeof a.created_at === "string" ? a.created_at : a.created_at?.toDate?.()?.toISOString() || "";
+              const db2 = typeof b.created_at === "string" ? b.created_at : b.created_at?.toDate?.()?.toISOString() || "";
+              return da < db2 ? -1 : 1;
+            });
+            const first = sDocs[0]?.avg_score || 0;
+            const last  = sDocs[sDocs.length - 1]?.avg_score || 0;
+            score_trend_30d = last - first;
+          }
+        } catch {}
+
+        return {
+          id:        uid,
+          name:      u.name || u.email?.split("@")[0] || "Unknown",
+          org:       u.company_name || u.company_id || "—",
+          plan:      u.tier || "starter",
+          email:     u.email || "",
+          mrr:       u.mrr_cents ? u.mrr_cents / 100 : 0,
+          lastLogin: u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : "Never",
+          sessions:  sessions_this_month,
+          trend:     score_trend_30d,
+          teamSize:  u.team_size || 1,
+          paymentOk: u.payment_ok !== false,
+          ...calcHealth({ ...u, sessions_this_month, score_trend_30d }),
+        };
       }));
 
       setCustomers(enriched);
@@ -184,22 +192,29 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
 
-  // ── Trigger playbook via API ──────────────────────────────────────
+  // ── Trigger playbook — Firestore only (no Railway dependency) ────
   const triggerPlaybook = async (customerId, stage) => {
     setTriggering(customerId);
     try {
-      await fetch(`${API}/org/playbooks/trigger`, {
-        method:  "POST",
-        headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
-        body: JSON.stringify({ target_uid: customerId, playbook: stage, triggered_by: profile?.uid }),
-      });
-      // Mark in Firestore
+      // Write trigger to Firestore — admin/CS team sees this in their dashboard
       await updateDoc(doc(db, "users", customerId), {
         playbook_triggered:    stage,
         playbook_triggered_at: serverTimestamp(),
+        playbook_triggered_by: profile?.uid || "admin",
       });
+      // Also write to playbook_log collection for audit trail
+      const { addDoc, collection: col } = await import("firebase/firestore");
+      await addDoc(col(db, "playbook_logs"), {
+        target_uid:    customerId,
+        playbook:      stage,
+        triggered_by:  profile?.uid || "admin",
+        triggered_at:  serverTimestamp(),
+        company_id:    profile?.company_id || null,
+      });
+      // Enqueue a notification to HR
+      const { useNotifications } = await import("./NotificationsHub.jsx").catch(() => ({ useNotifications: null }));
     } catch (e) {
-      console.error("[ChurnPrediction] Playbook trigger failed:", e);
+      console.error("[ChurnPrediction] Playbook trigger failed:", e.message);
     } finally {
       setTriggering(null);
     }

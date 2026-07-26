@@ -548,6 +548,20 @@ export async function deleteSession(sessionId) {
 }
 
 // Real-time listener version — keeps sessions always fresh
+// Live listener on the user's own profile doc. Added so server-side tier
+// changes — most notably the subscription-expiry downgrade enforced in
+// backend/auth/middleware.py's _get_user_role() — reflect in the UI
+// immediately instead of silently persisting until the next full reload.
+// Any other server-side profile write (admin tier change, etc.) benefits
+// the same way now, not just this one case.
+export function onUserProfile(uid, callback) {
+  return onSnapshot(doc(db,"users",uid), snap => {
+    if (snap.exists()) callback({ uid, ...snap.data() });
+  }, err => {
+    console.error("[onUserProfile] listener error:", err);
+  });
+}
+
 export function onUserSessions(uid, callback) {
   // BUG FIX: this query had no orderBy, so Firestore's limit(50) returned
   // an arbitrary/undefined-order subset of matching docs — not necessarily
