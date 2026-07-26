@@ -134,6 +134,30 @@
       "dest": "/api/org/invite.js"
     },
     {
+      "src": "/api/email/welcome",
+      "dest": "/api/email/send.js"
+    },
+    {
+      "src": "/api/email/invoice",
+      "dest": "/api/email/send.js"
+    },
+    {
+      "src": "/api/email/weekly-report",
+      "dest": "/api/email/send.js"
+    },
+    {
+      "src": "/api/email/weekly-progress",
+      "dest": "/api/email/send.js"
+    },
+    {
+      "src": "/api/email/sequence",
+      "dest": "/api/email/send.js"
+    },
+    {
+      "src": "/api/admin/seed-flags",
+      "dest": "/api/admin/seed-flags.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
@@ -160,6 +184,12 @@
     },
     "api/org/invite.js": {
       "maxDuration": 15
+    },
+    "api/email/send.js": {
+      "maxDuration": 15
+    },
+    "api/admin/seed-flags.js": {
+      "maxDuration": 30
     }
   }
 }

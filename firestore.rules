@@ -359,6 +359,20 @@ service cloud.firestore {
       allow create, update, delete: if false; // Admin SDK only
     }
 
+    // ── Feature Flags ────────────────────────────────────────────
+    match /feature_flags/{flagId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Audit Logs ────────────────────────────────────────────────
+    match /audit_logs/{logId} {
+      allow read: if isOwner(resource.data.uid) || isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
     // ── Deny everything else ─────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
