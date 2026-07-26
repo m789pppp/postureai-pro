@@ -5857,6 +5857,23 @@ def mark_tour_complete():
 
 
 # ── Drip Email Triggers ───────────────────────────────────────────────────────
+@app.route("/api/auth/whoami", methods=["GET"])
+@require_auth
+@limiter.limit("60 per minute")
+def auth_whoami():
+    """
+    Minimal authenticated endpoint whose only real purpose is to guarantee
+    require_auth's _get_user_role() call actually runs on login.
+
+    Without this, the elite-domain/email auto-elevation fix (and any other
+    logic living in _get_user_role, like the subscription-expiry downgrade)
+    never fires for a normal user in practice: the dashboard loads entirely
+    via direct Firestore client reads (getUserProfile, onUserSessions) and
+    never calls any @require_auth-protected backend route at all. Calling
+    this once on sign-in gives that logic a real touchpoint.
+    """
+    return jsonify({"uid": g.uid, "tier": g.tier})
+
 @app.route("/api/user/onboard", methods=["POST"])
 @require_auth
 @limiter.limit("5 per day")
