@@ -10018,6 +10018,20 @@ def health():
         "auth_ready":    AUTH_READY,
         "rate_limiting": "enabled",
         "timestamp": datetime.now().isoformat(),
+        # Deployment diagnostics — lets anyone check in one request whether
+        # a 404 on a given route means "not deployed yet" vs. something else.
+        # Railway auto-injects RAILWAY_GIT_COMMIT_SHA on every deploy; compare
+        # this against the repo's `git log -1 --format=%H` to confirm the
+        # live backend actually matches the latest pushed commit.
+        "deploy_commit": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "unknown"),
+        "routes_registered": {
+            "marketplace_therapists": any(
+                r.rule == "/api/marketplace/therapists" for r in app.url_map.iter_rules()
+            ),
+            "marketplace_bookings": any(
+                r.rule == "/api/marketplace/bookings" for r in app.url_map.iter_rules()
+            ),
+        },
     })
 
 # ── /api/health/detailed ─────────────────────────────────────────
@@ -11676,6 +11690,124 @@ def admin_users():
             u.pop("password", None)
             users.append(u)
         return jsonify({"users": users, "total": len(users)})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/admin/backfill/user-stats", methods=["POST"])
+@require_auth
+@require_admin
+@limiter.limit("5 per minute")
+def backfill_user_stats():
+    """
+    One-time (but safe to re-run) backfill for existing accounts, covering
+    every field the Sessions-page and ChurnPrediction real-data fixes
+    depend on — those fixes only take effect going forward (new logins,
+    new saveSession() calls); this catches existing accounts up.
+
+    For each user:
+      - Walks their FULL session history (not the 50-doc query cap used
+        elsewhere) to assign a correct chronological session_number to
+        every session doc that's missing one, and recompute the true
+        sessions_count / avg_score on the profile.
+      - sessions_this_month: real count for the current calendar month.
+      - score_trend_30d: no historical snapshot exists to compute a real
+        trend from, so this sets a neutral anchor (avg_score_anchor =
+        current avg_score, trend starts at 0) rather than fabricating
+        history — it will start reflecting real 30-day movement as
+        saveSession() runs normally from here on.
+      - last_login_at: no login history was ever tracked before this fix,
+        so this is an ESTIMATE using the most recent of last_session_at /
+        updated_at / created_at as a reasonable proxy, clearly not a real
+        login timestamp.
+
+    Body: { dry_run: bool (default true), limit: int (default 200),
+            start_after_uid: str (optional, for pagination across calls) }
+    """
+    try:
+        db = firestore.client()
+        body = request.get_json(force=True) or {}
+        dry_run = body.get("dry_run", True)
+        page_limit = min(int(body.get("limit", 200)), 500)
+        start_after_uid = body.get("start_after_uid")
+
+        q = db.collection("users").order_by("__name__").limit(page_limit)
+        if start_after_uid:
+            start_doc = db.collection("users").document(start_after_uid).get()
+            if start_doc.exists:
+                q = q.start_after(start_doc)
+
+        user_docs = list(q.stream())
+        results = {"processed": 0, "updated": 0, "errors": [], "last_uid": None}
+        month_key = datetime.utcnow().strftime("%Y-%m")
+        month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        for udoc in user_docs:
+            uid = udoc.id
+            results["last_uid"] = uid
+            results["processed"] += 1
+            try:
+                sessions_ref = db.collection("sessions").where("uid", "==", uid) \
+                    .order_by("created_at", direction=firestore.Query.ASCENDING)
+                sessions = list(sessions_ref.stream())
+                if not sessions:
+                    continue
+
+                # Assign correct chronological session_number to any session
+                # doc missing one; recompute true count/avg from ALL of them.
+                total_score = 0
+                sessions_this_month = 0
+                batch = db.batch()
+                batch_writes = 0
+                for i, sdoc in enumerate(sessions, start=1):
+                    sdata = sdoc.to_dict()
+                    total_score += sdata.get("avg_score", 0) or 0
+                    created = sdata.get("created_at")
+                    if isinstance(created, datetime) and created.replace(tzinfo=None) >= month_start:
+                        sessions_this_month += 1
+                    if sdata.get("session_number") != i:
+                        if not dry_run:
+                            batch.update(sdoc.reference, {"session_number": i})
+                            batch_writes += 1
+                            # Firestore batches hard-cap at 500 writes — a very
+                            # active user could plausibly exceed that if none
+                            # of their sessions had session_number set yet.
+                            if batch_writes % 500 == 0:
+                                batch.commit()
+                                batch = db.batch()
+                if batch_writes % 500 and not dry_run:
+                    batch.commit()
+
+                true_count = len(sessions)
+                true_avg = round(total_score / true_count) if true_count else 0
+                udata = udoc.to_dict()
+                last_login_estimate = udata.get("last_session_at") or udata.get("updated_at") or udata.get("created_at")
+
+                profile_update = {
+                    "sessions_count": true_count,
+                    "avg_score": true_avg,
+                    "sessions_this_month": sessions_this_month,
+                    "sessions_this_month_key": month_key,
+                    "avg_score_anchor": true_avg,
+                    "avg_score_anchor_at": datetime.utcnow().isoformat() if not dry_run else None,
+                    "score_trend_30d": 0,
+                }
+                if "last_login_at" not in udata:
+                    profile_update["last_login_at"] = (
+                        last_login_estimate.isoformat() if hasattr(last_login_estimate, "isoformat")
+                        else (last_login_estimate or datetime.utcnow().isoformat())
+                    )
+
+                if not dry_run:
+                    profile_update = {k: v for k, v in profile_update.items() if v is not None}
+                    db.collection("users").document(uid).set(profile_update, merge=True)
+                results["updated"] += 1
+            except Exception as e:
+                results["errors"].append({"uid": uid, "error": str(e)})
+
+        results["has_more"] = len(user_docs) == page_limit
+        results["dry_run"] = dry_run
+        return jsonify(results)
     except Exception as e:
         return safe_error(e)
 
