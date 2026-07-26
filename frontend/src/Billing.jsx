@@ -219,8 +219,20 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   };
 
   const T = {
-    en: { title: "Choose your plan", billing: "Billing", monthly: "Monthly", yearly: "Yearly", save: "Save 20%", current: "Current plan", upgrade: "Upgrade", downgrade: "Downgrade", contact: "Contact sales", free: "Free forever", perMonth: "/mo", perYear: "/yr", stripeNote: "Secure payment via Stripe — cancel anytime", kashierNote: "Secure payment via Kashier — Egypt cards & wallets", or: "or pay with" },
-    ar: { title: "اختر خطتك", billing: "الفوترة", monthly: "شهري", yearly: "سنوي", save: "وفر 20%", current: "خطتك الحالية", upgrade: "ترقية", downgrade: "تخفيض", contact: "تواصل مع المبيعات", free: "مجاني للأبد", perMonth: "/شهر", perYear: "/سنة", stripeNote: "دفع آمن عبر Stripe — إلغاء في أي وقت", kashierNote: "دفع آمن عبر Kashier — بطاقات ومحافظ مصرية", or: "أو ادفع بـ" },
+    en: { title: "Choose your plan", billing: "Billing", monthly: "Monthly", yearly: "Yearly", save: "Save 20%", current: "Current plan", upgrade: "Upgrade", downgrade: "Downgrade", contact: "Contact sales", free: "Free forever", perMonth: "/mo", perYear: "/yr", stripeNote: "Secure payment via Stripe — cancel anytime", kashierNote: "Secure payment via Kashier — Egypt cards & wallets", or: "or pay with",
+      errGeneric: "Something went wrong starting checkout. Please try again in a moment.",
+      errStripeUnavailable: "Card payment isn't available right now — try Kashier below instead.",
+      errEnterpriseContact: "Enterprise pricing is custom — please contact sales.",
+      errPaymentUnavailable: "Payment isn't available right now. Please try again shortly or contact support.",
+      errPortal: "Couldn't open your billing portal. Please try again in a moment.",
+    },
+    ar: { title: "اختر خطتك", billing: "الفوترة", monthly: "شهري", yearly: "سنوي", save: "وفر 20%", current: "خطتك الحالية", upgrade: "ترقية", downgrade: "تخفيض", contact: "تواصل مع المبيعات", free: "مجاني للأبد", perMonth: "/شهر", perYear: "/سنة", stripeNote: "دفع آمن عبر Stripe — إلغاء في أي وقت", kashierNote: "دفع آمن عبر Kashier — بطاقات ومحافظ مصرية", or: "أو ادفع بـ",
+      errGeneric: "حصلت مشكلة في بدء الدفع. حاول تاني بعد لحظات.",
+      errStripeUnavailable: "الدفع بالبطاقة مش متاح دلوقتي — جرب Kashier تحت.",
+      errEnterpriseContact: "أسعار خطة Enterprise مخصصة — تواصل مع فريق المبيعات.",
+      errPaymentUnavailable: "الدفع مش متاح دلوقتي. حاول تاني بعد شوية أو تواصل مع الدعم.",
+      errPortal: "تعذر فتح صفحة الفوترة. حاول تاني بعد لحظات.",
+    },
   };
   const t = T[lang] || T.en;
 
@@ -246,22 +258,21 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
         lang,
       });
     } catch (e) {
-      setError(e.message);
-      // Fallback to Kashier if Stripe not configured
-      if (e.message.includes("not configured")) {
-        setError("Stripe not set up — use Kashier below ↓");
-      }
+      console.error("[Billing] Stripe checkout error:", e.message);
+      // Fallback hint to Kashier if Stripe isn't configured; otherwise a
+      // generic, friendly, bilingual message — never the raw error text.
+      setError(e.message?.includes("not configured") ? t.errStripeUnavailable : t.errGeneric);
     } finally {
       setLoading(null);
     }
-  }, [billing, profile, lang]);
+  }, [billing, profile, lang, t]);
 
   const handleKashier = useCallback(async (planId) => {
     setError(""); setLoading("ks_" + planId);
     try {
       const plan   = activePlans[planId];
       const amount = billing === "yearly" ? plan.priceEGP.yearly : plan.priceEGP.monthly;
-      if (!amount) { setError("Contact sales for Enterprise pricing"); setLoading(null); return; }
+      if (!amount) { setError(t.errEnterpriseContact); setLoading(null); return; }
       const tok3 = await getAuthToken();
       const resp = await fetch("/api/kashier/create-order", {
         method:  "POST",
@@ -282,14 +293,16 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       if (data.redirect_url) {
         window.location.href = data.redirect_url;
       } else {
-        setError(data.error || "Kashier error — check Vercel env vars");
+        console.error("[Billing] Kashier create-order error:", data.error);
+        setError(t.errPaymentUnavailable);
       }
     } catch (e) {
-      setError(e.message);
+      console.error("[Billing] Kashier checkout error:", e.message);
+      setError(t.errGeneric);
     } finally {
       setLoading(null);
     }
-  }, [billing, profile]);
+  }, [billing, profile, t]);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9500, backdropFilter: "blur(12px)", overflowY: "auto", padding: 20 }}>
@@ -397,7 +410,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                     {t.contact}
                   </a>
                 ) : isCurr ? (
-                  <button onClick={() => openStripePortal(profile?.uid).catch(e => setError(e.message))} style={{ width: "100%", background: "none", border: `1px solid ${col}50`, borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: col, cursor: "pointer" }}>
+                  <button onClick={() => openStripePortal(profile?.uid).catch(e => { console.error("[Billing] portal error:", e.message); setError(t.errPortal); })} style={{ width: "100%", background: "none", border: `1px solid ${col}50`, borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: col, cursor: "pointer" }}>
                     {isAr ? "إدارة الاشتراك" : "Manage subscription"}
                   </button>
                 ) : (
