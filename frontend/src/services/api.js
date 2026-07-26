@@ -290,6 +290,20 @@ export async function exportAuditLogCsv(org_id) {
   return resp.blob();
 }
 
+/** Dispatch a real notification (in-app + optionally Slack/Teams/Jira) via
+ * the Vercel serverless endpoint — a different runtime from the Flask
+ * backend apiFetch() talks to, so this calls it directly, same-origin. */
+export async function dispatchNotification({ type, channels = ["in_app"], payload = {} }) {
+  const tok  = await getAuthToken();
+  const resp = await fetch(`/api/notify/dispatch`, {
+    method:  "POST",
+    headers: { "Content-Type":"application/json", ...(tok?{Authorization:`Bearer ${tok}`}:{}) },
+    body:    JSON.stringify({ type, channels, payload }),
+  });
+  if (!resp.ok) throw new Error(`Notification dispatch failed: ${resp.status}`);
+  return resp.json();
+}
+
 // ── Push Notifications API (register/unregister handled in push.js directly) ─
 export const PushAPI = {
   /** Send a test push to the current user's registered devices. */
