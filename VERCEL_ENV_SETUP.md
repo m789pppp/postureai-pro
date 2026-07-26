@@ -48,3 +48,28 @@ The private key has \n characters. In Vercel:
 2. Paste it AS-IS (Vercel handles the \n correctly)
 OR:
 1. In the Value field, paste the key with actual newlines (not \n)
+
+## 📧 EMAIL (Resend — required for invoice/welcome/weekly emails)
+
+| Variable | Where to get it |
+|----------|----------------|
+| RESEND_API_KEY | [resend.com](https://resend.com) → API Keys → Create API Key (free: 3000/mo) |
+| EMAIL_FROM | `Corvus PostureAI <noreply@yourdomain.com>` — must match your Resend verified domain |
+
+## 🔔 WEB PUSH (Firebase Cloud Messaging)
+
+| Variable | Where to get it |
+|----------|----------------|
+| VITE_FIREBASE_VAPID_KEY | Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair |
+
+## 🏁 AFTER DEPLOYMENT — Run Once
+
+Seed the feature flags collection (run from browser console after login as admin):
+```javascript
+const tok = await firebase.auth().currentUser.getIdToken();
+fetch("/api/admin/seed-flags", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok },
+  body: JSON.stringify({ force: false })
+}).then(r => r.json()).then(console.log);
+```

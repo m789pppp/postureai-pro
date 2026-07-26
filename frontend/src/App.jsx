@@ -1338,8 +1338,7 @@ function CancelSubscriptionCard({profile,user,cs,addToast,isAr}){
   const doCancel=async()=>{
     setLoading(true);
     try{
-      // Email queued via Firestore (serverless email not yet configured)
-      console.log("[Email] Cancellation email queued for", user.email);
+      EmailAPI.invoice({email:user.email,name:profile?.name||"",tier:profile?.tier||"",amount:0,billing:"cancelled",ref:"CANCEL-"+Date.now()}).catch(e=>console.warn("[Email]",e.message));
     }catch(e){ console.warn("[cancel] email failed:",e?.code||e?.message); }
     addToast(t.done,"info");
     setStep(2);
@@ -1450,8 +1449,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
     setProc(pay.id);
     await confirmPayment(pay.id,pay.uid,pay.tier,pay.billing_cycle==="yearly"?12:1);
     // Send invoice email automatically
-    // Email queued (serverless email not yet configured)
-    console.log("[Email] Invoice email queued for", pay.user_email); void ({email:pay.user_email,name:pay.user_name,tier:pay.tier,
+    EmailAPI.invoice({email:pay.user_email,name:pay.user_name,tier:pay.tier,
         amount:pay.amount,billing:pay.billing_cycle,seats:pay.seats||25,
         ref:pay.ref_code||"AUTO"}).catch(()=>{});
     PaymentAPI.notifyConfirmed(pay).catch(()=>{});
@@ -2701,7 +2699,7 @@ export default function App(){
               await createUserProfile(u.uid,{email:u.email,name:u.displayName||"",company:"",setup_complete:false});
               p = await getUserProfile(u.uid);
             } catch(e){ console.warn("[Auth] create:",e?.code); }
-            try { console.log("[Email] Nurture sequence queued for", u.email); void ({email:u.email,name:u.displayName||u.email.split("@")[0],
+            try { EmailAPI.sequence({email:u.email,name:u.displayName||u.email.split("@")[0],
               day:0,tier:"professional",session_count:0,avg_score:0}).catch(()=>{}); } catch{}
           } else {
             try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked){ setProfile(checked); if(checked.tier) setTier(normalizeTier(checked.tier)); } }).catch(e=>console.warn("[Trial]",e.message)); } catch{}

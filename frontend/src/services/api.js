@@ -213,11 +213,11 @@ export const NotifyAPI = {
 
 // ── Email API ──────────────────────────────────────────────────────
 export const EmailAPI = {
-  sequence: (data) => apiFetch("/email/sequence",       { method: "POST", body: data }),
-  weekly:   (data) => apiFetch("/email/weekly-report",  { method: "POST", body: data }),
-  invoice:  (data) => apiFetch("/email/invoice",        { method: "POST", body: data }),
-  welcome:  (data) => apiFetch("/email/welcome",        { method: "POST", body: data }),
-  weeklyProgress: (data) => apiFetch("/email/weekly-progress", { method: "POST", body: data }),
+  sequence:       (data) => apiFetch("/api/email/sequence",        { method: "POST", body: data }),
+  weekly:         (data) => apiFetch("/api/email/weekly-report",   { method: "POST", body: data }),
+  invoice:        (data) => apiFetch("/api/email/invoice",         { method: "POST", body: data }),
+  welcome:        (data) => apiFetch("/api/email/welcome",         { method: "POST", body: data }),
+  weeklyProgress: (data) => apiFetch("/api/email/weekly-progress", { method: "POST", body: data }),
 };
 
 // ── White-label branding API ────────────────────────────────────────
