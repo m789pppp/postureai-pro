@@ -158,6 +158,10 @@
       "dest": "/api/admin/seed-flags.js"
     },
     {
+      "src": "/api/cron/symptom-pattern-alerts",
+      "dest": "/api/cron/symptom-pattern-alerts.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
@@ -190,6 +194,15 @@
     },
     "api/admin/seed-flags.js": {
       "maxDuration": 30
+    },
+    "api/cron/symptom-pattern-alerts.js": {
+      "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/symptom-pattern-alerts",
+      "schedule": "0 9 * * 1"
+    }
+  ]
 }

@@ -1094,6 +1094,18 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   const [saving,  setSaving]  = useState(false);
   const [tab,     setTab]     = useState("profile");
   const [linkingGoogle, setLinkingGoogle] = useState(false);
+  // BUG FIX: this component referenced currency/setCurrency (used below in
+  // the upgrade-plans currency toggle) without ever defining them — a
+  // ReferenceError that crashed the Settings page for every non-Pro user,
+  // the moment the !isPro(tier) upgrade section tried to render. Same
+  // timezone-based default used elsewhere in this file (Egypt → EGP via
+  // Kashier, everyone else → USD via Stripe).
+  const [currency, setCurrency] = useState(()=>{
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return tz === "Africa/Cairo" ? "EGP" : "USD";
+    } catch { return "EGP"; }
+  });
   const [addPwVisible, setAddPwVisible]   = useState(false);
   const [showDeleteBox, setShowDeleteBox] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
