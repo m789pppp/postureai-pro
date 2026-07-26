@@ -23,10 +23,32 @@ function getAdmin() {
 
 // ── Channel dispatchers ──────────────────────────────────────────
 
+const TYPE_META = {
+  burnout_alert:    { icon: "🔥", color: "#f85149", title: "Burnout Risk Alert" },
+  posture_warning:  { icon: "⚠️", color: "#d29922", title: "Posture Warning" },
+  weekly_digest:    { icon: "📊", color: "#388bfd", title: "Weekly Digest" },
+  achievement:      { icon: "🏆", color: "#3fb950", title: "New Achievement!" },
+  session_reminder: { icon: "⏰", color: "#06b6d4", title: "Session Reminder" },
+  risk_alert:       { icon: "🚨", color: "#f85149", title: "Risk Alert" },
+  ai_insight:       { icon: "🧠", color: "#a78bfa", title: "AI Insight" },
+  team_milestone:   { icon: "🎯", color: "#3fb950", title: "Team Milestone" },
+};
+
 async function dispatchInApp(db, entry, orgId) {
+  // NotificationsHub.jsx reads Firestore notification docs as flat fields
+  // (title/body/icon/color/actions) with no transform — this used to write
+  // everything nested under `payload` instead, so a notification sent
+  // through this dispatcher would have rendered blank in the actual
+  // notification center: no title, no body, no icon, no color.
+  const m = TYPE_META[entry.type] || { icon: "🔔", color: "#1a56db", title: entry.type };
   const notif = {
     type:       entry.type,
-    payload:    entry.payload || {},
+    icon:       entry.payload?.icon  || m.icon,
+    color:      entry.payload?.color || m.color,
+    title:      entry.payload?.title || m.title,
+    body:       entry.payload?.body  || entry.payload?.text || "",
+    actions:    entry.payload?.actions || [],
+    payload:    entry.payload || {},   // kept for any consumer that wants the raw data too
     channels:   entry.channels || ["in_app"],
     created_at: new Date().toISOString(),
     read:       false,
@@ -36,9 +58,19 @@ async function dispatchInApp(db, entry, orgId) {
   const recipients = entry.payload?.recipients || "all";
 
   if (recipients === "all" && orgId) {
-    // Broadcast to org
-    await db.collection("orgs").doc(orgId)
-      .collection("notifications").add(notif);
+    // Broadcast to every org member's own notifications subcollection —
+    // that's the only place NotificationsHub.jsx actually reads from.
+    // (This used to write to orgs/{orgId}/notifications instead, a
+    // collection nothing in the app ever displays.)
+    const snap = await db.collection("users")
+      .where("company_id", "==", orgId)
+      .limit(500).get();
+    const batch = db.batch();
+    snap.docs.forEach(u => {
+      const ref = db.collection("users").doc(u.id).collection("notifications").doc();
+      batch.set(ref, notif);
+    });
+    if (!snap.empty) await batch.commit();
   } else if (recipients === "hr_admins" && orgId) {
     const snap = await db.collection("users")
       .where("company_id", "==", orgId)

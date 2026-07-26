@@ -1,5 +1,14 @@
 import { initializeApp } from "firebase/app";
 import { API_BASE_URL } from "./config/api.js";
+
+// Single source of truth for the backend base URL — used by invite, notify,
+// and email trigger functions throughout this file. This used to be
+// declared INSIDE one specific function's body (with a comment claiming
+// "top-level... single source of truth" that wasn't true), so every other
+// function referencing it (notifyPaymentPending, notifyPaymentConfirmed,
+// sendWeeklyProgressEmails, the invite-email trigger) hit a genuine
+// ReferenceError the moment they actually ran.
+const BACKEND_URL = API_BASE_URL;
 import {
   getAuth, signInWithPopup, signInWithRedirect, getRedirectResult,
   GoogleAuthProvider, OAuthProvider,
@@ -240,9 +249,6 @@ export async function createUserProfile(uid, data, referredBy = null) {
 
   // Fire welcome drip sequence — fire-and-forget, never blocks profile creation
   const _API = API_BASE_URL;
-
-// Top-level backend URL — single source of truth (used by invite, notify, email functions)
-const BACKEND_URL = API_BASE_URL;
   try {
     const { getAuth } = await import("firebase/auth");
     const _tok = await getAuth().currentUser?.getIdToken?.();
