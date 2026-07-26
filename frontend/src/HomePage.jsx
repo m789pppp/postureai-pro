@@ -1110,14 +1110,6 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   const [showDeleteBox, setShowDeleteBox] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
-  // Default currency by timezone — Egypt → EGP (Kashier), everyone else → USD
-  // (Stripe). Matches Sidebar's/Billing.jsx's same Egypt/Gulf split.
-  const [currency, setCurrency] = useState(()=>{
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      return tz === "Africa/Cairo" ? "EGP" : "USD";
-    } catch { return "EGP"; }
-  });
 
   // Track whether user has started editing (prevents useEffect overriding their input)
   const [nameDirty, setNameDirty] = useState(false);
