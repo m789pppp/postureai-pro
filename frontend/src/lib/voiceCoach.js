@@ -77,6 +77,29 @@ export function stopSpeaking() {
  * @param {{force?:boolean}} opts - force bypasses enabled+cooldown (used for the toggle-on confirmation and the settings preview button)
  * @returns {boolean} true if speech was queued
  */
+// Chrome/Chromium (and most Chromium-based browsers, including many
+// Android WebViews) has a long-standing bug: calling speechSynthesis
+// .speak() immediately after .cancel() silently drops the utterance —
+// no error, no event, just no sound. This is the single most likely
+// reason this could look entirely correctly wired and still never
+// actually speak. Standard, widely-used workaround: a short delay
+// between cancel() and speak() so Chrome's internal queue actually
+// clears first. See e.g. https://bugs.chromium.org/p/chromium/issues/detail?id=1141979
+const CANCEL_SPEAK_GAP_MS = 120;
+
+// Some browsers (notably Chrome on first load) return an empty voice
+// list from getVoices() until the async "voiceschanged" event fires.
+// Nudge it early so the very first speakCoach() call has real voices
+// to match against, not just whatever default the browser falls back to.
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  try {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener?.("voiceschanged", () => {
+      try { window.speechSynthesis.getVoices(); } catch {}
+    }, { once: true });
+  } catch {}
+}
+
 export function speakCoach(text, lang = "en", { force = false } = {}) {
   if (!force && !_enabled) return false;
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
@@ -90,19 +113,24 @@ export function speakCoach(text, lang = "en", { force = false } = {}) {
     if (!clean) return false;
     const prefs  = loadPrefs();
     const locale = prefs.locale || (lang === "ar" ? "ar-EG" : "en-US");
-    const u = new SpeechSynthesisUtterance(clean);
-    u.lang   = locale;
-    u.rate   = prefs.rate ?? (lang === "ar" ? 0.95 : 1.0);
-    u.pitch  = prefs.pitch ?? 1.0;
-    u.volume = 0.9;
-    // Personalized voice choice takes priority; otherwise best match for
-    // the selected locale, falling back to a plain language match, then default.
-    const voices = synth.getVoices?.() || [];
-    let match = prefs.voiceURI ? voices.find(v => v.voiceURI === prefs.voiceURI) : null;
-    if (!match) match = voices.find(v => v.lang === locale);
-    if (!match) match = voices.find(v => v.lang?.toLowerCase().startsWith(lang === "ar" ? "ar" : "en"));
-    if (match) u.voice = match;
-    synth.speak(u);
+    const speakNow = () => {
+      try {
+        const u = new SpeechSynthesisUtterance(clean);
+        u.lang   = locale;
+        u.rate   = prefs.rate ?? (lang === "ar" ? 0.95 : 1.0);
+        u.pitch  = prefs.pitch ?? 1.0;
+        u.volume = 0.9;
+        // Personalized voice choice takes priority; otherwise best match for
+        // the selected locale, falling back to a plain language match, then default.
+        const voices = synth.getVoices?.() || [];
+        let match = prefs.voiceURI ? voices.find(v => v.voiceURI === prefs.voiceURI) : null;
+        if (!match) match = voices.find(v => v.lang === locale);
+        if (!match) match = voices.find(v => v.lang?.toLowerCase().startsWith(lang === "ar" ? "ar" : "en"));
+        if (match) u.voice = match;
+        synth.speak(u);
+      } catch {}
+    };
+    setTimeout(speakNow, CANCEL_SPEAK_GAP_MS);
     return true;
   } catch { return false; }
 }
