@@ -1009,7 +1009,7 @@ Respond ONLY with a valid JSON array (no markdown, no explanation):
       {/* AI Generator */}
       <div style={{ background:"linear-gradient(135deg,rgba(167,139,250,.06),rgba(56,139,253,.04))",
         border:"1px solid rgba(167,139,250,.2)", borderRadius:16, padding:18 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:aiOutput||aiLoading?14:0 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:aiRules.length||aiLoading?14:0 }}>
           <div>
             <div style={{ fontFamily:"'Syne',system-ui,sans-serif", fontSize:13, fontWeight:800, color:C.text }}>
               {isAr ? "مولّد القواعد بالذكاء الاصطناعي" : "AI Rule Generator"}

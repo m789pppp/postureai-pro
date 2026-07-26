@@ -67,7 +67,16 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
   const exportCsv = async () => {
     setExporting(true); setExportError("");
     try {
-      const blob = await exportAuditLogCsv();
+      // BUG FIX: this used to call exportAuditLogCsv(), a function that was
+      // never defined anywhere in the codebase — clicking Export crashed
+      // the whole component with a ReferenceError for every user. The
+      // activity data is already loaded client-side, so generate the CSV
+      // directly from it instead of needing a round-trip to a new endpoint.
+      const esc = (v) => `"${String(v ?? "").replace(/"/g,'""')}"`;
+      const header = ["Date","Type","Title","Detail","Severity"].map(esc).join(",");
+      const rows = filtered.map(a => [a.ts, a.type, a.title, a.detail, a.severity].map(esc).join(","));
+      const csv = [header, ...rows].join("\r\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href = url; a.download = `activity_${new Date().toISOString().slice(0,10)}.csv`;
