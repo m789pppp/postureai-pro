@@ -9,7 +9,7 @@ import {
   SUPPORT_EMAIL, ADMIN_PHONE,
   AUTO_APPROVE_DOMAIN, serverTimestamp,
   notifyPaymentPending, notifyPaymentConfirmed,
-  getCompany, createCompany, getUserSessions, onUserSessions, updateUserProfile,
+  getCompany, createCompany, getUserSessions, onUserSessions, onUserProfile, updateUserProfile,
   checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, checkAndSendNurtureEmails,
   doc, updateDoc,
 } from "./firebase.js";
@@ -2739,6 +2739,19 @@ export default function App(){
           } catch(e){ console.warn("[Auth] sessions:",e?.code); }
           }
 
+          // Live profile listener — reflects server-side profile/tier changes
+          // (e.g. the subscription-expiry downgrade in _get_user_role()) as
+          // soon as Firestore updates, instead of only on next full reload.
+          if(!mfaPending){
+          try {
+            if(window.__unsubProfile){ window.__unsubProfile(); window.__unsubProfile=null; }
+            window.__unsubProfile = onUserProfile(u.uid, freshProfile=>{
+              setProfile(prev => ({ ...prev, ...freshProfile }));
+              if(freshProfile.tier) setTier(normalizeTier(freshProfile.tier));
+            });
+          } catch(e){ console.warn("[Auth] profile listener:",e?.code); }
+          }
+
           // Load team members
           if(!mfaPending){
           try {
@@ -2779,6 +2792,7 @@ export default function App(){
             return;
           }
           try { if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; } } catch{}
+          try { if(window.__unsubProfile){ window.__unsubProfile(); window.__unsubProfile=null; } } catch{}
           setUser(null);
           setProfile(null);
           setUserSessions([]);
@@ -3969,6 +3983,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
               }
             });
           } catch(e){ console.warn("[Auth] sessions:",e?.code); }
+          try {
+            if(window.__unsubProfile){ window.__unsubProfile(); window.__unsubProfile=null; }
+            window.__unsubProfile = onUserProfile(user.uid, freshProfile=>{
+              setProfile(prev => ({ ...prev, ...freshProfile }));
+              if(freshProfile.tier) setTier(normalizeTier(freshProfile.tier));
+            });
+          } catch(e){ console.warn("[Auth] profile listener:",e?.code); }
           try {
             if(profile?.company_id||profile?.is_org_owner){
               getAllUsers(profile.company_id||null,false).then(setAllUsers).catch(()=>{});
