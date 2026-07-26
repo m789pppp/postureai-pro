@@ -14,12 +14,16 @@ const APP_URL       = typeof window !== "undefined" ? window.location.origin : "
 
 // ── SPA navigation — dispatches event instead of full-page reload ─
 function navTo(path) {
-  const event = new CustomEvent('spa:navigate', { detail: { path } });
-  if (window.dispatchEvent(event) && window.__spaNavigate) {
+  if (window.__spaNavigate) {
     window.__spaNavigate(path);
-  } else {
-    window.location.href = path;
+    return;
   }
+  const event = new CustomEvent('spa:navigate', { detail: { path } });
+  window.dispatchEvent(event);
+  // Fallback: full navigation if SPA handler not registered
+  setTimeout(() => {
+    if (!window.__spaNavigateHandled) window.location.href = path;
+  }, 100);
 }
 
 // ── Scroll-triggered reveal (Framer Motion) ────────────────────────
@@ -33,7 +37,7 @@ function Reveal({ children, delay = 0, y = 28, style = {}, className }) {
       style={style}
       initial={reduce ? false : { opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.2 }}
+      viewport={{ once: true, amount: 0.1 }}
       transition={{ duration: 0.6, delay: delay / 1000, ease: [0.22, 1, 0.36, 1] }}
     >{children}</motion.div>
   );
@@ -91,8 +95,16 @@ function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
     };
     requestAnimationFrame(tick);
   }, [vis, to]);
-  // Reset so counter re-animates if 'to' changes after already played
-  useEffect(() => { started.current = false; setV(0); }, [to]);
+  // Reset only when target value actually changes (prevents flicker on re-render)
+  const prevTo = useRef(to);
+  useEffect(() => {
+    if (prevTo.current !== to) {
+      prevTo.current = to;
+      started.current = false;
+      setVis(false);
+      setTimeout(() => setVis(true), 50);
+    }
+  }, [to]);
   return <span ref={ref}>{prefix}{v.toFixed(decimals)}{suffix}</span>;
 }
 
@@ -248,11 +260,11 @@ function GlobalStyle() {
       .lp-section{padding:60px 32px}
 
       /* cards */
-      .lp-lift{transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s,border-color .28s}
+      .lp-lift{transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s,border-color .28s;will-change:transform}
       .lp-lift:hover{transform:translateY(-5px);box-shadow:0 20px 48px rgba(0,0,0,.38),0 0 0 1px rgba(79,124,249,.1)}
 
       /* buttons — shimmer sweep on hover */
-      .lp-btn{transition:transform .22s cubic-bezier(.16,1,.3,1),box-shadow .22s;position:relative;overflow:hidden}
+      .lp-btn{transition:transform .22s cubic-bezier(.16,1,.3,1),box-shadow .22s;position:relative;overflow:hidden;will-change:transform}
       .lp-btn::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.16) 50%,transparent 62%);transform:translateX(-120%);transition:transform .55s ease;pointer-events:none}
       .lp-btn:hover::after{transform:translateX(120%)}
       .lp-btn:hover{transform:translateY(-2px)}
@@ -265,8 +277,11 @@ function GlobalStyle() {
       @keyframes lp-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.42;transform:scale(1.65)}}
       @keyframes lp-drift-a{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-46%,-54%)}}
       @keyframes lp-drift-b{0%,100%{transform:translate(0,0)}50%{transform:translate(3%,-4%)}}
-      .lp-drift-a{animation:lp-drift-a 20s ease-in-out infinite}
-      .lp-drift-b{animation:lp-drift-b 26s ease-in-out infinite}
+      @keyframes lp-float-10{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+      @keyframes lp-float-8{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+      @keyframes lp-float-6{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+      .lp-drift-a{animation:lp-drift-a 20s ease-in-out infinite;will-change:transform}
+      .lp-drift-b{animation:lp-drift-b 26s ease-in-out infinite;will-change:transform}
 
       :focus-visible{outline:2px solid #4f7cf9;outline-offset:3px;border-radius:4px}
 
@@ -380,6 +395,12 @@ function ScrollProgress() {
 function Nav({ lang, setLang, onCTA }) {
   const [scrolled,     setScrolled]     = useState(false);
   const [mobileOpen,   setMobileOpen]   = useState(false);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileOpen]);
   const [activeSection,setActiveSection]= useState("");
 
   useEffect(() => {
@@ -595,19 +616,20 @@ function Hero({ lang, onCTA, mode, setMode }) {
   const isCompany = mode === "company";
   const [demoScore, setDemoScore] = useState(89);
   useEffect(() => {
+    // Smooth demo score oscillation — looks realistic without being jarring
+    const sequence = [89,91,88,93,90,87,92,89,94,91,88,90];
+    let idx = 0;
     const iv = setInterval(() => {
-      setDemoScore(s => {
-        const n = s + (Math.random() > .5 ? 1 : -1) * Math.floor(Math.random() * 3);
-        return Math.max(72, Math.min(98, n));
-      });
-    }, 1800);
+      idx = (idx + 1) % sequence.length;
+      setDemoScore(sequence[idx]);
+    }, 2200);
     return () => clearInterval(iv);
   }, []);
 
   const scoreColor = demoScore >= 80 ? LPV7_TOKENS.green : demoScore >= 60 ? LPV7_TOKENS.amber : LPV7_TOKENS.red;
+  // CSS-driven float: no JS thread involvement, GPU-composited
   const float = (delay = 0, dist = 10) => reduce ? {} : {
-    animate: { y: [0, -dist, 0] },
-    transition: { duration: 5, repeat: Infinity, ease: "easeInOut", delay },
+    style: { animation: `lp-float-${dist} ${5 + delay}s ease-in-out ${delay}s infinite` },
   };
 
   return (
@@ -686,7 +708,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
               <span style={{
                 width:6, height:6, borderRadius:"50%", background:LPV7_TOKENS.green,
                 boxShadow:`0 0 8px ${LPV7_TOKENS.green}`,
-                animation:"lp-pulse 1.5s ease-in-out infinite",
+                animation:"lp-pulse 1.5s ease-in-out infinite", willChange:"opacity, transform",
               }}/>
               {ar ? "متاح الآن · ابدأ مجاناً" : "Now Available · Free to Start"}
             </div>
@@ -942,12 +964,12 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
       {/* Scroll cue */}
       {!reduce && (
-        <motion.div aria-hidden="true"
-          animate={{ y:[0,8,0] }} transition={{ duration:1.8, repeat:Infinity, ease:"easeInOut" }}
+        <div aria-hidden="true"
           style={{ position:"absolute", bottom:28, left:"50%", transform:"translateX(-50%)",
-            color:LPV7_TOKENS.muted, fontSize:20, opacity:.6 }}>
+            color:LPV7_TOKENS.muted, fontSize:20, opacity:.6,
+            animation:"lp-float-8 1.8s ease-in-out infinite" }}>
           ↓
-        </motion.div>
+        </div>
       )}
 
       <style>{`
@@ -1199,7 +1221,7 @@ function HowItWorks({ lang }) {
           title={ar ? "ابدأ في 3 خطوات بسيطة" : "Up and running in 3 simple steps"}
           sub={ar ? "ثلاث خطوات بسيطة لبداية موثوقة" : "Three simple steps to a healthier team"}/>
 
-        <Stagger key={String(ar)} className="lp-how-grid" gap={0.12}>
+        <Stagger className="lp-how-grid" gap={0.12}>
           {steps.map((s, i) => {
             const cols = [LPV7_TOKENS.blue, LPV7_TOKENS.indigo, LPV7_TOKENS.green];
             const col = cols[i];
@@ -1269,7 +1291,7 @@ function CaseStudies({ lang }) {
           eyebrowColor={LPV7_TOKENS.green} eyebrowBg="rgba(16,217,160,.08)" eyebrowBorder="rgba(16,217,160,.2)"
           title={ar ? "عملاؤنا يحقّقون نتائج قابلة للقياس" : "Our customers achieve measurable results"}/>
 
-        <Stagger key={String(ar)} className="lp-cases-grid">
+        <Stagger className="lp-cases-grid">
           {cases.map((c) => (
             <StaggerItem key={c.co}>
               <div className="lp-lift" style={{ ...card(), height:"100%", display:"flex", flexDirection:"column" }}>
@@ -1325,6 +1347,8 @@ function CaseStudies({ lang }) {
 function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) {
   const ar = lang === "ar";
   const [billing, setBilling] = useState("yearly");
+  const [priceVis, setPriceVis] = useState(true);
+  const toggleBilling = (b) => { setPriceVis(false); setTimeout(() => { setBilling(b); setPriceVis(true); }, 140); };
   const [localMode, setLocalMode] = useState(modeProp || "company");
 
   // Sync if parent changes mode (e.g. nav toggle)
@@ -1444,7 +1468,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
               padding:4, border:`1px solid ${LPV7_TOKENS.border}`,
             }}>
               {["monthly","yearly"].map(b => (
-                <button key={b} onClick={() => setBilling(b)} style={{
+                <button key={b} onClick={() => toggleBilling(b)} style={{
                   background: billing === b ? LPV7_TOKENS.blue : "transparent",
                   color: billing === b ? "#fff" : LPV7_TOKENS.sub,
                   border:"none", borderRadius:100, padding:"10px 22px",
@@ -1475,7 +1499,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
           </div>
         </Reveal>
 
-        <Stagger key={`${localMode}-${billing}`} className="lp-pricing-grid" style={{ alignItems:"start" }}>
+        <Stagger className="lp-pricing-grid" style={{ alignItems:"start", opacity:priceVis?1:0, transition:"opacity 140ms ease" }}>
           {plans.map((p) => (
             <StaggerItem key={p.id}>
               <div className={p.popular ? "lp-lift lp-glow lp-popular-card" : "lp-lift"} style={{
@@ -1586,7 +1610,8 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
       </div>
       <style>{`
         @media(max-width:600px){.lp-pricing-grid{grid-template-columns:1fr!important}
-        .lp-pricing-grid > div > div{transform:none!important}}`}</style>
+        .lp-pricing-grid > div > div{transform:none!important}}
+        .lp-pricing-card{contain:layout style;}`}</style>
     </section>
   );
 }
@@ -1612,13 +1637,13 @@ function Testimonials({ lang }) {
           title={ar ? "ماذا يقول عملاؤنا" : "What our customers say"}
           sub={ar ? "نتائج حقيقية من مستخدمين حقيقيين في مصر والخليج" : "Real results from real users across Egypt and the Gulf"}
         />
-        <Stagger key={String(ar)} className="lp-testi-grid">
+        <Stagger className="lp-testi-grid">
           {testimonials.map((t) => (
             <StaggerItem key={t.name}>
               <div className="lp-lift" style={{
                 height:"100%", borderRadius:20, padding:28, position:"relative",
                 background:"rgba(255,255,255,.035)", border:`1px solid ${LPV7_TOKENS.border}`,
-                backdropFilter:"blur(16px)", display:"flex", flexDirection:"column",
+                display:"flex", flexDirection:"column",
               }}>
                 {/* Quote mark */}
                 <div style={{ position:"absolute", top:20, [ar?"left":"right"]:24,
@@ -1699,7 +1724,7 @@ function FAQItem({ q, a, isOpen, onToggle, ar }) {
 
 function FAQ({ lang }) {
   const ar = lang === "ar";
-  const [open, setOpen] = useState(0);
+  const [open, setOpen] = useState(null);
   const items = ar ? [
     ["هل أحتاج كاميرا خاصة؟","لا. بيشتغل مع أي كاميرا لابتوب أو ويب كام عادية. مفيش أجهزة إضافية مطلوبة."],
     ["هل بيانات الفيديو بتاعتي بتتحفظ؟","لأ. التحليل بيحصل محلياً في المتصفح بتاعك. مش بنحفظ صور أو فيديو — بس إحداثيات الوضعية المجهولة."],

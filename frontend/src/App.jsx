@@ -2831,7 +2831,7 @@ export default function App(){
         setPage('pricing');
       }
     };
-    window.__spaNavigate = (path) => handler({ detail: { path } });
+    window.__spaNavigate = (path) => { window.__spaNavigateHandled = true; handler({ detail: { path } }); };
     window.addEventListener('spa:navigate', handler);
     return () => window.removeEventListener('spa:navigate', handler);
   }, []);
