@@ -69,7 +69,6 @@ function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
   const ref = useRef(null);
   const [vis, setVis] = useState(false);
   const [v, setV] = useState(0);
-  const started = useRef(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -78,21 +77,30 @@ function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
     return () => obs.disconnect();
   }, []);
   useEffect(() => {
-    if (!vis || started.current) return;
-    started.current = true;
+    if (!vis) return;
+    // BUG FIX: this used to be two separate useEffects both keyed on `to`.
+    // On a render where `to` actually changed after the counter had
+    // already played once, they ran in definition order: the animator
+    // effect ran FIRST and saw the stale started.current===true from the
+    // previous run (so it bailed out and did nothing), THEN the reset
+    // effect ran and set v back to 0 — with nothing left to animate it
+    // back up. The counter would silently freeze at 0 instead of
+    // re-animating to the new target. One effect, reset-then-animate in
+    // the same pass, removes the race entirely.
+    setV(0);
     const n = parseFloat(String(to)) || 0;
     const dur = 1600, start = performance.now();
+    let raf;
     const tick = now => {
       const p = Math.min((now - start) / dur, 1);
       const ease = 1 - Math.pow(1 - p, 4);
       setV(ease * n);
-      if (p < 1) requestAnimationFrame(tick);
+      if (p < 1) raf = requestAnimationFrame(tick);
       else setV(n); // land exactly on target value
     };
-    requestAnimationFrame(tick);
+    raf = requestAnimationFrame(tick);
+    return () => { if (raf) cancelAnimationFrame(raf); };
   }, [vis, to]);
-  // Reset so counter re-animates if 'to' changes after already played
-  useEffect(() => { started.current = false; setV(0); }, [to]);
   return <span ref={ref}>{prefix}{v.toFixed(decimals)}{suffix}</span>;
 }
 
@@ -267,6 +275,32 @@ function GlobalStyle() {
       @keyframes lp-drift-b{0%,100%{transform:translate(0,0)}50%{transform:translate(3%,-4%)}}
       .lp-drift-a{animation:lp-drift-a 20s ease-in-out infinite}
       .lp-drift-b{animation:lp-drift-b 26s ease-in-out infinite}
+
+      /* PERF FIX: backdrop-filter (used 8x on this page — cards, badges,
+         the sticky nav) is notoriously expensive to composite on mobile,
+         especially Safari and lower-end Android GPUs, and this page has
+         several of them potentially visible/scrolling at once. Disabling
+         just the blur on small screens (not the background/border/opacity,
+         which stay as designed) meaningfully cuts scroll jank without
+         touching each of the 8 individual call sites. Inline styles have
+         the highest specificity in the cascade, so !important is required
+         to override them here — this is the one legitimate use for it. */
+      @media (max-width:768px){
+        [style*="backdrop-filter"]{ backdrop-filter:none!important; -webkit-backdrop-filter:none!important; }
+      }
+
+      /* PERF FIX: these 3 were driven by Framer Motion's JS interpolation
+         loop (animate:{y:[...]}, repeat:Infinity) — even though the
+         resulting paint is a composited transform, Framer computes every
+         intermediate frame value on the main JS thread, forever, for as
+         long as the page is open. Native @keyframes hand the entire
+         animation to the browser's compositor thread — zero ongoing JS
+         thread cost. transform-only keyframes are GPU-composited in every
+         modern browser. */
+      @keyframes lp-float{0%,100%{transform:translateY(0)}50%{transform:translateY(var(--float-dist,-10px))}}
+      @keyframes lp-scroll-cue{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+      .lp-float{animation:lp-float 5s ease-in-out infinite; animation-delay:var(--float-delay,0s); will-change:transform}
+      .lp-scroll-cue{animation:lp-scroll-cue 1.8s ease-in-out infinite; will-change:transform}
 
       :focus-visible{outline:2px solid #4f7cf9;outline-offset:3px;border-radius:4px}
 
@@ -605,9 +639,13 @@ function Hero({ lang, onCTA, mode, setMode }) {
   }, []);
 
   const scoreColor = demoScore >= 80 ? LPV7_TOKENS.green : demoScore >= 60 ? LPV7_TOKENS.amber : LPV7_TOKENS.red;
+  // PERF FIX: was a Framer Motion animate:{y:[...]} with repeat:Infinity —
+  // JS-thread-driven forever. Now a CSS class + custom properties, handled
+  // entirely by the compositor thread. Returns a className + style vars to
+  // spread onto a plain div instead of motion.div's animate/transition props.
   const float = (delay = 0, dist = 10) => reduce ? {} : {
-    animate: { y: [0, -dist, 0] },
-    transition: { duration: 5, repeat: Infinity, ease: "easeInOut", delay },
+    className: "lp-float",
+    style: { "--float-dist": `-${dist}px`, "--float-delay": `${delay}s` },
   };
 
   return (
@@ -686,7 +724,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
               <span style={{
                 width:6, height:6, borderRadius:"50%", background:LPV7_TOKENS.green,
                 boxShadow:`0 0 8px ${LPV7_TOKENS.green}`,
-                animation:"lp-pulse 1.5s ease-in-out infinite",
+                animation:"lp-pulse 1.5s ease-in-out .4s infinite",
               }}/>
               {ar ? "متاح الآن · ابدأ مجاناً" : "Now Available · Free to Start"}
             </div>
@@ -907,34 +945,36 @@ function Hero({ lang, onCTA, mode, setMode }) {
             </div>
 
             {/* Floating card — top */}
-            <motion.div {...float(0, 9)} style={{
+            <div className={float(0, 9).className} style={{
               position:"absolute", top:-12, [ar?"left":"right"]:-18,
               background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
               border:`1px solid ${LPV7_TOKENS.borderM}`, borderRadius:16,
               padding:"12px 16px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
               display:"flex", alignItems:"center", gap:10, zIndex:2,
+              ...float(0, 9).style,
             }}>
               <span style={{ fontSize:20 }}>📉</span>
               <div>
                 <div style={{ fontSize:15, fontWeight:800, color:LPV7_TOKENS.green, fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
                 <div style={{ fontSize:10.5, color:LPV7_TOKENS.muted, marginTop:2 }}>{ar ? "إجازات مرضية" : "sick leave"}</div>
               </div>
-            </motion.div>
+            </div>
 
             {/* Floating card — bottom */}
-            <motion.div {...float(1.4, 8)} style={{
+            <div className={float(1.4, 8).className} style={{
               position:"absolute", bottom:-6, [ar?"right":"left"]:-22,
               background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
               border:`1px solid ${LPV7_TOKENS.borderM}`, borderRadius:16,
               padding:"11px 15px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
               display:"flex", alignItems:"center", gap:9, zIndex:2, maxWidth:200,
+              ...float(1.4, 8).style,
             }}>
               <span style={{ width:8, height:8, borderRadius:"50%", background:LPV7_TOKENS.green, flexShrink:0,
                 boxShadow:`0 0 8px ${LPV7_TOKENS.green}` }}/>
               <span style={{ fontSize:11.5, color:LPV7_TOKENS.sub, lineHeight:1.4 }}>
                 {ar ? "جلسة 45 دق — تحسن 18 نقطة 🎯" : "45 min session — +18 score 🎯"}
               </span>
-            </motion.div>
+            </div>
           </div>
         </Reveal>
         </div>{/* end lp-hero-grid */}
@@ -942,12 +982,11 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
       {/* Scroll cue */}
       {!reduce && (
-        <motion.div aria-hidden="true"
-          animate={{ y:[0,8,0] }} transition={{ duration:1.8, repeat:Infinity, ease:"easeInOut" }}
-          style={{ position:"absolute", bottom:28, left:"50%", transform:"translateX(-50%)",
+        <div aria-hidden="true" className="lp-scroll-cue"
+          style={{ position:"absolute", bottom:28, left:"50%",
             color:LPV7_TOKENS.muted, fontSize:20, opacity:.6 }}>
           ↓
-        </motion.div>
+        </div>
       )}
 
       <style>{`
