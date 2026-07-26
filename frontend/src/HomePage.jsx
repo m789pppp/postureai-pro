@@ -352,7 +352,22 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
       {/* Hero card */}
       <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14,
         padding:"22px", display:"flex", gap:20, alignItems:"center", flexWrap:"wrap" }}>
-        <Ring score={last||avg} size={104}/>
+        {/* BUG FIX: Ring alone never shows the actual number — it's a pure
+            SVG arc with no text. The one other place Ring is used in this
+            app (App.jsx live-session view) always pairs it with an adjacent
+            number; these two HomePage hero cards were missing that, so the
+            main "at a glance" gauge showed a colored arc with no indication
+            of what score it represented. */}
+        <div style={{ position:"relative", width:104, height:104, flexShrink:0 }}>
+          <Ring score={last||avg} size={104}/>
+          <div style={{ position:"absolute", inset:0, display:"flex",
+            flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+            <div style={{ fontSize:26, fontWeight:900, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
+              {(last||avg) || "—"}
+            </div>
+            {(last||avg) > 0 && <div style={{ fontSize:9, color:cs.muted, fontWeight:600 }}>/100</div>}
+          </div>
+        </div>
         <div style={{ flex:1, minWidth:180 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
             <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
@@ -492,7 +507,22 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
       {/* Hero */}
       <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14,
         padding:"22px", display:"flex", gap:20, alignItems:"center", flexWrap:"wrap" }}>
-        <Ring score={last||avg} size={104}/>
+        {/* BUG FIX: Ring alone never shows the actual number — it's a pure
+            SVG arc with no text. The one other place Ring is used in this
+            app (App.jsx live-session view) always pairs it with an adjacent
+            number; these two HomePage hero cards were missing that, so the
+            main "at a glance" gauge showed a colored arc with no indication
+            of what score it represented. */}
+        <div style={{ position:"relative", width:104, height:104, flexShrink:0 }}>
+          <Ring score={last||avg} size={104}/>
+          <div style={{ position:"absolute", inset:0, display:"flex",
+            flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+            <div style={{ fontSize:26, fontWeight:900, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
+              {(last||avg) || "—"}
+            </div>
+            {(last||avg) > 0 && <div style={{ fontSize:9, color:cs.muted, fontWeight:600 }}>/100</div>}
+          </div>
+        </div>
         <div style={{ flex:1, minWidth:180 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
             <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
