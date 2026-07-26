@@ -213,11 +213,11 @@ export const NotifyAPI = {
 
 // ── Email API ──────────────────────────────────────────────────────
 export const EmailAPI = {
-  sequence: (data) => apiFetch("/email/sequence",       { method: "POST", body: data }),
-  weekly:   (data) => apiFetch("/email/weekly-report",  { method: "POST", body: data }),
-  invoice:  (data) => apiFetch("/email/invoice",        { method: "POST", body: data }),
-  welcome:  (data) => apiFetch("/email/welcome",        { method: "POST", body: data }),
-  weeklyProgress: (data) => apiFetch("/email/weekly-progress", { method: "POST", body: data }),
+  sequence:       (data) => apiFetch("/api/email/sequence",        { method: "POST", body: data }),
+  weekly:         (data) => apiFetch("/api/email/weekly-report",   { method: "POST", body: data }),
+  invoice:        (data) => apiFetch("/api/email/invoice",         { method: "POST", body: data }),
+  welcome:        (data) => apiFetch("/api/email/welcome",         { method: "POST", body: data }),
+  weeklyProgress: (data) => apiFetch("/api/email/weekly-progress", { method: "POST", body: data }),
 };
 
 // ── White-label branding API ────────────────────────────────────────
@@ -288,6 +288,20 @@ export async function exportAuditLogCsv(org_id) {
   });
   if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
   return resp.blob();
+}
+
+/** Dispatch a real notification (in-app + optionally Slack/Teams/Jira) via
+ * the Vercel serverless endpoint — a different runtime from the Flask
+ * backend apiFetch() talks to, so this calls it directly, same-origin. */
+export async function dispatchNotification({ type, channels = ["in_app"], payload = {} }) {
+  const tok  = await getAuthToken();
+  const resp = await fetch(`/api/notify/dispatch`, {
+    method:  "POST",
+    headers: { "Content-Type":"application/json", ...(tok?{Authorization:`Bearer ${tok}`}:{}) },
+    body:    JSON.stringify({ type, channels, payload }),
+  });
+  if (!resp.ok) throw new Error(`Notification dispatch failed: ${resp.status}`);
+  return resp.json();
 }
 
 // ── Push Notifications API (register/unregister handled in push.js directly) ─

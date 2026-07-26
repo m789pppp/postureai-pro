@@ -10,8 +10,8 @@
  * rather than throwing, so the rest of the app keeps working.
  */
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
-import { auth } from "./firebase.js";
-import { apiFetch } from "./services/api.js";
+import { auth, db } from "./firebase.js";
+import { doc, setDoc, deleteField, updateDoc } from "firebase/firestore";
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "";
 
@@ -41,10 +41,34 @@ export async function enablePushNotifications(lang = "en") {
     if (permission !== "granted") return { ok: false, reason: "permission_denied" };
 
     const reg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+    // Pass Firebase config to SW (SW can't access import.meta.env directly)
+    await navigator.serviceWorker.ready.then(registration => {
+      const sw = registration.active;
+      if (sw) {
+        sw.postMessage({
+          type: "FIREBASE_CONFIG",
+          config: {
+            apiKey:            import.meta.env.VITE_FIREBASE_API_KEY             || "",
+            authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN         || "",
+            projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID          || "",
+            storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET      || "",
+            messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+            appId:             import.meta.env.VITE_FIREBASE_APP_ID              || "",
+          },
+        });
+      }
+    });
     const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
     if (!token) return { ok: false, reason: "no_token" };
 
-    await apiFetch("/push/register", { method: "POST", body: { token, platform: "web", lang } });
+    // Store push token in Firestore (no Railway needed)
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      await setDoc(doc(db, "users", uid), {
+        push_token: token, push_platform: "web", push_lang: lang,
+        push_registered_at: new Date().toISOString(),
+      }, { merge: true });
+    }
     localStorage.setItem("push_token", token);
     return { ok: true, token };
   } catch (e) {
@@ -57,7 +81,10 @@ export async function disablePushNotifications() {
   try {
     const token = localStorage.getItem("push_token");
     if (token) {
-      await apiFetch("/push/unregister", { method: "POST", body: { token } }).catch(() => {});
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        await updateDoc(doc(db, "users", uid), { push_token: deleteField(), push_registered_at: deleteField() }).catch(() => {});
+      }
       localStorage.removeItem("push_token");
     }
     return { ok: true };

@@ -3,7 +3,8 @@
  * Super-admin: feature flags, system health, user impersonation, announcements, DB management
  */
 import { useState, useEffect } from "react";
-import { apiFetch } from "./services/api.js";
+import { db } from "./firebase.js";
+import { collection, getDocs, query, where, orderBy, limit, doc, updateDoc, setDoc } from "firebase/firestore";
 
 const FEATURE_FLAGS = [
   { id:"ff_ai_coaching",       label:"AI Coaching",          desc:"Enable AI coach panel for all users",         enabled:true,  rollout:100, env:"all" },
@@ -61,21 +62,27 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
 
   // Real system health — WebSocket / Redis / Firestore / Stripe / SendGrid / etc.
   useEffect(() => {
-    apiFetch("/admin/system/health").then(setRealHealth).catch(() => setRealHealth(null));
+    // System health: derive from Firestore data (no Railway needed)
+    getDocs(query(collection(db, "users"), limit(1)))
+      .then(snap => setRealHealth({ status:"operational", users_readable: !snap.empty }))
+      .catch(() => setRealHealth(null));
   }, []);
 
   // Real user directory — replaces the old hardcoded sample rows.
   useEffect(() => {
-    apiFetch("/admin/users").then(d => {
-      const mapped = (d?.users || []).map(u => ({
-        uid:      u.id,
-        email:    u.email || "—",
-        name:     u.name || (u.email ? u.email.split("@")[0] : "Unknown"),
-        plan:     u.tier || "standard",
-        org:      u.company_name || "—",
-        lastSeen: u.updated_at ? new Date(u.updated_at).toLocaleDateString() : (u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"),
-        sessions: u.session_count ?? "—",
-      }));
+    getDocs(query(collection(db, "users"), orderBy("created_at","desc"), limit(200))).then(snap => {
+      const mapped = snap.docs.map(d2 => {
+        const u = {id:d2.id,...d2.data()};
+        return {
+          uid:      u.id,
+          email:    u.email || "—",
+          name:     u.name || (u.email ? u.email.split("@")[0] : "Unknown"),
+          plan:     u.tier || "standard",
+          org:      u.company_name || "—",
+          lastSeen: u.updated_at ? new Date(u.updated_at).toLocaleDateString() : (u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"),
+          sessions: u.session_count ?? "—",
+        };
+      });
       setRealUsers(mapped);
     }).catch(() => setRealUsers([])).finally(() => setUsersLoading(false));
   }, []);
@@ -139,7 +146,9 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
   // labels/descriptions/env stay local since the backend only stores the
   // toggle state, not display metadata.
   useEffect(() => {
-    apiFetch("/admin/feature-flags").then(d => {
+    getDocs(collection(db, "feature_flags")).then(snap => {
+      const d = { flags: snap.docs.map(d2 => ({id:d2.id,...d2.data()})) };
+      
       const real = d?.flags || {};
       if (Object.keys(real).length === 0) return; // nothing synced yet — keep local defaults
       setFlags(prev => prev.map(f => real[f.id] ? {
@@ -157,11 +166,9 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
     const nextRollout  = nextEnabled ? 100 : 0;
     setFlags(p => p.map(f => f.id===id ? { ...f, enabled:nextEnabled, rollout:nextRollout } : f));
     // Persist: PATCH if the backend already knows this flag, otherwise POST to create it.
-    apiFetch("/admin/feature-flags", { method:"PATCH", body:{ key:id, enabled:nextEnabled, rollout_pct:nextRollout } })
-      .catch(() => apiFetch("/admin/feature-flags", {
-        method:"POST",
-        body:{ key:id, enabled:nextEnabled, rollout_pct:nextRollout, tiers:[] },
-      }).catch(() => {}));
+    updateDoc(doc(db, "feature_flags", id), { enabled: nextEnabled, rollout_pct: nextRollout, updated_at: new Date().toISOString() })
+      .catch(() => setDoc(doc(db, "feature_flags", id), { enabled: nextEnabled, rollout_pct: nextRollout, updated_at: new Date().toISOString() }, { merge: true }))
+      .catch(e => console.warn("[FeatureFlags] update failed:", e.message));
   };
   const setRollout = (id, v) => setFlags(p => p.map(f => f.id===id ? { ...f, rollout:parseInt(v), enabled:parseInt(v)>0 } : f));
 

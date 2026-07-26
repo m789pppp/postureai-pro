@@ -8,7 +8,7 @@ import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
-import { PushAPI } from "./services/api.js";
+import { PushAPI, dispatchNotification } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
 
 // ─── Role detection ────────────────────────────────────────────────
@@ -402,7 +402,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
         <StatCard label={isAr?"آخر جلسة":"Last Session"} value={last||"—"} color={gradeColor(last)} cs={cs}/>
         <StatCard label={isAr?"المتوسط":"Average"} value={avg||"—"} color="#3b82f6" cs={cs}/>
         <StatCard label={isAr?"هذا الشهر":"This Month"} value={month||"—"} sub={isAr?"جلسة":"sessions"} color="#f59e0b" cs={cs}/>
-        <StatCard label={isAr?"الإجمالي":"Total"} value={userSessions.length||"—"} sub={isAr?"جلسة":"sessions"} color="#a855f7" cs={cs}/>
+        <StatCard label={isAr?"الإجمالي":"Total"} value={(profile?.sessions_count ?? userSessions.length)||"—"} sub={isAr?"جلسة":"sessions"} color="#a855f7" cs={cs}/>
       </div>
 
       {/* Week chart */}
@@ -686,7 +686,28 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
             desc={isAr?"PDF تنفيذي":"Executive PDF"} onClick={onReports} cs={cs}/>
           <ToolBtn icon="🔔" label={isAr?"تنبيهات":"Alerts"} color="245,158,11"
             desc={isAr?`${atRisk} في خطر`:`${atRisk} at risk`}
-            onClick={()=>addToast(isAr?"تم إرسال تنبيهات لكل المعرضين للخطر":"Alerts sent to at-risk employees","success")} cs={cs}/>
+            onClick={async()=>{
+              const atRiskUsers = users.filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50);
+              if(!atRiskUsers.length){ addToast(isAr?"مفيش حد في خطر دلوقتي":"No one is currently at risk","info"); return; }
+              const results = await Promise.allSettled(atRiskUsers.map(u =>
+                dispatchNotification({
+                  type: "posture_warning",
+                  channels: ["in_app"],
+                  payload: {
+                    recipients: "uid",
+                    uid: u.uid || u.id,
+                    body: isAr
+                      ? `درجة وضعيتك ${u.avg_score||0}/100 — محتاجة انتباه`
+                      : `Your posture score is ${u.avg_score||0}/100 — worth a look`,
+                    actions: [{ label: isAr?"عرض":"View", key:"view" }],
+                  },
+                })
+              ));
+              const sent = results.filter(r=>r.status==="fulfilled").length;
+              const failed = results.length - sent;
+              if(failed===0) addToast(isAr?`تم إرسال ${sent} تنبيه`:`Sent ${sent} alert${sent!==1?"s":""}`,"success");
+              else addToast(isAr?`اتبعت ${sent} وفشل ${failed}`:`Sent ${sent}, ${failed} failed`, sent>0?"info":"error");
+            }} cs={cs}/>
         </div>
       </div>
 
@@ -1067,12 +1088,24 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
-  onBillingHistory, onReferral, onIntegrations,
+  onBillingHistory, onReferral, onIntegrations, onNotifications,
   lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
   const [tab,     setTab]     = useState("profile");
   const [linkingGoogle, setLinkingGoogle] = useState(false);
+  // BUG FIX: this component referenced currency/setCurrency (used below in
+  // the upgrade-plans currency toggle) without ever defining them — a
+  // ReferenceError that crashed the Settings page for every non-Pro user,
+  // the moment the !isPro(tier) upgrade section tried to render. Same
+  // timezone-based default used elsewhere in this file (Egypt → EGP via
+  // Kashier, everyone else → USD via Stripe).
+  const [currency, setCurrency] = useState(()=>{
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return tz === "Africa/Cairo" ? "EGP" : "USD";
+    } catch { return "EGP"; }
+  });
   const [addPwVisible, setAddPwVisible]   = useState(false);
   const [showDeleteBox, setShowDeleteBox] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -1392,6 +1425,16 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 <span>
                   <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"التكاملات":"Integrations"}</div>
                   <div style={{ fontSize:11, color:cs.muted }}>Slack, Teams, Zapier, Webhooks…</div>
+                </span>
+              </span>
+              <span style={{ color:cs.muted }}>›</span>
+            </button>
+            <button onClick={onNotifications} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
+              <span style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontSize:18 }}>🔔</span>
+                <span>
+                  <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"الإشعارات":"Notifications"}</div>
+                  <div style={{ fontSize:11, color:cs.muted }}>{isAr?"إنجازات، رؤى AI، تنبيهات":"Achievements, AI insights, alerts"}</div>
                 </span>
               </span>
               <span style={{ color:cs.muted }}>›</span>
@@ -2524,6 +2567,7 @@ export default function HomePage({
       tier={tier} onBilling={openBilling}
       onBillingHistory={()=>setShowBillingDashboard?.(true)}
       onReferral={()=>setShowReferralProgram?.(true)}
+      onNotifications={()=>setShowNotificationsHub?.(true)}
       onIntegrations={()=>setShowIntegrationsHub?.(true)}
       lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}
       AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}/>
