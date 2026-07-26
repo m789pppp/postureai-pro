@@ -402,7 +402,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
         <StatCard label={isAr?"آخر جلسة":"Last Session"} value={last||"—"} color={gradeColor(last)} cs={cs}/>
         <StatCard label={isAr?"المتوسط":"Average"} value={avg||"—"} color="#3b82f6" cs={cs}/>
         <StatCard label={isAr?"هذا الشهر":"This Month"} value={month||"—"} sub={isAr?"جلسة":"sessions"} color="#f59e0b" cs={cs}/>
-        <StatCard label={isAr?"الإجمالي":"Total"} value={userSessions.length||"—"} sub={isAr?"جلسة":"sessions"} color="#a855f7" cs={cs}/>
+        <StatCard label={isAr?"الإجمالي":"Total"} value={(profile?.sessions_count ?? userSessions.length)||"—"} sub={isAr?"جلسة":"sessions"} color="#a855f7" cs={cs}/>
       </div>
 
       {/* Week chart */}

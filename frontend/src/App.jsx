@@ -1184,7 +1184,14 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
   const isElite=tierAtLeast(profile?.tier,"elite");
   useEffect(()=>{ getReferralStats(user.uid).then(setRefStats).catch(()=>{}); },[user.uid]);
   const refLink=refStats?.ref_code?`${window.location.origin}?ref=${refStats.ref_code}`:"";
-  const avgScore=sessions?.length?Math.round(sessions?.reduce((a,s)=>a+(s.avg_score||0),0)/sessions?.length):0;
+  // BUG FIX: these used to be derived from `sessions` (the capped
+  // 50-session array), not the authoritative persistent counters that
+  // firebase.js's saveSession() already maintains on every save. Any user
+  // with more than 50 lifetime sessions saw "Total Sessions: 50" frozen
+  // forever, and an average computed only over their 50 most recent
+  // sessions instead of their true lifetime average.
+  const totalSessions=profile?.sessions_count ?? sessions?.length ?? 0;
+  const avgScore=profile?.avg_score ?? (sessions?.length?Math.round(sessions?.reduce((a,s)=>a+(s.avg_score||0),0)/sessions?.length):0);
   const inp={width:"100%",background:cs.inp,border:`0.5px solid ${cs.inpB}`,borderRadius:9,padding:"11px 14px",fontSize:13,color:cs.text,outline:"none",boxSizing:"border-box",marginBottom:12};
   async function save(){
     setSaving(true);
@@ -1211,7 +1218,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
         </div>
         <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20}}>
           <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:14}}>{t.profileStats||"Statistics"}</div>
-          {[[t.totalSess,sessions?.length],[t.avgScore,avgScore+"/100"],[t.planLabel||"Plan",qualityFor(profile?.tier).label[isAr?"ar":"en"]],[t.memberSince,profile?.created_at?.toDate?.()?.toLocaleDateString?.()||"—"]].map(([k,v])=>(
+          {[[t.totalSess,totalSessions],[t.avgScore,avgScore+"/100"],[t.planLabel||"Plan",qualityFor(profile?.tier).label[isAr?"ar":"en"]],[t.memberSince,profile?.created_at?.toDate?.()?.toLocaleDateString?.()||"—"]].map(([k,v])=>(
             <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`0.5px solid ${cs.border}`}}>
               <span style={{fontSize:12,color:cs.muted}}>{k}</span><span style={{fontSize:12,fontWeight:600,color:cs.text}}>{v}</span>
             </div>
