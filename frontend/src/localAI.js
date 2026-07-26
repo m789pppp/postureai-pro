@@ -876,6 +876,27 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, sign
 }
 
 
+// Strip Pollinations watermark from responses
+// RESTORED: this was accidentally dropped during a recent refactor/merge —
+// callLLM7Direct's go() helper below calls this on every successful
+// response, so its absence was a guaranteed ReferenceError crash on every
+// single AI response through the primary provider path.
+function cleanAIResponse(text) {
+  if (!text) return text;
+  return text
+    // Pollinations ad blocks (various formats)
+    .replace(/\n*-{2,}\n*🌸[\s\S]*?🌸[\s\S]*?(?=\n|$)/gm, "")
+    .replace(/\n*🌸[\s\S]*?🌸[\s\S]*?(?=\n|$)/gm, "")
+    .replace(/\n*[-–]{2,}\n*[\s\S]*?[Pp]ollinations[\s\S]*?(?:\n|$)/gm, "")
+    .replace(/\n*[Ss]upport [Pp]ollinations[\s\S]*?(?:\n\n|$)/gm, "")
+    .replace(/\n*[Pp]owered by [Pp]ollinations[\s\S]*?(?:\n\n|$)/gm, "")
+    .replace(/\n*\[[Ss]upport our mission\][\s\S]*?(?:\n|$)/gm, "")
+    .replace(/\n*[Aa]d 🌸[\s\S]*?(?:\n|$)/gm, "")
+    .replace(/\n*https?:\/\/pollinations\.ai[^\s]*/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // Fallback: non-streaming (if streaming fails)
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
   const allMsgs = [
