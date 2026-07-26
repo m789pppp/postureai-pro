@@ -439,8 +439,15 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
 /* ── Step 3: Goals ───────────────────────────────────────────────── */
 function StepGoals({ isAr, profile, setProfile, onNext, onBack }) {
   const [selected, setSelected] = useState([]);
+  const isCompany = profile.acct_type === "company";
 
-  const goals = [
+  const individualGoals = [
+    { id: "reduce_pain",    icon: "💪", en: "Reduce back/neck pain",          ar: "تقليل آلام الظهر والرقبة" },
+    { id: "productivity",   icon: "⚡", en: "Improve productivity",            ar: "تحسين الإنتاجية" },
+    { id: "habits",         icon: "🎯", en: "Build healthy work habits",       ar: "بناء عادات عمل صحية" },
+    { id: "remote",         icon: "🏠", en: "Support remote work wellness",    ar: "دعم صحة العمل عن بُعد" },
+  ];
+  const companyGoals = [
     { id: "reduce_pain",    icon: "💪", en: "Reduce back/neck pain",          ar: "تقليل آلام الظهر والرقبة" },
     { id: "productivity",   icon: "⚡", en: "Improve productivity",            ar: "تحسين الإنتاجية" },
     { id: "team_health",    icon: "👥", en: "Track team wellness",             ar: "تتبع صحة الفريق" },
@@ -450,6 +457,12 @@ function StepGoals({ isAr, profile, setProfile, onNext, onBack }) {
     { id: "remote",         icon: "🏠", en: "Support remote work wellness",    ar: "دعم صحة العمل عن بُعد" },
     { id: "compliance",     icon: "🛡️", en: "HR compliance & reporting",       ar: "الامتثال وتقارير HR" },
   ];
+  // BUG FIX: this used to be one flat list shown to everyone — an
+  // individual user would see "Track team wellness", "Prevent employee
+  // burnout", "HR compliance & reporting" right after choosing an
+  // individual (not company) account in the previous step. Every other
+  // step in this wizard already branches on isCompany; this one didn't.
+  const goals = isCompany ? companyGoals : individualGoals;
 
   const toggle = id => setSelected(prev =>
     prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -761,22 +774,34 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
 
 /* ── Step 6: Integrations quick connect ──────────────────────────── */
 function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
-  const [connected, setConnected] = useState([]);
-  const [connecting, setConnecting] = useState(null);
+  const [selected, setSelected] = useState([]);
+  const isCompany = profile.acct_type === "company";
 
-  const options = [
+  // BUG FIX: Teams ("Team health updates") and Jira ("Auto HR tickets") are
+  // company/HR-oriented and don't make sense for an individual account —
+  // same gap as StepGoals had.
+  const individualOptions = [
+    { id: "slack",  icon: "💬", name: "Slack",               desc: isAr ? "تنبيهات في قنواتك" : "Alerts in your channels",       color: "#4A154B" },
+    { id: "gcal",   icon: "📅", name: "Google Calendar",     desc: isAr ? "جدولة الجلسات تلقائياً" : "Auto-schedule sessions",    color: "#1A73E8" },
+  ];
+  const companyOptions = [
     { id: "slack",  icon: "💬", name: "Slack",               desc: isAr ? "تنبيهات في قنواتك" : "Alerts in your channels",       color: "#4A154B" },
     { id: "teams",  icon: "🟦", name: "Microsoft Teams",     desc: isAr ? "تحديثات الفريق" : "Team health updates",              color: "#6264A7" },
     { id: "gcal",   icon: "📅", name: "Google Calendar",     desc: isAr ? "جدولة الجلسات تلقائياً" : "Auto-schedule sessions",    color: "#1A73E8" },
     { id: "jira",   icon: "🔵", name: "Jira",                desc: isAr ? "تذاكر HR تلقائية" : "Auto HR tickets",                 color: "#0052CC" },
   ];
+  const options = isCompany ? companyOptions : individualOptions;
 
-  const connect = async (id) => {
-    setConnecting(id);
-    await new Promise(r => setTimeout(r, 1200 + Math.random() * 600));
-    setConnected(prev => [...prev, id]);
-    setConnecting(null);
-  };
+  // BUG FIX: this used to fake a real connection — a random 1.2-1.8s delay
+  // then a green "✓ Connected" badge, with zero actual OAuth/API call ever
+  // happening. It actively misled users into thinking Slack/Teams/Jira were
+  // live-linked, and that false state got saved and echoed back on the
+  // Summary step. This is now an honest interest picker — instant toggle,
+  // no fake "connecting" animation, and wording that matches what actually
+  // happens (real setup later, in Settings).
+  const toggle = (id) => setSelected(prev =>
+    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+  );
 
   return (
     <div style={{ padding: "8px 0" }}>
@@ -784,18 +809,17 @@ function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
         {isAr ? "ربط منصاتك" : "Connect Your Platforms"}
       </h2>
       <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 24, lineHeight: 1.6 }}>
-        {isAr ? "ربط اختياري — تقدر تربطهم دائماً من الإعدادات لاحقاً" : "Optional — you can always connect these later from Settings"}
+        {isAr ? "اختياري — الربط الفعلي بيتم من الإعدادات بعد كده" : "Optional — the actual connection happens in Settings after this"}
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
         {options.map((opt, i) => {
-          const isConnected = connected.includes(opt.id);
-          const isConnecting = connecting === opt.id;
+          const isSelected = selected.includes(opt.id);
           return (
             <div key={opt.id} style={{
               display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
-              background: isConnected ? `${opt.color}0a` : "rgba(255,255,255,.03)",
-              border: `1.5px solid ${isConnected ? `${opt.color}35` : "rgba(148,163,184,.1)"}`,
+              background: isSelected ? `${opt.color}0a` : "rgba(255,255,255,.03)",
+              border: `1.5px solid ${isSelected ? `${opt.color}35` : "rgba(148,163,184,.1)"}`,
               borderRadius: 12, transition: `all 200ms ${SPRING}`,
               animation: `ob-fadeIn 300ms ${i * 70}ms both`,
             }}>
@@ -804,10 +828,10 @@ function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
                 <div style={{ fontFamily: SYNE, fontSize: 13, fontWeight: 700, color: "#e8f0fe" }}>{opt.name}</div>
                 <div style={{ fontSize: 11, color: "#475569" }}>{opt.desc}</div>
               </div>
-              {isConnected
-                ? <span style={{ fontSize: 12, fontWeight: 700, color: "#34d399", display: "flex", alignItems: "center", gap: 5 }}>✓ {isAr ? "متصل" : "Connected"}</span>
-                : <Btn size="xs" variant="secondary" loading={isConnecting} onClick={() => connect(opt.id)}>
-                    {isAr ? "ربط" : "Connect"}
+              {isSelected
+                ? <span style={{ fontSize: 12, fontWeight: 700, color: "#34d399", display: "flex", alignItems: "center", gap: 5 }}>✓ {isAr ? "مُختار" : "Selected"}</span>
+                : <Btn size="xs" variant="secondary" onClick={() => toggle(opt.id)}>
+                    {isAr ? "اختيار" : "Select"}
                   </Btn>
               }
             </div>
@@ -817,8 +841,8 @@ function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
 
       <div style={{ display: "flex", gap: 10 }}>
         <Btn variant="ghost" onClick={onBack}>{isAr ? "← رجوع" : "← Back"}</Btn>
-        <Btn onClick={() => { setProfile(p => ({ ...p, connectedIntegrations: connected })); onNext(); }} fullWidth>
-          {connected.length > 0 ? (isAr ? `${connected.length} تكاملات متصلة ← التالي` : `${connected.length} connected → Continue`) : (isAr ? "تخطي للآن ←" : "Skip for now →")}
+        <Btn onClick={() => { setProfile(p => ({ ...p, interestedIntegrations: selected })); onNext(); }} fullWidth>
+          {selected.length > 0 ? (isAr ? `${selected.length} مُختارة ← التالي` : `${selected.length} selected → Continue`) : (isAr ? "تخطي للآن ←" : "Skip for now →")}
         </Btn>
       </div>
     </div>
@@ -847,7 +871,7 @@ function StepFinish({ isAr, profile, onComplete }) {
     { icon: "🎯", label: isAr ? "الدور" : "Role",          value: profile.userType || "Individual" },
     { icon: "💻", label: isAr ? "وضع الكاميرا" : "Mode",   value: profile.mode || "Laptop" },
     { icon: "🎯", label: isAr ? "الأهداف" : "Goals",       value: `${(profile.goals||[]).length} ${isAr ? "أهداف" : "selected"}` },
-    { icon: "🔌", label: isAr ? "التكاملات" : "Integrations", value: `${(profile.connectedIntegrations||[]).length} ${isAr ? "متصلة" : "connected"}` },
+    { icon: "🔌", label: isAr ? "التكاملات" : "Integrations", value: `${(profile.interestedIntegrations||[]).length} ${isAr ? "مُختارة" : "selected"}` },
   ];
 
   return (
