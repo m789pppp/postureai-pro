@@ -279,6 +279,22 @@ def _get_user_role(uid: str) -> dict:
                     if current_level < TIER_ORDER.get("elite", 2):
                         role_data["tier"]     = "elite"
                         role_data["is_trial"] = False   # not a trial, it's institutional
+                        # BUG FIX: this used to only ever update role_data
+                        # (in-memory, used for backend authorization checks)
+                        # — it never wrote tier:"elite" back to the actual
+                        # Firestore user document. Backend API calls
+                        # correctly treated the user as elite, but the
+                        # frontend (which reads tier directly from
+                        # Firestore) never showed it — elite access looked
+                        # like it had silently disappeared even though the
+                        # allowlist was intact. Persist it once here.
+                        try:
+                            db.collection("users").document(uid).update({
+                                "tier": "elite",
+                                "is_trial": False,
+                            })
+                        except Exception as _elev_err:
+                            print(f"[auth] elite-elevation write failed for {uid}: {_elev_err}", file=sys.stderr)
         except Exception as e:
             print(f"[auth] Firestore role fetch error for {uid}: {e}", file=sys.stderr)
 
