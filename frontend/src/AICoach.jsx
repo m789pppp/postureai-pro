@@ -253,7 +253,9 @@ function buildSystemPrompt(ctx, isAr) {
 - ⚕️ علامات الخطر: ألم متشع / تنميل / ضعف أحادي → "راجع فيزيوثيرابيست"
 - ابدأ مباشرة — بدون "سؤال ممتاز" أو "بالطبع"
 - 150-220 كلمة محادثة | حتى 400 للخطط الكاملة
-اللغة: عامية مصرية. مصطلحات طبية مع شرح.`;
+اللغة: عامية مصرية. مصطلحات طبية مع شرح.
+
+[CTXDATA:${JSON.stringify({avg:ctx.avg_score||0, sessions:ctx.sessions_count||0, weekAvg:wa||0, weekSessions:ctx.week_sessions||0, trendPct:tr||0, neckRisk:nr||0, fatigue:fa||0, burnout:bu||0, calibrated:!!ctx.has_calibration, alerts:al, lang:"ar"})}]`;
 
   return `You are Dr. Corvus — clinical physiotherapist & ergonomics specialist in Corvus PostureAI Pro. 15 years MSK experience.
 
@@ -281,7 +283,9 @@ Est. flexion for ${nm}: ~${nr>=70?"35-45°":nr>=40?"20-30°":"<15°"}
 - PLAN → weekly protocol with progressions
 - ⚕️ Red flags (radiation/numbness/unilateral weakness) → advise in-person physio
 - No "Great question!" openings. Start with the answer.
-- 220w max conversation | 400w max for full plans.`;
+- 220w max conversation | 400w max for full plans.
+
+[CTXDATA:${JSON.stringify({avg:ctx.avg_score||0, sessions:ctx.sessions_count||0, weekAvg:wa||0, weekSessions:ctx.week_sessions||0, trendPct:tr||0, neckRisk:nr||0, fatigue:fa||0, burnout:bu||0, calibrated:!!ctx.has_calibration, alerts:al, lang:isAr?"ar":"en"})}]`;
 }
 
 // ── Main component ────────────────────────────────────────────────

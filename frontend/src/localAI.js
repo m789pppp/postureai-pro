@@ -44,7 +44,25 @@ function cite(ref,ar) {
 
 // ── Data extraction ───────────────────────────────────────────────
 function parseData(sp) {
-  const t = (sp||"").replace(/\n/g," ");
+  const t = (sp||"").replace(/\n/g,"  ");
+  // Prefer the stable [CTXDATA:{...}] marker (added to buildSystemPrompt
+  // specifically so this parser doesn't have to regex-match prose/table
+  // formatting that changes independently of it — see the fix note where
+  // this marker is emitted for the full story on why the old regex-only
+  // approach silently broke).
+  const markerMatch = t.match(/\[CTXDATA:(\{.*?\})\]/);
+  if (markerMatch) {
+    try {
+      const d = JSON.parse(markerMatch[1]);
+      return {
+        name:         str(t, /Name:\s*([A-Za-z][A-Za-z ]{1,20})/, /User:\s*([A-Za-z]{2,20})/),
+        avg: d.avg||0, weekAvg: d.weekAvg||0, sessions: d.sessions||0, weekSessions: d.weekSessions||0,
+        trendPct: d.trendPct||0, fatigue: d.fatigue||0, burnout: d.burnout||0, neckRisk: d.neckRisk||0,
+        worstTime: "", alerts: d.alerts||"", calibrated: !!d.calibrated,
+        lang: d.lang === "ar" ? "ar" : "en",
+      };
+    } catch { /* fall through to regex parsing below */ }
+  }
   return {
     name:         str(t, /Name:\s*([A-Za-z][A-Za-z ]{1,20})/, /User:\s*([A-Za-z]{2,20})/),
     avg:          num(t, /[Oo]verall avg score:\s*(\d+)/, /[Aa]vg[^:]*:\s*(\d+)/),
