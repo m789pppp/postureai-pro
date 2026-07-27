@@ -2287,16 +2287,19 @@ export default function App(){
   const[sessionInsights,setSessionInsights]=useState([]);
   useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); distSmootherRef.current?.reset(); resetProportions(); },[mode]);
   const[tier,setTier]=useState(null);
-  const[acctType,setAcctType]=useState(null); // always null on setup — user must choose (except employees, see below)
-  // Sync acctType when profile loads (only if NOT on setup page) — EXCEPT an
-  // employee (joined via a valid company invite) skips the picker entirely,
-  // since picking "Company/Team" here used to silently overwrite their role
-  // to hr_admin/is_org_owner — every invited employee would end up looking
-  // like an org owner over their own company after their first login.
+  const[acctType,setAcctType]=useState(null); // null until known — user chooses only if signup didn't already tell us
+  // Sync acctType from the profile whenever it's already known — this used
+  // to only apply for page!=="setup", plus a special-cased employee rule,
+  // which meant a fresh company (hr_admin) signup — who just explicitly
+  // chose "Company/Team" and typed their company name during signup — saw
+  // the *exact same* individual-vs-company question again on the very next
+  // screen, with nothing distinguishing it from the individual flow. Any
+  // account type already known from signup now skips the picker outright,
+  // on setup or not — it was only ever meant to ask when we don't know yet.
   useEffect(()=>{
-    if(profile?.acct_type&&!acctType&&page!=="setup") setAcctType(profile.acct_type);
-    if(page==="setup"&&profile?.user_type==="employee"&&!acctType) setAcctType("company");
-  },[profile?.acct_type,profile?.user_type,acctType,page]); // "company" | "individual"
+    if(profile?.acct_type && !acctType) setAcctType(profile.acct_type);
+    else if((profile?.user_type==="employee"||profile?.user_type==="hr_admin") && !acctType) setAcctType("company");
+  },[profile?.acct_type,profile?.user_type,acctType]); // "company" | "individual"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
@@ -4126,8 +4129,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
           ):(
             <>
               <div style={{textAlign:"center",marginBottom:24}}>
-                <button onClick={()=>{setAcctType(null);setDevicePref(null);}} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:11,marginBottom:12}}>{isAr?"← رجوع":"← Back"}</button>
+                {!(profile?.acct_type||profile?.user_type==="employee"||profile?.user_type==="hr_admin")&&<button onClick={()=>{setAcctType(null);setDevicePref(null);}} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:11,marginBottom:12}}>{isAr?"← رجوع":"← Back"}</button>}
                 <div style={{fontSize:20,fontWeight:700,marginBottom:6,color:cs.text}}>{t.deviceType}</div>
+                {acctType==="company"&&<div style={{fontSize:12,color:cs.muted,marginTop:4}}>
+                  {isAr?`لفريق ${profile?.company||"شركتك"}`:`For ${profile?.company||"your team"}`}
+                </div>}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
                 {[
