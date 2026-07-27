@@ -101,10 +101,15 @@
 
     <!-- ═══ Preconnect ════════════════════════════════════════════ -->
     <link rel="dns-prefetch" href="https://get.geojs.io"/>
-    <link rel="dns-prefetch" href="https://api.groq.com"/>
-    <link rel="dns-prefetch" href="https://postureai-backend.up.railway.app"/>
+    <link rel="dns-prefetch" href="https://text.pollinations.ai"/>
+    <link rel="dns-prefetch" href="https://api.resend.com"/>
+    <link rel="preconnect" href="https://text.pollinations.ai"/>
+    <link rel="preconnect" href="https://checkout.kashier.io"/>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="preconnect" href="https://firestore.googleapis.com" />
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
+    <link rel="preconnect" href="https://securetoken.googleapis.com" />
+    <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Non-blocking font load: this stylesheet spans 3 families x up to 5
@@ -174,7 +179,9 @@
       *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
       html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
       body{background:#030b14;color:#e8f0ff;font-family:'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif;line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
-      #root{min-height:100vh}
+      #root{min-height:100vh;contain:layout style}
+      /* Prevent invisible text during font load */
+      @font-face{font-display:swap}
       /* Loading state */
       .app-loading{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#030b14}
       .app-loading-dot{width:8px;height:8px;border-radius:50%;background:#4f7cf9;animation:ld .8s ease-in-out infinite}

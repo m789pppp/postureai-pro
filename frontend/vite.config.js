@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    include: ["react", "react-dom", "firebase/app", "firebase/auth", "firebase/firestore"],
+    exclude: ["mediapipe", "@mediapipe/tasks-vision"],
+  },
   server: {
     port: 5173,
     host: true,
@@ -15,16 +19,21 @@ export default defineConfig({
     }
   },
   build: {
-    chunkSizeWarningLimit: 600,
-    // Minification
     minify: 'terser',
     terserOptions: {
       compress: {
         drop_console: true,
         drop_debugger: true,
-        pure_funcs: ['console.log', 'console.warn'],
-      }
+        pure_funcs: ['console.log', 'console.warn', 'console.info', 'console.debug'],
+        passes: 2,
+        collapse_vars: true,
+        reduce_vars: true,
+      },
+      mangle: { safari10: true },
+      format: { comments: false },
     },
+    // Report any chunk > 500KB
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         // Better cache hashing
@@ -79,7 +88,10 @@ export default defineConfig({
           if (id.includes('/src/HRPanel') ||
               id.includes('/src/CompanySystem'))                  return 'hr';
           if (id.includes('/src/AICoach') ||
-              id.includes('/src/PostureCalibration'))             return 'ai-features';
+              id.includes('/src/localAI') ||
+              id.includes('/src/gemini'))                           return 'ai-coach';
+          if (id.includes('/src/PostureCalibration'))                return 'ai-features';
+          if (id.includes('/src/NotificationsHub'))                  return 'notifications';
           if (id.includes('/src/UsageBilling') ||
               id.includes('/src/BillingDashboard') ||
               id.includes('/src/Billing.jsx'))                    return 'billing';
