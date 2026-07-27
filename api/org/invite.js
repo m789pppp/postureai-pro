@@ -70,6 +70,7 @@ export default async function handler(req, res) {
       await db.collection("users").doc(uid).update({
         company_id,
         company_name: company.name || "",
+        acct_type:    "company",
         user_type:    invite.role === "hr_admin" ? "hr_admin" : "employee",
         is_hr:        invite.role === "hr_admin",
         team:         invite.team || "",
