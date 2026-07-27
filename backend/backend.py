@@ -12372,6 +12372,7 @@ def emr_webhook_receiver():
 # ENTERPRISE WEBHOOK ENGINE
 # ══════════════════════════════════════════════════════════════════
 import hmac as _hmac, hashlib as _hashlib, threading as _threading
+from urllib.parse import urlencode
 
 # Webhook config and delivery logs live in Firestore (webhooks/{id},
 # webhook_logs/{auto-id}) — moved 2026-07-25. Previously these were
@@ -16152,9 +16153,19 @@ def marketplace_therapist_slots(therapist_id):
 @require_auth
 @limiter.limit("15 per minute")
 def marketplace_create_booking():
-    """Create a booking request and open a PayMob payment for the therapist's
-    session fee. Mirrors /api/paymob/create-payment's order flow, but priced
-    from the therapist doc instead of a subscription tier."""
+    """Create a booking request and open a Kashier payment for the
+    therapist's session fee.
+
+    This used to call PayMob directly - the gateway the rest of the app
+    migrated away from when the subscription checkout flow moved to
+    Kashier. It was never updated when that migration happened, so this
+    was the one real-money flow still pointed at the old gateway,
+    almost certainly against credentials (PAYMOB_SECRET_KEY) that are
+    no longer configured now that Kashier is the live gateway - meaning
+    every booking attempt was silently falling through to the
+    'pending_manual_followup' no-payment path instead of actually
+    charging anyone.
+    """
     try:
         data          = request.get_json(force=True) or {}
         therapist_id  = (data.get("therapist_id") or "").strip()
@@ -16212,61 +16223,51 @@ def marketplace_create_booking():
             "payout_status":      "pending",   # pending | paid — only meaningful once status=confirmed
         }
 
-        if not PAYMOB_SECRET_KEY:
+        kashier_merchant_id = os.getenv("KASHIER_MERCHANT_ID", "")
+        kashier_api_key     = os.getenv("KASHIER_API_KEY", "")
+        if not kashier_merchant_id or not kashier_api_key:
             # No payment configured — still record the request so admin can
             # follow up manually, matching the "coming soon" card path.
             booking["status"] = "pending_manual_followup"
             booking_ref.set(booking)
             return jsonify({"ok": True, "booking_id": booking_ref.id,
                              "payment": None,
-                             "note": "PayMob not configured — booking recorded for manual follow-up"}), 200
+                             "note": "Kashier not configured — booking recorded for manual follow-up"}), 200
 
-        headers   = {"Content-Type": "application/json"}
-        auth_resp = req.post("https://accept.paymob.com/api/auth/tokens",
-                              json={"api_key": PAYMOB_SECRET_KEY}, headers=headers, timeout=15)
-        auth_resp.raise_for_status()
-        auth_token = auth_resp.json().get("token")
-        if not auth_token:
-            return jsonify({"error": "PayMob auth failed"}), 502
+        # BOOKING- prefix (distinct from CORVUS- used for subscriptions) lets
+        # the Kashier webhook (api/kashier/webhook.js) tell the two apart and
+        # confirm a marketplace booking instead of activating a subscription.
+        order_id   = f"BOOKING-{g.uid[:8]}-{booking_ref.id}-{int(time.time())}"
+        amount_str = f"{amount_cents/100:.2f}"
+        sig_msg    = ".".join([kashier_merchant_id, order_id, amount_str, currency])
+        kashier_hash = _hmac.new(kashier_api_key.encode(), sig_msg.encode(), _hashlib.sha256).hexdigest()
 
-        order_resp = req.post("https://accept.paymob.com/api/ecommerce/orders",
-                               json={"auth_token": auth_token, "delivery_needed": False,
-                                     "amount_cents": amount_cents, "currency": currency,
-                                     "merchant_order_id": f"PAI-BOOK-{g.uid}-{booking_ref.id}-{int(time.time())}",
-                                     "items": [{"name": f"Session with {therapist.get('name','Therapist')}",
-                                                "amount_cents": amount_cents,
-                                                "description": f"PostureAI Marketplace — physiotherapy session booking",
-                                                "quantity": 1}]},
-                               headers=headers, timeout=15)
-        order_resp.raise_for_status()
-        order_id = order_resp.json().get("id")
+        app_url = os.getenv("VITE_APP_URL", "https://postureai-pro-omega-nine.vercel.app")
+        params = {
+            "merchantId":       kashier_merchant_id,
+            "orderId":          order_id,
+            "amount":           amount_str,
+            "currency":         currency,
+            "hash":             kashier_hash,
+            "merchantRedirect": f"{app_url}/?payment=success",
+            "failureRedirect":  f"{app_url}/?payment=cancelled",
+            "serverWebhook":    f"{app_url}/api/kashier/webhook",
+            "display":          "en",
+            "description":      f"PostureAI Marketplace — session with {therapist.get('name','Therapist')}",
+            "shopperReference": g.uid,
+        }
+        if billing_data.get("email"):
+            params["email"] = billing_data["email"]
 
-        pk_resp = req.post("https://accept.paymob.com/api/acceptance/payment_keys",
-                            json={"auth_token": auth_token, "amount_cents": amount_cents,
-                                  "expiration": 3600, "order_id": order_id, "currency": currency,
-                                  "integration_id": PAYMOB_INTEGRATIONS.get("card", ""),
-                                  "billing_data": {"email": billing_data.get("email","NA"),
-                                                   "first_name": billing_data.get("first_name","Customer"),
-                                                   "last_name": billing_data.get("last_name",""),
-                                                   "phone_number": billing_data.get("phone_number","NA"),
-                                                   "apartment":"NA","floor":"NA","street":"NA",
-                                                   "building":"NA","shipping_method":"NA",
-                                                   "postal_code":"NA","city":"Cairo","country":"EG","state":"Cairo"}},
-                            headers=headers, timeout=15)
-        pk_resp.raise_for_status()
-        payment_key = pk_resp.json().get("token")
-
-        booking["paymob_order_id"] = order_id
+        booking["kashier_order_id"] = order_id
+        booking["payment_gateway"]  = "kashier"
         booking_ref.set(booking)
 
-        iframe_id = os.getenv("PAYMOB_IFRAME_ID", "")
+        redirect_url = "https://checkout.kashier.io/?" + urlencode(params)
         return jsonify({
             "ok": True,
             "booking_id": booking_ref.id,
-            "payment": {
-                "payment_key": payment_key,
-                "iframe_url": f"https://accept.paymob.com/api/acceptance/iframes/{iframe_id}?payment_token={payment_key}" if iframe_id else None,
-            }
+            "payment": {"redirect_url": redirect_url},
         })
     except Exception as e:
         return safe_error(e)

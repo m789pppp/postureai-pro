@@ -52,6 +52,64 @@ function parseOrderId(orderId) {
   return null;
 }
 
+/**
+ * Parse a marketplace booking orderId: BOOKING-{uid8}-{bookingId}-{timestamp}
+ * (Firestore auto-IDs are alphanumeric, no hyphens, so index 2 is safe.)
+ */
+function parseBookingOrderId(orderId) {
+  const parts = (orderId || "").split("-");
+  if (parts.length >= 4 && parts[0] === "BOOKING") {
+    return { bookingId: parts[2] };
+  }
+  return null;
+}
+
+/**
+ * Confirm a marketplace booking payment. Ported from the old PayMob
+ * webhook's equivalent branch (backend.py's paymob_webhook) when booking
+ * payments moved to Kashier — same idempotency and amount-mismatch
+ * protections, just running in this runtime instead.
+ */
+async function confirmBookingPayment(db, orderId, amount, transactionId) {
+  const parsed = parseBookingOrderId(orderId);
+  if (!parsed) {
+    console.warn("[Kashier Webhook] Could not parse booking orderId:", orderId);
+    return { received: true, action: "booking_parse_failed" };
+  }
+  const bookingRef = db.collection("marketplace_bookings").doc(parsed.bookingId);
+  const bookingSnap = await bookingRef.get();
+  if (!bookingSnap.exists) {
+    console.warn("[Kashier Webhook] marketplace_bookings/" + parsed.bookingId + " not found");
+    return { received: true, action: "booking_not_found" };
+  }
+  const booking = bookingSnap.data();
+
+  // Idempotency — Kashier can legitimately retry the webhook
+  if (booking.status === "confirmed") {
+    console.log("[Kashier Webhook] Booking", parsed.bookingId, "already confirmed — skipping duplicate");
+    return { received: true, note: "already processed" };
+  }
+
+  // Defense in depth — confirm the charged amount matches what this
+  // booking was created for (Kashier's amount is EGP, booking stores cents).
+  const paidCents = Math.round(Number(amount) * 100);
+  if (booking.amount_cents !== paidCents) {
+    console.error(
+      "🚨 [Kashier Webhook] Booking amount mismatch: expected=" + booking.amount_cents +
+      " got=" + paidCents + " booking_id=" + parsed.bookingId + " — flagged for review"
+    );
+    return { received: true, warning: "amount mismatch — flagged for review" };
+  }
+
+  await bookingRef.update({
+    status:               "confirmed",
+    kashier_transaction_id: transactionId,
+    confirmed_at:          new Date().toISOString(),
+  });
+  console.log("[Kashier Webhook] ✅ Marketplace booking", parsed.bookingId, "confirmed");
+  return { received: true, action: "booking_confirmed", booking_id: parsed.bookingId };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
@@ -88,6 +146,17 @@ export default async function handler(req, res) {
 
     console.log("[Kashier Webhook] Payment success:", orderId, amount, "EGP");
 
+    // Marketplace booking payments use a DIFFERENT orderId shape
+    // (BOOKING-{uid8}-{bookingId}-{ts}) than subscription payments
+    // (CORVUS-{uid8}-{tier}-{billing}-{ts}). Must be checked FIRST —
+    // otherwise parseOrderId below would either misparse it or reject it,
+    // and a real successful charge would never mark the booking paid.
+    const db = getAdminDb();
+    if (orderId.startsWith("BOOKING-")) {
+      const result = await confirmBookingPayment(db, orderId, amount, transactionId);
+      return res.json(result);
+    }
+
     const parsed = parseOrderId(orderId);
     if (!parsed) {
       console.warn("[Kashier Webhook] Could not parse orderId:", orderId);
@@ -95,7 +164,6 @@ export default async function handler(req, res) {
     }
 
     const { tier, billing } = parsed;
-    const db = getAdminDb();
 
     if (email) {
       const snap = await db.collection("users").where("email", "==", email).limit(1).get();

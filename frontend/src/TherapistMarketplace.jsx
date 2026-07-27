@@ -94,8 +94,8 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
         notes,
         billing_data: { email: user?.email || "" },
       });
-      if (res?.payment?.iframe_url) {
-        window.open(res.payment.iframe_url, "_blank");
+      if (res?.payment?.redirect_url) {
+        window.open(res.payment.redirect_url, "_blank");
         addToast?.(isAr ? "افتحنا صفحة الدفع في تاب جديد" : "Payment page opened in a new tab", "success");
       } else {
         addToast?.(isAr ? "اتسجل طلب الحجز، هيتواصل معاك فريقنا" : "Booking recorded — our team will follow up", "success");
