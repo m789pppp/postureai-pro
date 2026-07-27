@@ -2710,8 +2710,26 @@ export default function App(){
             try { checkAndDowngradeTrial(u.uid).then(checked=>{ if(checked){ setProfile(checked); if(checked.tier) setTier(normalizeTier(checked.tier)); } }).catch(e=>console.warn("[Trial]",e.message)); } catch{}
             try { checkAndSendNurtureEmails(u.uid, p, API).catch(()=>{}); } catch{}
           }
-          // Note: server-side middleware auto-elevates eligible emails to elite on every API
-          // call via _should_elevate_to_elite() — no client-side overrides needed here.
+          // Give require_auth's server-side role check (elite-domain/email
+          // auto-elevation, subscription-expiry downgrade) a real
+          // touchpoint. Without this call, that logic never actually runs
+          // for a normal user: the dashboard loads entirely via direct
+          // Firestore reads and never hits any @require_auth backend
+          // route, so an eligible email's elite status (or an expired
+          // subscription's downgrade) would sit correct on the backend but
+          // never make it into what the user's own Firestore document
+          // says — which is what the UI actually reads.
+          try {
+            const token = await u.getIdToken();
+            const res = await fetch(`${API}/auth/whoami`, { headers:{ Authorization:`Bearer ${token}` } });
+            if (res.ok) {
+              const who = await res.json().catch(()=>null);
+              if (who?.tier && p && who.tier !== p.tier) {
+                const fresh = await getUserProfile(u.uid).catch(()=>null);
+                if (fresh) { p = fresh; }
+              }
+            }
+          } catch(e) { console.warn("[Auth] whoami:", e?.message); }
 
           let mfaPending = false;
           if(p){
@@ -2836,7 +2854,7 @@ export default function App(){
         setPage('pricing');
       }
     };
-    window.__spaNavigate = (path) => handler({ detail: { path } });
+    window.__spaNavigate = (path) => { window.__spaNavigateHandled = true; handler({ detail: { path } }); };
     window.addEventListener('spa:navigate', handler);
     return () => window.removeEventListener('spa:navigate', handler);
   }, []);
