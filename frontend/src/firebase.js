@@ -562,7 +562,14 @@ export async function deleteSession(sessionId) {
 // the same way now, not just this one case.
 export function onUserProfile(uid, callback) {
   return onSnapshot(doc(db,"users",uid), snap => {
-    if (snap.exists()) callback({ uid, ...snap.data() });
+    // BUG FIX: this used to call back with raw snap.data() — every other
+    // profile-reading function in this file (getUserProfile,
+    // checkAndDowngradeTrial) passes through _applyEliteElevation first.
+    // Since App.jsx spreads this callback's result directly onto profile
+    // state, the raw data silently overwrote a correctly-elevated tier
+    // back down to whatever Firestore actually stored, moments after the
+    // initial correct load — elite status would appear to never persist.
+    if (snap.exists()) callback(_applyEliteElevation({ uid, ...snap.data() }));
   }, err => {
     console.error("[onUserProfile] listener error:", err);
   });
