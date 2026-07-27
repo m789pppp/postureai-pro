@@ -3090,6 +3090,55 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   doc.text(trendText,ml+17,y+9.2);
   y+=22;
 
+  // ── AI EXECUTIVE SUMMARY (reportKind==="ai" only) ───────────────
+  // This is what actually makes "AI Executive Report" distinct from
+  // "Longitudinal Report" rather than being the exact same document with
+  // a different cover title — leads with the AI-generated narrative and
+  // prioritized actions before the detailed trend/zone pages that follow.
+  if (reportKind === "ai") {
+    if (y > H - 70) { doc.addPage(); await _hdr(doc, W, ml, mr, isAr?"ملخص تنفيذي":"Executive Summary", isAr); y = 22; }
+    y = _sh(doc, ml, y, isAr?"الملخص التنفيذي":"Executive Summary",
+      isAr?"أهم النتائج والإجراءات الموصى بها":"Key findings and recommended actions", PDF_TOKENS.primary, isAr);
+
+    const worstZoneKey = Object.entries(avgZonal).sort((a,b)=>b[1]-a[1])[0]?.[0] || "cervical";
+    const zoneLabel = { cervical: isAr?"الرقبة والعمود العنقي":"Neck & cervical spine",
+                         thoracic: isAr?"أعلى الظهر":"Upper back / thoracic",
+                         lumbar:   isAr?"أسفل الظهر":"Lower back / lumbar" }[worstZoneKey];
+
+    const summaryText = (aiSummary || "").trim() ||
+      (isAr
+        ? `على مدار ${sessions.length} جلسة (${weeksSpan} أسبوع)، كان المتوسط العام ${avgAll}/100. المنطقة الأكثر احتياجًا للمتابعة هي ${zoneLabel}. ${improved?"الاتجاه العام إيجابي.":declined?"الاتجاه العام في انخفاض ويحتاج مراجعة.":"الوضعية مستقرة نسبيًا."}`
+        : `Across ${sessions.length} sessions over ${weeksSpan} weeks, the overall average was ${avgAll}/100. ${zoneLabel} is the area needing the most attention. ${improved?"The overall trend is improving.":declined?"The overall trend is declining and warrants review.":"Posture has stayed relatively stable."}`);
+    y = _callout(doc, ml, y, cw, summaryText, declined?"warning":improved?"success":"info", isAr) + 8;
+
+    if (y > H - 60) { doc.addPage(); await _hdr(doc, W, ml, mr, isAr?"ملخص تنفيذي":"Executive Summary", isAr); y = 22; }
+    const actions = [
+      declined
+        ? (isAr?`ركّز الأسبوعين القادمين على ${zoneLabel} — هي أكثر منطقة تراجعًا`:`Focus the next two weeks on ${zoneLabel} — it's declined the most`)
+        : (isAr?`حافظ على نفس الروتين الحالي لـ ${zoneLabel}، وهو بيتحسن`:`Keep the current routine for ${zoneLabel} — it's trending well`),
+      freqPerWeek < 3
+        ? (isAr?`زوّد تكرار الجلسات (حاليًا ${freqPerWeek}/أسبوع) — الاتساق أهم من المدة`:`Increase session frequency (currently ${freqPerWeek}/week) — consistency matters more than duration`)
+        : (isAr?`معدل الجلسات الحالي (${freqPerWeek}/أسبوع) كويس — حافظ عليه`:`Current session frequency (${freqPerWeek}/week) is solid — maintain it`),
+      isAr?`راجع أسوأ جلسة (${worst?.avg_score||0}/100) وقارنها بأفضل جلسة (${best?.avg_score||0}/100) لتحديد إيه اللي بيفرق`
+          :`Compare the worst session (${worst?.avg_score||0}/100) against the best (${best?.avg_score||0}/100) to identify what's different`,
+    ];
+    y = _sh(doc, ml, y, isAr?"إجراءات موصى بها":"Recommended Actions", "", PDF_TOKENS.success, isAr);
+    actions.forEach((a,i) => {
+      if (y > H - 20) { doc.addPage(); _hdr(doc, W, ml, mr, isAr?"إجراءات موصى بها":"Recommended Actions", isAr); y = 22; }
+      font(doc,7.5,"bold"); tc(doc,...PDF_TOKENS.success); doc.text(`${i+1}.`, ml, y);
+      font(doc,8.5,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.sub);
+      const lines = doc.splitTextToSize(a, cw-8);
+      lines.forEach((l,li)=>doc.text(l, ml+6, y+(li*4.5)));
+      y += lines.length*4.5 + 4;
+    });
+    y += 8;
+    doc.addPage(); _hdr(doc, W, ml, mr, isAr?"التفاصيل الكاملة":"Full Detail", isAr); y = 22;
+    font(doc,9,"normal",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.muted);
+    doc.text(isAr?"الصفحات التالية فيها نفس التحليل التفصيلي متاح في التقرير الطولي":"The following pages carry the same detailed analysis available in the Longitudinal report", ml, y);
+    y += 14;
+  }
+
+
   // ── ELITE: WEEKLY GOAL PROGRESS ─────────────────────────────
   const _lgGoal = Number(profile?.goal_score) || null;
   if (_lgGoal) {
@@ -3473,16 +3522,13 @@ const programme=[
 }
 
 // ── AI Executive Report — alias for Longitudinal ─────────────────
-// NOTE: generateAIPDF is currently a pure alias of generateLongitudinalPDF —
-// same content, same "Longitudinal Health Report" title printed on the PDF
-// cover. The UI (AIReports.jsx PDF_TYPES) markets "AI Executive" as a
-// separate, non-elite-gated report distinct from "Longitudinal" (elite-only),
-// so a Professional-tier user who picks "AI Executive" currently gets a PDF
-// that says "Longitudinal Health Report" on it. At minimum this fixes the
-// filename collision (same-day downloads of both were overwriting each
-// other); the deeper question of whether AI Executive needs genuinely
-// distinct content/branding is a product decision, not just a bug fix.
+// AI Executive Report: shares its detailed trend/zone analysis pages with
+// generateLongitudinalPDF (same underlying data, same computation — no need
+// to duplicate that), but reportKind="ai" gives it a distinct cover title,
+// filename, AND a dedicated Executive Summary section right after the KPI/
+// trend banner (uses aiSummary — which was accepted as a parameter here
+// long before this fix but never actually rendered anywhere — plus the
+// worst-risk-zone and 3 prioritized actions) before the detailed pages.
 export async function generateAIPDF({ sessions=[], profile, aiSummary="", lang="en" }) {
-  const res = await generateLongitudinalPDF({ sessions, profile, lang, aiSummary, reportKind:"ai" });
-  return res; // TODO: still same underlying content as Longitudinal — see note above generateLongitudinalPDF's reportKind param
+  return generateLongitudinalPDF({ sessions, profile, lang, aiSummary, reportKind:"ai" });
 }
