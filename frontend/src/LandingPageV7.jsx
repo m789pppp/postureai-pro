@@ -77,7 +77,7 @@ function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect(); } }, { threshold: 0.3 });
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect(); } }, { threshold: 0.1, rootMargin:"0px 0px -20px 0px" });
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
@@ -86,14 +86,15 @@ function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
     started.current = true;
     const n = parseFloat(String(to)) || 0;
     const dur = 1600, start = performance.now();
+    let raf;
     const tick = now => {
       const p = Math.min((now - start) / dur, 1);
-      const ease = 1 - Math.pow(1 - p, 4);
-      setV(ease * n);
-      if (p < 1) requestAnimationFrame(tick);
-      else setV(n); // land exactly on target value
+      setV((1 - Math.pow(1 - p, 4)) * n);
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else setV(n);
     };
-    requestAnimationFrame(tick);
+    raf = requestAnimationFrame(tick);
+    return () => { if (raf) cancelAnimationFrame(raf); }; // cleanup on unmount
   }, [vis, to]);
   // Reset only when target value actually changes (prevents flicker on re-render)
   const prevTo = useRef(to);
@@ -213,15 +214,11 @@ const btn = (variant = "primary", size = "md") => {
   return base;
 };
 
-const card = (glow = false) => ({
-  background: LPV7_TOKENS.card,
-  border: `1px solid ${glow ? "rgba(79,124,249,.25)" : LPV7_TOKENS.border}`,
-  borderRadius: 20,
-  padding: 32,
-  backdropFilter: "blur(12px)",
-  boxShadow: glow ? "0 0 40px rgba(79,124,249,.08),0 8px 32px rgba(0,0,0,.3)"
-                  : "0 4px 24px rgba(0,0,0,.25)",
-});
+// Pre-computed card styles — avoids object allocation on every render
+const CARD_BASE = { borderRadius: 20, padding: 32 };
+const CARD_GLOW  = { ...CARD_BASE, background:LPV7_TOKENS.card, border:"1px solid rgba(79,124,249,.25)", boxShadow:"0 0 40px rgba(79,124,249,.08),0 8px 32px rgba(0,0,0,.3)" };
+const CARD_PLAIN = { ...CARD_BASE, background:LPV7_TOKENS.card, border:"1px solid "+LPV7_TOKENS.border, boxShadow:"0 4px 24px rgba(0,0,0,.25)" };
+const card = (glow = false) => glow ? CARD_GLOW : CARD_PLAIN;
 
 // Eyebrow pill — used above most section headings
 function Eyebrow({ children, color = LPV7_TOKENS.indigo, bg = "rgba(129,140,248,.1)", border = "rgba(129,140,248,.2)" }) {
@@ -261,10 +258,16 @@ function GlobalStyle() {
 
       /* cards */
       .lp-lift{transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s,border-color .28s;will-change:transform}
+      .lp-section{contain:layout style}
       .lp-lift:hover{transform:translateY(-5px);box-shadow:0 20px 48px rgba(0,0,0,.38),0 0 0 1px rgba(79,124,249,.1)}
 
       /* buttons — shimmer sweep on hover */
       .lp-btn{transition:transform .22s cubic-bezier(.16,1,.3,1),box-shadow .22s;position:relative;overflow:hidden;will-change:transform}
+      /* CSS-only reveal — replaces some Framer Motion IntersectionObservers */
+      @media(prefers-reduced-motion:no-preference){
+        .lp-reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+        .lp-reveal.lp-visible{opacity:1;transform:none}
+      }
       .lp-btn::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.16) 50%,transparent 62%);transform:translateX(-120%);transition:transform .55s ease;pointer-events:none}
       .lp-btn:hover::after{transform:translateX(120%)}
       .lp-btn:hover{transform:translateY(-2px)}
@@ -404,7 +407,13 @@ function Nav({ lang, setLang, onCTA }) {
   const [activeSection,setActiveSection]= useState("");
 
   useEffect(() => {
-    const h = () => setScrolled(window.scrollY > 48);
+    let ticking = false;
+    const h = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => { setScrolled(window.scrollY > 48); ticking = false; });
+        ticking = true;
+      }
+    };
     window.addEventListener("scroll", h, { passive:true });
     return () => window.removeEventListener("scroll", h);
   }, []);
@@ -413,7 +422,7 @@ function Nav({ lang, setLang, onCTA }) {
     const ids = ["features","casestudies","pricing","how"];
     const obs = new IntersectionObserver(
       entries => entries.forEach(e => { if(e.isIntersecting) setActiveSection(e.target.id); }),
-      { rootMargin:"-30% 0px -60% 0px" }
+      { rootMargin:"-20% 0px -50% 0px", threshold: 0.1 }
     );
     ids.forEach(id => { const el=document.getElementById(id); if(el) obs.observe(el); });
     return () => obs.disconnect();
@@ -421,8 +430,10 @@ function Nav({ lang, setLang, onCTA }) {
 
   useEffect(() => {
     const h = () => { if(window.innerWidth>860) setMobileOpen(false); };
-    window.addEventListener("resize", h);
-    return () => window.removeEventListener("resize", h);
+    let debounce;
+    const dh = () => { clearTimeout(debounce); debounce = setTimeout(h, 150); };
+    window.addEventListener("resize", dh);
+    return () => { window.removeEventListener("resize", dh); clearTimeout(debounce); };
   }, []);
 
   const ar = lang === "ar";
@@ -448,8 +459,8 @@ function Nav({ lang, setLang, onCTA }) {
         background: scrolled || mobileOpen
           ? "rgba(3,8,18,.95)"
           : "rgba(3,8,18,.45)",
-        backdropFilter:"blur(28px) saturate(180%)",
-        WebkitBackdropFilter:"blur(28px) saturate(180%)",
+        backdropFilter:"blur(12px)",
+        WebkitBackdropFilter:"blur(12px)",
         borderBottom:`1px solid ${scrolled ? "rgba(255,255,255,.08)" : "transparent"}`,
         boxShadow: scrolled ? "0 2px 40px rgba(0,0,0,.4)" : "none",
         transition:"background .3s, border-color .3s, box-shadow .3s",
@@ -873,7 +884,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
                 {/* LIVE badge */}
                 <div style={{ position:"absolute", top:12, left:12, display:"flex", alignItems:"center",
-                  gap:6, background:"rgba(0,0,0,.55)", backdropFilter:"blur(8px)",
+                  gap:6, background:"rgba(0,0,0,.75)",
                   borderRadius:99, padding:"4px 10px", border:"1px solid rgba(16,217,160,.3)" }}>
                   <span style={{ width:6, height:6, borderRadius:"50%", background:LPV7_TOKENS.green,
                     boxShadow:`0 0 6px ${LPV7_TOKENS.green}`, animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
@@ -882,7 +893,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
                 {/* Score overlay — bottom right */}
                 <div style={{ position:"absolute", bottom:12, right:12,
-                  background:"rgba(0,0,0,.6)", backdropFilter:"blur(12px)",
+                  background:"rgba(0,0,0,.78)",
                   borderRadius:14, padding:"10px 14px", border:"1px solid rgba(16,217,160,.25)",
                   textAlign:"center" }}>
                   <div style={{ fontSize:28, fontWeight:800, color:scoreColor,
@@ -892,7 +903,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
                 {/* Alert badge — top right */}
                 <div style={{ position:"absolute", top:12, right:12,
-                  background:"rgba(245,158,11,.15)", backdropFilter:"blur(8px)",
+                  background:"rgba(40,30,0,.85)",
                   borderRadius:10, padding:"6px 10px", border:"1px solid rgba(245,158,11,.35)" }}>
                   <div style={{ fontSize:10, color:"#fbbf24", fontWeight:600 }}>
                     ⚠️ {ar ? "رقبة للأمام 12°" : "Neck forward 12°"}
@@ -929,9 +940,9 @@ function Hero({ lang, onCTA, mode, setMode }) {
             </div>
 
             {/* Floating card — top */}
-            <motion.div {...float(0, 9)} style={{
+            <motion.div {...float(0, 9)} style={{ willChange:"transform",
               position:"absolute", top:-12, [ar?"left":"right"]:-18,
-              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
+              background:"rgba(8,18,32,.92)",
               border:`1px solid ${LPV7_TOKENS.borderM}`, borderRadius:16,
               padding:"12px 16px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
               display:"flex", alignItems:"center", gap:10, zIndex:2,
@@ -944,9 +955,9 @@ function Hero({ lang, onCTA, mode, setMode }) {
             </motion.div>
 
             {/* Floating card — bottom */}
-            <motion.div {...float(1.4, 8)} style={{
+            <motion.div {...float(1.4, 8)} style={{ willChange:"transform",
               position:"absolute", bottom:-6, [ar?"right":"left"]:-22,
-              background:"rgba(13,31,51,.85)", backdropFilter:"blur(16px)",
+              background:"rgba(8,18,32,.92)",
               border:`1px solid ${LPV7_TOKENS.borderM}`, borderRadius:16,
               padding:"11px 15px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
               display:"flex", alignItems:"center", gap:9, zIndex:2, maxWidth:200,
