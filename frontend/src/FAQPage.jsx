@@ -170,7 +170,7 @@ export default function FAQPage() {
               <div style={{ textAlign:"center", padding:"60px 0", color:T.muted }}>
                 <div style={{ fontSize:40, marginBottom:16 }}>🤷</div>
                 <p>No questions match "{search}".<br/>
-                  Try a different keyword or <a href="mailto:m789pppp@gmail.com" style={{ color:T.blue }}>contact us directly</a>.
+                  Try a different keyword or <a href="mailto:support@corvus.io" style={{ color:T.blue }}>contact us directly</a>.
                 </p>
               </div>
             ) : filtered.map(([q, a, color, cat], i) => (
@@ -211,7 +211,7 @@ export default function FAQPage() {
                   <p style={{ fontSize:12.5, color:T.muted, lineHeight:1.6, margin:"0 0 12px" }}>
                     Can't find what you're looking for? We respond within 24 hours.
                   </p>
-                  <a href="mailto:m789pppp@gmail.com" style={{
+                  <a href="mailto:support@corvus.io" style={{
                     display:"block", textAlign:"center", padding:"9px", borderRadius:8,
                     background:"linear-gradient(135deg,#1a56db,#0891b2)", color:"#fff",
                     textDecoration:"none", fontSize:13, fontWeight:600,

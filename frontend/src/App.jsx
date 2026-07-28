@@ -1716,7 +1716,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
 
   if(step==="kashier")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
     <div style={{padding:"12px 18px",borderBottom:"0.5px solid "+cs.border,display:"flex",alignItems:"center",gap:11,background:cs.card}}>
-      <button onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{"← "}{isAr?"رجوع":"Back"}</button>
+      <button aria-label="Go back" onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{"← "}{isAr?"رجوع":"Back"}</button>
       <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{"🔒 "}{isAr?"دفع آمن عبر Kashier":"Secure payment via Kashier"}{" — "}{price?.toLocaleString()}{" EGP"}</div>
     </div>
     <iframe src={kashierUrl} style={{flex:1,border:"none",width:"100%"}} title="Kashier Checkout"/>
@@ -5337,7 +5337,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {/* User row */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
             {profile?.photoURL
-              ? <img src={profile.photoURL} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
+              ? <img alt="" src={profile.photoURL} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
               : (() => {
                   // #16: use actual first name for initials — if profile?.name looks
                   // like an email address/prefix, fall back to "?" not the raw email.

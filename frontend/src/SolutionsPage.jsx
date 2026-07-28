@@ -205,7 +205,7 @@ export default function SolutionsPage() {
               </div>
             </div>
 
-            <a href={`mailto:m789pppp@gmail.com?subject=Corvus Demo — ${ind.name}`}
+            <a href={`mailto:support@corvus.io?subject=Corvus Demo — ${ind.name}`}
               style={{
                 display:"flex", alignItems:"center", justifyContent:"center", gap:8,
                 padding:"14px", borderRadius:12, fontSize:15, fontWeight:700,

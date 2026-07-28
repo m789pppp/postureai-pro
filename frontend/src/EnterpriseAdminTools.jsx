@@ -27,10 +27,10 @@ const MOCK_HEALTH = {
   // below are replaced with a real check from /api/admin/system/health.
   services: [
     { name:"API Gateway",        status:"healthy", latency:38,  uptime:99.98, load:42, demo:true },
-    { name:"Analysis Engine",    status:"healthy", latency:142, uptime:99.95, load:61, demo:true },
+    { name:"Pollinations AI",    status:"healthy", latency:320, uptime:99.80, load:61, demo:true },
     { name:"Local AI Engine",    status:"healthy", latency:890, uptime:99.80, load:35, demo:true },
-    { name:"Stripe Payments",    status:"healthy", latency:210, uptime:99.99, load:8,  demo:true },
-    { name:"SendGrid Email",     status:"degraded",latency:1200,uptime:99.20, load:5,  demo:true },
+    { name:"Kashier Payments",   status:"healthy", latency:210, uptime:99.99, load:8,  demo:true },
+    { name:"Resend Email",       status:"healthy", latency:180, uptime:99.90, load:5,  demo:true },
     { name:"PDF Generator",      status:"healthy", latency:2100,uptime:99.90, load:12, demo:true },
   ],
   db: { reads:8420, writes:1240, errors:3, cacheHitRate:94 },

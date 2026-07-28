@@ -40,7 +40,7 @@ if (!firebaseConfig.apiKey) console.error("❌ Firebase config missing — check
 
 // Admin status is determined ONLY from Firestore profile.is_admin (set server-side).
 // Exposing admin email in the client bundle allows role discovery attacks.
-export const SUPPORT_EMAIL       = import.meta.env.VITE_SUPPORT_EMAIL       || "m789pppp@gmail.com";
+export const SUPPORT_EMAIL       = import.meta.env.VITE_SUPPORT_EMAIL       || "support@corvus.io";
 export const ADMIN_PHONE         = import.meta.env.VITE_ADMIN_PHONE         || "";
 export const AUTO_APPROVE_DOMAIN = import.meta.env.VITE_AUTO_APPROVE_DOMAIN || "";
 export const KASHIER_MERCHANT_ID = import.meta.env.VITE_KASHIER_MERCHANT_ID || "";
@@ -395,7 +395,7 @@ export async function getCalibration(uid) {
 // Keep in sync with ELITE_EMAILS + ELITE_DOMAINS in middleware.py
 const _ELITE_EMAILS = [
   "judyayman36@gmail.com",
-  "m789pppp@gmail.com",
+  "support@corvus.io",
   // add individual emails here as needed
 ];
 const _ELITE_DOMAINS = [
