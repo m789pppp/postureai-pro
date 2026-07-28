@@ -340,28 +340,27 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
 
         {/* Customer list */}
         <div style={{ flex:1, overflowY:"auto", padding:"16px 24px" }}>
-          {loading && customers.length === 0 ? (
-            <div style={{ textAlign:"center", padding:"64px 0" }}>
-              <div style={{ fontSize:40, marginBottom:12, animation:"spin 1.2s linear infinite" }}>⏳</div>
-              <div style={{ color:CP_TOKENS.sub, fontSize:14 }}>Loading live data from Firestore…</div>
+          {loading ? (
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {[1,2,3,4,5].map(i => <SkeletonRow key={i}/>)}
             </div>
           ) : filtered.length === 0 ? (
-            <div style={{ textAlign:"center", padding:"64px 0", color:CP_TOKENS.muted, fontSize:14 }}>
-              {customers.length === 0
-                ? "No customer data available. Ensure users are in Firestore with company_id set."
-                : `No customers in "${filter.replace("_"," ")}" stage.`}
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"60px 0", gap:10 }}>
+              <div style={{ fontSize:36 }}>📊</div>
+              <div style={{ fontWeight:700, fontSize:14, color:CP_TOKENS.text }}>
+                {customers.length === 0
+                  ? "No customer data available yet"
+                  : "No customers match this filter"}
+              </div>
+              <div style={{ fontSize:12, color:CP_TOKENS.muted }}>
+                {customers.length === 0
+                  ? "Ensure users are in Firestore with company_id set"
+                  : "Try switching to \"All\" or wait for more session data"}
+              </div>
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {loading && [1,2,3,4,5].map(i => <SkeletonRow key={i}/>)}
-              {!loading && filtered.length === 0 && (
-                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"60px 0", gap:10 }}>
-                  <div style={{ fontSize:36 }}>📊</div>
-                  <div style={{ fontWeight:700, fontSize:14, color:CP_TOKENS.text }}>No customers match this filter</div>
-                  <div style={{ fontSize:12, color:CP_TOKENS.muted }}>Try switching to "All" or wait for more session data</div>
-                </div>
-              )}
-              {!loading && filtered.map(c => (
+              {filtered.map(c => (
                 <div key={c.id} onClick={() => setSelected(selected?.id === c.id ? null : c)}
                   style={{ background:"rgba(255,255,255,.03)", borderRadius:14, padding:"16px 20px",
                     border:`1px solid ${selected?.id===c.id ? STAGE_COLORS[c.stage] : CP_TOKENS.border}`,
