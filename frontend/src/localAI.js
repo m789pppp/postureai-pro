@@ -834,7 +834,7 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, sign
   const connectTimer = setTimeout(() => localCtrl.abort(), 12000);
   if (signal) signal.addEventListener("abort", () => localCtrl.abort(), { once: true });
 
-  const res = await fetch("https://text.pollinations.ai/", {
+  const res = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -945,6 +945,9 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
   // This function only runs when the backend's /api/coach/chat is
   // unavailable — that endpoint holds a real, properly-secured provider
   // key server-side (Ollama or Groq) and is the intended primary path.
+  // URL migrated to gen.pollinations.ai — text.pollinations.ai is
+  // deprecated per Pollinations' own API docs, which was very likely
+  // the actual root cause of AI failures forcing the offline fallback.
   // A second client-side provider used to be raced here (OpenRouter) but
   // it required an Authorization: Bearer key that was never configured
   // and structurally couldn't be — VITE_-prefixed env vars ship in the
@@ -953,7 +956,7 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
   // case (Pollinations also down) it just added a guaranteed-to-401
   // ~14s wait before falling back to the offline KB, for zero real
   // redundancy.
-  return go("https://text.pollinations.ai/", {
+  return go("https://gen.pollinations.ai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: toks, temperature: 0.45, private: true }),
