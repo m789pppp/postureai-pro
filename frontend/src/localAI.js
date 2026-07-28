@@ -834,7 +834,7 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, sign
   const connectTimer = setTimeout(() => localCtrl.abort(), 12000);
   if (signal) signal.addEventListener("abort", () => localCtrl.abort(), { once: true });
 
-  const res = await fetch("https://text.pollinations.ai/", {
+  const res = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -943,7 +943,7 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
 
   // ── 1. Pollinations + OpenRouter race (primary) ─────────────────
   return Promise.any([
-    go("https://text.pollinations.ai/", {
+    go("https://gen.pollinations.ai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: toks, temperature: 0.45, private: true }),
