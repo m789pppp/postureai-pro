@@ -334,7 +334,7 @@ function CompanyScore({data,isAr,loading}) {
           <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"var(--wa-muted)",marginBottom:8}}>
             {isAr?"آخر 6 أشهر":"6-Month Trend"}
           </div>
-          <Bars data={data.monthly6.map(m=>({v:m.score,l:m.label}))} h={48}/>
+          <Bars data={(data.monthly6||[]).map(m=>({v:m.score,l:m.label}))} h={48}/>
         </div>
       )}
     </div>
@@ -344,8 +344,8 @@ function CompanyScore({data,isAr,loading}) {
 /* ── Productivity Trends ────────────────────────────────────────── */
 function ProductivityTrends({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
   const lines = [
-    {label:isAr?"نقاط الصحة":"Wellness score", data:data.daily30.map(d=>d.score||0), color:"#1a56db"},
-    {label:isAr?"جلسات/يوم":"Sessions/day",   data:data.daily30.map(d=>d.count*25),  color:"#10b981"},
+    {label:isAr?"نقاط الصحة":"Wellness score", data:(data.daily30||[]).map(d=>d.score||0), color:"#1a56db"},
+    {label:isAr?"جلسات/يوم":"Sessions/day",   data:(data.daily30||[]).map(d=>d.count*25),  color:"#10b981"},
   ];
   const weekDays = isAr?["أح","إث","ثل","أر","خم","جم","سب"]:["Su","Mo","Tu","We","Th","Fr","Sa"];
   return (
@@ -387,7 +387,7 @@ function ProductivityTrends({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
 
 /* ── Focus Trends ───────────────────────────────────────────────── */
 function FocusTrends({data,isAr,loading}) {
-  const focusData = data.daily30.map(d=>{
+  const focusData = (data.daily30||[]).map(d=>{
     if(!d.score) return {v:0,l:d.label};
     return {v:d.score>=70?100:d.score>=50?60:20, l:d.label};
   });

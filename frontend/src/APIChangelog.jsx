@@ -152,7 +152,7 @@ export function APIChangelog({ cs, onClose }) {
                 {/* Items */}
                 {open && (
                   <div style={{ padding:"4px 18px 16px" }}>
-                    {entry.items.map((item, i) => {
+                    {(entry.items||[]).map((item, i) => {
                       const ic = ITEM_COLORS[item.type] || ITEM_COLORS.new;
                       return (
                         <div key={i} style={{ display:"flex", gap:10, padding:"7px 0", borderBottom:i<entry.items.length-1?`1px solid ${cs.border}`:undefined }}>
