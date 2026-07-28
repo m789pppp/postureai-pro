@@ -172,20 +172,27 @@ if (path.startsWith("/report/")) {
 // Set VITE_POSTHOG_KEY in .env.local
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
 if (POSTHOG_KEY && typeof window !== "undefined") {
-  import("posthog-js").then(({ default: posthog }) => {
-    posthog.init(POSTHOG_KEY, {
-      api_host:              import.meta.env.VITE_POSTHOG_HOST || "https://app.posthog.com",
-      capture_pageview:      true,
-      capture_pageleave:     true,
-      autocapture:           false,   // manual capture for GDPR
-      persistence:           "localStorage",
-      session_recording:     { maskAllInputs: true, maskTextSelector: "input, .sensitive" },
-      loaded: (ph) => {
-        if (import.meta.env.DEV) ph.opt_out_capturing();
-      },
-    });
-    window._posthog = posthog;
-  }).catch(() => {});
+  // Defer PostHog until after page is interactive (saves parse time on LCP)
+  const initPostHog = () => {
+    import("posthog-js").then(({ default: posthog }) => {
+      posthog.init(POSTHOG_KEY, {
+        api_host:          import.meta.env.VITE_POSTHOG_HOST || "https://app.posthog.com",
+        capture_pageview:  true,
+        capture_pageleave: true,
+        autocapture:       false,   // manual capture for GDPR
+        persistence:       "localStorage",
+        session_recording: { maskAllInputs: true, maskTextSelector: "input, .sensitive" },
+        loaded: (ph) => { if (import.meta.env.DEV) ph.opt_out_capturing(); },
+      });
+      window._posthog = posthog;
+    }).catch(() => {});
+  };
+  // Init after first idle period (non-blocking for LCP/TTI)
+  if ("requestIdleCallback" in window) {
+    requestIdleCallback(initPostHog, { timeout: 3000 });
+  } else {
+    setTimeout(initPostHog, 2000);
+  }
 }
 
 // Usage helper — call from any component:

@@ -246,9 +246,17 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
     : 0;
 
   // ── Render ────────────────────────────────────────────────────────
+  // Skeleton overlay while loading
+  const SkeletonRow = () => (
+    <div style={{ height:52, borderRadius:10, margin:"4px 0",
+      background:"linear-gradient(90deg,rgba(56,139,253,.04) 0%,rgba(56,139,253,.09) 50%,rgba(56,139,253,.04) 100%)",
+      backgroundSize:"400% 100%", animation:"cpShimmer 1.5s ease infinite" }}/>
+  );
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:2000,
       display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+    <style>{`@keyframes cpShimmer{0%{background-position:-400% 0}100%{background-position:400% 0}}`}</style>
       <div style={{ background:CP_TOKENS.card, borderRadius:20, width:"100%", maxWidth:1160,
         height:"90vh", display:"flex", flexDirection:"column", overflow:"hidden",
         border:`1px solid ${CP_TOKENS.border}`, boxShadow:"0 32px 80px rgba(0,0,0,.5)" }}>
@@ -345,7 +353,15 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {filtered.map(c => (
+              {loading && [1,2,3,4,5].map(i => <SkeletonRow key={i}/>)}
+              {!loading && filtered.length === 0 && (
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"60px 0", gap:10 }}>
+                  <div style={{ fontSize:36 }}>📊</div>
+                  <div style={{ fontWeight:700, fontSize:14, color:CP_TOKENS.text }}>No customers match this filter</div>
+                  <div style={{ fontSize:12, color:CP_TOKENS.muted }}>Try switching to "All" or wait for more session data</div>
+                </div>
+              )}
+              {!loading && filtered.map(c => (
                 <div key={c.id} onClick={() => setSelected(selected?.id === c.id ? null : c)}
                   style={{ background:"rgba(255,255,255,.03)", borderRadius:14, padding:"16px 20px",
                     border:`1px solid ${selected?.id===c.id ? STAGE_COLORS[c.stage] : CP_TOKENS.border}`,

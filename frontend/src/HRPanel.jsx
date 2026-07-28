@@ -322,8 +322,9 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":"Bearer " + token},
         body: JSON.stringify({ company_id: companyId, role: "employee", expires_days: 7 }),
-      });
+      }).catch(e => { throw new Error("Network error: " + e.message); });
       const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(data.error || "Failed to create invite ("+res.status+")");
       if (res.ok && (data.token || data.invite_id)) {
         const code = data.token || data.invite_id;
         const link = window.location.origin + "/auth?invite=" + code;

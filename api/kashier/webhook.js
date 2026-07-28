@@ -1,7 +1,8 @@
 /**
  * Vercel Serverless — Kashier Webhook
  * POST /api/kashier/webhook
- * Kashier sends JSON body with payment result
+ * No Firebase auth here — this is called by Kashier servers, not users.
+ * Security: X-Kashier-Signature HMAC-SHA256 verification (always required).
  * Docs: https://developers.kashier.io/payment/webhooks
  */
 import crypto from "crypto";

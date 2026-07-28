@@ -163,7 +163,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
                     <span style={{ fontSize:11, color:cs.muted||"#64748b", marginLeft:"auto" }}>{entry.date}</span>
                   </div>
                   <ul style={{ margin:0, padding:"0 0 0 18px", display:"flex", flexDirection:"column", gap:4 }}>
-                    {entry.items.map((item,i)=>(
+                    {(entry.items||[]).map((item,i)=>(
                       <li key={i} style={{ fontSize:13, color:cs.text, lineHeight:1.6 }}>{item}</li>
                     ))}
                   </ul>

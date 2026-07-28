@@ -282,7 +282,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                   ) : secret ? (
                     <div style={{ background:"rgba(0,0,0,0.2)", borderRadius:9, padding:12, display:"flex", gap:8, alignItems:"center" }}>
                       <code style={{ flex:1, fontSize:13, color:"#a5f3fc", letterSpacing:2, wordBreak:"break-all" }}>{secret}</code>
-                      <button onClick={copySecret} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:7, padding:"5px 12px", cursor:"pointer", fontSize:11, flexShrink:0 }}>{copied?"✓":(isAr?"نسخ":"Copy")}</button>
+                      <button aria-label="Copy secret" onClick={copySecret} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:7, padding:"5px 12px", cursor:"pointer", fontSize:11, flexShrink:0 }}>{copied?"✓":(isAr?"نسخ":"Copy")}</button>
                     </div>
                   ) : (
                     <button onClick={startTotpSetup} style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"10px", cursor:"pointer", fontWeight:600, fontSize:13 }}>{isAr?"إعادة المحاولة":"Retry"}</button>
@@ -365,7 +365,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                     ))}
                   </div>
                   <div style={{ display:"flex", gap:8 }}>
-                    <button onClick={copyBackupCodes} style={{ flex:1, background:"rgba(255,255,255,0.06)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"11px", cursor:"pointer", fontWeight:700, fontSize:13 }}>{copied?(isAr?"✓ اتنسخت!":"✓ Copied!"):(isAr?"📋 نسخ كل الأكواد":"📋 Copy all codes")}</button>
+                    <button aria-label="Copy backup codes" onClick={copyBackupCodes} style={{ flex:1, background:"rgba(255,255,255,0.06)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"11px", cursor:"pointer", fontWeight:700, fontSize:13 }}>{copied?(isAr?"✓ اتنسخت!":"✓ Copied!"):(isAr?"📋 نسخ كل الأكواد":"📋 Copy all codes")}</button>
                     <button onClick={() => window.print?.()} style={{ flex:1, background:"rgba(255,255,255,0.06)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"11px", cursor:"pointer", fontWeight:700, fontSize:13 }}>🖨 {isAr?"طباعة":"Print codes"}</button>
                   </div>
                   {mfaEnabled && <button onClick={() => { onClose(); }} style={{ background:"linear-gradient(135deg,#10b981,#6366f1)", border:"none", color:"#fff", borderRadius:10, padding:"13px", cursor:"pointer", fontWeight:800, fontSize:15 }}>✓ {isAr?"حفظتهم":"I've saved my codes"}</button>}
