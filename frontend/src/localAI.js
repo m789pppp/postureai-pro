@@ -14,6 +14,26 @@ export async function initLocalAI()   { return true; }
 export async function unloadLocalAI() {}
 export async function checkWebGPU()   { return true; }
 
+// Pollinations text/chat completions: per their current docs, anonymous
+// no-key access is stated to be for IMAGE generation only — text/chat
+// needs at least a free publishable key (pk_) registered to a specific
+// domain at enter.pollinations.ai. Without one, requests may be silently
+// throttled/deprioritized as unrecognized anonymous traffic, which is very
+// likely why the primary AI path kept failing and falling back to the
+// offline responder. Falls back to no Authorization header if unset —
+// same (throttled) behavior as before, so this is safe until configured.
+const POLLINATIONS_KEY = import.meta.env.VITE_POLLINATIONS_KEY || "";
+const _pollinationsHeaders = () => ({
+  "Content-Type": "application/json",
+  ...(POLLINATIONS_KEY ? { "Authorization": `Bearer ${POLLINATIONS_KEY}` } : {}),
+});
+
+// OpenRouter requires a key on every request, even for :free models — this
+// call had none at all, so it was a guaranteed 401 every single time, not
+// an occasional failure. Falls back to no header if unset, which will
+// still fail — but explicitly, rather than silently as before.
+const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_KEY || "";
+
 // ── Utilities ─────────────────────────────────────────────────────
 const pick  = arr => arr[Math.floor(Math.random()*arr.length)];
 const num   = (t,...ps) => { for(const p of ps){const m=t?.match(p);if(m){const v=parseFloat(m[1]);if(!isNaN(v))return v;}} return null; };
@@ -836,7 +856,7 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, sign
 
   const res = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: _pollinationsHeaders(),
     body: JSON.stringify({
       model: "openai",
       messages: allMsgs,
@@ -941,26 +961,26 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
 
   const parsePOST = async r => (await r.json())?.choices?.[0]?.message?.content?.trim();
 
-  // ── Pollinations (best-effort client-side fallback) ──────────────
-  // This function only runs when the backend's /api/coach/chat is
-  // unavailable — that endpoint holds a real, properly-secured provider
-  // key server-side (Ollama or Groq) and is the intended primary path.
-  // URL migrated to gen.pollinations.ai — text.pollinations.ai is
-  // deprecated per Pollinations' own API docs, which was very likely
-  // the actual root cause of AI failures forcing the offline fallback.
-  // A second client-side provider used to be raced here (OpenRouter) but
-  // it required an Authorization: Bearer key that was never configured
-  // and structurally couldn't be — VITE_-prefixed env vars ship in the
-  // public JS bundle, so a real secret key would be exposed to every
-  // visitor. It was removed: it could never succeed, so in the worst
-  // case (Pollinations also down) it just added a guaranteed-to-401
-  // ~14s wait before falling back to the offline KB, for zero real
-  // redundancy.
-  return go("https://gen.pollinations.ai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: toks, temperature: 0.45, private: true }),
-  }, parsePOST, 14000);
+  // ── 1. Pollinations + OpenRouter race (primary) ─────────────────
+  const providers = [
+    go("https://gen.pollinations.ai/v1/chat/completions", {
+      method: "POST",
+      headers: _pollinationsHeaders(),
+      body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: toks, temperature: 0.45, private: true }),
+    }, parsePOST, 14000),
+  ];
+  // Skip this branch entirely without a key — a guaranteed-401 request
+  // racing against the real provider adds nothing but a wasted round trip.
+  if (OPENROUTER_KEY) {
+    providers.push(
+      go("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENROUTER_KEY}`, "HTTP-Referer": "https://postureai-pro-omega-nine.vercel.app", "X-Title": "Corvus PostureAI" },
+        body: JSON.stringify({ model: "meta-llama/llama-3.1-8b-instruct:free", messages: allMsgs, max_tokens: toks }),
+      }, parsePOST, 14000)
+    );
+  }
+  return Promise.any(providers).catch(() => { throw new Error("all_providers_failed"); });
 }
 
 
