@@ -941,20 +941,23 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
 
   const parsePOST = async r => (await r.json())?.choices?.[0]?.message?.content?.trim();
 
-  // ── 1. Pollinations + OpenRouter race (primary) ─────────────────
-  return Promise.any([
-    go("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: toks, temperature: 0.45, private: true }),
-    }, parsePOST, 14000),
-
-    go("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "HTTP-Referer": "https://postureai-pro-omega-nine.vercel.app", "X-Title": "Corvus PostureAI" },
-      body: JSON.stringify({ model: "meta-llama/llama-3.1-8b-instruct:free", messages: allMsgs, max_tokens: toks }),
-    }, parsePOST, 14000),
-  ]).catch(() => { throw new Error("all_providers_failed"); });
+  // ── Pollinations (best-effort client-side fallback) ──────────────
+  // This function only runs when the backend's /api/coach/chat is
+  // unavailable — that endpoint holds a real, properly-secured provider
+  // key server-side (Ollama or Groq) and is the intended primary path.
+  // A second client-side provider used to be raced here (OpenRouter) but
+  // it required an Authorization: Bearer key that was never configured
+  // and structurally couldn't be — VITE_-prefixed env vars ship in the
+  // public JS bundle, so a real secret key would be exposed to every
+  // visitor. It was removed: it could never succeed, so in the worst
+  // case (Pollinations also down) it just added a guaranteed-to-401
+  // ~14s wait before falling back to the offline KB, for zero real
+  // redundancy.
+  return go("https://text.pollinations.ai/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "openai", messages: allMsgs, max_tokens: toks, temperature: 0.45, private: true }),
+  }, parsePOST, 14000);
 }
 
 
