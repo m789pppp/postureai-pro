@@ -2764,6 +2764,11 @@ export default function App(){
                   preloadAIInsights(u.uid, p, sessions, null, p?.is_trial ? p?.trial_tier : p?.tier, lang);
                 }, 1500);
               }
+            }, err => {
+              console.error("[Auth] sessions listener failed:", err.code, err.message);
+              addToast?.(isAr
+                ? "تعذر تحميل جلساتك — حاول تحديث الصفحة"
+                : "Couldn't load your sessions — try refreshing the page", "error");
             });
             window.__unsubSessions = unsubSessions;
           } catch(e){ console.warn("[Auth] sessions:",e?.code); }

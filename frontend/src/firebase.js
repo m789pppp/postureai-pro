@@ -575,7 +575,7 @@ export function onUserProfile(uid, callback) {
   });
 }
 
-export function onUserSessions(uid, callback) {
+export function onUserSessions(uid, callback, onError) {
   // BUG FIX: this query had no orderBy, so Firestore's limit(50) returned
   // an arbitrary/undefined-order subset of matching docs — not necessarily
   // the 50 most recent sessions. Any user with more than 50 total sessions
@@ -600,6 +600,7 @@ export function onUserSessions(uid, callback) {
     callback(sessions);
   }, err => {
     console.warn("onUserSessions error:", err.code);
+    onError?.(err);
   });
 }
 
