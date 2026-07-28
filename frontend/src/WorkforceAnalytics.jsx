@@ -58,7 +58,7 @@ function CardSkeleton({h=80}) {
 /* ── Spark line ───────────────────────────────────────────────────── */
 function Spark({data=[],color="#1a56db",h=40,showFill=true}) {
   if(data.length<2) return null;
-  const max=Math.max(...data,1), pts=data.map((v,i)=>[i/(data.length-1)*200,((max-v)/max)*h]);
+  const _data=data||[]; const max=Math.max(..._data,1), pts=_data.map((v,i)=>[i/(data.length-1)*200,((max-v)/max)*h]);
   const poly=pts.map(([x,y])=>`${x},${y}`).join(" ");
   const fill=`M0,${h} ${poly} L200,${h} Z`;
   const id=`sg-${Math.random().toString(36).slice(2)}`;
@@ -77,10 +77,10 @@ function Spark({data=[],color="#1a56db",h=40,showFill=true}) {
 
 /* ── Bar chart ────────────────────────────────────────────────────── */
 function Bars({data=[],h=60,color}) {
-  const max=Math.max(...data.map(d=>d.v||0),1);
+  const max=Math.max(...(data||[]).map(d=>d.v||0),1);
   return (
     <div style={{display:"flex",alignItems:"flex-end",gap:4,height:h}}>
-      {data.map((d,i)=>{
+      {(data||[]).map((d,i)=>{
         const pct=Math.max(8,Math.round((d.v/max)*100));
         const c=color || sc(d.v||0);
         return (
@@ -195,7 +195,7 @@ function AIBlock({loading,data,error,onRetry,accentColor="#1a56db",isAr}) {
    DATA ENGINE
    ═══════════════════════════════════════════════════════════════════ */
 function buildAnalytics(sessions=[], allUsers=[], profile={}) {
-  const scores = sessions.map(s=>s.avg_score||0).filter(Boolean);
+  const scores = (sessions||[]).map(s=>s.avg_score||0).filter(Boolean);
   const avgScore = avg(scores);
 
   // time buckets
