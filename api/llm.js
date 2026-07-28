@@ -27,6 +27,9 @@ function respond(data, status = 200) {
   });
 }
 
+// Simple per-IP rate limiting via Vercel Edge headers
+const _ipCounts = new Map(); // resets on cold start
+
 export default async function handler(req) {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: cors() });
@@ -34,6 +37,27 @@ export default async function handler(req) {
 
   if (req.method !== "POST") {
     return respond({ error: "POST only" }, 405);
+  }
+
+  // Rate limit: 30 requests per minute per IP
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const now = Date.now();
+  const entry = _ipCounts.get(ip) || { count: 0, window: now };
+  if (now - entry.window > 60000) {
+    entry.count = 0; entry.window = now;
+  }
+  entry.count++;
+  _ipCounts.set(ip, entry);
+  if (entry.count > 30) {
+    return respond({ error: "Too many requests — slow down" }, 429);
+  }
+
+  // Require Authorization header (Firebase ID token from client)
+  // We can't verify it in Edge (no firebase-admin), but we check presence
+  // to prevent completely unauthenticated public abuse
+  const authHeader = req.headers.get("authorization") || "";
+  if (!authHeader.startsWith("Bearer ") || authHeader.length < 20) {
+    return respond({ error: "Authentication required" }, 401);
   }
 
   let body;

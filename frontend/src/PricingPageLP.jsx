@@ -12,7 +12,7 @@ const T = {
 };
 const FD = "'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif";
 const FM = "'IBM Plex Mono','Segoe UI',monospace";
-const SUPPORT = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
+const SUPPORT = import.meta.env.VITE_SUPPORT_EMAIL || "support@corvus.io";
 
 function Reveal({ children, delay=0, y=20 }) {
   const ref = useRef(null);
