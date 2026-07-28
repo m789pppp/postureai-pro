@@ -11419,9 +11419,15 @@ def coupon_validate():
         data = request.get_json(force=True) or {}
         code = data.get("code","").strip().upper()
         _, c = _get_coupon_from_db(code)
-        if not c: return jsonify({"valid":False,"reason":"Invalid coupon code"})
-        if c.get("used",0) >= c.get("max_uses",100): return jsonify({"valid":False,"reason":"Coupon expired or used up"})
-        return jsonify({"valid":True,"discount":c["discount"],"label":c["label"]})
+        if c:
+            if c.get("used",0) >= c.get("max_uses",100): return jsonify({"valid":False,"reason":"Coupon expired or used up"})
+            return jsonify({"valid":True,"discount":c["discount"],"label":c["label"]})
+        # Fall back to clinic discount codes — same input field covers both,
+        # rather than a separate UI just for clinic partners.
+        d = _get_active_discount_code(firestore.client(), code)
+        if d:
+            return jsonify({"valid":True,"discount":d.get("discount_pct",0),"label":d.get("clinic_name","Clinic partner")})
+        return jsonify({"valid":False,"reason":"Invalid coupon code"})
     except Exception as e:
         return safe_error(e)
 
@@ -15906,11 +15912,51 @@ def admin_list_therapists():
         return safe_error(e)
 
 
+def _get_active_discount_code(db, code):
+    """Shared lookup used by both checkout flows and the validate endpoint."""
+    if not code:
+        return None
+    snap = db.collection("discount_codes").document(code.strip().upper()).get()
+    if not snap.exists:
+        return None
+    d = snap.to_dict()
+    if not d.get("active", True):
+        return None
+    return d
+
+
+@app.route("/api/discount-codes/validate", methods=["GET"])
+@optional_auth
+@limiter.limit("30 per minute")
+def validate_discount_code():
+    """Check a clinic discount code before checkout — used for real-time
+    UI feedback (show the discount + clinic name) before the user pays."""
+    code = (request.args.get("code") or "").strip()
+    if not code:
+        return jsonify({"valid": False}), 400
+    db = firestore.client()
+    d  = _get_active_discount_code(db, code)
+    if not d:
+        return jsonify({"valid": False})
+    return jsonify({
+        "valid":        True,
+        "discount_pct": d.get("discount_pct", 0),
+        "clinic_name":  d.get("clinic_name", ""),
+    })
+
+
 @app.route("/api/admin/marketplace/therapists", methods=["POST"])
 @require_auth
 @require_admin
 @limiter.limit("30 per minute")
 def admin_create_therapist():
+    """Create a therapist OR a clinic partner. A clinic partner (partner_type
+    'clinic') gets: (1) a real discount code patients can apply at checkout —
+    subscription or marketplace booking — for discount_pct off, tracked in
+    the shared discount_codes collection the same way referral codes are;
+    and (2) optionally, if bulk_seats > 0, a real provisioned tenant
+    (reusing provision_tenant's own logic) so the clinic can invite staff/
+    patients under a group license, same as any other multi-tenant org."""
     try:
         data = request.get_json(force=True) or {}
         name = (data.get("name") or "").strip()
@@ -15919,6 +15965,10 @@ def admin_create_therapist():
         fee_cents = int(data.get("session_fee_cents") or 0)
         if fee_cents <= 0:
             return jsonify({"error": "session_fee_cents must be > 0"}), 400
+
+        partner_type = data.get("partner_type") if data.get("partner_type") in ("individual","clinic") else "individual"
+        discount_pct = max(0, min(100, float(data.get("discount_pct") or 0))) if partner_type == "clinic" else 0
+        bulk_seats   = max(0, int(data.get("bulk_seats") or 0)) if partner_type == "clinic" else 0
 
         db  = firestore.client()
         doc = {
@@ -15936,6 +15986,7 @@ def admin_create_therapist():
             "status":            "active",          # active | paused
             "rating":            None,
             "review_count":      0,
+            "partner_type":      partner_type,       # individual | clinic
             # Weekly recurring availability: {"mon":["09:00","11:00"], "wed":[...]}
             # Empty/absent means "no fixed slots" — booking falls back to the
             # freeform preferred_time text field for that therapist.
@@ -15944,8 +15995,69 @@ def admin_create_therapist():
             "created_by_admin":  g.uid,
         }
         ref = db.collection("therapists").document()
+
+        if partner_type == "clinic":
+            # Generate a real, unique discount code — same collision-retry
+            # pattern used for referral codes (see _get_or_create_referral_code).
+            import hashlib as _hl
+            code = None
+            for attempt in range(5):
+                seed = ref.id if attempt == 0 else f"{ref.id}:{attempt}"
+                candidate = "CLINIC-" + _hl.sha256(seed.encode()).hexdigest()[:6].upper()
+                if not db.collection("discount_codes").document(candidate).get().exists:
+                    code = candidate
+                    break
+            if not code:
+                return jsonify({"error": "could not allocate a unique discount code"}), 500
+
+            doc["discount_code"] = code
+            doc["discount_pct"]  = discount_pct
+            doc["bulk_seats"]    = bulk_seats
+
+            db.collection("discount_codes").document(code).set({
+                "code":            code,
+                "type":            "clinic",
+                "owner_type":      "therapist",
+                "owner_id":        ref.id,
+                "clinic_name":     name,
+                "discount_pct":    discount_pct,
+                "active":          True,
+                "redemption_count": 0,
+                "created_at":      doc["created_at"],
+            })
+
+            if bulk_seats > 0:
+                # Reuses the same tenant record shape provision_tenant creates —
+                # gives the clinic a real multi-tenant org so they can invite
+                # staff/patients under a shared group license via the existing
+                # invite flow, instead of building a separate seat system.
+                org_ref = db.collection("companies").document()
+                org_ref.set({
+                    "name":         name,
+                    "domain":       (data.get("contact_email") or "").split("@")[-1] if data.get("contact_email") else "",
+                    "admin_email":  (data.get("contact_email") or "").strip(),
+                    "plan":         "growth",
+                    "seats":        bulk_seats,
+                    "region":       "eg",
+                    "status":       "active",
+                    "source":       "clinic_partner",
+                    "therapist_id": ref.id,
+                    "mrr":          0,
+                    "created_at":   doc["created_at"],
+                    "created_by_admin": g.uid,
+                })
+                doc["company_id"] = org_ref.id
+                audit(g.uid, "clinic_tenant_provisioned", "marketplace", {"clinic_id": ref.id, "org_id": org_ref.id, "seats": bulk_seats})
+
+            audit(g.uid, "clinic_partner_created", "marketplace", {"clinic_id": ref.id, "code": code, "discount_pct": discount_pct})
+
         ref.set(doc)
-        return jsonify({"ok": True, "id": ref.id})
+        resp = {"ok": True, "id": ref.id}
+        if partner_type == "clinic":
+            resp["discount_code"] = doc["discount_code"]
+            if doc.get("company_id"):
+                resp["company_id"] = doc["company_id"]
+        return jsonify(resp)
     except Exception as e:
         return safe_error(e)
 
@@ -16173,6 +16285,7 @@ def marketplace_create_booking():
         slot_iso      = (data.get("slot_datetime") or "").strip()
         notes         = (data.get("notes") or "").strip()
         billing_data  = data.get("billing_data", {})
+        discount_code = (data.get("discount_code") or "").strip()
         if not therapist_id:
             return jsonify({"error": "therapist_id required"}), 400
 
@@ -16181,10 +16294,14 @@ def marketplace_create_booking():
         if not tdoc.exists or tdoc.to_dict().get("status") != "active":
             return jsonify({"error": "therapist not found or unavailable"}), 404
         therapist = tdoc.to_dict()
-        amount_cents = int(therapist.get("session_fee_cents") or 0)
+        base_amount_cents = int(therapist.get("session_fee_cents") or 0)
         currency     = therapist.get("currency", "EGP")
-        if amount_cents <= 0:
+        if base_amount_cents <= 0:
             return jsonify({"error": "therapist has no fee configured"}), 400
+
+        applied_discount = _get_active_discount_code(db, discount_code) if discount_code else None
+        discount_pct = applied_discount.get("discount_pct", 0) if applied_discount else 0
+        amount_cents = round(base_amount_cents * (1 - discount_pct/100))
 
         slot_dt = None
         if slot_iso:
@@ -16212,6 +16329,9 @@ def marketplace_create_booking():
             "preferred_time": preferred_time or (slot_dt.strftime("%a %b %d, %H:%M") if slot_dt else ""),
             "slot_datetime":  slot_dt,
             "notes":          notes,
+            "base_amount_cents": base_amount_cents,
+            "discount_code":     discount_code.upper() if applied_discount else None,
+            "discount_pct":      discount_pct,
             "amount_cents":   amount_cents,
             "currency":       currency,
             "status":         "pending_payment",   # pending_payment | confirmed | cancelled

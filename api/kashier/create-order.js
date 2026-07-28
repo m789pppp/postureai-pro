@@ -53,6 +53,27 @@ async function applyReferralDiscount(db, uid, amount, minChargeEGP = 1) {
   }
 }
 
+// Clinic partner discount code (percentage off) — same discount_codes
+// collection admin_create_therapist (backend.py) writes to when a clinic
+// partner is registered, and marketplace booking checkout reads from.
+// Applied on top of any referral credit, floored the same way.
+async function applyClinicDiscount(db, code, amount, minChargeEGP = 1) {
+  if (!code) return { amount, discountPct: 0, clinicName: null };
+  try {
+    const snap = await db.collection("discount_codes").doc(String(code).trim().toUpperCase()).get();
+    if (!snap.exists) return { amount, discountPct: 0, clinicName: null };
+    const d = snap.data();
+    if (!d.active) return { amount, discountPct: 0, clinicName: null };
+    const pct = Math.max(0, Math.min(100, Number(d.discount_pct) || 0));
+    if (pct <= 0) return { amount, discountPct: 0, clinicName: null };
+    const discounted = Math.max(minChargeEGP, amount * (1 - pct / 100));
+    return { amount: discounted, discountPct: pct, clinicName: d.clinic_name || null };
+  } catch (e) {
+    console.error("[Kashier create-order] clinic discount lookup failed:", e);
+    return { amount, discountPct: 0, clinicName: null };
+  }
+}
+
 // ── Prices (EGP) ─────────────────────────────────────────────────
 const PRICES = {
   individual: {
@@ -117,6 +138,7 @@ export default async function handler(req, res) {
       user_count   = 1,
       coupon_code  = "",
       discount_pct = 0,
+      discount_code = "",
       billing_data = {},
     } = req.body || {};
 
@@ -139,16 +161,18 @@ export default async function handler(req, res) {
 
     // Kashier expects amount as string with 2 decimal places
     const db = getAdminDb();
-    const { amount: discountedAmount, creditAppliedEGP } = await applyReferralDiscount(db, uid, amount);
+    const { amount: afterReferral, creditAppliedEGP } = await applyReferralDiscount(db, uid, amount);
+    const { amount: discountedAmount, discountPct: clinicDiscountPct, clinicName } = await applyClinicDiscount(db, discount_code, afterReferral);
     const amountStr  = discountedAmount.toFixed(2);
     const currency   = "EGP";
     const orderId    = "CORVUS-" + uid.slice(0, 8) + "-" + tier + "-" + (billing[0]) + "-" + Date.now();
     const hash       = kashierSignature(KASHIER_MERCHANT_ID, orderId, amountStr, currency, KASHIER_API_KEY);
 
-    if (creditAppliedEGP > 0) {
+    if (creditAppliedEGP > 0 || clinicDiscountPct > 0) {
       try {
         await db.collection("pending_orders").doc(orderId).set({
           uid, tier, billing, credit_applied_egp: creditAppliedEGP,
+          discount_code: clinicDiscountPct > 0 ? String(discount_code).trim().toUpperCase() : null,
           base_amount_egp: amount,
           created_at: new Date().toISOString(),
         });
@@ -202,6 +226,8 @@ export default async function handler(req, res) {
       amount: amountStr,
       currency,
       credit_applied_egp: creditAppliedEGP,
+      clinic_discount_pct: clinicDiscountPct,
+      clinic_name: clinicName,
     });
 
   } catch (err) {

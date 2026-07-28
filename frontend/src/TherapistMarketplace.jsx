@@ -75,7 +75,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
     }
   }, [tab, demoMode]);
 
-  const submitBooking = async (preferredTime, notes, slotDatetime) => {
+  const submitBooking = async (preferredTime, notes, slotDatetime, discountCode) => {
     if (!selected) return;
     setBooking(true);
     try {
@@ -92,6 +92,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
         preferred_time: preferredTime,
         slot_datetime: slotDatetime || undefined,
         notes,
+        discount_code: discountCode || undefined,
         billing_data: { email: user?.email || "" },
       });
       if (res?.payment?.redirect_url) {
@@ -417,6 +418,19 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
   const [slots, setSlots] = useState(null);       // null = loading, [] = none/no template
   const [hasTemplate, setHasTemplate] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null); // ISO string
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountInfo, setDiscountInfo] = useState(null); // {valid, discount_pct, clinic_name}
+  const [checkingCode, setCheckingCode] = useState(false);
+
+  const checkDiscountCode = async () => {
+    if (!discountCode.trim()) { setDiscountInfo(null); return; }
+    setCheckingCode(true);
+    try {
+      const r = await MarketplaceAPI.validateDiscountCode(discountCode.trim());
+      setDiscountInfo(r?.valid ? r : { valid: false });
+    } catch { setDiscountInfo({ valid: false }); }
+    setCheckingCode(false);
+  };
 
   useEffect(() => {
     MarketplaceAPI.getSlots(therapist.id)
@@ -442,7 +456,34 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
                   alignItems:"center", justifyContent:"center", zIndex:1000, padding:20 }}>
       <div style={{ ...card, width:"100%", maxWidth:460, background:"#111827", maxHeight:"85vh", overflowY:"auto" }}>
         <div style={{ fontWeight:800, fontSize:16, marginBottom:4 }}>{isAr ? "حجز جلسة مع" : "Book a session with"} {therapist.name}</div>
-        <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:16 }}>{money(therapist.session_fee_cents, therapist.currency, isAr)}</div>
+        <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:4 }}>
+          {discountInfo?.valid ? (
+            <>
+              <span style={{ textDecoration:"line-through", color:"#64748b", marginInlineEnd:8 }}>{money(therapist.session_fee_cents, therapist.currency, isAr)}</span>
+              {money(Math.round(therapist.session_fee_cents * (1 - discountInfo.discount_pct/100)), therapist.currency, isAr)}
+            </>
+          ) : money(therapist.session_fee_cents, therapist.currency, isAr)}
+        </div>
+
+        <div style={{ marginBottom:16 }}>
+          <div style={label}>{isAr ? "كود خصم العيادة (اختياري)" : "Clinic discount code (optional)"}</div>
+          <div style={{ display:"flex", gap:8 }}>
+            <input style={{ ...input, flex:1 }} placeholder={isAr ? "مثال: CLINIC-A1B2C3" : "e.g. CLINIC-A1B2C3"}
+                   value={discountCode}
+                   onChange={e=>{ setDiscountCode(e.target.value.toUpperCase()); setDiscountInfo(null); }}
+                   onKeyDown={e=>e.key==="Enter"&&checkDiscountCode()} />
+            <button style={btnGhost} onClick={checkDiscountCode} disabled={checkingCode || !discountCode.trim()}>
+              {checkingCode ? "…" : (isAr ? "تحقق" : "Apply")}
+            </button>
+          </div>
+          {discountInfo && (
+            <div style={{ fontSize:11.5, marginTop:5, color: discountInfo.valid ? "#5eead4" : "#f87171" }}>
+              {discountInfo.valid
+                ? (isAr ? `✓ خصم ${discountInfo.discount_pct}% من ${discountInfo.clinic_name || "العيادة"}` : `✓ ${discountInfo.discount_pct}% off from ${discountInfo.clinic_name || "clinic"}`)
+                : (isAr ? "الكود غير صحيح أو منتهي" : "Invalid or expired code")}
+            </div>
+          )}
+        </div>
 
         {slots === null && (
           <div style={{ fontSize:12.5, color:"#64748b", marginBottom:16 }}>{isAr?"جاري تحميل المواعيد المتاحة…":"Loading available times…"}</div>
@@ -495,7 +536,7 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <button style={btnGhost} onClick={onClose} disabled={loading}>{isAr ? "إلغاء" : "Cancel"}</button>
           <button style={{ ...btnPrimary, opacity: canSubmit ? 1 : .5 }} disabled={loading || !canSubmit}
-                  onClick={()=>onSubmit(hasTemplate ? fmtDay(new Date(selectedSlot).toDateString())+" "+fmtTime(selectedSlot) : preferredTime, notes, selectedSlot)}>
+                  onClick={()=>onSubmit(hasTemplate ? fmtDay(new Date(selectedSlot).toDateString())+" "+fmtTime(selectedSlot) : preferredTime, notes, selectedSlot, discountInfo?.valid ? discountCode : "")}>
             {loading ? (isAr ? "جاري الحجز…" : "Booking…") : (isAr ? "تأكيد الحجز والدفع" : "Confirm & Pay")}
           </button>
         </div>
@@ -626,7 +667,7 @@ function AdminBookingsManager({ isAr, addToast, adminUid }) {
 function AdminTherapistManager({ isAr, addToast }) {
   const [list, setList] = useState([]);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ name:"", city:"", bio:"", specialties:"", session_fee_cents:"", currency:"EGP", years_experience:"" });
+  const [form, setForm] = useState({ name:"", city:"", bio:"", specialties:"", session_fee_cents:"", currency:"EGP", years_experience:"", partner_type:"individual", discount_pct:"", bulk_seats:"" });
   const [availability, setAvailability] = useState({}); // {mon:["09:00",...], ...}
   const [saving, setSaving] = useState(false);
 
@@ -655,18 +696,24 @@ function AdminTherapistManager({ isAr, addToast }) {
     }
     setSaving(true);
     try {
-      await MarketplaceAPI.adminCreateTherapist({
+      const res = await MarketplaceAPI.adminCreateTherapist({
         ...form,
         session_fee_cents: Math.round(parseFloat(form.session_fee_cents) * 100),
         years_experience: parseInt(form.years_experience) || 0,
         specialties: form.specialties.split(",").map(s=>s.trim()).filter(Boolean),
         availability_template: Object.fromEntries(Object.entries(availability).filter(([,v])=>v.length>0)),
+        discount_pct: form.partner_type==="clinic" ? (parseFloat(form.discount_pct)||0) : undefined,
+        bulk_seats: form.partner_type==="clinic" ? (parseInt(form.bulk_seats)||0) : undefined,
       });
-      setForm({ name:"", city:"", bio:"", specialties:"", session_fee_cents:"", currency:"EGP", years_experience:"" });
+      setForm({ name:"", city:"", bio:"", specialties:"", session_fee_cents:"", currency:"EGP", years_experience:"", partner_type:"individual", discount_pct:"", bulk_seats:"" });
       setAvailability({});
       setShowNew(false);
       load();
-      addToast?.(isAr ? "تمت الإضافة" : "Therapist added", "success");
+      if (res?.discount_code) {
+        addToast?.(isAr ? `تمت الإضافة — كود العيادة: ${res.discount_code}` : `Added — clinic code: ${res.discount_code}`, "success");
+      } else {
+        addToast?.(isAr ? "تمت الإضافة" : "Therapist added", "success");
+      }
     } catch (e) {
       addToast?.(e.message, "error");
     } finally { setSaving(false); }
@@ -694,6 +741,31 @@ function AdminTherapistManager({ isAr, addToast }) {
           <div><div style={label}>{isAr?"سنوات الخبرة":"Years experience"}</div><input style={input} type="number" value={form.years_experience} onChange={e=>setForm(f=>({...f,years_experience:e.target.value}))}/></div>
           <div style={{ gridColumn:"1 / -1" }}><div style={label}>{isAr?"التخصصات (مفصولة بفاصلة)":"Specialties (comma-separated)"}</div><input style={input} value={form.specialties} onChange={e=>setForm(f=>({...f,specialties:e.target.value}))}/></div>
           <div style={{ gridColumn:"1 / -1" }}><div style={label}>{isAr?"نبذة":"Bio"}</div><textarea style={{...input,minHeight:60}} value={form.bio} onChange={e=>setForm(f=>({...f,bio:e.target.value}))}/></div>
+
+          <div style={{ gridColumn:"1 / -1", borderTop:border, paddingTop:12, marginTop:4 }}>
+            <div style={label}>{isAr?"نوع الشريك":"Partner type"}</div>
+            <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+              {[["individual", isAr?"معالج فردي":"Individual therapist"], ["clinic", isAr?"عيادة شريكة":"Clinic partner"]].map(([val,lbl]) => (
+                <button key={val} style={{ ...btnGhost, background: form.partner_type===val ? "rgba(94,234,212,.15)" : undefined, borderColor: form.partner_type===val ? "#5eead4" : undefined }}
+                        onClick={()=>setForm(f=>({...f,partner_type:val}))}>{lbl}</button>
+              ))}
+            </div>
+            {form.partner_type === "clinic" && (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div>
+                  <div style={label}>{isAr?"نسبة خصم المرضى %":"Patient discount %"}</div>
+                  <input style={input} type="number" min="0" max="100" value={form.discount_pct} onChange={e=>setForm(f=>({...f,discount_pct:e.target.value}))} placeholder="15"/>
+                  <div style={{ fontSize:10.5, color:"#64748b", marginTop:4 }}>{isAr?"هيتولّد كود خصم فريد للعيادة توزّعه على مرضاها":"A unique discount code will be generated for the clinic to hand out to patients"}</div>
+                </div>
+                <div>
+                  <div style={label}>{isAr?"مقاعد الاشتراك الجماعي (اختياري)":"Group license seats (optional)"}</div>
+                  <input style={input} type="number" min="0" value={form.bulk_seats} onChange={e=>setForm(f=>({...f,bulk_seats:e.target.value}))} placeholder="0"/>
+                  <div style={{ fontSize:10.5, color:"#64748b", marginTop:4 }}>{isAr?"لو أكبر من صفر، هيتعمل حساب مؤسسة للعيادة تقدر تدعو موظفين/مرضى عليه":"If greater than 0, a company account is provisioned for the clinic to invite staff/patients into"}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div style={{ gridColumn:"1 / -1" }}>
             <div style={label}>{isAr?"المواعيد المتاحة أسبوعيًا (اختياري)":"Weekly availability (optional)"}</div>
             <div style={{ fontSize:11, color:"#64748b", marginBottom:8 }}>
