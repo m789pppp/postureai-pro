@@ -326,6 +326,8 @@ export const SymptomAPI = {
 
 // ── Marketplace API (Physiotherapist directory + booking) ──────────
 export const MarketplaceAPI = {
+  /** Validate a clinic discount code before checkout. */
+  validateDiscountCode: (code) => apiFetch(`/discount-codes/validate?code=${encodeURIComponent(code)}`),
   /** Patient-facing: browse active therapists, optional ?city=&specialty= filters. */
   listTherapists: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

@@ -107,6 +107,16 @@ async function confirmBookingPayment(db, orderId, amount, transactionId) {
     kashier_transaction_id: transactionId,
     confirmed_at:          new Date().toISOString(),
   });
+
+  if (booking.discount_code) {
+    try {
+      await db.collection("discount_codes").doc(booking.discount_code)
+        .update({ redemption_count: FieldValue.increment(1) });
+    } catch (e) {
+      console.error("[Kashier Webhook] discount redemption tracking failed:", e);
+    }
+  }
+
   console.log("[Kashier Webhook] ✅ Marketplace booking", parsed.bookingId, "confirmed");
   return { received: true, action: "booking_confirmed", booking_id: parsed.bookingId };
 }
@@ -208,14 +218,20 @@ export default async function handler(req, res) {
 
         console.log("[Kashier Webhook] Updated user", uid, "=> tier=" + tier + " billing=" + billing);
 
-        // ── Referral reconciliation (best-effort — never blocks the webhook) ──
+        // ── Referral / clinic-discount reconciliation (best-effort — never blocks the webhook) ──
         try {
           const pendingRef  = db.collection("pending_orders").doc(orderId);
           const pendingSnap = await pendingRef.get();
           if (pendingSnap.exists) {
-            const creditApplied = Number(pendingSnap.data().credit_applied_egp || 0);
+            const pendingData = pendingSnap.data();
+            const creditApplied = Number(pendingData.credit_applied_egp || 0);
             if (creditApplied > 0) {
               await userDoc.ref.update({ referral_credits: FieldValue.increment(-creditApplied) });
+            }
+            if (pendingData.discount_code) {
+              await db.collection("discount_codes").doc(pendingData.discount_code)
+                .update({ redemption_count: FieldValue.increment(1) })
+                .catch(e => console.error("[Kashier Webhook] discount redemption tracking failed:", e));
             }
             await pendingRef.delete();
           }

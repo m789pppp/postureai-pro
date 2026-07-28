@@ -249,7 +249,7 @@ async function askGemini(prompt){
   }catch{return null;}
 }
 
-async function initKashier({tier,user_email,user_name,billing,uid="",coupon_code,discount_pct=0}){
+async function initKashier({tier,user_email,user_name,billing,uid="",coupon_code,discount_code,discount_pct=0}){
   try{
     const {getAuthToken} = await import("./firebase.js");
     const tok = await getAuthToken().catch(()=>null);
@@ -259,6 +259,7 @@ async function initKashier({tier,user_email,user_name,billing,uid="",coupon_code
       body:JSON.stringify({
         tier, billing, uid,
         coupon_code: coupon_code||undefined,
+        discount_code: discount_code||undefined,
         discount_pct: discount_pct||0,
         billing_data:{
           email:user_email,
@@ -1699,6 +1700,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
       user_name:profile?.name||"",billing,
       uid:user?.uid||"",
       coupon_code: couponData ? coupon.trim().toUpperCase() : undefined,
+      discount_code: couponData ? coupon.trim().toUpperCase() : undefined,
       discount_pct: disc || 0});
     if(result?.creditApplied) setReferralCreditApplied(result.creditApplied);
     if(result?.type==="redirect"&&result?.url){
