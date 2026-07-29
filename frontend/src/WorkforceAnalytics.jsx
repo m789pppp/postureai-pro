@@ -716,9 +716,9 @@ function MonthlyInsights({data,profile,isAr,loading,onAI,aiData,aiLoading,aiErro
             <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
               {isAr?"اتجاه 6 أشهر":"6-Month Trend"}
             </div>
-            <Spark data={data.monthly6.map(m=>m.score)} color="#10b981" h={48}/>
+            <Spark data={(data.monthly6||[]).map(m=>m.score)} color="#10b981" h={48}/>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-              {data.monthly6.map(m=>(
+              {(data.monthly6||[]).map(m=>(
                 <div key={m.label} style={{fontSize:8,color:"var(--wa-muted)",fontWeight:600}}>{m.label}</div>
               ))}
             </div>
@@ -728,7 +728,7 @@ function MonthlyInsights({data,profile,isAr,loading,onAI,aiData,aiLoading,aiErro
             <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
               {isAr?"جلسات/شهر":"Sessions / month"}
             </div>
-            <Bars data={data.monthly6.map(m=>({v:m.count,l:m.label}))} h={42} color="#1a56db"/>
+            <Bars data={(data.monthly6||[]).map(m=>({v:m.count,l:m.label}))} h={42} color="#1a56db"/>
           </div>
         </>
       )}
