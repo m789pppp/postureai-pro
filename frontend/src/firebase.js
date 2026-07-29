@@ -563,7 +563,7 @@ export async function deleteSession(sessionId) {
 // immediately instead of silently persisting until the next full reload.
 // Any other server-side profile write (admin tier change, etc.) benefits
 // the same way now, not just this one case.
-export function onUserProfile(uid, callback) {
+export function onUserProfile(uid, callback, onError) {
   return onSnapshot(doc(db,"users",uid), snap => {
     // BUG FIX: this used to call back with raw snap.data() — every other
     // profile-reading function in this file (getUserProfile,
@@ -575,6 +575,7 @@ export function onUserProfile(uid, callback) {
     if (snap.exists()) callback(_applyEliteElevation({ uid, ...snap.data() }));
   }, err => {
     console.error("[onUserProfile] listener error:", err);
+    onError?.(err);
   });
 }
 
@@ -647,7 +648,11 @@ export async function confirmPayment(paymentId, uid, tier, months) {
 export async function rejectPayment(paymentId, reason) {
   await updateDoc(doc(db,"payments",paymentId), { status:"rejected", reject_reason:reason||"Not verified", rejected_at:_serverTimestamp(), updated_at:_serverTimestamp() });
 }
-export const listenToPayment = (paymentId, cb) => onSnapshot(doc(db,"payments",paymentId), snap=>{ if(snap.exists()) cb({id:snap.id,...snap.data()}); });
+export const listenToPayment = (paymentId, cb, onError) => onSnapshot(
+  doc(db,"payments",paymentId),
+  snap=>{ if(snap.exists()) cb({id:snap.id,...snap.data()}); },
+  err=>{ console.error("[listenToPayment] listener error:", err); onError?.(err); }
+);
 
 export async function getAllPayments(statusFilter, dateFrom, dateTo) {
   let q = statusFilter && statusFilter!=="all"
