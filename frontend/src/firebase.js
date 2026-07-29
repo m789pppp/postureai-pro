@@ -373,9 +373,12 @@ export async function checkAndDowngradeTrial(uid) {
       // hard-downgrade it to standard.
       const stored   = String(data.tier||"standard").toLowerCase();
       const keepTier = !["standard","basic",""].includes(stored);
-      const newTier  = _shouldElevateToElite(data.email) ? "elite" : (keepTier ? data.tier : "standard");
-      await updateDoc(doc(db,"users",uid), { tier:newTier, is_trial:false, trial_expires_at:null, updated_at:_serverTimestamp() });
-      return { ...data, tier:newTier, is_trial:false, trial_expires_at:null };
+      const isEliteEmail = _shouldElevateToElite(data.email);
+      const newTier = isEliteEmail ? "elite" : (keepTier ? data.tier : "standard");
+      // For elite-whitelisted accounts: set subscription_status active so expiry check never fires
+      const extra = isEliteEmail ? { subscription_status:"active", subscription_expiry:null } : {};
+      await updateDoc(doc(db,"users",uid), { tier:newTier, is_trial:false, trial_expires_at:null, ...extra, updated_at:_serverTimestamp() });
+      return { ...data, tier:newTier, is_trial:false, trial_expires_at:null, ...extra };
     }
     return data;
   } catch(e) { return null; }
@@ -396,6 +399,7 @@ export async function getCalibration(uid) {
 const _ELITE_EMAILS = [
   "judyayman36@gmail.com",
   "support@corvus.io",
+  "m789pppp@gmail.com",   // Corvus founder — always elite
   // add individual emails here as needed
 ];
 const _ELITE_DOMAINS = [
@@ -418,10 +422,17 @@ function _applyEliteElevation(data) {
   if (!data) return data;
   const TIER_LEVEL = { standard:0, basic:1, professional:2, elite:3 };
 
-  // ── Subscription expiry check ─────────────────────────────────────
-  // If paid subscription has expired, downgrade to standard (client-side guard)
-  // Webhook sets subscription_expiry; if past and subscription_status is active,
-  // the user should be on standard until they renew.
+  // ── Elite whitelist check FIRST — whitelisted users bypass ALL expiry logic ──
+  // Founder accounts, university pilots, etc. are ALWAYS elite regardless of
+  // subscription status, trial expiry, or payment history.
+  if (_shouldElevateToElite(data.email || "")) {
+    data.tier = "elite";
+    data.is_trial = false;
+    data.subscription_status = "active";
+    return data; // early return — no expiry check for whitelisted accounts
+  }
+
+  // ── Subscription expiry check (non-whitelisted paying users only) ────────
   if (data.subscription_expiry && data.subscription_status === "active" && !data.is_trial) {
     const expiry = new Date(data.subscription_expiry);
     if (!isNaN(expiry) && expiry < new Date()) {
@@ -430,14 +441,6 @@ function _applyEliteElevation(data) {
     }
   }
 
-  // ── Elite auto-elevation (domain/email whitelist) ─────────────────
-  if (_shouldElevateToElite(data.email || "")) {
-    const current = TIER_LEVEL[String(data.tier||"standard").toLowerCase()] ?? 0;
-    if (current < 3) {
-      data.tier = "elite";
-      data.is_trial = false;
-    }
-  }
   return data;
 }
 
