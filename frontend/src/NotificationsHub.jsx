@@ -283,7 +283,7 @@ function FeedTab({ profile, isAr }) {
       } else {
         setNotifs(items);
       }
-    }, () => setNotifs([]));
+    }, err => { console.error("[NotificationsHub] listener error:", err); setNotifs([]); });
 
     return unsub;
   }, [profile?.uid]);
