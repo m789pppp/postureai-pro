@@ -1825,7 +1825,7 @@ def _calibrate_focal(face_lms, w, h, session_id: str = "", known_dist_cm: float 
     except Exception:
         return None
 
-def ipd_distance_face(face_lms, w, h, yaw_deg=0.0, session_id: str = ""):
+def ipd_distance_face(face_lms, w, h, yaw_deg=0.0, session_id: str = "", dist_calib_factor=None):
     """
     IMPROVED: Dual-estimator distance with calibrated focal length.
     1. IPD estimator  — 6.3cm real IPD, yaw-corrected
@@ -1833,6 +1833,14 @@ def ipd_distance_face(face_lms, w, h, yaw_deg=0.0, session_id: str = ""):
     Blend: 70% IPD + 30% face-width (when yaw < 20° both are reliable)
            100% IPD when yaw >= 20° (face-width less reliable at angle)
     Focal: calibrated per-session from face-width estimator
+
+    dist_calib_factor: this user's own calibrated (knownDistanceCm *
+    ipdFraction) constant from PostureCalibration.jsx. When present, this
+    REPLACES the generic 6.3cm population-average IPD assumption with this
+    person's actual measured IPD and this camera's actual FOV in one
+    number — the frontend's own comment documents this as cutting typical
+    distance error from ~15cm to ~3cm. BUG FIX: this was computed and sent
+    on every request but never read anywhere in the backend until now.
     """
     try:
         lp = face_lms.landmark[L_PUPIL]
@@ -1846,6 +1854,13 @@ def ipd_distance_face(face_lms, w, h, yaw_deg=0.0, session_id: str = ""):
         yaw_rad          = math.radians(abs(yaw_deg))
         cos_yaw          = max(math.cos(yaw_rad), 0.5)
         ipd_px_corrected = ipd_px / cos_yaw
+
+        # ── Calibrated-IPD path (preferred when available) ───────
+        if dist_calib_factor and dist_calib_factor > 0:
+            ipd_frac_corrected = ipd_px_corrected / max(w, 1)
+            if ipd_frac_corrected > 0:
+                dist = round(dist_calib_factor / ipd_frac_corrected, 1)
+                return max(20, min(150, dist))
 
         # ── Calibrated focal ─────────────────────────────────────
         # Try to calibrate focal from face width (more stable than IPD alone)
@@ -1947,7 +1962,7 @@ def head_pose_from_face(face_lms, w, h):
         return None
 
 # ── FRONT ANALYSIS ─────────────────────────────────────────────────
-def analyze_front(image, mode="laptop", tier="standard", session_id=None):
+def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_baseline_cm=None, dist_calib_factor=None):
     _ensure_models()  # lazy-load MediaPipe on first call
     h, w = image.shape[:2]
     rgb   = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -2284,7 +2299,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
                             _focal_cal[_sid]           = _cal_data.get("focal_px")
             except Exception:
                 pass
-        dist_cm  = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw, session_id=_sid)
+        dist_cm  = ipd_distance_face(face_lms, w, h, yaw_deg=_yaw, session_id=_sid, dist_calib_factor=dist_calib_factor)
         out["engine"]    = "mediapipe_pose+facemesh"
         # Eye strain — all paid tiers (iris tracking via FaceMesh)
         if tier in ("elite", "premium", "professional", "pro", "business"):
@@ -2302,7 +2317,19 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None):
         dist_cm = max(20, min(150, dist_cm))
 
     lo, hi = (50, 80) if mode == "laptop" else (60, 90)
-    ideal  = (lo + hi) / 2   # 65cm laptop, 75cm desktop
+    # BUG FIX: this used to be a fixed range based only on device type,
+    # completely ignoring the user's own calibrated camera-distance
+    # baseline — the whole point of "Camera Calibration" on the dashboard.
+    # Blend 70% toward their calibrated distance so their actual setup is
+    # what gets scored as "ideal", while the generic range still acts as a
+    # sane ergonomic guardrail (not fully overridden) in case their
+    # calibrated setup is itself too close/far.
+    if dist_baseline_cm and 20 <= dist_baseline_cm <= 150:
+        generic_mid = (lo + hi) / 2
+        personal_mid = 0.70 * dist_baseline_cm + 0.30 * generic_mid
+        half_width = (hi - lo) / 2
+        lo, hi = personal_mid - half_width, personal_mid + half_width
+    ideal  = (lo + hi) / 2   # 65cm laptop, 75cm desktop (or personalized)
 
     # ── Continuous quadratic scoring — no buckets ─────────────────
     # Perfect: inside lo-hi = 100
@@ -4357,7 +4384,9 @@ def analyze():
         if mode == "side":
             result = analyze_side(img_to_analyze, tier, session_id=_session_id_for_analysis)
         else:
-            result = analyze_front(img_to_analyze, mode, tier, session_id=_session_id_for_analysis)
+            result = analyze_front(img_to_analyze, mode, tier, session_id=_session_id_for_analysis,
+                                    dist_baseline_cm=(calib or {}).get("distance_calibrated_cm"),
+                                    dist_calib_factor=(calib or {}).get("distCalibFactor"))
         # ── Apply personal calibration with asymmetric thresholds ──
         # Asymmetric: if user's natural lean is toward right (+),
         # we widen the ok/bad zone on the right side and tighten on left.
