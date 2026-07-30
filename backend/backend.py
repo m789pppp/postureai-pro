@@ -780,7 +780,7 @@ def get_pricing():
         "ok":     True,
         "region": region,
         "currency": "EGP" if region == "egypt" else "USD",
-        "gateway": "paymob" if region == "egypt" else "stripe",
+        "gateway": "kashier" if region == "egypt" else "stripe",
         "plans":  plans,
     })
 
@@ -7126,6 +7126,35 @@ def admin_system_health():
             except Exception as e:
                 sendgrid_status = {"status": "down", "error": str(e)}
 
+        # Kashier — the live payment gateway for the primary (Egypt) market.
+        # No known safe read-only ping endpoint, so this is a config-presence
+        # check (both merchant ID and API key set) rather than a live call.
+        kashier_merchant_id = os.getenv("KASHIER_MERCHANT_ID", "")
+        kashier_api_key     = os.getenv("KASHIER_API_KEY", "")
+        kashier_status = {"status": "healthy" if (kashier_merchant_id and kashier_api_key) else "not_configured"}
+
+        # Resend — email provider used by the Vercel-side email function
+        # (api/email/send.js). Its key normally only lives in Vercel's env,
+        # not this Flask service's — this only reports "healthy" if a copy
+        # also happens to be configured here for a live check; otherwise
+        # honestly reports not_configured rather than guessing.
+        resend_api_key = os.getenv("RESEND_API_KEY", "")
+        resend_status  = {"status": "not_configured"}
+        if resend_api_key:
+            try:
+                r = req.get("https://api.resend.com/domains",
+                            headers={"Authorization": f"Bearer {resend_api_key}"}, timeout=5)
+                resend_status = {"status": "healthy" if r.status_code == 200 else "error",
+                                  "http_status": r.status_code}
+            except Exception as e:
+                resend_status = {"status": "down", "error": str(e)}
+
+        # Pollinations — the AI provider calls made directly from the
+        # browser (frontend/src/localAI.js), not from this backend at all.
+        # Genuinely not something this server can check the health of —
+        # reported as such rather than faking a status either way.
+        pollinations_status = {"status": "client_side_only", "note": "Called directly from the browser — not monitored server-side"}
+
         return jsonify({
             "websocket": {
                 "enabled":     ws["enabled"],
@@ -7138,6 +7167,9 @@ def admin_system_health():
             "firestore":       {"status": "healthy" if firestore_ok else "down"},
             "stripe":          stripe_status,
             "sendgrid":        sendgrid_status,
+            "kashier":         kashier_status,
+            "resend":          resend_status,
+            "pollinations":    pollinations_status,
             "pdf_generator":   {"status": "healthy" if REPORTLAB_OK else "down"},
             "analysis_engine": {"status": "healthy" if POSE_LITE is not None else "loading"},
             "local_ai":        {"status": "healthy" if bool(OLLAMA_URL) else "not_configured"},

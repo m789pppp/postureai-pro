@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import { db } from "./firebase.js";
 import { collection, getDocs, query, where, orderBy, limit, doc, updateDoc, setDoc } from "firebase/firestore";
+import { apiFetch } from "./services/api.js";
 
 const FEATURE_FLAGS = [
   { id:"ff_ai_coaching",       label:"AI Coaching",          desc:"Enable AI coach panel for all users",         enabled:true,  rollout:100, env:"all" },
@@ -37,7 +38,7 @@ const MOCK_HEALTH = {
   queue: { pending:12, processing:4, failed:1, avgWait:"1.2s" },
 };
 
-const STATUS_DOT = { healthy:"#10b981", degraded:"#f59e0b", down:"#ef4444", disabled:"#64748b", unknown:"#64748b", not_configured:"#64748b" };
+const STATUS_DOT = { healthy:"#10b981", degraded:"#f59e0b", down:"#ef4444", disabled:"#64748b", unknown:"#64748b", not_configured:"#64748b", info:"#38bdf8" };
 
 export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
   const [tab, setTab]         = useState("flags");
@@ -60,11 +61,15 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
     return () => clearInterval(t);
   }, []);
 
-  // Real system health — WebSocket / Redis / Firestore / Stripe / SendGrid / etc.
+  // Real system health — calls the actual backend health endpoint. This
+  // used to just ping Firestore for a single doc and label that "system
+  // health" — every row below (Stripe, SendGrid, PDF generator, analysis
+  // engine, etc.) was reading fields that never existed on that object,
+  // so they always fell through to "down"/"unknown" regardless of whether
+  // the real services were actually healthy or not.
   useEffect(() => {
-    // System health: derive from Firestore data (no Railway needed)
-    getDocs(query(collection(db, "users"), limit(1)))
-      .then(snap => setRealHealth({ status:"operational", users_readable: !snap.empty }))
+    apiFetch("/admin/system/health")
+      .then(setRealHealth)
       .catch(() => setRealHealth(null));
   }, []);
 
@@ -121,6 +126,24 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
     status: realHealth.sendgrid?.status === "healthy" ? "healthy" : realHealth.sendgrid?.status === "not_configured" ? "disabled" : "down",
     detail: realHealth.sendgrid?.status === "not_configured" ? "SENDGRID_API_KEY not set" : (realHealth.sendgrid?.status || "unknown"),
   } : { name:"SendGrid Email", status:"unknown", detail:"Checking…" };
+
+  const kashierRow = realHealth ? {
+    name: "Kashier Payments",
+    status: realHealth.kashier?.status === "healthy" ? "healthy" : "disabled",
+    detail: realHealth.kashier?.status === "healthy" ? "Configured" : "KASHIER_MERCHANT_ID/KASHIER_API_KEY not set",
+  } : { name:"Kashier Payments", status:"unknown", detail:"Checking…" };
+
+  const resendRow = realHealth ? {
+    name: "Resend Email",
+    status: realHealth.resend?.status === "healthy" ? "healthy" : realHealth.resend?.status === "not_configured" ? "disabled" : "down",
+    detail: realHealth.resend?.status === "not_configured" ? "RESEND_API_KEY not set on this service" : (realHealth.resend?.status || "unknown"),
+  } : { name:"Resend Email", status:"unknown", detail:"Checking…" };
+
+  const pollinationsRow = {
+    name: "Pollinations AI",
+    status: "info",
+    detail: "Called directly from the browser — not monitored server-side",
+  };
 
   const pdfRow = realHealth ? {
     name: "PDF Generator",
@@ -276,7 +299,7 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                   Service Status {!realHealth && "(checking…)"}
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {[wsRow, redisRow, firestoreRow, stripeRow, sendgridRow, pdfRow, analysisRow, localAiRow, gatewayRow].map(s => (
+                  {[wsRow, redisRow, firestoreRow, stripeRow, sendgridRow, kashierRow, resendRow, pollinationsRow, pdfRow, analysisRow, localAiRow, gatewayRow].map(s => (
                     <div key={s.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
                       padding:"8px 12px", background:"rgba(255,255,255,0.02)", borderRadius:8 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
