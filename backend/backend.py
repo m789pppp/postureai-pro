@@ -1980,7 +1980,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
 
     if not pose_result.pose_landmarks:
         out["alerts"].append("No person detected — ensure your upper body is visible in the camera frame")
-        return analyze_front_cascade(image, mode, out)
+        return analyze_front_cascade(image, mode, out, dist_baseline_cm=dist_baseline_cm, dist_calib_factor=dist_calib_factor)
 
     # ── Landmark averaging: reduce ±3° jitter to ±1° ─────────────
     _sid  = session_id or out.get("session_id", "front_default")
@@ -3765,11 +3765,21 @@ def analyze_side(image, tier="standard", session_id=None):
 # here at module level, which crashed on every cold start (cv2 is still None
 # at import time, before _ensure_models() has ever run).
 
-def analyze_front_cascade(image, mode, out):
+def analyze_front_cascade(image, mode, out, dist_baseline_cm=None, dist_calib_factor=None):
     """
     Cascade fallback (OpenCV Haar) — uses SAME score_m thresholds and weights
     as analyze_front() so score is consistent regardless of which engine runs.
     Lower confidence (72) but same scoring formula.
+
+    dist_calib_factor is intentionally NOT applied to override dist_cm here:
+    it was calibrated against MediaPipe FaceMesh iris landmarks, not this
+    engine's Haar eye-cascade bounding boxes — a different, cruder detector
+    with a different measurement bias. Reusing the same constant across two
+    unrelated detectors would silently trade one systematic error for
+    another, not remove it. dist_baseline_cm (the user's own comfortable
+    calibrated distance) IS safe to use here since it only shifts the ideal
+    *range*, independent of how dist_cm was measured — same gap, same fix,
+    as analyze_front's ideal-range blend.
     """
     _ensure_models()
     h, w = image.shape[:2]
@@ -3800,6 +3810,16 @@ def analyze_front_cascade(image, mode, out):
     dist_cm = max(20, min(150, dist_cm))
 
     lo, hi = (50, 80) if mode == "laptop" else (60, 90)
+    # BUG FIX (same gap as analyze_front): blend 70% toward the user's own
+    # calibrated comfortable distance instead of a fixed generic range, so
+    # the cascade fallback scores against the same personalized target as
+    # the primary MediaPipe path rather than silently reverting to generic
+    # thresholds whenever MediaPipe fails to detect a face.
+    if dist_baseline_cm and 20 <= dist_baseline_cm <= 150:
+        _generic_mid = (lo + hi) / 2
+        _personal_mid = 0.70 * dist_baseline_cm + 0.30 * _generic_mid
+        _half_width = (hi - lo) / 2
+        lo, hi = _personal_mid - _half_width, _personal_mid + _half_width
     # ── Adaptive focal from face size (better than fixed 600) ────
     # Standard face width ~14cm. Reference: 640px wide frame at 65cm → face ~140px
     ref_face_pct = 0.22   # ~22% of frame width at reference distance
