@@ -32,8 +32,15 @@ try {
 } catch {}
 
 // ── Sentry: init before render ────────────────────────────────────
-import { initSentry } from "./Observability.jsx";
-initSentry().catch(() => {});
+// Was importing initSentry() from Observability.jsx — a second, weaker,
+// CDN-loaded Sentry client (no integrations, no session replay, no
+// auth-header redaction) that nobody had wired up on purpose. The
+// properly-configured version (npm package, replay masking, strips
+// Authorization headers) lives in sentry.js and was already imported by
+// App.jsx for identifyUser/captureError — but its initSentry() was never
+// actually called, so it silently did nothing. Fixed to use the real one.
+import { initSentry } from "./sentry.js";
+try { initSentry(); } catch {}
 
 // ── PWA: Service Worker ───────────────────────────────────────────
 // Force clear old SW + caches when CSP or SW version changes
@@ -170,10 +177,17 @@ if (path.startsWith("/report/")) {
 // ── PostHog Product Analytics ─────────────────────────────────────
 // Install: npm install posthog-js
 // Set VITE_POSTHOG_KEY in .env.local
+// GATED ON COOKIE CONSENT: previously this ran unconditionally on every
+// page load regardless of what the user chose in the cookie banner
+// (LegalCompliance.jsx) — the banner stored a choice nobody read. Now it
+// only starts after the user has actually opted into analytics, and starts
+// immediately (no reload needed) if they accept later via the banner.
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
+let _posthogStarted = false;
 if (POSTHOG_KEY && typeof window !== "undefined") {
-  // Defer PostHog until after page is interactive (saves parse time on LCP)
   const initPostHog = () => {
+    if (_posthogStarted) return;
+    _posthogStarted = true;
     import("posthog-js").then(({ default: posthog }) => {
       posthog.init(POSTHOG_KEY, {
         api_host:          import.meta.env.VITE_POSTHOG_HOST || "https://app.posthog.com",
@@ -187,12 +201,18 @@ if (POSTHOG_KEY && typeof window !== "undefined") {
       window._posthog = posthog;
     }).catch(() => {});
   };
-  // Init after first idle period (non-blocking for LCP/TTI)
-  if ("requestIdleCallback" in window) {
-    requestIdleCallback(initPostHog, { timeout: 3000 });
-  } else {
-    setTimeout(initPostHog, 2000);
-  }
+  const startIfConsented = () => {
+    import("./LegalCompliance.jsx").then(({ hasAnalyticsConsent }) => {
+      if (!hasAnalyticsConsent()) return;
+      if ("requestIdleCallback" in window) {
+        requestIdleCallback(initPostHog, { timeout: 3000 });
+      } else {
+        setTimeout(initPostHog, 2000);
+      }
+    }).catch(() => {});
+  };
+  startIfConsented();
+  window.addEventListener("corvus-consent-updated", startIfConsented);
 }
 
 // Usage helper — call from any component:

@@ -6,6 +6,27 @@ import { useState, useEffect } from "react";
 
 const COOKIE_KEY = "corvus_cookie_consent_v1";
 
+// ── Consent read helper (used by main.jsx to gate analytics init) ──
+export function getStoredConsent() {
+  try {
+    const raw = localStorage.getItem(COOKIE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function hasAnalyticsConsent() {
+  return getStoredConsent()?.analytics === true;
+}
+
+function persistConsent(consent) {
+  try { localStorage.setItem(COOKIE_KEY, JSON.stringify(consent)); } catch (e) {}
+  // Let main.jsx (already loaded, banner shows after boot) react immediately
+  // instead of only taking effect on next page load.
+  try { window.dispatchEvent(new CustomEvent("corvus-consent-updated", { detail: consent })); } catch (e) {}
+}
+
 // ── Cookie Consent Banner ───────────────────────────────────────
 export function CookieConsent({ cs }) {
   const [show, setShow]     = useState(false);
@@ -20,18 +41,18 @@ export function CookieConsent({ cs }) {
 
   const acceptAll = () => {
     const consent = { necessary: true, analytics: true, marketing: true, ts: Date.now() };
-    try { localStorage.setItem(COOKIE_KEY, JSON.stringify(consent)); } catch(e) {}
+    persistConsent(consent);
     setShow(false);
   };
 
   const acceptSelected = () => {
-    try { localStorage.setItem(COOKIE_KEY, JSON.stringify({ ...prefs, ts: Date.now() })); } catch(e) {}
+    persistConsent({ ...prefs, ts: Date.now() });
     setShow(false);
   };
 
   const rejectAll = () => {
     const consent = { necessary: true, analytics: false, marketing: false, ts: Date.now() };
-    try { localStorage.setItem(COOKIE_KEY, JSON.stringify(consent)); } catch(e) {}
+    persistConsent(consent);
     setShow(false);
   };
 
