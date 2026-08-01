@@ -122,6 +122,18 @@ const STANDALONE_ROUTES = {
   "/faq":         () => import("./FAQPage.jsx"),
 };
 
+// Known app paths that should load App.jsx normally
+const APP_PATHS = new Set(["/", "/auth", "/app", "/dashboard", "/billing", "/invite"]);
+// Unknown path = 404
+const isKnownPath = path === "/" ||
+  path.startsWith("/report/") ||
+  Object.keys(STANDALONE_ROUTES).includes(path) ||
+  APP_PATHS.has(path) ||
+  path === "" ||
+  // Auth path variants
+  path.startsWith("/auth");
+
+
 const standaloneLoader = STANDALONE_ROUTES[path];
 
 // If a top-level entry chunk resolves but its default export is missing
@@ -140,7 +152,19 @@ function reloadOnceForStaleChunk() {
   return false;
 }
 
-if (path.startsWith("/report/")) {
+if (!isKnownPath) {
+  // Unknown path → render 404
+  import("./ErrorPage.jsx").then(({ NotFound }) => {
+    const lang = (() => { try { return localStorage.getItem("lang") || "en"; } catch { return "en"; } })();
+    const root = document.getElementById("root");
+    if (!root) return;
+    createRoot(root).render(
+      <StrictMode>
+        <NotFound lang={lang} onHome={() => { window.location.href = "/"; }} />
+      </StrictMode>
+    );
+  });
+} else if (path.startsWith("/report/")) {
   import("./SharedReportPage.jsx").then(({ default: SharedReportPage }) => {
     if (!SharedReportPage) { if (reloadOnceForStaleChunk()) return; }
     createRoot(document.getElementById("root")).render(

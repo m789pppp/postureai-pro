@@ -2261,6 +2261,8 @@ export default function App(){
       window.history.replaceState({}, "", "#auth");
       return "auth";
     }
+    // #5 FIX: returning user (was previously logged in) shows login page not full landing
+    try { if (localStorage.getItem("corvus_was_logged") === "1") return "auth"; } catch {}
     return "landing";
   });
   // Firebase action URLs (password reset / email verify from email links)
@@ -2373,6 +2375,7 @@ export default function App(){
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
+  const[authMode,setAuthMode]=useState(()=>new URLSearchParams(window.location.search).get("mode")==="signup"?"signup":"login");
   const[deepBilling,setDeepBilling]=useState("monthly");
   const[companyId,setCompanyId]=useState(null);
   const[showUpgrade,setShowUpgrade]=useState(false);
@@ -2695,6 +2698,8 @@ export default function App(){
           // anywhere wrote this before, so every customer was scored as if
           // they hadn't logged in for 30 days, regardless of actual activity.
           try { updateUserProfile(u.uid, { last_login_at: new Date().toISOString() }); } catch{}
+          // #5: persist returning-user flag so next visit skips the full landing page
+          try { localStorage.setItem("corvus_was_logged", "1"); } catch {}
 
           if(!p){
             // Profile might not be written yet (race with AuthPage signup) — wait & retry once
@@ -2853,7 +2858,10 @@ export default function App(){
       if (path.includes('/auth')) {
         const params = new URLSearchParams(path.split('?')[1] || '');
         const plan = params.get('plan');
+        const mode = params.get('mode');
         if (plan) setDeepPlan(plan);
+        if (mode === 'signup') setAuthMode('signup');
+        else setAuthMode('login');
         setPage('auth');
       } else if (path === '/app' || path === '/dashboard') {
         setPage('home');
@@ -3896,7 +3904,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       <AuthPage
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
-        initialView={new URLSearchParams(window.location.search).get("mode")==="signup" ? "signup" : "login"}
+        initialView={authMode}
         onAuth={(u,isNew)=>{
           setUser(u);
           if(isNew) {
@@ -3990,7 +3998,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       <AuthPage
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
-        initialView={new URLSearchParams(window.location.search).get("mode")==="signup" ? "signup" : "login"}
+        initialView={authMode}
         onAuth={(u,isNew)=>{
           setUser(u);
           if(isNew){ /* onAuthStateChanged will route to setup */ return;}
