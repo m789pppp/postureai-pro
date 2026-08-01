@@ -10,6 +10,7 @@ import { tierAtLeast } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
 import { PushAPI, dispatchNotification } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
+import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -342,6 +343,12 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
   const streak = profile?.streak_days||0;
   const pro    = isPro(tier);
   const elite  = isElite(tier);
+  const isFreeTier = !pro && !elite;
+  const [showDemoSession, setShowDemoSession] = useState(false);
+  const [teaserDismissed, setTeaserDismissed] = useState(false);
+  // Upgrade teaser: Free-tier only, shown once right after the user's
+  // first-ever real session, dismissed permanently via profile flag.
+  const showTeaser = isFreeTier && userSessions.length===1 && !profile?.upgrade_teaser_seen && !teaserDismissed;
 
   const grade = s => s>=80?(isAr?"ممتاز":"Excellent"):s>=60?(isAr?"جيد":"Good"):s>0?(isAr?"ضعيف":"Poor"):"—";
   const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
@@ -388,14 +395,43 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
               : last>=60 ? `📈 ${isAr?"وضعيتك جيدة، في تحسن":"Decent posture, improving!"}`
               : `⚠️ ${isAr?"وضعيتك تحتاج انتباه":"Posture needs attention"}`}
           </div>
-          <button onClick={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}
-            style={{ padding:"10px 22px", background:"linear-gradient(135deg,#1a56db,#0891b2)",
-              color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:700,
-              cursor:"pointer", boxShadow:"0 4px 14px rgba(26,86,219,.4)" }}>
-            {isAr?"▶ ابدأ جلسة":"▶ Start Session"}
-          </button>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+            <button onClick={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}
+              style={{ padding:"10px 22px", background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:700,
+                cursor:"pointer", boxShadow:"0 4px 14px rgba(26,86,219,.4)" }}>
+              {isAr?"▶ ابدأ جلسة":"▶ Start Session"}
+            </button>
+            {userSessions.length===0 && (
+              <button onClick={()=>setShowDemoSession(true)}
+                style={{ padding:"10px 18px", background:"rgba(148,163,184,.08)",
+                  border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, fontSize:13, fontWeight:600,
+                  cursor:"pointer" }}>
+                {isAr?"👀 شاهد جلسة تجريبية":"👀 Watch a Demo Session"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {showTeaser && (
+        <UpgradeTeaser isAr={isAr}
+          onUpgrade={onBilling}
+          onDismiss={()=>{
+            setTeaserDismissed(true);
+            if (user?.uid) updateUserProfile(user.uid,{upgrade_teaser_seen:true}).catch(()=>{});
+          }}/>
+      )}
+
+      {isFreeTier && (
+        <SessionUsageBar used={month} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
+      )}
+
+      {showDemoSession && (
+        <DemoSessionModal isAr={isAr} cs={cs}
+          onClose={()=>setShowDemoSession(false)}
+          onStartReal={()=>{ setShowDemoSession(false); setPage("live"); setTimeout(()=>startCamera?.(),200); }}/>
+      )}
 
       {/* Stats */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
