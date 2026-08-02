@@ -114,6 +114,14 @@ if ('requestIdleCallback' in window) {
   }, { timeout: 2000 });
 }
 
+// Certificate verify page
+if (path.startsWith("/verify/")) {
+  import("./CertificatePage.jsx").then(({ CertVerifyPage }) => {
+    createRoot(document.getElementById("root")).render(
+      <StrictMode><CertVerifyPage /></StrictMode>
+    );
+  });
+} else
 const STANDALONE_ROUTES = {
   "/product":     () => import("./ProductPage.jsx"),
   "/solutions":   () => import("./SolutionsPage.jsx"),
