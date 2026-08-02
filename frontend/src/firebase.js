@@ -542,14 +542,37 @@ export async function getUserSessions(uid) {
     orderBy("created_at","desc"),
     limit(50)
   );
-  const snaps = await getDocs(q);
-  return snaps.docs
-    .map(d=>({id:d.id,...d.data()}))
-    .sort((a,b)=>{
-      const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
-      const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
-      return tb - ta;
-    });
+  try {
+    const snaps = await getDocs(q);
+    return snaps.docs
+      .map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>{
+        const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
+        const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
+        return tb - ta;
+      });
+  } catch (err) {
+    // failed-precondition = the uid+created_at composite index is missing
+    // or still building in this Firestore project. Rather than surface
+    // zero sessions (which looks exactly like data loss to the user),
+    // fall back to the un-ordered query and sort client-side — same
+    // correctness caveat as before this fix (limit(50) may not be the
+    // true most-recent-50 until the index finishes), but it's visibly
+    // better than an empty history.
+    if (err?.code === "failed-precondition") {
+      console.warn("[getUserSessions] composite index missing/building — falling back:", err.message);
+      const fq = query(collection(db,"sessions"), where("uid","==",uid), limit(50));
+      const snaps = await getDocs(fq);
+      return snaps.docs
+        .map(d=>({id:d.id,...d.data()}))
+        .sort((a,b)=>{
+          const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
+          const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
+          return tb - ta;
+        });
+    }
+    throw err;
+  }
 }
 
 export async function deleteSession(sessionId) {
@@ -593,19 +616,31 @@ export function onUserSessions(uid, callback, onError) {
     orderBy("created_at","desc"),
     limit(50)
   );
-  return onSnapshot(q, snap => {
-    const sessions = snap.docs
-      .map(d=>({id:d.id,...d.data()}))
-      .sort((a,b)=>{
-        const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
-        const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
-        return tb - ta;
-      });
-    callback(sessions);
+  const sortSessions = docs => docs
+    .map(d=>({id:d.id,...d.data()}))
+    .sort((a,b)=>{
+      const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
+      const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
+      return tb - ta;
+    });
+  let fallbackUnsub = null;
+  const unsub = onSnapshot(q, snap => {
+    callback(sortSessions(snap.docs));
   }, err => {
     console.warn("onUserSessions error:", err.code);
+    // failed-precondition = composite index missing/still building. Don't
+    // just leave the caller's session list empty forever (that reads as
+    // "all my sessions disappeared") — fall back to an un-ordered live
+    // query, sorted client-side, until the index is in place.
+    if (err?.code === "failed-precondition" && !fallbackUnsub) {
+      console.warn("[onUserSessions] falling back to un-ordered live query while the index is missing/building");
+      const fq = query(collection(db,"sessions"), where("uid","==",uid), limit(50));
+      fallbackUnsub = onSnapshot(fq, snap => callback(sortSessions(snap.docs)),
+        fallbackErr => { console.error("[onUserSessions] fallback also failed:", fallbackErr.code); onError?.(fallbackErr); });
+    }
     onError?.(err);
   });
+  return () => { unsub(); fallbackUnsub?.(); };
 }
 
 // ── Departments (isolated) ────────────────────────────────────────
