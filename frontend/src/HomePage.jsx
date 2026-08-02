@@ -422,7 +422,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
   setShowDashboard, setShowCoach, setShowCalibWizard, setShowBilling,
   setShowAIReports, setShowSessionComparison, setShowTrendChart,
   isAdmin, isHRAdmin = false, getAllUsers, setAllUsers, setShowWorkforceAnalytics,
-  setShowMRR, setShowChangelog, setShowNotificationsHub, setShowEnterpriseRBAC }) {
+  setShowMRR, setShowChangelog, setShowNotificationsHub, setShowEnterpriseRBAC, setShowCertModal }) {
 
   const last   = userSessions[0]?.avg_score||0;
   const avg    = profile?.avg_score || (userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0);
@@ -587,6 +587,28 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
       {/* Basic Plan extras — streak freeze, habit score, WhatsApp reminder
           (daily check-in / weekly challenge / pain prediction render
           elsewhere on this page as the AI-backed, server-verified versions) */}
+      {/* Corvus Certificate Badge card */}
+      <div style={{ background:cs.card, border:profile?.has_cert?"1px solid rgba(245,158,11,.3)":"1px dashed rgba(245,158,11,.25)",
+        borderRadius:14, padding:"16px 20px", display:"flex", alignItems:"center", gap:14 }}>
+        <span style={{fontSize:26}}>🏅</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
+            {isAr?"شهادة إرجونوميكس Corvus":"Corvus Ergonomist Certificate"}
+          </div>
+          <div style={{fontSize:11,color:cs.muted,marginTop:2}}>
+            {profile?.has_cert
+              ?(isAr?"✅ شهادتك صالحة · "+profile.cert_id:"✅ Valid · "+profile.cert_id)
+              :(isAr?"أثبت بيئة عملك الصحية على LinkedIn · ١٥٠ جنيه مرة واحدة":"Prove healthy workspace on LinkedIn · 150 EGP one-time")}
+          </div>
+        </div>
+        <button onClick={()=>setShowCertModal?.(true)}
+          style={{padding:"8px 16px",background:"linear-gradient(135deg,#f59e0b,#d97706)",
+            border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:700,
+            cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+          {profile?.has_cert?(isAr?"تحميل":"Download"):(isAr?"احصل عليها":"Get Badge")}
+        </button>
+      </div>
+
       <BasicDashboard
         profile={profile}
         userSessions={userSessions}
@@ -2910,7 +2932,8 @@ export default function HomePage({
         setShowTrendChart={setShowTrendChart}
         setShowWorkforceAnalytics={setShowWorkforceAnalytics}
         getAllUsers={getAllUsers} setAllUsers={setAllUsers}
-        onCompare={()=>setShowSessionComparison?.(true)} onTrend={()=>setShowTrendChart?.(true)}/>
+        onCompare={()=>setShowSessionComparison?.(true)} onTrend={()=>setShowTrendChart?.(true)}
+        setShowCertModal={setShowCertModal}/>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[tab, userRole, user, profile, userSessions, allUsers, tier, isAr, cs, atRisk, isHRAdmin, isAdmin, downloadPDF, handleDeleteSession, handleTrend, openCoach, openBilling, openAnalytics, openCalib, openReports, currency, setCurrency]);

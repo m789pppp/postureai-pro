@@ -170,6 +170,14 @@
       "dest": "/api/habits/whatsapp-cron.js"
     },
     {
+      "src": "/api/cert/issue",
+      "dest": "/api/cert/issue.js"
+    },
+    {
+      "src": "/api/cert/verify",
+      "dest": "/api/cert/verify.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
@@ -211,6 +219,12 @@
     },
     "api/habits/whatsapp-cron.js": {
       "maxDuration": 60
+    },
+    "api/cert/issue.js": {
+      "maxDuration": 15
+    },
+    "api/cert/verify.js": {
+      "maxDuration": 10
     }
   },
   "crons": [
