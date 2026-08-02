@@ -781,7 +781,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
 // HR ADMIN DASHBOARD
 // ══════════════════════════════════════════════════════════════════
 function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
-  onAnalytics, onWorkforce, onReports }) {
+  onAnalytics, onWorkforce, onReports, onQuarterlyReport }) {
   const [search, setSearch]   = useState("");
   const [dept,   setDept]     = useState("all");
   const [sortBy, setSortBy]   = useState("score"); // score | name | sessions
@@ -860,6 +860,8 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
             desc={isAr?"إنتاجية وإرهاق":"Productivity"} onClick={onWorkforce} cs={cs}/>
           <ToolBtn icon="📋" label={isAr?"تقارير":"Reports"} color="16,185,129"
             desc={isAr?"PDF تنفيذي":"Executive PDF"} onClick={onReports} cs={cs}/>
+          <ToolBtn icon="📈" label={isAr?"ربع سنوي":"Quarterly"} color="212,175,55"
+            desc={isAr?"تقرير مؤسسي":"Wellness Report"} onClick={onQuarterlyReport} cs={cs}/>
           <ToolBtn icon="🔔" label={isAr?"تنبيهات":"Alerts"} color="245,158,11"
             desc={isAr?`${atRisk} في خطر`:`${atRisk} at risk`}
             onClick={async()=>{
@@ -2753,6 +2755,8 @@ export default function HomePage({
   shareReport,
   AccountSwitcher, onSwitchAccount,
   NavAvatarDropdown,
+  onQuarterlyReport,
+  onSchools,
 }) {
   const [tab,    setTab]    = useState("home");
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
@@ -2848,7 +2852,8 @@ export default function HomePage({
       if(tab==="home"||tab==="employees") return (
         <DashHR profile={profile} allUsers={allUsers} cs={cs} isAr={isAr}
           addToast={addToast} onBilling={openBilling} onInvite={openInvite}
-          onAnalytics={openAnalytics} onWorkforce={openWorkforce} onReports={openReports}/>
+          onAnalytics={openAnalytics} onWorkforce={openWorkforce} onReports={openReports}
+          onQuarterlyReport={onQuarterlyReport}/>
       );
       if(tab==="analytics") { openAnalytics(); setTab("home"); return null; }
       if(tab==="alerts") return (

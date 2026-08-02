@@ -16839,6 +16839,30 @@ def marketplace_therapist_slots(therapist_id):
         return safe_error(e)
 
 
+@app.route("/api/marketplace/elite-credit-status", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def marketplace_elite_credit_status():
+    """Does the current user have an unused Elite monthly free-session
+    credit right now? Checked ahead of booking so the UI can show the
+    'free this month' badge before the user picks a therapist, not just
+    react after the fact."""
+    try:
+        raw_tier  = (getattr(g, "tier", "standard") or "standard").lower()
+        norm_tier = _EARLY_ACCESS_TIER_ALIASES.get(raw_tier, raw_tier)
+        is_elite  = norm_tier == "elite"
+        if not is_elite:
+            return jsonify({"ok": True, "is_elite": False, "available": False})
+
+        db = firestore.client()
+        month_key = datetime.utcnow().strftime("%Y-%m")
+        user_snap = db.collection("users").document(g.uid).get()
+        used_month = (user_snap.to_dict() or {}).get("elite_physio_credit_used_month") if user_snap.exists else None
+        return jsonify({"ok": True, "is_elite": True, "available": used_month != month_key})
+    except Exception as e:
+        return safe_error(e)
+
+
 @app.route("/api/marketplace/bookings", methods=["POST"])
 @require_auth
 @limiter.limit("15 per minute")
@@ -16881,6 +16905,24 @@ def marketplace_create_booking():
         discount_pct = applied_discount.get("discount_pct", 0) if applied_discount else 0
         amount_cents = round(base_amount_cents * (1 - discount_pct/100))
 
+        # ── Elite: one session/month covered by Corvus ──────────────────
+        # Checked before the discount code path so it always wins if both
+        # would otherwise apply (a paying customer's discount code doesn't
+        # make sense once the session is already free).
+        raw_tier  = (getattr(g, "tier", "standard") or "standard").lower()
+        norm_tier = _EARLY_ACCESS_TIER_ALIASES.get(raw_tier, raw_tier)
+        is_elite  = norm_tier == "elite"
+        month_key = datetime.utcnow().strftime("%Y-%m")
+        covered_by_corvus = False
+        if is_elite:
+            user_ref  = db.collection("users").document(g.uid)
+            user_snap = user_ref.get()
+            used_month = (user_snap.to_dict() or {}).get("elite_physio_credit_used_month") if user_snap.exists else None
+            if used_month != month_key:
+                covered_by_corvus = True
+                applied_discount, discount_pct = None, 0
+                amount_cents = 0  # user pays nothing — Corvus still pays the therapist their full fee below
+
         slot_dt = None
         if slot_iso:
             try:
@@ -16900,6 +16942,13 @@ def marketplace_create_booking():
 
         booking_ref = db.collection("marketplace_bookings").document()
         commission_pct = float(os.getenv("MARKETPLACE_COMMISSION_PCT", "20"))
+        # Payout is always based on base_amount_cents (the therapist's real
+        # fee), not amount_cents (what the customer paid) — for a covered
+        # booking amount_cents is 0 but the therapist still gets their
+        # normal payout (Corvus absorbs it, same commission_pct as any
+        # other booking — not waived, just paid by Corvus instead of the
+        # patient).
+        payout_base = base_amount_cents if covered_by_corvus else amount_cents
         booking = {
             "therapist_id":   therapist_id,
             "therapist_name": therapist.get("name", ""),
@@ -16917,9 +16966,28 @@ def marketplace_create_booking():
             # Snapshotted at booking time so a later commission-rate change
             # doesn't retroactively alter what's owed on old bookings.
             "commission_pct":     commission_pct,
-            "payout_amount_cents": round(amount_cents * (1 - commission_pct/100)),
+            "payout_amount_cents": round(payout_base * (1 - commission_pct/100)),
             "payout_status":      "pending",   # pending | paid — only meaningful once status=confirmed
+            "covered_by_corvus":  covered_by_corvus,
         }
+
+        if covered_by_corvus:
+            # No payment needed at all — confirm immediately, mark the
+            # month's credit as used, no Kashier round-trip.
+            booking["status"] = "confirmed"
+            booking["payment_gateway"] = "corvus_elite_credit"
+            booking["confirmed_at"] = datetime.utcnow().isoformat() + "Z"
+            booking_ref.set(booking)
+            try:
+                user_ref.set({"elite_physio_credit_used_month": month_key}, merge=True)
+            except Exception as e:
+                print(f"[elite_physio_credit] failed to mark used uid={g.uid}: {e}", file=sys.stderr)
+            audit(g.uid, "elite_physio_session_booked", "elite_credit", {"therapist_id": therapist_id})
+            return jsonify({
+                "ok": True, "booking_id": booking_ref.id,
+                "payment": None, "covered_by_corvus": True,
+                "note": "Booked with your Elite monthly session — no payment needed",
+            }), 200
 
         kashier_merchant_id = os.getenv("KASHIER_MERCHANT_ID", "")
         kashier_api_key     = os.getenv("KASHIER_API_KEY", "")
