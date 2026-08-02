@@ -4079,7 +4079,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     </ErrorBoundary>
   );  if(page==="admin"&&isAdmin)return <ErrorBoundary><Admin {...shared} adminUser={user} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="hr"&&(isAdmin||isHRAdmin))return <ErrorBoundary><HRPanel {...shared} user={user} profile={profile} companyId={companyId||profile?.company_id} onBack={()=>setPage("home")}/></ErrorBoundary>;
-  if(page==="marketplace"&&user)return <ErrorBoundary><TherapistMarketplace {...shared} user={user} isAdmin={isAdmin} onBack={()=>setPage("home")}/></ErrorBoundary>;
+  if(page==="marketplace"&&user)return <ErrorBoundary><TherapistMarketplace {...shared} user={user} isAdmin={isAdmin} tier={effectiveTier} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="pricing") return(
     <ErrorBoundary>
       <PricingPage
