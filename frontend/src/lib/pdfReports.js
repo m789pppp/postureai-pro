@@ -3532,3 +3532,247 @@ const programme=[
 export async function generateAIPDF({ sessions=[], profile, aiSummary="", lang="en" }) {
   return generateLongitudinalPDF({ sessions, profile, lang, aiSummary, reportKind:"ai" });
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CORPORATE WELLNESS QUARTERLY REPORT
+// Executive-grade PDF for HR — 5,000–15,000 EGP/quarter
+// ══════════════════════════════════════════════════════════════════════════════
+export async function generateQuarterlyWellnessReport({
+  users = [], company = "", quarter = "", lang = "en",
+  profile, aiExecutiveSummary = "",
+}) {
+  const { jsPDF } = await import("jspdf");
+  const isAr = lang === "ar";
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const W = 210, H = 297, ml = 18, mr = 18, cw = W - ml - mr;
+  const cairo = await _loadCairo(doc, isAr);
+  const sf = (sz, st = "normal") => cairo && isAr ? fontAr(doc, sz, st, true) : font(doc, sz, st);
+
+  const now = new Date();
+  const nowStr = now.toLocaleDateString(isAr ? "ar-EG" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+  const activeUsers = users.filter(u => (u.avg_score || 0) > 0);
+  const totalU = activeUsers.length;
+  const teamAvg = totalU > 0 ? Math.round(activeUsers.reduce((s, u) => s + (u.avg_score || 0), 0) / totalU) : 0;
+  const atRisk = activeUsers.filter(u => (u.avg_score || 0) < 55);
+  const excellent = activeUsers.filter(u => (u.avg_score || 0) >= 80);
+  const moderate = activeUsers.filter(u => (u.avg_score || 0) >= 55 && (u.avg_score || 0) < 80);
+
+  // ROI calculations (Egyptian market benchmarks)
+  const AVG_SALARY_EGP = 8000;
+  const SICK_DAYS_AT_RISK = 4.2;   // avg extra sick days/quarter for at-risk employees
+  const PRODUCTIVITY_LOSS_PCT = 0.18;
+  const projectedSickLeaveCost = Math.round(atRisk.length * SICK_DAYS_AT_RISK * (AVG_SALARY_EGP / 22));
+  const productivityLoss = Math.round(atRisk.length * AVG_SALARY_EGP * PRODUCTIVITY_LOSS_PCT);
+  const totalRisk = projectedSickLeaveCost + productivityLoss;
+  const corvusCost = Math.round(totalU * 499 * 3); // Pro plan × 3 months
+  const roi = corvusCost > 0 ? Math.round(((totalRisk - corvusCost) / corvusCost) * 100) : 0;
+
+  // ── COVER PAGE ────────────────────────────────────────────────────────────
+  // Dark navy header block
+  fc(doc, 10, 15, 30); doc.rect(0, 0, W, 80, "F");
+  fc(doc, 26, 86, 219); doc.rect(0, 78, W, 2, "F");
+
+  // Corvus logo area
+  sf(11, "bold"); tc(doc, 212, 175, 55);
+  doc.text("🦅  CORVUS HEALTH INTELLIGENCE", ml, 20);
+  sf(7, "normal"); tc(doc, 140, 150, 170);
+  doc.text(isAr ? "منصة ذكاء صحة بيئة العمل" : "Workplace Health Intelligence Platform", ml, 27);
+
+  // Report title
+  sf(20, "bold"); tc(doc, 240, 246, 255);
+  doc.text(
+    isAr ? "تقرير الصحة المؤسسية الربع سنوي" : "Corporate Wellness Quarterly Report",
+    W / 2, 50, { align: "center" }
+  );
+  sf(10, "normal"); tc(doc, 212, 175, 55);
+  doc.text(quarter || (isAr ? `الربع الثالث ${now.getFullYear()}` : `Q3 ${now.getFullYear()}`), W / 2, 61, { align: "center" });
+
+  sf(8, "normal"); tc(doc, 140, 150, 170);
+  doc.text(`${company || (isAr ? "المؤسسة" : "Organisation")} · ${nowStr}`, W / 2, 70, { align: "center" });
+
+  let y = 95;
+
+  // ── EXECUTIVE SUMMARY ──────────────────────────────────────────────────────
+  sf(13, "bold"); tc(doc, 10, 15, 30);
+  doc.text(isAr ? "الملخص التنفيذي" : "Executive Summary", ml, y); y += 8;
+
+  // 4 KPI boxes
+  const kpis = [
+    { v: String(totalU),        l: isAr ? "إجمالي الموظفين" : "Employees Tracked", col: PDF_TOKENS.primary },
+    { v: String(teamAvg),       l: isAr ? "متوسط درجة الوضعية" : "Avg Posture Score",  col: _sc(teamAvg) },
+    { v: `${atRisk.length}`,    l: isAr ? "موظف في خطر" : "At-Risk Employees",       col: PDF_TOKENS.danger },
+    { v: `${roi}%`,             l: isAr ? "العائد على الاستثمار" : "Projected ROI",   col: PDF_TOKENS.success },
+  ];
+  const bw = (cw - 9) / 4;
+  kpis.forEach(({ v, l, col }, i) => {
+    const kx = ml + i * (bw + 3);
+    fc(doc, ...PDF_TOKENS.bg); rr(doc, kx, y, bw, 28, 3, "F");
+    fc(doc, ...col); doc.setLineWidth(0.4);
+    rr(doc, kx, y + 26, bw, 2, 0, "F");
+    sf(17, "bold"); tc(doc, ...col);
+    doc.text(v, kx + bw / 2, y + 16, { align: "center" });
+    sf(6.5, "normal"); tc(doc, ...PDF_TOKENS.muted);
+    doc.text(l, kx + bw / 2, y + 23, { align: "center" });
+  });
+  y += 38;
+
+  // ── AI EXECUTIVE SUMMARY BOX ──────────────────────────────────────────────
+  if (aiExecutiveSummary) {
+    fc(doc, 17, 24, 39); rr(doc, ml, y, cw, 1, 0, "F"); // top border
+    fc(doc, 26, 86, 219); rr(doc, ml, y, 3, 34, 1, "F"); // left accent
+    fc(doc, 17, 24, 39); rr(doc, ml + 3, y, cw - 3, 34, 2, "F");
+    sf(7, "bold"); tc(doc, 96, 165, 250);
+    doc.text("🧠  " + (isAr ? "تحليل الذكاء الاصطناعي" : "AI Analysis"), ml + 7, y + 7);
+    sf(6.5, "normal"); tc(doc, 180, 190, 210);
+    const lines = doc.splitTextToSize(aiExecutiveSummary, cw - 14);
+    doc.text(lines.slice(0, 5), ml + 7, y + 14);
+    y += 42;
+  }
+
+  // ── RISK BREAKDOWN ────────────────────────────────────────────────────────
+  sf(11, "bold"); tc(doc, 10, 15, 30);
+  doc.text(isAr ? "تحليل المخاطر" : "Risk Analysis", ml, y); y += 7;
+
+  const bands = [
+    { label: isAr ? "ممتاز (80+)" : "Excellent (80+)",  col: PDF_TOKENS.success, count: excellent.length },
+    { label: isAr ? "متوسط (55-79)" : "Good (55-79)",   col: PDF_TOKENS.warning, count: moderate.length },
+    { label: isAr ? "خطر (<55)" : "At Risk (<55)",       col: PDF_TOKENS.danger,  count: atRisk.length },
+  ];
+  for (const { label, col, count } of bands) {
+    const pct = totalU > 0 ? count / totalU : 0;
+    fc(doc, ...PDF_TOKENS.bg); rr(doc, ml, y, cw, 9, 2, "F");
+    fc(doc, ...col); rr(doc, ml, y, Math.max(cw * pct, 3), 9, 2, "F");
+    fc(doc, ...PDF_TOKENS.bg); rr(doc, ml + cw * pct + 1, y, cw - cw * pct - 1, 9, 0, "F");
+    sf(6.5, "bold"); tc(doc, 240, 246, 255);
+    doc.text(`${label}  (${count} / ${Math.round(pct * 100)}%)`, ml + 3, y + 6);
+    y += 12;
+  }
+  y += 6;
+
+  // ── FINANCIAL IMPACT ──────────────────────────────────────────────────────
+  sf(11, "bold"); tc(doc, 10, 15, 30);
+  doc.text(isAr ? "التأثير المالي المتوقع" : "Projected Financial Impact", ml, y); y += 7;
+
+  const financials = [
+    [isAr ? "تكلفة الإجازات المرضية المتوقعة" : "Projected sick-leave cost", `${projectedSickLeaveCost.toLocaleString()} EGP`],
+    [isAr ? "خسارة الإنتاجية المقدّرة" : "Estimated productivity loss",     `${productivityLoss.toLocaleString()} EGP`],
+    [isAr ? "إجمالي الخسارة بدون Corvus" : "Total risk without Corvus",      `${totalRisk.toLocaleString()} EGP`],
+    [isAr ? "تكلفة Corvus Pro (الربع)" : "Corvus Pro cost (quarter)",        `${corvusCost.toLocaleString()} EGP`],
+    [isAr ? "العائد على الاستثمار المتوقع" : "Projected ROI",                `${roi}%`],
+  ];
+  financials.forEach(([k, v], i) => {
+    const isLast = i === financials.length - 1;
+    const isTotal = i === 2;
+    fc(doc, ...(isLast ? PDF_TOKENS.successLt : isTotal ? PDF_TOKENS.dangerLt : PDF_TOKENS.bg));
+    rr(doc, ml, y, cw, 9, 2, "F");
+    sf(6.5, isLast || isTotal ? "bold" : "normal"); tc(doc, ...PDF_TOKENS.ink);
+    doc.text(k, ml + 4, y + 6);
+    tc(doc, ...(isLast ? PDF_TOKENS.success : isTotal ? PDF_TOKENS.danger : PDF_TOKENS.ink));
+    doc.text(v, ml + cw - 4, y + 6, { align: "right" });
+    y += 11;
+  });
+  y += 8;
+
+  // ── DEPARTMENT BREAKDOWN (if available) ───────────────────────────────────
+  const depts = {};
+  activeUsers.forEach(u => {
+    const d = u.department || (isAr ? "غير محدد" : "General");
+    if (!depts[d]) depts[d] = [];
+    depts[d].push(u);
+  });
+  const deptList = Object.entries(depts).sort((a, b) => b[1].length - a[1].length).slice(0, 6);
+
+  if (deptList.length > 1) {
+    if (y > H - 80) { doc.addPage(); y = 22; }
+    sf(11, "bold"); tc(doc, 10, 15, 30);
+    doc.text(isAr ? "تفاصيل الأقسام" : "Department Breakdown", ml, y); y += 7;
+
+    // Header row
+    fc(doc, 17, 24, 39); rr(doc, ml, y, cw, 8, 2, "F");
+    sf(6, "bold"); tc(doc, 140, 150, 170);
+    doc.text(isAr ? "القسم" : "Department", ml + 3, y + 5.5);
+    doc.text(isAr ? "الموظفون" : "Employees", ml + cw * 0.45, y + 5.5, { align: "center" });
+    doc.text(isAr ? "متوسط الدرجة" : "Avg Score",  ml + cw * 0.65, y + 5.5, { align: "center" });
+    doc.text(isAr ? "في خطر" : "At Risk",           ml + cw * 0.85, y + 5.5, { align: "center" });
+    y += 10;
+
+    deptList.forEach(([dept, dUsers], i) => {
+      const dAvg  = Math.round(dUsers.reduce((s, u) => s + (u.avg_score || 0), 0) / dUsers.length);
+      const dRisk = dUsers.filter(u => (u.avg_score || 0) < 55).length;
+      fc(doc, ...(i % 2 === 0 ? PDF_TOKENS.bg : [17, 24, 39]));
+      rr(doc, ml, y, cw, 8, 2, "F");
+      sf(6.5, "normal"); tc(doc, ...PDF_TOKENS.ink);
+      doc.text(dept, ml + 3, y + 5.5);
+      doc.text(String(dUsers.length), ml + cw * 0.45, y + 5.5, { align: "center" });
+      tc(doc, ..._sc(dAvg));
+      doc.text(String(dAvg), ml + cw * 0.65, y + 5.5, { align: "center" });
+      tc(doc, ...(dRisk > 0 ? PDF_TOKENS.danger : PDF_TOKENS.success));
+      doc.text(dRisk > 0 ? String(dRisk) : "✓", ml + cw * 0.85, y + 5.5, { align: "center" });
+      y += 9;
+    });
+    y += 8;
+  }
+
+  // ── TOP AT-RISK EMPLOYEES ────────────────────────────────────────────────
+  if (atRisk.length > 0) {
+    if (y > H - 70) { doc.addPage(); y = 22; }
+    sf(11, "bold"); tc(doc, 10, 15, 30);
+    doc.text(isAr ? "الموظفون الأكثر عرضة للخطر" : "Highest-Risk Employees", ml, y); y += 4;
+    sf(6.5, "normal"); tc(doc, ...PDF_TOKENS.muted);
+    doc.text(isAr ? "يُنصح بالتدخل الفوري" : "Immediate intervention recommended", ml, y + 4); y += 10;
+
+    atRisk.slice(0, 8).forEach((u, i) => {
+      const col = _sc(u.avg_score || 0);
+      fc(doc, 17, 24, 39); rr(doc, ml, y, cw, 9, 2, "F");
+      fc(doc, ...col); rr(doc, ml, y, 2.5, 9, 0, "F");
+      sf(6.5, "bold"); tc(doc, ...PDF_TOKENS.ink);
+      doc.text(`${i + 1}. ${u.name || u.email || "Employee"}`, ml + 6, y + 6);
+      sf(6.5, "normal"); tc(doc, ...PDF_TOKENS.muted);
+      if (u.department) doc.text(u.department, ml + cw * 0.5, y + 6);
+      tc(doc, ...col); sf(7, "bold");
+      doc.text(String(u.avg_score || 0), ml + cw - 4, y + 6, { align: "right" });
+      y += 10;
+    });
+    y += 6;
+  }
+
+  // ── RECOMMENDATIONS ───────────────────────────────────────────────────────
+  if (y > H - 70) { doc.addPage(); y = 22; }
+  sf(11, "bold"); tc(doc, 10, 15, 30);
+  doc.text(isAr ? "التوصيات" : "Recommendations", ml, y); y += 8;
+
+  const recs = isAr ? [
+    ["🔴", "تدخل فوري",  `${atRisk.length} موظف بحاجة لتقييم إرجونوميكس فوري ودعم من Dr. Corvus AI`],
+    ["🟡", "تدريب",      "جلسة إرجونوميكس جماعية لتحسين وضعية الجلوس — متاحة عبر Corvus"],
+    ["🟢", "صيانة",      `الحفاظ على مستوى الـ ${excellent.length} موظف الممتاز بتحديات أسبوعية`],
+    ["📊", "متابعة",     "إعادة تقييم بعد 30 يومًا وقياس التحسن مقارنةً بهذا التقرير"],
+  ] : [
+    ["🔴", "Immediate",  `${atRisk.length} employees need ergonomics assessment + Dr. Corvus AI coaching`],
+    ["🟡", "Training",   "Group ergonomics session to improve posture habits — available via Corvus"],
+    ["🟢", "Maintain",   `Preserve the ${excellent.length} excellent performers with weekly challenges`],
+    ["📊", "Follow-up",  "Re-assess in 30 days and benchmark against this report"],
+  ];
+
+  recs.forEach(([icon, title, desc]) => {
+    fc(doc, 17, 24, 39); rr(doc, ml, y, cw, 14, 3, "F");
+    sf(8, "bold"); tc(doc, 240, 246, 255);
+    doc.text(`${icon}  ${title}`, ml + 4, y + 6);
+    sf(6.5, "normal"); tc(doc, 140, 150, 170);
+    doc.text(desc, ml + 4, y + 11, { maxWidth: cw - 8 });
+    y += 17;
+  });
+
+  // ── FOOTER ────────────────────────────────────────────────────────────────
+  const pgs = doc.getNumberOfPages();
+  for (let p = 1; p <= pgs; p++) {
+    doc.setPage(p);
+    fc(doc, 10, 15, 30); doc.rect(0, H - 14, W, 14, "F");
+    sf(5.5, "normal"); tc(doc, 140, 150, 170);
+    doc.text("🦅 Corvus Health Intelligence · corvus.io", ml, H - 6);
+    doc.text(isAr ? `صفحة ${p} من ${pgs}` : `Page ${p} of ${pgs}`, W - mr, H - 6, { align: "right" });
+    doc.text(isAr ? "سري — للاستخدام الداخلي فقط" : "CONFIDENTIAL — Internal Use Only", W / 2, H - 6, { align: "center" });
+  }
+
+  const filename = `Corvus-Wellness-Report-${(quarter || "Q").replace(/\s/g, "-")}-${company.replace(/\s/g, "-") || "Company"}.pdf`;
+  doc.save(filename);
+}
