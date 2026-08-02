@@ -10,7 +10,7 @@ import { tierAtLeast } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
 import { PushAPI, dispatchNotification } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
-import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
+import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -356,6 +356,10 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
+      {isFreeTier && userSessions.length===1 && (
+        <FirstSessionBadge isAr={isAr} cs={cs}/>
+      )}
+
       {/* Hero card */}
       <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14,
         padding:"22px", display:"flex", gap:20, alignItems:"center", flexWrap:"wrap" }}>
@@ -425,6 +429,11 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 
       {isFreeTier && (
         <SessionUsageBar used={month} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
+      )}
+
+      {isFreeTier && (
+        <PainAreaSelfReport isAr={isAr} cs={cs} initial={profile?.pain_area||null}
+          onSave={(areaId)=>{ if (user?.uid) updateUserProfile(user.uid,{pain_area:areaId}).catch(()=>{}); }}/>
       )}
 
       {showDemoSession && (
