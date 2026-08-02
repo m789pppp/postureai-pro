@@ -162,6 +162,14 @@
       "dest": "/api/cron/symptom-pattern-alerts.js"
     },
     {
+      "src": "/api/habits/whatsapp-test",
+      "dest": "/api/habits/whatsapp-test.js"
+    },
+    {
+      "src": "/api/habits/whatsapp-cron",
+      "dest": "/api/habits/whatsapp-cron.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
@@ -197,12 +205,22 @@
     },
     "api/cron/symptom-pattern-alerts.js": {
       "maxDuration": 60
+    },
+    "api/habits/whatsapp-test.js": {
+      "maxDuration": 15
+    },
+    "api/habits/whatsapp-cron.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
     {
       "path": "/api/cron/symptom-pattern-alerts",
       "schedule": "0 9 * * 1"
+    },
+    {
+      "path": "/api/habits/whatsapp-cron",
+      "schedule": "0 * * * *"
     }
   ]
 }
