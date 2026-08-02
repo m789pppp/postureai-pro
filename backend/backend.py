@@ -9986,6 +9986,19 @@ def send_weekly_report_card():
 
                 if not email: continue
 
+                # Free-tier users get a deliberately minimal email — just
+                # this week's number vs last week's, no breakdown/CTA noise.
+                # Read tier from the users doc (user_settings has no tier field).
+                try:
+                    _udoc = db.collection("users").document(uid).get()
+                    raw_tier = (_udoc.to_dict() or {}).get("tier","standard") if _udoc.exists else "standard"
+                except Exception:
+                    raw_tier = "standard"
+                is_free_tier = str(raw_tier or "standard").lower() not in (
+                    "professional","elite","pro","premium","enterprise","business",
+                    "b2b_growth","b2b_enterprise",
+                )
+
                 # Get last 7 days sessions
                 cutoff = datetime.utcnow()-timedelta(days=7)
                 sdocs  = (db.collection("sessions")
@@ -9998,6 +10011,44 @@ def send_weekly_report_card():
 
                 avg   = round(sum(scores)/len(scores),1)
                 grade = "A" if avg>=85 else "B" if avg>=70 else "C" if avg>=55 else "D"
+
+                if is_free_tier:
+                    # Prior week's average, for the one-line comparison only.
+                    prev_cutoff = datetime.utcnow()-timedelta(days=14)
+                    try:
+                        pdocs = (db.collection("sessions")
+                                   .where("uid","==",uid)
+                                   .where("created_at",">=",prev_cutoff)
+                                   .where("created_at","<",cutoff)
+                                   .limit(50).stream())
+                        pscores = [d.to_dict().get("avg_score") for d in pdocs if d.to_dict().get("avg_score")]
+                    except Exception:
+                        pscores = []
+                    prev_avg = round(sum(pscores)/len(pscores),1) if pscores else None
+
+                    subject = (f"وضعيتك الأسبوع ده: {avg}/100" if is_ar
+                               else f"Your posture this week: {avg}/100")
+                    _this_lbl = "الأسبوع ده" if is_ar else "This week"
+                    _last_lbl = "الأسبوع اللي فات" if is_ar else "Last week"
+                    _prev_row = (
+                        f'<div style="font-size:16px;color:#64748B;margin-top:6px">{_last_lbl}: <strong style="color:#94A3B8">{prev_avg}</strong>/100</div>'
+                        if prev_avg is not None else ""
+                    )
+                    html = f"""
+<div style="font-family:Inter,sans-serif;max-width:420px;margin:0 auto;background:#050D1A;color:#F0F6FF;border-radius:16px;overflow:hidden;text-align:center">
+  <div style="padding:36px 28px">
+    <div style="font-size:12px;color:#64748B;margin-bottom:14px">{_this_lbl}</div>
+    <div style="font-size:56px;font-weight:900;color:#0EA5E9;line-height:1">{avg}<span style="font-size:22px;color:#334155">/100</span></div>
+    {_prev_row}
+    <a href="https://postureai-pro-omega-nine.vercel.app" style="display:inline-block;margin-top:26px;background:#0EA5E9;color:#fff;padding:11px 26px;border-radius:9px;text-decoration:none;font-weight:700;font-size:13px">
+      {"افتح Corvus" if is_ar else "Open Corvus"}
+    </a>
+  </div>
+</div>"""
+                    ok = send_email(email, subject, html)
+                    if ok: sent+=1
+                    else:  failed+=1
+                    continue
                 trend_emoji = "📈" if scores[-1]>scores[0] else "📉" if scores[-1]<scores[0] else "➡️"
 
                 subject = (f"تقرير Corvus الأسبوعي — درجتك {avg}/100 {grade}"
@@ -13197,6 +13248,20 @@ immediately actionable (not "maintain good posture")."""
             "answer": None, "created_at": datetime.utcnow().isoformat() + "Z",
         }
         doc_ref.set(checkin_doc)
+
+        # Keep profile.checkin_streak alive — HabitScoreCard's consistency
+        # bonus (BasicFeatures.jsx) reads this field. It used to only be
+        # written by a separate client-side mood check-in component that
+        # was dropped in favor of this AI-backed one; this is now the only
+        # writer. Same simple always-increment semantics as before (not a
+        # true consecutive-day streak) — matching prior behavior exactly.
+        try:
+            db.collection("users").document(uid).set({
+                "checkin_streak": firestore.Increment(1),
+                "last_checkin_at": datetime.utcnow().isoformat() + "Z",
+            }, merge=True)
+        except Exception as e:
+            print(f"[daily_checkin] failed to bump checkin_streak uid={uid}: {e}", file=sys.stderr)
 
         try:
             import redis as _rc_ci2

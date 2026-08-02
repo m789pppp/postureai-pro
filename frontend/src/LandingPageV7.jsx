@@ -258,7 +258,7 @@ function GlobalStyle() {
 
       /* cards */
       .lp-lift{transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s,border-color .28s;will-change:transform}
-      .lp-section{contain:layout style}
+      .lp-section{contain:layout style;content-visibility:auto;contain-intrinsic-size:0 500px}
       .lp-lift:hover{transform:translateY(-5px);box-shadow:0 20px 48px rgba(0,0,0,.38),0 0 0 1px rgba(79,124,249,.1)}
 
       /* buttons — shimmer sweep on hover */
@@ -518,11 +518,11 @@ function Nav({ lang, setLang, onCTA }) {
               background:"rgba(255,255,255,.05)", border:"1px solid rgba(255,255,255,.09)",
               color:"#8896ac", padding:"6px 12px", borderRadius:8,
               cursor:"pointer", fontSize:12.5, fontWeight:500, fontFamily:"inherit",
-              transition:"all .18s",
+              transition:"all .18s", display:"flex", alignItems:"center", gap:5,
             }}
             onMouseEnter={e=>{e.currentTarget.style.color="#f1f5f9";e.currentTarget.style.borderColor="rgba(255,255,255,.18)"}}
             onMouseLeave={e=>{e.currentTarget.style.color="#8896ac";e.currentTarget.style.borderColor="rgba(255,255,255,.09)"}}>
-              {ar ? "EN" : "عربي"}
+              🌐 {ar ? "EN" : "عربي"}
             </button>
             {/* Log in */}
             <a href="#" onClick={e=>{e.preventDefault();navTo("/auth");}} style={{
@@ -607,10 +607,11 @@ function Nav({ lang, setLang, onCTA }) {
                 </a>
               </div>
               <button onClick={() => setLang(ar ? "en" : "ar")} style={{
-                marginTop:12, background:"transparent", border:"none",
+                marginTop:12, background:"rgba(255,255,255,.05)", border:"1px solid rgba(255,255,255,.1)",
                 color:"#8896ac", fontSize:12.5, cursor:"pointer", textAlign:"center",
-                fontFamily:"inherit",
-              }}>{ar ? "Switch to English" : "التبديل للعربية"}</button>
+                fontFamily:"inherit", borderRadius:8, padding:"8px 16px",
+                display:"flex", alignItems:"center", justifyContent:"center", gap:6, width:"100%",
+              }}>🌐 {ar ? "🇬🇧 EN — Switch to English" : "🇪🇬 عربي — التبديل للعربية"}</button>
             </div>
           </div>
         )}
@@ -626,6 +627,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
   const reduce = useReducedMotion();
   const isCompany = mode === "company";
   const [demoScore, setDemoScore] = useState(89);
+  // #11: camera demo consent gate — user must click "Start Demo" first
+  const [demoStarted, setDemoStarted] = useState(false);
   useEffect(() => {
     // Smooth demo score oscillation — looks realistic without being jarring
     const sequence = [89,91,88,93,90,87,92,89,94,91,88,90];
@@ -826,6 +829,32 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
               {/* Camera feed + skeleton overlay */}
               <div style={{ position:"relative", background:"#0a1628", aspectRatio:"4/3", overflow:"hidden" }}>
+                {/* #11 Demo consent gate — show blurred preview until user clicks Start Demo */}
+                {!demoStarted && (
+                  <div style={{
+                    position:"absolute", inset:0, zIndex:20,
+                    background:"rgba(5,12,28,.75)", backdropFilter:"blur(6px)",
+                    display:"flex", flexDirection:"column",
+                    alignItems:"center", justifyContent:"center", gap:14,
+                  }}>
+                    <div style={{ fontSize:32, lineHeight:1 }}>📷</div>
+                    <div style={{ fontSize:13.5, fontWeight:700, color:"#f0f6ff", textAlign:"center", lineHeight:1.4 }}>
+                      {ar ? "شاهد كيف يعمل Corvus" : "See Corvus in action"}
+                    </div>
+                    <div style={{ fontSize:11, color:"#8896ac", textAlign:"center", maxWidth:180, lineHeight:1.5 }}>
+                      {ar ? "عرض توضيحي — لا توجد كاميرا حقيقية" : "Simulated demo — no real camera"}
+                    </div>
+                    <button onClick={() => setDemoStarted(true)} style={{
+                      background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                      border:"none", borderRadius:10, padding:"10px 22px",
+                      fontSize:13, fontWeight:700, color:"#fff", cursor:"pointer",
+                      boxShadow:"0 4px 20px rgba(26,86,219,.4)",
+                      display:"flex", alignItems:"center", gap:7,
+                    }}>
+                      ▶ {ar ? "ابدأ العرض التجريبي" : "Start Demo"}
+                    </button>
+                  </div>
+                )}
                 {/* Simulated camera background — gradient silhouette */}
                 <div style={{ position:"absolute", inset:0,
                   background:"radial-gradient(ellipse 60% 80% at 50% 30%, rgba(30,50,80,.9) 0%, rgba(5,12,25,.98) 100%)" }}/>
@@ -1406,7 +1435,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 
   const b2bPlans = [
     {
-      id:"b2b_team", name: ar?"تيم":"Team",
+      id:"b2b_starter", name: ar?"ستارتر":"Starter",
       priceUSD:{ monthly:5, yearly:48 }, priceEGP:{ monthly:249, yearly:2390 },
       perUser:true, color:LPV7_TOKENS.sub,
       features: ar
