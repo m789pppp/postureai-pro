@@ -138,7 +138,7 @@ export function XPBar({ xp, level, xpCurrent, xpNext, levelLabel, cs }) {
             <div style={{ fontSize: 9, color: cs?.muted || "#64748b" }}>Level {level}</div>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: cs?.muted || "#64748b" }}>{xp.toLocaleString()} XP</div>
+        <div style={{ fontSize: 11, color: cs?.muted || "#64748b" }}>{(xp||0).toLocaleString()} XP</div>
       </div>
       <div style={{ background: "rgba(148,163,184,.1)", borderRadius: 99, height: 5, overflow: "hidden" }}>
         <div style={{ height: "100%", borderRadius: 99, width: `${pct}%`, background: col, transition: "width .8s ease" }} />

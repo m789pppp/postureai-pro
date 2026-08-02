@@ -4059,6 +4059,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   preloadAIInsights(user.uid, profile, sessions, null, profile?.is_trial ? profile?.trial_tier : profile?.tier, lang);
                 }, 1500);
               }
+            }, err => {
+              console.error("[Auth/MFA] sessions listener failed:", err.code, err.message);
+              addToast?.(isAr
+                ? "تعذر تحميل جلساتك — حاول تحديث الصفحة"
+                : "Couldn't load your sessions — try refreshing the page", "error");
             });
           } catch(e){ console.warn("[Auth] sessions:",e?.code); }
           try {
