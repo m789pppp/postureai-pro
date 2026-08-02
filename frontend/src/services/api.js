@@ -344,6 +344,14 @@ export const SymptomAPI = {
   correlation: (period="90d") => apiFetch(`/analytics/symptom-correlation?period=${period}`),
 };
 
+// ── Stress API (Pro tier — daily 1-5 self-report x posture score) ──
+export const StressAPI = {
+  /** Log (or overwrite) today's work-stress level, 1-5. */
+  log:         (level)  => apiFetch("/stress/log",      { method: "POST", body: { level } }),
+  /** Pearson correlation between daily stress and daily avg posture score. days: 7-90. */
+  correlation: (days=30) => apiFetch(`/stress/correlation?days=${days}`),
+};
+
 // ── Marketplace API (Physiotherapist directory + booking) ──────────
 export const MarketplaceAPI = {
   /** Validate a clinic discount code before checkout. */

@@ -11,6 +11,7 @@ import { enablePushNotifications, disablePushNotifications, isPushEnabled } from
 import { PushAPI, dispatchNotification, FeatureFlagsAPI } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
 import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
+import { StressCheckIn, StressCorrelationCard } from "./StressPosture.jsx";
 import { BasicDashboard } from "./BasicFeatures.jsx";
 
 // ─── Role detection ────────────────────────────────────────────────
@@ -522,6 +523,13 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
       {isFreeTier && (
         <PainAreaSelfReport isAr={isAr} cs={cs} initial={profile?.pain_area||null}
           onSave={(areaId)=>{ if (user?.uid) updateUserProfile(user.uid,{pain_area:areaId}).catch(()=>{}); }}/>
+      )}
+
+      {pro && (
+        <>
+          <StressCheckIn isAr={isAr} cs={cs}/>
+          <StressCorrelationCard isAr={isAr} cs={cs}/>
+        </>
       )}
 
       {showDemoSession && (
