@@ -2057,6 +2057,89 @@ function FinalCTA({ lang, onCTA }) {
   );
 }
 
+// ── Schools Section ───────────────────────────────────────────────
+function SchoolsSection({ lang, onCTA }) {
+  const ar = lang === "ar";
+  return (
+    <section id="schools" className="lp-section" style={{ padding:"80px 0", background:"rgba(99,102,241,.04)" }}>
+      <div style={{ maxWidth:1100, margin:"0 auto", padding:"0 24px" }}>
+        <div style={{ textAlign:"center", marginBottom:48 }}>
+          <div style={{ display:"inline-flex", alignItems:"center", gap:8,
+            background:"rgba(99,102,241,.12)", borderRadius:99, padding:"6px 16px",
+            fontSize:12, fontWeight:700, color:"#a5b4fc", marginBottom:16 }}>
+            🎓 {ar ? "Corvus للتعليم" : "Corvus for Education"}
+          </div>
+          <h2 style={{ fontSize:"clamp(24px,4vw,38px)", fontWeight:900, color:"#f0f6ff",
+            margin:"0 0 14px", lineHeight:1.2 }}>
+            {ar ? "بنِ جيل يعرف يجلس صح" : "Build a generation that sits right"}
+          </h2>
+          <p style={{ fontSize:15, color:"#8896ac", maxWidth:560, margin:"0 auto", lineHeight:1.7 }}>
+            {ar
+              ? "سعر خاص للجامعات والمدارس — 49 جنيه للطالب شهرياً. جامعة 5,000 طالب = 245,000 جنيه recurring revenue."
+              : "Special pricing for universities & schools — 49 EGP/student/month. 5,000 students = 245,000 EGP monthly recurring."}
+          </p>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:20, marginBottom:48 }}>
+          {[
+            { icon:"⭐", en:"Full Pro features", ar:"كل مميزات Pro" },
+            { icon:"🏫", en:"Academic dashboard", ar:"لوحة إدارة أكاديمية" },
+            { icon:"📊", en:"Periodic wellness reports", ar:"تقارير صحية دورية" },
+            { icon:"🏅", en:"Certificates for graduates", ar:"شهادات للخريجين" },
+            { icon:"🤖", en:"AI Coach for students", ar:"Dr. Corvus للطلاب" },
+            { icon:"📱", en:"WhatsApp support", ar:"دعم WhatsApp مخصص" },
+          ].map(f => (
+            <div key={f.en} style={{ background:"rgba(255,255,255,.03)",
+              border:"1px solid rgba(255,255,255,.07)",
+              borderRadius:12, padding:"18px 16px", display:"flex", alignItems:"center", gap:12 }}>
+              <span style={{ fontSize:22 }}>{f.icon}</span>
+              <span style={{ fontSize:13, color:"#8896ac" }}>{ar ? f.ar : f.en}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Pricing cards */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:16, marginBottom:40 }}>
+          {[
+            { size: ar?"500 طالب":"500 students", price:"24,500", highlight:false },
+            { size: ar?"1,000 طالب":"1,000 students", price:"49,000", highlight:false },
+            { size: ar?"5,000 طالب":"5,000 students", price:"245,000", highlight:true },
+            { size: ar?"أكثر من 10,000":"10,000+", price:ar?"تفاوض":"Custom", highlight:false },
+          ].map(c=>(
+            <div key={c.size} style={{
+              background: c.highlight ? "linear-gradient(135deg,rgba(99,102,241,.2),rgba(99,102,241,.06))" : "rgba(255,255,255,.03)",
+              border:`1px solid ${c.highlight?"rgba(99,102,241,.4)":"rgba(255,255,255,.07)"}`,
+              borderRadius:14, padding:"20px 16px", textAlign:"center" }}>
+              <div style={{ fontSize:13, color:"#8896ac", marginBottom:8 }}>{c.size}</div>
+              <div style={{ fontSize:22, fontWeight:900, color:c.highlight?"#a5b4fc":"#f0f6ff" }}>
+                {c.price !== "Custom" && c.price !== "تفاوض" ? `${c.price}` : c.price}
+              </div>
+              {c.price !== "Custom" && c.price !== "تفاوض" && (
+                <div style={{ fontSize:10, color:"#8896ac", marginTop:4 }}>
+                  {ar ? "جنيه / شهر" : "EGP / month"}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ textAlign:"center" }}>
+          <button onClick={()=>onCTA?.("schools")} style={{
+            padding:"14px 36px", fontSize:15, fontWeight:800,
+            background:"linear-gradient(135deg,#6366f1,#4f46e5)",
+            border:"none", borderRadius:12, color:"#fff", cursor:"pointer",
+            boxShadow:"0 8px 30px rgba(99,102,241,.35)" }}>
+            🎓 {ar ? "احجز عرض لمؤسستك التعليمية" : "Book a Demo for Your Institution"}
+          </button>
+          <div style={{ fontSize:11, color:"#8896ac", marginTop:12 }}>
+            {ar ? "رد خلال 24 ساعة · لا بطاقة بنكية" : "Response within 24h · No credit card"}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── Footer ────────────────────────────────────────────────────────
 function Footer({ lang }) {
   const ar = lang === "ar";
@@ -2097,6 +2180,7 @@ function Footer({ lang }) {
       { label:"HR Teams",         href:"#casestudies", anchor:true },
       { label:"Customer Results", href:"#casestudies", anchor:true },
       { label:"Enterprise Plans", href:"#pricing",     anchor:true },
+      { label:"For Schools",      href:"#schools",     anchor:true },
       { label:"Book a Demo",      href:CALENDLY_URL },
     ]},
     { title:"Resources", links:[
@@ -2306,6 +2390,7 @@ export default function LandingPage({ onNavigate }) {
       <Pricing lang={lang} onCTA={handleCTA} mode={mode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
       <Testimonials lang={lang}/>
       <FAQ lang={lang}/>
+      <SchoolsSection lang={lang} onCTA={()=>window.__spaNavigate?.("/auth?mode=signup")}/>
       <FinalCTA lang={lang} onCTA={handleCTA}/>
       <Footer lang={lang}/>
     </div>
