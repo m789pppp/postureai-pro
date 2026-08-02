@@ -121,7 +121,7 @@ if (path.startsWith("/verify/")) {
       <StrictMode><CertVerifyPage /></StrictMode>
     );
   });
-} else
+} else {
 const STANDALONE_ROUTES = {
   "/product":     () => import("./ProductPage.jsx"),
   "/solutions":   () => import("./SolutionsPage.jsx"),
@@ -204,6 +204,7 @@ if (!isKnownPath) {
       </StrictMode>
     );
   });
+}
 }
 
 // ── PostHog Product Analytics ─────────────────────────────────────
