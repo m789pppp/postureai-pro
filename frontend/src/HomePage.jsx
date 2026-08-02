@@ -90,7 +90,92 @@ function StatCard({ label, value, sub, color="#3b82f6", cs }) {
   );
 }
 
-// ─── Week bar chart ────────────────────────────────────────────────
+// ─── Pain Risk forecast card ───────────────────────────────────────
+// "Pain prediction" was listed as a Basic-tier feature but had zero
+// presence on the dashboard — the only pain-prediction UI in the app is
+// buried inside the live camera sidebar and only fires mid-session
+// (App.jsx usePainPrediction). This is a separate, longer-horizon view:
+// a prominent forward-looking card built from the last 48h of actual
+// sessions, visible the moment the dashboard loads — no camera needed.
+// Heuristic, not a clinical prediction (same disclaimer spirit as the
+// live in-session estimate) — based on how much of the recent window was
+// spent in poor posture and which body region came up most in alerts.
+const REGION_LABEL = {
+  neck:    { en: "neck",     ar: "رقبتك" },
+  yaw:     { en: "neck",     ar: "رقبتك" },
+  dist:    { en: "neck/eyes", ar: "رقبتك وعينيك" },
+  posture: { en: "back",     ar: "ظهرك" },
+  shoulder:{ en: "shoulder", ar: "كتفك" },
+};
+
+function computePainRisk(sessions) {
+  const cutoff = Date.now() - 48 * 3600 * 1000;
+  const recent = (sessions || []).filter(s => {
+    const t = (s.created_at?.toDate?.() ?? new Date(s.created_at || 0)).getTime();
+    return t >= cutoff;
+  });
+  if (!recent.length) return null;
+
+  let poorMin = 0, totalMin = 0;
+  const causeCounts = {};
+  recent.forEach(s => {
+    const mins = s.duration_min ?? (s.duration_s || s.duration_sec || 0) / 60;
+    totalMin += mins;
+    if ((s.avg_score || 0) < 65) poorMin += mins;
+    (s.alert_causes || []).forEach(a => {
+      const c = a.cause || "posture";
+      causeCounts[c] = (causeCounts[c] || 0) + 1;
+    });
+  });
+  if (totalMin < 5) return null; // not enough signal to say anything meaningful
+
+  const poorRatio = poorMin / totalMin;
+  const riskPct = Math.round(Math.min(92, poorRatio * 130));
+  const topCause = Object.entries(causeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "posture";
+  const region = REGION_LABEL[topCause] || REGION_LABEL.posture;
+
+  return { riskPct, region, poorMin: Math.round(poorMin), hours: 48 };
+}
+
+function PainRiskCard({ sessions, cs, isAr }) {
+  const risk = useMemo(() => computePainRisk(sessions), [sessions]);
+  if (!risk) return null;
+
+  const { riskPct, region } = risk;
+  const level = riskPct >= 55 ? "high" : riskPct >= 25 ? "moderate" : "low";
+  const col   = level === "high" ? "#ef4444" : level === "moderate" ? "#f59e0b" : "#10b981";
+  const icon  = level === "high" ? "🔴" : level === "moderate" ? "🟠" : "🟢";
+
+  const msgEn = level === "low"
+    ? `Low pain risk right now — your posture the last 48h has stayed mostly healthy. Keep it up.`
+    : `Based on your posture the last 48h, ~${riskPct}% chance of ${region.en} discomfort within 48 hours if it doesn't change.`;
+  const msgAr = level === "low"
+    ? `احتمال ألم منخفض حاليًا — وضعيتك في آخر 48 ساعة كانت صحية في الغالب. استمر كده.`
+    : `بناءً على وضعيتك آخر 48 ساعة، احتمال ${riskPct}% تحس بألم في ${region.ar} خلال 48 ساعة إذا ما بدّلتش وضعيتك.`;
+
+  return (
+    <div style={{
+      background: `${col}12`, border: `1px solid ${col}44`, borderLeft: `4px solid ${col}`,
+      borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "flex-start", gap: 12,
+    }}>
+      <span style={{ fontSize: 22, lineHeight: 1 }}>{icon}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: col, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>
+          {isAr ? "توقع الألم" : "Pain Prediction"}
+        </div>
+        <div style={{ fontSize: 13, color: cs.text, lineHeight: 1.5 }}>
+          {isAr ? msgAr : msgEn}
+        </div>
+        <div style={{ fontSize: 10, color: cs.muted, marginTop: 5 }}>
+          {isAr ? "تقدير توعوي مبني على جلساتك الأخيرة — ليس تشخيصاً طبياً"
+                : "Awareness estimate based on your recent sessions — not a medical diagnosis"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function WeekChart({ sessions, cs }) {
   const days = useMemo(()=>{
     return Array.from({length:7},(_,i)=>{
@@ -397,6 +482,8 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
         </div>
       </div>
 
+      {tierAtLeast(tier,"basic") && <PainRiskCard sessions={userSessions} cs={cs} isAr={isAr} />}
+
       {/* Stats */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
         <StatCard label={isAr?"آخر جلسة":"Last Session"} value={last||"—"} color={gradeColor(last)} cs={cs}/>
@@ -547,6 +634,8 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
           </button>
         </div>
       </div>
+
+      {tierAtLeast(profile?.tier,"basic") && <PainRiskCard sessions={userSessions} cs={cs} isAr={isAr} />}
 
       {/* Stats */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>

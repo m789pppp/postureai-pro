@@ -745,8 +745,8 @@ def get_pricing():
             "name":  "Basic" if not is_ar else "أساسي",
             "color": "#3b82f6",
             "features": {
-                "en": ["Unlimited sessions", "AI Coach (10 msgs/month)", "Streak tracking", "Goals"],
-                "ar": ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "تتبع السلسلة", "الأهداف"],
+                "en": ["Unlimited sessions", "AI Daily Check-in (10/month)", "Weekly Challenge & Streak"],
+                "ar": ["جلسات غير محدودة", "تشيك-إن يومي بالـ AI (10/شهر)", "تحدي أسبوعي وسلسلة"],
             },
             "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("basic", {}),
             "cta": "ابدأ الآن" if is_ar else "Get Started",
@@ -13052,6 +13052,199 @@ CONVERSATION STYLE:
         return jsonify({"error": "AI response timed out — try again", "ok": False}), 504
     except Exception as e:
         return jsonify({"error": str(e), "ok": False}), 500
+
+
+@app.route("/api/ai-coach/daily-checkin", methods=["POST"])
+@require_auth
+@limiter.limit("15 per minute")
+def coach_daily_checkin():
+    """
+    Daily Check-in — replaces raw message-by-message chat as the primary
+    Basic-tier AI Coach interaction.
+
+    WHY: Basic tier ships with 10 AI Coach messages/month — spread across
+    free-form chat that's ~1 message every 3 days, which never builds a
+    habit. Restructured into one bounded daily interaction instead: each
+    day the coach asks ONE question (tied to the user's actual recent
+    data) and gives ONE specific tip. Same 10/month budget, but each unit
+    is now a complete, higher-value interaction instead of an isolated
+    chat turn — 10 real check-in days is a much stronger habit anchor
+    than 10 scattered messages ever was.
+
+    Idempotent per day: calling this again the same calendar day returns
+    the SAME question/tip already generated (no extra LLM call, no extra
+    quota consumed) so refreshing the page or reopening the app doesn't
+    burn additional budget or show a different question.
+    """
+    try:
+        data    = request.get_json(force=True) or {}
+        context = data.get("context", {})
+        lang    = data.get("lang", "en")
+        is_ar   = lang == "ar"
+
+        uid  = getattr(g, "uid", "")
+        tier = getattr(g, "tier", "standard") or "standard"
+        db   = firestore.client()
+        today_key = datetime.utcnow().strftime("%Y-%m-%d")
+        doc_id    = f"{uid}_{today_key}"
+        doc_ref   = db.collection("daily_checkins").document(doc_id)
+
+        existing = doc_ref.get()
+        if existing.exists:
+            d = existing.to_dict() or {}
+            return jsonify({
+                "ok": True, "date": today_key, "already_generated": True,
+                "question":    d.get("question"),    "question_ar": d.get("question_ar"),
+                "tip":         d.get("tip"),          "tip_ar":      d.get("tip_ar"),
+                "answered":    d.get("answer") is not None,
+                "answer":      d.get("answer"),
+            })
+
+        # ── Quota: same monthly ai_coach counter as free-form chat ──────
+        _quality_coach = get_coach_quality(tier)
+        _limit = _quality_coach["monthly_limit"]
+        _month_key = f"usage:{uid}:ai_coach:{datetime.utcnow().strftime('%Y-%m')}"
+        _used = 0
+        if _limit > 0:
+            try:
+                import redis as _rc_ci
+                _rc = _rc_ci.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_timeout=1)
+                _used = int(_rc.get(_month_key) or 0)
+            except Exception:
+                _used = 0
+            if _used >= _limit:
+                return jsonify({
+                    "error":   "coach_limit_reached",
+                    "message": f"You've used all {_limit} check-ins this month. Upgrade for more.",
+                    "used":    _used, "limit": _limit,
+                    "upgrade_url": "/pricing",
+                }), 429
+
+        avg_score  = context.get("avg_score", 0)
+        top_alerts = context.get("top_alerts", [])
+        streak     = context.get("streak_days", 0)
+        neck_risk  = context.get("neck_risk", 0)
+        _alerts_str = ", ".join(top_alerts[:3]) if top_alerts else "none recorded"
+
+        sys_prompt = f"""You are Dr. Corvus, the AI physiotherapist in Corvus PostureAI Pro, running a
+30-second DAILY CHECK-IN (not a free-form chat).
+
+PATIENT DATA: posture score {avg_score}/100, streak {streak} days, cervical risk {neck_risk}%,
+recurring alerts: {_alerts_str}.
+
+Output STRICT JSON only, no markdown fences, no extra text, in this exact shape:
+{{"question": "<one short, specific check-in question in English, referencing their real data, max 20 words>",
+  "question_ar": "<same question in Egyptian Arabic (عامية مصرية)>",
+  "tip": "<one specific, actionable tip in English tied to their data, max 30 words>",
+  "tip_ar": "<same tip in Egyptian Arabic>"}}
+
+The question should feel like a quick daily pulse-check (e.g. about how a previously-flagged area
+feels today, or their environment), not a generic "how are you". The tip must be concrete and
+immediately actionable (not "maintain good posture")."""
+
+        ollama_msgs = [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": "Generate today's check-in."},
+        ]
+        text = None
+        _max_tok = min(_quality_coach.get("max_tokens", 300), 300)
+
+        if OLLAMA_URL:
+            try:
+                resp_local = req.post(
+                    OLLAMA_URL.rstrip("/") + "/v1/chat/completions",
+                    headers={"Content-Type": "application/json"},
+                    json={"model": LOCAL_LLM_MODEL, "messages": ollama_msgs,
+                          "max_tokens": _max_tok, "temperature": 0.6, "stream": False},
+                    timeout=25,
+                )
+                if resp_local.status_code == 200:
+                    text = (resp_local.json().get("choices") or [{}])[0].get("message", {}).get("content", "") or None
+            except Exception as _le:
+                log_event("checkin_local_llm_error", meta={"error": str(_le)[:80]})
+
+        if text is None:
+            try:
+                llm7_resp = req.post(
+                    "https://api.llm7.io/v1/chat/completions",
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {LLM7_API_KEY}"},
+                    json={"model": "gpt-4o-mini", "messages": ollama_msgs,
+                          "max_tokens": _max_tok, "temperature": 0.6},
+                    timeout=20,
+                )
+                if llm7_resp.status_code == 200:
+                    text = (llm7_resp.json().get("choices") or [{}])[0].get("message", {}).get("content", "") or None
+            except Exception as _le:
+                log_event("checkin_llm7_error", meta={"error": str(_le)[:80]})
+
+        if text is None:
+            return jsonify({"error": "AI unavailable — please try again", "ok": False}), 503
+
+        try:
+            import json as _json_ci
+            clean = text.strip()
+            if clean.startswith("```"):
+                clean = clean.split("```")[1]
+                if clean.startswith("json"): clean = clean[4:]
+            parsed = _json_ci.loads(clean.strip())
+        except Exception:
+            return jsonify({"error": "Could not parse check-in — please try again", "ok": False}), 502
+
+        checkin_doc = {
+            "uid": uid, "date": today_key,
+            "question": parsed.get("question"), "question_ar": parsed.get("question_ar"),
+            "tip": parsed.get("tip"), "tip_ar": parsed.get("tip_ar"),
+            "answer": None, "created_at": datetime.utcnow().isoformat() + "Z",
+        }
+        doc_ref.set(checkin_doc)
+
+        try:
+            import redis as _rc_ci2
+            _rc2 = _rc_ci2.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+            _rc2.incr(_month_key); _rc2.expire(_month_key, 86400 * 35)
+        except Exception:
+            pass
+
+        audit(uid, "ai_checkin_generated", "local:" + LOCAL_LLM_MODEL if OLLAMA_URL else "none", {"lang": lang})
+        return jsonify({
+            "ok": True, "date": today_key, "already_generated": False,
+            "question": parsed.get("question"), "question_ar": parsed.get("question_ar"),
+            "tip": parsed.get("tip"), "tip_ar": parsed.get("tip_ar"),
+            "answered": False, "answer": None,
+            "used": _used + 1, "limit": _limit,
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/ai-coach/daily-checkin/answer", methods=["POST"])
+@require_auth
+@limiter.limit("15 per minute")
+def coach_daily_checkin_answer():
+    """
+    Save the user's answer to today's check-in question. No extra LLM call
+    (and no extra quota consumed) — the value was already delivered in the
+    question+tip; this just closes the loop and gives SymptomCorrelation-
+    style history of how the user responded day to day.
+    """
+    try:
+        data   = request.get_json(force=True) or {}
+        answer = (data.get("answer") or "").strip()[:500]
+        if not answer:
+            return jsonify({"error": "answer required", "ok": False}), 400
+
+        uid = getattr(g, "uid", "")
+        db  = firestore.client()
+        today_key = datetime.utcnow().strftime("%Y-%m-%d")
+        doc_ref = db.collection("daily_checkins").document(f"{uid}_{today_key}")
+        if not doc_ref.get().exists:
+            return jsonify({"error": "no check-in generated for today yet", "ok": False}), 404
+
+        doc_ref.set({"answer": answer, "answered_at": datetime.utcnow().isoformat() + "Z"}, merge=True)
+        return jsonify({"ok": True, "date": today_key, "answer": answer})
+    except Exception as e:
+        return safe_error(e)
+
 _xp_events = {
     "session_complete":    10,
     "score_80_plus":       25,
@@ -13111,8 +13304,6 @@ def compute_gamification():
                 x -= needed; lvl += 1; needed = int(needed * 1.35)
             return lvl, x, needed
 
-        level, xp_curr, xp_next = xp_to_level(xp)
-
         # Check achievements
         new_achievements = []
         all_earned       = list(existing_ach)
@@ -13141,6 +13332,94 @@ def compute_gamification():
             "xp_reward":       50,
         }
 
+        # ── Weekly Challenge: "Sit correctly 20 min/day for 5 days this
+        # week, earn a badge" ─────────────────────────────────────────
+        # A concrete, bounded target (unlike the bare streak counter, which
+        # shows "0 day streak" with no context and nothing to work toward).
+        # Computed from real session history, not a static label like
+        # daily_goal above — a day "counts" if the user accumulated 20+
+        # minutes in sessions averaging 70+ that day.
+        WC_TARGET_DAYS   = 5
+        WC_TARGET_MIN    = 20
+        WC_TARGET_SCORE  = 70
+        WC_XP_REWARD     = 150
+        weekly_challenge = None
+        try:
+            today = datetime.utcnow()
+            week_start = (today - timedelta(days=today.isoweekday() - 1)).replace(
+                hour=0, minute=0, second=0, microsecond=0)
+            week_key = week_start.strftime("%Y-W%W")
+
+            wk_docs = (db.collection("sessions")
+                         .where("uid", "==", g.uid)
+                         .where("created_at", ">=", week_start)
+                         .stream())
+            good_min_by_day: dict = {}
+            for sd in wk_docs:
+                d = sd.to_dict() or {}
+                sc = d.get("avg_score"); ts = d.get("created_at")
+                mins = d.get("duration_min")
+                if mins is None:
+                    mins = (d.get("duration_s") or 0) / 60
+                if sc is None or not ts or sc < WC_TARGET_SCORE:
+                    continue
+                try:
+                    day = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+                except Exception:
+                    continue
+                good_min_by_day[day] = good_min_by_day.get(day, 0) + (mins or 0)
+
+            days_detail = []
+            for i in range(7):
+                day_dt = week_start + timedelta(days=i)
+                day_key = day_dt.strftime("%Y-%m-%d")
+                mins = round(good_min_by_day.get(day_key, 0), 1)
+                days_detail.append({
+                    "date":      day_key,
+                    "weekday":   i,  # 0=Mon .. 6=Sun
+                    "minutes":   mins,
+                    "qualified": mins >= WC_TARGET_MIN,
+                    "is_future": day_dt.date() > today.date(),
+                })
+            days_qualified = sum(1 for d in days_detail if d["qualified"])
+            complete = days_qualified >= WC_TARGET_DAYS
+
+            # Persist the claim once per week so the XP/badge isn't
+            # re-awarded (or re-shown as "newly completed") on every call —
+            # same pattern as the achievements persistence right above.
+            newly_completed = False
+            if complete:
+                try:
+                    user_ref = db.collection("users").document(g.uid)
+                    user_doc = user_ref.get()
+                    claimed_week = (user_doc.to_dict() or {}).get("weekly_challenge_claimed_week") if user_doc.exists else None
+                    if claimed_week != week_key:
+                        user_ref.set({"weekly_challenge_claimed_week": week_key}, merge=True)
+                        newly_completed = True
+                        xp += WC_XP_REWARD
+                except Exception as e:
+                    print(f"[weekly_challenge] failed to persist claim uid={g.uid}: {e}", file=sys.stderr)
+
+            weekly_challenge = {
+                "target_days":     WC_TARGET_DAYS,
+                "target_minutes":  WC_TARGET_MIN,
+                "target_score":    WC_TARGET_SCORE,
+                "days_qualified":  days_qualified,
+                "days":            days_detail,
+                "complete":        complete,
+                "newly_completed": newly_completed,
+                "xp_reward":       WC_XP_REWARD,
+                "label":           f"Sit correctly ({WC_TARGET_SCORE}+) for {WC_TARGET_MIN} min/day, {WC_TARGET_DAYS} days this week",
+                "label_ar":        f"اجلس صح ({WC_TARGET_SCORE}+) لمدة {WC_TARGET_MIN} دقيقة يوميًا، {WC_TARGET_DAYS} أيام هذا الأسبوع",
+                "badge":           "🏅",
+            }
+        except Exception as e:
+            print(f"[weekly_challenge] compute failed uid={g.uid}: {e}", file=sys.stderr)
+
+        # Level computed here — after xp has received achievement AND
+        # weekly-challenge rewards, not before (see fix note above).
+        level, xp_curr, xp_next = xp_to_level(xp)
+
         # Persist newly-earned achievements so they aren't re-shown as "new"
         # on every future visit. Previously this endpoint was fully
         # stateless — existing_ach came from profile.achievements, which no
@@ -13164,6 +13443,7 @@ def compute_gamification():
             "new_achievements":  new_achievements,
             "all_achievements":  all_earned,
             "daily_goal":        daily_goal,
+            "weekly_challenge":  weekly_challenge,
             "achievements_list": ACHIEVEMENTS,
         })
     except Exception as e:

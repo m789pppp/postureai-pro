@@ -314,6 +314,20 @@ export const PushAPI = {
   setPreferences: (data) => apiFetch("/push/preferences", { method: "POST", body: data }),
 };
 
+// ── AI Coach: Daily Check-in API ─────────────────────────────────────
+// Server-backed (Firestore + Redis quota) — unlike the free-form chat in
+// AICoach.jsx, which calls Pollinations/OpenRouter directly from the
+// browser with a msgCount client React state that resets to 0 on every
+// remount (close/reopen the panel = free reset, so the advertised
+// 10/50/unlimited tier limits were never actually enforced). This path
+// is real: idempotent per calendar day, quota tracked server-side.
+export const CoachAPI = {
+  /** Get (or generate, once per day) today's check-in question + tip. */
+  getDailyCheckin: (data) => apiFetch("/ai-coach/daily-checkin", { method: "POST", body: data }),
+  /** Save the user's answer to today's check-in question. */
+  answerDailyCheckin: (answer) => apiFetch("/ai-coach/daily-checkin/answer", { method: "POST", body: { answer } }),
+};
+
 // ── Symptom Correlation API ─────────────────────────────────────────
 export const SymptomAPI = {
   /** Log (or overwrite) a day's symptom check-in. symptoms: [{type, severity(1-5)}] */

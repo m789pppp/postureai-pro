@@ -22,9 +22,9 @@ const PAID_PLANS = [
       usd_monthly: 9.99,  usd_yearly: 79.99,
     },
     features: {
-      en: ["Unlimited sessions", "AI Coach (10 msgs/mo)", "Streak & Goals",
+      en: ["Unlimited sessions", "AI Daily Check-in (10/mo)", "Weekly Challenge & Streak",
            "Pain prediction", "Leaderboard", "Share card"],
-      ar: ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "سلسلة وأهداف",
+      ar: ["جلسات غير محدودة", "تشيك-إن يومي بالـ AI (10/شهر)", "تحدي أسبوعي وسلسلة",
            "توقع الألم", "المتصدرين", "بطاقة مشاركة"],
     },
   },

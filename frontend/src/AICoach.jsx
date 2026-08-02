@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { geminiChat, buildCoachContext, friendlyError } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus, localChatStream, abortCurrentStream } from "./localAI.js";
-import { qualityFor } from "./lib/tierQuality.js";
+import { qualityFor, featureTier } from "./lib/tierQuality.js";
+import { CoachAPI } from "./services/api.js";
 
 // ── Tokens ────────────────────────────────────────────────────────
 const T = {
@@ -288,8 +289,9 @@ Est. flexion for ${nm}: ~${nr>=70?"35-45°":nr>=40?"20-30°":"<15°"}
 [CTXDATA:${JSON.stringify({avg:ctx.avg_score||0, sessions:ctx.sessions_count||0, weekAvg:wa||0, weekSessions:ctx.week_sessions||0, trendPct:tr||0, neckRisk:nr||0, fatigue:fa||0, burnout:bu||0, calibrated:!!ctx.has_calibration, alerts:al, lang:isAr?"ar":"en"})}]`;
 }
 
-// ── Main component ────────────────────────────────────────────────
-export function AICoach({ profile, sessions=[], calibration, cs, lang="en", effectiveTier, onClose }) {
+// ── Free-form chat coach (Professional/Elite — plenty of monthly budget
+// for open conversation) ────────────────────────────────────────────
+function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effectiveTier, onClose }) {
   const isAr = lang==="ar";
   const dir  = isAr?"rtl":"ltr";
 
@@ -679,4 +681,181 @@ export function AICoach({ profile, sessions=[], calibration, cs, lang="en", effe
       </div>
     </div>
   );
+}
+
+// ── Daily Check-in panel (Basic tier) ────────────────────────────
+// One question + one tip per day, server-generated and server-gated
+// (via CoachAPI → backend /api/ai-coach/daily-checkin, Firestore +
+// Redis-backed — idempotent per calendar day, real monthly quota).
+// Replaces free-form chat for Basic: the same 10/month budget now
+// buys 10 complete daily interactions instead of 10 scattered messages.
+function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", tier, onClose }) {
+  const isAr = lang === "ar";
+  const dir  = isAr ? "rtl" : "ltr";
+
+  const [state,   setState]   = useState("loading"); // loading | ready | limit | error
+  const [checkin, setCheckin] = useState(null);       // {question, question_ar, tip, tip_ar, answered, answer, used, limit}
+  const [answer,  setAnswer]  = useState("");
+  const [saving,  setSaving]  = useState(false);
+  const [tipShown, setTipShown] = useState(false);
+
+  const context = useMemo(() => {
+    const avg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
+    const scores = (sessions||[]).map(s=>s.avg_score||0).filter(Boolean);
+    const ac = {};
+    (sessions||[]).slice(0,20).forEach(s => {
+      (s.alert_causes||s.alerts||[]).forEach(a => {
+        const k = typeof a==="string" ? a : (a?.cause||a?.label||a?.type||"");
+        if (k) ac[k]=(ac[k]||0)+1;
+      });
+    });
+    const topAlerts = Object.entries(ac).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k])=>k);
+    return {
+      avg_score: profile?.avg_score || avg(scores),
+      streak_days: profile?.streak_days || 0,
+      neck_risk: Math.min(100, Math.round(100-(profile?.avg_score||avg(scores))+((profile?.avg_score||avg(scores))<60?20:0))),
+      top_alerts: topAlerts,
+    };
+  }, [sessions, profile]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await CoachAPI.getDailyCheckin({ context, lang });
+        if (cancelled) return;
+        setCheckin(res);
+        setTipShown(!!res.answered); // if already answered today, show everything immediately
+        setAnswer(res.answer || "");
+        setState("ready");
+      } catch (e) {
+        if (cancelled) return;
+        if (e?.code === "coach_limit_reached" || String(e?.message||"").includes("limit")) setState("limit");
+        else setState("error");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // one fetch per panel open — server is the source of truth for "today"
+
+  const submitAnswer = async () => {
+    if (!answer.trim() || saving) return;
+    setSaving(true);
+    try {
+      await CoachAPI.answerDailyCheckin(answer.trim());
+      setCheckin(prev => ({ ...prev, answered: true, answer: answer.trim() }));
+      setTipShown(true);
+    } catch {
+      setTipShown(true); // still reveal the tip even if saving the answer failed — that's the real value
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position:"fixed",inset:0,zIndex:9999,
+      display:"flex",alignItems:"center",justifyContent:"center",
+      background:"rgba(4,8,20,.8)",backdropFilter:"blur(14px)",
+      WebkitBackdropFilter:"blur(14px)",padding:16,
+      animation:"bIn .18s ease both",
+    }}>
+      <style>{`@keyframes bIn{from{opacity:0}to{opacity:1}}@keyframes sUp{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:none}}`}</style>
+      <div dir={dir} style={{
+        width:"100%",maxWidth:460,
+        background:T.bg,border:`0.5px solid ${T.borderH}`,borderRadius:22,
+        padding:24,boxShadow:"0 32px 96px rgba(0,0,0,.7)",
+        animation:"sUp .3s "+T.spring+" both",
+      }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
+          <div style={{ display:"flex",alignItems:"center",gap:9 }}>
+            <div style={{ width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,#1158c7,#0e7490)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>🩺</div>
+            <div>
+              <div style={{ fontSize:14,fontWeight:800,color:T.text }}>{isAr?"تشيك-إن اليوم":"Today's Check-in"}</div>
+              <div style={{ fontSize:10,color:T.muted }}>Dr. Corvus · {isAr?"مرة واحدة يوميًا":"once a day"}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:T.muted,fontSize:18,cursor:"pointer" }}>✕</button>
+        </div>
+
+        {state === "loading" && (
+          <div style={{ padding:"40px 0",textAlign:"center",color:T.muted,fontSize:13 }}>
+            {isAr?"جاري تحضير سؤال اليوم…":"Preparing today's check-in…"}
+          </div>
+        )}
+
+        {state === "limit" && (
+          <div style={{ padding:"20px 0",textAlign:"center" }}>
+            <div style={{ fontSize:13,color:T.text,marginBottom:6 }}>
+              {isAr?"استخدمت كل تشيك-إن الشهر ده":"You've used all your check-ins this month"}
+            </div>
+            <div style={{ fontSize:12,color:T.muted }}>{isAr?"رقّي خطتك لمزيد":"Upgrade for more"}</div>
+          </div>
+        )}
+
+        {state === "error" && (
+          <div style={{ padding:"20px 0",textAlign:"center",color:T.red,fontSize:13 }}>
+            {isAr?"حصل خطأ — جرب تاني":"Something went wrong — try again"}
+          </div>
+        )}
+
+        {state === "ready" && checkin && (
+          <>
+            <div style={{ background:"rgba(56,139,253,.08)",border:`0.5px solid ${T.border}`,borderRadius:14,padding:16,marginBottom:14 }}>
+              <div style={{ fontSize:10,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6 }}>
+                {isAr?"سؤال اليوم":"Today's question"}
+              </div>
+              <div style={{ fontSize:14,color:T.text,lineHeight:1.55 }}>
+                {isAr ? (checkin.question_ar||checkin.question) : (checkin.question||checkin.question_ar)}
+              </div>
+            </div>
+
+            {!tipShown ? (
+              <div style={{ display:"flex",gap:8 }}>
+                <input
+                  value={answer}
+                  onChange={e=>setAnswer(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==="Enter") submitAnswer(); }}
+                  placeholder={isAr?"اكتب إجابتك…":"Type your answer…"}
+                  style={{ flex:1,background:"rgba(255,255,255,.04)",border:`0.5px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:T.text,outline:"none" }}
+                  autoFocus
+                />
+                <button onClick={submitAnswer} disabled={!answer.trim()||saving}
+                  style={{ background:answer.trim()?"#388bfd":"rgba(56,139,253,.22)",border:"none",borderRadius:10,padding:"0 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:answer.trim()?"pointer":"default" }}>
+                  {saving ? "…" : (isAr?"إرسال":"Send")}
+                </button>
+              </div>
+            ) : (
+              <div style={{ background:"rgba(16,185,129,.08)",border:"0.5px solid rgba(16,185,129,.25)",borderRadius:14,padding:16 }}>
+                <div style={{ fontSize:10,fontWeight:700,color:"#10b981",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6 }}>
+                  {isAr?"نصيحة اليوم":"Today's tip"}
+                </div>
+                <div style={{ fontSize:13,color:T.text,lineHeight:1.6 }}>
+                  {isAr ? (checkin.tip_ar||checkin.tip) : (checkin.tip||checkin.tip_ar)}
+                </div>
+              </div>
+            )}
+
+            {typeof checkin.limit === "number" && checkin.limit > 0 && (
+              <div style={{ marginTop:14,fontSize:10,color:T.subtle,textAlign:"center" }}>
+                {isAr
+                  ? `${(checkin.limit-(checkin.used||1))} تشيك-إن متبقي الشهر ده`
+                  : `${checkin.limit-(checkin.used||1)} check-ins left this month`}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main export — routes by tier ─────────────────────────────────
+// Basic: bounded daily check-in (question + tip, server-gated).
+// Professional/Elite: full free-form chat (plenty of monthly budget).
+export function AICoach({ profile, sessions=[], calibration, cs, lang="en", effectiveTier, onClose }) {
+  const _tier = effectiveTier || profile?.tier || "standard";
+  if (featureTier(_tier) === "basic") {
+    return <DailyCheckinPanel profile={profile} sessions={sessions} calibration={calibration} cs={cs} lang={lang} tier={_tier} onClose={onClose} />;
+  }
+  return <FreeChatCoach profile={profile} sessions={sessions} calibration={calibration} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={onClose} />;
 }
