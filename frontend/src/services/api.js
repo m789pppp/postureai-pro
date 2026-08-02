@@ -321,6 +321,12 @@ export const PushAPI = {
 // remount (close/reopen the panel = free reset, so the advertised
 // 10/50/unlimited tier limits were never actually enforced). This path
 // is real: idempotent per calendar day, quota tracked server-side.
+// ── Elite Early Access ────────────────────────────────────────────
+export const FeatureFlagsAPI = {
+  /** What early-access features (if any) does the current user have? */
+  mine: () => apiFetch("/feature-flags/mine"),
+};
+
 export const CoachAPI = {
   /** Get (or generate, once per day) today's check-in question + tip. */
   getDailyCheckin: (data) => apiFetch("/ai-coach/daily-checkin", { method: "POST", body: data }),
