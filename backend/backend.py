@@ -14113,8 +14113,111 @@ def compute_heatmap():
         return safe_error(e)
 
 # ══════════════════════════════════════════════════════════════════
-# API KEY PLATFORM (Enterprise API)
+# STRESS × POSTURE CORRELATION (Pro tier)
+# ── Self-reported daily stress level, correlated against that day's
+# ── average posture score. Feeds the future Weekly Intelligence
+# ── Report; exposed standalone for now so the dashboard can already
+# ── show "your posture tends to slip on high-stress days" insights
+# ── as soon as there's enough data (min 5 days with both a stress
+# ── log AND a session that day).
 # ══════════════════════════════════════════════════════════════════
+@app.route("/api/stress/log", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def log_stress():
+    """Log today's self-reported work-stress level (1-5). One entry per day (upsert)."""
+    try:
+        uid  = getattr(g, "uid", "")
+        data = request.get_json(force=True) or {}
+        level = data.get("level")
+        if not isinstance(level, (int, float)) or not (1 <= level <= 5):
+            return jsonify({"error": "level must be 1-5"}), 400
+        date_key = datetime.utcnow().strftime("%Y-%m-%d")
+        doc_id   = f"{uid}_{date_key}"
+        db.collection("stress_logs").document(doc_id).set({
+            "uid": uid, "date": date_key, "level": int(level),
+            "updated_at": datetime.utcnow(),
+        }, merge=True)
+        return jsonify({"ok": True, "date": date_key, "level": int(level)})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/stress/correlation", methods=["GET"])
+@require_auth
+@limiter.limit("15 per minute")
+@require_tier("professional")
+def stress_correlation():
+    """
+    Pearson correlation between daily self-reported stress (1-5) and that
+    day's average posture score, over the last `days` days (default 30).
+    Requires at least 5 overlapping days to return a coefficient — below
+    that the correlation is statistically meaningless, so we say so
+    instead of returning a misleading number.
+    """
+    try:
+        uid  = getattr(g, "uid", "")
+        days = min(90, max(7, int(request.args.get("days", 30))))
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        slogs = (db.collection("stress_logs")
+                   .where("uid", "==", uid)
+                   .where("updated_at", ">=", cutoff)
+                   .limit(200).stream())
+        stress_by_day = {d.to_dict().get("date"): d.to_dict().get("level") for d in slogs}
+
+        sdocs = (db.collection("sessions")
+                   .where("uid", "==", uid)
+                   .where("created_at", ">=", cutoff)
+                   .limit(500).stream())
+        score_by_day: dict = {}
+        for d in sdocs:
+            sd = d.to_dict()
+            ts, sc = sd.get("created_at"), sd.get("avg_score")
+            if not ts or not sc: continue
+            try:
+                day = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+                score_by_day.setdefault(day, []).append(sc)
+            except Exception:
+                pass
+        avg_score_by_day = {d: sum(v)/len(v) for d, v in score_by_day.items()}
+
+        pairs = [(stress_by_day[d], avg_score_by_day[d]) for d in stress_by_day if d in avg_score_by_day]
+        n = len(pairs)
+        if n < 5:
+            return jsonify({
+                "ok": True, "enough_data": False, "days_logged": n,
+                "min_required": 5,
+                "message": "Log your stress for at least 5 days that also have a posture session to unlock this insight.",
+            })
+
+        xs = [p[0] for p in pairs]; ys = [p[1] for p in pairs]
+        mean_x = sum(xs)/n; mean_y = sum(ys)/n
+        cov = sum((x-mean_x)*(y-mean_y) for x, y in pairs)
+        var_x = sum((x-mean_x)**2 for x in xs)
+        var_y = sum((y-mean_y)**2 for y in ys)
+        denom = (var_x * var_y) ** 0.5
+        r = round(cov/denom, 2) if denom > 0 else 0.0
+
+        strength = "strong" if abs(r) >= 0.6 else "moderate" if abs(r) >= 0.3 else "weak"
+        direction = "negative" if r < 0 else "positive"
+
+        return jsonify({
+            "ok": True, "enough_data": True, "days_logged": n,
+            "correlation": r, "strength": strength, "direction": direction,
+            # Negative r = higher stress days correlate with lower posture scores (the expected pattern).
+            "interpretation": (
+                f"On days you report higher stress, your posture score tends to be lower "
+                f"({strength} negative correlation, r={r})."
+                if r <= -0.3 else
+                f"No clear link found yet between reported stress and posture score "
+                f"(r={r}, {strength} {direction})."
+            ),
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
 import secrets as _secrets
 # ── API Keys store — Redis-backed (same pattern as sessions) ────────
 # key_hash -> {uid, plan, name, usage, created_at, last_used, rate_limit}

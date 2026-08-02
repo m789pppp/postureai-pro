@@ -32,6 +32,7 @@ import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
+import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
@@ -2333,6 +2334,9 @@ export default function App(){
   // Elite voice coach — persisted preference; actual enablement is tier-gated below
   const[voiceCoach,setVoiceCoach]=useState(()=>{try{return localStorage.getItem("corvus_voice_coach")==="1";}catch{return false;}});
   const[faceBlur,setFaceBlur]=useState(()=>{try{return localStorage.getItem("corvus_face_blur")==="1";}catch{return false;}});
+  // Pro-tier Custom Alert Rules — synced from profile once it loads (see effect below)
+  const[customAlertRules,setCustomAlertRules]=useState([]);
+  const[showCustomAlertRules,setShowCustomAlertRules]=useState(false);
   const[showSkeleton,setShowSkeleton]=useState(()=>{try{return localStorage.getItem("corvus_show_skeleton")!=="0";}catch{return true;}});
   const[showAngles,setShowAngles]=useState(()=>{try{return localStorage.getItem("corvus_show_angles")!=="0";}catch{return true;}});
   const playPostureAlert=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();[440,360].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=f;g.gain.setValueAtTime(0,ac.currentTime+i*.32);g.gain.linearRampToValueAtTime(.14,ac.currentTime+i*.32+.06);g.gain.linearRampToValueAtTime(0,ac.currentTime+i*.32+.3);o.start();o.stop(ac.currentTime+i*.32+.35);});}catch{}}; // local fallback
@@ -2407,6 +2411,21 @@ export default function App(){
   const[muted,setMuted]=useState(false);
   const { alertIfNeeded } = useSoundFeedback(muted);
   const { update: updatePainPrediction, reset: resetPainPrediction } = usePainPrediction();
+
+  // Pro-tier Custom Alert Rules — sync local copy once profile loads/changes
+  useEffect(()=>{ if(profile?.custom_alert_rules) setCustomAlertRules(profile.custom_alert_rules); },[profile?.custom_alert_rules]);
+  const { checkRules: checkCustomAlertRules } = useCustomAlertRuleEngine(customAlertRules, {
+    onTrigger: (rule, val) => {
+      const mCfg = ALERT_METRICS.find(m=>m.id===rule.metric);
+      const label = mCfg ? (isAr?mCfg.label_ar:mCfg.label) : rule.metric;
+      const msg = isAr
+        ? `⚠️ ${label} تعدّى ${rule.thresholdDeg}° لأكتر من ${Math.round(rule.durationSec/60)} دقيقة`
+        : `⚠️ ${label} exceeded ${rule.thresholdDeg}° for over ${Math.round(rule.durationSec/60)} min`;
+      addToast(msg,"warn");
+      if(rule.voice) speakCoach(msg, isAr?"ar":"en", {force:true});
+    },
+  });
+
   const[showCoach,setShowCoach]=useState(false);
   const[showGamification,setShowGamification]=useState(false);
   // AI Intelligence Layer
@@ -2997,6 +3016,7 @@ export default function App(){
             const smoothed1=pushScore(finalResult.overall);
             const displayScore = smoothed1 ?? finalResult.overall;
             alertIfNeeded(displayScore);
+            checkCustomAlertRules(finalResult.metrics);
             finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
@@ -3179,7 +3199,7 @@ export default function App(){
         }).catch(e=>{ clearTimeout(_tmr); /* silent fail — local analysis continues */ });
     }
     rafRef.current=requestAnimationFrame(runLoop);
-  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus,faceBlur,showSkeleton,showAngles]);
+  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,checkCustomAlertRules,mpStatus,faceBlur,showSkeleton,showAngles]);
 
   // Keep the analysis loop bound to the latest state. runLoop is a useCallback
   // whose identity changes when mode / sound / faceBlur / calib change; without
@@ -4314,6 +4334,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={()=>setShowCoach(false)}/>}
       {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/>}
+      {showCustomAlertRules&&<CustomAlertRulesPanel isAr={isAr} cs={cs} rules={customAlertRules}
+        onSave={(next)=>{
+          setCustomAlertRules(next);
+          setProfile(p=>p?({...p,custom_alert_rules:next}):p);
+          if(user?.uid) updateUserProfile(user.uid,{custom_alert_rules:next}).catch(()=>{});
+        }}
+        onClose={()=>setShowCustomAlertRules(false)}/>}
       {showAdmin&&isAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
       {showMRR&&isAdmin&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
       {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
@@ -5692,6 +5719,22 @@ async function downloadPDF(sessionOverride, isClinical=false){
             display:"flex",alignItems:"center",justifyContent:"center",gap:5,
           }}>
             {faceBlur?"🕶️":"👤"} {isAr?(faceBlur?"إخفاء الوجه: مُفعّل":"إخفاء الوجه (خصوصية)"):(faceBlur?"Face blur: ON":"Blur face (privacy)")}
+          </button>
+          {/* Pro-tier: user-defined threshold+duration alert rules */}
+          <button onClick={()=>{
+            if(!tierAtLeast(effectiveTier,"professional")){
+              addToast(isAr?"⚙️ قواعد التنبيه المخصصة متاحة لباقة Pro فأعلى":"⚙️ Custom Alert Rules is a Pro feature","warn");
+              setShowBilling(true);return;
+            }
+            setShowCustomAlertRules(true);
+          }} style={{
+            background:customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.12)":"rgba(255,255,255,.04)",
+            border:`1px solid ${customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.4)":cs.border}`,borderRadius:9,
+            padding:"8px 0",fontSize:11,fontWeight:700,color:customAlertRules.some(r=>r.enabled)?"#c4b5fd":cs.muted,cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+          }}>
+            ⚙️ {isAr?"قواعد تنبيه مخصصة":"Custom Alert Rules"}
+            {!tierAtLeast(effectiveTier,"professional")&&<span style={{fontSize:8,background:"rgba(124,58,237,.12)",border:"1px solid rgba(124,58,237,.25)",borderRadius:99,padding:"1px 6px",color:"#a78bfa"}}>PRO</span>}
           </button>
           {/* Overlay controls — show/hide the skeleton and angle labels on the video */}
           <div style={{display:"flex",gap:8}}>
