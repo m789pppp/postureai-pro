@@ -11,6 +11,7 @@ import { enablePushNotifications, disablePushNotifications, isPushEnabled } from
 import { PushAPI, dispatchNotification } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
 import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
+import { BasicDashboard } from "./BasicFeatures.jsx";
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -486,6 +487,16 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
         onOpenFull={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}
         onCompare={userSessions.length>=2?()=>{getUserSessions(user.uid).then(setUserSessions);setShowSessionComparison(true);}:null}
         onTrend={userSessions.length>=3?()=>{getUserSessions(user.uid).then(setUserSessions);setShowTrendChart(true);}:null}
+      />
+
+      {/* Basic Plan — Build a daily habit (6 features) */}
+      <BasicDashboard
+        profile={profile}
+        userSessions={userSessions}
+        cs={cs}
+        isAr={isAr}
+        addToast={addToast}
+        onCheckedIn={(data)=>{ if(profile) Object.assign(profile,data); }}
       />
 
       {/* Session history */}
