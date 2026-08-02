@@ -47,6 +47,23 @@ export function useCustomAlertRuleEngine(rules, { onTrigger, cooldownMs = 180000
   const holdSinceRef = useRef({});
   // lastFiredRef[ruleId] = timestamp rule last fired (for cooldown)
   const lastFiredRef = useRef({});
+  // BUG FIX: onTrigger is passed as an inline arrow function by the one
+  // caller (App.jsx), so it's a brand-new reference every single render.
+  // Previously it sat directly in checkRules' useCallback deps below, so
+  // checkRules itself got a new identity every render too — and since
+  // checkRules is a dependency of App.jsx's runLoop useCallback, which is
+  // in turn the sole dependency of the effect that (re)starts the live
+  // session's requestAnimationFrame loop, every render was cancelling and
+  // re-requesting the RAF loop. Each frame's analysis triggers a state
+  // update -> re-render -> new onTrigger -> new checkRules -> new runLoop
+  // -> effect fires -> cancels+restarts RAF again: a tight thrash cycle
+  // that degrades to the live page visibly freezing/hanging under load,
+  // with no thrown error (nothing crashes — it just can't keep up).
+  // Fix: read the latest onTrigger through a ref so checkRules' identity
+  // depends only on rules/cooldownMs, which are genuinely stable between
+  // frames (rules only changes when the user actually edits a rule).
+  const onTriggerRef = useRef(onTrigger);
+  onTriggerRef.current = onTrigger;
 
   const checkRules = useCallback((metrics) => {
     if (!rules || !rules.length || !metrics) return;
@@ -66,10 +83,10 @@ export function useCustomAlertRuleEngine(rules, { onTrigger, cooldownMs = 180000
       const lastFired = lastFiredRef.current[rule.id] || 0;
       if (heldMs >= rule.durationSec * 1000 && (now - lastFired) >= cooldownMs) {
         lastFiredRef.current[rule.id] = now;
-        onTrigger?.(rule, val);
+        onTriggerRef.current?.(rule, val);
       }
     }
-  }, [rules, onTrigger, cooldownMs]);
+  }, [rules, cooldownMs]);
 
   return { checkRules };
 }

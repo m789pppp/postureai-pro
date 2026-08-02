@@ -34,7 +34,7 @@ function SimpleBar({ data, height = 80 }) {
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height, paddingTop: 8 }}>
       {data.map((d, i) => (
-        <div key={i} title={`${d.date}: ${d.amount.toLocaleString()} EGP`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+        <div key={i} title={`${d.date}: ${(d.amount||0).toLocaleString()} EGP`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
           <div style={{ width: "100%", background: "#6366f1", borderRadius: "3px 3px 0 0", height: `${(d.amount / max) * (height - 16)}px`, minHeight: 2, transition: "height .3s" }} />
         </div>
       ))}
