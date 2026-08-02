@@ -3221,9 +3221,17 @@ export default function App(){
     // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
     // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
     if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
+    // ── Mode fallback ────────────────────────────────────────────────
+    // If the user clicked a mode button (Laptop / Phone / Side) right before
+    // pressing Start Analysis, React's async state update may not have
+    // flushed yet — mode is still null in this closure.  We default to
+    // "laptop" so getUserMedia is ALWAYS invoked, then persist the choice
+    // so the next render picks it up correctly.
+    const effectiveMode = mode || "laptop";
+    if (!mode) { setMode("laptop"); }
     setCameraStatus("requesting");
     try{
-      const facingMode=mode==="phone"?"environment":"user";
+      const facingMode=effectiveMode==="phone"?"environment":"user";
       const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}}});
       streamRef.current=s;
       if(!vidRef.current){setCameraStatus("idle");return;}
@@ -3245,7 +3253,7 @@ export default function App(){
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
       try{
-        const d=await AnalysisAPI.startSession({mode});
+        const d=await AnalysisAPI.startSession({mode:effectiveMode});
         sid=d.session_id||sid;
       }catch(e){
         // session_limit_reached (Free plan cap) must actually block the
@@ -3263,7 +3271,8 @@ export default function App(){
         // local-only session so the user isn't blocked by infra issues.
       }
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
-      setAlertMsg({text:`${M_?.label} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
+      const mLabel=MC[effectiveMode]?.label||effectiveMode;
+      setAlertMsg({text:`${mLabel} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
       if(user?.uid) completeOnboardingStep(user.uid,"first_session").catch(e=>console.warn("[Onboarding]",e.message));
       // Calibration is opt-in — user can trigger from settings
       // Removed auto-popup to prevent overlay conflict with camera
