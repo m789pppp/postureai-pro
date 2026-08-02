@@ -45,6 +45,7 @@ const Landing = LandingPageV7; // alias so <Landing> works
 import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
 import { handleSSORedirect } from "./EnterpriseSSO.jsx";
 // initSentry moved to sentry.js (V12)
+import { CertBadgeModal } from "./CertificatePage.jsx";
 import AuthPage            from "./AuthPage.jsx";
 import ResetPasswordPage    from "./ResetPasswordPage.jsx";
 import EmailVerificationPage from "./EmailVerificationPage.jsx";
@@ -2379,6 +2380,9 @@ export default function App(){
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
+  const[showCertModal,setShowCertModal]=useState(()=>{
+    try{return new URLSearchParams(window.location.search).get("cert_issued")==="1";}catch{return false;}
+  });
   const[authMode,setAuthMode]=useState(()=>new URLSearchParams(window.location.search).get("mode")==="signup"?"signup":"login");
   const[deepBilling,setDeepBilling]=useState("monthly");
   const[companyId,setCompanyId]=useState(null);
@@ -4457,6 +4461,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onSwitchAccount={handleSwitchAccount}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
+      {showCertModal&&<CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/>}
       {/* Moved here from the live-analysis render branch — modals must render on the
           home page only, never over the live camera/analysis screen (interrupts the Stop button). */}
       {showAnnualUpsell && (
