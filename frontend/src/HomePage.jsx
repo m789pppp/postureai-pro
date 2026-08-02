@@ -981,7 +981,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
-function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false }) {
+function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onPostureDNA, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
 
@@ -1109,6 +1109,23 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
               fontSize:12, fontWeight:600, cursor: pdfLoading==="longitudinal"?"wait":"pointer",
               display:"flex", alignItems:"center", gap:6 }}>
             {pdfLoading==="longitudinal" ? "⏳" : "📅"} {isAr?"التقرير الطولي":"Longitudinal PDF"}
+          </button>
+        )}
+        {/* Posture DNA Report — Elite, quarterly comprehensive report */}
+        {isEliteTier && (
+          <button onClick={async ()=>{
+              setPdfLoading("dna");
+              await onPostureDNA?.();
+              setPdfLoading(null);
+            }}
+            disabled={pdfLoading==="dna"}
+            style={{ padding:"9px 14px", background:"rgba(212,175,55,.1)",
+              border:"1px solid rgba(212,175,55,.3)", borderRadius:9,
+              color: pdfLoading==="dna"?"#94a3b8":"#d4af37",
+              fontSize:12, fontWeight:600, cursor: pdfLoading==="dna"?"wait":"pointer",
+              display:"flex", alignItems:"center", gap:6 }}
+            title={isAr?"تحليل شامل لآخر 90 يوم + مقارنة بمهنتك":"Comprehensive analysis of your last 90 days + profession benchmark"}>
+            {pdfLoading==="dna" ? "⏳" : "🧬"} {isAr?"بصمة الوضعية":"Posture DNA"}
           </button>
         )}
         {/* Share Report — Elite + last session */}
@@ -1532,6 +1549,37 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                   border:`1px solid ${cs.border}`, borderRadius:8, color:cs.text,
                   fontSize:13, outline:"none", boxSizing:"border-box" }}
               />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:cs.muted, fontWeight:600, marginBottom:6,
+                textTransform:"uppercase", letterSpacing:".06em" }}>
+                {isAr?"المهنة":"Profession"}
+              </div>
+              <select
+                value={profile?.profession || "other"}
+                onChange={async e=>{
+                  const val = e.target.value;
+                  setProfile(p=>({...(p||{}), profession: val}));
+                  try {
+                    if (user?.uid) await updateUserProfile(user.uid, { profession: val });
+                  } catch { addToast(isAr?"تعذر حفظ المهنة":"Couldn't save profession","error"); }
+                }}
+                style={{ width:"100%", padding:"10px 12px", background:"rgba(255,255,255,.05)",
+                  border:`1px solid ${cs.border}`, borderRadius:8, color:cs.text,
+                  fontSize:13, outline:"none", boxSizing:"border-box" }}
+              >
+                <option value="desk_worker">{isAr?"عمل مكتبي / برمجة":"Desk / Software work"}</option>
+                <option value="driver">{isAr?"قيادة / نقل":"Driving / Transport"}</option>
+                <option value="healthcare">{isAr?"عامل رعاية صحية":"Healthcare worker"}</option>
+                <option value="teacher">{isAr?"تدريس / تعليم":"Teaching / Education"}</option>
+                <option value="retail_service">{isAr?"مبيعات / خدمة عملاء":"Retail / Customer service"}</option>
+                <option value="manual_labor">{isAr?"عمل يدوي / بدني":"Manual / Physical labor"}</option>
+                <option value="student">{isAr?"طالب":"Student"}</option>
+                <option value="other">{isAr?"عام / أخرى":"General / Other"}</option>
+              </select>
+              <div style={{ fontSize:10, color:cs.subtle||cs.muted, marginTop:5 }}>
+                {isAr?"بيستخدم في تقرير بصمة الوضعية (Elite) للمقارنة بمعايير مهنتك":"Used in your Posture DNA report (Elite) to benchmark against your profession"}
+              </div>
             </div>
             <div>
               <div style={{ fontSize:11, color:cs.muted, fontWeight:600, marginBottom:6,
@@ -2752,6 +2800,7 @@ export default function HomePage({
   downloadComparisonPDF,
   downloadTeamPDF,
   downloadLongitudinalPDF,
+  downloadPostureDNAReport,
   shareReport,
   AccountSwitcher, onSwitchAccount,
   NavAvatarDropdown,
@@ -2895,7 +2944,7 @@ export default function HomePage({
       if(tab==="sessions") return (
         <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
           setPage={setPage} startCamera={startCamera}
-          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
+          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
           onDeleteSession={handleDeleteSession}
           onTrend={handleTrend}/>
       );
@@ -2905,7 +2954,7 @@ export default function HomePage({
     if(tab==="sessions") return (
       <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
         setPage={setPage} startCamera={startCamera}
-        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
+        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
         onDeleteSession={handleDeleteSession}
         onTrend={handleTrend}/>
     );

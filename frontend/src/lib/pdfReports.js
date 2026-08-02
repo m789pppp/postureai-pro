@@ -3776,3 +3776,311 @@ export async function generateQuarterlyWellnessReport({
   const filename = `Corvus-Wellness-Report-${(quarter || "Q").replace(/\s/g, "-")}-${company.replace(/\s/g, "-") || "Company"}.pdf`;
   doc.save(filename);
 }
+
+// ══════════════════════════════════════════════════════════════════
+// POSTURE DNA REPORT (Elite) — comprehensive quarterly individual report
+// ══════════════════════════════════════════════════════════════════
+// Unlike every other report in this file (single session, comparison,
+// team/corporate aggregate), this looks across the user's full recent
+// history to answer three things none of the others do:
+//   1. Which specific pattern (not just "score") shows up most
+//   2. How that compares to general reference ranges for their
+//      profession — NOT a comparison to other real Corvus users (we
+//      don't have reliable per-profession sample sizes for that), so
+//      this is explicitly labeled as general ergonomics guidance.
+//   3. A heuristic classification of whether the dominant pattern
+//      looks more habit-driven (correlates with session length/fatigue)
+//      or more structural/consistent (same offset regardless of
+//      duration) — informational framing only, not a diagnosis.
+
+// General reference ranges by profession category — published ergonomics
+// guidance (typical office/occupational-health literature ranges), NOT a
+// comparison against other Corvus users' real data.
+const DNA_PROFESSION_BENCHMARKS = {
+  desk_worker: {
+    en: "Desk / Software work", ar: "عمل مكتبي / برمجة",
+    typical_range: [58, 74], common_issues: ["fhp_index", "rounded_shoulders", "screen_distance"],
+  },
+  driver: {
+    en: "Driving / Transport", ar: "قيادة / نقل",
+    typical_range: [52, 68], common_issues: ["spine_lean", "shoulder_level", "neck_lean"],
+  },
+  healthcare: {
+    en: "Healthcare worker", ar: "عامل رعاية صحية",
+    typical_range: [55, 72], common_issues: ["trunk_lean", "shoulder_level", "rounded_shoulders"],
+  },
+  teacher: {
+    en: "Teaching / Education", ar: "تدريس / تعليم",
+    typical_range: [56, 73], common_issues: ["neck_lean", "spine_align", "fhp_index"],
+  },
+  retail_service: {
+    en: "Retail / Customer service", ar: "مبيعات / خدمة عملاء",
+    typical_range: [54, 70], common_issues: ["trunk_lean", "spine_lean", "shoulder_level"],
+  },
+  manual_labor: {
+    en: "Manual / Physical labor", ar: "عمل يدوي / بدني",
+    typical_range: [50, 68], common_issues: ["spine_align", "trunk_lean", "hip_angle"],
+  },
+  student: {
+    en: "Student", ar: "طالب",
+    typical_range: [55, 72], common_issues: ["fhp_index", "neck_lean", "screen_distance"],
+  },
+  other: {
+    en: "General / Other", ar: "عام / أخرى",
+    typical_range: [55, 72], common_issues: ["fhp_index", "rounded_shoulders", "neck_lean"],
+  },
+};
+
+function _dnaAnalyze(sessions) {
+  const cutoff = Date.now() - 90 * 24 * 3600 * 1000;
+  const recent = (sessions || []).filter(s => {
+    const t = (s.created_at?.toDate?.() ?? new Date(s.created_at || 0)).getTime();
+    return t >= cutoff && (s.avg_score || 0) > 0;
+  });
+
+  const durations = recent.map(s => s.duration_min ?? (s.duration_s || s.duration_sec || 0) / 60).filter(m => m > 0);
+  const sortedDur = [...durations].sort((a, b) => a - b);
+  const shortCut = sortedDur[Math.floor(sortedDur.length * 0.33)] ?? 0;
+  const longCut  = sortedDur[Math.floor(sortedDur.length * 0.67)] ?? Infinity;
+
+  // Per-metric aggregation across all recent sessions
+  const byMetric = {}; // key -> { scores:[], shortScores:[], longScores:[] }
+  recent.forEach(s => {
+    const mins = s.duration_min ?? (s.duration_s || s.duration_sec || 0) / 60;
+    const metrics = s.metrics || {};
+    Object.entries(metrics).forEach(([k, v]) => {
+      if (k.startsWith("_")) return;
+      const sc = typeof v === "number" ? v : (v?.score ?? null);
+      if (sc == null) return;
+      if (!byMetric[k]) byMetric[k] = { scores: [], shortScores: [], longScores: [] };
+      byMetric[k].scores.push(sc);
+      if (mins > 0 && mins <= shortCut) byMetric[k].shortScores.push(sc);
+      if (mins >= longCut) byMetric[k].longScores.push(sc);
+    });
+  });
+
+  const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const stdev = a => {
+    if (a.length < 2) return null;
+    const m = avg(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / a.length);
+  };
+
+  const metricStats = Object.entries(byMetric)
+    .map(([k, d]) => ({
+      key: k,
+      avgScore: avg(d.scores),
+      stdev: stdev(d.scores),
+      shortAvg: avg(d.shortScores),
+      longAvg: avg(d.longScores),
+      n: d.scores.length,
+    }))
+    .filter(m => m.avgScore != null && m.n >= 5) // need enough samples per metric to say anything
+    .sort((a, b) => a.avgScore - b.avgScore);
+
+  const topConcerns = metricStats.slice(0, 3);
+
+  // Classification heuristic across the top concerns
+  let fatigueSignals = 0, structuralSignals = 0, evaluated = 0;
+  topConcerns.forEach(m => {
+    if (m.shortAvg == null || m.longAvg == null) return;
+    evaluated++;
+    const drop = m.shortAvg - m.longAvg; // positive = worse when session is longer
+    if (drop >= 8) fatigueSignals++;
+    else if (m.stdev != null && m.stdev < 9) structuralSignals++;
+  });
+
+  let profileType = "mixed";
+  if (evaluated > 0) {
+    if (fatigueSignals > structuralSignals) profileType = "behavioral";
+    else if (structuralSignals > fatigueSignals) profileType = "structural";
+  }
+
+  const overallAvg = avg(recent.map(s => s.avg_score));
+  const totalMinutes = durations.reduce((a, b) => a + b, 0);
+
+  return {
+    recent, overallAvg, totalMinutes, sessionCount: recent.length,
+    daySpan: recent.length ? Math.round((Date.now() - Math.min(...recent.map(s => (s.created_at?.toDate?.() ?? new Date(s.created_at || 0)).getTime()))) / 86400000) : 0,
+    metricStats, topConcerns, profileType, evaluated,
+  };
+}
+
+export async function generatePostureDNAReport({ sessions = [], profile, user, profession = "other", lang = "en" }) {
+  const { jsPDF } = await import("jspdf");
+  const isAr = lang === "ar";
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const W = 210, H = 297, ml = 18, mr = 18, cw = W - ml - mr;
+  const cairo = await _loadCairo(doc, isAr);
+  const sf = (sz, st = "normal") => cairo && isAr ? fontAr(doc, sz, st, true) : font(doc, sz, st);
+
+  const A = _dnaAnalyze(sessions);
+  const bench = DNA_PROFESSION_BENCHMARKS[profession] || DNA_PROFESSION_BENCHMARKS.other;
+  const nowStr = new Date().toLocaleDateString(isAr ? "ar-EG" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const footer = () => {
+    const pgs = doc.getNumberOfPages();
+    for (let p = 1; p <= pgs; p++) {
+      doc.setPage(p);
+      sf(6, "normal"); tc(doc, ...PDF_TOKENS.light);
+      doc.text("🦅 Corvus Health Intelligence", ml, H - 8);
+      doc.text(isAr ? `صفحة ${p} من ${pgs}` : `Page ${p} of ${pgs}`, W - mr, H - 8, { align: "right" });
+    }
+  };
+
+  // ── COVER ──────────────────────────────────────────────────────
+  fc(doc, ...PDF_TOKENS.slate); doc.rect(0, 0, W, H, "F");
+  fc(doc, 212, 175, 55); doc.rect(0, 78, W, 1.5, "F");
+  sf(11, "bold"); tc(doc, 212, 175, 55);
+  doc.text("🦅  CORVUS", ml, 24);
+  sf(24, "bold"); tc(doc, 240, 246, 255);
+  doc.text(isAr ? "تقرير بصمة الوضعية" : "Posture DNA Report", W / 2, 130, { align: "center" });
+  sf(11, "normal"); tc(doc, 180, 190, 210);
+  doc.text(isAr ? "تحليل شامل — آخر 90 يوم" : "Comprehensive analysis — last 90 days", W / 2, 141, { align: "center" });
+  sf(9, "normal"); tc(doc, 140, 150, 170);
+  doc.text(`${profile?.name || user?.email || ""} · ${nowStr}`, W / 2, 152, { align: "center" });
+  sf(7, "normal"); tc(doc, 120, 130, 150);
+  const disclaimerCover = isAr
+    ? "أداة توعية عامة للوضعية — ليست جهازًا طبيًا وليست بديلاً عن استشارة أخصائي"
+    : "General posture awareness tool — not a medical device, not a substitute for professional advice";
+  doc.text(disclaimerCover, W / 2, 270, { align: "center", maxWidth: cw });
+
+  // Not enough data — say so plainly on the cover instead of a report full
+  // of unreliable numbers, and stop here.
+  if (A.sessionCount < 15 || A.daySpan < 14) {
+    doc.addPage();
+    fc(doc, ...PDF_TOKENS.bg); doc.rect(0, 0, W, H, "F");
+    sf(13, "bold"); tc(doc, ...PDF_TOKENS.ink);
+    doc.text(isAr ? "مفيش بيانات كافية لسه" : "Not enough data yet", ml, 40);
+    sf(9, "normal"); tc(doc, ...PDF_TOKENS.muted);
+    const msg = isAr
+      ? `محتاجين على الأقل 15 جلسة موزعة على أسبوعين قبل ما نقدر نطلع تحليل موثوق. عندك دلوقتي ${A.sessionCount} جلسة على مدى ${A.daySpan} يوم. كمّل جلساتك وارجع تاني بعد كام أسبوع.`
+      : `We need at least 15 sessions spread across two weeks before this analysis is statistically meaningful. You currently have ${A.sessionCount} sessions over ${A.daySpan} days. Keep logging sessions and check back in a few weeks.`;
+    doc.text(msg, ml, 52, { maxWidth: cw, lineHeightFactor: 1.6 });
+    footer();
+    doc.save(`Corvus-Posture-DNA-${(profile?.name || "report").replace(/\s/g, "-")}.pdf`);
+    return;
+  }
+
+  // ── PAGE 2: Overview ──────────────────────────────────────────
+  doc.addPage();
+  fc(doc, ...PDF_TOKENS.bg); doc.rect(0, 0, W, H, "F");
+  let y = 22;
+  sf(15, "bold"); tc(doc, ...PDF_TOKENS.ink);
+  doc.text(isAr ? "نظرة عامة" : "Overview", ml, y); y += 10;
+
+  const ov = [
+    { v: Math.round(A.overallAvg || 0), l: isAr ? "متوسط الدرجة" : "Avg Score", col: _sc(A.overallAvg || 0) },
+    { v: String(A.sessionCount), l: isAr ? "عدد الجلسات" : "Sessions", col: PDF_TOKENS.primary },
+    { v: `${Math.round(A.totalMinutes)}`, l: isAr ? "دقيقة متابعة" : "Minutes tracked", col: PDF_TOKENS.indigo },
+    { v: `${A.daySpan}`, l: isAr ? "يوم" : "Days span", col: PDF_TOKENS.teal },
+  ];
+  const bw = (cw - 9) / 4;
+  ov.forEach(({ v, l, col }, i) => {
+    const kx = ml + i * (bw + 3);
+    fc(doc, ...PDF_TOKENS.card); rr(doc, kx, y, bw, 26, 3, "F");
+    dc(doc, ...PDF_TOKENS.border); doc.setLineWidth(0.3); rr(doc, kx, y, bw, 26, 3, "S");
+    sf(15, "bold"); tc(doc, ...col);
+    doc.text(v, kx + bw / 2, y + 14, { align: "center" });
+    sf(6, "normal"); tc(doc, ...PDF_TOKENS.muted);
+    doc.text(l, kx + bw / 2, y + 21, { align: "center" });
+  });
+  y += 38;
+
+  // ── Pattern breakdown ─────────────────────────────────────────
+  sf(13, "bold"); tc(doc, ...PDF_TOKENS.ink);
+  doc.text(isAr ? "أكتر 3 أنماط ملاحظة" : "Top 3 recurring patterns", ml, y); y += 4;
+  sf(7, "normal"); tc(doc, ...PDF_TOKENS.muted);
+  doc.text(isAr ? "الأقل درجة = الأكتر تكرارًا كمشكلة" : "Lowest score = most frequently flagged", ml, y); y += 8;
+
+  A.topConcerns.forEach((m, i) => {
+    const lbl = (isAr ? METRIC_LABELS_AR[m.key] : METRIC_LABELS[m.key]) || m.key.replace(/_/g, " ");
+    const col = _sc(m.avgScore);
+    fc(doc, ...PDF_TOKENS.card); rr(doc, ml, y, cw, 16, 2, "F");
+    sf(9, "bold"); tc(doc, ...PDF_TOKENS.ink);
+    doc.text(`${i + 1}. ${lbl}`, ml + 5, y + 10);
+    sf(11, "bold"); tc(doc, ...col);
+    doc.text(String(Math.round(m.avgScore)), W - mr - 5, y + 10, { align: "right" });
+    y += 19;
+  });
+  y += 8;
+
+  // ── Profession benchmark ──────────────────────────────────────
+  sf(13, "bold"); tc(doc, ...PDF_TOKENS.ink);
+  doc.text(isAr ? "مقارنة بمعايير المهنة" : "Profession benchmark", ml, y); y += 4;
+  sf(7, "normal"); tc(doc, ...PDF_TOKENS.muted);
+  const benchNote = isAr
+    ? `مدى مرجعي عام لمهنة "${bench.ar}" من إرشادات صحة مهنية منشورة — مش مقارنة ببيانات مستخدمين حقيقيين`
+    : `General reference range for "${bench.en}" from published occupational-health guidance — not a comparison to real Corvus users`;
+  doc.text(benchNote, ml, y, { maxWidth: cw }); y += 12;
+
+  const [lo, hi] = bench.typical_range;
+  const barX = ml, barW = cw, barY = y, barH = 10;
+  fc(doc, ...PDF_TOKENS.borderSoft); rr(doc, barX, barY, barW, barH, 2, "F");
+  const loX = barX + (lo / 100) * barW, hiX = barX + (hi / 100) * barW;
+  fc(doc, ...PDF_TOKENS.primaryLt); doc.rect(loX, barY, hiX - loX, barH, "F");
+  const userX = barX + (Math.min(100, Math.max(0, A.overallAvg || 0)) / 100) * barW;
+  fc(doc, ...PDF_TOKENS.primaryDk); doc.circle(userX, barY + barH / 2, 2.2, "F");
+  sf(6, "normal"); tc(doc, ...PDF_TOKENS.muted);
+  doc.text("0", barX, barY + barH + 5); doc.text("100", barX + barW, barY + barH + 5, { align: "right" });
+  doc.text(isAr ? "المدى المرجعي المعتاد" : "typical reference range", barX + (loX + hiX) / 2 - barX, barY + barH + 5, { align: "center" });
+  y += 22;
+
+  footer();
+
+  // ── PAGE 3: Posture Profile + Recommendations ──────────────────
+  doc.addPage();
+  fc(doc, ...PDF_TOKENS.bg); doc.rect(0, 0, W, H, "F");
+  y = 22;
+  sf(15, "bold"); tc(doc, ...PDF_TOKENS.ink);
+  doc.text(isAr ? "بروفايل الوضعية" : "Posture Profile", ml, y); y += 10;
+
+  const profileCopy = {
+    behavioral: {
+      en: { title: "Habit-driven pattern", body: "The patterns above get noticeably worse the longer your sessions run, and don't stay consistent — that points toward fatigue and habit (how you sit as the day goes on) rather than a fixed structural issue. Good news: habit-driven patterns respond well to reminders and short breaks." },
+      ar: { title: "نمط سلوكي/عادة", body: "الأنماط اللي فوق بتزيد سوءًا كل ما الجلسة طالت، ومش ثابتة — ده بيرشّح إجهاد وعادة (طريقة جلوسك مع مرور اليوم) مش مشكلة هيكلية ثابتة. الخبر الحلو: الأنماط دي بتستجيب كويس للتذكيرات والاستراحات القصيرة." },
+    },
+    structural: {
+      en: { title: "Consistent pattern", body: "The patterns above stay fairly consistent regardless of session length — the same offset shows up whether you've been sitting 5 minutes or 50. That's more suggestive of a structural or muscular factor than a pure habit, and worth mentioning specifically if you see a physiotherapist." },
+      ar: { title: "نمط ثابت/هيكلي محتمل", body: "الأنماط اللي فوق ثابتة نسبيًا بغض النظر عن مدة الجلسة — نفس الانحراف بيظهر سواء قعدت 5 دقايق أو 50. ده بيرشّح عامل هيكلي أو عضلي أكتر من عادة بحتة، ويستاهل تذكره تحديدًا لو زرت فيزيوثيرابيست." },
+    },
+    mixed: {
+      en: { title: "Mixed pattern", body: "The data doesn't lean clearly toward either fatigue-driven or structural — likely a mix of both, or not enough signal yet to tell them apart. More sessions over time will sharpen this." },
+      ar: { title: "نمط مختلط", body: "البيانات مش بتميل بوضوح لا للإجهاد ولا للعامل الهيكلي — على الأرجح مزيج من الاتنين، أو لسه مفيش إشارة كفاية نفرّق بيها. جلسات أكتر مع الوقت هتوضّح الصورة." },
+    },
+  };
+  const pc = profileCopy[A.profileType][isAr ? "ar" : "en"];
+
+  fc(doc, ...PDF_TOKENS.primaryLt); rr(doc, ml, y, cw, 42, 4, "F");
+  sf(11, "bold"); tc(doc, ...PDF_TOKENS.primaryDk);
+  doc.text(pc.title, ml + 8, y + 12);
+  sf(8.5, "normal"); tc(doc, ...PDF_TOKENS.ink2);
+  doc.text(pc.body, ml + 8, y + 20, { maxWidth: cw - 16, lineHeightFactor: 1.5 });
+  y += 52;
+
+  sf(7, "italic"); tc(doc, ...PDF_TOKENS.muted);
+  doc.text(isAr
+    ? "ملاحظة: ده تصنيف استكشافي مبني على أنماط الجلسات، مش تشخيص طبي."
+    : "Note: this is an exploratory classification based on session patterns, not a medical diagnosis.", ml, y, { maxWidth: cw });
+  y += 14;
+
+  sf(13, "bold"); tc(doc, ...PDF_TOKENS.ink);
+  doc.text(isAr ? "التوصيات" : "Recommendations", ml, y); y += 8;
+
+  const recs = A.profileType === "behavioral"
+    ? [isAr ? "خد استراحة 2-3 دقايق كل 25-30 دقيقة جلوس" : "Take a 2-3 min break every 25-30 minutes of sitting",
+       isAr ? "فعّل تذكيرات الوضعية في الجلسات الطويلة تحديدًا" : "Enable posture reminders specifically for longer sessions",
+       isAr ? "جرب تمارين إطالة قصيرة نص اليوم" : "Try short stretches at the midpoint of your workday"]
+    : A.profileType === "structural"
+    ? [isAr ? "شارك التقرير ده مع فيزيوثيرابيست في أول زيارة" : "Share this report with a physiotherapist at your first visit",
+       isAr ? "راجع إعداد مكان شغلك (ارتفاع الشاشة، الكرسي)" : "Review your workstation setup (monitor height, chair)",
+       isAr ? "ركّز التمارين على المنطقة المتكررة فوق" : "Focus targeted exercises on the recurring area above"]
+    : [isAr ? "كمّل تسجيل الجلسات كام أسبوع كمان لصورة أوضح" : "Keep logging sessions for a few more weeks for a clearer picture",
+       isAr ? "راجع إعداد مكان شغلك كخطوة عامة أولى" : "Review your workstation setup as a general first step"];
+  recs.forEach(r => {
+    sf(8.5, "normal"); tc(doc, ...PDF_TOKENS.ink2);
+    doc.text(`•  ${r}`, ml + 2, y, { maxWidth: cw - 4 }); y += 8;
+  });
+
+  footer();
+  doc.save(`Corvus-Posture-DNA-${(profile?.name || "report").replace(/\s/g, "-")}-${new Date().toISOString().slice(0,7)}.pdf`);
+}

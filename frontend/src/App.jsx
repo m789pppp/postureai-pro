@@ -3646,6 +3646,22 @@ export default function App(){
     }
   }
 
+  async function downloadPostureDNAReport() {
+    if (!tierAtLeast(tier,"elite")) {
+      addToast(isAr?"تقرير بصمة الوضعية متاح لباقة Elite فقط":"Posture DNA report requires Elite tier","warn");
+      setShowBilling(true); return;
+    }
+    addToast(isAr?"جاري تحليل بيانات آخر 90 يوم...":"Analyzing your last 90 days of data...","info");
+    try {
+      const { generatePostureDNAReport } = await import("./lib/pdfReports.js");
+      await generatePostureDNAReport({ sessions: userSessions, profile, user, profession: profile?.profession || "other", lang });
+      addToast(isAr?"✅ تم تحميل تقرير بصمة الوضعية":"✅ Posture DNA report downloaded","success");
+    } catch(e) {
+      console.error("[Posture DNA PDF]", e);
+      addToast(isAr?"تعذر إنشاء التقرير — جرب تاني":"Couldn't generate the report — try again", "error");
+    }
+  }
+
   async function downloadComparisonPDF(session1, session2) {
     if (!tierAtLeast(tier,"professional")) {
       addToast(isAr?"المقارنة متاحة لباقة Pro وElite فقط":"Comparison PDF requires Pro or Elite","warn");
@@ -4472,6 +4488,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         downloadComparisonPDF={downloadComparisonPDF}
         downloadTeamPDF={downloadTeamPDF}
         downloadLongitudinalPDF={downloadLongitudinalPDF}
+        downloadPostureDNAReport={downloadPostureDNAReport}
         shareReport={shareReport}
         AccountSwitcher={AccountSwitcher}
         onSwitchAccount={handleSwitchAccount}

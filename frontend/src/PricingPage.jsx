@@ -59,11 +59,11 @@ const PAID_PLANS = [
       en: ["Everything in Pro", "AI Coach unlimited", "Predictive AI",
            "PDF report", "Priority support", "Calibration", "Session narrative",
            "Arabic Voice Coach (Egyptian/Gulf)", "Early Access to new features",
-           "1 free physiotherapist session/month"],
+           "1 free physiotherapist session/month", "Posture DNA Report (quarterly)"],
       ar: ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي",
            "تقرير PDF", "دعم أولوية", "معايرة", "سرد الجلسة",
            "مدرب صوتي بلهجات عربية (مصري/خليجي)", "Early Access للفيتشرز الجديدة",
-           "جلسة فيزيوثيرابي مجانية شهريًا"],
+           "جلسة فيزيوثيرابي مجانية شهريًا", "تقرير بصمة الوضعية (ربع سنوي)"],
     },
   },
 ];
