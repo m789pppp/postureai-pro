@@ -8,7 +8,7 @@ import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
-import { PushAPI, dispatchNotification } from "./services/api.js";
+import { PushAPI, dispatchNotification, FeatureFlagsAPI } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
 import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 import { BasicDashboard } from "./BasicFeatures.jsx";
@@ -1957,7 +1957,12 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
       {tab==="notifications"&&(
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
           <PushNotificationSettings cs={cs} isAr={isAr} addToast={addToast} />
-          <VoiceCoachSettings cs={cs} isAr={isAr} lang={lang} addToast={addToast} />
+          {tierAtLeast(tier,"elite") ? (
+            <VoiceCoachSettings cs={cs} isAr={isAr} lang={lang} addToast={addToast} />
+          ) : (
+            <VoiceCoachUpsell cs={cs} isAr={isAr} onUpgrade={onBilling} />
+          )}
+          <EarlyAccessPanel cs={cs} isAr={isAr} tier={tier} onUpgrade={onBilling} />
         </div>
       )}
 
@@ -2106,6 +2111,101 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
           {isAr?"بعت إشعار تجريبي":"Send test notification"}
         </button>
       )}
+    </div>
+  );
+}
+
+// ── Elite Early Access panel ──────────────────────────────────────
+function EarlyAccessPanel({ cs, isAr, tier, onUpgrade }) {
+  const [state, setState] = useState("loading"); // loading | ready | error
+  const [data,  setData]  = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    FeatureFlagsAPI.mine()
+      .then(res => { if (!cancelled) { setData(res); setState("ready"); } })
+      .catch(() => { if (!cancelled) setState("error"); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (state === "loading" || state === "error") return null; // fail quiet — this is a perk, not critical UI
+
+  const isElite = tierAtLeast(tier, "elite");
+
+  if (!isElite) {
+    return (
+      <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px",
+        display:"flex", alignItems:"center", gap:14 }}>
+        <div style={{ fontSize:28 }}>🚀</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:3 }}>
+            {isAr?"Elite Early Access":"Elite Early Access"}
+          </div>
+          <div style={{ fontSize:11.5, color:cs.muted, lineHeight:1.5 }}>
+            {data.count > 0
+              ? (isAr ? `${data.count} فيتشرز جديدة بتتجرب دلوقتي — أعضاء Elite بيوصلولها الأول` : `${data.count} new features being tested right now — Elite members get them first`)
+              : (isAr ? "جرّب كل فيتشر جديد قبل الكل بشهر" : "Try every new feature a month before everyone else")}
+          </div>
+        </div>
+        <button onClick={onUpgrade} style={{ padding:"8px 16px", background:"linear-gradient(135deg,#d4af37,#b8860b)",
+          border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+          {isAr?"⭐ Elite":"⭐ Elite"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <span style={{ fontSize:18 }}>🚀</span>
+        <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>
+          {isAr?"Early Access — حصري ليك":"Early Access — exclusive to you"}
+        </div>
+      </div>
+      {data.flags.length === 0 ? (
+        <div style={{ fontSize:12, color:cs.muted }}>
+          {isAr?"مفيش فيتشرز تجريبية دلوقتي — هنبعتلك أول ما حاجة تتفتح.":"Nothing in testing right now — we'll notify you the moment something opens up."}
+        </div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {data.flags.map(f => (
+            <div key={f.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+              padding:"9px 12px", background:"rgba(255,255,255,.03)", borderRadius:8 }}>
+              <div style={{ fontSize:12, color:cs.text }}>{f.description}</div>
+              <span style={{ fontSize:9, fontWeight:700, borderRadius:99, padding:"2px 8px",
+                color: f.available_to_me ? "#10b981" : "#f59e0b",
+                background: f.available_to_me ? "rgba(16,185,129,.12)" : "rgba(245,158,11,.12)" }}>
+                {f.available_to_me
+                  ? (isAr?"متاح ليك":"Live for you")
+                  : (isAr?"قريب":"Coming soon")}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Voice Coach upsell (shown below Elite) ───────────────────────
+function VoiceCoachUpsell({ cs, isAr, onUpgrade }) {
+  return (
+    <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px",
+      display:"flex", alignItems:"center", gap:14 }}>
+      <div style={{ fontSize:28 }}>🎙️</div>
+      <div style={{ flex:1 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:3 }}>
+          {isAr?"مدرب صوتي بلهجات عربية":"Voice Coach with Arabic accents"}
+        </div>
+        <div style={{ fontSize:11.5, color:cs.muted, lineHeight:1.5 }}>
+          {isAr?"مصري، خليجي (سعودي/إماراتي) — حصري لأعضاء Elite":"Egyptian, Gulf (Saudi/Emirati) — exclusive to Elite members"}
+        </div>
+      </div>
+      <button onClick={onUpgrade} style={{ padding:"8px 16px", background:"linear-gradient(135deg,#d4af37,#b8860b)",
+        border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+        {isAr?"⭐ Elite":"⭐ Elite"}
+      </button>
     </div>
   );
 }
