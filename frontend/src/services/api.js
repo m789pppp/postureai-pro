@@ -369,6 +369,8 @@ export const MarketplaceAPI = {
   createBooking:  (data) => apiFetch("/marketplace/bookings",        { method: "POST", body: data }),
   /** Patient-facing: my own booking history. */
   myBookings:     ()     => apiFetch("/marketplace/bookings", { treat404AsDown: true }),
+  /** Elite: do I have an unused monthly free-session credit right now? */
+  eliteCreditStatus: () => apiFetch("/marketplace/elite-credit-status"),
 
   /** Admin: full therapist list (including paused). */
   adminListTherapists:  ()     => apiFetch("/admin/marketplace/therapists"),
