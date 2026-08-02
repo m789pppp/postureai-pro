@@ -162,6 +162,56 @@ export function StreakDisplay({ streak, cs }) {
   );
 }
 
+// ── Weekly Challenge Card ────────────────────────────────────────
+// "Sit correctly 20 min/day, 5 days this week" — a concrete bounded target
+// with real per-day progress, shown next to the bare streak counter (which
+// on its own gives a "0 day streak" with no context to work toward).
+export function WeeklyChallengeCard({ wc, cs, lang = "en" }) {
+  if (!wc) return null;
+  const DARK = cs || { text: "#f0f4f8", muted: "#64748b", border: "rgba(148,163,184,.1)" };
+  const isAr = lang === "ar";
+  const DOW  = isAr ? ["إث","ثل","أر","خم","جم","سب","أح"] : ["M","T","W","T","F","S","S"];
+  return (
+    <div style={{
+      background: wc.complete ? "rgba(16,185,129,.08)" : "rgba(99,102,241,.06)",
+      border: `0.5px solid ${wc.complete ? "rgba(16,185,129,.25)" : "rgba(99,102,241,.15)"}`,
+      borderRadius: 12, padding: "12px 14px", marginBottom: 12,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: DARK.text, display: "flex", alignItems: "center", gap: 6 }}>
+          <span>{wc.badge || "🏅"}</span>
+          <span>{isAr ? "تحدي الأسبوع" : "Weekly Challenge"}</span>
+        </div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: wc.complete ? "#10b981" : "#6366f1" }}>
+          {wc.complete
+            ? (isAr ? "مكتمل! 🎉" : "Complete! 🎉")
+            : `${wc.days_qualified}/${wc.target_days}`}
+          {wc.newly_completed ? ` · +${wc.xp_reward} XP` : ""}
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: DARK.muted, marginBottom: 10 }}>
+        {isAr ? wc.label_ar : wc.label}
+      </div>
+      <div style={{ display: "flex", gap: 4 }}>
+        {(wc.days || []).map((d, i) => (
+          <div key={d.date} style={{ flex: 1, textAlign: "center" }}>
+            <div style={{
+              height: 24, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11,
+              background: d.qualified ? "rgba(16,185,129,.18)" : d.is_future ? "rgba(148,163,184,.05)" : "rgba(148,163,184,.1)",
+              border: `0.5px solid ${d.qualified ? "rgba(16,185,129,.4)" : "rgba(148,163,184,.12)"}`,
+              color: d.qualified ? "#10b981" : DARK.muted,
+              opacity: d.is_future ? 0.4 : 1,
+            }}>
+              {d.qualified ? "✓" : DOW[d.weekday]}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Achievement Badge ─────────────────────────────────────────────
 function AchievementBadge({ ach, earned, isNew, cs }) {
   return (
@@ -453,6 +503,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
                 {gamData && <XPBar xp={gamData.xp} level={gamData.level} xpCurrent={gamData.xp_current} xpNext={gamData.xp_to_next} levelLabel={gamData.level_label} cs={DARK} />}
                 <StreakDisplay streak={profile?.streak_days || 0} cs={DARK} />
               </div>
+              <WeeklyChallengeCard wc={gamData?.weekly_challenge} cs={DARK} lang={lang} />
               {/* Daily Goal */}
               {gamData?.daily_goal && (
                 <div style={{ background: "rgba(26,86,219,.06)", border: "0.5px solid rgba(26,86,219,.15)", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
