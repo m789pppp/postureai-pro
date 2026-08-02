@@ -6341,6 +6341,55 @@ def sso_provision_user():
 
 
 
+# ── Elite Early Access ────────────────────────────────────────────
+# Reuses the existing feature_flags collection (already supports a
+# `tiers` array from the admin side — see admin_feature_flags below —
+# but had no user-facing consumer at all; only the admin panel could
+# see flags, there was no way for a real user to know what they had
+# early access to). A flag counts as "early access" here specifically
+# when its `tiers` list includes "elite" and it's enabled — that's the
+# admin's signal that this is being rolled out to Elite first.
+_EARLY_ACCESS_TIER_ALIASES = {"premium": "elite", "business": "elite", "enterprise": "elite", "b2b_enterprise": "elite"}
+
+@app.route("/api/feature-flags/mine", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def my_feature_flags():
+    """
+    What early-access features does the CURRENT user have? Elite-gated:
+    only flags whose `tiers` includes "elite" are ever returned — this
+    endpoint is specifically the Early Access surface, not a general
+    flag-check API for arbitrary app logic.
+    """
+    try:
+        raw_tier = (getattr(g, "tier", "standard") or "standard").lower()
+        norm_tier = _EARLY_ACCESS_TIER_ALIASES.get(raw_tier, raw_tier)
+        is_elite = norm_tier == "elite"
+
+        db = firestore.client()
+        docs = db.collection("feature_flags").stream()
+        flags = []
+        for d in docs:
+            f = d.to_dict() or {}
+            tiers = f.get("tiers") or []
+            if "elite" not in tiers:
+                continue  # not an early-access flag — irrelevant to this endpoint
+            flags.append({
+                "key":         d.id,
+                "description": f.get("description", d.id),
+                "enabled":     bool(f.get("enabled", False)),
+                "available_to_me": bool(is_elite and f.get("enabled", False)),
+            })
+        # Elite sees the actual list (enabled + not-yet-enabled = "coming
+        # soon"); everyone else just gets a count for the upsell copy
+        # ("3 features waiting for Elite") without seeing what they are.
+        if not is_elite:
+            return jsonify({"ok": True, "is_elite": False, "count": len(flags), "flags": []})
+        return jsonify({"ok": True, "is_elite": True, "count": len(flags), "flags": flags})
+    except Exception as e:
+        return safe_error(e)
+
+
 # ── Announcements, Security Center, Feature Flags, Onboarding Analytics ─────────
 @app.route("/api/admin/feature-flags", methods=["GET", "POST", "PATCH"])
 @require_auth
