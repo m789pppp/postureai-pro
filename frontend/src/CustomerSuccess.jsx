@@ -415,7 +415,7 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:13, fontWeight:600, color:CS_TOKENS.text }}>{a.title}</div>
                       <div style={{ fontSize:11, color:CS_TOKENS.muted, marginTop:2 }}>
-                        {a.views.toLocaleString()} views · {a.helpful}% found helpful
+                        {(a.views||0).toLocaleString()} views · {a.helpful}% found helpful
                       </div>
                     </div>
                     <span style={{ fontSize:13, color:CS_TOKENS.primary }}>→</span>
