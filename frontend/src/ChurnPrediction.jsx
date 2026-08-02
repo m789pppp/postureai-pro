@@ -398,7 +398,7 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
                     </div>
                     <div style={{ textAlign:"center" }}>
                       <div style={{ fontSize:16, fontWeight:700,
-                        color:c.mrr>0?CP_TOKENS.text:CP_TOKENS.muted }}>${c.mrr.toLocaleString()}</div>
+                        color:c.mrr>0?CP_TOKENS.text:CP_TOKENS.muted }}>${(c.mrr||0).toLocaleString()}</div>
                       <div style={{ fontSize:10, color:CP_TOKENS.muted }}>MRR</div>
                     </div>
                     <button

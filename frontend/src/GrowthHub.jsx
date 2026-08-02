@@ -242,7 +242,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
                     <div style={{ fontSize:11, color:cs.muted||"#64748b" }}>{a.email} · Joined {a.joined}</div>
                   </div>
                   {[
-                    { label:"Clicks", value:a.clicks.toLocaleString() },
+                    { label:"Clicks", value:(a.clicks||0).toLocaleString() },
                     { label:"Signups", value:a.signups },
                     { label:"Revenue", value:`$${a.revenue}` },
                   ].map(s=>(
