@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { MarketplaceAPI } from "./services/api.js";
+import { tierAtLeast } from "./lib/tierQuality.js";
 import { DEMO_THERAPISTS, getDemoBookings, createDemoBooking, updateDemoBooking, getDemoMessages, addDemoMessage } from "./marketplaceDemo.js";
 
 const border = "1px solid rgba(255,255,255,.08)";
@@ -31,7 +32,7 @@ function money(cents, currency, isAr) {
   return `${(cents/100).toLocaleString()} ${currency||"EGP"}`;
 }
 
-export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, addToast }) {
+export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, onBack, addToast }) {
   const isAr = lang === "ar";
   const [tab, setTab]           = useState("browse"); // browse | mine | admin
   const [therapists, setTherapists] = useState([]);
@@ -44,6 +45,14 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
   const [chatBooking, setChatBooking] = useState(null); // booking whose chat thread is open
   const [demoMode, setDemoMode] = useState(false); // true once we've fallen back to local demo data
   const [cancellingId, setCancellingId] = useState(null);
+  const [eliteCreditAvailable, setEliteCreditAvailable] = useState(false);
+
+  useEffect(() => {
+    if (!tierAtLeast(tier, "elite")) return;
+    MarketplaceAPI.eliteCreditStatus()
+      .then(d => setEliteCreditAvailable(!!d?.available))
+      .catch(() => {}); // fail quiet — worst case the badge just doesn't show, booking flow still works
+  }, [tier]);
 
   const load = useCallback(() => {
     setLoading(true); setErr(null);
@@ -98,6 +107,9 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
       if (res?.payment?.redirect_url) {
         window.open(res.payment.redirect_url, "_blank");
         addToast?.(isAr ? "افتحنا صفحة الدفع في تاب جديد" : "Payment page opened in a new tab", "success");
+      } else if (res?.covered_by_corvus) {
+        addToast?.(isAr ? "🎉 اتحجزت الجلسة — مجانًا كجزء من عضوية Elite بتاعتك الشهر ده" : "🎉 Session booked — free, part of your Elite membership this month", "success");
+        setEliteCreditAvailable(false);
       } else {
         addToast?.(isAr ? "اتسجل طلب الحجز، هيتواصل معاك فريقنا" : "Booking recorded — our team will follow up", "success");
       }
@@ -188,6 +200,17 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
 
       {tab === "browse" && (
         <>
+          {eliteCreditAvailable && (
+            <div style={{ marginBottom:16, padding:"12px 16px", borderRadius:12,
+              background:"linear-gradient(135deg,rgba(212,175,55,.15),rgba(184,134,11,.08))",
+              border:"1px solid rgba(212,175,55,.35)", display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:20 }}>🎁</span>
+              <div style={{ fontSize:12.5, color:"#e2eaf6" }}>
+                {isAr ? "عندك جلسة مجانية الشهر ده مع أي أخصائي — جزء من عضوية Elite بتاعتك"
+                      : "You have a free session this month with any therapist — part of your Elite membership"}
+              </div>
+            </div>
+          )}
           <div style={{ marginBottom:16, maxWidth:260 }}>
             <div style={label}>{isAr ? "المدينة" : "City"}</div>
             <input style={input} placeholder={isAr ? "مثال: القاهرة" : "e.g. Cairo"} value={cityFilter}
@@ -291,7 +314,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, onBack, 
       {tab === "admin" && isAdmin && <AdminMarketplaceManager isAr={isAr} addToast={addToast} adminUid={user?.uid} />}
 
       {selected && (
-        <BookingModal therapist={selected} isAr={isAr} loading={booking}
+        <BookingModal therapist={selected} isAr={isAr} loading={booking} eliteCreditAvailable={eliteCreditAvailable}
                       onClose={()=>setSelected(null)} onSubmit={submitBooking} />
       )}
     </div>
@@ -412,7 +435,7 @@ function BookingChat({ bookingId, isAr, currentUid, addToast }) {
   );
 }
 
-function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
+function BookingModal({ therapist, isAr, loading, eliteCreditAvailable, onClose, onSubmit }) {
   const [preferredTime, setPreferredTime] = useState("");
   const [notes, setNotes] = useState("");
   const [slots, setSlots] = useState(null);       // null = loading, [] = none/no template
@@ -456,25 +479,32 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
                   alignItems:"center", justifyContent:"center", zIndex:1000, padding:20 }}>
       <div style={{ ...card, width:"100%", maxWidth:460, background:"#111827", maxHeight:"85vh", overflowY:"auto" }}>
         <div style={{ fontWeight:800, fontSize:16, marginBottom:4 }}>{isAr ? "حجز جلسة مع" : "Book a session with"} {therapist.name}</div>
-        <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:4 }}>
-          {discountInfo?.valid ? (
-            <>
-              <span style={{ textDecoration:"line-through", color:"#64748b", marginInlineEnd:8 }}>{money(therapist.session_fee_cents, therapist.currency, isAr)}</span>
-              {money(Math.round(therapist.session_fee_cents * (1 - discountInfo.discount_pct/100)), therapist.currency, isAr)}
-            </>
-          ) : money(therapist.session_fee_cents, therapist.currency, isAr)}
-        </div>
+        {eliteCreditAvailable ? (
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ textDecoration:"line-through", color:"#64748b" }}>{money(therapist.session_fee_cents, therapist.currency, isAr)}</span>
+            <span style={{ color:"#d4af37" }}>{isAr ? "مجانًا — عضوية Elite" : "FREE — Elite membership"}</span>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize:13, color:"#5eead4", fontWeight:700, marginBottom:4 }}>
+              {discountInfo?.valid ? (
+                <>
+                  <span style={{ textDecoration:"line-through", color:"#64748b", marginInlineEnd:8 }}>{money(therapist.session_fee_cents, therapist.currency, isAr)}</span>
+                  {money(Math.round(therapist.session_fee_cents * (1 - discountInfo.discount_pct/100)), therapist.currency, isAr)}
+                </>
+              ) : money(therapist.session_fee_cents, therapist.currency, isAr)}
+            </div>
 
-        <div style={{ marginBottom:16 }}>
-          <div style={label}>{isAr ? "كود خصم العيادة (اختياري)" : "Clinic discount code (optional)"}</div>
-          <div style={{ display:"flex", gap:8 }}>
-            <input style={{ ...input, flex:1 }} placeholder={isAr ? "مثال: CLINIC-A1B2C3" : "e.g. CLINIC-A1B2C3"}
-                   value={discountCode}
-                   onChange={e=>{ setDiscountCode(e.target.value.toUpperCase()); setDiscountInfo(null); }}
-                   onKeyDown={e=>e.key==="Enter"&&checkDiscountCode()} />
-            <button style={btnGhost} onClick={checkDiscountCode} disabled={checkingCode || !discountCode.trim()}>
-              {checkingCode ? "…" : (isAr ? "تحقق" : "Apply")}
-            </button>
+            <div style={{ marginBottom:16 }}>
+              <div style={label}>{isAr ? "كود خصم العيادة (اختياري)" : "Clinic discount code (optional)"}</div>
+              <div style={{ display:"flex", gap:8 }}>
+                <input style={{ ...input, flex:1 }} placeholder={isAr ? "مثال: CLINIC-A1B2C3" : "e.g. CLINIC-A1B2C3"}
+                       value={discountCode}
+                       onChange={e=>{ setDiscountCode(e.target.value.toUpperCase()); setDiscountInfo(null); }}
+                       onKeyDown={e=>e.key==="Enter"&&checkDiscountCode()} />
+                <button style={btnGhost} onClick={checkDiscountCode} disabled={checkingCode || !discountCode.trim()}>
+                  {checkingCode ? "…" : (isAr ? "تحقق" : "Apply")}
+                </button>
           </div>
           {discountInfo && (
             <div style={{ fontSize:11.5, marginTop:5, color: discountInfo.valid ? "#5eead4" : "#f87171" }}>
@@ -484,6 +514,8 @@ function BookingModal({ therapist, isAr, loading, onClose, onSubmit }) {
             </div>
           )}
         </div>
+          </>
+        )}
 
         {slots === null && (
           <div style={{ fontSize:12.5, color:"#64748b", marginBottom:16 }}>{isAr?"جاري تحميل المواعيد المتاحة…":"Loading available times…"}</div>
