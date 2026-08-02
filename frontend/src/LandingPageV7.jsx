@@ -1647,6 +1647,178 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
             </StaggerItem>
           ))}
         </Stagger>
+
+        {/* ── Feature Comparison Table ───────────────────────────────────── */}
+        {(()=>{
+          const COLS = [
+            { key:"free",  label:ar?"مجاني":"Free",   color:"#8896ac" },
+            { key:"basic", label:"Basic",              color:"#1a56db" },
+            { key:"pro",   label:"Pro",                color:"#6366f1", popular:true },
+            { key:"elite", label:"Elite",              color:"#f59e0b" },
+          ];
+          const GROUPS = [
+            {
+              en:"Core",ar:"الأساسيات",
+              rows:[
+                { en:"Sessions",            ar:"الجلسات",               free:ar?"5/شهر":"5/mo",   basic:"∞", pro:"∞", elite:"∞" },
+                { en:"Posture Score",        ar:"درجة الوضعية",          free:"✅", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"Demo Session",         ar:"جلسة تجريبية",          free:"✅", basic:"—",  pro:"—",  elite:"—" },
+                { en:"Sessions Countdown",   ar:"عداد الجلسات",          free:"✅", basic:"—",  pro:"—",  elite:"—" },
+                { en:"Pain Self-Report",     ar:"تقرير الألم الذاتي",    free:"✅", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"First Session Badge",  ar:"شارة الجلسة الأولى",   free:"✅", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"Weekly Email Report",  ar:"تقرير أسبوعي (إيميل)", free:"✅", basic:"✅", pro:"✅", elite:"✅" },
+              ],
+            },
+            {
+              en:"Basic Habits",ar:"عادات Basic",
+              rows:[
+                { en:"Daily Check-in",       ar:"تسجيل يومي",           free:"—", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"Weekly Challenge",     ar:"تحدي أسبوعي",          free:"—", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"Pain Prediction Card", ar:"بطاقة توقع الألم",     free:"—", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"Streak Freeze",        ar:"تجميد الـ Streak",      free:"—", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"Posture Habit Score",  ar:"درجة عادة الوضعية",    free:"—", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"WhatsApp Reminders",   ar:"تذكيرات واتساب",       free:"—", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"AI Coach",             ar:"مدرب AI",               free:"—", basic:ar?"10 رسائل/شهر":"10 msgs/mo", pro:ar?"30 رسائل/شهر":"30 msgs/mo", elite:ar?"غير محدود":"Unlimited" },
+              ],
+            },
+            {
+              en:"Pro Intelligence",ar:"ذكاء Pro",
+              rows:[
+                { en:"Weekly Intelligence Report", ar:"تقرير ذكاء أسبوعي",         free:"—", basic:"—", pro:"✅", elite:"✅" },
+                { en:"Shareable PDF Report",        ar:"تقرير PDF قابل للمشاركة",  free:"—", basic:"—", pro:"✅", elite:"✅" },
+                { en:"Body Heatmap",                ar:"خريطة حرارة الجسم",         free:"—", basic:"—", pro:"✅", elite:"✅" },
+                { en:"Focus Mode Integration",      ar:"تكامل وضع التركيز",         free:"—", basic:"—", pro:"✅", elite:"✅" },
+                { en:"Custom Alert Rules",          ar:"قواعد تنبيه مخصصة",         free:"—", basic:"—", pro:"✅", elite:"✅" },
+                { en:"Family / Partner Mode (+1)",  ar:"وضع الأسرة (+1)",           free:"—", basic:"—", pro:"✅", elite:"✅" },
+              ],
+            },
+            {
+              en:"Elite Exclusive",ar:"حصري Elite",
+              rows:[
+                { en:"Predictive AI (detailed)",     ar:"ذكاء اصطناعي تنبؤي تفصيلي", free:"—", basic:"—", pro:"—", elite:"✅" },
+                { en:"Voice Coach (Arabic)",          ar:"مدرب صوتي عربي",             free:"—", basic:"—", pro:"—", elite:"✅" },
+                { en:"Monthly Physiotherapist",       ar:"أخصائي علاج طبيعي شهري",    free:"—", basic:"—", pro:"—", elite:"✅" },
+                { en:"Posture DNA Report (quarterly)",ar:"تقرير Posture DNA (ربع سنوي)",free:"—",basic:"—",pro:"—", elite:"✅" },
+                { en:"Priority WhatsApp Support",     ar:"دعم واتساب أولوية",          free:"—", basic:"—", pro:"—", elite:"✅" },
+                { en:"Elite Early Access",            ar:"وصول مبكر Elite",            free:"—", basic:"—", pro:"—", elite:"✅" },
+              ],
+            },
+          ];
+
+          const cell = (val, colColor) => {
+            if(val==="✅") return <span style={{color:"#10b981",fontSize:16}}>✓</span>;
+            if(val==="—")  return <span style={{color:"#334155",fontSize:14}}>—</span>;
+            return <span style={{color:colColor||"#94a3b8",fontSize:12.5,fontWeight:600}}>{val}</span>;
+          };
+
+          return (
+            <div style={{marginTop:56}}>
+              <div style={{textAlign:"center",marginBottom:28}}>
+                <h3 style={{fontSize:22,fontWeight:800,color:LPV7_TOKENS.text,margin:"0 0 8px",fontFamily:FONT_DISPLAY}}>
+                  {ar?"قارن كل المميزات":"Compare all features"}
+                </h3>
+                <p style={{fontSize:13.5,color:LPV7_TOKENS.muted,margin:0}}>
+                  {ar?"كل ما تحتاجه في مكان واحد":"Everything you need, side by side"}
+                </p>
+              </div>
+
+              {/* scrollable wrapper for mobile */}
+              <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",borderRadius:18,border:`1px solid ${LPV7_TOKENS.border}`}}>
+                <table style={{width:"100%",minWidth:580,borderCollapse:"collapse",background:LPV7_TOKENS.card}}>
+                  {/* sticky header */}
+                  <thead>
+                    <tr>
+                      <th style={{
+                        padding:"16px 18px",textAlign:ar?"right":"left",
+                        fontSize:12,fontWeight:600,color:LPV7_TOKENS.muted,
+                        background:LPV7_TOKENS.card,borderBottom:`1px solid ${LPV7_TOKENS.border}`,
+                        width:"38%",
+                      }}>
+                        {ar?"الميزة":"Feature"}
+                      </th>
+                      {COLS.map(c=>(
+                        <th key={c.key} style={{
+                          padding:"16px 12px",textAlign:"center",
+                          fontSize:13,fontWeight:700,color:c.color,
+                          background: c.popular ? `${c.color}12` : LPV7_TOKENS.card,
+                          borderBottom:`1px solid ${LPV7_TOKENS.border}`,
+                          borderInlineStart: c.popular ? `2px solid ${c.color}55` : "none",
+                          borderInlineEnd:   c.popular ? `2px solid ${c.color}55` : "none",
+                          whiteSpace:"nowrap",
+                        }}>
+                          {c.popular && <div style={{fontSize:9,fontWeight:700,color:c.color,letterSpacing:".05em",marginBottom:3,opacity:.8}}>
+                            {ar?"الأكثر شيوعاً":"POPULAR"}
+                          </div>}
+                          {c.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {GROUPS.map((g,gi)=>(
+                      <>
+                        {/* group header row */}
+                        <tr key={`g${gi}`}>
+                          <td colSpan={5} style={{
+                            padding:"10px 18px 6px",
+                            fontSize:10.5,fontWeight:700,color:LPV7_TOKENS.muted,
+                            letterSpacing:".08em",textTransform:"uppercase",
+                            background:`rgba(255,255,255,.025)`,
+                            borderTop: gi>0?`1px solid ${LPV7_TOKENS.border}`:"none",
+                          }}>
+                            {ar?g.ar:g.en}
+                          </td>
+                        </tr>
+
+                        {g.rows.map((row,ri)=>(
+                          <tr key={`${gi}-${ri}`} style={{
+                            background: ri%2===1 ? "rgba(255,255,255,.018)" : "transparent",
+                          }}>
+                            <td style={{
+                              padding:"11px 18px",
+                              fontSize:13.5,color:LPV7_TOKENS.sub,
+                              borderBottom:`1px solid rgba(255,255,255,.04)`,
+                              textAlign:ar?"right":"left",
+                            }}>
+                              {ar?row.ar:row.en}
+                            </td>
+                            {COLS.map(c=>(
+                              <td key={c.key} style={{
+                                padding:"11px 12px",textAlign:"center",
+                                borderBottom:`1px solid rgba(255,255,255,.04)`,
+                                background: c.popular ? `${c.color}08` : "transparent",
+                                borderInlineStart: c.popular ? `2px solid ${c.color}30` : "none",
+                                borderInlineEnd:   c.popular ? `2px solid ${c.color}30` : "none",
+                              }}>
+                                {cell(row[c.key], c.color)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* CTA under table */}
+              <div style={{textAlign:"center",marginTop:28,display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+                <a href="/auth?mode=signup" onClick={onCTA}
+                  className="lp-btn lp-btn-primary"
+                  style={{...btn("primary","md"),minWidth:180}}>
+                  {ar?"ابدأ تجربتك المجانية":"Start your free trial"}
+                </a>
+                <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer"
+                  className="lp-btn lp-btn-ghost"
+                  style={{...btn("ghost","md"),minWidth:180}}>
+                  {ar?"احجز عرضاً للشركات":"Book enterprise demo"}
+                </a>
+              </div>
+            </div>
+          );
+        })()}
+
       </div>
       <style>{`
         @media(max-width:600px){.lp-pricing-grid{grid-template-columns:1fr!important}
