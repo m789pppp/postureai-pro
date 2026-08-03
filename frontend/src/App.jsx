@@ -4987,6 +4987,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{fontSize:11.5,color:cs.text,lineHeight:1.65}}>{aiInsight}</div>
           </div>
         )}
+        {/* Below Elite this card just never appeared with zero explanation —
+            looked like a missing feature rather than a tier boundary. One
+            small locked hint, same compact style as the tools row below. */}
+        {!aiInsight&&camActive&&!tierAtLeast(effectiveTier,"elite")&&(
+          <div style={{margin:"0 16px 12px",display:"flex"}}>
+            <button onClick={()=>{ addToast(isAr?"🧠 تحليل AI اللحظي متاح لباقة Elite فقط":"🧠 Live AI analysis is an Elite feature","warn"); setShowBilling(true); }}
+              style={{background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
+                display:"flex",alignItems:"center",gap:4}}>
+              🔒 🧠 {isAr?"تحليل AI":"AI analysis"}
+              <span style={{fontSize:8,color:"#10b981",fontWeight:800}}>ELITE</span>
+            </button>
+          </div>
+        )}
 
         {/* Recommendations */}
         {analysis?.recommendations&&(
