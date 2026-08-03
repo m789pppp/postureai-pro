@@ -422,7 +422,8 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
   setShowDashboard, setShowCoach, setShowCalibWizard, setShowBilling,
   setShowAIReports, setShowSessionComparison, setShowTrendChart,
   isAdmin, isHRAdmin = false, getAllUsers, setAllUsers, setShowWorkforceAnalytics,
-  setShowMRR, setShowChangelog, setShowNotificationsHub, setShowEnterpriseRBAC, setShowCertModal }) {
+  setShowMRR, setShowChangelog, setShowNotificationsHub, setShowEnterpriseRBAC, setShowCertModal,
+  onDevPortal, onInsurance }) {
 
   const last   = userSessions[0]?.avg_score||0;
   const avg    = profile?.avg_score || (userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0);
@@ -609,6 +610,42 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
         </button>
       </div>
 
+      {/* Developer API + Insurance Partnership entry cards */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div style={{ background:cs.card, border:"1px dashed rgba(26,86,219,.3)",
+          borderRadius:14, padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{fontSize:18}}>⚡</span>
+            <div style={{fontSize:12,fontWeight:700,color:cs.text}}>Posture API</div>
+          </div>
+          <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
+            {isAr?"ادمج تحليل الوضعية في أي تطبيق":"Integrate posture analysis into any app"}
+          </div>
+          <button onClick={()=>onDevPortal?.()}
+            style={{padding:"7px 0",background:"rgba(26,86,219,.12)",border:"1px solid rgba(26,86,219,.25)",
+              borderRadius:8,color:"#60a5fa",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:"auto"}}>
+            {isAr?"عرض التوثيق":"View Docs"}
+          </button>
+        </div>
+        <div style={{ background:cs.card, border:"1px dashed rgba(16,185,129,.25)",
+          borderRadius:14, padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{fontSize:18}}>🤝</span>
+            <div style={{fontSize:12,fontWeight:700,color:cs.text}}>
+              {isAr?"خصم التأمين":"Insurance Discount"}
+            </div>
+          </div>
+          <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
+            {isAr?"وضعيتك الجيدة = خصم في تأمينك الصحي":"Good posture = health insurance discount"}
+          </div>
+          <button onClick={()=>onInsurance?.()}
+            style={{padding:"7px 0",background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.25)",
+              borderRadius:8,color:"#10b981",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:"auto"}}>
+            {isAr?"اعرف أكتر":"Learn More"}
+          </button>
+        </div>
+      </div>
+
       <BasicDashboard
         profile={profile}
         userSessions={userSessions}
@@ -781,7 +818,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
 // HR ADMIN DASHBOARD
 // ══════════════════════════════════════════════════════════════════
 function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
-  onAnalytics, onWorkforce, onReports, onQuarterlyReport }) {
+  onAnalytics, onWorkforce, onReports, onQuarterlyReport, onDevPortal, onInsurance }) {
   const [search, setSearch]   = useState("");
   const [dept,   setDept]     = useState("all");
   const [sortBy, setSortBy]   = useState("score"); // score | name | sessions
@@ -862,6 +899,10 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
             desc={isAr?"PDF تنفيذي":"Executive PDF"} onClick={onReports} cs={cs}/>
           <ToolBtn icon="📈" label={isAr?"ربع سنوي":"Quarterly"} color="212,175,55"
             desc={isAr?"تقرير مؤسسي":"Wellness Report"} onClick={onQuarterlyReport} cs={cs}/>
+          <ToolBtn icon="⚡" label="Posture API" color="26,86,219"
+            desc={isAr?"للمطورين":"For developers"} onClick={onDevPortal} cs={cs}/>
+          <ToolBtn icon="🤝" label={isAr?"تأمين":"Insurance"} color="16,185,129"
+            desc={isAr?"خصم تأمين":"Partner discount"} onClick={onInsurance} cs={cs}/>
           <ToolBtn icon="🔔" label={isAr?"تنبيهات":"Alerts"} color="245,158,11"
             desc={isAr?`${atRisk} في خطر`:`${atRisk} at risk`}
             onClick={async()=>{
@@ -2806,6 +2847,8 @@ export default function HomePage({
   NavAvatarDropdown,
   onQuarterlyReport,
   onSchools,
+  onDevPortal,
+  onInsurance,
 }) {
   const [tab,    setTab]    = useState("home");
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
@@ -2902,7 +2945,8 @@ export default function HomePage({
         <DashHR profile={profile} allUsers={allUsers} cs={cs} isAr={isAr}
           addToast={addToast} onBilling={openBilling} onInvite={openInvite}
           onAnalytics={openAnalytics} onWorkforce={openWorkforce} onReports={openReports}
-          onQuarterlyReport={onQuarterlyReport}/>
+          onQuarterlyReport={onQuarterlyReport}
+          onDevPortal={onDevPortal} onInsurance={onInsurance}/>
       );
       if(tab==="analytics") { openAnalytics(); setTab("home"); return null; }
       if(tab==="alerts") return (
@@ -2987,7 +3031,9 @@ export default function HomePage({
         setShowWorkforceAnalytics={setShowWorkforceAnalytics}
         getAllUsers={getAllUsers} setAllUsers={setAllUsers}
         onCompare={()=>setShowSessionComparison?.(true)} onTrend={()=>setShowTrendChart?.(true)}
-        setShowCertModal={setShowCertModal}/>
+        setShowCertModal={setShowCertModal}
+        onDevPortal={onDevPortal}
+        onInsurance={onInsurance}/>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[tab, userRole, user, profile, userSessions, allUsers, tier, isAr, cs, atRisk, isHRAdmin, isAdmin, downloadPDF, handleDeleteSession, handleTrend, openCoach, openBilling, openAnalytics, openCalib, openReports, currency, setCurrency]);
