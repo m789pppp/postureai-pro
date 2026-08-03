@@ -2748,6 +2748,28 @@ export default function App(){
           if(p.company_id) setCompanyId(p.company_id);
         }
         getUserSessions(u.uid).then(setUserSessions).catch(e=>console.warn("[Sessions]",e.message));
+        // Retry any sessions that failed to save last time (see the
+        // saveSession catch in stopCamera) now that we have a fresh,
+        // authenticated connection to Firestore.
+        (async()=>{
+          try{
+            const key="corvus_pending_sessions";
+            const queue=JSON.parse(localStorage.getItem(key)||"[]");
+            if(!queue.length) return;
+            const mine=queue.filter(q=>q.uid===u.uid);
+            const others=queue.filter(q=>q.uid!==u.uid);
+            const stillFailed=[];
+            for(const q of mine){
+              try{ await saveSession(u.uid,q.data); }
+              catch{ if(Date.now()-q.queuedAt < 7*86400000) stillFailed.push(q); } // drop after 7 days
+            }
+            localStorage.setItem(key, JSON.stringify([...others,...stillFailed]));
+            if(mine.length>stillFailed.length){
+              addToast?.(isAr?`✅ اتحفظت ${mine.length-stillFailed.length} جلسة كانت متعلقة`:`✅ Saved ${mine.length-stillFailed.length} previously pending session(s)`,"success");
+              getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
+            }
+          }catch{}
+        })();
         setAuthChecked(true);
         if (isNew) setPage("setup");
         else setPage("home");
@@ -3548,7 +3570,34 @@ export default function App(){
         }
       }).catch(e=>{
         console.error("saveSession failed:", e?.code, e?.message);
-        addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
+        // Firestore's persistent cache (see firebase.js) now absorbs most
+        // transient network failures automatically, but for whatever still
+        // gets here (quota, permission, doc-too-large) the session's data
+        // used to just be gone with only an error toast to show for it.
+        // Queue it in localStorage and retry automatically next time this
+        // user's session list loads (see flushPendingSessions below).
+        try{
+          const key="corvus_pending_sessions";
+          const queue=JSON.parse(localStorage.getItem(key)||"[]");
+          queue.push({uid:user.uid,data:{
+            session_id:sessionId, mode, tier:effectiveTier, avg_score:avg,
+            good_pct:gPct, duration_s:dur, duration_sec:dur,
+            alerts_count:acRef.current?.total||0,
+            score_history:hist.slice(-60),
+            alert_causes: alRef.current.map(a=>({cause:a.cause||"posture",hour:a.time?.split(":")?.[0]||"0",severity:a.severity||"mild"})),
+            metrics:la.metrics||{},
+            ai_tip: la.ai_tip||la.ai_insight||la.claude_analysis||"",
+            improvement_tip: result.improvement_tip||"",
+            pain_summary: result.pain_summary||null,
+            pain_prediction: la.pain_prediction||null,
+            trend: result.trend||"stable",
+            ...(worstSnapsRef.current.length?{worst_snapshots:worstSnapsRef.current.slice(0,3)}:{}),
+          },queuedAt:Date.now()});
+          localStorage.setItem(key, JSON.stringify(queue.slice(-10))); // cap at 10 pending
+          addToast(isAr?"⚠️ فشل الحفظ — هنحاول تاني تلقائياً":"⚠️ Save failed — will retry automatically","warn");
+        }catch{
+          addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
+        }
       });
     } else if(user && dur < 5){
       addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
