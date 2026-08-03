@@ -3027,7 +3027,7 @@ export default function App(){
       try{
         const det=mpRef.current.detectForVideo(vid,performance.now());
         if(det.landmarks?.length>0){
-          const quality = qualityFor(tier);
+          const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(150); // was 60 (2s) → 150 (5s) for smoother score history
           if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);
@@ -3186,7 +3186,7 @@ export default function App(){
     //  1) Fallback mode (local MediaPipe failed to load) → backend IS the analysis
     //  2) Elite-equivalent tier (elite/premium/b2b_enterprise) → snapshots for PDF + Corvus AI insights
     // Standard/Basic/Professional tiers with working local MediaPipe never touch the backend here.
-    const eliteEquivalent = tierAtLeast(tier, "elite");
+    const eliteEquivalent = tierAtLeast(effectiveTier, "elite");
     const needsBackend = mpStatus==="fallback" || eliteEquivalent;
     if(needsBackend && totalRef.current%45===0 && canvRef.current){
       const c=canvRef.current,v2=vidRef.current;
@@ -3640,7 +3640,7 @@ export default function App(){
   }
 
   async function downloadLongitudinalPDF() {
-    if (!tierAtLeast(tier,"elite")) {
+    if (!tierAtLeast(effectiveTier,"elite")) {
       addToast(isAr?"التقرير الطولي متاح لباقة Elite فقط":"Longitudinal report requires Elite tier","warn");
       setShowBilling(true); return;
     }
@@ -3660,7 +3660,7 @@ export default function App(){
   }
 
   async function downloadPostureDNAReport() {
-    if (!tierAtLeast(tier,"elite")) {
+    if (!tierAtLeast(effectiveTier,"elite")) {
       addToast(isAr?"تقرير بصمة الوضعية متاح لباقة Elite فقط":"Posture DNA report requires Elite tier","warn");
       setShowBilling(true); return;
     }
@@ -3676,7 +3676,7 @@ export default function App(){
   }
 
   async function downloadComparisonPDF(session1, session2) {
-    if (!tierAtLeast(tier,"professional")) {
+    if (!tierAtLeast(effectiveTier,"professional")) {
       addToast(isAr?"المقارنة متاحة لباقة Pro وElite فقط":"Comparison PDF requires Pro or Elite","warn");
       setShowBilling(true); return;
     }
@@ -3696,7 +3696,7 @@ export default function App(){
   }
 
   async function downloadTeamPDF() {
-    if (!tierAtLeast(tier,"professional")) {
+    if (!tierAtLeast(effectiveTier,"professional")) {
       addToast(isAr?"تقرير الفريق متاح لـ HR Admin فقط":"Team PDF requires HR Admin + Pro","warn");
       setShowBilling(true); return;
     }
@@ -4783,7 +4783,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 <button onClick={async ()=>{
                   // Same canonical gate as downloadPDF() — this button bypassed it
                   // entirely by calling generateSessionPDF() directly.
-                  if(qualityFor(tier).pdfDetail === "none"){
+                  if(qualityFor(effectiveTier).pdfDetail === "none"){
                     addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
                     setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
                     return;
@@ -4808,15 +4808,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     addToast("PDF error: "+(e?.message||"unknown"),"error");
                   }
                 }}
-                  style={{flex:1,padding:"10px",background:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.05)":tier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.4)":tier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.1)":tier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                  {qualityFor(tier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${tier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
+                  style={{flex:1,padding:"10px",background:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.05)":effectiveTier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.4)":effectiveTier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.1)":effectiveTier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  {qualityFor(effectiveTier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${effectiveTier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
                 </button>
-                {/* Share button — Elite only */}
-                {tierAtLeast(tier,"elite") && (
+                {/* Share button — Elite only. Was gated on raw `tier`, which
+                    doesn't reflect trial_tier elevation or the b2b_enterprise
+                    -> elite equivalence, so a trialing/B2B-enterprise user
+                    could lose this button entirely even though every other
+                    Elite check on this same page correctly uses effectiveTier. */}
+                {tierAtLeast(effectiveTier,"elite") && (
                   <button onClick={()=>shareReport({
                       avg_score: sessionResult?.avg_score, good_pct: sessionResult?.good_pct,
                       duration_s: sessionResult?.duration_s, alerts_count: sessionResult?.alerts_count,
-                      mode, tier, session_id: sessionId,
+                      mode, tier: effectiveTier, session_id: sessionId,
                       score_history: histRef.current||[],
                       metrics: lastAnalRef.current?.metrics||{},
                       ai_tip: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
@@ -5845,7 +5849,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           }}>
             🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
           </button>
-          {histRef.current?.length>0&&qualityFor(tier).pdfDetail!=="none"&&(
+          {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"&&(
 <button onClick={async ()=>{
               const hist=histRef.current||[];
               const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
@@ -5888,7 +5892,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               actually press. Same colors/behaviour (still opens billing on
               tap) — just visually demoted so the page doesn't read as "100
               options, none of them mine" for Free/Basic/Pro users. */}
-          {(!tierAtLeast(effectiveTier,"elite")||!tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(tier).pdfDetail==="none"))&&(
+          {(!tierAtLeast(effectiveTier,"elite")||!tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail==="none"))&&(
             <div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:2}}>
               {!tierAtLeast(effectiveTier,"professional")&&(
                 <button onClick={()=>{
@@ -5916,7 +5920,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   <span style={{fontSize:8,color:"#10b981",fontWeight:800}}>ELITE</span>
                 </button>
               )}
-              {histRef.current?.length>0&&qualityFor(tier).pdfDetail==="none"&&(
+              {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail==="none"&&(
                 <button onClick={()=>{
                   addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
                   setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
