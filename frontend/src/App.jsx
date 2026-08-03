@@ -5731,7 +5731,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Secondary controls (primary Start/Stop moved up under the camera) */}
         <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
-          {/* Alert sound + Elite voice coach toggles */}
+          {/* Alert sound + Elite voice coach toggles — voice coach only takes
+              a slot here once actually unlocked; below Elite it moved into
+              the compact "locked tools" row at the end of this block so a
+              Free/Basic/Pro user isn't looking at a full-prominence button
+              for something they can't use yet. */}
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setSound(s=>!s)} style={{
               flex:1,background:sound?"rgba(26,86,219,.12)":"rgba(255,255,255,.04)",
@@ -5740,28 +5744,25 @@ async function downloadPDF(sessionOverride, isClinical=false){
             }}>
               {sound?"🔊":"🔇"} {isAr?"تنبيه صوتي":"Beep alerts"}
             </button>
-            <button onClick={()=>{
-              if(!tierAtLeast(effectiveTier,"elite")){
-                addToast(isAr?"🎙️ المدرب الصوتي متاح لباقة Elite فقط":"🎙️ Voice coach is an Elite feature","warn");
-                setShowBilling(true);return;
-              }
-              setVoiceCoach(v=>{
-                const nv=!v;
-                try{localStorage.setItem("corvus_voice_coach",nv?"1":"0");}catch{}
-                if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{force:true});
-                else stopSpeaking();
-                return nv;
-              });
-            }} style={{
-              flex:1,background:voiceCoach&&tierAtLeast(effectiveTier,"elite")?"rgba(16,185,129,.12)":"rgba(255,255,255,.04)",
-              border:`1px solid ${voiceCoach&&tierAtLeast(effectiveTier,"elite")?"rgba(16,185,129,.4)":cs.border}`,borderRadius:9,
-              padding:"8px 0",fontSize:11,fontWeight:700,
-              color:voiceCoach&&tierAtLeast(effectiveTier,"elite")?"#34d399":cs.muted,cursor:"pointer",
-              display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-            }}>
-              🎙️ {isAr?"المدرب الصوتي":"Voice coach"}
-              {!tierAtLeast(effectiveTier,"elite")&&<span style={{fontSize:8,background:"rgba(16,185,129,.12)",border:"1px solid rgba(16,185,129,.25)",borderRadius:99,padding:"1px 6px",color:"#10b981"}}>ELITE</span>}
-            </button>
+            {tierAtLeast(effectiveTier,"elite") && (
+              <button onClick={()=>{
+                setVoiceCoach(v=>{
+                  const nv=!v;
+                  try{localStorage.setItem("corvus_voice_coach",nv?"1":"0");}catch{}
+                  if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{force:true});
+                  else stopSpeaking();
+                  return nv;
+                });
+              }} style={{
+                flex:1,background:voiceCoach?"rgba(16,185,129,.12)":"rgba(255,255,255,.04)",
+                border:`1px solid ${voiceCoach?"rgba(16,185,129,.4)":cs.border}`,borderRadius:9,
+                padding:"8px 0",fontSize:11,fontWeight:700,
+                color:voiceCoach?"#34d399":cs.muted,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+              }}>
+                🎙️ {isAr?"المدرب الصوتي":"Voice coach"}
+              </button>
+            )}
           </div>
           {/* Privacy: face blur toggle — pixelates the face on the analysis view */}
           <button onClick={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }} style={{
@@ -5772,22 +5773,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
           }}>
             {faceBlur?"🕶️":"👤"} {isAr?(faceBlur?"إخفاء الوجه: مُفعّل":"إخفاء الوجه (خصوصية)"):(faceBlur?"Face blur: ON":"Blur face (privacy)")}
           </button>
-          {/* Pro-tier: user-defined threshold+duration alert rules */}
-          <button onClick={()=>{
-            if(!tierAtLeast(effectiveTier,"professional")){
-              addToast(isAr?"⚙️ قواعد التنبيه المخصصة متاحة لباقة Pro فأعلى":"⚙️ Custom Alert Rules is a Pro feature","warn");
-              setShowBilling(true);return;
-            }
-            setShowCustomAlertRules(true);
-          }} style={{
-            background:customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.12)":"rgba(255,255,255,.04)",
-            border:`1px solid ${customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.4)":cs.border}`,borderRadius:9,
-            padding:"8px 0",fontSize:11,fontWeight:700,color:customAlertRules.some(r=>r.enabled)?"#c4b5fd":cs.muted,cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-          }}>
-            ⚙️ {isAr?"قواعد تنبيه مخصصة":"Custom Alert Rules"}
-            {!tierAtLeast(effectiveTier,"professional")&&<span style={{fontSize:8,background:"rgba(124,58,237,.12)",border:"1px solid rgba(124,58,237,.25)",borderRadius:99,padding:"1px 6px",color:"#a78bfa"}}>PRO</span>}
-          </button>
+          {/* Pro-tier: user-defined threshold+duration alert rules — same
+              declutter logic as voice coach above, only rendered here once
+              actually unlocked. */}
+          {tierAtLeast(effectiveTier,"professional") && (
+            <button onClick={()=>setShowCustomAlertRules(true)} style={{
+              background:customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.12)":"rgba(255,255,255,.04)",
+              border:`1px solid ${customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.4)":cs.border}`,borderRadius:9,
+              padding:"8px 0",fontSize:11,fontWeight:700,color:customAlertRules.some(r=>r.enabled)?"#c4b5fd":cs.muted,cursor:"pointer",
+              display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+            }}>
+              ⚙️ {isAr?"قواعد تنبيه مخصصة":"Custom Alert Rules"}
+            </button>
+          )}
           {/* Overlay controls — show/hide the skeleton and angle labels on the video */}
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>{ setShowSkeleton(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_skeleton",nv?"1":"0");}catch{} return nv; }); }} style={{
@@ -5815,14 +5813,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
           }}>
             🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
           </button>
-          {histRef.current?.length>0&&(
+          {histRef.current?.length>0&&qualityFor(tier).pdfDetail!=="none"&&(
 <button onClick={async ()=>{
-              // Same canonical gate — third direct generateSessionPDF() call that bypassed it.
-              if(qualityFor(tier).pdfDetail === "none"){
-                addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
-                setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
-                return;
-              }
               const hist=histRef.current||[];
               const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
               const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
@@ -5843,12 +5835,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 });
               } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
             }} style={{
-              background:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.04)":"rgba(59,130,246,.08)",
-              color:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.35)":"#93c5fd",
-              border:`1px solid ${qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.08)":"rgba(59,130,246,.2)"}`,borderRadius:10,
+              background:"rgba(59,130,246,.08)",
+              color:"#93c5fd",
+              border:"1px solid rgba(59,130,246,.2)",borderRadius:10,
               padding:"10px 0",fontSize:12,fontWeight:600,cursor:"pointer",
             }}>
-              {qualityFor(tier).pdfDetail==="none" ? (isAr?"🔒 تنزيل PDF (Pro+)":"🔒 Download PDF (Pro+)") : (isAr?"📄 تنزيل PDF":"📄 Download PDF")}
+              📄 {isAr?"تنزيل PDF":"Download PDF"}
             </button>
           )}
           <button onClick={()=>setMuted(v=>!v)} style={{
@@ -5858,6 +5850,55 @@ async function downloadPDF(sessionOverride, isClinical=false){
           }}>
             {muted?(isAr?"🔇 الصوت متوقف":"🔇 Sound OFF"):(isAr?"🔊 الصوت شغّال":"🔊 Sound ON")}
           </button>
+          {/* Compact locked-tools strip — everything this tier can't use yet
+              lives HERE as small inline chips, instead of each one getting
+              its own full-width button mixed in with the tools the user can
+              actually press. Same colors/behaviour (still opens billing on
+              tap) — just visually demoted so the page doesn't read as "100
+              options, none of them mine" for Free/Basic/Pro users. */}
+          {(!tierAtLeast(effectiveTier,"elite")||!tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(tier).pdfDetail==="none"))&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:2}}>
+              {!tierAtLeast(effectiveTier,"professional")&&(
+                <button onClick={()=>{
+                  addToast(isAr?"⚙️ قواعد التنبيه المخصصة متاحة لباقة Pro فأعلى":"⚙️ Custom Alert Rules is a Pro feature","warn");
+                  setShowBilling(true);
+                }} style={{
+                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
+                  display:"flex",alignItems:"center",gap:4,
+                }}>
+                  🔒 ⚙️ {isAr?"قواعد تنبيه":"Alert rules"}
+                  <span style={{fontSize:8,color:"#a78bfa",fontWeight:800}}>PRO</span>
+                </button>
+              )}
+              {!tierAtLeast(effectiveTier,"elite")&&(
+                <button onClick={()=>{
+                  addToast(isAr?"🎙️ المدرب الصوتي متاح لباقة Elite فقط":"🎙️ Voice coach is an Elite feature","warn");
+                  setShowBilling(true);
+                }} style={{
+                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
+                  display:"flex",alignItems:"center",gap:4,
+                }}>
+                  🔒 🎙️ {isAr?"مدرب صوتي":"Voice coach"}
+                  <span style={{fontSize:8,color:"#10b981",fontWeight:800}}>ELITE</span>
+                </button>
+              )}
+              {histRef.current?.length>0&&qualityFor(tier).pdfDetail==="none"&&(
+                <button onClick={()=>{
+                  addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
+                  setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
+                }} style={{
+                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
+                  display:"flex",alignItems:"center",gap:4,
+                }}>
+                  🔒 📄 {isAr?"تقرير PDF":"PDF report"}
+                  <span style={{fontSize:8,color:"#93c5fd",fontWeight:800}}>PRO</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tools moved to Dashboard — see HomePage tools tab */}
