@@ -373,6 +373,17 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── Support Tickets (WhatsApp inbound + admin replies) ──────────
+    // Written only via Admin SDK (api/support/whatsapp-inbound.js,
+    // api/support/reply.js) — no rule existed for this collection
+    // before, which meant the admin ticket viewer (CustomerSuccess.jsx)
+    // could never actually read anything; every query silently hit the
+    // default-deny fallback below.
+    match /support_tickets/{ticketId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // Admin SDK only
+    }
+
     // ── Deny everything else ─────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
