@@ -2072,13 +2072,13 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 function Testimonials({ lang }) {
   const ar = lang === "ar";
   const testimonials = ar ? [
-    { name:"سارة محمود", initials:"سم", role:"مهندسة برمجيات أولى", company:"Vodafone مصر", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", outcome:"آلام الرقبة انتهت في أسبوعين", color:"#818cf8" },
-    { name:"أحمد كريم", initials:"أك", role:"مدير موارد بشرية", company:"Orange Business", text:"جربنا 3 أدوات قبل Corvus. دي الأولى اللي الفريق بيستخدمها فعلاً. الـ AI coach بيعمل فرق حقيقي ومش مجرد رقم على شاشة.", score:"4.9/5", outcome:"أعلى adoption rate من 3 أدوات", color:"#22d3ee" },
-    { name:"ياسمين حسن", initials:"يح", role:"مديرة تقنية", company:"Fawry", text:"الإعداد خلص في 20 دقيقة. الدقة في تتبع وضعية الرقبة أعلى من أي أداة جربتها. التقارير الأسبوعية مفيدة للتتبع.", score:"4.8/5", outcome:"إعداد كامل في 20 دقيقة", color:"#10d9a0" },
+    { name:"س.م.", initials:"سم", role:"مهندسة برمجيات أولى", company:"شركة اتصالات كبرى", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", outcome:"آلام الرقبة انتهت في أسبوعين", color:"#818cf8" },
+    { name:"أ.ك.", initials:"أك", role:"مدير موارد بشرية", company:"شركة تكنولوجيا متوسطة", text:"جربنا 3 أدوات قبل Corvus. دي الأولى اللي الفريق بيستخدمها فعلاً. الـ AI coach بيعمل فرق حقيقي ومش مجرد رقم على شاشة.", score:"4.9/5", outcome:"أعلى adoption rate من 3 أدوات", color:"#22d3ee" },
+    { name:"ي.ح.", initials:"يح", role:"مديرة تقنية", company:"شركة مدفوعات رقمية", text:"الإعداد خلص في 20 دقيقة. الدقة في تتبع وضعية الرقبة أعلى من أي أداة جربتها. التقارير الأسبوعية مفيدة للتتبع.", score:"4.8/5", outcome:"إعداد كامل في 20 دقيقة", color:"#10d9a0" },
   ] : [
-    { name:"Sara Mahmoud", initials:"SM", role:"Senior Software Engineer", company:"Vodafone Egypt", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", outcome:"Neck pain gone in 2 weeks", color:"#818cf8" },
-    { name:"Ahmed Karim", initials:"AK", role:"HR Director", company:"Orange Business", text:"We tried 3 tools before Corvus. This is the first one the team actually uses. The AI coach makes a real difference — not just a number on a screen.", score:"4.9/5", outcome:"Highest adoption of 3 tools tested", color:"#22d3ee" },
-    { name:"Yasmine Hassan", initials:"YH", role:"Chief Technology Officer", company:"Fawry", text:"Setup took 20 minutes. Neck posture tracking accuracy is higher than any tool I've tested. Weekly reports are genuinely useful for tracking progress.", score:"4.8/5", outcome:"Full team setup in 20 min", color:"#10d9a0" },
+    { name:"S.M.", initials:"SM", role:"Senior Software Engineer", company:"Major Telecom Company", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", outcome:"Neck pain gone in 2 weeks", color:"#818cf8" },
+    { name:"A.K.", initials:"AK", role:"HR Director", company:"Mid-size Tech Company", text:"We tried 3 tools before Corvus. This is the first one the team actually uses. The AI coach makes a real difference — not just a number on a screen.", score:"4.9/5", outcome:"Highest adoption of 3 tools tested", color:"#22d3ee" },
+    { name:"Y.H.", initials:"YH", role:"Chief Technology Officer", company:"Digital Payments Company", text:"Setup took 20 minutes. Neck posture tracking accuracy is higher than any tool I've tested. Weekly reports are genuinely useful for tracking progress.", score:"4.8/5", outcome:"Full team setup in 20 min", color:"#10d9a0" },
   ];
 
   return (
