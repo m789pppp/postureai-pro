@@ -47,6 +47,7 @@ import { handleSSORedirect } from "./EnterpriseSSO.jsx";
 // initSentry moved to sentry.js (V12)
 import { CertBadgeModal } from "./CertificatePage.jsx";
 import { QuarterlyReportModal, SchoolsModal } from "./CorporateWellness.jsx";
+import { DeveloperPortalModal, InsurancePartnerModal } from "./DeveloperPortal.jsx";
 import AuthPage            from "./AuthPage.jsx";
 import ResetPasswordPage    from "./ResetPasswordPage.jsx";
 import EmailVerificationPage from "./EmailVerificationPage.jsx";
@@ -2383,6 +2384,8 @@ export default function App(){
   const[deepPlan,setDeepPlan]=useState(null);
   const[showQuarterlyReport,setShowQuarterlyReport]=useState(false);
   const[showSchoolsModal,setShowSchoolsModal]=useState(false);
+  const[showDevPortal,setShowDevPortal]=useState(false);
+  const[showInsuranceModal,setShowInsuranceModal]=useState(false);
   const[showCertModal,setShowCertModal]=useState(()=>{
     try{return new URLSearchParams(window.location.search).get("cert_issued")==="1";}catch{return false;}
   });
@@ -4494,11 +4497,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onSwitchAccount={handleSwitchAccount}
         onQuarterlyReport={()=>setShowQuarterlyReport(true)}
         onSchools={()=>setShowSchoolsModal(true)}
+        onDevPortal={()=>setShowDevPortal(true)}
+        onInsurance={()=>setShowInsuranceModal(true)}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showCertModal&&<CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/>}
       {showQuarterlyReport&&<QuarterlyReportModal profile={profile} allUsers={allUsers} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowQuarterlyReport(false)}/>}
       {showSchoolsModal&&<SchoolsModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowSchoolsModal(false)}/>}
+      {showDevPortal&&<DeveloperPortalModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowDevPortal(false)}/>}
+      {showInsuranceModal&&<InsurancePartnerModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowInsuranceModal(false)}/>}
       {/* Moved here from the live-analysis render branch — modals must render on the
           home page only, never over the live camera/analysis screen (interrupts the Stop button). */}
       {showAnnualUpsell && (
