@@ -1134,107 +1134,347 @@ function Stats({ lang }) {
 function Features({ lang }) {
   const ar = lang === "ar";
   const [active, setActive] = useState(0);
-  // Reset to first tab on language change — avoids stale index if array length differs
   useEffect(() => { setActive(0); }, [ar]);
 
-  const features = ar ? [
-    { icon:"🎯", title:"تحليل دقيق بالذكاء الاصطناعي",
-      desc:"478 نقطة تتبع + تحليل ثلاثي الأبعاد لوضع الرأس بدقة ~96%",
-      detail:"تقنية MediaPipe FaceMesh المتقدمة تتتبع 478 نقطة معلم على الوجه والجسم لتقييم الوضعية بدقة لم تكن ممكنة من قبل." },
-    { icon:"📊", title:"لوحة HR الذكية",
-      desc:"تحليلات فورية لصحة الفريق والمخاطر المهنية",
-      detail:"لوحة قيادة متكاملة تعرض مؤشرات الأداء، تنبيهات المخاطر، وتقارير قابلة للتصدير بصيغ PDF وExcel." },
-    { icon:"🤖", title:"مدرب AI شخصي",
-      desc:"توصيات مخصصة بالذكاء الاصطناعي",
-      detail:"محادثة AI تفاعلية تحلل بيانات الجلسة وتقدم توصيات علاجية مخصصة لكل موظف." },
-    { icon:"🔗", title:"تكاملات المؤسسات",
-      desc:"Slack · Teams · Jira · SAP HR · Webhooks",
-      detail:"API متكامل مع أنظمة HR الموجودة. تنبيهات تلقائية على Slack وTeams عند اكتشاف مخاطر عالية." },
-    { icon:"🛡️", title:"أمان المستوى المؤسسي",
-      desc:"SAML SSO · RBAC · تشفير كامل · سجلات التدقيق",
-      detail:"ISO27001 · تشفير AES-256 للبيانات في حالة السكون. سجلات تدقيق شاملة لكل حدث." },
-  ] : [
-    { icon:"🎯", title:"Precision AI Analysis",
-      desc:"478-landmark tracking + 3D head pose at ~96% accuracy",
-      detail:"Advanced MediaPipe FaceMesh technology tracks 478 facial and body landmarks to assess posture with medical-grade precision previously only available in clinical settings." },
-    { icon:"📊", title:"Smart HR Dashboard",
-      desc:"Real-time team health analytics and risk monitoring",
-      detail:"Integrated command center showing KPIs, risk alerts, exportable reports in PDF/Excel, and department-level breakdowns." },
-    { icon:"🤖", title:"Personal AI Coach",
-      desc:"Personalized AI-powered recommendations",
-      detail:"Interactive AI chat analyzes session data and provides tailored therapeutic recommendations for each employee." },
-    { icon:"🔗", title:"Enterprise Integrations",
-      desc:"Slack · Teams · Jira · SAP HR · Webhooks",
-      detail:"Full API integration with existing HR systems. Automatic Slack/Teams alerts when high-risk posture is detected." },
-    { icon:"🛡️", title:"Enterprise-Grade Security",
-      desc:"SAML SSO · RBAC · Full encryption · Audit logs",
-      detail:"ISO27001 · AES-256 encryption at rest. Comprehensive audit logs for every system event." },
+  const FEAT = [
+    {
+      icon:"🎯", accentColor:"#4f7cf9",
+      badge:{ en:"All Plans", ar:"كل الخطط" }, badgeC:"#10b981",
+      title:{ en:"Posture Score Engine", ar:"محرك درجة الوضعية" },
+      sub:{ en:"478 landmarks · 3D head pose · 30 fps live", ar:"478 نقطة · وضع رأس ثلاثي الأبعاد · 30 إطار/ثانية" },
+      bullets:{
+        en:["MediaPipe FaceMesh tracks 478 facial & body landmarks in real time",
+            "3D head pose via solvePnP — detects forward head, tilt & rotation",
+            "Shoulder symmetry + neck angle measured every frame",
+            "Live 0–100 score with green/amber/red alerts every 15 seconds"],
+        ar:["MediaPipe FaceMesh تتتبع 478 نقطة على الوجه والجسم فورياً",
+            "وضع رأس ثلاثي الأبعاد عبر solvePnP — يكتشف الرأس الأمامي والميلان والدوران",
+            "تقييم تماثل الكتفين وزاوية العنق في كل إطار",
+            "درجة حية 0-100 مع تنبيهات ملونة كل 15 ثانية"],
+      },
+      stat:{ v:"96%",  l:{ en:"tracking accuracy", ar:"دقة التتبع" } },
+      mock:"score",
+    },
+    {
+      icon:"🔮", accentColor:"#8b5cf6",
+      badge:{ en:"Basic +", ar:"Basic +" }, badgeC:"#1a56db",
+      title:{ en:"Pain Prediction AI", ar:"ذكاء توقع الألم" },
+      sub:{ en:"Predicts pain zones 48 hrs before they peak", ar:"يتوقع مناطق الألم قبل 48 ساعة من ذروتها" },
+      bullets:{
+        en:["Analyses 14-day posture history to spot strain patterns",
+            "Risk scores for neck, lower back, shoulders & wrists",
+            "Donut chart visualises body risk zones at a glance",
+            "Proactive WhatsApp alert sent before pain peaks"],
+        ar:["يحلل 14 يوماً من تاريخ الوضعية للكشف عن أنماط الإجهاد",
+            "درجة خطر للرقبة، أسفل الظهر، الكتفين والمعصمين",
+            "مخطط دائري يُظهر مناطق خطر الجسم بلمحة",
+            "تنبيه واتساب استباقي يُرسل قبل بلوغ الألم ذروته"],
+      },
+      stat:{ v:"48h", l:{ en:"early warning window", ar:"نافذة الإنذار المبكر" } },
+      mock:"pain",
+    },
+    {
+      icon:"🔥", accentColor:"#f59e0b",
+      badge:{ en:"Basic +", ar:"Basic +" }, badgeC:"#1a56db",
+      title:{ en:"Habits & Streaks", ar:"العادات والسلاسل" },
+      sub:{ en:"Daily check-ins · weekly challenge · 1× freeze/month", ar:"تسجيل يومي · تحدي أسبوعي · تجميد مرة/شهر" },
+      bullets:{
+        en:["Morning check-in: mood, pain level + AI personalised tip",
+            "Weekly posture challenge with badge on completion",
+            "Streak counter with one freeze-per-month protection",
+            "14-day consistency grid + Habit Score 0–100"],
+        ar:["تسجيل صباحي: المزاج، مستوى الألم + نصيحة AI مخصصة",
+            "تحدي وضعية أسبوعي مع شارة عند الإكمال",
+            "عداد سلسلة مع حماية تجميد مرة في الشهر",
+            "شبكة اتساق 14 يوماً + درجة عادة 0-100"],
+      },
+      stat:{ v:"+34%", l:{ en:"habit consistency vs. no reminders", ar:"اتساق أعلى مقارنةً بغير المذكَّرين" } },
+      mock:"streak",
+    },
+    {
+      icon:"🤖", accentColor:"#6366f1",
+      badge:{ en:"Basic → Elite", ar:"Basic → Elite" }, badgeC:"#6366f1",
+      title:{ en:"Dr. Corvus AI Coach", ar:"مدرب AI — د. كورفوس" },
+      sub:{ en:"10 → 30 → Unlimited msgs/mo · Arabic & English", ar:"10 → 30 → غير محدود رسالة/شهر · عربي وإنجليزي" },
+      bullets:{
+        en:["Remembers your full session history — no re-explaining needed",
+            "Evidence-based stretch & ergonomics advice per your score",
+            "Explains exactly why your score dropped and what to fix first",
+            "Elite: voice replies in Egyptian & Gulf Arabic dialects"],
+        ar:["يحفظ كامل تاريخ جلساتك — لا حاجة للشرح مجدداً",
+            "نصائح تمدد وهندسة بيئة عمل مبنية على أدلة بحسب درجتك",
+            "يشرح بدقة سبب انخفاض درجتك وأول شيء تصلحه",
+            "Elite: ردود صوتية بالعربية المصرية والخليجية"],
+      },
+      stat:{ v:"87%", l:{ en:"improved score after coaching week", ar:"تحسّنوا بعد أسبوع coaching" } },
+      mock:"coach",
+    },
+    {
+      icon:"📱", accentColor:"#25d366",
+      badge:{ en:"Basic +", ar:"Basic +" }, badgeC:"#1a56db",
+      title:{ en:"WhatsApp Reminders", ar:"تذكيرات واتساب" },
+      sub:{ en:"Smart nudges in your time window · Cairo UTC+3", ar:"تنبيهات ذكية في نافذة وقتك · القاهرة UTC+3" },
+      bullets:{
+        en:["Set your reminder window (e.g. 9 AM–5 PM Cairo time)",
+            "AI picks the sharpest message based on your recent score",
+            "Pain early-warning alerts sent proactively when risk rises",
+            "Twilio-powered — works on any phone, no app download needed"],
+        ar:["حدد نافذة التذكير (مثلاً 9 صباحاً–5 مساءً بتوقيت القاهرة)",
+            "الـ AI يختار أقوى رسالة بناءً على درجتك الأخيرة",
+            "تنبيهات ألم استباقية تُرسل تلقائياً عند ارتفاع الخطر",
+            "مدعوم بـ Twilio — يعمل على أي هاتف بدون تنزيل تطبيق"],
+      },
+      stat:{ v:"3×", l:{ en:"more check-ins vs. no reminders", ar:"ضعف التسجيلات بالمقارنة بغير المذكّرين" } },
+      mock:"whatsapp",
+    },
+    {
+      icon:"📊", accentColor:"#10b981",
+      badge:{ en:"B2B", ar:"B2B" }, badgeC:"#10b981",
+      title:{ en:"HR Intelligence Dashboard", ar:"لوحة HR الذكية" },
+      sub:{ en:"Team posture analytics for HR managers", ar:"تحليلات وضعية الفريق لمدراء الموارد البشرية" },
+      bullets:{
+        en:["Department-level risk maps and 30-day posture trends",
+            "Automatic weekly PDF wellness reports per employee",
+            "High-risk Slack / Teams / email alerts in real time",
+            "CSV + Excel export for compliance & insurance reporting"],
+        ar:["خرائط مخاطر على مستوى الأقسام واتجاهات الوضعية لمدة 30 يوماً",
+            "تقارير PDF صحية أسبوعية تلقائية لكل موظف",
+            "تنبيهات عالية الخطورة إلى Slack / Teams / بريد فورياً",
+            "تصدير CSV + Excel لتقارير الامتثال والتأمين"],
+      },
+      stat:{ v:"↓40%", l:{ en:"back pain complaints in 90 days", ar:"انخفاض شكاوى آلام الظهر خلال 90 يوماً" } },
+      mock:"hr",
+    },
+    {
+      icon:"🛡️", accentColor:"#f59e0b",
+      badge:{ en:"Enterprise", ar:"Enterprise" }, badgeC:"#f59e0b",
+      title:{ en:"Enterprise Security", ar:"أمان المستوى المؤسسي" },
+      sub:{ en:"SSO · RBAC · AES-256 · Audit logs · GDPR", ar:"SSO · RBAC · AES-256 · سجلات تدقيق · GDPR" },
+      bullets:{
+        en:["SAML 2.0 / Azure AD / Okta single sign-on",
+            "Role-based access — HR, Manager & Employee tiers",
+            "AES-256 at rest + TLS 1.3 in transit, zero data sold",
+            "Full audit-log export + GDPR right-to-erasure API"],
+        ar:["تسجيل دخول موحد SAML 2.0 / Azure AD / Okta",
+            "تحكم وصول بالأدوار — HR، مدير، موظف",
+            "AES-256 للبيانات المخزنة + TLS 1.3 أثناء النقل، لا بيانات تُباع",
+            "تصدير سجل تدقيق كامل + API حق الحذف GDPR"],
+      },
+      stat:{ v:"99.9%", l:{ en:"uptime SLA", ar:"وقت تشغيل مضمون" } },
+      mock:"security",
+    },
   ];
 
-  const f = features[active];
+  function FeatureMock({ type, accent }) {
+    const s = { borderRadius:12, overflow:"hidden", fontSize:12 };
+    if (type === "score") return (
+      <div style={{ ...s, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", padding:"18px 20px", display:"flex", alignItems:"center", gap:20 }}>
+        <div style={{ position:"relative", width:72, height:72, flexShrink:0 }}>
+          <svg viewBox="0 0 72 72" width="72" height="72">
+            <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="7"/>
+            <circle cx="36" cy="36" r="30" fill="none" stroke={accent} strokeWidth="7"
+              strokeDasharray={`${2*Math.PI*30*0.78} ${2*Math.PI*30}`}
+              strokeDashoffset={2*Math.PI*30*0.25} strokeLinecap="round"/>
+          </svg>
+          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column" }}>
+            <span style={{ fontSize:18, fontWeight:800, color:"#f0f6ff", lineHeight:1 }}>78</span>
+            <span style={{ fontSize:9, color:"#8896ac" }}>/100</span>
+          </div>
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:11, color:"#8896ac", marginBottom:6 }}>{ar?"الجلسة الحالية":"Live session"}</div>
+          {[["Neck angle","12°","#10b981"],["Shoulder tilt","4°","#f59e0b"],["Head forward","8mm","#10b981"]].map(([l,v,c])=>(
+            <div key={l} style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+              <span style={{ color:"#8896ac", fontSize:11 }}>{l}</span>
+              <span style={{ color:c, fontWeight:600, fontSize:11 }}>{v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+    if (type === "pain") return (
+      <div style={{ ...s, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", padding:"16px 18px" }}>
+        <div style={{ fontSize:11, color:"#8896ac", marginBottom:10 }}>{ar?"مناطق خطر الجسم":"Body risk zones"}</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+          {[[ar?"الرقبة":"Neck","72%","#ef4444"],[ar?"أسفل الظهر":"Lower back","48%","#f59e0b"],[ar?"الكتفان":"Shoulders","31%","#10b981"],[ar?"المعصمان":"Wrists","19%","#10b981"]].map(([z,p,c])=>(
+            <div key={z} style={{ background:"rgba(255,255,255,.04)", borderRadius:8, padding:"8px 10px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                <span style={{ color:"#8896ac", fontSize:10.5 }}>{z}</span>
+                <span style={{ color:c, fontWeight:700, fontSize:10.5 }}>{p}</span>
+              </div>
+              <div style={{ height:3, borderRadius:99, background:"rgba(255,255,255,.08)" }}>
+                <div style={{ height:3, borderRadius:99, background:c, width:p }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+    if (type === "streak") return (
+      <div style={{ ...s, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", padding:"16px 18px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+          <span style={{ fontSize:11, color:"#8896ac" }}>{ar?"14 يوم اتساق":"14-day consistency"}</span>
+          <span style={{ fontSize:13, fontWeight:700, color:accent }}>🔥 12 {ar?"يوم":"days"}</span>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
+          {[1,1,1,1,0,1,1,1,1,1,1,1,0,1].map((v,i)=>(
+            <div key={i} style={{ height:22, borderRadius:5, background: v ? `${accent}cc` : "rgba(255,255,255,.06)" }}/>
+          ))}
+        </div>
+        <div style={{ marginTop:10, display:"flex", gap:8 }}>
+          <div style={{ flex:1, background:"rgba(255,255,255,.04)", borderRadius:8, padding:"6px 10px", textAlign:"center" }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#f0f6ff" }}>83</div>
+            <div style={{ fontSize:9.5, color:"#8896ac" }}>{ar?"درجة العادة":"Habit Score"}</div>
+          </div>
+          <div style={{ flex:1, background:"rgba(255,255,255,.04)", borderRadius:8, padding:"6px 10px", textAlign:"center" }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#f0f6ff" }}>5/7</div>
+            <div style={{ fontSize:9.5, color:"#8896ac" }}>{ar?"هذا الأسبوع":"This week"}</div>
+          </div>
+        </div>
+      </div>
+    );
+    if (type === "coach") return (
+      <div style={{ ...s, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
+        <div style={{ alignSelf:"flex-start", background:"rgba(79,124,249,.15)", border:"1px solid rgba(79,124,249,.25)", borderRadius:"14px 14px 14px 4px", padding:"9px 13px", maxWidth:"80%" }}>
+          <div style={{ fontSize:10.5, color:"#818cf8", marginBottom:3, fontWeight:600 }}>Dr. Corvus</div>
+          <div style={{ fontSize:11.5, color:"#d1d5db", lineHeight:1.5 }}>{ar?"درجتك انخفضت 8 نقاط — الرقبة في وضع أمامي 47 دقيقة. جرّب تمرين الـ chin tuck الآن.":"Your score dropped 8pts — forward head for 47 min. Try a chin tuck stretch now."}</div>
+        </div>
+        <div style={{ alignSelf:"flex-end", background:"rgba(255,255,255,.07)", borderRadius:"14px 14px 4px 14px", padding:"9px 13px", maxWidth:"70%" }}>
+          <div style={{ fontSize:11.5, color:"#d1d5db" }}>{ar?"كيف أعمل الـ chin tuck صح؟":"How do I do chin tuck correctly?"}</div>
+        </div>
+        <div style={{ alignSelf:"flex-start", background:"rgba(79,124,249,.15)", border:"1px solid rgba(79,124,249,.25)", borderRadius:"14px 14px 14px 4px", padding:"9px 13px", maxWidth:"85%" }}>
+          <div style={{ fontSize:10.5, color:"#818cf8", marginBottom:3, fontWeight:600 }}>Dr. Corvus</div>
+          <div style={{ fontSize:11.5, color:"#d1d5db", lineHeight:1.5 }}>{ar?"اسحب ذقنك للخلف دون خفض رأسك — 10 تكرارات كل ساعة.":"Pull chin straight back without dropping head — 10 reps, every hour."}</div>
+        </div>
+      </div>
+    );
+    if (type === "whatsapp") return (
+      <div style={{ ...s, background:"#0b1f14", border:"1px solid rgba(37,211,102,.18)", padding:"14px 16px", display:"flex", flexDirection:"column", gap:7 }}>
+        <div style={{ fontSize:10, color:"#25d366", fontWeight:600, marginBottom:2 }}>● Corvus Health · {ar?"واتساب":"WhatsApp"}</div>
+        {[
+          ar?"⚠️ درجتك انخفضت إلى 61 — الرقبة في وضع إجهاد عالٍ. استرح 5 دقائق الآن."
+            :"⚠️ Your score dropped to 61 — neck in high-strain. Take a 5-min break now.",
+          ar?"🔥 سلسلة 12 يوم! تسجيل اليوم؟ اضغط ✅"
+            :"🔥 12-day streak! Log today? Tap ✅ to confirm.",
+          ar?"📊 تقرير الأسبوع: متوسط درجتك 74 (+6 من الأسبوع الماضي) 🎉"
+            :"📊 Weekly: avg score 74 (+6 from last week) 🎉",
+        ].map((msg,i)=>(
+          <div key={i} style={{ background:"rgba(37,211,102,.08)", border:"1px solid rgba(37,211,102,.12)", borderRadius:"12px 12px 12px 4px", padding:"8px 11px" }}>
+            <div style={{ fontSize:11.5, color:"#d1fae5", lineHeight:1.45 }}>{msg}</div>
+            <div style={{ fontSize:9.5, color:"#25d366", marginTop:3, opacity:.7 }}>{["9:04 AM","12:00 PM","Mon 9:00 AM"][i]} ✓✓</div>
+          </div>
+        ))}
+      </div>
+    );
+    if (type === "hr") return (
+      <div style={{ ...s, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", padding:"16px 18px" }}>
+        <div style={{ fontSize:11, color:"#8896ac", marginBottom:10 }}>{ar?"متوسط درجة الأقسام — هذا الأسبوع":"Department avg score — this week"}</div>
+        {[[ar?"هندسة":"Engineering","82",accent],[ar?"تصميم":"Design","76","#f59e0b"],[ar?"مبيعات":"Sales","61","#ef4444"],[ar?"دعم":"Support","88",accent]].map(([d,v,c])=>(
+          <div key={d} style={{ marginBottom:6 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+              <span style={{ color:"#8896ac", fontSize:11 }}>{d}</span>
+              <span style={{ color:c, fontWeight:700, fontSize:11 }}>{v}/100</span>
+            </div>
+            <div style={{ height:5, borderRadius:99, background:"rgba(255,255,255,.06)" }}>
+              <div style={{ height:5, borderRadius:99, background:c, width:`${v}%` }}/>
+            </div>
+          </div>
+        ))}
+        <div style={{ marginTop:10, padding:"8px 12px", background:"rgba(239,68,68,.08)", border:"1px solid rgba(239,68,68,.2)", borderRadius:9, fontSize:11, color:"#fca5a5" }}>
+          🚨 {ar?"3 موظفين في المبيعات — خطر ألم ظهر مرتفع":"3 Sales employees — high back pain risk"}
+        </div>
+      </div>
+    );
+    if (type === "security") return (
+      <div style={{ ...s, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", padding:"16px 18px" }}>
+        {[["SAML 2.0 SSO","Azure AD · Okta · Google"],["AES-256 Encryption","at rest + TLS 1.3 in transit"],["RBAC","HR · Manager · Employee roles"],["GDPR Erasure API","right-to-delete in < 24h"],["Audit Logs","every event, exportable CSV"]].map(([t,s2])=>(
+          <div key={t} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,.05)" }}>
+            <span style={{ color:accent, fontWeight:700, fontSize:14, flexShrink:0 }}>✓</span>
+            <div>
+              <div style={{ fontSize:12, color:"#e2e8f0", fontWeight:600 }}>{t}</div>
+              <div style={{ fontSize:10.5, color:"#8896ac" }}>{s2}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+    return null;
+  }
+
+  const f = FEAT[active];
 
   return (
     <section id="features" className="lp-section">
       <div className="lp-wrap">
-        <SectionHead eyebrow={ar ? "المنصة" : "Platform"}
-          title={ar ? "كل ما تحتاجه لصحة موظفيك" : "Everything your workforce health program needs"}
-          sub={ar ? "من التحليل الفوري إلى الرؤى المؤسسية — كل شيء في مكان واحد"
-                  : "From real-time analysis to enterprise insights — everything in one platform"}/>
+        <SectionHead
+          eyebrow={ar ? "المنصة" : "Platform"}
+          title={ar ? "كل ما تحتاجه — فرداً كنت أو شركة" : "Everything you need — individual or enterprise"}
+          sub={ar ? "من تحليل الوضعية الفوري إلى لوحات HR المؤسسية — منصة واحدة تخدم الجميع"
+                  : "From real-time posture analysis to enterprise HR dashboards — one platform for everyone"}
+        />
 
         <div className="lp-features-wrap">
-          {/* Feature tabs */}
-          <div style={{ display:"flex", flexDirection:"column", gap:6 }} className="lp-features-tabs">
-            {features.map((item, i) => (
-              <button key={i} onClick={() => setActive(i)} style={{
-                background: active === i ? "rgba(79,124,249,.12)" : "transparent",
-                border: active === i ? "1px solid rgba(79,124,249,.28)" : "1px solid transparent",
-                borderRadius:14, padding:"15px 16px",
-                cursor:"pointer", textAlign: ar ? "right" : "left",
-                transition:"background .2s,border-color .2s",
-                display:"flex", alignItems:"center", gap:13,
-              }}>
-                <span style={{
-                  width:38, height:38, borderRadius:11, flexShrink:0,
-                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
-                  background: active === i ? LPV7_TOKENS.gBlue : "rgba(255,255,255,.05)",
-                  boxShadow: active === i ? "0 4px 14px rgba(79,124,249,.4)" : "none",
-                  transition:"background .2s,box-shadow .2s",
-                }}>{item.icon}</span>
-                <span style={{ fontSize:14.5, fontWeight:500,
-                  color: active === i ? LPV7_TOKENS.text : LPV7_TOKENS.sub }}>{item.title}</span>
-              </button>
-            ))}
+          <div style={{ display:"flex", flexDirection:"column", gap:4 }} className="lp-features-tabs">
+            {FEAT.map((item, i) => {
+              const isActive = active === i;
+              return (
+                <button key={i} onClick={() => setActive(i)} style={{
+                  background: isActive ? `${item.accentColor}12` : "transparent",
+                  border: isActive ? `1px solid ${item.accentColor}38` : "1px solid transparent",
+                  borderRadius:14, padding:"13px 15px",
+                  cursor:"pointer", textAlign: ar ? "right" : "left",
+                  transition:"background .2s,border-color .2s",
+                  display:"flex", alignItems:"center", gap:12,
+                }}>
+                  <div style={{ width:3, height:32, borderRadius:99, flexShrink:0, background: isActive ? item.accentColor : "transparent", transition:"background .2s" }}/>
+                  <span style={{ width:36, height:36, borderRadius:10, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, background: isActive ? `${item.accentColor}22` : "rgba(255,255,255,.05)", border: isActive ? `1px solid ${item.accentColor}44` : "1px solid transparent", transition:"background .2s,border-color .2s" }}>{item.icon}</span>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13.5, fontWeight:600, color: isActive ? LPV7_TOKENS.text : LPV7_TOKENS.sub, lineHeight:1.3 }}>{ar ? item.title.ar : item.title.en}</div>
+                    <div style={{ fontSize:11, color: isActive ? item.accentColor : "transparent", marginTop:1, fontWeight:500, transition:"color .2s", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ar ? item.sub.ar : item.sub.en}</div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Feature detail */}
           <motion.div key={active}
-            initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
+            initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }}
             transition={{ duration:.35, ease:[0.22,1,0.36,1] }}
-            style={{ ...card(true), display:"flex", flexDirection:"column", gap:16, padding:"clamp(20px,2vw,36px)", minHeight:"auto" }}>
-            <span style={{
-              width:60, height:60, borderRadius:16, fontSize:28,
-              display:"flex", alignItems:"center", justifyContent:"center",
-              background:LPV7_TOKENS.gBlue, boxShadow:"0 6px 20px rgba(79,124,249,.4)",
-            }}>{f.icon}</span>
-            <h3 style={{ ...TYPE.h3, fontSize:26, color:LPV7_TOKENS.text, margin:0, fontFamily:FONT_DISPLAY }}>
-              {f.title}
-            </h3>
-            <p style={{ fontSize:16.5, color:LPV7_TOKENS.indigo, margin:0, fontWeight:500 }}>
-              {f.desc}
-            </p>
-            <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:0 }}>
-              {f.detail}
-            </p>
+            style={{ display:"flex", flexDirection:"column", gap:0, ...card(true), padding:0, overflow:"hidden" }}>
+            <div style={{ background:`linear-gradient(135deg, ${f.accentColor}18 0%, transparent 70%)`, padding:"26px 28px 20px", borderBottom:"1px solid rgba(255,255,255,.07)" }}>
+              <div style={{ display:"flex", alignItems:"flex-start", gap:14, marginBottom:14 }}>
+                <span style={{ width:52, height:52, borderRadius:14, fontSize:24, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:`${f.accentColor}22`, border:`1.5px solid ${f.accentColor}44` }}>{f.icon}</span>
+                <div style={{ flex:1 }}>
+                  <span style={{ display:"inline-block", fontSize:10, fontWeight:700, letterSpacing:".06em", padding:"3px 10px", borderRadius:99, marginBottom:6, background:`${f.badgeC}18`, border:`1px solid ${f.badgeC}40`, color:f.badgeC }}>{ar ? f.badge.ar : f.badge.en}</span>
+                  <h3 style={{ fontSize:22, fontWeight:800, color:LPV7_TOKENS.text, margin:0, fontFamily:FONT_DISPLAY, lineHeight:1.2 }}>{ar ? f.title.ar : f.title.en}</h3>
+                  <p style={{ fontSize:13.5, color:f.accentColor, margin:"4px 0 0", fontWeight:500, opacity:.9 }}>{ar ? f.sub.ar : f.sub.en}</p>
+                </div>
+              </div>
+              <div style={{ display:"inline-flex", alignItems:"center", gap:10, background:"rgba(255,255,255,.05)", border:`1px solid ${f.accentColor}30`, borderRadius:10, padding:"8px 16px" }}>
+                <span style={{ fontSize:24, fontWeight:800, color:f.accentColor, fontFamily:FONT_DISPLAY }}>{f.stat.v}</span>
+                <span style={{ fontSize:12, color:LPV7_TOKENS.muted, maxWidth:120, lineHeight:1.3 }}>{ar ? f.stat.l.ar : f.stat.l.en}</span>
+              </div>
+            </div>
+            <div style={{ padding:"20px 28px 24px", display:"flex", flexDirection:"column", gap:18 }}>
+              <ul style={{ margin:0, padding:0, listStyle:"none", display:"flex", flexDirection:"column", gap:9 }}>
+                {(ar ? f.bullets.ar : f.bullets.en).map((b,i)=>(
+                  <li key={i} style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+                    <span style={{ width:18, height:18, borderRadius:99, background:`${f.accentColor}20`, border:`1px solid ${f.accentColor}50`, color:f.accentColor, fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>✓</span>
+                    <span style={{ fontSize:13.5, color:LPV7_TOKENS.sub, lineHeight:1.5 }}>{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <FeatureMock type={f.mock} accent={f.accentColor} />
+            </div>
           </motion.div>
         </div>
       </div>
       <style>{`
         @media(max-width:860px){
-          .lp-features-grid{grid-template-columns:1fr!important}
-          .lp-features-tabs{flex-direction:row!important;overflow-x:auto;gap:8px!important;
-            padding-bottom:6px;-webkit-overflow-scrolling:touch}
-          .lp-features-tabs button{flex-shrink:0}
-          .lp-features-tabs button span:last-child{display:none}
+          .lp-features-wrap{grid-template-columns:1fr!important}
+          .lp-features-tabs{flex-direction:row!important;overflow-x:auto;gap:6px!important;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+          .lp-features-tabs button{flex-shrink:0;min-width:140px}
+          .lp-features-tabs button>div:last-child>div:last-child{display:none}
         }
       `}</style>
     </section>

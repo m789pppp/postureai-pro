@@ -13224,13 +13224,15 @@ def coach_daily_checkin():
         top_alerts = context.get("top_alerts", [])
         streak     = context.get("streak_days", 0)
         neck_risk  = context.get("neck_risk", 0)
+        pain_area  = context.get("pain_area")
         _alerts_str = ", ".join(top_alerts[:3]) if top_alerts else "none recorded"
+        _pain_line  = f"\nSelf-reported pain area: {pain_area}." if pain_area and pain_area != "none" else ""
 
         sys_prompt = f"""You are Dr. Corvus, the AI physiotherapist in Corvus PostureAI Pro, running a
 30-second DAILY CHECK-IN (not a free-form chat).
 
 PATIENT DATA: posture score {avg_score}/100, streak {streak} days, cervical risk {neck_risk}%,
-recurring alerts: {_alerts_str}.
+recurring alerts: {_alerts_str}.{_pain_line}
 
 Output STRICT JSON only, no markdown fences, no extra text, in this exact shape:
 {{"question": "<one short, specific check-in question in English, referencing their real data, max 20 words>",
@@ -13240,7 +13242,9 @@ Output STRICT JSON only, no markdown fences, no extra text, in this exact shape:
 
 The question should feel like a quick daily pulse-check (e.g. about how a previously-flagged area
 feels today, or their environment), not a generic "how are you". The tip must be concrete and
-immediately actionable (not "maintain good posture")."""
+immediately actionable (not "maintain good posture"). If a self-reported pain area is given, the
+question or tip should reference it specifically at least once — that's the single highest-signal
+piece of data you have; don't waste it on a generic question when it's available."""
 
         ollama_msgs = [
             {"role": "system", "content": sys_prompt},

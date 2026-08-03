@@ -99,6 +99,8 @@ const DEFAULT_RULE = () => ({
   enabled: true, voice: true, toast: true,
 });
 
+const MAX_RULES = 5;
+
 export function CustomAlertRulesPanel({ isAr, cs, rules = [], onSave, onClose }) {
   const [localRules, setLocalRules] = useState(rules);
   const [editing, setEditing] = useState(null); // rule being added/edited, or null
@@ -107,7 +109,8 @@ export function CustomAlertRulesPanel({ isAr, cs, rules = [], onSave, onClose })
   const remove = (id) => persist(localRules.filter(r => r.id !== id));
   const toggle = (id) => persist(localRules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
 
-  const startAdd = () => setEditing(DEFAULT_RULE());
+  const atMax = localRules.length >= MAX_RULES;
+  const startAdd = () => { if (!atMax) setEditing(DEFAULT_RULE()); };
   const startEdit = (r) => setEditing({ ...r });
   const saveEditing = () => {
     if (!editing) return;
@@ -194,11 +197,16 @@ export function CustomAlertRulesPanel({ isAr, cs, rules = [], onSave, onClose })
                   ))}
                 </div>
               )}
-              <button onClick={startAdd} style={{
-                width: "100%", padding: "11px", background: "linear-gradient(135deg,#7c3aed,#1a56db)", color: "#fff",
-                border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+              <button onClick={startAdd} disabled={atMax} style={{
+                width: "100%", padding: "11px",
+                background: atMax ? "rgba(148,163,184,.08)" : "linear-gradient(135deg,#7c3aed,#1a56db)",
+                color: atMax ? cs.muted : "#fff",
+                border: atMax ? `1px solid ${cs.border}` : "none", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                cursor: atMax ? "default" : "pointer",
               }}>
-                {isAr ? "+ قاعدة جديدة" : "+ New Rule"}
+                {atMax
+                  ? (isAr ? `الحد الأقصى ${MAX_RULES} قواعد — امسح واحدة عشان تضيف` : `Max ${MAX_RULES} rules — remove one to add another`)
+                  : (isAr ? "+ قاعدة جديدة" : "+ New Rule")}
               </button>
             </>
           ) : (
