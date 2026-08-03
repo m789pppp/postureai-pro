@@ -32,8 +32,8 @@ export const PLANS = {
     priceUSD: { monthly: 0,     yearly: 0 },
     stripePriceId: { monthly: "", yearly: "" },
     color:"#6366f1",
-    features:   ["5 sessions/month", "Posture score", "Basic alerts"],
-    featuresAr: ["5 جلسات/شهر", "درجة الوضعية", "تنبيهات أساسية"],
+    features:   ["5 sessions/month", "Posture Score", "Demo Session", "Pain Self-Report", "First Session Badge", "Weekly Email Report"],
+    featuresAr: ["5 جلسات/شهر", "درجة الوضعية", "جلسة تجريبية", "تقرير الألم الذاتي", "شارة الجلسة الأولى", "تقرير أسبوعي بالإيميل"],
     limit: -1,
   },
   basic: {
@@ -45,8 +45,8 @@ export const PLANS = {
       yearly:  import.meta.env.VITE_STRIPE_PRICE_BASIC_YEARLY  || "",
     },
     color:"#3b82f6",
-    features:   ["Unlimited sessions", "AI Coach (10 msgs/mo)", "Streak tracking", "Goals", "Pain prediction"],
-    featuresAr: ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "تتبع السلسلة", "الأهداف", "توقع الألم"],
+    features:   ["Unlimited sessions", "Daily Check-in", "Weekly Challenge", "Pain Prediction Card", "Streak Freeze", "Posture Habit Score", "WhatsApp Reminders", "AI Coach (10 msgs/mo)"],
+    featuresAr: ["جلسات غير محدودة", "تسجيل يومي", "تحدي أسبوعي", "بطاقة توقع الألم", "تجميد الـ Streak", "درجة عادة الوضعية", "تذكيرات واتساب", "مدرب AI (10 رسائل/شهر)"],
     limit: -1,
   },
   professional: {
@@ -58,8 +58,8 @@ export const PLANS = {
       yearly:  import.meta.env.VITE_STRIPE_PRICE_PRO_YEARLY  || "",
     },
     color:"#8b5cf6", popular:true,
-    features:   ["Everything in Basic", "AI Insights", "Reports", "Session compare", "Leaderboard", "Export CSV/PDF"],
-    featuresAr: ["كل Basic", "رؤى AI", "تقارير", "مقارنة الجلسات", "المتصدرين", "تصدير CSV/PDF"],
+    features:   ["Everything in Basic", "AI Coach (30 msgs/mo)", "Weekly Intelligence Report", "Shareable PDF Report", "Body Heatmap", "Focus Mode Integration", "Custom Alert Rules", "Family/Partner Mode (+1)"],
+    featuresAr: ["كل Basic", "مدرب AI (30 رسائل/شهر)", "تقرير ذكاء أسبوعي", "تقرير PDF قابل للمشاركة", "خريطة حرارة الجسم", "تكامل وضع التركيز", "قواعد تنبيه مخصصة", "وضع الأسرة (+1)"],
     limit: -1,
   },
   elite: {
@@ -71,8 +71,8 @@ export const PLANS = {
       yearly:  import.meta.env.VITE_STRIPE_PRICE_ELITE_YEARLY  || "",
     },
     color:"#f59e0b",
-    features:   ["Everything in Pro", "AI Coach unlimited", "Predictive AI", "PDF report", "Priority support"],
-    featuresAr: ["كل Pro", "مدرب AI غير محدود", "AI تنبؤي", "تقرير PDF", "دعم أولوية"],
+    features:   ["Everything in Pro", "AI Coach (Unlimited)", "Predictive AI (detailed)", "Voice Coach (Arabic)", "Monthly Physiotherapist", "Posture DNA Report (quarterly)", "Priority WhatsApp Support", "Elite Early Access"],
+    featuresAr: ["كل Pro", "مدرب AI غير محدود", "ذكاء اصطناعي تنبؤي تفصيلي", "مدرب صوتي عربي", "أخصائي علاج طبيعي شهري", "تقرير Posture DNA (ربع سنوي)", "دعم واتساب أولوية", "وصول مبكر Elite"],
     limit: -1,
   },
 };
