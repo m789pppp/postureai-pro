@@ -2285,7 +2285,16 @@ export default function App(){
   };
   // Listen for browser back/forward
   useEffect(() => {
-    const onPop = () => setPageRaw(hashToPage(window.location.hash));
+    const onPop = () => {
+      const newPage = hashToPage(window.location.hash);
+      // Physical/mobile back button used to just swap the page underneath an
+      // active camera session: stream kept running, camera indicator light
+      // stayed on, RAF loop kept burning CPU in the background, and the
+      // session was never saved -- none of that happened only through the
+      // in-app Back buttons, which explicitly call stopCamera() themselves.
+      if(newPage!=="live" && camActiveRef.current){ stopCamera(); }
+      setPageRaw(newPage);
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -2310,6 +2319,12 @@ export default function App(){
   },[profile?.acct_type,profile?.user_type,acctType]); // "company" | "individual"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
+  // Popstate (browser/mobile back button) fires from a listener registered
+  // once on mount — without a ref, its closure would only ever see camActive
+  // as it was at that first render (false), so it could never detect "camera
+  // is currently running" no matter what actually happens later.
+  const camActiveRef=useRef(false);
+  useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
