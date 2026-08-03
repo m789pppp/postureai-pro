@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
 import { getCached, setCache } from "./aiPreloader.js";
 import { SymptomAPI } from "./services/api.js";
+import { updateUserProfile } from "./firebase.js";
 
 async function callGemini(prompt, system, maxTokens = 900) {
   try {
@@ -46,6 +47,81 @@ const TOKENS = {
 };
 
 const riskColor = v => v >= 70 ? "#ef4444" : v >= 45 ? "#f59e0b" : "#10b981";
+
+// ── Weekly Preventive Forecast ───────────────────────────────────
+// Different from the general trend Forecast tab above — this looks for
+// a SPECIFIC recurring day-of-week x time-of-day x body-region pattern,
+// not just an overall trajectory. "Next week, ~62% chance of right
+// shoulder discomfort Wednesday after 3pm" instead of "your score is
+// trending down".
+const WEEKDAY_LABELS = {
+  en: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
+  ar: ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"],
+};
+const DAY_PART = {
+  morning:   { en: "morning",   ar: "الصبح",    range: [6, 12] },
+  afternoon: { en: "afternoon", ar: "بعد الضهر", range: [12, 17] },
+  evening:   { en: "evening",   ar: "بالليل",    range: [17, 21] },
+  night:     { en: "late night",ar: "بالليل بدري",range: [21, 24] },
+};
+function _dayPartOf(hour) {
+  for (const [k, v] of Object.entries(DAY_PART)) {
+    if (hour >= v.range[0] && hour < v.range[1]) return k;
+  }
+  return "night";
+}
+const WF_REGION_LABEL = {
+  fhp_index: { en: "neck", ar: "رقبتك" }, neck_lean: { en: "neck", ar: "رقبتك" },
+  rounded_shoulders: { en: "shoulders", ar: "كتفك" }, shoulder_level: { en: "right shoulder", ar: "كتفك اليمين" },
+  spine_lean: { en: "lower back", ar: "أسفل ظهرك" }, spine_align: { en: "back", ar: "ظهرك" },
+  trunk_lean: { en: "back", ar: "ظهرك" }, hip_angle: { en: "hips", ar: "الحوض" },
+  screen_distance: { en: "eyes/neck", ar: "عينك ورقبتك" },
+};
+
+function computeWeeklyForecast(sessions) {
+  const scored = (sessions || []).filter(s => (s.avg_score || 0) > 0);
+  if (scored.length < 20) return { ready: false, reason: "not_enough_sessions", n: scored.length };
+
+  const buckets = {}; // "weekday-part" -> { scores:[], metricSums:{}, metricCounts:{} }
+  const weeksSeen = new Set();
+  scored.forEach(s => {
+    const d = s.created_at?.toDate?.() ?? new Date(s.created_at || 0);
+    if (isNaN(d.getTime())) return;
+    const weekday = d.getDay();
+    const part = _dayPartOf(d.getHours());
+    const key = `${weekday}-${part}`;
+    weeksSeen.add(`${d.getFullYear()}-W${Math.floor(d.getDate()/7)}`);
+    if (!buckets[key]) buckets[key] = { weekday, part, scores: [], metricSums: {}, metricCounts: {} };
+    buckets[key].scores.push(s.avg_score);
+    Object.entries(s.metrics || {}).forEach(([k, v]) => {
+      if (k.startsWith("_")) return;
+      const sc = typeof v === "number" ? v : (v?.score ?? null);
+      if (sc == null) return;
+      buckets[key].metricSums[k] = (buckets[key].metricSums[k] || 0) + sc;
+      buckets[key].metricCounts[k] = (buckets[key].metricCounts[k] || 0) + 1;
+    });
+  });
+
+  if (weeksSeen.size < 3) return { ready: false, reason: "not_enough_weeks", n: scored.length };
+
+  const candidates = Object.values(buckets)
+    .filter(b => b.scores.length >= 3)
+    .map(b => {
+      const avgScore = b.scores.reduce((a, c) => a + c, 0) / b.scores.length;
+      const badCount = b.scores.filter(s => s < 65).length;
+      const problemPct = Math.round((badCount / b.scores.length) * 100);
+      const worstMetric = Object.entries(b.metricSums)
+        .map(([k, sum]) => ({ key: k, avg: sum / b.metricCounts[k] }))
+        .sort((a, c) => a.avg - c.avg)[0];
+      return { ...b, avgScore, problemPct, worstMetric, n: b.scores.length };
+    })
+    .sort((a, c) => c.problemPct - a.problemPct || a.avgScore - c.avgScore);
+
+  const top = candidates[0];
+  if (!top || top.problemPct < 35) return { ready: false, reason: "no_clear_pattern", n: scored.length };
+
+  return { ready: true, ...top };
+}
 
 // Inline markdown — NO T. references (avoids minifier collision)
 function inlineMdP(t) {
@@ -519,6 +595,8 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
   const [symptomInsights, setSymptomInsights] = useState(null); // from the symptom correlation engine
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [reminderSaved,  setReminderSaved]  = useState(!!profile?.predictive_stretch_reminder?.enabled);
   const isAr = lang === "ar";
 
   useEffect(() => {
@@ -549,6 +627,7 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   const anomalies    = detectAnomalies(scoredSessions);
   const fore         = forecast(recent14.length >= 3 ? recent14 : allScores.slice().reverse());
   const forecastTrend = fore?.trend || "stable";
+  const weeklyForecast = computeWeeklyForecast(sessions);
 
   // Risk scoring — a weighted sum of explainable factors rather than one
   // opaque number. The "symptom correlation" factor pulls in the real
@@ -693,13 +772,42 @@ Max 180 words. Start immediately.`,
     finally { setLoading(false); }
   }, [sessions.length, avgScore, burnoutScore, riskScore, fore?.trend, lang, profile]);
 
-  useEffect(() => { loadAI(tab); }, [tab]);
+  useEffect(() => { if (tab !== "weekplan") loadAI(tab); }, [tab]);
+
+  const saveStretchReminder = async () => {
+    if (!weeklyForecast?.ready || !uid) return;
+    setReminderSaving(true);
+    try {
+      const region = WF_REGION_LABEL[weeklyForecast.worstMetric?.key] || { en: "your posture", ar: "وضعيتك" };
+      // Reminder fires 1 day before the predicted risk window, at a fixed
+      // 10am slot — reuses the same hourly whatsapp-cron.js infra as the
+      // daily session reminder (api/habits/whatsapp-cron.js), just keyed
+      // to a specific weekday instead of every day.
+      const reminderWeekday = (weeklyForecast.weekday + 6) % 7; // day before
+      await updateUserProfile(uid, {
+        predictive_stretch_reminder: {
+          enabled: true,
+          weekday: reminderWeekday,
+          hour: 14, // 2pm Cairo time
+          target_weekday: weeklyForecast.weekday,
+          target_part: weeklyForecast.part,
+          region_en: region.en, region_ar: region.ar,
+        },
+      });
+      setReminderSaved(true);
+    } catch (e) {
+      console.error("[predictive reminder]", e);
+    } finally {
+      setReminderSaving(false);
+    }
+  };
 
   const TABS = [
     { id: "burnout",  icon: "🔥", en: "Burnout",   ar: "الإرهاق"  },
     { id: "anomaly",  icon: "🔍", en: "Anomalies", ar: "الشذوذات" },
     { id: "risk",     icon: "⚠️", en: "Risk",      ar: "الخطر"    },
     { id: "forecast", icon: "🔮", en: "Forecast",  ar: "التوقع"   },
+    { id: "weekplan", icon: "🗓️", en: "Weekly Plan", ar: "الخطة الأسبوعية" },
   ];
 
   const trendLabel = forecastTrend === "improving"
@@ -939,6 +1047,85 @@ Max 180 words. Start immediately.`,
 
               <AIBlock loading={loading} data={aiText} error={error}
                 onRetry={() => loadAI(tab)} isAr={isAr} />
+            </div>
+          )}
+
+          {tab === "weekplan" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp4 }}>
+              {!weeklyForecast?.ready ? (
+                <div style={{ textAlign: "center", padding: "50px 20px" }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>🗓️</div>
+                  <div style={{ fontSize: TOKENS.base, color: TOKENS.textSub, marginBottom: 6 }}>
+                    {weeklyForecast?.reason === "not_enough_weeks"
+                      ? (isAr ? "محتاجين بيانات موزعة على 3 أسابيع على الأقل عشان نطلع نمط أسبوعي موثوق" : "Need data spread across at least 3 weeks for a reliable weekly pattern")
+                      : weeklyForecast?.reason === "no_clear_pattern"
+                      ? (isAr ? "مفيش نمط أسبوعي واضح لسه — وضعيتك متسقة، أو مش متكررة كفاية بنفس اليوم/الوقت" : "No clear weekly pattern yet — your posture is either consistent, or not repeating enough at the same day/time")
+                      : (isAr ? "محتاجين على الأقل 20 جلسة قبل ما نقدر نطلع خطة أسبوعية موثوقة" : "Need at least 20 sessions before a reliable weekly plan is possible")}
+                  </div>
+                  <div style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted }}>
+                    {isAr ? `عندك دلوقتي ${weeklyForecast?.n || 0} جلسة` : `You currently have ${weeklyForecast?.n || 0} sessions`}
+                  </div>
+                </div>
+              ) : (() => {
+                const region = WF_REGION_LABEL[weeklyForecast.worstMetric?.key] || { en: "posture", ar: "وضعيتك" };
+                const dayName = WEEKDAY_LABELS[isAr ? "ar" : "en"][weeklyForecast.weekday];
+                const partName = DAY_PART[weeklyForecast.part][isAr ? "ar" : "en"];
+                const reminderDay = WEEKDAY_LABELS[isAr ? "ar" : "en"][(weeklyForecast.weekday + 6) % 7];
+                return (
+                  <>
+                    <div style={{
+                      background: `linear-gradient(135deg, ${riskColor(weeklyForecast.problemPct)}18, transparent)`,
+                      border: `1px solid ${riskColor(weeklyForecast.problemPct)}40`,
+                      borderRadius: 16, padding: TOKENS.sp5,
+                    }}>
+                      <div style={{ fontSize: TOKENS.xs, fontWeight: TOKENS.bold, color: TOKENS.textMuted,
+                        letterSpacing: ".07em", textTransform: "uppercase", marginBottom: TOKENS.sp3 }}>
+                        {isAr ? "الأسبوع الجاي" : "Next Week"}
+                      </div>
+                      <div style={{ fontSize: TOKENS.md, color: TOKENS.text, lineHeight: 1.6, marginBottom: TOKENS.sp3 }}>
+                        {isAr
+                          ? <>لو اشتغلت بنفس النمط، احتمال <strong style={{color:riskColor(weeklyForecast.problemPct)}}>{weeklyForecast.problemPct}%</strong> تحس بألم في {region.ar} يوم {dayName} {partName}.</>
+                          : <>If you keep the same pattern, there's a <strong style={{color:riskColor(weeklyForecast.problemPct)}}>{weeklyForecast.problemPct}%</strong> chance of {region.en} discomfort {dayName} {partName}.</>}
+                      </div>
+                      <div style={{ fontSize: TOKENS.sm, color: TOKENS.textSub, lineHeight: 1.6,
+                        borderTop: `1px solid ${TOKENS.border}`, paddingTop: TOKENS.sp3 }}>
+                        {isAr
+                          ? <>توصيتنا: stretch 10 دقايق كل {reminderDay}، وهننبهك {reminderDay} الساعة 2 الضهر.</>
+                          : <>Our recommendation: 10-min stretch every {reminderDay}, and we'll remind you {reminderDay} at 2pm.</>}
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted, lineHeight: 1.6, padding: `0 ${TOKENS.sp1}px` }}>
+                      {isAr
+                        ? `مبني على ${weeklyForecast.n} جلسة سابقة يوم ${dayName} ${partName} — ده نمط استكشافي مش تشخيص طبي.`
+                        : `Based on ${weeklyForecast.n} previous sessions on ${dayName} ${partName} — this is an exploratory pattern, not a medical diagnosis.`}
+                    </div>
+
+                    <button
+                      onClick={saveStretchReminder}
+                      disabled={reminderSaving || reminderSaved}
+                      style={{
+                        padding: `${TOKENS.sp3}px ${TOKENS.sp4}px`, borderRadius: 12,
+                        background: reminderSaved ? "rgba(16,185,129,.12)" : TOKENS.accent,
+                        border: reminderSaved ? "1px solid rgba(16,185,129,.35)" : "none",
+                        color: reminderSaved ? "#10b981" : "#fff",
+                        fontSize: TOKENS.base, fontWeight: TOKENS.bold,
+                        cursor: reminderSaved ? "default" : "pointer",
+                      }}>
+                      {reminderSaved
+                        ? (isAr ? `✓ مفعّل — هننبهك ${reminderDay} الساعة 2` : `✓ Enabled — we'll remind you ${reminderDay} at 2pm`)
+                        : reminderSaving
+                        ? "…"
+                        : (isAr ? `🔔 فعّل التذكير عبر واتساب` : `🔔 Enable WhatsApp reminder`)}
+                    </button>
+                    {!profile?.whatsapp_phone && !reminderSaved && (
+                      <div style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted }}>
+                        {isAr ? "محتاج تضيف رقم واتساب في الإعدادات الأول عشان التذكير يوصلك" : "Add your WhatsApp number in Settings first so the reminder can reach you"}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 
