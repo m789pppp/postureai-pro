@@ -8,7 +8,7 @@ import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
-import { PushAPI, dispatchNotification, FeatureFlagsAPI } from "./services/api.js";
+import { PushAPI, dispatchNotification, FeatureFlagsAPI, BillingAPI } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
 import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 import { StressCheckIn, StressCorrelationCard } from "./StressPosture.jsx";
@@ -434,6 +434,24 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
   const isFreeTier = !pro && !elite;
   const [showDemoSession, setShowDemoSession] = useState(false);
   const [teaserDismissed, setTeaserDismissed] = useState(false);
+  // The client-computed `month` above (filtering userSessions by date) can
+  // drift from the actual enforcement counter: /api/session/start counts
+  // against a server-side Redis key, incremented independently of whether
+  // the session doc later saved successfully to Firestore. Fetch the real
+  // number so the bar can never show "3 of 5" while the user is actually
+  // already blocked at 5/5 (or vice versa). Falls back to the client count
+  // instantly (no loading flash) and swaps in the authoritative number
+  // once it arrives.
+  const [realMonthUsage, setRealMonthUsage] = useState(null);
+  useEffect(() => {
+    if (!isFreeTier) return;
+    let cancelled = false;
+    BillingAPI.usage().then(res => {
+      const n = res?.usage?.sessions_this_month;
+      if (!cancelled && typeof n === "number") setRealMonthUsage(n);
+    }).catch(() => {}); // fail quiet — client-computed count is still shown
+    return () => { cancelled = true; };
+  }, [isFreeTier, userSessions.length]);
   // Upgrade teaser: Free-tier only, shown once right after the user's
   // first-ever real session, dismissed permanently via profile flag.
   const showTeaser = isFreeTier && userSessions.length===1 && !profile?.upgrade_teaser_seen && !teaserDismissed;
@@ -518,7 +536,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
       )}
 
       {isFreeTier && (
-        <SessionUsageBar used={month} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
+        <SessionUsageBar used={realMonthUsage ?? month} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
       )}
 
       {isFreeTier && (
