@@ -21,7 +21,8 @@ import {
   deleteUser as _deleteAuthUser,
 } from "firebase/auth";
 import {
-  getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
+  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
+  doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
   collection, query, where, orderBy, limit, getDocs,
   onSnapshot, serverTimestamp as _serverTimestamp, increment, writeBatch,
 } from "firebase/firestore";
@@ -47,7 +48,24 @@ export const KASHIER_MERCHANT_ID = import.meta.env.VITE_KASHIER_MERCHANT_ID || "
 
 const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
-export const db   = getFirestore(fbApp);
+// Was plain getFirestore() — zero offline persistence, so ANY network blip
+// mid-session (very common on mobile/flaky wifi) made saveSession() fail
+// immediately and permanently: no automatic retry, no queue, session data
+// just gone. persistentLocalCache queues writes in IndexedDB and replays
+// them once the connection is back, across tabs.
+export const db = (()=>{
+  try{
+    return initializeFirestore(fbApp, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  }catch(e){
+    // Falls back to a plain in-memory Firestore instance if persistence
+    // can't init (e.g. private/incognito browsing in some browsers) rather
+    // than crashing the whole app on load.
+    console.warn("[firebase] persistent cache unavailable, using in-memory Firestore:", e?.message);
+    return getFirestore(fbApp);
+  }
+})();
 export const serverTimestamp = _serverTimestamp;
 
 // Re-export Firestore SDK functions so other modules can import from firebase.js
