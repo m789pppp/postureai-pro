@@ -1918,9 +1918,11 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {isAr?"إدارة أمان حسابك وجلساتك.":"Manage your account security and active sessions."}
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            {/* MFA / 2FA status */}
-            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
-              borderRadius:10, border:`1px solid ${cs.border}`,
+            {/* MFA / 2FA status — MFASetup.jsx has been a fully working
+                TOTP+SMS flow for a while; this row was still a permanently
+                dead "Soon" badge with nothing wired to open it. */}
+            <div onClick={()=>setShowMFASetup?.(true)} style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+              borderRadius:10, border:`1px solid ${cs.border}`, cursor:"pointer",
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
                 <span style={{ fontSize:22 }}>🔐</span>
@@ -1929,14 +1931,17 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                     {isAr?"المصادقة الثنائية (2FA)":"Two-Factor Authentication"}
                   </div>
                   <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
-                    {isAr?"أضف طبقة حماية إضافية لحسابك":"Add an extra layer of protection"}
+                    {profile?.mfa_enabled
+                      ? (isAr?`مفعّلة عبر ${profile?.mfa_method==="sms"?"SMS":"تطبيق المصادقة"}`:`Enabled via ${profile?.mfa_method==="sms"?"SMS":"authenticator app"}`)
+                      : (isAr?"أضف طبقة حماية إضافية لحسابك":"Add an extra layer of protection")}
                   </div>
                 </div>
               </div>
               <span style={{ fontSize:10, fontWeight:700,
-                background:"rgba(245,158,11,.1)", color:"#f59e0b",
+                background: profile?.mfa_enabled ? "rgba(16,185,129,.12)" : "rgba(99,102,241,.1)",
+                color: profile?.mfa_enabled ? "#10b981" : "#a5b4fc",
                 padding:"3px 10px", borderRadius:99 }}>
-                {isAr?"قريباً":"Soon"}
+                {profile?.mfa_enabled ? (isAr?"مفعّل ✓":"Enabled ✓") : (isAr?"إعداد":"Set up")}
               </span>
             </div>
             {/* Active sessions */}
@@ -2833,6 +2838,7 @@ export default function HomePage({
   setShowPredictiveAI, setShowMRR, setShowChangelog,
   setShowNotificationsHub, setShowEnterpriseRBAC,
   setShowBillingDashboard, setShowReferralProgram, setShowIntegrationsHub,
+  setShowMFASetup,
   isAdmin, isHRAdmin, companyId,
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,

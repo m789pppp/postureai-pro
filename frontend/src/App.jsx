@@ -4485,6 +4485,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         setShowBillingDashboard={setShowBillingDashboard}
         setShowReferralProgram={setShowReferralProgram}
         setShowIntegrationsHub={setShowIntegrationsHub}
+        setShowMFASetup={setShowMFASetup}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin} companyId={companyId}
         darkMode={darkMode} setDarkMode={setDarkMode} setLang={setLang}
         t={t} logOut={logOut} setUser={setUser} setProfile={setProfile}
