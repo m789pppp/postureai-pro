@@ -3124,7 +3124,15 @@ export default function App(){
                   const _sc=document.createElement("canvas");
                   const _sw=320,_sh=Math.max(120,Math.round(320*(_v.videoHeight/Math.max(_v.videoWidth,1))))||240;
                   _sc.width=_sw;_sc.height=_sh;
-                  _sc.getContext("2d").drawImage(_v,0,0,_sw,_sh);
+                  const _sctx=_sc.getContext("2d");
+                  _sctx.drawImage(_v,0,0,_sw,_sh);
+                  // The face-blur toggle only ever pixelated the on-screen
+                  // overlay canvas — it never touched this snapshot, which
+                  // draws straight from the raw <video> element. A user with
+                  // "Blur face (privacy)" ON still had their real,
+                  // unblurred face captured here and stored/shown in the
+                  // session report. Apply the same blur to the snapshot too.
+                  if(faceBlur) drawFaceBlur(_sctx,_v,lms,_sw,_sh);
                   const _img=_sc.toDataURL("image/jpeg",0.6);
                   lastSnapMsRef.current=_snow;
                   _snaps.push({img:_img,score:finalResult.overall,time:new Date().toLocaleTimeString()});
