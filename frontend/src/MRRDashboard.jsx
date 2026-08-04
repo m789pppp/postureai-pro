@@ -57,9 +57,22 @@ export function MRRDashboard({ cs, lang, onClose }) {
     // what this dashboard originally expected (no LTV, churn rate, trial/paid
     // split, or cohort retention yet), so those sections are marked "not yet
     // tracked" below instead of showing fabricated numbers.
-    apiFetch("/billing/analytics")
-      .then(d => { setRaw(d); setLoad(false); })
-      .catch(e => { setError(e.message); setLoad(false); });
+    // Use real Firestore-computed revenue endpoint
+    import("firebase/auth").then(({ getAuth }) => {
+      const user = getAuth().currentUser;
+      if (!user) { setError("Not authenticated"); setLoad(false); return; }
+      user.getIdToken().then(token =>
+        fetch("/api/metrics/revenue", { headers:{ Authorization:`Bearer ${token}` } })
+          .then(r => r.json())
+          .then(d => { setRaw(d); setLoad(false); })
+          .catch(e => {
+            // Fallback to billing/analytics
+            apiFetch("/billing/analytics")
+              .then(d => { setRaw(d); setLoad(false); })
+              .catch(e2 => { setError(e2.message); setLoad(false); });
+          })
+      );
+    });
   }, []);
 
   // Adapt the real backend response to this dashboard's display shape.

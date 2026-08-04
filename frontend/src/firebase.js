@@ -305,7 +305,8 @@ export async function getReferralStats(uid) {
   try {
     const { getAuth } = await import("firebase/auth");
     const tok = await getAuth().currentUser?.getIdToken?.();
-    const res = await fetch(`${API_BASE_URL}/api/referral/stats`, {
+    // Use Vercel serverless endpoint (not Railway)
+    const res = await fetch("/api/referral/stats", {
       headers: tok ? { "Authorization": `Bearer ${tok}` } : {},
     });
     const d = await res.json();
