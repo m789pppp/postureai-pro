@@ -7,12 +7,45 @@
  * - Multi-turn memory + follow-up questions
  * - Redirects off-topic questions back to posture
  */
+import { API_BASE_URL } from "./config/api.js";
 
 export function getLocalAIStatus() { return { ready:true, loading:false, progress:100, error:null }; }
 export function onLocalAIStatus(cb) { return ()=>{}; }
 export async function initLocalAI()   { return true; }
 export async function unloadLocalAI() {}
 export async function checkWebGPU()   { return true; }
+
+// ── Backend LLM proxy — now the PRIMARY path ─────────────────────
+// /api/llm (backend/backend.py llm_proxy()) already exists, is server-
+// side (no CORS, no client-exposed key), tries multiple LLM7.io models
+// with fallback, and its own docstring says "Used by AI Coach, AI
+// Insights, Predictive AI" — but nothing actually called it. Every AI
+// feature was instead going straight from the browser to Pollinations,
+// which (per current Pollinations docs, confirmed August 2026) now
+// requires an API key for text generation, and a client-safe
+// PUBLISHABLE key (the only kind safe to ship in a browser bundle) is
+// rate-limited to 1 request/hour per IP+key — structurally unusable for
+// a live chat product regardless of whether VITE_POLLINATIONS_KEY is
+// set. That's the real root cause of "AI مش شاغل" — not a missing key,
+// but the free client-side tier being far too limited for real traffic.
+// Fixed by making the already-built, already-working backend proxy
+// (LLM7.io needs no key server-side — LLM7_API_KEY defaults to the
+// literal string "unused", which is LLM7's documented anonymous-access
+// value, ~30 requests/min) the primary path, with direct-from-browser
+// Pollinations kept only as a last-resort fallback in case the backend
+// itself is ever unreachable.
+async function _backendLLM(messages, systemPrompt, maxTokens, temperature = 0.5) {
+  const r = await fetch(`${API_BASE_URL}/llm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, system_prompt: systemPrompt, max_tokens: maxTokens, temperature }),
+  });
+  if (!r.ok) throw new Error("backend_llm_" + r.status);
+  const data = await r.json();
+  const text = data?.text?.trim();
+  if (!text) throw new Error("backend_llm_empty");
+  return text;
+}
 
 // Pollinations text/chat completions: per their current docs, anonymous
 // no-key access is stated to be for IMAGE generation only — text/chat
@@ -22,6 +55,8 @@ export async function checkWebGPU()   { return true; }
 // likely why the primary AI path kept failing and falling back to the
 // offline responder. Falls back to no Authorization header if unset —
 // same (throttled) behavior as before, so this is safe until configured.
+// NOTE: even WITH a key, publishable (pk_) keys are capped at 1 req/hour
+// per IP+key — this is now a fallback-of-last-resort, not the primary.
 const POLLINATIONS_KEY = import.meta.env.VITE_POLLINATIONS_KEY || "";
 const _pollinationsHeaders = () => ({
   "Content-Type": "application/json",
@@ -840,7 +875,33 @@ async function _offlineStream(messages, systemPrompt, onChunk) {
 }
 
 async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, signal) {
-  // ── 1. Pollinations streaming (primary) ──────────────────────────
+  // ── 1. Backend proxy (primary) — non-streaming endpoint, so this
+  // simulates a natural typing reveal client-side rather than true SSE.
+  // See _backendLLM's comment above for why this replaced Pollinations
+  // streaming as primary. ──────────────────────────────────────────
+  try {
+    const text = await _backendLLM(messages, systemPrompt, Math.min(maxTokens || 500, 500), 0.4);
+    const clean = cleanAIResponse(text);
+    if (!clean || clean.length < 10) throw new Error("backend_stream_empty");
+
+    // Reveal word-by-word so the UI still feels like it's streaming,
+    // rather than the whole answer appearing at once.
+    const words = clean.split(/(\s+)/);
+    let shown = "";
+    for (const w of words) {
+      if (signal?.aborted) throw new Error("aborted");
+      shown += w;
+      onChunk(shown);
+      await new Promise(r => setTimeout(r, 18));
+    }
+    return clean;
+  } catch (e) {
+    if (e.message === "aborted") throw e;
+    console.warn("[CorvusAI] backend proxy stream failed, falling back to Pollinations:", e.message);
+  }
+
+  // ── 2. Pollinations streaming (fallback — only reached if the backend
+  // itself is unreachable) ─────────────────────────────────────────
   const allMsgs = [
     { role: "system", content: systemPrompt },
     ...messages.map(m => ({
@@ -937,6 +998,17 @@ function cleanAIResponse(text) {
 
 // Fallback: non-streaming (if streaming fails)
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
+  const toks = Math.min(maxTokens || 600, 600);
+
+  // ── 1. Backend proxy (primary) — see _backendLLM's comment above for
+  // why this replaced browser-direct Pollinations as the primary path. ──
+  try {
+    const text = await _backendLLM(messages, systemPrompt, toks, 0.45);
+    return cleanAIResponse(text);
+  } catch (e) {
+    console.warn("[CorvusAI] backend proxy failed, falling back to direct providers:", e.message);
+  }
+
   const allMsgs = [
     { role: "system", content: systemPrompt },
     ...messages.map(m => ({
@@ -944,7 +1016,6 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
       content: String(m.content || ""),
     })),
   ];
-  const toks = Math.min(maxTokens || 600, 600);
 
   const go = (url, opts, parse, ms = 12000) => {
     const ctrl = new AbortController();
@@ -961,7 +1032,8 @@ async function callLLM7Direct(messages, systemPrompt, maxTokens) {
 
   const parsePOST = async r => (await r.json())?.choices?.[0]?.message?.content?.trim();
 
-  // ── 1. Pollinations + OpenRouter race (primary) ─────────────────
+  // ── 2. Pollinations + OpenRouter race (fallback — only reached if the
+  // backend itself is unreachable, e.g. Railway down) ─────────────────
   const providers = [
     go("https://gen.pollinations.ai/v1/chat/completions", {
       method: "POST",
@@ -1161,6 +1233,7 @@ export async function localChat(messages, {systemPrompt=""} = {}) {
 
   // Rule-based KB (only if both attempts fail or deadline reached)
   console.warn("[CorvusAI] Using rule-based KB fallback");
+  try { window._posthog?.capture("ai_fallback_to_rule_based", { path: "chat" }); } catch {}
   const hist = analyzeHistory(messages);
   const last = [...messages].reverse().find(m => m.role === "user");
   const intent = detectIntent(last?.content || "");
@@ -1194,5 +1267,6 @@ export async function localAnalysis(prompt, {systemPrompt=""} = {}) {
 
   // True fallback — rule-based (only if both attempts fail or deadline reached)
   console.warn("[CorvusAI] Using rule-based fallback for analysis");
+  try { window._posthog?.capture("ai_fallback_to_rule_based", { path: "analysis" }); } catch {}
   return runAnalysis(prompt, systemPrompt);
 }
