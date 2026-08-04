@@ -190,6 +190,18 @@
       "dest": "/api/posture-api/usage.js"
     },
     {
+      "src": "/api/metrics/revenue",
+      "dest": "/api/metrics/revenue.js"
+    },
+    {
+      "src": "/api/referral/stats",
+      "dest": "/api/referral/stats.js"
+    },
+    {
+      "src": "/api/referral/track",
+      "dest": "/api/referral/track.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
@@ -246,6 +258,15 @@
     },
     "api/posture-api/usage.js": {
       "maxDuration": 10
+    },
+    "api/metrics/revenue.js": {
+      "maxDuration": 15
+    },
+    "api/referral/stats.js": {
+      "maxDuration": 10
+    },
+    "api/referral/track.js": {
+      "maxDuration": 5
     }
   },
   "crons": [
