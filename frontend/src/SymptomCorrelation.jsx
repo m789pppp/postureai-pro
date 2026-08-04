@@ -5,7 +5,8 @@
  * shown during a session with an after-the-fact, explainable correlation.
  */
 import { useState, useEffect, useCallback } from "react";
-import { SymptomAPI } from "./services/api.js";
+import { db } from "./firebase.js";
+import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
 
 const border = "1px solid rgba(255,255,255,.08)";
 const card   = { background:"rgba(255,255,255,.03)", border, borderRadius:16, padding:20 };
@@ -62,7 +63,13 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
     if (symptoms.length === 0) return;
     setSaving(true);
     try {
-      await SymptomAPI.log({ date: todayStr(), symptoms });
+      // Write directly to Firestore — no Railway backend needed
+      const uid = profile?.uid;
+      if (!uid) throw new Error("No user");
+      await setDoc(doc(db, "symptom_logs", `${uid}_${todayStr()}`), {
+        uid, date: todayStr(), symptoms,
+        saved_at: new Date().toISOString(),
+      }, { merge: true });
       setSavedToday(true);
     } catch (e) {
       // silent — non-critical background feature
@@ -73,18 +80,58 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
 
   const loadInsights = useCallback(() => {
     setLoadingInsights(true);
-    SymptomAPI.correlation("90d")
-      .then(d => { setInsights(d?.insights || []); setNote(d?.note || null); })
-      .catch(() => { setInsights([]); })
-      .finally(() => setLoadingInsights(false));
+    // Compute correlation locally from Firestore symptom logs + sessions
+    (async () => {
+      try {
+        const uid = profile?.uid;
+        if (!uid) { setInsights([]); return; }
+        const cutoff = new Date(Date.now() - 90*24*3600000).toISOString().slice(0,10);
+        const snap = await getDocs(query(
+          collection(db, "symptom_logs"),
+          where("uid","==",uid),
+          where("date",">=",cutoff),
+          orderBy("date","desc"),
+          limit(90)
+        ));
+        const logs = snap.docs.map(d => d.data());
+        // Count symptom frequency
+        const freq = {};
+        logs.forEach(l => l.symptoms?.forEach(s => { freq[s.type] = (freq[s.type]||0)+1; }));
+        // Build insights from frequency
+        const insights = Object.entries(freq)
+          .sort((a,b)=>b[1]-a[1])
+          .slice(0,4)
+          .map(([type, count]) => {
+            const sym = ["neck_pain","back_pain"].includes(type)
+              ? { cause:"neck", strength: count > 10 ? "strong" : "moderate" }
+              : { cause:"posture", strength: count > 5 ? "moderate" : "weak" };
+            return { symptom_type: type, ...sym, occurrences: count, total_days: logs.length };
+          });
+        setInsights(insights);
+        if (!logs.length) setNote(isAr?"سجّل أعراضك يومياً لمدة أسبوع لرؤية الربط":"Log symptoms daily for a week to see correlations");
+      } catch { setInsights([]); }
+      finally { setLoadingInsights(false); }
+    })();
   }, []);
 
   const loadHistory = useCallback((period) => {
     setLoadingHistory(true);
-    SymptomAPI.history(period)
-      .then(d => setHistory(d?.logs || []))
-      .catch(() => setHistory([]))
-      .finally(() => setLoadingHistory(false));
+    (async () => {
+      try {
+        const uid = profile?.uid;
+        if (!uid) { setHistory([]); return; }
+        const days = period === "30d" ? 30 : period === "7d" ? 7 : 14;
+        const cutoff = new Date(Date.now() - days*24*3600000).toISOString().slice(0,10);
+        const snap = await getDocs(query(
+          collection(db, "symptom_logs"),
+          where("uid","==",uid),
+          where("date",">=",cutoff),
+          orderBy("date","desc")
+        ));
+        setHistory(snap.docs.map(d => d.data()));
+      } catch { setHistory([]); }
+      finally { setLoadingHistory(false); }
+    })();
   }, []);
 
   useEffect(() => { if (tab === "insights") loadInsights(); }, [tab, loadInsights]);
