@@ -2734,6 +2734,11 @@ export default function App(){
   // Auth state listener
   // Track if auth came from OAuth redirect — prevents timeout from firing
   const _oauthRedirect = useRef(false);
+  // Which uid we've already run the forced setPage("home"/"setup"/"invite")
+  // routing for — onAuthStateChanged can legitimately refire for the SAME
+  // signed-in user (token refresh, tab visibility changes), and that must
+  // NOT re-trigger navigation away from wherever the user currently is.
+  const routedUidRef = useRef(null);
 
   useEffect(()=>{
     // Handle Google/Microsoft OAuth redirect result
@@ -2923,18 +2928,28 @@ export default function App(){
           try { const lm=localStorage.getItem("last_mode"); if(lm) setMode(lm); } catch{}
 
           // Navigate — always land on home or setup, never on live (live requires user interaction)
-          try {
-            const params=new URLSearchParams(window.location.search);
-            const pendingInvite=sessionStorage.getItem("pending_invite");
-            // Clear #live hash if present — live page should only open via explicit user action
-            if(window.location.hash === "#live") window.history.replaceState({},"","#home");
-            if(pendingInvite){ window.__invite_token=pendingInvite; setPage("invite"); }
-            else if(!p || !p.setup_complete) setPage("setup");
-            else {
-              const planParam = params.get("plan");
-              setPage(planParam && TIERS[planParam] ? "pricing" : "home");
-            }
-          } catch{ setPage("home"); }
+          // ONLY on the first resolution for this uid. onAuthStateChanged
+          // legitimately refires during an active session (ID token refresh,
+          // and on mobile, tab visibility changes right after things like
+          // the getUserMedia() camera-permission prompt) -- every refire
+          // used to run this same forced setPage("home"/"setup") again,
+          // which is exactly what was yanking users on the LIVE page back
+          // to Home mid-session, camera still running, session unsaved.
+          if(routedUidRef.current!==u.uid){
+            routedUidRef.current=u.uid;
+            try {
+              const params=new URLSearchParams(window.location.search);
+              const pendingInvite=sessionStorage.getItem("pending_invite");
+              // Clear #live hash if present — live page should only open via explicit user action
+              if(window.location.hash === "#live") window.history.replaceState({},"","#home");
+              if(pendingInvite){ window.__invite_token=pendingInvite; setPage("invite"); }
+              else if(!p || !p.setup_complete) setPage("setup");
+              else {
+                const planParam = params.get("plan");
+                setPage(planParam && TIERS[planParam] ? "pricing" : "home");
+              }
+            } catch{ setPage("home"); }
+          }
           setAuthChecked(true); // always mark checked when user is logged in
           // Pre-generate AI insights in background (3s delay so auth fully settles)
           setTimeout(() => {
@@ -2952,6 +2967,7 @@ export default function App(){
           }
           try { if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; } } catch{}
           try { if(window.__unsubProfile){ window.__unsubProfile(); window.__unsubProfile=null; } } catch{}
+          routedUidRef.current=null;
           setUser(null);
           setProfile(null);
           setUserSessions([]);
