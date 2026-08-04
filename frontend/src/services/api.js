@@ -137,7 +137,7 @@ export const AnalysisAPI = {
   snapshot:     (data) => apiFetch("/session/snapshot", { method: "POST", body: data }),
   addSnapshot:  (sid, frame, score, timestamp) =>
     apiFetch("/session/snapshot", { method: "POST", body: { session_id: sid, frame, score, timestamp } }),
-  startSession: (data) => apiFetch("/session/start",    { method: "POST", body: data }),
+  startSession: (data) => apiFetch("/session/start",    { method: "POST", body: data, timeout: 8000 }),
   getSession:   (sid)  => apiFetch(`/session/${sid}`),
   deleteSession:(sid)  => apiFetch("/session/delete",   { method: "POST", body: { session_id: sid } }),
   syncOffline:  (data) => apiFetch("/session/sync",     { method: "POST", body: data }),
