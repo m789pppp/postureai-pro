@@ -2383,6 +2383,17 @@ export default function App(){
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
   const[showQuarterlyReport,setShowQuarterlyReport]=useState(false);
+
+  // Track referral clicks — fire-and-forget on mount
+  useEffect(()=>{
+    try {
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      if (ref) {
+        fetch("/api/referral/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ref_code:ref})}).catch(()=>{});
+        try { sessionStorage.setItem("corvus_ref",ref); } catch {}
+      }
+    } catch {}
+  },[]);
   const[showSchoolsModal,setShowSchoolsModal]=useState(false);
   const[showDevPortal,setShowDevPortal]=useState(false);
   const[showInsuranceModal,setShowInsuranceModal]=useState(false);
