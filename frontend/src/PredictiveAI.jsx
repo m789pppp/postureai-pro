@@ -79,6 +79,17 @@ const WF_REGION_LABEL = {
 };
 
 function computeWeeklyForecast(sessions) {
+  // KNOWN LIMITATION (found in QA review): weekday/hour here are read via
+  // Date.getDay()/getHours(), i.e. the BROWSER's local timezone — correct
+  // for "which day does this user's own schedule tend to go wrong". But
+  // the delivery side (api/habits/whatsapp-cron.js) checks against a
+  // Cairo-fixed clock (UTC+3), not the user's own timezone. For a user
+  // whose device is actually set to Cairo/similar (the large majority for
+  // an Egypt/MENA product) these match. For a user traveling or with a
+  // different device timezone, the reminder could fire a day off. Proper
+  // fix would be storing the user's timezone and having the cron check
+  // against it per-user instead of one fixed offset — flagging rather
+  // than silently leaving unfixed.
   const scored = (sessions || []).filter(s => (s.avg_score || 0) > 0);
   if (scored.length < 20) return { ready: false, reason: "not_enough_sessions", n: scored.length };
 
@@ -776,6 +787,7 @@ Max 180 words. Start immediately.`,
 
   const saveStretchReminder = async () => {
     if (!weeklyForecast?.ready || !uid) return;
+    if (!profile?.whatsapp_phone) return; // nothing to deliver to — button below stays disabled + note stays visible
     setReminderSaving(true);
     try {
       const region = WF_REGION_LABEL[weeklyForecast.worstMetric?.key] || { en: "your posture", ar: "وضعيتك" };
@@ -1101,16 +1113,21 @@ Max 180 words. Start immediately.`,
                         : `Based on ${weeklyForecast.n} previous sessions on ${dayName} ${partName} — this is an exploratory pattern, not a medical diagnosis.`}
                     </div>
 
+                    {!profile?.whatsapp_phone && !reminderSaved && (
+                      <div style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted }}>
+                        {isAr ? "محتاج تضيف رقم واتساب في الإعدادات الأول عشان التذكير يوصلك" : "Add your WhatsApp number in Settings first so the reminder can reach you"}
+                      </div>
+                    )}
                     <button
                       onClick={saveStretchReminder}
-                      disabled={reminderSaving || reminderSaved}
+                      disabled={reminderSaving || reminderSaved || !profile?.whatsapp_phone}
                       style={{
                         padding: `${TOKENS.sp3}px ${TOKENS.sp4}px`, borderRadius: 12,
-                        background: reminderSaved ? "rgba(16,185,129,.12)" : TOKENS.accent,
+                        background: reminderSaved ? "rgba(16,185,129,.12)" : (!profile?.whatsapp_phone ? "rgba(255,255,255,.06)" : TOKENS.accent),
                         border: reminderSaved ? "1px solid rgba(16,185,129,.35)" : "none",
-                        color: reminderSaved ? "#10b981" : "#fff",
+                        color: reminderSaved ? "#10b981" : (!profile?.whatsapp_phone ? TOKENS.textMuted : "#fff"),
                         fontSize: TOKENS.base, fontWeight: TOKENS.bold,
-                        cursor: reminderSaved ? "default" : "pointer",
+                        cursor: (reminderSaved || !profile?.whatsapp_phone) ? "default" : "pointer",
                       }}>
                       {reminderSaved
                         ? (isAr ? `✓ مفعّل — هننبهك ${reminderDay} الساعة 2` : `✓ Enabled — we'll remind you ${reminderDay} at 2pm`)
@@ -1118,11 +1135,6 @@ Max 180 words. Start immediately.`,
                         ? "…"
                         : (isAr ? `🔔 فعّل التذكير عبر واتساب` : `🔔 Enable WhatsApp reminder`)}
                     </button>
-                    {!profile?.whatsapp_phone && !reminderSaved && (
-                      <div style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted }}>
-                        {isAr ? "محتاج تضيف رقم واتساب في الإعدادات الأول عشان التذكير يوصلك" : "Add your WhatsApp number in Settings first so the reminder can reach you"}
-                      </div>
-                    )}
                   </>
                 );
               })()}
