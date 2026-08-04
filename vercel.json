@@ -210,6 +210,18 @@
       "dest": "/api/support/reply.js"
     },
     {
+      "src": "/api/session/start",
+      "dest": "/api/session/start.js"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/session/health.js"
+    },
+    {
+      "src": "/api/session/snapshot",
+      "dest": "/api/session/snapshot.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
@@ -281,6 +293,15 @@
     },
     "api/referral/track.js": {
       "maxDuration": 5
+    },
+    "api/session/start.js": {
+      "maxDuration": 15
+    },
+    "api/session/health.js": {
+      "maxDuration": 5
+    },
+    "api/session/snapshot.js": {
+      "maxDuration": 10
     }
   },
   "crons": [

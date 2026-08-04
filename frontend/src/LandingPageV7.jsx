@@ -316,7 +316,7 @@ function GlobalStyle() {
       .lp-features-wrap{display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:start}
       .lp-how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
       .lp-cases-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-      .lp-pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+      .lp-pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
       .lp-testi-grid,.lp-testi-inner{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
       .lp-footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:32px 24px}
       .lp-sp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
@@ -1632,7 +1632,14 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
   const [localMode, setLocalMode] = useState(modeProp || "company");
 
   // Sync if parent changes mode (e.g. nav toggle)
-  useEffect(() => { if (modeProp) setLocalMode(modeProp); }, [modeProp]);
+  // Only sync from parent when parent explicitly changes (not on initial render)
+  const prevModeProp = useRef(modeProp);
+  useEffect(() => {
+    if (modeProp && modeProp !== prevModeProp.current) {
+      prevModeProp.current = modeProp;
+      setLocalMode(modeProp);
+    }
+  }, [modeProp]);
 
   const isCompany = localMode === "company";
 
@@ -1799,8 +1806,16 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                 )}
                 <div style={{ marginBottom:24 }}>
                   <div style={{ fontSize:13.5, color:p.color, fontWeight:600,
-                    marginBottom:10, textTransform:"uppercase", letterSpacing:".06em" }}>
+                    marginBottom:10, textTransform:"uppercase", letterSpacing:".06em",
+                    display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                     {p.name}
+                    {p.perUser && (
+                      <span style={{ fontSize:10, fontWeight:700, color:"#60a5fa",
+                        background:"rgba(96,165,250,.12)", borderRadius:99, padding:"2px 7px",
+                        textTransform:"none", letterSpacing:0 }}>
+                        {ar?"لكل مستخدم":"per user"}
+                      </span>
+                    )}
                   </div>
                   {p.isEnterprise ? (
                     <div>
@@ -1825,7 +1840,9 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                                   ? Math.round(p.priceEGP.yearly/12).toLocaleString()
                                   : (p.priceEGP.monthly ?? 0).toLocaleString()}
                             </span>
-                            <span style={{ fontSize:14.5, color:LPV7_TOKENS.muted }}>{ar ? "ج.م./شهر" : "EGP/mo"}</span>
+                            <span style={{ fontSize:14.5, color:LPV7_TOKENS.muted }}>
+                              {p.perUser ? (ar ? "ج.م./مستخدم/شهر" : "EGP/user/mo") : (ar ? "ج.م./شهر" : "EGP/mo")}
+                            </span>
                           </div>
                           {billing==="yearly" && p.priceEGP.yearly && (
                             <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginTop:6, fontFamily:FONT_MONO }}>
@@ -1839,7 +1856,9 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                             <span style={{ fontSize:40, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
                               ${p.priceUSD[billing] ?? p.priceUSD.monthly ?? "—"}
                             </span>
-                            <span style={{ fontSize:14.5, color:LPV7_TOKENS.muted }}>/{ar ? "شهر" : "mo"}</span>
+                            <span style={{ fontSize:14.5, color:LPV7_TOKENS.muted }}>
+                              {p.perUser ? (ar ? "/مستخدم/شهر" : "/user/mo") : (ar ? "/شهر" : "/mo")}
+                            </span>
                           </div>
                           {p.priceEGP.yearly || p.priceEGP.monthly ? (
                             <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginTop:6, fontFamily:FONT_MONO }}>
@@ -1888,15 +1907,61 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
           ))}
         </Stagger>
 
-        {/* ── Feature Comparison Table ───────────────────────────────────── */}
+        {/* ── Feature Comparison Table — switches with isCompany ─────────── */}
         {(()=>{
-          const COLS = [
+          const COLS = isCompany ? [
+            { key:"starter",    label:"Starter",    color:"#8896ac" },
+            { key:"business",   label:"Business",   color:"#6366f1", popular:true },
+            { key:"enterprise", label:"Enterprise", color:"#f59e0b" },
+          ] : [
             { key:"free",  label:ar?"مجاني":"Free",   color:"#8896ac" },
             { key:"basic", label:"Basic",              color:"#1a56db" },
             { key:"pro",   label:"Pro",                color:"#6366f1", popular:true },
             { key:"elite", label:"Elite",              color:"#f59e0b" },
           ];
-          const GROUPS = [
+          const B2B_GROUPS = [
+            {
+              en:"Core HR",ar:"الأساسيات",
+              rows:[
+                { en:"Employees",            ar:"الموظفون",              starter:"10–100",         business:"10–5,000",    enterprise:ar?"غير محدود":"Unlimited" },
+                { en:"HR Dashboard",         ar:"لوحة HR",               starter:"✅",              business:"✅",           enterprise:"✅" },
+                { en:"Department Mgmt",      ar:"إدارة الأقسام",         starter:"✅",              business:"✅",           enterprise:"✅" },
+                { en:"Auto Weekly Reports",  ar:"تقارير أسبوعية تلقائية",starter:"✅",              business:"✅",           enterprise:"✅" },
+                { en:"Employee Invites",     ar:"دعوة الموظفين",         starter:"✅",              business:"✅",           enterprise:"✅" },
+                { en:"CSV Import",           ar:"استيراد CSV",           starter:"✅",              business:"✅",           enterprise:"✅" },
+              ],
+            },
+            {
+              en:"Analytics & AI",ar:"التحليلات والذكاء الاصطناعي",
+              rows:[
+                { en:"Workforce Analytics",  ar:"تحليلات القوى العاملة",  starter:"—",              business:"✅",           enterprise:"✅" },
+                { en:"Pain Prediction",      ar:"توقع الألم",             starter:"—",              business:"✅",           enterprise:"✅" },
+                { en:"Churn Prediction",     ar:"توقع الإنهاء",           starter:"—",              business:"✅",           enterprise:"✅" },
+                { en:"AI Executive Summary", ar:"ملخص AI تنفيذي",         starter:"—",              business:"✅",           enterprise:"✅" },
+                { en:"Quarterly PDF Report", ar:"تقرير PDF ربع سنوي",    starter:"—",              business:ar?"إضافي":"Add-on",enterprise:"✅" },
+              ],
+            },
+            {
+              en:"Integrations",ar:"التكاملات",
+              rows:[
+                { en:"Slack / Teams Alerts", ar:"تنبيهات Slack/Teams",   starter:"✅",              business:"✅",           enterprise:"✅" },
+                { en:"API Access",           ar:"وصول API",               starter:"✅",              business:"✅",           enterprise:"✅" },
+                { en:"SSO / SAML 2.0",       ar:"تسجيل دخول موحد",        starter:"—",              business:"✅",           enterprise:"✅" },
+                { en:"SAP / Workday",        ar:"تكامل SAP/Workday",      starter:"—",              business:"✅",           enterprise:"✅" },
+                { en:"On-Premise Option",    ar:"خيار On-Premise",        starter:"—",              business:"—",           enterprise:"✅" },
+              ],
+            },
+            {
+              en:"Support & SLA",ar:"الدعم والـ SLA",
+              rows:[
+                { en:"Uptime SLA",           ar:"اتفاقية التشغيل",        starter:ar?"معياري":"Standard",business:"99.9%",   enterprise:ar?"مخصص":"Custom" },
+                { en:"Support Channel",      ar:"قناة الدعم",             starter:ar?"إيميل":"Email",   business:ar?"أولوية":"Priority",enterprise:ar?"مدير مخصص":"Dedicated CSM" },
+                { en:"Onboarding",           ar:"التأهيل",                 starter:"—",              business:"✅",           enterprise:ar?"مخصص":"White-glove" },
+              ],
+            },
+          ];
+
+          const GROUPS = isCompany ? B2B_GROUPS : [
             {
               en:"Core",ar:"الأساسيات",
               rows:[
@@ -1943,7 +2008,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                 { en:"Elite Early Access",            ar:"وصول مبكر Elite",            free:"—", basic:"—", pro:"—", elite:"✅" },
               ],
             },
-          ];
+          ]; // end B2C GROUPS
 
           const cell = (val, colColor) => {
             if(val==="✅") return <span style={{color:"#10b981",fontSize:16}}>✓</span>;
@@ -2000,7 +2065,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                       <>
                         {/* group header row */}
                         <tr key={`g${gi}`}>
-                          <td colSpan={5} style={{
+                          <td colSpan={COLS.length + 1} style={{
                             padding:"10px 18px 6px",
                             fontSize:10.5,fontWeight:700,color:LPV7_TOKENS.muted,
                             letterSpacing:".08em",textTransform:"uppercase",
@@ -2044,14 +2109,16 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 
               {/* CTA under table */}
               <div style={{textAlign:"center",marginTop:28,display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-                <a href="/auth?mode=signup" onClick={onCTA}
-                  className="lp-btn lp-btn-primary"
-                  style={{...btn("primary","md"),minWidth:180}}>
-                  {ar?"ابدأ تجربتك المجانية":"Start your free trial"}
-                </a>
+                {!isCompany && (
+                  <a href="/auth?mode=signup" onClick={onCTA}
+                    className="lp-btn lp-btn-primary"
+                    style={{...btn("primary","md"),minWidth:180}}>
+                    {ar?"ابدأ تجربتك المجانية":"Start your free trial"}
+                  </a>
+                )}
                 <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer"
-                  className="lp-btn lp-btn-ghost"
-                  style={{...btn("ghost","md"),minWidth:180}}>
+                  className={isCompany?"lp-btn lp-btn-primary":"lp-btn lp-btn-ghost"}
+                  style={{...(isCompany?btn("primary","md"):btn("ghost","md")),minWidth:180}}>
                   {ar?"احجز عرضاً للشركات":"Book enterprise demo"}
                 </a>
               </div>
