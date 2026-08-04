@@ -3566,10 +3566,22 @@ export default function App(){
         pain_summary:    result.pain_summary||null,
         pain_prediction: la.pain_prediction||null,
         trend:           result.trend||"stable",
-        // Elite: worst 3 posture moments (~20KB each, well under the 1MB doc cap)
-        ...(worstSnapsRef.current.length?{worst_snapshots:worstSnapsRef.current.slice(0,3)}:{}),
+        // Elite: worst 3 posture snapshots — only include if total payload
+        // stays under ~800KB (Firestore hard-limits docs to 1MB; base64
+        // images are the main risk factor that caused silent addDoc failures).
+        ...(()=>{
+          if(!worstSnapsRef.current.length) return {};
+          const snaps = worstSnapsRef.current.slice(0,3);
+          // rough byte estimate: JSON.stringify is a good proxy
+          const roughBytes = JSON.stringify(snaps).length;
+          if(roughBytes > 600_000) return {}; // skip if > ~600KB to leave room for other fields
+          return { worst_snapshots: snaps };
+        })(),
       }).then(()=>{
         addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
+        // Refresh sessions list so the new session appears immediately
+        // without waiting for the user to re-login or navigate away.
+        if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
         // #9 Compute weekly pattern from this session's alert causes
         if(alRef.current.length>=3){
           const causeCounts={};
@@ -4965,7 +4977,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         }}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <button
-              onClick={()=>{stopCamera();if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});setPage("home");setCamActive(false);}}
+              onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
               style={{
                 background:"rgba(148,163,184,.08)",
                 border:`1px solid ${cs.border}`,
@@ -5243,7 +5255,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 sidebar needs its own way back to Home. */}
             {isMobile && (
               <button
-                onClick={()=>{stopCamera();if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});setPage("home");setCamActive(false);}}
+                onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
                 style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",fontSize:12,color:cs.muted,cursor:"pointer",display:"flex",alignItems:"center",marginRight:isAr?0:2,marginLeft:isAr?2:0}}>
                 {isAr ? "→" : "←"}
               </button>
