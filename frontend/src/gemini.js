@@ -1,14 +1,14 @@
 /**
- * gemini.js — AI calls, 100% client-side, no server, no API keys.
+ * gemini.js — thin wrappers around localAI.js's real AI chain (backend
+ * LLM proxy primary, Pollinations/OpenRouter fallback, rule-based KB as
+ * the last resort if everything else fails).
  *
- * Engine: Offline rule-based AI — zero downloads, zero API calls, works on all browsers.
- *   - Nothing to install — the model downloads once on first use and
- *     is cached by the browser (IndexedDB), then works instantly,
- *     completely free, with zero backend involvement.
- *   - No cloud API keys (no Gemini, no Groq), no per-request cost,
- *     no rate limits, no data ever leaves the user's device.
- *   - Every user who opens the site gets their own private AI — no
- *     shared quota, no "AI not configured" errors.
+ * NOTE: this file's docstring used to claim "100% client-side, no
+ * server, no API keys... offline rule-based AI" — that was never
+ * actually true (see localChat/localAnalysis calls below, which hit
+ * real LLM providers first) and is doubly wrong now that the primary
+ * path goes through the backend. Corrected rather than left to mislead
+ * whoever reads this next.
  */
 
 function _isRateLimit() { return false; } // kept for API compatibility, unused locally
@@ -35,7 +35,7 @@ export function friendlyError(e, lang = "en") {
 }
 
 /**
- * geminiChat — multi-turn conversation, fully offline (rule-based engine).
+ * geminiChat — multi-turn conversation, real AI via localChat (backend proxy primary).
  * context: structured analytics object {avg_score, sessions_count,
  * worst_time, top_alerts, has_calibration} — folded into the system
  * prompt since there is no server-side session/tier to read it from.
@@ -85,7 +85,7 @@ export async function localFallbackAnalysis(prompt, opts = {}) {
 }
 
 /**
- * geminiAnalysis — single-shot analysis, fully offline (rule-based engine).
+ * geminiAnalysis — single-shot analysis, real AI via localAnalysis (backend proxy primary).
  * Used by AIInsights, PredictiveAI, AIReports, NotificationsHub.
  */
 export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTokens = 600, systemPrompt = "" } = {}) {
