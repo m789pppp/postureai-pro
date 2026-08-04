@@ -717,6 +717,9 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
       streak_days: profile?.streak_days || 0,
       neck_risk: Math.min(100, Math.round(100-(profile?.avg_score||avg(scores))+((profile?.avg_score||avg(scores))<60?20:0))),
       top_alerts: topAlerts,
+      // Free-tier self-report ("Where does it hurt?") — was captured and
+      // saved but never actually fed into any personalization until now.
+      pain_area: profile?.pain_area || null,
     };
   }, [sessions, profile]);
 
