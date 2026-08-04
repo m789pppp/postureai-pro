@@ -5889,7 +5889,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               border:`1px solid ${sound?"rgba(26,86,219,.35)":cs.border}`,borderRadius:9,
               padding:"8px 0",fontSize:11,fontWeight:700,color:sound?"#60a5fa":cs.muted,cursor:"pointer",
             }}>
-              {sound?"🔊":"🔇"} {isAr?"تنبيه صوتي":"Beep alerts"}
+              {sound?"🔊":"🔇"} {isAr?"تنبيه الوضعية":"Posture alerts"}
             </button>
             {tierAtLeast(effectiveTier,"elite") && (
               <button onClick={()=>{
@@ -5911,56 +5911,55 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </button>
             )}
           </div>
-          {/* Privacy: face blur toggle — pixelates the face on the analysis view */}
-          <button onClick={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }} style={{
-            background:faceBlur?"rgba(99,102,241,.12)":"rgba(255,255,255,.04)",
-            border:`1px solid ${faceBlur?"rgba(99,102,241,.4)":cs.border}`,borderRadius:9,
-            padding:"8px 0",fontSize:11,fontWeight:700,color:faceBlur?"#a5b4fc":cs.muted,cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-          }}>
-            {faceBlur?"🕶️":"👤"} {isAr?(faceBlur?"إخفاء الوجه: مُفعّل":"إخفاء الوجه (خصوصية)"):(faceBlur?"Face blur: ON":"Blur face (privacy)")}
-          </button>
-          {/* Pro-tier: user-defined threshold+duration alert rules — same
-              declutter logic as voice coach above, only rendered here once
-              actually unlocked. */}
-          {tierAtLeast(effectiveTier,"professional") && (
-            <button onClick={()=>setShowCustomAlertRules(true)} style={{
-              background:customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.12)":"rgba(255,255,255,.04)",
-              border:`1px solid ${customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.4)":cs.border}`,borderRadius:9,
-              padding:"8px 0",fontSize:11,fontWeight:700,color:customAlertRules.some(r=>r.enabled)?"#c4b5fd":cs.muted,cursor:"pointer",
-              display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+          {/* Privacy + display overlay toggles — these three were a
+              full-width block (face blur) stacked on top of a separate 2-up
+              row (skeleton/angles). All three do the same kind of thing
+              (what's drawn on the video overlay), so they're one row now. */}
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }} style={{
+              flex:1,background:faceBlur?"rgba(99,102,241,.12)":"rgba(255,255,255,.04)",
+              border:`1px solid ${faceBlur?"rgba(99,102,241,.4)":cs.border}`,borderRadius:9,
+              padding:"8px 2px",fontSize:10.5,fontWeight:700,color:faceBlur?"#a5b4fc":cs.muted,cursor:"pointer",
+              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
             }}>
-              ⚙️ {isAr?"قواعد تنبيه مخصصة":"Custom Alert Rules"}
+              <span style={{fontSize:14}}>{faceBlur?"🕶️":"👤"}</span>
+              {isAr?"إخفاء الوجه":"Face blur"}
             </button>
-          )}
-          {/* Overlay controls — show/hide the skeleton and angle labels on the video */}
-          <div style={{display:"flex",gap:8}}>
             <button onClick={()=>{ setShowSkeleton(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_skeleton",nv?"1":"0");}catch{} return nv; }); }} style={{
               flex:1,background:showSkeleton?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
               border:`1px solid ${showSkeleton?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
-              padding:"8px 0",fontSize:11,fontWeight:700,color:showSkeleton?"#38bdf8":cs.muted,cursor:"pointer",
+              padding:"8px 2px",fontSize:10.5,fontWeight:700,color:showSkeleton?"#38bdf8":cs.muted,cursor:"pointer",
+              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
             }}>
-              {showSkeleton?"🦴":"⬚"} {isAr?"الهيكل":"Skeleton"}
+              <span style={{fontSize:14}}>{showSkeleton?"🦴":"⬚"}</span>
+              {isAr?"الهيكل":"Skeleton"}
             </button>
             <button onClick={()=>{ setShowAngles(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_angles",nv?"1":"0");}catch{} return nv; }); }} style={{
               flex:1,background:showAngles?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
               border:`1px solid ${showAngles?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
-              padding:"8px 0",fontSize:11,fontWeight:700,color:showAngles?"#38bdf8":cs.muted,cursor:"pointer",
+              padding:"8px 2px",fontSize:10.5,fontWeight:700,color:showAngles?"#38bdf8":cs.muted,cursor:"pointer",
+              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
             }}>
-              {showAngles?"📐":"⬚"} {isAr?"الزوايا":"Angles"}
+              <span style={{fontSize:14}}>{showAngles?"📐":"⬚"}</span>
+              {isAr?"الزوايا":"Angles"}
             </button>
           </div>
-          {/* Calibrate for accuracy — personalises scoring to the user's own
-              neutral posture; reachable straight from the live session. */}
-          <button onClick={()=>setShowCalibWizard(true)} style={{
-            background:calibData?"rgba(148,163,184,.06)":"rgba(16,185,129,.1)",
-            border:`1px solid ${calibData?cs.border:"rgba(16,185,129,.4)"}`,borderRadius:10,
-            padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:"#34d399",cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:6,
-          }}>
-            🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
-          </button>
-          {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"&&(
+          {/* Pro tools — Custom Alert Rules + PDF grouped together as what
+              they are (both Pro-tier session tools), instead of one sitting
+              here and the other sitting several rows further down. */}
+          {(tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"))&&(
+            <div style={{display:"flex",gap:6}}>
+              {tierAtLeast(effectiveTier,"professional") && (
+                <button onClick={()=>setShowCustomAlertRules(true)} style={{
+                  flex:1,background:customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.12)":"rgba(255,255,255,.04)",
+                  border:`1px solid ${customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.4)":cs.border}`,borderRadius:9,
+                  padding:"8px 0",fontSize:11,fontWeight:700,color:customAlertRules.some(r=>r.enabled)?"#c4b5fd":cs.muted,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+                }}>
+                  ⚙️ {isAr?"قواعد تنبيه":"Alert rules"}
+                </button>
+              )}
+              {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"&&(
 <button onClick={async ()=>{
               const hist=histRef.current||[];
               const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
@@ -5982,20 +5981,39 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 });
               } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
             }} style={{
-              background:"rgba(59,130,246,.08)",
+              flex:1,background:"rgba(59,130,246,.08)",
               color:"#93c5fd",
-              border:"1px solid rgba(59,130,246,.2)",borderRadius:10,
-              padding:"10px 0",fontSize:12,fontWeight:600,cursor:"pointer",
+              border:"1px solid rgba(59,130,246,.2)",borderRadius:9,
+              padding:"8px 0",fontSize:11,fontWeight:600,cursor:"pointer",
             }}>
               📄 {isAr?"تنزيل PDF":"Download PDF"}
             </button>
+              )}
+            </div>
           )}
+          {/* Calibrate for accuracy — personalises scoring to the user's own
+              neutral posture; reachable straight from the live session. Kept
+              visually distinct (green, not a toggle) since it's a one-time
+              setup action, not an on/off switch like everything above it. */}
+          <button onClick={()=>setShowCalibWizard(true)} style={{
+            background:calibData?"rgba(148,163,184,.06)":"rgba(16,185,129,.1)",
+            border:`1px solid ${calibData?cs.border:"rgba(16,185,129,.4)"}`,borderRadius:10,
+            padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:"#34d399",cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+          }}>
+            🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
+          </button>
+          {/* "Sound ON/OFF" used to sit here with a generic label that read
+              like a master mute for everything, including the posture-alert
+              beeps above (which it never controlled — see `muted` vs
+              `sound` above). It only ever gates the break-reminder chime,
+              so it's labelled and placed as exactly that now. */}
           <button onClick={()=>setMuted(v=>!v)} style={{
             background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#10b981",
             border:`1px solid ${muted?cs.border:"rgba(16,185,129,.25)"}`,
-            borderRadius:10,padding:"8px 0",fontSize:12,fontWeight:500,cursor:"pointer",
+            borderRadius:10,padding:"8px 0",fontSize:11.5,fontWeight:500,cursor:"pointer",
           }}>
-            {muted?(isAr?"🔇 الصوت متوقف":"🔇 Sound OFF"):(isAr?"🔊 الصوت شغّال":"🔊 Sound ON")}
+            {muted?(isAr?"🔇 صوت تذكير الاستراحة: متوقف":"🔇 Break-reminder chime: OFF"):(isAr?"🔔 صوت تذكير الاستراحة: شغّال":"🔔 Break-reminder chime: ON")}
           </button>
           {/* Compact locked-tools strip — everything this tier can't use yet
               lives HERE as small inline chips, instead of each one getting
