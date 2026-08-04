@@ -498,17 +498,27 @@ export async function updateUserTier(uid, tier, months) {
 // ── Sessions ──────────────────────────────────────────────────────
 export async function saveSession(uid, data) {
   // Compute the true lifetime session number BEFORE creating the doc.
-  // Previously this was computed after creation from userSessions array
-  // (50-doc cap, sorted newest-first) so the most recent session was
-  // labeled "#1" and froze at "#51" for long-time users.
   let newCount = 1, prof = null;
   try {
     prof = await getUserProfile(uid);
     newCount = (prof?.sessions_count||0)+1;
   } catch(e) { console.warn("saveSession profile read:", e.code||e.message); }
 
+  // ── Document size guard ──────────────────────────────────────────
+  // Firestore hard-limits documents to 1MB.  The two fields that can
+  // blow past that are worst_snapshots (base64 images) and score_history
+  // (up to 60 floats — fine on their own but combined they add up).
+  // Strip worst_snapshots if the payload looks too large, and cap
+  // score_history to the last 30 entries so the doc stays well under.
+  const safeData = { ...data };
+  if(safeData.score_history) safeData.score_history = safeData.score_history.slice(-30);
+  if(safeData.worst_snapshots){
+    const roughBytes = JSON.stringify(safeData.worst_snapshots).length;
+    if(roughBytes > 600_000) delete safeData.worst_snapshots;
+  }
+
   const ref = await addDoc(collection(db,"sessions"), {
-    uid, ...data, session_number: newCount, created_at:_serverTimestamp(),
+    uid, ...safeData, session_number: newCount, created_at:_serverTimestamp(),
   });
   try {
     const newAvg   = Math.round(((prof?.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
