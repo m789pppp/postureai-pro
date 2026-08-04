@@ -202,6 +202,14 @@
       "dest": "/api/referral/track.js"
     },
     {
+      "src": "/api/support/whatsapp-inbound",
+      "dest": "/api/support/whatsapp-inbound.js"
+    },
+    {
+      "src": "/api/support/reply",
+      "dest": "/api/support/reply.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
@@ -234,6 +242,12 @@
     },
     "api/admin/seed-flags.js": {
       "maxDuration": 30
+    },
+    "api/support/whatsapp-inbound.js": {
+      "maxDuration": 15
+    },
+    "api/support/reply.js": {
+      "maxDuration": 15
     },
     "api/cron/symptom-pattern-alerts.js": {
       "maxDuration": 60

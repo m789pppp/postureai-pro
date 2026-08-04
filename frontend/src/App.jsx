@@ -103,7 +103,7 @@ const TIERS = {
     id:"standard", name:"Free", color:"#6366f1", colorDim:"rgba(99,102,241,.12)",
     price_egp_monthly:0,     price_egp_yearly:0,
     price_usd_monthly:0,     price_usd_yearly:0,
-    features:["5 sessions/month","Posture score","Basic alerts"],
+    features:["5 sessions/month (max 3/day)","Posture score","Basic alerts"],
     badge:null
   },
   basic:{
@@ -2285,7 +2285,16 @@ export default function App(){
   };
   // Listen for browser back/forward
   useEffect(() => {
-    const onPop = () => setPageRaw(hashToPage(window.location.hash));
+    const onPop = () => {
+      const newPage = hashToPage(window.location.hash);
+      // Physical/mobile back button used to just swap the page underneath an
+      // active camera session: stream kept running, camera indicator light
+      // stayed on, RAF loop kept burning CPU in the background, and the
+      // session was never saved -- none of that happened only through the
+      // in-app Back buttons, which explicitly call stopCamera() themselves.
+      if(newPage!=="live" && camActiveRef.current){ stopCamera(); }
+      setPageRaw(newPage);
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -2310,6 +2319,12 @@ export default function App(){
   },[profile?.acct_type,profile?.user_type,acctType]); // "company" | "individual"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
+  // Popstate (browser/mobile back button) fires from a listener registered
+  // once on mount — without a ref, its closure would only ever see camActive
+  // as it was at that first render (false), so it could never detect "camera
+  // is currently running" no matter what actually happens later.
+  const camActiveRef=useRef(false);
+  useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
@@ -2744,6 +2759,28 @@ export default function App(){
           if(p.company_id) setCompanyId(p.company_id);
         }
         getUserSessions(u.uid).then(setUserSessions).catch(e=>console.warn("[Sessions]",e.message));
+        // Retry any sessions that failed to save last time (see the
+        // saveSession catch in stopCamera) now that we have a fresh,
+        // authenticated connection to Firestore.
+        (async()=>{
+          try{
+            const key="corvus_pending_sessions";
+            const queue=JSON.parse(localStorage.getItem(key)||"[]");
+            if(!queue.length) return;
+            const mine=queue.filter(q=>q.uid===u.uid);
+            const others=queue.filter(q=>q.uid!==u.uid);
+            const stillFailed=[];
+            for(const q of mine){
+              try{ await saveSession(u.uid,q.data); }
+              catch{ if(Date.now()-q.queuedAt < 7*86400000) stillFailed.push(q); } // drop after 7 days
+            }
+            localStorage.setItem(key, JSON.stringify([...others,...stillFailed]));
+            if(mine.length>stillFailed.length){
+              addToast?.(isAr?`✅ اتحفظت ${mine.length-stillFailed.length} جلسة كانت متعلقة`:`✅ Saved ${mine.length-stillFailed.length} previously pending session(s)`,"success");
+              getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
+            }
+          }catch{}
+        })();
         setAuthChecked(true);
         if (isNew) setPage("setup");
         else setPage("home");
@@ -3038,7 +3075,7 @@ export default function App(){
       try{
         const det=mpRef.current.detectForVideo(vid,performance.now());
         if(det.landmarks?.length>0){
-          const quality = qualityFor(tier);
+          const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(150); // was 60 (2s) → 150 (5s) for smoother score history
           if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);
@@ -3120,7 +3157,15 @@ export default function App(){
                   const _sc=document.createElement("canvas");
                   const _sw=320,_sh=Math.max(120,Math.round(320*(_v.videoHeight/Math.max(_v.videoWidth,1))))||240;
                   _sc.width=_sw;_sc.height=_sh;
-                  _sc.getContext("2d").drawImage(_v,0,0,_sw,_sh);
+                  const _sctx=_sc.getContext("2d");
+                  _sctx.drawImage(_v,0,0,_sw,_sh);
+                  // The face-blur toggle only ever pixelated the on-screen
+                  // overlay canvas — it never touched this snapshot, which
+                  // draws straight from the raw <video> element. A user with
+                  // "Blur face (privacy)" ON still had their real,
+                  // unblurred face captured here and stored/shown in the
+                  // session report. Apply the same blur to the snapshot too.
+                  if(faceBlur) drawFaceBlur(_sctx,_v,lms,_sw,_sh);
                   const _img=_sc.toDataURL("image/jpeg",0.6);
                   lastSnapMsRef.current=_snow;
                   _snaps.push({img:_img,score:finalResult.overall,time:new Date().toLocaleTimeString()});
@@ -3197,7 +3242,7 @@ export default function App(){
     //  1) Fallback mode (local MediaPipe failed to load) → backend IS the analysis
     //  2) Elite-equivalent tier (elite/premium/b2b_enterprise) → snapshots for PDF + Corvus AI insights
     // Standard/Basic/Professional tiers with working local MediaPipe never touch the backend here.
-    const eliteEquivalent = tierAtLeast(tier, "elite");
+    const eliteEquivalent = tierAtLeast(effectiveTier, "elite");
     const needsBackend = mpStatus==="fallback" || eliteEquivalent;
     if(needsBackend && totalRef.current%45===0 && canvRef.current){
       const c=canvRef.current,v2=vidRef.current;
@@ -3324,8 +3369,18 @@ export default function App(){
         if(e?.status===403 && e?.upgrade){
           setCameraStatus("idle");
           streamRef.current?.getTracks?.().forEach(t=>t.stop());
-          addToast(isAr?"وصلت لحد جلسات الخطة المجانية. قم بالترقية للمتابعة":"You've reached the Free plan session limit. Upgrade to continue","warn");
-          setShowUpgrade?.(true); setUpgradeReason?.(isAr?"حد الجلسات الشهري":"Monthly session limit");
+          // Distinguish which cap was actually hit — the backend enforces
+          // BOTH a monthly (5) and a daily (3) cap on Free, but only the
+          // monthly number is ever shown anywhere in the UI (SessionUsageBar,
+          // pricing copy). Hitting the daily cap with 2 monthly sessions
+          // used looked like an unexplained random block; show the real
+          // reason instead of one generic message for both cases.
+          const hitDaily = (e?.body?.used_daily ?? 0) >= (e?.body?.limit_daily ?? Infinity);
+          const msg = hitDaily
+            ? (isAr?`وصلت لحد ${e.body.limit_daily} جلسات في اليوم للخطة المجانية. جرّب تاني بكرة أو رقّي الخطة`:`You've hit today's ${e.body.limit_daily}-session Free plan cap. Try again tomorrow or upgrade`)
+            : (isAr?"وصلت لحد جلسات الخطة المجانية الشهري. قم بالترقية للمتابعة":"You've reached the Free plan's monthly session limit. Upgrade to continue");
+          addToast(msg,"warn");
+          setShowUpgrade?.(true); setUpgradeReason?.(isAr?(hitDaily?"حد الجلسات اليومي":"حد الجلسات الشهري"):(hitDaily?"Daily session limit":"Monthly session limit"));
           return;
         }
         // Any other error (network, backend down, etc.) — fall back to
@@ -3526,7 +3581,34 @@ export default function App(){
         }
       }).catch(e=>{
         console.error("saveSession failed:", e?.code, e?.message);
-        addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
+        // Firestore's persistent cache (see firebase.js) now absorbs most
+        // transient network failures automatically, but for whatever still
+        // gets here (quota, permission, doc-too-large) the session's data
+        // used to just be gone with only an error toast to show for it.
+        // Queue it in localStorage and retry automatically next time this
+        // user's session list loads (see flushPendingSessions below).
+        try{
+          const key="corvus_pending_sessions";
+          const queue=JSON.parse(localStorage.getItem(key)||"[]");
+          queue.push({uid:user.uid,data:{
+            session_id:sessionId, mode, tier:effectiveTier, avg_score:avg,
+            good_pct:gPct, duration_s:dur, duration_sec:dur,
+            alerts_count:acRef.current?.total||0,
+            score_history:hist.slice(-60),
+            alert_causes: alRef.current.map(a=>({cause:a.cause||"posture",hour:a.time?.split(":")?.[0]||"0",severity:a.severity||"mild"})),
+            metrics:la.metrics||{},
+            ai_tip: la.ai_tip||la.ai_insight||la.claude_analysis||"",
+            improvement_tip: result.improvement_tip||"",
+            pain_summary: result.pain_summary||null,
+            pain_prediction: la.pain_prediction||null,
+            trend: result.trend||"stable",
+            ...(worstSnapsRef.current.length?{worst_snapshots:worstSnapsRef.current.slice(0,3)}:{}),
+          },queuedAt:Date.now()});
+          localStorage.setItem(key, JSON.stringify(queue.slice(-10))); // cap at 10 pending
+          addToast(isAr?"⚠️ فشل الحفظ — هنحاول تاني تلقائياً":"⚠️ Save failed — will retry automatically","warn");
+        }catch{
+          addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
+        }
       });
     } else if(user && dur < 5){
       addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
@@ -3641,7 +3723,7 @@ export default function App(){
   }
 
   async function downloadLongitudinalPDF() {
-    if (!tierAtLeast(tier,"elite")) {
+    if (!tierAtLeast(effectiveTier,"elite")) {
       addToast(isAr?"التقرير الطولي متاح لباقة Elite فقط":"Longitudinal report requires Elite tier","warn");
       setShowBilling(true); return;
     }
@@ -3661,7 +3743,7 @@ export default function App(){
   }
 
   async function downloadPostureDNAReport() {
-    if (!tierAtLeast(tier,"elite")) {
+    if (!tierAtLeast(effectiveTier,"elite")) {
       addToast(isAr?"تقرير بصمة الوضعية متاح لباقة Elite فقط":"Posture DNA report requires Elite tier","warn");
       setShowBilling(true); return;
     }
@@ -3677,7 +3759,7 @@ export default function App(){
   }
 
   async function downloadComparisonPDF(session1, session2) {
-    if (!tierAtLeast(tier,"professional")) {
+    if (!tierAtLeast(effectiveTier,"professional")) {
       addToast(isAr?"المقارنة متاحة لباقة Pro وElite فقط":"Comparison PDF requires Pro or Elite","warn");
       setShowBilling(true); return;
     }
@@ -3697,7 +3779,7 @@ export default function App(){
   }
 
   async function downloadTeamPDF() {
-    if (!tierAtLeast(tier,"professional")) {
+    if (!tierAtLeast(effectiveTier,"professional")) {
       addToast(isAr?"تقرير الفريق متاح لـ HR Admin فقط":"Team PDF requires HR Admin + Pro","warn");
       setShowBilling(true); return;
     }
@@ -4486,6 +4568,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         setShowBillingDashboard={setShowBillingDashboard}
         setShowReferralProgram={setShowReferralProgram}
         setShowIntegrationsHub={setShowIntegrationsHub}
+        setShowMFASetup={setShowMFASetup}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin} companyId={companyId}
         darkMode={darkMode} setDarkMode={setDarkMode} setLang={setLang}
         t={t} logOut={logOut} setUser={setUser} setProfile={setProfile}
@@ -4783,7 +4866,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 <button onClick={async ()=>{
                   // Same canonical gate as downloadPDF() — this button bypassed it
                   // entirely by calling generateSessionPDF() directly.
-                  if(qualityFor(tier).pdfDetail === "none"){
+                  if(qualityFor(effectiveTier).pdfDetail === "none"){
                     addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
                     setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
                     return;
@@ -4808,15 +4891,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     addToast("PDF error: "+(e?.message||"unknown"),"error");
                   }
                 }}
-                  style={{flex:1,padding:"10px",background:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.05)":tier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.4)":tier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.1)":tier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                  {qualityFor(tier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${tier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
+                  style={{flex:1,padding:"10px",background:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.05)":effectiveTier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.4)":effectiveTier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.1)":effectiveTier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  {qualityFor(effectiveTier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${effectiveTier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
                 </button>
-                {/* Share button — Elite only */}
-                {tierAtLeast(tier,"elite") && (
+                {/* Share button — Elite only. Was gated on raw `tier`, which
+                    doesn't reflect trial_tier elevation or the b2b_enterprise
+                    -> elite equivalence, so a trialing/B2B-enterprise user
+                    could lose this button entirely even though every other
+                    Elite check on this same page correctly uses effectiveTier. */}
+                {tierAtLeast(effectiveTier,"elite") && (
                   <button onClick={()=>shareReport({
                       avg_score: sessionResult?.avg_score, good_pct: sessionResult?.good_pct,
                       duration_s: sessionResult?.duration_s, alerts_count: sessionResult?.alerts_count,
-                      mode, tier, session_id: sessionId,
+                      mode, tier: effectiveTier, session_id: sessionId,
                       score_history: histRef.current||[],
                       metrics: lastAnalRef.current?.metrics||{},
                       ai_tip: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
@@ -4985,6 +5072,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?"تحليل AI":"AI Analysis"}
             </div>
             <div style={{fontSize:11.5,color:cs.text,lineHeight:1.65}}>{aiInsight}</div>
+          </div>
+        )}
+        {/* Below Elite this card just never appeared with zero explanation —
+            looked like a missing feature rather than a tier boundary. One
+            small locked hint, same compact style as the tools row below. */}
+        {!aiInsight&&camActive&&!tierAtLeast(effectiveTier,"elite")&&(
+          <div style={{margin:"0 16px 12px",display:"flex"}}>
+            <button onClick={()=>{ addToast(isAr?"🧠 تحليل AI اللحظي متاح لباقة Elite فقط":"🧠 Live AI analysis is an Elite feature","warn"); setShowBilling(true); }}
+              style={{background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
+                display:"flex",alignItems:"center",gap:4}}>
+              🔒 🧠 {isAr?"تحليل AI":"AI analysis"}
+              <span style={{fontSize:8,color:"#10b981",fontWeight:800}}>ELITE</span>
+            </button>
           </div>
         )}
 
@@ -5831,7 +5932,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           }}>
             🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
           </button>
-          {histRef.current?.length>0&&qualityFor(tier).pdfDetail!=="none"&&(
+          {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"&&(
 <button onClick={async ()=>{
               const hist=histRef.current||[];
               const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
@@ -5874,7 +5975,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               actually press. Same colors/behaviour (still opens billing on
               tap) — just visually demoted so the page doesn't read as "100
               options, none of them mine" for Free/Basic/Pro users. */}
-          {(!tierAtLeast(effectiveTier,"elite")||!tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(tier).pdfDetail==="none"))&&(
+          {(!tierAtLeast(effectiveTier,"elite")||!tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail==="none"))&&(
             <div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:2}}>
               {!tierAtLeast(effectiveTier,"professional")&&(
                 <button onClick={()=>{
@@ -5902,7 +6003,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   <span style={{fontSize:8,color:"#10b981",fontWeight:800}}>ELITE</span>
                 </button>
               )}
-              {histRef.current?.length>0&&qualityFor(tier).pdfDetail==="none"&&(
+              {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail==="none"&&(
                 <button onClick={()=>{
                   addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
                   setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");

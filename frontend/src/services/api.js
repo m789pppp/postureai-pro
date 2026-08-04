@@ -78,7 +78,7 @@ export async function apiFetch(path, options = {}) {
           if (retry.status === 404 && treat404AsDown) {
             throw Object.assign(new Error("Backend unreachable — using local posture engine"), { isBackendDown: true, status: 404 });
           }
-          throw Object.assign(new Error(err.error || `HTTP ${retry.status}`), { status: retry.status, upgrade: err.upgrade });
+          throw Object.assign(new Error(err.error || `HTTP ${retry.status}`), { status: retry.status, upgrade: err.upgrade, body: err });
         }
         return _parseJsonOrThrow(retry);
       }
@@ -97,6 +97,11 @@ export async function apiFetch(path, options = {}) {
         status:   response.status,
         upgrade:  err.upgrade,
         required: err.required,
+        // Full parsed body too — callers that need endpoint-specific detail
+        // fields (e.g. session_limit_reached's limit_daily/used_daily vs
+        // limit_monthly/used_monthly) don't have to be enumerated here one
+        // by one; they can read e.body.<field> directly.
+        body:     err,
       });
     }
 

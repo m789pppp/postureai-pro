@@ -8,7 +8,7 @@ import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
-import { PushAPI, dispatchNotification, FeatureFlagsAPI } from "./services/api.js";
+import { PushAPI, dispatchNotification, FeatureFlagsAPI, BillingAPI } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
 import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 import { StressCheckIn, StressCorrelationCard } from "./StressPosture.jsx";
@@ -434,6 +434,24 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
   const isFreeTier = !pro && !elite;
   const [showDemoSession, setShowDemoSession] = useState(false);
   const [teaserDismissed, setTeaserDismissed] = useState(false);
+  // The client-computed `month` above (filtering userSessions by date) can
+  // drift from the actual enforcement counter: /api/session/start counts
+  // against a server-side Redis key, incremented independently of whether
+  // the session doc later saved successfully to Firestore. Fetch the real
+  // number so the bar can never show "3 of 5" while the user is actually
+  // already blocked at 5/5 (or vice versa). Falls back to the client count
+  // instantly (no loading flash) and swaps in the authoritative number
+  // once it arrives.
+  const [realMonthUsage, setRealMonthUsage] = useState(null);
+  useEffect(() => {
+    if (!isFreeTier) return;
+    let cancelled = false;
+    BillingAPI.usage().then(res => {
+      const n = res?.usage?.sessions_this_month;
+      if (!cancelled && typeof n === "number") setRealMonthUsage(n);
+    }).catch(() => {}); // fail quiet — client-computed count is still shown
+    return () => { cancelled = true; };
+  }, [isFreeTier, userSessions.length]);
   // Upgrade teaser: Free-tier only, shown once right after the user's
   // first-ever real session, dismissed permanently via profile flag.
   const showTeaser = isFreeTier && userSessions.length===1 && !profile?.upgrade_teaser_seen && !teaserDismissed;
@@ -518,7 +536,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
       )}
 
       {isFreeTier && (
-        <SessionUsageBar used={month} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
+        <SessionUsageBar used={realMonthUsage ?? month} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
       )}
 
       {isFreeTier && (
@@ -701,118 +719,371 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 // ══════════════════════════════════════════════════════════════════
 // EMPLOYEE DASHBOARD
 // ══════════════════════════════════════════════════════════════════
-function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage, startCamera, onCoach }) {
-  const last   = userSessions[0]?.avg_score||0;
-  const avg    = profile?.avg_score || (userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0);
-  const streak = profile?.streak_days||0;
-  const rank   = useMemo(()=>{
+function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage, startCamera, onCoach, addToast, tier, tab }) {
+  const last    = userSessions[0]?.avg_score || 0;
+  const avg     = profile?.avg_score || (userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0);
+  const streak  = profile?.streak_days || 0;
+  const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
+
+  // rank among team
+  const rank = React.useMemo(()=>{
     if(!allUsers?.length) return null;
     const sorted=[...allUsers].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
     const i=sorted.findIndex(u=>u.uid===profile?.uid||u.id===profile?.uid);
     return i>=0?{pos:i+1,total:sorted.length}:null;
   },[allUsers,profile]);
-  const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
 
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-      {/* Hero */}
-      <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14,
-        padding:"22px", display:"flex", gap:20, alignItems:"center", flexWrap:"wrap" }}>
-        {/* BUG FIX: Ring alone never shows the actual number — it's a pure
-            SVG arc with no text. The one other place Ring is used in this
-            app (App.jsx live-session view) always pairs it with an adjacent
-            number; these two HomePage hero cards were missing that, so the
-            main "at a glance" gauge showed a colored arc with no indication
-            of what score it represented. */}
-        <div style={{ position:"relative", width:104, height:104, flexShrink:0 }}>
-          <Ring score={last||avg} size={104}/>
-          <div style={{ position:"absolute", inset:0, display:"flex",
-            flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
-            <div style={{ fontSize:26, fontWeight:900, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
-              {(last||avg) || "—"}
-            </div>
-            {(last||avg) > 0 && <div style={{ fontSize:9, color:cs.muted, fontWeight:600 }}>/100</div>}
+  // ── AI Coach tab ────────────────────────────────────────────────
+  if(tab==="coach"){
+    return (
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14, padding:"24px",
+          background:"linear-gradient(135deg,rgba(99,102,241,.1),rgba(8,145,178,.06))" }}>
+          <div style={{ fontSize:28, marginBottom:8 }}>🤖</div>
+          <div style={{ fontSize:20, fontWeight:800, color:cs.text, marginBottom:4 }}>
+            {isAr?"مدرب AI — د. كورفوس":"AI Coach — Dr. Corvus"}
           </div>
-        </div>
-        <div style={{ flex:1, minWidth:180 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-            <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
-            <div>
-              <div style={{ fontSize:18, fontWeight:800, color:cs.text }}>
-                {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || ""}!`:`Hey, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
-              </div>
-              <div style={{ fontSize:11, color:"#60a5fa", fontWeight:500, marginTop:2 }}>
-                {profile?.department||profile?.company||(isAr?"موظف":"Employee")}
-              </div>
-            </div>
+          <div style={{ fontSize:13, color:cs.muted, marginBottom:18 }}>
+            {isAr?"اسألني عن وضعيتك، ألمك، أو احصل على تمارين مخصصة لبياناتك"
+                 :"Ask me about your posture, pain, or get personalised stretches based on your data"}
           </div>
-          <div style={{ fontSize:13, color:cs.muted, marginBottom:14 }}>
-            {last>=80?`💪 ${isAr?"وضعيتك ممتازة اليوم":"Great posture today"}`
-            :last>=60?`📈 ${isAr?"وضعيتك تتحسن":"Your posture is improving"}`
-            :`⚠️ ${isAr?"ابدأ جلسة لتحسين وضعيتك":"Start a session to improve"}`}
-          </div>
-          <button onClick={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}
-            style={{ padding:"10px 22px", background:"linear-gradient(135deg,#1a56db,#0891b2)",
-              color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-            {isAr?"▶ ابدأ جلسة":"▶ Start Session"}
+          <button onClick={()=>onCoach?.()}
+            style={{ padding:"12px 28px", background:"linear-gradient(135deg,#6366f1,#4f7cf9)",
+              color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer",
+              boxShadow:"0 4px 16px rgba(99,102,241,.4)" }}>
+            {isAr?"🤖 افتح مدرب AI":"🤖 Open AI Coach"}
           </button>
         </div>
-      </div>
-
-      {tierAtLeast(profile?.tier,"basic") && <PainRiskCard sessions={userSessions} cs={cs} isAr={isAr} />}
-
-      {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
-        <StatCard label={isAr?"متوسطك":"Your Avg"} value={avg||"—"} color="#3b82f6" cs={cs}/>
-        <StatCard label={isAr?"التواصل":"Streak"} value={streak?`${streak}d`:"—"} color="#10b981" cs={cs}/>
-        {rank&&<StatCard label={isAr?"ترتيبك":"Rank"} value={`#${rank.pos}`} sub={`of ${rank.total}`} color="#f59e0b" cs={cs}/>}
-        <StatCard label={isAr?"الجلسات":"Sessions"} value={profile?.sessions_count||userSessions.length||"—"} color="#a855f7" cs={cs}/>
-      </div>
-
-      {userSessions.length>0&&(
-        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"16px 18px" }}>
-          <SectionHead title={isAr?"آخر 7 أيام":"Last 7 days"} cs={cs}/>
-          <WeekChart sessions={userSessions} cs={cs}/>
+        {/* coach tips */}
+        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"18px 20px" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:12 }}>
+            {isAr?"أسئلة مقترحة لتبدأ بها":"Suggested questions to get started"}
+          </div>
+          {[
+            isAr?"ليه وضعيتي بتنخفض في آخر الأسبوع؟":"Why does my posture drop at end of week?",
+            isAr?"اعملي برنامج تمارين لرقبتي":"Make me a neck stretch programme",
+            isAr?"قارن درجتي مع الشهر اللي فات":"Compare my score to last month",
+            isAr?"ايه أكتر وضعية بتأثر عليا؟":"What posture issue affects me most?",
+          ].map((q,i)=>(
+            <button key={i} onClick={()=>onCoach?.(q)}
+              style={{ display:"block", width:"100%", textAlign:isAr?"right":"left",
+                padding:"10px 14px", marginBottom:6, background:"rgba(99,102,241,.08)",
+                border:"1px solid rgba(99,102,241,.2)", borderRadius:9,
+                color:"#818cf8", fontSize:12.5, cursor:"pointer" }}>
+              {q}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Team leaderboard */}
-      {allUsers?.length>1&&(
+  // ── Team tab ─────────────────────────────────────────────────────
+  if(tab==="team"){
+    const teamSorted=[...( allUsers||[])].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
+    const myRankIdx=teamSorted.findIndex(u=>u.uid===profile?.uid||u.id===profile?.uid);
+    const teamAvg=teamSorted.length?Math.round(teamSorted.reduce((a,u)=>a+(u.avg_score||0),0)/teamSorted.length):0;
+    const depts=[...new Set(teamSorted.map(u=>u.department||"").filter(Boolean))];
+    const [deptFilter,setDeptFilter]=React.useState("all");
+    const filtered=deptFilter==="all"?teamSorted:teamSorted.filter(u=>u.department===deptFilter);
+    return (
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        {/* My rank hero */}
+        <div style={{ background:"linear-gradient(135deg,rgba(59,130,246,.1),rgba(8,145,178,.06))",
+          border:"1px solid rgba(59,130,246,.25)", borderRadius:14, padding:"20px 22px",
+          display:"flex", alignItems:"center", gap:18, flexWrap:"wrap" }}>
+          <div style={{ textAlign:"center", minWidth:80 }}>
+            <div style={{ fontSize:36, fontWeight:900, color:"#f59e0b", lineHeight:1 }}>
+              {myRankIdx>=0?`#${myRankIdx+1}`:"—"}
+            </div>
+            <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+              {isAr?`من ${teamSorted.length}`:`of ${teamSorted.length}`}
+            </div>
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:cs.text }}>
+              {isAr?"ترتيبك في الفريق":"Your team rank"}
+            </div>
+            <div style={{ fontSize:12, color:cs.muted, marginTop:3 }}>
+              {isAr?`متوسط الفريق: ${teamAvg}/100`:`Team average: ${teamAvg}/100`}
+            </div>
+            <div style={{ marginTop:8, height:6, borderRadius:99, background:"rgba(255,255,255,.08)", position:"relative", maxWidth:220 }}>
+              <div style={{ height:6, borderRadius:99, background:gradeColor(avg), width:`${avg}%`, maxWidth:"100%" }}/>
+            </div>
+            <div style={{ fontSize:11, color:cs.muted, marginTop:3 }}>
+              {isAr?`درجتك: ${avg}/100`:`Your score: ${avg}/100`}
+              {avg>teamAvg
+                ?<span style={{ color:"#10b981", marginInlineStart:6 }}>↑ {isAr?"فوق المتوسط":"above avg"}</span>
+                :<span style={{ color:"#f59e0b", marginInlineStart:6 }}>↓ {isAr?"تحت المتوسط":"below avg"}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* Dept filter */}
+        {depts.length>1&&(
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            {["all",...depts].map(d=>(
+              <button key={d} onClick={()=>setDeptFilter(d)}
+                style={{ padding:"5px 13px", borderRadius:99, fontSize:12, fontWeight:600,
+                  background:deptFilter===d?"#1a56db":"rgba(255,255,255,.05)",
+                  border:`1px solid ${deptFilter===d?"#1a56db":cs.border}`,
+                  color:deptFilter===d?"#fff":cs.muted, cursor:"pointer" }}>
+                {d==="all"?(isAr?"الكل":"All"):d}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Full leaderboard */}
         <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"16px 18px" }}>
-          <SectionHead title={isAr?"لوحة الفريق":"Team Leaderboard"} cs={cs}/>
-          <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-            {[...allUsers].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0)).slice(0,7).map((u,i)=>{
+          <div style={{ fontSize:14, fontWeight:700, color:cs.text, marginBottom:12 }}>
+            {isAr?"لوحة الفريق":"Team Leaderboard"} · <span style={{ color:cs.muted, fontWeight:400, fontSize:12 }}>{filtered.length} {isAr?"عضو":"members"}</span>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {filtered.map((u,i)=>{
               const isMe=u.uid===profile?.uid||u.id===profile?.uid;
               const sc=u.avg_score||0;
               const col=gradeColor(sc);
+              const realIdx=teamSorted.findIndex(x=>x.uid===u.uid||x.id===u.id);
               return (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:10,
-                  padding:"9px 12px", borderRadius:8,
-                  background:isMe?"rgba(59,130,246,.08)":"rgba(255,255,255,.02)",
+                  padding:"10px 12px", borderRadius:9,
+                  background:isMe?"rgba(59,130,246,.1)":"rgba(255,255,255,.02)",
                   border:`1px solid ${isMe?"rgba(59,130,246,.35)":cs.border}` }}>
-                  <div style={{ width:22, textAlign:"center", fontSize:13, color:cs.muted, fontWeight:700 }}>
-                    {i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}
+                  <div style={{ width:26, textAlign:"center", fontSize:13, color:cs.muted, fontWeight:700, flexShrink:0 }}>
+                    {realIdx===0?"🥇":realIdx===1?"🥈":realIdx===2?"🥉":`#${realIdx+1}`}
                   </div>
-                  <Avatar name={u.name||u.email} photo={u.photoURL} size={28}/>
+                  <Avatar name={u.name||u.email} photo={u.photoURL} size={30}/>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight:isMe?700:500,
                       color:isMe?"#60a5fa":cs.text,
                       overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                       {u.name||u.email?.split("@")[0]}
-                      {isMe&&<span style={{ marginLeft:6, fontSize:10, color:"#60a5fa" }}>{isAr?"(أنت)":"(you)"}</span>}
+                      {isMe&&<span style={{ marginInlineStart:6, fontSize:10, color:"#60a5fa", fontWeight:600 }}>{isAr?"(أنت)":"(you)"}</span>}
                     </div>
                     {u.department&&<div style={{ fontSize:10, color:cs.muted }}>{u.department}</div>}
                   </div>
-                  <div style={{ fontSize:17, fontWeight:800, color:col }}>{sc||"—"}</div>
+                  <div style={{ textAlign:"center", minWidth:44 }}>
+                    <div style={{ fontSize:18, fontWeight:800, color:col, lineHeight:1 }}>{sc||"—"}</div>
+                    <div style={{ fontSize:9, color:cs.muted }}>/100</div>
+                  </div>
+                </div>
+              );
+            })}
+            {filtered.length===0&&(
+              <div style={{ padding:"30px", textAlign:"center", color:cs.muted, fontSize:13 }}>
+                {isAr?"لا يوجد أعضاء في هذا القسم":"No members in this department"}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dist: healthy / ok / at-risk */}
+        {teamSorted.length>0&&(()=>{
+          const healthy=teamSorted.filter(u=>u.avg_score>=80).length;
+          const ok=teamSorted.filter(u=>u.avg_score>=60&&u.avg_score<80).length;
+          const atRisk=teamSorted.filter(u=>u.avg_score>0&&u.avg_score<60).length;
+          return (
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+              {[[isAr?"ممتاز":"Excellent",healthy,"#10b981"],[isAr?"جيد":"Good",ok,"#f59e0b"],[isAr?"خطر":"At Risk",atRisk,"#ef4444"]].map(([l,v,c])=>(
+                <div key={l} style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:10, padding:"14px", textAlign:"center" }}>
+                  <div style={{ fontSize:22, fontWeight:800, color:c }}>{v}</div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+    );
+  }
+
+  // ── Home tab (default) ───────────────────────────────────────────
+  const greetTime=()=>{
+    const h=new Date().getHours();
+    if(isAr) return h<12?"صباح الخير":h<17?"مساء الخير":"مساء النور";
+    return h<12?"Good morning":h<17?"Good afternoon":"Good evening";
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+
+      {/* ── Hero ── */}
+      <div style={{ background:"linear-gradient(135deg,rgba(26,86,219,.08),rgba(8,145,178,.04))",
+        border:"1px solid rgba(59,130,246,.18)", borderRadius:16, padding:"22px 24px" }}>
+        <div style={{ display:"flex", alignItems:"flex-start", gap:14, flexWrap:"wrap" }}>
+          <div style={{ position:"relative", width:80, height:80, flexShrink:0 }}>
+            <Ring score={last||avg} size={80}/>
+            <div style={{ position:"absolute", inset:0, display:"flex",
+              flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+              <div style={{ fontSize:20, fontWeight:900, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
+                {(last||avg)||"—"}
+              </div>
+              {(last||avg)>0&&<div style={{ fontSize:8, color:cs.muted, fontWeight:600 }}>/100</div>}
+            </div>
+          </div>
+
+          <div style={{ flex:1, minWidth:160 }}>
+            <div style={{ fontSize:11, color:"#60a5fa", fontWeight:600, marginBottom:3, textTransform:"uppercase", letterSpacing:".05em" }}>
+              {greetTime()}
+            </div>
+            <div style={{ fontSize:20, fontWeight:800, color:cs.text, lineHeight:1.2, marginBottom:4 }}>
+              {profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || (isAr?"مرحباً":"Welcome")}
+            </div>
+            <div style={{ fontSize:12, color:cs.muted, marginBottom:2 }}>
+              {profile?.department&&<span style={{ color:"#60a5fa", fontWeight:500 }}>{profile.department} · </span>}
+              {profile?.company||(isAr?"موظف":"Employee")}
+            </div>
+            <div style={{ fontSize:12.5, color: last>=80?"#10b981":last>=60?"#f59e0b":"#8896ac", marginBottom:14, marginTop:4 }}>
+              {last>=80?`💪 ${isAr?"وضعيتك ممتازة اليوم":"Excellent posture today"}`
+              :last>=60?`📈 ${isAr?"وضعيتك تتحسن":"Your posture is improving"}`
+              :last>0?`⚠️ ${isAr?"وضعيتك تحتاج اهتمام":"Your posture needs attention"}`
+              :`👋 ${isAr?"ابدأ جلستك الأولى اليوم":"Start your first session today"}`}
+            </div>
+
+            {/* Quick actions */}
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              <button onClick={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}
+                style={{ padding:"9px 18px", background:"linear-gradient(135deg,#1a56db,#0891b2)",
+                  color:"#fff", border:"none", borderRadius:8, fontSize:12.5, fontWeight:700, cursor:"pointer" }}>
+                ▶ {isAr?"ابدأ جلسة":"Start Session"}
+              </button>
+              <button onClick={()=>onCoach?.()}
+                style={{ padding:"9px 16px", background:"rgba(99,102,241,.12)",
+                  border:"1px solid rgba(99,102,241,.3)", borderRadius:8,
+                  color:"#818cf8", fontSize:12.5, fontWeight:600, cursor:"pointer" }}>
+                🤖 {isAr?"اسأل المدرب":"Ask Coach"}
+              </button>
+            </div>
+          </div>
+
+          {/* Rank badge */}
+          {rank&&(
+            <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)",
+              borderRadius:12, padding:"12px 16px", textAlign:"center", flexShrink:0 }}>
+              <div style={{ fontSize:22, fontWeight:900, color:"#f59e0b" }}>#{rank.pos}</div>
+              <div style={{ fontSize:10, color:cs.muted }}>{isAr?`من ${rank.total}`:`of ${rank.total}`}</div>
+              <div style={{ fontSize:9.5, color:"#f59e0b", marginTop:2 }}>{isAr?"ترتيبك":"Team rank"}</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Stats row ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10 }}>
+        {[
+          { label:isAr?"متوسطك":"Avg Score",  value:avg||"—",                                     color:"#3b82f6"  },
+          { label:isAr?"السلسلة":"Streak",     value:streak?`${streak}🔥`:"—",                   color:"#10b981"  },
+          { label:isAr?"الجلسات":"Sessions",  value:profile?.sessions_count||userSessions.length||"—", color:"#a855f7" },
+          { label:isAr?"آخر جلسة":"Last",     value:last||"—",                                    color:last?gradeColor(last):"#8896ac" },
+        ].map(c=>(
+          <div key={c.label} style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 14px", textAlign:"center" }}>
+            <div style={{ fontSize:20, fontWeight:800, color:c.color }}>{c.value}</div>
+            <div style={{ fontSize:10.5, color:cs.muted, marginTop:2 }}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Pain risk card (Basic+) ── */}
+      {tierAtLeast(profile?.tier,"basic")&&<PainRiskCard sessions={userSessions} cs={cs} isAr={isAr}/>}
+
+      {/* ── BasicDashboard: habit score + streak freeze + whatsapp (Basic+) ── */}
+      {tierAtLeast(profile?.tier,"basic")&&(
+        <BasicDashboard profile={profile} userSessions={userSessions} cs={cs} isAr={isAr} addToast={addToast}/>
+      )}
+
+      {/* ── 7-day chart ── */}
+      {userSessions.length>0&&(
+        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"16px 18px" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:10 }}>
+            {isAr?"آخر 7 أيام":"Last 7 days"}
+          </div>
+          <WeekChart sessions={userSessions} cs={cs}/>
+        </div>
+      )}
+
+      {/* ── Recent sessions (last 4) ── */}
+      {userSessions.length>0&&(
+        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"16px 18px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"آخر الجلسات":"Recent Sessions"}</div>
+            <button onClick={()=>{/* setTab("sessions") handled via sidebar */}}
+              style={{ fontSize:11, color:"#60a5fa", background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
+              {isAr?"عرض الكل ←":"View all →"}
+            </button>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+            {userSessions.slice(0,4).map((s,i)=>{
+              const d=s.created_at?.toDate?.()??new Date(s.created_at||0);
+              const sc=s.avg_score||0;
+              const col=gradeColor(sc);
+              const dur=s.duration_sec?`${Math.round(s.duration_sec/60)}m`:"";
+              return (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:12,
+                  padding:"9px 12px", background:"rgba(255,255,255,.025)",
+                  borderRadius:8, border:`1px solid ${cs.border}` }}>
+                  <div style={{ width:36, height:36, borderRadius:8, flexShrink:0,
+                    background:`${col}18`, display:"flex", alignItems:"center",
+                    justifyContent:"center", fontSize:15, fontWeight:800, color:col }}>{sc||"—"}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:12.5, fontWeight:600, color:cs.text }}>
+                      {isAr?`جلسة #${s.session_number||(userSessions.length-i)}`:`Session #${s.session_number||(userSessions.length-i)}`}
+                    </div>
+                    <div style={{ fontSize:11, color:cs.muted }}>
+                      {d.toLocaleDateString(isAr?"ar-EG":"en-US",{weekday:"short",month:"short",day:"numeric"})}
+                      {dur&&<span> · {dur}</span>}
+                    </div>
+                  </div>
+                  <div style={{ fontSize:10, color:sc>=80?"#10b981":sc>=60?"#f59e0b":"#ef4444",
+                    fontWeight:600, background:sc>=80?"rgba(16,185,129,.1)":sc>=60?"rgba(245,158,11,.1)":"rgba(239,68,68,.1)",
+                    padding:"3px 9px", borderRadius:99 }}>
+                    {sc>=80?(isAr?"ممتاز":"Excellent"):sc>=60?(isAr?"جيد":"Good"):(isAr?"تحسّن":"Improve")}
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
       )}
+
+      {/* ── Mini team leaderboard (home preview — top 5) ── */}
+      {allUsers?.length>1&&(
+        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"16px 18px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"الفريق":"Team"}</div>
+            <span style={{ fontSize:11, color:cs.muted }}>{isAr?"أفضل 5":"Top 5"}</span>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {[...allUsers].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0)).slice(0,5).map((u,i)=>{
+              const isMe=u.uid===profile?.uid||u.id===profile?.uid;
+              const sc=u.avg_score||0;
+              return (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:9,
+                  padding:"8px 11px", borderRadius:8,
+                  background:isMe?"rgba(59,130,246,.08)":"rgba(255,255,255,.02)",
+                  border:`1px solid ${isMe?"rgba(59,130,246,.3)":cs.border}` }}>
+                  <div style={{ width:20, textAlign:"center", fontSize:12, color:cs.muted, fontWeight:700, flexShrink:0 }}>
+                    {i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}
+                  </div>
+                  <Avatar name={u.name||u.email} photo={u.photoURL} size={26}/>
+                  <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    <span style={{ fontSize:12.5, fontWeight:isMe?700:500, color:isMe?"#60a5fa":cs.text }}>
+                      {u.name||u.email?.split("@")[0]}
+                    </span>
+                    {isMe&&<span style={{ marginInlineStart:5, fontSize:10, color:"#60a5fa" }}>{isAr?"(أنت)":"(you)"}</span>}
+                  </div>
+                  <div style={{ fontSize:16, fontWeight:800, color:gradeColor(sc), flexShrink:0 }}>{sc||"—"}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+
 
 // ══════════════════════════════════════════════════════════════════
 // HR ADMIN DASHBOARD
@@ -1918,9 +2189,11 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {isAr?"إدارة أمان حسابك وجلساتك.":"Manage your account security and active sessions."}
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            {/* MFA / 2FA status */}
-            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
-              borderRadius:10, border:`1px solid ${cs.border}`,
+            {/* MFA / 2FA status — MFASetup.jsx has been a fully working
+                TOTP+SMS flow for a while; this row was still a permanently
+                dead "Soon" badge with nothing wired to open it. */}
+            <div onClick={()=>setShowMFASetup?.(true)} style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+              borderRadius:10, border:`1px solid ${cs.border}`, cursor:"pointer",
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
                 <span style={{ fontSize:22 }}>🔐</span>
@@ -1929,14 +2202,17 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                     {isAr?"المصادقة الثنائية (2FA)":"Two-Factor Authentication"}
                   </div>
                   <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
-                    {isAr?"أضف طبقة حماية إضافية لحسابك":"Add an extra layer of protection"}
+                    {profile?.mfa_enabled
+                      ? (isAr?`مفعّلة عبر ${profile?.mfa_method==="sms"?"SMS":"تطبيق المصادقة"}`:`Enabled via ${profile?.mfa_method==="sms"?"SMS":"authenticator app"}`)
+                      : (isAr?"أضف طبقة حماية إضافية لحسابك":"Add an extra layer of protection")}
                   </div>
                 </div>
               </div>
               <span style={{ fontSize:10, fontWeight:700,
-                background:"rgba(245,158,11,.1)", color:"#f59e0b",
+                background: profile?.mfa_enabled ? "rgba(16,185,129,.12)" : "rgba(99,102,241,.1)",
+                color: profile?.mfa_enabled ? "#10b981" : "#a5b4fc",
                 padding:"3px 10px", borderRadius:99 }}>
-                {isAr?"قريباً":"Soon"}
+                {profile?.mfa_enabled ? (isAr?"مفعّل ✓":"Enabled ✓") : (isAr?"إعداد":"Set up")}
               </span>
             </div>
             {/* Active sessions */}
@@ -2450,6 +2726,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       { id:"home",     icon:"⊞",  en:"Dashboard", ar:"الرئيسية" },
       { id:"sessions", icon:"📋", en:"Sessions",  ar:"جلساتي" },
       { id:"team",     icon:"👥", en:"Team",       ar:"الفريق" },
+      { id:"coach",    icon:"🤖", en:"AI Coach",   ar:"مدرب AI" },
     ];
     return [
       { id:"home",     icon:"⊞",  en:"Dashboard",  ar:"الرئيسية" },
@@ -2833,6 +3110,7 @@ export default function HomePage({
   setShowPredictiveAI, setShowMRR, setShowChangelog,
   setShowNotificationsHub, setShowEnterpriseRBAC,
   setShowBillingDashboard, setShowReferralProgram, setShowIntegrationsHub,
+  setShowMFASetup,
   isAdmin, isHRAdmin, companyId,
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,
@@ -2981,9 +3259,10 @@ export default function HomePage({
         uid:u.uid, id:u.id, name:u.name, photoURL:u.photoURL,
         avg_score:u.avg_score, department:u.department,
       }));
-      if(tab==="home"||tab==="team") return (
+      if(tab==="home"||tab==="team"||tab==="coach") return (
         <DashEmployee user={user} profile={profile} userSessions={userSessions} allUsers={teamData}
-          cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera} onCoach={openCoach}/>
+          cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
+          onCoach={openCoach} addToast={addToast} tier={tier} tab={tab}/>
       );
       if(tab==="sessions") return (
         <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}

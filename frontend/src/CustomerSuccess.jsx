@@ -7,7 +7,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
   collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp,
 } from "firebase/firestore";
-import { db } from "./firebase.js";
+import { db, getAuthToken } from "./firebase.js";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
@@ -43,6 +43,101 @@ function getBotReply(msg) {
   if (m.includes("export") || m.includes("csv") || m.includes("pdf"))   return BOT_RESPONSES.export;
   if (m.includes("mfa") || m.includes("2fa") || m.includes("auth"))     return BOT_RESPONSES.mfa;
   return BOT_RESPONSES.default;
+}
+
+// ── Ticket row: SLA countdown + reply (WhatsApp threads go out for
+// real via /api/support/reply; other tickets just log the reply text
+// for now since there's no other outbound channel wired yet) ────────
+function TicketRow({ t, onReplied }) {
+  const [open, setOpen] = useState(false);
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const stColor = t.status==="open"?CS_TOKENS.amber:t.status==="resolved"?CS_TOKENS.green:CS_TOKENS.muted;
+  const prColor = t.priority==="high"?CS_TOKENS.red:t.priority==="medium"?CS_TOKENS.amber:CS_TOKENS.muted;
+
+  const dueAt = t.first_response_due_at ? new Date(t.first_response_due_at) : null;
+  const responded = !!t.first_responded_at;
+  const overdue = dueAt && !responded && dueAt.getTime() < Date.now();
+  const msLeft = dueAt ? dueAt.getTime() - Date.now() : null;
+  const hoursLeft = msLeft != null ? Math.abs(msLeft / 3600000) : null;
+
+  const sendReply = async () => {
+    if (!reply.trim() || sending) return;
+    setSending(true);
+    try {
+      const idToken = await getAuthToken().catch(() => null);
+      if (!idToken) throw new Error("no auth token");
+      const r = await fetch(`${API}/support/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ ticket_id: t.id, body: reply.trim() }),
+      });
+      if (r.ok) { setReply(""); onReplied?.(); }
+    } catch (e) {
+      console.error("[TicketRow] reply failed:", e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={{ background:"rgba(255,255,255,.03)", borderRadius:12,
+      border:`1px solid ${overdue?CS_TOKENS.red+"55":CS_TOKENS.border}`, overflow:"hidden" }}>
+      <div onClick={()=>setOpen(o=>!o)} style={{ padding:"14px 18px",
+        display:"flex", alignItems:"center", gap:14, cursor:"pointer" }}>
+        <span style={{ fontFamily:"monospace", fontSize:12, color:CS_TOKENS.primary }}>{(t.id||t.ticket_id||"").slice(0,8)}</span>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:CS_TOKENS.text }}>
+            {t.source==="whatsapp" && "📱 "}{t.subject}
+          </div>
+          <div style={{ fontSize:11, color:CS_TOKENS.muted, marginTop:2 }}>
+            {t.user||t.email} · {t.created_at?.toDate?.()?.toLocaleString?.() || t.created||"—"}
+          </div>
+        </div>
+        {dueAt && !responded && (
+          <span style={{ fontSize:10, padding:"3px 8px", borderRadius:4, fontWeight:700,
+            background: overdue ? `${CS_TOKENS.red}22` : `${CS_TOKENS.amber}18`,
+            color: overdue ? CS_TOKENS.red : CS_TOKENS.amber }}>
+            {overdue ? `⚠ overdue ${hoursLeft?.toFixed(1)}h` : `⏱ ${hoursLeft?.toFixed(1)}h left`}
+          </span>
+        )}
+        <span style={{ fontSize:10, padding:"3px 8px", borderRadius:4, fontWeight:700,
+          background:`${prColor}18`, color:prColor }}>{t.priority||"medium"}</span>
+        <span style={{ fontSize:10, padding:"3px 8px", borderRadius:4, fontWeight:700,
+          background:`${stColor}18`, color:stColor }}>{t.status||"open"}</span>
+      </div>
+
+      {open && (
+        <div style={{ padding:"0 18px 16px", borderTop:`1px solid ${CS_TOKENS.border}` }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:8, margin:"12px 0", maxHeight:220, overflowY:"auto" }}>
+            {(t.messages||[]).map((m,i) => (
+              <div key={i} style={{
+                alignSelf: m.from==="agent" ? "flex-end" : "flex-start",
+                maxWidth:"75%", padding:"8px 12px", borderRadius:10, fontSize:12.5,
+                background: m.from==="agent" ? `${CS_TOKENS.primary}22` : "rgba(255,255,255,.05)",
+                color: CS_TOKENS.text }}>
+                {m.body}
+              </div>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <input value={reply} onChange={e=>setReply(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&sendReply()}
+              placeholder={t.source==="whatsapp" ? "Reply via WhatsApp…" : "Reply…"}
+              style={{ flex:1, padding:"9px 12px", borderRadius:8, background:"rgba(255,255,255,.05)",
+                border:`1px solid ${CS_TOKENS.border}`, color:CS_TOKENS.text, fontSize:12.5, outline:"none" }} />
+            <button onClick={sendReply} disabled={sending || !reply.trim()}
+              style={{ padding:"9px 16px", borderRadius:8, background:CS_TOKENS.primary,
+                border:"none", color:"#fff", fontWeight:600, fontSize:12.5,
+                cursor: reply.trim() ? "pointer" : "default", opacity: reply.trim() ? 1 : .5 }}>
+              {sending ? "…" : "Send"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
@@ -366,27 +461,9 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
                 </div>
               ) : (
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {tickets.map(t => {
-                    const stColor = t.status==="open"?CS_TOKENS.amber:t.status==="resolved"?CS_TOKENS.green:CS_TOKENS.muted;
-                    const prColor = t.priority==="high"?CS_TOKENS.red:t.priority==="medium"?CS_TOKENS.amber:CS_TOKENS.muted;
-                    return (
-                      <div key={t.id} style={{ background:"rgba(255,255,255,.03)", borderRadius:12,
-                        padding:"14px 18px", border:`1px solid ${CS_TOKENS.border}`,
-                        display:"flex", alignItems:"center", gap:14 }}>
-                        <span style={{ fontFamily:"monospace", fontSize:12, color:CS_TOKENS.primary }}>{t.id||t.ticket_id}</span>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:13, fontWeight:600, color:CS_TOKENS.text }}>{t.subject}</div>
-                          <div style={{ fontSize:11, color:CS_TOKENS.muted, marginTop:2 }}>
-                            {t.user||t.email} · {t.created_at?.toDate?.()?.toLocaleDateString?.() || t.created||"—"}
-                          </div>
-                        </div>
-                        <span style={{ fontSize:10, padding:"3px 8px", borderRadius:4, fontWeight:700,
-                          background:`${prColor}18`, color:prColor }}>{t.priority||"medium"}</span>
-                        <span style={{ fontSize:10, padding:"3px 8px", borderRadius:4, fontWeight:700,
-                          background:`${stColor}18`, color:stColor }}>{t.status||"open"}</span>
-                      </div>
-                    );
-                  })}
+                  {tickets.map(t => (
+                    <TicketRow key={t.id} t={t} onReplied={loadTickets} />
+                  ))}
                 </div>
               )}
             </>
