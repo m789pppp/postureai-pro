@@ -308,10 +308,6 @@
     {
       "path": "/api/cron/symptom-pattern-alerts",
       "schedule": "0 9 * * 1"
-    },
-    {
-      "path": "/api/habits/whatsapp-cron",
-      "schedule": "0 * * * *"
     }
   ]
 }
