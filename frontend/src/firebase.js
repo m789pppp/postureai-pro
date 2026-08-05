@@ -102,7 +102,7 @@ export const signInGoogle = async () => {
       code === 'auth/network-request-failed'
     ) {
       try {
-        sessionStorage.setItem("__pendingOAuth", "1");
+        sessionStorage.setItem("__pendingOAuth", "1"); sessionStorage.setItem("__pendingOAuthTs", String(Date.now()));
         await signInWithRedirect(auth, gProvider);
       } catch {}
       return null;
@@ -128,7 +128,7 @@ export const signInMicrosoft = async () => {
       code === 'auth/network-request-failed'
     ) {
       try {
-        sessionStorage.setItem("__pendingOAuth", "1");
+        sessionStorage.setItem("__pendingOAuth", "1"); sessionStorage.setItem("__pendingOAuthTs", String(Date.now()));
         await signInWithRedirect(auth, msProvider);
       } catch {}
       return null;
