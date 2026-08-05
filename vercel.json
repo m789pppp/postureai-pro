@@ -172,7 +172,7 @@
   ],
   "functions": {
     "api/llm.js": {
-      "runtime": "edge"
+      "maxDuration": 30
     },
     "api/kashier.js": {
       "maxDuration": 30
