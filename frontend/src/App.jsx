@@ -2092,10 +2092,7 @@ function DeviceSelect({cs,t,lang,onSelect}){
 // ══════════════════════════════════════════════════════════════════
 // MAIN APP COMPONENT
 // ══════════════════════════════════════════════════════════════════
-// OAuth redirect detection — persists across page reload
-let _oauthInProgress = !!(function() {
-  try { return sessionStorage.getItem("__pendingOAuth") === "1"; } catch { return false; }
-})();
+
 
 // ── Lazy-loaded components ──────────────────────────────────────
 // lazyNamed(): wraps React.lazy() so that if the dynamic import DOES
@@ -2746,7 +2743,7 @@ export default function App(){
       if (result?.user) {
         _oauthRedirect.current = true;
         _oauthInProgress = false;
-        try { sessionStorage.removeItem("__pendingOAuth"); } catch {}
+        try { sessionStorage.removeItem("__pendingOAuth"); sessionStorage.removeItem("__pendingOAuthTs"); } catch {}
         const u = result.user;
         let p = null;
         try { p = await getUserProfile(u.uid); } catch{}
@@ -2804,7 +2801,7 @@ export default function App(){
       clearTimeout(authTimeout);
       // onAuthStateChanged is the SINGLE source of truth for routing
       // Clear OAuth pending flag — we now have definitive auth state
-      try { if(u) sessionStorage.removeItem("__pendingOAuth"); } catch{}
+      try { if(u) { sessionStorage.removeItem("__pendingOAuth"); sessionStorage.removeItem("__pendingOAuthTs"); } } catch{}
       // NOTE: Elite tier elevation is handled SERVER-SIDE only in
       // backend/auth/middleware.py (ELITE_DOMAINS + ELITE_EMAILS).
       // Do NOT add email lists here — client JS is visible in DevTools.
