@@ -25,8 +25,20 @@ jobs:
       - name: Pull Vercel project config
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
-      - name: Build project
+      - name: Build project artifacts
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
-      - name: Deploy prebuilt to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy prebuilt artifacts
+        id: deploy
+        run: |
+          DEPLOY_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | tee /tmp/deploy.log | grep "https://" | tail -1)
+          echo "deploy_url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+          cat /tmp/deploy.log
+          # Exit with error if deploy log contains error
+          if grep -qi "error\|Error" /tmp/deploy.log && ! grep -qi "https://.*vercel.app" /tmp/deploy.log; then
+            cat /tmp/deploy.log >&2
+            exit 1
+          fi
+
+      - name: Print deployment URL
+        run: echo "Deployed to ${{ steps.deploy.outputs.deploy_url }}"
