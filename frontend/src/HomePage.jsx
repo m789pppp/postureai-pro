@@ -725,8 +725,10 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
   const streak  = profile?.streak_days || 0;
   const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
 
-  // rank among team
-  const rank = React.useMemo(()=>{
+  // All hooks at top level — no conditional hook calls
+  const [deptFilter, setDeptFilter] = useState("all");
+
+  const rank = useMemo(()=>{
     if(!allUsers?.length) return null;
     const sorted=[...allUsers].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
     const i=sorted.findIndex(u=>u.uid===profile?.uid||u.id===profile?.uid);
@@ -784,7 +786,6 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
     const myRankIdx=teamSorted.findIndex(u=>u.uid===profile?.uid||u.id===profile?.uid);
     const teamAvg=teamSorted.length?Math.round(teamSorted.reduce((a,u)=>a+(u.avg_score||0),0)/teamSorted.length):0;
     const depts=[...new Set(teamSorted.map(u=>u.department||"").filter(Boolean))];
-    const [deptFilter,setDeptFilter]=React.useState("all");
     const filtered=deptFilter==="all"?teamSorted:teamSorted.filter(u=>u.department===deptFilter);
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
