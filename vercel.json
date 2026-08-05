@@ -62,14 +62,6 @@
   ],
   "routes": [
     {
-      "src": "/assets/(.*)",
-      "dest": "/assets/$1"
-    },
-    {
-      "src": "/api/account/delete",
-      "dest": "/api/account/delete.js"
-    },
-    {
       "src": "/api/llm",
       "dest": "/api/llm.js"
     },
@@ -79,151 +71,99 @@
     },
     {
       "src": "/api/kashier/create-order",
-      "dest": "/api/kashier/create-order.js"
+      "dest": "/api/kashier.js"
     },
     {
       "src": "/api/kashier/webhook",
-      "dest": "/api/kashier/webhook.js"
+      "dest": "/api/kashier.js"
     },
     {
-      "src": "/api/notify/dispatch",
-      "dest": "/api/notify/dispatch.js"
-    },
-    {
-      "src": "/api/auth/mfa/totp/setup",
-      "dest": "/api/auth/mfa.js"
-    },
-    {
-      "src": "/api/auth/mfa/totp/verify",
-      "dest": "/api/auth/mfa.js"
-    },
-    {
-      "src": "/api/auth/mfa/sms/send",
-      "dest": "/api/auth/mfa.js"
-    },
-    {
-      "src": "/api/auth/mfa/sms/verify",
-      "dest": "/api/auth/mfa.js"
-    },
-    {
-      "src": "/api/auth/mfa/disable",
-      "dest": "/api/auth/mfa.js"
-    },
-    {
-      "src": "/api/auth/mfa/backup-codes/regenerate",
-      "dest": "/api/auth/mfa.js"
-    },
-    {
-      "src": "/api/auth/mfa/login-verify",
-      "dest": "/api/auth/mfa.js"
-    },
-    {
-      "src": "/api/org/invite/accept",
-      "dest": "/api/org/invite.js"
-    },
-    {
-      "src": "/api/org/invite/consent",
-      "dest": "/api/org/invite.js"
-    },
-    {
-      "src": "/api/employee/consent",
-      "dest": "/api/org/invite.js"
-    },
-    {
-      "src": "/api/org/create-invite",
-      "dest": "/api/org/invite.js"
-    },
-    {
-      "src": "/api/email/welcome",
-      "dest": "/api/email/send.js"
-    },
-    {
-      "src": "/api/email/invoice",
-      "dest": "/api/email/send.js"
-    },
-    {
-      "src": "/api/email/weekly-report",
-      "dest": "/api/email/send.js"
-    },
-    {
-      "src": "/api/email/weekly-progress",
-      "dest": "/api/email/send.js"
-    },
-    {
-      "src": "/api/email/sequence",
-      "dest": "/api/email/send.js"
-    },
-    {
-      "src": "/api/admin/seed-flags",
-      "dest": "/api/admin/seed-flags.js"
-    },
-    {
-      "src": "/api/cron/symptom-pattern-alerts",
-      "dest": "/api/cron/symptom-pattern-alerts.js"
-    },
-    {
-      "src": "/api/habits/whatsapp-test",
-      "dest": "/api/habits/whatsapp-test.js"
+      "src": "/api/auth/(.*)",
+      "dest": "/api/auth.js"
     },
     {
       "src": "/api/habits/whatsapp-cron",
-      "dest": "/api/habits/whatsapp-cron.js"
+      "dest": "/api/habits.js"
     },
     {
-      "src": "/api/cert/issue",
-      "dest": "/api/cert/issue.js"
-    },
-    {
-      "src": "/api/cert/verify",
-      "dest": "/api/cert/verify.js"
-    },
-    {
-      "src": "/api/posture-api/analyze",
-      "dest": "/api/posture-api/analyze.js"
-    },
-    {
-      "src": "/api/posture-api/keys",
-      "dest": "/api/posture-api/keys.js"
-    },
-    {
-      "src": "/api/posture-api/usage",
-      "dest": "/api/posture-api/usage.js"
-    },
-    {
-      "src": "/api/metrics/revenue",
-      "dest": "/api/metrics/revenue.js"
-    },
-    {
-      "src": "/api/referral/stats",
-      "dest": "/api/referral/stats.js"
-    },
-    {
-      "src": "/api/referral/track",
-      "dest": "/api/referral/track.js"
-    },
-    {
-      "src": "/api/support/whatsapp-inbound",
-      "dest": "/api/support/whatsapp-inbound.js"
-    },
-    {
-      "src": "/api/support/reply",
-      "dest": "/api/support/reply.js"
+      "src": "/api/habits/whatsapp-test",
+      "dest": "/api/habits.js"
     },
     {
       "src": "/api/session/start",
-      "dest": "/api/session/start.js"
+      "dest": "/api/session.js"
     },
     {
-      "src": "/api/health",
-      "dest": "/api/session/health.js"
+      "src": "/api/session/health",
+      "dest": "/api/session.js"
     },
     {
       "src": "/api/session/snapshot",
-      "dest": "/api/session/snapshot.js"
+      "dest": "/api/session.js"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "https://postureai-backend.up.railway.app/api/$1"
+      "src": "/api/posture-api/analyze",
+      "dest": "/api/posture.js"
+    },
+    {
+      "src": "/api/posture-api/keys",
+      "dest": "/api/posture.js"
+    },
+    {
+      "src": "/api/posture-api/usage",
+      "dest": "/api/posture.js"
+    },
+    {
+      "src": "/api/referral/stats",
+      "dest": "/api/referral.js"
+    },
+    {
+      "src": "/api/referral/track",
+      "dest": "/api/referral.js"
+    },
+    {
+      "src": "/api/support/reply",
+      "dest": "/api/support.js"
+    },
+    {
+      "src": "/api/support/whatsapp-inbound",
+      "dest": "/api/support.js"
+    },
+    {
+      "src": "/api/cert/issue",
+      "dest": "/api/cert.js"
+    },
+    {
+      "src": "/api/cert/verify",
+      "dest": "/api/cert.js"
+    },
+    {
+      "src": "/api/account/(.*)",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/admin/(.*)",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/email/(.*)",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/metrics/(.*)",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/notify/(.*)",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/org/(.*)",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/cron/(.*)",
+      "dest": "/api/misc.js"
     },
     {
       "src": "/(.*)",
@@ -231,77 +171,35 @@
     }
   ],
   "functions": {
-    "api/account/delete.js": {
+    "api/llm.js": {
+      "runtime": "edge"
+    },
+    "api/kashier.js": {
       "maxDuration": 30
     },
-    "api/kashier/create-order.js": {
-      "maxDuration": 15
-    },
-    "api/kashier/webhook.js": {
+    "api/auth.js": {
       "maxDuration": 30
     },
-    "api/notify/dispatch.js": {
-      "maxDuration": 15
-    },
-    "api/auth/mfa.js": {
-      "maxDuration": 15
-    },
-    "api/org/invite.js": {
-      "maxDuration": 15
-    },
-    "api/email/send.js": {
-      "maxDuration": 15
-    },
-    "api/admin/seed-flags.js": {
-      "maxDuration": 30
-    },
-    "api/support/whatsapp-inbound.js": {
-      "maxDuration": 15
-    },
-    "api/support/reply.js": {
-      "maxDuration": 15
-    },
-    "api/cron/symptom-pattern-alerts.js": {
+    "api/habits.js": {
       "maxDuration": 60
     },
-    "api/habits/whatsapp-test.js": {
+    "api/session.js": {
+      "maxDuration": 30
+    },
+    "api/posture.js": {
+      "maxDuration": 30
+    },
+    "api/referral.js": {
       "maxDuration": 15
     },
-    "api/habits/whatsapp-cron.js": {
+    "api/support.js": {
+      "maxDuration": 30
+    },
+    "api/cert.js": {
+      "maxDuration": 15
+    },
+    "api/misc.js": {
       "maxDuration": 60
-    },
-    "api/cert/issue.js": {
-      "maxDuration": 15
-    },
-    "api/cert/verify.js": {
-      "maxDuration": 10
-    },
-    "api/posture-api/analyze.js": {
-      "maxDuration": 10
-    },
-    "api/posture-api/keys.js": {
-      "maxDuration": 15
-    },
-    "api/posture-api/usage.js": {
-      "maxDuration": 10
-    },
-    "api/metrics/revenue.js": {
-      "maxDuration": 15
-    },
-    "api/referral/stats.js": {
-      "maxDuration": 10
-    },
-    "api/referral/track.js": {
-      "maxDuration": 5
-    },
-    "api/session/start.js": {
-      "maxDuration": 15
-    },
-    "api/session/health.js": {
-      "maxDuration": 5
-    },
-    "api/session/snapshot.js": {
-      "maxDuration": 10
     }
   },
   "crons": [
