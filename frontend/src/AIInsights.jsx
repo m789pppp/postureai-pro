@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
 import { getCached, setCache, getCachedAsync, setFirestoreCache } from "./aiPreloader.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── AI call via offline engine ──────────────────────────────────────
 // NOTE: previously routed through geminiChat() -> /api/coach/chat, but
@@ -312,6 +313,7 @@ function AITextSection({ loading, data, error, onRetry, isAr, D }) {
 }
 
 export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose, effectiveTier, uid = "" }) {
+  useBodyScrollLock();
   const [tab, setTab]               = useState("executive");
   const [loading, setLoading]       = useState(false);
   const [data, setData]             = useState(null);   // AI-generated text

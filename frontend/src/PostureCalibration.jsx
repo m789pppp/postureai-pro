@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { saveCalibration, getCalibration } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── Calibration constants ─────────────────────────────────────────
 const CALIB_DURATION = 10; // seconds
@@ -55,6 +56,7 @@ const LM = { NOSE:0, L_EYE:2, R_EYE:5, L_EAR:7, R_EAR:8, L_SHOULDER:11, R_SHOULD
 
 // ── CalibrationWizard ─────────────────────────────────────────────
 export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
+  useBodyScrollLock();
   // Close on Escape key anywhere
   useEffect(() => {
     const handler = (e) => { if (e.key === "Escape") onSkip?.(); };

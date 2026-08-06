@@ -9,6 +9,7 @@
  * ✅ Arabic name support
  */
 import React, { useRef, useEffect, useState, useCallback } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── roundRect polyfill (Chrome <99, Safari <15.4) ─────────────────
 function roundRectPolyfill(ctx, x, y, w, h, r) {
@@ -188,6 +189,7 @@ function FallbackCard({ score, isAr }) {
 
 // ── Main component ────────────────────────────────────────────────
 export function ShareCard({ score, sessions, avgScore, streak, name, lang, onClose, addToast }) {
+  useBodyScrollLock();
   const canvasRef  = useRef(null);
   const [copied,   setCopied]   = useState(false);
   const [sharing,  setSharing]  = useState(false);

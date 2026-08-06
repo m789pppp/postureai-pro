@@ -8,6 +8,7 @@ import {
   collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp,
 } from "firebase/firestore";
 import { db, getAuthToken } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
@@ -141,6 +142,7 @@ function TicketRow({ t, onReplied }) {
 }
 
 export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
+  useBodyScrollLock();
   const [tab, setTab]             = useState("nps");
   const [npsData, setNpsData]     = useState([]);
   const [npsLoading, setNpsLoading] = useState(true);

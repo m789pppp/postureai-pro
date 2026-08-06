@@ -4,6 +4,7 @@
  * No external deps — pure React with search
  */
 import React, { useState, useMemo } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const FAQ = [
   {
@@ -65,6 +66,7 @@ const FAQ = [
 ];
 
 export function HelpCenter({ cs, lang, onClose }) {
+  useBodyScrollLock();
   const [search, setSearch] = useState("");
   const [open, setOpen]     = useState(null);
   const isAr = lang === "ar";

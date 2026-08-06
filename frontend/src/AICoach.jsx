@@ -3,6 +3,7 @@ import { geminiChat, buildCoachContext, friendlyError } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus, localChatStream, abortCurrentStream } from "./localAI.js";
 import { qualityFor, featureTier } from "./lib/tierQuality.js";
 import { CoachAPI } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── Tokens ────────────────────────────────────────────────────────
 const T = {
@@ -858,6 +859,7 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
 // Basic: bounded daily check-in (question + tip, server-gated).
 // Professional/Elite: full free-form chat (plenty of monthly budget).
 export function AICoach({ profile, sessions=[], calibration, cs, lang="en", effectiveTier, onClose }) {
+  useBodyScrollLock();
   const _tier = effectiveTier || profile?.tier || "standard";
   if (featureTier(_tier) === "basic") {
     return <DailyCheckinPanel profile={profile} sessions={sessions} calibration={calibration} cs={cs} lang={lang} tier={_tier} onClose={onClose} />;

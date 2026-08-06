@@ -2,6 +2,7 @@ import { API_BASE_URL } from "./config/api.js";
 import { useState, useEffect, useCallback } from "react";
 
 import { apiFetch, getAuthToken } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 const API = API_BASE_URL;
 const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 
@@ -183,6 +184,7 @@ export async function openStripePortal(userId) {
 
 // ── BillingModal Component ────────────────────────────────────────
 export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, onSuccess }) {
+  useBodyScrollLock();
   const [billing,  setBilling]  = useState("monthly");
   const [loading,  setLoading]  = useState(null); // planId being processed
   const [error,    setError]    = useState("");

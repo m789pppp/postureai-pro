@@ -8,6 +8,7 @@ import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
 import { getLocalAIStatus } from "./localAI.js";
 import { featureTier, qualityFor } from "./lib/tierQuality.js";
 import { exportPDFReport } from "./lib/pdfReports.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── helpers ───────────────────────────────────────────────────────
 const avg  = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
@@ -256,6 +257,7 @@ function ReportSkeleton() {
 
 // ═══════════════════════════════════════════════════════════════════
 export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "en", effectiveTier, onClose }) {
+  useBodyScrollLock();
   const [tab, setTab]           = useState("summary");
   const [aiText, setAiText]     = useState({});  // keyed by tab
   const [loading, setLoading]   = useState(false);
