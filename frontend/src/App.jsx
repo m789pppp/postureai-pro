@@ -1,3 +1,4 @@
+// BUILD: 20260806091209
 import React, { useState, Suspense, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import {
@@ -2225,7 +2226,7 @@ export default function App(){
   // ── ABSOLUTE SAFETY NET — app MUST unblock within 6s no matter what ──
   useEffect(()=>{
     const t = setTimeout(()=>{
-      setAuthChecked(c=>{ if(!c && !_oauthInProgress){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
+      setAuthChecked(c=>{ if(!c && !_oauthInProgress.current){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
     }, 6000);
     return ()=>clearTimeout(t);
   },[]);
@@ -2547,6 +2548,13 @@ export default function App(){
     </div>
   );
   const[showAccountActivity,setShowAccountActivity]=useState(false);
+  // Live-page settings panel (posture alerts, voice coach, overlays, PDF,
+  // calibrate, break chime) — collapsed by default. Elite users have every
+  // one of these unlocked with nothing to compact away via tier-gating, so
+  // without a collapse they're looking at 7 full rows the instant they open
+  // the page, whether they came here to change a setting or just start a
+  // session.
+  const[showLiveSettings,setShowLiveSettings]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   const[showReferralProgram,setShowReferralProgram]=useState(false);
   const[showIntegrationsHub,setShowIntegrationsHub]=useState(false);
@@ -2731,6 +2739,12 @@ export default function App(){
   // Auth state listener
   // Track if auth came from OAuth redirect — prevents timeout from firing
   const _oauthRedirect = useRef(false);
+  // Was referenced in 6 places (safety-net timeout, popstate-adjacent auth
+  // flow, and the pre-auth render guard) but never actually declared
+  // anywhere — a leftover from the loading-screen fix that turned "stuck
+  // loading" into "crashes on load for everyone" the moment it shipped,
+  // since every one of those reads threw ReferenceError on first render.
+  const _oauthInProgress = useRef(false);
   // Which uid we've already run the forced setPage("home"/"setup"/"invite")
   // routing for — onAuthStateChanged can legitimately refire for the SAME
   // signed-in user (token refresh, tab visibility changes), and that must
@@ -2742,7 +2756,7 @@ export default function App(){
     getGoogleRedirectResult().then(async result => {
       if (result?.user) {
         _oauthRedirect.current = true;
-        _oauthInProgress = false;
+        _oauthInProgress.current = false;
         try { sessionStorage.removeItem("__pendingOAuth"); sessionStorage.removeItem("__pendingOAuthTs"); } catch {}
         const u = result.user;
         let p = null;
@@ -2793,7 +2807,7 @@ export default function App(){
 
     const authTimeout=setTimeout(()=>{
       // Don't redirect to landing if we know we're processing an OAuth redirect
-      if (_oauthRedirect.current || _oauthInProgress) return;
+      if (_oauthRedirect.current || _oauthInProgress.current) return;
       setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
     }, 8000);
 
@@ -2958,7 +2972,7 @@ export default function App(){
         } else {
           // u===null: user signed out OR Firebase is still processing OAuth redirect
           // Don't go to landing if we know we're in the middle of an OAuth redirect
-          if (_oauthRedirect.current || _oauthInProgress) {
+          if (_oauthRedirect.current || _oauthInProgress.current) {
             // Still waiting for getGoogleRedirectResult to resolve — do nothing
             return;
           }
@@ -2973,7 +2987,7 @@ export default function App(){
         }
       } catch(e) {
         console.error("[Auth] fatal:", e);
-        if (!_oauthRedirect.current && !_oauthInProgress) setPage("landing");
+        if (!_oauthRedirect.current && !_oauthInProgress.current) setPage("landing");
       } finally {
         setAuthChecked(true);
       }
@@ -4168,7 +4182,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   );
 
   // During OAuth redirect: user is temporarily null — show spinner NOT auth page
-  if(!user && (_oauthInProgress || _oauthRedirect?.current)) return(
+  if(!user && (_oauthInProgress.current || _oauthRedirect?.current)) return(
     <div style={{
       minHeight:"100vh",background:"#030b14",
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
@@ -4442,7 +4456,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       </div>
-    </ErrorBoundary>);
+    </></ErrorBoundary>);
   }
 
 
@@ -4566,6 +4580,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         allUsers={allUsers} setAllUsers={setAllUsers}
         tier={tier} setTier={setTier} mode={mode} setMode={setMode}
         setPage={setPage} startCamera={startCamera} addToast={addToast} goToBreak={goToBreak}
+        setShowCertModal={setShowCertModal}
         setShowDashboard={setShowDashboard} setShowCoach={setShowCoach}
         setShowGamification={setShowGamification} setShowBilling={setShowBilling}
         setShowCompanyOnboard={setShowCompanyOnboard} setShowAdmin={setShowAdmin}
@@ -4618,6 +4633,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onSchools={()=>setShowSchoolsModal(true)}
         onDevPortal={()=>setShowDevPortal(true)}
         onInsurance={()=>setShowInsuranceModal(true)}
+        setShowCertModal={setShowCertModal}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showCertModal&&<CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/>}
@@ -4704,13 +4720,17 @@ async function downloadPDF(sessionOverride, isClinical=false){
     );
   };
 
-  return(<ErrorBoundary>
+  return(<ErrorBoundary><>
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
       @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
     `}</style>
+    {/* Fixed overlays — outside grid so they don't consume grid columns */}
+    <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
+    <OfflineBanner lang={lang}/>
+    {healthConsentModalEl}
     <div dir={dir} style={{
       display:"grid",
       gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
@@ -4718,9 +4738,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
     }}>
-      <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
-      <OfflineBanner lang={lang}/>
-      {healthConsentModalEl}
 
       {/* ── GlobalModals: render on ALL pages ──────────────────── */}
       
@@ -5361,6 +5378,30 @@ async function downloadPDF(sessionOverride, isClinical=false){
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
           }}>{isFs?"🗗":"⛶"}</button>
 
+          {/* AI model loading overlay — the camera permission/feed itself
+              resolves in a couple seconds, but the pose-detection model
+              (a few MB, first load only, then cached) can take up to a
+              minute on a slower connection. Until now the ONLY feedback for
+              that wait was a small pulsing status dot — the camera looked
+              "on" with a live feed and zero scores updating, which reads as
+              broken/frozen rather than "still loading, one moment." */}
+          {camActive && mpStatus==="loading" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"center",gap:12,
+              background:"rgba(2,8,16,.72)",backdropFilter:"blur(3px)",zIndex:15,
+            }}>
+              <div style={{width:34,height:34,border:"3px solid rgba(255,255,255,.15)",
+                borderTopColor:TN?.color||"#1a56db",borderRadius:"50%",animation:"spin .9s linear infinite"}}/>
+              <div style={{fontSize:13,fontWeight:700,color:"#e2e8f0",textAlign:"center",padding:"0 24px"}}>
+                {isAr?"بيتحمّل نموذج الذكاء الاصطناعي لأول مرة…":"Loading the AI model for the first time…"}
+              </div>
+              <div style={{fontSize:11,color:cs.muted,textAlign:"center",padding:"0 32px",lineHeight:1.5}}>
+                {isAr?"بيتخزن بعد كده على جهازك — المرات الجاية هتفتح فورًا":"It's cached on your device after this — future sessions start instantly"}
+              </div>
+            </div>
+          )}
+
           {/* Idle-state visual cue — previously the camera area was just a black box
               with no indication a click was needed. First-time users had no way to
               know to press "Start Analysis" below. */}
@@ -5874,7 +5915,21 @@ async function downloadPDF(sessionOverride, isClinical=false){
         )}
 
         {/* Secondary controls (primary Start/Stop moved up under the camera) */}
-        <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
+        {/* Collapsed by default — see showLiveSettings declaration. One row
+            to open everything below, instead of 7 rows shown unconditionally
+            the moment the page loads. */}
+        <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
+          <button onClick={()=>setShowLiveSettings(v=>!v)} style={{
+            width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
+            background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:10,
+            padding:"10px 14px",fontSize:12.5,fontWeight:700,color:cs.text,cursor:"pointer",
+          }}>
+            <span>⚙️ {isAr?"إعدادات الجلسة":"Session settings"}</span>
+            <span style={{fontSize:11,color:cs.muted}}>{showLiveSettings?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?"عرض ▼":"Show ▼")}</span>
+          </button>
+        </div>
+        {showLiveSettings && (
+        <div style={{padding:"0 14px 12px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
           {/* Alert sound + Elite voice coach toggles — voice coach only takes
               a slot here once actually unlocked; below Elite it moved into
               the compact "locked tools" row at the end of this block so a
@@ -6062,6 +6117,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           )}
         </div>
+        )}
 
         {/* Tools moved to Dashboard — see HomePage tools tab */}
 
@@ -6184,7 +6240,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
       </div>
     </div>
-  </ErrorBoundary>);
+  </></ErrorBoundary>);
 }
 
 
