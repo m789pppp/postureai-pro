@@ -4456,7 +4456,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       </div>
-    </></ErrorBoundary>);
+    </ErrorBoundary>);
   }
 
 
