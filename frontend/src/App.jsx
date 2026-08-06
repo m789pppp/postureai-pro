@@ -2548,6 +2548,13 @@ export default function App(){
     </div>
   );
   const[showAccountActivity,setShowAccountActivity]=useState(false);
+  // Live-page settings panel (posture alerts, voice coach, overlays, PDF,
+  // calibrate, break chime) — collapsed by default. Elite users have every
+  // one of these unlocked with nothing to compact away via tier-gating, so
+  // without a collapse they're looking at 7 full rows the instant they open
+  // the page, whether they came here to change a setting or just start a
+  // session.
+  const[showLiveSettings,setShowLiveSettings]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   const[showReferralProgram,setShowReferralProgram]=useState(false);
   const[showIntegrationsHub,setShowIntegrationsHub]=useState(false);
@@ -5883,7 +5890,21 @@ async function downloadPDF(sessionOverride, isClinical=false){
         )}
 
         {/* Secondary controls (primary Start/Stop moved up under the camera) */}
-        <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
+        {/* Collapsed by default — see showLiveSettings declaration. One row
+            to open everything below, instead of 7 rows shown unconditionally
+            the moment the page loads. */}
+        <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
+          <button onClick={()=>setShowLiveSettings(v=>!v)} style={{
+            width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
+            background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:10,
+            padding:"10px 14px",fontSize:12.5,fontWeight:700,color:cs.text,cursor:"pointer",
+          }}>
+            <span>⚙️ {isAr?"إعدادات الجلسة":"Session settings"}</span>
+            <span style={{fontSize:11,color:cs.muted}}>{showLiveSettings?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?"عرض ▼":"Show ▼")}</span>
+          </button>
+        </div>
+        {showLiveSettings && (
+        <div style={{padding:"0 14px 12px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
           {/* Alert sound + Elite voice coach toggles — voice coach only takes
               a slot here once actually unlocked; below Elite it moved into
               the compact "locked tools" row at the end of this block so a
@@ -6071,6 +6092,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           )}
         </div>
+        )}
 
         {/* Tools moved to Dashboard — see HomePage tools tab */}
 
