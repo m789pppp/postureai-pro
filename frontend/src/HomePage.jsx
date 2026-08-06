@@ -3128,6 +3128,7 @@ export default function HomePage({
   onSchools,
   onDevPortal,
   onInsurance,
+  setShowCertModal,
 }) {
   const [tab,    setTab]    = useState("home");
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
