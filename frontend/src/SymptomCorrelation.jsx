@@ -48,6 +48,12 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyPeriod, setHistoryPeriod] = useState("30d");
 
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
   const toggleSymptom = (type) => {
     setSelected(prev => {
       const next = { ...prev };
@@ -183,27 +189,36 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
                   {SYMPTOMS.map(s => {
                     const active = s.type in selected;
                     return (
-                      <div key={s.type} style={{ ...card, padding:"12px 16px", display:"flex",
-                                                  alignItems:"center", justifyContent:"space-between",
+                      <div key={s.type} style={{ ...card, padding:"12px 16px",
                                                   borderColor: active ? "rgba(15,118,110,.5)" : undefined,
                                                   cursor:"pointer" }}
                            onClick={()=>toggleSymptom(s.type)}>
-                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <span style={{ fontSize:18 }}>{s.icon}</span>
-                          <span style={{ fontSize:13.5, fontWeight:600, color:"#e2e8f0" }}>{isAr?s.ar:s.en}</span>
-                        </div>
-                        {active && (
-                          <div style={{ display:"flex", gap:4 }} onClick={e=>e.stopPropagation()}>
-                            {[1,2,3,4,5].map(n => (
-                              <button key={n} onClick={()=>setSeverity(s.type, n)}
-                                style={{ width:24, height:24, borderRadius:"50%", border:"none", cursor:"pointer",
-                                          background: n <= selected[s.type] ? "#0f766e" : "rgba(255,255,255,.08)",
-                                          color: n <= selected[s.type] ? "#fff" : "#64748b", fontSize:10, fontWeight:700 }}>
-                                {n}
-                              </button>
-                            ))}
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            <span style={{ fontSize:18 }}>{s.icon}</span>
+                            <span style={{ fontSize:13.5, fontWeight:600, color:"#e2e8f0" }}>{isAr?s.ar:s.en}</span>
                           </div>
-                        )}
+                        </div>
+                        {/* Always in the layout (fixed height) so selecting a
+                            symptom never pushes the rows below it — only
+                            visibility/interactivity toggles, not presence. */}
+                        <div
+                          onClick={e=>e.stopPropagation()}
+                          style={{
+                            display:"flex", gap:4, marginTop: active ? 10 : 0,
+                            maxHeight: active ? 28 : 0, opacity: active ? 1 : 0,
+                            overflow:"hidden", pointerEvents: active ? "auto" : "none",
+                            transition:"max-height .18s ease, opacity .15s ease, margin-top .18s ease",
+                          }}>
+                          {[1,2,3,4,5].map(n => (
+                            <button key={n} onClick={()=>setSeverity(s.type, n)}
+                              style={{ width:24, height:24, borderRadius:"50%", border:"none", cursor:"pointer",
+                                        background: n <= selected[s.type] ? "#0f766e" : "rgba(255,255,255,.08)",
+                                        color: n <= selected[s.type] ? "#fff" : "#64748b", fontSize:10, fontWeight:700 }}>
+                              {n}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     );
                   })}
