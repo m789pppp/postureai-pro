@@ -4456,7 +4456,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       </div>
-    </ErrorBoundary>);
+    </></ErrorBoundary>);
   }
 
 
@@ -4720,13 +4720,17 @@ async function downloadPDF(sessionOverride, isClinical=false){
     );
   };
 
-  return(<ErrorBoundary>
+  return(<ErrorBoundary><>
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
       @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
     `}</style>
+    {/* Fixed overlays — outside grid so they don't consume grid columns */}
+    <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
+    <OfflineBanner lang={lang}/>
+    {healthConsentModalEl}
     <div dir={dir} style={{
       display:"grid",
       gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
@@ -4734,9 +4738,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
     }}>
-      <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
-      <OfflineBanner lang={lang}/>
-      {healthConsentModalEl}
 
       {/* ── GlobalModals: render on ALL pages ──────────────────── */}
       
@@ -6239,7 +6240,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
       </div>
     </div>
-  </ErrorBoundary>);
+  </></ErrorBoundary>);
 }
 
 
