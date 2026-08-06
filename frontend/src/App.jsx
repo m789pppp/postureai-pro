@@ -4566,6 +4566,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         allUsers={allUsers} setAllUsers={setAllUsers}
         tier={tier} setTier={setTier} mode={mode} setMode={setMode}
         setPage={setPage} startCamera={startCamera} addToast={addToast} goToBreak={goToBreak}
+        setShowCertModal={setShowCertModal}
         setShowDashboard={setShowDashboard} setShowCoach={setShowCoach}
         setShowGamification={setShowGamification} setShowBilling={setShowBilling}
         setShowCompanyOnboard={setShowCompanyOnboard} setShowAdmin={setShowAdmin}
