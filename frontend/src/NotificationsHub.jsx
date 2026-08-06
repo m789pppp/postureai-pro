@@ -9,6 +9,7 @@ import {
   db, doc, getDoc, setDoc, addDoc, updateDoc, collection,
   query, where, orderBy, limit, onSnapshot, getDocs,
 } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ─────────────────────────────────────────────────────────────
 // DESIGN TOKENS
@@ -1174,6 +1175,7 @@ Respond ONLY with a valid JSON array (no markdown, no explanation):
 // MAIN EXPORT
 // ─────────────────────────────────────────────────────────────
 export function NotificationsHub({ orgId, profile, sessions=[], allUsers=[], lang="en", onClose }) {
+  useBodyScrollLock();
   const isAr = lang === "ar";
   const [tab, setTab] = useState("feed");
 

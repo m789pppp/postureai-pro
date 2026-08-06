@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from "react";
 import { MarketplaceAPI } from "./services/api.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { DEMO_THERAPISTS, getDemoBookings, createDemoBooking, updateDemoBooking, getDemoMessages, addDemoMessage } from "./marketplaceDemo.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const border = "1px solid rgba(255,255,255,.08)";
 const card   = { background:"rgba(255,255,255,.03)", border, borderRadius:16, padding:20 };
@@ -33,6 +34,7 @@ function money(cents, currency, isAr) {
 }
 
 export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, onBack, addToast }) {
+  useBodyScrollLock();
   const isAr = lang === "ar";
   const [tab, setTab]           = useState("browse"); // browse | mine | admin
   const [therapists, setTherapists] = useState([]);

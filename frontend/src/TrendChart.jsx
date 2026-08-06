@@ -3,6 +3,7 @@
  * Shows: daily avg scores, 7-day rolling avg, regression line + verdict
  */
 import React, { useMemo } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── Linear regression ─────────────────────────────────────────────
 function linReg(pts) {
@@ -32,6 +33,7 @@ function sc(s) {
 }
 
 export default function TrendChart({ sessions = [], cs, lang, onClose }) {
+  useBodyScrollLock();
   const isAr = lang === "ar";
   const W = 580, H = 220, PAD = { t: 16, r: 20, b: 36, l: 44 };
   const CW = W - PAD.l - PAD.r;

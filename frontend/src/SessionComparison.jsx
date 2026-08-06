@@ -2,6 +2,7 @@
  * SessionComparison — آخر 3 جلسات جنب بعض مع diff في كل metric
  */
 import React, { useMemo } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const METRICS = [
   { key: "neck_lean",       label: "Neck Lean",       labelAr: "ميل الرقبة",    unit: "°",  low_good: true  },
@@ -40,6 +41,7 @@ function DiffBadge({ diff, lowGood, isAr }) {
 }
 
 export default function SessionComparison({ sessions = [], cs, lang, onClose }) {
+  useBodyScrollLock();
   const isAr = lang === "ar";
 
   // Take last 3 sessions newest→oldest

@@ -7,6 +7,7 @@ import { geminiAnalysis } from "./gemini.js";
 import { getCached, setCache } from "./aiPreloader.js";
 import { SymptomAPI } from "./services/api.js";
 import { updateUserProfile } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 async function callGemini(prompt, system, maxTokens = 900) {
   try {
@@ -601,6 +602,7 @@ function AIBlock({ loading, data, error, onRetry, isAr }) {
 
 // ═══════════════════════════════════════════════════════════════════
 export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose , effectiveTier, uid = ""}) {
+  useBodyScrollLock();
   const [tab, setTab]         = useState("burnout");
   const [aiText, setAiText]   = useState("");
   const [loading, setLoading] = useState(false);

@@ -2,6 +2,7 @@ import { API_BASE_URL } from "./config/api.js";
 import { useState, useEffect, useCallback } from "react";
 
 import { apiFetch } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 const API = API_BASE_URL;
 
 // ── Season boundaries (calendar quarter) ───────────────────────────
@@ -438,6 +439,7 @@ export function Leaderboard({ employees, companyName, cs, lang = "en" }) {
 
 // ── Main Gamification Panel ───────────────────────────────────────
 export function GamificationPanel({ profile, sessions, calibration, employees, cs, lang = "en", onAchievementsUpdate, onClose }) {
+  useBodyScrollLock();
   const [gamData, setGamData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab]         = useState("progress");
