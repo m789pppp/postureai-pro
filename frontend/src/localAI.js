@@ -8,6 +8,7 @@
  * - Redirects off-topic questions back to posture
  */
 import { API_BASE_URL } from "./config/api.js";
+import { getAuthToken } from "./services/api.js";
 
 export function getLocalAIStatus() { return { ready:true, loading:false, progress:100, error:null }; }
 export function onLocalAIStatus(cb) { return ()=>{}; }
@@ -35,9 +36,21 @@ export async function checkWebGPU()   { return true; }
 // Pollinations kept only as a last-resort fallback in case the backend
 // itself is ever unreachable.
 async function _backendLLM(messages, systemPrompt, maxTokens, temperature = 0.5) {
+  // BUG FIX: api/llm.js (the Vercel Edge Function this hits) requires an
+  // Authorization: Bearer <token> header and returns 401 immediately
+  // without one — this call sent no auth header at all, so every single
+  // request to what's supposed to be the PRIMARY AI path failed instantly
+  // and silently fell through to the Pollinations fallback (rate-limited
+  // to 1 req/hour per the comments below) or the offline responder. This
+  // was the actual live cause of "AI مش شاغل خالص" even after the
+  // Pollinations-primary -> backend-primary fix landed.
+  const token = await getAuthToken().catch(() => null);
   const r = await fetch(`${API_BASE_URL}/llm`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({ messages, system_prompt: systemPrompt, max_tokens: maxTokens, temperature }),
   });
   if (!r.ok) throw new Error("backend_llm_" + r.status);
