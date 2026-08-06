@@ -5377,6 +5377,30 @@ async function downloadPDF(sessionOverride, isClinical=false){
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
           }}>{isFs?"🗗":"⛶"}</button>
 
+          {/* AI model loading overlay — the camera permission/feed itself
+              resolves in a couple seconds, but the pose-detection model
+              (a few MB, first load only, then cached) can take up to a
+              minute on a slower connection. Until now the ONLY feedback for
+              that wait was a small pulsing status dot — the camera looked
+              "on" with a live feed and zero scores updating, which reads as
+              broken/frozen rather than "still loading, one moment." */}
+          {camActive && mpStatus==="loading" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"center",gap:12,
+              background:"rgba(2,8,16,.72)",backdropFilter:"blur(3px)",zIndex:15,
+            }}>
+              <div style={{width:34,height:34,border:"3px solid rgba(255,255,255,.15)",
+                borderTopColor:TN?.color||"#1a56db",borderRadius:"50%",animation:"spin .9s linear infinite"}}/>
+              <div style={{fontSize:13,fontWeight:700,color:"#e2e8f0",textAlign:"center",padding:"0 24px"}}>
+                {isAr?"بيتحمّل نموذج الذكاء الاصطناعي لأول مرة…":"Loading the AI model for the first time…"}
+              </div>
+              <div style={{fontSize:11,color:cs.muted,textAlign:"center",padding:"0 32px",lineHeight:1.5}}>
+                {isAr?"بيتخزن بعد كده على جهازك — المرات الجاية هتفتح فورًا":"It's cached on your device after this — future sessions start instantly"}
+              </div>
+            </div>
+          )}
+
           {/* Idle-state visual cue — previously the camera area was just a black box
               with no indication a click was needed. First-time users had no way to
               know to press "Start Analysis" below. */}
