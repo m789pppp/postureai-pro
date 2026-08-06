@@ -4619,6 +4619,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onSchools={()=>setShowSchoolsModal(true)}
         onDevPortal={()=>setShowDevPortal(true)}
         onInsurance={()=>setShowInsuranceModal(true)}
+        setShowCertModal={setShowCertModal}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showCertModal&&<CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/>}
