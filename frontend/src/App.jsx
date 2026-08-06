@@ -2290,7 +2290,12 @@ export default function App(){
       // stayed on, RAF loop kept burning CPU in the background, and the
       // session was never saved -- none of that happened only through the
       // in-app Back buttons, which explicitly call stopCamera() themselves.
-      if(newPage!=="live" && camActiveRef.current){ stopCamera(); }
+      // streamRef.current (not just camActiveRef) is the real source of
+      // truth for "is a camera stream open right now" — the preview/
+      // countdown phase (see openPreview/confirmStartSession) opens the
+      // stream and shows it live BEFORE camActive ever becomes true, so
+      // checking camActive alone would miss exactly that window.
+      if(newPage!=="live" && (camActiveRef.current || streamRef.current)){ stopCamera(); }
       setPageRaw(newPage);
     };
     window.addEventListener("popstate", onPop);
@@ -2324,6 +2329,14 @@ export default function App(){
   const camActiveRef=useRef(false);
   useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
+  // Camera-selection → live preview → 3-2-1 countdown flow. Previously
+  // "Start Analysis" opened the camera and started scoring in the exact
+  // same instant — no chance to pick a camera, check framing, or get ready.
+  const[cameraDevices,setCameraDevices]=useState([]);
+  const[showCameraPicker,setShowCameraPicker]=useState(false);
+  const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
+  const[countdownN,setCountdownN]=useState(3);
+  const chosenDeviceIdRef=useRef(null);
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
   // "AI Coach (local, free)" regardless of whether WebLLM had actually loaded.
@@ -3354,18 +3367,33 @@ export default function App(){
     // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
     // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
     if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
-    // ── Mode fallback ────────────────────────────────────────────────
-    // If the user clicked a mode button (Laptop / Phone / Side) right before
-    // pressing Start Analysis, React's async state update may not have
-    // flushed yet — mode is still null in this closure.  We default to
-    // "laptop" so getUserMedia is ALWAYS invoked, then persist the choice
-    // so the next render picks it up correctly.
+    // Enumerate cameras first so the user can pick one before anything opens.
+    // Labels are blank until permission has been granted at least once on
+    // some browsers — falls back to "Camera 1/2/…" in that case, still
+    // fully functional since deviceId itself doesn't need a label.
+    try{
+      const devices=await navigator.mediaDevices.enumerateDevices();
+      const cams=devices.filter(d=>d.kind==="videoinput");
+      setCameraDevices(cams);
+      if(cams.length>1){ setShowCameraPicker(true); return; }
+      chosenDeviceIdRef.current = cams[0]?.deviceId || null;
+    }catch{ chosenDeviceIdRef.current=null; } // enumerate failing isn't fatal — just skip the picker
+    await openPreview();
+  }
+
+  // Called once a device is chosen (or immediately if there's only one
+  // camera). Opens the stream and shows a live, non-scoring preview so the
+  // user can see themselves and adjust framing before anything is recorded.
+  async function openPreview(){
     const effectiveMode = mode || "laptop";
     if (!mode) { setMode("laptop"); }
     setCameraStatus("requesting");
     try{
       const facingMode=effectiveMode==="phone"?"environment":"user";
-      const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}}});
+      const videoConstraints = chosenDeviceIdRef.current
+        ? {deviceId:{exact:chosenDeviceIdRef.current},width:{ideal:1280},height:{ideal:720}}
+        : {width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}};
+      const s=await navigator.mediaDevices.getUserMedia({video:videoConstraints});
       streamRef.current=s;
       if(!vidRef.current){setCameraStatus("idle");return;}
       vidRef.current.srcObject=s;
@@ -3375,6 +3403,46 @@ export default function App(){
       }).catch(()=>{});
       if(!vidRef.current){return;}
       setCameraStatus("ready");
+      setPreviewPhase("preview"); // shows live feed + "Start session" button — NOT scoring yet
+    }catch(e){
+      const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
+      const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
+      setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
+      const errMsg=isDenied
+        ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
+        :noDevice
+        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
+        :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
+      setAlertMsg({text:errMsg,type:"bad"});
+      addToast(errMsg,"error");
+    }
+  }
+
+  // User tapped "Start session" from the live preview — run a 3-2-1
+  // countdown (gives a moment to get in frame / sit down) then hand off to
+  // beginScoring(), which is the original startCamera() logic untouched.
+  function confirmStartSession(){
+    setPreviewPhase("countdown");
+    setCountdownN(3);
+    let n=3;
+    const iv=setInterval(()=>{
+      n-=1;
+      if(n<=0){
+        clearInterval(iv);
+        setPreviewPhase(null);
+        beginScoring();
+      } else {
+        setCountdownN(n);
+      }
+    },1000);
+  }
+
+  // The actual session start — reuses the stream already opened by
+  // openPreview(), so no second camera-permission round trip. Logic here is
+  // byte-for-byte the tail half of the original single-phase startCamera().
+  async function beginScoring(){
+    const effectiveMode = mode || "laptop";
+    try{
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
@@ -3434,16 +3502,7 @@ export default function App(){
       },1000);
       rafRef.current=requestAnimationFrame(runLoop);
     }catch(e){
-      const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
-      const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
-      setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
-      const errMsg=isDenied
-        ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
-        :noDevice
-        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
-        :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
-      setAlertMsg({text:errMsg,type:"bad"});
-      addToast(errMsg,"error");
+      addToast(isAr?"خطأ في بدء الجلسة":"Error starting session","error");
     }
   }
 
@@ -3473,6 +3532,7 @@ export default function App(){
     // Close PoseLandmarker only if it was created locally (not the shared window.__mpPose)
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
+    setPreviewPhase(null);
 
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
     const la  = lastAnalRef.current||{};
@@ -4723,6 +4783,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
       @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes countdownPop{0%{opacity:0;transform:scale(1.5)}30%{opacity:1;transform:scale(1)}100%{opacity:.85;transform:scale(1)}}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
     `}</style>
@@ -4737,6 +4798,36 @@ async function downloadPDF(sessionOverride, isClinical=false){
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
     }}>
+      {showCameraPicker && (
+        <div dir={dir} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000,padding:20}}>
+          <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,maxWidth:380,width:"100%",padding:"22px 20px"}}>
+            <div style={{fontSize:15,fontWeight:800,color:cs.text,marginBottom:4}}>
+              {isAr?"اختار الكاميرا":"Choose a camera"}
+            </div>
+            <div style={{fontSize:11.5,color:cs.muted,marginBottom:16}}>
+              {isAr?`لقينا ${cameraDevices.length} كاميرات على جهازك`:`Found ${cameraDevices.length} cameras on your device`}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {cameraDevices.map((d,i)=>(
+                <button key={d.deviceId||i} onClick={()=>{ chosenDeviceIdRef.current=d.deviceId; setShowCameraPicker(false); openPreview(); }} style={{
+                  textAlign:isAr?"right":"left",background:"rgba(255,255,255,.04)",border:`1px solid ${cs.border}`,
+                  borderRadius:11,padding:"12px 14px",fontSize:13,fontWeight:600,color:cs.text,cursor:"pointer",
+                  display:"flex",alignItems:"center",gap:10,
+                }}>
+                  <span style={{fontSize:16}}>📷</span>
+                  {d.label || (isAr?`كاميرا ${i+1}`:`Camera ${i+1}`)}
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>setShowCameraPicker(false)} style={{
+              width:"100%",marginTop:14,background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,
+              padding:"10px 0",fontSize:12.5,color:cs.muted,cursor:"pointer",
+            }}>
+              {isAr?"إلغاء":"Cancel"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── GlobalModals: render on ALL pages ──────────────────── */}
       
@@ -5377,6 +5468,43 @@ async function downloadPDF(sessionOverride, isClinical=false){
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
           }}>{isFs?"🗗":"⛶"}</button>
 
+          {/* Live preview, not yet scored — shown after the camera opens and
+              before the user confirms they're ready. Was previously skipped
+              entirely: pressing Start opened the camera AND began scoring
+              in the same instant, with zero chance to check framing first. */}
+          {previewPhase==="preview" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"flex-end",padding:"0 0 22px",
+              background:"linear-gradient(to top, rgba(2,8,16,.85), transparent 45%)",zIndex:15,
+            }}>
+              <div style={{fontSize:12.5,color:"#e2e8f0",marginBottom:12,textAlign:"center",padding:"0 20px"}}>
+                {isAr?"اتأكد إنك ظاهر كويس في الكاميرا، وابدأ لما تجهز":"Make sure you're framed well, then start when you're ready"}
+              </div>
+              <button onClick={confirmStartSession} style={{
+                background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
+                padding:"14px 32px",fontSize:14.5,fontWeight:800,color:"#fff",cursor:"pointer",
+                boxShadow:"0 8px 24px rgba(26,86,219,.4)",
+              }}>
+                ▶ {isAr?"ابدأ الجلسة الآن":"Start session now"}
+              </button>
+            </div>
+          )}
+
+          {/* 3-2-1 countdown right before scoring actually begins */}
+          {previewPhase==="countdown" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",
+              background:"rgba(2,8,16,.55)",zIndex:16,
+            }}>
+              <div key={countdownN} style={{
+                fontSize:88,fontWeight:900,color:"#fff",
+                animation:"countdownPop .9s ease-out",
+                textShadow:"0 4px 24px rgba(0,0,0,.5)",
+              }}>{countdownN}</div>
+            </div>
+          )}
+
           {/* AI model loading overlay — the camera permission/feed itself
               resolves in a couple seconds, but the pose-detection model
               (a few MB, first load only, then cached) can take up to a
@@ -5566,7 +5694,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Primary control — placed directly under the camera so Start / Stop
             is always visible without scrolling past the metrics list. */}
         <div style={{padding:"12px 14px 0"}}>
-          {!camActive
+          {previewPhase
+            ? null /* overlay's own "Start session now" button is the CTA here */
+            : !camActive
             ? <button
                 onClick={cameraStatus==="requesting" ? undefined : startCamera}
                 disabled={cameraStatus==="requesting"}
