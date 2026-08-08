@@ -258,7 +258,7 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
       display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
     <style>{`@keyframes cpShimmer{0%{background-position:-400% 0}100%{background-position:400% 0}}`}</style>
       <div style={{ background:CP_TOKENS.card, borderRadius:20, width:"100%", maxWidth:1160,
-        height:"90vh", display:"flex", flexDirection:"column", overflow:"hidden",
+        height:"90dvh", display:"flex", flexDirection:"column", overflow:"hidden",
         border:`1px solid ${CP_TOKENS.border}`, boxShadow:"0 32px 80px rgba(0,0,0,.5)" }}>
 
         {/* Header */}

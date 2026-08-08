@@ -91,7 +91,7 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.76)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-      <div style={{ background:cs.card, borderRadius:20, width:"100%", maxWidth:780, height:"86vh", display:"flex", flexDirection:"column", overflow:"hidden", border:`1px solid ${cs.border}`, boxShadow:"0 32px 80px rgba(0,0,0,0.5)" }}>
+      <div style={{ background:cs.card, borderRadius:20, width:"100%", maxWidth:780, height:"86dvh", display:"flex", flexDirection:"column", overflow:"hidden", border:`1px solid ${cs.border}`, boxShadow:"0 32px 80px rgba(0,0,0,0.5)" }}>
         <div style={{ padding:"20px 28px", borderBottom:`1px solid ${cs.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#8b5cf6,#6366f1)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>📜</div>

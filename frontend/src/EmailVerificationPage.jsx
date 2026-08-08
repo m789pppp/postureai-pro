@@ -46,7 +46,7 @@ export default function EmailVerificationPage({ oobCode, user, darkMode, lang, o
 
   return (
     <div style={{
-      minHeight:"100vh", background:c.bg, display:"flex",
+      minHeight:"100dvh", background:c.bg, display:"flex",
       alignItems:"center", justifyContent:"center",
       fontFamily:"'Inter',system-ui,sans-serif", padding:24,
       direction:isAr?"rtl":"ltr",

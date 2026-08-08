@@ -1028,7 +1028,7 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
   }
 
   return(
-    <div dir={dir} style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div dir={dir} style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
       <div style={{width:"100%",maxWidth:400}}>
 
         {/* Controls */}
@@ -1141,7 +1141,7 @@ function Waiting({paymentId,payMethod,amount,tier,refCode,onSuccess,cs,t}){
   const[status,setStatus]=useState("pending"),[payData,setPayData]=useState(null);
   useEffect(()=>{const unsub=listenToPayment(paymentId,d=>{setPayData(d);if(d.status==="confirmed"){setStatus("confirmed");onSuccess();}else if(d.status==="rejected")setStatus("rejected");});return unsub;},[paymentId]);
   const pm=PAY_METHODS.find(p=>p.id===payMethod),tierInfo=TIERS[tier];
-  return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+  return <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
     <div style={{maxWidth:480,width:"100%"}}>
       {status==="confirmed"?(<div style={{background:cs.card,border:"0.5px solid rgba(16,185,129,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
         <div style={{fontSize:52,marginBottom:12}}>✅</div>
@@ -1207,7 +1207,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
     }catch{addToast(isAr?"خطأ في الحفظ":"Error saving","error");}
     setSaving(false);
   }
-  return <div style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div style={{minHeight:"100dvh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:700,margin:"0 auto",padding:"26px 18px 52px"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:24}}>
         <button onClick={onBack} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
@@ -1286,7 +1286,7 @@ function PaymentResultScreen({result, cs, lang, onContinue}){
   const isAr=lang==="ar";
   const isSuccess=result==="success";
   return(
-    <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
       <div style={{maxWidth:460,width:"100%",textAlign:"center"}}>
         <div style={{
           width:72,height:72,borderRadius:"50%",margin:"0 auto 20px",
@@ -1382,7 +1382,7 @@ function Leaderboard({users,cs,t,onBack,lang}){
   const filtered=users.filter(u=>deptFilter==="all"||(u.department||u.company||"")=== deptFilter);
   const sorted=[...filtered].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
   const medals=["🥇","🥈","🥉"];
-  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100dvh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:700,margin:"0 auto",padding:"24px 17px 52px"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:18,flexDirection:isAr?"row-reverse":"row"}}>
         <button onClick={onBack} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
@@ -1500,7 +1500,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
     }).reduce((a,p)=>a+(p.amount||0),0)};
   });
 
-  return <div style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif"}}>
+  return <div style={{minHeight:"100dvh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif"}}>
     {modal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}}>
       <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:14,padding:22,width:340}}>
         <div style={{fontSize:14,fontWeight:700,marginBottom:11}}>{isAr?"رفض الدفعة":"Reject Payment"}</div>
@@ -1721,7 +1721,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
   if(step==="waiting")return <Waiting paymentId={paymentId} payMethod={payMethod} amount={price}
     tier={selTier} refCode={""} onSuccess={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");onPaid();}} cs={cs} t={t}/>;
 
-  if(step==="kashier")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
+  if(step==="kashier")return <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
     <div style={{padding:"12px 18px",borderBottom:"0.5px solid "+cs.border,display:"flex",alignItems:"center",gap:11,background:cs.card}}>
       <button aria-label="Go back" onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{"← "}{isAr?"رجوع":"Back"}</button>
       <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{"🔒 "}{isAr?"دفع آمن عبر Kashier":"Secure payment via Kashier"}{" — "}{price?.toLocaleString()}{" EGP"}</div>
@@ -1729,7 +1729,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
     <iframe src={kashierUrl} style={{flex:1,border:"none",width:"100%"}} title="Kashier Checkout"/>
   </div>;
 
-  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100dvh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:880,margin:"0 auto",padding:"24px 17px 52px"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:20,flexDirection:isAr?"row-reverse":"row"}}>
@@ -3965,7 +3965,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── ROUTING ───────────────────────────────────────────────────────
   if(!authChecked)return(
     <div style={{
-      minHeight:"100vh",
+      minHeight:"100dvh",
       background: darkMode ? "#040d1a" : "#f8fafc",
       display:"flex", flexDirection:"column",
       alignItems:"center", justifyContent:"center",
@@ -4184,7 +4184,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // During OAuth redirect: user is temporarily null — show spinner NOT auth page
   if(!user && (_oauthInProgress.current || _oauthRedirect?.current)) return(
     <div style={{
-      minHeight:"100vh",background:"#030b14",
+      minHeight:"100dvh",background:"#030b14",
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
       gap:16,fontFamily:"'Inter',system-ui,sans-serif",
     }}>
@@ -4313,7 +4313,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── SETUP SCREEN: account type + device selection ─────────────────
   if(page==="setup"){
     return(<ErrorBoundary>
-      <div dir={dir} style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
+      <div dir={dir} style={{minHeight:"100dvh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
         <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
         {/* Lang + Dark toggle */}
         <div style={{position:"absolute",top:16,right:16,display:"flex",gap:7}}>
@@ -4733,7 +4733,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <div dir={dir} style={{
       display:"grid",
       gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
-      minHeight:"100vh",
+      minHeight:"100dvh",
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
     }}>
@@ -5250,7 +5250,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         borderLeft:  isAr ? "none" : `1px solid ${cs.border}`,
         borderRight: isAr ? `1px solid ${cs.border}` : "none",
         display:"flex", flexDirection:"column",
-        maxHeight: isMobile ? "auto" : "100vh",
+        maxHeight: isMobile ? "auto" : "100dvh",
         overflowY:"auto",
         order: isMobile ? 0 : (isAr ? 0 : 1),
         position: isMobile ? "static" : "sticky",
@@ -5363,7 +5363,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Camera feed */}
         <div ref={camWrapRef} style={{position:"relative",background:"#020810",flexShrink:0,
-          ...(isFs?{width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}:{aspectRatio:"4/3"})}}>
+          ...(isFs?{width:"100vw",height:"100dvh",display:"flex",alignItems:"center",justifyContent:"center"}:{aspectRatio:"4/3"})}}>
           <video ref={vidRef} autoPlay muted playsInline
             style={{width:"100%",height:"100%",objectFit:isFs?"contain":"cover",transform:"scaleX(-1)",display:"block"}}/>
           <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)",objectFit:isFs?"contain":"cover"}}/>

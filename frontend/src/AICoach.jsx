@@ -487,7 +487,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
       `}</style>
 
       <div dir={dir} style={{
-        width:"100%",maxWidth:640,height:"min(700px,92vh)",
+        width:"100%",maxWidth:640,height:"min(700px,92dvh)",
         background:T.bg,
         border:`0.5px solid ${T.borderH}`,
         borderRadius:22,

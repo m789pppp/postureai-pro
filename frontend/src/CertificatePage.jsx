@@ -168,7 +168,7 @@ export function CertVerifyPage({ certId: propCertId }) {
   const cs = { bg:"#0a0f1e", card:"#111827", border:"rgba(255,255,255,.08)", text:"#f0f6ff", muted:"#8896ac" };
 
   if (loading) return (
-    <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{color:cs.muted,fontSize:14}}>Verifying certificate...</div>
     </div>
   );
@@ -178,7 +178,7 @@ export function CertVerifyPage({ certId: propCertId }) {
   const icon  = valid ? "✅" : "❌";
 
   return (
-    <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
       <div style={{maxWidth:480,width:"100%",background:cs.card,border:`1px solid ${valid?"rgba(16,185,129,.3)":"rgba(239,68,68,.3)"}`,borderRadius:20,padding:36,textAlign:"center"}}>
 
         {/* Corvus header */}

@@ -85,7 +85,7 @@ export function HelpCenter({ cs, lang, onClose }) {
   }, [search, activeCat, isAr]);
 
   const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,.65)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16 };
-  const box = { background:"#0b1120",border:"1px solid rgba(148,163,184,.1)",borderRadius:20,padding:"28px 24px",maxWidth:700,width:"100%",maxHeight:"85vh",overflowY:"auto",direction:isAr?"rtl":"ltr" };
+  const box = { background:"#0b1120",border:"1px solid rgba(148,163,184,.1)",borderRadius:20,padding:"28px 24px",maxWidth:700,width:"100%",maxHeight:"85dvh",overflowY:"auto",direction:isAr?"rtl":"ltr" };
 
   return (
     <div style={overlay} onClick={onClose}>
