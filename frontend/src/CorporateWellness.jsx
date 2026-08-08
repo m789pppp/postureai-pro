@@ -84,7 +84,7 @@ Be concise, professional, and action-oriented. ${isAr ? "Write in Arabic." : "Wr
 
   const scoreColor = teamAvg >= 80 ? "#10b981" : teamAvg >= 60 ? "#f59e0b" : "#ef4444";
 
-  const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:9999,
+  const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,.50)",zIndex:9999,
     display:"flex",alignItems:"center",justifyContent:"center",padding:16 };
   const modal = { background:cs.card,border:`1px solid ${cs.border}`,borderRadius:20,
     padding:28,maxWidth:540,width:"100%",maxHeight:"90dvh",overflowY:"auto",
@@ -247,7 +247,7 @@ export function SchoolsModal({ cs, isAr, onClose, addToast }) {
     setSending(false);
   }
 
-  const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:9999,
+  const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,.50)",zIndex:9999,
     display:"flex",alignItems:"center",justifyContent:"center",padding:16 };
   const modal = { background:cs.card,border:`1px solid ${cs.border}`,borderRadius:20,
     padding:28,maxWidth:520,width:"100%",maxHeight:"90dvh",overflowY:"auto",

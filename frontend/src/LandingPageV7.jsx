@@ -151,7 +151,7 @@ function useCurrency(arFallback) {
 
 // ── Design tokens (brand colors — unchanged) ───────────────────────
 const LPV7_TOKENS = {
-  bg:    "#030b14",
+  bg:    "#0d1a2e",
   bg1:   "#040d18",
   bg2:   "#06111e",
   surf:  "#0a1828",
@@ -913,7 +913,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
                 {/* LIVE badge */}
                 <div style={{ position:"absolute", top:12, left:12, display:"flex", alignItems:"center",
-                  gap:6, background:"rgba(0,0,0,.75)",
+                  gap:6, background:"rgba(0,0,0,.50)",
                   borderRadius:99, padding:"4px 10px", border:"1px solid rgba(16,217,160,.3)" }}>
                   <span style={{ width:6, height:6, borderRadius:"50%", background:LPV7_TOKENS.green,
                     boxShadow:`0 0 6px ${LPV7_TOKENS.green}`, animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
@@ -922,7 +922,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
                 {/* Score overlay — bottom right */}
                 <div style={{ position:"absolute", bottom:12, right:12,
-                  background:"rgba(0,0,0,.78)",
+                  background:"rgba(0,0,0,.55)",
                   borderRadius:14, padding:"10px 14px", border:"1px solid rgba(16,217,160,.25)",
                   textAlign:"center" }}>
                   <div style={{ fontSize:28, fontWeight:800, color:scoreColor,

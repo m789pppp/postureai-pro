@@ -237,7 +237,7 @@ const PAY_METHODS = [
 // HR_EMAILS — list of emails with HR admin access
 const HR_EMAILS = [];
 
-const DARK  = {bg:"#030b14",card:"#05101f",card2:"#080f1e",border:"rgba(148,163,184,.1)",text:"#f0f4f8",muted:"#64748b",blue:"#1a56db",inp:"rgba(148,163,184,.08)",inpB:"rgba(148,163,184,.15)"};
+const DARK  = {bg:"#0d1a2e",card:"#05101f",card2:"#080f1e",border:"rgba(148,163,184,.1)",text:"#f0f4f8",muted:"#64748b",blue:"#1a56db",inp:"rgba(148,163,184,.08)",inpB:"rgba(148,163,184,.15)"};
 const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,139,.15)",text:"#0f172a",muted:"#94a3b8",blue:"#1a56db",inp:"rgba(100,116,139,.07)",inpB:"rgba(100,116,139,.2)"};
 
 
@@ -905,7 +905,7 @@ function Onboard({cs,t,done}){
   const[step,setStep]=useState(0);
   const steps=[{e:"◈",ti:t.ob1,d:t.ob1d},{e:"📊",ti:t.ob2,d:t.ob2d},{e:"📷",ti:t.ob3,d:t.ob3d},{e:"🚀",ti:t.ob4,d:t.ob4d}];
   const s=steps[step];
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888,backdropFilter:"blur(4px)"}}>
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888,backdropFilter:"blur(4px)"}}>
     <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,padding:36,maxWidth:400,width:"90%",textAlign:"center"}}>
       <div style={{fontSize:48,marginBottom:14}}>{s.e}</div>
       <div style={{fontSize:17,fontWeight:700,color:cs.text,marginBottom:10}}>{s.ti}</div>
@@ -4298,7 +4298,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // During OAuth redirect: user is temporarily null — show spinner NOT auth page
   if(!user && (_oauthInProgress.current || _oauthRedirect?.current)) return(
     <div style={{
-      minHeight:"100vh",background:"#030b14",
+      minHeight:"100vh",background:"#0d1a2e",
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
       gap:16,fontFamily:"'Inter',system-ui,sans-serif",
     }}>
@@ -4904,7 +4904,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
       {/* ── Session Result Modal ── */}
       {sessionResult&&(
-        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.82)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.55)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"rgba(8,14,28,.98)",border:`2px solid ${sessionResult.color}30`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
             {/* Score ring */}
             <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>
@@ -5684,7 +5684,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {analysis && score > 0 && (
           <div style={{
             position:"absolute", top:10, right:10,
-            background:"rgba(2,8,20,.88)", backdropFilter:"blur(8px)",
+            background:"rgba(2,8,20,.55)", backdropFilter:"blur(8px)",
             border:"1px solid rgba(255,255,255,.08)", borderRadius:12,
             padding:"10px 14px", minWidth:160, zIndex:10,
           }}>

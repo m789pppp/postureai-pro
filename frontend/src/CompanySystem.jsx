@@ -26,7 +26,7 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete, addToa
   const [companyId, setCid]   = useState(null);
   const isAr = lang === "ar";
 
-  const DARK = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
+  const DARK = cs || { bg: "#0d1a2e", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
 
   const T = {
     en: {
@@ -152,7 +152,7 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete, addToa
   const selectStyle = { ...inputStyle };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9800, backdropFilter: "blur(12px)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9800, backdropFilter: "blur(12px)" }}>
       <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 22, width: "min(580px,96vw)", maxHeight: "92dvh", overflowY: "auto", direction: isAr ? "rtl" : "ltr" }}>
 
         {/* Header */}
