@@ -147,7 +147,7 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", zIndex:900,
                   display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{ background:"#0b1220", border, borderRadius:20, width:"100%", maxWidth:560,
-                    maxHeight:"88vh", overflowY:"auto", padding:24 }}>
+                    maxHeight:"88dvh", overflowY:"auto", padding:24 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
           <div style={{ fontSize:18, fontWeight:900, color:"#e2e8f0" }}>
             {isAr ? "🩹 ربط الأعراض بالوضعية" : "🩹 Symptom Correlation"}

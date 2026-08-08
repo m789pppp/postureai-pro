@@ -530,7 +530,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div style={{
-      minHeight:"100vh", background:t.bg,
+      minHeight:"100dvh", background:t.bg,
       display:"flex", alignItems:"flex-start", justifyContent:"center",
       fontFamily:"'Inter','IBM Plex Sans Arabic',system-ui,-apple-system,sans-serif",
       direction:isAr?"rtl":"ltr",

@@ -459,7 +459,7 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
   const dark = { bg:"#030b14", card:"#05101f", border:"rgba(255,255,255,.07)", text:"#f0f6ff", muted:"#64748b" };
 
   if(loading) return (
-    <div style={{minHeight:"100vh",background:"#030b14",display:"flex",alignItems:"center",justifyContent:"center",color:"#f0f6ff",fontFamily:"'Inter',system-ui"}}>
+    <div style={{minHeight:"100dvh",background:"#030b14",display:"flex",alignItems:"center",justifyContent:"center",color:"#f0f6ff",fontFamily:"'Inter',system-ui"}}>
       <div style={{textAlign:"center"}}>
         <div style={{width:36,height:36,border:"3px solid rgba(26,86,219,.3)",borderTopColor:"#1a56db",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 16px"}}/>
         <div style={{fontSize:13,color:"#64748b"}}>{isAr?"جاري التحميل...":"Loading..."}</div>
@@ -469,7 +469,7 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
   );
 
   if(!companyId) return (
-    <div style={{minHeight:"100vh",background:"#030b14",display:"flex",alignItems:"center",justifyContent:"center",color:"#f0f6ff",fontFamily:"'Inter',system-ui",padding:24}}>
+    <div style={{minHeight:"100dvh",background:"#030b14",display:"flex",alignItems:"center",justifyContent:"center",color:"#f0f6ff",fontFamily:"'Inter',system-ui",padding:24}}>
       <div style={{textAlign:"center",maxWidth:360}}>
         <div style={{fontSize:40,marginBottom:16}}>🏢</div>
         <div style={{fontSize:18,fontWeight:800,marginBottom:8}}>{isAr?"لم تنضم لأي شركة بعد":"No Company Yet"}</div>
@@ -631,7 +631,7 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
     }
 
   return (
-    <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:"#030b14",color:"#f0f6ff",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100dvh",background:"#030b14",color:"#f0f6ff",fontFamily:"'Inter',system-ui,sans-serif"}}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {/* -- TOP NAV -- */}
