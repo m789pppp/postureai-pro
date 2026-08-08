@@ -36,28 +36,40 @@ export async function checkWebGPU()   { return true; }
 // Pollinations kept only as a last-resort fallback in case the backend
 // itself is ever unreachable.
 async function _backendLLM(messages, systemPrompt, maxTokens, temperature = 0.5) {
-  // BUG FIX: api/llm.js (the Vercel Edge Function this hits) requires an
-  // Authorization: Bearer <token> header and returns 401 immediately
-  // without one — this call sent no auth header at all, so every single
-  // request to what's supposed to be the PRIMARY AI path failed instantly
-  // and silently fell through to the Pollinations fallback (rate-limited
-  // to 1 req/hour per the comments below) or the offline responder. This
-  // was the actual live cause of "AI مش شاغل خالص" even after the
-  // Pollinations-primary -> backend-primary fix landed.
   const token = await getAuthToken().catch(() => null);
-  const r = await fetch(`${API_BASE_URL}/llm`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ messages, system_prompt: systemPrompt, max_tokens: maxTokens, temperature }),
-  });
-  if (!r.ok) throw new Error("backend_llm_" + r.status);
-  const data = await r.json();
-  const text = data?.text?.trim();
-  if (!text) throw new Error("backend_llm_empty");
-  return text;
+  if (!token) throw new Error("backend_llm_no_token");
+
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 18000); // 18s timeout
+
+  try {
+    const r = await fetch(`${API_BASE_URL}/llm`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        messages,
+        system_prompt: systemPrompt,
+        max_tokens: Math.min(maxTokens, 600),
+        temperature,
+      }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+
+    if (r.status === 503) throw new Error("backend_llm_providers_down");
+    if (!r.ok) throw new Error("backend_llm_" + r.status);
+
+    const data = await r.json();
+    const text = data?.text?.trim();
+    if (!text || text.length < 5) throw new Error("backend_llm_empty");
+    return text;
+  } catch (e) {
+    clearTimeout(t);
+    throw e;
+  }
 }
 
 // Pollinations text/chat completions: per their current docs, anonymous
