@@ -327,6 +327,14 @@ export const PushAPI = {
 // 10/50/unlimited tier limits were never actually enforced). This path
 // is real: idempotent per calendar day, quota tracked server-side.
 // ── Elite Early Access ────────────────────────────────────────────
+// ── Family/Partner Mode (Professional+) ──────────────────────────
+export const FamilyAPI = {
+  status:      ()      => apiFetch("/family/status"),
+  invite:      (email) => apiFetch("/family/invite", { method: "POST", body: { email } }),
+  accept:      (token) => apiFetch("/family/accept", { method: "POST", body: { token } }),
+  remove:      ()      => apiFetch("/family/remove", { method: "POST" }),
+};
+
 export const FeatureFlagsAPI = {
   /** What early-access features (if any) does the current user have? */
   mine: () => apiFetch("/feature-flags/mine"),
