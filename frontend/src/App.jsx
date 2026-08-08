@@ -1028,7 +1028,7 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
   }
 
   return(
-    <div dir={dir} style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div dir={dir} style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
       <div style={{width:"100%",maxWidth:400}}>
 
         {/* Controls */}
@@ -1141,7 +1141,7 @@ function Waiting({paymentId,payMethod,amount,tier,refCode,onSuccess,cs,t}){
   const[status,setStatus]=useState("pending"),[payData,setPayData]=useState(null);
   useEffect(()=>{const unsub=listenToPayment(paymentId,d=>{setPayData(d);if(d.status==="confirmed"){setStatus("confirmed");onSuccess();}else if(d.status==="rejected")setStatus("rejected");});return unsub;},[paymentId]);
   const pm=PAY_METHODS.find(p=>p.id===payMethod),tierInfo=TIERS[tier];
-  return <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+  return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
     <div style={{maxWidth:480,width:"100%"}}>
       {status==="confirmed"?(<div style={{background:cs.card,border:"0.5px solid rgba(16,185,129,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
         <div style={{fontSize:52,marginBottom:12}}>✅</div>
@@ -1207,7 +1207,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
     }catch{addToast(isAr?"خطأ في الحفظ":"Error saving","error");}
     setSaving(false);
   }
-  return <div style={{minHeight:"100dvh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:700,margin:"0 auto",padding:"26px 18px 52px"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:24}}>
         <button onClick={onBack} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
@@ -1286,7 +1286,7 @@ function PaymentResultScreen({result, cs, lang, onContinue}){
   const isAr=lang==="ar";
   const isSuccess=result==="success";
   return(
-    <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
       <div style={{maxWidth:460,width:"100%",textAlign:"center"}}>
         <div style={{
           width:72,height:72,borderRadius:"50%",margin:"0 auto 20px",
@@ -1382,7 +1382,7 @@ function Leaderboard({users,cs,t,onBack,lang}){
   const filtered=users.filter(u=>deptFilter==="all"||(u.department||u.company||"")=== deptFilter);
   const sorted=[...filtered].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
   const medals=["🥇","🥈","🥉"];
-  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100dvh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:700,margin:"0 auto",padding:"24px 17px 52px"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:18,flexDirection:isAr?"row-reverse":"row"}}>
         <button onClick={onBack} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
@@ -1500,7 +1500,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
     }).reduce((a,p)=>a+(p.amount||0),0)};
   });
 
-  return <div style={{minHeight:"100dvh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif"}}>
+  return <div style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif"}}>
     {modal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}}>
       <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:14,padding:22,width:340}}>
         <div style={{fontSize:14,fontWeight:700,marginBottom:11}}>{isAr?"رفض الدفعة":"Reject Payment"}</div>
@@ -1721,7 +1721,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
   if(step==="waiting")return <Waiting paymentId={paymentId} payMethod={payMethod} amount={price}
     tier={selTier} refCode={""} onSuccess={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");onPaid();}} cs={cs} t={t}/>;
 
-  if(step==="kashier")return <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
+  if(step==="kashier")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
     <div style={{padding:"12px 18px",borderBottom:"0.5px solid "+cs.border,display:"flex",alignItems:"center",gap:11,background:cs.card}}>
       <button aria-label="Go back" onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{"← "}{isAr?"رجوع":"Back"}</button>
       <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{"🔒 "}{isAr?"دفع آمن عبر Kashier":"Secure payment via Kashier"}{" — "}{price?.toLocaleString()}{" EGP"}</div>
@@ -1729,7 +1729,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
     <iframe src={kashierUrl} style={{flex:1,border:"none",width:"100%"}} title="Kashier Checkout"/>
   </div>;
 
-  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100dvh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:880,margin:"0 auto",padding:"24px 17px 52px"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:20,flexDirection:isAr?"row-reverse":"row"}}>
@@ -2290,19 +2290,7 @@ export default function App(){
       // stayed on, RAF loop kept burning CPU in the background, and the
       // session was never saved -- none of that happened only through the
       // in-app Back buttons, which explicitly call stopCamera() themselves.
-      // streamRef.current (not just camActiveRef) is the real source of
-      // truth for "is a camera stream open right now" — the preview/
-      // countdown phase (see openPreview/confirmStartSession) opens the
-      // stream and shows it live BEFORE camActive ever becomes true, so
-      // checking camActive alone would miss exactly that window.
-      if(newPage!=="live" && (camActiveRef.current || streamRef.current)){ stopCamera(); }
-      // showHealthConsent/showCameraPicker can be open BEFORE any stream
-      // exists (health consent is the very first check in startCamera(),
-      // before getUserMedia is ever called) — so gating a reset on
-      // camActive/streamRef alone missed exactly that window, leaving the
-      // consent modal's full-screen overlay stuck blocking every click on
-      // whatever page the back button landed on afterward.
-      if(newPage!=="live"){ setShowHealthConsent(false); setShowCameraPicker(false); }
+      if(newPage!=="live" && camActiveRef.current){ stopCamera(); }
       setPageRaw(newPage);
     };
     window.addEventListener("popstate", onPop);
@@ -2335,28 +2323,7 @@ export default function App(){
   // is currently running" no matter what actually happens later.
   const camActiveRef=useRef(false);
   useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
-  // Catch-all: whichever way the user actually leaves the live page (Back
-  // buttons, browser/mobile back, or anything else), these two modals must
-  // not survive the transition. They're checked/opened before any camera
-  // stream exists (health consent is the very first line of startCamera()),
-  // so point-fixes tied to stream/camActive state alone kept missing this
-  // window — a stuck-open modal here is a full-screen fixed overlay that
-  // silently blocks every click on the page underneath with nothing
-  // visibly wrong to explain why.
-  useEffect(()=>{
-    if(page!=="live"){ setShowHealthConsent(false); setShowCameraPicker(false); }
-  },[page]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
-  // Camera-selection → live preview → 3-2-1 countdown flow. Previously
-  // "Start Analysis" opened the camera and started scoring in the exact
-  // same instant — no chance to pick a camera, check framing, or get ready.
-  const[cameraDevices,setCameraDevices]=useState([]);
-  const[showCameraPicker,setShowCameraPicker]=useState(false);
-  const[hoverBarIdx,setHoverBarIdx]=useState(null);
-  const[showAllMetrics,setShowAllMetrics]=useState(false);
-  const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
-  const[countdownN,setCountdownN]=useState(3);
-  const chosenDeviceIdRef=useRef(null);
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
   // "AI Coach (local, free)" regardless of whether WebLLM had actually loaded.
@@ -3387,33 +3354,18 @@ export default function App(){
     // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
     // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
     if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
-    // Enumerate cameras first so the user can pick one before anything opens.
-    // Labels are blank until permission has been granted at least once on
-    // some browsers — falls back to "Camera 1/2/…" in that case, still
-    // fully functional since deviceId itself doesn't need a label.
-    try{
-      const devices=await navigator.mediaDevices.enumerateDevices();
-      const cams=devices.filter(d=>d.kind==="videoinput");
-      setCameraDevices(cams);
-      if(cams.length>1){ setShowCameraPicker(true); return; }
-      chosenDeviceIdRef.current = cams[0]?.deviceId || null;
-    }catch{ chosenDeviceIdRef.current=null; } // enumerate failing isn't fatal — just skip the picker
-    await openPreview();
-  }
-
-  // Called once a device is chosen (or immediately if there's only one
-  // camera). Opens the stream and shows a live, non-scoring preview so the
-  // user can see themselves and adjust framing before anything is recorded.
-  async function openPreview(){
+    // ── Mode fallback ────────────────────────────────────────────────
+    // If the user clicked a mode button (Laptop / Phone / Side) right before
+    // pressing Start Analysis, React's async state update may not have
+    // flushed yet — mode is still null in this closure.  We default to
+    // "laptop" so getUserMedia is ALWAYS invoked, then persist the choice
+    // so the next render picks it up correctly.
     const effectiveMode = mode || "laptop";
     if (!mode) { setMode("laptop"); }
     setCameraStatus("requesting");
     try{
       const facingMode=effectiveMode==="phone"?"environment":"user";
-      const videoConstraints = chosenDeviceIdRef.current
-        ? {deviceId:{exact:chosenDeviceIdRef.current},width:{ideal:1280},height:{ideal:720}}
-        : {width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}};
-      const s=await navigator.mediaDevices.getUserMedia({video:videoConstraints});
+      const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}}});
       streamRef.current=s;
       if(!vidRef.current){setCameraStatus("idle");return;}
       vidRef.current.srcObject=s;
@@ -3423,46 +3375,6 @@ export default function App(){
       }).catch(()=>{});
       if(!vidRef.current){return;}
       setCameraStatus("ready");
-      setPreviewPhase("preview"); // shows live feed + "Start session" button — NOT scoring yet
-    }catch(e){
-      const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
-      const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
-      setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
-      const errMsg=isDenied
-        ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
-        :noDevice
-        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
-        :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
-      setAlertMsg({text:errMsg,type:"bad"});
-      addToast(errMsg,"error");
-    }
-  }
-
-  // User tapped "Start session" from the live preview — run a 3-2-1
-  // countdown (gives a moment to get in frame / sit down) then hand off to
-  // beginScoring(), which is the original startCamera() logic untouched.
-  function confirmStartSession(){
-    setPreviewPhase("countdown");
-    setCountdownN(3);
-    let n=3;
-    const iv=setInterval(()=>{
-      n-=1;
-      if(n<=0){
-        clearInterval(iv);
-        setPreviewPhase(null);
-        beginScoring();
-      } else {
-        setCountdownN(n);
-      }
-    },1000);
-  }
-
-  // The actual session start — reuses the stream already opened by
-  // openPreview(), so no second camera-permission round trip. Logic here is
-  // byte-for-byte the tail half of the original single-phase startCamera().
-  async function beginScoring(){
-    const effectiveMode = mode || "laptop";
-    try{
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
@@ -3522,7 +3434,16 @@ export default function App(){
       },1000);
       rafRef.current=requestAnimationFrame(runLoop);
     }catch(e){
-      addToast(isAr?"خطأ في بدء الجلسة":"Error starting session","error");
+      const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
+      const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
+      setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
+      const errMsg=isDenied
+        ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
+        :noDevice
+        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
+        :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
+      setAlertMsg({text:errMsg,type:"bad"});
+      addToast(errMsg,"error");
     }
   }
 
@@ -3552,16 +3473,6 @@ export default function App(){
     // Close PoseLandmarker only if it was created locally (not the shared window.__mpPose)
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
-    setPreviewPhase(null);
-    // These two were NOT being reset here. showHealthConsent is intentionally
-    // mounted in both the live-page AND home-page render trees (so it can
-    // paint regardless of which page triggered it) — if a user backed out
-    // via the Back button or browser-back while it (or the camera picker)
-    // was still open, it stayed stuck true forever, and its full-screen
-    // fixed overlay kept silently blocking every click across the entire
-    // dashboard afterward with nothing visibly wrong to explain why.
-    setShowHealthConsent(false);
-    setShowCameraPicker(false);
 
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
     const la  = lastAnalRef.current||{};
@@ -4054,7 +3965,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── ROUTING ───────────────────────────────────────────────────────
   if(!authChecked)return(
     <div style={{
-      minHeight:"100dvh",
+      minHeight:"100vh",
       background: darkMode ? "#040d1a" : "#f8fafc",
       display:"flex", flexDirection:"column",
       alignItems:"center", justifyContent:"center",
@@ -4273,7 +4184,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // During OAuth redirect: user is temporarily null — show spinner NOT auth page
   if(!user && (_oauthInProgress.current || _oauthRedirect?.current)) return(
     <div style={{
-      minHeight:"100dvh",background:"#030b14",
+      minHeight:"100vh",background:"#030b14",
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
       gap:16,fontFamily:"'Inter',system-ui,sans-serif",
     }}>
@@ -4402,7 +4313,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── SETUP SCREEN: account type + device selection ─────────────────
   if(page==="setup"){
     return(<ErrorBoundary>
-      <div dir={dir} style={{minHeight:"100dvh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
+      <div dir={dir} style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
         <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
         {/* Lang + Dark toggle */}
         <div style={{position:"absolute",top:16,right:16,display:"flex",gap:7}}>
@@ -4545,7 +4456,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       </div>
-    </ErrorBoundary>);
+    </></ErrorBoundary>);
   }
 
 
@@ -4722,6 +4633,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onSchools={()=>setShowSchoolsModal(true)}
         onDevPortal={()=>setShowDevPortal(true)}
         onInsurance={()=>setShowInsuranceModal(true)}
+        setShowCertModal={setShowCertModal}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showCertModal&&<CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/>}
@@ -4812,7 +4724,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
       @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-      @keyframes countdownPop{0%{opacity:0;transform:scale(1.5)}30%{opacity:1;transform:scale(1)}100%{opacity:.85;transform:scale(1)}}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
     `}</style>
@@ -4823,40 +4734,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <div dir={dir} style={{
       display:"grid",
       gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
-      minHeight:"100dvh",
+      minHeight:"100vh",
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
     }}>
-      {showCameraPicker && (
-        <div dir={dir} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000,padding:20}}>
-          <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,maxWidth:380,width:"100%",padding:"22px 20px"}}>
-            <div style={{fontSize:15,fontWeight:800,color:cs.text,marginBottom:4}}>
-              {isAr?"اختار الكاميرا":"Choose a camera"}
-            </div>
-            <div style={{fontSize:11.5,color:cs.muted,marginBottom:16}}>
-              {isAr?`لقينا ${cameraDevices.length} كاميرات على جهازك`:`Found ${cameraDevices.length} cameras on your device`}
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {cameraDevices.map((d,i)=>(
-                <button key={d.deviceId||i} onClick={()=>{ chosenDeviceIdRef.current=d.deviceId; setShowCameraPicker(false); openPreview(); }} style={{
-                  textAlign:isAr?"right":"left",background:darkMode?"rgba(255,255,255,.04)":"rgba(0,0,0,.03)",border:`1px solid ${cs.border}`,
-                  borderRadius:11,padding:"12px 14px",fontSize:13,fontWeight:600,color:cs.text,cursor:"pointer",
-                  display:"flex",alignItems:"center",gap:10,
-                }}>
-                  <span style={{fontSize:16}}>📷</span>
-                  {d.label || (isAr?`كاميرا ${i+1}`:`Camera ${i+1}`)}
-                </button>
-              ))}
-            </div>
-            <button onClick={()=>setShowCameraPicker(false)} style={{
-              width:"100%",marginTop:14,background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,
-              padding:"10px 0",fontSize:12.5,color:cs.muted,cursor:"pointer",
-            }}>
-              {isAr?"إلغاء":"Cancel"}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ── GlobalModals: render on ALL pages ──────────────────── */}
       
@@ -4884,7 +4765,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   setShowNPS(false);
                   if(n>=9) toast(lang==="ar"?"شكراً! 🎉":"Thank you! 🎉","success");
                 }}
-                  style={{width:36,height:36,borderRadius:8,border:"1px solid rgba(148,163,184,.2)",background:darkMode?"rgba(255,255,255,.04)":"rgba(0,0,0,.03)",color:"#e2e8f0",cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s"}}
+                  style={{width:36,height:36,borderRadius:8,border:"1px solid rgba(148,163,184,.2)",background:"rgba(255,255,255,.04)",color:"#e2e8f0",cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s"}}
                   onMouseEnter={e=>{e.target.style.background="#6366f1";e.target.style.borderColor="#6366f1";}}
                   onMouseLeave={e=>{e.target.style.background="rgba(255,255,255,.04)";e.target.style.borderColor="rgba(148,163,184,.2)";}}
                 >{n}</button>
@@ -4924,7 +4805,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
 
             {/* Grade */}
-            <div style={{fontSize:22,fontWeight:800,color:cs.text,marginBottom:6}}>
+            <div style={{fontSize:22,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
               {isAr?sessionResult.gradeAr:sessionResult.grade}
             </div>
             <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginBottom:24}}>
@@ -4938,8 +4819,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 {label:isAr?"وضعية جيدة":"Good posture", value:`${sessionResult.good_pct}%`},
                 {label:isAr?"التنبيهات":"Alerts", value:sessionResult.alerts_count},
               ].map((s,i)=>(
-                <div key={i} style={{flex:1,background:darkMode?"rgba(255,255,255,.04)":"rgba(0,0,0,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,padding:"10px 8px"}}>
-                  <div style={{fontSize:16,fontWeight:800,color:cs.text}}>{s.value}</div>
+                <div key={i} style={{flex:1,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,padding:"10px 8px"}}>
+                  <div style={{fontSize:16,fontWeight:800,color:"#f0f6ff"}}>{s.value}</div>
                   <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginTop:2}}>{s.label}</div>
                 </div>
               ))}
@@ -4951,7 +4832,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div style={{fontSize:11,color:"#f59e0b",fontWeight:700,marginBottom:3}}>
                   {isAr?"أبرز مشكلة":"Top issue to fix"}
                 </div>
-                <div style={{fontSize:13,color:cs.text,fontWeight:500}}>
+                <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
                   {sessionResult.top_metric[1]?.label} — score {sessionResult.top_metric[1]?.score}/100
                 </div>
               </div>
@@ -5021,7 +4902,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
                     setPage("home");
                   }}
-                  style={{flex:1,padding:"10px",background:darkMode?"rgba(255,255,255,.05)":"rgba(0,0,0,.04)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  style={{flex:1,padding:"10px",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {isAr?"لوحة التحكم":"Dashboard"}
                 </button>
 <button onClick={async ()=>{
@@ -5109,11 +4990,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
           position:"sticky", top:0, zIndex:10,
         }}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {/* Desktop only — on mobile the sidebar (which renders first,
-                above the fold) has its own copy of this exact same button.
-                Showing both was the actual source of "which Back do I use"
-                confusion; now there's exactly one visible per breakpoint. */}
-            {!isMobile && (
             <button
               onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
               style={{
@@ -5125,7 +5001,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
               }}>
               {isAr ? "→" : "←"} {isAr?"رجوع":"Back"}
             </button>
-            )}
             <div>
               <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
                 {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
@@ -5175,21 +5050,31 @@ async function downloadPDF(sessionOverride, isClinical=false){
           ))}
         </div>
 
-        {/* Secondary stats */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,padding:"0 16px 12px"}}>
-          {[
-            {label:isAr?"تنبيهات الرقبة":"Neck Alerts",  value:alertCounts.neck, color:"#ef4444"},
-            {label:isAr?"تنبيهات المسافة":"Dist Alerts",  value:alertCounts.dist, color:"#f59e0b"},
-            {label:isAr?"التقييم":"Grade",
-              value: avg>=85?(isAr?"ممتاز":"Excellent"):avg>=70?(isAr?"جيد":"Good"):avg>=50?(isAr?"مقبول":"Fair"):avg>0?(isAr?"ضعيف":"Poor"):"—",
-              color: avg>=85?"#10b981":avg>=70?"#22c55e":avg>=50?"#f59e0b":avg>0?"#ef4444":cs.muted},
-          ].map(s=>(
-            <div key={s.label} style={{background:cs.card,border:`1px solid ${cs.border}`,borderRadius:10,padding:"10px 12px"}}>
-              <div style={{fontSize:9,color:cs.muted,marginBottom:4}}>{s.label}</div>
-              <div style={{fontSize:15,fontWeight:700,color:s.color,fontFamily:"monospace"}}>{s.value}</div>
+        {/* Fix #2: Pre-session empty state — shown before first session starts */}
+        {!camActive && sessionTime === 0 && avg === 0 && (
+          <div style={{margin:"4px 16px 10px",background:"rgba(26,86,219,.06)",
+            border:"1px dashed rgba(26,86,219,.2)",borderRadius:12,padding:"14px 16px",
+            display:"flex",alignItems:"flex-start",gap:12}}>
+            <span style={{fontSize:22,flexShrink:0}}>▶</span>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#93c5fd",marginBottom:4}}>
+                {isAr?"اضغط ابدأ التحليل للبدء":"Press Start Analysis to begin"}
+              </div>
+              <div style={{fontSize:11,color:cs.muted,lineHeight:1.6}}>
+                {isAr
+                  ? "Corvus هيحلل وضعيتك في الوقت الفعلي ويديك درجة ونصائح فورية."
+                  : "Corvus will analyse your posture in real-time and give you a live score + instant tips."}
+              </div>
+              {userSessions?.length > 0 && (
+                <div style={{marginTop:8,fontSize:11,color:"#60a5fa",fontWeight:600}}>
+                  {isAr
+                    ? `آخر جلسة: ${userSessions[0]?.avg_score||0}/100`
+                    : `Last session: ${userSessions[0]?.avg_score||0}/100`}
+                </div>
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
 
         {/* Score history chart */}
         <div style={{margin:"0 16px 12px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:14,padding:"14px 16px"}}>
@@ -5210,47 +5095,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
               borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
             {(history.length?history:Array(40).fill(0)).map((s,i)=>{
               const isLast=i===history.length-1;
-              // Bars are pushed at a roughly even cadence across the session,
-              // so distributing elapsed time evenly across them gives a
-              // reasonable "when was this" estimate for the tooltip without
-              // needing to store a timestamp per sample.
-              const barsAgo = history.length-1-i;
-              const secAgo = history.length>1 ? Math.round(barsAgo*(sessionTime/(history.length-1))) : 0;
-              const atSec = Math.max(0, sessionTime-secAgo);
               return (
-                <div key={i}
-                  onMouseEnter={()=>history.length&&setHoverBarIdx(i)}
-                  onMouseLeave={()=>setHoverBarIdx(null)}
-                  style={{flex:1, position:"relative", height:"100%", display:"flex", alignItems:"flex-end", cursor:history.length?"pointer":"default"}}>
-                  {hoverBarIdx===i && s>0 && (
-                    <div style={{
-                      position:"absolute",bottom:"calc(100% + 6px)",insetInlineStart:"50%",transform:"translateX(-50%)",
-                      background:"#0a0f1e",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",
-                      fontSize:10,fontWeight:700,color:"#fff",whiteSpace:"nowrap",zIndex:20,pointerEvents:"none",
-                      boxShadow:"0 4px 12px rgba(0,0,0,.4)",
-                    }}>
-                      {isAr?`النتيجة: ${s} عند ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`:`Score: ${s} at ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`}
-                    </div>
-                  )}
-                  {isLast && s>0 && (
-                    <div style={{
-                      position:"absolute",bottom:"calc(100% + 4px)",insetInlineEnd:-2,
-                      fontSize:8,fontWeight:800,color:sc(s),letterSpacing:".03em",
-                      opacity:hoverBarIdx===i?0:1,
-                    }}>
-                      {isAr?"الآن":"Now"}
-                    </div>
-                  )}
-                  <div style={{
-                    width:"100%", borderRadius:"3px 3px 0 0",
-                    minHeight:3,
-                    height: s ? Math.max(3,Math.round(s*.64)) : 3,
-                    background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
-                    transition:"height .25s ease",
-                    boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
-                    outline: hoverBarIdx===i&&s ? `1px solid ${sc(s)}` : "none",
-                  }}/>
-                </div>
+                <div key={i} style={{
+                  flex:1, borderRadius:"3px 3px 0 0",
+                  minHeight:3,
+                  height: s ? Math.max(3,Math.round(s*.64)) : 3,
+                  background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
+                  transition:"height .25s ease",
+                  boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
+                }}/>
               );
             })}
           </div>
@@ -5279,7 +5132,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {!aiInsight&&camActive&&!tierAtLeast(effectiveTier,"elite")&&(
           <div style={{margin:"0 16px 12px",display:"flex"}}>
             <button onClick={()=>{ addToast(isAr?"🧠 تحليل AI اللحظي متاح لباقة Elite فقط":"🧠 Live AI analysis is an Elite feature","warn"); setShowBilling(true); }}
-              style={{background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:7,
+              style={{background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
                 padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                 display:"flex",alignItems:"center",gap:4}}>
               🔒 🧠 {isAr?"تحليل AI":"AI analysis"}
@@ -5339,7 +5192,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <span style={{fontSize:10,fontWeight:700,color:"#ef4444",background:"rgba(239,68,68,.12)",borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
               </div>
             </div>
-            {alerts.slice(0,10).map((a,i)=>{
+            {alerts.slice(0,3).map((a,i)=>{
               const sev = a.severity==="severe"||a.score<40 ? "severe"
                         : a.severity==="moderate"||a.score<55 ? "moderate" : "mild";
               const sevColor = sev==="severe"?"#ef4444":sev==="moderate"?"#f97316":"#f59e0b";
@@ -5348,7 +5201,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               const tips = FIX_TIPS[a.cause]||FIX_TIPS.default;
               const isOpen = fixItOpen===i;
               return (
-                <div key={i} style={{borderBottom:i<Math.min(alerts.length,10)-1?`1px solid ${cs.border}`:"none",background:i===0?`${sevColor}06`:"transparent"}}>
+                <div key={i} style={{borderBottom:i<Math.min(alerts.length,3)-1?`1px solid ${cs.border}`:"none",background:i===0?`${sevColor}06`:"transparent"}}>
                   <div style={{display:"flex",gap:8,padding:"8px 14px",alignItems:"flex-start"}}>
                     <span style={{fontSize:10,flexShrink:0,marginTop:1}}>{sevIcon}</span>
                     <div style={{flex:1,minWidth:0}}>
@@ -5379,11 +5232,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 </div>
               );
             })}
+            {alerts.length > 3 && (
+              <div style={{padding:"8px 14px",borderTop:`1px solid ${cs.border}`,textAlign:"center"}}>
+                <span style={{fontSize:10,color:cs.muted}}>
+                  {isAr?`+ ${alerts.length-3} تنبيه آخر`:`+ ${alerts.length-3} more alerts`}
+                  {" — "}{isAr?"الأحدث في الأعلى":"newest shown above"}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
         {/* #9 Weekly pattern card */}
-        {weeklyPattern&&(
+        {weeklyPattern&&!camActive&&(
           <div style={{margin:"0 16px 16px",background:"rgba(99,102,241,.05)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"12px 14px"}}>
             <div style={{fontSize:9.5,fontWeight:700,color:"#a5b4fc",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>
               📊 {isAr?"نمط هذا الأسبوع":"This Week's Pattern"}
@@ -5408,7 +5269,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         borderLeft:  isAr ? "none" : `1px solid ${cs.border}`,
         borderRight: isAr ? `1px solid ${cs.border}` : "none",
         display:"flex", flexDirection:"column",
-        maxHeight: isMobile ? "auto" : "100dvh",
+        maxHeight: isMobile ? "auto" : "100vh",
         overflowY:"auto",
         order: isMobile ? 0 : (isAr ? 0 : 1),
         position: isMobile ? "static" : "sticky",
@@ -5437,45 +5298,53 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{display:"flex",gap:5,alignItems:"center"}}>
             {TN&&<span style={{background:TN.colorDim,border:`1px solid ${TN.color}40`,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,color:TN.color}}>{TN.name}</span>}
             {M_&&<span style={{background:"rgba(99,102,241,.1)",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,color:M_.color}}>{M_.label}</span>}
+            {/* Hide upgrade CTA during active session — wrong time to convert */}
+            {!camActive && tierAtLeast && !tierAtLeast(effectiveTier,"basic") && (
+              <button onClick={openBilling} style={{fontSize:9.5,fontWeight:700,
+                background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.25)",
+                borderRadius:5,padding:"2px 8px",color:"#a5b4fc",cursor:"pointer"}}>
+                ↑ {isAr?"ترقية":"Upgrade"}
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Posture model status */}
-        <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
-          <div style={{
-            width:7,height:7,borderRadius:"50%",flexShrink:0,
-            background:mpStatus==="ready"?"#10b981":mpStatus==="fallback"?"#f59e0b":mpStatus==="error"?"#ef4444":"#f59e0b",
-            boxShadow:mpStatus==="ready"?"0 0 6px #10b981":mpStatus==="fallback"?"0 0 6px #f59e0b":mpStatus==="error"?"0 0 6px #ef4444":"0 0 6px #f59e0b",
-            animation:mpStatus==="loading"?"livePulse 1.2s infinite":"none",
-          }}/>
-          <span style={{fontSize:11,color:mpStatus==="ready"?"#10b981":mpStatus==="fallback"?"#f59e0b":mpStatus==="error"?"#ef4444":"#f59e0b",fontWeight:500}}>
-            {mpStatus==="ready"
-              ?(isAr?"نموذج الوضعية جاهز ✓":"Posture model ready ✓")
-              :mpStatus==="fallback"
-              ?(isAr?"وضع احتياطي (السيرفر)":"Fallback mode (server-assisted)")
-              :mpStatus==="error"
-              ?(isAr?"نموذج الوضعية غير متاح":"Posture model unavailable")
-              :(isAr?"جاري تحميل النموذج...":"Loading model...")}
-          </span>
-        </div>
-
-        {/* AI Coach status — reflects real WebLLM load state (see aiCoachStatus above) */}
-        <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
-          <div style={{
-            width:7,height:7,borderRadius:"50%",flexShrink:0,
-            background: aiCoachStatus.error ? "#ef4444" : aiCoachStatus.ready ? "#6366f1" : "#f59e0b",
-            boxShadow: aiCoachStatus.error ? "0 0 6px #ef4444" : aiCoachStatus.ready ? "0 0 6px #6366f1" : "0 0 6px #f59e0b",
-            animation: (!aiCoachStatus.ready && !aiCoachStatus.error) ? "livePulse 1.2s infinite" : "none",
-          }}/>
-          <span style={{fontSize:11,color: aiCoachStatus.error ? "#ef4444" : aiCoachStatus.ready ? "#6366f1" : "#f59e0b",fontWeight:500}}>
-            {aiCoachStatus.error
-              ? (isAr?"مدرب AI غير متاح":"AI Coach unavailable")
-              : aiCoachStatus.ready
-              ? (isAr?"مدرب AI (محلي ومجاني)":"AI Coach (local, free)")
-              : aiCoachStatus.loading
-              ? (isAr?`جاري تحميل مدرب AI... ${aiCoachStatus.progress}%`:`Loading AI Coach... ${aiCoachStatus.progress}%`)
-              : (isAr?"مدرب AI (يبدأ عند الفتح)":"AI Coach (loads on open)")}
-          </span>
+        {/* ── Status bar — posture model + AI Coach in ONE compact row ── */}
+        <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:10,background:"rgba(0,0,0,.15)"}}>
+          {/* Posture model dot */}
+          <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
+            <div style={{
+              width:6,height:6,borderRadius:"50%",flexShrink:0,
+              background:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":"#f59e0b",
+              animation:mpStatus==="loading"?"livePulse 1.2s infinite":"none",
+            }}/>
+            <span style={{fontSize:10,color:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":"#f59e0b",fontWeight:600}}>
+              {mpStatus==="ready"?(isAr?"وضعية ✓":"Pose ✓"):mpStatus==="error"?(isAr?"خطأ":"Error"):(isAr?"تحميل...":"Loading...")}
+            </span>
+          </div>
+          {/* Divider */}
+          <div style={{width:1,height:14,background:cs.border,flexShrink:0}}/>
+          {/* AI Coach dot */}
+          <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
+            <div style={{
+              width:6,height:6,borderRadius:"50%",flexShrink:0,
+              background:aiCoachStatus.error?"#ef4444":aiCoachStatus.ready?"#6366f1":"#f59e0b",
+              animation:(!aiCoachStatus.ready&&!aiCoachStatus.error)?"livePulse 1.2s infinite":"none",
+            }}/>
+            <span style={{fontSize:10,color:aiCoachStatus.error?"#ef4444":aiCoachStatus.ready?"#6366f1":"#f59e0b",fontWeight:600}}>
+              {aiCoachStatus.ready
+                ?(isAr?"AI ✓":"AI ✓")
+                :aiCoachStatus.loading
+                ?(isAr?`AI ${aiCoachStatus.progress}%`:`AI ${aiCoachStatus.progress}%`)
+                :(isAr?"AI ...":"AI ...")}
+            </span>
+          </div>
+          {/* Session timer if active */}
+          {camActive&&(
+            <div style={{fontSize:10,color:cs.muted,fontWeight:600,flexShrink:0,marginInlineStart:"auto"}}>
+              🔴 {Math.floor(sessionTime/60)}:{String(sessionTime%60).padStart(2,"0")}
+            </div>
+          )}
         </div>
 
         {/* ── Camera-mode switcher — change laptop / phone / side without
@@ -5521,7 +5390,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Camera feed */}
         <div ref={camWrapRef} style={{position:"relative",background:"#020810",flexShrink:0,
-          ...(isFs?{width:"100vw",height:"100dvh",display:"flex",alignItems:"center",justifyContent:"center"}:{aspectRatio:"4/3"})}}>
+          ...(isFs?{width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}:{aspectRatio:"4/3"})}}>
           <video ref={vidRef} autoPlay muted playsInline
             style={{width:"100%",height:"100%",objectFit:isFs?"contain":"cover",transform:"scaleX(-1)",display:"block"}}/>
           <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)",objectFit:isFs?"contain":"cover"}}/>
@@ -5535,43 +5404,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
           }}>{isFs?"🗗":"⛶"}</button>
 
-          {/* Live preview, not yet scored — shown after the camera opens and
-              before the user confirms they're ready. Was previously skipped
-              entirely: pressing Start opened the camera AND began scoring
-              in the same instant, with zero chance to check framing first. */}
-          {previewPhase==="preview" && (
-            <div style={{
-              position:"absolute",inset:0,display:"flex",flexDirection:"column",
-              alignItems:"center",justifyContent:"flex-end",padding:"0 0 22px",
-              background:"linear-gradient(to top, rgba(2,8,16,.85), transparent 45%)",zIndex:15,
-            }}>
-              <div style={{fontSize:12.5,color:"#e2e8f0",marginBottom:12,textAlign:"center",padding:"0 20px"}}>
-                {isAr?"اتأكد إنك ظاهر كويس في الكاميرا، وابدأ لما تجهز":"Make sure you're framed well, then start when you're ready"}
-              </div>
-              <button onClick={confirmStartSession} style={{
-                background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
-                padding:"14px 32px",fontSize:14.5,fontWeight:800,color:"#fff",cursor:"pointer",
-                boxShadow:"0 8px 24px rgba(26,86,219,.4)",
-              }}>
-                ▶ {isAr?"ابدأ الجلسة الآن":"Start session now"}
-              </button>
-            </div>
-          )}
-
-          {/* 3-2-1 countdown right before scoring actually begins */}
-          {previewPhase==="countdown" && (
-            <div style={{
-              position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",
-              background:"rgba(2,8,16,.55)",zIndex:16,
-            }}>
-              <div key={countdownN} style={{
-                fontSize:88,fontWeight:900,color:"#fff",
-                animation:"countdownPop .9s ease-out",
-                textShadow:"0 4px 24px rgba(0,0,0,.5)",
-              }}>{countdownN}</div>
-            </div>
-          )}
-
           {/* AI model loading overlay — the camera permission/feed itself
               resolves in a couple seconds, but the pose-detection model
               (a few MB, first load only, then cached) can take up to a
@@ -5582,16 +5414,32 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {camActive && mpStatus==="loading" && (
             <div style={{
               position:"absolute",inset:0,display:"flex",flexDirection:"column",
-              alignItems:"center",justifyContent:"center",gap:12,
-              background:"rgba(2,8,16,.72)",backdropFilter:"blur(3px)",zIndex:15,
+              alignItems:"center",justifyContent:"center",gap:14,
+              background:"rgba(2,8,16,.88)",backdropFilter:"blur(4px)",zIndex:15,
             }}>
-              <div style={{width:34,height:34,border:"3px solid rgba(255,255,255,.15)",
+              <div style={{width:44,height:44,border:"3px solid rgba(255,255,255,.08)",
                 borderTopColor:TN?.color||"#1a56db",borderRadius:"50%",animation:"spin .9s linear infinite"}}/>
-              <div style={{fontSize:13,fontWeight:700,color:"#e2e8f0",textAlign:"center",padding:"0 24px"}}>
-                {isAr?"بيتحمّل نموذج الذكاء الاصطناعي لأول مرة…":"Loading the AI model for the first time…"}
+              <div style={{textAlign:"center",padding:"0 28px"}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
+                  {isAr?"جاري تحميل نموذج الـ AI…":"Loading AI model…"}
+                </div>
+                <div style={{fontSize:11,color:"#64748b",lineHeight:1.6}}>
+                  {isAr?"بيحصل بس أول مرة — المرات الجاية فورية":"First time only — future sessions are instant"}
+                </div>
               </div>
-              <div style={{fontSize:11,color:cs.muted,textAlign:"center",padding:"0 32px",lineHeight:1.5}}>
-                {isAr?"بيتخزن بعد كده على جهازك — المرات الجاية هتفتح فورًا":"It's cached on your device after this — future sessions start instantly"}
+              {/* Animated progress bar */}
+              <div style={{width:200}}>
+                <div style={{height:5,background:"rgba(255,255,255,.07)",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{
+                    height:"100%",borderRadius:99,
+                    background:`linear-gradient(90deg,${TN?.color||"#1a56db"},#0891b2)`,
+                    animation:"modelLoad 12s ease-in-out forwards",
+                  }}/>
+                </div>
+                <style>{`@keyframes modelLoad{0%{width:4%}30%{width:40%}70%{width:75%}90%{width:90%}100%{width:95%}}`}</style>
+                <div style={{fontSize:10,color:"#475569",textAlign:"center",marginTop:7}}>
+                  {isAr?"يُحفظ تلقائياً — المرة الجاية يفتح فورًا":"Cached automatically after this"}
+                </div>
               </div>
             </div>
           )}
@@ -5655,7 +5503,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 width:38,height:38,borderRadius:"50%",
                 background:`conic-gradient(${score>=75?"#10b981":score>=55?"#f59e0b":"#ef4444"} ${score*3.6}deg, rgba(255,255,255,.06) 0deg)`,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:11,fontWeight:900,color:cs.text,flexShrink:0,
+                fontSize:11,fontWeight:900,color:"#f0f6ff",flexShrink:0,
               }}>{score}</div>
               <div>
                 <div style={{fontSize:9,color:"#64748b",fontWeight:600,letterSpacing:.5}}>
@@ -5697,7 +5545,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div key={i} style={{display:"flex",alignItems:"center",
                   justifyContent:"space-between",marginBottom:5}}>
                   <div style={{fontSize:10,color:"#64748b",width:60}}>{label}</div>
-                  <div style={{flex:1,height:4,background:darkMode?"rgba(255,255,255,.06)":"rgba(0,0,0,.04)",
+                  <div style={{flex:1,height:4,background:"rgba(255,255,255,.06)",
                     borderRadius:2,margin:"0 6px",overflow:"hidden"}}>
                     <div style={{height:"100%",width:`${s??0}%`,
                       background:col,borderRadius:2,transition:"width .4s ease"}}/>
@@ -5761,9 +5609,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Primary control — placed directly under the camera so Start / Stop
             is always visible without scrolling past the metrics list. */}
         <div style={{padding:"12px 14px 0"}}>
-          {previewPhase
-            ? null /* overlay's own "Start session now" button is the CTA here */
-            : !camActive
+          {!camActive
             ? <button
                 onClick={cameraStatus==="requesting" ? undefined : startCamera}
                 disabled={cameraStatus==="requesting"}
@@ -5807,62 +5653,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
           }
         </div>
 
-        {/* Score ring + user */}
-        <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
-          {/* User row */}
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            {profile?.photoURL
-              ? <img alt="" src={profile.photoURL} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
-              : (() => {
-                  // #16: use actual first name for initials — if profile?.name looks
-                  // like an email address/prefix, fall back to "?" not the raw email.
-                  const pName  = profile?.name || "";
-                  const isEmail = pName.includes("@") || pName.includes(".") || /\d{2,}/.test(pName);
-                  const initials = (!pName || isEmail) ? "?" : pName.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();
-                  return (
-                    <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,
-                      background:`hsl(${pName.split("").reduce((a,c)=>a+c.charCodeAt(0),0)%360 || 210},50%,30%)`,
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:11,fontWeight:700,color:"#fff"}}>
-                      {initials}
-                    </div>
-                  );
-                })()
-            }
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:12,fontWeight:700,color:cs.text,
-                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                {(() => {
-                  const n = profile?.name || "";
-                  const isEmail = n.includes("@") || n.includes(".") || /\d{2,}/.test(n);
-                  return (!n || isEmail) ? (isAr ? "المستخدم" : "User") : n;
-                })()}
-              </div>
-              <div style={{fontSize:9.5,color:cs.muted}}>
-                {isAr?"المسافة المثلى":"Optimal"}: {M_?.optDist[0]}–{M_?.optDist[1]}cm
-              </div>
-            </div>
+        {/* Optimal distance hint — score/user shown in left panel & video overlay */}
+        {M_ && !camActive && (
+          <div style={{padding:"8px 14px",borderBottom:`1px solid ${cs.border}`,
+            display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:13}}>📏</span>
+            <span style={{fontSize:11,color:cs.muted}}>
+              {isAr?`اجلس على مسافة ${M_.optDist[0]}–${M_.optDist[1]}cm من الكاميرا`:`Sit ${M_.optDist[0]}–${M_.optDist[1]}cm from camera`}
+            </span>
           </div>
-          {/* Score + grade */}
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <Ring score={score} size={52}/>
-            <div style={{flex:1}}>
-              <div style={{fontSize:18,fontWeight:900,color:scoreColor,lineHeight:1}}>
-                {score||0}<span style={{fontSize:10,color:cs.muted,fontWeight:400}}>/100</span>
-              </div>
-              <div style={{fontSize:12,fontWeight:600,color:scoreColor,marginTop:2}}>
-                {score ? grade(score,t) : (isAr?"ابدأ الكاميرا":"Start camera")}
-              </div>
-              {/* Mini progress bar */}
-              <div style={{marginTop:6,height:3,borderRadius:99,background:darkMode?"rgba(255,255,255,.06)":"rgba(0,0,0,.04)"}}>
-                <div style={{height:"100%",width:`${score||0}%`,borderRadius:99,
-                  background:`linear-gradient(90deg,${scoreColor}88,${scoreColor})`,
-                  transition:"width .4s ease"}}/>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        )}
         {/* Strain / discomfort prediction — wired to the real pain_prediction
             data (minutes_to_pain / primary_driver / confidence). Previously
             this section read analysis.pain_bar, which nothing ever set, so it
@@ -5883,7 +5683,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {pp.primary_driver?` · ${pp.primary_driver}`:""}
                 </div>
               </div>
-              <div style={{height:3,borderRadius:99,background:darkMode?"rgba(255,255,255,.08)":"rgba(0,0,0,.05)"}}>
+              <div style={{height:3,borderRadius:99,background:"rgba(255,255,255,.08)"}}>
                 <div style={{height:"100%",borderRadius:99,width:`${pct}%`,
                   background:col,transition:"width .5s ease"}}/>
               </div>
@@ -5902,31 +5702,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
           {analysis?.metrics
             ? (() => {
-                // Metrics to show in the main list — exclude purely internal ones
                 const HIDE = new Set(["session_fatigue","confidence_val"]);
                 const mEntries = Object.entries(analysis.metrics).filter(([k,m])=>
                   !HIDE.has(k) && m.value!=null && m.label
                 );
-                // Show the 3 lowest-scoring (i.e. most worth attention)
-                // metrics by default instead of all 6-8 at once — the rest
-                // are one tap away, not gone.
-                const sortedEntries = [...mEntries].sort((a,b)=>(a[1].score??100)-(b[1].score??100));
-                const visibleEntries = showAllMetrics ? sortedEntries : sortedEntries.slice(0,3);
+                // Sort by score ascending (worst first), cap at 3 by default
+                const sorted = [...mEntries].sort((a,b)=>(a[1].score??100)-(b[1].score??100));
+                const showAll = window.__liveMetricsExpanded;
+                const visible = showAll ? sorted : sorted.slice(0,3);
                 return (
                   <>
-                    {visibleEntries.map(([k,m])=>(
+                    {visible.map(([k,m])=>(
                       <MetRow key={k} label={m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
                         dim={m.reliable===false}
                       />
                     ))}
-                    {mEntries.length>3 && (
-                      <button onClick={()=>setShowAllMetrics(v=>!v)} style={{
-                        width:"100%",background:"none",border:"none",color:cs.muted,
-                        fontSize:10,fontWeight:600,cursor:"pointer",padding:"4px 0",textAlign:isAr?"right":"left",
-                      }}>
-                        {showAllMetrics
-                          ? (isAr?"▲ عرض أقل":"▲ Show less")
-                          : (isAr?`▼ عرض كل القياسات (${mEntries.length})`:`▼ See all metrics (${mEntries.length})`)}
+                    {sorted.length > 3 && (
+                      <button onClick={()=>{window.__liveMetricsExpanded=!window.__liveMetricsExpanded;
+                        const el=document.getElementById("live-metrics-toggle"); if(el) el.textContent=window.__liveMetricsExpanded?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?`+ ${sorted.length-3} مقياس ▼`:`+ ${sorted.length-3} more ▼`);}}
+                        id="live-metrics-toggle"
+                        style={{width:"100%",background:"none",border:`1px solid ${cs.border}`,borderRadius:8,
+                          padding:"5px 0",fontSize:10,color:cs.muted,cursor:"pointer",marginTop:4}}>
+                        {isAr?`+ ${sorted.length-3} مقياس ▼`:`+ ${sorted.length-3} more ▼`}
                       </button>
                     )}
                     {/* ── Detected conditions with severity badges ── */}
@@ -6132,7 +5929,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <button onClick={()=>setShowLiveSettings(v=>!v)} style={{
             width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
-            background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:10,
+            background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:10,
             padding:"10px 14px",fontSize:12.5,fontWeight:700,color:cs.text,cursor:"pointer",
           }}>
             <span>⚙️ {isAr?"إعدادات الجلسة":"Session settings"}</span>
@@ -6291,7 +6088,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   addToast(isAr?"⚙️ قواعد التنبيه المخصصة متاحة لباقة Pro فأعلى":"⚙️ Custom Alert Rules is a Pro feature","warn");
                   setShowBilling(true);
                 }} style={{
-                  background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
@@ -6304,7 +6101,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   addToast(isAr?"🎙️ المدرب الصوتي متاح لباقة Elite فقط":"🎙️ Voice coach is an Elite feature","warn");
                   setShowBilling(true);
                 }} style={{
-                  background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
@@ -6317,7 +6114,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
                   setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
                 }} style={{
-                  background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
