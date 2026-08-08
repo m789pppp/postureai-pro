@@ -28,8 +28,20 @@ jobs:
       # tests run in seconds instead of minutes. If future tests need real
       # Flask/Firebase app context, add a separate job that installs
       # requirements.txt rather than slowing this one down.
-      - name: Install test dependencies
-        run: pip install pytest
+      # NOTE: this job originally only installed pytest, on the assumption
+      # that every test file only imports scoring_utils.py (zero heavy
+      # deps). That's no longer true — test_distance_calibration.py and
+      # test_stress_correlation.py both `import backend` directly to test
+      # against the real functions, which pulls in Flask/mediapipe/etc.
+      # Without this, `import backend` raises ImportError inside pytest's
+      # collection step and the whole job fails before running a single
+      # test — which is what's been happening on every push since those
+      # files were added, silently, because nobody was watching the
+      # Actions tab. Installing the real requirements.txt costs a couple
+      # extra minutes but means this job actually tests what it claims to.
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
 
       - name: Run backend tests
         working-directory: backend
