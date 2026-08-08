@@ -648,7 +648,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
   return (
     <section style={{
-      minHeight: "100dvh", display:"flex", alignItems:"center",
+      minHeight: "100vh", display:"flex", alignItems:"center",
       padding:"clamp(68px,8vw,110px) 24px clamp(48px,5vw,72px)", position:"relative", overflow:"hidden",
     }}>
       {/* Ambient background */}
@@ -1425,6 +1425,7 @@ function Features({ lang }) {
                   cursor:"pointer", textAlign: ar ? "right" : "left",
                   transition:"background .2s,border-color .2s",
                   display:"flex", alignItems:"center", gap:12,
+                  flexDirection: ar ? "row-reverse" : "row",
                 }}>
                   <div style={{ width:3, height:32, borderRadius:99, flexShrink:0, background: isActive ? item.accentColor : "transparent", transition:"background .2s" }}/>
                   <span style={{ width:36, height:36, borderRadius:10, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, background: isActive ? `${item.accentColor}22` : "rgba(255,255,255,.05)", border: isActive ? `1px solid ${item.accentColor}44` : "1px solid transparent", transition:"background .2s,border-color .2s" }}>{item.icon}</span>
@@ -2179,7 +2180,7 @@ function Testimonials({ lang }) {
                   {"★★★★★".split("").map((s,i) => (
                     <span key={i} style={{ color:LPV7_TOKENS.amber, fontSize:14 }}>{s}</span>
                   ))}
-                  <span style={{ color:LPV7_TOKENS.muted, fontSize:11.5, marginLeft:8, fontFamily:FONT_MONO }}>{t.score}</span>
+                  <span style={{ color:LPV7_TOKENS.muted, fontSize:11.5, marginInlineStart:8, fontFamily:FONT_MONO }}>{t.score}</span>
                 </div>
                 {/* Text */}
                 <p style={{ fontSize:15, color:LPV7_TOKENS.sub, lineHeight:1.7, margin:"0 0 22px", flex:1 }}>"{t.text}"</p>
@@ -2657,7 +2658,7 @@ export default function LandingPage({ onNavigate }) {
   }, []);
 
   return (
-    <div style={{ background:LPV7_TOKENS.bg, minHeight:"100dvh", color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
+    <div dir={lang==="ar"?"rtl":"ltr"} style={{ background:LPV7_TOKENS.bg, minHeight:"100vh", color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
       <GlobalStyle/>
       <ScrollProgress/>
       <Nav lang={lang} setLang={setLang} onCTA={handleCTA} mode={mode} setMode={setMode}/>
