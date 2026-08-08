@@ -2296,6 +2296,13 @@ export default function App(){
       // stream and shows it live BEFORE camActive ever becomes true, so
       // checking camActive alone would miss exactly that window.
       if(newPage!=="live" && (camActiveRef.current || streamRef.current)){ stopCamera(); }
+      // showHealthConsent/showCameraPicker can be open BEFORE any stream
+      // exists (health consent is the very first check in startCamera(),
+      // before getUserMedia is ever called) — so gating a reset on
+      // camActive/streamRef alone missed exactly that window, leaving the
+      // consent modal's full-screen overlay stuck blocking every click on
+      // whatever page the back button landed on afterward.
+      if(newPage!=="live"){ setShowHealthConsent(false); setShowCameraPicker(false); }
       setPageRaw(newPage);
     };
     window.addEventListener("popstate", onPop);
@@ -2328,6 +2335,17 @@ export default function App(){
   // is currently running" no matter what actually happens later.
   const camActiveRef=useRef(false);
   useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
+  // Catch-all: whichever way the user actually leaves the live page (Back
+  // buttons, browser/mobile back, or anything else), these two modals must
+  // not survive the transition. They're checked/opened before any camera
+  // stream exists (health consent is the very first line of startCamera()),
+  // so point-fixes tied to stream/camActive state alone kept missing this
+  // window — a stuck-open modal here is a full-screen fixed overlay that
+  // silently blocks every click on the page underneath with nothing
+  // visibly wrong to explain why.
+  useEffect(()=>{
+    if(page!=="live"){ setShowHealthConsent(false); setShowCameraPicker(false); }
+  },[page]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
   // Camera-selection → live preview → 3-2-1 countdown flow. Previously
   // "Start Analysis" opened the camera and started scoring in the exact
@@ -3535,6 +3553,15 @@ export default function App(){
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
     setPreviewPhase(null);
+    // These two were NOT being reset here. showHealthConsent is intentionally
+    // mounted in both the live-page AND home-page render trees (so it can
+    // paint regardless of which page triggered it) — if a user backed out
+    // via the Back button or browser-back while it (or the camera picker)
+    // was still open, it stayed stuck true forever, and its full-screen
+    // fixed overlay kept silently blocking every click across the entire
+    // dashboard afterward with nothing visibly wrong to explain why.
+    setShowHealthConsent(false);
+    setShowCameraPicker(false);
 
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
     const la  = lastAnalRef.current||{};
