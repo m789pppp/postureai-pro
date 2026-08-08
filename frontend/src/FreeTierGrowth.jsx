@@ -26,6 +26,7 @@
  * (onDismiss in UpgradeTeaser, onSave in PainAreaSelfReport).
  */
 import { useState, useEffect, useRef } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const FREE_MONTHLY_SESSION_LIMIT = 5;
 
@@ -100,6 +101,7 @@ function demoCoachLines(isAr) {
 }
 
 export function DemoSessionModal({ isAr, cs, onClose, onStartReal }) {
+  useBodyScrollLock();
   const [step, setStep] = useState("idle"); // idle -> playing -> done
   const [idx, setIdx] = useState(0);
   const [visibleLines, setVisibleLines] = useState(0);

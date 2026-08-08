@@ -7,6 +7,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 /* ── helpers ──────────────────────────────────────────────────────── */
 const avg  = arr => arr.length ? Math.round(arr.reduce((a,v) => a+v,0) / arr.length) : 0;
@@ -744,6 +745,7 @@ function MonthlyInsights({data,profile,isAr,loading,onAI,aiData,aiLoading,aiErro
    MAIN EXPORT
    ═══════════════════════════════════════════════════════════════════ */
 export function WorkforceAnalytics({ uid, profile, sessions:initialSessions=[], allUsers=[], cs, lang="en", onClose }) {
+  useBodyScrollLock();
   const isAr = lang === "ar";
   const [tab, setTab] = useState("workforce");
   const [loading, setLoading] = useState(!initialSessions.length);

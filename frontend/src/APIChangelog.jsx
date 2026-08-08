@@ -4,6 +4,7 @@
  * Linked from API Marketplace docs. Builds developer trust.
  */
 import { useState } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const CHANGELOG = [
   {
@@ -108,6 +109,7 @@ const ITEM_COLORS = {
 };
 
 export function APIChangelog({ cs, onClose }) {
+  useBodyScrollLock();
   const [expanded, setExpanded] = useState({ "v1.5.0": true });
 
   const toggle = (v) => setExpanded(p => ({ ...p, [v]: !p[v] }));

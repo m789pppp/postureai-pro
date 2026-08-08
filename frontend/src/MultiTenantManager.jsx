@@ -19,6 +19,7 @@
  */
 import { useState, useMemo, useEffect } from "react";
 import { apiFetch } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const PLAN_COLORS = { starter:"#64748b", growth:"#6366f1", scale:"#0ea5e9", enterprise:"#f59e0b" };
 const STATUS_COLORS = { active:"#10b981", at_risk:"#f59e0b", suspended:"#ef4444", trial:"#8b5cf6" };
@@ -26,6 +27,7 @@ const REGIONS = ["all","us-east","us-west","eu-west","ap-south"];
 const NOT_WIRED = ["Email Admin","Reset SSO","Export Data","Delete Org"];
 
 export function MultiTenantManager({ profile, cs, lang, onClose }) {
+  useBodyScrollLock();
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");

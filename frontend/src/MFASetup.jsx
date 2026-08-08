@@ -16,8 +16,10 @@
 import { useState, useEffect } from "react";
 import { getAuthToken } from "./firebase.js";
 import { reauthenticate, getReauthMethod } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChange }) {
+  useBodyScrollLock();
   const isAr = lang === "ar";
 
   const mfaFetch = async (path, body = null) => {

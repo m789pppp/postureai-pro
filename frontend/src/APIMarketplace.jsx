@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const PLANS_API = [
   { id:"api_free", name:"Free", price:0, reqs:1000, rps:2, color:"#6366f1", features:["REST API","Basic endpoints","Email support","1 webhook"] },
@@ -46,6 +47,7 @@ const METHOD_COLORS = { GET:"#10b981", POST:"#6366f1", DELETE:"#ef4444", PUT:"#f
 function fmtNum(n){ return n<0?"∞":n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(0)+"K":n; }
 
 export function APIMarketplace({ profile, cs, lang, onClose }) {
+  useBodyScrollLock();
   const isAr = lang==="ar";
   const [tab, setTab] = useState("overview");
   // Real data — fetched from the backend, not fabricated client-side.

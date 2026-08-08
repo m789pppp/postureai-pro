@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { MarketplaceAPI } from "./services/api.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 import {
   DEMO_THERAPISTS, getDemoBookings, createDemoBooking,
   updateDemoBooking, getDemoMessages, addDemoMessage,
@@ -700,6 +701,7 @@ function AdminTherapistManager({ isAr, addToast }) {
 
 /* ══ Main component ═════════════════════════════════════════════ */
 export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin, tier, onBack, addToast }) {
+  useBodyScrollLock();
   const isAr = lang === "ar";
   const tk = mkT(cs);
   const { BORDER, TEXT, MUTED, SUB, CARD } = tk;

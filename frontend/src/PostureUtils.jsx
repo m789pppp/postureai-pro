@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── Score Smoothing ───────────────────────────────────────────────
 /**
@@ -82,6 +83,7 @@ const BREAK_EXERCISES = [
 ];
 
 export function BreakTimer({ onDismiss, onComplete, cs, lang = "en", intervalMin = 30 }) {
+  useBodyScrollLock();
   const [exerciseIdx, setExerciseIdx] = useState(0);
   const [exTimer, setExTimer]         = useState(0);
   const [running, setRunning]         = useState(false);

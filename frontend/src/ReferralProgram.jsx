@@ -8,10 +8,12 @@
  */
 import { useState, useEffect } from "react";
 import { getReferralStats } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const STATUS_COLORS = { active:"#10b981", pending:"#f59e0b", expired:"#ef4444" };
 
 export function ReferralProgram({ profile, cs, lang, onClose }) {
+  useBodyScrollLock();
   const isAr = lang === "ar";
   const [tab, setTab]         = useState("dashboard");
   const [copied, setCopied]   = useState(false);

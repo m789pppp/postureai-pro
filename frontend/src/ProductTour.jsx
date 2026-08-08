@@ -3,6 +3,7 @@
  * Interactive guided tour: hotspots, tooltips, progress, skip/resume
  */
 import { useState, useEffect, useCallback } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const TOUR_STEPS = [
   {
@@ -133,6 +134,7 @@ function Spotlight({ targetId }) {
 
 // ── Main Tour component ────────────────────────────────────────────
 export function ProductTour({ onComplete, cs }) {
+  useBodyScrollLock();
   const [step,     setStep]   = useState(0);
   const [visible,  setVisible] = useState(true);
   const [minimised,setMin]    = useState(false);

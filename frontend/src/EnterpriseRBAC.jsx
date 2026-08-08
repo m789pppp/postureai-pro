@@ -9,6 +9,7 @@ import {
   doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
   collection, query, where, orderBy, limit, getDocs, serverTimestamp,
 } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 /* ── Design tokens ─────────────────────────────────────────────── */
 const RBAC_TOKENS = {
@@ -1082,6 +1083,7 @@ function SecurityPolicies({orgId,adminUid,isAr}) {
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 export function EnterpriseRBAC({ orgId, adminUid, profile, members=[], cs, lang="en", onClose }) {
+  useBodyScrollLock();
   const [tab,setTab]=useState("roles");
   const isAr=lang==="ar";
 
