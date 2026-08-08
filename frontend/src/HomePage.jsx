@@ -685,7 +685,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
               const dur=s.duration_sec?`${Math.round(s.duration_sec/60)}m`:"";
               return (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:12,
-                  padding:"10px 12px", background:dm("rgba(255,255,255,.025)","rgba(0,0,0,.02)"),
+                  padding:"10px 12px", background:"rgba(255,255,255,.025)",
                   borderRadius:8, border:`1px solid ${cs.border}` }}>
                   <div style={{ width:38, height:38, borderRadius:8, flexShrink:0,
                     background:`${col}18`, display:"flex", alignItems:"center",
@@ -1022,7 +1022,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
               const dur=s.duration_sec?`${Math.round(s.duration_sec/60)}m`:"";
               return (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:12,
-                  padding:"9px 12px", background:dm("rgba(255,255,255,.025)","rgba(0,0,0,.02)"),
+                  padding:"9px 12px", background:"rgba(255,255,255,.025)",
                   borderRadius:8, border:`1px solid ${cs.border}` }}>
                   <div style={{ width:36, height:36, borderRadius:8, flexShrink:0,
                     background:`${col}18`, display:"flex", alignItems:"center",
@@ -1608,12 +1608,6 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
-  // Light/dark-mode row overlays — avoids rgba(255,255,255) in light mode
-  const dm     = (dark, light) => darkMode ? dark : light;
-  const rowEven  = dm("rgba(255,255,255,.025)", "rgba(0,0,0,.02)");
-  const rowOdd   = dm("rgba(255,255,255,.045)", "rgba(0,0,0,.035)");
-  const subCard  = dm("rgba(255,255,255,.03)",  "rgba(0,0,0,.025)");
-
 
   const [tab,     setTab]     = useState("profile");
   const [linkingGoogle, setLinkingGoogle] = useState(false);
@@ -1931,14 +1925,14 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </div>
               <div style={{ display:"flex", gap:8 }}>
                 <button onClick={()=>setLang?.(lang==="ar"?"en":"ar")}
-                  style={{ flex:1, padding:"10px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+                  style={{ flex:1, padding:"10px", background:"rgba(255,255,255,.03)",
                     border:`1px solid ${cs.border}`, borderRadius:8,
                     color:cs.text, fontSize:12, fontWeight:600, cursor:"pointer",
                     display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
                   {lang==="ar"?"🇬🇧 Switch to English":"🇪🇬 التبديل للعربية"}
                 </button>
                 <button onClick={()=>setDarkMode?.(!darkMode)}
-                  style={{ padding:"10px 16px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+                  style={{ padding:"10px 16px", background:"rgba(255,255,255,.03)",
                     border:`1px solid ${cs.border}`, borderRadius:8,
                     color:cs.text, fontSize:13, cursor:"pointer" }}>
                   {darkMode?"☀️":"🌙"}
@@ -1955,7 +1949,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {isAr?"النمو والتكاملات":"Growth & Integrations"}
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-            <button onClick={onReferral} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"), border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
+            <button onClick={onReferral} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
               <span style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <span style={{ fontSize:18 }}>🤝</span>
                 <span>
@@ -1965,7 +1959,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </span>
               <span style={{ color:cs.muted }}>›</span>
             </button>
-            <button onClick={onIntegrations} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"), border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
+            <button onClick={onIntegrations} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
               <span style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <span style={{ fontSize:18 }}>🔌</span>
                 <span>
@@ -1975,7 +1969,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </span>
               <span style={{ color:cs.muted }}>›</span>
             </button>
-            <button onClick={onNotifications} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"), border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
+            <button onClick={onNotifications} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
               <span style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <span style={{ fontSize:18 }}>🔔</span>
                 <span>
@@ -2000,7 +1994,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {/* Google */}
-            <div style={{ padding:"14px 16px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
               borderRadius:10, border:`1px solid ${hasGoogle?"rgba(66,133,244,.3)":cs.border}`,
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2027,7 +2021,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               }
             </div>
             {/* Email/Password */}
-            <div style={{ padding:"14px 16px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
               borderRadius:10, border:`1px solid ${hasEmail?"rgba(16,185,129,.25)":cs.border}` }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2081,7 +2075,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {isAr?"خطتك الحالية":"Current Plan"}
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:16, padding:"16px",
-            background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"), borderRadius:10,
+            background:"rgba(255,255,255,.03)", borderRadius:10,
             border:`1px solid ${cs.border}`, marginBottom:16 }}>
             <div style={{ fontSize:32 }}>
               {tier==="elite"?"✦":tier==="professional"?"⭐":tier==="business"?"🏢":"🆓"}
@@ -2099,7 +2093,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             </div>
             <TierBadge tier={tier}/>
           </div>
-          <button onClick={onBillingHistory} style={{ width:"100%", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"), border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+          <button onClick={onBillingHistory} style={{ width:"100%", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
             <span style={{ display:"flex", alignItems:"center", gap:10 }}>
               <span style={{ fontSize:18 }}>📄</span>
               <span style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"الفواتير والاستخدام":"Invoices & Usage"}</span>
@@ -2208,7 +2202,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {/* MFA / 2FA status — MFASetup.jsx has been a fully working
                 TOTP+SMS flow for a while; this row was still a permanently
                 dead "Soon" badge with nothing wired to open it. */}
-            <div onClick={()=>setShowMFASetup?.(true)} style={{ padding:"14px 16px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+            <div onClick={()=>setShowMFASetup?.(true)} style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
               borderRadius:10, border:`1px solid ${cs.border}`, cursor:"pointer",
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2232,7 +2226,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </span>
             </div>
             {/* Active sessions */}
-            <div style={{ padding:"14px 16px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
               borderRadius:10, border:`1px solid ${cs.border}` }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                 <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2269,7 +2263,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </div>
             </div>
             {/* Password change */}
-            <div style={{ padding:"14px 16px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
               borderRadius:10, border:`1px solid ${cs.border}`,
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2465,7 +2459,7 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
         {isAr?"استقبل تنبيهات لما سلسلة الالتزام بتاعتك في خطر أو لما نكتشف نمط وضعية محتاج انتباه."
              :"Get notified when your streak is at risk or when we detect a posture pattern worth your attention."}
       </div>
-      <div style={{ padding:"14px 16px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+      <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
         borderRadius:10, border:`1px solid ${cs.border}`,
         display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
         <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2506,7 +2500,7 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
               {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
                 <div key={key} onClick={()=>toggleCategory(key)} style={{
                   display:"flex", justifyContent:"space-between", alignItems:"center",
-                  padding:"8px 12px", background:dm("rgba(255,255,255,.025)","rgba(0,0,0,.02)"), borderRadius:8, cursor:"pointer" }}>
+                  padding:"8px 12px", background:"rgba(255,255,255,.025)", borderRadius:8, cursor:"pointer" }}>
                   <span style={{ fontSize:12.5, color:cs.text }}>{isAr?label.ar:label.en}</span>
                   <div style={{ width:36, height:20, borderRadius:99, position:"relative", transition:"background .15s",
                     background: prefs.categories?.[key]!==false ? "#10b981" : "rgba(255,255,255,.12)" }}>
@@ -2702,7 +2696,7 @@ function EarlyAccessPanel({ cs, isAr, tier, onUpgrade }) {
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           {data.flags.map(f => (
             <div key={f.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-              padding:"9px 12px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"), borderRadius:8 }}>
+              padding:"9px 12px", background:"rgba(255,255,255,.03)", borderRadius:8 }}>
               <div style={{ fontSize:12, color:cs.text }}>{f.description}</div>
               <span style={{ fontSize:9, fontWeight:700, borderRadius:99, padding:"2px 8px",
                 color: f.available_to_me ? "#10b981" : "#f59e0b",
@@ -2799,7 +2793,7 @@ function VoiceCoachSettings({ cs, isAr, lang, addToast }) {
             {isAr?"الصوت":"Voice"}
           </div>
           <select value={prefs.voiceURI || ""} onChange={e=>update({ voiceURI: e.target.value || null })}
-            style={{ width:"100%", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"), border:`1px solid ${cs.border}`,
+            style={{ width:"100%", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`,
               borderRadius:8, color:cs.text, padding:"8px 10px", fontSize:12.5 }}>
             <option value="">{isAr?"تلقائي (أفضل مطابقة)":"Automatic (best match)"}</option>
             {voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
@@ -3073,12 +3067,12 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         {/* Lang + Dark mode row */}
         <div style={{ display:"flex", gap:5, marginBottom:8 }}>
           <button onClick={()=>setLang(lang==="ar"?"en":"ar")}
-            style={{ flex:1, padding:"5px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+            style={{ flex:1, padding:"5px", background:"rgba(255,255,255,.03)",
               border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer" }}>
             {lang==="ar"?"🇬🇧 EN":"🇪🇬 عربي"}
           </button>
           <button onClick={()=>setDarkMode(!darkMode)}
-            style={{ padding:"5px 9px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+            style={{ padding:"5px 9px", background:"rgba(255,255,255,.03)",
               border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer" }}>
             {darkMode?"☀️":"🌙"}
           </button>
@@ -3086,7 +3080,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         {/* User card — click → Settings */}
         <button onClick={()=>setTab("settings")}
           style={{ width:"100%", display:"flex", alignItems:"center", gap:8,
-            padding:"8px 9px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+            padding:"8px 9px", background:"rgba(255,255,255,.03)",
             border:`1px solid ${cs.border}`, borderRadius:9, cursor:"pointer",
             textAlign:"left", transition:"background .12s" }}
           onMouseEnter={e=>e.currentTarget.style.background="rgba(59,130,246,.08)"}
@@ -3151,7 +3145,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
               {(tools||[]).map(t=>(
                 <button key={t.id} onClick={()=>{ t.onClick?.(); setShowMore(false); }}
                   style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4,
-                    padding:"10px 6px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+                    padding:"10px 6px", background:"rgba(255,255,255,.03)",
                     border:`1px solid ${cs.border}`, borderRadius:10,
                     cursor:"pointer" }}>
                   <span style={{ fontSize:20 }}>{t.icon}</span>
@@ -3162,7 +3156,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
               {/* Settings shortcut */}
               <button onClick={()=>{ setTab("settings"); setShowMore(false); }}
                 style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4,
-                  padding:"10px 6px", background:dm("rgba(255,255,255,.03)","rgba(0,0,0,.025)"),
+                  padding:"10px 6px", background:"rgba(255,255,255,.03)",
                   border:`1px solid ${cs.border}`, borderRadius:10, cursor:"pointer" }}>
                 <span style={{ fontSize:20 }}>⚙️</span>
                 <span style={{ fontSize:9, color:"#94a3b8", fontWeight:600 }}>{isAr?"إعدادات":"Settings"}</span>
@@ -3454,7 +3448,7 @@ export default function HomePage({
 
   return (
     <div dir={dir} style={{ display:"flex", minHeight:"100dvh",
-      background:cs.bg||"#030b14", color:cs.text||"#f0f6ff",
+      background:cs.bg||"#0d1a2e", color:cs.text||"#f0f6ff",
       fontFamily:"system-ui,-apple-system,'Segoe UI',sans-serif" }}>
 
       {!mobile&&(

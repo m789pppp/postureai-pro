@@ -462,7 +462,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
 
   // ── Color tokens ────────────────────────────────────────────────────
   const t = dark ? {
-    bg:"#030b14", card:"rgba(15,23,42,.85)", border:"rgba(255,255,255,.07)",
+    bg:"#0d1a2e", card:"rgba(15,23,42,.85)", border:"rgba(255,255,255,.07)",
     text:"#f0f6ff", textSub:"#94a3b8", muted:"rgba(255,255,255,.3)",
     faint:"rgba(255,255,255,.04)", divider:"rgba(255,255,255,.06)",
     pillBg:"rgba(255,255,255,.05)", pillBd:"rgba(255,255,255,.08)",

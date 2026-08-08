@@ -494,7 +494,7 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
   };
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(2,8,20,.88)", backdropFilter:"blur(10px)", WebkitBackdropFilter:"blur(10px)", zIndex:9100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(2,8,20,.55)", backdropFilter:"blur(10px)", WebkitBackdropFilter:"blur(10px)", zIndex:9100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{
         background:"#0a1628", border:`1px solid ${D.c.border}`,
         borderRadius:20, width:"min(640px,96vw)", height:"min(720px,94dvh)",

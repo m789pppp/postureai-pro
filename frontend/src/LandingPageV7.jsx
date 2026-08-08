@@ -151,7 +151,7 @@ function useCurrency(arFallback) {
 
 // ── Design tokens (brand colors — unchanged) ───────────────────────
 const LPV7_TOKENS = {
-  bg:    "#030b14",
+  bg:    "#0d1a2e",
   bg1:   "#040d18",
   bg2:   "#06111e",
   surf:  "#0a1828",
@@ -468,7 +468,7 @@ function Nav({ lang, setLang, onCTA }) {
         <div className="lp-wrap" style={{ height:68, display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
 
           {/* ── Logo ── */}
-          <a href="#" onClick={e=>{e.preventDefault(); window.scrollTo({top:0,behavior:"smooth"});}}
+          <a href="#" role="button" onClick={e=>{e.preventDefault(); window.scrollTo({top:0,behavior:"smooth"});}}
             style={{ display:"flex", alignItems:"center", gap:10, textDecoration:"none", flexShrink:0 }}>
             <div style={{
               width:36, height:36, borderRadius:10, flexShrink:0,
@@ -525,7 +525,7 @@ function Nav({ lang, setLang, onCTA }) {
               🌐 {ar ? "EN" : "عربي"}
             </button>
             {/* Log in */}
-            <a href="#" onClick={e=>{e.preventDefault();navTo("/auth");}} style={{
+            <a href="#" role="button" onClick={e=>{e.preventDefault();navTo("/auth");}} style={{
               color:"#94a3b8", textDecoration:"none", fontSize:13.5,
               fontWeight:500, padding:"8px 10px", borderRadius:8,
               transition:"color .18s",
@@ -535,7 +535,7 @@ function Nav({ lang, setLang, onCTA }) {
               {ar ? "دخول" : "Log in"}
             </a>
             {/* CTA */}
-            <a href="#" className="lp-btn lp-btn-primary"
+            <a href="#" role="button" className="lp-btn lp-btn-primary"
               onClick={e=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
               style={{
                 ...btn("primary","sm"), borderRadius:10,
@@ -592,7 +592,7 @@ function Nav({ lang, setLang, onCTA }) {
                 </a>
               ))}
               <div style={{ display:"flex", gap:10, marginTop:18 }}>
-                <a href="#" onClick={e=>{e.preventDefault();setMobileOpen(false);navTo("/auth");}}
+                <a href="#" role="button" onClick={e=>{e.preventDefault();setMobileOpen(false);navTo("/auth");}}
                   style={{
                     flex:1, textAlign:"center", padding:"11px", borderRadius:10,
                     border:"1px solid rgba(255,255,255,.12)", color:"#94a3b8",
@@ -600,7 +600,7 @@ function Nav({ lang, setLang, onCTA }) {
                   }}>
                   {ar ? "دخول" : "Log in"}
                 </a>
-                <a href="#" className="lp-btn lp-btn-primary"
+                <a href="#" role="button" className="lp-btn lp-btn-primary"
                   onClick={e=>{e.preventDefault();setMobileOpen(false);onCTA(e);navTo("/auth?mode=signup");}}
                   style={{ ...btn("primary","md"), flex:1, borderRadius:10, fontSize:14 }}>
                   {ar ? "ابدأ مجاناً" : "Start Free Trial"}
@@ -760,11 +760,11 @@ function Hero({ lang, onCTA, mode, setMode }) {
           <Reveal delay={200}>
             <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:16 }}>
               {isCompany ? (
-                <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
+                <a href="#" role="button" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
                   {ar ? "🚀 تجربة مجانية 7 أيام — لفريقي" : "🚀 Free 7-Day Trial — For My Team"}
                 </a>
               ) : (
-                <a href="#" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=personal_pro")}} style={btn("primary","lg")}>
+                <a href="#" role="button" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=personal_pro")}} style={btn("primary","lg")}>
                   {ar ? "🚀 تجربة مجانية 7 أيام" : "🚀 Start 7-Day Free Trial"}
                 </a>
               )}
@@ -913,7 +913,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
                 {/* LIVE badge */}
                 <div style={{ position:"absolute", top:12, left:12, display:"flex", alignItems:"center",
-                  gap:6, background:"rgba(0,0,0,.75)",
+                  gap:6, background:"rgba(0,0,0,.50)",
                   borderRadius:99, padding:"4px 10px", border:"1px solid rgba(16,217,160,.3)" }}>
                   <span style={{ width:6, height:6, borderRadius:"50%", background:LPV7_TOKENS.green,
                     boxShadow:`0 0 6px ${LPV7_TOKENS.green}`, animation:"lp-pulse 1.5s ease-in-out infinite" }}/>
@@ -922,7 +922,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
                 {/* Score overlay — bottom right */}
                 <div style={{ position:"absolute", bottom:12, right:12,
-                  background:"rgba(0,0,0,.78)",
+                  background:"rgba(0,0,0,.55)",
                   borderRadius:14, padding:"10px 14px", border:"1px solid rgba(16,217,160,.25)",
                   textAlign:"center" }}>
                   <div style={{ fontSize:28, fontWeight:800, color:scoreColor,
@@ -2308,7 +2308,7 @@ function MidCTA({ lang, onCTA, variant="features" }) {
             <div style={{ fontSize:17, fontWeight:700, color:LPV7_TOKENS.text, marginBottom:5, fontFamily:FONT_DISPLAY }}>{m.h}</div>
             <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted }}>{m.sub}</div>
           </div>
-          <a href="#" className="lp-btn lp-btn-primary" onClick={e=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
+          <a href="#" role="button" className="lp-btn lp-btn-primary" onClick={e=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
             style={{...btn("primary","md"), whiteSpace:"nowrap", flexShrink:0}}>
             {m.cta}
           </a>
@@ -2348,7 +2348,7 @@ function FinalCTA({ lang, onCTA }) {
                 : "Join 50+ teams reducing workplace pain with AI posture coaching. 7-day free trial, no credit card."}
             </p>
             <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
-              <a href="#" className="lp-btn lp-btn-primary"
+              <a href="#" role="button" className="lp-btn lp-btn-primary"
                 onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
                 style={btn("primary","lg")}>
                 {ar ? "🚀 ابدأ تجربتك المجانية" : "🚀 Start Free Trial"}

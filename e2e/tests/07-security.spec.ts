@@ -8,7 +8,11 @@ const API = process.env.E2E_API_URL || "http://localhost:5050/api";
 
 test.describe("Security", () => {
   test("unauthenticated API request returns 401", async ({ request }) => {
-    const resp = await request.get(`${API}/dashboard/stats`);
+    // Was /api/dashboard/stats — confirmed via grep against backend.py that
+    // no such route exists anywhere (never did), so this always got a 404
+    // instead of the 401/403 it asserted for. Swapped for /api/session/start,
+    // a real, core, definitely auth-gated endpoint.
+    const resp = await request.post(`${API}/session/start`, { data: { mode: "laptop" } });
     expect([401, 403]).toContain(resp.status());
   });
 
@@ -36,7 +40,9 @@ test.describe("Security", () => {
   });
 
   test("feature flags blocked without auth", async ({ request }) => {
-    const resp = await request.get(`${API}/feature-flags`);
+    // Was /api/feature-flags (no such route — the real one is scoped
+    // per-user at /api/feature-flags/mine, confirmed @require_auth).
+    const resp = await request.get(`${API}/feature-flags/mine`);
     expect([401, 403]).toContain(resp.status());
   });
 

@@ -5,7 +5,7 @@ import React from "react";
 export function NotFound({ onHome, lang="en" }) {
   const isAr = lang==="ar";
   return (
-    <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100dvh",background:"#030b14",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Inter',system-ui,sans-serif",color:"#f0f6ff",textAlign:"center"}}>
+    <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100dvh",background:"#0d1a2e",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Inter',system-ui,sans-serif",color:"#f0f6ff",textAlign:"center"}}>
       <div style={{maxWidth:400}}>
         <div style={{fontSize:64,marginBottom:16,filter:"grayscale(20%)"}}>🧘</div>
         <div style={{fontSize:48,fontWeight:900,color:"rgba(148,163,184,.2)",marginBottom:8}}>404</div>
