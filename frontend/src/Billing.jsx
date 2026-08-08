@@ -191,7 +191,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   const [currency, setCurrency] = useState("EGP");
 
   const isAr  = lang === "ar";
-  const DARK  = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
+  const DARK  = cs || { bg: "#0d1a2e", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
 
   // Feature lists are tier-identical in price, but worded for who's actually buying.
   // Individuals never see employee counts, HR dashboards, or "Contact sales" —
