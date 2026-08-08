@@ -2334,6 +2334,8 @@ export default function App(){
   // same instant — no chance to pick a camera, check framing, or get ready.
   const[cameraDevices,setCameraDevices]=useState([]);
   const[showCameraPicker,setShowCameraPicker]=useState(false);
+  const[hoverBarIdx,setHoverBarIdx]=useState(null);
+  const[showAllMetrics,setShowAllMetrics]=useState(false);
   const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
   const[countdownN,setCountdownN]=useState(3);
   const chosenDeviceIdRef=useRef(null);
@@ -5080,6 +5082,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
           position:"sticky", top:0, zIndex:10,
         }}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {/* Desktop only — on mobile the sidebar (which renders first,
+                above the fold) has its own copy of this exact same button.
+                Showing both was the actual source of "which Back do I use"
+                confusion; now there's exactly one visible per breakpoint. */}
+            {!isMobile && (
             <button
               onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
               style={{
@@ -5091,6 +5098,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               }}>
               {isAr ? "→" : "←"} {isAr?"رجوع":"Back"}
             </button>
+            )}
             <div>
               <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
                 {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
@@ -5175,15 +5183,47 @@ async function downloadPDF(sessionOverride, isClinical=false){
               borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
             {(history.length?history:Array(40).fill(0)).map((s,i)=>{
               const isLast=i===history.length-1;
+              // Bars are pushed at a roughly even cadence across the session,
+              // so distributing elapsed time evenly across them gives a
+              // reasonable "when was this" estimate for the tooltip without
+              // needing to store a timestamp per sample.
+              const barsAgo = history.length-1-i;
+              const secAgo = history.length>1 ? Math.round(barsAgo*(sessionTime/(history.length-1))) : 0;
+              const atSec = Math.max(0, sessionTime-secAgo);
               return (
-                <div key={i} style={{
-                  flex:1, borderRadius:"3px 3px 0 0",
-                  minHeight:3,
-                  height: s ? Math.max(3,Math.round(s*.64)) : 3,
-                  background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
-                  transition:"height .25s ease",
-                  boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
-                }}/>
+                <div key={i}
+                  onMouseEnter={()=>history.length&&setHoverBarIdx(i)}
+                  onMouseLeave={()=>setHoverBarIdx(null)}
+                  style={{flex:1, position:"relative", height:"100%", display:"flex", alignItems:"flex-end", cursor:history.length?"pointer":"default"}}>
+                  {hoverBarIdx===i && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 6px)",insetInlineStart:"50%",transform:"translateX(-50%)",
+                      background:"#0a0f1e",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",
+                      fontSize:10,fontWeight:700,color:"#fff",whiteSpace:"nowrap",zIndex:20,pointerEvents:"none",
+                      boxShadow:"0 4px 12px rgba(0,0,0,.4)",
+                    }}>
+                      {isAr?`النتيجة: ${s} عند ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`:`Score: ${s} at ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`}
+                    </div>
+                  )}
+                  {isLast && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 4px)",insetInlineEnd:-2,
+                      fontSize:8,fontWeight:800,color:sc(s),letterSpacing:".03em",
+                      opacity:hoverBarIdx===i?0:1,
+                    }}>
+                      {isAr?"الآن":"Now"}
+                    </div>
+                  )}
+                  <div style={{
+                    width:"100%", borderRadius:"3px 3px 0 0",
+                    minHeight:3,
+                    height: s ? Math.max(3,Math.round(s*.64)) : 3,
+                    background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
+                    transition:"height .25s ease",
+                    boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
+                    outline: hoverBarIdx===i&&s ? `1px solid ${sc(s)}` : "none",
+                  }}/>
+                </div>
               );
             })}
           </div>
@@ -5840,13 +5880,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 const mEntries = Object.entries(analysis.metrics).filter(([k,m])=>
                   !HIDE.has(k) && m.value!=null && m.label
                 );
+                // Show the 3 lowest-scoring (i.e. most worth attention)
+                // metrics by default instead of all 6-8 at once — the rest
+                // are one tap away, not gone.
+                const sortedEntries = [...mEntries].sort((a,b)=>(a[1].score??100)-(b[1].score??100));
+                const visibleEntries = showAllMetrics ? sortedEntries : sortedEntries.slice(0,3);
                 return (
                   <>
-                    {mEntries.map(([k,m])=>(
+                    {visibleEntries.map(([k,m])=>(
                       <MetRow key={k} label={m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
                         dim={m.reliable===false}
                       />
                     ))}
+                    {mEntries.length>3 && (
+                      <button onClick={()=>setShowAllMetrics(v=>!v)} style={{
+                        width:"100%",background:"none",border:"none",color:cs.muted,
+                        fontSize:10,fontWeight:600,cursor:"pointer",padding:"4px 0",textAlign:isAr?"right":"left",
+                      }}>
+                        {showAllMetrics
+                          ? (isAr?"▲ عرض أقل":"▲ Show less")
+                          : (isAr?`▼ عرض كل القياسات (${mEntries.length})`:`▼ See all metrics (${mEntries.length})`)}
+                      </button>
+                    )}
                     {/* ── Detected conditions with severity badges ── */}
                     {analysis.detectedConditions?.length > 0 && (
                       <div style={{marginTop:10,marginBottom:4}}>
