@@ -3874,7 +3874,7 @@ function _dnaAnalyze(sessions) {
       longAvg: avg(d.longScores),
       n: d.scores.length,
     }))
-    .filter(m => m.avgScore != null && m.n >= 5) // need enough samples per metric to say anything
+    .filter(m => m.avgScore != null && m.n >= 2) // need at least 2 samples per metric
     .sort((a, b) => a.avgScore - b.avgScore);
 
   const topConcerns = metricStats.slice(0, 3);
@@ -3946,18 +3946,18 @@ export async function generatePostureDNAReport({ sessions = [], profile, user, p
 
   // Not enough data — say so plainly on the cover instead of a report full
   // of unreliable numbers, and stop here.
-  if (A.sessionCount < 15 || A.daySpan < 14) {
+  if (A.sessionCount < 5 || A.daySpan < 7) {
     doc.addPage();
     fc(doc, ...PDF_TOKENS.bg); doc.rect(0, 0, W, H, "F");
     sf(13, "bold"); tc(doc, ...PDF_TOKENS.ink);
     doc.text(isAr ? "مفيش بيانات كافية لسه" : "Not enough data yet", ml, 40);
     sf(9, "normal"); tc(doc, ...PDF_TOKENS.muted);
     const msg = isAr
-      ? `محتاجين على الأقل 15 جلسة موزعة على أسبوعين قبل ما نقدر نطلع تحليل موثوق. عندك دلوقتي ${A.sessionCount} جلسة على مدى ${A.daySpan} يوم. كمّل جلساتك وارجع تاني بعد كام أسبوع.`
-      : `We need at least 15 sessions spread across two weeks before this analysis is statistically meaningful. You currently have ${A.sessionCount} sessions over ${A.daySpan} days. Keep logging sessions and check back in a few weeks.`;
+      ? `محتاجين على الأقل 5 جلسات موزعة على أسبوع قبل ما نقدر نطلع تحليل موثوق. عندك دلوقتي ${A.sessionCount} جلسة على مدى ${A.daySpan} يوم. كمّل جلساتك وارجع قريبًا.`
+      : `We need at least 5 sessions spread across one week before this analysis is meaningful. You currently have ${A.sessionCount} sessions over ${A.daySpan} days. Keep logging sessions and check back soon.`;
     doc.text(msg, ml, 52, { maxWidth: cw, lineHeightFactor: 1.6 });
     footer();
-    doc.save(`Corvus-Posture-DNA-${(profile?.name || "report").replace(/\s/g, "-")}.pdf`);
+    await doc.save(`Corvus-Posture-DNA-${(profile?.name || "report").replace(/\s/g, "-")}.pdf`, {returnPromise:true});
     return;
   }
 
@@ -4082,5 +4082,5 @@ export async function generatePostureDNAReport({ sessions = [], profile, user, p
   });
 
   footer();
-  doc.save(`Corvus-Posture-DNA-${(profile?.name || "report").replace(/\s/g, "-")}-${new Date().toISOString().slice(0,7)}.pdf`);
+  await doc.save(`Corvus-Posture-DNA-${(profile?.name || "report").replace(/\s/g, "-")}-${new Date().toISOString().slice(0,7)}.pdf`, {returnPromise:true});
 }

@@ -1313,7 +1313,7 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
 
   const normTier    = (tier||"standard").toLowerCase();
   const isProTier   = ["professional","elite"].includes(normTier);
-  const isEliteTier = normTier === "elite";
+  const isEliteTier = isElite(tier); // handles b2b_enterprise + trial tiers
 
   async function handlePDF(s, i, clinical=false) {
     if (!isProTier) { onDownloadPDF?.(null); return; } // triggers billing in App.jsx
