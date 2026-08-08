@@ -25,7 +25,7 @@ Keep both in sync if the ladder ever changes.
 AI_COACH_QUALITY: dict[str, dict] = {
     "standard":     {"monthly_limit": 5,  "max_tokens": 550,  "depth": "brief"},
     "basic":        {"monthly_limit": 10, "max_tokens": 650,  "depth": "brief"},
-    "professional": {"monthly_limit": 50, "max_tokens": 900,  "depth": "standard"},
+    "professional": {"monthly_limit": 30, "max_tokens": 900,  "depth": "standard"},
     "elite":        {"monthly_limit": -1, "max_tokens": 1400, "depth": "clinical"},
     # ── legacy aliases kept for old Firestore docs / older code paths ──
     "pro":          {"monthly_limit": 30, "max_tokens": 900,  "depth": "standard"},
