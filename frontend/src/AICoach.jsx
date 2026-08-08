@@ -6,12 +6,14 @@ import { CoachAPI } from "./services/api.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── Tokens ────────────────────────────────────────────────────────
-const T = {
-  bg:      "#060d1a",
-  surf:    "#0b1525",
+// T is built per-render inside FreeChatCoach using the cs prop.
+// This module-level object is the DARK fallback used only when cs is unavailable.
+const T_DARK = {
+  bg:      "#0d1a2e",
+  surf:    "#111827",
   card:    "#0f1c2e",
-  border:  "rgba(56,139,253,.1)",
-  borderH: "rgba(56,139,253,.25)",
+  border:  "rgba(56,139,253,.12)",
+  borderH: "rgba(56,139,253,.3)",
   text:    "#e6edf3",
   muted:   "#8b949e",
   subtle:  "#6e7681",
@@ -22,9 +24,25 @@ const T = {
   red:     "#f85149",
   amber:   "#d29922",
   userBg:  "linear-gradient(135deg,#1158c7,#0e7490)",
-  aiBg:    "rgba(13,17,23,.9)",
+  aiBg:    "rgba(15,28,46,.95)",
   spring:  "cubic-bezier(.16,1,.3,1)",
 };
+function mkT(cs) {
+  const dark = !cs || cs.bg === "#030b14" || cs.bg === "#0a0f1e";
+  return {
+    ...T_DARK,
+    bg:     cs?.card  || T_DARK.bg,
+    surf:   cs?.card2 || T_DARK.surf,
+    card:   cs?.card  || T_DARK.card,
+    border: cs?.border|| T_DARK.border,
+    borderH:cs?.border|| T_DARK.borderH,
+    text:   cs?.text  || T_DARK.text,
+    muted:  cs?.muted || T_DARK.muted,
+    subtle: cs?.muted || T_DARK.subtle,
+    aiBg:   dark ? "rgba(15,28,46,.95)" : "rgba(241,245,249,.9)",
+  };
+}
+const T = T_DARK; // module-level fallback (overridden inside component)
 
 // ── Markdown renderer ─────────────────────────────────────────────
 function renderMd(raw) {
@@ -297,6 +315,7 @@ Est. flexion for ${nm}: ~${nr>=70?"35-45°":nr>=40?"20-30°":"<15°"}
 function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effectiveTier, onClose }) {
   const isAr = lang==="ar";
   const dir  = isAr?"rtl":"ltr";
+  const T    = mkT(cs); // theme tokens that respect light/dark mode
 
   const [messages,  setMessages]  = useState([]);
   const [input,     setInput]     = useState("");
@@ -307,6 +326,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
   const messagesRef = useRef([]);
   useEffect(()=>{ messagesRef.current=messages; },[messages]);
 
+  // ALL tiers get free chat — just with different monthly limits
   const _tier    = effectiveTier||profile?.tier||"standard";
   const quality  = qualityFor(_tier);
   const coachLimit = quality.aiCoach?.monthlyLimit ?? 5;
@@ -470,7 +490,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
     <div style={{
       position:"fixed",inset:0,zIndex:9999,
       display:"flex",alignItems:"center",justifyContent:"center",
-      background:"rgba(4,8,20,.8)",backdropFilter:"blur(14px)",
+      background:"rgba(4,8,20,.55)",backdropFilter:"blur(8px)",
       WebkitBackdropFilter:"blur(14px)",padding:16,
       animation:"bIn .18s ease both",
     }}>
@@ -599,7 +619,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
                 border:`1px solid ${T.borderH}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:12,color:"#fff"}}>✦</div>
-              <div style={{background:T.aiBg,border:`0.5px solid ${T.borderH}`,
+              <div style={{background:T.aiBg||"rgba(15,28,46,.95)",border:`0.5px solid ${T.borderH}`,
                 borderRadius:"16px 4px 16px 16px",backdropFilter:"blur(10px)"}}>
                 <TypingDots/>
               </div>
@@ -881,9 +901,8 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
 // Professional/Elite: full free-form chat (plenty of monthly budget).
 export function AICoach({ profile, sessions=[], calibration, cs, lang="en", effectiveTier, onClose }) {
   useBodyScrollLock();
-  const _tier = effectiveTier || profile?.tier || "standard";
-  if (featureTier(_tier) === "basic") {
-    return <DailyCheckinPanel profile={profile} sessions={sessions} calibration={calibration} cs={cs} lang={lang} tier={_tier} onClose={onClose} />;
-  }
+  // All users get the free-chat Dr. Corvus — tier only affects the monthly message limit
+  // (free=5, basic=10, pro=50, elite=unlimited). DailyCheckinPanel is still
+  // accessible via the Basic features panel; this modal is the full chat.
   return <FreeChatCoach profile={profile} sessions={sessions} calibration={calibration} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={onClose} />;
 }
