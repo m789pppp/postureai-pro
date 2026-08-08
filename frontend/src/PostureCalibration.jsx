@@ -380,12 +380,12 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     try { localStorage.setItem("posture_calibration", JSON.stringify(calibData)); } catch(e) {}
   }, [uid, stopCamera, t.err_pose, knownDistanceCm]);
 
-  const DARK  = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", blue: "#1a56db" };
+  const DARK  = cs || { bg: "#0d1a2e", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", blue: "#1a56db" };
 
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9000, backdropFilter: "blur(8px)" }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9000, backdropFilter: "blur(8px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onSkip?.(); }}
       onKeyDown={(e) => { if (e.key === "Escape") onSkip?.(); }}
       tabIndex={-1}

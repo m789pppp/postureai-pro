@@ -237,7 +237,7 @@ const PAY_METHODS = [
 // HR_EMAILS — list of emails with HR admin access
 const HR_EMAILS = [];
 
-const DARK  = {bg:"#030b14",card:"#05101f",card2:"#080f1e",border:"rgba(148,163,184,.1)",text:"#f0f4f8",muted:"#64748b",blue:"#1a56db",inp:"rgba(148,163,184,.08)",inpB:"rgba(148,163,184,.15)"};
+const DARK  = {bg:"#0d1a2e",card:"#05101f",card2:"#080f1e",border:"rgba(148,163,184,.1)",text:"#f0f4f8",muted:"#64748b",blue:"#1a56db",inp:"rgba(148,163,184,.08)",inpB:"rgba(148,163,184,.15)"};
 const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,139,.15)",text:"#0f172a",muted:"#94a3b8",blue:"#1a56db",inp:"rgba(100,116,139,.07)",inpB:"rgba(100,116,139,.2)"};
 
 
@@ -905,7 +905,7 @@ function Onboard({cs,t,done}){
   const[step,setStep]=useState(0);
   const steps=[{e:"◈",ti:t.ob1,d:t.ob1d},{e:"📊",ti:t.ob2,d:t.ob2d},{e:"📷",ti:t.ob3,d:t.ob3d},{e:"🚀",ti:t.ob4,d:t.ob4d}];
   const s=steps[step];
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888,backdropFilter:"blur(4px)"}}>
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888,backdropFilter:"blur(4px)"}}>
     <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,padding:36,maxWidth:400,width:"90%",textAlign:"center"}}>
       <div style={{fontSize:48,marginBottom:14}}>{s.e}</div>
       <div style={{fontSize:17,fontWeight:700,color:cs.text,marginBottom:10}}>{s.ti}</div>
@@ -2293,7 +2293,17 @@ export default function App(){
       // stayed on, RAF loop kept burning CPU in the background, and the
       // session was never saved -- none of that happened only through the
       // in-app Back buttons, which explicitly call stopCamera() themselves.
-      if(newPage!=="live" && camActiveRef.current){ stopCamera(); }
+      // streamRef.current (not just camActiveRef) is the real source of
+      // truth for "is a camera stream open right now" — the preview/
+      // countdown phase opens the stream and shows it live BEFORE camActive
+      // ever becomes true, so checking camActive alone would miss that
+      // window entirely.
+      if(newPage!=="live" && (camActiveRef.current || streamRef.current)){ stopCamera(); }
+      // showHealthConsent can be open BEFORE any stream exists (it's the
+      // very first check in startCamera(), before getUserMedia is even
+      // called) — reset unconditionally so it can't get stuck open and
+      // block clicks on whatever page the back button lands on.
+      if(newPage!=="live"){ setShowHealthConsent(false); setPreviewPhase(null); }
       setPageRaw(newPage);
     };
     window.addEventListener("popstate", onPop);
@@ -2327,6 +2337,15 @@ export default function App(){
   const camActiveRef=useRef(false);
   useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
+  // Camera preview → 3-2-1 countdown flow, cancellable the whole time.
+  const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
+  const[countdownN,setCountdownN]=useState(3);
+  const countdownIvRef=useRef(null);
+  // True pause/resume — freezes the RAF analysis loop and the session
+  // timer without ending or saving the session. Camera stream stays
+  // attached (video keeps showing) so resuming is instant, no re-request.
+  const[isPaused,setIsPaused]=useState(false);
+  const pausedAtRef=useRef(null);
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
   // "AI Coach (local, free)" regardless of whether WebLLM had actually loaded.
@@ -2597,6 +2616,7 @@ export default function App(){
   // the page, whether they came here to change a setting or just start a
   // session.
   const[showLiveSettings,setShowLiveSettings]=useState(false);
+  const[hoverBarIdx,setHoverBarIdx]=useState(null);
   const[showAllMetrics,setShowAllMetrics]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   const[showReferralProgram,setShowReferralProgram]=useState(false);
@@ -3397,12 +3417,13 @@ export default function App(){
     // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
     // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
     if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
-    // ── Mode fallback ────────────────────────────────────────────────
-    // If the user clicked a mode button (Laptop / Phone / Side) right before
-    // pressing Start Analysis, React's async state update may not have
-    // flushed yet — mode is still null in this closure.  We default to
-    // "laptop" so getUserMedia is ALWAYS invoked, then persist the choice
-    // so the next render picks it up correctly.
+    await openPreview();
+  }
+
+  // Opens the camera and shows a live, non-scoring preview so the user can
+  // see themselves and adjust framing before anything is recorded. A
+  // Cancel button is visible the whole time this is showing.
+  async function openPreview(){
     const effectiveMode = mode || "laptop";
     if (!mode) { setMode("laptop"); }
     setCameraStatus("requesting");
@@ -3418,6 +3439,56 @@ export default function App(){
       }).catch(()=>{});
       if(!vidRef.current){return;}
       setCameraStatus("ready");
+      setPreviewPhase("preview"); // shows live feed + "Start"/"Cancel" — NOT scoring yet
+    }catch(e){
+      const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
+      const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
+      setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
+      const errMsg=isDenied
+        ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
+        :noDevice
+        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
+        :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
+      setAlertMsg({text:errMsg,type:"bad"});
+      addToast(errMsg,"error");
+    }
+  }
+
+  // Cancels out of preview or countdown — same cleanup as the normal Back
+  // button, just doesn't navigate away from the live page.
+  function cancelPreview(){
+    if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
+    setPreviewPhase(null);
+    if(streamRef.current){ streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current=null; }
+    if(vidRef.current) vidRef.current.srcObject=null;
+    setCameraStatus("idle");
+  }
+
+  // User tapped "Start session" from the live preview — run a 3-2-1
+  // countdown (gives a moment to get in frame / sit down), cancellable the
+  // whole time, then hand off to beginScoring().
+  function confirmStartSession(){
+    setPreviewPhase("countdown");
+    setCountdownN(3);
+    let n=3;
+    countdownIvRef.current=setInterval(()=>{
+      n-=1;
+      if(n<=0){
+        clearInterval(countdownIvRef.current);
+        countdownIvRef.current=null;
+        setPreviewPhase(null);
+        beginScoring();
+      } else {
+        setCountdownN(n);
+      }
+    },1000);
+  }
+
+  // The actual session start — reuses the stream already opened by
+  // openPreview(), so no second camera-permission round trip.
+  async function beginScoring(){
+    const effectiveMode = mode || "laptop";
+    try{
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
@@ -3516,6 +3587,11 @@ export default function App(){
     // Close PoseLandmarker only if it was created locally (not the shared window.__mpPose)
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
+    setIsPaused(false);
+    pausedAtRef.current=null;
+    setPreviewPhase(null);
+    if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
+    setShowHealthConsent(false);
 
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
     const la  = lastAnalRef.current||{};
@@ -3698,6 +3774,61 @@ export default function App(){
       addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
   } // end stopCamera
+
+  // Back button while ACTIVELY scoring (not paused, not idle) used to
+  // silently end + save the session with zero warning — an easy accidental
+  // click away, given it's the very first button in the top-left corner.
+  // Paused/idle sessions skip the confirm since the user already
+  // deliberately stepped away.
+  function backFromLive(){
+    if(camActive && !isPaused){
+      const ok=window.confirm(isAr
+        ?"الجلسة شغالة دلوقتي. تأكيد الرجوع هيوقف الجلسة ويحفظها. متأكد؟"
+        :"Your session is currently running. Going back will stop and save it. Continue?");
+      if(!ok) return;
+    }
+    stopCamera();
+    setPage("home");
+    setCamActive(false);
+  }
+
+  // Freezes analysis + the session timer WITHOUT ending/saving the session.
+  // Camera stream stays attached (video keeps showing) — resuming just
+  // restarts the loop, no re-request, no permission prompt again.
+  function pauseSession(){
+    if(!camActive || isPaused) return;
+    if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; }
+    if(timerRef.current){ clearInterval(timerRef.current); timerRef.current=null; }
+    pausedAtRef.current = Date.now();
+    setIsPaused(true);
+  }
+
+  function resumeSession(){
+    if(!camActive || !isPaused) return;
+    // Shift the session's start timestamp forward by however long the
+    // pause lasted, so sessionTime keeps counting from where it left off
+    // instead of jumping ahead by the paused duration.
+    if(pausedAtRef.current){
+      sessRef.current += (Date.now() - pausedAtRef.current);
+      pausedAtRef.current = null;
+    }
+    setIsPaused(false);
+    timerRef.current=setInterval(()=>{
+      const elapsed=Math.floor((Date.now()-sessRef.current)/1000);
+      setSessionTime(elapsed);
+      setBreakTimer(bt=>{
+        const next=bt+1;
+        if(next>=1500&&breakReminder&&!showBreakAlert){
+          setShowBreakAlert(true);
+          if(!muted)playPostureAlert();
+          sendDesktopNotif("Break time! 25 minutes passed — take a 2-min stretch",0);
+        }
+        return next;
+      });
+    },1000);
+    rafRef.current=requestAnimationFrame(runLoop);
+  }
+
 
   // ── Switch camera mode from the live page ───────────────────────
   // Previously the mode (laptop/phone/side) could only be chosen on the
@@ -4227,7 +4358,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // During OAuth redirect: user is temporarily null — show spinner NOT auth page
   if(!user && (_oauthInProgress.current || _oauthRedirect?.current)) return(
     <div style={{
-      minHeight:"100vh",background:"#030b14",
+      minHeight:"100vh",background:"#0d1a2e",
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
       gap:16,fontFamily:"'Inter',system-ui,sans-serif",
     }}>
@@ -4586,7 +4717,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         }
       }}/>}
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
-      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
+      {showDashboard&&<Suspense fallback={null}><AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}</Suspense>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={()=>setShowCoach(false)}/>}
       {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/>}
       {showCustomAlertRules&&<CustomAlertRulesPanel isAr={isAr} cs={cs} rules={customAlertRules}
@@ -4598,20 +4729,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onClose={()=>setShowCustomAlertRules(false)}/>}
       {showAdmin&&isAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
       {showMRR&&isAdmin&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
-      {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
+      {showHelp&&<Suspense fallback={null}><HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}</Suspense>}
       {showChangelog&&isAdmin&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
-      {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIInsights(false)}/>}
+      {showAIInsights&&<Suspense fallback={null}><AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIInsights(false)}/>}</Suspense>}
       {showSymptomCorrelation&&<SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/>}
-      {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/>}
-      {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/>}
-      {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
-      {showEnterpriseRBAC&&<EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}
+      {showPredictiveAI&&<Suspense fallback={null}><PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/>}</Suspense>}
+      {showAIReports&&<Suspense fallback={null}><AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/>}</Suspense>}
+      {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}</Suspense>}
+      {showEnterpriseRBAC&&<Suspense fallback={null}><EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}</Suspense>}
       
       {showFeatureFlags&&isAdmin&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
-      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
+      {showNotificationsHub&&<Suspense fallback={null}><NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}</Suspense>}
       {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
       {healthConsentModalEl}
-      {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
+      {showOnboardingAnalytics&&<Suspense fallback={null}><OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}</Suspense>}
       {authToken && (
         <div style={{maxWidth:960,margin:"0 auto",padding:"12px 20px 0"}}>
           <AnnouncementsBar token={authToken}/>
@@ -4677,7 +4808,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onDevPortal={()=>setShowDevPortal(true)}
         onInsurance={()=>setShowInsuranceModal(true)}
       />
-      {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
+      {showGrowthHub&&<Suspense fallback={null}><GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}</Suspense>}
       {showCertModal&&<CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/>}
       {showQuarterlyReport&&<QuarterlyReportModal profile={profile} allUsers={allUsers} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowQuarterlyReport(false)}/>}
       {showSchoolsModal&&<SchoolsModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowSchoolsModal(false)}/>}
@@ -4727,9 +4858,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
-      {showAPIMarketplace&&<APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/>}
-      {showWhiteLabel&&<WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/>}
-      {showMultiTenant&&<MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/>}
+      {showAPIMarketplace&&<Suspense fallback={null}><APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/>}</Suspense>}
+      {showWhiteLabel&&<Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/>}</Suspense>}
+      {showMultiTenant&&<Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/>}</Suspense>}
       {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
     </ErrorBoundary>
   );
@@ -4765,6 +4896,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   return(<ErrorBoundary><>
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
+      @keyframes countdownPop{0%{opacity:0;transform:scale(1.5)}30%{opacity:1;transform:scale(1)}100%{opacity:.85;transform:scale(1)}}
       @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
@@ -4820,10 +4952,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
       )}
       {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
-      {showSecurityCenter&&<SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/>}
+      {showSecurityCenter&&<Suspense fallback={null}><SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/>}</Suspense>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }
-      {showMFASetup&&<MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/>}
-      {showBillingDashboard&&<BillingDashboard profile={profile} user={user} isAr={lang==="ar"} isAdmin={isAdmin} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}
+      {showMFASetup&&<Suspense fallback={null}><MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/>}</Suspense>}
+      {showBillingDashboard&&<Suspense fallback={null}><BillingDashboard profile={profile} user={user} isAr={lang==="ar"} isAdmin={isAdmin} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}</Suspense>}
       {showReferralProgram&&<Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense>}
       {showIntegrationsHub&&<Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense>}
       {/* Phase 12 — Enterprise Scale */}
@@ -4831,7 +4963,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
       {/* ── Session Result Modal ── */}
       {sessionResult&&(
-        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.82)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.55)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"rgba(8,14,28,.98)",border:`2px solid ${sessionResult.color}30`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
             {/* Score ring */}
             <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>
@@ -5032,8 +5164,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
           position:"sticky", top:0, zIndex:10,
         }}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {/* Desktop only — on mobile the sidebar (which renders first,
+                above the fold) has its own copy of this exact same button.
+                Showing both was a real "which Back do I use" confusion. */}
+            {!isMobile && (
             <button
-              onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
+              onClick={backFromLive}
               style={{
                 background:"rgba(148,163,184,.08)",
                 border:`1px solid ${cs.border}`,
@@ -5043,6 +5179,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               }}>
               {isAr ? "→" : "←"} {isAr?"رجوع":"Back"}
             </button>
+            )}
             <div>
               <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
                 {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
@@ -5137,15 +5274,47 @@ async function downloadPDF(sessionOverride, isClinical=false){
               borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
             {(history.length?history:Array(40).fill(0)).map((s,i)=>{
               const isLast=i===history.length-1;
+              // Bars are pushed at a roughly even cadence across the session,
+              // so distributing elapsed time evenly across them gives a
+              // reasonable "when was this" estimate for the tooltip without
+              // needing to store a timestamp per sample.
+              const barsAgo = history.length-1-i;
+              const secAgo = history.length>1 ? Math.round(barsAgo*(sessionTime/(history.length-1))) : 0;
+              const atSec = Math.max(0, sessionTime-secAgo);
               return (
-                <div key={i} style={{
-                  flex:1, borderRadius:"3px 3px 0 0",
-                  minHeight:3,
-                  height: s ? Math.max(3,Math.round(s*.64)) : 3,
-                  background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
-                  transition:"height .25s ease",
-                  boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
-                }}/>
+                <div key={i}
+                  onMouseEnter={()=>history.length&&setHoverBarIdx(i)}
+                  onMouseLeave={()=>setHoverBarIdx(null)}
+                  style={{flex:1, position:"relative", height:"100%", display:"flex", alignItems:"flex-end", cursor:history.length?"pointer":"default"}}>
+                  {hoverBarIdx===i && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 6px)",insetInlineStart:"50%",transform:"translateX(-50%)",
+                      background:"#0a0f1e",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",
+                      fontSize:10,fontWeight:700,color:"#fff",whiteSpace:"nowrap",zIndex:20,pointerEvents:"none",
+                      boxShadow:"0 4px 12px rgba(0,0,0,.4)",
+                    }}>
+                      {isAr?`النتيجة: ${s} عند ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`:`Score: ${s} at ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`}
+                    </div>
+                  )}
+                  {isLast && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 4px)",insetInlineEnd:-2,
+                      fontSize:8,fontWeight:800,color:sc(s),letterSpacing:".03em",
+                      opacity:hoverBarIdx===i?0:1,
+                    }}>
+                      {isAr?"الآن":"Now"}
+                    </div>
+                  )}
+                  <div style={{
+                    width:"100%", borderRadius:"3px 3px 0 0",
+                    minHeight:3,
+                    height: s ? Math.max(3,Math.round(s*.64)) : 3,
+                    background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
+                    transition:"height .25s ease",
+                    boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
+                    outline: hoverBarIdx===i&&s ? `1px solid ${sc(s)}` : "none",
+                  }}/>
+                </div>
               );
             })}
           </div>
@@ -5329,7 +5498,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 sidebar needs its own way back to Home. */}
             {isMobile && (
               <button
-                onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
+                onClick={backFromLive}
                 style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",fontSize:12,color:cs.muted,cursor:"pointer",display:"flex",alignItems:"center",marginRight:isAr?0:2,marginLeft:isAr?2:0}}>
                 {isAr ? "→" : "←"}
               </button>
@@ -5486,6 +5655,83 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           )}
 
+          {/* Live preview, not yet scored — shown after the camera opens and
+              before the user confirms they're ready. Cancel is always
+              visible here — no phase where the user is stuck with no way
+              to back out. */}
+          {previewPhase==="preview" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"flex-end",padding:"0 0 22px",
+              background:"linear-gradient(to top, rgba(2,8,16,.85), transparent 45%)",zIndex:15,
+            }}>
+              <div style={{fontSize:12.5,color:"#e2e8f0",marginBottom:12,textAlign:"center",padding:"0 20px"}}>
+                {isAr?"اتأكد إنك ظاهر كويس في الكاميرا، وابدأ لما تجهز":"Make sure you're framed well, then start when you're ready"}
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={cancelPreview} style={{
+                  background:"rgba(255,255,255,.08)",border:`1px solid ${cs.border}`,borderRadius:14,
+                  padding:"14px 22px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",
+                }}>
+                  {isAr?"إلغاء":"Cancel"}
+                </button>
+                <button onClick={confirmStartSession} style={{
+                  background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
+                  padding:"14px 32px",fontSize:14.5,fontWeight:800,color:"#fff",cursor:"pointer",
+                  boxShadow:"0 8px 24px rgba(26,86,219,.4)",
+                }}>
+                  ▶ {isAr?"ابدأ الجلسة الآن":"Start session now"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Paused — analysis + timer frozen, camera stays attached so
+              resume is instant. Distinct from "Break now", which keeps the
+              session running invisibly in the background; this actually
+              stops. */}
+          {camActive && isPaused && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"center",gap:14,
+              background:"rgba(2,8,16,.62)",backdropFilter:"blur(2px)",zIndex:14,
+            }}>
+              <div style={{fontSize:36}}>⏸</div>
+              <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>
+                {isAr?"الجلسة متوقفة مؤقتاً":"Session paused"}
+              </div>
+              <button onClick={resumeSession} style={{
+                background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
+                padding:"12px 28px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",
+                boxShadow:"0 8px 24px rgba(26,86,219,.4)",
+              }}>
+                ▶ {isAr?"استكمال":"Resume"}
+              </button>
+            </div>
+          )}
+
+          {/* 3-2-1 countdown right before scoring actually begins — Cancel
+              stays visible and cancels the countdown + closes the camera,
+              same as during preview. */}
+          {previewPhase==="countdown" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+              background:"rgba(2,8,16,.55)",zIndex:16,gap:18,
+            }}>
+              <div key={countdownN} style={{
+                fontSize:88,fontWeight:900,color:"#fff",
+                animation:"countdownPop .9s ease-out",
+                textShadow:"0 4px 24px rgba(0,0,0,.5)",
+              }}>{countdownN}</div>
+              <button onClick={cancelPreview} style={{
+                background:"rgba(255,255,255,.1)",border:`1px solid ${cs.border}`,borderRadius:12,
+                padding:"9px 20px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",
+              }}>
+                {isAr?"إلغاء":"Cancel"}
+              </button>
+            </div>
+          )}
+
           {/* Idle-state visual cue — previously the camera area was just a black box
               with no indication a click was needed. First-time users had no way to
               know to press "Start Analysis" below. */}
@@ -5534,7 +5780,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {analysis && score > 0 && (
           <div style={{
             position:"absolute", top:10, right:10,
-            background:"rgba(2,8,20,.88)", backdropFilter:"blur(8px)",
+            background:"rgba(2,8,20,.55)", backdropFilter:"blur(8px)",
             border:"1px solid rgba(255,255,255,.08)", borderRadius:12,
             padding:"10px 14px", minWidth:160, zIndex:10,
           }}>
@@ -5651,7 +5897,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Primary control — placed directly under the camera so Start / Stop
             is always visible without scrolling past the metrics list. */}
         <div style={{padding:"12px 14px 0"}}>
-          {!camActive
+          {previewPhase
+            ? null /* overlay's own Start/Cancel buttons are the CTA here */
+            : !camActive
             ? <button
                 onClick={cameraStatus==="requesting" ? undefined : startCamera}
                 disabled={cameraStatus==="requesting"}
@@ -5681,17 +5929,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   ? (isAr?"🔄 حاول تاني — لو وصّلت كاميرا":"🔄 Retry — if you've connected one")
                   : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
               </button>
-            : <button onClick={stopCamera} style={{
-                width:"100%",
-                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
-                color:"#fca5a5",
-                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
-                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
-                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
-                letterSpacing:"-.01em",
-              }}>
-                {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
-              </button>
+            : <div style={{display:"flex",gap:8}}>
+                <button onClick={isPaused?resumeSession:pauseSession} style={{
+                  flex:1,
+                  background: isPaused ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(5,150,105,.12))" : "rgba(148,163,184,.08)",
+                  color: isPaused ? "#6ee7b7" : cs.text,
+                  border:`1px solid ${isPaused?"rgba(16,185,129,.4)":cs.border}`,borderRadius:10,
+                  padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
+                }}>
+                  {isPaused ? (isAr?"▶ استكمال":"▶ Resume") : (isAr?"⏸ وقف مؤقت":"⏸ Pause")}
+                </button>
+                <button onClick={stopCamera} style={{
+                  flex:1,
+                  background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                  color:"#fca5a5",
+                  border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
+                  padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
+                  boxShadow:"0 2px 12px rgba(239,68,68,.2)",
+                  letterSpacing:"-.01em",
+                }}>
+                  {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
+                </button>
+              </div>
           }
         </div>
 

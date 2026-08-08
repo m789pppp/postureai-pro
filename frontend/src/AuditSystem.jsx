@@ -151,7 +151,7 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
   ];
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.78)", zIndex:2000,
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", zIndex:2000,
       display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{ background:AUDIT_TOKENS.card, borderRadius:20, width:"100%", maxWidth:1200,
         height:"92dvh", display:"flex", flexDirection:"column", overflow:"hidden",

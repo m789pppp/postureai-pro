@@ -834,7 +834,7 @@ Max 180 words. Start immediately.`,
   return (
     <div style={{
       position: "fixed", inset: 0,
-      background: "rgba(2,8,20,.88)", backdropFilter: "blur(12px)",
+      background: "rgba(2,8,20,.55)", backdropFilter: "blur(12px)",
       WebkitBackdropFilter: "blur(12px)", zIndex: 9100,
       display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
     }}>

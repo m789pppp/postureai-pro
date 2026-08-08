@@ -445,7 +445,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
   const [loading, setLoading] = useState(true);
   const [tab, setTab]         = useState("progress");
 
-  const DARK = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
+  const DARK = cs || { bg: "#0d1a2e", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
   const T = { en: { progress: "My Progress", achievements: "Achievements", heatmap: "Heatmap", leaderboard: "Leaderboard", season: "Season" }, ar: { progress: "تقدمي", achievements: "الإنجازات", heatmap: "الخريطة الحرارية", leaderboard: "لوحة الشرف", season: "الموسم" } };
   const t = T[lang] || T.en;
 
@@ -482,7 +482,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
   const isPro = tierAtLeast(tier, "professional");
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9300, backdropFilter: "blur(8px)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9300, backdropFilter: "blur(8px)" }}>
       <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 20, width: "min(680px,96vw)", maxHeight: "90dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* Header */}

@@ -194,7 +194,7 @@ if (!isKnownPath) {
         <ErrorBoundary>
           <Suspense fallback={
             <div style={{ position:"fixed", inset:0, display:"flex", alignItems:"center",
-              justifyContent:"center", background:"#030b14", color:"#64748b", fontSize:14 }}>
+              justifyContent:"center", background:"#0d1a2e", color:"#64748b", fontSize:14 }}>
               Loading…
             </div>
           }>
