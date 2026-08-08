@@ -2724,7 +2724,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   setShowAIReports, setShowSessionComparison, setShowTrendChart, setShowWorkforceAnalytics,
   setShowCalibWizard, setShowDashboard,
 }) {
-  const nav = useMemo(()=>{
+  const nav = (()=>{
     if(userRole==="hr_admin"||userRole==="platform_admin") return [
       { id:"home",      icon:"⊞",  en:"Overview",   ar:"النظرة العامة" },
       { id:"employees", icon:"👥", en:"Employees",  ar:"الموظفون" },
@@ -2740,7 +2740,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       { id:"home",     icon:"⊞",  en:"Dashboard",  ar:"الرئيسية" },
       { id:"sessions", icon:"📋", en:"Sessions",   ar:"جلساتي" },
     ];
-  },[userRole,atRisk]);
+  })();
 
   const pro   = isPro(tier);
   const elite = isElite(tier);
