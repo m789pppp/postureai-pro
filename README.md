@@ -73,3 +73,4 @@ python backend.py
 - 🌍 Arabic/English i18n
 - 📱 PWA support
 - 🔐 Firebase Auth + Firestore
+
