@@ -295,6 +295,43 @@ def _get_user_role(uid: str) -> dict:
                             })
                         except Exception as _elev_err:
                             print(f"[auth] elite-elevation write failed for {uid}: {_elev_err}", file=sys.stderr)
+
+                # ── Family/Partner Mode tier inheritance ────────────────
+                # A linked partner account (family_primary_uid points back
+                # to whoever invited them) inherits the PRIMARY account's
+                # tier, same "only ever go up, never downgrade" pattern as
+                # the elite-elevation block above — if the partner already
+                # has an equal-or-higher tier some other way, that's kept.
+                # One extra Firestore read, only for accounts that are
+                # actually linked (rare), and this whole function result
+                # is cached for PROFILE_TTL seconds already.
+                _family_primary_uid = data.get("family_primary_uid")
+                if _family_primary_uid:
+                    try:
+                        primary_doc = db.collection("users").document(_family_primary_uid).get()
+                        if primary_doc.exists:
+                            primary_data = primary_doc.to_dict()
+                            primary_tier = _normalize_tier(primary_data.get("tier", "standard"))
+                            # Only inherit from a primary who is themselves
+                            # Professional+ (the tier that unlocks this
+                            # feature) and whose OWN subscription hasn't
+                            # expired (mirrors the expiry check above).
+                            primary_expiry_raw = primary_data.get("subscription_expiry")
+                            primary_active = True
+                            if primary_expiry_raw and primary_tier not in ("standard", "free"):
+                                try:
+                                    p_exp = datetime.fromisoformat(str(primary_expiry_raw).replace("Z", "+00:00"))
+                                    if p_exp.tzinfo is None:
+                                        p_exp = p_exp.replace(tzinfo=timezone.utc)
+                                    primary_active = p_exp >= datetime.now(timezone.utc)
+                                except Exception:
+                                    primary_active = True
+                            if primary_active and TIER_ORDER.get(primary_tier, 0) >= TIER_ORDER.get("professional", 0):
+                                if TIER_ORDER.get(primary_tier, 0) > TIER_ORDER.get(role_data["tier"], 0):
+                                    role_data["tier"] = primary_tier
+                                    role_data["family_inherited_from"] = _family_primary_uid
+                    except Exception as _fam_err:
+                        print(f"[auth] family-partner tier inheritance failed for {uid}: {_fam_err}", file=sys.stderr)
         except Exception as e:
             print(f"[auth] Firestore role fetch error for {uid}: {e}", file=sys.stderr)
 

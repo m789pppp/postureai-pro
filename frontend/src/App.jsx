@@ -26,7 +26,7 @@ import { NotificationsHub, useNotifications } from "./NotificationsHub.jsx";
 import { OnboardingWizard } from "./OnboardingWizard.jsx";
 import { GamificationPanel } from "./Gamification.jsx";
 import { BillingModal, PLANS } from "./Billing.jsx";
-import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, apiFetch } from "./services/api.js";
+import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, FamilyAPI, apiFetch } from "./services/api.js";
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
@@ -2271,6 +2271,9 @@ export default function App(){
   const _fbp = new URLSearchParams(window.location.search);
   const [fbMode]    = useState(_fbp.get("mode")    || null);
   const [fbOobCode] = useState(_fbp.get("oobCode") || null);
+  // Family/Partner Mode invite link (?family_invite=TOKEN) — processed
+  // once the user is authenticated, see the effect below.
+  const [pendingFamilyInvite, setPendingFamilyInvite] = useState(_fbp.get("family_invite") || null);
   const [showEmailVerify, setShowEmailVerify] = useState(false);
   const [showChangePw,    setShowChangePw]    = useState(false);
   const setPage = (p) => {
@@ -2372,8 +2375,47 @@ export default function App(){
     document.body.classList.toggle("light", !darkMode);
   }, [darkMode]);
   useEffect(()=>{try{localStorage.setItem("lang",lang);}catch{}}, [lang]);
-  const { toasts, addToast, dismiss: dismissToast } = useToasts();
+  const { toasts, addToast: _rawAddToast, dismiss: dismissToast } = useToasts();
+  // ── Focus Mode ────────────────────────────────────────────────
+  // Was a Professional-tier pricing-page promise with zero
+  // implementation anywhere in the codebase. Real, scoped behavior:
+  // while active, suppresses the generic toast queue (achievements,
+  // streak celebrations, upsell nudges, etc.) so a session feels
+  // distraction-free — it does NOT touch actual posture-correction
+  // alerts, which already live on a completely separate mechanism
+  // (setAlertMsg/speakCoach/sendDesktopNotif in the live-analysis loop,
+  // not addToast) — those are the whole point of using the app and
+  // are never suppressed by this.
+  const [focusMode, setFocusMode] = useState(() => {
+    try { return localStorage.getItem("corvus_focus_mode") === "1"; } catch { return false; }
+  });
+  useEffect(() => { try { localStorage.setItem("corvus_focus_mode", focusMode ? "1" : "0"); } catch {} }, [focusMode]);
+  const addToast = useCallback((text, type = "info", duration) => {
+    if (focusMode && type !== "error") return null; // errors always get through
+    return _rawAddToast(text, type, duration);
+  }, [focusMode, _rawAddToast]);
   const toast = addToast; // alias
+
+  // ── Family/Partner Mode invite acceptance ────────────────────────
+  // ?family_invite=TOKEN in the URL (from the invite email) — processed
+  // once we know who's logged in, then cleared from the URL either way
+  // so a refresh doesn't try to re-accept it.
+  useEffect(() => {
+    if (!pendingFamilyInvite || !user) return;
+    const token = pendingFamilyInvite;
+    setPendingFamilyInvite(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("family_invite");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    FamilyAPI.accept(token)
+      .then(() => {
+        addToast(isAr ? "🎉 اتربط حسابك بنجاح — عندك دلوقتي نفس صلاحيات الباقة" : "🎉 Account linked — you now have the same plan access", "success");
+      })
+      .catch(e => {
+        addToast(e?.message || (isAr ? "تعذر قبول الدعوة" : "Couldn't accept the invite"), "error");
+      });
+  }, [pendingFamilyInvite, user]);
+
   const isOnline = useOnline();
   const[showOnboard,setShowOnboard]=useState(false);
   const[showCompanyOnboard,setShowCompanyOnboard]=useState(false);
@@ -4546,7 +4588,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
       {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={()=>setShowCoach(false)}/>}
-      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/>}
+      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/>}
       {showCustomAlertRules&&<CustomAlertRulesPanel isAr={isAr} cs={cs} rules={customAlertRules}
         onSave={(next)=>{
           setCustomAlertRules(next);
@@ -4634,7 +4676,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onSchools={()=>setShowSchoolsModal(true)}
         onDevPortal={()=>setShowDevPortal(true)}
         onInsurance={()=>setShowInsuranceModal(true)}
-        setShowCertModal={setShowCertModal}
       />
       {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {showCertModal&&<CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/>}
@@ -5950,6 +5991,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
             }}>
               {sound?"🔊":"🔇"} {isAr?"تنبيه الوضعية":"Posture alerts"}
             </button>
+            {tierAtLeast(effectiveTier,"professional") && (
+              <button onClick={()=>setFocusMode(f=>!f)} title={isAr?"يوقف إشعارات الإنجازات والتحديات وقت الجلسة — تنبيهات الوضعية بتفضل شغالة عادي":"Mutes achievement/challenge notifications during the session — posture alerts stay on"} style={{
+                flex:1,background:focusMode?"rgba(168,85,247,.14)":"rgba(255,255,255,.04)",
+                border:`1px solid ${focusMode?"rgba(168,85,247,.4)":cs.border}`,borderRadius:9,
+                padding:"8px 0",fontSize:11,fontWeight:700,color:focusMode?"#c084fc":cs.muted,cursor:"pointer",
+              }}>
+                {focusMode?"🎯":"🎯"} {isAr?"وضع التركيز":"Focus Mode"}
+              </button>
+            )}
             {tierAtLeast(effectiveTier,"elite") && (
               <button onClick={()=>{
                 setVoiceCoach(v=>{
