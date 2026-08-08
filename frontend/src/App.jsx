@@ -2338,6 +2338,11 @@ export default function App(){
   const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
   const[countdownN,setCountdownN]=useState(3);
   const countdownIvRef=useRef(null);
+  // True pause/resume — freezes the RAF analysis loop and the session
+  // timer without ending or saving the session. Camera stream stays
+  // attached (video keeps showing) so resuming is instant, no re-request.
+  const[isPaused,setIsPaused]=useState(false);
+  const pausedAtRef=useRef(null);
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
   // "AI Coach (local, free)" regardless of whether WebLLM had actually loaded.
@@ -3539,6 +3544,8 @@ export default function App(){
     // Close PoseLandmarker only if it was created locally (not the shared window.__mpPose)
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
+    setIsPaused(false);
+    pausedAtRef.current=null;
     setPreviewPhase(null);
     if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
     setShowHealthConsent(false);
@@ -3724,6 +3731,44 @@ export default function App(){
       addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
   } // end stopCamera
+
+  // Freezes analysis + the session timer WITHOUT ending/saving the session.
+  // Camera stream stays attached (video keeps showing) — resuming just
+  // restarts the loop, no re-request, no permission prompt again.
+  function pauseSession(){
+    if(!camActive || isPaused) return;
+    if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; }
+    if(timerRef.current){ clearInterval(timerRef.current); timerRef.current=null; }
+    pausedAtRef.current = Date.now();
+    setIsPaused(true);
+  }
+
+  function resumeSession(){
+    if(!camActive || !isPaused) return;
+    // Shift the session's start timestamp forward by however long the
+    // pause lasted, so sessionTime keeps counting from where it left off
+    // instead of jumping ahead by the paused duration.
+    if(pausedAtRef.current){
+      sessRef.current += (Date.now() - pausedAtRef.current);
+      pausedAtRef.current = null;
+    }
+    setIsPaused(false);
+    timerRef.current=setInterval(()=>{
+      const elapsed=Math.floor((Date.now()-sessRef.current)/1000);
+      setSessionTime(elapsed);
+      setBreakTimer(bt=>{
+        const next=bt+1;
+        if(next>=1500&&breakReminder&&!showBreakAlert){
+          setShowBreakAlert(true);
+          if(!muted)playPostureAlert();
+          sendDesktopNotif("Break time! 25 minutes passed — take a 2-min stretch",0);
+        }
+        return next;
+      });
+    },1000);
+    rafRef.current=requestAnimationFrame(runLoop);
+  }
+
 
   // ── Switch camera mode from the live page ───────────────────────
   // Previously the mode (laptop/phone/side) could only be chosen on the
@@ -5545,6 +5590,30 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           )}
 
+          {/* Paused — analysis + timer frozen, camera stays attached so
+              resume is instant. Distinct from "Break now", which keeps the
+              session running invisibly in the background; this actually
+              stops. */}
+          {camActive && isPaused && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"center",gap:14,
+              background:"rgba(2,8,16,.62)",backdropFilter:"blur(2px)",zIndex:14,
+            }}>
+              <div style={{fontSize:36}}>⏸</div>
+              <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>
+                {isAr?"الجلسة متوقفة مؤقتاً":"Session paused"}
+              </div>
+              <button onClick={resumeSession} style={{
+                background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
+                padding:"12px 28px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",
+                boxShadow:"0 8px 24px rgba(26,86,219,.4)",
+              }}>
+                ▶ {isAr?"استكمال":"Resume"}
+              </button>
+            </div>
+          )}
+
           {/* 3-2-1 countdown right before scoring actually begins — Cancel
               stays visible and cancels the countdown + closes the camera,
               same as during preview. */}
@@ -5764,17 +5833,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   ? (isAr?"🔄 حاول تاني — لو وصّلت كاميرا":"🔄 Retry — if you've connected one")
                   : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
               </button>
-            : <button onClick={stopCamera} style={{
-                width:"100%",
-                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
-                color:"#fca5a5",
-                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
-                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
-                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
-                letterSpacing:"-.01em",
-              }}>
-                {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
-              </button>
+            : <div style={{display:"flex",gap:8}}>
+                <button onClick={isPaused?resumeSession:pauseSession} style={{
+                  flex:1,
+                  background: isPaused ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(5,150,105,.12))" : "rgba(148,163,184,.08)",
+                  color: isPaused ? "#6ee7b7" : cs.text,
+                  border:`1px solid ${isPaused?"rgba(16,185,129,.4)":cs.border}`,borderRadius:10,
+                  padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
+                }}>
+                  {isPaused ? (isAr?"▶ استكمال":"▶ Resume") : (isAr?"⏸ وقف مؤقت":"⏸ Pause")}
+                </button>
+                <button onClick={stopCamera} style={{
+                  flex:1,
+                  background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                  color:"#fca5a5",
+                  border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
+                  padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
+                  boxShadow:"0 2px 12px rgba(239,68,68,.2)",
+                  letterSpacing:"-.01em",
+                }}>
+                  {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
+                </button>
+              </div>
           }
         </div>
 
