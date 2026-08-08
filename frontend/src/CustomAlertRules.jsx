@@ -17,6 +17,7 @@
  *    its own per-rule cooldown so it can't spam every frame.
  */
 import { useState, useRef, useCallback } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 export const ALERT_METRICS = [
   { id: "spine_lean",    label: "Back/Spine lean",   label_ar: "انحناء الظهر",     keys: ["spine_lean", "spine_align"],       unit: "°" },
@@ -102,6 +103,7 @@ const DEFAULT_RULE = () => ({
 const MAX_RULES = 5;
 
 export function CustomAlertRulesPanel({ isAr, cs, rules = [], onSave, onClose }) {
+  useBodyScrollLock();
   const [localRules, setLocalRules] = useState(rules);
   const [editing, setEditing] = useState(null); // rule being added/edited, or null
 

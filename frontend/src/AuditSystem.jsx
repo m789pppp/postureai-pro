@@ -8,6 +8,7 @@ import {
   collection, query, where, orderBy, limit, getDocs, startAfter,
 } from "firebase/firestore";
 import { db } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
@@ -36,6 +37,7 @@ const COMPLIANCE_CHECKS = [
 ];
 
 export function AuditSystem({ profile, cs, lang, token, onClose }) {
+  useBodyScrollLock();
   const [tab, setTab]             = useState("logs");
   const [events, setEvents]       = useState([]);
   const [loading, setLoading]     = useState(true);

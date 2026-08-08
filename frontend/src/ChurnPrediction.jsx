@@ -9,6 +9,7 @@ import {
   getDoc, doc, updateDoc, serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 
 // ── Design ────────────────────────────────────────────────────────
@@ -100,6 +101,7 @@ const PLAYBOOKS = {
 
 // ── Main component ─────────────────────────────────────────────────
 export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
+  useBodyScrollLock();
   const [customers, setCustomers]   = useState([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(null);

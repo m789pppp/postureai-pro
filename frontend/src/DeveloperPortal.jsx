@@ -8,9 +8,11 @@
  */
 import React, { useState, useEffect } from "react";
 import { getAuth } from "firebase/auth";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── DEVELOPER PORTAL MODAL ───────────────────────────────────────
 export function DeveloperPortalModal({ profile, cs, isAr, onClose, addToast }) {
+  useBodyScrollLock();
   const [tab, setTab]         = useState("overview"); // overview | keys | docs | usage
   const [keys, setKeys]       = useState([]);
   const [creating, setCreating] = useState(false);
@@ -380,6 +382,7 @@ curl -X POST https://corvus.io/api/posture-api/analyze \\
 
 // ── INSURANCE PARTNERSHIP MODAL ──────────────────────────────────
 export function InsurancePartnerModal({ cs, isAr, onClose, addToast }) {
+  useBodyScrollLock();
   const [step, setStep]     = useState("info"); // info | contact | done
   const [form, setForm]     = useState({ name:"", email:"", company:"", role:"", size:"" });
   const [sending, setSending] = useState(false);

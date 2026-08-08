@@ -9,9 +9,11 @@
 import React, { useState, useEffect } from "react";
 import { generateQuarterlyWellnessReport } from "./lib/pdfReports.js";
 import { updateUserProfile } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── QUARTERLY WELLNESS REPORT MODAL ─────────────────────────────
 export function QuarterlyReportModal({ profile, allUsers = [], cs, isAr, onClose, addToast }) {
+  useBodyScrollLock();
   const [generating, setGenerating] = useState(false);
   const [aiSummary, setAiSummary]   = useState("");
   const [loadingAI, setLoadingAI]   = useState(false);
@@ -211,6 +213,7 @@ Be concise, professional, and action-oriented. ${isAr ? "Write in Arabic." : "Wr
 
 // ── CORVUS FOR SCHOOLS MODAL ─────────────────────────────────────
 export function SchoolsModal({ cs, isAr, onClose, addToast }) {
+  useBodyScrollLock();
   const [step, setStep]       = useState("info"); // info | enroll | done
   const [form, setForm]       = useState({ name:"", email:"", institution:"", students:"", role:"" });
   const [sending, setSending] = useState(false);

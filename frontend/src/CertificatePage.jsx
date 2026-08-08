@@ -9,6 +9,7 @@
 import React, { useState, useEffect } from "react";
 import { jsPDF } from "jspdf";
 import { installArabicText } from "./lib/arabicShaper.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ── QR Code (lightweight, no dependency) ─────────────────────────
 // Uses Google Charts API for QR — no npm package needed
@@ -242,6 +243,7 @@ export function CertVerifyPage({ certId: propCertId }) {
 
 // ── IN-APP CERT BADGE MODAL ──────────────────────────────────────
 export function CertBadgeModal({ profile, cs, isAr, onClose, addToast }) {
+  useBodyScrollLock();
   const [step, setStep]       = useState("info"); // info | paying | done
   const [certData, setCertData] = useState(null);
   const [downloading, setDownloading] = useState(false);
