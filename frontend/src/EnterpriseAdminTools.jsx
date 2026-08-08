@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { db } from "./firebase.js";
 import { collection, getDocs, query, where, orderBy, limit, doc, updateDoc, setDoc } from "firebase/firestore";
 import { apiFetch } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const FEATURE_FLAGS = [
   { id:"ff_ai_coaching",       label:"AI Coaching",          desc:"Enable AI coach panel for all users",         enabled:true,  rollout:100, env:"all" },
@@ -41,6 +42,7 @@ const MOCK_HEALTH = {
 const STATUS_DOT = { healthy:"#10b981", degraded:"#f59e0b", down:"#ef4444", disabled:"#64748b", unknown:"#64748b", not_configured:"#64748b", info:"#38bdf8" };
 
 export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
+  useBodyScrollLock();
   const [tab, setTab]         = useState("flags");
   const [flags, setFlags]     = useState(FEATURE_FLAGS);
   const [health]              = useState(MOCK_HEALTH);

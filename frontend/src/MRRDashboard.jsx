@@ -5,6 +5,7 @@
  */
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const fmt = (n, currency = "EGP") =>
   typeof n === "number"
@@ -43,6 +44,7 @@ function SimpleBar({ data, height = 80 }) {
 }
 
 export function MRRDashboard({ cs, lang, onClose }) {
+  useBodyScrollLock();
   const [raw, setRaw]       = useState(null);
   const [loading, setLoad]  = useState(true);
   const [error, setError]   = useState("");

@@ -5,6 +5,7 @@
  * Sample analytics · Interactive walkthroughs
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 /* ── Design tokens ───────────────────────────────────────────────── */
 const SPRING = "cubic-bezier(0.16,1,0.3,1)";
@@ -934,6 +935,7 @@ function StepFinish({ isAr, profile, onComplete }) {
    MAIN WIZARD COMPONENT
    ═══════════════════════════════════════════════════════════════════ */
 export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
+  useBodyScrollLock();
   const [step, setStep]       = useState(0);
   const [profile, setProfile] = useState({ ...DEMO_PROFILE, name: user?.displayName || "" });
   const [dir, setDir]         = useState("forward");
