@@ -738,7 +738,7 @@ export function ProgressBar({ value, max = 100, color, label, showPct, h = 6 }) 
 // ─────────────────────────────────────────────────────────────────
 // BOTTOM SHEET (mobile-native feel)
 // ─────────────────────────────────────────────────────────────────
-export function BottomSheet({ open, onClose, children, title, maxH = "82vh" }) {
+export function BottomSheet({ open, onClose, children, title, maxH = "82dvh" }) {
   injectCSS();
   const [closing, setClosing] = useState(false);
   const startY = useRef(null);
@@ -824,7 +824,7 @@ export function Modal({ children, onClose, cs, maxWidth = 500, title }) {
         border:`1px solid ${cs?.border || UI_TOKENS.border}`,
         borderRadius:22,
         width:`min(${maxWidth}px,96vw)`,
-        maxHeight:"92vh", overflowY:"auto",
+        maxHeight:"92dvh", overflowY:"auto",
         animation: closing ? "scale-out .2s ease both" : "scale-in .25s cubic-bezier(.16,1,.3,1) both",
       }}>
         {title && (

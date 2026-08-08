@@ -57,7 +57,7 @@ export default function FeatureFlags({ token }) {
   };
 
   return (
-    <div style={{ background:FF_TOKENS.bg, minHeight:"100vh", padding:"32px 24px",
+    <div style={{ background:FF_TOKENS.bg, minHeight:"100dvh", padding:"32px 24px",
       color:FF_TOKENS.text, maxWidth:1000, margin:"0 auto", fontFamily:"'Sora',sans-serif" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:28 }}>
         <div>

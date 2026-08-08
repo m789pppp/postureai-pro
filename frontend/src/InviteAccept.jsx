@@ -116,7 +116,7 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
 
   return (
     <div style={{
-      minHeight: "100vh", background: BG,
+      minHeight: "100dvh", background: BG,
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: 24, fontFamily: "'Inter',system-ui,sans-serif",
       direction: isAr ? "rtl" : "ltr",

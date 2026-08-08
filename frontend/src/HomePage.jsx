@@ -2836,7 +2836,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const [hov, setHov] = useState(null);
 
   return (
-    <aside style={{ width:236, flexShrink:0, height:"100vh", position:"sticky", top:0,
+    <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"sticky", top:0,
       background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`,
       display:"flex", flexDirection:"column" }}>
 
@@ -3320,7 +3320,7 @@ export default function HomePage({
   },[tab, userRole, user, profile, userSessions, allUsers, tier, isAr, cs, atRisk, isHRAdmin, isAdmin, downloadPDF, handleDeleteSession, handleTrend, openCoach, openBilling, openAnalytics, openCalib, openReports, currency, setCurrency]);
 
   return (
-    <div dir={dir} style={{ display:"flex", minHeight:"100vh",
+    <div dir={dir} style={{ display:"flex", minHeight:"100dvh",
       background:cs.bg||"#030b14", color:cs.text||"#f0f6ff",
       fontFamily:"system-ui,-apple-system,'Segoe UI',sans-serif" }}>
 

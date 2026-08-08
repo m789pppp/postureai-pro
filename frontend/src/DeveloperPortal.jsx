@@ -83,7 +83,7 @@ export function DeveloperPortalModal({ profile, cs, isAr, onClose, addToast }) {
   const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,.8)",zIndex:9999,
     display:"flex",alignItems:"center",justifyContent:"center",padding:16 };
   const modal = { background:cs.card,border:`1px solid ${cs.border}`,borderRadius:20,
-    width:"100%",maxWidth:680,maxHeight:"90vh",overflowY:"auto",fontFamily:"system-ui,sans-serif" };
+    width:"100%",maxWidth:680,maxHeight:"90dvh",overflowY:"auto",fontFamily:"system-ui,sans-serif" };
   const tabBtn = (id,label) => (
     <button key={id} onClick={()=>setTab(id)} style={{
       padding:"8px 16px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,
@@ -412,7 +412,7 @@ export function InsurancePartnerModal({ cs, isAr, onClose, addToast }) {
   const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,.8)",zIndex:9999,
     display:"flex",alignItems:"center",justifyContent:"center",padding:16 };
   const modal = { background:cs.card,border:`1px solid ${cs.border}`,borderRadius:20,
-    padding:28,maxWidth:500,width:"100%",maxHeight:"90vh",overflowY:"auto",fontFamily:"system-ui,sans-serif" };
+    padding:28,maxWidth:500,width:"100%",maxHeight:"90dvh",overflowY:"auto",fontFamily:"system-ui,sans-serif" };
   const inp = { width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,.04)",
     border:`1px solid ${cs.border}`,borderRadius:9,padding:"10px 13px",
     fontSize:13,color:cs.text,outline:"none",marginBottom:10 };

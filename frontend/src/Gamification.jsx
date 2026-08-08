@@ -481,7 +481,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9300, backdropFilter: "blur(8px)" }}>
-      <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 20, width: "min(680px,96vw)", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 20, width: "min(680px,96vw)", maxHeight: "90dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* Header */}
         <div style={{ padding: "16px 20px", borderBottom: `0.5px solid ${DARK.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>

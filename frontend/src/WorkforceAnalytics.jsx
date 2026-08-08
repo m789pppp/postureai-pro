@@ -809,7 +809,7 @@ Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bul
       <div style={{
         background:"var(--color-background-primary,#0c1528)",
         border:"1px solid rgba(255,255,255,.08)",
-        borderRadius:20, width:"min(900px,96vw)", height:"min(800px,96vh)",
+        borderRadius:20, width:"min(900px,96vw)", height:"min(800px,96dvh)",
         display:"flex", flexDirection:"column", overflow:"hidden",
         direction:isAr?"rtl":"ltr",
         boxShadow:"0 24px 80px rgba(0,0,0,.6)",

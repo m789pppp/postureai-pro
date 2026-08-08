@@ -141,7 +141,7 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
       zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose?.(); }}>
       <div style={{ background:SEC_TOKENS.bg, borderRadius:18, padding:28, color:SEC_TOKENS.text,
-        width:"100%", maxWidth:860, maxHeight:"90vh", overflowY:"auto",
+        width:"100%", maxWidth:860, maxHeight:"90dvh", overflowY:"auto",
         fontFamily:"'Sora',sans-serif", position:"relative",
         border:`1px solid ${SEC_TOKENS.border}`, boxShadow:"0 32px 80px rgba(0,0,0,.6)" }}>
 

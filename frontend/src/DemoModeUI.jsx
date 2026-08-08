@@ -73,7 +73,7 @@ export function DemoWelcome({ isAr, onStart, onBack }) {
 
   return (
     <div style={{
-      minHeight: "100vh", background: DEMO_TOKENS.bg, color: DEMO_TOKENS.text,
+      minHeight: "100dvh", background: DEMO_TOKENS.bg, color: DEMO_TOKENS.text,
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: "24px", fontFamily: "'DM Sans',system-ui,sans-serif",
       direction: isAr ? "rtl" : "ltr",
@@ -170,7 +170,7 @@ export function DemoDashboard({ isAr, onStartSession, onExit, onUpgrade }) {
 
   return (
     <div style={{
-      minHeight: "100vh", background: DEMO_TOKENS.bg, color: DEMO_TOKENS.text,
+      minHeight: "100dvh", background: DEMO_TOKENS.bg, color: DEMO_TOKENS.text,
       padding: "32px 5vw 60px", fontFamily: "'DM Sans',system-ui,sans-serif",
       direction: isAr ? "rtl" : "ltr",
     }}>

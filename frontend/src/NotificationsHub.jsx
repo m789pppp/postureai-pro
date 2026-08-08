@@ -1196,7 +1196,7 @@ export function NotificationsHub({ orgId, profile, sessions=[], allUsers=[], lan
 
       <div dir={isAr?"rtl":"ltr"} style={{
         background:C.bg, border:`0.5px solid ${C.borderB}`,
-        borderRadius:22, width:"min(1020px,98vw)", height:"min(880px,96vh)",
+        borderRadius:22, width:"min(1020px,98vw)", height:"min(880px,96dvh)",
         display:"flex", flexDirection:"column", overflow:"hidden",
         boxShadow:"0 40px 120px rgba(0,0,0,.8), 0 0 0 0.5px rgba(56,139,253,.06) inset",
         animation:"nhIn .3s "+C.spring+" both",

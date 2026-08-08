@@ -420,7 +420,7 @@ function BookingModal({ therapist, isAr, loading, eliteCredit, onClose, onSubmit
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"flex",
       alignItems:"center", justifyContent:"center", zIndex:1000, padding:20 }}>
       <div style={{ ...card, background:"#0d1a2e", width:"100%", maxWidth:480,
-        maxHeight:"88vh", overflowY:"auto", boxShadow:"0 24px 64px rgba(0,0,0,.5)" }}>
+        maxHeight:"88dvh", overflowY:"auto", boxShadow:"0 24px 64px rgba(0,0,0,.5)" }}>
 
         {/* Header */}
         <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:18 }}>

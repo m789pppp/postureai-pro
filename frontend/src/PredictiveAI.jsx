@@ -840,7 +840,7 @@ Max 180 words. Start immediately.`,
     }}>
       <div style={{
         background: "#0b1525", border: `1px solid ${TOKENS.border}`,
-        borderRadius: 20, width: "min(660px,96vw)", height: "min(740px,94vh)",
+        borderRadius: 20, width: "min(660px,96vw)", height: "min(740px,94dvh)",
         display: "flex", flexDirection: "column", overflow: "hidden",
         direction: isAr ? "rtl" : "ltr",
         boxShadow: "0 32px 80px rgba(0,0,0,.7)",

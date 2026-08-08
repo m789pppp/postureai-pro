@@ -76,7 +76,7 @@ export default function OnboardingAnalytics({ token }) {
   const overallConversion = funnel.length ? Math.round(funnel[funnel.length-1]?.completions / max * 100) : 0;
 
   return (
-    <div style={{ background:OA_TOKENS.bg, minHeight:"100vh", padding:"32px 24px",
+    <div style={{ background:OA_TOKENS.bg, minHeight:"100dvh", padding:"32px 24px",
       color:OA_TOKENS.text, maxWidth:900, margin:"0 auto", fontFamily:"'Sora',sans-serif" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:28 }}>
         <div>

@@ -89,7 +89,7 @@ export function MRRDashboard({ cs, lang, onClose }) {
   } : null;
 
   const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 };
-  const box = { background: "#0b1120", border: "1px solid rgba(148,163,184,.12)", borderRadius: 20, padding: "28px 24px", maxWidth: 900, width: "100%", maxHeight: "90vh", overflowY: "auto" };
+  const box = { background: "#0b1120", border: "1px solid rgba(148,163,184,.12)", borderRadius: 20, padding: "28px 24px", maxWidth: 900, width: "100%", maxHeight: "90dvh", overflowY: "auto" };
 
   return (
     <div style={overlay} onClick={onClose}>

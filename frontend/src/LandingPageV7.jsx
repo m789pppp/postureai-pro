@@ -648,7 +648,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
   return (
     <section style={{
-      minHeight: "100vh", display:"flex", alignItems:"center",
+      minHeight: "100dvh", display:"flex", alignItems:"center",
       padding:"clamp(68px,8vw,110px) 24px clamp(48px,5vw,72px)", position:"relative", overflow:"hidden",
     }}>
       {/* Ambient background */}
@@ -2657,7 +2657,7 @@ export default function LandingPage({ onNavigate }) {
   }, []);
 
   return (
-    <div style={{ background:LPV7_TOKENS.bg, minHeight:"100vh", color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
+    <div style={{ background:LPV7_TOKENS.bg, minHeight:"100dvh", color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
       <GlobalStyle/>
       <ScrollProgress/>
       <Nav lang={lang} setLang={setLang} onCTA={handleCTA} mode={mode} setMode={setMode}/>

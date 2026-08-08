@@ -1010,7 +1010,7 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
       <div style={{
         background: "linear-gradient(145deg,#0a1428 0%,#07112a 100%)",
         border: "1px solid rgba(148,163,184,.09)",
-        borderRadius: 22, width: "min(580px,96vw)", maxHeight: "92vh",
+        borderRadius: 22, width: "min(580px,96vw)", maxHeight: "92dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
         boxShadow: "0 32px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(26,86,219,.12)",
         direction: isAr ? "rtl" : "ltr",

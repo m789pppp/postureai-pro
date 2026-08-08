@@ -67,7 +67,7 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose }) 
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1800, background: "rgba(0,0,0,.8)", backdropFilter: "blur(14px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}>
-      <div style={{ background: "rgba(6,12,24,.99)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, width: "100%", maxWidth: 700, maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 32px 80px rgba(0,0,0,.7)" }}>
+      <div style={{ background: "rgba(6,12,24,.99)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, width: "100%", maxWidth: 700, maxHeight: "92dvh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 32px 80px rgba(0,0,0,.7)" }}>
 
         {/* Header */}
         <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>

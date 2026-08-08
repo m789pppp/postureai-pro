@@ -213,7 +213,7 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.78)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-      <div style={{ background:cs.card, borderRadius:20, width:"100%", maxWidth:1120, height:"90vh", display:"flex", flexDirection:"column", overflow:"hidden", border:`1px solid ${cs.border}`, boxShadow:"0 32px 80px rgba(0,0,0,0.5)" }}>
+      <div style={{ background:cs.card, borderRadius:20, width:"100%", maxWidth:1120, height:"90dvh", display:"flex", flexDirection:"column", overflow:"hidden", border:`1px solid ${cs.border}`, boxShadow:"0 32px 80px rgba(0,0,0,0.5)" }}>
 
         {/* Header */}
         <div style={{ padding:"20px 28px", borderBottom:`1px solid ${cs.border}`, background:"linear-gradient(135deg,rgba(99,102,241,0.07),rgba(14,165,233,0.04))", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
