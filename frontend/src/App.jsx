@@ -2334,6 +2334,8 @@ export default function App(){
   // same instant — no chance to pick a camera, check framing, or get ready.
   const[cameraDevices,setCameraDevices]=useState([]);
   const[showCameraPicker,setShowCameraPicker]=useState(false);
+  const[hoverBarIdx,setHoverBarIdx]=useState(null);
+  const[showAllMetrics,setShowAllMetrics]=useState(false);
   const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
   const[countdownN,setCountdownN]=useState(3);
   const chosenDeviceIdRef=useRef(null);
@@ -4810,7 +4812,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {cameraDevices.map((d,i)=>(
                 <button key={d.deviceId||i} onClick={()=>{ chosenDeviceIdRef.current=d.deviceId; setShowCameraPicker(false); openPreview(); }} style={{
-                  textAlign:isAr?"right":"left",background:"rgba(255,255,255,.04)",border:`1px solid ${cs.border}`,
+                  textAlign:isAr?"right":"left",background:darkMode?"rgba(255,255,255,.04)":"rgba(0,0,0,.03)",border:`1px solid ${cs.border}`,
                   borderRadius:11,padding:"12px 14px",fontSize:13,fontWeight:600,color:cs.text,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:10,
                 }}>
@@ -4855,7 +4857,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   setShowNPS(false);
                   if(n>=9) toast(lang==="ar"?"شكراً! 🎉":"Thank you! 🎉","success");
                 }}
-                  style={{width:36,height:36,borderRadius:8,border:"1px solid rgba(148,163,184,.2)",background:"rgba(255,255,255,.04)",color:"#e2e8f0",cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s"}}
+                  style={{width:36,height:36,borderRadius:8,border:"1px solid rgba(148,163,184,.2)",background:darkMode?"rgba(255,255,255,.04)":"rgba(0,0,0,.03)",color:"#e2e8f0",cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s"}}
                   onMouseEnter={e=>{e.target.style.background="#6366f1";e.target.style.borderColor="#6366f1";}}
                   onMouseLeave={e=>{e.target.style.background="rgba(255,255,255,.04)";e.target.style.borderColor="rgba(148,163,184,.2)";}}
                 >{n}</button>
@@ -4895,7 +4897,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
 
             {/* Grade */}
-            <div style={{fontSize:22,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
+            <div style={{fontSize:22,fontWeight:800,color:cs.text,marginBottom:6}}>
               {isAr?sessionResult.gradeAr:sessionResult.grade}
             </div>
             <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginBottom:24}}>
@@ -4909,8 +4911,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 {label:isAr?"وضعية جيدة":"Good posture", value:`${sessionResult.good_pct}%`},
                 {label:isAr?"التنبيهات":"Alerts", value:sessionResult.alerts_count},
               ].map((s,i)=>(
-                <div key={i} style={{flex:1,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,padding:"10px 8px"}}>
-                  <div style={{fontSize:16,fontWeight:800,color:"#f0f6ff"}}>{s.value}</div>
+                <div key={i} style={{flex:1,background:darkMode?"rgba(255,255,255,.04)":"rgba(0,0,0,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,padding:"10px 8px"}}>
+                  <div style={{fontSize:16,fontWeight:800,color:cs.text}}>{s.value}</div>
                   <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginTop:2}}>{s.label}</div>
                 </div>
               ))}
@@ -4922,7 +4924,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div style={{fontSize:11,color:"#f59e0b",fontWeight:700,marginBottom:3}}>
                   {isAr?"أبرز مشكلة":"Top issue to fix"}
                 </div>
-                <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
+                <div style={{fontSize:13,color:cs.text,fontWeight:500}}>
                   {sessionResult.top_metric[1]?.label} — score {sessionResult.top_metric[1]?.score}/100
                 </div>
               </div>
@@ -4992,7 +4994,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
                     setPage("home");
                   }}
-                  style={{flex:1,padding:"10px",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  style={{flex:1,padding:"10px",background:darkMode?"rgba(255,255,255,.05)":"rgba(0,0,0,.04)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {isAr?"لوحة التحكم":"Dashboard"}
                 </button>
 <button onClick={async ()=>{
@@ -5080,6 +5082,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
           position:"sticky", top:0, zIndex:10,
         }}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {/* Desktop only — on mobile the sidebar (which renders first,
+                above the fold) has its own copy of this exact same button.
+                Showing both was the actual source of "which Back do I use"
+                confusion; now there's exactly one visible per breakpoint. */}
+            {!isMobile && (
             <button
               onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
               style={{
@@ -5091,6 +5098,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               }}>
               {isAr ? "→" : "←"} {isAr?"رجوع":"Back"}
             </button>
+            )}
             <div>
               <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
                 {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
@@ -5175,15 +5183,47 @@ async function downloadPDF(sessionOverride, isClinical=false){
               borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
             {(history.length?history:Array(40).fill(0)).map((s,i)=>{
               const isLast=i===history.length-1;
+              // Bars are pushed at a roughly even cadence across the session,
+              // so distributing elapsed time evenly across them gives a
+              // reasonable "when was this" estimate for the tooltip without
+              // needing to store a timestamp per sample.
+              const barsAgo = history.length-1-i;
+              const secAgo = history.length>1 ? Math.round(barsAgo*(sessionTime/(history.length-1))) : 0;
+              const atSec = Math.max(0, sessionTime-secAgo);
               return (
-                <div key={i} style={{
-                  flex:1, borderRadius:"3px 3px 0 0",
-                  minHeight:3,
-                  height: s ? Math.max(3,Math.round(s*.64)) : 3,
-                  background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
-                  transition:"height .25s ease",
-                  boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
-                }}/>
+                <div key={i}
+                  onMouseEnter={()=>history.length&&setHoverBarIdx(i)}
+                  onMouseLeave={()=>setHoverBarIdx(null)}
+                  style={{flex:1, position:"relative", height:"100%", display:"flex", alignItems:"flex-end", cursor:history.length?"pointer":"default"}}>
+                  {hoverBarIdx===i && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 6px)",insetInlineStart:"50%",transform:"translateX(-50%)",
+                      background:"#0a0f1e",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",
+                      fontSize:10,fontWeight:700,color:"#fff",whiteSpace:"nowrap",zIndex:20,pointerEvents:"none",
+                      boxShadow:"0 4px 12px rgba(0,0,0,.4)",
+                    }}>
+                      {isAr?`النتيجة: ${s} عند ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`:`Score: ${s} at ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`}
+                    </div>
+                  )}
+                  {isLast && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 4px)",insetInlineEnd:-2,
+                      fontSize:8,fontWeight:800,color:sc(s),letterSpacing:".03em",
+                      opacity:hoverBarIdx===i?0:1,
+                    }}>
+                      {isAr?"الآن":"Now"}
+                    </div>
+                  )}
+                  <div style={{
+                    width:"100%", borderRadius:"3px 3px 0 0",
+                    minHeight:3,
+                    height: s ? Math.max(3,Math.round(s*.64)) : 3,
+                    background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
+                    transition:"height .25s ease",
+                    boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
+                    outline: hoverBarIdx===i&&s ? `1px solid ${sc(s)}` : "none",
+                  }}/>
+                </div>
               );
             })}
           </div>
@@ -5212,7 +5252,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {!aiInsight&&camActive&&!tierAtLeast(effectiveTier,"elite")&&(
           <div style={{margin:"0 16px 12px",display:"flex"}}>
             <button onClick={()=>{ addToast(isAr?"🧠 تحليل AI اللحظي متاح لباقة Elite فقط":"🧠 Live AI analysis is an Elite feature","warn"); setShowBilling(true); }}
-              style={{background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+              style={{background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:7,
                 padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                 display:"flex",alignItems:"center",gap:4}}>
               🔒 🧠 {isAr?"تحليل AI":"AI analysis"}
@@ -5588,7 +5628,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 width:38,height:38,borderRadius:"50%",
                 background:`conic-gradient(${score>=75?"#10b981":score>=55?"#f59e0b":"#ef4444"} ${score*3.6}deg, rgba(255,255,255,.06) 0deg)`,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:11,fontWeight:900,color:"#f0f6ff",flexShrink:0,
+                fontSize:11,fontWeight:900,color:cs.text,flexShrink:0,
               }}>{score}</div>
               <div>
                 <div style={{fontSize:9,color:"#64748b",fontWeight:600,letterSpacing:.5}}>
@@ -5630,7 +5670,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div key={i} style={{display:"flex",alignItems:"center",
                   justifyContent:"space-between",marginBottom:5}}>
                   <div style={{fontSize:10,color:"#64748b",width:60}}>{label}</div>
-                  <div style={{flex:1,height:4,background:"rgba(255,255,255,.06)",
+                  <div style={{flex:1,height:4,background:darkMode?"rgba(255,255,255,.06)":"rgba(0,0,0,.04)",
                     borderRadius:2,margin:"0 6px",overflow:"hidden"}}>
                     <div style={{height:"100%",width:`${s??0}%`,
                       background:col,borderRadius:2,transition:"width .4s ease"}}/>
@@ -5787,7 +5827,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 {score ? grade(score,t) : (isAr?"ابدأ الكاميرا":"Start camera")}
               </div>
               {/* Mini progress bar */}
-              <div style={{marginTop:6,height:3,borderRadius:99,background:"rgba(255,255,255,.06)"}}>
+              <div style={{marginTop:6,height:3,borderRadius:99,background:darkMode?"rgba(255,255,255,.06)":"rgba(0,0,0,.04)"}}>
                 <div style={{height:"100%",width:`${score||0}%`,borderRadius:99,
                   background:`linear-gradient(90deg,${scoreColor}88,${scoreColor})`,
                   transition:"width .4s ease"}}/>
@@ -5816,7 +5856,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {pp.primary_driver?` · ${pp.primary_driver}`:""}
                 </div>
               </div>
-              <div style={{height:3,borderRadius:99,background:"rgba(255,255,255,.08)"}}>
+              <div style={{height:3,borderRadius:99,background:darkMode?"rgba(255,255,255,.08)":"rgba(0,0,0,.05)"}}>
                 <div style={{height:"100%",borderRadius:99,width:`${pct}%`,
                   background:col,transition:"width .5s ease"}}/>
               </div>
@@ -5840,13 +5880,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 const mEntries = Object.entries(analysis.metrics).filter(([k,m])=>
                   !HIDE.has(k) && m.value!=null && m.label
                 );
+                // Show the 3 lowest-scoring (i.e. most worth attention)
+                // metrics by default instead of all 6-8 at once — the rest
+                // are one tap away, not gone.
+                const sortedEntries = [...mEntries].sort((a,b)=>(a[1].score??100)-(b[1].score??100));
+                const visibleEntries = showAllMetrics ? sortedEntries : sortedEntries.slice(0,3);
                 return (
                   <>
-                    {mEntries.map(([k,m])=>(
+                    {visibleEntries.map(([k,m])=>(
                       <MetRow key={k} label={m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
                         dim={m.reliable===false}
                       />
                     ))}
+                    {mEntries.length>3 && (
+                      <button onClick={()=>setShowAllMetrics(v=>!v)} style={{
+                        width:"100%",background:"none",border:"none",color:cs.muted,
+                        fontSize:10,fontWeight:600,cursor:"pointer",padding:"4px 0",textAlign:isAr?"right":"left",
+                      }}>
+                        {showAllMetrics
+                          ? (isAr?"▲ عرض أقل":"▲ Show less")
+                          : (isAr?`▼ عرض كل القياسات (${mEntries.length})`:`▼ See all metrics (${mEntries.length})`)}
+                      </button>
+                    )}
                     {/* ── Detected conditions with severity badges ── */}
                     {analysis.detectedConditions?.length > 0 && (
                       <div style={{marginTop:10,marginBottom:4}}>
@@ -6050,7 +6105,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <button onClick={()=>setShowLiveSettings(v=>!v)} style={{
             width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
-            background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:10,
+            background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:10,
             padding:"10px 14px",fontSize:12.5,fontWeight:700,color:cs.text,cursor:"pointer",
           }}>
             <span>⚙️ {isAr?"إعدادات الجلسة":"Session settings"}</span>
@@ -6209,7 +6264,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   addToast(isAr?"⚙️ قواعد التنبيه المخصصة متاحة لباقة Pro فأعلى":"⚙️ Custom Alert Rules is a Pro feature","warn");
                   setShowBilling(true);
                 }} style={{
-                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:7,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
@@ -6222,7 +6277,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   addToast(isAr?"🎙️ المدرب الصوتي متاح لباقة Elite فقط":"🎙️ Voice coach is an Elite feature","warn");
                   setShowBilling(true);
                 }} style={{
-                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:7,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
@@ -6235,7 +6290,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
                   setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
                 }} style={{
-                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:darkMode?"rgba(255,255,255,.03)":"rgba(0,0,0,.025)",border:`1px solid ${cs.border}`,borderRadius:7,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
