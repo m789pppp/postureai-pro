@@ -33,7 +33,7 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
 
   return (
     <div style={{
-      minHeight:"100vh", background:t.bg,
+      minHeight:"100dvh", background:t.bg,
       display:"flex", flexDirection:"column",
       alignItems:"center", justifyContent:"center",
       fontFamily:"'Inter','IBM Plex Sans Arabic',system-ui,sans-serif",

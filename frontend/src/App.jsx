@@ -1028,7 +1028,7 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
   }
 
   return(
-    <div dir={dir} style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div dir={dir} style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
       <div style={{width:"100%",maxWidth:400}}>
 
         {/* Controls */}
@@ -1141,7 +1141,7 @@ function Waiting({paymentId,payMethod,amount,tier,refCode,onSuccess,cs,t}){
   const[status,setStatus]=useState("pending"),[payData,setPayData]=useState(null);
   useEffect(()=>{const unsub=listenToPayment(paymentId,d=>{setPayData(d);if(d.status==="confirmed"){setStatus("confirmed");onSuccess();}else if(d.status==="rejected")setStatus("rejected");});return unsub;},[paymentId]);
   const pm=PAY_METHODS.find(p=>p.id===payMethod),tierInfo=TIERS[tier];
-  return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+  return <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
     <div style={{maxWidth:480,width:"100%"}}>
       {status==="confirmed"?(<div style={{background:cs.card,border:"0.5px solid rgba(16,185,129,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
         <div style={{fontSize:52,marginBottom:12}}>✅</div>
@@ -1207,7 +1207,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
     }catch{addToast(isAr?"خطأ في الحفظ":"Error saving","error");}
     setSaving(false);
   }
-  return <div style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div style={{minHeight:"100dvh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:700,margin:"0 auto",padding:"26px 18px 52px"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:24}}>
         <button onClick={onBack} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
@@ -1286,7 +1286,7 @@ function PaymentResultScreen({result, cs, lang, onContinue}){
   const isAr=lang==="ar";
   const isSuccess=result==="success";
   return(
-    <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
       <div style={{maxWidth:460,width:"100%",textAlign:"center"}}>
         <div style={{
           width:72,height:72,borderRadius:"50%",margin:"0 auto 20px",
@@ -1382,7 +1382,7 @@ function Leaderboard({users,cs,t,onBack,lang}){
   const filtered=users.filter(u=>deptFilter==="all"||(u.department||u.company||"")=== deptFilter);
   const sorted=[...filtered].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
   const medals=["🥇","🥈","🥉"];
-  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100dvh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:700,margin:"0 auto",padding:"24px 17px 52px"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:18,flexDirection:isAr?"row-reverse":"row"}}>
         <button onClick={onBack} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
@@ -1500,7 +1500,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
     }).reduce((a,p)=>a+(p.amount||0),0)};
   });
 
-  return <div style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif"}}>
+  return <div style={{minHeight:"100dvh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif"}}>
     {modal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}}>
       <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:14,padding:22,width:340}}>
         <div style={{fontSize:14,fontWeight:700,marginBottom:11}}>{isAr?"رفض الدفعة":"Reject Payment"}</div>
@@ -1721,7 +1721,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
   if(step==="waiting")return <Waiting paymentId={paymentId} payMethod={payMethod} amount={price}
     tier={selTier} refCode={""} onSuccess={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");onPaid();}} cs={cs} t={t}/>;
 
-  if(step==="kashier")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
+  if(step==="kashier")return <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
     <div style={{padding:"12px 18px",borderBottom:"0.5px solid "+cs.border,display:"flex",alignItems:"center",gap:11,background:cs.card}}>
       <button aria-label="Go back" onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{"← "}{isAr?"رجوع":"Back"}</button>
       <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{"🔒 "}{isAr?"دفع آمن عبر Kashier":"Secure payment via Kashier"}{" — "}{price?.toLocaleString()}{" EGP"}</div>
@@ -1729,7 +1729,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
     <iframe src={kashierUrl} style={{flex:1,border:"none",width:"100%"}} title="Kashier Checkout"/>
   </div>;
 
-  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100dvh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:880,margin:"0 auto",padding:"24px 17px 52px"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:20,flexDirection:isAr?"row-reverse":"row"}}>
@@ -2290,7 +2290,12 @@ export default function App(){
       // stayed on, RAF loop kept burning CPU in the background, and the
       // session was never saved -- none of that happened only through the
       // in-app Back buttons, which explicitly call stopCamera() themselves.
-      if(newPage!=="live" && camActiveRef.current){ stopCamera(); }
+      // streamRef.current (not just camActiveRef) is the real source of
+      // truth for "is a camera stream open right now" — the preview/
+      // countdown phase (see openPreview/confirmStartSession) opens the
+      // stream and shows it live BEFORE camActive ever becomes true, so
+      // checking camActive alone would miss exactly that window.
+      if(newPage!=="live" && (camActiveRef.current || streamRef.current)){ stopCamera(); }
       setPageRaw(newPage);
     };
     window.addEventListener("popstate", onPop);
@@ -2324,6 +2329,16 @@ export default function App(){
   const camActiveRef=useRef(false);
   useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
+  // Camera-selection → live preview → 3-2-1 countdown flow. Previously
+  // "Start Analysis" opened the camera and started scoring in the exact
+  // same instant — no chance to pick a camera, check framing, or get ready.
+  const[cameraDevices,setCameraDevices]=useState([]);
+  const[showCameraPicker,setShowCameraPicker]=useState(false);
+  const[hoverBarIdx,setHoverBarIdx]=useState(null);
+  const[showAllMetrics,setShowAllMetrics]=useState(false);
+  const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
+  const[countdownN,setCountdownN]=useState(3);
+  const chosenDeviceIdRef=useRef(null);
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
   // "AI Coach (local, free)" regardless of whether WebLLM had actually loaded.
@@ -3354,18 +3369,33 @@ export default function App(){
     // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
     // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
     if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
-    // ── Mode fallback ────────────────────────────────────────────────
-    // If the user clicked a mode button (Laptop / Phone / Side) right before
-    // pressing Start Analysis, React's async state update may not have
-    // flushed yet — mode is still null in this closure.  We default to
-    // "laptop" so getUserMedia is ALWAYS invoked, then persist the choice
-    // so the next render picks it up correctly.
+    // Enumerate cameras first so the user can pick one before anything opens.
+    // Labels are blank until permission has been granted at least once on
+    // some browsers — falls back to "Camera 1/2/…" in that case, still
+    // fully functional since deviceId itself doesn't need a label.
+    try{
+      const devices=await navigator.mediaDevices.enumerateDevices();
+      const cams=devices.filter(d=>d.kind==="videoinput");
+      setCameraDevices(cams);
+      if(cams.length>1){ setShowCameraPicker(true); return; }
+      chosenDeviceIdRef.current = cams[0]?.deviceId || null;
+    }catch{ chosenDeviceIdRef.current=null; } // enumerate failing isn't fatal — just skip the picker
+    await openPreview();
+  }
+
+  // Called once a device is chosen (or immediately if there's only one
+  // camera). Opens the stream and shows a live, non-scoring preview so the
+  // user can see themselves and adjust framing before anything is recorded.
+  async function openPreview(){
     const effectiveMode = mode || "laptop";
     if (!mode) { setMode("laptop"); }
     setCameraStatus("requesting");
     try{
       const facingMode=effectiveMode==="phone"?"environment":"user";
-      const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}}});
+      const videoConstraints = chosenDeviceIdRef.current
+        ? {deviceId:{exact:chosenDeviceIdRef.current},width:{ideal:1280},height:{ideal:720}}
+        : {width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}};
+      const s=await navigator.mediaDevices.getUserMedia({video:videoConstraints});
       streamRef.current=s;
       if(!vidRef.current){setCameraStatus("idle");return;}
       vidRef.current.srcObject=s;
@@ -3375,6 +3405,46 @@ export default function App(){
       }).catch(()=>{});
       if(!vidRef.current){return;}
       setCameraStatus("ready");
+      setPreviewPhase("preview"); // shows live feed + "Start session" button — NOT scoring yet
+    }catch(e){
+      const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
+      const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
+      setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
+      const errMsg=isDenied
+        ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
+        :noDevice
+        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
+        :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
+      setAlertMsg({text:errMsg,type:"bad"});
+      addToast(errMsg,"error");
+    }
+  }
+
+  // User tapped "Start session" from the live preview — run a 3-2-1
+  // countdown (gives a moment to get in frame / sit down) then hand off to
+  // beginScoring(), which is the original startCamera() logic untouched.
+  function confirmStartSession(){
+    setPreviewPhase("countdown");
+    setCountdownN(3);
+    let n=3;
+    const iv=setInterval(()=>{
+      n-=1;
+      if(n<=0){
+        clearInterval(iv);
+        setPreviewPhase(null);
+        beginScoring();
+      } else {
+        setCountdownN(n);
+      }
+    },1000);
+  }
+
+  // The actual session start — reuses the stream already opened by
+  // openPreview(), so no second camera-permission round trip. Logic here is
+  // byte-for-byte the tail half of the original single-phase startCamera().
+  async function beginScoring(){
+    const effectiveMode = mode || "laptop";
+    try{
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
@@ -3434,16 +3504,7 @@ export default function App(){
       },1000);
       rafRef.current=requestAnimationFrame(runLoop);
     }catch(e){
-      const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
-      const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
-      setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
-      const errMsg=isDenied
-        ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
-        :noDevice
-        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
-        :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
-      setAlertMsg({text:errMsg,type:"bad"});
-      addToast(errMsg,"error");
+      addToast(isAr?"خطأ في بدء الجلسة":"Error starting session","error");
     }
   }
 
@@ -3473,6 +3534,7 @@ export default function App(){
     // Close PoseLandmarker only if it was created locally (not the shared window.__mpPose)
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
+    setPreviewPhase(null);
 
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
     const la  = lastAnalRef.current||{};
@@ -3965,7 +4027,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── ROUTING ───────────────────────────────────────────────────────
   if(!authChecked)return(
     <div style={{
-      minHeight:"100vh",
+      minHeight:"100dvh",
       background: darkMode ? "#040d1a" : "#f8fafc",
       display:"flex", flexDirection:"column",
       alignItems:"center", justifyContent:"center",
@@ -4184,7 +4246,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // During OAuth redirect: user is temporarily null — show spinner NOT auth page
   if(!user && (_oauthInProgress.current || _oauthRedirect?.current)) return(
     <div style={{
-      minHeight:"100vh",background:"#030b14",
+      minHeight:"100dvh",background:"#030b14",
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
       gap:16,fontFamily:"'Inter',system-ui,sans-serif",
     }}>
@@ -4313,7 +4375,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── SETUP SCREEN: account type + device selection ─────────────────
   if(page==="setup"){
     return(<ErrorBoundary>
-      <div dir={dir} style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
+      <div dir={dir} style={{minHeight:"100dvh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
         <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
         {/* Lang + Dark toggle */}
         <div style={{position:"absolute",top:16,right:16,display:"flex",gap:7}}>
@@ -4723,6 +4785,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
       @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes countdownPop{0%{opacity:0;transform:scale(1.5)}30%{opacity:1;transform:scale(1)}100%{opacity:.85;transform:scale(1)}}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
     `}</style>
@@ -4733,10 +4796,40 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <div dir={dir} style={{
       display:"grid",
       gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
-      minHeight:"100vh",
+      minHeight:"100dvh",
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
     }}>
+      {showCameraPicker && (
+        <div dir={dir} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000,padding:20}}>
+          <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,maxWidth:380,width:"100%",padding:"22px 20px"}}>
+            <div style={{fontSize:15,fontWeight:800,color:cs.text,marginBottom:4}}>
+              {isAr?"اختار الكاميرا":"Choose a camera"}
+            </div>
+            <div style={{fontSize:11.5,color:cs.muted,marginBottom:16}}>
+              {isAr?`لقينا ${cameraDevices.length} كاميرات على جهازك`:`Found ${cameraDevices.length} cameras on your device`}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {cameraDevices.map((d,i)=>(
+                <button key={d.deviceId||i} onClick={()=>{ chosenDeviceIdRef.current=d.deviceId; setShowCameraPicker(false); openPreview(); }} style={{
+                  textAlign:isAr?"right":"left",background:"rgba(255,255,255,.04)",border:`1px solid ${cs.border}`,
+                  borderRadius:11,padding:"12px 14px",fontSize:13,fontWeight:600,color:cs.text,cursor:"pointer",
+                  display:"flex",alignItems:"center",gap:10,
+                }}>
+                  <span style={{fontSize:16}}>📷</span>
+                  {d.label || (isAr?`كاميرا ${i+1}`:`Camera ${i+1}`)}
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>setShowCameraPicker(false)} style={{
+              width:"100%",marginTop:14,background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,
+              padding:"10px 0",fontSize:12.5,color:cs.muted,cursor:"pointer",
+            }}>
+              {isAr?"إلغاء":"Cancel"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── GlobalModals: render on ALL pages ──────────────────── */}
       
@@ -4989,6 +5082,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
           position:"sticky", top:0, zIndex:10,
         }}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {/* Desktop only — on mobile the sidebar (which renders first,
+                above the fold) has its own copy of this exact same button.
+                Showing both was the actual source of "which Back do I use"
+                confusion; now there's exactly one visible per breakpoint. */}
+            {!isMobile && (
             <button
               onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
               style={{
@@ -5000,6 +5098,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               }}>
               {isAr ? "→" : "←"} {isAr?"رجوع":"Back"}
             </button>
+            )}
             <div>
               <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
                 {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
@@ -5084,15 +5183,47 @@ async function downloadPDF(sessionOverride, isClinical=false){
               borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
             {(history.length?history:Array(40).fill(0)).map((s,i)=>{
               const isLast=i===history.length-1;
+              // Bars are pushed at a roughly even cadence across the session,
+              // so distributing elapsed time evenly across them gives a
+              // reasonable "when was this" estimate for the tooltip without
+              // needing to store a timestamp per sample.
+              const barsAgo = history.length-1-i;
+              const secAgo = history.length>1 ? Math.round(barsAgo*(sessionTime/(history.length-1))) : 0;
+              const atSec = Math.max(0, sessionTime-secAgo);
               return (
-                <div key={i} style={{
-                  flex:1, borderRadius:"3px 3px 0 0",
-                  minHeight:3,
-                  height: s ? Math.max(3,Math.round(s*.64)) : 3,
-                  background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
-                  transition:"height .25s ease",
-                  boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
-                }}/>
+                <div key={i}
+                  onMouseEnter={()=>history.length&&setHoverBarIdx(i)}
+                  onMouseLeave={()=>setHoverBarIdx(null)}
+                  style={{flex:1, position:"relative", height:"100%", display:"flex", alignItems:"flex-end", cursor:history.length?"pointer":"default"}}>
+                  {hoverBarIdx===i && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 6px)",insetInlineStart:"50%",transform:"translateX(-50%)",
+                      background:"#0a0f1e",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",
+                      fontSize:10,fontWeight:700,color:"#fff",whiteSpace:"nowrap",zIndex:20,pointerEvents:"none",
+                      boxShadow:"0 4px 12px rgba(0,0,0,.4)",
+                    }}>
+                      {isAr?`النتيجة: ${s} عند ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`:`Score: ${s} at ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`}
+                    </div>
+                  )}
+                  {isLast && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 4px)",insetInlineEnd:-2,
+                      fontSize:8,fontWeight:800,color:sc(s),letterSpacing:".03em",
+                      opacity:hoverBarIdx===i?0:1,
+                    }}>
+                      {isAr?"الآن":"Now"}
+                    </div>
+                  )}
+                  <div style={{
+                    width:"100%", borderRadius:"3px 3px 0 0",
+                    minHeight:3,
+                    height: s ? Math.max(3,Math.round(s*.64)) : 3,
+                    background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
+                    transition:"height .25s ease",
+                    boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
+                    outline: hoverBarIdx===i&&s ? `1px solid ${sc(s)}` : "none",
+                  }}/>
+                </div>
               );
             })}
           </div>
@@ -5250,7 +5381,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         borderLeft:  isAr ? "none" : `1px solid ${cs.border}`,
         borderRight: isAr ? `1px solid ${cs.border}` : "none",
         display:"flex", flexDirection:"column",
-        maxHeight: isMobile ? "auto" : "100vh",
+        maxHeight: isMobile ? "auto" : "100dvh",
         overflowY:"auto",
         order: isMobile ? 0 : (isAr ? 0 : 1),
         position: isMobile ? "static" : "sticky",
@@ -5363,7 +5494,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Camera feed */}
         <div ref={camWrapRef} style={{position:"relative",background:"#020810",flexShrink:0,
-          ...(isFs?{width:"100vw",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}:{aspectRatio:"4/3"})}}>
+          ...(isFs?{width:"100vw",height:"100dvh",display:"flex",alignItems:"center",justifyContent:"center"}:{aspectRatio:"4/3"})}}>
           <video ref={vidRef} autoPlay muted playsInline
             style={{width:"100%",height:"100%",objectFit:isFs?"contain":"cover",transform:"scaleX(-1)",display:"block"}}/>
           <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)",objectFit:isFs?"contain":"cover"}}/>
@@ -5376,6 +5507,43 @@ async function downloadPDF(sessionOverride, isClinical=false){
             backdropFilter:"blur(6px)",color:"#e2e8f0",cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
           }}>{isFs?"🗗":"⛶"}</button>
+
+          {/* Live preview, not yet scored — shown after the camera opens and
+              before the user confirms they're ready. Was previously skipped
+              entirely: pressing Start opened the camera AND began scoring
+              in the same instant, with zero chance to check framing first. */}
+          {previewPhase==="preview" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"flex-end",padding:"0 0 22px",
+              background:"linear-gradient(to top, rgba(2,8,16,.85), transparent 45%)",zIndex:15,
+            }}>
+              <div style={{fontSize:12.5,color:"#e2e8f0",marginBottom:12,textAlign:"center",padding:"0 20px"}}>
+                {isAr?"اتأكد إنك ظاهر كويس في الكاميرا، وابدأ لما تجهز":"Make sure you're framed well, then start when you're ready"}
+              </div>
+              <button onClick={confirmStartSession} style={{
+                background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
+                padding:"14px 32px",fontSize:14.5,fontWeight:800,color:"#fff",cursor:"pointer",
+                boxShadow:"0 8px 24px rgba(26,86,219,.4)",
+              }}>
+                ▶ {isAr?"ابدأ الجلسة الآن":"Start session now"}
+              </button>
+            </div>
+          )}
+
+          {/* 3-2-1 countdown right before scoring actually begins */}
+          {previewPhase==="countdown" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",
+              background:"rgba(2,8,16,.55)",zIndex:16,
+            }}>
+              <div key={countdownN} style={{
+                fontSize:88,fontWeight:900,color:"#fff",
+                animation:"countdownPop .9s ease-out",
+                textShadow:"0 4px 24px rgba(0,0,0,.5)",
+              }}>{countdownN}</div>
+            </div>
+          )}
 
           {/* AI model loading overlay — the camera permission/feed itself
               resolves in a couple seconds, but the pose-detection model
@@ -5566,7 +5734,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Primary control — placed directly under the camera so Start / Stop
             is always visible without scrolling past the metrics list. */}
         <div style={{padding:"12px 14px 0"}}>
-          {!camActive
+          {previewPhase
+            ? null /* overlay's own "Start session now" button is the CTA here */
+            : !camActive
             ? <button
                 onClick={cameraStatus==="requesting" ? undefined : startCamera}
                 disabled={cameraStatus==="requesting"}
@@ -5710,13 +5880,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 const mEntries = Object.entries(analysis.metrics).filter(([k,m])=>
                   !HIDE.has(k) && m.value!=null && m.label
                 );
+                // Show the 3 lowest-scoring (i.e. most worth attention)
+                // metrics by default instead of all 6-8 at once — the rest
+                // are one tap away, not gone.
+                const sortedEntries = [...mEntries].sort((a,b)=>(a[1].score??100)-(b[1].score??100));
+                const visibleEntries = showAllMetrics ? sortedEntries : sortedEntries.slice(0,3);
                 return (
                   <>
-                    {mEntries.map(([k,m])=>(
+                    {visibleEntries.map(([k,m])=>(
                       <MetRow key={k} label={m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
                         dim={m.reliable===false}
                       />
                     ))}
+                    {mEntries.length>3 && (
+                      <button onClick={()=>setShowAllMetrics(v=>!v)} style={{
+                        width:"100%",background:"none",border:"none",color:cs.muted,
+                        fontSize:10,fontWeight:600,cursor:"pointer",padding:"4px 0",textAlign:isAr?"right":"left",
+                      }}>
+                        {showAllMetrics
+                          ? (isAr?"▲ عرض أقل":"▲ Show less")
+                          : (isAr?`▼ عرض كل القياسات (${mEntries.length})`:`▼ See all metrics (${mEntries.length})`)}
+                      </button>
+                    )}
                     {/* ── Detected conditions with severity badges ── */}
                     {analysis.detectedConditions?.length > 0 && (
                       <div style={{marginTop:10,marginBottom:4}}>

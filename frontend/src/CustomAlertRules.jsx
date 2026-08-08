@@ -133,7 +133,7 @@ export function CustomAlertRulesPanel({ isAr, cs, rules = [], onSave, onClose })
     }} onClick={onClose}>
       <div style={{
         background: cs.card, border: `1px solid ${cs.border}`, borderRadius: 20, maxWidth: 460, width: "100%",
-        maxHeight: "85vh", overflow: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.45)",
+        maxHeight: "85dvh", overflow: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.45)",
       }} onClick={e => e.stopPropagation()}>
         <div style={{
           background: "linear-gradient(135deg,#7c3aed,#1a56db)", padding: "18px 22px",

@@ -1102,7 +1102,7 @@ export function EnterpriseRBAC({ orgId, adminUid, profile, members=[], cs, lang=
       justifyContent:"center",padding:16}}>
       <div style={{
         background:RBAC_TOKENS.bg, border:`1px solid ${RBAC_TOKENS.border}`,
-        borderRadius:20,width:"min(960px,97vw)",height:"min(820px,96vh)",
+        borderRadius:20,width:"min(960px,97vw)",height:"min(820px,96dvh)",
         display:"flex",flexDirection:"column",overflow:"hidden",
         direction:isAr?"rtl":"ltr",
         boxShadow:"0 28px 80px rgba(0,0,0,.65)",

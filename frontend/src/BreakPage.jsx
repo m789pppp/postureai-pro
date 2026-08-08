@@ -85,7 +85,7 @@ export default function BreakPage({ cs, lang="en", onExit, muted=false }) {
     padding:"13px 0", fontSize:14, fontWeight:700, cursor:"pointer", ...extra });
 
   return (
-    <div dir={dir} style={{ minHeight:"100vh", background:cs?.bg||"#050b16", color:text,
+    <div dir={dir} style={{ minHeight:"100dvh", background:cs?.bg||"#050b16", color:text,
       fontFamily:"'Inter',system-ui,sans-serif", display:"flex", flexDirection:"column", alignItems:"center" }}>
       {/* Header */}
       <div style={{ width:"100%", maxWidth:560, display:"flex", alignItems:"center",

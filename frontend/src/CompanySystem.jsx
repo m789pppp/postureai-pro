@@ -153,7 +153,7 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete, addToa
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9800, backdropFilter: "blur(12px)" }}>
-      <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 22, width: "min(580px,96vw)", maxHeight: "92vh", overflowY: "auto", direction: isAr ? "rtl" : "ltr" }}>
+      <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 22, width: "min(580px,96vw)", maxHeight: "92dvh", overflowY: "auto", direction: isAr ? "rtl" : "ltr" }}>
 
         {/* Header */}
         <div style={{ padding: "22px 24px 16px", borderBottom: `0.5px solid ${DARK.border}` }}>

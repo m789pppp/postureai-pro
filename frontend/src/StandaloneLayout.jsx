@@ -356,7 +356,7 @@ export function PageShell({ lang, setLang, activePage, children }) {
           .lp-section { padding:44px 16px; }
         }
       `}</style>
-      <div dir={lang==="ar" ? "rtl" : "ltr"} style={{ background:T.bg, minHeight:"100vh", color:T.text,
+      <div dir={lang==="ar" ? "rtl" : "ltr"} style={{ background:T.bg, minHeight:"100dvh", color:T.text,
         fontFamily:FD, display:"flex", flexDirection:"column" }}>
         <SharedNav lang={lang} setLang={setLang} activePage={activePage}/>
         <main style={{ paddingTop:68, flex:1, minHeight:0 }}>

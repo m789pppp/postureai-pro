@@ -537,7 +537,7 @@ export function ErrorPermission({ isAr, resource = "camera", onFix }) {
 export function PageLoader({ isAr }) {
   return (
     <div style={{
-      minHeight: "60vh",
+      minHeight: "60dvh",
       display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center", gap: "var(--space-4)",
       animation: "fadeIn 200ms both",
