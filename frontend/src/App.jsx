@@ -2574,6 +2574,7 @@ export default function App(){
   // the page, whether they came here to change a setting or just start a
   // session.
   const[showLiveSettings,setShowLiveSettings]=useState(false);
+  const[hoverBarIdx,setHoverBarIdx]=useState(null);
   const[showAllMetrics,setShowAllMetrics]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   const[showReferralProgram,setShowReferralProgram]=useState(false);
@@ -3731,6 +3732,23 @@ export default function App(){
       addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
   } // end stopCamera
+
+  // Back button while ACTIVELY scoring (not paused, not idle) used to
+  // silently end + save the session with zero warning — an easy accidental
+  // click away, given it's the very first button in the top-left corner.
+  // Paused/idle sessions skip the confirm since the user already
+  // deliberately stepped away.
+  function backFromLive(){
+    if(camActive && !isPaused){
+      const ok=window.confirm(isAr
+        ?"الجلسة شغالة دلوقتي. تأكيد الرجوع هيوقف الجلسة ويحفظها. متأكد؟"
+        :"Your session is currently running. Going back will stop and save it. Continue?");
+      if(!ok) return;
+    }
+    stopCamera();
+    setPage("home");
+    setCamActive(false);
+  }
 
   // Freezes analysis + the session timer WITHOUT ending/saving the session.
   // Camera stream stays attached (video keeps showing) — resuming just
@@ -5105,8 +5123,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
           position:"sticky", top:0, zIndex:10,
         }}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {/* Desktop only — on mobile the sidebar (which renders first,
+                above the fold) has its own copy of this exact same button.
+                Showing both was a real "which Back do I use" confusion. */}
+            {!isMobile && (
             <button
-              onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
+              onClick={backFromLive}
               style={{
                 background:"rgba(148,163,184,.08)",
                 border:`1px solid ${cs.border}`,
@@ -5116,6 +5138,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               }}>
               {isAr ? "→" : "←"} {isAr?"رجوع":"Back"}
             </button>
+            )}
             <div>
               <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
                 {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
@@ -5210,15 +5233,47 @@ async function downloadPDF(sessionOverride, isClinical=false){
               borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
             {(history.length?history:Array(40).fill(0)).map((s,i)=>{
               const isLast=i===history.length-1;
+              // Bars are pushed at a roughly even cadence across the session,
+              // so distributing elapsed time evenly across them gives a
+              // reasonable "when was this" estimate for the tooltip without
+              // needing to store a timestamp per sample.
+              const barsAgo = history.length-1-i;
+              const secAgo = history.length>1 ? Math.round(barsAgo*(sessionTime/(history.length-1))) : 0;
+              const atSec = Math.max(0, sessionTime-secAgo);
               return (
-                <div key={i} style={{
-                  flex:1, borderRadius:"3px 3px 0 0",
-                  minHeight:3,
-                  height: s ? Math.max(3,Math.round(s*.64)) : 3,
-                  background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
-                  transition:"height .25s ease",
-                  boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
-                }}/>
+                <div key={i}
+                  onMouseEnter={()=>history.length&&setHoverBarIdx(i)}
+                  onMouseLeave={()=>setHoverBarIdx(null)}
+                  style={{flex:1, position:"relative", height:"100%", display:"flex", alignItems:"flex-end", cursor:history.length?"pointer":"default"}}>
+                  {hoverBarIdx===i && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 6px)",insetInlineStart:"50%",transform:"translateX(-50%)",
+                      background:"#0a0f1e",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",
+                      fontSize:10,fontWeight:700,color:"#fff",whiteSpace:"nowrap",zIndex:20,pointerEvents:"none",
+                      boxShadow:"0 4px 12px rgba(0,0,0,.4)",
+                    }}>
+                      {isAr?`النتيجة: ${s} عند ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`:`Score: ${s} at ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`}
+                    </div>
+                  )}
+                  {isLast && s>0 && (
+                    <div style={{
+                      position:"absolute",bottom:"calc(100% + 4px)",insetInlineEnd:-2,
+                      fontSize:8,fontWeight:800,color:sc(s),letterSpacing:".03em",
+                      opacity:hoverBarIdx===i?0:1,
+                    }}>
+                      {isAr?"الآن":"Now"}
+                    </div>
+                  )}
+                  <div style={{
+                    width:"100%", borderRadius:"3px 3px 0 0",
+                    minHeight:3,
+                    height: s ? Math.max(3,Math.round(s*.64)) : 3,
+                    background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
+                    transition:"height .25s ease",
+                    boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
+                    outline: hoverBarIdx===i&&s ? `1px solid ${sc(s)}` : "none",
+                  }}/>
+                </div>
               );
             })}
           </div>
@@ -5402,7 +5457,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 sidebar needs its own way back to Home. */}
             {isMobile && (
               <button
-                onClick={()=>{stopCamera();setPage("home");setCamActive(false);}}
+                onClick={backFromLive}
                 style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",fontSize:12,color:cs.muted,cursor:"pointer",display:"flex",alignItems:"center",marginRight:isAr?0:2,marginLeft:isAr?2:0}}>
                 {isAr ? "→" : "←"}
               </button>
