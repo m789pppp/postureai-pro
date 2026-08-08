@@ -8,6 +8,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { getAuth } from "firebase/auth";
 import { apiFetch } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const SEC_TOKENS = {
   bg:"#030711", card:"#0c1832", border:"rgba(99,102,241,.14)", text:"#e8eeff",
@@ -63,6 +64,7 @@ function Check({ ok, label, impact, action }) {
 }
 
 export default function SecurityCenter({ user, onClose, onSignOut }) {
+  useBodyScrollLock();
   const [tab, setTab] = useState("overview");
   const [serverData, setServerData] = useState(null);   // /api/security/overview
   const [sessions, setSessions]     = useState([]);      // /api/security/active-sessions

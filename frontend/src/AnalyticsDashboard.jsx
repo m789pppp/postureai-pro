@@ -9,6 +9,7 @@ import { COLORS as C, TYPE as TY, RADIUS as R, SPACE as SP,
          scoreColor, scoreGrade, GLOBAL_CSS } from "./DesignSystem.js";
 import { Skeleton, Spinner, EmptyState, ErrorState,
          ProgressBar, Badge, Btn, Divider } from "./ui/index.jsx";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ─── helpers ────────────────────────────────────────────────────
 const sc = scoreColor;
@@ -151,6 +152,7 @@ function ForecastBar({ day, score, confidence }) {
 
 // ─── Main component ───────────────────────────────────────────────
 export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessions:propSessions }) {
+  useBodyScrollLock();
   const [sessions, setSessions]   = useState(propSessions||[]);
   const [loading, setLoading]     = useState(!propSessions);
   const [tab, setTab]             = useState("overview");

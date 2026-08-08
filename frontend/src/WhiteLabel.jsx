@@ -4,6 +4,7 @@
  */
 import { useState, useRef, useEffect } from "react";
 import { BrandingAPI } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const DEFAULT_CONFIG = {
   companyName: "Corvus",
@@ -40,6 +41,7 @@ const PRESET_THEMES = [
 ];
 
 export function WhiteLabel({ profile, cs, lang, onClose }) {
+  useBodyScrollLock();
   const [config, setConfig] = useState({ ...DEFAULT_CONFIG, companyName: profile?.company || "Corvus" });
   const [tab, setTab] = useState("branding");
   const [saved, setSaved] = useState(false);

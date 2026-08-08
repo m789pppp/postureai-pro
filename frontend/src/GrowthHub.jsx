@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { db } from "./firebase.js";
 import { doc, getDoc, updateDoc, increment, collection, getDocs, setDoc } from "firebase/firestore";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const ROADMAP_ITEMS = [
   { id:"r1",  status:"shipped",     quarter:"Q1 2026", title:"API Marketplace",              votes:284, category:"platform",    desc:"Self-serve API key management with docs, SDKs, and usage analytics." },
@@ -45,6 +46,7 @@ const TIER_COLORS   = { gold:"#f59e0b", silver:"#94a3b8", bronze:"#cd7c2f" };
 const CAT_COLORS    = { platform:"#6366f1", enterprise:"#f59e0b", billing:"#10b981", product:"#0ea5e9", analytics:"#8b5cf6", integrations:"#ec4899" };
 
 export function GrowthHub({ profile, cs, lang, onClose }) {
+  useBodyScrollLock();
   const [tab, setTab]       = useState("roadmap");
   const [voted, setVoted]   = useState({});
   const [items, setItems]   = useState(ROADMAP_ITEMS);

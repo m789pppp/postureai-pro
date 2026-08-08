@@ -3,6 +3,7 @@
  * Cookie consent banner, ToS, Privacy Policy, DPA — GDPR/CCPA compliant
  */
 import { useState, useEffect } from "react";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const COOKIE_KEY = "corvus_cookie_consent_v1";
 
@@ -104,6 +105,7 @@ export function CookieConsent({ cs }) {
 
 // ── Legal Modal (ToS / Privacy / DPA) ──────────────────────────
 export function LegalModal({ doc, cs, onClose }) {
+  useBodyScrollLock();
   const docs = {
     tos: {
       title: "Terms of Service",

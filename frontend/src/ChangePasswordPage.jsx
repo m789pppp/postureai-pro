@@ -4,6 +4,7 @@
  */
 import { useState } from "react";
 import { changePassword } from "./firebase.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 function pwScore(p) {
   if (!p) return 0;
@@ -17,6 +18,7 @@ function pwScore(p) {
 }
 
 export default function ChangePasswordPage({ darkMode, lang, onClose }) {
+  useBodyScrollLock();
   const isAr = lang === "ar";
   const dark  = darkMode;
 

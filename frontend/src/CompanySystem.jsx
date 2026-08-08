@@ -11,11 +11,13 @@ import {
   updateUserProfile, db,
 } from "./firebase.js";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const API = API_BASE_URL;
 
 // ── Company Setup Wizard ──────────────────────────────────────────
 export function CompanyOnboarding({ profile, cs, lang = "en", onComplete, addToast }) {
+  useBodyScrollLock();
   const [step,    setStep]    = useState(1); // 1=info, 2=depts, 3=invite, 4=done
   const [company, setCompany] = useState({ name: "", industry: "", size: "", website: "", country: "Egypt" });
   const [depts,   setDepts]   = useState([{ name: "Engineering", manager: "" }, { name: "HR", manager: "" }]);

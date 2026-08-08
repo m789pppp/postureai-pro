@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { db, auth } from "./firebase.js";
 import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const TYPE_COLORS = {
   login:"#6366f1", analysis:"#0ea5e9", billing:"#f59e0b",
@@ -22,6 +23,7 @@ const TYPE_COLORS = {
 const SEV_COLORS = { info:"#64748b", success:"#10b981", warning:"#f59e0b", error:"#ef4444" };
 
 export function AccountActivity({ profile, cs, lang, onClose }) {
+  useBodyScrollLock();
   const [filter, setFilter]     = useState("all");
   const [activity, setActivity] = useState([]);
   const [loading, setLoading]   = useState(true);

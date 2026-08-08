@@ -22,6 +22,7 @@
  */
 import { useState, useEffect } from "react";
 import { apiFetch } from "./services/api.js";
+import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const INTEGRATIONS = [
   {
@@ -126,6 +127,7 @@ const CAT_LABELS = { messaging:"💬 Messaging", automation:"⚡ Automation", da
 const STATUS_COLORS = { available:"#10b981", enterprise:"#f59e0b", beta:"#8b5cf6", coming_soon:"#64748b" };
 
 export function IntegrationsHub({ profile, cs, lang, onClose }) {
+  useBodyScrollLock();
   const [selected,    setSelected]    = useState(null);
   const [connected,   setConnected]   = useState({});
   const [configs,     setConfigs]     = useState({});
