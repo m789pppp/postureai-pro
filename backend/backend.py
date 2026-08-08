@@ -37,7 +37,7 @@ try:
     from auth.middleware import (
         require_auth, require_tier, require_admin, require_hr,
         optional_auth, verify_firebase_token, get_user_role,
-        invalidate_user_cache,
+        invalidate_user_cache, TIER_ORDER,
     )
     AUTH_READY = True
     print("✅ Auth middleware loaded")
@@ -50,6 +50,7 @@ except ImportError as _e:
     def require_admin(f): return f
     def require_hr(f): return f
     def optional_auth(f): return f
+    TIER_ORDER = {"standard": 0, "professional": 1, "elite": 2, "enterprise": 3}
 
 try:
     from services.redis_service import (
@@ -16326,6 +16327,198 @@ def org_create_invite():
         return jsonify({"token": token, "invite_id": token, **invite_data})
     except Exception as e:
         return jsonify({"error":str(e)}),500
+
+@app.route("/api/family/status", methods=["GET"])
+@require_auth
+@limiter.limit("30 per minute")
+def family_status():
+    """
+    Family/Partner Mode status for the current user — am I a primary
+    with a linked partner, a linked partner myself, or neither?
+    Professional+ only feature (checked via g.tier, which
+    auth/middleware.py's _get_user_role already resolves with family
+    inheritance applied — see the tier-inheritance block there).
+    """
+    try:
+        uid  = g.uid
+        tier = getattr(g, "tier", "standard")
+        db   = firestore.client()
+        me   = db.collection("users").document(uid).get()
+        data = me.to_dict() if me.exists else {}
+
+        eligible = TIER_ORDER.get(tier, 0) >= TIER_ORDER.get("professional", 0) and not data.get("family_primary_uid")
+        partner_uid = data.get("family_partner_uid")
+        partner_info = None
+        if partner_uid:
+            p = db.collection("users").document(partner_uid).get()
+            if p.exists:
+                pd = p.to_dict()
+                partner_info = {"uid": partner_uid, "name": pd.get("name", ""), "email": pd.get("email", "")}
+
+        pending = None
+        if not partner_uid:
+            inv = (db.collection("invites")
+                     .where("created_by", "==", uid).where("type", "==", "family")
+                     .where("status", "==", "pending").limit(1).get())
+            if inv:
+                pending = {"email": inv[0].to_dict().get("email", ""), "sent_at": inv[0].to_dict().get("created_at")}
+
+        return jsonify({
+            "ok": True,
+            "is_partner_account": bool(data.get("family_primary_uid")),
+            "primary_uid": data.get("family_primary_uid"),
+            "can_invite": eligible,
+            "partner": partner_info,
+            "pending_invite": pending,
+        })
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/family/invite", methods=["POST"])
+@require_auth
+@limiter.limit("10 per hour")
+def family_invite():
+    """Send a Family/Partner Mode invite. One partner max per primary account."""
+    import secrets
+    try:
+        data  = request.get_json(force=True) or {}
+        email = (data.get("email") or "").strip().lower()
+        if not email or "@" not in email:
+            return jsonify({"error": "Valid email required"}), 400
+
+        uid  = g.uid
+        tier = getattr(g, "tier", "standard")
+        if TIER_ORDER.get(tier, 0) < TIER_ORDER.get("professional", 0):
+            return jsonify({"error": "Family/Partner Mode requires Professional tier or above"}), 403
+
+        db = firestore.client()
+        me_doc = db.collection("users").document(uid).get()
+        me_data = me_doc.to_dict() if me_doc.exists else {}
+
+        if me_data.get("family_primary_uid"):
+            return jsonify({"error": "You're already a linked partner on someone else's account"}), 400
+        if me_data.get("family_partner_uid"):
+            return jsonify({"error": "You already have a linked partner — remove them first to invite someone else"}), 400
+        if email == (me_data.get("email") or "").lower():
+            return jsonify({"error": "Can't invite yourself"}), 400
+
+        token = secrets.token_urlsafe(20)
+        expires_at = datetime.utcnow() + timedelta(days=14)
+        db.collection("invites").document(token).set({
+            "type": "family", "created_by": uid, "email": email,
+            "status": "pending", "created_at": datetime.utcnow().isoformat() + "Z",
+            "expires_at": expires_at.isoformat() + "Z",
+        })
+
+        inviter_name = me_data.get("name") or "A Corvus user"
+        accept_url = f"{os.getenv('VITE_APP_URL', 'https://postureai.io')}/?family_invite={token}#auth"
+        html = f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+          <h2>🦅 {inviter_name} invited you to Corvus</h2>
+          <p>{inviter_name} wants to share their Professional plan with you via Family/Partner Mode —
+          you'll get your own account with full Professional-tier access, no separate payment needed.</p>
+          <p><a href="{accept_url}" style="background:#1a56db;color:#fff;padding:12px 24px;
+             border-radius:8px;text-decoration:none;display:inline-block">Accept Invite</a></p>
+          <p style="color:#888;font-size:12px">This invite expires in 14 days. If you didn't expect this,
+          you can ignore this email.</p>
+        </div>"""
+        sent = send_email(email, f"{inviter_name} invited you to Corvus", html)
+
+        audit(uid, "family_invite_sent", "self", {"email": email, "email_sent": sent})
+        return jsonify({"ok": True, "token": token, "email_sent": sent})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/family/accept", methods=["POST"])
+@require_auth
+@limiter.limit("10 per hour")
+def family_accept():
+    """Accept a Family/Partner Mode invite — links this account to the inviter."""
+    try:
+        data  = request.get_json(force=True) or {}
+        token = (data.get("token") or "").strip()
+        if not token:
+            return jsonify({"error": "token required"}), 400
+
+        uid = g.uid
+        db  = firestore.client()
+        inv_ref = db.collection("invites").document(token)
+        inv     = inv_ref.get()
+        if not inv.exists:
+            return jsonify({"error": "Invite not found or already used"}), 404
+        inv_data = inv.to_dict()
+        if inv_data.get("type") != "family" or inv_data.get("status") != "pending":
+            return jsonify({"error": "This invite is no longer valid"}), 400
+
+        expires_at = inv_data.get("expires_at")
+        if expires_at:
+            try:
+                exp_dt = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+                if exp_dt.tzinfo is None: exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                if exp_dt < datetime.now(timezone.utc):
+                    return jsonify({"error": "This invite has expired"}), 400
+            except Exception:
+                pass
+
+        primary_uid = inv_data.get("created_by")
+        if primary_uid == uid:
+            return jsonify({"error": "Can't accept your own invite"}), 400
+
+        primary_ref = db.collection("users").document(primary_uid)
+        primary_doc = primary_ref.get()
+        if not primary_doc.exists:
+            return jsonify({"error": "Inviter account no longer exists"}), 404
+        if primary_doc.to_dict().get("family_partner_uid"):
+            return jsonify({"error": "This account already has a linked partner"}), 400
+
+        me_doc = db.collection("users").document(uid).get()
+        if me_doc.exists and me_doc.to_dict().get("family_primary_uid"):
+            return jsonify({"error": "You're already linked to another account"}), 400
+
+        db.collection("users").document(uid).set({"family_primary_uid": primary_uid}, merge=True)
+        primary_ref.set({"family_partner_uid": uid}, merge=True)
+        inv_ref.set({"status": "accepted", "accepted_by": uid,
+                     "accepted_at": datetime.utcnow().isoformat() + "Z"}, merge=True)
+
+        invalidate_user_cache(uid)
+        invalidate_user_cache(primary_uid)
+        audit(uid, "family_invite_accepted", "self", {"primary_uid": primary_uid})
+        return jsonify({"ok": True})
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/family/remove", methods=["POST"])
+@require_auth
+@limiter.limit("10 per hour")
+def family_remove():
+    """Primary account unlinks their partner (or the partner unlinks themselves)."""
+    try:
+        uid = g.uid
+        db  = firestore.client()
+        me  = db.collection("users").document(uid).get()
+        data = me.to_dict() if me.exists else {}
+
+        if data.get("family_partner_uid"):
+            partner_uid = data["family_partner_uid"]
+            db.collection("users").document(uid).update({"family_partner_uid": firestore.DELETE_FIELD})
+            db.collection("users").document(partner_uid).update({"family_primary_uid": firestore.DELETE_FIELD})
+            invalidate_user_cache(uid); invalidate_user_cache(partner_uid)
+        elif data.get("family_primary_uid"):
+            primary_uid = data["family_primary_uid"]
+            db.collection("users").document(uid).update({"family_primary_uid": firestore.DELETE_FIELD})
+            db.collection("users").document(primary_uid).update({"family_partner_uid": firestore.DELETE_FIELD})
+            invalidate_user_cache(uid); invalidate_user_cache(primary_uid)
+        else:
+            return jsonify({"error": "No family link to remove"}), 400
+
+        audit(uid, "family_link_removed", "self", {})
+        return jsonify({"ok": True})
+    except Exception as e:
+        return safe_error(e)
+
 
 @app.route("/api/org/send-invite", methods=["POST"])
 @limiter.limit("100 per hour")

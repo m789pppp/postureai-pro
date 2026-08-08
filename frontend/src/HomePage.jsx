@@ -8,11 +8,12 @@ import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
-import { PushAPI, dispatchNotification, FeatureFlagsAPI, BillingAPI } from "./services/api.js";
+import { PushAPI, dispatchNotification, FeatureFlagsAPI, BillingAPI, FamilyAPI } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
 import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 import { StressCheckIn, StressCorrelationCard } from "./StressPosture.jsx";
 import { BasicDashboard } from "./BasicFeatures.jsx";
+import { WeeklyIntelligenceButton, WeeklyIntelligenceModal } from "./WeeklyIntelligence.jsx";
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -1297,6 +1298,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onPostureDNA, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
+  const [showWeeklyIntel, setShowWeeklyIntel] = useState(false);
 
   if(!userSessions.length) return <EmptyBlock icon="📋" cs={cs}
     title={isAr?"لا توجد جلسات":"No sessions yet"}
@@ -1369,6 +1371,9 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
               display:"flex", alignItems:"center", gap:6 }}>
             🔒 {isAr?"PDF — Pro & Elite فقط":"PDF — Pro & Elite only"}
           </button>
+        )}
+        {tierAtLeast(tier,"professional") && (
+          <WeeklyIntelligenceButton sessions={userSessions} cs={cs} isAr={isAr} onOpen={()=>setShowWeeklyIntel(true)} />
         )}
         {isEliteTier && (
           <button onClick={()=>handlePDF(userSessions[0], totalSessions, true)}
@@ -1555,6 +1560,9 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
           );
         })}
       </div>
+      {showWeeklyIntel && (
+        <WeeklyIntelligenceModal sessions={userSessions} cs={cs} isAr={isAr} onClose={()=>setShowWeeklyIntel(false)} />
+      )}
     </div>
   );
 }
@@ -2362,6 +2370,9 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             <VoiceCoachUpsell cs={cs} isAr={isAr} onUpgrade={onBilling} />
           )}
           <EarlyAccessPanel cs={cs} isAr={isAr} tier={tier} onUpgrade={onBilling} />
+          <div style={{ marginTop:12 }}>
+            <FamilyPartnerSettings cs={cs} isAr={isAr} tier={tier} onUpgrade={onBilling} addToast={addToast} />
+          </div>
         </div>
       )}
 
@@ -2509,6 +2520,121 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
           color:cs.muted, fontSize:12, fontWeight:600, cursor:"pointer" }}>
           {isAr?"بعت إشعار تجريبي":"Send test notification"}
         </button>
+      )}
+    </div>
+  );
+}
+
+// ── Family/Partner Mode panel (Professional+) ─────────────────────
+// Was a pricing-page promise ("+1 family/partner seat") with zero
+// implementation. Backend: /api/family/status,invite,accept,remove
+// (backend.py) + tier inheritance in auth/middleware.py.
+function FamilyPartnerSettings({ cs, isAr, tier, onUpgrade, addToast }) {
+  const [state, setState]   = useState("loading"); // loading | ready | error
+  const [data,  setData]    = useState(null);
+  const [email, setEmail]   = useState("");
+  const [sending, setSending] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  const load = () => {
+    FamilyAPI.status()
+      .then(res => { setData(res); setState("ready"); })
+      .catch(() => setState("error"));
+  };
+  useEffect(() => { load(); }, []);
+
+  const sendInvite = async () => {
+    if (!email.trim() || sending) return;
+    setSending(true);
+    try {
+      const res = await FamilyAPI.invite(email.trim());
+      addToast?.(res.email_sent
+        ? (isAr ? "✅ اتبعتت الدعوة" : "✅ Invite sent")
+        : (isAr ? "اتسجلت الدعوة لكن الإيميل ما اتبعتش — جرب تاني" : "Invite created but the email didn't send — try again"),
+        res.email_sent ? "success" : "warn");
+      setEmail("");
+      load();
+    } catch (e) {
+      addToast?.(e?.message || (isAr ? "تعذر إرسال الدعوة" : "Couldn't send the invite"), "error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const removeLink = async () => {
+    if (removing) return;
+    setRemoving(true);
+    try {
+      await FamilyAPI.remove();
+      addToast?.(isAr ? "تم إلغاء الربط" : "Link removed", "success");
+      load();
+    } catch (e) {
+      addToast?.(e?.message || (isAr ? "تعذر إلغاء الربط" : "Couldn't remove the link"), "error");
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  if (state === "loading" || state === "error") return null; // fail quiet — same pattern as EarlyAccessPanel
+
+  const isPro = tierAtLeast(tier, "professional");
+
+  return (
+    <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <span style={{ fontSize:18 }}>👨‍👩‍👧</span>
+        <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>
+          {isAr?"وضع العائلة/الشريك":"Family/Partner Mode"}
+        </div>
+      </div>
+
+      {data.is_partner_account ? (
+        <div style={{ fontSize:12, color:cs.text, lineHeight:1.6 }}>
+          {isAr ? "حسابك مربوط بحساب شخص تاني وبتاخد نفس صلاحيات باقته." : "Your account is linked to someone else's plan and inherits their tier access."}
+          <button onClick={removeLink} disabled={removing} style={{ display:"block", marginTop:10, padding:"8px 14px",
+            background:"rgba(239,68,68,.1)", border:"1px solid rgba(239,68,68,.25)", borderRadius:8,
+            color:"#f87171", fontSize:11.5, fontWeight:600, cursor:"pointer" }}>
+            {removing ? "…" : (isAr ? "إلغاء الربط" : "Unlink account")}
+          </button>
+        </div>
+      ) : !isPro ? (
+        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+          <div style={{ flex:1, fontSize:11.5, color:cs.muted, lineHeight:1.5 }}>
+            {isAr?"رقّي لـ Pro عشان تشارك باقتك مع شخص واحد (شريك/فرد من العيلة) مجانًا":"Upgrade to Pro to share your plan with one family member or partner, free"}
+          </div>
+          <button onClick={onUpgrade} style={{ padding:"8px 16px", background:"#1a56db", border:"none",
+            borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+            {isAr?"Pro":"Pro"}
+          </button>
+        </div>
+      ) : data.partner ? (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ fontSize:12, color:cs.text }}>
+            {isAr ? `مربوط بـ ${data.partner.name || data.partner.email}` : `Linked to ${data.partner.name || data.partner.email}`}
+          </div>
+          <button onClick={removeLink} disabled={removing} style={{ padding:"6px 12px",
+            background:"rgba(239,68,68,.1)", border:"1px solid rgba(239,68,68,.25)", borderRadius:8,
+            color:"#f87171", fontSize:11, fontWeight:600, cursor:"pointer" }}>
+            {removing ? "…" : (isAr ? "إزالة" : "Remove")}
+          </button>
+        </div>
+      ) : data.pending_invite ? (
+        <div style={{ fontSize:12, color:cs.muted }}>
+          {isAr ? `دعوة معلّقة لـ ${data.pending_invite.email} — في انتظار القبول` : `Pending invite to ${data.pending_invite.email} — waiting on acceptance`}
+        </div>
+      ) : (
+        <div style={{ display:"flex", gap:8 }}>
+          <input value={email} onChange={e=>setEmail(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&sendInvite()}
+            placeholder={isAr?"إيميل الشريك/فرد العيلة":"Partner/family member's email"}
+            style={{ flex:1, padding:"9px 12px", background:"rgba(255,255,255,.05)", border:`1px solid ${cs.border}`,
+              borderRadius:8, color:cs.text, fontSize:12.5, outline:"none" }} />
+          <button onClick={sendInvite} disabled={sending || !email.trim()} style={{ padding:"9px 16px",
+            background: email.trim() ? "#1a56db" : "rgba(26,86,219,.3)", border:"none", borderRadius:8,
+            color:"#fff", fontSize:12, fontWeight:700, cursor: email.trim() ? "pointer" : "default" }}>
+            {sending ? "…" : (isAr?"ادعُ":"Invite")}
+          </button>
+        </div>
       )}
     </div>
   );

@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 
 import { apiFetch } from "./services/api.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import { tierAtLeast } from "./lib/tierQuality.js";
 const API = API_BASE_URL;
 
 // ── Season boundaries (calendar quarter) ───────────────────────────
@@ -438,7 +439,7 @@ export function Leaderboard({ employees, companyName, cs, lang = "en" }) {
 }
 
 // ── Main Gamification Panel ───────────────────────────────────────
-export function GamificationPanel({ profile, sessions, calibration, employees, cs, lang = "en", onAchievementsUpdate, onClose }) {
+export function GamificationPanel({ profile, sessions, calibration, employees, cs, lang = "en", tier = "standard", onAchievementsUpdate, onClose }) {
   useBodyScrollLock();
   const [gamData, setGamData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -478,6 +479,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
 
   const TABS = [t.progress, t.achievements, t.season, t.heatmap, t.leaderboard];
   const KEYS = ["progress", "achievements", "season", "heatmap", "leaderboard"];
+  const isPro = tierAtLeast(tier, "professional");
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9300, backdropFilter: "blur(8px)" }}>
@@ -491,9 +493,12 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
 
         {/* Tabs */}
         <div style={{ display: "flex", borderBottom: `0.5px solid ${DARK.border}`, padding: "0 20px" }}>
-          {TABS.map((label, i) => (
-            <button key={KEYS[i]} onClick={() => setTab(KEYS[i])} style={{ background: "none", border: "none", borderBottom: tab === KEYS[i] ? "2px solid #1a56db" : "2px solid transparent", padding: "10px 14px", fontSize: 11, fontWeight: 600, color: tab === KEYS[i] ? "#1a56db" : DARK.muted, cursor: "pointer" }}>{label}</button>
-          ))}
+          {TABS.map((label, i) => {
+            const locked = KEYS[i] === "heatmap" && !isPro;
+            return (
+              <button key={KEYS[i]} onClick={() => setTab(locked ? "heatmap-locked" : KEYS[i])} style={{ background: "none", border: "none", borderBottom: tab === KEYS[i] ? "2px solid #1a56db" : "2px solid transparent", padding: "10px 14px", fontSize: 11, fontWeight: 600, color: tab === KEYS[i] ? "#1a56db" : DARK.muted, cursor: "pointer" }}>{locked ? "🔒 " : ""}{label}</button>
+            );
+          })}
         </div>
 
         <div style={{ overflowY: "auto", padding: 20, flex: 1 }}>
@@ -538,8 +543,18 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
                 <AchievementBadge key={ach.id} ach={ach} earned={gamData.all_achievements?.includes(ach.id)} isNew={gamData.new_achievements?.some(n => n.id === ach.id)} cs={DARK} />
               ))}
             </div>
-          ) : tab === "heatmap" ? (
+          ) : tab === "heatmap" && isPro ? (
             <PostureHeatmap sessions={sessions} cs={DARK} lang={lang} />
+          ) : tab === "heatmap-locked" ? (
+            <div style={{ textAlign: "center", padding: "40px 20px" }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🔥🔒</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: DARK.text, marginBottom: 6 }}>
+                {lang === "ar" ? "خريطة حرارة الجسم — حصري لـ Pro" : "Body Heatmap — exclusive to Pro"}
+              </div>
+              <div style={{ fontSize: 11.5, color: DARK.muted }}>
+                {lang === "ar" ? "رقّي لباقة Pro عشان تشوف مناطق الضغط على جسمك بمرور الوقت" : "Upgrade to Pro to see where strain builds up on your body over time"}
+              </div>
+            </div>
           ) : tab === "season" ? (
             <SeasonProgress sessions={sessions} cs={DARK} lang={lang} />
           ) : tab === "leaderboard" ? (
