@@ -2290,7 +2290,17 @@ export default function App(){
       // stayed on, RAF loop kept burning CPU in the background, and the
       // session was never saved -- none of that happened only through the
       // in-app Back buttons, which explicitly call stopCamera() themselves.
-      if(newPage!=="live" && camActiveRef.current){ stopCamera(); }
+      // streamRef.current (not just camActiveRef) is the real source of
+      // truth for "is a camera stream open right now" — the preview/
+      // countdown phase opens the stream and shows it live BEFORE camActive
+      // ever becomes true, so checking camActive alone would miss that
+      // window entirely.
+      if(newPage!=="live" && (camActiveRef.current || streamRef.current)){ stopCamera(); }
+      // showHealthConsent can be open BEFORE any stream exists (it's the
+      // very first check in startCamera(), before getUserMedia is even
+      // called) — reset unconditionally so it can't get stuck open and
+      // block clicks on whatever page the back button lands on.
+      if(newPage!=="live"){ setShowHealthConsent(false); setPreviewPhase(null); }
       setPageRaw(newPage);
     };
     window.addEventListener("popstate", onPop);
@@ -2324,6 +2334,10 @@ export default function App(){
   const camActiveRef=useRef(false);
   useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
+  // Camera preview → 3-2-1 countdown flow, cancellable the whole time.
+  const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
+  const[countdownN,setCountdownN]=useState(3);
+  const countdownIvRef=useRef(null);
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
   // "AI Coach (local, free)" regardless of whether WebLLM had actually loaded.
@@ -3355,12 +3369,13 @@ export default function App(){
     // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
     // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
     if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
-    // ── Mode fallback ────────────────────────────────────────────────
-    // If the user clicked a mode button (Laptop / Phone / Side) right before
-    // pressing Start Analysis, React's async state update may not have
-    // flushed yet — mode is still null in this closure.  We default to
-    // "laptop" so getUserMedia is ALWAYS invoked, then persist the choice
-    // so the next render picks it up correctly.
+    await openPreview();
+  }
+
+  // Opens the camera and shows a live, non-scoring preview so the user can
+  // see themselves and adjust framing before anything is recorded. A
+  // Cancel button is visible the whole time this is showing.
+  async function openPreview(){
     const effectiveMode = mode || "laptop";
     if (!mode) { setMode("laptop"); }
     setCameraStatus("requesting");
@@ -3376,6 +3391,56 @@ export default function App(){
       }).catch(()=>{});
       if(!vidRef.current){return;}
       setCameraStatus("ready");
+      setPreviewPhase("preview"); // shows live feed + "Start"/"Cancel" — NOT scoring yet
+    }catch(e){
+      const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
+      const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
+      setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
+      const errMsg=isDenied
+        ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
+        :noDevice
+        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
+        :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
+      setAlertMsg({text:errMsg,type:"bad"});
+      addToast(errMsg,"error");
+    }
+  }
+
+  // Cancels out of preview or countdown — same cleanup as the normal Back
+  // button, just doesn't navigate away from the live page.
+  function cancelPreview(){
+    if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
+    setPreviewPhase(null);
+    if(streamRef.current){ streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current=null; }
+    if(vidRef.current) vidRef.current.srcObject=null;
+    setCameraStatus("idle");
+  }
+
+  // User tapped "Start session" from the live preview — run a 3-2-1
+  // countdown (gives a moment to get in frame / sit down), cancellable the
+  // whole time, then hand off to beginScoring().
+  function confirmStartSession(){
+    setPreviewPhase("countdown");
+    setCountdownN(3);
+    let n=3;
+    countdownIvRef.current=setInterval(()=>{
+      n-=1;
+      if(n<=0){
+        clearInterval(countdownIvRef.current);
+        countdownIvRef.current=null;
+        setPreviewPhase(null);
+        beginScoring();
+      } else {
+        setCountdownN(n);
+      }
+    },1000);
+  }
+
+  // The actual session start — reuses the stream already opened by
+  // openPreview(), so no second camera-permission round trip.
+  async function beginScoring(){
+    const effectiveMode = mode || "laptop";
+    try{
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
@@ -3474,6 +3539,9 @@ export default function App(){
     // Close PoseLandmarker only if it was created locally (not the shared window.__mpPose)
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
+    setPreviewPhase(null);
+    if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
+    setShowHealthConsent(false);
 
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
     const la  = lastAnalRef.current||{};
@@ -4724,6 +4792,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   return(<ErrorBoundary><>
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
+      @keyframes countdownPop{0%{opacity:0;transform:scale(1.5)}30%{opacity:1;transform:scale(1)}100%{opacity:.85;transform:scale(1)}}
       @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
@@ -5445,6 +5514,59 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           )}
 
+          {/* Live preview, not yet scored — shown after the camera opens and
+              before the user confirms they're ready. Cancel is always
+              visible here — no phase where the user is stuck with no way
+              to back out. */}
+          {previewPhase==="preview" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"flex-end",padding:"0 0 22px",
+              background:"linear-gradient(to top, rgba(2,8,16,.85), transparent 45%)",zIndex:15,
+            }}>
+              <div style={{fontSize:12.5,color:"#e2e8f0",marginBottom:12,textAlign:"center",padding:"0 20px"}}>
+                {isAr?"اتأكد إنك ظاهر كويس في الكاميرا، وابدأ لما تجهز":"Make sure you're framed well, then start when you're ready"}
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={cancelPreview} style={{
+                  background:"rgba(255,255,255,.08)",border:`1px solid ${cs.border}`,borderRadius:14,
+                  padding:"14px 22px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",
+                }}>
+                  {isAr?"إلغاء":"Cancel"}
+                </button>
+                <button onClick={confirmStartSession} style={{
+                  background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
+                  padding:"14px 32px",fontSize:14.5,fontWeight:800,color:"#fff",cursor:"pointer",
+                  boxShadow:"0 8px 24px rgba(26,86,219,.4)",
+                }}>
+                  ▶ {isAr?"ابدأ الجلسة الآن":"Start session now"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 3-2-1 countdown right before scoring actually begins — Cancel
+              stays visible and cancels the countdown + closes the camera,
+              same as during preview. */}
+          {previewPhase==="countdown" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+              background:"rgba(2,8,16,.55)",zIndex:16,gap:18,
+            }}>
+              <div key={countdownN} style={{
+                fontSize:88,fontWeight:900,color:"#fff",
+                animation:"countdownPop .9s ease-out",
+                textShadow:"0 4px 24px rgba(0,0,0,.5)",
+              }}>{countdownN}</div>
+              <button onClick={cancelPreview} style={{
+                background:"rgba(255,255,255,.1)",border:`1px solid ${cs.border}`,borderRadius:12,
+                padding:"9px 20px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",
+              }}>
+                {isAr?"إلغاء":"Cancel"}
+              </button>
+            </div>
+          )}
+
           {/* Idle-state visual cue — previously the camera area was just a black box
               with no indication a click was needed. First-time users had no way to
               know to press "Start Analysis" below. */}
@@ -5610,7 +5732,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Primary control — placed directly under the camera so Start / Stop
             is always visible without scrolling past the metrics list. */}
         <div style={{padding:"12px 14px 0"}}>
-          {!camActive
+          {previewPhase
+            ? null /* overlay's own Start/Cancel buttons are the CTA here */
+            : !camActive
             ? <button
                 onClick={cameraStatus==="requesting" ? undefined : startCamera}
                 disabled={cameraStatus==="requesting"}
