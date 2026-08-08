@@ -47,7 +47,16 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys()
         .hasAny(['is_admin', 'tier', 'is_hr', 'is_org_owner', 'user_type', 'company_id',
                  'referral_credits', 'referral_count', 'subscription_status',
-                 'subscription_expiry', 'payment_method']);
+                 'subscription_expiry', 'payment_method',
+                 // Family/Partner Mode: auth/middleware.py's _get_user_role()
+                 // reads this field and INHERITS the linked primary account's
+                 // tier for free. Must only ever be set server-side (the
+                 // /api/family/accept endpoint, via the admin SDK which
+                 // bypasses these rules) after validating a real invite
+                 // token — never by the linked account writing to its own
+                 // profile directly, or any user could set this to an
+                 // arbitrary Elite account's uid and inherit their tier.
+                 'family_primary_uid']);
     }
 
     // Allow trial expiry: owner can write tier ONLY when downgrading from trial
@@ -56,7 +65,8 @@ service cloud.firestore {
       return resource.data.get('is_trial', false) == true
           && request.resource.data.get('is_trial', false) == false
           && !request.resource.data.diff(resource.data).affectedKeys()
-               .hasAny(['is_admin', 'is_hr', 'is_org_owner', 'user_type', 'company_id']);
+               .hasAny(['is_admin', 'is_hr', 'is_org_owner', 'user_type', 'company_id',
+                        'family_primary_uid']);
     }
 
     // ── Users Collection ────────────────────────────────────────
