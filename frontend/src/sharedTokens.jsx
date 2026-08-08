@@ -132,7 +132,7 @@ function useCurrency(arFallback) {
 
 // ── Design tokens (brand colors — unchanged) ───────────────────────
 const LPV7_TOKENS = {
-  bg:    "#030b14",
+  bg:    "#0d1a2e",
   bg1:   "#040d18",
   bg2:   "#06111e",
   surf:  "#0a1828",

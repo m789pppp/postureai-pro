@@ -3322,7 +3322,7 @@ export default function HomePage({
 
   return (
     <div dir={dir} style={{ display:"flex", minHeight:"100dvh",
-      background:cs.bg||"#030b14", color:cs.text||"#f0f6ff",
+      background:cs.bg||"#0d1a2e", color:cs.text||"#f0f6ff",
       fontFamily:"system-ui,-apple-system,'Segoe UI',sans-serif" }}>
 
       {!mobile&&(

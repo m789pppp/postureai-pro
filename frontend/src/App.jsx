@@ -237,7 +237,7 @@ const PAY_METHODS = [
 // HR_EMAILS — list of emails with HR admin access
 const HR_EMAILS = [];
 
-const DARK  = {bg:"#030b14",card:"#05101f",card2:"#080f1e",border:"rgba(148,163,184,.1)",text:"#f0f4f8",muted:"#64748b",blue:"#1a56db",inp:"rgba(148,163,184,.08)",inpB:"rgba(148,163,184,.15)"};
+const DARK  = {bg:"#0d1a2e",card:"#05101f",card2:"#080f1e",border:"rgba(148,163,184,.1)",text:"#f0f4f8",muted:"#64748b",blue:"#1a56db",inp:"rgba(148,163,184,.08)",inpB:"rgba(148,163,184,.15)"};
 const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,139,.15)",text:"#0f172a",muted:"#94a3b8",blue:"#1a56db",inp:"rgba(100,116,139,.07)",inpB:"rgba(100,116,139,.2)"};
 
 
@@ -905,7 +905,7 @@ function Onboard({cs,t,done}){
   const[step,setStep]=useState(0);
   const steps=[{e:"◈",ti:t.ob1,d:t.ob1d},{e:"📊",ti:t.ob2,d:t.ob2d},{e:"📷",ti:t.ob3,d:t.ob3d},{e:"🚀",ti:t.ob4,d:t.ob4d}];
   const s=steps[step];
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888,backdropFilter:"blur(4px)"}}>
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888,backdropFilter:"blur(4px)"}}>
     <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,padding:36,maxWidth:400,width:"90%",textAlign:"center"}}>
       <div style={{fontSize:48,marginBottom:14}}>{s.e}</div>
       <div style={{fontSize:17,fontWeight:700,color:cs.text,marginBottom:10}}>{s.ti}</div>
@@ -2338,6 +2338,11 @@ export default function App(){
   const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
   const[countdownN,setCountdownN]=useState(3);
   const countdownIvRef=useRef(null);
+  // True pause/resume — freezes the RAF analysis loop and the session
+  // timer without ending or saving the session. Camera stream stays
+  // attached (video keeps showing) so resuming is instant, no re-request.
+  const[isPaused,setIsPaused]=useState(false);
+  const pausedAtRef=useRef(null);
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
   // "AI Coach (local, free)" regardless of whether WebLLM had actually loaded.
@@ -3539,6 +3544,8 @@ export default function App(){
     // Close PoseLandmarker only if it was created locally (not the shared window.__mpPose)
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
+    setIsPaused(false);
+    pausedAtRef.current=null;
     setPreviewPhase(null);
     if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
     setShowHealthConsent(false);
@@ -3724,6 +3731,44 @@ export default function App(){
       addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
   } // end stopCamera
+
+  // Freezes analysis + the session timer WITHOUT ending/saving the session.
+  // Camera stream stays attached (video keeps showing) — resuming just
+  // restarts the loop, no re-request, no permission prompt again.
+  function pauseSession(){
+    if(!camActive || isPaused) return;
+    if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; }
+    if(timerRef.current){ clearInterval(timerRef.current); timerRef.current=null; }
+    pausedAtRef.current = Date.now();
+    setIsPaused(true);
+  }
+
+  function resumeSession(){
+    if(!camActive || !isPaused) return;
+    // Shift the session's start timestamp forward by however long the
+    // pause lasted, so sessionTime keeps counting from where it left off
+    // instead of jumping ahead by the paused duration.
+    if(pausedAtRef.current){
+      sessRef.current += (Date.now() - pausedAtRef.current);
+      pausedAtRef.current = null;
+    }
+    setIsPaused(false);
+    timerRef.current=setInterval(()=>{
+      const elapsed=Math.floor((Date.now()-sessRef.current)/1000);
+      setSessionTime(elapsed);
+      setBreakTimer(bt=>{
+        const next=bt+1;
+        if(next>=1500&&breakReminder&&!showBreakAlert){
+          setShowBreakAlert(true);
+          if(!muted)playPostureAlert();
+          sendDesktopNotif("Break time! 25 minutes passed — take a 2-min stretch",0);
+        }
+        return next;
+      });
+    },1000);
+    rafRef.current=requestAnimationFrame(runLoop);
+  }
+
 
   // ── Switch camera mode from the live page ───────────────────────
   // Previously the mode (laptop/phone/side) could only be chosen on the
@@ -4253,7 +4298,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // During OAuth redirect: user is temporarily null — show spinner NOT auth page
   if(!user && (_oauthInProgress.current || _oauthRedirect?.current)) return(
     <div style={{
-      minHeight:"100vh",background:"#030b14",
+      minHeight:"100vh",background:"#0d1a2e",
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
       gap:16,fontFamily:"'Inter',system-ui,sans-serif",
     }}>
@@ -4859,7 +4904,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
       {/* ── Session Result Modal ── */}
       {sessionResult&&(
-        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.82)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.55)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"rgba(8,14,28,.98)",border:`2px solid ${sessionResult.color}30`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
             {/* Score ring */}
             <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>
@@ -5545,6 +5590,30 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           )}
 
+          {/* Paused — analysis + timer frozen, camera stays attached so
+              resume is instant. Distinct from "Break now", which keeps the
+              session running invisibly in the background; this actually
+              stops. */}
+          {camActive && isPaused && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"center",gap:14,
+              background:"rgba(2,8,16,.62)",backdropFilter:"blur(2px)",zIndex:14,
+            }}>
+              <div style={{fontSize:36}}>⏸</div>
+              <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>
+                {isAr?"الجلسة متوقفة مؤقتاً":"Session paused"}
+              </div>
+              <button onClick={resumeSession} style={{
+                background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
+                padding:"12px 28px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",
+                boxShadow:"0 8px 24px rgba(26,86,219,.4)",
+              }}>
+                ▶ {isAr?"استكمال":"Resume"}
+              </button>
+            </div>
+          )}
+
           {/* 3-2-1 countdown right before scoring actually begins — Cancel
               stays visible and cancels the countdown + closes the camera,
               same as during preview. */}
@@ -5615,7 +5684,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {analysis && score > 0 && (
           <div style={{
             position:"absolute", top:10, right:10,
-            background:"rgba(2,8,20,.88)", backdropFilter:"blur(8px)",
+            background:"rgba(2,8,20,.55)", backdropFilter:"blur(8px)",
             border:"1px solid rgba(255,255,255,.08)", borderRadius:12,
             padding:"10px 14px", minWidth:160, zIndex:10,
           }}>
@@ -5764,17 +5833,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   ? (isAr?"🔄 حاول تاني — لو وصّلت كاميرا":"🔄 Retry — if you've connected one")
                   : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
               </button>
-            : <button onClick={stopCamera} style={{
-                width:"100%",
-                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
-                color:"#fca5a5",
-                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
-                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
-                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
-                letterSpacing:"-.01em",
-              }}>
-                {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
-              </button>
+            : <div style={{display:"flex",gap:8}}>
+                <button onClick={isPaused?resumeSession:pauseSession} style={{
+                  flex:1,
+                  background: isPaused ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(5,150,105,.12))" : "rgba(148,163,184,.08)",
+                  color: isPaused ? "#6ee7b7" : cs.text,
+                  border:`1px solid ${isPaused?"rgba(16,185,129,.4)":cs.border}`,borderRadius:10,
+                  padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
+                }}>
+                  {isPaused ? (isAr?"▶ استكمال":"▶ Resume") : (isAr?"⏸ وقف مؤقت":"⏸ Pause")}
+                </button>
+                <button onClick={stopCamera} style={{
+                  flex:1,
+                  background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                  color:"#fca5a5",
+                  border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
+                  padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
+                  boxShadow:"0 2px 12px rgba(239,68,68,.2)",
+                  letterSpacing:"-.01em",
+                }}>
+                  {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
+                </button>
+              </div>
           }
         </div>
 

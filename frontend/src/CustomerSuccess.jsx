@@ -260,7 +260,7 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
   ];
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.78)", zIndex:2000,
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", zIndex:2000,
       display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{ background:CS_TOKENS.card, borderRadius:20, width:"100%", maxWidth:1120,
         height:"90dvh", display:"flex", flexDirection:"column", overflow:"hidden",

@@ -139,7 +139,7 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
   const TABS = [["overview","Overview"],["sessions","Sessions"],["activity","Activity"]];
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.78)",
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)",
       zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose?.(); }}>
       <div style={{ background:SEC_TOKENS.bg, borderRadius:18, padding:28, color:SEC_TOKENS.text,
