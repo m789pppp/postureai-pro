@@ -2555,6 +2555,7 @@ export default function App(){
   // the page, whether they came here to change a setting or just start a
   // session.
   const[showLiveSettings,setShowLiveSettings]=useState(false);
+  const[showAllMetrics,setShowAllMetrics]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   const[showReferralProgram,setShowReferralProgram]=useState(false);
   const[showIntegrationsHub,setShowIntegrationsHub]=useState(false);
@@ -5298,9 +5299,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{display:"flex",gap:5,alignItems:"center"}}>
             {TN&&<span style={{background:TN.colorDim,border:`1px solid ${TN.color}40`,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,color:TN.color}}>{TN.name}</span>}
             {M_&&<span style={{background:"rgba(99,102,241,.1)",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,color:M_.color}}>{M_.label}</span>}
-            {/* Hide upgrade CTA during active session — wrong time to convert */}
-            {!camActive && tierAtLeast && !tierAtLeast(effectiveTier,"basic") && (
-              <button onClick={openBilling} style={{fontSize:9.5,fontWeight:700,
+            {/* Upgrade CTA — only shown when idle, hidden during active session */}
+            {!camActive && !tierAtLeast(effectiveTier,"basic") && (
+              <button onClick={()=>setShowBilling(true)} style={{fontSize:9.5,fontWeight:700,
                 background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.25)",
                 borderRadius:5,padding:"2px 8px",color:"#a5b4fc",cursor:"pointer"}}>
                 ↑ {isAr?"ترقية":"Upgrade"}
@@ -5708,7 +5709,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 );
                 // Sort by score ascending (worst first), cap at 3 by default
                 const sorted = [...mEntries].sort((a,b)=>(a[1].score??100)-(b[1].score??100));
-                const showAll = window.__liveMetricsExpanded;
+                const showAll = showAllMetrics;
                 const visible = showAll ? sorted : sorted.slice(0,3);
                 return (
                   <>
@@ -5718,12 +5719,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
                       />
                     ))}
                     {sorted.length > 3 && (
-                      <button onClick={()=>{window.__liveMetricsExpanded=!window.__liveMetricsExpanded;
-                        const el=document.getElementById("live-metrics-toggle"); if(el) el.textContent=window.__liveMetricsExpanded?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?`+ ${sorted.length-3} مقياس ▼`:`+ ${sorted.length-3} more ▼`);}}
-                        id="live-metrics-toggle"
+                      <button onClick={()=>setShowAllMetrics(v=>!v)}
                         style={{width:"100%",background:"none",border:`1px solid ${cs.border}`,borderRadius:8,
                           padding:"5px 0",fontSize:10,color:cs.muted,cursor:"pointer",marginTop:4}}>
-                        {isAr?`+ ${sorted.length-3} مقياس ▼`:`+ ${sorted.length-3} more ▼`}
+                        {showAllMetrics?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?`+ ${sorted.length-3} مقياس ▼`:`+ ${sorted.length-3} more ▼`)}
                       </button>
                     )}
                     {/* ── Detected conditions with severity badges ── */}
