@@ -562,6 +562,27 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
           flex:1,overflowY:"auto",padding:"18px 18px 10px",
           display:"flex",flexDirection:"column",gap:14,
         }}>
+          {/* Fresh conversation — messages.map() below renders nothing when
+              empty, and this area is flex:1 (expands to fill the modal), so
+              a brand-new chat used to just show a big blank void above the
+              suggested questions with nothing explaining why. */}
+          {messages.length===0 && (
+            <div style={{
+              flex:1,display:"flex",flexDirection:"column",alignItems:"center",
+              justifyContent:"center",gap:10,padding:"20px 24px",textAlign:"center",
+              opacity:.85,
+            }}>
+              <div style={{fontSize:34}}>🩺</div>
+              <div style={{fontSize:14,fontWeight:700,color:T.text||"#f0f6ff"}}>
+                {isAr?"أهلاً! أنا Dr. Corvus":"Hi, I'm Dr. Corvus"}
+              </div>
+              <div style={{fontSize:12,color:T.subtle,maxWidth:280,lineHeight:1.6}}>
+                {isAr
+                  ?"اسألني عن وضعيتك، الألم، أو أي حاجة عايز تفهمها من بياناتك — أو دوس على سؤال جاهز تحت"
+                  :"Ask me about your posture, pain, or anything from your data — or tap a suggestion below to start"}
+              </div>
+            </div>
+          )}
           {messages.map((msg,i)=>(
             <Bubble key={msg.ts+i} msg={msg} isAr={isAr} index={i}
               onReact={handleReact}
