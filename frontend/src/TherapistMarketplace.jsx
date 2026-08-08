@@ -5,32 +5,37 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { MarketplaceAPI } from "./services/api.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
-import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 import {
   DEMO_THERAPISTS, getDemoBookings, createDemoBooking,
   updateDemoBooking, getDemoMessages, addDemoMessage,
 } from "./marketplaceDemo.js";
 
 /* ── Design tokens ─────────────────────────────────────────── */
-const BG    = "#0a0f1e";
-const CARD  = "#111827";
-const CARD2 = "#0d1a2e";
+/* tokens resolved per render — passed as args to mkT() */
 const TEAL  = "#0d9488";
 const TEALLT= "#5eead4";
-const BORDER= "rgba(255,255,255,.07)";
-const MUTED = "#64748b";
-const SUB   = "#94a3b8";
-const TEXT  = "#e2e8f0";
 
-const card  = { background:CARD, border:`1px solid ${BORDER}`, borderRadius:16, padding:"18px 20px" };
-const lbl   = { fontSize:10.5, color:MUTED, fontWeight:700, marginBottom:5, textTransform:"uppercase", letterSpacing:".06em" };
-const inp   = { width:"100%", background:"rgba(0,0,0,.3)", border:`1px solid ${BORDER}`, borderRadius:9,
-                color:TEXT, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" };
-const btnP  = { background:`linear-gradient(135deg,${TEAL},#0891b2)`, color:"#fff", border:"none",
-                borderRadius:10, padding:"10px 20px", fontSize:13, fontWeight:700, cursor:"pointer",
-                boxShadow:`0 4px 14px rgba(13,148,136,.35)` };
-const btnG  = { background:"transparent", color:SUB, border:`1px solid ${BORDER}`,
-                borderRadius:10, padding:"9px 16px", fontSize:13, fontWeight:600, cursor:"pointer" };
+function mkT(cs) {
+  const BORDER = cs.border;
+  const TEXT   = cs.text;
+  const MUTED  = cs.muted;
+  const SUB    = cs.muted;
+  const CARD   = cs.card;
+  return {
+    BORDER, TEXT, MUTED, SUB, CARD,
+    card : { background:CARD, border:`1px solid ${BORDER}`, borderRadius:16, padding:"18px 20px" },
+    lbl  : { fontSize:10.5, color:MUTED, fontWeight:700, marginBottom:5, textTransform:"uppercase", letterSpacing:".06em" },
+    inp  : { width:"100%", background:cs.inp, border:`1px solid ${cs.inpB||BORDER}`, borderRadius:9,
+             color:TEXT, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" },
+    btnP : { background:`linear-gradient(135deg,${TEAL},#0891b2)`, color:"#fff", border:"none",
+             borderRadius:10, padding:"10px 20px", fontSize:13, fontWeight:700, cursor:"pointer",
+             boxShadow:"0 4px 14px rgba(13,148,136,.35)" },
+    btnG : { background:"transparent", color:MUTED, border:`0.5px solid ${BORDER}`,
+             borderRadius:7, padding:"7px 14px", fontSize:11, cursor:"pointer" },
+    btnGh: { background:"transparent", color:MUTED, border:`1px solid ${BORDER}`,
+             borderRadius:10, padding:"9px 16px", fontSize:13, fontWeight:600, cursor:"pointer" },
+  };
+}
 
 /* ── Helpers ───────────────────────────────────────────────── */
 function money(cents, currency, isAr) {
@@ -53,12 +58,13 @@ function Pill({ text, color="#5eead4", bg }) {
     </span>
   );
 }
-function Tab({ active, onClick, children }) {
+function Tab({ active, onClick, children, cs }) {
+  const border = cs?.border || "rgba(255,255,255,.07)";
   return (
     <button onClick={onClick} style={{
       background: active ? "rgba(13,148,136,.15)" : "transparent",
-      color:      active ? TEALLT : SUB,
-      border:     active ? "1px solid rgba(13,148,136,.35)" : `1px solid ${BORDER}`,
+      color:      active ? TEALLT : (cs?.muted||"#64748b"),
+      border:     active ? "1px solid rgba(13,148,136,.35)" : `1px solid ${border}`,
       borderRadius:10, padding:"8px 18px", fontSize:13, fontWeight:700, cursor:"pointer",
       transition:"all .2s",
     }}>{children}</button>
@@ -95,7 +101,10 @@ function Stars({ rating, count }) {
 }
 
 /* ── Therapist card ──────────────────────────────────────────── */
-function TherapistCard({ th, onBook, eliteCredit, isAr }) {
+function TherapistCard({ th, onBook, eliteCredit, isAr, cs, tk }) {
+  if(!cs||!tk){ cs={card:"#111827",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; tk=mkT(cs); }
+  const { BORDER, TEXT, MUTED } = tk;
+  const btnP = tk.btnP; const card = tk.card;
   const [expanded, setExpanded] = useState(false);
   return (
     <div style={{ ...card, display:"flex", flexDirection:"column", gap:0,
@@ -161,7 +170,10 @@ function TherapistCard({ th, onBook, eliteCredit, isAr }) {
 
 /* ── Booking card (My Bookings) ──────────────────────────────── */
 function BookingCard({ b, isAr, currentUid, demoMode, onCancel, cancellingId,
-                       ratingId, setRatingId, submitReview, submittingReview }) {
+                       ratingId, setRatingId, submitReview, submittingReview, cs, tk }) {
+  if(!cs||!tk){ cs={card:"#111827",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; tk=mkT(cs); }
+  const { BORDER, TEXT, MUTED, SUB, CARD } = tk;
+  const btnG = tk.btnGh; const lbl = tk.lbl;
   const [chatOpen, setChatOpen] = useState(false);
   const sc = STATUS_COLORS[b.status] || MUTED;
 
@@ -225,14 +237,17 @@ function BookingCard({ b, isAr, currentUid, demoMode, onCancel, cancellingId,
 
       {chatOpen && (
         <BookingChat bookingId={b.id} isAr={isAr} currentUid={currentUid}
-          demoMode={demoMode}/>
+          demoMode={demoMode} cs={cs} tk={tk}/>
       )}
     </div>
   );
 }
 
 /* ── Chat ─────────────────────────────────────────────────────── */
-function BookingChat({ bookingId, isAr, currentUid, demoMode }) {
+function BookingChat({ bookingId, isAr, currentUid, demoMode, cs, tk }) {
+  if(!cs||!tk){ cs={card:"#111827",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; tk=mkT(cs); }
+  const { BORDER, TEXT, MUTED } = tk;
+  const inp = tk.inp; const btnP = tk.btnP;
   const [messages, setMessages] = useState([]);
   const [text, setText]         = useState("");
   const [loading, setLoading]   = useState(true);
@@ -386,7 +401,10 @@ function ReviewForm({ booking, isAr, submitting, onCancel, onSubmit }) {
 }
 
 /* ── Booking modal ───────────────────────────────────────────── */
-function BookingModal({ therapist, isAr, loading, eliteCredit, onClose, onSubmit }) {
+function BookingModal({ therapist, isAr, loading, eliteCredit, cs, tk, onClose, onSubmit }) {
+  if(!cs||!tk){ cs={card:"#0d1a2e",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; tk=mkT(cs); }
+  const { BORDER, TEXT, MUTED } = tk;
+  const inp = tk.inp; const btnP = tk.btnP; const btnG = tk.btnGh; const lbl = tk.lbl;
   const [preferredTime, setPreferredTime] = useState("");
   const [notes, setNotes]                 = useState("");
   const [slots, setSlots]                 = useState(null);
@@ -681,9 +699,12 @@ function AdminTherapistManager({ isAr, addToast }) {
 }
 
 /* ══ Main component ═════════════════════════════════════════════ */
-export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, onBack, addToast }) {
-  useBodyScrollLock();
+export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin, tier, onBack, addToast }) {
   const isAr = lang === "ar";
+  const tk = mkT(cs);
+  const { BORDER, TEXT, MUTED, SUB, CARD } = tk;
+  const card = tk.card; const lbl = tk.lbl; const inp = tk.inp;
+  const btnP = tk.btnP; const btnG = tk.btnGh;
   const [tab, setTab]               = useState("browse");
   const [therapists, setTherapists] = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -779,7 +800,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, on
   );
 
   return (
-    <div style={{ maxWidth:1000, margin:"0 auto", padding:"24px 20px", color:TEXT }}>
+    <div dir={isAr?"rtl":"ltr"} style={{ maxWidth:1000, margin:"0 auto", padding:"24px 20px", color:TEXT, background:cs.bg, minHeight:"100vh" }}>
 
       {/* ── Header ── */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
@@ -799,7 +820,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, on
             {isAr?"احجز جلسة مع أخصائي معتمد — دفع آمن عبر Kashier":"Book with a vetted therapist — secure payment via Kashier"}
           </p>
         </div>
-        {onBack && <button onClick={onBack} style={btnG}>{isAr?"رجوع":"Back"}</button>}
+        {onBack && <button onClick={onBack} style={{background:cs.card,border:"0.5px solid "+cs.border,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{isAr?"← رجوع":"← Back"}</button>}
       </div>
 
       {/* ── Elite free credit banner ── */}
@@ -817,8 +838,8 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, on
 
       {/* ── Tabs ── */}
       <div style={{ display:"flex", gap:8, marginBottom:20 }}>
-        <Tab active={tab==="browse"} onClick={()=>setTab("browse")}>{isAr?"تصفح الأخصائيين":"Browse"}</Tab>
-        <Tab active={tab==="mine"}   onClick={()=>setTab("mine")}>
+        <Tab active={tab==="browse"} onClick={()=>setTab("browse")} cs={cs}>{isAr?"تصفح الأخصائيين":"Browse"}</Tab>
+        <Tab active={tab==="mine"}   onClick={()=>setTab("mine")} cs={cs}>
           {isAr?"حجوزاتي":"My Bookings"}
           {myBookings.filter(b=>b.status!=="cancelled").length > 0 && (
             <span style={{ marginInlineStart:6, background:TEAL, color:"#fff", borderRadius:99,
@@ -827,7 +848,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, on
             </span>
           )}
         </Tab>
-        {isAdmin && <Tab active={tab==="admin"} onClick={()=>setTab("admin")}>{isAr?"إدارة":"Manage"}</Tab>}
+        {isAdmin && <Tab active={tab==="admin"} onClick={()=>setTab("admin")} cs={cs}>{isAr?"إدارة":"Manage"}</Tab>}
       </div>
 
       {/* ══ Browse tab ══ */}
@@ -890,7 +911,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, on
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14 }}>
             {filtered.map(th=>(
               <TherapistCard key={th.id} th={th} isAr={isAr}
-                eliteCredit={eliteCredit} onBook={setSelected}/>
+                eliteCredit={eliteCredit} onBook={setSelected} cs={cs} tk={tk}/>
             ))}
           </div>
         </>
@@ -918,7 +939,8 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, on
                 currentUid={user?.uid} demoMode={demoMode}
                 onCancel={cancelBooking} cancellingId={cancellingId}
                 ratingId={ratingId} setRatingId={setRatingId}
-                submitReview={submitReview} submittingReview={submittingReview}/>
+                submitReview={submitReview} submittingReview={submittingReview}
+                cs={cs} tk={tk}/>
             ))
           )}
         </div>
@@ -932,7 +954,7 @@ export function TherapistMarketplace({ cs, t, lang="en", user, isAdmin, tier, on
       {/* ══ Booking modal ══ */}
       {selected && (
         <BookingModal therapist={selected} isAr={isAr} loading={booking}
-          eliteCredit={eliteCredit}
+          eliteCredit={eliteCredit} cs={cs} tk={tk}
           onClose={()=>setSelected(null)} onSubmit={submitBooking}/>
       )}
     </div>
