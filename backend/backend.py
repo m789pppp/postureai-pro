@@ -16462,6 +16462,22 @@ def family_accept():
             except Exception:
                 pass
 
+        # Hardening: confirm the account accepting is the one actually
+        # invited. The token itself is unguessable (20 bytes via
+        # secrets.token_urlsafe), so this wasn't an active exploit — but
+        # without it, a forwarded/leaked invite link could be accepted by
+        # whoever has it rather than the intended partner. Matches the
+        # same case-insensitive comparison style already used in
+        # family_invite()'s "can't invite yourself" check. Also doubles as
+        # the "already linked to another account" check further down, so
+        # one read covers both instead of fetching this doc twice.
+        me_doc = db.collection("users").document(uid).get()
+        me_data_now = me_doc.to_dict() if me_doc.exists else {}
+        accepting_email = me_data_now.get("email", "")
+        invited_email    = inv_data.get("email", "")
+        if invited_email and accepting_email and invited_email.lower() != accepting_email.lower():
+            return jsonify({"error": "This invite was sent to a different email address"}), 403
+
         primary_uid = inv_data.get("created_by")
         if primary_uid == uid:
             return jsonify({"error": "Can't accept your own invite"}), 400
@@ -16473,8 +16489,7 @@ def family_accept():
         if primary_doc.to_dict().get("family_partner_uid"):
             return jsonify({"error": "This account already has a linked partner"}), 400
 
-        me_doc = db.collection("users").document(uid).get()
-        if me_doc.exists and me_doc.to_dict().get("family_primary_uid"):
+        if me_data_now.get("family_primary_uid"):
             return jsonify({"error": "You're already linked to another account"}), 400
 
         db.collection("users").document(uid).set({"family_primary_uid": primary_uid}, merge=True)
