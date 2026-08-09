@@ -2270,6 +2270,13 @@ export default function App(){
   // ── White Label: load company branding and apply to cs ──────────────
   useEffect(()=>{
     if(!user?.uid) return;
+    // Admin-only server-side (backend checks user_type/is_org_owner/is_admin)
+    // — skip the request entirely for accounts that clearly aren't going to
+    // be authorized, instead of firing it for every logged-in user and
+    // eating a 403/500 + console error on every load.
+    const canHaveBranding = profile?.company_id || profile?.is_org_owner || profile?.is_admin
+      || ["platform_admin","hr_admin"].includes(profile?.user_type);
+    if(!canHaveBranding) return;
     fetch("/api/company/branding", {
       headers:{ Authorization: `Bearer ${user.accessToken||""}` }
     })
@@ -2291,7 +2298,7 @@ export default function App(){
       if(b.companyName) document.title = `${b.companyName} | Powered by Corvus`;
     })
     .catch(()=>{});
-  },[user?.uid]);
+  },[user?.uid, profile?.company_id, profile?.is_org_owner, profile?.is_admin, profile?.user_type]);
 
   // Firebase action URLs (password reset / email verify from email links)
   const _fbp = new URLSearchParams(window.location.search);
