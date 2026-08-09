@@ -307,7 +307,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
   }, [billing, profile, t]);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9500, backdropFilter: "blur(12px)", overflowY: "auto", padding: 20 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9500, backdropFilter: "blur(4px)", overflowY: "auto", padding: 20 }}>
       <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 22, width: "min(960px,98vw)", maxHeight: "94dvh", overflowY: "auto", direction: isAr ? "rtl" : "ltr" }}>
 
         {/* Header */}

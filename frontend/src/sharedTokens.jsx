@@ -200,7 +200,7 @@ const card = (glow = false) => ({
   border: `1px solid ${glow ? "rgba(79,124,249,.25)" : LPV7_TOKENS.border}`,
   borderRadius: 20,
   padding: 32,
-  backdropFilter: "blur(12px)",
+  backdropFilter: "blur(4px)",
   boxShadow: glow ? "0 0 40px rgba(79,124,249,.08),0 8px 32px rgba(0,0,0,.3)"
                   : "0 4px 24px rgba(0,0,0,.25)",
 });

@@ -217,12 +217,21 @@ export const NotifyAPI = {
 };
 
 // ── Email API ──────────────────────────────────────────────────────
+// BUG FIX: every path here had a redundant leading "/api" — apiFetch()
+// already prepends API_BASE_URL, which itself ends in "/api" (see
+// config/api.js). The resulting request URL was /api/api/email/... on
+// every single call, a guaranteed 404 against the real backend routes
+// (which are all single-prefixed: /api/email/invoice, etc.). Silently
+// swallowed by .catch(e=>console.warn(...)) at every call site, so
+// this had zero visible effect except emails never actually sending:
+// invoice confirmation on payment approval and cancellation (App.jsx
+// ~1347, ~1458) and the new-user welcome sequence (App.jsx ~2936).
 export const EmailAPI = {
-  sequence:       (data) => apiFetch("/api/email/sequence",        { method: "POST", body: data }),
-  weekly:         (data) => apiFetch("/api/email/weekly-report",   { method: "POST", body: data }),
-  invoice:        (data) => apiFetch("/api/email/invoice",         { method: "POST", body: data }),
-  welcome:        (data) => apiFetch("/api/email/welcome",         { method: "POST", body: data }),
-  weeklyProgress: (data) => apiFetch("/api/email/weekly-progress", { method: "POST", body: data }),
+  sequence:       (data) => apiFetch("/email/sequence",        { method: "POST", body: data }),
+  weekly:         (data) => apiFetch("/email/weekly-report",   { method: "POST", body: data }),
+  invoice:        (data) => apiFetch("/email/invoice",         { method: "POST", body: data }),
+  welcome:        (data) => apiFetch("/email/welcome",         { method: "POST", body: data }),
+  weeklyProgress: (data) => apiFetch("/email/weekly-progress", { method: "POST", body: data }),
 };
 
 // ── White-label branding API ────────────────────────────────────────
