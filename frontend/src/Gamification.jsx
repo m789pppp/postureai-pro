@@ -38,7 +38,7 @@ const SEASON_TIERS = [
 ];
 
 export function SeasonProgress({ sessions, cs, lang = "en" }) {
-  const DARK = cs || { border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", card: "#05101f" };
+  const DARK = cs || { border: "rgba(255,255,255,.08)", text: "#f0f6ff", muted: "#8896ac", card: "#111827" };
   const isAr = lang === "ar";
   const season = getCurrentSeason();
 
@@ -170,7 +170,7 @@ export function StreakDisplay({ streak, cs }) {
 // on its own gives a "0 day streak" with no context to work toward).
 export function WeeklyChallengeCard({ wc, cs, lang = "en" }) {
   if (!wc) return null;
-  const DARK = cs || { text: "#f0f4f8", muted: "#64748b", border: "rgba(148,163,184,.1)" };
+  const DARK = cs || { text: "#f0f6ff", muted: "#8896ac", border: "rgba(255,255,255,.08)" };
   const isAr = lang === "ar";
   const DOW  = isAr ? ["إث","ثل","أر","خم","جم","سب","أح"] : ["M","T","W","T","F","S","S"];
   return (
@@ -261,7 +261,7 @@ export function PostureHeatmap({ sessions, cs, lang = "en" }) {
   useEffect(() => { load(); }, [load]);
 
   const sc = v => v >= 75 ? "#10b981" : v >= 50 ? "#f59e0b" : v ? "#ef4444" : "rgba(148,163,184,.1)";
-  const DARK = cs || { border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", card: "#05101f" };
+  const DARK = cs || { border: "rgba(255,255,255,.08)", text: "#f0f6ff", muted: "#8896ac", card: "#111827" };
   const T = { en: { title: "Posture Heatmap", subtitle: "When is your posture best/worst?", noData: "Complete more sessions to see your heatmap", hours: "Hour of day", days: "Day of week" }, ar: { title: "خريطة الوضعية الحرارية", subtitle: "متى تكون وضعيتك الأفضل والأسوأ؟", noData: "أكمل المزيد من الجلسات لرؤية خريطتك", hours: "ساعة اليوم", days: "يوم الأسبوع" } };
   const t = T[lang] || T.en;
 
@@ -366,7 +366,7 @@ export function Leaderboard({ employees, companyName, cs, lang = "en" }) {
   const [loading, setLoading] = useState(false);
   const [view, setView]   = useState("individual"); // individual | department
 
-  const DARK = cs || { border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", card: "#05101f" };
+  const DARK = cs || { border: "rgba(255,255,255,.08)", text: "#f0f6ff", muted: "#8896ac", card: "#111827" };
   const T = { en: { title: "Company Leaderboard", dep: "Departments", ind: "Individuals", week: "This week", champion: "Posture Champion" }, ar: { title: "لوحة الشرف", dep: "الأقسام", ind: "الأفراد", week: "هذا الأسبوع", champion: "بطل الوضعية" } };
   const t = T[lang] || T.en;
 
@@ -445,7 +445,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
   const [loading, setLoading] = useState(true);
   const [tab, setTab]         = useState("progress");
 
-  const DARK = cs || { bg: "#0d1a2e", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
+  const DARK = cs || { bg: "#0a0f1e", card: "#111827", border: "rgba(255,255,255,.08)", text: "#f0f6ff", muted: "#8896ac" };
   const T = { en: { progress: "My Progress", achievements: "Achievements", heatmap: "Heatmap", leaderboard: "Leaderboard", season: "Season" }, ar: { progress: "تقدمي", achievements: "الإنجازات", heatmap: "الخريطة الحرارية", leaderboard: "لوحة الشرف", season: "الموسم" } };
   const t = T[lang] || T.en;
 
