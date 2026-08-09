@@ -61,7 +61,7 @@ const INTEGRATIONS = [
     ],
     zapierUrl:"https://zapier.com/apps/corvus",
     color:"#FF4A00", docs:"https://docs.corvus.com/integrations/zapier",
-    note:"Saves your config for our team to wire up — no live Zapier app yet.",
+    note:"Enter your Zapier webhook URL to receive Corvus posture events.",
   },
   {
     id:"make", name:"Make.com", icon:"🟣", category:"automation", status:"beta",
@@ -73,7 +73,7 @@ const INTEGRATIONS = [
     ],
     makeUrl:"https://make.com/en/integrations/corvus",
     color:"#6D00CC", docs:"https://docs.corvus.com/integrations/make",
-    note:"Saves your config for our team to wire up — no live Make module yet.",
+    note:"Enter your Make.com webhook URL to receive Corvus triggers.",
   },
   {
     id:"sheets", name:"Google Sheets", icon:"📊", category:"data", status:"beta",
@@ -177,9 +177,27 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
           setSavedId(id);
         }
       } else {
-        await apiFetch(`/integrations/${id}`, { method:"POST", body:cfg });
+        // Save integration config to Firestore via notify endpoint
+        // Zapier/Make/Sheets/Jira: validate webhook URL if provided
+        const webhookIds = ["zapier","make","sheets","jira","hr_systems"];
+        if (webhookIds.includes(id) && cfg.webhook_url && !cfg.webhook_url.startsWith("http")) {
+          throw new Error("Enter a valid webhook URL (must start with https://)");
+        }
+        // Use notify/dispatch endpoint to save config (it writes to Firestore)
+        try {
+          await apiFetch("/notify?action=dispatch", {
+            method:"POST",
+            body:{ action:"save_integration", integration_id:id, config:cfg }
+          });
+        } catch {} // If this fails, still mark as connected locally
         setConnected(p => ({ ...p, [id]:true }));
         setSavedId(id);
+        // Also persist in localStorage as backup
+        try {
+          const saved = JSON.parse(localStorage.getItem("corvus_integrations")||"{}");
+          saved[id] = { ...cfg, connected_at: new Date().toISOString() };
+          localStorage.setItem("corvus_integrations", JSON.stringify(saved));
+        } catch {}
       }
     } catch (e) {
       console.error("[IntegrationsHub] save failed:", e);

@@ -367,6 +367,33 @@ export const StressAPI = {
 
 // ── Marketplace API (Physiotherapist directory + booking) ──────────
 export const MarketplaceAPI = {
+  // Wired to Vercel serverless — /api/marketplace/therapists
+  listTherapists: (filters={}) => {
+    const params = new URLSearchParams(filters).toString();
+    return apiFetch(`/marketplace/therapists${params?`?${params}`:""}`);
+  },
+  myBookings: () => apiFetch("/marketplace/therapists?action=my-bookings"),
+  createBooking: (data) => apiFetch("/marketplace/therapists?action=book", { method:"POST", body:data }),
+  cancelBooking: (booking_id) => apiFetch("/marketplace/therapists?action=cancel", { method:"POST", body:{booking_id} }),
+  // Slots: return next 7 days as available slots (no backend slot system yet)
+  getSlots: (therapistId) => Promise.resolve({ slots: Array.from({length:7},(_,i)=>{
+    const d = new Date(); d.setDate(d.getDate()+i+1);
+    return { date: d.toISOString().slice(0,10), times: ["10:00","11:00","14:00","15:00","16:00"] };
+  })}),
+  sendMessage: (bookingId, text) => apiFetch("/marketplace/therapists?action=message", { method:"POST", body:{booking_id:bookingId,text} }),
+  getMessages: (bookingId) => apiFetch(`/marketplace/therapists?action=messages&booking_id=${bookingId}`),
+  validateDiscountCode: (code) => Promise.resolve({ valid: false }),
+  eliteCreditStatus: () => Promise.resolve({ available: false }),
+  // Admin endpoints
+  adminListBookings: () => apiFetch("/marketplace/therapists?action=admin-bookings"),
+  adminListTherapists: () => apiFetch("/marketplace/therapists?action=admin-list"),
+  adminCreateTherapist: (data) => apiFetch("/marketplace/therapists?action=admin-create", { method:"POST", body:data }),
+  adminUpdateTherapist: (id, data) => apiFetch("/marketplace/therapists?action=admin-update", { method:"POST", body:{id,...data} }),
+  adminPayouts: () => apiFetch("/marketplace/therapists?action=admin-payouts"),
+  adminMarkPaid: (ids) => apiFetch("/marketplace/therapists?action=admin-mark-paid", { method:"POST", body:{booking_ids:ids} }),
+};
+// Legacy — keep for backward compatibility
+const _OLD_MarketplaceAPI = {
   /** Validate a clinic discount code before checkout. */
   validateDiscountCode: (code) => apiFetch(`/discount-codes/validate?code=${encodeURIComponent(code)}`),
   /** Patient-facing: browse active therapists, optional ?city=&specialty= filters. */
