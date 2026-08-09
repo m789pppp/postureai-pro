@@ -55,6 +55,13 @@ try { initSentry(); } catch {}
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
+    // Track whether this tab already had a controlling SW before this
+    // registration — only a change AFTER that point is a genuine update
+    // (an already-open tab getting taken over by a newer deploy). The
+    // very first claim (uncontrolled -> controlled, which happens on
+    // every load here since clearOldAssets() above just unregistered
+    // everything) is not an update and must not trigger a reload.
+    let hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register("/sw.js")
       .then(reg => {
         // Check for updates immediately on load
@@ -71,9 +78,14 @@ if ("serviceWorker" in navigator) {
         });
       })
       .catch(() => {});
-    // Reload when new SW takes control
+    // Reload ONLY when a new SW takes over a tab that was already
+    // controlled — was previously unconditional, which combined with
+    // clearOldAssets() unregistering on every load meant essentially
+    // every page load force-reloaded itself once, right in the middle
+    // of whatever was rendering.
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      window.location.reload();
+      if (hadController) window.location.reload();
+      hadController = true;
     });
   });
 }

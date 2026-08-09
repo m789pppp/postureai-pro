@@ -445,7 +445,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
   const [loading, setLoading] = useState(true);
   const [tab, setTab]         = useState("progress");
 
-  const DARK = cs || { bg: "#0d1a2e", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
+  const DARK = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
   const T = { en: { progress: "My Progress", achievements: "Achievements", heatmap: "Heatmap", leaderboard: "Leaderboard", season: "Season" }, ar: { progress: "تقدمي", achievements: "الإنجازات", heatmap: "الخريطة الحرارية", leaderboard: "لوحة الشرف", season: "الموسم" } };
   const t = T[lang] || T.en;
 
