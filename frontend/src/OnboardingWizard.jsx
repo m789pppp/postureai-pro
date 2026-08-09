@@ -1005,7 +1005,7 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
   return (
     <div style={{
       position: "fixed", inset: 0,
-      background: "rgba(2,8,20,.96)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+      background: "rgba(2,8,20,.96)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
       zIndex: 9500, display: "flex", alignItems: "center", justifyContent: "center",
       padding: "16px",
     }}>

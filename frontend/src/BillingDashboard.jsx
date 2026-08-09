@@ -342,7 +342,7 @@ export function BillingDashboard({ profile, user, payments:initialPayments=[], i
       {/* Header */}
       <div style={{ position:"sticky", top:0, zIndex:30,
         background:"rgba(7,11,18,.95)", borderBottom:`1px solid ${TOKENS.border}`,
-        backdropFilter:"blur(16px)" }}>
+        backdropFilter:"blur(4px)" }}>
         <div style={{ padding:`${SP[4]}px ${SP[5]}px`,
           display:"flex", alignItems:"center", gap:12 }}>
           <Btn variant="ghost" size="sm" onClick={onClose}>← {isAr_?"رجوع":"Back"}</Btn>
