@@ -48,15 +48,24 @@ service cloud.firestore {
         .hasAny(['is_admin', 'tier', 'is_hr', 'is_org_owner', 'user_type', 'company_id',
                  'referral_credits', 'referral_count', 'subscription_status',
                  'subscription_expiry', 'payment_method',
-                 // Family/Partner Mode: auth/middleware.py's _get_user_role()
-                 // reads this field and INHERITS the linked primary account's
-                 // tier for free. Must only ever be set server-side (the
-                 // /api/family/accept endpoint, via the admin SDK which
-                 // bypasses these rules) after validating a real invite
-                 // token — never by the linked account writing to its own
-                 // profile directly, or any user could set this to an
-                 // arbitrary Elite account's uid and inherit their tier.
-                 'family_primary_uid']);
+                 // Family/Partner Mode tier inheritance (auth/middleware.py)
+                 // trusts these fields completely — client-writable would be
+                 // a free self-service tier upgrade (set family_primary_uid
+                 // to any Professional/Elite uid). Admin-SDK-only, set via
+                 // /api/family/accept and /api/family/invite,remove.
+                 'family_primary_uid', 'family_partner_uid',
+                 // Elite's one-covered-session-per-month credit
+                 // (backend.py marketplace_create_booking) — resettable
+                 // client-side would mean unlimited free physiotherapist
+                 // sessions at Corvus's expense (the therapist still gets
+                 // paid regardless of who covers it).
+                 'elite_physio_credit_used_month',
+                 // Server-authoritative gamification counters — resettable
+                 // client-side would let a user re-claim the weekly
+                 // challenge's XP/badge repeatedly, or inflate their
+                 // check-in streak (feeds HabitScoreCard's consistency
+                 // score in BasicFeatures.jsx).
+                 'weekly_challenge_claimed_week', 'checkin_streak']);
     }
 
     // Allow trial expiry: owner can write tier ONLY when downgrading from trial
@@ -66,7 +75,9 @@ service cloud.firestore {
           && request.resource.data.get('is_trial', false) == false
           && !request.resource.data.diff(resource.data).affectedKeys()
                .hasAny(['is_admin', 'is_hr', 'is_org_owner', 'user_type', 'company_id',
-                        'family_primary_uid']);
+                        'family_primary_uid', 'family_partner_uid',
+                        'elite_physio_credit_used_month',
+                        'weekly_challenge_claimed_week', 'checkin_streak']);
     }
 
     // ── Users Collection ────────────────────────────────────────
@@ -392,6 +403,16 @@ service cloud.firestore {
     match /support_tickets/{ticketId} {
       allow read: if isAdmin();
       allow create, update, delete: if false; // Admin SDK only
+    }
+
+    // ── Daily Check-ins (AI Coach, Basic tier) ───────────────────────
+    // Written/read only via the backend (api/ai-coach/daily-checkin,
+    // Admin SDK) — the frontend (AICoach.jsx DailyCheckinPanel) always
+    // goes through that endpoint, never reads Firestore directly here.
+    // Explicit rule instead of relying on the default-deny fallback,
+    // so this stays unambiguous if rules get restructured later.
+    match /daily_checkins/{checkinId} {
+      allow read, write: if false; // Admin SDK only
     }
 
     // ── Deny everything else ─────────────────────────────────────
