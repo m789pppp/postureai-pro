@@ -5760,8 +5760,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
           {/* Idle-state visual cue — previously the camera area was just a black box
               with no indication a click was needed. First-time users had no way to
-              know to press "Start Analysis" below. */}
-          {!camActive && cameraStatus!=="requesting" && (
+              know to press "Start Analysis" below. Must NOT show during preview/
+              countdown — camActive is still false at that point (correct, scoring
+              hasn't started), so without excluding previewPhase this rendered on
+              top of the preview overlay's own text simultaneously, garbled. */}
+          {!camActive && !previewPhase && cameraStatus!=="requesting" && (
             <div style={{
               position:"absolute",inset:0,display:"flex",flexDirection:"column",
               alignItems:"center",justifyContent:"center",gap:10,
