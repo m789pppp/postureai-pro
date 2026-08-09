@@ -25,13 +25,25 @@ export default async function handler(req, res) {
   if (req.method==="OPTIONS") return res.status(200).end();
 
   const token = (req.headers.authorization||"").replace("Bearer ","");
-  const { db, auth } = getAdmin();
+  let db, auth;
+  try {
+    ({ db, auth } = getAdmin());
+  } catch (e) {
+    console.error("[company-branding] Firebase Admin init failed:", e.message);
+    return res.status(500).json({ error: "Server misconfiguration — Firebase Admin credentials" });
+  }
   let uid;
   try { uid = (await auth.verifyIdToken(token)).uid; }
   catch { return res.status(401).json({error:"Unauthorized"}); }
 
-  const userSnap = await db.collection("users").doc(uid).get();
-  const user = userSnap.data()||{};
+  let user;
+  try {
+    const userSnap = await db.collection("users").doc(uid).get();
+    user = userSnap.data()||{};
+  } catch (e) {
+    console.error("[company-branding] Firestore read failed:", e.message);
+    return res.status(500).json({ error: "Server error — could not load user profile" });
+  }
   const companyId = user.company_id || user.companyId;
   const isAdmin = ["platform_admin","hr_admin"].includes(user.user_type) || user.is_org_owner || user.is_admin;
   if (!isAdmin) return res.status(403).json({error:"Admin only"});
