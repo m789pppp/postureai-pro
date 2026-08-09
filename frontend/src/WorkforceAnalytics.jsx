@@ -805,7 +805,7 @@ Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bul
   return (
     <div style={{
       position:"fixed", inset:0,
-      background:"rgba(2,8,20,.92)", backdropFilter:"blur(10px)", WebkitBackdropFilter:"blur(10px)",
+      background:"rgba(2,8,20,.92)", backdropFilter:"blur(4px)", WebkitBackdropFilter:"blur(4px)",
       zIndex:9100, display:"flex", alignItems:"center", justifyContent:"center", padding:16,
     }}>
       <div style={{
