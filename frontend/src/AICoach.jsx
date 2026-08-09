@@ -490,8 +490,8 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
     <div style={{
       position:"fixed",inset:0,zIndex:9999,
       display:"flex",alignItems:"center",justifyContent:"center",
-      background:"rgba(4,8,20,.55)",backdropFilter:"blur(8px)",
-      WebkitBackdropFilter:"blur(14px)",padding:16,
+      background:"rgba(4,8,20,.6)",backdropFilter:"blur(6px)",
+      WebkitBackdropFilter:"blur(6px)",padding:16,
       animation:"bIn .18s ease both",
     }}>
       <style>{`
@@ -802,8 +802,8 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
     <div style={{
       position:"fixed",inset:0,zIndex:9999,
       display:"flex",alignItems:"center",justifyContent:"center",
-      background:"rgba(4,8,20,.8)",backdropFilter:"blur(14px)",
-      WebkitBackdropFilter:"blur(14px)",padding:16,
+      background:"rgba(4,8,20,.7)",backdropFilter:"blur(6px)",
+      WebkitBackdropFilter:"blur(6px)",padding:16,
       animation:"bIn .18s ease both",
     }}>
       <style>{`@keyframes bIn{from{opacity:0}to{opacity:1}}@keyframes sUp{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:none}}`}</style>
