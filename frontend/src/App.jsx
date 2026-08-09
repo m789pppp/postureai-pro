@@ -2362,6 +2362,12 @@ export default function App(){
   // is currently running" no matter what actually happens later.
   const camActiveRef=useRef(false);
   useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
+  // Catch-all safety net, independent of the popstate handler above: force
+  // these two modals closed on ANY transition away from the live page, via
+  // any mechanism (not just back-button).
+  useEffect(()=>{
+    if(page!=="live"){ setShowHealthConsent(false); setPreviewPhase(null); }
+  },[page]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
   // Camera preview → 3-2-1 countdown flow, cancellable the whole time.
   const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
