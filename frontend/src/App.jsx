@@ -2267,6 +2267,32 @@ export default function App(){
     try { if (localStorage.getItem("corvus_was_logged") === "1") return "auth"; } catch {}
     return "landing";
   });
+  // ── White Label: load company branding and apply to cs ──────────────
+  useEffect(()=>{
+    if(!user?.uid) return;
+    fetch("/api/company/branding", {
+      headers:{ Authorization: `Bearer ${user.accessToken||""}` }
+    })
+    .then(r=>r.ok?r.json():null)
+    .then(d=>{
+      const b = d?.branding;
+      if(!b || !Object.keys(b).length) return;
+      // Apply primary color as CSS variable
+      if(b.primaryColor) document.documentElement.style.setProperty("--brand-primary", b.primaryColor);
+      if(b.bgColor)      document.documentElement.style.setProperty("--brand-bg", b.bgColor);
+      if(b.fontFamily)   document.documentElement.style.setProperty("--brand-font", b.fontFamily);
+      // Apply favicon
+      if(b.faviconUrl){
+        let link = document.querySelector("link[rel~='icon']");
+        if(!link){ link=document.createElement("link"); link.rel="icon"; document.head.appendChild(link); }
+        link.href = b.faviconUrl;
+      }
+      // Apply page title
+      if(b.companyName) document.title = `${b.companyName} | Powered by Corvus`;
+    })
+    .catch(()=>{});
+  },[user?.uid]);
+
   // Firebase action URLs (password reset / email verify from email links)
   const _fbp = new URLSearchParams(window.location.search);
   const [fbMode]    = useState(_fbp.get("mode")    || null);

@@ -41,7 +41,12 @@ test.describe("Landing Page", () => {
     await expect(page.locator("html[dir='rtl']")).toBeAttached({ timeout: 5000 });
     await expect(page.getByText(/ابدأ مجاناً|وضعية/i).first()).toBeVisible();
     // Switch back
-    await page.getByRole("button", { name: /english/i }).first().click();
+    // Was /english/i only — the always-visible desktop nav toggle just
+    // says short "EN" (a standard, legitimate UI convention), and only
+    // the mobile-menu-only variant spells out "Switch to English". That
+    // element isn't visible in a normal desktop-viewport test run, so
+    // .first() would find nothing clickable. Match both forms.
+    await page.getByRole("button", { name: /\bEN\b|english/i }).first().click();
     await expect(page.locator("html[dir='ltr']")).toBeAttached({ timeout: 5000 });
   });
 
