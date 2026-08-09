@@ -33,7 +33,7 @@ export default defineConfig({
       format: { comments: false },
     },
     // Report any chunk > 500KB
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 400,
     rollupOptions: {
       output: {
         // Better cache hashing
@@ -87,9 +87,11 @@ export default defineConfig({
               id.includes('/src/AIInsights'))                     return 'analytics';
           if (id.includes('/src/HRPanel') ||
               id.includes('/src/CompanySystem'))                  return 'hr';
-          if (id.includes('/src/AICoach') ||
-              id.includes('/src/localAI') ||
-              id.includes('/src/gemini'))                           return 'ai-coach';
+          if (id.includes('/src/AICoach'))                          return 'ai-coach';
+          if (id.includes('/src/localAI') ||
+              id.includes('/src/gemini'))                           return 'ai-engine';
+          if (id.includes('/src/lib/pdfReports') ||
+              id.includes('/src/assets/cairoFont'))                return 'pdf-engine';
           if (id.includes('/src/PostureCalibration'))                return 'ai-features';
           if (id.includes('/src/NotificationsHub'))                  return 'notifications';
           if (id.includes('/src/UsageBilling') ||

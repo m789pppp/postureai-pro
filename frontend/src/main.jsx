@@ -40,6 +40,33 @@ try {
 // App.jsx for identifyUser/captureError — but its initSentry() was never
 // actually called, so it silently did nothing. Fixed to use the real one.
 import { initSentry } from "./sentry.js";
+
+// ── Global error safety net ──────────────────────────────────────
+// Catches unhandled promise rejections (e.g. Firestore permission errors,
+// network drops during session saves) that would otherwise silently fail.
+// We log to console in dev and will send to Sentry in production if configured.
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason;
+  const msg = reason?.message || String(reason) || "unknown";
+  // Ignore Firebase offline/network errors that are expected behaviour
+  if (
+    msg.includes("offline") ||
+    msg.includes("Failed to fetch") ||
+    msg.includes("NetworkError") ||
+    msg.includes("AbortError") ||
+    msg.includes("cancelled")
+  ) return;
+  console.error("[Corvus] Unhandled rejection:", msg, reason);
+  // Optional: send to Sentry / PostHog
+  try { window.posthog?.capture("js_unhandled_rejection", { message: msg }); } catch {}
+});
+
+window.addEventListener("error", (event) => {
+  const msg = event?.message || "unknown";
+  if (msg.includes("ResizeObserver") || msg.includes("Script error")) return;
+  console.error("[Corvus] Global error:", msg);
+});
+
 try { initSentry(); } catch {}
 
 // ── PWA: Service Worker ───────────────────────────────────────────

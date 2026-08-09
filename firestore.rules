@@ -394,6 +394,84 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── Certificates ─────────────────────────────────────────────
+    // Issued by backend after verified milestones. Users can read
+    // their own; sharing links use the public /cert/verify endpoint
+    // (Admin SDK), not a direct client read.
+    match /certificates/{certId} {
+      allow read:   if isAuthenticated() && (
+                      resource.data.uid == request.auth.uid || isAdmin()
+                    );
+      allow create: if false; // Admin SDK only (api/cert/issue.js)
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Roadmap Votes ─────────────────────────────────────────────
+    // One document per user per feature. Users can only read/write
+    // their own vote — prevents vote manipulation across accounts.
+    match /roadmap_votes/{voteId} {
+      allow read:   if isAuthenticated() && (
+                      resource.data.uid == request.auth.uid || isAdmin()
+                    );
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated()
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
+    }
+
+    // ── Affiliate Stats ───────────────────────────────────────────
+    // Sensitive financial data. Only the affiliate owner and admins
+    // may read; writes are Admin SDK only (referral server-side).
+    match /affiliate_stats/{affiliateId} {
+      allow read:   if isAdmin() ||
+                    (isAuthenticated() && resource.data.uid == request.auth.uid);
+      allow write:  if false; // Admin SDK only
+    }
+
+    // ── Symptom Logs ──────────────────────────────────────────────
+    // Health data — strictly private. Users read/write only their own.
+    // HR admins may read org-level aggregates via a Cloud Function,
+    // NOT via direct Firestore access from the client.
+    match /symptom_logs/{logId} {
+      allow read:   if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
+    }
+
+    // ── Therapist Bookings ────────────────────────────────────────
+    // Patient: read/cancel their own bookings.
+    // Therapist: read bookings where they are the provider.
+    // Admin: full access.
+    // Writes: create via authenticated patient; status updates via
+    //   Admin SDK (therapist/admin portal) or own document.
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && (
+                    resource.data.patient_uid  == request.auth.uid ||
+                    resource.data.therapist_uid == request.auth.uid ||
+                    isAdmin()
+                  );
+      allow create: if isAuthenticated()
+                    && request.resource.data.patient_uid == request.auth.uid;
+      allow update: if isAuthenticated() && (
+                      resource.data.patient_uid == request.auth.uid ||
+                      isAdmin()
+                    );
+      allow delete: if isAdmin();
+    }
+
+    // ── Therapists (Marketplace Directory) ───────────────────────
+    // Public-ish read for the browse listing (authenticated users only).
+    // Writes are admin-only — therapist profiles are managed via the
+    // admin panel (api/support/reply.js + AdminTherapistManager).
+    match /therapists/{therapistId} {
+      allow read:   if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
     // ── Support Tickets (WhatsApp inbound + admin replies) ──────────
     // Written only via Admin SDK (api/support/whatsapp-inbound.js,
     // api/support/reply.js) — no rule existed for this collection
