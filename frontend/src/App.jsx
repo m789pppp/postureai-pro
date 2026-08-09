@@ -237,7 +237,7 @@ const PAY_METHODS = [
 // HR_EMAILS — list of emails with HR admin access
 const HR_EMAILS = [];
 
-const DARK  = {bg:"#0a0f1e",card:"#0a0f1e",card2:"#0a0f1e",border:"rgba(255,255,255,.08)",text:"#f0f6ff",muted:"#8896ac",blue:"#1a56db",inp:"rgba(255,255,255,.05)",inpB:"rgba(255,255,255,.1)"};
+const DARK  = {bg:"#030b14",card:"#05101f",card2:"#080f1e",border:"rgba(148,163,184,.1)",text:"#f0f4f8",muted:"#64748b",blue:"#1a56db",inp:"rgba(148,163,184,.08)",inpB:"rgba(148,163,184,.15)"};
 const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,139,.15)",text:"#0f172a",muted:"#94a3b8",blue:"#1a56db",inp:"rgba(100,116,139,.07)",inpB:"rgba(100,116,139,.2)"};
 
 
