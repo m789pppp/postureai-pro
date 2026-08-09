@@ -88,27 +88,27 @@
     },
     {
       "src": "/api/billing/payments",
-      "dest": "/api/billing/payments.js"
+      "dest": "/api/billing.js"
     },
     {
       "src": "/api/billing/analytics",
-      "dest": "/api/billing/analytics.js"
+      "dest": "/api/billing.js"
     },
     {
       "src": "/api/billing/prorate",
-      "dest": "/api/billing/prorate.js"
+      "dest": "/api/billing.js"
     },
     {
       "src": "/api/company/branding",
-      "dest": "/api/company/branding.js"
+      "dest": "/api/billing.js"
     },
     {
       "src": "/api/marketplace/therapists",
-      "dest": "/api/marketplace/therapists.js"
+      "dest": "/api/billing.js"
     },
     {
       "src": "/api/marketplace/seed",
-      "dest": "/api/marketplace/seed.js"
+      "dest": "/api/billing.js"
     },
     {
       "src": "/api/auth/(.*)",
@@ -237,22 +237,7 @@
     "api/misc.js": {
       "maxDuration": 60
     },
-    "/api/billing/payments.js": {
-      "maxDuration": 15
-    },
-    "/api/billing/analytics.js": {
-      "maxDuration": 15
-    },
-    "/api/billing/prorate.js": {
-      "maxDuration": 15
-    },
-    "/api/company/branding.js": {
-      "maxDuration": 15
-    },
-    "/api/marketplace/therapists.js": {
-      "maxDuration": 15
-    },
-    "/api/marketplace/seed.js": {
+    "api/billing.js": {
       "maxDuration": 15
     }
   },
