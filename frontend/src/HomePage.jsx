@@ -2502,7 +2502,7 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
                   display:"flex", justifyContent:"space-between", alignItems:"center",
                   padding:"8px 12px", background:"rgba(255,255,255,.025)", borderRadius:8, cursor:"pointer" }}>
                   <span style={{ fontSize:12.5, color:cs.text }}>{isAr?label.ar:label.en}</span>
-                  <div style={{ width:36, height:20, borderRadius:99, position:"relative", transition:"background .15s",
+                  <div style={{ width:36, height:20, borderRadius:99, position:"relative", transition:"background-color .15s",
                     background: prefs.categories?.[key]!==false ? "#10b981" : "rgba(255,255,255,.12)" }}>
                     <div style={{ width:16, height:16, borderRadius:"50%", background:"#fff", position:"absolute", top:2,
                       left: prefs.categories?.[key]!==false ? 18 : 2, transition:"left .15s" }} />
