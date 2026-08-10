@@ -111,7 +111,7 @@
       "dest": "/api/billing.js"
     },
     {
-      "src": "/api/auth/(.*)",
+      "src": "/api/auth/mfa/(.*)",
       "dest": "/api/auth.js"
     },
     {
@@ -197,6 +197,10 @@
     {
       "src": "/api/cron/(.*)",
       "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
     {
       "handle": "filesystem"

@@ -255,7 +255,7 @@ export function ShareCard({ score, sessions, avgScore, streak, name, lang, onClo
   };
 
   return (
-    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.8)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(12px)" }}
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.8)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)" }}
       onClick={onClose}>
       <div style={{ background:"#080e1e",border:"1px solid rgba(148,163,184,.12)",borderRadius:20,padding:"24px 22px",maxWidth:700,width:"100%",boxShadow:"0 24px 80px rgba(0,0,0,.7)" }}
         onClick={e => e.stopPropagation()}>

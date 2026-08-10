@@ -23,7 +23,9 @@ export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({error:"GET only"});
 
   const token = (req.headers.authorization||"").replace("Bearer ","");
-  const { db, auth } = getAdmin();
+  let db, auth;
+  try { ({ db, auth } = getAdmin()); }
+  catch (e) { console.error("[billing-payments] Firebase Admin init failed:", e.message); return res.status(500).json({error:"Server misconfiguration — Firebase Admin credentials"}); }
   let uid;
   try { uid = (await auth.verifyIdToken(token)).uid; }
   catch { return res.status(401).json({error:"Unauthorized"}); }
