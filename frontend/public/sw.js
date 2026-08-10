@@ -29,6 +29,12 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
 
+  // Cache API only accepts http(s) — a page can trigger fetches with other
+  // schemes (chrome-extension://, etc, e.g. from an installed browser
+  // extension's own content scripts) which this listener was intercepting
+  // and then crashing on when it reached cache.put() further down.
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
+
   // CRITICAL: Never intercept POST/PUT/PATCH/DELETE — body already consumed
   // This fixes "Response body is already used" error on /api/llm
   if (e.request.method !== "GET") return;

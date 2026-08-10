@@ -7,13 +7,18 @@
 
 export const runtime = "edge";
 
-// LLM7.io free anonymous models (no key needed)
+// LLM7.io free anonymous models (no key needed) — kept to 2 fast models,
+// not 5: this is an Edge Function (see runtime="edge" above), whose real
+// platform execution limit is NOT controlled by vercel.json's
+// functions.maxDuration (that setting only applies to Node.js serverless
+// functions, not Edge). All model attempts here share ONE timeout budget
+// with no per-call limit, so a long list makes it easy to exceed
+// whatever Vercel's actual Edge ceiling is — the function gets killed by
+// the platform before the code's own 503/504 error handling ever runs,
+// which is what a bare 500 with no useful error body looks like.
 const LLM7_MODELS = [
   "gpt-4o-mini",
-  "gpt-4.1-mini",
   "meta-llama/llama-3.3-70b-instruct",
-  "mistralai/mistral-7b-instruct",
-  "deepseek/deepseek-chat",
 ];
 
 function cors() {
@@ -46,22 +51,37 @@ function checkRate(ip) {
 async function callLLM7(messages, maxTokens, temperature, signal) {
   for (const model of LLM7_MODELS) {
     try {
-      const r = await fetch("https://api.llm7.io/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer unused",
-        },
-        body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
-        signal,
-      });
+      // Per-model cap (independent of the outer signal's overall budget)
+      // so one slow model can't eat the whole request's time allowance
+      // before the next model — or the Pollinations fallbacks — get a
+      // real chance to run.
+      const perCallCtrl = new AbortController();
+      const onOuterAbort = () => perCallCtrl.abort();
+      signal?.addEventListener("abort", onOuterAbort, { once: true });
+      const perCallTimer = setTimeout(() => perCallCtrl.abort(), 6000);
+      let r;
+      try {
+        r = await fetch("https://api.llm7.io/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer unused",
+          },
+          body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+          signal: perCallCtrl.signal,
+        });
+      } finally {
+        clearTimeout(perCallTimer);
+        signal?.removeEventListener("abort", onOuterAbort);
+      }
       if (r.status === 429) { continue; }
       if (!r.ok) { console.warn(`[llm7] ${model} → ${r.status}`); continue; }
       const data = await r.json();
       const text = data?.choices?.[0]?.message?.content?.trim();
       if (text && text.length > 5) return { text, model: `llm7:${model}` };
     } catch (e) {
-      if (e.name === "AbortError") throw e;
+      if (signal?.aborted && e.name === "AbortError") throw e; // outer (whole-request) abort — stop entirely
+      // otherwise this was just this one model's own per-call timeout/error — move to the next model
       console.warn(`[llm7] ${model} error:`, e.message);
     }
   }
@@ -158,7 +178,7 @@ export default async function handler(req) {
   ];
 
   const ctrl  = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 22000);
+  const timer = setTimeout(() => ctrl.abort(), 18000);
 
   try {
     // 1. Try LLM7.io
