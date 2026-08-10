@@ -1,5 +1,14 @@
-// BUILD: 20260806091209
-import React, { useState, Suspense, useEffect, useRef, useCallback } from "react";
+// BUILD:
+// Global error handler for unhandled promise rejections
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('[Corvus] Unhandled promise rejection:', e.reason);
+    // Prevent blank screen crashes from promise rejections
+    e.preventDefault();
+  });
+}
+ 20260806091209
+import React, { lazy, Suspense, useState, Suspense, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
@@ -15,8 +24,8 @@ import {
   doc, updateDoc,
 } from "./firebase.js";
 import { HRPanel } from "./HRPanel.jsx";
-import { TherapistMarketplace } from "./TherapistMarketplace.jsx";
-import { SymptomCorrelation } from "./SymptomCorrelation.jsx";
+const TherapistMarketplace = lazy(()=>import("./TherapistMarketplace.jsx").then(m=>({default:m.TherapistMarketplace})));
+const SymptomCorrelation = lazy(()=>import("./SymptomCorrelation.jsx").then(m=>({default:m.SymptomCorrelation})));
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
 import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
@@ -24,7 +33,7 @@ import { AICoach } from "./AICoach.jsx";
 import { preloadAIInsights } from "./aiPreloader.js";
 import { NotificationsHub, useNotifications } from "./NotificationsHub.jsx";
 import { OnboardingWizard } from "./OnboardingWizard.jsx";
-import { GamificationPanel } from "./Gamification.jsx";
+const GamificationPanel = lazy(()=>import("./Gamification.jsx").then(m=>({default:m.GamificationPanel})));
 import { BillingModal, PLANS } from "./Billing.jsx";
 import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, FamilyAPI, apiFetch } from "./services/api.js";
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
@@ -46,9 +55,11 @@ const Landing = LandingPageV7; // alias so <Landing> works
 import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
 import { handleSSORedirect } from "./EnterpriseSSO.jsx";
 // initSentry moved to sentry.js (V12)
-import { CertBadgeModal } from "./CertificatePage.jsx";
-import { QuarterlyReportModal, SchoolsModal } from "./CorporateWellness.jsx";
-import { DeveloperPortalModal, InsurancePartnerModal } from "./DeveloperPortal.jsx";
+const CertBadgeModal = lazy(()=>import("./CertificatePage.jsx").then(m=>({default:m.CertBadgeModal})));
+const QuarterlyReportModal = lazy(()=>import("./CorporateWellness.jsx").then(m=>({default:m.QuarterlyReportModal})));
+const SchoolsModal = lazy(()=>import("./CorporateWellness.jsx").then(m=>({default:m.SchoolsModal})));
+const DeveloperPortalModal = lazy(()=>import("./DeveloperPortal.jsx").then(m=>({default:m.DeveloperPortalModal})));
+const InsurancePartnerModal = lazy(()=>import("./DeveloperPortal.jsx").then(m=>({default:m.InsurancePartnerModal})));
 import AuthPage            from "./AuthPage.jsx";
 import ResetPasswordPage    from "./ResetPasswordPage.jsx";
 import EmailVerificationPage from "./EmailVerificationPage.jsx";
@@ -61,8 +72,8 @@ import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
 import { NotFound } from "./ErrorPage.jsx";
-import SessionComparison    from "./SessionComparison.jsx";
-import TrendChart           from "./TrendChart.jsx";
+const SessionComparison = lazy(()=>import("./SessionComparison.jsx"));
+const TrendChart = lazy(()=>import("./TrendChart.jsx"));
 import { ShareCard }        from "./ShareCard.jsx";
 import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
 import { ProductTour, TourTrigger } from "./ProductTour.jsx";
@@ -1243,7 +1254,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
         </div>
         {refStats?.credits>0&&<div style={{fontSize:11,color:"#10b981",fontWeight:700}}>💰 {refStats.credits} EGP {isAr?"رصيد متاح":"credit available"}</div>}
       </div>
-      {showReferralProgram&&<Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense>}
+      {showReferralProgram&&<ErrorBoundary key="referralprogram"><Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense></ErrorBoundary>}
       <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:9}}>
@@ -1253,7 +1264,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
           <Btn cs={cs} onClick={()=>setShowIntegrationsHub(true)} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{isAr?"فتح":"Open"}</Btn>
         </div>
       </div>
-      {showIntegrationsHub&&<Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense>}
+      {showIntegrationsHub&&<ErrorBoundary key="integrationshub"><Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense></ErrorBoundary>}
       {sessions?.length>0&&<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
         <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:13}}>{t.sessionHist||"Session History"}</div>
         <BarChart data={sessions?.slice(0,10).reverse().map((s,i)=>({l:`S${i+1}`,v:s.avg_score||0}))} color="#1a56db" cs={cs}/>
@@ -2655,6 +2666,7 @@ export default function App(){
   // the page, whether they came here to change a setting or just start a
   // session.
   const[showLiveSettings,setShowLiveSettings]=useState(false);
+  const[isSavingSession,setIsSavingSession]=useState(false);
   const[hoverBarIdx,setHoverBarIdx]=useState(null);
   const[showAllMetrics,setShowAllMetrics]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
@@ -3603,6 +3615,7 @@ export default function App(){
   const[sessionResult,setSessionResult]=useState(null);
 
   async function stopCamera(){
+    setIsSavingSession(true); // show saving state on stop button
     stopSpeaking(); // cut any in-flight voice-coach cue
     lmSmootherRef.current?.reset();
     frameBufferRef.current?.clear();
@@ -3629,6 +3642,7 @@ export default function App(){
     setIsPaused(false);
     pausedAtRef.current=null;
     setPreviewPhase(null);
+    setTimeout(()=>setIsSavingSession(false), 1500);
     if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
     setShowHealthConsent(false);
 
@@ -4756,9 +4770,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
         }
       }}/>}
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
-      {showDashboard&&<Suspense fallback={null}><AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/></Suspense>}
+      {showDashboard&&<ErrorBoundary key="dashboard"><Suspense fallback={null}><AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}</Suspense></ErrorBoundary>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={()=>setShowCoach(false)}/>}
-      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/>}
+      {showGamification&&<ErrorBoundary key="gamification"><Suspense fallback={null}><GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/></Suspense>}}
       {showCustomAlertRules&&<CustomAlertRulesPanel isAr={isAr} cs={cs} rules={customAlertRules}
         onSave={(next)=>{
           setCustomAlertRules(next);
@@ -4768,20 +4782,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onClose={()=>setShowCustomAlertRules(false)}/>}
       {showAdmin&&isAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
       {showMRR&&isAdmin&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
-      {showHelp&&<Suspense fallback={null}><HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/></Suspense>}
+      {showHelp&&<ErrorBoundary key="help"><Suspense fallback={null}><HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}</Suspense></ErrorBoundary>}
       {showChangelog&&isAdmin&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
-      {showAIInsights&&<Suspense fallback={null}><AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIInsights(false)}/></Suspense>}
+      {showAIInsights&&<ErrorBoundary key="aiinsights"><Suspense fallback={null}><AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIInsights(false)}/>}</Suspense></ErrorBoundary>}
       {showSymptomCorrelation&&<SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/>}
-      {showPredictiveAI&&<Suspense fallback={null}><PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/></Suspense>}
-      {showAIReports&&<Suspense fallback={null}><AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/></Suspense>}
-      {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/></Suspense>}
-      {showEnterpriseRBAC&&<Suspense fallback={null}><EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/></Suspense>}
+      {showPredictiveAI&&<ErrorBoundary key="predictiveai"><Suspense fallback={null}><PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/>}</Suspense></ErrorBoundary>}
+      {showAIReports&&<ErrorBoundary key="aireports"><Suspense fallback={null}><AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/>}</Suspense></ErrorBoundary>}
+      {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}</Suspense></ErrorBoundary>}
+      {showEnterpriseRBAC&&<ErrorBoundary key="enterpriserbac"><Suspense fallback={null}><EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}</Suspense></ErrorBoundary>}
       
       {showFeatureFlags&&isAdmin&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
-      {showNotificationsHub&&<Suspense fallback={null}><NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/></Suspense>}
+      {showNotificationsHub&&<ErrorBoundary key="notificationshub"><Suspense fallback={null}><NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}</Suspense></ErrorBoundary>}
       {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
       {healthConsentModalEl}
-      {showOnboardingAnalytics&&<Suspense fallback={null}><OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/></Suspense>}
+      {showOnboardingAnalytics&&<ErrorBoundary key="onboardinganalytics"><Suspense fallback={null}><OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}</Suspense></ErrorBoundary>}
       {authToken && (
         <div style={{maxWidth:960,margin:"0 auto",padding:"12px 20px 0"}}>
           <AnnouncementsBar token={authToken}/>
@@ -4847,12 +4861,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onDevPortal={()=>setShowDevPortal(true)}
         onInsurance={()=>setShowInsuranceModal(true)}
       />
-      {showGrowthHub&&<Suspense fallback={null}><GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/></Suspense>}
-      {showCertModal&&<CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/>}
-      {showQuarterlyReport&&<QuarterlyReportModal profile={profile} allUsers={allUsers} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowQuarterlyReport(false)}/>}
-      {showSchoolsModal&&<SchoolsModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowSchoolsModal(false)}/>}
-      {showDevPortal&&<DeveloperPortalModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowDevPortal(false)}/>}
-      {showInsuranceModal&&<InsurancePartnerModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowInsuranceModal(false)}/>}
+      {showGrowthHub&&<ErrorBoundary key="growthhub"><Suspense fallback={null}><GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}</Suspense></ErrorBoundary>}
+      {showCertModal&&<ErrorBoundary key="certmodal"><Suspense fallback={null}><CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/></Suspense>}}
+      {showQuarterlyReport&&<ErrorBoundary key="quarterlyreport"><Suspense fallback={null}><QuarterlyReportModal profile={profile} allUsers={allUsers} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowQuarterlyReport(false)}/></Suspense>}}
+      {showSchoolsModal&&<ErrorBoundary key="schoolsmodal"><Suspense fallback={null}><SchoolsModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowSchoolsModal(false)}/></Suspense>}}
+      {showDevPortal&&<ErrorBoundary key="devportal"><Suspense fallback={null}><DeveloperPortalModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowDevPortal(false)}/></Suspense>}}
+      {showInsuranceModal&&<ErrorBoundary key="insurancemodal"><Suspense fallback={null}><InsurancePartnerModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowInsuranceModal(false)}/></Suspense>}}
       {/* Moved here from the live-analysis render branch — modals must render on the
           home page only, never over the live camera/analysis screen (interrupts the Stop button). */}
       {showAnnualUpsell && (
@@ -4892,14 +4906,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
         streak={shareCardData.streak||0} percentile={null}
         lang={lang} cs={cs} addToast={addToast} onClose={()=>setShowShareCard(false)}/>
     )}
-    {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
+    {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><Suspense fallback={null}><SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/></Suspense>}}
       {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}
-      {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
+      {showTrendChart&&<ErrorBoundary key="trendchart"><Suspense fallback={null}><TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/></Suspense>}}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
-      {showAPIMarketplace&&<Suspense fallback={null}><APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/></Suspense>}
-      {showWhiteLabel&&<Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/></Suspense>}
-      {showMultiTenant&&<Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/></Suspense>}
+      {showAPIMarketplace&&<ErrorBoundary key="apimarketplace"><Suspense fallback={null}><APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/>}</Suspense></ErrorBoundary>}
+      {showWhiteLabel&&<ErrorBoundary key="whitelabel"><Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/>}</Suspense></ErrorBoundary>}
+      {showMultiTenant&&<ErrorBoundary key="multitenant"><Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/>}</Suspense></ErrorBoundary>}
       {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
     </ErrorBoundary>
   );
@@ -4991,12 +5005,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
       )}
       {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
-      {showSecurityCenter&&<Suspense fallback={null}><SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/></Suspense>}
+      {showSecurityCenter&&<ErrorBoundary key="securitycenter"><Suspense fallback={null}><SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/>}</Suspense></ErrorBoundary>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }
-      {showMFASetup&&<Suspense fallback={null}><MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/></Suspense>}
-      {showBillingDashboard&&<Suspense fallback={null}><BillingDashboard profile={profile} user={user} isAr={lang==="ar"} isAdmin={isAdmin} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/></Suspense>}
-      {showReferralProgram&&<Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense>}
-      {showIntegrationsHub&&<Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense>}
+      {showMFASetup&&<ErrorBoundary key="mfasetup"><Suspense fallback={null}><MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/>}</Suspense></ErrorBoundary>}
+      {showBillingDashboard&&<ErrorBoundary key="billingdashboard"><Suspense fallback={null}><BillingDashboard profile={profile} user={user} isAr={lang==="ar"} isAdmin={isAdmin} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}</Suspense></ErrorBoundary>}
+      {showReferralProgram&&<ErrorBoundary key="referralprogram"><Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense></ErrorBoundary>}
+      {showIntegrationsHub&&<ErrorBoundary key="integrationshub"><Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense></ErrorBoundary>}
       {/* Phase 12 — Enterprise Scale */}
       {showEnterpriseAdmin&&isAdmin&&<EnterpriseAdminTools profile={profile} cs={cs} lang={lang} onClose={()=>setShowEnterpriseAdmin(false)}/>}
 
@@ -5267,6 +5281,29 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           ))}
         </div>
+
+        {/* Calibration missing banner */}
+        {!camActive && !calibData && (
+          <div style={{margin:"8px 16px",background:"rgba(245,158,11,.06)",
+            border:"1px solid rgba(245,158,11,.25)",borderRadius:10,padding:"10px 14px",
+            display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:16,flexShrink:0}}>⚙️</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11.5,fontWeight:700,color:"#f59e0b",marginBottom:2}}>
+                {isAr?"الوضعية غير معايرة — النتائج تقريبية":"Not calibrated — results are approximate"}
+              </div>
+              <div style={{fontSize:10.5,color:cs.muted}}>
+                {isAr?"اعمل معايرة للحصول على درجة دقيقة":"Calibrate for accurate posture scoring"}
+              </div>
+            </div>
+            <button onClick={()=>setShowCalibWizard(true)}
+              style={{fontSize:10.5,fontWeight:700,padding:"5px 10px",
+                background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.3)",
+                borderRadius:7,color:"#f59e0b",cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+              {isAr?"معايرة الآن":"Calibrate →"}
+            </button>
+          </div>
+        )}
 
         {/* Fix #2: Pre-session empty state — shown before first session starts */}
         {!camActive && sessionTime === 0 && avg === 0 && (
@@ -5981,16 +6018,21 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 }}>
                   {isPaused ? (isAr?"▶ استكمال":"▶ Resume") : (isAr?"⏸ وقف مؤقت":"⏸ Pause")}
                 </button>
-                <button onClick={stopCamera} style={{
+                <button onClick={stopCamera} disabled={isSavingSession} style={{
                   flex:1,
-                  background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
-                  color:"#fca5a5",
-                  border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
-                  padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
-                  boxShadow:"0 2px 12px rgba(239,68,68,.2)",
-                  letterSpacing:"-.01em",
+                  background: isSavingSession
+                    ? "rgba(255,255,255,.05)"
+                    : "linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                  color: isSavingSession ? "#64748b" : "#fca5a5",
+                  border:`1px solid ${isSavingSession?"rgba(255,255,255,.08)":"rgba(239,68,68,.5)"}`,borderRadius:10,
+                  padding:"13px 0",fontSize:13,fontWeight:700,
+                  cursor: isSavingSession ? "not-allowed" : "pointer",
+                  boxShadow: isSavingSession ? "none" : "0 2px 12px rgba(239,68,68,.2)",
+                  letterSpacing:"-.01em",transition:"all .2s",
                 }}>
-                  {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
+                  {isSavingSession
+                    ? (isAr ? "⏳ جاري الحفظ…" : "⏳ Saving…")
+                    : (isAr ? "⏹ إيقاف وحفظ" : "⏹ Stop & Save")}
                 </button>
               </div>
           }
