@@ -4,6 +4,7 @@
  */
 import React, { useMemo } from "react";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import { tierAtLeast } from "./lib/tierQuality.js";
 
 // ── Linear regression ─────────────────────────────────────────────
 function linReg(pts) {
@@ -32,7 +33,7 @@ function sc(s) {
   return s >= 75 ? "#10b981" : s >= 50 ? "#f59e0b" : "#ef4444";
 }
 
-export default function TrendChart({ sessions = [], cs, lang, onClose }) {
+export default function TrendChart({ sessions = [], cs, lang, onClose, effectiveTier, onUpgrade }) {
   useBodyScrollLock();
   const isAr = lang === "ar";
   const W = 580, H = 220, PAD = { t: 16, r: 20, b: 36, l: 44 };
@@ -88,6 +89,24 @@ export default function TrendChart({ sessions = [], cs, lang, onClose }) {
 
     return { days, roll7, reg, regPts, verdict, verdictColor, overallAvg, best, worst };
   }, [sessions, isAr]);
+
+  // Was gated only at the sidebar nav level (locked:!pro), which was
+  // removed in favor of an "open the feature, upsell inside" pattern —
+  // but this component never had any internal gate of its own, so
+  // removing the sidebar block made it fully free for every tier.
+  if (!tierAtLeast(effectiveTier, "professional")) return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1800, background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
+        <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "مسار التحسن — Pro" : "Trend — Pro"}</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>{isAr ? "شوف اتجاه وضعيتك على مدار 30 يوم مع خط الانحدار" : "See your 30-day posture trend with a regression line"}</div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <button onClick={onClose} style={{ padding: "10px 20px", background: "rgba(255,255,255,.06)", color: "#94a3b8", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{isAr ? "إغلاق" : "Close"}</button>
+          <button onClick={()=>{ onClose?.(); onUpgrade?.(); }} style={{ padding: "10px 20px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{isAr ? "الترقية لـ Pro" : "Upgrade to Pro"}</button>
+        </div>
+      </div>
+    </div>
+  );
 
   // ── SVG helpers ──────────────────────────────────────────────────
   const xPos = idx => PAD.l + (idx / 29) * CW;

@@ -8,6 +8,7 @@ import { getCached, setCache } from "./aiPreloader.js";
 import { SymptomAPI } from "./services/api.js";
 import { updateUserProfile } from "./firebase.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import { tierAtLeast } from "./lib/tierQuality.js";
 
 async function callGemini(prompt, system, maxTokens = 900) {
   try {
@@ -601,7 +602,7 @@ function AIBlock({ loading, data, error, onRetry, isAr }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose , effectiveTier, uid = ""}) {
+export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose , effectiveTier, uid = "", onUpgrade}) {
   useBodyScrollLock();
   const [tab, setTab]         = useState("burnout");
   const [aiText, setAiText]   = useState("");
@@ -786,6 +787,25 @@ Max 180 words. Start immediately.`,
   }, [sessions.length, avgScore, burnoutScore, riskScore, fore?.trend, lang, profile]);
 
   useEffect(() => { if (tab !== "weekplan") loadAI(tab); }, [tab]);
+
+  // Was gated only at the sidebar nav level (locked:!elite), which was
+  // removed in favor of an "open the feature, upsell inside" pattern —
+  // but this component never actually used its effectiveTier prop for
+  // anything, so removing the sidebar block made it fully free for
+  // every tier.
+  if (!tierAtLeast(effectiveTier, "elite")) return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1800, background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
+        <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "AI تنبؤي — Elite" : "Predictive AI — Elite"}</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>{isAr ? "توقّع الإرهاق والألم قبل ما يحصل، بناءً على بيانات وضعيتك" : "Predict burnout and pain before it happens, based on your posture data"}</div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <button onClick={onClose} style={{ padding: "10px 20px", background: "rgba(255,255,255,.06)", color: "#94a3b8", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{isAr ? "إغلاق" : "Close"}</button>
+          <button onClick={()=>{ onClose?.(); onUpgrade?.(); }} style={{ padding: "10px 20px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{isAr ? "الترقية لـ Elite" : "Upgrade to Elite"}</button>
+        </div>
+      </div>
+    </div>
+  );
 
   const saveStretchReminder = async () => {
     if (!weeklyForecast?.ready || !uid) return;

@@ -3,6 +3,7 @@
  */
 import React, { useMemo } from "react";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import { tierAtLeast } from "./lib/tierQuality.js";
 
 const METRICS = [
   { key: "neck_lean",       label: "Neck Lean",       labelAr: "ميل الرقبة",    unit: "°",  low_good: true  },
@@ -40,12 +41,31 @@ function DiffBadge({ diff, lowGood, isAr }) {
   );
 }
 
-export default function SessionComparison({ sessions = [], cs, lang, onClose }) {
+export default function SessionComparison({ sessions = [], cs, lang, onClose, effectiveTier, onUpgrade }) {
   useBodyScrollLock();
   const isAr = lang === "ar";
-
-  // Take last 3 sessions newest→oldest
+  // Take last 3 sessions newest→oldest — must run before any conditional
+  // return below (Rules of Hooks: every hook call must happen on every
+  // render, unconditionally, in the same order).
   const s3 = useMemo(() => sessions.slice(0, 3), [sessions]);
+
+  // Was gated only at the sidebar nav level (locked:!pro), which was
+  // removed in favor of an "open the feature, upsell inside" pattern —
+  // but this component never had any internal gate of its own, so
+  // removing the sidebar block made it fully free for every tier.
+  if (!tierAtLeast(effectiveTier, "professional")) return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1800, background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
+        <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "مقارنة الجلسات — Pro" : "Session Comparison — Pro"}</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>{isAr ? "قارن آخر 3 جلسات جنب بعض وشوف التحسن في كل metric" : "Compare your last 3 sessions side by side across every metric"}</div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <button onClick={onClose} style={{ padding: "10px 20px", background: "rgba(255,255,255,.06)", color: "#94a3b8", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{isAr ? "إغلاق" : "Close"}</button>
+          <button onClick={()=>{ onClose?.(); onUpgrade?.(); }} style={{ padding: "10px 20px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{isAr ? "الترقية لـ Pro" : "Upgrade to Pro"}</button>
+        </div>
+      </div>
+    </div>
+  );
 
   if (s3.length < 2) return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1800, background: "rgba(0,0,0,.50)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
