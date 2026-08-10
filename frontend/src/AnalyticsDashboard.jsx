@@ -455,7 +455,7 @@ function KpiBox({ label, value, sub, color, icon, trend, accent }) {
 
       {/* HEADER */}
       <div style={{ position:"sticky", top:0, zIndex:30, background:"rgba(7,11,18,.95)",
-        borderBottom:`1px solid ${TOKENS.border}`, backdropFilter:"blur(16px)" }}>
+        borderBottom:`1px solid ${TOKENS.border}`, backdropFilter:"blur(4px)" }}>
         <div style={{ padding:`${SP[4]}px ${SP[5]}px`, display:"flex",
           alignItems:"center", gap:12 }}>
           <button onClick={onBack} style={{ background:"none",

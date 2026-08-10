@@ -159,8 +159,8 @@ function Bubble({ msg, isAr, index, onReact, onRegenerate }) {
           boxShadow: isUser
             ? "0 4px 16px rgba(17,88,199,.22)"
             : "0 2px 12px rgba(0,0,0,.3)",
-          backdropFilter:isUser?"none":"blur(10px)",
-          WebkitBackdropFilter:isUser?"none":"blur(10px)",
+          backdropFilter:isUser?"none":"blur(4px)",
+          WebkitBackdropFilter:isUser?"none":"blur(4px)",
         }}>
           {/* Shimmer while waiting */}
           {msg.streaming && !msg.content && (
@@ -490,8 +490,8 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
     <div style={{
       position:"fixed",inset:0,zIndex:9999,
       display:"flex",alignItems:"center",justifyContent:"center",
-      background:"rgba(4,8,20,.6)",backdropFilter:"blur(6px)",
-      WebkitBackdropFilter:"blur(6px)",padding:16,
+      background:"rgba(4,8,20,.6)",backdropFilter:"blur(4px)",
+      WebkitBackdropFilter:"blur(4px)",padding:16,
       animation:"bIn .18s ease both",
     }}>
       <style>{`
@@ -620,7 +620,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:12,color:"#fff"}}>✦</div>
               <div style={{background:T.aiBg||"rgba(15,28,46,.95)",border:`0.5px solid ${T.borderH}`,
-                borderRadius:"16px 4px 16px 16px",backdropFilter:"blur(10px)"}}>
+                borderRadius:"16px 4px 16px 16px",backdropFilter:"blur(4px)"}}>
                 <TypingDots/>
               </div>
             </div>
@@ -802,8 +802,8 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
     <div style={{
       position:"fixed",inset:0,zIndex:9999,
       display:"flex",alignItems:"center",justifyContent:"center",
-      background:"rgba(4,8,20,.7)",backdropFilter:"blur(6px)",
-      WebkitBackdropFilter:"blur(6px)",padding:16,
+      background:"rgba(4,8,20,.8)",backdropFilter:"blur(4px)",
+      WebkitBackdropFilter:"blur(4px)",padding:16,
       animation:"bIn .18s ease both",
     }}>
       <style>{`@keyframes bIn{from{opacity:0}to{opacity:1}}@keyframes sUp{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:none}}`}</style>

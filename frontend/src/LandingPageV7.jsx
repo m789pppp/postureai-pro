@@ -459,8 +459,8 @@ function Nav({ lang, setLang, onCTA }) {
         background: scrolled || mobileOpen
           ? "rgba(3,8,18,.95)"
           : "rgba(3,8,18,.45)",
-        backdropFilter:"blur(12px)",
-        WebkitBackdropFilter:"blur(12px)",
+        backdropFilter:"blur(4px)",
+        WebkitBackdropFilter:"blur(4px)",
         borderBottom:`1px solid ${scrolled ? "rgba(255,255,255,.08)" : "transparent"}`,
         boxShadow: scrolled ? "0 2px 40px rgba(0,0,0,.4)" : "none",
         transition:"background .3s, border-color .3s, box-shadow .3s",

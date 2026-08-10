@@ -73,10 +73,14 @@ export function useBackendHealth() {
 export function useToasts() {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback((text, type = "info", duration = 3500) => {
+  const addToast = useCallback((text, type = "info", duration) => {
+    // Arabic text needs more reading time — auto-detect RTL characters
+    const isArabic = /[؀-ۿ]/.test(text);
+    const dur = duration ?? (type === "error" ? 0 : isArabic ? 5500 : 3500);
+    // Error toasts stay until dismissed (dur=0 means permanent)
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setToasts(prev => [...prev.slice(-5), { id, text, type }]); // max 6 toasts
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration);
+    if (dur > 0) setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), dur);
     return id;
   }, []);
 
