@@ -4763,9 +4763,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showMRR&&isAdmin&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
       {showHelp&&<Suspense fallback={null}><HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/></Suspense>}
       {showChangelog&&isAdmin&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
-      {showAIInsights&&<Suspense fallback={null}><AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIInsights(false)}/></Suspense>}
+      {showAIInsights&&<Suspense fallback={null}><AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowAIInsights(false)}/></Suspense>}
       {showSymptomCorrelation&&<SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/>}
-      {showPredictiveAI&&<Suspense fallback={null}><PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/></Suspense>}
+      {showPredictiveAI&&<Suspense fallback={null}><PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowPredictiveAI(false)}/></Suspense>}
       {showAIReports&&<Suspense fallback={null}><AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/></Suspense>}
       {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/></Suspense>}
       {showEnterpriseRBAC&&<Suspense fallback={null}><EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/></Suspense>}
@@ -4885,9 +4885,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
         streak={shareCardData.streak||0} percentile={null}
         lang={lang} cs={cs} addToast={addToast} onClose={()=>setShowShareCard(false)}/>
     )}
-    {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
+    {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowSessionComparison(false)}/>}
       {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}
-      {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
+      {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowTrendChart(false)}/>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
       {showAPIMarketplace&&<Suspense fallback={null}><APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/></Suspense>}
