@@ -1,4 +1,4 @@
-// Router: /api/* misc → 7 handlers (account, admin, email, metrics, notify, org, cron)
+// Router: /api/* misc → 9 handlers (account, admin, email, metrics, notify, org, cron, whoami, gamification)
 import accountDelete    from "./_handlers/misc/account-delete.js";
 import seedFlags        from "./_handlers/misc/seed-flags.js";
 import emailSend        from "./_handlers/misc/email-send.js";
@@ -6,6 +6,8 @@ import revenue          from "./_handlers/misc/revenue.js";
 import notifyDispatch   from "./_handlers/misc/notify-dispatch.js";
 import orgInvite        from "./_handlers/misc/org-invite.js";
 import symptomAlerts    from "./_handlers/misc/symptom-alerts.js";
+import whoami           from "./_handlers/misc/whoami.js";
+import gamificationCompute from "./_handlers/misc/gamification-compute.js";
 
 export default async function handler(req, res) {
   const path = req.url.split("?")[0];
@@ -16,5 +18,7 @@ export default async function handler(req, res) {
   if (path.includes("/notify/dispatch"))             return notifyDispatch(req, res);
   if (path.includes("/org/invite"))                  return orgInvite(req, res);
   if (path.includes("/cron/symptom-pattern-alerts")) return symptomAlerts(req, res);
+  if (path.includes("/auth/whoami"))                 return whoami(req, res);
+  if (path.includes("/gamification/compute"))        return gamificationCompute(req, res);
   res.status(404).json({ error: "Not found" });
 }
