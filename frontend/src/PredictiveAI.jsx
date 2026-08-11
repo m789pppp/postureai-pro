@@ -794,7 +794,7 @@ Max 180 words. Start immediately.`,
   // anything, so removing the sidebar block made it fully free for
   // every tier.
   if (!tierAtLeast(effectiveTier, "elite")) return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1800, background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 9200, background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
         <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
         <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "AI تنبؤي — Elite" : "Predictive AI — Elite"}</div>
