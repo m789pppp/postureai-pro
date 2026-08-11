@@ -1,5 +1,5 @@
-// Corvus — Service Worker v7 — POST requests bypass SW entirely
-const CACHE_VER = "corvus-v7";
+// Corvus — Service Worker v8 — guards against non-http(s) cache.put() errors
+const CACHE_VER = "corvus-v8";
 const MP_CACHE  = "mediapipe-v3";
 
 const MP_ASSETS = [
@@ -32,6 +32,12 @@ self.addEventListener("fetch", e => {
   // CRITICAL: Never intercept POST/PUT/PATCH/DELETE — body already consumed
   // This fixes "Response body is already used" error on /api/llm
   if (e.request.method !== "GET") return;
+
+  // The Cache API only supports http(s) requests — browser extensions can
+  // inject chrome-extension:// (or other non-http) requests into the page's
+  // fetch activity, and caches.put() throws a TypeError on those, which was
+  // an uncaught promise rejection every time it happened.
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
   // Never intercept Firebase / Google / payment APIs
   if (
