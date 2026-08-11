@@ -95,7 +95,7 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
   // but this component never had any internal gate of its own, so
   // removing the sidebar block made it fully free for every tier.
   if (!tierAtLeast(effectiveTier, "professional")) return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1800, background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 9200, background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
         <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
         <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "مسار التحسن — Pro" : "Trend — Pro"}</div>
@@ -143,7 +143,7 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
 
   if (data.days.filter(d => d.avg !== null).length === 0) {
     return (
-      <div style={{ position:"fixed",inset:0,zIndex:1800,background:"rgba(0,0,0,.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
+      <div style={{ position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
         <div style={{ background:"rgba(8,14,28,.98)",border:"1px solid rgba(255,255,255,.08)",borderRadius:18,padding:"40px 28px",maxWidth:360,textAlign:"center" }}>
           <div style={{ fontSize:44,marginBottom:14 }}>📊</div>
           <div style={{ fontSize:17,fontWeight:800,color:"#f0f6ff",marginBottom:8 }}>{isAr?"لا توجد بيانات بعد":"No data yet"}</div>
@@ -155,7 +155,7 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
   }
 
   return (
-    <div style={{ position:"fixed",inset:0,zIndex:1800,background:"rgba(0,0,0,.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflowY:"auto" }}>
+    <div style={{ position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflowY:"auto" }}>
       <div style={{ background:"rgba(15,23,42,.98)",border:"1px solid rgba(255,255,255,.08)",borderRadius:20,width:"100%",maxWidth:660,maxHeight:"92dvh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.7)" }}>
 
         {/* Header */}
