@@ -1,17 +1,4 @@
-// BUILD:
-// Global error handler for unhandled promise rejections
-if (typeof window !== 'undefined') {
-  window.addEventListener('unhandledrejection', (e) => {
-    console.error('[Corvus] Unhandled promise rejection:', e.reason);
-    // Prevent blank screen crashes from promise rejections
-    e.preventDefault();
-  });
-}
-<<<<<<< Updated upstream
-=======
- 20260806091209
->>>>>>> Stashed changes
-import React, { lazy, Suspense, useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, Suspense, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
@@ -27,8 +14,8 @@ import {
   doc, updateDoc,
 } from "./firebase.js";
 import { HRPanel } from "./HRPanel.jsx";
-const TherapistMarketplace = lazy(()=>import("./TherapistMarketplace.jsx").then(m=>({default:m.TherapistMarketplace})));
-const SymptomCorrelation = lazy(()=>import("./SymptomCorrelation.jsx").then(m=>({default:m.SymptomCorrelation})));
+import { TherapistMarketplace } from "./TherapistMarketplace.jsx";
+import { SymptomCorrelation } from "./SymptomCorrelation.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
 import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
@@ -36,16 +23,15 @@ import { AICoach } from "./AICoach.jsx";
 import { preloadAIInsights } from "./aiPreloader.js";
 import { NotificationsHub, useNotifications } from "./NotificationsHub.jsx";
 import { OnboardingWizard } from "./OnboardingWizard.jsx";
-const GamificationPanel = lazy(()=>import("./Gamification.jsx").then(m=>({default:m.GamificationPanel})));
+import { GamificationPanel } from "./Gamification.jsx";
 import { BillingModal, PLANS } from "./Billing.jsx";
-import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, FamilyAPI, apiFetch } from "./services/api.js";
+import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, apiFetch } from "./services/api.js";
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
-import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 // DESIGN import removed — use COLORS, TYPE, SPACE directly from DesignSystem.js
@@ -58,11 +44,6 @@ const Landing = LandingPageV7; // alias so <Landing> works
 import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
 import { handleSSORedirect } from "./EnterpriseSSO.jsx";
 // initSentry moved to sentry.js (V12)
-const CertBadgeModal = lazy(()=>import("./CertificatePage.jsx").then(m=>({default:m.CertBadgeModal})));
-const QuarterlyReportModal = lazy(()=>import("./CorporateWellness.jsx").then(m=>({default:m.QuarterlyReportModal})));
-const SchoolsModal = lazy(()=>import("./CorporateWellness.jsx").then(m=>({default:m.SchoolsModal})));
-const DeveloperPortalModal = lazy(()=>import("./DeveloperPortal.jsx").then(m=>({default:m.DeveloperPortalModal})));
-const InsurancePartnerModal = lazy(()=>import("./DeveloperPortal.jsx").then(m=>({default:m.InsurancePartnerModal})));
 import AuthPage            from "./AuthPage.jsx";
 import ResetPasswordPage    from "./ResetPasswordPage.jsx";
 import EmailVerificationPage from "./EmailVerificationPage.jsx";
@@ -75,8 +56,8 @@ import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
 import { NotFound } from "./ErrorPage.jsx";
-const SessionComparison = lazy(()=>import("./SessionComparison.jsx"));
-const TrendChart = lazy(()=>import("./TrendChart.jsx"));
+import SessionComparison    from "./SessionComparison.jsx";
+import TrendChart           from "./TrendChart.jsx";
 import { ShareCard }        from "./ShareCard.jsx";
 import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
 import { ProductTour, TourTrigger } from "./ProductTour.jsx";
@@ -118,7 +99,7 @@ const TIERS = {
     id:"standard", name:"Free", color:"#6366f1", colorDim:"rgba(99,102,241,.12)",
     price_egp_monthly:0,     price_egp_yearly:0,
     price_usd_monthly:0,     price_usd_yearly:0,
-    features:["5 sessions/month (max 3/day)","Posture score","Basic alerts"],
+    features:["5 sessions/month","Posture score","Basic alerts"],
     badge:null
   },
   basic:{
@@ -919,7 +900,7 @@ function Onboard({cs,t,done}){
   const[step,setStep]=useState(0);
   const steps=[{e:"◈",ti:t.ob1,d:t.ob1d},{e:"📊",ti:t.ob2,d:t.ob2d},{e:"📷",ti:t.ob3,d:t.ob3d},{e:"🚀",ti:t.ob4,d:t.ob4d}];
   const s=steps[step];
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888,backdropFilter:"blur(4px)"}}>
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888,backdropFilter:"blur(4px)"}}>
     <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,padding:36,maxWidth:400,width:"90%",textAlign:"center"}}>
       <div style={{fontSize:48,marginBottom:14}}>{s.e}</div>
       <div style={{fontSize:17,fontWeight:700,color:cs.text,marginBottom:10}}>{s.ti}</div>
@@ -1257,7 +1238,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
         </div>
         {refStats?.credits>0&&<div style={{fontSize:11,color:"#10b981",fontWeight:700}}>💰 {refStats.credits} EGP {isAr?"رصيد متاح":"credit available"}</div>}
       </div>
-      {showReferralProgram&&<ErrorBoundary key="referralprogram"><Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense></ErrorBoundary>}
+      {showReferralProgram&&<Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense>}
       <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:9}}>
@@ -1267,7 +1248,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
           <Btn cs={cs} onClick={()=>setShowIntegrationsHub(true)} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{isAr?"فتح":"Open"}</Btn>
         </div>
       </div>
-      {showIntegrationsHub&&<ErrorBoundary key="integrationshub"><Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense></ErrorBoundary>}
+      {showIntegrationsHub&&<Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense>}
       {sessions?.length>0&&<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
         <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:13}}>{t.sessionHist||"Session History"}</div>
         <BarChart data={sessions?.slice(0,10).reverse().map((s,i)=>({l:`S${i+1}`,v:s.avg_score||0}))} color="#1a56db" cs={cs}/>
@@ -2107,7 +2088,10 @@ function DeviceSelect({cs,t,lang,onSelect}){
 // ══════════════════════════════════════════════════════════════════
 // MAIN APP COMPONENT
 // ══════════════════════════════════════════════════════════════════
-
+// OAuth redirect detection — persists across page reload
+let _oauthInProgress = !!(function() {
+  try { return sessionStorage.getItem("__pendingOAuth") === "1"; } catch { return false; }
+})();
 
 // ── Lazy-loaded components ──────────────────────────────────────
 // lazyNamed(): wraps React.lazy() so that if the dynamic import DOES
@@ -2240,7 +2224,7 @@ export default function App(){
   // ── ABSOLUTE SAFETY NET — app MUST unblock within 6s no matter what ──
   useEffect(()=>{
     const t = setTimeout(()=>{
-      setAuthChecked(c=>{ if(!c && !_oauthInProgress.current){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
+      setAuthChecked(c=>{ if(!c && !_oauthInProgress){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
     }, 6000);
     return ()=>clearTimeout(t);
   },[]);
@@ -2277,50 +2261,12 @@ export default function App(){
       window.history.replaceState({}, "", "#auth");
       return "auth";
     }
-    // #5 FIX: returning user (was previously logged in) shows login page not full landing
-    try { if (localStorage.getItem("corvus_was_logged") === "1") return "auth"; } catch {}
     return "landing";
   });
-  // ── White Label: load company branding and apply to cs ──────────────
-  useEffect(()=>{
-    if(!user?.uid) return;
-    // Admin-only server-side (backend checks user_type/is_org_owner/is_admin)
-    // — skip the request entirely for accounts that clearly aren't going to
-    // be authorized, instead of firing it for every logged-in user and
-    // eating a 403/500 + console error on every load.
-    const canHaveBranding = profile?.company_id || profile?.is_org_owner || profile?.is_admin
-      || ["platform_admin","hr_admin"].includes(profile?.user_type);
-    if(!canHaveBranding) return;
-    fetch("/api/company/branding", {
-      headers:{ Authorization: `Bearer ${user.accessToken||""}` }
-    })
-    .then(r=>r.ok?r.json():null)
-    .then(d=>{
-      const b = d?.branding;
-      if(!b || !Object.keys(b).length) return;
-      // Apply primary color as CSS variable
-      if(b.primaryColor) document.documentElement.style.setProperty("--brand-primary", b.primaryColor);
-      if(b.bgColor)      document.documentElement.style.setProperty("--brand-bg", b.bgColor);
-      if(b.fontFamily)   document.documentElement.style.setProperty("--brand-font", b.fontFamily);
-      // Apply favicon
-      if(b.faviconUrl){
-        let link = document.querySelector("link[rel~='icon']");
-        if(!link){ link=document.createElement("link"); link.rel="icon"; document.head.appendChild(link); }
-        link.href = b.faviconUrl;
-      }
-      // Apply page title
-      if(b.companyName) document.title = `${b.companyName} | Powered by Corvus`;
-    })
-    .catch(()=>{});
-  },[user?.uid, profile?.company_id, profile?.is_org_owner, profile?.is_admin, profile?.user_type]);
-
   // Firebase action URLs (password reset / email verify from email links)
   const _fbp = new URLSearchParams(window.location.search);
   const [fbMode]    = useState(_fbp.get("mode")    || null);
   const [fbOobCode] = useState(_fbp.get("oobCode") || null);
-  // Family/Partner Mode invite link (?family_invite=TOKEN) — processed
-  // once the user is authenticated, see the effect below.
-  const [pendingFamilyInvite, setPendingFamilyInvite] = useState(_fbp.get("family_invite") || null);
   const [showEmailVerify, setShowEmailVerify] = useState(false);
   const [showChangePw,    setShowChangePw]    = useState(false);
   const setPage = (p) => {
@@ -2333,26 +2279,7 @@ export default function App(){
   };
   // Listen for browser back/forward
   useEffect(() => {
-    const onPop = () => {
-      const newPage = hashToPage(window.location.hash);
-      // Physical/mobile back button used to just swap the page underneath an
-      // active camera session: stream kept running, camera indicator light
-      // stayed on, RAF loop kept burning CPU in the background, and the
-      // session was never saved -- none of that happened only through the
-      // in-app Back buttons, which explicitly call stopCamera() themselves.
-      // streamRef.current (not just camActiveRef) is the real source of
-      // truth for "is a camera stream open right now" — the preview/
-      // countdown phase opens the stream and shows it live BEFORE camActive
-      // ever becomes true, so checking camActive alone would miss that
-      // window entirely.
-      if(newPage!=="live" && (camActiveRef.current || streamRef.current)){ stopCamera(); }
-      // showHealthConsent can be open BEFORE any stream exists (it's the
-      // very first check in startCamera(), before getUserMedia is even
-      // called) — reset unconditionally so it can't get stuck open and
-      // block clicks on whatever page the back button lands on.
-      if(newPage!=="live"){ setShowHealthConsent(false); setPreviewPhase(null); }
-      setPageRaw(newPage);
-    };
+    const onPop = () => setPageRaw(hashToPage(window.location.hash));
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -2377,28 +2304,7 @@ export default function App(){
   },[profile?.acct_type,profile?.user_type,acctType]); // "company" | "individual"
   const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
   const[camActive,setCamActive]=useState(false);
-  // Popstate (browser/mobile back button) fires from a listener registered
-  // once on mount — without a ref, its closure would only ever see camActive
-  // as it was at that first render (false), so it could never detect "camera
-  // is currently running" no matter what actually happens later.
-  const camActiveRef=useRef(false);
-  useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
-  // Catch-all safety net, independent of the popstate handler above: force
-  // these two modals closed on ANY transition away from the live page, via
-  // any mechanism (not just back-button).
-  useEffect(()=>{
-    if(page!=="live"){ setShowHealthConsent(false); setPreviewPhase(null); }
-  },[page]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
-  // Camera preview → 3-2-1 countdown flow, cancellable the whole time.
-  const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
-  const[countdownN,setCountdownN]=useState(3);
-  const countdownIvRef=useRef(null);
-  // True pause/resume — freezes the RAF analysis loop and the session
-  // timer without ending or saving the session. Camera stream stays
-  // attached (video keeps showing) so resuming is instant, no re-request.
-  const[isPaused,setIsPaused]=useState(false);
-  const pausedAtRef=useRef(null);
   const[mpStatus,setMpStatus]=useState("loading");
   // AI Coach status — previously the sidebar dot was hardcoded to always show
   // "AI Coach (local, free)" regardless of whether WebLLM had actually loaded.
@@ -2425,9 +2331,6 @@ export default function App(){
   // Elite voice coach — persisted preference; actual enablement is tier-gated below
   const[voiceCoach,setVoiceCoach]=useState(()=>{try{return localStorage.getItem("corvus_voice_coach")==="1";}catch{return false;}});
   const[faceBlur,setFaceBlur]=useState(()=>{try{return localStorage.getItem("corvus_face_blur")==="1";}catch{return false;}});
-  // Pro-tier Custom Alert Rules — synced from profile once it loads (see effect below)
-  const[customAlertRules,setCustomAlertRules]=useState([]);
-  const[showCustomAlertRules,setShowCustomAlertRules]=useState(false);
   const[showSkeleton,setShowSkeleton]=useState(()=>{try{return localStorage.getItem("corvus_show_skeleton")!=="0";}catch{return true;}});
   const[showAngles,setShowAngles]=useState(()=>{try{return localStorage.getItem("corvus_show_angles")!=="0";}catch{return true;}});
   const playPostureAlert=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();[440,360].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=f;g.gain.setValueAtTime(0,ac.currentTime+i*.32);g.gain.linearRampToValueAtTime(.14,ac.currentTime+i*.32+.06);g.gain.linearRampToValueAtTime(0,ac.currentTime+i*.32+.3);o.start();o.stop(ac.currentTime+i*.32+.35);});}catch{}}; // local fallback
@@ -2447,47 +2350,8 @@ export default function App(){
     document.body.classList.toggle("light", !darkMode);
   }, [darkMode]);
   useEffect(()=>{try{localStorage.setItem("lang",lang);}catch{}}, [lang]);
-  const { toasts, addToast: _rawAddToast, dismiss: dismissToast } = useToasts();
-  // ── Focus Mode ────────────────────────────────────────────────
-  // Was a Professional-tier pricing-page promise with zero
-  // implementation anywhere in the codebase. Real, scoped behavior:
-  // while active, suppresses the generic toast queue (achievements,
-  // streak celebrations, upsell nudges, etc.) so a session feels
-  // distraction-free — it does NOT touch actual posture-correction
-  // alerts, which already live on a completely separate mechanism
-  // (setAlertMsg/speakCoach/sendDesktopNotif in the live-analysis loop,
-  // not addToast) — those are the whole point of using the app and
-  // are never suppressed by this.
-  const [focusMode, setFocusMode] = useState(() => {
-    try { return localStorage.getItem("corvus_focus_mode") === "1"; } catch { return false; }
-  });
-  useEffect(() => { try { localStorage.setItem("corvus_focus_mode", focusMode ? "1" : "0"); } catch {} }, [focusMode]);
-  const addToast = useCallback((text, type = "info", duration) => {
-    if (focusMode && type !== "error") return null; // errors always get through
-    return _rawAddToast(text, type, duration);
-  }, [focusMode, _rawAddToast]);
+  const { toasts, addToast, dismiss: dismissToast } = useToasts();
   const toast = addToast; // alias
-
-  // ── Family/Partner Mode invite acceptance ────────────────────────
-  // ?family_invite=TOKEN in the URL (from the invite email) — processed
-  // once we know who's logged in, then cleared from the URL either way
-  // so a refresh doesn't try to re-accept it.
-  useEffect(() => {
-    if (!pendingFamilyInvite || !user) return;
-    const token = pendingFamilyInvite;
-    setPendingFamilyInvite(null);
-    const url = new URL(window.location.href);
-    url.searchParams.delete("family_invite");
-    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
-    FamilyAPI.accept(token)
-      .then(() => {
-        addToast(isAr ? "🎉 اتربط حسابك بنجاح — عندك دلوقتي نفس صلاحيات الباقة" : "🎉 Account linked — you now have the same plan access", "success");
-      })
-      .catch(e => {
-        addToast(e?.message || (isAr ? "تعذر قبول الدعوة" : "Couldn't accept the invite"), "error");
-      });
-  }, [pendingFamilyInvite, user]);
-
   const isOnline = useOnline();
   const[showOnboard,setShowOnboard]=useState(false);
   const[showCompanyOnboard,setShowCompanyOnboard]=useState(false);
@@ -2509,25 +2373,6 @@ export default function App(){
   const[userSessions,setUserSessions]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
-  const[showQuarterlyReport,setShowQuarterlyReport]=useState(false);
-
-  // Track referral clicks — fire-and-forget on mount
-  useEffect(()=>{
-    try {
-      const ref = new URLSearchParams(window.location.search).get("ref");
-      if (ref) {
-        fetch("/api/referral/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ref_code:ref})}).catch(()=>{});
-        try { sessionStorage.setItem("corvus_ref",ref); } catch {}
-      }
-    } catch {}
-  },[]);
-  const[showSchoolsModal,setShowSchoolsModal]=useState(false);
-  const[showDevPortal,setShowDevPortal]=useState(false);
-  const[showInsuranceModal,setShowInsuranceModal]=useState(false);
-  const[showCertModal,setShowCertModal]=useState(()=>{
-    try{return new URLSearchParams(window.location.search).get("cert_issued")==="1";}catch{return false;}
-  });
-  const[authMode,setAuthMode]=useState(()=>new URLSearchParams(window.location.search).get("mode")==="signup"?"signup":"login");
   const[deepBilling,setDeepBilling]=useState("monthly");
   const[companyId,setCompanyId]=useState(null);
   const[showUpgrade,setShowUpgrade]=useState(false);
@@ -2559,21 +2404,6 @@ export default function App(){
   const[muted,setMuted]=useState(false);
   const { alertIfNeeded } = useSoundFeedback(muted);
   const { update: updatePainPrediction, reset: resetPainPrediction } = usePainPrediction();
-
-  // Pro-tier Custom Alert Rules — sync local copy once profile loads/changes
-  useEffect(()=>{ if(profile?.custom_alert_rules) setCustomAlertRules(profile.custom_alert_rules); },[profile?.custom_alert_rules]);
-  const { checkRules: checkCustomAlertRules } = useCustomAlertRuleEngine(customAlertRules, {
-    onTrigger: (rule, val) => {
-      const mCfg = ALERT_METRICS.find(m=>m.id===rule.metric);
-      const label = mCfg ? (isAr?mCfg.label_ar:mCfg.label) : rule.metric;
-      const msg = isAr
-        ? `⚠️ ${label} تعدّى ${rule.thresholdDeg}° لأكتر من ${Math.round(rule.durationSec/60)} دقيقة`
-        : `⚠️ ${label} exceeded ${rule.thresholdDeg}° for over ${Math.round(rule.durationSec/60)} min`;
-      addToast(msg,"warn");
-      if(rule.voice) speakCoach(msg, isAr?"ar":"en", {force:true});
-    },
-  });
-
   const[showCoach,setShowCoach]=useState(false);
   const[showGamification,setShowGamification]=useState(false);
   // AI Intelligence Layer
@@ -2621,57 +2451,7 @@ export default function App(){
     if(user?.uid){ updateDoc(doc(db,"users",user.uid),{healthDisclaimerAcceptedAt:new Date().toISOString()}).catch(()=>{}); }
     startCamera();
   }
-  // Rendered from BOTH the page==="home" block and the page==="live" block —
-  // startCamera() (called from the live page) is what sets showHealthConsent
-  // to true, but the home block's early `return` meant the modal only ever
-  // painted while page==="home". A first-time user clicking "Start Analysis"
-  // from the live page got a completely silent no-op: state flipped, nothing
-  // rendered, button looked dead. Defining it once here and mounting it in
-  // both branches fixes that regardless of which page triggered it.
-  const healthConsentModalEl = showHealthConsent&&(
-    <div dir={dir} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000,padding:20}}>
-      <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,maxWidth:460,width:"100%",padding:0,overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,.4)"}}>
-        <div style={{background:"linear-gradient(135deg,#3b82f6,#2563eb)",padding:"22px 26px",display:"flex",alignItems:"center",gap:12}}>
-          <div style={{fontSize:26,lineHeight:1}}>🩺</div>
-          <div>
-            <div style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:.2}}>{isAr?"قبل ما نبدأ التحليل":"Before we start"}</div>
-            <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:2}}>{isAr?"إقرار سريع لمرة واحدة":"A one-time acknowledgement"}</div>
-          </div>
-        </div>
-        <div style={{padding:"22px 26px"}}>
-          <p style={{color:cs.text,fontSize:13.5,lineHeight:1.7,margin:"0 0 14px"}}>
-            {isAr
-              ? "Corvus أداة توعية بوضعية الجسم للاستخدام العام — وليست جهازاً طبياً ولا بديلاً عن استشارة أخصائي. القياسات والتقارير تقريبية والغرض منها التوعية فقط."
-              : "Corvus is a general wellness tool for posture awareness — not a medical device and not a substitute for professional advice. Measurements and reports are approximate and for informational purposes only."}
-          </p>
-          <ul style={{color:cs.muted,fontSize:12.5,lineHeight:1.6,margin:"0 0 16px",paddingInlineStart:18}}>
-            <li>{isAr?"لو عندك ألم أو حالة طبية، استشر طبيباً أو أخصائي علاج طبيعي.":"If you have pain or a medical condition, consult a doctor or physiotherapist."}</li>
-            <li>{isAr?"لا تعتمد على النتائج في اتخاذ قرارات طبية.":"Do not rely on results for medical decisions."}</li>
-            <li>{isAr?"معالجة الفيديو تتم على جهازك في الوقت اللحظي.":"Video is processed on your device in real time."}</li>
-          </ul>
-          <div style={{display:"flex",gap:10,flexDirection:isAr?"row-reverse":"row"}}>
-            <button onClick={acceptHealthConsent} style={{flex:1,background:"linear-gradient(135deg,#3b82f6,#2563eb)",border:"none",borderRadius:11,padding:"13px 18px",fontSize:13.5,fontWeight:700,color:"#fff",cursor:"pointer"}}>
-              {isAr?"أوافق وابدأ":"I agree — start"}
-            </button>
-            <button onClick={()=>{setShowHealthConsent(false); if(page==="live") setPage("home");}} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,padding:"13px 18px",fontSize:13,color:cs.muted,cursor:"pointer"}}>
-              {isAr?"إلغاء":"Cancel"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
   const[showAccountActivity,setShowAccountActivity]=useState(false);
-  // Live-page settings panel (posture alerts, voice coach, overlays, PDF,
-  // calibrate, break chime) — collapsed by default. Elite users have every
-  // one of these unlocked with nothing to compact away via tier-gating, so
-  // without a collapse they're looking at 7 full rows the instant they open
-  // the page, whether they came here to change a setting or just start a
-  // session.
-  const[showLiveSettings,setShowLiveSettings]=useState(false);
-  const[isSavingSession,setIsSavingSession]=useState(false);
-  const[hoverBarIdx,setHoverBarIdx]=useState(null);
-  const[showAllMetrics,setShowAllMetrics]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   const[showReferralProgram,setShowReferralProgram]=useState(false);
   const[showIntegrationsHub,setShowIntegrationsHub]=useState(false);
@@ -2856,25 +2636,14 @@ export default function App(){
   // Auth state listener
   // Track if auth came from OAuth redirect — prevents timeout from firing
   const _oauthRedirect = useRef(false);
-  // Was referenced in 6 places (safety-net timeout, popstate-adjacent auth
-  // flow, and the pre-auth render guard) but never actually declared
-  // anywhere — a leftover from the loading-screen fix that turned "stuck
-  // loading" into "crashes on load for everyone" the moment it shipped,
-  // since every one of those reads threw ReferenceError on first render.
-  const _oauthInProgress = useRef(false);
-  // Which uid we've already run the forced setPage("home"/"setup"/"invite")
-  // routing for — onAuthStateChanged can legitimately refire for the SAME
-  // signed-in user (token refresh, tab visibility changes), and that must
-  // NOT re-trigger navigation away from wherever the user currently is.
-  const routedUidRef = useRef(null);
 
   useEffect(()=>{
     // Handle Google/Microsoft OAuth redirect result
     getGoogleRedirectResult().then(async result => {
       if (result?.user) {
         _oauthRedirect.current = true;
-        _oauthInProgress.current = false;
-        try { sessionStorage.removeItem("__pendingOAuth"); sessionStorage.removeItem("__pendingOAuthTs"); } catch {}
+        _oauthInProgress = false;
+        try { sessionStorage.removeItem("__pendingOAuth"); } catch {}
         const u = result.user;
         let p = null;
         try { p = await getUserProfile(u.uid); } catch{}
@@ -2892,28 +2661,6 @@ export default function App(){
           if(p.company_id) setCompanyId(p.company_id);
         }
         getUserSessions(u.uid).then(setUserSessions).catch(e=>console.warn("[Sessions]",e.message));
-        // Retry any sessions that failed to save last time (see the
-        // saveSession catch in stopCamera) now that we have a fresh,
-        // authenticated connection to Firestore.
-        (async()=>{
-          try{
-            const key="corvus_pending_sessions";
-            const queue=JSON.parse(localStorage.getItem(key)||"[]");
-            if(!queue.length) return;
-            const mine=queue.filter(q=>q.uid===u.uid);
-            const others=queue.filter(q=>q.uid!==u.uid);
-            const stillFailed=[];
-            for(const q of mine){
-              try{ await saveSession(u.uid,q.data); }
-              catch{ if(Date.now()-q.queuedAt < 7*86400000) stillFailed.push(q); } // drop after 7 days
-            }
-            localStorage.setItem(key, JSON.stringify([...others,...stillFailed]));
-            if(mine.length>stillFailed.length){
-              addToast?.(isAr?`✅ اتحفظت ${mine.length-stillFailed.length} جلسة كانت متعلقة`:`✅ Saved ${mine.length-stillFailed.length} previously pending session(s)`,"success");
-              getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
-            }
-          }catch{}
-        })();
         setAuthChecked(true);
         if (isNew) setPage("setup");
         else setPage("home");
@@ -2924,7 +2671,7 @@ export default function App(){
 
     const authTimeout=setTimeout(()=>{
       // Don't redirect to landing if we know we're processing an OAuth redirect
-      if (_oauthRedirect.current || _oauthInProgress.current) return;
+      if (_oauthRedirect.current || _oauthInProgress) return;
       setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
     }, 8000);
 
@@ -2932,7 +2679,7 @@ export default function App(){
       clearTimeout(authTimeout);
       // onAuthStateChanged is the SINGLE source of truth for routing
       // Clear OAuth pending flag — we now have definitive auth state
-      try { if(u) { sessionStorage.removeItem("__pendingOAuth"); sessionStorage.removeItem("__pendingOAuthTs"); } } catch{}
+      try { if(u) sessionStorage.removeItem("__pendingOAuth"); } catch{}
       // NOTE: Elite tier elevation is handled SERVER-SIDE only in
       // backend/auth/middleware.py (ELITE_DOMAINS + ELITE_EMAILS).
       // Do NOT add email lists here — client JS is visible in DevTools.
@@ -2948,8 +2695,6 @@ export default function App(){
           // anywhere wrote this before, so every customer was scored as if
           // they hadn't logged in for 30 days, regardless of actual activity.
           try { updateUserProfile(u.uid, { last_login_at: new Date().toISOString() }); } catch{}
-          // #5: persist returning-user flag so next visit skips the full landing page
-          try { localStorage.setItem("corvus_was_logged", "1"); } catch {}
 
           if(!p){
             // Profile might not be written yet (race with AuthPage signup) — wait & retry once
@@ -3056,28 +2801,18 @@ export default function App(){
           try { const lm=localStorage.getItem("last_mode"); if(lm) setMode(lm); } catch{}
 
           // Navigate — always land on home or setup, never on live (live requires user interaction)
-          // ONLY on the first resolution for this uid. onAuthStateChanged
-          // legitimately refires during an active session (ID token refresh,
-          // and on mobile, tab visibility changes right after things like
-          // the getUserMedia() camera-permission prompt) -- every refire
-          // used to run this same forced setPage("home"/"setup") again,
-          // which is exactly what was yanking users on the LIVE page back
-          // to Home mid-session, camera still running, session unsaved.
-          if(routedUidRef.current!==u.uid){
-            routedUidRef.current=u.uid;
-            try {
-              const params=new URLSearchParams(window.location.search);
-              const pendingInvite=sessionStorage.getItem("pending_invite");
-              // Clear #live hash if present — live page should only open via explicit user action
-              if(window.location.hash === "#live") window.history.replaceState({},"","#home");
-              if(pendingInvite){ window.__invite_token=pendingInvite; setPage("invite"); }
-              else if(!p || !p.setup_complete) setPage("setup");
-              else {
-                const planParam = params.get("plan");
-                setPage(planParam && TIERS[planParam] ? "pricing" : "home");
-              }
-            } catch{ setPage("home"); }
-          }
+          try {
+            const params=new URLSearchParams(window.location.search);
+            const pendingInvite=sessionStorage.getItem("pending_invite");
+            // Clear #live hash if present — live page should only open via explicit user action
+            if(window.location.hash === "#live") window.history.replaceState({},"","#home");
+            if(pendingInvite){ window.__invite_token=pendingInvite; setPage("invite"); }
+            else if(!p || !p.setup_complete) setPage("setup");
+            else {
+              const planParam = params.get("plan");
+              setPage(planParam && TIERS[planParam] ? "pricing" : "home");
+            }
+          } catch{ setPage("home"); }
           setAuthChecked(true); // always mark checked when user is logged in
           // Pre-generate AI insights in background (3s delay so auth fully settles)
           setTimeout(() => {
@@ -3089,13 +2824,12 @@ export default function App(){
         } else {
           // u===null: user signed out OR Firebase is still processing OAuth redirect
           // Don't go to landing if we know we're in the middle of an OAuth redirect
-          if (_oauthRedirect.current || _oauthInProgress.current) {
+          if (_oauthRedirect.current || _oauthInProgress) {
             // Still waiting for getGoogleRedirectResult to resolve — do nothing
             return;
           }
           try { if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; } } catch{}
           try { if(window.__unsubProfile){ window.__unsubProfile(); window.__unsubProfile=null; } } catch{}
-          routedUidRef.current=null;
           setUser(null);
           setProfile(null);
           setUserSessions([]);
@@ -3104,7 +2838,7 @@ export default function App(){
         }
       } catch(e) {
         console.error("[Auth] fatal:", e);
-        if (!_oauthRedirect.current && !_oauthInProgress.current) setPage("landing");
+        if (!_oauthRedirect.current && !_oauthInProgress) setPage("landing");
       } finally {
         setAuthChecked(true);
       }
@@ -3119,10 +2853,7 @@ export default function App(){
       if (path.includes('/auth')) {
         const params = new URLSearchParams(path.split('?')[1] || '');
         const plan = params.get('plan');
-        const mode = params.get('mode');
         if (plan) setDeepPlan(plan);
-        if (mode === 'signup') setAuthMode('signup');
-        else setAuthMode('login');
         setPage('auth');
       } else if (path === '/app' || path === '/dashboard') {
         setPage('home');
@@ -3219,7 +2950,7 @@ export default function App(){
       try{
         const det=mpRef.current.detectForVideo(vid,performance.now());
         if(det.landmarks?.length>0){
-          const quality = qualityFor(effectiveTier);
+          const quality = qualityFor(tier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(150); // was 60 (2s) → 150 (5s) for smoother score history
           if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);
@@ -3258,7 +2989,6 @@ export default function App(){
             const smoothed1=pushScore(finalResult.overall);
             const displayScore = smoothed1 ?? finalResult.overall;
             alertIfNeeded(displayScore);
-            checkCustomAlertRules(finalResult.metrics);
             finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
@@ -3301,15 +3031,7 @@ export default function App(){
                   const _sc=document.createElement("canvas");
                   const _sw=320,_sh=Math.max(120,Math.round(320*(_v.videoHeight/Math.max(_v.videoWidth,1))))||240;
                   _sc.width=_sw;_sc.height=_sh;
-                  const _sctx=_sc.getContext("2d");
-                  _sctx.drawImage(_v,0,0,_sw,_sh);
-                  // The face-blur toggle only ever pixelated the on-screen
-                  // overlay canvas — it never touched this snapshot, which
-                  // draws straight from the raw <video> element. A user with
-                  // "Blur face (privacy)" ON still had their real,
-                  // unblurred face captured here and stored/shown in the
-                  // session report. Apply the same blur to the snapshot too.
-                  if(faceBlur) drawFaceBlur(_sctx,_v,lms,_sw,_sh);
+                  _sc.getContext("2d").drawImage(_v,0,0,_sw,_sh);
                   const _img=_sc.toDataURL("image/jpeg",0.6);
                   lastSnapMsRef.current=_snow;
                   _snaps.push({img:_img,score:finalResult.overall,time:new Date().toLocaleTimeString()});
@@ -3386,7 +3108,7 @@ export default function App(){
     //  1) Fallback mode (local MediaPipe failed to load) → backend IS the analysis
     //  2) Elite-equivalent tier (elite/premium/b2b_enterprise) → snapshots for PDF + Corvus AI insights
     // Standard/Basic/Professional tiers with working local MediaPipe never touch the backend here.
-    const eliteEquivalent = tierAtLeast(effectiveTier, "elite");
+    const eliteEquivalent = tierAtLeast(tier, "elite");
     const needsBackend = mpStatus==="fallback" || eliteEquivalent;
     if(needsBackend && totalRef.current%45===0 && canvRef.current){
       const c=canvRef.current,v2=vidRef.current;
@@ -3449,7 +3171,7 @@ export default function App(){
         }).catch(e=>{ clearTimeout(_tmr); /* silent fail — local analysis continues */ });
     }
     rafRef.current=requestAnimationFrame(runLoop);
-  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,checkCustomAlertRules,mpStatus,faceBlur,showSkeleton,showAngles]);
+  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,mpStatus,faceBlur,showSkeleton,showAngles]);
 
   // Keep the analysis loop bound to the latest state. runLoop is a useCallback
   // whose identity changes when mode / sound / faceBlur / calib change; without
@@ -3471,18 +3193,9 @@ export default function App(){
     // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
     // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
     if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
-    await openPreview();
-  }
-
-  // Opens the camera and shows a live, non-scoring preview so the user can
-  // see themselves and adjust framing before anything is recorded. A
-  // Cancel button is visible the whole time this is showing.
-  async function openPreview(){
-    const effectiveMode = mode || "laptop";
-    if (!mode) { setMode("laptop"); }
     setCameraStatus("requesting");
     try{
-      const facingMode=effectiveMode==="phone"?"environment":"user";
+      const facingMode=mode==="phone"?"environment":"user";
       const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}}});
       streamRef.current=s;
       if(!vidRef.current){setCameraStatus("idle");return;}
@@ -3493,56 +3206,6 @@ export default function App(){
       }).catch(()=>{});
       if(!vidRef.current){return;}
       setCameraStatus("ready");
-      setPreviewPhase("preview"); // shows live feed + "Start"/"Cancel" — NOT scoring yet
-    }catch(e){
-      const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
-      const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
-      setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
-      const errMsg=isDenied
-        ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
-        :noDevice
-        ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
-        :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
-      setAlertMsg({text:errMsg,type:"bad"});
-      addToast(errMsg,"error");
-    }
-  }
-
-  // Cancels out of preview or countdown — same cleanup as the normal Back
-  // button, just doesn't navigate away from the live page.
-  function cancelPreview(){
-    if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
-    setPreviewPhase(null);
-    if(streamRef.current){ streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current=null; }
-    if(vidRef.current) vidRef.current.srcObject=null;
-    setCameraStatus("idle");
-  }
-
-  // User tapped "Start session" from the live preview — run a 3-2-1
-  // countdown (gives a moment to get in frame / sit down), cancellable the
-  // whole time, then hand off to beginScoring().
-  function confirmStartSession(){
-    setPreviewPhase("countdown");
-    setCountdownN(3);
-    let n=3;
-    countdownIvRef.current=setInterval(()=>{
-      n-=1;
-      if(n<=0){
-        clearInterval(countdownIvRef.current);
-        countdownIvRef.current=null;
-        setPreviewPhase(null);
-        beginScoring();
-      } else {
-        setCountdownN(n);
-      }
-    },1000);
-  }
-
-  // The actual session start — reuses the stream already opened by
-  // openPreview(), so no second camera-permission round trip.
-  async function beginScoring(){
-    const effectiveMode = mode || "laptop";
-    try{
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
@@ -3554,7 +3217,7 @@ export default function App(){
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
       try{
-        const d=await AnalysisAPI.startSession({mode:effectiveMode});
+        const d=await AnalysisAPI.startSession({mode});
         sid=d.session_id||sid;
       }catch(e){
         // session_limit_reached (Free plan cap) must actually block the
@@ -3564,26 +3227,15 @@ export default function App(){
         if(e?.status===403 && e?.upgrade){
           setCameraStatus("idle");
           streamRef.current?.getTracks?.().forEach(t=>t.stop());
-          // Distinguish which cap was actually hit — the backend enforces
-          // BOTH a monthly (5) and a daily (3) cap on Free, but only the
-          // monthly number is ever shown anywhere in the UI (SessionUsageBar,
-          // pricing copy). Hitting the daily cap with 2 monthly sessions
-          // used looked like an unexplained random block; show the real
-          // reason instead of one generic message for both cases.
-          const hitDaily = (e?.body?.used_daily ?? 0) >= (e?.body?.limit_daily ?? Infinity);
-          const msg = hitDaily
-            ? (isAr?`وصلت لحد ${e.body.limit_daily} جلسات في اليوم للخطة المجانية. جرّب تاني بكرة أو رقّي الخطة`:`You've hit today's ${e.body.limit_daily}-session Free plan cap. Try again tomorrow or upgrade`)
-            : (isAr?"وصلت لحد جلسات الخطة المجانية الشهري. قم بالترقية للمتابعة":"You've reached the Free plan's monthly session limit. Upgrade to continue");
-          addToast(msg,"warn");
-          setShowUpgrade?.(true); setUpgradeReason?.(isAr?(hitDaily?"حد الجلسات اليومي":"حد الجلسات الشهري"):(hitDaily?"Daily session limit":"Monthly session limit"));
+          addToast(isAr?"وصلت لحد جلسات الخطة المجانية. قم بالترقية للمتابعة":"You've reached the Free plan session limit. Upgrade to continue","warn");
+          setShowUpgrade?.(true); setUpgradeReason?.(isAr?"حد الجلسات الشهري":"Monthly session limit");
           return;
         }
         // Any other error (network, backend down, etc.) — fall back to
         // local-only session so the user isn't blocked by infra issues.
       }
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
-      const mLabel=MC[effectiveMode]?.label||effectiveMode;
-      setAlertMsg({text:`${mLabel} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
+      setAlertMsg({text:`${M_?.label} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
       if(user?.uid) completeOnboardingStep(user.uid,"first_session").catch(e=>console.warn("[Onboarding]",e.message));
       // Calibration is opt-in — user can trigger from settings
       // Removed auto-popup to prevent overlay conflict with camera
@@ -3618,7 +3270,6 @@ export default function App(){
   const[sessionResult,setSessionResult]=useState(null);
 
   async function stopCamera(){
-    setIsSavingSession(true); // show saving state on stop button
     stopSpeaking(); // cut any in-flight voice-coach cue
     lmSmootherRef.current?.reset();
     frameBufferRef.current?.clear();
@@ -3642,12 +3293,6 @@ export default function App(){
     // Close PoseLandmarker only if it was created locally (not the shared window.__mpPose)
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
-    setIsPaused(false);
-    pausedAtRef.current=null;
-    setPreviewPhase(null);
-    setTimeout(()=>setIsSavingSession(false), 1500);
-    if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
-    setShowHealthConsent(false);
 
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
     const la  = lastAnalRef.current||{};
@@ -3752,22 +3397,10 @@ export default function App(){
         pain_summary:    result.pain_summary||null,
         pain_prediction: la.pain_prediction||null,
         trend:           result.trend||"stable",
-        // Elite: worst 3 posture snapshots — only include if total payload
-        // stays under ~800KB (Firestore hard-limits docs to 1MB; base64
-        // images are the main risk factor that caused silent addDoc failures).
-        ...(()=>{
-          if(!worstSnapsRef.current.length) return {};
-          const snaps = worstSnapsRef.current.slice(0,3);
-          // rough byte estimate: JSON.stringify is a good proxy
-          const roughBytes = JSON.stringify(snaps).length;
-          if(roughBytes > 600_000) return {}; // skip if > ~600KB to leave room for other fields
-          return { worst_snapshots: snaps };
-        })(),
+        // Elite: worst 3 posture moments (~20KB each, well under the 1MB doc cap)
+        ...(worstSnapsRef.current.length?{worst_snapshots:worstSnapsRef.current.slice(0,3)}:{}),
       }).then(()=>{
         addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
-        // Refresh sessions list so the new session appears immediately
-        // without waiting for the user to re-login or navigate away.
-        if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
         // #9 Compute weekly pattern from this session's alert causes
         if(alRef.current.length>=3){
           const causeCounts={};
@@ -3795,34 +3428,7 @@ export default function App(){
         }
       }).catch(e=>{
         console.error("saveSession failed:", e?.code, e?.message);
-        // Firestore's persistent cache (see firebase.js) now absorbs most
-        // transient network failures automatically, but for whatever still
-        // gets here (quota, permission, doc-too-large) the session's data
-        // used to just be gone with only an error toast to show for it.
-        // Queue it in localStorage and retry automatically next time this
-        // user's session list loads (see flushPendingSessions below).
-        try{
-          const key="corvus_pending_sessions";
-          const queue=JSON.parse(localStorage.getItem(key)||"[]");
-          queue.push({uid:user.uid,data:{
-            session_id:sessionId, mode, tier:effectiveTier, avg_score:avg,
-            good_pct:gPct, duration_s:dur, duration_sec:dur,
-            alerts_count:acRef.current?.total||0,
-            score_history:hist.slice(-60),
-            alert_causes: alRef.current.map(a=>({cause:a.cause||"posture",hour:a.time?.split(":")?.[0]||"0",severity:a.severity||"mild"})),
-            metrics:la.metrics||{},
-            ai_tip: la.ai_tip||la.ai_insight||la.claude_analysis||"",
-            improvement_tip: result.improvement_tip||"",
-            pain_summary: result.pain_summary||null,
-            pain_prediction: la.pain_prediction||null,
-            trend: result.trend||"stable",
-            ...(worstSnapsRef.current.length?{worst_snapshots:worstSnapsRef.current.slice(0,3)}:{}),
-          },queuedAt:Date.now()});
-          localStorage.setItem(key, JSON.stringify(queue.slice(-10))); // cap at 10 pending
-          addToast(isAr?"⚠️ فشل الحفظ — هنحاول تاني تلقائياً":"⚠️ Save failed — will retry automatically","warn");
-        }catch{
-          addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
-        }
+        addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
       });
     } else if(user && dur < 5){
       addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
@@ -3830,61 +3436,6 @@ export default function App(){
       addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
   } // end stopCamera
-
-  // Back button while ACTIVELY scoring (not paused, not idle) used to
-  // silently end + save the session with zero warning — an easy accidental
-  // click away, given it's the very first button in the top-left corner.
-  // Paused/idle sessions skip the confirm since the user already
-  // deliberately stepped away.
-  function backFromLive(){
-    if(camActive && !isPaused){
-      const ok=window.confirm(isAr
-        ?"الجلسة شغالة دلوقتي. تأكيد الرجوع هيوقف الجلسة ويحفظها. متأكد؟"
-        :"Your session is currently running. Going back will stop and save it. Continue?");
-      if(!ok) return;
-    }
-    stopCamera();
-    setPage("home");
-    setCamActive(false);
-  }
-
-  // Freezes analysis + the session timer WITHOUT ending/saving the session.
-  // Camera stream stays attached (video keeps showing) — resuming just
-  // restarts the loop, no re-request, no permission prompt again.
-  function pauseSession(){
-    if(!camActive || isPaused) return;
-    if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; }
-    if(timerRef.current){ clearInterval(timerRef.current); timerRef.current=null; }
-    pausedAtRef.current = Date.now();
-    setIsPaused(true);
-  }
-
-  function resumeSession(){
-    if(!camActive || !isPaused) return;
-    // Shift the session's start timestamp forward by however long the
-    // pause lasted, so sessionTime keeps counting from where it left off
-    // instead of jumping ahead by the paused duration.
-    if(pausedAtRef.current){
-      sessRef.current += (Date.now() - pausedAtRef.current);
-      pausedAtRef.current = null;
-    }
-    setIsPaused(false);
-    timerRef.current=setInterval(()=>{
-      const elapsed=Math.floor((Date.now()-sessRef.current)/1000);
-      setSessionTime(elapsed);
-      setBreakTimer(bt=>{
-        const next=bt+1;
-        if(next>=1500&&breakReminder&&!showBreakAlert){
-          setShowBreakAlert(true);
-          if(!muted)playPostureAlert();
-          sendDesktopNotif("Break time! 25 minutes passed — take a 2-min stretch",0);
-        }
-        return next;
-      });
-    },1000);
-    rafRef.current=requestAnimationFrame(runLoop);
-  }
-
 
   // ── Switch camera mode from the live page ───────────────────────
   // Previously the mode (laptop/phone/side) could only be chosen on the
@@ -3992,7 +3543,7 @@ export default function App(){
   }
 
   async function downloadLongitudinalPDF() {
-    if (!tierAtLeast(effectiveTier,"elite")) {
+    if (!tierAtLeast(tier,"elite")) {
       addToast(isAr?"التقرير الطولي متاح لباقة Elite فقط":"Longitudinal report requires Elite tier","warn");
       setShowBilling(true); return;
     }
@@ -4011,24 +3562,8 @@ export default function App(){
     }
   }
 
-  async function downloadPostureDNAReport() {
-    if (!tierAtLeast(effectiveTier,"elite")) {
-      addToast(isAr?"تقرير بصمة الوضعية متاح لباقة Elite فقط":"Posture DNA report requires Elite tier","warn");
-      setShowBilling(true); return;
-    }
-    addToast(isAr?"جاري تحليل بيانات آخر 90 يوم...":"Analyzing your last 90 days of data...","info");
-    try {
-      const { generatePostureDNAReport } = await import("./lib/pdfReports.js");
-      await generatePostureDNAReport({ sessions: userSessions, profile, user, profession: profile?.profession || "other", lang });
-      addToast(isAr?"✅ تم تحميل تقرير بصمة الوضعية":"✅ Posture DNA report downloaded","success");
-    } catch(e) {
-      console.error("[Posture DNA PDF]", e);
-      addToast(isAr?"تعذر إنشاء التقرير — جرب تاني":"Couldn't generate the report — try again", "error");
-    }
-  }
-
   async function downloadComparisonPDF(session1, session2) {
-    if (!tierAtLeast(effectiveTier,"professional")) {
+    if (!tierAtLeast(tier,"professional")) {
       addToast(isAr?"المقارنة متاحة لباقة Pro وElite فقط":"Comparison PDF requires Pro or Elite","warn");
       setShowBilling(true); return;
     }
@@ -4048,7 +3583,7 @@ export default function App(){
   }
 
   async function downloadTeamPDF() {
-    if (!tierAtLeast(effectiveTier,"professional")) {
+    if (!tierAtLeast(tier,"professional")) {
       addToast(isAr?"تقرير الفريق متاح لـ HR Admin فقط":"Team PDF requires HR Admin + Pro","warn");
       setShowBilling(true); return;
     }
@@ -4361,7 +3896,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       <AuthPage
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
-        initialView={authMode}
+        initialView={new URLSearchParams(window.location.search).get("mode")==="signup" ? "signup" : "login"}
         onAuth={(u,isNew)=>{
           setUser(u);
           if(isNew) {
@@ -4412,9 +3947,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
   );
 
   // During OAuth redirect: user is temporarily null — show spinner NOT auth page
-  if(!user && (_oauthInProgress.current || _oauthRedirect?.current)) return(
+  if(!user && (_oauthInProgress || _oauthRedirect?.current)) return(
     <div style={{
-      minHeight:"100vh",background:"#0d1a2e",
+      minHeight:"100vh",background:"#030b14",
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
       gap:16,fontFamily:"'Inter',system-ui,sans-serif",
     }}>
@@ -4455,7 +3990,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       <AuthPage
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
-        initialView={authMode}
+        initialView={new URLSearchParams(window.location.search).get("mode")==="signup" ? "signup" : "login"}
         onAuth={(u,isNew)=>{
           setUser(u);
           if(isNew){ /* onAuthStateChanged will route to setup */ return;}
@@ -4483,11 +4018,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   preloadAIInsights(user.uid, profile, sessions, null, profile?.is_trial ? profile?.trial_tier : profile?.tier, lang);
                 }, 1500);
               }
-            }, err => {
-              console.error("[Auth/MFA] sessions listener failed:", err.code, err.message);
-              addToast?.(isAr
-                ? "تعذر تحميل جلساتك — حاول تحديث الصفحة"
-                : "Couldn't load your sessions — try refreshing the page", "error");
             });
           } catch(e){ console.warn("[Auth] sessions:",e?.code); }
           try {
@@ -4508,7 +4038,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     </ErrorBoundary>
   );  if(page==="admin"&&isAdmin)return <ErrorBoundary><Admin {...shared} adminUser={user} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="hr"&&(isAdmin||isHRAdmin))return <ErrorBoundary><HRPanel {...shared} user={user} profile={profile} companyId={companyId||profile?.company_id} onBack={()=>setPage("home")}/></ErrorBoundary>;
-  if(page==="marketplace"&&user)return <ErrorBoundary><TherapistMarketplace {...shared} user={user} isAdmin={isAdmin} tier={effectiveTier} onBack={()=>setPage("home")}/></ErrorBoundary>;
+  if(page==="marketplace"&&user)return <ErrorBoundary><TherapistMarketplace {...shared} user={user} isAdmin={isAdmin} onBack={()=>setPage("home")}/></ErrorBoundary>;
   if(page==="pricing") return(
     <ErrorBoundary>
       <PricingPage
@@ -4773,40 +4303,57 @@ async function downloadPDF(sessionOverride, isClinical=false){
         }
       }}/>}
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
-      {showDashboard&&<ErrorBoundary key="dashboard"><Suspense fallback={null}><AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/></Suspense></ErrorBoundary>}
+      {showDashboard&&<AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={()=>setShowCoach(false)}/>}
-<<<<<<< Updated upstream
-      {showGamification&&<ErrorBoundary key="gamification"><Suspense fallback={null}><GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/></Suspense></ErrorBoundary>}
-=======
-      {showGamification&&<ErrorBoundary key="gamification"><Suspense fallback={null}><GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/></Suspense>}</ErrorBoundary>}
->>>>>>> Stashed changes
-      {showCustomAlertRules&&<CustomAlertRulesPanel isAr={isAr} cs={cs} rules={customAlertRules}
-        onSave={(next)=>{
-          setCustomAlertRules(next);
-          setProfile(p=>p?({...p,custom_alert_rules:next}):p);
-          if(user?.uid) updateUserProfile(user.uid,{custom_alert_rules:next}).catch(()=>{});
-        }}
-        onClose={()=>setShowCustomAlertRules(false)}/>}
+      {showGamification&&<GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/>}
       {showAdmin&&isAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
       {showMRR&&isAdmin&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
-      {showHelp&&<ErrorBoundary key="help"><Suspense fallback={null}><HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/></Suspense></ErrorBoundary>}
+      {showHelp&&<HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/>}
       {showChangelog&&isAdmin&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
-      {showAIInsights&&<ErrorBoundary key="aiinsights"><Suspense fallback={null}><AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIInsights(false)}/></Suspense></ErrorBoundary>}
+      {showAIInsights&&<AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIInsights(false)}/>}
       {showSymptomCorrelation&&<SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/>}
-      {showPredictiveAI&&<ErrorBoundary key="predictiveai"><Suspense fallback={null}><PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/></Suspense></ErrorBoundary>}
-      {showAIReports&&<ErrorBoundary key="aireports"><Suspense fallback={null}><AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/></Suspense></ErrorBoundary>}
-<<<<<<< Updated upstream
-      {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/></Suspense>}
-=======
-      {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<ErrorBoundary key="workforceanalytics"><Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/></Suspense></ErrorBoundary>}
->>>>>>> Stashed changes
-      {showEnterpriseRBAC&&<ErrorBoundary key="enterpriserbac"><Suspense fallback={null}><EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/></Suspense></ErrorBoundary>}
+      {showPredictiveAI&&<PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/>}
+      {showAIReports&&<AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/>}
+      {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/>}
+      {showEnterpriseRBAC&&<EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/>}
       
       {showFeatureFlags&&isAdmin&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
-      {showNotificationsHub&&<ErrorBoundary key="notificationshub"><Suspense fallback={null}><NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/></Suspense></ErrorBoundary>}
+      {showNotificationsHub&&<NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/>}
       {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
-      {healthConsentModalEl}
-      {showOnboardingAnalytics&&<ErrorBoundary key="onboardinganalytics"><Suspense fallback={null}><OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/></Suspense></ErrorBoundary>}
+      {showHealthConsent&&(
+        <div dir={dir} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000,padding:20}}>
+          <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,maxWidth:460,width:"100%",padding:0,overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,.4)"}}>
+            <div style={{background:"linear-gradient(135deg,#3b82f6,#2563eb)",padding:"22px 26px",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{fontSize:26,lineHeight:1}}>🩺</div>
+              <div>
+                <div style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:.2}}>{isAr?"قبل ما نبدأ التحليل":"Before we start"}</div>
+                <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:2}}>{isAr?"إقرار سريع لمرة واحدة":"A one-time acknowledgement"}</div>
+              </div>
+            </div>
+            <div style={{padding:"22px 26px"}}>
+              <p style={{color:cs.text,fontSize:13.5,lineHeight:1.7,margin:"0 0 14px"}}>
+                {isAr
+                  ? "Corvus أداة توعية بوضعية الجسم للاستخدام العام — وليست جهازاً طبياً ولا بديلاً عن استشارة أخصائي. القياسات والتقارير تقريبية والغرض منها التوعية فقط."
+                  : "Corvus is a general wellness tool for posture awareness — not a medical device and not a substitute for professional advice. Measurements and reports are approximate and for informational purposes only."}
+              </p>
+              <ul style={{color:cs.muted,fontSize:12.5,lineHeight:1.6,margin:"0 0 16px",paddingInlineStart:18}}>
+                <li>{isAr?"لو عندك ألم أو حالة طبية، استشر طبيباً أو أخصائي علاج طبيعي.":"If you have pain or a medical condition, consult a doctor or physiotherapist."}</li>
+                <li>{isAr?"لا تعتمد على النتائج في اتخاذ قرارات طبية.":"Do not rely on results for medical decisions."}</li>
+                <li>{isAr?"معالجة الفيديو تتم على جهازك في الوقت اللحظي.":"Video is processed on your device in real time."}</li>
+              </ul>
+              <div style={{display:"flex",gap:10,flexDirection:isAr?"row-reverse":"row"}}>
+                <button onClick={acceptHealthConsent} style={{flex:1,background:"linear-gradient(135deg,#3b82f6,#2563eb)",border:"none",borderRadius:11,padding:"13px 18px",fontSize:13.5,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                  {isAr?"أوافق وابدأ":"I agree — start"}
+                </button>
+                <button onClick={()=>{setShowHealthConsent(false); if(page==="live") setPage("home");}} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,padding:"13px 18px",fontSize:13,color:cs.muted,cursor:"pointer"}}>
+                  {isAr?"إلغاء":"Cancel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showOnboardingAnalytics&&<OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/>}
       {authToken && (
         <div style={{maxWidth:960,margin:"0 auto",padding:"12px 20px 0"}}>
           <AnnouncementsBar token={authToken}/>
@@ -4818,7 +4365,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
         allUsers={allUsers} setAllUsers={setAllUsers}
         tier={tier} setTier={setTier} mode={mode} setMode={setMode}
         setPage={setPage} startCamera={startCamera} addToast={addToast} goToBreak={goToBreak}
-        setShowCertModal={setShowCertModal}
         setShowDashboard={setShowDashboard} setShowCoach={setShowCoach}
         setShowGamification={setShowGamification} setShowBilling={setShowBilling}
         setShowCompanyOnboard={setShowCompanyOnboard} setShowAdmin={setShowAdmin}
@@ -4846,7 +4392,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
         setShowBillingDashboard={setShowBillingDashboard}
         setShowReferralProgram={setShowReferralProgram}
         setShowIntegrationsHub={setShowIntegrationsHub}
-        setShowMFASetup={setShowMFASetup}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin} companyId={companyId}
         darkMode={darkMode} setDarkMode={setDarkMode} setLang={setLang}
         t={t} logOut={logOut} setUser={setUser} setProfile={setProfile}
@@ -4863,29 +4408,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
         downloadComparisonPDF={downloadComparisonPDF}
         downloadTeamPDF={downloadTeamPDF}
         downloadLongitudinalPDF={downloadLongitudinalPDF}
-        downloadPostureDNAReport={downloadPostureDNAReport}
         shareReport={shareReport}
         AccountSwitcher={AccountSwitcher}
         onSwitchAccount={handleSwitchAccount}
-        onQuarterlyReport={()=>setShowQuarterlyReport(true)}
-        onSchools={()=>setShowSchoolsModal(true)}
-        onDevPortal={()=>setShowDevPortal(true)}
-        onInsurance={()=>setShowInsuranceModal(true)}
       />
-      {showGrowthHub&&<ErrorBoundary key="growthhub"><Suspense fallback={null}><GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/></Suspense></ErrorBoundary>}
-<<<<<<< Updated upstream
-      {showCertModal&&<ErrorBoundary key="certmodal"><Suspense fallback={null}><CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/></Suspense></ErrorBoundary>}
-      {showQuarterlyReport&&<ErrorBoundary key="quarterlyreport"><Suspense fallback={null}><QuarterlyReportModal profile={profile} allUsers={allUsers} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowQuarterlyReport(false)}/></Suspense></ErrorBoundary>}
-      {showSchoolsModal&&<ErrorBoundary key="schoolsmodal"><Suspense fallback={null}><SchoolsModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowSchoolsModal(false)}/></Suspense></ErrorBoundary>}
-      {showDevPortal&&<ErrorBoundary key="devportal"><Suspense fallback={null}><DeveloperPortalModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowDevPortal(false)}/></Suspense></ErrorBoundary>}
-      {showInsuranceModal&&<ErrorBoundary key="insurancemodal"><Suspense fallback={null}><InsurancePartnerModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowInsuranceModal(false)}/></Suspense></ErrorBoundary>}
-=======
-      {showCertModal&&<ErrorBoundary key="certmodal"><Suspense fallback={null}><CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/></Suspense>}</ErrorBoundary>}
-      {showQuarterlyReport&&<ErrorBoundary key="quarterlyreport"><Suspense fallback={null}><QuarterlyReportModal profile={profile} allUsers={allUsers} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowQuarterlyReport(false)}/></Suspense>}</ErrorBoundary>}
-      {showSchoolsModal&&<ErrorBoundary key="schoolsmodal"><Suspense fallback={null}><SchoolsModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowSchoolsModal(false)}/></Suspense>}</ErrorBoundary>}
-      {showDevPortal&&<ErrorBoundary key="devportal"><Suspense fallback={null}><DeveloperPortalModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowDevPortal(false)}/></Suspense>}</ErrorBoundary>}
-      {showInsuranceModal&&<ErrorBoundary key="insurancemodal"><Suspense fallback={null}><InsurancePartnerModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowInsuranceModal(false)}/></Suspense>}</ErrorBoundary>}
->>>>>>> Stashed changes
+      {showGrowthHub&&<GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/>}
       {/* Moved here from the live-analysis render branch — modals must render on the
           home page only, never over the live camera/analysis screen (interrupts the Stop button). */}
       {showAnnualUpsell && (
@@ -4925,20 +4452,17 @@ async function downloadPDF(sessionOverride, isClinical=false){
         streak={shareCardData.streak||0} percentile={null}
         lang={lang} cs={cs} addToast={addToast} onClose={()=>setShowShareCard(false)}/>
     )}
-<<<<<<< Updated upstream
-    {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><Suspense fallback={null}><SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/></Suspense></ErrorBoundary>}
-=======
-    {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><Suspense fallback={null}><SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/></Suspense>}</ErrorBoundary>}
->>>>>>> Stashed changes
+    {showSessionComparison&&<SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/>}
       {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}
-      {showTrendChart&&<ErrorBoundary key="trendchart"><Suspense fallback={null}><TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/></Suspense></ErrorBoundary>}
+      {showTrendChart&&<TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
-      {showAPIMarketplace&&<ErrorBoundary key="apimarketplace"><Suspense fallback={null}><APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/></Suspense></ErrorBoundary>}
-      {showWhiteLabel&&<ErrorBoundary key="whitelabel"><Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/></Suspense></ErrorBoundary>}
-      {showMultiTenant&&<ErrorBoundary key="multitenant"><Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/></Suspense></ErrorBoundary>}
+      {showAPIMarketplace&&<APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/>}
+      {showWhiteLabel&&<WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/>}
+      {showMultiTenant&&<MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/>}
       {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
-    </ErrorBoundary>);
+    </ErrorBoundary>
+  );
   const TN = T_norm;
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const scoreColor = score ? sc(score) : cs.muted;
@@ -4968,18 +4492,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
     );
   };
 
-  return(<ErrorBoundary><>
+  return(<ErrorBoundary>
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
-      @keyframes countdownPop{0%{opacity:0;transform:scale(1.5)}30%{opacity:1;transform:scale(1)}100%{opacity:.85;transform:scale(1)}}
       @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
     `}</style>
-    {/* Fixed overlays — outside grid so they don't consume grid columns */}
-    <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
-    <OfflineBanner lang={lang}/>
-    {healthConsentModalEl}
     <div dir={dir} style={{
       display:"grid",
       gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
@@ -4987,6 +4506,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
     }}>
+      <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
+      <OfflineBanner lang={lang}/>
 
       {/* ── GlobalModals: render on ALL pages ──────────────────── */}
       
@@ -5027,18 +4548,18 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
       )}
       {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
-      {showSecurityCenter&&<ErrorBoundary key="securitycenter"><Suspense fallback={null}><SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/></Suspense></ErrorBoundary>}
+      {showSecurityCenter&&<SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }
-      {showMFASetup&&<ErrorBoundary key="mfasetup"><Suspense fallback={null}><MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/></Suspense></ErrorBoundary>}
-      {showBillingDashboard&&<ErrorBoundary key="billingdashboard"><Suspense fallback={null}><BillingDashboard profile={profile} user={user} isAr={lang==="ar"} isAdmin={isAdmin} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/></Suspense></ErrorBoundary>}
-      {showReferralProgram&&<ErrorBoundary key="referralprogram"><Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense></ErrorBoundary>}
-      {showIntegrationsHub&&<ErrorBoundary key="integrationshub"><Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense></ErrorBoundary>}
+      {showMFASetup&&<MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/>}
+      {showBillingDashboard&&<BillingDashboard profile={profile} user={user} isAr={lang==="ar"} isAdmin={isAdmin} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/>}
+      {showReferralProgram&&<Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense>}
+      {showIntegrationsHub&&<Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense>}
       {/* Phase 12 — Enterprise Scale */}
       {showEnterpriseAdmin&&isAdmin&&<EnterpriseAdminTools profile={profile} cs={cs} lang={lang} onClose={()=>setShowEnterpriseAdmin(false)}/>}
 
       {/* ── Session Result Modal ── */}
       {sessionResult&&(
-        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.82)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"rgba(8,14,28,.98)",border:`2px solid ${sessionResult.color}30`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
             {/* Score ring */}
             <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>
@@ -5157,7 +4678,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 <button onClick={async ()=>{
                   // Same canonical gate as downloadPDF() — this button bypassed it
                   // entirely by calling generateSessionPDF() directly.
-                  if(qualityFor(effectiveTier).pdfDetail === "none"){
+                  if(qualityFor(tier).pdfDetail === "none"){
                     addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
                     setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
                     return;
@@ -5182,19 +4703,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     addToast("PDF error: "+(e?.message||"unknown"),"error");
                   }
                 }}
-                  style={{flex:1,padding:"10px",background:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.05)":effectiveTier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.4)":effectiveTier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.1)":effectiveTier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                  {qualityFor(effectiveTier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${effectiveTier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
+                  style={{flex:1,padding:"10px",background:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.05)":tier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.4)":tier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.1)":tier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  {qualityFor(tier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${tier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
                 </button>
-                {/* Share button — Elite only. Was gated on raw `tier`, which
-                    doesn't reflect trial_tier elevation or the b2b_enterprise
-                    -> elite equivalence, so a trialing/B2B-enterprise user
-                    could lose this button entirely even though every other
-                    Elite check on this same page correctly uses effectiveTier. */}
-                {tierAtLeast(effectiveTier,"elite") && (
+                {/* Share button — Elite only */}
+                {tierAtLeast(tier,"elite") && (
                   <button onClick={()=>shareReport({
                       avg_score: sessionResult?.avg_score, good_pct: sessionResult?.good_pct,
                       duration_s: sessionResult?.duration_s, alerts_count: sessionResult?.alerts_count,
-                      mode, tier: effectiveTier, session_id: sessionId,
+                      mode, tier, session_id: sessionId,
                       score_history: histRef.current||[],
                       metrics: lastAnalRef.current?.metrics||{},
                       ai_tip: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
@@ -5239,12 +4756,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
           position:"sticky", top:0, zIndex:10,
         }}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {/* Desktop only — on mobile the sidebar (which renders first,
-                above the fold) has its own copy of this exact same button.
-                Showing both was a real "which Back do I use" confusion. */}
-            {!isMobile && (
             <button
-              onClick={backFromLive}
+              onClick={()=>{stopCamera();if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});setPage("home");setCamActive(false);}}
               style={{
                 background:"rgba(148,163,184,.08)",
                 border:`1px solid ${cs.border}`,
@@ -5254,7 +4767,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
               }}>
               {isAr ? "→" : "←"} {isAr?"رجوع":"Back"}
             </button>
-            )}
             <div>
               <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
                 {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
@@ -5304,54 +4816,21 @@ async function downloadPDF(sessionOverride, isClinical=false){
           ))}
         </div>
 
-        {/* Calibration missing banner */}
-        {!camActive && !calibData && (
-          <div style={{margin:"8px 16px",background:"rgba(245,158,11,.06)",
-            border:"1px solid rgba(245,158,11,.25)",borderRadius:10,padding:"10px 14px",
-            display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:16,flexShrink:0}}>⚙️</span>
-            <div style={{flex:1}}>
-              <div style={{fontSize:11.5,fontWeight:700,color:"#f59e0b",marginBottom:2}}>
-                {isAr?"الوضعية غير معايرة — النتائج تقريبية":"Not calibrated — results are approximate"}
-              </div>
-              <div style={{fontSize:10.5,color:cs.muted}}>
-                {isAr?"اعمل معايرة للحصول على درجة دقيقة":"Calibrate for accurate posture scoring"}
-              </div>
+        {/* Secondary stats */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,padding:"0 16px 12px"}}>
+          {[
+            {label:isAr?"تنبيهات الرقبة":"Neck Alerts",  value:alertCounts.neck, color:"#ef4444"},
+            {label:isAr?"تنبيهات المسافة":"Dist Alerts",  value:alertCounts.dist, color:"#f59e0b"},
+            {label:isAr?"التقييم":"Grade",
+              value: avg>=85?(isAr?"ممتاز":"Excellent"):avg>=70?(isAr?"جيد":"Good"):avg>=50?(isAr?"مقبول":"Fair"):avg>0?(isAr?"ضعيف":"Poor"):"—",
+              color: avg>=85?"#10b981":avg>=70?"#22c55e":avg>=50?"#f59e0b":avg>0?"#ef4444":cs.muted},
+          ].map(s=>(
+            <div key={s.label} style={{background:cs.card,border:`1px solid ${cs.border}`,borderRadius:10,padding:"10px 12px"}}>
+              <div style={{fontSize:9,color:cs.muted,marginBottom:4}}>{s.label}</div>
+              <div style={{fontSize:15,fontWeight:700,color:s.color,fontFamily:"monospace"}}>{s.value}</div>
             </div>
-            <button onClick={()=>setShowCalibWizard(true)}
-              style={{fontSize:10.5,fontWeight:700,padding:"5px 10px",
-                background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.3)",
-                borderRadius:7,color:"#f59e0b",cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-              {isAr?"معايرة الآن":"Calibrate →"}
-            </button>
-          </div>
-        )}
-
-        {/* Fix #2: Pre-session empty state — shown before first session starts */}
-        {!camActive && sessionTime === 0 && avg === 0 && (
-          <div style={{margin:"4px 16px 10px",background:"rgba(26,86,219,.06)",
-            border:"1px dashed rgba(26,86,219,.2)",borderRadius:12,padding:"14px 16px",
-            display:"flex",alignItems:"flex-start",gap:12}}>
-            <span style={{fontSize:22,flexShrink:0}}>▶</span>
-            <div>
-              <div style={{fontSize:12,fontWeight:700,color:"#93c5fd",marginBottom:4}}>
-                {isAr?"اضغط ابدأ التحليل للبدء":"Press Start Analysis to begin"}
-              </div>
-              <div style={{fontSize:11,color:cs.muted,lineHeight:1.6}}>
-                {isAr
-                  ? "Corvus هيحلل وضعيتك في الوقت الفعلي ويديك درجة ونصائح فورية."
-                  : "Corvus will analyse your posture in real-time and give you a live score + instant tips."}
-              </div>
-              {userSessions?.length > 0 && (
-                <div style={{marginTop:8,fontSize:11,color:"#60a5fa",fontWeight:600}}>
-                  {isAr
-                    ? `آخر جلسة: ${userSessions[0]?.avg_score||0}/100`
-                    : `Last session: ${userSessions[0]?.avg_score||0}/100`}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+          ))}
+        </div>
 
         {/* Score history chart */}
         <div style={{margin:"0 16px 12px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:14,padding:"14px 16px"}}>
@@ -5372,47 +4851,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
               borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
             {(history.length?history:Array(40).fill(0)).map((s,i)=>{
               const isLast=i===history.length-1;
-              // Bars are pushed at a roughly even cadence across the session,
-              // so distributing elapsed time evenly across them gives a
-              // reasonable "when was this" estimate for the tooltip without
-              // needing to store a timestamp per sample.
-              const barsAgo = history.length-1-i;
-              const secAgo = history.length>1 ? Math.round(barsAgo*(sessionTime/(history.length-1))) : 0;
-              const atSec = Math.max(0, sessionTime-secAgo);
               return (
-                <div key={i}
-                  onMouseEnter={()=>history.length&&setHoverBarIdx(i)}
-                  onMouseLeave={()=>setHoverBarIdx(null)}
-                  style={{flex:1, position:"relative", height:"100%", display:"flex", alignItems:"flex-end", cursor:history.length?"pointer":"default"}}>
-                  {hoverBarIdx===i && s>0 && (
-                    <div style={{
-                      position:"absolute",bottom:"calc(100% + 6px)",insetInlineStart:"50%",transform:"translateX(-50%)",
-                      background:"#0a0f1e",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",
-                      fontSize:10,fontWeight:700,color:"#fff",whiteSpace:"nowrap",zIndex:20,pointerEvents:"none",
-                      boxShadow:"0 4px 12px rgba(0,0,0,.4)",
-                    }}>
-                      {isAr?`النتيجة: ${s} عند ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`:`Score: ${s} at ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`}
-                    </div>
-                  )}
-                  {isLast && s>0 && (
-                    <div style={{
-                      position:"absolute",bottom:"calc(100% + 4px)",insetInlineEnd:-2,
-                      fontSize:8,fontWeight:800,color:sc(s),letterSpacing:".03em",
-                      opacity:hoverBarIdx===i?0:1,
-                    }}>
-                      {isAr?"الآن":"Now"}
-                    </div>
-                  )}
-                  <div style={{
-                    width:"100%", borderRadius:"3px 3px 0 0",
-                    minHeight:3,
-                    height: s ? Math.max(3,Math.round(s*.64)) : 3,
-                    background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
-                    transition:"height .25s ease",
-                    boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
-                    outline: hoverBarIdx===i&&s ? `1px solid ${sc(s)}` : "none",
-                  }}/>
-                </div>
+                <div key={i} style={{
+                  flex:1, borderRadius:"3px 3px 0 0",
+                  minHeight:3,
+                  height: s ? Math.max(3,Math.round(s*.64)) : 3,
+                  background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
+                  transition:"height .25s ease",
+                  boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
+                }}/>
               );
             })}
           </div>
@@ -5433,20 +4880,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?"تحليل AI":"AI Analysis"}
             </div>
             <div style={{fontSize:11.5,color:cs.text,lineHeight:1.65}}>{aiInsight}</div>
-          </div>
-        )}
-        {/* Below Elite this card just never appeared with zero explanation —
-            looked like a missing feature rather than a tier boundary. One
-            small locked hint, same compact style as the tools row below. */}
-        {!aiInsight&&camActive&&!tierAtLeast(effectiveTier,"elite")&&(
-          <div style={{margin:"0 16px 12px",display:"flex"}}>
-            <button onClick={()=>{ addToast(isAr?"🧠 تحليل AI اللحظي متاح لباقة Elite فقط":"🧠 Live AI analysis is an Elite feature","warn"); setShowBilling(true); }}
-              style={{background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
-                padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
-                display:"flex",alignItems:"center",gap:4}}>
-              🔒 🧠 {isAr?"تحليل AI":"AI analysis"}
-              <span style={{fontSize:8,color:"#10b981",fontWeight:800}}>ELITE</span>
-            </button>
           </div>
         )}
 
@@ -5501,7 +4934,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <span style={{fontSize:10,fontWeight:700,color:"#ef4444",background:"rgba(239,68,68,.12)",borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
               </div>
             </div>
-            {alerts.slice(0,3).map((a,i)=>{
+            {alerts.slice(0,10).map((a,i)=>{
               const sev = a.severity==="severe"||a.score<40 ? "severe"
                         : a.severity==="moderate"||a.score<55 ? "moderate" : "mild";
               const sevColor = sev==="severe"?"#ef4444":sev==="moderate"?"#f97316":"#f59e0b";
@@ -5510,7 +4943,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               const tips = FIX_TIPS[a.cause]||FIX_TIPS.default;
               const isOpen = fixItOpen===i;
               return (
-                <div key={i} style={{borderBottom:i<Math.min(alerts.length,3)-1?`1px solid ${cs.border}`:"none",background:i===0?`${sevColor}06`:"transparent"}}>
+                <div key={i} style={{borderBottom:i<Math.min(alerts.length,10)-1?`1px solid ${cs.border}`:"none",background:i===0?`${sevColor}06`:"transparent"}}>
                   <div style={{display:"flex",gap:8,padding:"8px 14px",alignItems:"flex-start"}}>
                     <span style={{fontSize:10,flexShrink:0,marginTop:1}}>{sevIcon}</span>
                     <div style={{flex:1,minWidth:0}}>
@@ -5541,19 +4974,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 </div>
               );
             })}
-            {alerts.length > 3 && (
-              <div style={{padding:"8px 14px",borderTop:`1px solid ${cs.border}`,textAlign:"center"}}>
-                <span style={{fontSize:10,color:cs.muted}}>
-                  {isAr?`+ ${alerts.length-3} تنبيه آخر`:`+ ${alerts.length-3} more alerts`}
-                  {" — "}{isAr?"الأحدث في الأعلى":"newest shown above"}
-                </span>
-              </div>
-            )}
           </div>
         )}
 
         {/* #9 Weekly pattern card */}
-        {weeklyPattern&&!camActive&&(
+        {weeklyPattern&&(
           <div style={{margin:"0 16px 16px",background:"rgba(99,102,241,.05)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"12px 14px"}}>
             <div style={{fontSize:9.5,fontWeight:700,color:"#a5b4fc",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>
               📊 {isAr?"نمط هذا الأسبوع":"This Week's Pattern"}
@@ -5596,7 +5021,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 sidebar needs its own way back to Home. */}
             {isMobile && (
               <button
-                onClick={backFromLive}
+                onClick={()=>{stopCamera();if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});setPage("home");setCamActive(false);}}
                 style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",fontSize:12,color:cs.muted,cursor:"pointer",display:"flex",alignItems:"center",marginRight:isAr?0:2,marginLeft:isAr?2:0}}>
                 {isAr ? "→" : "←"}
               </button>
@@ -5607,53 +5032,45 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{display:"flex",gap:5,alignItems:"center"}}>
             {TN&&<span style={{background:TN.colorDim,border:`1px solid ${TN.color}40`,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,color:TN.color}}>{TN.name}</span>}
             {M_&&<span style={{background:"rgba(99,102,241,.1)",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,color:M_.color}}>{M_.label}</span>}
-            {/* Upgrade CTA — only shown when idle, hidden during active session */}
-            {!camActive && !tierAtLeast(effectiveTier,"basic") && (
-              <button onClick={()=>setShowBilling(true)} style={{fontSize:9.5,fontWeight:700,
-                background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.25)",
-                borderRadius:5,padding:"2px 8px",color:"#a5b4fc",cursor:"pointer"}}>
-                ↑ {isAr?"ترقية":"Upgrade"}
-              </button>
-            )}
           </div>
         </div>
 
-        {/* ── Status bar — posture model + AI Coach in ONE compact row ── */}
-        <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:10,background:"rgba(0,0,0,.15)"}}>
-          {/* Posture model dot */}
-          <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
-            <div style={{
-              width:6,height:6,borderRadius:"50%",flexShrink:0,
-              background:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":"#f59e0b",
-              animation:mpStatus==="loading"?"livePulse 1.2s infinite":"none",
-            }}/>
-            <span style={{fontSize:10,color:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":"#f59e0b",fontWeight:600}}>
-              {mpStatus==="ready"?(isAr?"وضعية ✓":"Pose ✓"):mpStatus==="error"?(isAr?"خطأ":"Error"):(isAr?"تحميل...":"Loading...")}
-            </span>
-          </div>
-          {/* Divider */}
-          <div style={{width:1,height:14,background:cs.border,flexShrink:0}}/>
-          {/* AI Coach dot */}
-          <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
-            <div style={{
-              width:6,height:6,borderRadius:"50%",flexShrink:0,
-              background:aiCoachStatus.error?"#ef4444":aiCoachStatus.ready?"#6366f1":"#f59e0b",
-              animation:(!aiCoachStatus.ready&&!aiCoachStatus.error)?"livePulse 1.2s infinite":"none",
-            }}/>
-            <span style={{fontSize:10,color:aiCoachStatus.error?"#ef4444":aiCoachStatus.ready?"#6366f1":"#f59e0b",fontWeight:600}}>
-              {aiCoachStatus.ready
-                ?(isAr?"AI ✓":"AI ✓")
-                :aiCoachStatus.loading
-                ?(isAr?`AI ${aiCoachStatus.progress}%`:`AI ${aiCoachStatus.progress}%`)
-                :(isAr?"AI ...":"AI ...")}
-            </span>
-          </div>
-          {/* Session timer if active */}
-          {camActive&&(
-            <div style={{fontSize:10,color:cs.muted,fontWeight:600,flexShrink:0,marginInlineStart:"auto"}}>
-              🔴 {Math.floor(sessionTime/60)}:{String(sessionTime%60).padStart(2,"0")}
-            </div>
-          )}
+        {/* Posture model status */}
+        <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
+          <div style={{
+            width:7,height:7,borderRadius:"50%",flexShrink:0,
+            background:mpStatus==="ready"?"#10b981":mpStatus==="fallback"?"#f59e0b":mpStatus==="error"?"#ef4444":"#f59e0b",
+            boxShadow:mpStatus==="ready"?"0 0 6px #10b981":mpStatus==="fallback"?"0 0 6px #f59e0b":mpStatus==="error"?"0 0 6px #ef4444":"0 0 6px #f59e0b",
+            animation:mpStatus==="loading"?"livePulse 1.2s infinite":"none",
+          }}/>
+          <span style={{fontSize:11,color:mpStatus==="ready"?"#10b981":mpStatus==="fallback"?"#f59e0b":mpStatus==="error"?"#ef4444":"#f59e0b",fontWeight:500}}>
+            {mpStatus==="ready"
+              ?(isAr?"نموذج الوضعية جاهز ✓":"Posture model ready ✓")
+              :mpStatus==="fallback"
+              ?(isAr?"وضع احتياطي (السيرفر)":"Fallback mode (server-assisted)")
+              :mpStatus==="error"
+              ?(isAr?"نموذج الوضعية غير متاح":"Posture model unavailable")
+              :(isAr?"جاري تحميل النموذج...":"Loading model...")}
+          </span>
+        </div>
+
+        {/* AI Coach status — reflects real WebLLM load state (see aiCoachStatus above) */}
+        <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
+          <div style={{
+            width:7,height:7,borderRadius:"50%",flexShrink:0,
+            background: aiCoachStatus.error ? "#ef4444" : aiCoachStatus.ready ? "#6366f1" : "#f59e0b",
+            boxShadow: aiCoachStatus.error ? "0 0 6px #ef4444" : aiCoachStatus.ready ? "0 0 6px #6366f1" : "0 0 6px #f59e0b",
+            animation: (!aiCoachStatus.ready && !aiCoachStatus.error) ? "livePulse 1.2s infinite" : "none",
+          }}/>
+          <span style={{fontSize:11,color: aiCoachStatus.error ? "#ef4444" : aiCoachStatus.ready ? "#6366f1" : "#f59e0b",fontWeight:500}}>
+            {aiCoachStatus.error
+              ? (isAr?"مدرب AI غير متاح":"AI Coach unavailable")
+              : aiCoachStatus.ready
+              ? (isAr?"مدرب AI (محلي ومجاني)":"AI Coach (local, free)")
+              : aiCoachStatus.loading
+              ? (isAr?`جاري تحميل مدرب AI... ${aiCoachStatus.progress}%`:`Loading AI Coach... ${aiCoachStatus.progress}%`)
+              : (isAr?"مدرب AI (يبدأ عند الفتح)":"AI Coach (loads on open)")}
+          </span>
         </div>
 
         {/* ── Camera-mode switcher — change laptop / phone / side without
@@ -5713,130 +5130,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
           }}>{isFs?"🗗":"⛶"}</button>
 
-          {/* AI model loading overlay — the camera permission/feed itself
-              resolves in a couple seconds, but the pose-detection model
-              (a few MB, first load only, then cached) can take up to a
-              minute on a slower connection. Until now the ONLY feedback for
-              that wait was a small pulsing status dot — the camera looked
-              "on" with a live feed and zero scores updating, which reads as
-              broken/frozen rather than "still loading, one moment." */}
-          {camActive && mpStatus==="loading" && (
-            <div style={{
-              position:"absolute",inset:0,display:"flex",flexDirection:"column",
-              alignItems:"center",justifyContent:"center",gap:14,
-              background:"rgba(2,8,16,.88)",backdropFilter:"blur(4px)",zIndex:15,
-            }}>
-              <div style={{width:44,height:44,border:"3px solid rgba(255,255,255,.08)",
-                borderTopColor:TN?.color||"#1a56db",borderRadius:"50%",animation:"spin .9s linear infinite"}}/>
-              <div style={{textAlign:"center",padding:"0 28px"}}>
-                <div style={{fontSize:15,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
-                  {isAr?"جاري تحميل نموذج الـ AI…":"Loading AI model…"}
-                </div>
-                <div style={{fontSize:11,color:"#64748b",lineHeight:1.6}}>
-                  {isAr?"بيحصل بس أول مرة — المرات الجاية فورية":"First time only — future sessions are instant"}
-                </div>
-              </div>
-              {/* Animated progress bar */}
-              <div style={{width:200}}>
-                <div style={{height:5,background:"rgba(255,255,255,.07)",borderRadius:99,overflow:"hidden"}}>
-                  <div style={{
-                    height:"100%",borderRadius:99,
-                    background:`linear-gradient(90deg,${TN?.color||"#1a56db"},#0891b2)`,
-                    animation:"modelLoad 12s ease-in-out forwards",
-                  }}/>
-                </div>
-                <style>{`@keyframes modelLoad{0%{width:4%}30%{width:40%}70%{width:75%}90%{width:90%}100%{width:95%}}`}</style>
-                <div style={{fontSize:10,color:"#475569",textAlign:"center",marginTop:7}}>
-                  {isAr?"يُحفظ تلقائياً — المرة الجاية يفتح فورًا":"Cached automatically after this"}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Live preview, not yet scored — shown after the camera opens and
-              before the user confirms they're ready. Cancel is always
-              visible here — no phase where the user is stuck with no way
-              to back out. */}
-          {previewPhase==="preview" && (
-            <div style={{
-              position:"absolute",inset:0,display:"flex",flexDirection:"column",
-              alignItems:"center",justifyContent:"flex-end",padding:"0 0 22px",
-              background:"linear-gradient(to top, rgba(2,8,16,.85), transparent 45%)",zIndex:15,
-            }}>
-              <div style={{fontSize:12.5,color:"#e2e8f0",marginBottom:12,textAlign:"center",padding:"0 20px"}}>
-                {isAr?"اتأكد إنك ظاهر كويس في الكاميرا، وابدأ لما تجهز":"Make sure you're framed well, then start when you're ready"}
-              </div>
-              <div style={{display:"flex",gap:10}}>
-                <button onClick={cancelPreview} style={{
-                  background:"rgba(255,255,255,.08)",border:`1px solid ${cs.border}`,borderRadius:14,
-                  padding:"14px 22px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",
-                }}>
-                  {isAr?"إلغاء":"Cancel"}
-                </button>
-                <button onClick={confirmStartSession} style={{
-                  background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
-                  padding:"14px 32px",fontSize:14.5,fontWeight:800,color:"#fff",cursor:"pointer",
-                  boxShadow:"0 8px 24px rgba(26,86,219,.4)",
-                }}>
-                  ▶ {isAr?"ابدأ الجلسة الآن":"Start session now"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Paused — analysis + timer frozen, camera stays attached so
-              resume is instant. Distinct from "Break now", which keeps the
-              session running invisibly in the background; this actually
-              stops. */}
-          {camActive && isPaused && (
-            <div style={{
-              position:"absolute",inset:0,display:"flex",flexDirection:"column",
-              alignItems:"center",justifyContent:"center",gap:14,
-              background:"rgba(2,8,16,.62)",backdropFilter:"blur(2px)",zIndex:14,
-            }}>
-              <div style={{fontSize:36}}>⏸</div>
-              <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>
-                {isAr?"الجلسة متوقفة مؤقتاً":"Session paused"}
-              </div>
-              <button onClick={resumeSession} style={{
-                background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
-                padding:"12px 28px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",
-                boxShadow:"0 8px 24px rgba(26,86,219,.4)",
-              }}>
-                ▶ {isAr?"استكمال":"Resume"}
-              </button>
-            </div>
-          )}
-
-          {/* 3-2-1 countdown right before scoring actually begins — Cancel
-              stays visible and cancels the countdown + closes the camera,
-              same as during preview. */}
-          {previewPhase==="countdown" && (
-            <div style={{
-              position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-              background:"rgba(2,8,16,.55)",zIndex:16,gap:18,
-            }}>
-              <div key={countdownN} style={{
-                fontSize:88,fontWeight:900,color:"#fff",
-                animation:"countdownPop .9s ease-out",
-                textShadow:"0 4px 24px rgba(0,0,0,.5)",
-              }}>{countdownN}</div>
-              <button onClick={cancelPreview} style={{
-                background:"rgba(255,255,255,.1)",border:`1px solid ${cs.border}`,borderRadius:12,
-                padding:"9px 20px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",
-              }}>
-                {isAr?"إلغاء":"Cancel"}
-              </button>
-            </div>
-          )}
-
           {/* Idle-state visual cue — previously the camera area was just a black box
               with no indication a click was needed. First-time users had no way to
-              know to press "Start Analysis" below. Must NOT show during preview/
-              countdown — camActive is still false at that point (correct, scoring
-              hasn't started), so without excluding previewPhase this rendered on
-              top of the preview overlay's own text simultaneously, garbled. */}
-          {!camActive && !previewPhase && cameraStatus!=="requesting" && (
+              know to press "Start Analysis" below. */}
+          {!camActive && cameraStatus!=="requesting" && (
             <div style={{
               position:"absolute",inset:0,display:"flex",flexDirection:"column",
               alignItems:"center",justifyContent:"center",gap:10,
@@ -5881,7 +5178,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {analysis && score > 0 && (
           <div style={{
             position:"absolute", top:10, right:10,
-            background:"rgba(2,8,20,.55)", backdropFilter:"blur(8px)",
+            background:"rgba(2,8,20,.88)", backdropFilter:"blur(8px)",
             border:"1px solid rgba(255,255,255,.08)", borderRadius:12,
             padding:"10px 14px", minWidth:160, zIndex:10,
           }}>
@@ -5998,9 +5295,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Primary control — placed directly under the camera so Start / Stop
             is always visible without scrolling past the metrics list. */}
         <div style={{padding:"12px 14px 0"}}>
-          {previewPhase
-            ? null /* overlay's own Start/Cancel buttons are the CTA here */
-            : !camActive
+          {!camActive
             ? <button
                 onClick={cameraStatus==="requesting" ? undefined : startCamera}
                 disabled={cameraStatus==="requesting"}
@@ -6030,46 +5325,76 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   ? (isAr?"🔄 حاول تاني — لو وصّلت كاميرا":"🔄 Retry — if you've connected one")
                   : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
               </button>
-            : <div style={{display:"flex",gap:8}}>
-                <button onClick={isPaused?resumeSession:pauseSession} style={{
-                  flex:1,
-                  background: isPaused ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(5,150,105,.12))" : "rgba(148,163,184,.08)",
-                  color: isPaused ? "#6ee7b7" : cs.text,
-                  border:`1px solid ${isPaused?"rgba(16,185,129,.4)":cs.border}`,borderRadius:10,
-                  padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
-                }}>
-                  {isPaused ? (isAr?"▶ استكمال":"▶ Resume") : (isAr?"⏸ وقف مؤقت":"⏸ Pause")}
-                </button>
-                <button onClick={stopCamera} disabled={isSavingSession} style={{
-                  flex:1,
-                  background: isSavingSession
-                    ? "rgba(255,255,255,.05)"
-                    : "linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
-                  color: isSavingSession ? "#64748b" : "#fca5a5",
-                  border:`1px solid ${isSavingSession?"rgba(255,255,255,.08)":"rgba(239,68,68,.5)"}`,borderRadius:10,
-                  padding:"13px 0",fontSize:13,fontWeight:700,
-                  cursor: isSavingSession ? "not-allowed" : "pointer",
-                  boxShadow: isSavingSession ? "none" : "0 2px 12px rgba(239,68,68,.2)",
-                  letterSpacing:"-.01em",transition:"all .2s",
-                }}>
-                  {isSavingSession
-                    ? (isAr ? "⏳ جاري الحفظ…" : "⏳ Saving…")
-                    : (isAr ? "⏹ إيقاف وحفظ" : "⏹ Stop & Save")}
-                </button>
-              </div>
+            : <button onClick={stopCamera} style={{
+                width:"100%",
+                background:"linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                color:"#fca5a5",
+                border:"1px solid rgba(239,68,68,.5)",borderRadius:10,
+                padding:"13px 0",fontSize:14,fontWeight:700,cursor:"pointer",
+                boxShadow:"0 2px 12px rgba(239,68,68,.2)",
+                letterSpacing:"-.01em",
+              }}>
+                {isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save"}
+              </button>
           }
         </div>
 
-        {/* Optimal distance hint — score/user shown in left panel & video overlay */}
-        {M_ && !camActive && (
-          <div style={{padding:"8px 14px",borderBottom:`1px solid ${cs.border}`,
-            display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:13}}>📏</span>
-            <span style={{fontSize:11,color:cs.muted}}>
-              {isAr?`اجلس على مسافة ${M_.optDist[0]}–${M_.optDist[1]}cm من الكاميرا`:`Sit ${M_.optDist[0]}–${M_.optDist[1]}cm from camera`}
-            </span>
+        {/* Score ring + user */}
+        <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
+          {/* User row */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            {profile?.photoURL
+              ? <img alt="" src={profile.photoURL} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
+              : (() => {
+                  // #16: use actual first name for initials — if profile?.name looks
+                  // like an email address/prefix, fall back to "?" not the raw email.
+                  const pName  = profile?.name || "";
+                  const isEmail = pName.includes("@") || pName.includes(".") || /\d{2,}/.test(pName);
+                  const initials = (!pName || isEmail) ? "?" : pName.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();
+                  return (
+                    <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,
+                      background:`hsl(${pName.split("").reduce((a,c)=>a+c.charCodeAt(0),0)%360 || 210},50%,30%)`,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:11,fontWeight:700,color:"#fff"}}>
+                      {initials}
+                    </div>
+                  );
+                })()
+            }
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:700,color:cs.text,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {(() => {
+                  const n = profile?.name || "";
+                  const isEmail = n.includes("@") || n.includes(".") || /\d{2,}/.test(n);
+                  return (!n || isEmail) ? (isAr ? "المستخدم" : "User") : n;
+                })()}
+              </div>
+              <div style={{fontSize:9.5,color:cs.muted}}>
+                {isAr?"المسافة المثلى":"Optimal"}: {M_?.optDist[0]}–{M_?.optDist[1]}cm
+              </div>
+            </div>
           </div>
-        )}
+          {/* Score + grade */}
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <Ring score={score} size={52}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:18,fontWeight:900,color:scoreColor,lineHeight:1}}>
+                {score||0}<span style={{fontSize:10,color:cs.muted,fontWeight:400}}>/100</span>
+              </div>
+              <div style={{fontSize:12,fontWeight:600,color:scoreColor,marginTop:2}}>
+                {score ? grade(score,t) : (isAr?"ابدأ الكاميرا":"Start camera")}
+              </div>
+              {/* Mini progress bar */}
+              <div style={{marginTop:6,height:3,borderRadius:99,background:"rgba(255,255,255,.06)"}}>
+                <div style={{height:"100%",width:`${score||0}%`,borderRadius:99,
+                  background:`linear-gradient(90deg,${scoreColor}88,${scoreColor})`,
+                  transition:"width .4s ease"}}/>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Strain / discomfort prediction — wired to the real pain_prediction
             data (minutes_to_pain / primary_driver / confidence). Previously
             this section read analysis.pain_bar, which nothing ever set, so it
@@ -6109,28 +5434,18 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
           {analysis?.metrics
             ? (() => {
+                // Metrics to show in the main list — exclude purely internal ones
                 const HIDE = new Set(["session_fatigue","confidence_val"]);
                 const mEntries = Object.entries(analysis.metrics).filter(([k,m])=>
                   !HIDE.has(k) && m.value!=null && m.label
                 );
-                // Sort by score ascending (worst first), cap at 3 by default
-                const sorted = [...mEntries].sort((a,b)=>(a[1].score??100)-(b[1].score??100));
-                const showAll = showAllMetrics;
-                const visible = showAll ? sorted : sorted.slice(0,3);
                 return (
                   <>
-                    {visible.map(([k,m])=>(
+                    {mEntries.map(([k,m])=>(
                       <MetRow key={k} label={m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
                         dim={m.reliable===false}
                       />
                     ))}
-                    {sorted.length > 3 && (
-                      <button onClick={()=>setShowAllMetrics(v=>!v)}
-                        style={{width:"100%",background:"none",border:`1px solid ${cs.border}`,borderRadius:8,
-                          padding:"5px 0",fontSize:10,color:cs.muted,cursor:"pointer",marginTop:4}}>
-                        {showAllMetrics?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?`+ ${sorted.length-3} مقياس ▼`:`+ ${sorted.length-3} more ▼`)}
-                      </button>
-                    )}
                     {/* ── Detected conditions with severity badges ── */}
                     {analysis.detectedConditions?.length > 0 && (
                       <div style={{marginTop:10,marginBottom:4}}>
@@ -6328,113 +5643,83 @@ async function downloadPDF(sessionOverride, isClinical=false){
         )}
 
         {/* Secondary controls (primary Start/Stop moved up under the camera) */}
-        {/* Collapsed by default — see showLiveSettings declaration. One row
-            to open everything below, instead of 7 rows shown unconditionally
-            the moment the page loads. */}
-        <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
-          <button onClick={()=>setShowLiveSettings(v=>!v)} style={{
-            width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
-            background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:10,
-            padding:"10px 14px",fontSize:12.5,fontWeight:700,color:cs.text,cursor:"pointer",
-          }}>
-            <span>⚙️ {isAr?"إعدادات الجلسة":"Session settings"}</span>
-            <span style={{fontSize:11,color:cs.muted}}>{showLiveSettings?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?"عرض ▼":"Show ▼")}</span>
-          </button>
-        </div>
-        {showLiveSettings && (
-        <div style={{padding:"0 14px 12px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
-          {/* Alert sound + Elite voice coach toggles — voice coach only takes
-              a slot here once actually unlocked; below Elite it moved into
-              the compact "locked tools" row at the end of this block so a
-              Free/Basic/Pro user isn't looking at a full-prominence button
-              for something they can't use yet. */}
+        <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
+          {/* Alert sound + Elite voice coach toggles */}
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setSound(s=>!s)} style={{
               flex:1,background:sound?"rgba(26,86,219,.12)":"rgba(255,255,255,.04)",
               border:`1px solid ${sound?"rgba(26,86,219,.35)":cs.border}`,borderRadius:9,
               padding:"8px 0",fontSize:11,fontWeight:700,color:sound?"#60a5fa":cs.muted,cursor:"pointer",
             }}>
-              {sound?"🔊":"🔇"} {isAr?"تنبيه الوضعية":"Posture alerts"}
+              {sound?"🔊":"🔇"} {isAr?"تنبيه صوتي":"Beep alerts"}
             </button>
-            {tierAtLeast(effectiveTier,"professional") && (
-              <button onClick={()=>setFocusMode(f=>!f)} title={isAr?"يوقف إشعارات الإنجازات والتحديات وقت الجلسة — تنبيهات الوضعية بتفضل شغالة عادي":"Mutes achievement/challenge notifications during the session — posture alerts stay on"} style={{
-                flex:1,background:focusMode?"rgba(168,85,247,.14)":"rgba(255,255,255,.04)",
-                border:`1px solid ${focusMode?"rgba(168,85,247,.4)":cs.border}`,borderRadius:9,
-                padding:"8px 0",fontSize:11,fontWeight:700,color:focusMode?"#c084fc":cs.muted,cursor:"pointer",
-              }}>
-                {focusMode?"🎯":"🎯"} {isAr?"وضع التركيز":"Focus Mode"}
-              </button>
-            )}
-            {tierAtLeast(effectiveTier,"elite") && (
-              <button onClick={()=>{
-                setVoiceCoach(v=>{
-                  const nv=!v;
-                  try{localStorage.setItem("corvus_voice_coach",nv?"1":"0");}catch{}
-                  if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{force:true});
-                  else stopSpeaking();
-                  return nv;
-                });
-              }} style={{
-                flex:1,background:voiceCoach?"rgba(16,185,129,.12)":"rgba(255,255,255,.04)",
-                border:`1px solid ${voiceCoach?"rgba(16,185,129,.4)":cs.border}`,borderRadius:9,
-                padding:"8px 0",fontSize:11,fontWeight:700,
-                color:voiceCoach?"#34d399":cs.muted,cursor:"pointer",
-                display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-              }}>
-                🎙️ {isAr?"المدرب الصوتي":"Voice coach"}
-              </button>
-            )}
-          </div>
-          {/* Privacy + display overlay toggles — these three were a
-              full-width block (face blur) stacked on top of a separate 2-up
-              row (skeleton/angles). All three do the same kind of thing
-              (what's drawn on the video overlay), so they're one row now. */}
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }} style={{
-              flex:1,background:faceBlur?"rgba(99,102,241,.12)":"rgba(255,255,255,.04)",
-              border:`1px solid ${faceBlur?"rgba(99,102,241,.4)":cs.border}`,borderRadius:9,
-              padding:"8px 2px",fontSize:10.5,fontWeight:700,color:faceBlur?"#a5b4fc":cs.muted,cursor:"pointer",
-              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
+            <button onClick={()=>{
+              if(!tierAtLeast(effectiveTier,"elite")){
+                addToast(isAr?"🎙️ المدرب الصوتي متاح لباقة Elite فقط":"🎙️ Voice coach is an Elite feature","warn");
+                setShowBilling(true);return;
+              }
+              setVoiceCoach(v=>{
+                const nv=!v;
+                try{localStorage.setItem("corvus_voice_coach",nv?"1":"0");}catch{}
+                if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{force:true});
+                else stopSpeaking();
+                return nv;
+              });
+            }} style={{
+              flex:1,background:voiceCoach&&tierAtLeast(effectiveTier,"elite")?"rgba(16,185,129,.12)":"rgba(255,255,255,.04)",
+              border:`1px solid ${voiceCoach&&tierAtLeast(effectiveTier,"elite")?"rgba(16,185,129,.4)":cs.border}`,borderRadius:9,
+              padding:"8px 0",fontSize:11,fontWeight:700,
+              color:voiceCoach&&tierAtLeast(effectiveTier,"elite")?"#34d399":cs.muted,cursor:"pointer",
+              display:"flex",alignItems:"center",justifyContent:"center",gap:5,
             }}>
-              <span style={{fontSize:14}}>{faceBlur?"🕶️":"👤"}</span>
-              {isAr?"إخفاء الوجه":"Face blur"}
+              🎙️ {isAr?"المدرب الصوتي":"Voice coach"}
+              {!tierAtLeast(effectiveTier,"elite")&&<span style={{fontSize:8,background:"rgba(16,185,129,.12)",border:"1px solid rgba(16,185,129,.25)",borderRadius:99,padding:"1px 6px",color:"#10b981"}}>ELITE</span>}
             </button>
+          </div>
+          {/* Privacy: face blur toggle — pixelates the face on the analysis view */}
+          <button onClick={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }} style={{
+            background:faceBlur?"rgba(99,102,241,.12)":"rgba(255,255,255,.04)",
+            border:`1px solid ${faceBlur?"rgba(99,102,241,.4)":cs.border}`,borderRadius:9,
+            padding:"8px 0",fontSize:11,fontWeight:700,color:faceBlur?"#a5b4fc":cs.muted,cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+          }}>
+            {faceBlur?"🕶️":"👤"} {isAr?(faceBlur?"إخفاء الوجه: مُفعّل":"إخفاء الوجه (خصوصية)"):(faceBlur?"Face blur: ON":"Blur face (privacy)")}
+          </button>
+          {/* Overlay controls — show/hide the skeleton and angle labels on the video */}
+          <div style={{display:"flex",gap:8}}>
             <button onClick={()=>{ setShowSkeleton(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_skeleton",nv?"1":"0");}catch{} return nv; }); }} style={{
               flex:1,background:showSkeleton?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
               border:`1px solid ${showSkeleton?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
-              padding:"8px 2px",fontSize:10.5,fontWeight:700,color:showSkeleton?"#38bdf8":cs.muted,cursor:"pointer",
-              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
+              padding:"8px 0",fontSize:11,fontWeight:700,color:showSkeleton?"#38bdf8":cs.muted,cursor:"pointer",
             }}>
-              <span style={{fontSize:14}}>{showSkeleton?"🦴":"⬚"}</span>
-              {isAr?"الهيكل":"Skeleton"}
+              {showSkeleton?"🦴":"⬚"} {isAr?"الهيكل":"Skeleton"}
             </button>
             <button onClick={()=>{ setShowAngles(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_angles",nv?"1":"0");}catch{} return nv; }); }} style={{
               flex:1,background:showAngles?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
               border:`1px solid ${showAngles?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
-              padding:"8px 2px",fontSize:10.5,fontWeight:700,color:showAngles?"#38bdf8":cs.muted,cursor:"pointer",
-              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
+              padding:"8px 0",fontSize:11,fontWeight:700,color:showAngles?"#38bdf8":cs.muted,cursor:"pointer",
             }}>
-              <span style={{fontSize:14}}>{showAngles?"📐":"⬚"}</span>
-              {isAr?"الزوايا":"Angles"}
+              {showAngles?"📐":"⬚"} {isAr?"الزوايا":"Angles"}
             </button>
           </div>
-          {/* Pro tools — Custom Alert Rules + PDF grouped together as what
-              they are (both Pro-tier session tools), instead of one sitting
-              here and the other sitting several rows further down. */}
-          {(tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"))&&(
-            <div style={{display:"flex",gap:6}}>
-              {tierAtLeast(effectiveTier,"professional") && (
-                <button onClick={()=>setShowCustomAlertRules(true)} style={{
-                  flex:1,background:customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.12)":"rgba(255,255,255,.04)",
-                  border:`1px solid ${customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.4)":cs.border}`,borderRadius:9,
-                  padding:"8px 0",fontSize:11,fontWeight:700,color:customAlertRules.some(r=>r.enabled)?"#c4b5fd":cs.muted,cursor:"pointer",
-                  display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-                }}>
-                  ⚙️ {isAr?"قواعد تنبيه":"Alert rules"}
-                </button>
-              )}
-              {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"&&(
+          {/* Calibrate for accuracy — personalises scoring to the user's own
+              neutral posture; reachable straight from the live session. */}
+          <button onClick={()=>setShowCalibWizard(true)} style={{
+            background:calibData?"rgba(148,163,184,.06)":"rgba(16,185,129,.1)",
+            border:`1px solid ${calibData?cs.border:"rgba(16,185,129,.4)"}`,borderRadius:10,
+            padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:"#34d399",cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+          }}>
+            🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
+          </button>
+          {histRef.current?.length>0&&(
 <button onClick={async ()=>{
+              // Same canonical gate — third direct generateSessionPDF() call that bypassed it.
+              if(qualityFor(tier).pdfDetail === "none"){
+                addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
+                setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
+                return;
+              }
               const hist=histRef.current||[];
               const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
               const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
@@ -6455,91 +5740,22 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 });
               } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
             }} style={{
-              flex:1,background:"rgba(59,130,246,.08)",
-              color:"#93c5fd",
-              border:"1px solid rgba(59,130,246,.2)",borderRadius:9,
-              padding:"8px 0",fontSize:11,fontWeight:600,cursor:"pointer",
+              background:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.04)":"rgba(59,130,246,.08)",
+              color:qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.35)":"#93c5fd",
+              border:`1px solid ${qualityFor(tier).pdfDetail==="none"?"rgba(255,255,255,.08)":"rgba(59,130,246,.2)"}`,borderRadius:10,
+              padding:"10px 0",fontSize:12,fontWeight:600,cursor:"pointer",
             }}>
-              📄 {isAr?"تنزيل PDF":"Download PDF"}
+              {qualityFor(tier).pdfDetail==="none" ? (isAr?"🔒 تنزيل PDF (Pro+)":"🔒 Download PDF (Pro+)") : (isAr?"📄 تنزيل PDF":"📄 Download PDF")}
             </button>
-              )}
-            </div>
           )}
-          {/* Calibrate for accuracy — personalises scoring to the user's own
-              neutral posture; reachable straight from the live session. Kept
-              visually distinct (green, not a toggle) since it's a one-time
-              setup action, not an on/off switch like everything above it. */}
-          <button onClick={()=>setShowCalibWizard(true)} style={{
-            background:calibData?"rgba(148,163,184,.06)":"rgba(16,185,129,.1)",
-            border:`1px solid ${calibData?cs.border:"rgba(16,185,129,.4)"}`,borderRadius:10,
-            padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:"#34d399",cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:6,
-          }}>
-            🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
-          </button>
-          {/* "Sound ON/OFF" used to sit here with a generic label that read
-              like a master mute for everything, including the posture-alert
-              beeps above (which it never controlled — see `muted` vs
-              `sound` above). It only ever gates the break-reminder chime,
-              so it's labelled and placed as exactly that now. */}
           <button onClick={()=>setMuted(v=>!v)} style={{
             background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#10b981",
             border:`1px solid ${muted?cs.border:"rgba(16,185,129,.25)"}`,
-            borderRadius:10,padding:"8px 0",fontSize:11.5,fontWeight:500,cursor:"pointer",
+            borderRadius:10,padding:"8px 0",fontSize:12,fontWeight:500,cursor:"pointer",
           }}>
-            {muted?(isAr?"🔇 صوت تذكير الاستراحة: متوقف":"🔇 Break-reminder chime: OFF"):(isAr?"🔔 صوت تذكير الاستراحة: شغّال":"🔔 Break-reminder chime: ON")}
+            {muted?(isAr?"🔇 الصوت متوقف":"🔇 Sound OFF"):(isAr?"🔊 الصوت شغّال":"🔊 Sound ON")}
           </button>
-          {/* Compact locked-tools strip — everything this tier can't use yet
-              lives HERE as small inline chips, instead of each one getting
-              its own full-width button mixed in with the tools the user can
-              actually press. Same colors/behaviour (still opens billing on
-              tap) — just visually demoted so the page doesn't read as "100
-              options, none of them mine" for Free/Basic/Pro users. */}
-          {(!tierAtLeast(effectiveTier,"elite")||!tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail==="none"))&&(
-            <div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:2}}>
-              {!tierAtLeast(effectiveTier,"professional")&&(
-                <button onClick={()=>{
-                  addToast(isAr?"⚙️ قواعد التنبيه المخصصة متاحة لباقة Pro فأعلى":"⚙️ Custom Alert Rules is a Pro feature","warn");
-                  setShowBilling(true);
-                }} style={{
-                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
-                  padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
-                  display:"flex",alignItems:"center",gap:4,
-                }}>
-                  🔒 ⚙️ {isAr?"قواعد تنبيه":"Alert rules"}
-                  <span style={{fontSize:8,color:"#a78bfa",fontWeight:800}}>PRO</span>
-                </button>
-              )}
-              {!tierAtLeast(effectiveTier,"elite")&&(
-                <button onClick={()=>{
-                  addToast(isAr?"🎙️ المدرب الصوتي متاح لباقة Elite فقط":"🎙️ Voice coach is an Elite feature","warn");
-                  setShowBilling(true);
-                }} style={{
-                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
-                  padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
-                  display:"flex",alignItems:"center",gap:4,
-                }}>
-                  🔒 🎙️ {isAr?"مدرب صوتي":"Voice coach"}
-                  <span style={{fontSize:8,color:"#10b981",fontWeight:800}}>ELITE</span>
-                </button>
-              )}
-              {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail==="none"&&(
-                <button onClick={()=>{
-                  addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
-                  setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
-                }} style={{
-                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
-                  padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
-                  display:"flex",alignItems:"center",gap:4,
-                }}>
-                  🔒 📄 {isAr?"تقرير PDF":"PDF report"}
-                  <span style={{fontSize:8,color:"#93c5fd",fontWeight:800}}>PRO</span>
-                </button>
-              )}
-            </div>
-          )}
         </div>
-        )}
 
         {/* Tools moved to Dashboard — see HomePage tools tab */}
 
@@ -6662,7 +5878,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
       </div>
     </div>
-  </></ErrorBoundary>);
+  </ErrorBoundary>);
 }
 
 
