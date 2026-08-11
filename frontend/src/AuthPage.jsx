@@ -462,7 +462,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
 
   // ── Color tokens ────────────────────────────────────────────────────
   const t = dark ? {
-    bg:"#0d1a2e", card:"rgba(15,23,42,.85)", border:"rgba(255,255,255,.07)",
+    bg:"#030b14", card:"rgba(15,23,42,.85)", border:"rgba(255,255,255,.07)",
     text:"#f0f6ff", textSub:"#94a3b8", muted:"rgba(255,255,255,.3)",
     faint:"rgba(255,255,255,.04)", divider:"rgba(255,255,255,.06)",
     pillBg:"rgba(255,255,255,.05)", pillBd:"rgba(255,255,255,.08)",
@@ -471,7 +471,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     tabAct:"linear-gradient(135deg,#1d4ed8,#0891b2)",tabActS:"0 3px 14px rgba(29,78,216,.4)",
   } : {
     bg:"#f0f4ff", card:"rgba(255,255,255,.95)", border:"rgba(0,0,0,.07)",
-    text:"#0f172a", textSub:"#64748b", muted:"#94a3b8",
+    text:"#0c1528", textSub:"#64748b", muted:"#94a3b8",
     faint:"rgba(0,0,0,.03)", divider:"rgba(0,0,0,.06)",
     pillBg:"rgba(0,0,0,.04)", pillBd:"rgba(0,0,0,.07)",
     acc:"#1a56db", accBtn:"linear-gradient(135deg,#1a56db 0%,#0891b2 100%)",
@@ -979,7 +979,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         input::placeholder   { color:${dark?"rgba(255,255,255,.18)":"rgba(0,0,0,.22)"}!important }
         input:-webkit-autofill {
           -webkit-box-shadow:0 0 0 100px ${dark?"#0d1829":"#f0f4ff"} inset!important;
-          -webkit-text-fill-color:${dark?"#f0f6ff":"#0f172a"}!important;
+          -webkit-text-fill-color:${dark?"#f0f6ff":"#0c1528"}!important;
         }
         *{box-sizing:border-box;margin:0;padding:0}
         button:focus-visible,input:focus-visible{outline:2px solid ${t.acc};outline-offset:2px}

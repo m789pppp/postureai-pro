@@ -18,7 +18,7 @@ const METRIC_LABELS = {
 /* ── Styles ── */
 const SRP_TOKENS = {
   page: {
-    minHeight:"100dvh", background:"#0d1a2e", color:"#f1f5f9",
+    minHeight:"100dvh", background:"#030b14", color:"#f1f5f9",
     fontFamily:"'DM Sans', system-ui, sans-serif",
   },
   center: {
@@ -359,7 +359,7 @@ export default function SharedReportPage() {
         {hist.length > 2 && (
           <div style={{ ...SRP_TOKENS.card, marginBottom:20 }}>
             <h2 style={SRP_TOKENS.sectionTitle}>Score Timeline</h2>
-            <div style={{ background:"#0f172a", borderRadius:8, padding:"12px 8px 4px" }}>
+            <div style={{ background:"#0c1528", borderRadius:8, padding:"12px 8px 4px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
                 {[50,65,80,95].map(v => (
                   <span key={v} style={{ fontSize:9, color:"#334155" }}>{v}</span>
@@ -402,7 +402,7 @@ export default function SharedReportPage() {
                   key={k}
                   onClick={() => setActiveZone(open ? null : k)}
                   style={{
-                    background: open?"#0f172a":"#1e293b",
+                    background: open?"#0c1528":"#1e293b",
                     border:`1px solid ${open?rc+"66":"#334155"}`,
                     borderRadius:10, padding:"14px 16px",
                     cursor:"pointer", transition:"all .2s",
