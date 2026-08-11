@@ -38,3 +38,4 @@ celerybeat-schedule
 # Python bytecode cache (accidentally committed once — never again)
 __pycache__/
 *.pyc
+*.bak
