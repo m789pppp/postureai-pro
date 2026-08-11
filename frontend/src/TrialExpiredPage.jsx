@@ -10,10 +10,10 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
 
   const dark = darkMode;
   const t = {
-    bg:     dark ? "#0d1a2e" : "#f0f4ff",
+    bg:     dark ? "#030b14" : "#f0f4ff",
     card:   dark ? "rgba(15,23,42,.9)" : "#ffffff",
     border: dark ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.07)",
-    text:   dark ? "#f0f6ff" : "#0f172a",
+    text:   dark ? "#f0f6ff" : "#0c1528",
     muted:  dark ? "rgba(255,255,255,.4)" : "#64748b",
     acc:    "#1a56db",
     btn:    "linear-gradient(135deg,#1a56db,#0891b2)",
