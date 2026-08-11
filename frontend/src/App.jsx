@@ -7,6 +7,10 @@ if (typeof window !== 'undefined') {
     e.preventDefault();
   });
 }
+<<<<<<< Updated upstream
+=======
+ 20260806091209
+>>>>>>> Stashed changes
 import React, { lazy, Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import {
@@ -4771,7 +4775,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
       {showDashboard&&<ErrorBoundary key="dashboard"><Suspense fallback={null}><AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/></Suspense></ErrorBoundary>}
       {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={()=>setShowCoach(false)}/>}
+<<<<<<< Updated upstream
       {showGamification&&<ErrorBoundary key="gamification"><Suspense fallback={null}><GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/></Suspense></ErrorBoundary>}
+=======
+      {showGamification&&<ErrorBoundary key="gamification"><Suspense fallback={null}><GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/></Suspense>}</ErrorBoundary>}
+>>>>>>> Stashed changes
       {showCustomAlertRules&&<CustomAlertRulesPanel isAr={isAr} cs={cs} rules={customAlertRules}
         onSave={(next)=>{
           setCustomAlertRules(next);
@@ -4787,7 +4795,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showSymptomCorrelation&&<SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/>}
       {showPredictiveAI&&<ErrorBoundary key="predictiveai"><Suspense fallback={null}><PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowPredictiveAI(false)}/></Suspense></ErrorBoundary>}
       {showAIReports&&<ErrorBoundary key="aireports"><Suspense fallback={null}><AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/></Suspense></ErrorBoundary>}
+<<<<<<< Updated upstream
       {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/></Suspense>}
+=======
+      {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<ErrorBoundary key="workforceanalytics"><Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/></Suspense></ErrorBoundary>}
+>>>>>>> Stashed changes
       {showEnterpriseRBAC&&<ErrorBoundary key="enterpriserbac"><Suspense fallback={null}><EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/></Suspense></ErrorBoundary>}
       
       {showFeatureFlags&&isAdmin&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
@@ -4861,11 +4873,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onInsurance={()=>setShowInsuranceModal(true)}
       />
       {showGrowthHub&&<ErrorBoundary key="growthhub"><Suspense fallback={null}><GrowthHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowGrowthHub(false)}/></Suspense></ErrorBoundary>}
+<<<<<<< Updated upstream
       {showCertModal&&<ErrorBoundary key="certmodal"><Suspense fallback={null}><CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/></Suspense></ErrorBoundary>}
       {showQuarterlyReport&&<ErrorBoundary key="quarterlyreport"><Suspense fallback={null}><QuarterlyReportModal profile={profile} allUsers={allUsers} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowQuarterlyReport(false)}/></Suspense></ErrorBoundary>}
       {showSchoolsModal&&<ErrorBoundary key="schoolsmodal"><Suspense fallback={null}><SchoolsModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowSchoolsModal(false)}/></Suspense></ErrorBoundary>}
       {showDevPortal&&<ErrorBoundary key="devportal"><Suspense fallback={null}><DeveloperPortalModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowDevPortal(false)}/></Suspense></ErrorBoundary>}
       {showInsuranceModal&&<ErrorBoundary key="insurancemodal"><Suspense fallback={null}><InsurancePartnerModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowInsuranceModal(false)}/></Suspense></ErrorBoundary>}
+=======
+      {showCertModal&&<ErrorBoundary key="certmodal"><Suspense fallback={null}><CertBadgeModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowCertModal(false)}/></Suspense>}</ErrorBoundary>}
+      {showQuarterlyReport&&<ErrorBoundary key="quarterlyreport"><Suspense fallback={null}><QuarterlyReportModal profile={profile} allUsers={allUsers} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowQuarterlyReport(false)}/></Suspense>}</ErrorBoundary>}
+      {showSchoolsModal&&<ErrorBoundary key="schoolsmodal"><Suspense fallback={null}><SchoolsModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowSchoolsModal(false)}/></Suspense>}</ErrorBoundary>}
+      {showDevPortal&&<ErrorBoundary key="devportal"><Suspense fallback={null}><DeveloperPortalModal profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowDevPortal(false)}/></Suspense>}</ErrorBoundary>}
+      {showInsuranceModal&&<ErrorBoundary key="insurancemodal"><Suspense fallback={null}><InsurancePartnerModal cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setShowInsuranceModal(false)}/></Suspense>}</ErrorBoundary>}
+>>>>>>> Stashed changes
       {/* Moved here from the live-analysis render branch — modals must render on the
           home page only, never over the live camera/analysis screen (interrupts the Stop button). */}
       {showAnnualUpsell && (
@@ -4905,7 +4925,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
         streak={shareCardData.streak||0} percentile={null}
         lang={lang} cs={cs} addToast={addToast} onClose={()=>setShowShareCard(false)}/>
     )}
+<<<<<<< Updated upstream
     {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><Suspense fallback={null}><SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/></Suspense></ErrorBoundary>}
+=======
+    {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><Suspense fallback={null}><SessionComparison sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowSessionComparison(false)}/></Suspense>}</ErrorBoundary>}
+>>>>>>> Stashed changes
       {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}
       {showTrendChart&&<ErrorBoundary key="trendchart"><Suspense fallback={null}><TrendChart sessions={userSessions} cs={cs} lang={lang} onClose={()=>setShowTrendChart(false)}/></Suspense></ErrorBoundary>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
@@ -4914,8 +4938,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showWhiteLabel&&<ErrorBoundary key="whitelabel"><Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/></Suspense></ErrorBoundary>}
       {showMultiTenant&&<ErrorBoundary key="multitenant"><Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/></Suspense></ErrorBoundary>}
       {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
-    </ErrorBoundary>
-  );
+    </ErrorBoundary>);
   const TN = T_norm;
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const scoreColor = score ? sc(score) : cs.muted;
