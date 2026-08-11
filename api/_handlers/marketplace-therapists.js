@@ -37,7 +37,9 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers","Content-Type,Authorization");
   if (req.method==="OPTIONS") return res.status(200).end();
 
-  const { db } = getAdmin();
+  let db;
+  try { ({ db } = getAdmin()); }
+  catch (e) { console.error("[marketplace-therapists] Firebase Admin init failed:", e.message); return res.status(500).json({error:"Server misconfiguration — Firebase Admin credentials"}); }
   const action = req.query.action;
 
   // ── GET therapists list ─────────────────────────────────────────

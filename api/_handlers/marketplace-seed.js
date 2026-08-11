@@ -26,7 +26,9 @@ export default async function handler(req, res) {
   const secret = req.headers["x-seed-secret"];
   if (secret !== process.env.SEED_SECRET && secret !== "corvus-seed-2026") return res.status(403).json({error:"Forbidden"});
 
-  const db = getAdmin();
+  let db;
+  try { db = getAdmin(); }
+  catch (e) { console.error("[marketplace-seed] Firebase Admin init failed:", e.message); return res.status(500).json({error:"Server misconfiguration — Firebase Admin credentials"}); }
   const batch = db.batch();
   DEFAULT_THERAPISTS.forEach((t,i) => {
     const ref = db.collection("therapists").doc(`th_${i+1}`);
