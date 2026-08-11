@@ -1,4 +1,4 @@
-// BUILD: 20260806091209
+// BUILD:
 // Global error handler for unhandled promise rejections
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', (e) => {
@@ -4914,8 +4914,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showWhiteLabel&&<ErrorBoundary key="whitelabel"><Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/></Suspense></ErrorBoundary>}
       {showMultiTenant&&<ErrorBoundary key="multitenant"><Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/></Suspense></ErrorBoundary>}
       {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
-    </ErrorBoundary>
-  );
+    </ErrorBoundary>);
   const TN = T_norm;
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const scoreColor = score ? sc(score) : cs.muted;
