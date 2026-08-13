@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from "react";
 import { geminiAnalysis } from "./gemini.js";
 import { getCached, setCache, getCachedAsync, setFirestoreCache } from "./aiPreloader.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import { tierAtLeast } from "./lib/tierQuality.js";
 
 // ── AI call via offline engine ──────────────────────────────────────
 // NOTE: previously routed through geminiChat() -> /api/coach/chat, but
@@ -312,7 +313,7 @@ function AITextSection({ loading, data, error, onRetry, isAr, D }) {
   );
 }
 
-export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose, effectiveTier, uid = "" }) {
+export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en", onClose, effectiveTier, uid = "", onUpgrade }) {
   useBodyScrollLock();
   const [tab, setTab]               = useState("executive");
   const [loading, setLoading]       = useState(false);
@@ -453,6 +454,24 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
   useEffect(() => {
     loadInsight(tab);
   }, [tab]);
+
+  // Was gated only at the sidebar nav level (locked:!elite), which was
+  // removed in favor of an "open the feature, upsell inside" pattern —
+  // but this component never had any internal gate of its own, so
+  // removing the sidebar block made it fully free for every tier.
+  if (!tierAtLeast(effectiveTier, "elite")) return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9200, background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
+        <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "رؤى AI — Elite" : "AI Insights — Elite"}</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>{isAr ? "ملخصات تنفيذية وتحليل اتجاهات وإرهاق مبني على AI" : "Executive summaries, trend and fatigue analysis powered by AI"}</div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <button onClick={onClose} style={{ padding: "10px 20px", background: "rgba(255,255,255,.06)", color: "#94a3b8", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{isAr ? "إغلاق" : "Close"}</button>
+          <button onClick={()=>{ onClose?.(); onUpgrade?.(); }} style={{ padding: "10px 20px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{isAr ? "الترقية لـ Elite" : "Upgrade to Elite"}</button>
+        </div>
+      </div>
+    </div>
+  );
 
   const TABS = [
     { id: "executive",       icon: "📋", en: "Executive",      ar: "ملخص تنفيذي" },

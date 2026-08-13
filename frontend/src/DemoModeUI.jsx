@@ -23,7 +23,7 @@ import {
 } from "./DemoMode.js";
 
 const DEMO_TOKENS = {
-  bg: "#0d1a2e", card: "#05101f", border: "rgba(148,163,184,.12)",
+  bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.12)",
   text: "#f0f4f8", muted: "#64748b", blue: "#1a56db", green: "#10b981",
   amber: "#f59e0b", red: "#ef4444",
 };
