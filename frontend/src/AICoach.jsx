@@ -490,7 +490,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
     <div style={{
       position:"fixed",inset:0,zIndex:9999,
       display:"flex",alignItems:"center",justifyContent:"center",
-      background:"rgba(4,8,20,.55)",backdropFilter:"blur(8px)",
+      background:"rgba(4,8,20,.6)",backdropFilter:"blur(4px)",
       WebkitBackdropFilter:"blur(4px)",padding:16,
       animation:"bIn .18s ease both",
     }}>

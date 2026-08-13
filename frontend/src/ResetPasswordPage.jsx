@@ -29,13 +29,13 @@ export default function ResetPasswordPage({ oobCode, darkMode, lang, onDone }) {
   const [err,      setErr]     = useState("");
 
   const c = dark ? {
-    bg:"#0d1a2e", card:"rgba(15,23,42,.9)", border:"rgba(255,255,255,.08)",
+    bg:"#030b14", card:"rgba(15,23,42,.9)", border:"rgba(255,255,255,.08)",
     text:"#f0f6ff", muted:"rgba(255,255,255,.4)", inp:"rgba(255,255,255,.05)",
     inpB:"rgba(255,255,255,.1)", inpBF:"#3b82f6", acc:"#3b82f6",
     btn:"linear-gradient(135deg,#1d4ed8,#0891b2)",
   } : {
     bg:"#f0f4ff", card:"#ffffff", border:"rgba(0,0,0,.08)",
-    text:"#0f172a", muted:"#64748b", inp:"#f8fafc",
+    text:"#0c1528", muted:"#64748b", inp:"#f8fafc",
     inpB:"rgba(0,0,0,.1)", inpBF:"#1a56db", acc:"#1a56db",
     btn:"linear-gradient(135deg,#1a56db,#0891b2)",
   };
