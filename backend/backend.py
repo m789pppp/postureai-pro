@@ -3,6 +3,9 @@ PostureAI Pro — Backend v15
 Real MediaPipe Pose (33 landmarks) + FaceMesh (478 landmarks)
 Accuracy: Standard ~88% | Professional ~93% | Elite ~96%
 3 Modes: Laptop | Phone | Side
+# force-redeploy: Railway was serving a stale build missing /api/auth/whoami,
+# /api/announcements, /api/stress/correlation (all defined below, all 404ing
+# in production) — this comment-only change triggers a fresh Railway deploy.
 Auto PDF download via ReportLab
 Fixed: WORK_HOURS_START, SUPPORT_EMAIL, ADMIN_PHONE, localhost links, Auth middleware
 """
