@@ -2605,6 +2605,15 @@ export default function App(){
     }
   },[page,showOnboardingAnalytics,user,authToken]);
   const[showLegalCompliance,setShowLegalCompliance]=useState(false);
+
+  // ── Core derived constants (moved up: must be declared before any JSX
+  // that references them — healthConsentModalEl below uses cs/isAr/dir
+  // and would throw a TDZ ReferenceError if these were defined later). ──
+  const cs=darkMode?DARK:LIGHT;
+  const t=TR[lang];
+  const isAr=lang==="ar";
+  const dir=isAr?"rtl":"ltr";
+
   // Health consent gate — must be accepted once before the first analysis.
   // Corvus is a wellness/awareness tool, NOT a medical device; explicit
   // informed consent protects the user and limits liability.
@@ -2749,11 +2758,6 @@ export default function App(){
     }
     if(p.get("payment")==="cancelled"){ toast(isAr?"تم إلغاء الدفع — لم يتم خصم أي مبلغ":"Payment cancelled — no charge made","info"); }
   },[]);
-
-  const cs=darkMode?DARK:LIGHT;
-  const t=TR[lang];
-  const isAr=lang==="ar";
-  const dir=isAr?"rtl":"ltr";
 
   // Apply direction globally
   useEffect(()=>{
