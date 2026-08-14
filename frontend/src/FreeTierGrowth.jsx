@@ -134,7 +134,7 @@ export function DemoSessionModal({ isAr, cs, onClose, onStartReal }) {
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,.72)", backdropFilter: "blur(6px)",
+      position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 20,
     }} onClick={step === "idle" ? onClose : undefined}>
       <div style={{

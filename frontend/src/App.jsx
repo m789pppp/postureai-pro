@@ -38,7 +38,7 @@ import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, Payme
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
-import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal } from "./ui/index.jsx";
+import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal, ModalPortal } from "./ui/index.jsx";
 import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
 import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
@@ -915,7 +915,7 @@ function Onboard({cs,t,done}){
   const[step,setStep]=useState(0);
   const steps=[{e:"◈",ti:t.ob1,d:t.ob1d},{e:"📊",ti:t.ob2,d:t.ob2d},{e:"📷",ti:t.ob3,d:t.ob3d},{e:"🚀",ti:t.ob4,d:t.ob4d}];
   const s=steps[step];
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888,backdropFilter:"blur(4px)"}}>
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888}}>
     <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,padding:36,maxWidth:400,width:"90%",textAlign:"center"}}>
       <div style={{fontSize:48,marginBottom:14}}>{s.e}</div>
       <div style={{fontSize:17,fontWeight:700,color:cs.text,marginBottom:10}}>{s.ti}</div>
@@ -2015,7 +2015,7 @@ function UpgradePrompt({cs,t,reason,onUpgrade,onDismiss,onClose,lang}){
   },[]);
   return(
     <div
-      style={{position:"fixed",inset:0,zIndex:8999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.55)",backdropFilter:"blur(4px)"}}
+      style={{position:"fixed",inset:0,zIndex:8999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.55)"}}
       onClick={e=>{ if(e.target===e.currentTarget) close(); }}
     >
       <div style={{background:cs.card||"#0f1e2e",border:`1px solid rgba(99,102,241,.4)`,borderRadius:16,padding:"24px 24px 20px",maxWidth:360,width:"calc(100% - 48px)",position:"relative"}}>
@@ -2625,7 +2625,7 @@ export default function App(){
   // rendered, button looked dead. Defining it once here and mounting it in
   // both branches fixes that regardless of which page triggered it.
   const healthConsentModalEl = showHealthConsent&&(
-    <div dir={dir} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000,padding:20}}>
+    <div dir={dir} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000,padding:20}}>
       <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,maxWidth:460,width:"100%",padding:0,overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,.4)"}}>
         <div style={{background:"linear-gradient(135deg,#3b82f6,#2563eb)",padding:"22px 26px",display:"flex",alignItems:"center",gap:12}}>
           <div style={{fontSize:26,lineHeight:1}}>🩺</div>
@@ -5014,7 +5014,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
       {/* ── Session Result Modal ── */}
       {sessionResult&&(
-        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"rgba(8,14,28,.98)",border:`2px solid ${sessionResult.color}30`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
             {/* Score ring */}
             <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>

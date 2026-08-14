@@ -1272,3 +1272,12 @@ export {
   SkeletonBox, SkeletonText, SkeletonStat, SkeletonChart, SkeletonShortcut, SkeletonHero, SkeletonTableRows, HomePageSkeleton, ZeroStateSessions, ZeroStateAnalytics, ZeroStateLeaderboard, OnboardingSteps, OnboardingWelcome, ErrorNetwork, ErrorPermission, PageLoader, InlineLoader,
 } from "./states.jsx";
 
+
+// ── ModalPortal — renders children directly on document.body ──────
+// Use this to wrap any modal/overlay that uses backdropFilter:blur
+// so it escapes any stacking context in the component tree.
+import { createPortal } from "react-dom";
+export function ModalPortal({ children }) {
+  if (typeof document === "undefined") return children;
+  return createPortal(children, document.body);
+}

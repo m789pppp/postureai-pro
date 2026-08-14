@@ -460,7 +460,7 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
   // but this component never had any internal gate of its own, so
   // removing the sidebar block made it fully free for every tier.
   if (!tierAtLeast(effectiveTier, "elite")) return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 9200, background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 9200, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
         <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
         <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "رؤى AI — Elite" : "AI Insights — Elite"}</div>
@@ -513,7 +513,7 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
   };
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(2,8,20,.55)", backdropFilter:"blur(4px)", WebkitBackdropFilter:"blur(4px)", zIndex:9100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(2,8,20,.55)", zIndex:9100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{
         background:"#0a1628", border:`1px solid ${D.c.border}`,
         borderRadius:20, width:"min(640px,96vw)", height:"min(720px,94dvh)",
