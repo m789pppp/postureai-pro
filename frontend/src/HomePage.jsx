@@ -2963,8 +2963,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const [hov, setHov] = useState(null);
 
   return (
-    <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"sticky", top:0,
-      background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`,
+    <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:isAr?"auto":0, right:isAr?0:"auto",
+      background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`, zIndex:50,
       display:"flex", flexDirection:"column" }}>
 
       {/* Logo */}
@@ -3473,7 +3473,7 @@ export default function HomePage({
         />
       )}
 
-      <main style={{ flex:1, minWidth:0, overflowY:"auto", paddingBottom:mobile?80:0 }}>
+      <main style={{ flex:1, minWidth:0, overflowY:"auto", paddingBottom:mobile?80:0, marginLeft:(!mobile&&!isAr)?236:0, marginRight:(!mobile&&isAr)?236:0 }}>
         {/* Topbar */}
         <header style={{ position:"sticky", top:0, zIndex:100,
           background:"rgba(4,9,20,.96)", borderBottom:`1px solid ${cs.border}`,
