@@ -14,7 +14,7 @@ export class ErrorBoundary extends Component {
     if (!this.state.hasError) return this.props.children;
     const err = this.state.error;
     return (
-      <div style={{ minHeight: "100dvh", background: "#030b14", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui,-apple-system,sans-serif", padding: 24 }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 99999, overflowY: "auto", minHeight: "100dvh", background: "#030b14", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui,-apple-system,sans-serif", padding: 24 }}>
         <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
           <div style={{ width: 56, height: 56, background: "rgba(239,68,68,.12)", border: "0.5px solid rgba(239,68,68,.3)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 20px" }}>⚠️</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: "#f0f4f8", marginBottom: 8 }}>Something went wrong</div>
