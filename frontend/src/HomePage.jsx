@@ -3134,7 +3134,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
           <div onClick={e=>e.stopPropagation()} style={{
             position:"fixed", bottom:64, left:8, right:8, zIndex:300,
             background:"rgba(5,16,31,.98)", border:"1px solid rgba(148,163,184,.12)",
-            borderRadius:16, padding:"16px 12px", backdropFilter:"blur(24px)",
+            borderRadius:16, padding:"16px 12px",
             boxShadow:"0 -8px 40px rgba(0,0,0,.5)",
           }}>
             <div style={{ fontSize:10, color:"#64748b", fontWeight:700, textTransform:"uppercase",
@@ -3167,8 +3167,8 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
       )}
 
       <nav style={{ position:"fixed", bottom:0, left:0, right:0, zIndex:200,
-        background:"rgba(4,9,20,.97)", borderTop:`1px solid ${cs.border}`,
-        backdropFilter:"blur(20px)", display:"flex",
+        background:"rgba(4,9,20,1)", borderTop:`1px solid ${cs.border}`,
+        display:"flex",
         padding:`6px 0 max(6px,env(safe-area-inset-bottom))` }}>
         {tabs.map(t=>(
           <button key={t.id}
