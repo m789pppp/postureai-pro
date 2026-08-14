@@ -2963,7 +2963,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const [hov, setHov] = useState(null);
 
   return (
-    <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:isAr?"auto":0, right:isAr?0:"auto",
+    <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:0,
       background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`, zIndex:50,
       display:"flex", flexDirection:"column" }}>
 
@@ -3473,11 +3473,11 @@ export default function HomePage({
         />
       )}
 
-      <main style={{ flex:1, minWidth:0, overflowY:"auto", paddingBottom:mobile?80:0, marginLeft:(!mobile&&!isAr)?236:0, marginRight:(!mobile&&isAr)?236:0 }}>
+      <main style={{ flex:1, minWidth:0, overflowY:"auto", paddingBottom:mobile?80:0, marginLeft:mobile?0:236 }}>
         {/* Topbar */}
         <header style={{ position:"sticky", top:0, zIndex:100,
-          background:"rgba(4,9,20,.96)", borderBottom:`1px solid ${cs.border}`,
-          backdropFilter:"blur(20px)", padding:"0 20px", height:50,
+          background:"rgba(4,9,20,1)", borderBottom:`1px solid ${cs.border}`,
+          padding:"0 20px", height:50,
           display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
           {mobile&&(
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
