@@ -482,7 +482,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
   const isPro = tierAtLeast(tier, "professional");
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9300, backdropFilter: "blur(8px)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9300 }}>
       <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 20, width: "min(680px,96vw)", maxHeight: "90dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* Header */}

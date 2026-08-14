@@ -385,7 +385,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9000, backdropFilter: "blur(8px)" }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9000 }}
       onClick={(e) => { if (e.target === e.currentTarget) onSkip?.(); }}
       onKeyDown={(e) => { if (e.key === "Escape") onSkip?.(); }}
       tabIndex={-1}
@@ -426,7 +426,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
               <video ref={videoRef} style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }} playsInline muted autoPlay />
               <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", transform: "scaleX(-1)" }} />
               <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, textAlign: "center" }}>
-                <span style={{ background: "rgba(0,0,0,.6)", color: "white", fontSize: 11, padding: "4px 12px", borderRadius: 99, backdropFilter: "blur(4px)" }}>
+                <span style={{ background: "rgba(0,0,0,.6)", color: "white", fontSize: 11, padding: "4px 12px", borderRadius: 99 }}>
                   {t.alignSub}
                 </span>
               </div>

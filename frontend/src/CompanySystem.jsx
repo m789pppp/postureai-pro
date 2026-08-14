@@ -152,7 +152,7 @@ export function CompanyOnboarding({ profile, cs, lang = "en", onComplete, addToa
   const selectStyle = { ...inputStyle };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9800, backdropFilter: "blur(4px)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9800 }}>
       <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 22, width: "min(580px,96vw)", maxHeight: "92dvh", overflowY: "auto", direction: isAr ? "rtl" : "ltr" }}>
 
         {/* Header */}

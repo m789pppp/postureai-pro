@@ -1189,8 +1189,7 @@ export function NotificationsHub({ orgId, profile, sessions=[], allUsers=[], lan
   const pending = Q.pending.length;
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(3,6,14,.93)", backdropFilter:"blur(4px)",
-      WebkitBackdropFilter:"blur(4px)", zIndex:9200, display:"flex", alignItems:"center",
+    <div style={{ position:"fixed", inset:0, background:"rgba(3,6,14,.93)", zIndex:9200, display:"flex", alignItems:"center",
       justifyContent:"center", padding:14 }}>
       <style>{GLOBAL_CSS}</style>
 

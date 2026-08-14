@@ -130,7 +130,7 @@ export function BreakTimer({ onDismiss, onComplete, cs, lang = "en", intervalMin
   const progressPct = ex.duration > 0 ? Math.round(((ex.duration - exTimer) / ex.duration) * 100) : 0;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9100, backdropFilter: "blur(8px)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9100 }}>
       <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 20, padding: "28px 24px", maxWidth: 400, width: "92%", textAlign: "center" }}>
 
         {done ? (

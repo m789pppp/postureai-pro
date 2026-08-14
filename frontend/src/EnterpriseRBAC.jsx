@@ -1117,8 +1117,7 @@ export function EnterpriseRBAC({ orgId, adminUid, profile, members=[], cs, lang=
   ];
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(2,8,20,.94)",backdropFilter:"blur(4px)",
-      WebkitBackdropFilter:"blur(4px)",zIndex:9200,display:"flex",alignItems:"center",
+    <div style={{position:"fixed",inset:0,background:"rgba(2,8,20,.94)",zIndex:9200,display:"flex",alignItems:"center",
       justifyContent:"center",padding:16}}>
       <div style={{
         background:RBAC_TOKENS.bg, border:`1px solid ${RBAC_TOKENS.border}`,

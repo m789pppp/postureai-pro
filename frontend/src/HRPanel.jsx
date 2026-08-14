@@ -639,7 +639,6 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
         padding:"0 20px", height:56,
         borderBottom:"1px solid rgba(255,255,255,.07)",
         background:"rgba(5,16,31,.95)",
-        backdropFilter:"blur(4px)",
         display:"flex", alignItems:"center", justifyContent:"space-between",
         position:"sticky", top:0, zIndex:50,
       }}>
