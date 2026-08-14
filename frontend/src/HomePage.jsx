@@ -3473,7 +3473,8 @@ export default function HomePage({
         />
       )}
 
-      <main style={{ flex:1, minWidth:0, overflowY:"auto", paddingBottom:mobile?80:0, marginLeft:mobile?0:236 }}>
+      <main style={{ flex:1, minWidth:0, marginLeft:mobile?0:236, display:"flex", flexDirection:"column" }}>
+        <div style={{ flex:1, overflowY:"auto", paddingBottom:mobile?80:0 }}>
         {/* Topbar */}
         <header style={{ position:"sticky", top:0, zIndex:100,
           background:"rgba(4,9,20,1)", borderBottom:`1px solid ${cs.border}`,
@@ -3520,6 +3521,7 @@ export default function HomePage({
 
         <div style={{ padding:"14px 16px", maxWidth:1060, margin:"0 auto" }}>
           {settingsContent || content}
+        </div>
         </div>
       </main>
 
