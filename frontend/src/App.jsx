@@ -3570,35 +3570,23 @@ export default function App(){
       insightsRef.current=null;setSessionInsights([]);
       worstSnapsRef.current=[];lastSnapMsRef.current=0;
       // Notification permission requested contextually after first alert (not cold on start)
-      let sid="local_"+Date.now();
-      try{
-        const d=await AnalysisAPI.startSession({mode:effectiveMode});
-        sid=d.session_id||sid;
-      }catch(e){
-        // session_limit_reached (Free plan cap) must actually block the
-        // session — previously this catch silently swallowed the error
-        // and fell back to a local-only session id, so the limit never
-        // had any real effect on the client.
+      const sid="local_"+Date.now();
+      // Fire-and-forget — don't await session/start, it blocks runLoop for 8s on 500
+      // Session ID updated async when server responds
+      AnalysisAPI.startSession({mode:effectiveMode}).then(d=>{
+        if(d?.session_id) { setSessionId(d.session_id); sessRef.current=Date.now(); }
+      }).catch(e=>{
         if(e?.status===403 && e?.upgrade){
           setCameraStatus("idle");
           streamRef.current?.getTracks?.().forEach(t=>t.stop());
-          // Distinguish which cap was actually hit — the backend enforces
-          // BOTH a monthly (5) and a daily (3) cap on Free, but only the
-          // monthly number is ever shown anywhere in the UI (SessionUsageBar,
-          // pricing copy). Hitting the daily cap with 2 monthly sessions
-          // used looked like an unexplained random block; show the real
-          // reason instead of one generic message for both cases.
-          const hitDaily = (e?.body?.used_daily ?? 0) >= (e?.body?.limit_daily ?? Infinity);
-          const msg = hitDaily
-            ? (isAr?`وصلت لحد ${e.body.limit_daily} جلسات في اليوم للخطة المجانية. جرّب تاني بكرة أو رقّي الخطة`:`You've hit today's ${e.body.limit_daily}-session Free plan cap. Try again tomorrow or upgrade`)
-            : (isAr?"وصلت لحد جلسات الخطة المجانية الشهري. قم بالترقية للمتابعة":"You've reached the Free plan's monthly session limit. Upgrade to continue");
+          const hitDaily=(e?.body?.used_daily??0)>=(e?.body?.limit_daily??Infinity);
+          const msg=hitDaily
+            ?(isAr?`وصلت لحد ${e.body.limit_daily} جلسات في اليوم للخطة المجانية. جرّب تاني بكرة أو رقّي الخطة`:`You've hit today's ${e.body.limit_daily}-session Free plan cap. Try again tomorrow or upgrade`)
+            :(isAr?"وصلت لحد جلسات الخطة المجانية الشهري. قم بالترقية للمتابعة":"You've reached the Free plan's monthly session limit. Upgrade to continue");
           addToast(msg,"warn");
-          setShowUpgrade?.(true); setUpgradeReason?.(isAr?(hitDaily?"حد الجلسات اليومي":"حد الجلسات الشهري"):(hitDaily?"Daily session limit":"Monthly session limit"));
-          return;
+          setShowUpgrade?.(true);setUpgradeReason?.(isAr?(hitDaily?"حد الجلسات اليومي":"حد الجلسات الشهري"):(hitDaily?"Daily session limit":"Monthly session limit"));
         }
-        // Any other error (network, backend down, etc.) — fall back to
-        // local-only session so the user isn't blocked by infra issues.
-      }
+      });
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
       const mLabel=MC[effectiveMode]?.label||effectiveMode;
       setAlertMsg({text:`${mLabel} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
