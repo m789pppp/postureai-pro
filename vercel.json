@@ -199,6 +199,22 @@
       "dest": "/api/misc.js"
     },
     {
+      "src": "/api/gamification/(.*)",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/announcements(.*)",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/stress/(.*)",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/auth/whoami",
+      "dest": "/api/auth.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },

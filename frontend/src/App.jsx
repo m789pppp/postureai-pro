@@ -3219,7 +3219,7 @@ export default function App(){
     if(mpRef.current){
       try{
         const nowDetect=performance.now();
-        if(nowDetect-lastDetectRef.current<50){rafRef.current=requestAnimationFrame(runLoop);return;}
+        if(nowDetect-lastDetectRef.current<66){rafRef.current=requestAnimationFrame(runLoop);return;}
         lastDetectRef.current=nowDetect;
         const det=mpRef.current.detectForVideo(vid,nowDetect);
         if(det.landmarks?.length>0){
@@ -4937,7 +4937,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
     )}
     </ErrorBoundary>);
   const TN = T_norm;
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const [isMobile, setIsMobile] = React.useState(()=> typeof window !== "undefined" && window.innerWidth < 768);
+  React.useEffect(()=>{ const fn=()=>setIsMobile(window.innerWidth<768); window.addEventListener("resize",fn); return ()=>window.removeEventListener("resize",fn); },[]);
   const scoreColor = score ? sc(score) : cs.muted;
   const tier_label = TN?.name || "—";
   const mode_label = M_?.label || "—";
