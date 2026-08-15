@@ -3,6 +3,7 @@
  * Complete rewrite: proper role separation, working tools, real data, tier gates
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession, getAuthToken, deleteAuthUser, logOut } from "./firebase.js";
 import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
@@ -527,14 +528,14 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 
       {tierAtLeast(tier,"basic") && <PainRiskCard sessions={userSessions} cs={cs} isAr={isAr} />}
 
-      {showTeaser && (
+      {showTeaser && createPortal(
         <UpgradeTeaser isAr={isAr}
           onUpgrade={onBilling}
           onDismiss={()=>{
             setTeaserDismissed(true);
             if (user?.uid) updateUserProfile(user.uid,{upgrade_teaser_seen:true}).catch(()=>{});
           }}/>
-      )}
+      , document.body)}
 
       {isFreeTier && (
         <SessionUsageBar used={realMonthUsage ?? month} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
@@ -552,11 +553,11 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
         </>
       )}
 
-      {showDemoSession && (
+      {showDemoSession && createPortal(
         <DemoSessionModal isAr={isAr} cs={cs}
           onClose={()=>setShowDemoSession(false)}
           onStartReal={()=>{ setShowDemoSession(false); setPage("live"); setTimeout(()=>startCamera?.(),200); }}/>
-      )}
+      , document.body)}
 
       {/* Stats */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
@@ -1560,9 +1561,9 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
           );
         })}
       </div>
-      {showWeeklyIntel && (
+      {showWeeklyIntel && createPortal(
         <WeeklyIntelligenceModal sessions={userSessions} cs={cs} isAr={isAr} onClose={()=>setShowWeeklyIntel(false)} />
-      )}
+      , document.body)}
     </div>
   );
 }
