@@ -2820,6 +2820,8 @@ export default function App(){
   useEffect(()=>{ setVoiceCoachEnabled(voiceCoach && tierAtLeast(effectiveTier,"elite")); },[voiceCoach,effectiveTier]);
   // Normalize T_ so live dashboard always has .name and .color
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
+  const [isMobile, setIsMobile] = React.useState(()=> typeof window !== "undefined" && window.innerWidth < 768);
+  React.useEffect(()=>{ const fn=()=>setIsMobile(window.innerWidth<768); window.addEventListener("resize",fn); return ()=>window.removeEventListener("resize",fn); },[]);
   const MC={
     laptop:{id:"laptop",label:isAr?"لابتوب":"Laptop",icon:"💻",color:"#6366f1",optDist:[50,80]},
     phone:{id:"phone",label:isAr?"موبايل":"Phone",icon:"📱",color:"#f59e0b",optDist:[60,90]},
@@ -4937,8 +4939,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
     )}
     </ErrorBoundary>);
   const TN = T_norm;
-  const [isMobile, setIsMobile] = React.useState(()=> typeof window !== "undefined" && window.innerWidth < 768);
-  React.useEffect(()=>{ const fn=()=>setIsMobile(window.innerWidth<768); window.addEventListener("resize",fn); return ()=>window.removeEventListener("resize",fn); },[]);
   const scoreColor = score ? sc(score) : cs.muted;
   const tier_label = TN?.name || "—";
   const mode_label = M_?.label || "—";
