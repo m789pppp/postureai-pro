@@ -2971,7 +2971,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   return (
     <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:0,
       background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`, zIndex:50,
-      display:mobile?"none":"flex", flexDirection:"column" }}>
+      display:"flex", flexDirection:"column" }}>
 
       {/* Logo */}
       <div style={{ padding:"16px 14px 12px", borderBottom:`1px solid ${cs.border}`, flexShrink:0 }}>
@@ -3459,7 +3459,7 @@ export default function HomePage({
       background:cs.bg||"#0d1a2e", color:cs.text||"#f0f6ff",
       fontFamily:"system-ui,-apple-system,'Segoe UI',sans-serif" }}>
 
-      <Sidebar userRole={userRole} tab={tab} setTab={setTab} profile={profile}
+      {!mobile && <Sidebar userRole={userRole} tab={tab} setTab={setTab} profile={profile}
           isAr={isAr} cs={cs} setPage={setPage} startCamera={startCamera}
           logOut={logOut} setUser={setUser} setProfile={setProfile}
           isAdmin={isAdmin} darkMode={darkMode} setDarkMode={setDarkMode}
@@ -3477,7 +3477,7 @@ export default function HomePage({
           setShowSessionComparison={setShowSessionComparison} setShowTrendChart={setShowTrendChart}
           setShowWorkforceAnalytics={setShowWorkforceAnalytics}
           setShowCalibWizard={setShowCalibWizard} setShowDashboard={setShowDashboard}
-        />
+        />}
 
       <main style={{ flex:1, minWidth:0, marginLeft:mobile?0:236, display:"flex", flexDirection:"column" }}>
         <div style={{ flex:1, overflowY:"auto", paddingBottom:mobile?80:0 }}>
