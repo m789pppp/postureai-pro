@@ -822,7 +822,7 @@ a { text-decoration: none; color: inherit; }
 
 /* Corvus sidebar layout */
 .corvus-sidebar {
-  display: none;
+  display: none !important;
 }
 .corvus-main {
   margin-left: 0 !important;
@@ -830,6 +830,7 @@ a { text-decoration: none; color: inherit; }
 @media (min-width: 768px) {
   .corvus-sidebar {
     display: flex !important;
+    flex-direction: column !important;
   }
   .corvus-main {
     margin-left: 236px !important;

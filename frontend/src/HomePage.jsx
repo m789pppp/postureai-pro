@@ -2971,7 +2971,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   return (
     <aside className="corvus-sidebar" style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:0,
       background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`, zIndex:50,
-      display:"flex", flexDirection:"column" }}>
+      flexDirection:"column" }}>
 
       {/* Logo */}
       <div style={{ padding:"16px 14px 12px", borderBottom:`1px solid ${cs.border}`, flexShrink:0 }}>
