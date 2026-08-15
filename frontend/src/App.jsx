@@ -8,7 +8,7 @@ if (typeof window !== 'undefined') {
     e.preventDefault();
   });
 }
-import React, { lazy, Suspense, useState, useEffect, useRef, useCallback } from "react";
+import React, { lazy, Suspense, useState, useEffect, useRef, useCallback, startTransition } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
@@ -3218,7 +3218,10 @@ export default function App(){
 
     if(mpRef.current){
       try{
-        const det=mpRef.current.detectForVideo(vid,performance.now());
+        const nowDetect=performance.now();
+        if(nowDetect-lastDetectRef.current<50){rafRef.current=requestAnimationFrame(runLoop);return;}
+        lastDetectRef.current=nowDetect;
+        const det=mpRef.current.detectForVideo(vid,nowDetect);
         if(det.landmarks?.length>0){
           const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
@@ -3263,7 +3266,8 @@ export default function App(){
             finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
-            setHistory([...histRef.current]);setAnalysis(finalResult);lastAnalRef.current=finalResult;
+            lastAnalRef.current=finalResult;
+            startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(finalResult); });
             // Privacy: pixelate the face first so the skeleton draws on top of it.
             if(faceBlur) drawFaceBlur(ctx,vid,lms,W,H);
             const _drawOpts={skeleton:showSkeleton,angles:showAngles};
@@ -3374,7 +3378,7 @@ export default function App(){
             }else{
               badRef.current=null;
               // Good posture — silent status update only, no alert box noise
-              setScoreStatus({score:finalResult.overall,grade:grade(finalResult.overall,t)});
+              startTransition(()=>setScoreStatus({score:finalResult.overall,grade:grade(finalResult.overall,t)}));
             }
           }
         }
@@ -3419,7 +3423,8 @@ export default function App(){
             if(smoothed>=65){goodRef.current++;setGoodF(goodRef.current);}
             histRef.current.push(smoothed);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
-            setHistory([...histRef.current]);setAnalysis(result);lastAnalRef.current=result;
+            lastAnalRef.current=result;
+            startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(result); });
             const now=Date.now();
             if(smoothed<65){
               if(!badRef.current)badRef.current=now;
@@ -3442,7 +3447,7 @@ export default function App(){
               } // close else if(badRef>15000)
             }else{
               badRef.current=null;
-              setScoreStatus({score:smoothed,grade:grade(smoothed,t)});
+              startTransition(()=>setScoreStatus({score:smoothed,grade:grade(smoothed,t)}));
             }
           }
           // Always use local Corvus AI for Elite-equivalent tiers
