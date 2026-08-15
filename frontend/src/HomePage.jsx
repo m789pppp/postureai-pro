@@ -2969,7 +2969,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const [hov, setHov] = useState(null);
 
   return (
-    <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:0,
+    <aside className="corvus-sidebar" style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:0,
       background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`, zIndex:50,
       display:"flex", flexDirection:"column" }}>
 
@@ -3479,7 +3479,7 @@ export default function HomePage({
         />
       )}
 
-      <main style={{ flex:1, minWidth:0, marginLeft:mobile?0:236, display:"flex", flexDirection:"column" }}>
+      <main className="corvus-main" style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column" }}>
         <div style={{ flex:1, overflowY:"auto", paddingBottom:mobile?80:0 }}>
         {/* Topbar */}
         <header style={{ position:"sticky", top:0, zIndex:100,

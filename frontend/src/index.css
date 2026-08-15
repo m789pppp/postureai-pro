@@ -819,3 +819,19 @@ a { text-decoration: none; color: inherit; }
 
 /* ── PAGE TRANSITION ─────────────────────────────────────────── */
 .page-enter { animation: pageIn 320ms var(--ease-spring) both; }
+
+/* Corvus sidebar layout */
+.corvus-sidebar {
+  display: none;
+}
+.corvus-main {
+  margin-left: 0 !important;
+}
+@media (min-width: 768px) {
+  .corvus-sidebar {
+    display: flex !important;
+  }
+  .corvus-main {
+    margin-left: 236px !important;
+  }
+}
