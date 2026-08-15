@@ -4740,6 +4740,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
   if(page==="home") return(
     <ErrorBoundary key="page-home">
+      <ModalPortal>
       {/* ── ALL MODALS — shown on home page too ────────────────── */}
       {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
       {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={async()=>{
@@ -4813,6 +4814,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <AnnouncementsBar token={authToken}/>
         </div>
       )}
+      </ModalPortal>
       <HomePage
         user={user} profile={profile} cs={cs} lang={lang} isAr={isAr} dir={dir}
         userSessions={userSessions} setUserSessions={setUserSessions}
