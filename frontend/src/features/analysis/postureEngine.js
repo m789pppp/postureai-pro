@@ -29,7 +29,8 @@
 // ═══════════════════════════════════════════════════════════════════
 
 /** Minimum landmark visibility/presence to trust a reading */
-const VIS_MIN = 0.60;
+const VIS_MIN = 0.55;  // was 0.60 — ears/hips MediaPipe scores 0.45-0.58 regularly
+const VIS_FACE = 0.60; // stricter for eyes/nose (more visible, more reliable)
 
 /** Adult average IPD in cm (interpupillary distance) */
 const IPD_CM = 6.3;
@@ -56,7 +57,7 @@ const MAX_LM_VELOCITY = 3.0;
 const MAX_REJECT_STREAK = 3;
 
 /** Frame buffer size for aggregation */
-const FRAME_BUFFER_SIZE = 150; // was 60 (2s) — raised to 150 (5s) for smoother score history
+const FRAME_BUFFER_SIZE = 60; // 2s at 20fps after throttle — balances smoothness and responsiveness
 
 /** Beep cooldown in ms */
 const BEEP_COOLDOWN_MS = 30000;
@@ -64,12 +65,12 @@ const BEEP_COOLDOWN_MS = 30000;
 // ─── Scoring thresholds (synced with backend.py score_m calls) ─────
 const THR = {
   // Front camera
-  HEAD_TILT:   { ok: 3,  bad: 10  },  // backend: score_m(head_tilt, 0, 3, 10)
-  SH_TILT:     { ok: 3,  bad: 10  },  // backend: score_m(sh_tilt,   0, 3, 10)
-  SPINE_LEAN:  { ok: 4,  bad: 12  },  // backend: score_m(spine_lean,0, 4, 12)
+  HEAD_TILT:   { ok: 5,  bad: 12  },  // was ok:3 — natural asymmetry is 2-4°, raised to 5
+  SH_TILT:     { ok: 5,  bad: 12  },  // was ok:3 — natural shoulder asymmetry 2-5° in adults
+  SPINE_LEAN:  { ok: 6,  bad: 14  },  // was ok:4 — camera perspective adds 2-4° apparent lean
   HEAD_YAW:    { ok: 8,  bad: 20  },
-  FHP_CM:      { ok: 2,  bad: 6   },  // forward head posture in cm
-  ROUNDED:     { ok: 8,  bad: 20  },  // rounded shoulders Z-depth
+  FHP_CM:      { ok: 3,  bad: 7   },  // was ok:2 — 2cm is within normal head position variation
+  ROUNDED:     { ok: 10, bad: 22  },  // was ok:8 — raised to reduce false positives for natural posture
   ELBOW:       { ok: 15, bad: 30  },  // deviation from 95° ideal
   MONITOR_PITCH:{ ok: 5, bad: 18  },  // head pitch degrees
 
@@ -87,11 +88,11 @@ const THR = {
 // informational metrics/alerts only, since they're more
 // setup/ergonomics signals than posture-quality signals.
 const WEIGHTS_FRONT = {
-  neck:     0.28,
+  neck:     0.32, // raised from 0.28 to compensate distance weight reduction
   tilt:     0.10,
   shoulder: 0.11,
   spine:    0.14,
-  distance: 0.18,
+  distance: 0.12, // was 0.18 — over-penalized slight distance deviations
   yaw:      0.06,
   rounded:  0.08,
   // remaining 0.05 = baseline constant
@@ -675,9 +676,9 @@ function analyzeNeckLean(lms, W, H, prop, calib = null) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
 
-  const earOK  = vis(PL.L_EAR) && vis(PL.R_EAR);
+  const earOK  = (g(PL.L_EAR)?.visibility ?? 0) >= VIS_MIN && (g(PL.R_EAR)?.visibility ?? 0) >= VIS_MIN;
   const shOK   = prop.shOK;
-  const noseOK = (g(PL.NOSE)?.visibility ?? 0) >= VIS_MIN;
+  const noseOK = (g(PL.NOSE)?.visibility ?? 0) >= VIS_FACE;
   const reliable = shOK && earOK;
 
   if (!reliable) return { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
@@ -728,7 +729,7 @@ function analyzeNeckLean(lms, W, H, prop, calib = null) {
 
 function analyzeHeadTilt(lms, W, H, calib = null) {
   const g   = i => lms[i];
-  const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
+  const vis = i => (g(i)?.visibility ?? 0) >= VIS_FACE; // use stricter face threshold
   const reliable = vis(PL.L_EYE) && vis(PL.R_EYE);
 
   if (!reliable) return { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
