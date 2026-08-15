@@ -4742,8 +4742,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <ErrorBoundary key="page-home">
       <ModalPortal>
       {/* ── ALL MODALS — shown on home page too ────────────────── */}
-      {showCompanyOnboard&&<CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/>}
-      {showOnboard&&<OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={async()=>{
+      {showCompanyOnboard&&<ErrorBoundary key="companyonboard"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/></ErrorBoundary>}
+      {showOnboard&&<ErrorBoundary key="onboard"><OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={async()=>{
         setShowOnboard(false);
         // Persist skip so wizard never shows again on next login
         if(user?.uid){
@@ -4756,8 +4756,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
             setProfile(p=>p?({...p,onboarding_done:["skipped"],setup_complete:true}):p);
           }catch(e){ console.warn("skip onboard:",e?.code); }
         }
-      }}/>}
-      {showBilling&&<BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={async(plan)=>{
+      }}/>}</ErrorBoundary>}
+      {showBilling&&<ErrorBoundary key="billing"><BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={async(plan)=>{
         const newTier = normalizeTier(plan);
         setTier(newTier);
         setShowBilling(false);
@@ -4781,10 +4781,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
             if(p){ setProfile(p); if(p.tier) setTier(normalizeTier(p.tier)); }
           }).catch(()=>{});
         }
-      }}/>}
-      {showCalibWizard&&<CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/>}
+      }}/>}</ErrorBoundary>}
+      {showCalibWizard&&<ErrorBoundary key="calibwizard"><CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/></ErrorBoundary>}
       {showDashboard&&<ErrorBoundary key="dashboard"><Suspense fallback={null}><AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/></Suspense></ErrorBoundary>}
-      {showCoach&&<AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={()=>setShowCoach(false)}/>}
+      {showCoach&&<ErrorBoundary key="aicoach"><AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={()=>setShowCoach(false)}/></ErrorBoundary>}
       {showGamification&&<ErrorBoundary key="gamification"><Suspense fallback={null}><GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/></Suspense></ErrorBoundary>}
       {showCustomAlertRules&&<CustomAlertRulesPanel isAr={isAr} cs={cs} rules={customAlertRules}
         onSave={(next)=>{
@@ -4793,20 +4793,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
           if(user?.uid) updateUserProfile(user.uid,{custom_alert_rules:next}).catch(()=>{});
         }}
         onClose={()=>setShowCustomAlertRules(false)}/>}
-      {showAdmin&&isAdmin&&<AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/>}
-      {showMRR&&isAdmin&&<MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/>}
+      {showAdmin&&isAdmin&&<ErrorBoundary key="admin"><AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/></ErrorBoundary>}
+      {showMRR&&isAdmin&&<ErrorBoundary key="mrr"><MRRDashboard cs={cs} lang={lang} onClose={()=>setShowMRR(false)}/></ErrorBoundary>}
       {showHelp&&<ErrorBoundary key="help"><Suspense fallback={null}><HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/></Suspense></ErrorBoundary>}
-      {showChangelog&&isAdmin&&<APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/>}
+      {showChangelog&&isAdmin&&<ErrorBoundary key="changelog"><APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/></ErrorBoundary>}
       {showAIInsights&&<ErrorBoundary key="aiinsights"><Suspense fallback={null}><AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowAIInsights(false)}/></Suspense></ErrorBoundary>}
-      {showSymptomCorrelation&&<SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/>}
+      {showSymptomCorrelation&&<ErrorBoundary key="symptom"><SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/></ErrorBoundary>}
       {showPredictiveAI&&<ErrorBoundary key="predictiveai"><Suspense fallback={null}><PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowPredictiveAI(false)}/></Suspense></ErrorBoundary>}
       {showAIReports&&<ErrorBoundary key="aireports"><Suspense fallback={null}><AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/></Suspense></ErrorBoundary>}
       {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<ErrorBoundary key="workforceanalytics"><Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/></Suspense></ErrorBoundary>}
       {showEnterpriseRBAC&&<ErrorBoundary key="enterpriserbac"><Suspense fallback={null}><EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/></Suspense></ErrorBoundary>}
       
-      {showFeatureFlags&&isAdmin&&<FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/>}
+      {showFeatureFlags&&isAdmin&&<ErrorBoundary key="featureflags"><FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/></ErrorBoundary>}
       {showNotificationsHub&&<ErrorBoundary key="notificationshub"><Suspense fallback={null}><NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/></Suspense></ErrorBoundary>}
-      {showUpgrade&&<UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/>}
+      {showUpgrade&&<ErrorBoundary key="upgrade"><UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/></ErrorBoundary>}
       {healthConsentModalEl}
       {showOnboardingAnalytics&&<ErrorBoundary key="onboardinganalytics"><Suspense fallback={null}><OnboardingAnalytics token={authToken} onClose={()=>setShowOnboardingAnalytics(false)}/></Suspense></ErrorBoundary>}
       </ModalPortal>
@@ -5017,7 +5017,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       )}
-      {showProductTour&&<ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/>}
+      {showProductTour&&<ErrorBoundary key="producttour"><ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/></ErrorBoundary>}
       {showSecurityCenter&&<ErrorBoundary key="securitycenter"><Suspense fallback={null}><SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/></Suspense></ErrorBoundary>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }
       {showMFASetup&&<ErrorBoundary key="mfasetup"><Suspense fallback={null}><MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/></Suspense></ErrorBoundary>}
