@@ -4686,6 +4686,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       </div>
+      {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><Suspense fallback={null}><SessionComparison sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowSessionComparison(false)}/></Suspense></ErrorBoundary>}
+      {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}
+      {showTrendChart&&<ErrorBoundary key="trendchart"><Suspense fallback={null}><TrendChart sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowTrendChart(false)}/></Suspense></ErrorBoundary>}
+      {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
+      {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
+      {showAPIMarketplace&&<ErrorBoundary key="apimarketplace"><Suspense fallback={null}><APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/></Suspense></ErrorBoundary>}
+      {showWhiteLabel&&<ErrorBoundary key="whitelabel"><Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/></Suspense></ErrorBoundary>}
+      {showMultiTenant&&<ErrorBoundary key="multitenant"><Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/></Suspense></ErrorBoundary>}
+      {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
     </ErrorBoundary>);
   }
 
@@ -4909,7 +4918,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         streak={shareCardData.streak||0} percentile={null}
         lang={lang} cs={cs} addToast={addToast} onClose={()=>setShowShareCard(false)}/>
     )}
-    {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><Suspense fallback={null}><SessionComparison sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowSessionComparison(false)}/></Suspense></ErrorBoundary>}
+      {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><Suspense fallback={null}><SessionComparison sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowSessionComparison(false)}/></Suspense></ErrorBoundary>}
       {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}
       {showTrendChart&&<ErrorBoundary key="trendchart"><Suspense fallback={null}><TrendChart sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowTrendChart(false)}/></Suspense></ErrorBoundary>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}

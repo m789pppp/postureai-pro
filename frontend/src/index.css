@@ -234,8 +234,6 @@ a { text-decoration: none; color: inherit; }
   background: var(--color-card);
   border: 1px solid var(--color-card-border);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .card-sm   { border-radius: var(--radius-md); }
@@ -245,8 +243,6 @@ a { text-decoration: none; color: inherit; }
 .card-glass {
   background: rgba(255,255,255,.04);
   border: 1px solid rgba(255,255,255,.08);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
 }
 
 .card-premium {
@@ -254,8 +250,6 @@ a { text-decoration: none; color: inherit; }
   border: 1px solid var(--color-card-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   position: relative;
   overflow: hidden;
 }
@@ -401,8 +395,6 @@ a { text-decoration: none; color: inherit; }
   position: fixed;
   inset: 0;
   background: rgba(2,8,20,.80);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   z-index: 200;
   display: flex;
   align-items: center;
@@ -626,8 +618,6 @@ a { text-decoration: none; color: inherit; }
 
 /* ── UTILITY ───────────────────────────────────────────────────── */
 .glass {
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
 }
 
 .gradient-text {
