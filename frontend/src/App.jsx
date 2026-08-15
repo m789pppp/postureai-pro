@@ -71,8 +71,8 @@ import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
 import { NotFound } from "./ErrorPage.jsx";
-const SessionComparison = lazy(()=>import("./SessionComparison.jsx"));
-const TrendChart = lazy(()=>import("./TrendChart.jsx"));
+import SessionComparison from "./SessionComparison.jsx";
+import TrendChart from "./TrendChart.jsx";
 import { ShareCard }        from "./ShareCard.jsx";
 import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
 import { ProductTour, TourTrigger } from "./ProductTour.jsx";
@@ -4686,9 +4686,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       </div>
-      {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><Suspense fallback={null}><SessionComparison sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowSessionComparison(false)}/></Suspense></ErrorBoundary>}
+      {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><SessionComparison sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowSessionComparison(false)}/></ErrorBoundary>}
       {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}
-      {showTrendChart&&<ErrorBoundary key="trendchart"><Suspense fallback={null}><TrendChart sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowTrendChart(false)}/></Suspense></ErrorBoundary>}
+      {showTrendChart&&<ErrorBoundary key="trendchart"><TrendChart sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowTrendChart(false)}/></ErrorBoundary>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
       {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
       {showAPIMarketplace&&<ErrorBoundary key="apimarketplace"><Suspense fallback={null}><APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/></Suspense></ErrorBoundary>}
