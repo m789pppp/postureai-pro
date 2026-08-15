@@ -8,6 +8,8 @@ import orgInvite        from "./_handlers/misc/org-invite.js";
 import symptomAlerts    from "./_handlers/misc/symptom-alerts.js";
 import whoami           from "./_handlers/misc/whoami.js";
 import gamificationCompute from "./_handlers/misc/gamification-compute.js";
+import announcements     from "./_handlers/misc/announcements.js";
+import stressCorrelation from "./_handlers/misc/stress-correlation.js";
 
 export default async function handler(req, res) {
   const path = req.url.split("?")[0];
@@ -20,5 +22,7 @@ export default async function handler(req, res) {
   if (path.includes("/cron/symptom-pattern-alerts")) return symptomAlerts(req, res);
   if (path.includes("/auth/whoami"))                 return whoami(req, res);
   if (path.includes("/gamification/compute"))        return gamificationCompute(req, res);
+  if (path.includes("/announcements"))               return announcements(req, res);
+  if (path.includes("/stress/correlation"))          return stressCorrelation(req, res);
   res.status(404).json({ error: "Not found" });
 }
