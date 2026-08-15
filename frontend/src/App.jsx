@@ -3248,6 +3248,11 @@ export default function App(){
               result = {...rawResult, overall: Math.round(buffered), score: Math.round(buffered)};
             }
           }
+          // If frame quality failed (too_close/too_far/body_cropped), show warning but skip scoring
+          if(result && result.overall == null && result.qualityReason){
+            startTransition(()=>setAnalysis(prev=>({...(prev||{}), qualityReason:result.qualityReason, detected:false, overall:null})));
+            rafRef.current=requestAnimationFrame(runLoop);return;
+          }
           if(result){
             // Apply personal calibration if available
             let finalResult = result;
