@@ -822,7 +822,7 @@ a { text-decoration: none; color: inherit; }
 
 /* Posmoz sidebar layout */
 .posmoz-sidebar {
-  display: none;
+  display: none !important;
 }
 .posmoz-main {
   margin-left: 0 !important;
@@ -830,6 +830,7 @@ a { text-decoration: none; color: inherit; }
 @media (min-width: 768px) {
   .posmoz-sidebar {
     display: flex !important;
+    flex-direction: column !important;
   }
   .posmoz-main {
     margin-left: 236px !important;
