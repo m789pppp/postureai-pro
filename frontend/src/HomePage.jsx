@@ -2969,9 +2969,9 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const [hov, setHov] = useState(null);
 
   return (
-    <aside className="corvus-sidebar" style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:0,
+    <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:0,
       background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`, zIndex:50,
-      flexDirection:"column" }}>
+      display:mobile?"none":"flex", flexDirection:"column" }}>
 
       {/* Logo */}
       <div style={{ padding:"16px 14px 12px", borderBottom:`1px solid ${cs.border}`, flexShrink:0 }}>
@@ -3264,7 +3264,7 @@ export default function HomePage({
   setShowCertModal,
 }) {
   const [tab,    setTab]    = useState("home");
-  const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
+  const [mobile, setMobile] = useState(()=>typeof window!=="undefined" && window.matchMedia("(max-width:767px)").matches);
   // Default currency by timezone — Egypt → EGP (Kashier), everyone else → USD (Stripe).
   // Matches the same Egypt/Gulf split documented in Billing.jsx. User can still toggle.
   const [currency, setCurrency] = useState(()=>{
@@ -3275,8 +3275,10 @@ export default function HomePage({
   });
 
   useEffect(()=>{
-    const fn=()=>setMobile(window.innerWidth<768);
-    window.addEventListener("resize",fn); return ()=>window.removeEventListener("resize",fn);
+    const mq = window.matchMedia("(max-width:767px)");
+    const fn=(e)=>setMobile(e.matches);
+    mq.addEventListener("change",fn);
+    return ()=>mq.removeEventListener("change",fn);
   },[]);
 
   const userRole = role(profile, isAdmin, isHRAdmin);
@@ -3477,7 +3479,7 @@ export default function HomePage({
           setShowCalibWizard={setShowCalibWizard} setShowDashboard={setShowDashboard}
         />
 
-      <main className="corvus-main" style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column" }}>
+      <main style={{ flex:1, minWidth:0, marginLeft:mobile?0:236, display:"flex", flexDirection:"column" }}>
         <div style={{ flex:1, overflowY:"auto", paddingBottom:mobile?80:0 }}>
         {/* Topbar */}
         <header style={{ position:"sticky", top:0, zIndex:100,
