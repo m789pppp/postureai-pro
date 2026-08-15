@@ -3221,9 +3221,11 @@ export default function App(){
     if(mpRef.current){
       try{
         const nowDetect=performance.now();
+        if(totalRef.current===0) console.log("[CORVUS DBG3] runLoop running, mpRef:",!!mpRef.current,"vid:",!!vid,"vid.src:",vid?.srcObject?"stream":"no-stream");
         if(nowDetect-lastDetectRef.current<66){rafRef.current=requestAnimationFrame(runLoop);return;}
         lastDetectRef.current=nowDetect;
         const det=mpRef.current.detectForVideo(vid,nowDetect);
+        if(totalRef.current<=2) console.log("[CORVUS DBG2] det:",det?.landmarks?.length,"vid.readyState:",vid?.readyState,"vid.paused:",vid?.paused,"vid.currentTime:",vid?.currentTime);
         if(det.landmarks?.length>0){
           const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
