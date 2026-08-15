@@ -666,6 +666,7 @@ export function onUserSessions(uid, callback, onError) {
       const fq = query(collection(db,"sessions"), where("uid","==",uid), limit(50));
       fallbackUnsub = onSnapshot(fq, snap => callback(sortSessions(snap.docs)),
         fallbackErr => { console.error("[onUserSessions] fallback also failed:", fallbackErr.code); onError?.(fallbackErr); });
+      return; // don't call onError — fallback is handling it silently
     }
     onError?.(err);
   });

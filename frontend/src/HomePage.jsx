@@ -3457,8 +3457,7 @@ export default function HomePage({
       background:cs.bg||"#0d1a2e", color:cs.text||"#f0f6ff",
       fontFamily:"system-ui,-apple-system,'Segoe UI',sans-serif" }}>
 
-      {!mobile&&(
-        <Sidebar userRole={userRole} tab={tab} setTab={setTab} profile={profile}
+      <Sidebar userRole={userRole} tab={tab} setTab={setTab} profile={profile}
           isAr={isAr} cs={cs} setPage={setPage} startCamera={startCamera}
           logOut={logOut} setUser={setUser} setProfile={setProfile}
           isAdmin={isAdmin} darkMode={darkMode} setDarkMode={setDarkMode}
@@ -3477,7 +3476,6 @@ export default function HomePage({
           setShowWorkforceAnalytics={setShowWorkforceAnalytics}
           setShowCalibWizard={setShowCalibWizard} setShowDashboard={setShowDashboard}
         />
-      )}
 
       <main className="corvus-main" style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column" }}>
         <div style={{ flex:1, overflowY:"auto", paddingBottom:mobile?80:0 }}>
