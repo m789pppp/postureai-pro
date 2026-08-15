@@ -24,5 +24,14 @@ export default async function handler(req, res) {
   if (path.includes("/gamification/compute"))        return gamificationCompute(req, res);
   if (path.includes("/announcements"))               return announcements(req, res);
   if (path.includes("/stress/correlation"))          return stressCorrelation(req, res);
+  // /api/analyze — legacy Railway endpoint, now handled locally
+  // The frontend's local MediaPipe engine does all posture analysis;
+  // this endpoint is only called as a fire-and-forget background sync.
+  // Return 200 with empty result so the client doesn't retry endlessly.
+  if (path.includes("/analyze")) {
+    res.setHeader("Access-Control-Allow-Origin","*");
+    if (req.method === "OPTIONS") return res.status(200).end();
+    return res.status(200).json({ ok: true, overall: null, metrics: {}, source: "local" });
+  }
   res.status(404).json({ error: "Not found" });
 }

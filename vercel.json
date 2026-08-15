@@ -215,6 +215,10 @@
       "dest": "/api/auth.js"
     },
     {
+      "src": "/api/analyze",
+      "dest": "/api/misc.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://postureai-backend.up.railway.app/api/$1"
     },
