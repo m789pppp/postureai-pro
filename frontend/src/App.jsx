@@ -4012,18 +4012,22 @@ export default function App(){
   }
 
   async function downloadPostureDNAReport() {
+    console.log("[DIAG] downloadPostureDNAReport() called. effectiveTier=", effectiveTier, "userSessions.length=", userSessions?.length);
     if (!tierAtLeast(effectiveTier,"elite")) {
+      console.log("[DIAG] blocked — effectiveTier not elite");
       addToast(isAr?"تقرير بصمة الوضعية متاح لباقة Elite فقط":"Posture DNA report requires Elite tier","warn");
       setShowBilling(true); return;
     }
     addToast(isAr?"جاري تحليل بيانات آخر 90 يوم...":"Analyzing your last 90 days of data...","info");
     try {
       const { generatePostureDNAReport } = await import("./lib/pdfReports.js");
+      console.log("[DIAG] module loaded, calling generatePostureDNAReport");
       await generatePostureDNAReport({ sessions: userSessions, profile, user, profession: profile?.profession || "other", lang });
+      console.log("[DIAG] generatePostureDNAReport finished OK");
       addToast(isAr?"✅ تم تحميل تقرير بصمة الوضعية":"✅ Posture DNA report downloaded","success");
     } catch(e) {
-      console.error("[Posture DNA PDF]", e);
-      addToast(isAr?"تعذر إنشاء التقرير — جرب تاني":"Couldn't generate the report — try again", "error");
+      console.error("[Posture DNA PDF] FULL ERROR:", e, e?.stack);
+      addToast((isAr?"تعذر إنشاء التقرير: ":"Couldn't generate the report: ")+(e?.message||String(e)), "error");
     }
   }
 
