@@ -3232,6 +3232,7 @@ export default function App(){
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
           const rawResult=mode==="side"?analyzeSideMP(lms,W,H,calibData?.knownDistCm):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData);
+          if(totalRef.current<=3) console.log("[CORVUS DBG] frame",totalRef.current,"overall:",rawResult?.overall,"qualityReason:",rawResult?.qualityReason,"shWidthFrac:",rawResult?.metrics?.screen_distance?.value);
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter
           if(rawResult?.distCm && distSmootherRef.current){
             const stableDistCm=distSmootherRef.current.push(rawResult.distCm);
