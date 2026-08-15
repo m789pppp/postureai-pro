@@ -3227,7 +3227,7 @@ export default function App(){
         if(det.landmarks?.length>0){
           const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
-          if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(150); // was 60 (2s) → 150 (5s) for smoother score history
+          if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(30); // 2s at 15fps
           if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
@@ -3250,11 +3250,13 @@ export default function App(){
               result = {...rawResult, overall: Math.round(buffered), score: Math.round(buffered)};
             }
           }
-          // If frame quality failed (too_close/too_far/body_cropped), show warning but skip scoring
+          // If frame quality failed (too_close/too_far/body_cropped), show warning but don't block
           if(result && result.overall == null && result.qualityReason){
             startTransition(()=>setAnalysis(prev=>({...(prev||{}), qualityReason:result.qualityReason, detected:false, overall:null})));
             rafRef.current=requestAnimationFrame(runLoop);return;
           }
+          // If no qualityReason but overall is null, skip silently (not enough frames yet)
+          if(result && result.overall == null){ rafRef.current=requestAnimationFrame(runLoop);return; }
           if(result){
             // Apply personal calibration if available
             let finalResult = result;
