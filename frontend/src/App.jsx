@@ -1,4 +1,5 @@
 // BUILD:
+console.log("%c[CORVUS BUILD] 8dbb864 — if you don't see this, your browser is running an OLD cached build", "background:#ef4444;color:#fff;font-size:14px;padding:4px 8px;font-weight:bold");
 // Global error handler for unhandled promise rejections
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', (e) => {
