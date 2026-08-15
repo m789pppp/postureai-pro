@@ -3264,7 +3264,7 @@ export default function HomePage({
   setShowCertModal,
 }) {
   const [tab,    setTab]    = useState("home");
-  const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<1024);
+  const [mobile, setMobile] = useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
   // Default currency by timezone — Egypt → EGP (Kashier), everyone else → USD (Stripe).
   // Matches the same Egypt/Gulf split documented in Billing.jsx. User can still toggle.
   const [currency, setCurrency] = useState(()=>{
@@ -3275,7 +3275,7 @@ export default function HomePage({
   });
 
   useEffect(()=>{
-    const fn=()=>setMobile(window.innerWidth<1024);
+    const fn=()=>setMobile(window.innerWidth<768);
     window.addEventListener("resize",fn); return ()=>window.removeEventListener("resize",fn);
   },[]);
 
