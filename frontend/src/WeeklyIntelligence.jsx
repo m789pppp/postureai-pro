@@ -29,7 +29,7 @@ function computeWeeklyIntelligence(sessions) {
   const thisWeek = (sessions || []).filter(s => { const t = getTime(s); return t >= now - 7*dayMs && t <= now; });
   const lastWeek = (sessions || []).filter(s => { const t = getTime(s); return t >= now - 14*dayMs && t < now - 7*dayMs; });
 
-  if (thisWeek.length < 3 || lastWeek.length < 3) {
+  if (thisWeek.length < 1 || lastWeek.length < 1) {
     return { ready: false, thisWeekCount: thisWeek.length, lastWeekCount: lastWeek.length };
   }
 
