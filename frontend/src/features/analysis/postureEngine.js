@@ -648,6 +648,15 @@ function checkFrameQuality(lms, W, H) {
     return { ok: false, reason: "too_close" };
   }
 
+  // Too close: shoulders take up >72% of frame width = person is too near
+  // At this distance, all angle calculations are unreliable because:
+  // 1. Head/neck landmarks may be partially outside frame
+  // 2. The perspective distortion makes angles inaccurate
+  const shWidthFracCheck = shWidthPx / Math.max(W, 1);
+  if (shWidthFracCheck > 0.72) {
+    return { ok: false, reason: "too_close" };
+  }
+
   // Too far: shoulder width less than 50px regardless of frame size
   // (replaces < 0.10 span which penalised wide-shoulder users at normal distance)
   if (shWidthPx < 50) {
