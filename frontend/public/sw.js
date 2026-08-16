@@ -1,5 +1,5 @@
 // Corvus — Service Worker v8 — guards against non-http(s) cache.put() errors
-const CACHE_VER = "corvus-v8";
+const CACHE_VER = "corvus-v9";
 const MP_CACHE  = "mediapipe-v3";
 
 const MP_ASSETS = [
