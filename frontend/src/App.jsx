@@ -3250,7 +3250,19 @@ export default function App(){
           }
           // If frame quality failed (too_close/too_far/body_cropped), show warning but don't block
           if(result && result.overall == null && result.qualityReason){
-            startTransition(()=>setAnalysis(prev=>({...(prev||{}), qualityReason:result.qualityReason, detected:false, overall:null})));
+            // BUG: qualityScore was never included in this spread, so it kept
+            // whatever value the LAST successful analysis left it at (always
+            // 100 on success). The warning banner below only renders when
+            // qualityScore < 100, so once a session had one good frame, this
+            // gate silently stopped showing "too close/too far/body cropped"
+            // ever again — the screen just froze on the last good reading
+            // with zero explanation while the user moved around in front of
+            // the camera. Also reset the distance readout and current score
+            // status so stale numbers don't sit on screen looking "live".
+            startTransition(()=>{
+              setAnalysis(prev=>({...(prev||{}), qualityReason:result.qualityReason, qualityScore:result.qualityScore ?? 0, detected:false, overall:null}));
+              setScoreStatus(null);
+            });
             rafRef.current=requestAnimationFrame(runLoop);return;
           }
           // If no qualityReason but overall is null, skip silently (not enough frames yet)
