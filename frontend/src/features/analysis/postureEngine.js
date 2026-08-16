@@ -837,9 +837,43 @@ function analyzeRoundedShoulders(lms, prop, H, calib = null) {
   const personalised = NEUTRAL_RATIO !== 0.52;
   const deviation = Math.max(0, NEUTRAL_RATIO - elevRatio) * 45;
 
-  const score    = scoreMetric(deviation, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
-  const severity = classify(deviation, SEV.ROUNDED);
-  return { depth: Math.round(deviation * 10) / 10, asymmetry: 0, score, severity, confidence: 80, reliable: true, personalised };
+  // Secondary Z signal, blended in cautiously. The elevation-ratio method
+  // above catches shoulders creeping UP toward the ears (shrug/rounding-up)
+  // but front-facing 2D geometry is structurally blind to shoulders moving
+  // FORWARD (protraction) — the actual "rounded shoulders" posture — since
+  // that motion is mostly along the camera's Z axis, not the image plane.
+  // MediaPipe Z is too noisy to trust alone (hence it was previously only
+  // used as a last-resort fallback when ears weren't visible at all), but
+  // when both shoulders are visible and their Z readings agree with each
+  // other (low left/right asymmetry = a stable, non-jittery frame), a
+  // small weighted contribution improves sensitivity to true protraction
+  // without letting a noisy reading swing the score on its own.
+  const shVisOK = vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER);
+  let finalDeviation = deviation;
+  let zBlended = false;
+  if (shVisOK) {
+    const lShZ  = g(PL.L_SHOULDER)?.z ?? 0;
+    const rShZ  = g(PL.R_SHOULDER)?.z ?? 0;
+    const avgZ  = (lShZ + rShZ) / 2;
+    const asymZ = Math.abs(lShZ - rShZ);
+    if (asymZ <= 0.04) {
+      const zDepth = Math.max(0, -avgZ * 100);
+      finalDeviation = deviation * 0.8 + zDepth * 0.2;
+      zBlended = true;
+    }
+  }
+
+  const score    = scoreMetric(finalDeviation, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
+  const severity = classify(finalDeviation, SEV.ROUNDED);
+  // Front-mode rounded-shoulders is inherently the weakest metric here —
+  // side mode measures actual sagittal protraction directly. Surface that
+  // so the UI can nudge users toward side mode when this reading matters
+  // (mild/moderate cases where the extra precision changes what they do).
+  return {
+    depth: Math.round(finalDeviation * 10) / 10, asymmetry: 0, score, severity,
+    confidence: zBlended ? 85 : 80, reliable: true, personalised, zBlended,
+    sideModeRecommended: severity === "mild" || severity === "moderate",
+  };
 }
 
 function analyzeFHP(lms, W, H, prop) {
@@ -968,6 +1002,7 @@ function buildAlerts(modules, distCm, lo, hi) {
     add("dist_f",    distCm > hi + 15,                            `Too far (${distCm}cm) — ideal ${lo}–${hi}cm`),
     add("round_sev", rounded.reliable && rounded.depth > 15,      `⚠️ Rounded shoulders — pull shoulder blades together`),
     add("round_mid", rounded.reliable && rounded.depth > 8 && rounded.depth <= 15, `Shoulders slightly forward — open chest`),
+    add("round_side_tip", rounded.sideModeRecommended,            `Tip: switch to Side mode for a more precise rounded-shoulders reading`),
     add("elbow_hi",  elbow.reliable && elbow.angle != null && elbow.angle < 70, `⚠️ Elbows too high (${elbow.angle}°) — lower keyboard`),
     add("elbow_lo",  elbow.reliable && elbow.angle != null && elbow.angle > 125, `Elbows too low (${elbow.angle}°) — raise keyboard`),
     add("mon_low",   monitor.reliable && monitor.direction === "below" && monitor.offsetCm > 5, `Monitor ~${monitor.offsetCm}cm below eye level — raise it`),
