@@ -3221,11 +3221,11 @@ export default function App(){
     if(mpRef.current){
       try{
         const nowDetect=performance.now();
-        if(totalRef.current===0) console.log("[CORVUS DBG3] runLoop running, mpRef:",!!mpRef.current,"vid:",!!vid,"vid.src:",vid?.srcObject?"stream":"no-stream");
+        if(!window.__dbg3done){window.__dbg3done=true;console.log("[CORVUS DBG3] runLoop running, mpRef:",!!mpRef.current,"vid:",!!vid,"vid.readyState:",vid?.readyState,"srcObject:",!!vid?.srcObject,"total:",totalRef.current);}
         if(nowDetect-lastDetectRef.current<66){rafRef.current=requestAnimationFrame(runLoop);return;}
         lastDetectRef.current=nowDetect;
         const det=mpRef.current.detectForVideo(vid,nowDetect);
-        if(totalRef.current<=2) console.log("[CORVUS DBG2] det:",det?.landmarks?.length,"vid.readyState:",vid?.readyState,"vid.paused:",vid?.paused,"vid.currentTime:",vid?.currentTime);
+        if(!window.__dbg2done||window.__dbg2cnt<3){window.__dbg2cnt=(window.__dbg2cnt||0)+1;window.__dbg2done=true;console.log("[CORVUS DBG2] landmarks:",det?.landmarks?.length,"worldLm:",det?.worldLandmarks?.length,"readyState:",vid?.readyState,"paused:",vid?.paused,"time:",vid?.currentTime?.toFixed(2));}
         if(det.landmarks?.length>0){
           const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
