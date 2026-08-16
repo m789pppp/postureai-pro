@@ -28,8 +28,16 @@ export default async function handler(req, res) {
   if (req.method!=="POST") return res.status(405).json({error:"POST only"});
 
   const token = (req.headers.authorization||"").replace("Bearer ","");
-  const { db, auth } = getAdmin();
 
+  // Return local session immediately if Firebase not configured
+  if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_PRIVATE_KEY) {
+    return res.status(200).json({ session_id: "local_" + randomBytes(4).toString("hex"), tier: "standard", source: "local" });
+  }
+
+  let db, auth;
+  try { ({ db, auth } = getAdmin()); } catch(e) {
+    return res.status(200).json({ session_id: "local_" + randomBytes(4).toString("hex"), tier: "standard", source: "local_firebase_error" });
+  }
   let uid = req.body?.uid;
   let tier = "standard";
   let db_available = false;

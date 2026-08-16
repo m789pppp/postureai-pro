@@ -1,5 +1,5 @@
 // Posmoz — Service Worker v8 — guards against non-http(s) cache.put() errors
-const CACHE_VER = "posmoz-v8";
+const CACHE_VER = "posmoz-v9";
 const MP_CACHE  = "mediapipe-v3";
 
 const MP_ASSETS = [
