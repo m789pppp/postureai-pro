@@ -5598,6 +5598,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             {isMobile && (
               <button
                 onClick={backFromLive}
+                aria-label={isAr?"رجوع":"Back"}
                 style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",fontSize:12,color:cs.muted,cursor:"pointer",display:"flex",alignItems:"center",marginRight:isAr?0:2,marginLeft:isAr?2:0}}>
                 {isAr ? "→" : "←"}
               </button>
@@ -5706,7 +5707,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)",objectFit:isFs?"contain":"cover"}}/>
           <canvas ref={canvRef} style={{display:"none"}}/>
           {/* Fullscreen / focus-mode toggle */}
-          <button onClick={toggleFullscreen} title={isAr?"ملء الشاشة":"Fullscreen"} style={{
+          <button onClick={toggleFullscreen} title={isAr?"ملء الشاشة":"Fullscreen"} aria-label={isAr?"ملء الشاشة":"Toggle fullscreen"} style={{
             position:"absolute",bottom:8,right:8,zIndex:20,
             width:32,height:32,borderRadius:8,
             background:"rgba(2,8,16,.8)",border:"1px solid rgba(255,255,255,.15)",
@@ -6228,14 +6229,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
                       <span style={{fontSize:10,color:cs.muted,flex:1}}>{isAr?["انحناء الرقبة","إمالة الرأس","مستوى الكتفين","انحناء العمود"][i]:m}</span>
                       <div style={{width:80,height:3,borderRadius:99,
                         background:`rgba(255,255,255,${.03+i*.01})`,overflow:"hidden"}}>
-                        <div style={{height:"100%",width:"0%",background:"rgba(148,163,184,.1)"}}/>
+                        <div style={{height:"100%",width: camActive?"40%":"0%",background:"rgba(148,163,184,.15)",
+                          animation: camActive?"livePulse 1.4s ease-in-out infinite":"none"}}/>
                       </div>
                       <span style={{fontSize:10,color:"rgba(255,255,255,.15)",minWidth:16,textAlign:"right"}}>—</span>
                     </div>
                   ))}
                 </div>
-                <div style={{fontSize:10,color:cs.muted,textAlign:"center",padding:"2px 0"}}>
-                  {isAr?"ابدأ الكاميرا للتحليل":"Start camera to see metrics"}
+                <div style={{fontSize:10,color:camActive?"#f59e0b":cs.muted,textAlign:"center",padding:"2px 0",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  {camActive && (
+                    <span style={{width:6,height:6,borderRadius:"50%",background:"#f59e0b",animation:"livePulse 1.2s infinite",flexShrink:0}}/>
+                  )}
+                  {camActive
+                    ? (sessionTime>8
+                        ? (isAr?"لسه مش شايفينك — قرّب من الكاميرا وخلي الإضاءة كويسة":"Still not detecting you — move closer and check your lighting")
+                        : (isAr?"بنحلل وضعيتك... استنى ثانية":"Detecting your posture... one moment"))
+                    : (isAr?"ابدأ الكاميرا للتحليل":"Start camera to see metrics")}
                 </div>
                 <div style={{background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.12)",borderRadius:10,padding:"10px 12px",
                   display: camActive ? "none" : "block" /* #13: hide tips during active session */}}>
