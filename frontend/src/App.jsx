@@ -6084,7 +6084,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           const conf=isAr?(pp.confidence==="high"?"عالية":pp.confidence==="medium"?"متوسطة":"منخفضة"):pp.confidence;
           return (
             <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,
-              background:`${col}12`,borderLeft:`3px solid ${col}`}}>
+              background:`${col}12`,borderInlineStart:`3px solid ${col}`}}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
                 <span style={{fontSize:13}}>{icon}</span>
                 <div style={{fontSize:10,fontWeight:700,color:col}}>
