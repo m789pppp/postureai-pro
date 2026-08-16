@@ -3220,19 +3220,7 @@ export default function App(){
 
     if(mpRef.current){
       try{
-        const nowDetect=performance.now();
-        if(nowDetect-lastDetectRef.current<66){rafRef.current=requestAnimationFrame(runLoop);return;}
-        lastDetectRef.current=nowDetect;
-        const det=mpRef.current.detectForVideo(vid,nowDetect);
-        // If no landmarks for 3+ seconds, show framing guidance
-        if(!det.landmarks?.length){
-          if(!window.__noLmSince) window.__noLmSince=nowDetect;
-          if(nowDetect-window.__noLmSince>3000){
-            setAlertMsg({text:isAr?"لا يمكن رؤية جسمك — ابتعد عن الكاميرا حتى تظهر كتفاك":"Body not visible — move back until your shoulders appear",type:"warn"});
-          }
-          rafRef.current=requestAnimationFrame(runLoop);return;
-        }
-        window.__noLmSince=null;
+        const det=mpRef.current.detectForVideo(vidRef.current,performance.now());
         if(det.landmarks?.length>0){
           const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
@@ -3577,12 +3565,11 @@ export default function App(){
       insightsRef.current=null;setSessionInsights([]);
       worstSnapsRef.current=[];lastSnapMsRef.current=0;
       // Notification permission requested contextually after first alert (not cold on start)
-      const sid="local_"+Date.now();
-      // Fire-and-forget — don't await session/start, it blocks runLoop for 8s on 500
-      // Session ID updated async when server responds
-      AnalysisAPI.startSession({mode:effectiveMode}).then(d=>{
-        if(d?.session_id) { setSessionId(d.session_id); sessRef.current=Date.now(); }
-      }).catch(e=>{
+      let sid="local_"+Date.now();
+      try{
+        const d=await AnalysisAPI.startSession({mode:effectiveMode});
+        sid=d.session_id||sid;
+      }catch(e){
         if(e?.status===403 && e?.upgrade){
           setCameraStatus("idle");
           streamRef.current?.getTracks?.().forEach(t=>t.stop());
@@ -3592,8 +3579,9 @@ export default function App(){
             :(isAr?"وصلت لحد جلسات الخطة المجانية الشهري. قم بالترقية للمتابعة":"You've reached the Free plan's monthly session limit. Upgrade to continue");
           addToast(msg,"warn");
           setShowUpgrade?.(true);setUpgradeReason?.(isAr?(hitDaily?"حد الجلسات اليومي":"حد الجلسات الشهري"):(hitDaily?"Daily session limit":"Monthly session limit"));
+          return;
         }
-      });
+      }
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
       const mLabel=MC[effectiveMode]?.label||effectiveMode;
       setAlertMsg({text:`${mLabel} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
