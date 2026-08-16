@@ -3056,7 +3056,7 @@ export default function App(){
           } catch{}
           }
 
-          try { const lm=localStorage.getItem("last_mode"); if(lm) setMode(lm); } catch{}
+          try { const lm=localStorage.getItem("last_mode"); if(lm && ["laptop","phone","side"].includes(lm)) setMode(lm); } catch{}
 
           // Navigate — always land on home or setup, never on live (live requires user interaction)
           // ONLY on the first resolution for this uid. onAuthStateChanged
@@ -3221,11 +3221,9 @@ export default function App(){
     if(mpRef.current){
       try{
         const nowDetect=performance.now();
-        if(!window.__dbg3done){window.__dbg3done=true;console.log("[CORVUS DBG3] runLoop running, mpRef:",!!mpRef.current,"vid:",!!vid,"vid.readyState:",vid?.readyState,"srcObject:",!!vid?.srcObject,"total:",totalRef.current);}
         if(nowDetect-lastDetectRef.current<66){rafRef.current=requestAnimationFrame(runLoop);return;}
         lastDetectRef.current=nowDetect;
         const det=mpRef.current.detectForVideo(vid,nowDetect);
-        if(!window.__dbg2done||window.__dbg2cnt<3){window.__dbg2cnt=(window.__dbg2cnt||0)+1;window.__dbg2done=true;console.log("[CORVUS DBG2] landmarks:",det?.landmarks?.length,"worldLm:",det?.worldLandmarks?.length,"readyState:",vid?.readyState,"paused:",vid?.paused,"time:",vid?.currentTime?.toFixed(2));}
         if(det.landmarks?.length>0){
           const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
@@ -3234,7 +3232,6 @@ export default function App(){
           const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
           totalRef.current++;setTotalF(totalRef.current);
           const rawResult=mode==="side"?analyzeSideMP(lms,W,H,calibData?.knownDistCm):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData);
-          if(totalRef.current<=3) console.log("[CORVUS DBG] frame",totalRef.current,"overall:",rawResult?.overall,"qualityReason:",rawResult?.qualityReason,"shWidthFrac:",rawResult?.metrics?.screen_distance?.value);
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter
           if(rawResult?.distCm && distSmootherRef.current){
             const stableDistCm=distSmootherRef.current.push(rawResult.distCm);
@@ -3498,6 +3495,7 @@ export default function App(){
   async function openPreview(){
     const effectiveMode = mode || "laptop";
     if (!mode) { setMode("laptop"); }
+    console.log("[Corvus] Starting camera in mode:", effectiveMode);
     setCameraStatus("requesting");
     try{
       const facingMode=effectiveMode==="phone"?"environment":"user";
