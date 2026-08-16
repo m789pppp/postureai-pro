@@ -3222,6 +3222,7 @@ export default function App(){
       try{
         const det=mpRef.current.detectForVideo(vidRef.current,performance.now());
         if(det.landmarks?.length>0){
+          window.__frameHadLandmarksOnce=true;
           const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(30); // 2s at 15fps
@@ -3387,10 +3388,24 @@ export default function App(){
               startTransition(()=>setScoreStatus({score:finalResult.overall,grade:grade(finalResult.overall,t)}));
             }
           }
+        } else {
+          // No person/landmarks detected in this frame at all.
+          const nowNoLm = performance.now();
+          if(!window.__lastNoLandmarksLog || nowNoLm - window.__lastNoLandmarksLog > 5000){
+            window.__lastNoLandmarksLog = nowNoLm;
+            console.warn("[DIAG] No landmarks detected this frame. det=", det, "video ready:", vid.readyState, vid.videoWidth, vid.videoHeight, "hadLandmarksEver:", !!window.__frameHadLandmarksOnce);
+          }
         }
       }catch(e){
-        // Analysis loop errors are non-fatal — log for debugging but never crash the RAF
+        // Analysis loop errors are non-fatal — log for debugging but never crash the RAF.
+        // DIAG: temporarily also surface the FIRST error in production (throttled to
+        // once per session) since silent swallowing here was hiding the exact cause
+        // of "camera runs, metrics never populate".
         if(import.meta.env.DEV) console.warn("[postureEngine]", e?.message||e);
+        else if(!window.__firstAnalysisErrorLogged){
+          window.__firstAnalysisErrorLogged=true;
+          console.error("[DIAG] First analysis-loop error (was being silently swallowed):", e?.message, e?.stack);
+        }
       }
     }
     // Backend call ONLY when actually needed — not a duplicate of local analysis:
