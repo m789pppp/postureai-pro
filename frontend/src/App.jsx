@@ -3164,7 +3164,7 @@ export default function App(){
         const MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
         const opts={
           runningMode:"VIDEO",numPoses:1,
-          minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5
+          minPoseDetectionConfidence:.3,minPosePresenceConfidence:.3,minTrackingConfidence:.3
         };
         let pl;
         try{
@@ -3224,6 +3224,15 @@ export default function App(){
         if(nowDetect-lastDetectRef.current<66){rafRef.current=requestAnimationFrame(runLoop);return;}
         lastDetectRef.current=nowDetect;
         const det=mpRef.current.detectForVideo(vid,nowDetect);
+        // If no landmarks for 3+ seconds, show framing guidance
+        if(!det.landmarks?.length){
+          if(!window.__noLmSince) window.__noLmSince=nowDetect;
+          if(nowDetect-window.__noLmSince>3000){
+            setAlertMsg({text:isAr?"لا يمكن رؤية جسمك — ابتعد عن الكاميرا حتى تظهر كتفاك":"Body not visible — move back until your shoulders appear",type:"warn"});
+          }
+          rafRef.current=requestAnimationFrame(runLoop);return;
+        }
+        window.__noLmSince=null;
         if(det.landmarks?.length>0){
           const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
