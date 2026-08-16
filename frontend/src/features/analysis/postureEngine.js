@@ -44,6 +44,9 @@ const SHOULDER_WIDTH_CM = 42.0;
 /** Reference shoulder-width fraction of frame at ~65cm distance */
 const REF_SH_FRAC = 0.34;
 
+/** Distance (cm) at which REF_SH_FRAC was empirically measured for an average 42cm-shoulder adult */
+const REF_DIST_CM = 60;
+
 /** Neutral nose-drop fraction relative to eye width (head level gaze) */
 const NEUTRAL_NOSE_DROP_FRAC = 0.62;
 
@@ -424,9 +427,14 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
   // Clamp to plausible anatomical range to guard against noisy calibrations.
   let effectiveShoulderWidthCm = SHOULDER_WIDTH_CM; // 42 cm default
   if (calibKnownDistCm && calibKnownDistCm > 20 && shWidthFrac > 0.05) {
-    // Simple pinhole camera model: shoulderWidthCm = knownDist * shoulderWidthFrac / (focalLength/frameWidth)
-    // Empirically: at 60 cm, REF_SH_FRAC (0.34) ≈ 42 cm shoulder → scale proportionally
-    const derived = (calibKnownDistCm * shWidthFrac) / (REF_SH_FRAC * calibKnownDistCm / SHOULDER_WIDTH_CM);
+    // Pinhole model: shWidthFrac = (actualShoulderCm / SHOULDER_WIDTH_CM) * REF_SH_FRAC * (REF_DIST_CM / currentDistCm)
+    // Solve for actualShoulderCm using the user's known calibration distance.
+    // BUG FIX: the previous formula divided by (REF_SH_FRAC * calibKnownDistCm / SHOULDER_WIDTH_CM),
+    // which algebraically cancelled calibKnownDistCm out of the result entirely — the
+    // "calibrated" shoulder width was identical to the uncalibrated one regardless of
+    // what distance the user calibrated at. Fixed to divide by the fixed REF_DIST_CM
+    // (the distance at which REF_SH_FRAC was empirically measured), not by calibKnownDistCm.
+    const derived = (shWidthFrac * SHOULDER_WIDTH_CM * calibKnownDistCm) / (REF_SH_FRAC * REF_DIST_CM);
     effectiveShoulderWidthCm = Math.max(28, Math.min(58, Math.round(derived * 10) / 10));
   }
 
@@ -518,7 +526,7 @@ function estimateHeadYaw(lms, W, H) {
  *
  * @param {number|null} calibFactor - user calibration constant (optional)
  */
-function estimateDistanceCm(lms, W, H, yawDeg = 0, calibFactor = null) {
+function estimateDistanceCm(lms, W, H, yawDeg = 0, calibFactor = null, effectiveShoulderWidthCm = SHOULDER_WIDTH_CM) {
   try {
     const g   = i => lms[i];
     const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
@@ -550,7 +558,7 @@ function estimateDistanceCm(lms, W, H, yawDeg = 0, calibFactor = null) {
     const shPx = Math.abs(g(PL.R_SHOULDER).x * W - g(PL.L_SHOULDER).x * W);
     if (shPx > 5) {
       const focal = 600 * (W / 640);
-      return Math.max(20, Math.min(160, Math.round((SHOULDER_WIDTH_CM * focal) / shPx)));
+      return Math.max(20, Math.min(160, Math.round((effectiveShoulderWidthCm * focal) / shPx)));
     }
     return 65; // default when nothing is visible
   } catch { return 65; }
@@ -1001,7 +1009,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // of duplicating it with a hardcoded if/else that silently drifts if
   // MODES is ever edited elsewhere.
   const [lo, hi] = MODES[mode]?.distRange || MODES.laptop.distRange;
-  const distCm  = estimateDistanceCm(lms, W, H, headYaw, distCalibFactor);
+  const distCm  = estimateDistanceCm(lms, W, H, headYaw, distCalibFactor, prop.effectiveShoulderWidthCm);
   const distSc  = distanceScore(distCm, lo, hi);
 
   // Body module analysis — quick metrics run every frame, expensive every 3rd.
