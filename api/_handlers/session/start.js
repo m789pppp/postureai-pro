@@ -32,24 +32,30 @@ export default async function handler(req, res) {
 
   let uid = req.body?.uid;
   let tier = "standard";
+  let db_available = false;
 
   // Try to get UID from token
   if (token) {
     try {
-      const decoded = await auth.verifyIdToken(token);
+      const { db: _db, auth: _auth } = getAdmin();
+      const decoded = await _auth.verifyIdToken(token);
       uid = decoded.uid;
       // Get user tier from Firestore
-      const userSnap = await db.collection("users").doc(uid).get();
+      const userSnap = await _db.collection("users").doc(uid).get();
       tier = userSnap.data()?.tier || "standard";
-    } catch {}
+      db_available = true;
+    } catch(e) {
+      // Firebase unavailable (missing env vars) — continue with local session
+      console.warn("[session/start] Firebase unavailable:", e.message?.slice(0,80));
+    }
   }
 
-  if (!uid) {
-    // Anonymous/demo session — just return a local ID
+  if (!uid || !db_available) {
+    // Anonymous/demo/firebase-down — just return a local ID immediately
     return res.status(200).json({ session_id: "local_" + randomBytes(4).toString("hex"), tier });
   }
 
-  // Check session limits for free tier
+  // Check session limits for free tier — skip if Firebase unavailable
   if (["free","standard"].includes(tier)) {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();

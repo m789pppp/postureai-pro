@@ -6,6 +6,11 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
 
+  // Graceful fallback when Firebase not configured
+  if (!process.env.FIREBASE_PROJECT_ID) {
+    return res.status(200).json({ ok: true, symptoms: [], correlation: "firebase_not_configured" });
+  }
+
   try {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.replace("Bearer ", "").trim();
