@@ -2232,7 +2232,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
     // English date — this footer is helvetica and can't shape the Arabic dateStr
     const _footDate = now.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});
-    doc.text(`Corvus Posture Health — Clinical Report — ${_footDate} — Confidential`, ml, H-2.5);
+    doc.text(`Corvus Posture Health — Clinical Report — ${_footDate} — Confidential — Not a medical diagnosis`, ml, H-2.5);
     doc.text(`${p} / ${totalPages2}`, W-mr, H-2.5, {align:"right"});
   }
 
@@ -2907,7 +2907,7 @@ export async function generateTeamPDF({ users=[], company="", dateRange=30, prof
     doc.setPage(p);
     fc(doc,...PDF_TOKENS.ink); doc.rect(0,H-8,W,8,"F");
     sf(6.5,"normal"); tc(doc,100,116,139); // sf → Arabic font so nowStr/label don't garble
-    doc.text(`Corvus — ${isAr?"تقرير الفريق — سري":"Team Report — Confidential"} · ${nowStr}`,ml,H-2.5);
+    doc.text(`Corvus — ${isAr?"تقرير الفريق — سري — ليس تشخيصاً طبياً":"Team Report — Confidential — Not a medical diagnosis"} · ${nowStr}`,ml,H-2.5);
     doc.text(`${p} / ${tp}`,W-mr,H-2.5,{align:"right"});
   }
 
@@ -3768,7 +3768,7 @@ export async function generateQuarterlyWellnessReport({
     doc.setPage(p);
     fc(doc, 10, 15, 30); doc.rect(0, H - 14, W, 14, "F");
     sf(5.5, "normal"); tc(doc, 140, 150, 170);
-    doc.text("🦅 Corvus Health Intelligence · corvus.io", ml, H - 6);
+    doc.text(isAr ? "🦅 Corvus Health Intelligence · corvus.io · ليس تشخيصاً طبياً" : "🦅 Corvus Health Intelligence · corvus.io · Not a medical diagnosis", ml, H - 6);
     doc.text(isAr ? `صفحة ${p} من ${pgs}` : `Page ${p} of ${pgs}`, W - mr, H - 6, { align: "right" });
     doc.text(isAr ? "سري — للاستخدام الداخلي فقط" : "CONFIDENTIAL — Internal Use Only", W / 2, H - 6, { align: "center" });
   }
