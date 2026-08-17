@@ -71,14 +71,6 @@
   ],
   "routes": [
     {
-      "src": "/api/llm",
-      "dest": "/api/llm.js"
-    },
-    {
-      "src": "/api/ai-chat",
-      "dest": "/api/llm.js"
-    },
-    {
       "src": "/api/kashier/create-order",
       "dest": "/api/kashier.js"
     },
@@ -231,9 +223,6 @@
     }
   ],
   "functions": {
-    "api/llm.js": {
-      "maxDuration": 30
-    },
     "api/kashier.js": {
       "maxDuration": 30
     },

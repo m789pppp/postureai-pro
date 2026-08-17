@@ -45,7 +45,12 @@ Be concise, professional, and action-oriented. ${isAr ? "Write in Arabic." : "Wr
         body: JSON.stringify({ messages: [{ role: "user", content: prompt }], max_tokens: 200 }),
       });
       const data = await res.json();
-      const text = data?.choices?.[0]?.message?.content || data?.content?.[0]?.text || "";
+      // /api/llm (backend.py llm_proxy()) responds {ok, text, model} —
+      // this was reading data.choices[...]/data.content[...], neither of
+      // which that endpoint ever returns, so a successful call silently
+      // produced an empty summary instead of throwing into the catch below.
+      const text = data?.ok && data?.text ? data.text : "";
+      if (!text) throw new Error("empty AI summary");
       setAiSummary(text.trim());
     } catch {
       setAiSummary(isAr
