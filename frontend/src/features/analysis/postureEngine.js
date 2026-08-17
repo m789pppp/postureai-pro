@@ -192,10 +192,24 @@ export const MEASUREMENT_DISCLOSURE = Object.freeze({
   reference_methods: "goniometry, radiographic assessment",
 });
 
-// Rolling overall-score history (feeds the stability index) and
+// Rolling overall-score window (feeds the stability index) and
 // per-alert persistence streaks — both cleared in resetProportions().
-const _scoreHist    = [];
-const _alertStreaks = Object.create(null);
+//
+// Perf note (v4 lag fix): this used to be a plain array with
+// `.push()`/`.shift()` (O(n) re-index per push) whose stability metric
+// then did TWO full `.reduce()` passes (mean, then variance) over up to
+// 150 values — O(n) work recomputed from scratch on EVERY analysed
+// frame, called once per camera path (front + side), i.e. up to
+// 2×150×2 = 600 array touches/sec at 60fps. Replaced with a fixed-size
+// ring buffer that maintains a running sum/sum-of-squares incrementally,
+// making both the push and the stability read O(1).
+const _SCORE_HIST_CAP = FRAME_BUFFER_SIZE;
+const _scoreHistBuf  = new Float64Array(_SCORE_HIST_CAP);
+let _scoreHistLen    = 0;
+let _scoreHistHead   = 0;
+let _scoreHistSum    = 0;
+let _scoreHistSumSq  = 0;
+const _alertStreaks  = Object.create(null);
 
 /**
  * Alert persistence gate: condition must hold for `need` consecutive
@@ -207,17 +221,40 @@ function _persistAlert(key, condition, need) {
   return _alertStreaks[key] >= need;
 }
 
+/** O(1) push into the rolling score window (see perf note above). */
+function _pushScoreHist(v) {
+  if (_scoreHistLen < _SCORE_HIST_CAP) {
+    _scoreHistBuf[_scoreHistHead] = v;
+    _scoreHistSum   += v;
+    _scoreHistSumSq += v * v;
+    _scoreHistLen++;
+  } else {
+    const old = _scoreHistBuf[_scoreHistHead];
+    _scoreHistSum   += v - old;
+    _scoreHistSumSq += v * v - old * old;
+    _scoreHistBuf[_scoreHistHead] = v;
+  }
+  _scoreHistHead = (_scoreHistHead + 1) % _SCORE_HIST_CAP;
+}
+
+function _resetScoreHist() {
+  _scoreHistBuf.fill(0);
+  _scoreHistLen = 0; _scoreHistHead = 0; _scoreHistSum = 0; _scoreHistSumSq = 0;
+}
+
 /**
  * Posture Stability Index from the rolling overall-score window.
  * Low variance = held, controlled posture; high variance = fidgeting /
  * slouch-correct cycles. Returns a metric entry or null (<20 frames).
+ * O(1) — reads the running sum/sum-of-squares maintained by _pushScoreHist.
  */
 function _stabilityMetric() {
-  if (_scoreHist.length < 20) return null;
-  const mean = _scoreHist.reduce((a, b) => a + b, 0) / _scoreHist.length;
-  const sd   = Math.sqrt(_scoreHist.reduce((s, v) => s + (v - mean) ** 2, 0) / _scoreHist.length);
+  if (_scoreHistLen < 20) return null;
+  const mean = _scoreHistSum / _scoreHistLen;
+  const variance = Math.max(0, _scoreHistSumSq / _scoreHistLen - mean * mean);
+  const sd = Math.sqrt(variance);
   const stability = Math.max(0, Math.min(100, Math.round(100 - sd * 4)));
-  return { value: stability, score: stability, unit: "%", label: "Posture stability", window_frames: _scoreHist.length };
+  return { value: stability, score: stability, unit: "%", label: "Posture stability", window_frames: _scoreHistLen };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -427,42 +464,65 @@ export function createLandmarkSmoother(alpha = 0.4, maxRejectStreak = MAX_REJECT
  * Collects raw metric values over FRAME_BUFFER_SIZE frames,
  * then returns the trimmed mean (removes top/bottom 10%).
  * Provides stable readings immune to single-frame spikes.
+ *
+ * Perf note (v4 lag fix): this is called once per analysed camera frame
+ * (30-60/sec). The original implementation used `Array.push`+`Array.shift`
+ * (O(n) re-index every push, n up to 150) and re-sorted the full buffer
+ * on every `trimmedMean()` call (O(n log n) every push, since App.jsx
+ * calls trimmedMean immediately after push). That's ~150 shifts +
+ * a 150-element sort up to 60 times/sec — a measurable chunk of the
+ * live-session frame budget for no visible benefit, since a 150-frame
+ * (~5s) trimmed mean cannot change meaningfully frame-to-frame.
+ * Fixed by: (1) a fixed-size ring buffer instead of push/shift, and
+ * (2) throttling the sort to every 3rd call, matching the engine's
+ * existing "expensive metric" cadence (postureEngine.js skipExpensive).
  */
 export function createFrameBuffer(size = FRAME_BUFFER_SIZE) {
-  const buffer = [];
+  const buffer = new Array(size);
+  let count = 0, head = 0, tick = 0;
+  let cache = Object.create(null);
 
   return {
-    /** Push a metrics object; returns aggregated result when buffer is full */
+    /** Push a metrics object; returns true once the buffer has enough data */
     push(metrics) {
-      buffer.push(metrics);
-      if (buffer.length > size) buffer.shift();
-      return buffer.length >= Math.min(10, size); // ready after 10+ frames
+      buffer[head] = metrics;
+      head = (head + 1) % size;
+      if (count < size) count++;
+      tick = (tick + 1) % 3;
+      return count >= Math.min(10, size); // ready after 10+ frames
     },
 
-    /** Trimmed mean of a numeric field across all buffered frames */
+    /** Trimmed mean of a numeric field across all buffered frames (throttled) */
     trimmedMean(field, trimFrac = 0.1) {
-      const vals = buffer
-        .map(f => f[field])
-        .filter(v => typeof v === "number" && isFinite(v))
-        .sort((a, b) => a - b);
-
-      if (!vals.length) return null;
+      if (tick !== 0 && cache[field] !== undefined) return cache[field];
+      const vals = [];
+      for (let i = 0; i < count; i++) {
+        const v = buffer[i] && buffer[i][field];
+        if (typeof v === "number" && isFinite(v)) vals.push(v);
+      }
+      vals.sort((a, b) => a - b);
+      if (!vals.length) { cache[field] = null; return null; }
       const cut = Math.floor(vals.length * trimFrac);
       const trimmed = vals.slice(cut, vals.length - cut);
-      return trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+      const result = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+      cache[field] = result;
+      return result;
     },
 
     /** Standard deviation of a field — quality/confidence indicator */
     stdDev(field) {
       const mean = this.trimmedMean(field, 0);
       if (mean === null) return 0;
-      const vals = buffer.map(f => f[field]).filter(v => isFinite(v));
-      const variance = vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length;
-      return Math.sqrt(variance);
+      let sum = 0, n = 0;
+      for (let i = 0; i < count; i++) {
+        const v = buffer[i] && buffer[i][field];
+        if (typeof v === "number" && isFinite(v)) { sum += (v - mean) ** 2; n++; }
+      }
+      return n ? Math.sqrt(sum / n) : 0;
     },
 
-    length: () => buffer.length,
-    clear()  { buffer.length = 0; },
+    length: () => count,
+    clear()  { count = 0; head = 0; tick = 0; cache = Object.create(null); buffer.length = 0; buffer.length = size; },
   };
 }
 
@@ -538,7 +598,7 @@ export function resetProportions() {
   analyzeMP._cachedElbow   = null;
   analyzeMP._cachedMonitor = null;
   // v4: clear stability window + alert persistence streaks
-  _scoreHist.length = 0;
+  _resetScoreHist();
   for (const k in _alertStreaks) delete _alertStreaks[k];
 }
 
@@ -1180,8 +1240,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor }, distCm, lo, hi);
 
   // ── Tier-gated clinical metrics (v4) ──────────────────────────────
-  _scoreHist.push(overall);
-  if (_scoreHist.length > FRAME_BUFFER_SIZE) _scoreHist.shift();
+  _pushScoreHist(overall);
   const advMetrics   = {};
   const tierFeatures = [];
 
@@ -1431,8 +1490,7 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
    .filter(Boolean);
 
   // v4: tier-gated stability index for the side camera too
-  _scoreHist.push(overall);
-  if (_scoreHist.length > FRAME_BUFFER_SIZE) _scoreHist.shift();
+  _pushScoreHist(overall);
   const advMetricsSide = {};
   const tierFeaturesSide = [];
   if (_engineProfile.stabilityIndex) {

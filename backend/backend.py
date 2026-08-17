@@ -13092,7 +13092,7 @@ CONVERSATION STYLE:
         # Gemini-compatible contents list simultaneously:
         # - Ollama: [{role:"system",...},{role:"user",...},{role:"assistant",...}]
         # - Gemini: [{role:"user",...},{role:"model",...}] (no system role in contents)
-        ollama_msgs = [{\"role\": \"system\", \"content\": sys_prompt}]
+        ollama_msgs = [{"role": "system", "content": sys_prompt}]
         gemini_contents = []
         last_role = None
         for i, msg in enumerate(messages):
