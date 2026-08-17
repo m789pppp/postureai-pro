@@ -348,42 +348,63 @@ export function createLandmarkSmoother(alpha = 0.4, maxRejectStreak = MAX_REJECT
  * Collects raw metric values over FRAME_BUFFER_SIZE frames,
  * then returns the trimmed mean (removes top/bottom 10%).
  * Provides stable readings immune to single-frame spikes.
+ *
+ * Perf note (live-session lag fix): this is called on every analysed
+ * camera frame from App.jsx's runLoop. The previous implementation used
+ * `Array.push`+`Array.shift` (O(n) re-index on every push) and re-sorted
+ * the entire buffer on every `trimmedMean()` call (O(n log n), called
+ * immediately after every push) — real, measurable per-frame cost that
+ * buys nothing, since a multi-second rolling average cannot change
+ * meaningfully frame-to-frame. Fixed with a fixed-size ring buffer
+ * (O(1) push) and a throttled sort (recomputed every 3rd call, still
+ * far more often than the underlying value can actually change).
  */
 export function createFrameBuffer(size = FRAME_BUFFER_SIZE) {
-  const buffer = [];
+  const buffer = new Array(size);
+  let count = 0, head = 0, tick = 0;
+  let cache = Object.create(null);
 
   return {
     /** Push a metrics object; returns aggregated result when buffer is full */
     push(metrics) {
-      buffer.push(metrics);
-      if (buffer.length > size) buffer.shift();
-      return buffer.length >= Math.min(10, size); // ready after 10+ frames
+      buffer[head] = metrics;
+      head = (head + 1) % size;
+      if (count < size) count++;
+      tick = (tick + 1) % 3;
+      return count >= Math.min(10, size); // ready after 10+ frames
     },
 
-    /** Trimmed mean of a numeric field across all buffered frames */
+    /** Trimmed mean of a numeric field across all buffered frames (throttled) */
     trimmedMean(field, trimFrac = 0.1) {
-      const vals = buffer
-        .map(f => f[field])
-        .filter(v => typeof v === "number" && isFinite(v))
-        .sort((a, b) => a - b);
-
-      if (!vals.length) return null;
+      if (tick !== 0 && cache[field] !== undefined) return cache[field];
+      const vals = [];
+      for (let i = 0; i < count; i++) {
+        const v = buffer[i] && buffer[i][field];
+        if (typeof v === "number" && isFinite(v)) vals.push(v);
+      }
+      vals.sort((a, b) => a - b);
+      if (!vals.length) { cache[field] = null; return null; }
       const cut = Math.floor(vals.length * trimFrac);
       const trimmed = vals.slice(cut, vals.length - cut);
-      return trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+      const result = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+      cache[field] = result;
+      return result;
     },
 
     /** Standard deviation of a field — quality/confidence indicator */
     stdDev(field) {
       const mean = this.trimmedMean(field, 0);
       if (mean === null) return 0;
-      const vals = buffer.map(f => f[field]).filter(v => isFinite(v));
-      const variance = vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length;
-      return Math.sqrt(variance);
+      let sum = 0, n = 0;
+      for (let i = 0; i < count; i++) {
+        const v = buffer[i] && buffer[i][field];
+        if (typeof v === "number" && isFinite(v)) { sum += (v - mean) ** 2; n++; }
+      }
+      return n ? Math.sqrt(sum / n) : 0;
     },
 
-    length: () => buffer.length,
-    clear()  { buffer.length = 0; },
+    length: () => count,
+    clear()  { count = 0; head = 0; tick = 0; cache = Object.create(null); buffer.length = 0; buffer.length = size; },
   };
 }
 

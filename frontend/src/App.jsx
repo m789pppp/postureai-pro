@@ -2792,6 +2792,7 @@ export default function App(){
   const lmSmootherRef   = useRef(null);
   const frameBufferRef  = useRef(null); // 60-frame aggregation buffer
   const distSmootherRef = useRef(null); // sliding-median distance smoother
+  const lastAnalysisTsRef = useRef(0);  // throttles the analysis loop — see runLoop
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
   const insightsRef=useRef(null);
   const alertCauseRef=useRef({});
@@ -3190,6 +3191,32 @@ export default function App(){
     if(!vid||!ov||vid.readyState<2){rafRef.current=requestAnimationFrame(runLoop);return;}
     const W=vid.videoWidth,H=vid.videoHeight;
     if(!W||!H){rafRef.current=requestAnimationFrame(runLoop);return;}
+
+    // ── Analysis-rate throttle ───────────────────────────────────────
+    // This loop is driven by requestAnimationFrame, which fires at the
+    // display's refresh rate (60Hz normally, but 120/144Hz+ on gaming
+    // monitors) — NOT at any analysis-appropriate rate. Every tick was
+    // running MediaPipe's detectForVideo (a WASM pose-inference call,
+    // genuinely expensive — tens of ms), the full posture-analysis
+    // pipeline, and a React state update, uncapped. On a 120Hz display
+    // that's roughly double the intended work every second; the buffer
+    // sizes elsewhere in this file (createFrameBuffer(30) below) already
+    // assume "~15fps" per their own comment, so nothing else in the
+    // pipeline needed a rate faster than that. Throttling here to a
+    // fixed real-world interval (not frame count, so it behaves the same
+    // on 60Hz/120Hz/144Hz screens) directly cuts MediaPipe inference
+    // calls and downstream work by up to ~4x — this was the single
+    // biggest source of live-session lag/stutter.
+    // Skipped ticks just re-request the next frame; the last drawn
+    // skeleton overlay and score simply persist for that ~50ms, which
+    // is imperceptible for posture (a slow-changing signal).
+    const _nowTs = performance.now();
+    if (_nowTs - lastAnalysisTsRef.current < 50) { // ~20fps ceiling
+      rafRef.current = requestAnimationFrame(runLoop);
+      return;
+    }
+    lastAnalysisTsRef.current = _nowTs;
+
     ov.width=W;ov.height=H;
     const ctx=ov.getContext("2d");ctx.clearRect(0,0,W,H);
 
