@@ -4007,9 +4007,10 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
     calling call_local_llm() directly.
 
     Server-side only — no AI provider credential is ever sent to the
-    client. Uses Ollama (if OLLAMA_URL is set — free, self-hosted,
-    zero per-request cost). `tier` is accepted for call-site
-    compatibility; token budget is set by the caller via
+    client. Tries Groq first (if GROQ_API_KEY is set — free tier,
+    14,400 req/day, ~500ms latency), then Ollama (if OLLAMA_URL is set —
+    free, self-hosted, zero per-request cost). `tier` is accepted for
+    call-site compatibility; token budget is set by the caller via
     tier_quality.py, not by this function.
 
     Returns None if no AI backend is configured / unreachable.
@@ -4020,8 +4021,22 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
         if _cached:
             return _cached
 
+    # Bug fix: this function's own docstring/config comments describe
+    # Groq as "primary" and Ollama as "optional fallback" (see
+    # GROQ_API_KEY/OLLAMA_URL setup above), but only the Ollama branch
+    # was ever actually called — call_groq() was fully dead code. Any
+    # deployment with GROQ_API_KEY set but no OLLAMA_URL (the expected
+    # normal case — Ollama needs a dedicated self-hosted server) had
+    # AI_CONFIGURED=True (gates pass) while call_ai() silently returned
+    # None every time, degrading every AI feature with no error at all.
     result = None
-    if OLLAMA_URL:
+    if GROQ_API_KEY:
+        _messages = []
+        if system_prompt:
+            _messages.append({"role": "system", "content": system_prompt})
+        _messages.append({"role": "user", "content": prompt})
+        result = call_groq(_messages, max_tokens=max_tokens, temperature=temperature)
+    if not result and OLLAMA_URL:
         result = call_local_llm(prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature)
 
     # ── Cache successful result ──────────────────────────────────────
@@ -16602,8 +16617,16 @@ def org_send_invite():
 @limiter.limit("20 per minute")
 def llm_proxy():
     """
-    LLM proxy — forwards requests to LLM7.io server-side (no CORS issues).
-    Used by AI Coach, AI Insights, Predictive AI.
+    LLM proxy — the primary client-facing AI path. Used by AI Coach, AI
+    Insights, Predictive AI, AI Reports, and Corporate Wellness (see
+    frontend/src/localAI.js, CorporateWellness.jsx — both call this route
+    directly at /api/llm; vercel.json used to intercept that path to a
+    client-side-provider Vercel Edge Function before it ever reached here,
+    which has since been fixed so it actually lands on this route).
+    Tries Groq first (fast, reliable, 14,400 req/day free tier — same
+    provider used by call_ai()), then falls back to the LLM7.io anonymous
+    pool below, which is shared/rate-limited and not sized for real
+    production traffic on its own.
     No auth required — rate limited by IP (flask-limiter, enforced server-side).
     """
     if request.method == "OPTIONS":
@@ -16628,6 +16651,16 @@ def llm_proxy():
              "content": str(m.get("content", ""))}
             for m in messages
         ]
+
+        if GROQ_API_KEY:
+            try:
+                groq_text = call_groq(llm_messages, max_tokens=max_tokens, temperature=temperature)
+                if groq_text:
+                    resp = jsonify({"ok": True, "text": groq_text, "model": "groq"})
+                    resp.headers["Access-Control-Allow-Origin"] = "*"
+                    return resp, 200
+            except Exception:
+                pass  # fall through to the LLM7 chain below
 
         models = ["gpt-4o-mini", "meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-r1"]
 
