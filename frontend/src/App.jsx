@@ -5406,6 +5406,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div key={i}
                   onMouseEnter={()=>history.length&&setHoverBarIdx(i)}
                   onMouseLeave={()=>setHoverBarIdx(null)}
+                  onClick={()=>history.length&&setHoverBarIdx(prev=>prev===i?null:i)}
                   style={{flex:1, position:"relative", height:"100%", display:"flex", alignItems:"flex-end", cursor:history.length?"pointer":"default"}}>
                   {hoverBarIdx===i && s>0 && (
                     <div style={{
@@ -6671,7 +6672,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <span style={{fontSize:10,color:cs.muted,flexShrink:0}}>{isAr?"استراحة كل":"Break every"}</span>
             {[15,25,45,60,90].map(m=>(
               <button key={m} onClick={()=>setBreakIntervalMin(m)} style={{
-                fontSize:10,padding:"3px 8px",borderRadius:6,cursor:"pointer",fontWeight:breakIntervalMin===m?700:400,
+                fontSize:10,padding:"8px 8px",borderRadius:6,cursor:"pointer",fontWeight:breakIntervalMin===m?700:400,
+                minHeight:36,
                 background:breakIntervalMin===m?"rgba(245,158,11,.15)":"rgba(148,163,184,.06)",
                 border:`1px solid ${breakIntervalMin===m?"rgba(245,158,11,.4)":cs.border}`,
                 color:breakIntervalMin===m?"#fcd34d":cs.muted,
