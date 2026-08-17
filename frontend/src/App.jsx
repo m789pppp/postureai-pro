@@ -3610,8 +3610,11 @@ export default function App(){
         }
       }
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
-      const mLabel=MC[effectiveMode]?.label||effectiveMode;
-      setAlertMsg({text:`${mLabel} camera · ${T_norm?.name||"–"} tier active`,type:"info"});
+      // NOTE: previously showed an info toast here ("{mode} camera · {tier}
+      // tier active") on every session start. Removed — that fact is already
+      // permanently visible in both the header and the sidebar badges, so the
+      // toast was a third repetition of the same two words with zero new
+      // information, right as the user is trying to focus on getting into frame.
       if(user?.uid) completeOnboardingStep(user.uid,"first_session").catch(e=>console.warn("[Onboarding]",e.message));
       // Calibration is opt-in — user can trigger from settings
       // Removed auto-popup to prevent overlay conflict with camera
@@ -4995,7 +4998,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
     {healthConsentModalEl}
     <div dir={dir} style={{
       display:"grid",
-      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
+      // Video panel was a fixed 320px while the stats/history panel took
+      // whatever space remained (unbounded 1fr) — on any reasonably wide
+      // screen this meant a small camera next to an increasingly empty
+      // Score History graph. Camera feed is the thing users actually look
+      // at during a live session, so it should read as the primary element:
+      // widened to 460px, and the stats panel capped so it can't sprawl.
+      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "460px minmax(0,640px)" : "minmax(0,640px) 460px"),
       minHeight:"100vh",
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
@@ -5269,12 +5278,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </button>
             )}
             <div>
-              <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
-                {isAr ? `${mode_label} · ${tier_label}` : `${tier_label} · ${mode_label}`}
-              </div>
-              {/* Model-ready state lives in the sidebar status row; here we
-                  show session guidance instead of repeating it. */}
-              <div style={{fontSize:10.5,color:cs.muted,marginTop:1}}>
+              {/* Model-ready state lives in the sidebar status row; tier/mode
+                  are already shown permanently as badges in the sidebar too —
+                  this used to repeat "Elite · Laptop" here as well, tripling
+                  the same two facts across the screen for no new information.
+                  Header now carries only the one thing it uniquely adds:
+                  session guidance. */}
+              <div style={{fontSize:12.5,fontWeight:600,color:cs.text}}>
                 {mpStatus==="ready"
                   ? (M_ ? (isAr?`المسافة المثلى ${M_.optDist[0]}–${M_.optDist[1]} سم`:`Optimal distance ${M_.optDist[0]}–${M_.optDist[1]}cm`) : (isAr?"جاهز للتحليل":"Ready to analyse"))
                   : (isAr?"جاري تحميل النموذج...":"Loading AI model...")}
