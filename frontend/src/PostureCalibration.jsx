@@ -394,7 +394,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     try { localStorage.setItem("posture_calibration", JSON.stringify(calibData)); } catch(e) {}
   }, [uid, stopCamera, t.err_pose, knownDistanceCm]);
 
-  const DARK  = cs || { bg: "#0d1a2e", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", blue: "#1a56db" };
+  const DARK  = cs || { bg: "#0d1a2e", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#7b8aa3", blue: "#1a56db" };
 
   // ── Render ────────────────────────────────────────────────────────
   return (
