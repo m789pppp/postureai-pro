@@ -339,6 +339,20 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       spine_angle:   Math.round(avg(spineAngles_s)   * 10) / 10,
     };
 
+    // ── Calibration quality gate ──────────────────────────────────────
+    // If the user calibrated with severely bad posture, their "ideal"
+    // baseline will lock in the bad position and the engine will never
+    // alert them. Warn clearly but still save — they might genuinely have
+    // a medical asymmetry. Thresholds: clinically significant bad posture.
+    const qualityWarnings = [];
+    if (baseline.neck_angle  > 18) qualityWarnings.push(t.warn_neck  || "High neck lean detected during calibration — try to sit straighter next time.");
+    if (baseline.head_tilt   > 8)  qualityWarnings.push(t.warn_tilt  || "Head was tilted during calibration — check chair and monitor height.");
+    if (baseline.spine_angle > 15) qualityWarnings.push(t.warn_spine || "Significant spine lean detected — try calibrating with back against the chair.");
+    if (qualityWarnings.length > 0) {
+      // Store warnings with the calibration so the UI can surface them
+      baseline.quality_warnings = qualityWarnings;
+    }
+
     const calibData = {
       ...baseline,
       tolerances: {
@@ -523,6 +537,23 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
                 </div>
               )}
               <div style={{ fontSize: 11, color: DARK.muted, marginTop: 12 }}>{t.doneSub} ({result.frames_used} frames)</div>
+
+              {/* Quality warnings — shown when user calibrated with bad posture */}
+              {result.quality_warnings?.length > 0 && (
+                <div style={{ marginTop: 12, background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.3)", borderRadius: 10, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#f59e0b", marginBottom: 6 }}>
+                    ⚠️ {isAr ? "ملاحظات على وضعيتك أثناء المعايرة" : "Notes on your calibration posture"}
+                  </div>
+                  {result.quality_warnings.map((w, i) => (
+                    <div key={i} style={{ fontSize: 11, color: "#fbbf24", marginBottom: 4, lineHeight: 1.5 }}>• {w}</div>
+                  ))}
+                  <div style={{ fontSize: 10, color: DARK.muted, marginTop: 6 }}>
+                    {isAr
+                      ? "المعايرة اتحفظت — لكن يُنصح بإعادتها وأنت جالس بوضعية أفضل لدقة أعلى."
+                      : "Calibration saved — but recalibrating with better posture will improve accuracy."}
+                  </div>
+                </div>
+              )}
             </div>
             <button onClick={() => onDone(result)} style={{ width: "100%", background: "#10b981", border: "none", borderRadius: 9, padding: "13px 0", fontSize: 13, fontWeight: 600, color: "white", cursor: "pointer" }}>
               {t.finish}

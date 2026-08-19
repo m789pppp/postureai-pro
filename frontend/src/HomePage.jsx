@@ -1433,13 +1433,11 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
         {/* Posture DNA Report — Elite, quarterly comprehensive report */}
         {isEliteTier && (
           <button onClick={async ()=>{
-              alert("Posture DNA button was clicked — handler is running");
-              console.log("[DIAG] Posture DNA clicked. typeof onPostureDNA=", typeof onPostureDNA, "userSessions.length=", userSessions?.length);
               try {
                 setPdfLoading("dna");
                 await onPostureDNA?.();
               } catch(e) {
-                console.error("[DIAG] Posture DNA threw:", e);
+                console.error("[Posture DNA]", e);
               } finally {
                 setPdfLoading(null);
               }

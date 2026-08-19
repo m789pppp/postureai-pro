@@ -484,6 +484,8 @@ export function resetProportions() {
   analyzeMP._cachedFhp     = null;
   analyzeMP._cachedElbow   = null;
   analyzeMP._cachedMonitor = null;
+  // Clear score-drift buffer so fatigue penalty resets on new session
+  analyzeMP._scoreBuf = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1140,19 +1142,37 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     (vis(PL.R_EAR) ? 3 : 0)
   );
 
-  // ── Fatigue penalty — evidence-based non-linear model ─────────────
-  // Richter et al. (2011): muscle fatigue onset at ~20-30 min sustained
-  // sedentary work, with non-linear accumulation thereafter.
-  // Penalty is informational only — does NOT reduce overall score.
+  // ── Posture-drift penalty (replaces time-based fatigue) ───────────
+  // Old model penalised users purely for working long hours — someone
+  // with perfect posture at 3 hours got the same hit as someone slumping.
+  // New model measures ACTUAL score degradation across the session:
+  //   • Maintain a rolling buffer of the last 300 frames (~5 min at 1fps).
+  //   • Compare the earliest 30 frames to the most recent 30 frames.
+  //   • If posture has genuinely degraded, apply a proportional penalty
+  //     (max 15 pts) that reflects real physical drift — not elapsed time.
+  //   • Users who maintain or improve their posture get penalty = 0.
   const sessionMin = sessionStartMs
     ? Math.max(0, Math.round((Date.now() - sessionStartMs) / 60000))
-    : 0; // Bug #8 fix: if no session start provided, assume 0 min — using performance.now()
-         // caused inflated fatigue penalty when the tab was left open before starting a session.
-  // Non-linear fatigue: 0-20min=none, 20-60min=mild (0-8pts), 60-120min=moderate (8-15pts), 120min+=severe
+    : 0;
+
+  // Initialise on first frame of a new session
+  if (!analyzeMP._scoreBuf) analyzeMP._scoreBuf = [];
+  analyzeMP._scoreBuf.push(overall);
+  if (analyzeMP._scoreBuf.length > 300) analyzeMP._scoreBuf.shift();
+
   let fatiguePenalty = 0;
-  if (sessionMin > 120) fatiguePenalty = Math.min(20, 15 + Math.round((sessionMin - 120) / 15));
-  else if (sessionMin > 60) fatiguePenalty = Math.round(8 + ((sessionMin - 60) / 60) * 7);
-  else if (sessionMin > 20) fatiguePenalty = Math.round(((sessionMin - 20) / 40) * 8);
+  const buf = analyzeMP._scoreBuf;
+  // Need at least 60 frames AND 10 minutes before we can meaningfully
+  // compare early vs late — avoids false penalty at session start.
+  if (buf.length >= 60 && sessionMin >= 10) {
+    const earlySlice  = buf.slice(0, 30);
+    const recentSlice = buf.slice(-30);
+    const earlyAvg  = earlySlice.reduce((a, b) => a + b, 0)  / earlySlice.length;
+    const recentAvg = recentSlice.reduce((a, b) => a + b, 0) / recentSlice.length;
+    const drift = Math.max(0, earlyAvg - recentAvg); // positive = degradation
+    // Scale: 10pt drift → 5pt penalty, 20pt drift → 10pt, 30pt+ → 15pt cap
+    fatiguePenalty = Math.round(Math.min(15, drift * 0.5));
+  }
 
   // Alerts
   const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor }, distCm, lo, hi);

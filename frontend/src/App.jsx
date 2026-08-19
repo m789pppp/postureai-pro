@@ -1,5 +1,5 @@
 // BUILD:
-console.log("%c[CORVUS BUILD] 8dbb864 — if you don't see this, your browser is running an OLD cached build", "background:#ef4444;color:#fff;font-size:14px;padding:4px 8px;font-weight:bold");
+
 // Global error handler for unhandled promise rejections
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', (e) => {
@@ -2543,7 +2543,19 @@ export default function App(){
   const[showCalibWizard,setShowCalibWizard]=useState(false);
   const { calibration: savedCalib } = useCalibration(profile?.uid);
   const [calibData, setCalibData] = useState(null);
-  useEffect(()=>{ if(savedCalib && !calibData) setCalibData(savedCalib); }, [savedCalib]);
+  const [calibStale, setCalibStale] = useState(false); // true when calibration >30 days old
+  useEffect(()=>{
+    if(savedCalib && !calibData){
+      setCalibData(savedCalib);
+      // Warn if calibration is older than 30 days — setup changes over time
+      // (new chair, desk rearrangement, posture improvement) can make old
+      // baselines misleading. 30 days is a reasonable recalibration cadence.
+      if(savedCalib.calibrated_at){
+        const ageMs = Date.now() - new Date(savedCalib.calibrated_at).getTime();
+        setCalibStale(ageMs > 30 * 24 * 60 * 60 * 1000);
+      }
+    }
+  }, [savedCalib]);
 
   // Score smoothing
   const { smoothed: smoothedScore, push: pushScore, reset: resetScore } = useScoreSmoothing(10000, 6000);
@@ -2794,7 +2806,10 @@ export default function App(){
   const distSmootherRef = useRef(null); // sliding-median distance smoother
   const lastAnalysisTsRef = useRef(0);  // throttles the analysis loop — see runLoop
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
+  const lightAlRef=useRef(0); // separate cooldown for lighting alerts (60s, not 8s)
   const insightsRef=useRef(null);
+  // alertCauseRef: { [causeKey]: { last: timestamp, count: number } }
+  // count drives exponential backoff: 1st repeat → 5min, 2nd → 10min, 3rd+ → 20min
   const alertCauseRef=useRef({});
   const histRef=useRef([]);const goodRef=useRef(0);const totalRef=useRef(0);
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
@@ -3254,7 +3269,21 @@ export default function App(){
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(30); // 2s at 15fps
           if(!distSmootherRef.current) distSmootherRef.current=createDistanceSmoother(30);
-          const lms=lmSmootherRef.current.smooth(det.landmarks[0]);
+          const rawLms = det.landmarks[0];
+          // ── Multi-person / subject-switch guard ─────────────────────
+          // If the shoulder centroid jumps > 30% of the frame width in
+          // one detection cycle, it's almost certainly a different person
+          // entering the frame (or a MediaPipe tracking reset). Reject the
+          // frame entirely rather than feeding bad data into the smoother.
+          let subjectOk = true;
+          const prevCentroid = lmSmootherRef.current?._prevCentroid;
+          const lShX = rawLms[11]?.x ?? 0.5;
+          const rShX = rawLms[12]?.x ?? 0.5;
+          const curCentroidX = (lShX + rShX) / 2;
+          if(prevCentroid != null && Math.abs(curCentroidX - prevCentroid) > 0.30) subjectOk = false;
+          if(lmSmootherRef.current) lmSmootherRef.current._prevCentroid = curCentroidX;
+          if(!subjectOk){ return; } // drop frame — don't update smoother or score
+          const lms=lmSmootherRef.current.smooth(rawLms);
           totalRef.current++;setTotalF(totalRef.current);
           const rawResult=mode==="side"?analyzeSideMP(lms,W,H,calibData?.knownDistCm):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData);
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter
@@ -3373,8 +3402,9 @@ export default function App(){
               // Don't trust score-based decisions in poor lighting — neither
               // accumulate nor reset the bad-streak timer, since we can't
               // tell if it's genuinely bad posture or just a bad frame.
-              if(now-lastAlRef.current>8000){
-                lastAlRef.current=now;
+              // Separate 60s cooldown so lighting notices don't block posture alerts.
+              if(now-lightAlRef.current>60000){
+                lightAlRef.current=now;
                 setAlertMsg({text:isAr?"الإضاءة ضعيفة جدًا — حسّن الإضاءة لقراءة أدق":"Lighting too low — improve lighting for an accurate reading",type:"warn"});
               }
             }else if(gateScore<65){
@@ -3397,10 +3427,14 @@ export default function App(){
                 else if(Math.abs(yaw)>12){causeKey="yaw";msg=`Head turned ${Math.round(Math.abs(yaw))}° — face the monitor`;msgAr=`الرأس مائل ${Math.round(Math.abs(yaw))}° — واجه الشاشة مباشرة`;}
                 else if(dist&&dist<lo){causeKey="dist";msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;msgAr=`قريب جداً (${dist}سم) — ابتعد إلى ${lo}–${hi}سم`;acRef.current.dist++;}
 
-                // Per-cause cooldown (5 min) — don't repeat same cause every 30s
-                const causeCooldown = 5 * 60 * 1000;
-                if(!alertCauseRef.current[causeKey] || now - alertCauseRef.current[causeKey] > causeCooldown){
-                  alertCauseRef.current[causeKey] = now;
+                // Exponential backoff per cause: 1st=5min, 2nd=10min, 3rd+=20min
+                // Prevents repeated same-cause spam while still alerting on genuine persistence
+                const causeEntry = alertCauseRef.current[causeKey] || { last: 0, count: 0 };
+                const causeCooldown = causeEntry.count === 0 ? 5*60*1000
+                                    : causeEntry.count === 1 ? 10*60*1000
+                                    : 20*60*1000;
+                if(now - causeEntry.last > causeCooldown){
+                  alertCauseRef.current[causeKey] = { last: now, count: causeEntry.count + 1 };
                   const displayMsg = isAr ? msgAr : msg;
                   const sev = finalResult.overall<40?"severe":finalResult.overall<55?"moderate":"mild";
                   setAlertCounts({...acRef.current});
@@ -3710,7 +3744,20 @@ export default function App(){
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
     const la  = lastAnalRef.current||{};
     const hist = histRef.current||[];
-    const avg  = hist.length ? Math.round(hist.reduce((a,b)=>a+b,0)/hist.length) : 0;
+    // Recency-weighted average: later frames get up to 3× the weight of
+    // the earliest frames. This means 45 min of slumping after 5 min of
+    // good posture is correctly reflected — not averaged away.
+    // Weight grows linearly from 1 (first frame) to 3 (last frame).
+    const avg = hist.length ? (() => {
+      const n = hist.length;
+      let wSum = 0, wTotal = 0;
+      hist.forEach((s, i) => {
+        const w = 1 + (i / Math.max(n - 1, 1)) * 2; // 1..3
+        wSum   += s * w;
+        wTotal += w;
+      });
+      return Math.round(wSum / wTotal);
+    })() : 0;
     const dur  = sessRef.current ? Math.floor((Date.now()-sessRef.current)/1000) : 0;
     const gPct = totalRef.current ? Math.round(goodRef.current/totalRef.current*100) : 0;
 
@@ -4070,21 +4117,17 @@ export default function App(){
   }
 
   async function downloadPostureDNAReport() {
-    console.log("[DIAG] downloadPostureDNAReport() called. effectiveTier=", effectiveTier, "userSessions.length=", userSessions?.length);
     if (!tierAtLeast(effectiveTier,"elite")) {
-      console.log("[DIAG] blocked — effectiveTier not elite");
       addToast(isAr?"تقرير بصمة الوضعية متاح لباقة Elite فقط":"Posture DNA report requires Elite tier","warn");
       setShowBilling(true); return;
     }
     addToast(isAr?"جاري تحليل بيانات آخر 90 يوم...":"Analyzing your last 90 days of data...","info");
     try {
       const { generatePostureDNAReport } = await import("./lib/pdfReports.js");
-      console.log("[DIAG] module loaded, calling generatePostureDNAReport");
       await generatePostureDNAReport({ sessions: userSessions, profile, user, profession: profile?.profession || "other", lang });
-      console.log("[DIAG] generatePostureDNAReport finished OK");
       addToast(isAr?"✅ تم تحميل تقرير بصمة الوضعية":"✅ Posture DNA report downloaded","success");
     } catch(e) {
-      console.error("[Posture DNA PDF] FULL ERROR:", e, e?.stack);
+      console.error("[Posture DNA PDF]", e);
       addToast((isAr?"تعذر إنشاء التقرير: ":"Couldn't generate the report: ")+(e?.message||String(e)), "error");
     }
   }
@@ -6608,9 +6651,17 @@ async function downloadPDF(sessionOverride, isClinical=false){
             "personalised analysis" badge above is already showing, so the two
             don't stack during a calibrated front-mode session. */}
         {calibData&&!(camActive&&mode!=="side"&&calibData?.tolerances)&&(
-          <div style={{margin:"10px 14px 0",background:"rgba(16,185,129,.07)",border:"1px solid rgba(16,185,129,.2)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#10b981",fontWeight:500}}>
-            ✓ {isAr?"المعايرة الشخصية نشطة":"Personal calibration active"}
-          </div>
+          calibStale ? (
+            <div style={{margin:"10px 14px 0",background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.3)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#f59e0b",fontWeight:500,cursor:"pointer"}}
+              onClick={()=>setShowCalibWizard(true)}
+              title={isAr?"المعايرة أقدم من 30 يوم — يُنصح بإعادتها":"Calibration is over 30 days old — recalibrate for best accuracy"}>
+              ⚠️ {isAr?"المعايرة قديمة — أعد المعايرة":"Calibration outdated — recalibrate"}
+            </div>
+          ) : (
+            <div style={{margin:"10px 14px 0",background:"rgba(16,185,129,.07)",border:"1px solid rgba(16,185,129,.2)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#10b981",fontWeight:500}}>
+              ✓ {isAr?"المعايرة الشخصية نشطة":"Personal calibration active"}
+            </div>
+          )
         )}
 
         {/* Company setup nudge — only for accounts that signed up as a
