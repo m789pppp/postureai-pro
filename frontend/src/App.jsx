@@ -89,7 +89,7 @@ import { APIChangelog }   from "./APIChangelog.jsx";
 import EmbedWidget        from "./EmbedWidget.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
-// Example: VITE_API_URL=https://corvus-backend.railway.app/api
+// Example: VITE_API_URL=https://corvus-backend.onrender.com/api
 const API = API_BASE_URL;
 
 // ── i18n ──────────────────────────────────────────────────────────
@@ -2229,7 +2229,7 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
 export default function App(){
   const[user,setUser]=useState(null);
   const[mfaChallengePending,setMfaChallengePending]=useState(false);
-  const[backendDown,setBackendDown]=useState(false);
+  const[backendDown,setBackendDown]=useState(false); // true when /api/analyze fails repeatedly in fallback mode — see runLoop
   const[profile,setProfile]=useState(null);
   const[authChecked,setAuthChecked]=useState(false);
   const[startupError,setStartupError]=useState(null);
@@ -2805,6 +2805,14 @@ export default function App(){
   const frameBufferRef  = useRef(null); // 60-frame aggregation buffer
   const distSmootherRef = useRef(null); // sliding-median distance smoother
   const lastAnalysisTsRef = useRef(0);  // throttles the analysis loop — see runLoop
+  // Fallback-mode health tracking — when local MediaPipe failed to load,
+  // /api/analyze IS the only source of scores. If it silently keeps
+  // failing (backend down, network), the camera looks "frozen" with zero
+  // feedback. Tracks consecutive failures so we can surface a real error
+  // after a short grace period instead of retrying forever in silence.
+  const backendFailRef  = useRef(0);
+  const backendFailShownRef = useRef(false);
+  const startingCameraRef = useRef(false); // sync guard — see startCamera()
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
   const lightAlRef=useRef(0); // separate cooldown for lighting alerts (60s, not 8s)
   const insightsRef=useRef(null);
@@ -3509,6 +3517,8 @@ export default function App(){
           }
           // Use backend result if local MP not available (fallback mode)
           if(mpStatus==="fallback"&&d.overall>0){
+            backendFailRef.current=0; // reset — backend is responding fine
+            if(backendFailShownRef.current){ backendFailShownRef.current=false; setBackendDown(false); }
             const rawScore = d.overall;
             const smoothed = pushScore(rawScore) || rawScore; // same 15s window as local MP
             const result={...d, overall: smoothed};
@@ -3546,7 +3556,26 @@ export default function App(){
           }
           // Always use local Corvus AI for Elite-equivalent tiers
           if(d.claude_analysis&&eliteEquivalent)setAiInsight(d.claude_analysis);
-        }).catch(e=>{ clearTimeout(_tmr); /* silent fail — local analysis continues */ });
+        }).catch(e=>{
+          clearTimeout(_tmr);
+          // In fallback mode the backend call IS the only analysis — a
+          // silent failure here means zero score updates, ever, with the
+          // camera looking "frozen." For the Elite-parallel case (local
+          // MediaPipe already working) this stays silent on purpose since
+          // local analysis genuinely continues unaffected.
+          if(mpStatus==="fallback"){
+            backendFailRef.current+=1;
+            if(backendFailRef.current>=3 && !backendFailShownRef.current){
+              backendFailShownRef.current=true;
+              setBackendDown(true);
+              const msg=isAr
+                ?"تعذر الوصول لخادم التحليل — تأكد من اتصال الإنترنت وحاول تاني"
+                :"Can't reach the analysis server — check your connection and retry";
+              setAlertMsg({text:msg,type:"bad"});
+              addToast(msg,"error");
+            }
+          }
+        });
     }
     rafRef.current=requestAnimationFrame(runLoop);
   },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,checkCustomAlertRules,mpStatus,faceBlur,showSkeleton,showAngles]);
@@ -3567,11 +3596,24 @@ export default function App(){
   }, [runLoop, camActive]);
 
   async function startCamera(){
+    // Guards a real bug: cameraStatus==="requesting" is the only thing that
+    // disables this button, but setCameraStatus() is async — a fast
+    // double-click/double-tap can fire startCamera() twice before React
+    // re-renders the disabled state. The second call's openPreview() then
+    // resolves LATER, well after the first call has already gone through
+    // the countdown and started real scoring (camActive=true), and its
+    // stray setPreviewPhase("preview") re-shows the Cancel/Start-session
+    // overlay on top of an already-running session — it just sits there,
+    // overlapping the live coaching-tip banner, for the rest of the
+    // session since nothing else ever clears it. A synchronous ref (not
+    // state, so no render-lag window) closes that gap.
+    if(startingCameraRef.current || camActive || previewPhase) return;
+    startingCameraRef.current=true;
     // Health consent gate — block the very first analysis until the user has
     // acknowledged this is a wellness tool, not a medical diagnosis. Uses a
     // ref (not state) so acceptHealthConsent() can re-invoke synchronously.
-    if(!healthConsentRef.current){ setShowHealthConsent(true); return; }
-    await openPreview();
+    if(!healthConsentRef.current){ setShowHealthConsent(true); startingCameraRef.current=false; return; }
+    try{ await openPreview(); } finally { startingCameraRef.current=false; }
   }
 
   // Opens the camera and shows a live, non-scoring preview so the user can
@@ -3652,6 +3694,7 @@ export default function App(){
       resetPainPrediction();
       insightsRef.current=null;setSessionInsights([]);
       worstSnapsRef.current=[];lastSnapMsRef.current=0;
+      backendFailRef.current=0;backendFailShownRef.current=false;setBackendDown(false);
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
       try{
@@ -3735,6 +3778,7 @@ export default function App(){
     // We never close window.__mpPose — it's reused across sessions to avoid 3s reload cost
     setCamActive(false);
     setIsPaused(false);
+    backendFailRef.current=0;backendFailShownRef.current=false;setBackendDown(false);
     pausedAtRef.current=null;
     setPreviewPhase(null);
     setTimeout(()=>setIsSavingSession(false), 1500);
@@ -5112,7 +5156,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 >{n}</button>
               ))}
             </div>
-            <button onClick={()=>setShowNPS(false)} style={{fontSize:12,color:"#64748b",background:"none",border:"none",cursor:"pointer"}}>
+            <button onClick={()=>setShowNPS(false)} style={{fontSize:12,color:"#94a3b8",background:"none",border:"none",cursor:"pointer"}}>
               {lang==="ar"?"لاحقاً":"Dismiss"}
             </button>
           </div>
@@ -5591,7 +5635,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 {isAr?"سجل التنبيهات":"Alert Log"}
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                {alerts.length>0&&<button onClick={()=>setAlerts([])} style={{fontSize:9,color:cs.muted,background:"none",border:"none",cursor:"pointer",padding:"0 4px"}}>✕ {isAr?"مسح":"clear"}</button>}
+                {alerts.length>0&&<button onClick={()=>setAlerts([])} aria-label={isAr?"مسح كل التنبيهات":"Clear all alerts"} style={{fontSize:9,color:cs.muted,background:"none",border:"none",cursor:"pointer",padding:"6px 8px",minHeight:28}}>✕ {isAr?"مسح":"clear"}</button>}
                 <span style={{fontSize:10,fontWeight:700,color:"#ef4444",background:"rgba(239,68,68,.12)",borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
               </div>
             </div>
@@ -5716,14 +5760,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* ── Status bar — posture model + AI Coach in ONE compact row ── */}
         <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:10,background:"rgba(0,0,0,.15)"}}>
           {/* Posture model dot */}
+          {/* Posture model dot — "fallback" used to fall into the same
+              "Loading..." branch as "loading" itself. Once MediaPipe has
+              actually given up and switched to server-side analysis,
+              telling the user it's still "loading" is misleading for the
+              rest of the session — they'd reasonably expect it to finish
+              loading and never understand why it never does. */}
           <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
             <div style={{
               width:6,height:6,borderRadius:"50%",flexShrink:0,
-              background:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":"#f59e0b",
+              background:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":mpStatus==="fallback"?"#60a5fa":"#f59e0b",
               animation:mpStatus==="loading"?"livePulse 1.2s infinite":"none",
             }}/>
-            <span style={{fontSize:10,color:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":"#f59e0b",fontWeight:600}}>
-              {mpStatus==="ready"?(isAr?"وضعية ✓":"Pose ✓"):mpStatus==="error"?(isAr?"خطأ":"Error"):(isAr?"تحميل...":"Loading...")}
+            <span style={{fontSize:10,color:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":mpStatus==="fallback"?"#60a5fa":"#f59e0b",fontWeight:600}}>
+              {mpStatus==="ready"?(isAr?"وضعية ✓":"Pose ✓"):mpStatus==="error"?(isAr?"خطأ":"Error"):mpStatus==="fallback"?(isAr?"عبر السيرفر ✓":"Server mode ✓"):(isAr?"تحميل...":"Loading...")}
             </span>
           </div>
           {/* Divider */}
@@ -5753,7 +5803,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* ── Camera-mode switcher — change laptop / phone / side without
             leaving the session (was only selectable on the setup screen) ── */}
-        <div style={{padding:"8px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6}}>
+        <div style={{padding:"8px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6,minHeight:44}}>
           <span style={{fontSize:10,color:cs.muted,flexShrink:0,marginInlineEnd:2}}>{isAr?"الوضع":"Mode"}</span>
           <div style={{display:"flex",gap:5,flex:1}}>
             {Object.values(MC).map(mc=>{
@@ -5763,7 +5813,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,
                   background:active?`${mc.color}1e`:"rgba(148,163,184,.06)",
                   border:`1px solid ${active?`${mc.color}66`:cs.border}`,
-                  borderRadius:8,padding:"6px 0",fontSize:10.5,fontWeight:active?700:500,
+                  borderRadius:8,padding:"13px 0",minHeight:40,fontSize:10.5,fontWeight:active?700:500,
                   color:active?mc.color:cs.muted,cursor:"pointer",
                 }}>
                   <span style={{fontSize:12}}>{mc.icon}</span>{mc.label}
@@ -5781,7 +5831,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{fontSize:11,fontWeight:700,color:"#93c5fd"}}>
                 {isAr?"هل تريد جولة سريعة؟":"Want a quick tour?"}
               </div>
-              <div style={{fontSize:10,color:"#64748b",marginTop:1}}>
+              <div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>
                 {isAr?"اضغط لإعادة معالج الإعداد":"Tap to restart the setup wizard"}
               </div>
             </div>
@@ -5827,7 +5877,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div style={{fontSize:15,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
                   {isAr?"جاري تحميل نموذج الـ AI…":"Loading AI model…"}
                 </div>
-                <div style={{fontSize:11,color:"#64748b",lineHeight:1.6}}>
+                <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.6}}>
                   {isAr?"بيحصل بس أول مرة — المرات الجاية فورية":"First time only — future sessions are instant"}
                 </div>
               </div>
@@ -5841,17 +5891,42 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   }}/>
                 </div>
                 <style>{`@keyframes modelLoad{0%{width:4%}30%{width:40%}70%{width:75%}90%{width:90%}100%{width:95%}}`}</style>
-                <div style={{fontSize:10,color:"#475569",textAlign:"center",marginTop:7}}>
+                <div style={{fontSize:10,color:"#94a3b8",textAlign:"center",marginTop:7}}>
                   {isAr?"يُحفظ تلقائياً — المرة الجاية يفتح فورًا":"Cached automatically after this"}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Live preview, not yet scored — shown after the camera opens and
-              before the user confirms they're ready. Cancel is always
-              visible here — no phase where the user is stuck with no way
-              to back out. */}
+          {/* Backend-fallback failure overlay — local MediaPipe isn't
+              available (mpStatus==="fallback") and /api/analyze has failed
+              3 times in a row. Without this the camera feed just sits
+              there with no score ever updating and zero explanation. */}
+          {camActive && backendDown && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"center",gap:14,textAlign:"center",padding:"0 28px",
+              background:"rgba(2,8,16,.9)",backdropFilter:"blur(4px)",zIndex:16,
+            }}>
+              <div style={{width:44,height:44,borderRadius:12,background:"rgba(239,68,68,.14)",
+                border:"1px solid rgba(239,68,68,.35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⚠️</div>
+              <div>
+                <div style={{fontSize:15,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
+                  {isAr?"تعذر الوصول لخادم التحليل":"Can't reach the analysis server"}
+                </div>
+                <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.6,maxWidth:280}}>
+                  {isAr?"جهازك مش شغال بالتحليل المحلي دلوقتي، والسيرفر مش بيرد. تأكد من الإنترنت وحاول تاني":"Local analysis isn't available on this device right now, and the server isn't responding. Check your connection and retry"}
+                </div>
+              </div>
+              <button onClick={()=>{ backendFailRef.current=0; backendFailShownRef.current=false; setBackendDown(false); }}
+                style={{background:"rgba(148,163,184,.1)",border:"1px solid rgba(148,163,184,.25)",borderRadius:9,
+                  padding:"9px 18px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}}>
+                {isAr?"🔄 حاول تاني":"🔄 Retry"}
+              </button>
+            </div>
+          )}
+
+
           {previewPhase==="preview" && (
             <div style={{
               position:"absolute",inset:0,display:"flex",flexDirection:"column",
@@ -5967,7 +6042,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               // #17: no-device pill removed — the Start Analysis button below already
               // shows "❌ No camera found" clearly; showing it twice was confusing.
               if(cameraStatus==="ready"&&camActive) return pill("#10b981",`${M_?.label||""} · Live · ${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`);
-              return pill("#64748b",isAr?"الكاميرا متوقفة":"Camera off");
+              return pill("#94a3b8",isAr?"الكاميرا متوقفة":"Camera off");
             })()}
           </div>
 
@@ -5990,7 +6065,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 fontSize:11,fontWeight:900,color:"#f0f6ff",flexShrink:0,
               }}>{score}</div>
               <div>
-                <div style={{fontSize:9,color:"#64748b",fontWeight:600,letterSpacing:.5}}>
+                <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,letterSpacing:.5}}>
                   {isAr?"الدرجة الكلية":"ERGONOMIC SCORE"}
                 </div>
                 <div style={{fontSize:11,fontWeight:700,
@@ -6028,7 +6103,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               return (
                 <div key={i} style={{display:"flex",alignItems:"center",
                   justifyContent:"space-between",marginBottom:5}}>
-                  <div style={{fontSize:10,color:"#64748b",width:60}}>{label}</div>
+                  <div style={{fontSize:10,color:"#94a3b8",width:60}}>{label}</div>
                   <div style={{flex:1,height:4,background:"rgba(255,255,255,.06)",
                     borderRadius:2,margin:"0 6px",overflow:"hidden"}}>
                     <div style={{height:"100%",width:`${s??0}%`,
@@ -6054,14 +6129,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div style={{
                   marginTop:8, paddingTop:8,
                   borderTop:"1px solid rgba(255,255,255,.06)",
-                  display:"flex", alignItems:"center", gap:5,
                 }}>
-                  <span style={{fontSize:13}}>{up?"📈":"📉"}</span>
-                  <div style={{fontSize:9, lineHeight:1.35,
-                    color: up ? "#10d9a0" : "#f59e0b", fontWeight:600}}>
-                    {isAr
-                      ? `${up?"أحسن":"أسوأ"} بـ ${Math.abs(diff)} نقطة من أول جلساتك`
-                      : `${Math.abs(diff)} pts ${up?"better":"worse"} than your first sessions`}
+                  {/* Was reading as a direct contradiction of the "Excellent"
+                      label right above it — this compares OVERALL history
+                      (first 3 vs last 3 sessions ever), not today's score,
+                      but with no label saying so it looked like the app was
+                      calling this session both excellent and worse at once. */}
+                  <div style={{fontSize:8,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em",marginBottom:3}}>
+                    {isAr?"الاتجاه العام (كل الجلسات)":"Overall trend (all sessions)"}
+                  </div>
+                  <div style={{display:"flex", alignItems:"center", gap:5}}>
+                    <span style={{fontSize:13}}>{up?"📈":"📉"}</span>
+                    <div style={{fontSize:9, lineHeight:1.35,
+                      color: up ? "#10d9a0" : "#f59e0b", fontWeight:600}}>
+                      {isAr
+                        ? `${up?"أحسن":"أسوأ"} بـ ${Math.abs(diff)} نقطة من أول جلساتك`
+                        : `${Math.abs(diff)} pts ${up?"better":"worse"} than your first sessions`}
+                    </div>
                   </div>
                 </div>
               );
@@ -6074,7 +6158,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
           {/* Big actionable correction cue — the single most useful "do this
               now" instruction, shown over the video when a metric is clearly off. */}
-          {camActive && (()=>{
+          {camActive && !previewPhase && (()=>{
             const cue=postureCue(analysis,isAr);
             if(!cue) return null;
             return (
@@ -6140,7 +6224,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   background: isSavingSession
                     ? "rgba(255,255,255,.05)"
                     : "linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
-                  color: isSavingSession ? "#64748b" : "#fca5a5",
+                  color: isSavingSession ? "#94a3b8" : "#fca5a5",
                   border:`1px solid ${isSavingSession?"rgba(255,255,255,.08)":"rgba(239,68,68,.5)"}`,borderRadius:10,
                   padding:"13px 0",fontSize:13,fontWeight:700,
                   cursor: isSavingSession ? "not-allowed" : "pointer",
