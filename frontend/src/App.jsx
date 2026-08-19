@@ -5031,7 +5031,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       // Score History graph. Camera feed is the thing users actually look
       // at during a live session, so it should read as the primary element:
       // widened to 460px, and the stats panel capped so it can't sprawl.
-      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "460px minmax(0,640px)" : "minmax(0,640px) 460px"),
+      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
       minHeight:"100vh",
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
