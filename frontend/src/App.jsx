@@ -40,7 +40,7 @@ import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal, ModalPortal } from "./ui/index.jsx";
-import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
+import { gradeScore, gradeScoreAr, gradeContext, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
 import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
 import { getT } from "./lib/i18n.js";
@@ -2204,6 +2204,13 @@ export default function App(){
   // is currently running" no matter what actually happens later.
   const camActiveRef=useRef(false);
   useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
+
+  // Show calibration nudge after 3 min of an uncalibrated session
+  useEffect(()=>{
+    if(!camActive || calibData){ setCalibNudge(false); return; }
+    const t = setTimeout(()=>setCalibNudge(true), 3*60*1000);
+    return ()=>clearTimeout(t);
+  },[camActive, calibData]);
   // Catch-all safety net, independent of the popstate handler above: force
   // these two modals closed on ANY transition away from the live page, via
   // any mechanism (not just back-button).
@@ -2368,6 +2375,7 @@ export default function App(){
   const { calibration: savedCalib } = useCalibration(profile?.uid);
   const [calibData, setCalibData] = useState(null);
   const [calibStale, setCalibStale] = useState(false); // true when calibration >30 days old
+  const [calibNudge, setCalibNudge] = useState(false);  // in-session nudge after 3 min without calib
   useEffect(()=>{
     if(savedCalib && !calibData){
       setCalibData(savedCalib);
@@ -3360,6 +3368,12 @@ export default function App(){
                 const _cool=_sev==='severe'?5000:_sev==='moderate'?15000:30000;
                 if(now-lastAlRef.current>_cool){
                 lastAlRef.current=now;acRef.current.total++;
+                // Per-cause exponential backoff (same as local MP loop)
+                const causeKeyBE = result.alerts?.[0]?.slice(0,30) || "posture";
+                const causeEntryBE = alertCauseRef.current[causeKeyBE] || { last: 0, count: 0 };
+                const causeCoolBE = causeEntryBE.count === 0 ? 5*60*1000 : causeEntryBE.count === 1 ? 10*60*1000 : 20*60*1000;
+                if(now - causeEntryBE.last > causeCoolBE){
+                alertCauseRef.current[causeKeyBE] = { last: now, count: causeEntryBE.count + 1 };
                 const msgFb = isAr
                   ? (result.alerts_ar?.[0] || "وضعية سيئة — صحّح وضعيتك")
                   : (result.alerts?.[0] || "Poor posture — correct position");
@@ -3369,6 +3383,7 @@ export default function App(){
                 if(sound)playBeep();
                 speakCoach(msgFb, isAr?"ar":"en"); // no-op unless Elite + toggle on
                 sendDesktopNotif(msgFb,smoothed);
+                } // close per-cause backoff
                 } // close if(_cool)
               } // close else if(badRef>15000)
             }else{
@@ -3517,6 +3532,12 @@ export default function App(){
       insightsRef.current=null;setSessionInsights([]);
       worstSnapsRef.current=[];lastSnapMsRef.current=0;
       backendFailRef.current=0;backendFailShownRef.current=false;setBackendDown(false);
+      // Reset all alert cooldowns — exponential backoff from previous
+      // sessions must not carry over into a fresh session
+      lastAlRef.current=0;
+      lightAlRef.current=0;
+      badRef.current=null;
+      alertCauseRef.current={};
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
       try{
@@ -6294,11 +6315,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Silent score status — good posture, no alert box noise */}
         {scoreStatus&&alertMsg.type!=="warn"&&alertMsg.type!=="bad"&&(
-          <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:"#10b981",flexShrink:0,boxShadow:"0 0 6px #10b981"}}/>
-            <span style={{fontSize:11,color:"#6ee7b7",fontWeight:600}}>
-              {isAr?`النتيجة ${scoreStatus.score}/100 — ${scoreStatus.grade}`:`Score ${scoreStatus.score}/100 — ${scoreStatus.grade}`}
-            </span>
+          <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:"#10b981",flexShrink:0,boxShadow:"0 0 6px #10b981"}}/>
+              <span style={{fontSize:11,color:"#6ee7b7",fontWeight:600}}>
+                {isAr?`النتيجة ${scoreStatus.score}/100 — ${scoreStatus.grade}`:`Score ${scoreStatus.score}/100 — ${scoreStatus.grade}`}
+              </span>
+            </div>
+            <div style={{fontSize:10,color:cs.muted,marginTop:3,paddingLeft:16,lineHeight:1.4}}>
+              {gradeContext(scoreStatus.score, isAr)}
+            </div>
           </div>
         )}
 
@@ -6534,6 +6560,37 @@ async function downloadPDF(sessionOverride, isClinical=false){
         )}
 
         {/* Tools moved to Dashboard — see HomePage tools tab */}
+
+        {/* In-session calibration nudge — appears after 3 min without calibration.
+            Dismissible so it doesn't block the interface. */}
+        {calibNudge && !calibData && camActive && (
+          <div style={{margin:"10px 14px 0",background:"rgba(245,158,11,.07)",
+            border:"1px solid rgba(245,158,11,.3)",borderRadius:9,padding:"9px 12px",
+            display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:15,flexShrink:0}}>📐</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:10.5,fontWeight:700,color:"#f59e0b",marginBottom:2}}>
+                {isAr?"الدقة تتحسن مع المعايرة":"Accuracy improves with calibration"}
+              </div>
+              <div style={{fontSize:10,color:cs.muted,lineHeight:1.4}}>
+                {isAr?"كتفك الفعلي مختلف عن المتوسط — معايرة سريعة تصلح ذلك":"Your build differs from average — a quick calibration fixes this"}
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
+              <button onClick={()=>{setCalibNudge(false);setShowCalibWizard(true);}}
+                style={{fontSize:10,fontWeight:700,padding:"4px 8px",
+                  background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.4)",
+                  borderRadius:6,color:"#f59e0b",cursor:"pointer",whiteSpace:"nowrap"}}>
+                {isAr?"معايرة":"Calibrate"}
+              </button>
+              <button onClick={()=>setCalibNudge(false)}
+                style={{fontSize:10,padding:"3px 8px",background:"transparent",
+                  border:"none",color:cs.muted,cursor:"pointer"}}>
+                {isAr?"تجاهل":"Dismiss"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Calibration active badge — hidden when the more specific
             "personalised analysis" badge above is already showing, so the two
