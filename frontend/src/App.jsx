@@ -4223,7 +4223,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     }}>
       <style>{`
         @keyframes splash-in  { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes bar-fill   { from{width:0%} to{width:72%} }
+        @keyframes bar-fill   { from{transform:scaleX(0)} to{transform:scaleX(.72)} }
         @keyframes txt-pulse  { 0%,100%{opacity:.55} 50%{opacity:1} }
         @keyframes icon-glow  { 0%,100%{box-shadow:0 0 0 0 rgba(26,86,219,.0)} 50%{box-shadow:0 0 32px 6px rgba(26,86,219,.22)} }
       `}</style>
@@ -4270,7 +4270,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         borderRadius: 99, overflow: "hidden",
       }}>
         <div style={{
-          height: "100%",
+          height: "100%", width:"100%", transformOrigin:"0% 50%",
           background: "linear-gradient(90deg,#1a56db,#0891b2)",
           borderRadius: 99,
           animation: "bar-fill 2.8s cubic-bezier(.4,0,.2,1) forwards",
@@ -5787,16 +5787,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {isAr?"بيحصل بس أول مرة — المرات الجاية فورية":"First time only — future sessions are instant"}
                 </div>
               </div>
-              {/* Animated progress bar */}
+              {/* Animated progress bar. The actual work happening behind this
+                  screen — WASM compile + GPU delegate init for the pose
+                  model — can genuinely stall the JS main thread for a
+                  stretch on a slower device. Animating `width` needs a
+                  layout pass on that same main thread every frame, so the
+                  bar itself would freeze mid-fill for exactly that stretch
+                  — the one moment this screen exists to reassure the user
+                  it's "still loading, one moment" instead reads as "even
+                  the loading bar is stuck." `transform:scaleX` is handled
+                  by the compositor and keeps animating smoothly regardless
+                  of what the main thread is doing (same reason the spinner
+                  above, which already animates `transform`, doesn't have
+                  this problem). */}
               <div style={{width:200}}>
                 <div style={{height:5,background:"rgba(255,255,255,.07)",borderRadius:99,overflow:"hidden"}}>
                   <div style={{
-                    height:"100%",borderRadius:99,
+                    height:"100%",width:"100%",borderRadius:99,transformOrigin:"0% 50%",
                     background:`linear-gradient(90deg,${TN?.color||"#1a56db"},#0891b2)`,
                     animation:"modelLoad 12s ease-in-out forwards",
                   }}/>
                 </div>
-                <style>{`@keyframes modelLoad{0%{width:4%}30%{width:40%}70%{width:75%}90%{width:90%}100%{width:95%}}`}</style>
+                <style>{`@keyframes modelLoad{0%{transform:scaleX(.04)}30%{transform:scaleX(.4)}70%{transform:scaleX(.75)}90%{transform:scaleX(.9)}100%{transform:scaleX(.95)}}`}</style>
                 <div style={{fontSize:10,color:"#94a3b8",textAlign:"center",marginTop:7}}>
                   {isAr?"يُحفظ تلقائياً — المرة الجاية يفتح فورًا":"Cached automatically after this"}
                 </div>
