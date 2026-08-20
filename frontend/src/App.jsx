@@ -6704,6 +6704,24 @@ async function downloadPDF(sessionOverride, isClinical=false){
               )}
             </div>
           )}
+          {/* Break-interval picker moved in here from its old spot below —
+              it's a session setting like everything else in this block, but
+              used to render unconditionally outside the collapse, so hiding
+              "Session settings" still left 5 interval buttons on screen. */}
+          {breakReminder&&!showBreak&&(
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <span style={{fontSize:10,color:cs.muted,flexShrink:0}}>{isAr?"استراحة كل":"Break every"}</span>
+              {[15,25,45,60,90].map(m=>(
+                <button key={m} onClick={()=>setBreakIntervalMin(m)} style={{
+                  fontSize:10,padding:"8px 8px",borderRadius:6,cursor:"pointer",fontWeight:breakIntervalMin===m?700:400,
+                  minHeight:36,
+                  background:breakIntervalMin===m?"rgba(214,162,76,.15)":"rgba(148,163,184,.06)",
+                  border:`1px solid ${breakIntervalMin===m?"rgba(214,162,76,.4)":cs.border}`,
+                  color:breakIntervalMin===m?"#fcd34d":cs.muted,
+                }}>{isAr?`${m} د`:`${m}m`}</button>
+              ))}
+            </div>
+          )}
         </div>
         )}
 
@@ -6837,21 +6855,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           </div>
         )}
-        {/* Break interval selector */}
-        {breakReminder&&!showBreak&&(
-          <div style={{margin:"6px 14px 0",display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:10,color:cs.muted,flexShrink:0}}>{isAr?"استراحة كل":"Break every"}</span>
-            {[15,25,45,60,90].map(m=>(
-              <button key={m} onClick={()=>setBreakIntervalMin(m)} style={{
-                fontSize:10,padding:"8px 8px",borderRadius:6,cursor:"pointer",fontWeight:breakIntervalMin===m?700:400,
-                minHeight:36,
-                background:breakIntervalMin===m?"rgba(214,162,76,.15)":"rgba(148,163,184,.06)",
-                border:`1px solid ${breakIntervalMin===m?"rgba(214,162,76,.4)":cs.border}`,
-                color:breakIntervalMin===m?"#fcd34d":cs.muted,
-              }}>{isAr?`${m} د`:`${m}m`}</button>
-            ))}
-          </div>
-        )}
+        {/* Break interval selector moved into the collapsible Session
+            settings block above — see the comment there. */}
 
         {/* Manual break entry — the guided break is always one tap away */}
         <div style={{padding:"10px 14px 0"}}>
