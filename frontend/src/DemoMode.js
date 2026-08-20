@@ -38,7 +38,7 @@ function makeShowcaseSessions() {
     sessions.push({
       id: `demo_${now}_${i}`,
       created_at: new Date(now - i * DAY - Math.random() * 3600000).toISOString(),
-      mode: Math.random() > 0.5 ? "laptop" : "side",
+      mode: "laptop",
       avg_score: Math.max(30, Math.min(98, score)),
       good_pct: Math.max(20, Math.min(95, Math.round(score - 5 + Math.random() * 10))),
       duration_s: duration,

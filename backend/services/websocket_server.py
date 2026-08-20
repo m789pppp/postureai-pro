@@ -74,18 +74,18 @@ def init_socketio(app):
 
             try:
                 import cv2, numpy as np
-                from backend import (analyze_front, analyze_side, enhance_low_light,
+                from backend import (analyze_front, enhance_low_light,
                                      push_score, get_smoothed_score)
                 if "," in b64: b64 = b64.split(",",1)[1]
                 img = cv2.imdecode(np.frombuffer(base64.b64decode(b64),np.uint8), cv2.IMREAD_COLOR)
                 if img is None:
                     emit("error", {"msg": "invalid frame"})
                     return
-                if mode in ("laptop","phone"):
+                if mode == "laptop":  # Phone/Side removed app-wide — laptop is the only mode, always mirror the selfie-style feed
                     img = cv2.flip(img,1)
 
                 img_analyzed, brightness, enhanced = enhance_low_light(img)
-                result = analyze_side(img_analyzed, plan) if mode=="side" else analyze_front(img_analyzed, mode, plan)
+                result = analyze_front(img_analyzed, mode, plan)  # Side mode removed app-wide — analyze_side no longer called
                 result["brightness"] = round(brightness,1)
                 result["low_light_enhanced"] = enhanced
 

@@ -598,9 +598,9 @@ export function useCalibration(uid) {
 }
 
 // ── applyCalibration: adjust score using personal baseline ────────
-// Works for both front and side camera modes.
-// mode = "side" → uses the side-camera metric→calibration-key map
-// mode = anything else → uses the front-camera map (default)
+// Front-camera only — Side mode was removed app-wide (previously this
+// also supported a side-camera metric map; kept the `mode` param for
+// call-site compatibility, but it's always "front" now).
 export function applyCalibration(rawMetrics, calibration, mode = "front") {
   if (!calibration?.tolerances) return rawMetrics;
 
@@ -624,18 +624,7 @@ export function applyCalibration(rawMetrics, calibration, mode = "front") {
     spine_lean:     "spine_angle",
   };
 
-  // Side-camera metrics → calibration tolerance keys
-  // The calibration wizard measures these in front-view (neck/spine/shoulder),
-  // so we map side-camera equivalents to the same calibration keys where the
-  // anatomy is the same (neck lean = same real-world angle, just captured from
-  // the side). Trunk lean has no direct front-camera equivalent so it uses
-  // spine_angle as the closest proxy.
-  const sideMap = {
-    neck_lean_side: "neck_angle",
-    trunk_lean:     "spine_angle",
-  };
-
-  const map = mode === "side" ? sideMap : frontMap;
+  const map = frontMap;
 
   Object.entries(map).forEach(([metricKey, calibKey]) => {
     if (adjusted[metricKey] !== undefined && tols[calibKey]) {
