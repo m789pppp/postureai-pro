@@ -801,7 +801,7 @@ def validate_frame(data):
         actual_kb = int(len(frame) * 3 / 4 / 1024)  # base64 → real decoded byte size
         return False, f"Frame too large ({actual_kb}KB, max 700KB)"
     mode = data.get("mode", "")
-    if mode not in ("laptop", "phone", "side", ""):
+    if mode not in ("laptop", ""):  # Phone and Side modes removed app-wide
         return False, f"Invalid mode: {mode}"
     tier = getattr(g, "tier", None) or "standard"  # never trust client tier
     if tier not in ("standard", "professional", "elite", "basic", "pro", "premium"):
@@ -3490,278 +3490,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     return out
 
 # ── SIDE ANALYSIS ──────────────────────────────────────────────────
-def analyze_side(image, tier="standard", session_id=None):
-    """
-    Side-camera posture analysis — full parity with analyze_front.
-    Improvements over old version:
-    - Landmark averaging (jitter reduction ±3°→±1°)
-    - 3-point spine (upper + lower segments + S-curve detection)
-    - Per-metric visibility confidence weighting
-    - Hip + knee properly weighted in overall
-    - Shoulder width normalization for neck lean
-    - Alert dedup + severity sort + cap at 5
-    """
-    _ensure_models()
-    h, w = image.shape[:2]
-    rgb  = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    out = {
-        "mode": "side", "detected": False, "metrics": {}, "score": 0,
-        "alerts": [], "recommendations": [], "landmarks": [],
-        "confidence": 0, "engine": "mediapipe"
-    }
-
-    pose_model  = POSE_FULL if tier in ("professional","elite","pro","premium","business") else POSE_LITE
-    pose_result = pose_model.process(rgb)
-
-    if not pose_result.pose_landmarks:
-        out["alerts"].append("No person detected — camera should be 90° to your side, 80–120cm away")
-        return analyze_side_cascade(image, out)
-
-    # ── Landmark averaging (same as analyze_front) ────────────────
-    _sid  = out.get("session_id", "side_default")
-    _raw  = pose_result.pose_landmarks.landmark
-    _key  = (session_id or _sid) + "_side"
-    _hist = _lm_history.setdefault(_key, [])
-    _hist.append(_raw)
-    if len(_hist) > 3: _hist.pop(0)
-
-    _w_s = [0.60, 0.30, 0.10][:len(_hist)]
-    _w_s_sum  = sum(_w_s)
-    _w_s_norm = [wi / _w_s_sum for wi in _w_s] if _w_s_sum > 0 else _w_s
-
-    class _AvgLM:
-        __slots__ = ("x","y","z","visibility")
-        def __init__(self, idx):
-            fr = list(reversed(_hist))
-            ws = _w_s_norm[:len(fr)]
-            self.x          = sum(fr[i][idx].x          * ws[i] for i in range(len(fr)))
-            self.y          = sum(fr[i][idx].y          * ws[i] for i in range(len(fr)))
-            self.z          = sum(fr[i][idx].z          * ws[i] for i in range(len(fr)))
-            self.visibility = sum(fr[i][idx].visibility * ws[i] for i in range(len(fr)))
-    class _AvgLMs:
-        def __getitem__(self, idx): return _AvgLM(idx)
-    lms = _AvgLMs()
-
-    out["detected"]    = True
-    out["engine"]      = "mediapipe_pose"
-    out["avg_frames"]  = len(_hist)
-
-    def g(idx): return lms[idx]
-    def px(idx): return (g(idx).x * w, g(idx).y * h)
-
-    # ── Pick dominant side (more visible) ─────────────────────────
-    l_vis = g(PL.L_SHOULDER).visibility
-    r_vis = g(PL.R_SHOULDER).visibility
-    S     = "L" if l_vis >= r_vis else "R"
-    _I    = lambda L, R: L if S == "L" else R
-
-    ear   = px(_I(PL.L_EAR,   PL.R_EAR))
-    sh    = px(_I(PL.L_SHOULDER, PL.R_SHOULDER))
-    hip   = px(_I(PL.L_HIP,   PL.R_HIP))
-    knee  = px(_I(PL.L_KNEE,  PL.R_KNEE))
-    ankle = px(_I(PL.L_ANKLE, PL.R_ANKLE))
-
-    vis_ear   = g(_I(PL.L_EAR,   PL.R_EAR)).visibility
-    vis_sh    = max(l_vis, r_vis)
-    vis_hip   = g(_I(PL.L_HIP,   PL.R_HIP)).visibility
-    vis_knee  = g(_I(PL.L_KNEE,  PL.R_KNEE)).visibility
-    vis_ankle = g(_I(PL.L_ANKLE, PL.R_ANKLE)).visibility
-
-    # ── Visibility confidence (same formula as analyze_front) ─────
-    def vis_conf(v): return max(0.0, min(1.0, v / 0.6))
-
-    conf_neck  = vis_conf(vis_ear * 0.5 + vis_sh * 0.5)
-    conf_trunk = vis_conf(vis_sh  * 0.5 + vis_hip * 0.5)
-    conf_hip   = vis_conf(min(vis_sh, vis_hip, vis_knee))
-    conf_knee  = vis_conf(min(vis_hip, vis_knee, vis_ankle))
-    conf_spine = vis_conf(vis_ear * 0.4 + vis_sh * 0.3 + vis_ankle * 0.3)
-
-    # ── Neck lean — ear-to-shoulder (side view is geometrically exact) ──
-    sh_width_px = abs(g(PL.L_SHOULDER).x * w - g(PL.R_SHOULDER).x * w)
-    # Distance proxy for threshold normalisation: full ear→shoulder span.
-    # The L-R shoulder width foreshortens to ~0 px in profile, so the old
-    # sh_frac/0.34 ratio always sat clamped at 0.70 regardless of distance.
-    _ear_sh_span_px = math.hypot(ear[0] - sh[0], ear[1] - sh[1])
-    sh_ratio    = max(0.7, min(1.3, (_ear_sh_span_px / max(w, 1)) / 0.14))
-
-    neck_lean  = angle_vert(sh, ear)
-    neck_ok    = max(5.0,  8.0 * sh_ratio)
-    neck_bad   = max(16.0, 22.0 * sh_ratio)
-    neck_sc    = score_m(neck_lean, 0, neck_ok, neck_bad)
-    # FHP from side: horizontal ear-to-shoulder offset in cm.
-    # cm ruler: the L-R shoulder width foreshortens to near-zero px in a
-    # true profile view, which exploded the conversion (an upright sitter
-    # could read 20+cm of "FHP"). Use spans that stay fully visible in
-    # profile instead: shoulder→hip (~46cm seated torso) when the hip is
-    # tracked, else ear→shoulder (~25cm). Shoulder width remains the last
-    # resort. Kept in sync with postureEngine.js analyzeSideMP().
-    _torso_px = math.hypot(sh[0] - hip[0], sh[1] - hip[1])
-    if _torso_px > 20 and vis_hip >= 0.5:
-        _cm_per_px_s = 46.0 / _torso_px
-    elif _ear_sh_span_px > 10:
-        _cm_per_px_s = 25.0 / _ear_sh_span_px
-    else:
-        _cm_per_px_s = 42.0 / max(sh_width_px, 1)
-    _fhp_side_cm  = round(abs(ear[0] - sh[0]) * _cm_per_px_s, 1)
-    _fhp_side_sc  = score_m(_fhp_side_cm, 0, 2.5, 7)
-    if _fhp_side_cm > 5:
-        out["alerts"].append(f"⚠️ Forward head posture {_fhp_side_cm}cm (side view) — tuck chin, pull head back over shoulders")
-
-    # ── Trunk lean ────────────────────────────────────────────────
-    trunk_lean = angle_vert(hip, sh)
-    trunk_sc   = score_m(trunk_lean, 0, 6, 16)
-
-    # ── IMPROVED: 4-point spine + kyphosis + lumbar lordosis ──────
-    # 4 reference points: sh → T8 → L3 → hip
-    mid_thoracic_s = (sh[0]*0.60 + hip[0]*0.40, sh[1]*0.60 + hip[1]*0.40)  # T8
-    mid_lumbar_s   = (sh[0]*0.25 + hip[0]*0.75, sh[1]*0.25 + hip[1]*0.75)  # L3
-
-    spine_upper_s  = angle_vert(mid_thoracic_s, sh)         # C7→T8
-    spine_mid_s    = angle_vert(mid_lumbar_s,   mid_thoracic_s)  # T8→L3
-    spine_lower_s  = angle_vert(hip,             mid_lumbar_s)    # L3→S1
-
-    # ── Kyphosis: thoracic rounds forward, lumbar compensates ─────
-    _upper_signed_s = sh[0]           - mid_thoracic_s[0]
-    _lower_signed_s = mid_thoracic_s[0] - hip[0]
-    _kyphosis_pen_s = 0.0
-    if spine_upper_s > 3 and spine_lower_s < 3 and (_upper_signed_s * _lower_signed_s < 0):
-        _kyphosis_pen_s = min(12.0, spine_upper_s * 0.6)
-        out["alerts"].append(f"⚠️ Thoracic kyphosis (side) {round(spine_upper_s,1)}° — open chest, pull shoulder blades together")
-
-    # ── Lumbar lordosis: normal = slight backward curve ───────────
-    # Measured as angle between lumbar segment and vertical
-    # <3° = flat back (lost lordosis) — risk of disc compression
-    _lordosis_angle = abs(spine_lower_s - spine_mid_s)
-    _lordosis_sc    = 100 if _lordosis_angle > 2 else score_m(2 - _lordosis_angle, 0, 1, 3)
-    if spine_lower_s < 2 and spine_mid_s < 2:
-        out["alerts"].append("Flat lower back detected — use lumbar support or sit further back in chair")
-        _lordosis_sc = 60
-
-    spine_scurve   = max(0, abs(spine_upper_s - spine_lower_s) - 8) * 0.5
-    spine_combined = (spine_upper_s * 0.45 + spine_mid_s * 0.30 +
-                      spine_lower_s * 0.25 + spine_scurve + _kyphosis_pen_s)
-    spine_combined = min(45.0, spine_combined)
-    spine_sc       = score_m(spine_combined, 0, 5, 14)
-
-    # ── Spinal plumb line alignment (ear above ankle) ─────────────
-    spine_align = abs(ear[0] - ankle[0]) / w * 100 if w > 0 else 0
-    align_sc    = score_m(spine_align, 0, 4, 12)
-
-    # ── Hip + knee angles ─────────────────────────────────────────
-    hip_angle  = angle_3pt(sh, hip, knee)
-    hip_sc     = score_m(abs(hip_angle - 90), 0, 12, 30)
-
-    knee_angle = angle_3pt(hip, knee, ankle)
-    knee_sc    = score_m(abs(knee_angle - 90), 0, 12, 35)
-
-    # ── Confidence-weighted overall ───────────────────────────────
-    BASE_W_S = {
-        "neck":  0.30,   # most important — FHP most common desk issue
-        "trunk": 0.25,   # trunk lean — direct back pain predictor
-        "spine": 0.18,   # 3-point curvature — S-curve detection
-        "align": 0.10,   # plumb line
-        "hip":   0.10,   # hip angle — 90° optimal
-        "knee":  0.07,   # knee angle — 90° optimal
-    }
-    eff_w_s = {
-        "neck":  BASE_W_S["neck"]  * conf_neck,
-        "trunk": BASE_W_S["trunk"] * conf_trunk,
-        "spine": BASE_W_S["spine"] * conf_spine,
-        "align": BASE_W_S["align"] * conf_spine,   # same landmarks as spine
-        "hip":   BASE_W_S["hip"]   * conf_hip,
-        "knee":  BASE_W_S["knee"]  * conf_knee,
-    }
-    scores_s = {
-        "neck": neck_sc, "trunk": trunk_sc, "spine": spine_sc,
-        "align": align_sc, "hip": hip_sc, "knee": knee_sc,
-    }
-    score_val_s  = sum(scores_s[k] * eff_w_s[k] for k in scores_s)
-    weight_used_s = sum(eff_w_s.values())
-    overall = max(0, min(100, int(round(score_val_s / max(weight_used_s, 0.01)))))
-
-    # ── Confidence score ──────────────────────────────────────────
-    overall_conf_s = sum(
-        {"neck":conf_neck,"trunk":conf_trunk,"spine":conf_spine,"hip":conf_hip,"knee":conf_knee}[k]
-        * BASE_W_S.get(k, 0) for k in ("neck","trunk","spine","hip","knee")
-    ) / sum(BASE_W_S[k] for k in ("neck","trunk","spine","hip","knee"))
-
-    confidence = min(95, int(
-        45
-        + (overall_conf_s * 30)
-        + (10 if len(_hist) >= 3 else 0)
-        + (10 if vis_sh > 0.7 else 0)
-    ))
-
-    out["score"]      = overall
-    out["confidence"] = confidence
-    out["metrics"]    = {
-        "neck_lean_side": {"value": round(neck_lean,1),     "score": neck_sc,   "unit": "°", "label": "Neck lean (side)"},
-        "trunk_lean":     {"value": round(trunk_lean,1),    "score": trunk_sc,  "unit": "°", "label": "Trunk lean"},
-        "spine_curvature":{"value": round(spine_combined,1),"score": spine_sc,  "unit": "°", "label": "Spine curvature"},
-        "spine_upper_s":   {"value": round(spine_upper_s,1),   "score": spine_sc,      "unit": "°", "label": "Upper spine C7→T8 (side)"},
-        "spine_mid_s":     {"value": round(spine_mid_s,1),     "score": spine_sc,      "unit": "°", "label": "Mid spine T8→L3 (side)"},
-        "spine_lower_s":   {"value": round(spine_lower_s,1),   "score": spine_sc,      "unit": "°", "label": "Lower spine L3→S1 (side)"},
-        "kyphosis_pen_s":  {"value": round(_kyphosis_pen_s,1), "score": max(0,100-_kyphosis_pen_s*5), "unit": "°", "label": "Kyphosis penalty (side)"},
-        "lumbar_lordosis": {"value": round(_lordosis_angle,1), "score": _lordosis_sc, "unit": "°", "label": "Lumbar lordosis"},
-        "fhp_side_cm":     {"value": _fhp_side_cm,            "score": _fhp_side_sc, "unit": "cm","label": "Forward head posture (side)"},
-        "spine_align":     {"value": round(spine_align,1),     "score": align_sc,     "unit": "%", "label": "Spinal plumb line"},
-        "hip_angle":       {"value": round(hip_angle,1),       "score": hip_sc,       "unit": "°", "label": "Hip flexion angle"},
-        "knee_angle":      {"value": round(knee_angle,1),      "score": knee_sc,      "unit": "°", "label": "Knee angle"},
-        "_side_confidence": {
-            "neck": round(conf_neck,2), "trunk": round(conf_trunk,2),
-            "hip":  round(conf_hip,2),  "knee":  round(conf_knee,2),
-            "eff_weights": {k: round(v,3) for k,v in eff_w_s.items()},
-            "label": "Per-metric side confidence",
-        },
-    }
-
-    # ── Alerts ────────────────────────────────────────────────────
-    if neck_lean > 20:
-        out["alerts"].append(f"⚠️ Forward head {round(neck_lean,1)}° — ear must align directly above shoulder")
-    elif neck_lean > 12:
-        out["alerts"].append(f"Forward head {round(neck_lean,1)}° — tuck chin and lengthen spine")
-    if trunk_lean > 18:
-        out["alerts"].append(f"⚠️ Trunk leaning {round(trunk_lean,1)}° — press back fully into chair backrest")
-    elif trunk_lean > 10:
-        out["alerts"].append(f"Trunk lean {round(trunk_lean,1)}° — sit upright, activate core")
-    if spine_scurve > 3:
-        out["alerts"].append(f"⚠️ S-curve detected — upper/lower spine misaligned ({round(spine_upper_s,1)}° vs {round(spine_lower_s,1)}°)")
-    if abs(hip_angle - 90) > 20:
-        out["alerts"].append(f"Hip angle {round(hip_angle,1)}° (ideal 90°) — {'raise' if hip_angle < 90 else 'lower'} chair height")
-    if abs(knee_angle - 90) > 25:
-        out["alerts"].append(f"Knee angle {round(knee_angle,1)}° (ideal 90°) — adjust seat depth or use footrest")
-    if spine_align > 8:
-        out["alerts"].append("Head not aligned above feet — check overall seated posture")
-
-    # Dedup + sort + cap (same as analyze_front)
-    seen_s, deduped_s = set(), []
-    for a in out["alerts"]:
-        k = a[:30]
-        if k not in seen_s:
-            seen_s.add(k); deduped_s.append(a)
-    deduped_s.sort(key=lambda a: (0 if a.startswith("⚠️") else 1))
-    out["alerts"] = deduped_s[:5]
-    # ── Arabic alerts (side view) ─────────────────────────────────
-    out["alerts_ar"] = [translate_alert_ar(a) for a in out["alerts"]]
-
-    grade = ("Excellent" if overall >= 85 else "Good" if overall >= 70
-             else "Fair" if overall >= 55 else "Poor")
-    out["recommendations"] = [
-        f"{grade} lateral posture ({overall}/100) — ear→shoulder→hip→ankle should align vertically",
-        f"{'Left' if S=='L' else 'Right'} side visible — {'✓ good angle' if vis_sh > 0.7 else 'improve camera angle for better accuracy'}",
-        f"Hip angle {round(hip_angle,1)}° — {'✓ ideal' if abs(hip_angle-90) < 12 else 'adjust chair so thighs are parallel to floor'}",
-        f"Spine curvature {round(spine_combined,1)}° — {'✓ good' if spine_combined < 8 else 'press lower back into lumbar support'}",
-        "Feet flat on floor, lower back fully touching chair back",
-        "Ear directly above shoulder — avoid forward head position",
-    ]
-    if overall < 60:
-        out["recommendations"].insert(0, "⚠️ Take a posture break — stand and stretch for 2 min")
-
-    for name, pt in [("ear",ear),("sh",sh),("hip",hip),("knee",knee),("ankle",ankle)]:
-        out["landmarks"].append({"name":name,"x":round(pt[0]/w,4),"y":round(pt[1]/h,4),"vis":round({"ear":vis_ear,"sh":vis_sh,"hip":vis_hip,"knee":vis_knee,"ankle":vis_ankle}[name],2)})
-
-    return out
+# analyze_side() removed — Side mode removed app-wide, no remaining callers.
 
 # ── CASCADE FALLBACK ───────────────────────────────────────────────
 # face_c/eye_c/prof_c are lazy-initialized in _ensure_models() alongside cv2 —
@@ -3894,31 +3623,7 @@ def analyze_front_cascade(image, mode, out, dist_baseline_cm=None, dist_calib_fa
     out["landmarks"] = [{"name": "face", "x": round(fcx / w, 4), "y": round(fcy / h, 4)}]
     return out
 
-def analyze_side_cascade(image, out):
-    _ensure_models()  # lazy-load MediaPipe on first call
-    h, w = image.shape[:2]
-    gray = cv2.createCLAHE(2.0,(8,8)).apply(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
-    pl = prof_c.detectMultiScale(gray, 1.07,4,minSize=(48,48))
-    pr = prof_c.detectMultiScale(cv2.flip(gray,1),1.07,4,minSize=(48,48))
-    ff = face_c.detectMultiScale(gray, 1.11,5,minSize=(52,52))
-    pok = len(pl)>0 or len(pr)>0
-    if not pok and not len(ff):
-        out["engine"] = "no_detection"; return out
-    out["detected"] = True; out["engine"] = "cascade_fallback_side"
-    if   len(pl)>0: px2,py,pw,ph=max(pl,key=lambda f:f[2]*f[3]); side="L"
-    elif len(pr)>0: px2,py,pw,ph=max(pr,key=lambda f:f[2]*f[3]); px2=w-px2-pw; side="R"
-    else:           px2,py,pw,ph=max(ff,key=lambda f:f[2]*f[3]); side="F"
-    fcx, fcy = px2+pw//2, py+ph//2
-    fd = abs(fcx/w-0.5)*100; nsc = score_m(fd,0,8,25)
-    hh = (1-fcy/h)*100;      psc = score_m(max(0,60-hh),0,9,28)
-    overall = max(0,min(100,int(nsc*.45+psc*.40+(90 if pok else 50)*.15)))
-    out["score"]=overall; out["confidence"]=70 if pok else 50
-    out["metrics"]={"head_forward":{"value":round(fd,1),"score":nsc,"unit":"°","label":"Forward head"},
-                    "head_height":{"value":round(hh,1),"score":psc,"unit":"%","label":"Head height"}}
-    if not pok: out["alerts"].append("Rotate camera 90° to your side for full body analysis")
-    out["recommendations"]=["Ear above shoulder above hip — check side profile","Feet flat, knees 90°, lumbar support engaged"]
-    out["landmarks"]=[{"name":"profile","x":round(fcx/w,4),"y":round(fcy/h,4)}]
-    return out
+# analyze_side_cascade() removed — Side mode removed app-wide, no remaining callers.
 
 # ── Gemini AI ──────────────────────────────────────────────────────
 def call_local_llm(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
@@ -4420,12 +4125,9 @@ def analyze():
         calib = data.get("calibration")   # personal calibration from Firestore
         # Pass session_id into analysis so landmark averaging uses correct per-session key
         _session_id_for_analysis = data.get("session_id", f"{uid}:default")
-        if mode == "side":
-            result = analyze_side(img_to_analyze, tier, session_id=_session_id_for_analysis)
-        else:
-            result = analyze_front(img_to_analyze, mode, tier, session_id=_session_id_for_analysis,
-                                    dist_baseline_cm=(calib or {}).get("distance_calibrated_cm"),
-                                    dist_calib_factor=(calib or {}).get("distCalibFactor"))
+        result = analyze_front(img_to_analyze, mode, tier, session_id=_session_id_for_analysis,
+                                dist_baseline_cm=(calib or {}).get("distance_calibrated_cm"),
+                                dist_calib_factor=(calib or {}).get("distCalibFactor"))  # Side mode removed app-wide — analyze_side no longer called
         # ── Apply personal calibration with asymmetric thresholds ──
         # Asymmetric: if user's natural lean is toward right (+),
         # we widen the ok/bad zone on the right side and tighten on left.

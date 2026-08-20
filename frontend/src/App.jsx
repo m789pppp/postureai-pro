@@ -40,7 +40,7 @@ import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal, ModalPortal } from "./ui/index.jsx";
-import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, analyzeSideMP as _engAnalyzeSideMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
+import { gradeScore, gradeScoreAr, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
 import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
 import { getT } from "./lib/i18n.js";
@@ -322,22 +322,8 @@ function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,
   };
 }
 
-function analyzeSideMP(lms,W,H,calibKnownDistCm){
-  const eng = _engAnalyzeSideMP(lms,W,H,calibKnownDistCm);
-  if(!eng) return null;
-  return{
-    overall:            eng.score,
-    metrics:            eng.metrics,
-    alerts:             eng.alerts,
-    bodyModules:        eng.bodyModules,
-    detectedConditions: eng.detectedConditions,
-    confidence:         eng.confidence,
-    lms: _buildSideLmsRefs(lms,W,H),
-    raw: {neckLean:eng.metrics?.neck_lean_side?.value, trunkLean:eng.metrics?.trunk_lean?.value,
-          hipA:eng.metrics?.hip_angle?.value, kneeA:eng.metrics?.knee_angle?.value,
-          spineAlign:eng.metrics?.spine_align?.value},
-  };
-}
+// analyzeSideMP wrapper and _buildSideLmsRefs removed — Side mode was
+// removed app-wide, these had no remaining callers.
 
 function _buildLmsRefs(lms,W,H){
   if(!lms||lms.length<25) return {};
@@ -347,16 +333,6 @@ function _buildLmsRefs(lms,W,H){
     midSh:{x:(lSh.x+rSh.x)/2,y:(lSh.y+rSh.y)/2},
     midEar:{x:(lEar.x+rEar.x)/2,y:(lEar.y+rEar.y)/2},
     midHip:{x:(lHip.x+rHip.x)/2,y:(lHip.y+rHip.y)/2}};
-}
-
-function _buildSideLmsRefs(lms,W,H){
-  if(!lms||lms.length<29) return {};
-  const g=i=>lms[i];
-  const lV=g(11).visibility||0,rV=g(12).visibility||0,S=lV>=rV?"L":"R";
-  const si=n=>S==="L"?{L_EAR:7,L_SHOULDER:11,L_HIP:23,L_KNEE:25,L_ANKLE:27}[n]:{R_EAR:8,R_SHOULDER:12,R_HIP:24,R_KNEE:26,R_ANKLE:28}[n];
-  return{ear:{x:g(si("L_EAR")).x,y:g(si("L_EAR")).y},sh:{x:g(si("L_SHOULDER")).x,y:g(si("L_SHOULDER")).y},
-         hip:{x:g(si("L_HIP")).x,y:g(si("L_HIP")).y},knee:{x:g(si("L_KNEE")).x,y:g(si("L_KNEE")).y},
-         ankle:{x:g(si("L_ANKLE")).x,y:g(si("L_ANKLE")).y}};
 }
 
 // ── Session pattern tracking: creep, chronic asymmetry, breathing ──
@@ -747,168 +723,8 @@ function _roundRect(ctx,x,y,w,h,r){
   ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
 }
 
-function drawSide(ctx,res,W,H,isAr=false,opts={}){
-  if(!res?.lms) return;
-  const showSkel=opts.skeleton!==false, showAng=opts.angles!==false;
-  const{lms:lm,overall,metrics}=res;
-  const px=p=>p?[p.x*W,p.y*H]:[0,0];
-  const valid=p=>p&&(p.visibility==null||p.visibility>0.5); // raised from 0.3 to match engine VIS_MIN
+// drawSide() removed — Side mode removed app-wide, no remaining callers.
 
-  const neckScore = metrics?.neck_lean?.score  ?? overall;
-  const trunkScore= metrics?.trunk_lean?.score ?? overall;
-  const hipScore  = metrics?.hip_angle?.score  ?? overall;
-  const neckCol   = _riskColor(neckScore);
-  const trunkCol  = _riskColor(trunkScore);
-  const hipCol    = _riskColor(hipScore);
-
-  ctx.save();
-
-  // ── Connections ───────────────────────────────────────────────
-  const SIDE_CONN=[
-    {pts:[lm.ear,lm.sh],   col:neckCol,  w:3},
-    {pts:[lm.sh,lm.hip],   col:trunkCol, w:3.5},
-    {pts:[lm.hip,lm.knee], col:hipCol,   w:3},
-    {pts:[lm.knee,lm.ankle],col:"#6366f1",w:2.5},
-  ];
-  if(showSkel) SIDE_CONN.forEach(({pts:[a,b],col,w})=>{
-    if(!valid(a)||!valid(b)) return;
-    const[ax,ay]=px(a),[bx,by]=px(b);
-    ctx.globalAlpha=.9; ctx.lineWidth=w; ctx.strokeStyle=col;
-    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
-  });
-
-  // ── Joints ────────────────────────────────────────────────────
-  if(showSkel) [{p:lm.ear,col:neckCol,r:5},{p:lm.sh,col:neckCol,r:7},
-   {p:lm.hip,col:hipCol,r:6},{p:lm.knee,col:"#6366f1",r:5},
-   {p:lm.ankle,col:"#6366f1",r:4}].forEach(({p,col,r})=>{
-    if(!valid(p)) return;
-    const[x,y]=px(p);
-    ctx.globalAlpha=.18; ctx.beginPath(); ctx.arc(x,y,r*2.5,0,Math.PI*2);
-    ctx.fillStyle=col; ctx.fill();
-    ctx.globalAlpha=1; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.fillStyle=col; ctx.fill();
-    ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,.6)"; ctx.stroke();
-  });
-
-  // ── Plumb-line + joint arcs + angle labels + risk panel (showAng) ──
-  // In ideal seated posture the ear should be directly above the ankle.
-  // Drawing this vertical reference lets the user see at a glance how
-  // far forward their head has drifted relative to their base of support.
-  if(showAng){
-  if(valid(lm.ear) && valid(lm.ankle)){
-    const[ex,ey]=px(lm.ear),[ax,ay]=px(lm.ankle);
-    ctx.save();
-    // Ideal vertical (dashed)
-    ctx.globalAlpha=.28; ctx.setLineDash([6,5]);
-    ctx.lineWidth=1.5; ctx.strokeStyle="#94a3b8";
-    ctx.beginPath(); ctx.moveTo(ax,ey); ctx.lineTo(ax,ay); ctx.stroke();
-    ctx.setLineDash([]);
-    // Deviation line (ear to ideal vertical)
-    const devPx = Math.abs(ex - ax);
-    const devPct = Math.round(devPx / Math.max(W,1) * 100);
-    if(devPx > 8){
-      const plumbCol = devPct > 9 ? "#ef4444" : devPct > 5 ? "#f59e0b" : "#10b981";
-      ctx.globalAlpha=.7; ctx.lineWidth=1.5; ctx.strokeStyle=plumbCol;
-      ctx.setLineDash([3,4]);
-      ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ax,ey); ctx.stroke();
-      ctx.setLineDash([]);
-      // Label
-      ctx.globalAlpha=.9;
-      ctx.fillStyle="rgba(2,8,20,.75)"; _roundRect(ctx,(ex+ax)/2-20,ey-18,40,14,4); ctx.fill();
-      ctx.fillStyle=plumbCol; ctx.font="bold 9px system-ui";
-      ctx.fillText(`${devPct}% off`,( ex+ax)/2-18,ey-7);
-    }
-    ctx.restore();
-  }
-
-  // ── Angle arcs at hip and knee ────────────────────────────────
-  // Small filled arcs show the joint angle deviation from 90° visually.
-  const drawArc=(center,from,to,col,label)=>{
-    if(!valid(center)||!valid(from)||!valid(to)) return;
-    const[cx,cy]=px(center),[fx,fy]=px(from),[tx,ty]=px(to);
-    const a1=Math.atan2(fy-cy,fx-cx), a2=Math.atan2(ty-cy,tx-cx);
-    const R=20;
-    ctx.save();
-    ctx.globalAlpha=.22; ctx.beginPath();
-    ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a1,a2,false); ctx.closePath();
-    ctx.fillStyle=col; ctx.fill();
-    ctx.globalAlpha=.7; ctx.lineWidth=1.5; ctx.strokeStyle=col;
-    ctx.beginPath(); ctx.arc(cx,cy,R,a1,a2,false); ctx.stroke();
-    ctx.restore();
-  };
-
-  if(valid(lm.sh)&&valid(lm.hip)&&valid(lm.knee)){
-    drawArc(lm.hip,lm.sh,lm.knee,hipCol,"hip");
-  }
-  if(valid(lm.hip)&&valid(lm.knee)&&valid(lm.ankle)){
-    const kneeScore2=metrics?.knee_angle?.score??90;
-    drawArc(lm.knee,lm.hip,lm.ankle,_riskColor(kneeScore2),"knee");
-  }
-
-  // ── Angle labels ──────────────────────────────────────────────
-  ctx.font="bold 10px system-ui"; ctx.globalAlpha=.95;
-
-  // Neck angle at shoulder
-  if(valid(lm.ear)&&valid(lm.sh)){
-    const neckAng=metrics?.neck_lean?.value??_angle2pt(lm.ear,lm.sh);
-    if(neckAng!=null){
-      const[sx,sy]=px(lm.sh);
-      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(sx+8,sy-14,52,16);
-      ctx.fillStyle=neckCol;
-      ctx.fillText(`${isAr?"رقبة":"neck"} ${neckAng}°`,sx+10,sy-2);
-    }
-  }
-  // Hip angle
-  if(valid(lm.sh)&&valid(lm.hip)&&valid(lm.knee)){
-    const hipAng=_angle3pt(lm.sh,lm.hip,lm.knee);
-    if(hipAng!=null){
-      const[hx,hy]=px(lm.hip);
-      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(hx+8,hy-14,52,16);
-      ctx.fillStyle=hipCol;
-      ctx.fillText(`${isAr?"ورك":"hip"} ${hipAng}°`,hx+10,hy-2);
-    }
-  }
-  // Knee angle
-  if(valid(lm.hip)&&valid(lm.knee)&&valid(lm.ankle)){
-    const kneeAng=_angle3pt(lm.hip,lm.knee,lm.ankle);
-    if(kneeAng!=null){
-      const[kx,ky]=px(lm.knee);
-      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(kx+8,ky-14,52,16);
-      ctx.fillStyle="#6366f1";
-      ctx.fillText(`${isAr?"ركبة":"knee"} ${kneeAng}°`,kx+10,ky-2);
-    }
-  }
-
-  // ── Risk panel with values ────────────────────────────────────
-  const panelX=8,panelY=H-110,panelW=162,panelH=104;
-  ctx.globalAlpha=.82; ctx.fillStyle="rgba(2,8,20,.85)";
-  _roundRect(ctx,panelX,panelY,panelW,panelH,8); ctx.fill();
-  ctx.globalAlpha=1;
-  const rows=[
-    {label:isAr?"الرقبة":"Neck",  col:neckCol,  score:neckScore,  val:metrics?.neck_lean?.value, unit:"°"},
-    {label:isAr?"الجذع":"Trunk",  col:trunkCol, score:trunkScore, val:metrics?.trunk_lean?.value, unit:"°"},
-    {label:isAr?"الورك":"Hip",    col:hipCol,   score:hipScore,   val:metrics?.hip_angle?.value, unit:"°"},
-    {label:isAr?"الركبة":"Knee",  col:_riskColor(metrics?.knee_angle?.score??90), score:metrics?.knee_angle?.score??90, val:metrics?.knee_angle?.value, unit:"°"},
-  ];
-  ctx.font="bold 10px system-ui";
-  rows.forEach(({label,col,score,val,unit},i)=>{
-    const ry=panelY+16+i*24;
-    ctx.fillStyle="#94a3b8"; ctx.font="10px system-ui";
-    ctx.fillText(label,panelX+8,ry);
-    const barX=panelX+52,barW=54,barFill=Math.max(4,(score??0)/100*barW);
-    ctx.fillStyle="rgba(255,255,255,.08)";
-    _roundRect(ctx,barX,ry-9,barW,10,5); ctx.fill();
-    ctx.fillStyle=col; _roundRect(ctx,barX,ry-9,barFill,10,5); ctx.fill();
-    if(val!=null){
-      ctx.fillStyle=col; ctx.font="600 9px system-ui";
-      ctx.fillText(`${val}${unit}`,barX+barW+4,ry);
-    }
-    ctx.font="bold 10px system-ui";
-  });
-  } // end showAng
-
-  ctx.restore();
-}
 
 
 // ── Onboarding Tour ───────────────────────────────────────────────
@@ -2353,7 +2169,15 @@ export default function App(){
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  const[mode,_setMode]=useState(()=>{try{return localStorage.getItem("last_mode")||null;}catch{return null;}});
+  const[mode,_setMode]=useState(()=>{
+    try{
+      const saved=localStorage.getItem("last_mode");
+      // Phone and Side modes were removed app-wide — a value saved before
+      // that change would otherwise silently select a mode the UI no
+      // longer offers a way back out of.
+      return saved==="laptop" ? saved : null;
+    }catch{return null;}
+  });
   const setMode=(m)=>{ _setMode(m); try{localStorage.setItem("last_mode",m);}catch{} };
   const[lowLight,setLowLight]=useState(false);
   const[sessionInsights,setSessionInsights]=useState([]);
@@ -2848,8 +2672,6 @@ export default function App(){
   React.useEffect(()=>{ const fn=()=>setIsMobile(window.innerWidth<768); window.addEventListener("resize",fn); return ()=>window.removeEventListener("resize",fn); },[]);
   const MC={
     laptop:{id:"laptop",label:isAr?"لابتوب":"Laptop",icon:"💻",color:"#6366f1",optDist:[50,80]},
-    phone:{id:"phone",label:isAr?"موبايل":"Phone",icon:"📱",color:"#f59e0b",optDist:[60,90]},
-    side:{id:"side",label:isAr?"جانبي":"Side",icon:"🎥",color:"#10b981",optDist:[80,120]}
   };
   const M_=mode?MC[mode]:null;
 
@@ -3293,7 +3115,7 @@ export default function App(){
           if(!subjectOk){ return; } // drop frame — don't update smoother or score
           const lms=lmSmootherRef.current.smooth(rawLms);
           totalRef.current++;setTotalF(totalRef.current);
-          const rawResult=mode==="side"?analyzeSideMP(lms,W,H,calibData?.knownDistCm):analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData);
+          const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData); // Side mode removed app-wide
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter
           if(rawResult?.distCm && distSmootherRef.current){
             const stableDistCm=distSmootherRef.current.push(rawResult.distCm);
@@ -3335,7 +3157,7 @@ export default function App(){
             // Apply personal calibration if available
             let finalResult = result;
             if(calibData?.tolerances) {
-              const adjMets = applyCalibration(result.metrics, calibData, mode === "side" ? "side" : "front");
+              const adjMets = applyCalibration(result.metrics, calibData, "front"); // Side mode removed app-wide — always front now
               const vals = Object.values(adjMets).map(m=>m.score||0);
               const calibScore = Math.round(vals.reduce((a,b)=>a+b,0)/Math.max(vals.length,1));
               finalResult = {...result, overall: Math.round(result.overall*.4 + calibScore*.6), metrics: adjMets};
@@ -3354,7 +3176,7 @@ export default function App(){
             // Privacy: pixelate the face first so the skeleton draws on top of it.
             if(faceBlur) drawFaceBlur(ctx,vid,lms,W,H);
             const _drawOpts={skeleton:showSkeleton,angles:showAngles};
-            if(mode==="side")drawSide(ctx,finalResult,W,H,isAr,_drawOpts);else drawFront(ctx,finalResult,W,H,isAr,_drawOpts);
+            drawFront(ctx,finalResult,W,H,isAr,_drawOpts); // Side mode removed app-wide
             const now=Date.now();
 
             // Session-level pattern tracking (creep, chronic asymmetry, experimental breathing)
@@ -5801,27 +5623,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
           )}
         </div>
 
-        {/* ── Camera-mode switcher — change laptop / phone / side without
-            leaving the session (was only selectable on the setup screen) ── */}
-        <div style={{padding:"8px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6,minHeight:44}}>
-          <span style={{fontSize:10,color:cs.muted,flexShrink:0,marginInlineEnd:2}}>{isAr?"الوضع":"Mode"}</span>
-          <div style={{display:"flex",gap:5,flex:1}}>
-            {Object.values(MC).map(mc=>{
-              const active=mode===mc.id;
-              return (
-                <button key={mc.id} onClick={()=>switchMode(mc.id)} style={{
-                  flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,
-                  background:active?`${mc.color}1e`:"rgba(148,163,184,.06)",
-                  border:`1px solid ${active?`${mc.color}66`:cs.border}`,
-                  borderRadius:8,padding:"13px 0",minHeight:40,fontSize:10.5,fontWeight:active?700:500,
-                  color:active?mc.color:cs.muted,cursor:"pointer",
-                }}>
-                  <span style={{fontSize:12}}>{mc.icon}</span>{mc.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* Camera-mode switcher removed — Laptop is now the only mode
+            (Phone and Side were removed app-wide). */}
+
 
         {/* ── Quick Start Banner (for users who skipped onboarding) ─── */}
         {profile?.onboarding_done?.[0]==="skipped" && !score && (

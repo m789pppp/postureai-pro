@@ -337,7 +337,7 @@ function StepProfile({ isAr, profile, setProfile, onNext, onBack }) {
 
 /* ── Step 2: Device + mode setup ─────────────────────────────────── */
 function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
-  const [mode, setMode] = useState("laptop");
+  const [mode] = useState("laptop"); // fixed — Phone/Side removed app-wide
   const [cameraOk, setCameraOk] = useState(null);
   const [checking, setChecking] = useState(false);
   const videoRef = useRef(null);
@@ -354,14 +354,9 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
     setChecking(false);
   };
 
-  const modes = [
-    { id: "laptop", icon: "💻", en: "Laptop / Desktop", ar: "لابتوب / كمبيوتر",
-      desc: "Front camera, sitting at desk", descAr: "كاميرا أمامية، جلوس على المكتب" },
-    { id: "phone",  icon: "📱", en: "Mobile (propped)",  ar: "موبايل (مثبّت)",
-      desc: "Phone camera at eye level", descAr: "كاميرا الهاتف على مستوى العين" },
-    { id: "side",   icon: "🪑", en: "Side view",         ar: "عرض جانبي",
-      desc: "Camera to your side for posture analysis", descAr: "كاميرا من الجانب لتحليل الوضعية" },
-  ];
+  // Camera mode picker removed — Laptop (front camera at your desk) is the
+  // only mode app-wide now. `mode` stays "laptop" (see useState above) so
+  // every downstream consumer of this wizard's output is unaffected.
 
   return (
     <div style={{ padding: "8px 0" }}>
@@ -369,28 +364,23 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
         {isAr ? "إعداد الجهاز" : "Device Setup"}
       </h2>
       <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 24 }}>
-        {isAr ? "اختر وضع الكاميرا المناسب لعملك" : "Choose the camera mode that fits your work setup"}
+        {isAr ? "Corvus بيشتغل بكاميرا اللابتوب الأمامية" : "Corvus works with your laptop's front camera"}
       </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-        {modes.map(m => (
-          <button key={m.id} onClick={() => setMode(m.id)} style={{
-            display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
-            borderRadius: 12, cursor: "pointer", textAlign: "left",
-            background: mode === m.id ? "rgba(26,86,219,.1)" : "rgba(255,255,255,.03)",
-            border: `1.5px solid ${mode === m.id ? "rgba(26,86,219,.45)" : "rgba(148,163,184,.1)"}`,
-            transition: `all 200ms ${SPRING}`,
-          }}>
-            <span style={{ fontSize: 28, flexShrink: 0 }}>{m.icon}</span>
-            <div>
-              <div style={{ fontFamily: SYNE, fontSize: 13, fontWeight: 700, color: mode === m.id ? "#60a5fa" : "#e8f0fe", marginBottom: 2 }}>
-                {isAr ? m.ar : m.en}
-              </div>
-              <div style={{ fontSize: 11, color: "#475569" }}>{isAr ? m.descAr : m.desc}</div>
-            </div>
-            {mode === m.id && <div style={{ marginLeft: "auto", fontSize: 16, color: "#60a5fa" }}>✓</div>}
-          </button>
-        ))}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
+        borderRadius: 12, marginBottom: 24,
+        background: "rgba(26,86,219,.1)", border: "1.5px solid rgba(26,86,219,.45)",
+      }}>
+        <span style={{ fontSize: 28, flexShrink: 0 }}>💻</span>
+        <div>
+          <div style={{ fontFamily: SYNE, fontSize: 13, fontWeight: 700, color: "#60a5fa", marginBottom: 2 }}>
+            {isAr ? "لابتوب / كمبيوتر" : "Laptop / Desktop"}
+          </div>
+          <div style={{ fontSize: 11, color: "#475569" }}>
+            {isAr ? "كاميرا أمامية، جلوس على المكتب" : "Front camera, sitting at desk"}
+          </div>
+        </div>
       </div>
 
       {/* Camera check */}

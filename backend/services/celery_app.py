@@ -63,8 +63,8 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
 
         # Import analysis functions lazily (MediaPipe loads on first import)
         from backend import (
-            analyze_front, analyze_side, analyze_blink_rate,
-            analyze_front_cascade, analyze_side_cascade,
+            analyze_front, analyze_blink_rate,
+            analyze_front_cascade,
             analyze_with_local_ai,
         )
         import base64
@@ -86,12 +86,9 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
         if image is None:
             return {"error": "Could not decode image", "status": "failed"}
 
-        # Run cascade analysis
+        # Run cascade analysis — Side mode removed app-wide, analyze_side_cascade no longer called
         out = {}
-        if mode in ("side", "side_view"):
-            analyze_side_cascade(image, out)
-        else:
-            analyze_front_cascade(image, mode, out)
+        analyze_front_cascade(image, mode, out)
 
         # Blink detection
         if out.get("face_landmarks"):
@@ -202,8 +199,8 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
 
         # Import analysis functions lazily (MediaPipe loads on first import)
         from backend import (
-            analyze_front, analyze_side, analyze_blink_rate,
-            analyze_front_cascade, analyze_side_cascade,
+            analyze_front, analyze_blink_rate,
+            analyze_front_cascade,
             analyze_with_local_ai,
         )
         import base64
@@ -225,12 +222,9 @@ def analyze_frame_task(self, frame_data: dict, uid: str, tier: str = "standard")
         if image is None:
             return {"error": "Could not decode image", "status": "failed"}
 
-        # Run cascade analysis
+        # Run cascade analysis — Side mode removed app-wide, analyze_side_cascade no longer called
         out = {}
-        if mode in ("side", "side_view"):
-            analyze_side_cascade(image, out)
-        else:
-            analyze_front_cascade(image, mode, out)
+        analyze_front_cascade(image, mode, out)
 
         # Blink detection
         if out.get("face_landmarks"):

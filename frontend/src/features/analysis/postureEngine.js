@@ -91,24 +91,25 @@ const THR = {
 // informational metrics/alerts only, since they're more
 // setup/ergonomics signals than posture-quality signals.
 const WEIGHTS_FRONT = {
-  neck:     0.32, // raised from 0.28 to compensate distance weight reduction
-  tilt:     0.10,
-  shoulder: 0.11,
-  spine:    0.14,
-  distance: 0.12, // was 0.18 — over-penalized slight distance deviations
+  // Rescaled proportionally from {0.32,0.10,0.11,0.14,0.12,0.06,0.08} (summed
+  // to 0.93, not 1.0) so relative importance is unchanged. Was silently
+  // injecting the 72-pt baseline into EVERY score, not just ones with
+  // unreliable modules — see the fix note above confWeight() below: at full
+  // confidence a perfect-posture session could never exceed 98, and a
+  // worst-possible session never went below ~5. Relative proportions
+  // preserved exactly (each value = old / 0.93).
+  neck:     0.34,
+  tilt:     0.11,
+  shoulder: 0.12,
+  spine:    0.15,
+  distance: 0.13,
   yaw:      0.06,
-  rounded:  0.08,
-  // remaining 0.05 = baseline constant
+  rounded:  0.09,
+  // sums to 1.00 — baseline (72 × (1 - W_ACTUAL)) is now genuinely 0
+  // whenever every module is fully reliable, matching what the confWeight
+  // comment already claimed was happening.
 };
 
-// ─── Weighted scoring (side camera) ────────────────────────────────
-const WEIGHTS_SIDE = {
-  neck:    0.30,
-  trunk:   0.28,
-  hip:     0.18,
-  knee:    0.12,
-  spine:   0.12,
-};
 
 // ─── Severity thresholds for condition classification ──────────────
 const SEV = {
@@ -1243,169 +1244,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
 // SIDE CAMERA ANALYSIS
 // ═══════════════════════════════════════════════════════════════════
 
-export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
-  if (!lms || lms.length < 28) return null;
+// analyzeSideMP() removed — Side mode removed app-wide, no remaining callers.
 
-  const g   = i => lms[i];
-  const vis = (i, thr = VIS_MIN) => (g(i)?.visibility ?? 0) >= thr;
-
-  // Pick the better-visible side
-  const lVis = g(PL.L_SHOULDER)?.visibility ?? 0;
-  const rVis = g(PL.R_SHOULDER)?.visibility ?? 0;
-  const S    = lVis >= rVis ? "L" : "R";
-  const I    = {
-    EAR:   S === "L" ? PL.L_EAR    : PL.R_EAR,
-    SH:    S === "L" ? PL.L_SHOULDER : PL.R_SHOULDER,
-    HIP:   S === "L" ? PL.L_HIP    : PL.R_HIP,
-    KNEE:  S === "L" ? PL.L_KNEE   : PL.R_KNEE,
-    ANKLE: S === "L" ? PL.L_ANKLE  : PL.R_ANKLE,
-  };
-
-  const px  = i => ({ x: g(i).x * W, y: g(i).y * H });
-  const ear   = px(I.EAR);
-  const sh    = px(I.SH);
-  const hip   = px(I.HIP);
-  const knee  = px(I.KNEE);
-  const ankle = px(I.ANKLE);
-
-  const earOK   = vis(I.EAR);
-  const shOK    = vis(I.SH);
-  const hipOK   = vis(I.HIP);
-  const kneeOK  = vis(I.KNEE);
-  const ankleOK = vis(I.ANKLE);
-
-  const NEUTRAL = 90;
-
-  // Shoulder width in px — the cm ruler for side-view conversions (mirrors
-  // backend.py analyze_side). MUST be computed before any use below: it was
-  // previously declared with `const` AFTER its first use, which threw a TDZ
-  // ReferenceError on every frame and silently killed side-mode analysis
-  // (the RAF loop catches and swallows engine errors).
-  const shWidthPx = shOK ? Math.abs(g(PL.L_SHOULDER).x * W - g(PL.R_SHOULDER).x * W) : 0;
-
-  // Apply calibration-based shoulder width correction (same logic as front mode).
-  // Without this, all cm-based side calculations used the hardcoded 42cm average.
-  let effectiveShoulderWidthCm = SHOULDER_WIDTH_CM;
-  if (calibKnownDistCm && calibKnownDistCm > 20 && shWidthPx > 0) {
-    const shWidthFracSide = shWidthPx / W;
-    if (shWidthFracSide > 0.01) {
-      const derived = (calibKnownDistCm * shWidthFracSide) / (REF_SH_FRAC * calibKnownDistCm / SHOULDER_WIDTH_CM);
-      effectiveShoulderWidthCm = Math.max(28, Math.min(58, Math.round(derived * 10) / 10));
-    }
-  }
-
-  // ── Neck lean (side) — pure ear-over-shoulder angle ──
-  // Matches backend.py analyze_side(), which treats the profile view as
-  // geometrically exact (angle_vert(sh, ear), no nose blend). The old
-  // nose-dominant blend (nose 85% when visible, 50% when NOT visible) added
-  // a systematic forward bias — the nose sits several cm anterior of the
-  // ear in profile, so blending it always inflated the lean reading.
-  const neckLean = earOK && shOK ? angleVert(sh, ear) : 0;
-  const neckOK   = earOK && shOK;
-
-  // Normalize neck thresholds by ear-shoulder span (camera-distance proxy).
-  // Full euclidean ear→shoulder distance — the old |ear.x - sh.x| was the
-  // horizontal FHP offset (≈0 px for an upright sitter), not a distance
-  // proxy, so the ratio always sat clamped at 0.70.
-  const earShSpanPx = Math.hypot(ear.x - sh.x, ear.y - sh.y);
-  const spanFrac  = earShSpanPx / Math.max(W, 1);
-  const spanRatio = Math.max(0.70, Math.min(1.30, spanFrac / 0.14));
-  const neckOkAdj  = Math.max(5.0,  8.0  * spanRatio);  // backend: neck_ok = max(5.0, 8.0*ratio)
-  const neckBadAdj = Math.max(16.0, 22.0 * spanRatio);  // backend: neck_bad = max(16.0, 22.0*ratio)
-
-  const trunkLean = shOK && hipOK  ? angleVert(hip, sh)          : 0;
-  const hipAngle  = hipOK && kneeOK ? angle3pt(sh, hip, knee)     : 90;
-  const kneeAngle = kneeOK && ankleOK ? angle3pt(hip, knee, ankle) : 90;
-  // ── Spine alignment (side view) ────────────────────────────────────
-  // Proper measure: deviation of shoulder from ear-to-hip line.
-  // A straight spine has shoulder on the ear→hip vector.
-  // Using horizontal offset of ear vs ankle was measuring lean, not curvature.
-  let spineAlign = 0;
-  if (shOK && hipOK && earOK) {
-    // Angle at shoulder between ear-shoulder and shoulder-hip vectors
-    spineAlign = angle3pt(ear, sh, hip);
-    // Ideal = 180° (straight line); deviation = |180 - angle|
-    spineAlign = Math.abs(180 - spineAlign);
-  }
-
-  // ── Forward head posture (side view) — horizontal ear-to-shoulder offset in cm ──
-  // cm ruler: in a true profile view the L-R shoulder width is foreshortened
-  // to near-zero px, so using it as a 42cm ruler (backend.py's approach)
-  // explodes the conversion — an upright sitter measured 20+cm of "FHP".
-  // Instead use spans that stay fully visible in profile: shoulder→hip
-  // (~46cm seated torso) when hips are visible, else ear→shoulder (~25cm).
-  // Intentional divergence from backend.py until it gets the same fix.
-  const TORSO_CM = 46, EAR_SH_CM = 25;
-  const torsoPx = shOK && hipOK ? Math.hypot(sh.x - hip.x, sh.y - hip.y) : 0;
-  const cmPerPxSide =
-    torsoPx     > 20 ? TORSO_CM  / torsoPx     :
-    earShSpanPx > 10 ? EAR_SH_CM / earShSpanPx :
-    effectiveShoulderWidthCm / Math.max(shWidthPx, 1);
-  const fhpSideCm   = earOK && shOK ? Math.round(Math.abs(ear.x - sh.x) * cmPerPxSide * 10) / 10 : 0;
-  const fhpSideSc   = earOK && shOK ? scoreMetric(fhpSideCm, 0, 2.5, 7) : NEUTRAL;
-
-  const neckSc  = neckOK  ? scoreMetric(neckLean,               0, neckOkAdj, neckBadAdj) : NEUTRAL;
-  const trunkSc = shOK && hipOK  ? scoreMetric(trunkLean,       0, THR.TRUNK_LEAN.ok, THR.TRUNK_LEAN.bad) : NEUTRAL;
-  const hipSc   = hipOK && kneeOK ? scoreMetric(Math.abs(hipAngle-90),  0, THR.HIP_ANGLE.ok,  THR.HIP_ANGLE.bad)  : NEUTRAL;
-  const kneeSc  = kneeOK && ankleOK ? scoreMetric(Math.abs(kneeAngle-90),0, THR.KNEE_ANGLE.ok, THR.KNEE_ANGLE.bad) : NEUTRAL;
-  const spineSc = shOK && hipOK && earOK ? scoreMetric(spineAlign, 0, THR.SPINE_ALIGN.ok, THR.SPINE_ALIGN.bad) : NEUTRAL;
-
-  // Confidence-weighted overall (same principle as front camera):
-  // unreliable modules contribute 0 weight — their NEUTRAL placeholder score
-  // (90) must not inflate the result. The missing weight is redistributed
-  // through sideBase below, exactly like the front-camera W_ACTUAL fix.
-  const cw = (ok, w) => ok ? w : 0;
-  const wN = cw(neckOK,           WEIGHTS_SIDE.neck);
-  const wT = cw(shOK && hipOK,    WEIGHTS_SIDE.trunk);
-  const wH = cw(hipOK && kneeOK,  WEIGHTS_SIDE.hip);
-  const wK = cw(kneeOK && ankleOK,WEIGHTS_SIDE.knee);
-  const wS = cw(shOK && hipOK && earOK, WEIGHTS_SIDE.spine);
-  const wSum = wN + wT + wH + wK + wS;
-  const sideBase = 72 * Math.max(0, 1 - wSum);
-
-  const overall = Math.max(0, Math.min(100, Math.round(
-    neckSc  * wN +
-    trunkSc * wT +
-    hipSc   * wH +
-    kneeSc  * wK +
-    spineSc * wS +
-    sideBase
-  )));
-
-  const alerts = [
-    neckOK && neckLean > neckBadAdj               && `⚠️ Forward head ${Math.round(neckLean)}° — ear must be above shoulder`,
-    neckOK && neckLean > (neckOkAdj+neckBadAdj)/2 && neckLean <= neckBadAdj && `Neck lean ${Math.round(neckLean)}° — tuck chin back`,
-    earOK && shOK && fhpSideCm > 5                && `⚠️ Forward head posture ${fhpSideCm}cm (side view) — tuck chin, pull head back over shoulders`,
-    shOK && hipOK && trunkLean > 12               && `Trunk leaning ${Math.round(trunkLean)}° — sit back with lumbar support`,
-    hipOK && kneeOK && Math.abs(hipAngle-90) > 15  && `Hip angle ${Math.round(hipAngle)}° (ideal ~90°) — adjust seat height`,
-    kneeOK && ankleOK && Math.abs(kneeAngle-90) > 18 && `Knee angle ${Math.round(kneeAngle)}° (ideal ~90°) — adjust footrest`,
-    shOK && hipOK && earOK && spineAlign > 12       && `Spine curvature ${Math.round(spineAlign)}° — maintain neutral spine, lumbar support`,
-  ].filter(Boolean);
-
-  return {
-    score:    overall,
-    confidence: Math.min(93, 70 + (shOK?10:0) + (earOK?8:0) + (hipOK?5:0)),
-    metrics: {
-      neck_lean_side: { value: Math.round(neckLean),  score: neckSc,  unit: "°",  label: "Neck lean (side)",  reliable: neckOK },
-      fhp_side:       { value: fhpSideCm,             score: fhpSideSc, unit: "cm", label: "Forward head posture", reliable: earOK && shOK },
-      trunk_lean:     { value: Math.round(trunkLean), score: trunkSc, unit: "°",  label: "Trunk lean",        reliable: shOK && hipOK },
-      hip_angle:      { value: Math.round(hipAngle),  score: hipSc,   unit: "°",  label: "Hip angle",         reliable: hipOK && kneeOK },
-      knee_angle:     { value: Math.round(kneeAngle), score: kneeSc,  unit: "°",  label: "Knee angle",        reliable: kneeOK && ankleOK },
-      spine_align:    { value: Math.round(spineAlign),score: spineSc, unit: "°",  label: "Spine alignment",   reliable: shOK && hipOK && earOK },
-    },
-    bodyModules: { neck: { angle: Math.round(neckLean), score: neckSc, severity: classify(neckLean, SEV.NECK) },
-                   trunk: { angle: Math.round(trunkLean), score: trunkSc }, hip: { angle: Math.round(hipAngle), score: hipSc },
-                   knee: { angle: Math.round(kneeAngle), score: kneeSc } },
-    alerts,
-    recommendations: [
-      `Overall: ${gradeScore(overall)} (${overall}/100) — ${S==="L"?"left":"right"} side`,
-      "Ear directly above shoulder, shoulder above hip",
-      `Hip angle ${Math.round(hipAngle)}° — ${Math.abs(hipAngle-90)<12?"✓ ideal":"adjust chair height"}`,
-      "Feet flat, lumbar support fully engaged",
-    ],
-    detected: true,
-  };
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // MODE DEFINITIONS
@@ -1413,8 +1253,7 @@ export function analyzeSideMP(lms, W, H, calibKnownDistCm = null) {
 
 export const MODES = {
   laptop: { label: "Laptop Camera", labelAr: "كاميرا اللابتوب", icon: "💻", distRange: [50, 80] },
-  phone:  { label: "Phone Camera",  labelAr: "كاميرا الموبايل",  icon: "📱", distRange: [60, 90] },
-  side:   { label: "Side Camera",   labelAr: "كاميرا جانبية",    icon: "🎥", distRange: [80, 120] },
+  // Phone and Side modes removed app-wide.
 };
 
 // ═══════════════════════════════════════════════════════════════════
