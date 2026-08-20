@@ -3498,6 +3498,10 @@ export default function App(){
   async function beginScoring(){
     const effectiveMode = mode || "laptop";
     try{
+      // Stale isPaused from a previous session must not leak into this one —
+      // see commit message for the exact double-timer bug this caused.
+      setIsPaused(false);
+      pausedAtRef.current = null;
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
