@@ -2760,6 +2760,18 @@ export default function App(){
 
     const unsub=onAuthStateChanged(async u=>{
       clearTimeout(authTimeout);
+      // Stale "#live" from a previous tab/reload must never be allowed to
+      // render the live page while auth/profile are still loading — see
+      // commit message for the exact flash-of-live-page bug this caused.
+      // Must happen HERE, synchronously, before any of the awaits below —
+      // moving it to the bottom of this handler (where it used to live)
+      // left a real window where user+profile were already set but page
+      // hadn't been redirected yet, during which the live page's guard
+      // passed and the full live UI (camera request included) rendered.
+      if (u && window.location.hash === "#live" && !camActiveRef.current && !streamRef.current) {
+        window.history.replaceState({}, "", "#home");
+        setPageRaw("home");
+      }
       // onAuthStateChanged is the SINGLE source of truth for routing
       // Clear OAuth pending flag — we now have definitive auth state
       try { if(u) { sessionStorage.removeItem("__pendingOAuth"); sessionStorage.removeItem("__pendingOAuthTs"); } } catch{}
