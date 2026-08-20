@@ -2116,6 +2116,16 @@ export default function App(){
       window.history.pushState({}, "", "#" + p);
     }
     setPageRaw(p);
+    // Every other screen that changes its own sub-view resets scroll
+    // manually (see AuthPage's view switcher) — the page router itself
+    // never did, so navigating here while scrolled down on the previous
+    // page (e.g. tapping "Start Session" from partway down the Home
+    // dashboard) landed the user mid-scroll on the new page instead of at
+    // its top. On the Live page specifically this was severe: the camera
+    // preview sits at the very top of the layout, so a carried-over scroll
+    // position could push it fully off-screen behind stats/tips/settings,
+    // leaving the one thing a "live" session is actually for invisible.
+    try { window.scrollTo(0, 0); } catch {}
   };
   // Listen for browser back/forward
   useEffect(() => {
@@ -2138,6 +2148,7 @@ export default function App(){
       // block clicks on whatever page the back button lands on.
       if(newPage!=="live"){ setShowHealthConsent(false); setPreviewPhase(null); }
       setPageRaw(newPage);
+      try { window.scrollTo(0, 0); } catch {}
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -2210,7 +2221,18 @@ export default function App(){
   const[totalF,setTotalF]=useState(0);
   const[alertCounts,setAlertCounts]=useState({total:0,neck:0,dist:0});
   const[alerts,setAlerts]=useState([]);
-  const[alertMsg,setAlertMsg]=useState({text:"Select mode to begin",type:"info"});
+  // "Select mode to begin" was the default before Phone/Side modes were
+  // removed app-wide (Laptop is now the only mode, auto-selected — see the
+  // "Camera-mode switcher removed" note further down). Left as-is, every
+  // new live session opened with an instruction to do something there was
+  // no longer any UI for. Default now matches what a user actually needs
+  // to do first. `lang` isn't initialized yet at this point in the
+  // component, so read the same localStorage key it uses rather than
+  // depending on it.
+  const[alertMsg,setAlertMsg]=useState(()=>{
+    let ar=false; try{ ar = localStorage.getItem("lang")==="ar"; }catch{}
+    return { text: ar ? "اضبط وضعيتك أمام الكاميرا ثم اضغط ابدأ" : "Position yourself in frame, then press Start", type:"info" };
+  });
   const[scoreStatus,setScoreStatus]=useState(null); // silent good-posture score display
   const[fixItOpen,setFixItOpen]=useState(null);     // #8 which alert idx has fix-it open
   const[streakAlert,setStreakAlert]=useState(false); // #10 streak protection shown
@@ -5249,6 +5271,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{fontSize:12.5,fontWeight:600,color:cs.text}}>
                 {mpStatus==="ready"
                   ? (M_ ? (isAr?`المسافة المثلى ${M_.optDist[0]}–${M_.optDist[1]} سم`:`Optimal distance ${M_.optDist[0]}–${M_.optDist[1]}cm`) : (isAr?"جاهز للتحليل":"Ready to analyse"))
+                  // mpStatus also settles into "fallback" (local model never
+                  // loaded in time, now scoring via the backend) or "error" —
+                  // this only ever checked for "ready", so both of those left
+                  // the header stuck reading "Loading AI model…" for the rest
+                  // of the session even once the status pill below had
+                  // already moved on to "Server mode ✓" / "Error", one line
+                  // of the UI still telling the user something that had
+                  // stopped being true.
+                  : mpStatus==="fallback" ? (isAr?"جاهز — عبر السيرفر":"Ready — via server")
+                  : mpStatus==="error" ? (isAr?"تعذر تحميل نموذج التحليل":"Analysis model failed to load")
                   : (isAr?"جاري تحميل النموذج...":"Loading AI model...")}
               </div>
             </div>
@@ -5901,6 +5933,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
               // #17: no-device pill removed — the Start Analysis button below already
               // shows "❌ No camera found" clearly; showing it twice was confusing.
               if(cameraStatus==="ready"&&camActive) return pill("#4FAE8E",`${M_?.label||""} · Live · ${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`);
+              // cameraStatus reaches "ready" as soon as getUserMedia resolves,
+              // which happens during the framing/preview step — well before
+              // camActive flips true on "Start session now". That whole
+              // window (stream open, video clearly playing on screen) was
+              // falling through to the same "Camera off" pill shown before
+              // the camera was ever requested, telling users their camera
+              // was off while they were looking directly at their own feed.
+              // #60a5fa matches the "fallback" tone already used by the
+              // mpStatus strip below (see mpStatus==="fallback").
+              if(cameraStatus==="ready"&&!camActive) return pill("#60a5fa",isAr?"معاينة":"Previewing");
               return pill("#94a3b8",isAr?"الكاميرا متوقفة":"Camera off");
             })()}
           </div>
