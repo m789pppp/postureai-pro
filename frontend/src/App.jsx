@@ -133,7 +133,7 @@ const TIERS = {
     badge:"Most Popular"
   },
   elite:{
-    id:"elite", name:"Elite", color:"#f59e0b", colorDim:"rgba(245,158,11,.12)",
+    id:"elite", name:"Elite", color:"#D6A24C", colorDim:"rgba(214,162,76,.12)",
     price_egp_monthly:699, price_egp_yearly:5590,  // 699 EGP/mo | 5,590/yr
     price_usd_monthly:39.99,  price_usd_yearly:299.99,   // $39.99/mo | $299.99/yr
     features:["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support","Calibration"],
@@ -177,7 +177,7 @@ const B2B_TIERS = {
   },
   b2b_enterprise: {
     id:"b2b_enterprise", name:"Enterprise", nameAr:"إنتربرايز",
-    color:"#10b981", colorDim:"rgba(16,185,129,.12)",
+    color:"#4FAE8E", colorDim:"rgba(79,174,142,.12)",
     price_egp_monthly:null, price_egp_yearly:null,    // Custom — contact sales
     price_usd_monthly:null, price_usd_yearly:null, price_usd_starting_at:499, // Starting at $499/mo
     seats:-1,
@@ -253,7 +253,7 @@ const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,
 
 
 // ── Helpers ───────────────────────────────────────────────────────
-const sc    = v => v>=70?"#10b981":v>=55?"#f59e0b":"#ef4444"; // aligned to gradeScore's tier boundaries (85/70/55/40) — see postureEngine.js
+const sc    = v => v>=70?"#4FAE8E":v>=55?"#D6A24C":"#C6604F"; // aligned to gradeScore's tier boundaries (85/70/55/40) — see postureEngine.js
 const grade = (v,t) => v>=85?t.excellent:v>=70?t.good:v>=50?t.fair:t.poor;
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 const LM = {NOSE:0,L_EYE:2,R_EYE:5,L_EAR:7,R_EAR:8,L_SHOULDER:11,R_SHOULDER:12,L_HIP:23,R_HIP:24,L_KNEE:25,R_KNEE:26,L_ANKLE:27,R_ANKLE:28};
@@ -446,9 +446,9 @@ function _trackSessionPatterns(tr, now, midShY, neckLeanVal, neckReliable, shTil
 
 function _riskColor(score){
   if(score==null) return "#94a3b8";
-  if(score>=80) return "#10b981";
-  if(score>=60) return "#f59e0b";
-  return "#ef4444";
+  if(score>=80) return "#4FAE8E";
+  if(score>=60) return "#D6A24C";
+  return "#C6604F";
 }
 function _riskLabel(score,isAr){
   if(score==null) return isAr?"غير متاح":"N/A";
@@ -491,7 +491,7 @@ function postureCue(analysis, isAr){
   if(!cands.length) return null;
   cands.sort((a,b)=>a.sc-b.sc);
   const w=cands[0];
-  return { text:isAr?w.ar:w.en, icon:w.icon, col:w.sc<40?"#ef4444":"#f97316" };
+  return { text:isAr?w.ar:w.en, icon:w.icon, col:w.sc<40?"#C6604F":"#f97316" };
 }
 
 function drawFront(ctx,res,W,H,isAr=false,opts={}){
@@ -591,7 +591,7 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
 
   // Screen distance
   if(raw?.distCm){
-    const dc=raw.distCm>=raw.lo&&raw.distCm<=raw.hi?"#10b981":raw.distCm>=(raw.lo-15)?"#f59e0b":"#ef4444";
+    const dc=raw.distCm>=raw.lo&&raw.distCm<=raw.hi?"#4FAE8E":raw.distCm>=(raw.lo-15)?"#D6A24C":"#C6604F";
     const[sx,sy]=px(lm.midEar||{x:.5,y:.1});
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(W-62,H-26,58,18);
     ctx.fillStyle=dc; ctx.font="bold 11px system-ui";
@@ -608,7 +608,7 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
     const[sx,sy]=px(lm.midSh); const[ex,ey]=px(lm.midEar);
     const fhpCm   = fhpMet?.value ?? 0;
     const loadKg  = fhpMet?.extra_load_kg ?? 0;
-    const fhpCol  = fhpCm > 6 ? "#ef4444" : fhpCm > 3 ? "#f59e0b" : "#10b981";
+    const fhpCol  = fhpCm > 6 ? "#C6604F" : fhpCm > 3 ? "#D6A24C" : "#4FAE8E";
 
     // Ideal ear position (directly above shoulder midpoint)
     const idealX = sx, idealY = ey;
@@ -659,14 +659,14 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
     ctx.moveTo(sx, sy);
     ctx.arc(sx, sy, R, -Math.PI/2 - (6*Math.PI/180), -Math.PI/2 + (6*Math.PI/180));
     ctx.closePath();
-    ctx.fillStyle = "#10b981"; ctx.fill();
+    ctx.fillStyle = "#4FAE8E"; ctx.fill();
     ctx.restore();
   }
 
   // ── Rounded shoulders badge ───────────────────────────────────
   const rsMet = metrics?.rounded_shoulders;
   if(rsMet?.reliable!==false && (rsMet?.value ?? 0) > 5){
-    const rsCol = (rsMet.value??0) > 15 ? "#ef4444" : "#f59e0b";
+    const rsCol = (rsMet.value??0) > 15 ? "#C6604F" : "#D6A24C";
     ctx.save();
     ctx.globalAlpha = .88;
     ctx.fillStyle = "rgba(2,8,20,.85)";
@@ -688,7 +688,7 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
     { label:isAr?"الرقبة":"Neck",     col:neckCol, score:neckScore, val: metrics?.neck_lean?.value, unit:"°" },
     { label:isAr?"الكتفين":"Shoulder", col:shCol,   score:shScore,   val: metrics?.shoulder_level?.value, unit:"°" },
     { label:isAr?"الظهر":"Back",       col:backCol, score:backScore, val: metrics?.spine_lean?.value, unit:"°" },
-    { label:isAr?"المسافة":"Dist",     col:raw?.distCm>=raw?.lo&&raw?.distCm<=raw?.hi?"#10b981":raw?.distCm>=(raw?.lo-15)?"#f59e0b":"#ef4444",
+    { label:isAr?"المسافة":"Dist",     col:raw?.distCm>=raw?.lo&&raw?.distCm<=raw?.hi?"#4FAE8E":raw?.distCm>=(raw?.lo-15)?"#D6A24C":"#C6604F",
       score: metrics?.screen_distance?.score ?? 90,
       val: raw?.distCm, unit:"cm" },
   ];
@@ -772,7 +772,7 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
   }
   function onPassChange(v){setPass(v);if(tab==="signup")setPassStrength(calcStrength(v));}
 
-  const strengthColor=["#ef4444","#f59e0b","#f59e0b","#10b981","#10b981"][passStrength]||"#ef4444";
+  const strengthColor=["#C6604F","#D6A24C","#D6A24C","#4FAE8E","#4FAE8E"][passStrength]||"#C6604F";
   const strengthLabel=isAr
     ?["ضعيفة جداً","ضعيفة","مقبولة","قوية","قوية جداً"][Math.min(passStrength,4)]
     :["Very weak","Weak","Fair","Strong","Very strong"][Math.min(passStrength,4)];
@@ -881,7 +881,7 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
           </div>
 
           {/* Academic badge */}
-          {isAuto&&<div style={{background:"rgba(16,185,129,.08)",border:"0.5px solid rgba(16,185,129,.25)",borderRadius:9,padding:"9px 12px",marginBottom:14,fontSize:11,color:"#6ee7b7",display:"flex",gap:8,alignItems:"center"}}>
+          {isAuto&&<div style={{background:"rgba(79,174,142,.08)",border:"0.5px solid rgba(79,174,142,.25)",borderRadius:9,padding:"9px 12px",marginBottom:14,fontSize:11,color:"#6ee7b7",display:"flex",gap:8,alignItems:"center"}}>
             <span style={{fontSize:15}}>🎓</span>
             <span><strong>{isAr?"نطاق أكاديمي!":"Academic domain!"}</strong> {isAr?"Elite مجاناً لـ":"Elite free for"} {AUTO_APPROVE_DOMAIN}</span>
           </div>}
@@ -941,12 +941,12 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
             </div>}
 
             {/* Reset sent */}
-            {resetSent&&<div style={{fontSize:11,color:"#6ee7b7",marginBottom:12,background:"rgba(16,185,129,.07)",padding:"10px 12px",borderRadius:8,border:"0.5px solid rgba(16,185,129,.2)"}}>
+            {resetSent&&<div style={{fontSize:11,color:"#6ee7b7",marginBottom:12,background:"rgba(79,174,142,.07)",padding:"10px 12px",borderRadius:8,border:"0.5px solid rgba(79,174,142,.2)"}}>
               ✅ {isAr?"تم إرسال رابط إعادة تعيين كلمة المرور — راجع بريدك":"Password reset link sent — check your email"}
             </div>}
 
             {/* Error */}
-            {err&&<div style={{fontSize:11,color:"#fca5a5",marginBottom:12,background:"rgba(239,68,68,.07)",padding:"10px 12px",borderRadius:8,border:"0.5px solid rgba(239,68,68,.2)"}}>{err}</div>}
+            {err&&<div style={{fontSize:11,color:"#fca5a5",marginBottom:12,background:"rgba(198,96,79,.07)",padding:"10px 12px",borderRadius:8,border:"0.5px solid rgba(198,96,79,.2)"}}>{err}</div>}
 
             <button type="submit" disabled={loading}
               style={{width:"100%",background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:10,padding:"12px 0",fontSize:13,fontWeight:700,color:"#fff",cursor:loading?"not-allowed":"pointer",opacity:loading?.7:1,marginBottom:4,boxShadow:"0 4px 14px rgba(26,86,219,.3)",transition:"all .2s"}}>
@@ -970,18 +970,18 @@ function Waiting({paymentId,payMethod,amount,tier,refCode,onSuccess,cs,t}){
   const pm=PAY_METHODS.find(p=>p.id===payMethod),tierInfo=TIERS[tier];
   return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
     <div style={{maxWidth:480,width:"100%"}}>
-      {status==="confirmed"?(<div style={{background:cs.card,border:"0.5px solid rgba(16,185,129,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
+      {status==="confirmed"?(<div style={{background:cs.card,border:"0.5px solid rgba(79,174,142,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
         <div style={{fontSize:52,marginBottom:12}}>✅</div>
         <div style={{fontSize:20,fontWeight:700,color:cs.text,marginBottom:8}}>{t.payOK}</div>
         <div style={{fontSize:13,color:cs.muted}}>{t.planActive} {tierInfo?.name}</div>
-      </div>):status==="rejected"?(<div style={{background:cs.card,border:"0.5px solid rgba(239,68,68,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
+      </div>):status==="rejected"?(<div style={{background:cs.card,border:"0.5px solid rgba(198,96,79,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
         <div style={{fontSize:52,marginBottom:12}}>❌</div>
         <div style={{fontSize:20,fontWeight:700,color:cs.text,marginBottom:8}}>{t.payFail}</div>
         <div style={{fontSize:12,color:cs.muted,marginBottom:16}}>{payData?.reject_reason||"Not verified"}</div>
         <Btn cs={cs} onClick={()=>window.location.reload()}>{t.tryAgain}</Btn>
       </div>):(<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:16,padding:24}}>
         <div style={{textAlign:"center",marginBottom:20}}>
-          <div style={{width:50,height:50,border:"3px solid rgba(245,158,11,.3)",borderTop:"3px solid #f59e0b",borderRadius:"50%",margin:"0 auto 12px",animation:"spin 1.2s linear infinite"}}/>
+          <div style={{width:50,height:50,border:"3px solid rgba(214,162,76,.3)",borderTop:"3px solid #D6A24C",borderRadius:"50%",margin:"0 auto 12px",animation:"spin 1.2s linear infinite"}}/>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           <div style={{fontSize:16,fontWeight:700,color:cs.text,marginBottom:4}}>{t.waitConfirm}</div>
           <div style={{fontSize:11,color:cs.muted}}>{t.adminReview}</div>
@@ -1068,7 +1068,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
           <Btn cs={cs} onClick={()=>{navigator.clipboard.writeText(refLink);addToast(t.copied,"success");}} disabled={!refLink} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{t.copyLink}</Btn>
           <Btn cs={cs} onClick={()=>setShowReferralProgram(true)} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{isAr?"التفاصيل":"Details"}</Btn>
         </div>
-        {refStats?.credits>0&&<div style={{fontSize:11,color:"#10b981",fontWeight:700}}>💰 {refStats.credits} EGP {isAr?"رصيد متاح":"credit available"}</div>}
+        {refStats?.credits>0&&<div style={{fontSize:11,color:"#4FAE8E",fontWeight:700}}>💰 {refStats.credits} EGP {isAr?"رصيد متاح":"credit available"}</div>}
       </div>
       {showReferralProgram&&<ErrorBoundary key="referralprogram"><Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense></ErrorBoundary>}
       <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
@@ -1117,8 +1117,8 @@ function PaymentResultScreen({result, cs, lang, onContinue}){
       <div style={{maxWidth:460,width:"100%",textAlign:"center"}}>
         <div style={{
           width:72,height:72,borderRadius:"50%",margin:"0 auto 20px",
-          background:isSuccess?"rgba(16,185,129,.12)":"rgba(239,68,68,.08)",
-          border:`0.5px solid ${isSuccess?"rgba(16,185,129,.3)":"rgba(239,68,68,.2)"}`,
+          background:isSuccess?"rgba(79,174,142,.12)":"rgba(198,96,79,.08)",
+          border:`0.5px solid ${isSuccess?"rgba(79,174,142,.3)":"rgba(198,96,79,.2)"}`,
           display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,
           animation:"payment-pop .5s cubic-bezier(.16,1,.3,1)",
         }}>{isSuccess?"🎉":"✕"}</div>
@@ -1131,7 +1131,7 @@ function PaymentResultScreen({result, cs, lang, onContinue}){
             :(isAr?"لم يتم خصم أي مبلغ من حسابك. يمكنك اختيار خطة في أي وقت.":"No charge was made. You can choose a plan anytime.")}
         </p>
         {isSuccess&&(
-          <div style={{background:"rgba(16,185,129,.06)",border:"0.5px solid rgba(16,185,129,.2)",borderRadius:14,padding:"16px 20px",marginBottom:24,textAlign:isAr?"right":"left"}}>
+          <div style={{background:"rgba(79,174,142,.06)",border:"0.5px solid rgba(79,174,142,.2)",borderRadius:14,padding:"16px 20px",marginBottom:24,textAlign:isAr?"right":"left"}}>
             {[
               isAr?"✓ تحليل الوضعية بالذكاء الاصطناعي":"✓ AI posture analysis activated",
               isAr?"✓ إشعارات Slack وTeams":"✓ Slack & Teams notifications",
@@ -1178,21 +1178,21 @@ function CancelSubscriptionCard({profile,user,cs,addToast,isAr}){
     setLoading(false);
   };
   if(step===2)return(
-    <div style={{background:"rgba(16,185,129,.05)",border:"0.5px solid rgba(16,185,129,.2)",borderRadius:13,padding:16,marginBottom:13,textAlign:"center"}}>
+    <div style={{background:"rgba(79,174,142,.05)",border:"0.5px solid rgba(79,174,142,.2)",borderRadius:13,padding:16,marginBottom:13,textAlign:"center"}}>
       <div style={{fontSize:20,marginBottom:6}}>✓</div>
       <div style={{fontSize:12,color:"#6ee7b7"}}>{t.done}</div>
     </div>
   );
   return(
-    <div style={{background:"rgba(239,68,68,.04)",border:"0.5px solid rgba(239,68,68,.2)",borderRadius:13,padding:18,marginBottom:13}}>
+    <div style={{background:"rgba(198,96,79,.04)",border:"0.5px solid rgba(198,96,79,.2)",borderRadius:13,padding:18,marginBottom:13}}>
       <div style={{fontSize:12,fontWeight:700,color:"#fca5a5",marginBottom:6}}>{t.title}</div>
       <div style={{fontSize:11,color:cs.muted,marginBottom:12,lineHeight:1.6}}>{t.desc}</div>
-      {step===0&&<button onClick={()=>setStep(1)} style={{background:"rgba(239,68,68,.1)",border:"0.5px solid rgba(239,68,68,.3)",borderRadius:8,padding:"8px 16px",fontSize:11,color:"#fca5a5",cursor:"pointer",fontWeight:600}}>{t.btn}</button>}
+      {step===0&&<button onClick={()=>setStep(1)} style={{background:"rgba(198,96,79,.1)",border:"0.5px solid rgba(198,96,79,.3)",borderRadius:8,padding:"8px 16px",fontSize:11,color:"#fca5a5",cursor:"pointer",fontWeight:600}}>{t.btn}</button>}
       {step===1&&<div>
         <div style={{fontSize:12,fontWeight:600,color:"#fca5a5",marginBottom:10}}>{t.sure}</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <button onClick={()=>setStep(0)} style={{background:"rgba(148,163,184,.1)",border:"0.5px solid rgba(148,163,184,.2)",borderRadius:8,padding:"8px 14px",fontSize:11,color:cs.muted,cursor:"pointer",fontWeight:600}}>{t.back}</button>
-          <button onClick={doCancel} disabled={loading} style={{background:"rgba(239,68,68,.15)",border:"0.5px solid rgba(239,68,68,.4)",borderRadius:8,padding:"8px 14px",fontSize:11,color:"#fca5a5",cursor:loading?"not-allowed":"pointer",fontWeight:700,opacity:loading?.7:1}}>
+          <button onClick={doCancel} disabled={loading} style={{background:"rgba(198,96,79,.15)",border:"0.5px solid rgba(198,96,79,.4)",borderRadius:8,padding:"8px 14px",fontSize:11,color:"#fca5a5",cursor:loading?"not-allowed":"pointer",fontWeight:700,opacity:loading?.7:1}}>
             {loading?"...":`${t.confirm}`}
           </button>
         </div>
@@ -1225,7 +1225,7 @@ function Leaderboard({users,cs,t,onBack,lang}){
       </div>}
       <div style={{display:"grid",gap:7}}>
         {sorted.map((u,i)=>(
-          <div key={u.id||i} style={{background:cs.card,border:`0.5px solid ${i<3?"rgba(245,158,11,.3)":cs.border}`,borderRadius:11,padding:"11px 16px",display:"flex",alignItems:"center",gap:11,flexDirection:isAr?"row-reverse":"row"}}>
+          <div key={u.id||i} style={{background:cs.card,border:`0.5px solid ${i<3?"rgba(214,162,76,.3)":cs.border}`,borderRadius:11,padding:"11px 16px",display:"flex",alignItems:"center",gap:11,flexDirection:isAr?"row-reverse":"row"}}>
             <div style={{fontSize:i<3?20:12,width:28,textAlign:"center",flexShrink:0}}>{i<3?medals[i]:<span style={{color:cs.muted,fontWeight:700}}>#{i+1}</span>}</div>
             <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${sc(u.avg_score||50)},#0891b2)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"white",flexShrink:0}}>{(u.name||u.email||"?")[0].toUpperCase()}</div>
             <div style={{flex:1,textAlign:isAr?"right":"left"}}>
@@ -1305,8 +1305,8 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([h+"\n"+rows],{type:"text/csv"}));a.download=filename;a.click();addToast("CSV exported","success");
   }
 
-  const tCol=x=>x==="elite"?"#10b981":x==="professional"?"#0ea5e9":"#6366f1";
-  const sBg=x=>x==="confirmed"?"rgba(16,185,129,.1)":x==="rejected"?"rgba(239,68,68,.1)":"rgba(245,158,11,.1)";
+  const tCol=x=>x==="elite"?"#4FAE8E":x==="professional"?"#0ea5e9":"#6366f1";
+  const sBg=x=>x==="confirmed"?"rgba(79,174,142,.1)":x==="rejected"?"rgba(198,96,79,.1)":"rgba(214,162,76,.1)";
   const sCol=x=>x==="confirmed"?"#6ee7b7":x==="rejected"?"#fca5a5":"#fcd34d";
   const totalRev=payments.filter(p=>p.status==="confirmed").reduce((a,p)=>a+(p.amount||0),0);
 
@@ -1336,7 +1336,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
           style={{width:"100%",background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:8,padding:"9px 11px",fontSize:12,color:cs.text,resize:"none",height:70,boxSizing:"border-box",outline:"none",marginBottom:11}}/>
         <div style={{display:"flex",gap:7}}>
           <button onClick={()=>{setModal(null);setReason("");}} style={{flex:1,background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:8,padding:9,fontSize:12,color:cs.muted,cursor:"pointer"}}>Cancel</button>
-          <button onClick={doReject} style={{flex:1,background:"rgba(239,68,68,.15)",border:"0.5px solid rgba(239,68,68,.3)",borderRadius:8,padding:9,fontSize:12,fontWeight:600,color:"#fca5a5",cursor:"pointer"}}>{t.reject}</button>
+          <button onClick={doReject} style={{flex:1,background:"rgba(198,96,79,.15)",border:"0.5px solid rgba(198,96,79,.3)",borderRadius:8,padding:9,fontSize:12,fontWeight:600,color:"#fca5a5",cursor:"pointer"}}>{t.reject}</button>
         </div>
       </div>
     </div>}
@@ -1347,7 +1347,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
         <div><div style={{fontSize:12,fontWeight:700}}>Corvus Admin</div><div style={{fontSize:9,color:cs.muted}}>{adminUser?.email}</div></div>
       </div>
       <div style={{display:"flex",gap:9,alignItems:"center"}}>
-        <div style={{fontSize:12,color:"#10b981",fontWeight:600}}>{totalRev.toLocaleString()} EGP total</div>
+        <div style={{fontSize:12,color:"#4FAE8E",fontWeight:600}}>{totalRev.toLocaleString()} EGP total</div>
         <button onClick={onBack} style={{background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"5px 13px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
       </div>
     </div>
@@ -1368,14 +1368,14 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
         </select>}
         <button onClick={()=>tab==="users"?exportCSV(filtUsers.map(u=>({id:u.id,name:u.name,email:u.email,tier:u.tier,sessions:u.sessions_count})),"users.csv"):exportCSV(filtPays.map(p=>({id:p.id,user:p.user_email,tier:p.tier,amount:p.amount,method:p.payment_method_name,status:p.status,ref:p.ref_code})),"payments.csv")}
           style={{background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:8,padding:"8px 12px",fontSize:11,color:cs.muted,cursor:"pointer",fontWeight:600}}>{t.exportCSV}</button>
-        {selected.length>0&&<Btn cs={cs} bg="#10b981" onClick={bulkConfirm} style={{padding:"8px 13px",fontSize:11}}>✓ Confirm {selected.length}</Btn>}
+        {selected.length>0&&<Btn cs={cs} bg="#4FAE8E" onClick={bulkConfirm} style={{padding:"8px 13px",fontSize:11}}>✓ Confirm {selected.length}</Btn>}
       </div>}
 
       {loading?<div style={{textAlign:"center",padding:44,color:cs.muted}}><div style={{width:28,height:28,border:"3px solid rgba(148,163,184,.2)",borderTop:"3px solid #1a56db",borderRadius:"50%",margin:"0 auto",animation:"spin 1s linear infinite"}}/></div>:
 
       tab==="revenue"?(<div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:11,marginBottom:18}}>
-          {[[totalRev.toLocaleString()+" EGP",isAr?"إجمالي الإيرادات":"Total Revenue","#10b981"],[payments.filter(p=>p.status==="confirmed").length,isAr?"مؤكد":"Confirmed","#6366f1"],[payments.filter(p=>p.status==="pending").length,isAr?"معلق":"Pending","#f59e0b"],[payments.filter(p=>p.status==="rejected").length,isAr?"مرفوض":"Rejected","#ef4444"]].map(([v,l,c])=>(
+          {[[totalRev.toLocaleString()+" EGP",isAr?"إجمالي الإيرادات":"Total Revenue","#4FAE8E"],[payments.filter(p=>p.status==="confirmed").length,isAr?"مؤكد":"Confirmed","#6366f1"],[payments.filter(p=>p.status==="pending").length,isAr?"معلق":"Pending","#D6A24C"],[payments.filter(p=>p.status==="rejected").length,isAr?"مرفوض":"Rejected","#C6604F"]].map(([v,l,c])=>(
             <div key={l} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:12,padding:15}}><div style={{fontSize:9.5,color:cs.muted,marginBottom:4}}>{l}</div><div style={{fontSize:19,fontWeight:700,color:c}}>{v}</div></div>
           ))}
         </div>
@@ -1392,7 +1392,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
             <div key={u.id} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:11,flexWrap:"wrap"}}>
               <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${tCol(u.tier)},${tCol(u.tier)}88)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"white",flexShrink:0}}>{(u.name||u.email||"U")[0].toUpperCase()}</div>
               <div style={{flex:"0 0 180px"}}><div style={{fontSize:12,fontWeight:600,color:cs.text}}>{u.name||"—"}</div><div style={{fontSize:10,color:cs.muted}}>{u.email}</div></div>
-              <span style={{background:`rgba(${u.tier==="elite"?"16,185,129":u.tier==="professional"?"14,165,233":"99,102,241"},.12)`,color:tCol(u.tier),borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700}}>{(u.tier||"standard").toUpperCase()}</span>
+              <span style={{background:`rgba(${u.tier==="elite"?"79,174,142":u.tier==="professional"?"14,165,233":"99,102,241"},.12)`,color:tCol(u.tier),borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700}}>{(u.tier||"standard").toUpperCase()}</span>
               <div style={{fontSize:10,color:cs.muted}}>{u.company||"—"}</div>
               <div style={{fontSize:10,color:cs.muted,marginLeft:"auto"}}>{u.sessions_count||0} {isAr?"جلسة":"sessions"}</div>
               <select onChange={e=>{if(e.target.value){updateUserTier(u.id,e.target.value,null).then(()=>{load();addToast(isAr?"تم تحديث الباقة":"Tier updated","success");});}}} defaultValue="" style={{background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:6,padding:"4px 7px",fontSize:10,color:cs.muted,cursor:"pointer"}}>
@@ -1413,13 +1413,13 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
         {filtPays.length===0?<div style={{textAlign:"center",padding:40,color:cs.muted,background:cs.card,borderRadius:11,fontSize:12}}>No payments found</div>:
         <div style={{display:"grid",gap:8}}>
           {filtPays.map(pay=>(
-            <div key={pay.id} style={{background:cs.card,border:`0.5px solid ${pay.status==="pending"?cs.border:pay.status==="confirmed"?"rgba(16,185,129,.25)":"rgba(239,68,68,.2)"}`,borderRadius:11,padding:"12px 16px"}}>
+            <div key={pay.id} style={{background:cs.card,border:`0.5px solid ${pay.status==="pending"?cs.border:pay.status==="confirmed"?"rgba(79,174,142,.25)":"rgba(198,96,79,.2)"}`,borderRadius:11,padding:"12px 16px"}}>
               <div style={{display:"flex",alignItems:"flex-start",gap:11,flexWrap:"wrap"}}>
                 {pay.status==="pending"&&<input type="checkbox" checked={selected.includes(pay.id)} onChange={e=>setSelected(prev=>e.target.checked?[...prev,pay.id]:prev.filter(id=>id!==pay.id))} style={{marginTop:3,flexShrink:0}}/>}
                 <div style={{flex:"1 1 200px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,flexWrap:"wrap"}}>
                     <div style={{fontSize:13,fontWeight:700,color:cs.text}}>{pay.user_name||pay.user_email}</div>
-                    <span style={{background:`rgba(${pay.tier==="elite"?"16,185,129":pay.tier==="professional"?"14,165,233":"99,102,241"},.12)`,color:tCol(pay.tier),borderRadius:99,padding:"1px 7px",fontSize:8.5,fontWeight:700}}>{(pay.tier||"").toUpperCase()}</span>
+                    <span style={{background:`rgba(${pay.tier==="elite"?"79,174,142":pay.tier==="professional"?"14,165,233":"99,102,241"},.12)`,color:tCol(pay.tier),borderRadius:99,padding:"1px 7px",fontSize:8.5,fontWeight:700}}>{(pay.tier||"").toUpperCase()}</span>
                     <span style={{background:sBg(pay.status),color:sCol(pay.status),borderRadius:99,padding:"1px 7px",fontSize:8.5,fontWeight:600}}>{pay.status?.toUpperCase()}</span>
                   </div>
                   <div style={{fontSize:10,color:cs.muted,lineHeight:1.7}}>
@@ -1432,8 +1432,8 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
                 <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end",flexShrink:0}}>
                   <div style={{fontSize:9,color:cs.muted}}>{pay.created_at?.toDate?.()?.toLocaleString?.()}</div>
                   {pay.status==="pending"&&<div style={{display:"flex",gap:5}}>
-                    <button onClick={()=>doConfirm(pay)} disabled={proc===pay.id} style={{background:"rgba(16,185,129,.15)",border:"0.5px solid rgba(16,185,129,.35)",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,color:"#6ee7b7",cursor:"pointer"}}>{proc===pay.id?"...":t.confirm}</button>
-                    <button onClick={()=>setModal(pay)} style={{background:"rgba(239,68,68,.1)",border:"0.5px solid rgba(239,68,68,.25)",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,color:"#fca5a5",cursor:"pointer"}}>{t.reject}</button>
+                    <button onClick={()=>doConfirm(pay)} disabled={proc===pay.id} style={{background:"rgba(79,174,142,.15)",border:"0.5px solid rgba(79,174,142,.35)",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,color:"#6ee7b7",cursor:"pointer"}}>{proc===pay.id?"...":t.confirm}</button>
+                    <button onClick={()=>setModal(pay)} style={{background:"rgba(198,96,79,.1)",border:"0.5px solid rgba(198,96,79,.25)",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,color:"#fca5a5",cursor:"pointer"}}>{t.reject}</button>
                   </div>}
                 </div>
               </div>
@@ -1604,7 +1604,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
               <button key={b} onClick={()=>setBilling(b)} style={{padding:"8px 17px",fontSize:12,fontWeight:600,
                 color:billing===b?cs.text:cs.muted,background:billing===b?cs.blue:"transparent",
                 border:"none",borderRadius:7,cursor:"pointer",position:"relative"}}>
-                {l}{b==="yearly"&&<span style={{position:"absolute",top:-8,right:-4,background:"#10b981",color:"white",fontSize:7,fontWeight:700,padding:"1px 5px",borderRadius:99}}>-17%</span>}
+                {l}{b==="yearly"&&<span style={{position:"absolute",top:-8,right:-4,background:"#4FAE8E",color:"white",fontSize:7,fontWeight:700,padding:"1px 5px",borderRadius:99}}>-17%</span>}
               </button>
             ))}
           </div>
@@ -1630,7 +1630,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
               </div>
               <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:3}}>
                 {tt.features.map((f,i)=><div key={i} style={{fontSize:10,color:cs.muted,display:"flex",gap:5,alignItems:"flex-start",flexDirection:isAr?"row-reverse":"row"}}>
-                  <span style={{color:"#10b981",flexShrink:0}}>✓</span>{f}
+                  <span style={{color:"#4FAE8E",flexShrink:0}}>✓</span>{f}
                 </div>)}
               </div>
             </div>;
@@ -1657,18 +1657,18 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
             <div style={{flex:1,position:"relative"}}>
               <input value={coupon} onChange={e=>setCoupon(e.target.value.toUpperCase())}
                 placeholder={isAr?"كود الخصم (سيُطبَّق تلقائياً)":"Coupon code (auto-validates)"}
-                style={{width:"100%",boxSizing:"border-box",background:cs.inp,border:`0.5px solid ${couponErr?cs.red:couponData?"rgba(16,185,129,.5)":cs.border}`,
+                style={{width:"100%",boxSizing:"border-box",background:cs.inp,border:`0.5px solid ${couponErr?cs.red:couponData?"rgba(79,174,142,.5)":cs.border}`,
                   borderRadius:8,padding:"9px 30px 9px 12px",fontSize:12,color:cs.text,outline:"none"}}/>
               {couponChecking&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:11,color:cs.muted,animation:"spin 0.7s linear infinite"}}>⟳</div>}
-              {!couponChecking&&couponData&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#10b981"}}>✓</div>}
-              {!couponChecking&&couponErr&&coupon&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#ef4444"}}>✗</div>}
+              {!couponChecking&&couponData&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#4FAE8E"}}>✓</div>}
+              {!couponChecking&&couponErr&&coupon&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#C6604F"}}>✗</div>}
             </div>
             <button onClick={applyCoupon} disabled={couponChecking||!coupon.trim()} style={{background:coupon.trim()?cs.blue:"rgba(148,163,184,.2)",color:"white",border:"none",borderRadius:8,
               padding:"9px 16px",fontSize:11,fontWeight:600,cursor:coupon.trim()?"pointer":"default",transition:"background .2s"}}>{t.applyCoupon}</button>
           </div>
-          {couponErr&&<div style={{fontSize:11,color:"#ef4444",marginTop:4}}>{couponErr}</div>}
-          {couponData&&<div style={{fontSize:11,color:"#10b981",marginTop:4}}>✓ {couponData.label} {isAr?"مطبّق":"applied"}</div>}
-          {referralCreditApplied>0&&<div style={{fontSize:11,color:"#10b981",marginTop:4}}>🔗 {isAr?`تم تطبيق ${referralCreditApplied} جنيه من رصيد الإحالة`:`${referralCreditApplied} EGP referral credit applied`}</div>}
+          {couponErr&&<div style={{fontSize:11,color:"#C6604F",marginTop:4}}>{couponErr}</div>}
+          {couponData&&<div style={{fontSize:11,color:"#4FAE8E",marginTop:4}}>✓ {couponData.label} {isAr?"مطبّق":"applied"}</div>}
+          {referralCreditApplied>0&&<div style={{fontSize:11,color:"#4FAE8E",marginTop:4}}>🔗 {isAr?`تم تطبيق ${referralCreditApplied} جنيه من رصيد الإحالة`:`${referralCreditApplied} EGP referral credit applied`}</div>}
         </div>
 
         {/* Price summary */}
@@ -1677,7 +1677,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
             <span>{tier.name} ({billing})</span>
             <span>{subtotal?.toLocaleString()} EGP</span>
           </div>
-          {disc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#10b981",marginBottom:4,flexDirection:isAr?"row-reverse":"row"}}>
+          {disc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#4FAE8E",marginBottom:4,flexDirection:isAr?"row-reverse":"row"}}>
             <span>Discount ({disc}%)</span><span>-{(subtotal-price).toLocaleString()} EGP</span>
           </div>}
           <div style={{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:700,color:cs.text,paddingTop:8,borderTop:`0.5px solid ${cs.border}`,flexDirection:isAr?"row-reverse":"row"}}>
@@ -1686,7 +1686,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
         </div>}
 
         {/* AI tip */}
-        {aiTip&&<div style={{background:"rgba(16,185,129,.05)",border:"0.5px solid rgba(16,185,129,.2)",borderRadius:10,padding:"11px 14px",marginBottom:20,fontSize:11,color:"#94a3b8",lineHeight:1.6}}>
+        {aiTip&&<div style={{background:"rgba(79,174,142,.05)",border:"0.5px solid rgba(79,174,142,.2)",borderRadius:10,padding:"11px 14px",marginBottom:20,fontSize:11,color:"#94a3b8",lineHeight:1.6}}>
           🤖 {aiTip}
         </div>}
 
@@ -1717,7 +1717,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
                 <div style={{fontSize:13,fontWeight:600,color:cs.text}}>{isAr?pm.nameAr:pm.name}</div>
                 <div style={{fontSize:10,color:cs.muted,marginTop:2}}>{isAr?pm.descAr:pm.desc}</div>
               </div>
-              {pm.instant&&<span style={{background:"rgba(16,185,129,.12)",color:"#10b981",fontSize:8.5,fontWeight:700,padding:"2px 8px",borderRadius:99}}>{isAr?"فوري":"INSTANT"}</span>}
+              {pm.instant&&<span style={{background:"rgba(79,174,142,.12)",color:"#4FAE8E",fontSize:8.5,fontWeight:700,padding:"2px 8px",borderRadius:99}}>{isAr?"فوري":"INSTANT"}</span>}
             </div>
           ))}
         </div>
@@ -1747,7 +1747,7 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
   const[open,setOpen]=useState(false);
   const ref=useRef(null);
   const initial=(profile?.name||user?.email||"U")[0].toUpperCase();
-  const tierColor=profile?.tier==="elite"?"#10b981":profile?.tier==="professional"?"#0ea5e9":"#6366f1";
+  const tierColor=profile?.tier==="elite"?"#4FAE8E":profile?.tier==="professional"?"#0ea5e9":"#6366f1";
 
   // Trial days remaining
   const trialDaysLeft = profile?.is_trial && profile?.trial_expires_at
@@ -1782,7 +1782,7 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
         position:"relative",
       }} title={profile?.name||user?.email}>
         {initial}
-        {profile?.is_trial&&<span style={{position:"absolute",top:-3,right:-3,width:8,height:8,background:"#f59e0b",borderRadius:"50%",border:`1.5px solid ${cs.bg}`}}/>}
+        {profile?.is_trial&&<span style={{position:"absolute",top:-3,right:-3,width:8,height:8,background:"#D6A24C",borderRadius:"50%",border:`1.5px solid ${cs.bg}`}}/>}
       </button>
       {open&&(
         <div style={{
@@ -1796,7 +1796,7 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
             <div style={{fontSize:10,color:cs.muted,marginTop:2}}>{user?.email}</div>
             {profile?.tier&&<div style={{display:"inline-block",marginTop:5,background:`${tierColor}18`,border:`0.5px solid ${tierColor}40`,borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700,color:tierColor}}>{profile.tier.toUpperCase()}{profile.is_trial?" ⏱":""}</div>}
             {profile?.is_trial&&trialDaysLeft!==null&&(
-              <div style={{marginTop:4,fontSize:9.5,color:"#f59e0b",fontWeight:600}}>
+              <div style={{marginTop:4,fontSize:9.5,color:"#D6A24C",fontWeight:600}}>
                 {isAr?`${trialDaysLeft} يوم متبقي`:`${trialDaysLeft} days left`}
               </div>
             )}
@@ -2004,7 +2004,7 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
           style={{ width:"100%", boxSizing:"border-box", textAlign:"center", fontSize:20, letterSpacing:3, fontWeight:700, background:"rgba(255,255,255,0.05)", border:`1.5px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"12px", outline:"none", marginBottom:12 }}
           autoFocus
         />
-        {error && <div style={{ color:"#ef4444", fontSize:12, marginBottom:12 }}>{error}</div>}
+        {error && <div style={{ color:"#C6604F", fontSize:12, marginBottom:12 }}>{error}</div>}
         <button onClick={verify} disabled={busy} style={{ width:"100%", background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"13px", cursor:"pointer", fontWeight:800, fontSize:15, marginBottom:10 }}>
           {busy ? (isAr?"جاري التحقق…":"Verifying…") : (isAr?"تأكيد":"Verify")}
         </button>
@@ -3650,7 +3650,7 @@ export default function App(){
         .sort(([,a],[,b])=>a.score-b.score)[0] : null,
       grade: avg>=85?"Excellent":avg>=70?"Good":avg>=55?"Fair":"Needs work",
       gradeAr: avg>=85?"ممتاز":avg>=70?"جيد":avg>=55?"مقبول":"يحتاج تحسين",
-      color: avg>=75?"#10b981":avg>=50?"#f59e0b":"#ef4444",
+      color: avg>=75?"#4FAE8E":avg>=50?"#D6A24C":"#C6604F",
       // Trend: compare first vs last 20% of frames
       trend: (()=>{
         if(hist.length<10) return "stable";
@@ -4566,7 +4566,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
                 {[
                   {id:"individual",icon:"🧑‍💻",label:isAr?"مستخدم فردي":"Individual",desc:isAr?"تتبع وضعيتك الشخصية، AI Coach، وتقارير شخصية":"Personal posture tracking, AI Coach, personal reports",color:"#3b82f6",features:isAr?["داشبورد شخصي","AI Coach","تقارير PDF"]:["Personal dashboard","AI Coach","PDF reports"]},
-                  {id:"company",icon:"🏢",label:isAr?"شركة / فريق":"Company / Team",desc:isAr?"راقب فريقك كاملاً، HR analytics، وتنبيهات الخطر":"Monitor your entire team, HR analytics, at-risk alerts",color:"#10b981",features:isAr?["داشبورد الفريق","HR Panel","تقارير المؤسسة"]:["Team dashboard","HR Panel","Org reports"]},
+                  {id:"company",icon:"🏢",label:isAr?"شركة / فريق":"Company / Team",desc:isAr?"راقب فريقك كاملاً، HR analytics، وتنبيهات الخطر":"Monitor your entire team, HR analytics, at-risk alerts",color:"#4FAE8E",features:isAr?["داشبورد الفريق","HR Panel","تقارير المؤسسة"]:["Team dashboard","HR Panel","Org reports"]},
                 ].map(o=>(
                   <button key={o.id}
                     type="button"
@@ -4708,8 +4708,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
   const LBL={fontSize:8.5,color:cs.muted,textTransform:"uppercase",letterSpacing:".09em",marginBottom:6,fontWeight:500};
   const SC2={background:cs.card2,border:`0.5px solid ${cs.border}`,borderRadius:8,padding:"9px 10px"};
   const abox=tp=>({borderRadius:8,padding:"9px 11px",fontSize:10.5,lineHeight:1.5,border:"0.5px solid",
-    background:tp==="warn"?"rgba(245,158,11,.07)":tp==="good"?"rgba(16,185,129,.07)":tp==="bad"?"rgba(239,68,68,.07)":"rgba(99,102,241,.07)",
-    borderColor:tp==="warn"?"rgba(245,158,11,.3)":tp==="good"?"rgba(16,185,129,.3)":tp==="bad"?"rgba(239,68,68,.3)":"rgba(99,102,241,.3)",
+    background:tp==="warn"?"rgba(214,162,76,.07)":tp==="good"?"rgba(79,174,142,.07)":tp==="bad"?"rgba(198,96,79,.07)":"rgba(99,102,241,.07)",
+    borderColor:tp==="warn"?"rgba(214,162,76,.3)":tp==="good"?"rgba(79,174,142,.3)":tp==="bad"?"rgba(198,96,79,.3)":"rgba(99,102,241,.3)",
     color:tp==="warn"?"#fcd34d":tp==="good"?"#6ee7b7":tp==="bad"?"#fca5a5":"#a5b4fc"});
 
   // ── HOME PAGE ─────────────────────────────────────────────────────
@@ -5045,8 +5045,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Top issue */}
             {sessionResult.top_metric&&(
-              <div style={{background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,textAlign:"left"}}>
-                <div style={{fontSize:11,color:"#f59e0b",fontWeight:700,marginBottom:3}}>
+              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,textAlign:"left"}}>
+                <div style={{fontSize:11,color:"#D6A24C",fontWeight:700,marginBottom:3}}>
                   {isAr?"أبرز مشكلة":"Top issue to fix"}
                 </div>
                 <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
@@ -5058,16 +5058,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
             {/* Elite: worst-posture snapshots */}
             {sessionResult.worst_snapshots?.length>0&&(
               <div style={{marginBottom:20,textAlign:"left"}}>
-                <div style={{fontSize:11,color:"#10b981",fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                <div style={{fontSize:11,color:"#4FAE8E",fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
                   📸 {isAr?"أسوأ لحظات الجلسة":"Worst posture moments"}
-                  <span style={{fontSize:8,background:"rgba(16,185,129,.12)",border:"1px solid rgba(16,185,129,.25)",borderRadius:99,padding:"1px 6px"}}>ELITE</span>
+                  <span style={{fontSize:8,background:"rgba(79,174,142,.12)",border:"1px solid rgba(79,174,142,.25)",borderRadius:99,padding:"1px 6px"}}>ELITE</span>
                 </div>
                 <div style={{display:"flex",gap:8}}>
                   {sessionResult.worst_snapshots.map((s,i)=>(
-                    <div key={i} style={{flex:1,position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid rgba(239,68,68,.3)"}}>
+                    <div key={i} style={{flex:1,position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid rgba(198,96,79,.3)"}}>
                       <img src={s.img} alt={`posture ${s.score}`} style={{width:"100%",display:"block",transform:"scaleX(-1)"}}/>
                       <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,.65)",padding:"3px 6px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <span style={{fontSize:10,fontWeight:800,color:s.score<40?"#ef4444":"#f59e0b"}}>{s.score}</span>
+                        <span style={{fontSize:10,fontWeight:800,color:s.score<40?"#C6604F":"#D6A24C"}}>{s.score}</span>
                         <span style={{fontSize:8,color:"rgba(255,255,255,.6)"}}>{s.time}</span>
                       </div>
                     </div>
@@ -5078,9 +5078,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Trend badge */}
             {sessionResult.trend && sessionResult.trend !== "stable" && (
-              <div style={{display:"flex",alignItems:"center",gap:8,background:sessionResult.trend==="improving"?"rgba(16,185,129,.08)":"rgba(239,68,68,.08)",border:`1px solid ${sessionResult.trend==="improving"?"rgba(16,185,129,.25)":"rgba(239,68,68,.25)"}`,borderRadius:10,padding:"9px 14px",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,background:sessionResult.trend==="improving"?"rgba(79,174,142,.08)":"rgba(198,96,79,.08)",border:`1px solid ${sessionResult.trend==="improving"?"rgba(79,174,142,.25)":"rgba(198,96,79,.25)"}`,borderRadius:10,padding:"9px 14px",marginBottom:12}}>
                 <span style={{fontSize:18}}>{sessionResult.trend==="improving"?"📈":"📉"}</span>
-                <div style={{fontSize:12,color:sessionResult.trend==="improving"?"#10b981":"#ef4444",fontWeight:600}}>
+                <div style={{fontSize:12,color:sessionResult.trend==="improving"?"#4FAE8E":"#C6604F",fontWeight:600}}>
                   {sessionResult.trend==="improving"
                     ?(isAr?"وضعيتك تتحسن خلال هذه الجلسة 💪":"Your posture improved during this session 💪")
                     :(isAr?"وضعيتك تراجعت — خذ استراحة":"Posture declined — consider a break")}
@@ -5100,8 +5100,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Pain prediction */}
             {sessionResult.pain_summary && (
-              <div style={{background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.25)",borderRadius:10,padding:"9px 14px",marginBottom:12}}>
-                <div style={{fontSize:12,color:"#f59e0b",fontWeight:600}}>{sessionResult.pain_summary}</div>
+              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.25)",borderRadius:10,padding:"9px 14px",marginBottom:12}}>
+                <div style={{fontSize:12,color:"#D6A24C",fontWeight:600}}>{sessionResult.pain_summary}</div>
               </div>
             )}
 
@@ -5150,7 +5150,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     addToast("PDF error: "+(e?.message||"unknown"),"error");
                   }
                 }}
-                  style={{flex:1,padding:"10px",background:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.05)":effectiveTier==="elite"?"rgba(16,185,129,.15)":"rgba(99,102,241,.15)",color:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.4)":effectiveTier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.1)":effectiveTier==="elite"?"rgba(16,185,129,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  style={{flex:1,padding:"10px",background:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.05)":effectiveTier==="elite"?"rgba(79,174,142,.15)":"rgba(99,102,241,.15)",color:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.4)":effectiveTier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.1)":effectiveTier==="elite"?"rgba(79,174,142,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {qualityFor(effectiveTier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${effectiveTier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
                 </button>
                 {/* Share button — Elite only. Was gated on raw `tier`, which
@@ -5239,16 +5239,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <button onClick={()=>setLang(lang==="en"?"ar":"en")}
-              style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 10px",fontSize:11,color:cs.muted,cursor:"pointer"}}>
+            <button onClick={()=>setLang(lang==="en"?"ar":"en")} aria-label={isAr?"تغيير اللغة":"Change language"}
+              style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:8,padding:"4px 10px",fontSize:11,color:cs.muted,cursor:"pointer"}}>
               {lang==="en"?"عربي":"EN"}
             </button>
-            <button onClick={()=>setDarkMode(!darkMode)}
-              style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",fontSize:12,cursor:"pointer"}}>
+            <button onClick={()=>setDarkMode(!darkMode)} aria-label={isAr?(darkMode?"وضع فاتح":"وضع داكن"):(darkMode?"Light mode":"Dark mode")}
+              style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:8,padding:"4px 8px",fontSize:12,cursor:"pointer"}}>
               {darkMode?"☀️":"🌙"}
             </button>
             <button onClick={()=>setPage("pricing")}
-              style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:7,padding:"4px 10px",fontSize:11,fontWeight:600,color:"#a5b4fc",cursor:"pointer"}}>
+              style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:600,color:"#a5b4fc",cursor:"pointer"}}>
               ↑ {isAr?"ترقية":"Upgrade"}
             </button>
           </div>
@@ -5257,10 +5257,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Main 4 stats */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,background:cs.border,margin:"0",borderBottom:`1px solid ${cs.border}`}}>
           {[
-            {label:isAr?"متوسط النقاط":"Avg Score",   value:avg||"--",  color:avg?sc(avg):"#475569",big:true},
-            {label:isAr?"وقت الجلسة":"Session Time", value:`${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`, color:"#94a3b8",big:true},
-            {label:isAr?"وضعية جيدة":"Good Posture",  value:gPct+"%",   color:"#10b981",big:false},
-            {label:isAr?"التنبيهات":"Alerts",         value:alertCounts.total, color:alertCounts.total>0?"#f59e0b":"#475569",big:false},
+            {label:isAr?"متوسط النقاط":"Avg Score",   value:avg||"--",  color:avg?sc(avg):"#475569"},
+            {label:isAr?"وقت الجلسة":"Session Time", value:`${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`, color:"#94a3b8"},
+            {label:isAr?"وضعية جيدة":"Good Posture",  value:gPct+"%",   color:"#4FAE8E"},
+            {label:isAr?"التنبيهات":"Alerts",         value:alertCounts.total, color:alertCounts.total>0?"#D6A24C":"#475569"},
           ].map((s,i)=>(
             <div key={s.label} style={{
               background:cs.card,
@@ -5273,55 +5273,51 @@ async function downloadPDF(sessionOverride, isClinical=false){
           ))}
         </div>
 
-        {/* Calibration missing banner */}
-        {!calibData && (
-          <div style={{margin:"0 16px 8px",background:"rgba(245,158,11,.04)",
-            border:"1px solid rgba(245,158,11,.15)",borderRadius:10,padding:"8px 12px",
-            display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:16,flexShrink:0}}>⚙️</span>
-            <div style={{flex:1}}>
-              <div style={{fontSize:11.5,fontWeight:700,color:"#f59e0b",marginBottom:2}}>
-                {isAr?"الوضعية غير معايرة — النتائج تقريبية":"Not calibrated — results are approximate"}
+        {/* Onboarding / calibration guidance — single card, priority-ordered.
+            Previously this was two separate stacked banners (calibration +
+            "press start" empty state) that both rendered at once for a
+            first-time uncalibrated user — two bordered boxes making the
+            same basic point ("do something before you start") right on
+            top of each other. Now it's one card: calibration takes
+            priority when it applies (it's the higher-value action), the
+            plain welcome only shows for an already-calibrated user who
+            simply hasn't run a session yet. */}
+        {!camActive && (!calibData ? true : sessionTime===0 && avg===0) && (()=>{
+          const needsCalib = !calibData;
+          const col = needsCalib ? "#D6A24C" : (TN?.color || "#1a56db");
+          return (
+            <div style={{margin:"10px 16px",background:`${col}0f`,
+              border:`1px solid ${col}40`,borderRadius:12,padding:"12px 14px",
+              display:"flex",alignItems:"flex-start",gap:11}}>
+              <span style={{fontSize:18,flexShrink:0,lineHeight:1.3}}>{needsCalib?"⚙️":"▶"}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:col,marginBottom:3}}>
+                  {needsCalib
+                    ? (isAr?"الوضعية غير معايرة — النتائج تقريبية":"Not calibrated — results are approximate")
+                    : (isAr?"اضغط ابدأ التحليل للبدء":"Press Start Analysis to begin")}
+                </div>
+                <div style={{fontSize:11,color:cs.muted,lineHeight:1.55}}>
+                  {needsCalib
+                    ? (isAr?"اعمل معايرة سريعة (30 ثانية) للحصول على درجة دقيقة مخصصة لوضعيتك الطبيعية":"A quick 30-second calibration gets you a score tuned to your natural posture")
+                    : (isAr?"Corvus هيحلل وضعيتك لحظياً ويديك درجة ونصائح فورية":"Corvus will analyse your posture live and give you a score + instant tips")}
+                </div>
+                {userSessions?.length > 0 && (
+                  <div style={{marginTop:6,fontSize:10.5,color:cs.muted}}>
+                    {isAr?`آخر جلسة: ${userSessions[0]?.avg_score||0}/100`:`Last session: ${userSessions[0]?.avg_score||0}/100`}
+                  </div>
+                )}
               </div>
-              <div style={{fontSize:10.5,color:cs.muted}}>
-                {isAr?"اعمل معايرة للحصول على درجة دقيقة":"Calibrate for accurate posture scoring"}
-              </div>
+              {needsCalib && (
+                <button onClick={()=>setShowCalibWizard(true)}
+                  style={{fontSize:10.5,fontWeight:700,padding:"6px 11px",
+                    background:`${col}1a`,border:`1px solid ${col}55`,
+                    borderRadius:8,color:col,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+                  {isAr?"معايرة الآن":"Calibrate →"}
+                </button>
+              )}
             </div>
-            <button onClick={()=>setShowCalibWizard(true)}
-              style={{fontSize:10.5,fontWeight:700,padding:"5px 10px",
-                background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.3)",
-                borderRadius:7,color:"#f59e0b",cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-              {isAr?"معايرة الآن":"Calibrate →"}
-            </button>
-          </div>
-        )}
-
-        {/* Pre-session empty state */}
-        {!camActive && sessionTime === 0 && avg === 0 && (
-          <div style={{margin:"12px 16px",padding:"20px",
-            background:"linear-gradient(135deg,rgba(26,86,219,.08),rgba(8,145,178,.05))",
-            border:"1px solid rgba(26,86,219,.2)",borderRadius:16,textAlign:"center"}}>
-            <div style={{fontSize:32,marginBottom:10}}>🧘</div>
-            <div style={{fontSize:14,fontWeight:700,color:"#93c5fd",marginBottom:6}}>
-              {isAr?"جاهز لتحليل وضعيتك":"Ready to analyse your posture"}
-            </div>
-            <div style={{fontSize:11.5,color:cs.muted,lineHeight:1.7,marginBottom:userSessions?.length>0?12:0}}>
-              {isAr
-                ? "اضبط وضعيتك أمام الكاميرا واضغط ابدأ"
-                : "Position yourself in front of the camera, then press Start"}
-            </div>
-            {userSessions?.length > 0 && (
-              <div style={{display:"inline-flex",alignItems:"center",gap:6,
-                background:"rgba(96,165,250,.1)",border:"1px solid rgba(96,165,250,.2)",
-                borderRadius:99,padding:"4px 12px",fontSize:11,color:"#60a5fa",fontWeight:600}}>
-                <span>📈</span>
-                {isAr
-                  ? `آخر جلسة: ${userSessions[0]?.avg_score||0}/100`
-                  : `Last session: ${userSessions[0]?.avg_score||0}/100`}
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* Score history chart */}
         <div style={{margin:"0 16px 12px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:14,padding:"14px 16px"}}>
@@ -5335,11 +5331,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
             )}
           </div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:80,position:"relative"}}>
-            <div style={{position:"absolute",left:0,right:0,top:`${(1-80/100)*80}px`,
-              borderTop:"1px dashed rgba(16,185,129,.2)",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",left:0,right:0,top:`${(1-60/100)*80}px`,
-              borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
+          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:68,position:"relative"}}>
+            <div style={{position:"absolute",left:0,right:0,top:`${(1-80/100)*68}px`,
+              borderTop:"1px dashed rgba(79,174,142,.2)",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",left:0,right:0,top:`${(1-60/100)*68}px`,
+              borderTop:"1px dashed rgba(214,162,76,.18)",pointerEvents:"none"}}/>
             {(history.length?history:Array(40).fill(0)).map((s,i)=>{
               const isLast=i===history.length-1;
               // Bars are pushed at a roughly even cadence across the session,
@@ -5390,8 +5386,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{display:"flex",justifyContent:"space-between",marginTop:5,fontSize:9,color:cs.muted}}>
             <span>{isAr?"الأقدم":"Oldest"}</span>
             <div style={{display:"flex",gap:8}}>
-              <span style={{color:"rgba(16,185,129,.6)"}}>━ 80</span>
-              <span style={{color:"rgba(245,158,11,.5)"}}>━ 60</span>
+              <span style={{color:"rgba(79,174,142,.6)"}}>━ 80</span>
+              <span style={{color:"rgba(214,162,76,.5)"}}>━ 60</span>
             </div>
             <span>{isAr?"الأحدث":"Newest"}</span>
           </div>
@@ -5399,8 +5395,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* AI insight */}
         {aiInsight&&(
-          <div style={{margin:"0 16px 12px",background:"rgba(16,185,129,.06)",border:"1px solid rgba(16,185,129,.2)",borderRadius:12,padding:"12px 14px",animation:"fadeUp .3s ease"}}>
-            <div style={{fontSize:9.5,fontWeight:700,color:"#10b981",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>
+          <div style={{margin:"0 16px 12px",background:"rgba(79,174,142,.06)",border:"1px solid rgba(79,174,142,.2)",borderRadius:12,padding:"12px 14px",animation:"fadeUp .3s ease"}}>
+            <div style={{fontSize:9.5,fontWeight:700,color:"#4FAE8E",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>
               {isAr?"تحليل AI":"AI Analysis"}
             </div>
             <div style={{fontSize:11.5,color:cs.text,lineHeight:1.65}}>{aiInsight}</div>
@@ -5416,7 +5412,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                 display:"flex",alignItems:"center",gap:4}}>
               🔒 🧠 {isAr?"تحليل AI":"AI analysis"}
-              <span style={{fontSize:8,color:"#10b981",fontWeight:800}}>ELITE</span>
+              <span style={{fontSize:8,color:"#4FAE8E",fontWeight:800}}>ELITE</span>
             </button>
           </div>
         )}
@@ -5469,13 +5465,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 {alerts.length>0&&<button onClick={()=>setAlerts([])} aria-label={isAr?"مسح كل التنبيهات":"Clear all alerts"} style={{fontSize:9,color:cs.muted,background:"none",border:"none",cursor:"pointer",padding:"6px 8px",minHeight:28}}>✕ {isAr?"مسح":"clear"}</button>}
-                <span style={{fontSize:10,fontWeight:700,color:"#ef4444",background:"rgba(239,68,68,.12)",borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
+                <span style={{fontSize:10,fontWeight:700,color:"#C6604F",background:"rgba(198,96,79,.12)",borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
               </div>
             </div>
             {alerts.slice(0,3).map((a,i)=>{
               const sev = a.severity==="severe"||a.score<40 ? "severe"
                         : a.severity==="moderate"||a.score<55 ? "moderate" : "mild";
-              const sevColor = sev==="severe"?"#ef4444":sev==="moderate"?"#f97316":"#f59e0b";
+              const sevColor = sev==="severe"?"#C6604F":sev==="moderate"?"#f97316":"#D6A24C";
               const sevIcon  = sev==="severe"?"🔴":sev==="moderate"?"🟠":"🟡";
               const sevLabel = sev==="severe"?(isAr?"حرج":"Critical"):sev==="moderate"?(isAr?"متوسط":"Moderate"):(isAr?"خفيف":"Mild");
               const tips = FIX_TIPS[a.cause]||FIX_TIPS.default;
@@ -5532,7 +5528,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{fontSize:11,color:cs.text,lineHeight:1.6,marginBottom:6}}>{weeklyPattern.summary}</div>
             {weeklyPattern.topCause&&(
               <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
-                <span style={{fontSize:10,color:"#ef4444",fontWeight:700}}>{weeklyPattern.pct}%</span>
+                <span style={{fontSize:10,color:"#C6604F",fontWeight:700}}>{weeklyPattern.pct}%</span>
                 <span style={{fontSize:10,color:cs.muted}}>{weeklyPattern.topCause}</span>
               </div>
             )}
@@ -5602,10 +5598,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
             <div style={{
               width:6,height:6,borderRadius:"50%",flexShrink:0,
-              background:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":mpStatus==="fallback"?"#60a5fa":"#f59e0b",
+              background:mpStatus==="ready"?"#4FAE8E":mpStatus==="error"?"#C6604F":mpStatus==="fallback"?"#60a5fa":"#D6A24C",
               animation:mpStatus==="loading"?"livePulse 1.2s infinite":"none",
             }}/>
-            <span style={{fontSize:10,color:mpStatus==="ready"?"#10b981":mpStatus==="error"?"#ef4444":mpStatus==="fallback"?"#60a5fa":"#f59e0b",fontWeight:600}}>
+            <span style={{fontSize:10,color:mpStatus==="ready"?"#4FAE8E":mpStatus==="error"?"#C6604F":mpStatus==="fallback"?"#60a5fa":"#D6A24C",fontWeight:600}}>
               {mpStatus==="ready"?(isAr?"وضعية ✓":"Pose ✓"):mpStatus==="error"?(isAr?"خطأ":"Error"):mpStatus==="fallback"?(isAr?"عبر السيرفر ✓":"Server mode ✓"):(isAr?"تحميل...":"Loading...")}
             </span>
           </div>
@@ -5615,10 +5611,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
             <div style={{
               width:6,height:6,borderRadius:"50%",flexShrink:0,
-              background:aiCoachStatus.error?"#ef4444":aiCoachStatus.ready?"#6366f1":"#f59e0b",
+              background:aiCoachStatus.error?"#C6604F":aiCoachStatus.ready?"#6366f1":"#D6A24C",
               animation:(!aiCoachStatus.ready&&!aiCoachStatus.error)?"livePulse 1.2s infinite":"none",
             }}/>
-            <span style={{fontSize:10,color:aiCoachStatus.error?"#ef4444":aiCoachStatus.ready?"#6366f1":"#f59e0b",fontWeight:600}}>
+            <span style={{fontSize:10,color:aiCoachStatus.error?"#C6604F":aiCoachStatus.ready?"#6366f1":"#D6A24C",fontWeight:600}}>
               {aiCoachStatus.ready
                 ?(isAr?"AI ✓":"AI ✓")
                 :aiCoachStatus.loading
@@ -5664,6 +5660,36 @@ async function downloadPDF(sessionOverride, isClinical=false){
             style={{width:"100%",height:"100%",objectFit:isFs?"contain":"cover",transform:"scaleX(-1)",display:"block"}}/>
           <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)",objectFit:isFs?"contain":"cover"}}/>
           <canvas ref={canvRef} style={{display:"none"}}/>
+
+          {/* Viewfinder frame — this is a computer-vision scanner, so the
+              signature visual treatment is a scan reticle (not a generic
+              rounded video box). Corners read as a status light: dim while
+              idle, brand color while a good-quality frame is being read,
+              warm amber when the current frame fails the quality gate
+              (too close/far/cropped) — the same signal as the text badge
+              below, but visible at a glance without reading anything. */}
+          {(()=>{
+            const badQuality = camActive && analysis?.qualityScore != null && analysis.qualityScore < 100;
+            const vfColor = !camActive ? "rgba(255,255,255,.22)" : badQuality ? "#D6A24C" : (TN?.color || "#38bdf8");
+            const corner = (top, left) => ({
+              position:"absolute", width:26, height:26, [top?"top":"bottom"]:10, [left?"left":"right"]:10,
+              borderTop: top ? `2.5px solid ${vfColor}` : "none",
+              borderBottom: !top ? `2.5px solid ${vfColor}` : "none",
+              borderLeft: left ? `2.5px solid ${vfColor}` : "none",
+              borderRight: !left ? `2.5px solid ${vfColor}` : "none",
+              borderRadius: top&&left?"8px 0 0 0":top&&!left?"0 8px 0 0":!top&&left?"0 0 0 8px":"0 0 8px 0",
+              opacity: camActive && !badQuality ? 1 : 0.65,
+              transition:"border-color .3s ease, opacity .3s ease",
+              pointerEvents:"none", zIndex:12,
+            });
+            return (
+              <div style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:12}}>
+                <div style={corner(true,true)}/><div style={corner(true,false)}/>
+                <div style={corner(false,true)}/><div style={corner(false,false)}/>
+              </div>
+            );
+          })()}
+
           {/* Fullscreen / focus-mode toggle */}
           <button onClick={toggleFullscreen} title={isAr?"ملء الشاشة":"Fullscreen"} aria-label={isAr?"ملء الشاشة":"Toggle fullscreen"} style={{
             position:"absolute",bottom:8,right:8,zIndex:20,
@@ -5723,8 +5749,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
               alignItems:"center",justifyContent:"center",gap:14,textAlign:"center",padding:"0 28px",
               background:"rgba(2,8,16,.9)",backdropFilter:"blur(4px)",zIndex:16,
             }}>
-              <div style={{width:44,height:44,borderRadius:12,background:"rgba(239,68,68,.14)",
-                border:"1px solid rgba(239,68,68,.35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⚠️</div>
+              <div style={{width:44,height:44,borderRadius:12,background:"rgba(198,96,79,.14)",
+                border:"1px solid rgba(198,96,79,.35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⚠️</div>
               <div>
                 <div style={{fontSize:15,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
                   {isAr?"تعذر الوصول لخادم التحليل":"Can't reach the analysis server"}
@@ -5836,8 +5862,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
           )}
 
-          {/* Camera status pill */}
-          <div style={{position:"absolute",top:8,left:isAr?"auto":8,right:isAr?8:"auto"}}>
+          {/* Camera status pill — aria-live so screen-reader users get
+              "camera denied" / "too close" etc. announced as they happen,
+              instead of only being able to discover it by re-reading the
+              page. */}
+          <div aria-live="polite" style={{position:"absolute",top:8,left:isAr?"auto":8,right:isAr?8:"auto"}}>
             {(()=>{
               const pill=(dot,label)=>(
                 <div style={{
@@ -5848,18 +5877,55 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 }}>
                   <div style={{width:6,height:6,borderRadius:"50%",background:dot,
                     boxShadow:`0 0 6px ${dot}`,
-                    animation:dot==="#f59e0b"?"livePulse 1s infinite":"none"}}/>
+                    animation:dot==="#D6A24C"?"livePulse 1s infinite":"none"}}/>
                   {label}
                 </div>
               );
-              if(cameraStatus==="requesting") return pill("#f59e0b",isAr?"جاري الفتح...":"Opening...");
-              if(cameraStatus==="denied")     return pill("#ef4444",isAr?"مرفوضة — اضغط سماح":"Denied — Allow camera");
+              if(cameraStatus==="requesting") return pill("#D6A24C",isAr?"جاري الفتح...":"Opening...");
+              if(cameraStatus==="denied")     return pill("#C6604F",isAr?"مرفوضة — اضغط سماح":"Denied — Allow camera");
               // #17: no-device pill removed — the Start Analysis button below already
               // shows "❌ No camera found" clearly; showing it twice was confusing.
-              if(cameraStatus==="ready"&&camActive) return pill("#10b981",`${M_?.label||""} · Live · ${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`);
+              if(cameraStatus==="ready"&&camActive) return pill("#4FAE8E",`${M_?.label||""} · Live · ${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`);
               return pill("#94a3b8",isAr?"الكاميرا متوقفة":"Camera off");
             })()}
           </div>
+
+          {/* Persistent live distance chip — same info as the "Distance" bar
+              further down the page, but that one needs a scroll past ~8
+              sections to reach, which is useless for something the user is
+              meant to react to while looking at THIS video. Pinned here so
+              it's visible the entire time the camera is on, and reflects
+              qualityScore so it can never show a number that disagrees with
+              a "too close/far" warning — it just goes into the warning
+              state itself instead of freezing on a stale reading. */}
+          {camActive && M_ && (
+            <div style={{position:"absolute",top:38,left:isAr?"auto":8,right:isAr?8:"auto",zIndex:11}}>
+              {(()=>{
+                const badQuality = analysis?.qualityScore != null && analysis.qualityScore < 100;
+                const inRange = !badQuality && distCm!=null && distCm>=M_.optDist[0] && distCm<=M_.optDist[1];
+                const col = badQuality ? "#D6A24C" : inRange ? "#4FAE8E" : "#8A93A3";
+                const label = badQuality
+                  ? (analysis.qualityReason==="too_close" ? (isAr?"قريب جداً":"Too close")
+                    : analysis.qualityReason==="too_far" ? (isAr?"بعيد جداً":"Too far")
+                    : (isAr?"الجسم مقطوع":"Body cropped"))
+                  : distCm!=null ? `${Math.round(distCm)}cm` : (isAr?"جاري القياس…":"Measuring…");
+                return (
+                  <div style={{
+                    background:"rgba(2,8,16,.85)",borderRadius:99,padding:"4px 10px",
+                    display:"flex",alignItems:"center",gap:5,fontSize:10,fontWeight:700,
+                    color:col,backdropFilter:"blur(6px)",border:`1px solid ${col}40`,
+                  }}>
+                    📏 {label}
+                    {!badQuality && distCm!=null && !inRange && (
+                      <span style={{opacity:.7,fontWeight:500}}>
+                        {distCm<M_.optDist[0] ? (isAr?"↩ ابعد":"↩ back up") : (isAr?"↪ اقترب":"↪ move in")}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Score overlay */}
         {/* Professional live metrics panel */}
@@ -5875,7 +5941,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               paddingBottom:8,borderBottom:"1px solid rgba(255,255,255,.06)"}}>
               <div style={{
                 width:38,height:38,borderRadius:"50%",
-                background:`conic-gradient(${score>=75?"#10b981":score>=55?"#f59e0b":"#ef4444"} ${score*3.6}deg, rgba(255,255,255,.06) 0deg)`,
+                background:`conic-gradient(${score>=75?"#4FAE8E":score>=55?"#D6A24C":"#C6604F"} ${score*3.6}deg, rgba(255,255,255,.06) 0deg)`,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:11,fontWeight:900,color:"#f0f6ff",flexShrink:0,
               }}>{score}</div>
@@ -5884,7 +5950,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {isAr?"الدرجة الكلية":"ERGONOMIC SCORE"}
                 </div>
                 <div style={{fontSize:11,fontWeight:700,
-                  color:score>=75?"#10b981":score>=55?"#f59e0b":"#ef4444"}}>
+                  color:score>=75?"#4FAE8E":score>=55?"#D6A24C":"#C6604F"}}>
                   {score>=75?(isAr?"ممتاز":"Excellent"):score>=55?(isAr?"مقبول":"Fair"):(isAr?"ضعيف":"Poor")}
                 </div>
               </div>
@@ -5910,10 +5976,17 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 value:    analysis?.metrics?.spine_lean?.value,
                 unit:     "°",
               },
+              {
+                label:    isAr?"الأكتاف":"Rounding",
+                score:    analysis?.metrics?.rounded_shoulders?.score,
+                value:    analysis?.metrics?.rounded_shoulders?.value,
+                unit:     "",
+              },
               // Distance intentionally omitted here — it has its own dedicated
-              // bar in the left column; a second copy on the video was noise.
+              // persistent chip pinned on the video (see above) plus the
+              // detailed bar further down the page.
             ].map(({label,score:s,value,unit},i)=>{
-              const col = s==null?"#475569":s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
+              const col = s==null?"#475569":s>=80?"#4FAE8E":s>=60?"#D6A24C":"#C6604F";
               const risk= s==null?(isAr?"—":"—"):s>=80?(isAr?"منخفض":"Low"):s>=60?(isAr?"متوسط":"Med"):(isAr?"مرتفع":"High");
               return (
                 <div key={i} style={{display:"flex",alignItems:"center",
@@ -5956,7 +6029,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   <div style={{display:"flex", alignItems:"center", gap:5}}>
                     <span style={{fontSize:13}}>{up?"📈":"📉"}</span>
                     <div style={{fontSize:9, lineHeight:1.35,
-                      color: up ? "#10d9a0" : "#f59e0b", fontWeight:600}}>
+                      color: up ? "#10d9a0" : "#D6A24C", fontWeight:600}}>
                       {isAr
                         ? `${up?"أحسن":"أسوأ"} بـ ${Math.abs(diff)} نقطة من أول جلساتك`
                         : `${Math.abs(diff)} pts ${up?"better":"worse"} than your first sessions`}
@@ -6001,11 +6074,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 style={{
                   width:"100%",
                   background: cameraStatus==="no-device"||cameraStatus==="denied"
-                    ? "rgba(239,68,68,.15)"
+                    ? "rgba(198,96,79,.15)"
                     : cameraStatus==="requesting"
                     ? "rgba(148,163,184,.1)"
                     : `linear-gradient(135deg,${TN?.color||"#1a56db"},${TN?.colorDim||"#0891b2"})`,
-                  border: cameraStatus==="no-device"||cameraStatus==="denied" ? "1px solid rgba(239,68,68,.4)" : "none",
+                  border: cameraStatus==="no-device"||cameraStatus==="denied" ? "1px solid rgba(198,96,79,.4)" : "none",
                   borderRadius:12, padding:"14px 0",
                   fontSize:14, fontWeight:800,
                   color: cameraStatus==="no-device"||cameraStatus==="denied" ? "#fca5a5"
@@ -6027,9 +6100,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
             : <div style={{display:"flex",gap:8}}>
                 <button onClick={isPaused?resumeSession:pauseSession} style={{
                   flex:1,
-                  background: isPaused ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(5,150,105,.12))" : "rgba(148,163,184,.08)",
+                  background: isPaused ? "linear-gradient(135deg,rgba(79,174,142,.18),rgba(5,150,105,.12))" : "rgba(148,163,184,.08)",
                   color: isPaused ? "#6ee7b7" : cs.text,
-                  border:`1px solid ${isPaused?"rgba(16,185,129,.4)":cs.border}`,borderRadius:10,
+                  border:`1px solid ${isPaused?"rgba(79,174,142,.4)":cs.border}`,borderRadius:10,
                   padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
                 }}>
                   {isPaused ? (isAr?"▶ استكمال":"▶ Resume") : (isAr?"⏸ وقف مؤقت":"⏸ Pause")}
@@ -6038,12 +6111,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   flex:1,
                   background: isSavingSession
                     ? "rgba(255,255,255,.05)"
-                    : "linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.12))",
+                    : "linear-gradient(135deg,rgba(198,96,79,.18),rgba(220,38,38,.12))",
                   color: isSavingSession ? "#94a3b8" : "#fca5a5",
-                  border:`1px solid ${isSavingSession?"rgba(255,255,255,.08)":"rgba(239,68,68,.5)"}`,borderRadius:10,
+                  border:`1px solid ${isSavingSession?"rgba(255,255,255,.08)":"rgba(198,96,79,.5)"}`,borderRadius:10,
                   padding:"13px 0",fontSize:13,fontWeight:700,
                   cursor: isSavingSession ? "not-allowed" : "pointer",
-                  boxShadow: isSavingSession ? "none" : "0 2px 12px rgba(239,68,68,.2)",
+                  boxShadow: isSavingSession ? "none" : "0 2px 12px rgba(198,96,79,.2)",
                   letterSpacing:"-.01em",transition:"all .2s",
                 }}>
                   {isSavingSession
@@ -6070,7 +6143,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             never appeared and the computed prediction was thrown away. */}
         {analysis?.pain_prediction?.minutes_to_pain != null && (()=>{
           const pp=analysis.pain_prediction, m=pp.minutes_to_pain;
-          const col=m<=10?"#ef4444":m<=30?"#f97316":"#f59e0b";
+          const col=m<=10?"#C6604F":m<=30?"#f97316":"#D6A24C";
           const icon=m<=10?"🔴":m<=30?"🟠":"🟡";
           const pct=Math.max(4,Math.min(100,100-(m/60)*100)); // nearer to strain = fuller
           const conf=isAr?(pp.confidence==="high"?"عالية":pp.confidence==="medium"?"متوسطة":"منخفضة"):pp.confidence;
@@ -6134,9 +6207,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         </div>
                         <div style={{display:"flex",flexDirection:"column",gap:4}}>
                           {analysis.detectedConditions.map((cond,i)=>{
-                            const sevColor = cond.severity==="severe"?"#ef4444"
+                            const sevColor = cond.severity==="severe"?"#C6604F"
                               :cond.severity==="moderate"?"#f97316"
-                              :cond.severity==="mild"?"#f59e0b":"#10b981";
+                              :cond.severity==="mild"?"#D6A24C":"#4FAE8E";
                             const sevLabel = cond.severity==="severe"
                               ?(isAr?"شديد":"Severe")
                               :cond.severity==="moderate"
@@ -6172,7 +6245,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     {/* ── Quality score indicator ── */}
                     {analysis.qualityScore != null && analysis.qualityScore < 100 && (
                       <div style={{fontSize:9.5,padding:"3px 8px",borderRadius:99,
-                        background:"rgba(239,68,68,.1)",color:"#f87171",
+                        background:"rgba(198,96,79,.1)",color:"#f87171",
                         fontWeight:600,marginBottom:4,display:"inline-flex",alignItems:"center",gap:4}}>
                         ⚠️ {analysis.qualityReason === "body_cropped"
                           ? (isAr?"الجسم مقطوع":"Body partially visible")
@@ -6188,8 +6261,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
                       {analysis.confidence!=null&&(
                         <span style={{fontSize:9.5,padding:"2px 8px",borderRadius:99,
-                          background:`rgba(${analysis.confidence>85?"16,185,129":analysis.confidence>70?"245,158,11":"239,68,68"},.12)`,
-                          color:analysis.confidence>85?"#10b981":analysis.confidence>70?"#f59e0b":"#ef4444",
+                          background:`rgba(${analysis.confidence>85?"79,174,142":analysis.confidence>70?"214,162,76":"198,96,79"},.12)`,
+                          color:analysis.confidence>85?"#4FAE8E":analysis.confidence>70?"#D6A24C":"#C6604F",
                           fontWeight:600}}>
                           📡 {analysis.confidence}% {isAr?"دقة الرصد":"detection"}
                         </span>
@@ -6202,7 +6275,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                       )}
                       {analysis.metrics?.monitor_height?.value>5&&(
                         <span style={{fontSize:9.5,padding:"2px 8px",borderRadius:99,
-                          background:"rgba(245,158,11,.12)",color:"#f59e0b",fontWeight:600}}>
+                          background:"rgba(214,162,76,.12)",color:"#D6A24C",fontWeight:600}}>
                           🖥 {isAr
                             ?(analysis.metrics.monitor_height.direction==="below"?`الشاشة أسفل ${analysis.metrics.monitor_height.value}سم`:`الشاشة أعلى ${analysis.metrics.monitor_height.value}سم`)
                             :(analysis.metrics.monitor_height.direction==="below"?`Monitor ${analysis.metrics.monitor_height.value}cm low`:`Monitor ${analysis.metrics.monitor_height.value}cm high`)
@@ -6228,10 +6301,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     </div>
                   ))}
                 </div>
-                <div style={{fontSize:10,color:camActive?"#f59e0b":cs.muted,textAlign:"center",padding:"2px 0",
+                <div style={{fontSize:10,color:camActive?"#D6A24C":cs.muted,textAlign:"center",padding:"2px 0",
                   display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
                   {camActive && (
-                    <span style={{width:6,height:6,borderRadius:"50%",background:"#f59e0b",animation:"livePulse 1.2s infinite",flexShrink:0}}/>
+                    <span style={{width:6,height:6,borderRadius:"50%",background:"#D6A24C",animation:"livePulse 1.2s infinite",flexShrink:0}}/>
                   )}
                   {camActive
                     ? (mpStatus!=="ready"
@@ -6241,9 +6314,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         : (isAr?"بنحلل وضعيتك... استنى ثانية":"Detecting your posture... one moment"))
                     : (isAr?"ابدأ الكاميرا للتحليل":"Start camera to see metrics")}
                 </div>
-                <div style={{background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.12)",borderRadius:10,padding:"10px 12px",
+                <div style={{background:"rgba(79,174,142,.05)",border:"1px solid rgba(79,174,142,.12)",borderRadius:10,padding:"10px 12px",
                   display: camActive ? "none" : "block" /* #13: hide tips during active session */}}>
-                  <div style={{fontSize:9.5,fontWeight:700,color:"#10b981",marginBottom:8,textTransform:"uppercase",letterSpacing:".05em"}}>
+                  <div style={{fontSize:9.5,fontWeight:700,color:"#4FAE8E",marginBottom:8,textTransform:"uppercase",letterSpacing:".05em"}}>
                     {isAr?"نصائح الوضعية الصحيحة":"Correct Posture Tips"}
                   </div>
                   {(isAr?[
@@ -6277,41 +6350,50 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
               <span style={{fontSize:10,color:cs.muted,fontWeight:600}}>{isAr?"المسافة":"Distance"}</span>
-              <span style={{fontSize:12,fontWeight:700,color:distCm>=M_.optDist[0]&&distCm<=M_.optDist[1]?"#10b981":distCm>=(M_.optDist[0]-15)?"#f59e0b":"#ef4444"}}>
+              <span style={{fontSize:12,fontWeight:700,color:distCm>=M_.optDist[0]&&distCm<=M_.optDist[1]?"#4FAE8E":distCm>=(M_.optDist[0]-15)?"#D6A24C":"#C6604F"}}>
                 {Math.round(distCm)}cm
               </span>
             </div>
             <div style={{position:"relative",height:8,background:"rgba(148,163,184,.08)",borderRadius:99,overflow:"hidden"}}>
-              <div style={{position:"absolute",left:"28%",top:0,bottom:0,width:"44%",background:"rgba(16,185,129,.15)",borderRadius:99}}/>
+              <div style={{position:"absolute",left:"28%",top:0,bottom:0,width:"44%",background:"rgba(79,174,142,.15)",borderRadius:99}}/>
               <div style={{
                 position:"absolute",top:1,bottom:1,
                 left:`${clamp((distCm-20)/(115-20)*100,2,96)}%`,
                 width:6,borderRadius:99,
-                background:distCm>=M_.optDist[0]&&distCm<=M_.optDist[1]?"#10b981":distCm>=(M_.optDist[0]-15)?"#f59e0b":"#ef4444",
+                background:distCm>=M_.optDist[0]&&distCm<=M_.optDist[1]?"#4FAE8E":distCm>=(M_.optDist[0]-15)?"#D6A24C":"#C6604F",
                 transition:"left .4s ease",
               }}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:cs.muted}}>
-              <span>20cm</span><span style={{color:"#10b981"}}>{M_.optDist[0]}–{M_.optDist[1]}cm ✓</span><span>115cm</span>
+              <span>20cm</span><span style={{color:"#4FAE8E"}}>{M_.optDist[0]}–{M_.optDist[1]}cm ✓</span><span>115cm</span>
             </div>
           </div>
         )}
 
         {/* Lighting warning */}
         {lowLight && (
-          <div style={{padding:"8px 14px",background:"rgba(245,158,11,.12)",borderBottom:`1px solid ${cs.border}`,
-            display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#f59e0b",fontWeight:600}}>
+          <div style={{padding:"8px 14px",background:"rgba(214,162,76,.12)",borderBottom:`1px solid ${cs.border}`,
+            display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#D6A24C",fontWeight:600}}>
             💡 {isAr?"الإضاءة ضعيفة — حسّن الإضاءة لقراءات أدق":"Low lighting — improve lighting for more accurate readings"}
           </div>
         )}
 
-        {/* Silent score status — good posture, no alert box noise */}
+        {/* Status strip — score status, personalisation note, and any active
+            alert used to each render as their own separately-bordered row
+            with slightly different padding/sizes even though they're all
+            "one line of status text under the camera". When a personalised
+            calibration applies AND posture is currently good, that's now
+            one row instead of two stacked ones; it only gets its own row
+            when there's no score-status row to attach to. */}
         {scoreStatus&&alertMsg.type!=="warn"&&alertMsg.type!=="bad"&&(
-          <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`}}>
+          <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:"#10b981",flexShrink:0,boxShadow:"0 0 6px #10b981"}}/>
+              <div style={{width:8,height:8,borderRadius:"50%",background:"#4FAE8E",flexShrink:0,boxShadow:"0 0 6px #4FAE8E"}}/>
               <span style={{fontSize:11,color:"#6ee7b7",fontWeight:600}}>
                 {isAr?`النتيجة ${scoreStatus.score}/100 — ${scoreStatus.grade}`:`Score ${scoreStatus.score}/100 — ${scoreStatus.grade}`}
+                {camActive&&calibData?.tolerances&&(
+                  <span style={{color:"#34d399",fontWeight:500}}> · {isAr?"مُخصّص":"Personalised"}</span>
+                )}
               </span>
             </div>
             <div style={{fontSize:10,color:cs.muted,marginTop:3,paddingLeft:16,lineHeight:1.4}}>
@@ -6320,11 +6402,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         )}
 
-        {/* Personalised analysis indicator — shown while a calibrated session runs */}
-        {camActive&&calibData?.tolerances&&( /* Side mode removed app-wide */
-          <div style={{padding:"5px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6,background:"rgba(16,185,129,.05)"}}>
+        {!(scoreStatus&&alertMsg.type!=="warn"&&alertMsg.type!=="bad")&&camActive&&calibData?.tolerances&&(
+          <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:8,background:"rgba(79,174,142,.05)"}}>
             <span style={{fontSize:11,color:"#34d399",fontWeight:700}}>✓</span>
-            <span style={{fontSize:10.5,color:"#34d399",fontWeight:600}}>
+            <span style={{fontSize:11,color:"#34d399",fontWeight:600}}>
               {isAr?"التحليل مُخصّص لوضعيتك الطبيعية":"Analysis personalised to your natural posture"}
             </span>
           </div>
@@ -6385,8 +6466,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   return nv;
                 });
               }} style={{
-                flex:1,background:voiceCoach?"rgba(16,185,129,.12)":"rgba(255,255,255,.04)",
-                border:`1px solid ${voiceCoach?"rgba(16,185,129,.4)":cs.border}`,borderRadius:9,
+                flex:1,background:voiceCoach?"rgba(79,174,142,.12)":"rgba(255,255,255,.04)",
+                border:`1px solid ${voiceCoach?"rgba(79,174,142,.4)":cs.border}`,borderRadius:9,
                 padding:"8px 0",fontSize:11,fontWeight:700,
                 color:voiceCoach?"#34d399":cs.muted,cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"center",gap:5,
@@ -6480,8 +6561,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
               visually distinct (green, not a toggle) since it's a one-time
               setup action, not an on/off switch like everything above it. */}
           <button onClick={()=>setShowCalibWizard(true)} style={{
-            background:calibData?"rgba(148,163,184,.06)":"rgba(16,185,129,.1)",
-            border:`1px solid ${calibData?cs.border:"rgba(16,185,129,.4)"}`,borderRadius:10,
+            background:calibData?"rgba(148,163,184,.06)":"rgba(79,174,142,.1)",
+            border:`1px solid ${calibData?cs.border:"rgba(79,174,142,.4)"}`,borderRadius:10,
             padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:"#34d399",cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",gap:6,
           }}>
@@ -6493,8 +6574,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
               `sound` above). It only ever gates the break-reminder chime,
               so it's labelled and placed as exactly that now. */}
           <button onClick={()=>setMuted(v=>!v)} style={{
-            background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#10b981",
-            border:`1px solid ${muted?cs.border:"rgba(16,185,129,.25)"}`,
+            background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#4FAE8E",
+            border:`1px solid ${muted?cs.border:"rgba(79,174,142,.25)"}`,
             borderRadius:10,padding:"8px 0",fontSize:11.5,fontWeight:500,cursor:"pointer",
           }}>
             {muted?(isAr?"🔇 صوت تذكير الاستراحة: متوقف":"🔇 Break-reminder chime: OFF"):(isAr?"🔔 صوت تذكير الاستراحة: شغّال":"🔔 Break-reminder chime: ON")}
@@ -6530,7 +6611,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   display:"flex",alignItems:"center",gap:4,
                 }}>
                   🔒 🎙️ {isAr?"مدرب صوتي":"Voice coach"}
-                  <span style={{fontSize:8,color:"#10b981",fontWeight:800}}>ELITE</span>
+                  <span style={{fontSize:8,color:"#4FAE8E",fontWeight:800}}>ELITE</span>
                 </button>
               )}
               {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail==="none"&&(
@@ -6556,12 +6637,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* In-session calibration nudge — appears after 3 min without calibration.
             Dismissible so it doesn't block the interface. */}
         {calibNudge && !calibData && camActive && (
-          <div style={{margin:"10px 14px 0",background:"rgba(245,158,11,.07)",
-            border:"1px solid rgba(245,158,11,.3)",borderRadius:9,padding:"9px 12px",
+          <div style={{margin:"10px 14px 0",background:"rgba(214,162,76,.07)",
+            border:"1px solid rgba(214,162,76,.3)",borderRadius:9,padding:"9px 12px",
             display:"flex",alignItems:"center",gap:8}}>
             <span style={{fontSize:15,flexShrink:0}}>📐</span>
             <div style={{flex:1}}>
-              <div style={{fontSize:10.5,fontWeight:700,color:"#f59e0b",marginBottom:2}}>
+              <div style={{fontSize:10.5,fontWeight:700,color:"#D6A24C",marginBottom:2}}>
                 {isAr?"الدقة تتحسن مع المعايرة":"Accuracy improves with calibration"}
               </div>
               <div style={{fontSize:10,color:cs.muted,lineHeight:1.4}}>
@@ -6571,8 +6652,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
               <button onClick={()=>{setCalibNudge(false);setShowCalibWizard(true);}}
                 style={{fontSize:10,fontWeight:700,padding:"4px 8px",
-                  background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.4)",
-                  borderRadius:6,color:"#f59e0b",cursor:"pointer",whiteSpace:"nowrap"}}>
+                  background:"rgba(214,162,76,.15)",border:"1px solid rgba(214,162,76,.4)",
+                  borderRadius:6,color:"#D6A24C",cursor:"pointer",whiteSpace:"nowrap"}}>
                 {isAr?"معايرة":"Calibrate"}
               </button>
               <button onClick={()=>setCalibNudge(false)}
@@ -6589,13 +6670,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
             don't stack during a calibrated front-mode session. */}
         {calibData&&!(camActive&&calibData?.tolerances)&&( /* Side mode removed app-wide */
           calibStale ? (
-            <div style={{margin:"10px 14px 0",background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.3)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#f59e0b",fontWeight:500,cursor:"pointer"}}
+            <div style={{margin:"10px 14px 0",background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.3)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#D6A24C",fontWeight:500,cursor:"pointer"}}
               onClick={()=>setShowCalibWizard(true)}
               title={isAr?"المعايرة أقدم من 30 يوم — يُنصح بإعادتها":"Calibration is over 30 days old — recalibrate for best accuracy"}>
               ⚠️ {isAr?"المعايرة قديمة — أعد المعايرة":"Calibration outdated — recalibrate"}
             </div>
           ) : (
-            <div style={{margin:"10px 14px 0",background:"rgba(16,185,129,.07)",border:"1px solid rgba(16,185,129,.2)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#10b981",fontWeight:500}}>
+            <div style={{margin:"10px 14px 0",background:"rgba(79,174,142,.07)",border:"1px solid rgba(79,174,142,.2)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#4FAE8E",fontWeight:500}}>
               ✓ {isAr?"المعايرة الشخصية نشطة":"Personal calibration active"}
             </div>
           )
@@ -6605,10 +6686,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
             company/HR account and haven't finished linking to their org yet,
             not individual paying customers on Pro/Elite */}
         {profile&&profile.acct_type==="company"&&profile.user_type!=="employee"&&!profile.company_id&&(
-          <div style={{margin:"10px 14px",background:"rgba(16,185,129,.05)",border:"1px solid rgba(16,185,129,.15)",borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+          <div style={{margin:"10px 14px",background:"rgba(79,174,142,.05)",border:"1px solid rgba(79,174,142,.15)",borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
             <span style={{fontSize:11,color:cs.muted}}>🏢 {isAr?"إعداد مساحة الشركة":"Set up company workspace"}</span>
             <button onClick={()=>setShowCompanyOnboard(true)}
-              style={{background:"#10b981",border:"none",borderRadius:7,padding:"4px 10px",fontSize:10,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
+              style={{background:"#4FAE8E",border:"none",borderRadius:7,padding:"4px 10px",fontSize:10,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
               {isAr?"ابدأ":"Start"}
             </button>
           </div>
@@ -6616,7 +6697,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* #10 Streak protection alert */}
         {streakAlert&&(
-          <div style={{margin:"10px 14px",background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.35)",borderRadius:12,padding:"12px 14px"}}>
+          <div style={{margin:"10px 14px",background:"rgba(214,162,76,.08)",border:"1px solid rgba(214,162,76,.35)",borderRadius:12,padding:"12px 14px"}}>
             <div style={{fontSize:13,fontWeight:700,color:"#fcd34d",marginBottom:4}}>
               ⚡ {isAr?`الـ ${profile?.streak_days}-day streak بتاعتك في خطر!`:`Your ${profile?.streak_days}-day streak is at risk!`}
             </div>
@@ -6625,7 +6706,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </div>
             <div style={{display:"flex",gap:6}}>
               <button onClick={()=>{setStreakAlert(false);goToBreak();}} style={{
-                flex:1,background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.35)",
+                flex:1,background:"rgba(214,162,76,.15)",border:"1px solid rgba(214,162,76,.35)",
                 borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
                 {isAr?"استراحة الآن 🧘":"Break now 🧘"}
               </button>
@@ -6664,14 +6745,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Break reminder */}
         {showBreak&&(
-          <div style={{margin:"10px 14px",background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.3)",borderRadius:12,padding:"12px 14px",textAlign:"center",animation:"fadeUp .3s ease"}}>
+          <div style={{margin:"10px 14px",background:"rgba(214,162,76,.08)",border:"1px solid rgba(214,162,76,.3)",borderRadius:12,padding:"12px 14px",textAlign:"center",animation:"fadeUp .3s ease"}}>
             <div style={{fontSize:14,fontWeight:700,color:"#fcd34d",marginBottom:4}}>⏰ {isAr?"وقت استراحة!":"Break time!"}</div>
             <div style={{fontSize:11,color:cs.muted,marginBottom:10}}>
               {isAr?`${breakIntervalMin} دقيقة مرت — استرح دقيقتين`:`${breakIntervalMin} min passed — take a 2-min stretch`}
             </div>
             <div style={{display:"flex",gap:6,justifyContent:"center"}}>
               <button onClick={()=>{dismissBreak();goToBreak();}}
-                style={{background:"rgba(245,158,11,.18)",border:"1px solid rgba(245,158,11,.4)",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
+                style={{background:"rgba(214,162,76,.18)",border:"1px solid rgba(214,162,76,.4)",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
                 {isAr?"ابدأ الاستراحة 🧘":"Start break 🧘"}
               </button>
               <button onClick={()=>snoozeBreak(5)}
@@ -6689,8 +6770,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <button key={m} onClick={()=>setBreakIntervalMin(m)} style={{
                 fontSize:10,padding:"8px 8px",borderRadius:6,cursor:"pointer",fontWeight:breakIntervalMin===m?700:400,
                 minHeight:36,
-                background:breakIntervalMin===m?"rgba(245,158,11,.15)":"rgba(148,163,184,.06)",
-                border:`1px solid ${breakIntervalMin===m?"rgba(245,158,11,.4)":cs.border}`,
+                background:breakIntervalMin===m?"rgba(214,162,76,.15)":"rgba(148,163,184,.06)",
+                border:`1px solid ${breakIntervalMin===m?"rgba(214,162,76,.4)":cs.border}`,
                 color:breakIntervalMin===m?"#fcd34d":cs.muted,
               }}>{isAr?`${m} د`:`${m}m`}</button>
             ))}
