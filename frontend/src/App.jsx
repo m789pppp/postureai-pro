@@ -2178,12 +2178,6 @@ export default function App(){
   const camActiveRef=useRef(false);
   useEffect(()=>{ camActiveRef.current=camActive; },[camActive]);
 
-  // Show calibration nudge after 3 min of an uncalibrated session
-  useEffect(()=>{
-    if(!camActive || calibData){ setCalibNudge(false); return; }
-    const t = setTimeout(()=>setCalibNudge(true), 3*60*1000);
-    return ()=>clearTimeout(t);
-  },[camActive, calibData]);
   // Catch-all safety net, independent of the popstate handler above: force
   // these two modals closed on ANY transition away from the live page, via
   // any mechanism (not just back-button).
@@ -2349,6 +2343,12 @@ export default function App(){
   const [calibData, setCalibData] = useState(null);
   const [calibStale, setCalibStale] = useState(false); // true when calibration >30 days old
   const [calibNudge, setCalibNudge] = useState(false);  // in-session nudge after 3 min without calib
+  // Show calibration nudge after 3 min of an uncalibrated session
+  useEffect(()=>{
+    if(!camActive || calibData){ setCalibNudge(false); return; }
+    const t = setTimeout(()=>setCalibNudge(true), 3*60*1000);
+    return ()=>clearTimeout(t);
+  },[camActive, calibData]);
   useEffect(()=>{
     if(savedCalib && !calibData){
       setCalibData(savedCalib);
