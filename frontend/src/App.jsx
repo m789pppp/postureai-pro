@@ -6655,18 +6655,45 @@ async function downloadPDF(sessionOverride, isClinical=false){
           }}>
             🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
           </button>
-          {/* "Sound ON/OFF" used to sit here with a generic label that read
-              like a master mute for everything, including the posture-alert
-              beeps above (which it never controlled — see `muted` vs
-              `sound` above). It only ever gates the break-reminder chime,
-              so it's labelled and placed as exactly that now. */}
-          <button onClick={()=>setMuted(v=>!v)} style={{
-            background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#4FAE8E",
-            border:`1px solid ${muted?cs.border:"rgba(79,174,142,.25)"}`,
-            borderRadius:10,padding:"8px 0",fontSize:11.5,fontWeight:500,cursor:"pointer",
-          }}>
-            {muted?(isAr?"🔇 صوت تذكير الاستراحة: متوقف":"🔇 Break-reminder chime: OFF"):(isAr?"🔔 صوت تذكير الاستراحة: شغّال":"🔔 Break-reminder chime: ON")}
-          </button>
+          {/* Break-reminder chime toggle + interval picker — used to be a
+              full-width "Break-reminder chime: ON/OFF" text button sitting
+              on its own row, plus 5 separate interval buttons further down
+              (moved in below). Both configure the exact same reminder, so
+              they're one compact row now: a small icon toggle for the
+              chime, a dropdown for the interval — 6 buttons down to 2
+              controls. */}
+          {breakReminder&&!showBreak&&(
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={()=>setMuted(v=>!v)}
+              title={muted?(isAr?"صوت تذكير الاستراحة: متوقف":"Break-reminder chime: OFF"):(isAr?"صوت تذكير الاستراحة: شغّال":"Break-reminder chime: ON")}
+              style={{
+                flexShrink:0,width:38,height:36,borderRadius:9,fontSize:15,cursor:"pointer",
+                background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#4FAE8E",
+                border:`1px solid ${muted?cs.border:"rgba(79,174,142,.25)"}`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+              }}>
+              {muted?"🔇":"🔔"}
+            </button>
+            <div style={{
+              flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,
+              background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,borderRadius:9,
+              padding:"0 6px 0 12px",height:36,
+            }}>
+              <span style={{fontSize:11,color:cs.muted,whiteSpace:"nowrap"}}>{isAr?"استراحة كل":"Break every"}</span>
+              <select value={breakIntervalMin} onChange={e=>setBreakIntervalMin(Number(e.target.value))}
+                style={{
+                  background:"transparent",border:"none",color:cs.text,fontSize:12,fontWeight:700,
+                  cursor:"pointer",outline:"none",textAlign:isAr?"left":"right",
+                }}>
+                {[15,25,45,60,90].map(m=>(
+                  <option key={m} value={m} style={{background:cs.bg,color:cs.text}}>
+                    {isAr?`${m} دقيقة`:`${m} min`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          )}
           {/* Compact locked-tools strip — everything this tier can't use yet
               lives HERE as small inline chips, instead of each one getting
               its own full-width button mixed in with the tools the user can
@@ -6714,24 +6741,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   <span style={{fontSize:8,color:"#93c5fd",fontWeight:800}}>PRO</span>
                 </button>
               )}
-            </div>
-          )}
-          {/* Break-interval picker moved in here from its old spot below —
-              it's a session setting like everything else in this block, but
-              used to render unconditionally outside the collapse, so hiding
-              "Session settings" still left 5 interval buttons on screen. */}
-          {breakReminder&&!showBreak&&(
-            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-              <span style={{fontSize:10,color:cs.muted,flexShrink:0}}>{isAr?"استراحة كل":"Break every"}</span>
-              {[15,25,45,60,90].map(m=>(
-                <button key={m} onClick={()=>setBreakIntervalMin(m)} style={{
-                  fontSize:10,padding:"8px 8px",borderRadius:6,cursor:"pointer",fontWeight:breakIntervalMin===m?700:400,
-                  minHeight:36,
-                  background:breakIntervalMin===m?"rgba(214,162,76,.15)":"rgba(148,163,184,.06)",
-                  border:`1px solid ${breakIntervalMin===m?"rgba(214,162,76,.4)":cs.border}`,
-                  color:breakIntervalMin===m?"#fcd34d":cs.muted,
-                }}>{isAr?`${m} د`:`${m}m`}</button>
-              ))}
             </div>
           )}
         </div>
