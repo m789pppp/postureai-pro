@@ -5335,10 +5335,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
             )}
           </div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:90,position:"relative"}}>
-            <div style={{position:"absolute",left:0,right:0,top:`${(1-80/100)*68}px`,
+          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:80,position:"relative"}}>
+            <div style={{position:"absolute",left:0,right:0,top:`${(1-80/100)*80}px`,
               borderTop:"1px dashed rgba(16,185,129,.2)",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",left:0,right:0,top:`${(1-60/100)*68}px`,
+            <div style={{position:"absolute",left:0,right:0,top:`${(1-60/100)*80}px`,
               borderTop:"1px dashed rgba(245,158,11,.18)",pointerEvents:"none"}}/>
             {(history.length?history:Array(40).fill(0)).map((s,i)=>{
               const isLast=i===history.length-1;
@@ -5377,11 +5377,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   <div style={{
                     width:"100%", borderRadius:"3px 3px 0 0",
                     minHeight:3,
-                    height: s ? Math.max(3,Math.round(s*.86)) : 3,
-                    background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
+                    height: s ? Math.max(3,Math.round(s*.80)) : 3,
+                    background: s ? sc(s) : "rgba(148,163,184,.06)",
                     transition:"height .25s ease",
-                    boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
-                    outline: hoverBarIdx===i&&s ? `1px solid ${sc(s)}` : "none",
+                    opacity: s ? (hoverBarIdx===i ? 1 : 0.85) : 1,
+                    boxShadow: isLast&&s ? `0 0 8px ${sc(s)}60` : "none",
                   }}/>
                 </div>
               );
