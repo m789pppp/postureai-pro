@@ -253,7 +253,7 @@ const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,
 
 
 // ── Helpers ───────────────────────────────────────────────────────
-const sc    = v => v>=75?"#10b981":v>=50?"#f59e0b":"#ef4444";
+const sc    = v => v>=70?"#10b981":v>=55?"#f59e0b":"#ef4444"; // aligned to gradeScore's tier boundaries (85/70/55/40) — see postureEngine.js
 const grade = (v,t) => v>=85?t.excellent:v>=70?t.good:v>=50?t.fair:t.poor;
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 const LM = {NOSE:0,L_EYE:2,R_EYE:5,L_EAR:7,R_EAR:8,L_SHOULDER:11,R_SHOULDER:12,L_HIP:23,R_HIP:24,L_KNEE:25,R_KNEE:26,L_ANKLE:27,R_ANKLE:28};
