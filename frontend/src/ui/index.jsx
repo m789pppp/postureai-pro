@@ -850,11 +850,11 @@ const TOAST_META = {
   warn:   { bg:"linear-gradient(135deg,#d97706,#b45309)", icon:"⚠", glow:"rgba(217,119,6,.4)" },
   info:   { bg:"linear-gradient(135deg,#6366f1,#4f46e5)", icon:"ℹ", glow:"rgba(99,102,241,.4)" },
 };
-export function Toasts({ toasts = [], dismiss, isAr = false }) {
+export function Toasts({ toasts = [], dismiss, isAr = false, edgeOffset = 16 }) {
   injectCSS();
   return (
     <div style={{
-      position:"fixed", bottom:88, [isAr?"left":"right"]:16, zIndex:9999,
+      position:"fixed", bottom:88, [isAr?"left":"right"]:edgeOffset, zIndex:9999,
       display:"flex", flexDirection:"column-reverse", gap:8,
       maxWidth:320, pointerEvents:"none",
     }}>

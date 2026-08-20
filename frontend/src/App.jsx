@@ -4976,9 +4976,27 @@ async function downloadPDF(sessionOverride, isClinical=false){
       @keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
     `}</style>
     {/* Fixed overlays — outside grid so they don't consume grid columns */}
-    <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
+    {/* Toasts default to a fixed 16px corner, positioned for a normal
+        full-width page. On desktop the Live page docks a 320px-wide
+        control sidebar (camera settings, calibrate, alert rules...) to
+        that exact corner, so any toast — a saved session, a calibration
+        confirmation, the backend-down retry message, achievement
+        unlocks, all of them — rendered directly on top of that sidebar's
+        button stack, covering whichever ones happened to be at that
+        scroll position. Push it clear of the sidebar on desktop; mobile
+        stacks the sidebar above the main content instead, so the default
+        corner is already clear there. */}
+    <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr} edgeOffset={isMobile?16:336}/>
     <OfflineBanner lang={lang}/>
     {healthConsentModalEl}
+    {/* The Live page has four separate "Calibrate" entry points (the
+        "not calibrated" banner, the sidebar shortcut, the calibration
+        nudge, and re-calibrate) that all just call setShowCalibWizard(true)
+        — but the actual <CalibrationWizard> was only ever mounted inside
+        the page==="home" branch's own return. Clicking any of them here
+        set the state and nothing happened: no modal, no error, just a
+        dead button. Mounted here too so it actually opens on this page. */}
+    {showCalibWizard&&<ErrorBoundary key="calibwizard-live"><CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/></ErrorBoundary>}
     <div dir={dir} style={{
       display:"grid",
       // Video panel was a fixed 320px while the stats/history panel took
