@@ -281,7 +281,7 @@ export function gradeContext(s, ar = false) {
   if (s >= 40) return "High load — chronic muscle strain risk over time";
   return "Critical posture — correct now to avoid injury";
 }
-export function scoreColor(s)   { return s >= 75 ? "#10b981"   : s >= 50 ? "#f59e0b" : "#ef4444"; }
+export function scoreColor(s)   { return s >= 70 ? "#10b981"   : s >= 55 ? "#f59e0b" : "#ef4444"; } // aligned to gradeScore's tier boundaries (85/70/55/40)
 
 // ═══════════════════════════════════════════════════════════════════
 // LANDMARK SMOOTHING — EMA + jitter rejection
