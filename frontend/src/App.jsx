@@ -1886,36 +1886,9 @@ function AccountTypeSelect({cs,t,lang,onSelect}){
   </div>;
 }
 
-function DeviceSelect({cs,t,lang,onSelect}){
-  const isAr=lang==="ar";
-  const dir=isAr?"rtl":"ltr";
-  return <div dir={dir} style={{position:"fixed",inset:0,background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,fontFamily:"system-ui,sans-serif",padding:24}}>
-    <div style={{maxWidth:480,width:"100%"}}>
-      <div style={{textAlign:"center",marginBottom:32}}>
-        <div style={{fontSize:20,fontWeight:700,color:cs.text,marginBottom:6}}>{t.deviceType}</div>
-        <div style={{fontSize:12,color:cs.muted}}>{isAr?"اختر الجهاز اللي هتستخدمه":"Choose your primary device"}</div>
-      </div>
-      <div style={{display:"grid",gap:14}}>
-        {[
-          {key:"laptop", icon:"💻", title:t.deviceLaptop, desc:t.deviceLaptopDesc, color:"#6366f1"},
-          {key:"phone",  icon:"📱", title:t.devicePhone,  desc:t.devicePhoneDesc,  color:"#f59e0b"},
-        ].map(opt=>(
-          <div key={opt.key} onClick={()=>onSelect(opt.key)}
-            style={{background:cs.card,border:`1px solid ${cs.border}`,borderRadius:16,padding:"20px 22px",cursor:"pointer",display:"flex",alignItems:"center",gap:16,flexDirection:isAr?"row-reverse":"row",transition:"all .2s"}}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=opt.color;e.currentTarget.style.transform="translateY(-2px)";}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor=cs.border;e.currentTarget.style.transform="none";}}>
-            <div style={{fontSize:34,flexShrink:0}}>{opt.icon}</div>
-            <div style={{textAlign:isAr?"right":"left"}}>
-              <div style={{fontSize:15,fontWeight:700,color:cs.text,marginBottom:4}}>{opt.title}</div>
-              <div style={{fontSize:12,color:cs.muted,lineHeight:1.5}}>{opt.desc}</div>
-            </div>
-            <div style={{marginInlineStart:"auto",color:opt.color,fontSize:20,flexShrink:0}}>›</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>;
-}
+// DeviceSelect component removed — was defined but never rendered
+// anywhere (showDeviceSelect was never set to true), and offered Phone
+// which has been removed app-wide.
 
 // ══════════════════════════════════════════════════════════════════
 // MAIN APP COMPONENT
@@ -2196,7 +2169,7 @@ export default function App(){
     if(profile?.acct_type && !acctType) setAcctType(profile.acct_type);
     else if((profile?.user_type==="employee"||profile?.user_type==="hr_admin") && !acctType) setAcctType("company");
   },[profile?.acct_type,profile?.user_type,acctType]); // "company" | "individual"
-  const[devicePref,setDevicePref]=useState(null); // "laptop" | "phone"
+  const[devicePref,setDevicePref]=useState(null); // "laptop" only now — Phone option removed app-wide
   const[camActive,setCamActive]=useState(false);
   // Popstate (browser/mobile back button) fires from a listener registered
   // once on mount — without a ref, its closure would only ever see camActive
@@ -2910,7 +2883,8 @@ export default function App(){
           } catch{}
           }
 
-          try { const lm=localStorage.getItem("last_mode"); if(lm && ["laptop","phone","side"].includes(lm)) setMode(lm); } catch{}
+          // Phone and Side modes were removed app-wide — only restore "laptop"
+          try { const lm=localStorage.getItem("last_mode"); if(lm==="laptop") setMode(lm); } catch{}
 
           // Navigate — always land on home or setup, never on live (live requires user interaction)
           // ONLY on the first resolution for this uid. onAuthStateChanged
@@ -3188,7 +3162,8 @@ export default function App(){
             const now=Date.now();
 
             // Session-level pattern tracking (creep, chronic asymmetry, experimental breathing)
-            if(mode!=="side"){
+            // Side mode removed app-wide — this always runs now.
+            {
               if(!insightsRef.current) insightsRef.current=_newInsightsTracker();
               const midShY=(lms[11]?.y+lms[12]?.y)/2;
               const neckMet=finalResult.metrics?.neck_lean, shMet=finalResult.metrics?.shoulder_level;
@@ -3462,7 +3437,7 @@ export default function App(){
     console.log("[Corvus] Starting camera in mode:", effectiveMode);
     setCameraStatus("requesting");
     try{
-      const facingMode=effectiveMode==="phone"?"environment":"user";
+      const facingMode="user"; // Phone mode removed app-wide — always front camera now
       const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}}});
       streamRef.current=s;
       if(!vidRef.current){setCameraStatus("idle");return;}
@@ -4622,10 +4597,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {isAr?`لفريق ${profile?.company||"شركتك"}`:`For ${profile?.company||"your team"}`}
                 </div>}
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr",gap:12,marginBottom:20}}>
                 {[
                   {id:"laptop",icon:"💻",label:t.deviceLaptop,desc:t.deviceLaptopDesc,color:"#6366f1",modes:["laptop"]},
-                  {id:"phone",icon:"📱",label:t.devicePhone,desc:t.devicePhoneDesc,color:"#f59e0b",modes:["phone","side"]},
+                  // Phone option removed — Phone/Side modes removed app-wide.
                 ].map(o=>(
                   <div key={o.id} onClick={()=>setDevicePref(o.id)}
                     style={{background:devicePref===o.id?`${o.color}18`:cs.card,border:`1.5px solid ${devicePref===o.id?o.color:o.color+"40"}`,borderRadius:14,padding:"20px 16px",cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
@@ -4637,7 +4612,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
               <button onClick={async ()=>{
                 if(!devicePref){addToast(isAr?"اختار جهازك الأول 👆":"Choose your device first 👆","warn");return;}
-                const defaultMode=devicePref==="laptop"?"laptop":"phone";
+                const defaultMode="laptop"; // Phone/Side removed app-wide
                 setMode(defaultMode);
                 // An employee's role/company link comes from their invite (see
                 // AuthPage.jsx signup + org_invite_accept), never from this
@@ -4723,10 +4698,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
   // ── HOME PAGE ─────────────────────────────────────────────────────
   const tierList=isAr?Object.values(TIERS).slice().reverse():Object.values(TIERS);
-  const allModes=Object.values(MC);
-  const filteredModes=devicePref==="laptop"?allModes.filter(m=>m.id==="laptop"):
-                      devicePref==="phone"?allModes.filter(m=>m.id!=="laptop"):allModes;
-  const modeList=isAr?filteredModes.slice().reverse():filteredModes;
+  const allModes=Object.values(MC); // Phone/Side removed app-wide — MC now only has laptop
+  const modeList=allModes; // no filtering needed with a single mode
 
   if(page==="home") return(
     <ErrorBoundary key="page-home">
@@ -6329,7 +6302,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         )}
 
         {/* Personalised analysis indicator — shown while a calibrated session runs */}
-        {camActive&&mode!=="side"&&calibData?.tolerances&&(
+        {camActive&&calibData?.tolerances&&( /* Side mode removed app-wide */
           <div style={{padding:"5px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:6,background:"rgba(16,185,129,.05)"}}>
             <span style={{fontSize:11,color:"#34d399",fontWeight:700}}>✓</span>
             <span style={{fontSize:10.5,color:"#34d399",fontWeight:600}}>
@@ -6595,7 +6568,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Calibration active badge — hidden when the more specific
             "personalised analysis" badge above is already showing, so the two
             don't stack during a calibrated front-mode session. */}
-        {calibData&&!(camActive&&mode!=="side"&&calibData?.tolerances)&&(
+        {calibData&&!(camActive&&calibData?.tolerances)&&( /* Side mode removed app-wide */
           calibStale ? (
             <div style={{margin:"10px 14px 0",background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.3)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#f59e0b",fontWeight:500,cursor:"pointer"}}
               onClick={()=>setShowCalibWizard(true)}

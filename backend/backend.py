@@ -4082,7 +4082,7 @@ def analyze():
         lang = data.get("lang", "en")
         img  = cv2.imdecode(np.frombuffer(base64.b64decode(b64_raw), np.uint8), cv2.IMREAD_COLOR)
         if img is None: return jsonify({"error": "Cannot decode image"}), 400
-        if mode in ("laptop", "phone"): img = cv2.flip(img, 1)
+        if mode == "laptop": img = cv2.flip(img, 1)  # Phone/Side removed app-wide — laptop is the only mode
 
         # ── Resize to 480p max — MediaPipe doesn't need 720p, saves 60% CPU ──
         h_img, w_img = img.shape[:2]
