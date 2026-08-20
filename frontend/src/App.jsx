@@ -6217,7 +6217,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     <span style={{width:6,height:6,borderRadius:"50%",background:"#f59e0b",animation:"livePulse 1.2s infinite",flexShrink:0}}/>
                   )}
                   {camActive
-                    ? (sessionTime>8
+                    ? (mpStatus!=="ready"
+                        ? (isAr?"جاري تحميل نموذج الذكاء الاصطناعي (أول مرة بس)...":"Loading the AI model (first time only)...")
+                        : sessionTime>8
                         ? (isAr?"لسه مش شايفينك — قرّب من الكاميرا وخلي الإضاءة كويسة":"Still not detecting you — move closer and check your lighting")
                         : (isAr?"بنحلل وضعيتك... استنى ثانية":"Detecting your posture... one moment"))
                     : (isAr?"ابدأ الكاميرا للتحليل":"Start camera to see metrics")}

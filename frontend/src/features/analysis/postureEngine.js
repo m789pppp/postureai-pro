@@ -86,28 +86,24 @@ const THR = {
 };
 
 // ─── Weighted scoring (front camera) ───────────────────────────────
-// NOTE: fhp, elbow, and monitor-height are intentionally NOT weighted
-// into the overall score (mirrors backend.py) — they surface as
-// informational metrics/alerts only, since they're more
-// setup/ergonomics signals than posture-quality signals.
+// FHP (forward head posture — head/neck leaning toward the screen) used
+// to be intentionally excluded here (see prior note, mirrored backend.py)
+// and only surfaced as an informational alert. In practice this meant the
+// single most common and damaging desk posture — craning your head toward
+// the screen — never moved the overall score at all, even though
+// analyzeFHP() already measures it correctly using true 3D (X+Z) distance.
+// Given a real weight (0.18) and the other 7 weights rescaled by ×0.82 so
+// they still sum to 1.0.
 const WEIGHTS_FRONT = {
-  // Rescaled proportionally from {0.32,0.10,0.11,0.14,0.12,0.06,0.08} (summed
-  // to 0.93, not 1.0) so relative importance is unchanged. Was silently
-  // injecting the 72-pt baseline into EVERY score, not just ones with
-  // unreliable modules — see the fix note above confWeight() below: at full
-  // confidence a perfect-posture session could never exceed 98, and a
-  // worst-possible session never went below ~5. Relative proportions
-  // preserved exactly (each value = old / 0.93).
-  neck:     0.34,
-  tilt:     0.11,
-  shoulder: 0.12,
-  spine:    0.15,
-  distance: 0.13,
-  yaw:      0.06,
-  rounded:  0.09,
-  // sums to 1.00 — baseline (72 × (1 - W_ACTUAL)) is now genuinely 0
-  // whenever every module is fully reliable, matching what the confWeight
-  // comment already claimed was happening.
+  neck:     0.2788,
+  tilt:     0.0902,
+  shoulder: 0.0984,
+  spine:    0.123,
+  distance: 0.1066,
+  yaw:      0.0492,
+  rounded:  0.0738,
+  fhp:      0.18,
+  // sums to 1.00
 };
 
 
@@ -1139,9 +1135,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const W_spine    = confWeight(spine,    WEIGHTS_FRONT.spine);
   const W_yaw      = confWeight(yaw,      WEIGHTS_FRONT.yaw);
   const W_rounded  = confWeight(rounded,  WEIGHTS_FRONT.rounded);
+  const W_fhp      = confWeight(fhp,      WEIGHTS_FRONT.fhp);
   const W_dist     = WEIGHTS_FRONT.distance; // distance is always measured
 
-  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded;
+  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp;
   const baseline = 72 * Math.max(0, 1 - W_ACTUAL);
 
   const overall = Math.max(0, Math.min(100, Math.round(
@@ -1152,6 +1149,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     distSc         * W_dist     +
     yaw.score      * W_yaw      +
     rounded.score  * W_rounded  +
+    fhp.score      * W_fhp      +
     baseline
   )));
 
