@@ -5196,6 +5196,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         order: isMobile ? 1 : (isAr ? 1 : 0),
         borderRight: isAr ? "none" : `1px solid ${cs.border}`,
         borderLeft:  isAr ? `1px solid ${cs.border}` : "none",
+        minWidth:0,
       }}>
         {/* Top bar */}
         <div style={{
@@ -5254,29 +5255,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
 
         {/* Main 4 stats */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"14px 16px 8px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,background:cs.border,margin:"0",borderBottom:`1px solid ${cs.border}`}}>
           {[
-            {icon:"📊", label:isAr?"متوسط النقاط":"Avg Score",   value:avg||"--",  color:avg?sc(avg):cs.muted},
-            {icon:"⏱",  label:isAr?"وقت الجلسة":"Session Time", value:`${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`, color:cs.text},
-            {icon:"✅", label:isAr?"وضعية جيدة":"Good Posture",  value:gPct+"%",   color:"#10b981"},
-            {icon:"🔔", label:isAr?"التنبيهات":"Alerts",         value:alertCounts.total, color:"#f59e0b"},
-          ].map(s=>(
+            {label:isAr?"متوسط النقاط":"Avg Score",   value:avg||"--",  color:avg?sc(avg):"#475569",big:true},
+            {label:isAr?"وقت الجلسة":"Session Time", value:`${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`, color:"#94a3b8",big:true},
+            {label:isAr?"وضعية جيدة":"Good Posture",  value:gPct+"%",   color:"#10b981",big:false},
+            {label:isAr?"التنبيهات":"Alerts",         value:alertCounts.total, color:alertCounts.total>0?"#f59e0b":"#475569",big:false},
+          ].map((s,i)=>(
             <div key={s.label} style={{
-              background:cs.card, border:`1px solid ${cs.border}`,
-              borderRadius:12, padding:"12px 10px",
-              display:"flex", flexDirection:"column", gap:4,
+              background:cs.card,
+              padding:i<2?"16px 20px":"12px 20px",
+              display:"flex", flexDirection:"column", gap:2,
             }}>
-              <div style={{fontSize:14}}>{s.icon}</div>
-              <div style={{fontSize:20,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</div>
-              <div style={{fontSize:9.5,color:cs.muted,fontWeight:500}}>{s.label}</div>
+              <div style={{fontSize:i<2?28:22,fontWeight:800,color:s.color,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{s.value}</div>
+              <div style={{fontSize:10,color:cs.muted,fontWeight:500,textTransform:"uppercase",letterSpacing:".06em",marginTop:2}}>{s.label}</div>
             </div>
           ))}
         </div>
 
         {/* Calibration missing banner */}
-        {!camActive && !calibData && (
-          <div style={{margin:"8px 16px",background:"rgba(245,158,11,.06)",
-            border:"1px solid rgba(245,158,11,.25)",borderRadius:10,padding:"10px 14px",
+        {!calibData && (
+          <div style={{margin:"0 16px 8px",background:"rgba(245,158,11,.04)",
+            border:"1px solid rgba(245,158,11,.15)",borderRadius:10,padding:"8px 12px",
             display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:16,flexShrink:0}}>⚙️</span>
             <div style={{flex:1}}>
@@ -5296,29 +5296,30 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         )}
 
-        {/* Fix #2: Pre-session empty state — shown before first session starts */}
+        {/* Pre-session empty state */}
         {!camActive && sessionTime === 0 && avg === 0 && (
-          <div style={{margin:"4px 16px 10px",background:"rgba(26,86,219,.06)",
-            border:"1px dashed rgba(26,86,219,.2)",borderRadius:12,padding:"14px 16px",
-            display:"flex",alignItems:"flex-start",gap:12}}>
-            <span style={{fontSize:22,flexShrink:0}}>▶</span>
-            <div>
-              <div style={{fontSize:12,fontWeight:700,color:"#93c5fd",marginBottom:4}}>
-                {isAr?"اضغط ابدأ التحليل للبدء":"Press Start Analysis to begin"}
-              </div>
-              <div style={{fontSize:11,color:cs.muted,lineHeight:1.6}}>
-                {isAr
-                  ? "Corvus هيحلل وضعيتك في الوقت الفعلي ويديك درجة ونصائح فورية."
-                  : "Corvus will analyse your posture in real-time and give you a live score + instant tips."}
-              </div>
-              {userSessions?.length > 0 && (
-                <div style={{marginTop:8,fontSize:11,color:"#60a5fa",fontWeight:600}}>
-                  {isAr
-                    ? `آخر جلسة: ${userSessions[0]?.avg_score||0}/100`
-                    : `Last session: ${userSessions[0]?.avg_score||0}/100`}
-                </div>
-              )}
+          <div style={{margin:"12px 16px",padding:"20px",
+            background:"linear-gradient(135deg,rgba(26,86,219,.08),rgba(8,145,178,.05))",
+            border:"1px solid rgba(26,86,219,.2)",borderRadius:16,textAlign:"center"}}>
+            <div style={{fontSize:32,marginBottom:10}}>🧘</div>
+            <div style={{fontSize:14,fontWeight:700,color:"#93c5fd",marginBottom:6}}>
+              {isAr?"جاهز لتحليل وضعيتك":"Ready to analyse your posture"}
             </div>
+            <div style={{fontSize:11.5,color:cs.muted,lineHeight:1.7,marginBottom:userSessions?.length>0?12:0}}>
+              {isAr
+                ? "اضبط وضعيتك أمام الكاميرا واضغط ابدأ"
+                : "Position yourself in front of the camera, then press Start"}
+            </div>
+            {userSessions?.length > 0 && (
+              <div style={{display:"inline-flex",alignItems:"center",gap:6,
+                background:"rgba(96,165,250,.1)",border:"1px solid rgba(96,165,250,.2)",
+                borderRadius:99,padding:"4px 12px",fontSize:11,color:"#60a5fa",fontWeight:600}}>
+                <span>📈</span>
+                {isAr
+                  ? `آخر جلسة: ${userSessions[0]?.avg_score||0}/100`
+                  : `Last session: ${userSessions[0]?.avg_score||0}/100`}
+              </div>
+            )}
           </div>
         )}
 
@@ -5334,7 +5335,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
             )}
           </div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:68,position:"relative"}}>
+          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:90,position:"relative"}}>
             <div style={{position:"absolute",left:0,right:0,top:`${(1-80/100)*68}px`,
               borderTop:"1px dashed rgba(16,185,129,.2)",pointerEvents:"none"}}/>
             <div style={{position:"absolute",left:0,right:0,top:`${(1-60/100)*68}px`,
@@ -5376,7 +5377,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   <div style={{
                     width:"100%", borderRadius:"3px 3px 0 0",
                     minHeight:3,
-                    height: s ? Math.max(3,Math.round(s*.64)) : 3,
+                    height: s ? Math.max(3,Math.round(s*.86)) : 3,
                     background: s ? `linear-gradient(to top,${sc(s)},${sc(s)}99)` : "rgba(148,163,184,.07)",
                     transition:"height .25s ease",
                     boxShadow: isLast&&s ? `0 0 6px ${sc(s)}80` : "none",
