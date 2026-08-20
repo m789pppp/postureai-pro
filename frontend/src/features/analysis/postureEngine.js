@@ -264,8 +264,23 @@ function resolveThr(calib, calibKey, defIdeal, defOk, defBad) {
 // GRADE / COLOR HELPERS
 // ═══════════════════════════════════════════════════════════════════
 
-export function gradeScore(s)   { return s >= 85 ? "Excellent" : s >= 70 ? "Good" : s >= 50 ? "Fair" : "Poor"; }
-export function gradeScoreAr(s) { return s >= 85 ? "ممتاز"     : s >= 70 ? "جيد"  : s >= 50 ? "مقبول" : "ضعيف"; }
+export function gradeScore(s)   { return s >= 85 ? "Excellent" : s >= 70 ? "Good" : s >= 55 ? "Fair" : s >= 40 ? "Poor" : "Critical"; }
+export function gradeScoreAr(s) { return s >= 85 ? "ممتاز"     : s >= 70 ? "جيد"  : s >= 55 ? "مقبول" : s >= 40 ? "ضعيف" : "خطر"; }
+/** One-line health context shown below the score badge */
+export function gradeContext(s, ar = false) {
+  if (ar) {
+    if (s >= 85) return "وضعية ممتازة — استمر على هذا";
+    if (s >= 70) return "وضعية جيدة — تحسينات بسيطة ممكنة";
+    if (s >= 55) return "ضغط متوسط على الرقبة والعمود — انتبه للتنبيهات";
+    if (s >= 40) return "ضغط مرتفع — خطر توتر عضلي مزمن على المدى البعيد";
+    return "وضعية خطرة — صحّح فوراً للحماية من الإصابة";
+  }
+  if (s >= 85) return "Excellent posture — keep it up";
+  if (s >= 70) return "Good posture — minor tweaks possible";
+  if (s >= 55) return "Moderate spinal load — watch the alerts";
+  if (s >= 40) return "High load — chronic muscle strain risk over time";
+  return "Critical posture — correct now to avoid injury";
+}
 export function scoreColor(s)   { return s >= 75 ? "#10b981"   : s >= 50 ? "#f59e0b" : "#ef4444"; }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -910,6 +925,13 @@ function analyzeFHP(lms, W, H, prop) {
   const rEar  = g(PL.R_EAR);
   const midEarX = ((lEar.x + rEar.x) / 2) * W;
   const midEarZ = (lEar.z + rEar.z) / 2;           // depth — normalised to same scale as X
+
+  // Z-asymmetry guard: if the two ears have very different Z values the head
+  // is significantly rotated (yaw). In that state the ear midpoint is no longer
+  // on the sagittal plane so FHP measurement is geometrically invalid.
+  // Threshold: 0.06 normalised units ≈ ~25-30° yaw — beyond this we bail out.
+  const zSpread = Math.abs(lEar.z - rEar.z);
+  if (zSpread > 0.06) return { distCm: 0, extraLoadKg: 0, neckAngleDeg: 0, score: 90, severity: "normal", confidence: 0, reliable: false, reason: "head_rotated" };
 
   // Bug #7 fix: true 3D distance combining horizontal (X) and depth (Z) offsets.
   // Pure 2D (X only) was corrupted by yaw — a rotated-but-straight neck produced
