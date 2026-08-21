@@ -62,6 +62,46 @@ OR:
 |----------|----------------|
 | VITE_FIREBASE_VAPID_KEY | Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair |
 
+## 🐍 PYTHON BACKEND (backend/backend.py, now deployed as a Vercel Function)
+
+The Flask backend that powers AI Coach/Insights/Predictive/Reports,
+posture analysis, symptom log, gamification, and everything else under
+`/api/*` not already covered by the smaller `api/*.js` functions now
+deploys as **one Vercel Python Function** (see `main.py` + `pyproject.toml`
+at the repo root, and the `/api/(.*)` route in `vercel.json`). It used to
+run on a separate Railway service — that's gone; everything is on Vercel
+now.
+
+### 🔴 REQUIRED — won't start without this
+| Variable | Where to get it |
+|----------|----------------|
+| SECRET_KEY | Any long random string (`openssl rand -hex 32`) |
+| FLASK_ENV | Set to `production` |
+| REDIS_URL | **Required in production** — the app refuses to start without it (shared rate limiting across function instances needs it). Easiest: Vercel Dashboard → Storage → Marketplace → add **Upstash Redis** → copy its `redis://`/`rediss://` connection string (not the REST URL) into `REDIS_URL`. |
+
+### 🟠 AI quality (Coach/Insights/Predictive/Reports) — free, strongly recommended
+| Variable | Where to get it |
+|----------|----------------|
+| GEMINI_API_KEY | [aistudio.google.com](https://aistudio.google.com) → "Get API key" → Create API key. Free tier, no cost. This is now the primary AI provider for every AI feature. |
+| GROQ_API_KEY | [console.groq.com](https://console.groq.com) → API Keys → Create API Key. Free tier, used as the fast fallback if Gemini is rate-limited/down. |
+
+Without either set, AI features fall back to a much lower-quality local
+rule-based response instead of a real model — not broken, just worse.
+
+### ⚙️ One-time project setting (not an env var — Project Settings toggle)
+The Python function's deployed size (~1GB, mostly MediaPipe/OpenCV/their
+dependencies) is over Vercel's standard 500MB Python limit, so:
+1. Vercel Dashboard → your project → Settings → Environment Variables
+2. Add `VERCEL_SUPPORT_LARGE_FUNCTIONS` = `1` (enables the "Large
+   Functions" beta, up to 5GB — free, officially supported, just not GA yet)
+
+### 🟡 Same optional vars as before
+FIREBASE_SERVICE_ACCOUNT_JSON (or the FIREBASE_PROJECT_ID/CLIENT_EMAIL/
+PRIVATE_KEY trio above — the Python backend accepts either), STRIPE_SECRET_KEY,
+STRIPE_WEBHOOK_SECRET, PAYMOB_*, SENDGRID_API_KEY/SUPPORT_EMAIL, and anything
+else already listed in `backend/.env.example` — all optional, each feature
+degrades gracefully without its specific key rather than crashing the app.
+
 ## 🏁 AFTER DEPLOYMENT — Run Once
 
 Seed the feature flags collection (run from browser console after login as admin):

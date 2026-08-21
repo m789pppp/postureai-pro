@@ -764,8 +764,9 @@ if not _redis_url:
     if _flask_env == "production":
         print(
             "🚨 FATAL: REDIS_URL not set in production.\n"
-            "   Rate limiting is per-process only with multiple Gunicorn workers.\n"
-            "   Set REDIS_URL in Railway/Render env vars (use Redis addon).\n"
+            "   Rate limiting is per-process/per-instance only otherwise.\n"
+            "   Set REDIS_URL (e.g. via Vercel's Upstash Redis integration,\n"
+            "   or a Railway/Render Redis addon).\n"
             "   Refusing to start without shared rate limiting.",
             file=sys.stderr, flush=True
         )

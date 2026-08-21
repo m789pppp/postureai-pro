@@ -8,10 +8,23 @@ flask-limiter==3.7.0
 gunicorn==22.0.0
 python-dotenv==1.2.2
 requests==2.32.4
-httpx==0.27.0
+# Bumped 0.27.0 -> 0.28.1: google-genai (below) requires httpx>=0.28.1,
+# and nothing else here pins it lower (supabase, the only package that
+# capped it below 0.28, is removed below since it isn't configured/used
+# anywhere — see that note). httpx's basic request API this app actually
+# uses (Resend calls) is unaffected across this range.
+httpx==0.28.1
 
 # ── Database ──────────────────────────────────────────────────────
-supabase==2.5.3
+# supabase removed: SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY are not set
+# anywhere in this project's env docs (.env.example, VERCEL_ENV_SETUP.md,
+# render.yaml) — services/db_service.py's get_db() already falls back to
+# a no-op _MockDB() whenever the URL/key are unset OR the `supabase`
+# package fails to import (explicit `except ImportError` branch), so
+# this was already inert in every real deployment. Its httpx<0.28 pin
+# was the other half of a hard conflict with google-genai's
+# httpx>=0.28.1 requirement — removing it is a no-op for current
+# behavior, not a feature cut.
 psycopg2-binary==2.9.9
 SQLAlchemy==2.0.30          # optional ORM if needed
 
