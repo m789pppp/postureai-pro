@@ -435,7 +435,8 @@ export function createFrameBuffer(size = FRAME_BUFFER_SIZE) {
  * @returns {object} proportions
  */
 // Stable shRatio — EMA across calls to prevent per-frame jitter
-let _shRatioEMA = null;
+let _shRatioEMA  = null;
+let _ipdShEMA    = null;  // IPD-based shoulder width estimate (pixels), EMA-smoothed
 
 function computeProportions(lms, W, H, calibKnownDistCm = null) {
   const g   = i => lms[i];
@@ -448,41 +449,51 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
   const shWidthFrac = shWidthPx / Math.max(W, 1);
   const rawRatio    = Math.max(0.70, Math.min(1.30, shWidthFrac / REF_SH_FRAC));
 
-  // EMA smoothing on shRatio — α=0.05 = very slow drift (stable over seconds)
   if (_shRatioEMA === null) _shRatioEMA = rawRatio;
   else _shRatioEMA = _shRatioEMA + 0.05 * (rawRatio - _shRatioEMA);
   const shRatio = _shRatioEMA;
 
-  // When a calibrated known distance is available, back-calculate the user's
-  // actual shoulder width in cm (adults: ~32–52 cm, median ~42 cm).
-  // This prevents systematic cmPerPx errors of up to ±19% for users whose
-  // shoulders differ from the hardcoded 42 cm average.
-  // Clamp to plausible anatomical range to guard against noisy calibrations.
-  let effectiveShoulderWidthCm = SHOULDER_WIDTH_CM; // 42 cm default
-  if (calibKnownDistCm && calibKnownDistCm > 20 && shWidthFrac > 0.05) {
-    // Pinhole model: shWidthFrac = (actualShoulderCm / SHOULDER_WIDTH_CM) * REF_SH_FRAC * (REF_DIST_CM / currentDistCm)
-    // Solve for actualShoulderCm using the user's known calibration distance.
-    // BUG FIX: the previous formula divided by (REF_SH_FRAC * calibKnownDistCm / SHOULDER_WIDTH_CM),
-    // which algebraically cancelled calibKnownDistCm out of the result entirely — the
-    // "calibrated" shoulder width was identical to the uncalibrated one regardless of
-    // what distance the user calibrated at. Fixed to divide by the fixed REF_DIST_CM
-    // (the distance at which REF_SH_FRAC was empirically measured), not by calibKnownDistCm.
-    const derived = (shWidthFrac * SHOULDER_WIDTH_CM * calibKnownDistCm) / (REF_SH_FRAC * REF_DIST_CM);
-    effectiveShoulderWidthCm = Math.max(28, Math.min(58, Math.round(derived * 10) / 10));
+  // ── IPD-based shoulder width estimation (no calibration needed) ─────────
+  // Outer eye corner span is stable, highly visible, and correlates strongly
+  // with biacromial shoulder width across body types.
+  // Population avg: outer eye span ≈ 93 mm, shoulder width ≈ 410 mm
+  // Ratio: 410 / 93 ≈ 4.41  (same distance → pixel ratio = cm ratio)
+  // α = 0.04 → converges after ~25 frames (≈1 second at 30fps)
+  const eyeOuterOK = vis(PL.L_EYE_OUTER) && vis(PL.R_EYE_OUTER);
+  if (eyeOuterOK) {
+    const outerSpanPx = Math.abs(g(PL.L_EYE_OUTER).x * W - g(PL.R_EYE_OUTER).x * W);
+    if (outerSpanPx > 8) {
+      const estimate = outerSpanPx * 4.41;
+      if (_ipdShEMA === null) _ipdShEMA = estimate;
+      else _ipdShEMA = _ipdShEMA + 0.04 * (estimate - _ipdShEMA);
+    }
   }
 
-  const cmPerPx = effectiveShoulderWidthCm / Math.max(shWidthPx, 1);
+  let effectiveShoulderWidthCm = SHOULDER_WIDTH_CM;
+  let shWidthPxForCalc = shWidthPx;
+
+  if (calibKnownDistCm && calibKnownDistCm > 20 && shWidthFrac > 0.05) {
+    // Full calibration: pinhole model — most accurate
+    const derived = (shWidthFrac * SHOULDER_WIDTH_CM * calibKnownDistCm) / (REF_SH_FRAC * REF_DIST_CM);
+    effectiveShoulderWidthCm = Math.max(28, Math.min(58, Math.round(derived * 10) / 10));
+  } else if (_ipdShEMA !== null && _ipdShEMA > 20) {
+    // No calibration: IPD-based estimate replaces noisy shoulder-landmark width
+    shWidthPxForCalc = _ipdShEMA;
+    effectiveShoulderWidthCm = SHOULDER_WIDTH_CM; // ratio already embedded in _ipdShEMA
+  }
+
+  const cmPerPx = effectiveShoulderWidthCm / Math.max(shWidthPxForCalc, 1);
 
   return {
     lSh, rSh,
     midSh:      { x: (lSh.x + rSh.x) / 2, y: (lSh.y + rSh.y) / 2, z: (lSh.z + rSh.z) / 2 },
-    // midShZ: normalised Z midpoint of shoulders — used by analyzeFHP 3D calculation
     midShZ:     (lSh.z + rSh.z) / 2,
-    shWidthPx,
+    shWidthPx:  shWidthPxForCalc,
     shWidthFrac,
     shRatio,
     cmPerPx,
     effectiveShoulderWidthCm,
+    ipdEstimated: _ipdShEMA !== null,
     shOK: vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER),
   };
 }
@@ -490,13 +501,12 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
 /** Call on session reset / camera restart to clear proportion memory */
 export function resetProportions() {
   _shRatioEMA = null;
-  // Clear expensive-metric cache so next frame recalculates fresh
+  _ipdShEMA   = null; // reset IPD estimate for new session
   analyzeMP._frameN = 0;
   analyzeMP._cachedRounded = null;
   analyzeMP._cachedFhp     = null;
   analyzeMP._cachedElbow   = null;
   analyzeMP._cachedMonitor = null;
-  // Clear score-drift buffer so fatigue penalty resets on new session
   analyzeMP._scoreBuf = null;
 }
 
