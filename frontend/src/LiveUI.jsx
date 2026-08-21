@@ -151,6 +151,15 @@ export function Icon({ name, size = 18, color = "currentColor", strokeWidth = 1.
     case "lock": return <svg {...c}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>;
     case "user": return <svg {...c}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg>;
     case "trend": return <svg {...c}><polyline points="3 17 9 11 13 15 21 6" /><polyline points="15 6 21 6 21 12" /></svg>;
+    case "angle": return <svg {...c}><polyline points="4 4 4 20 20 20" /><path d="M4 13a7 7 0 0 1 7 7" /></svg>;
+    case "skeleton": return (
+      <svg {...c}>
+        <circle cx="12" cy="5" r="2.4" />
+        <line x1="12" y1="7.4" x2="12" y2="14" />
+        <line x1="12" y1="9.5" x2="6.5" y2="12" /><line x1="12" y1="9.5" x2="17.5" y2="12" />
+        <line x1="12" y1="14" x2="7.5" y2="21" /><line x1="12" y1="14" x2="16.5" y2="21" />
+      </svg>
+    );
     default: return null;
   }
 }
@@ -245,6 +254,56 @@ export function SectionCard({ title, icon, cs, children, style, actions }) {
       {children}
     </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SETTINGS LIST — iOS/Apple-Health-style toggle rows, replaces cramped
+// button grids with wrapping labels. One consistent row height regardless
+// of label length; a real switch instead of a recolored button.
+// ─────────────────────────────────────────────────────────────────────────
+export function Switch({ on, onChange, cs, tone = "blue", disabled, label }) {
+  const toneColor = { blue: cs.blue || LT.color.info, purple: "#a78bfa", teal: "#38bdf8", green: LT.color.good }[tone] || (cs.blue || LT.color.info);
+  return (
+    <button onClick={onChange} disabled={disabled} role="switch" aria-checked={on} aria-label={label}
+      className="liveui-focusable"
+      style={{
+        width: 38, height: 22, borderRadius: LT.radius.pill, flexShrink: 0, position: "relative",
+        background: on ? toneColor : (cs.inpB || "rgba(148,163,184,.25)"),
+        border: "none", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
+        padding: 0, transition: `background ${LT.duration.fast}ms ease`,
+      }}>
+      <span style={{
+        position: "absolute", top: 2, insetInlineStart: on ? 18 : 2, width: 18, height: 18,
+        borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.4)",
+        transition: `inset-inline-start ${LT.duration.fast}ms ease`,
+      }} />
+    </button>
+  );
+}
+
+export function SettingsRow({ icon, label, sub, right, cs, onClick, disabled }) {
+  return (
+    <div onClick={disabled ? undefined : onClick} style={{
+      display: "flex", alignItems: "center", gap: 10, padding: "9px 2px",
+      cursor: onClick && !disabled ? "pointer" : "default", opacity: disabled ? 0.55 : 1,
+    }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: LT.radius.sm, background: cs.inp || "rgba(255,255,255,.04)",
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+      }}>
+        <Icon name={icon} size={14} color={cs.muted} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: LT.font.sm, fontWeight: 600, color: cs.text }}>{label}</div>
+        {sub && <div style={{ fontSize: LT.font.xs, color: cs.muted, marginTop: 1, lineHeight: 1.4 }}>{sub}</div>}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+export function SettingsDivider({ cs }) {
+  return <div style={{ height: 1, background: cs.border, margin: "2px 0" }} />;
 }
 
 export function StatTile({ label, value, cs, tone = "neutral" }) {

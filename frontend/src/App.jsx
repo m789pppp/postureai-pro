@@ -44,6 +44,7 @@ import {
   LT, Icon, IconBtn, Btn as LiveBtn, StatusPill, SectionCard, StatTile, MetricRow,
   LiveHeader, ScoreGauge, AICoachCard, CameraFrame, CameraOverlay, OverlayCard,
   CountdownRing, GuidanceHint, useLiveUICSS, fmtTime, scoreTierColor, alpha as liveAlpha,
+  Switch, SettingsRow, SettingsDivider,
 } from "./LiveUI.jsx";
 import { gradeScore, gradeScoreAr, gradeContext, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
@@ -6495,128 +6496,73 @@ async function downloadPDF(sessionOverride, isClinical=false){
         </div>
         {showLiveSettings && (
         <div style={{padding:"0 14px 12px",display:"flex",flexDirection:"column",gap:8,borderBottom:`1px solid ${cs.border}`}}>
-          {/* Alert sound + Elite voice coach toggles — voice coach only takes
-              a slot here once actually unlocked; below Elite it moved into
-              the compact "locked tools" row at the end of this block so a
-              Free/Basic/Pro user isn't looking at a full-prominence button
-              for something they can't use yet. */}
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setSound(s=>!s)} style={{
-              flex:1,background:sound?"rgba(26,86,219,.12)":"rgba(255,255,255,.04)",
-              border:`1px solid ${sound?"rgba(26,86,219,.35)":cs.border}`,borderRadius:9,
-              padding:"8px 0",fontSize:11,fontWeight:700,color:sound?"#60a5fa":cs.muted,cursor:"pointer",
-            }}>
-              {sound?"🔊":"🔇"} {isAr?"تنبيه الوضعية":"Posture alerts"}
-            </button>
+          {/* Settings list — was a grid of same-size buttons whose labels
+              ("Focus Mode", "Voice coach") wrapped onto 2 lines inside a
+              fixed-width box, reading as cramped/broken. An iOS-style row
+              list (icon + label + switch, one row height regardless of
+              label length) fixes that while keeping every handler, every
+              localStorage side effect, and every tier gate byte-identical
+              to before — this is a visual swap only. */}
+          <div style={{display:"flex",flexDirection:"column"}}>
+            <SettingsRow cs={cs} icon={sound?"bell":"bellOff"} label={isAr?"تنبيه الوضعية":"Posture alerts"}
+              right={<Switch cs={cs} on={sound} onChange={()=>setSound(s=>!s)} label={isAr?"تنبيه الوضعية":"Posture alerts"}/>}/>
             {tierAtLeast(effectiveTier,"professional") && (
-              <button onClick={()=>setFocusMode(f=>!f)} title={isAr?"يوقف إشعارات الإنجازات والتحديات وقت الجلسة — تنبيهات الوضعية بتفضل شغالة عادي":"Mutes achievement/challenge notifications during the session — posture alerts stay on"} style={{
-                flex:1,background:focusMode?"rgba(168,85,247,.14)":"rgba(255,255,255,.04)",
-                border:`1px solid ${focusMode?"rgba(168,85,247,.4)":cs.border}`,borderRadius:9,
-                padding:"8px 0",fontSize:11,fontWeight:700,color:focusMode?"#c084fc":cs.muted,cursor:"pointer",
-              }}>
-                {focusMode?"🎯":"🎯"} {isAr?"وضع التركيز":"Focus Mode"}
-              </button>
+              <SettingsRow cs={cs} icon="target" label={isAr?"وضع التركيز":"Focus Mode"}
+                sub={isAr?"يوقف إشعارات الإنجازات وقت الجلسة":"Mutes achievement notifications during the session"}
+                right={<Switch cs={cs} tone="purple" on={focusMode} onChange={()=>setFocusMode(f=>!f)} label={isAr?"وضع التركيز":"Focus Mode"}/>}/>
             )}
             {tierAtLeast(effectiveTier,"elite") && (
-              <button onClick={()=>{
-                setVoiceCoach(v=>{
-                  const nv=!v;
-                  try{localStorage.setItem("corvus_voice_coach",nv?"1":"0");}catch{}
-                  if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{force:true});
-                  else stopSpeaking();
-                  return nv;
-                });
-              }} style={{
-                flex:1,background:voiceCoach?"rgba(79,174,142,.12)":"rgba(255,255,255,.04)",
-                border:`1px solid ${voiceCoach?"rgba(79,174,142,.4)":cs.border}`,borderRadius:9,
-                padding:"8px 0",fontSize:11,fontWeight:700,
-                color:voiceCoach?"#34d399":cs.muted,cursor:"pointer",
-                display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-              }}>
-                🎙️ {isAr?"المدرب الصوتي":"Voice coach"}
-              </button>
+              <SettingsRow cs={cs} icon="mic" label={isAr?"المدرب الصوتي":"Voice coach"}
+                right={<Switch cs={cs} tone="green" on={voiceCoach} label={isAr?"المدرب الصوتي":"Voice coach"} onChange={()=>{
+                  setVoiceCoach(v=>{
+                    const nv=!v;
+                    try{localStorage.setItem("corvus_voice_coach",nv?"1":"0");}catch{}
+                    if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{force:true});
+                    else stopSpeaking();
+                    return nv;
+                  });
+                }}/>}/>
+            )}
+            <SettingsDivider cs={cs}/>
+            <SettingsRow cs={cs} icon={faceBlur?"eyeOff":"eye"} label={isAr?"إخفاء الوجه":"Face blur"}
+              right={<Switch cs={cs} tone="purple" on={faceBlur} label={isAr?"إخفاء الوجه":"Face blur"} onChange={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }}/>}/>
+            <SettingsRow cs={cs} icon="skeleton" label={isAr?"الهيكل":"Skeleton"}
+              right={<Switch cs={cs} tone="teal" on={showSkeleton} label={isAr?"الهيكل":"Skeleton"} onChange={()=>{ setShowSkeleton(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_skeleton",nv?"1":"0");}catch{} return nv; }); }}/>}/>
+            <SettingsRow cs={cs} icon="angle" label={isAr?"الزوايا":"Angles"}
+              right={<Switch cs={cs} tone="teal" on={showAngles} label={isAr?"الزوايا":"Angles"} onChange={()=>{ setShowAngles(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_angles",nv?"1":"0");}catch{} return nv; }); }}/>}/>
+            {(tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none")) && <SettingsDivider cs={cs}/>}
+            {tierAtLeast(effectiveTier,"professional") && (
+              <SettingsRow cs={cs} icon="settings" label={isAr?"قواعد تنبيه":"Alert rules"}
+                sub={customAlertRules.some(r=>r.enabled)?(isAr?"مفعّلة":"Active"):undefined}
+                onClick={()=>setShowCustomAlertRules(true)}
+                right={<Icon name="chevronDown" size={13} color={cs.muted} style={{transform:isAr?"rotate(90deg)":"rotate(-90deg)"}}/>}/>
+            )}
+            {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"&&(
+              <SettingsRow cs={cs} icon="download" label={isAr?"تنزيل PDF":"Download PDF"}
+                onClick={async ()=>{
+                  const hist=histRef.current||[];
+                  const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
+                  const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
+                  const gp=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
+                  try {
+                    const { generateSessionPDF } = await import("./lib/pdfReports.js");
+                    await generateSessionPDF({
+                      session:{
+                        avg_score:sc, duration_s:dur, good_pct:gp,
+                        alerts_count:acRef.current?.total||0, mode, tier:effectiveTier,
+                        score_history:hist.slice(-60), created_at:new Date(),
+                        metrics:lastAnalRef.current?.metrics||{},
+                        worst_snapshots:worstSnapsRef.current.slice(0,3),
+                      },
+                      profile: { ...profile, tier: effectiveTier },
+                      allSessions: userSessions,
+                      aiSummary: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
+                    });
+                  } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
+                }}
+                right={<Icon name="chevronDown" size={13} color={cs.muted} style={{transform:isAr?"rotate(90deg)":"rotate(-90deg)"}}/>}/>
             )}
           </div>
-          {/* Privacy + display overlay toggles — these three were a
-              full-width block (face blur) stacked on top of a separate 2-up
-              row (skeleton/angles). All three do the same kind of thing
-              (what's drawn on the video overlay), so they're one row now. */}
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }} style={{
-              flex:1,background:faceBlur?"rgba(99,102,241,.12)":"rgba(255,255,255,.04)",
-              border:`1px solid ${faceBlur?"rgba(99,102,241,.4)":cs.border}`,borderRadius:9,
-              padding:"8px 2px",fontSize:10.5,fontWeight:700,color:faceBlur?"#a5b4fc":cs.muted,cursor:"pointer",
-              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
-            }}>
-              <span style={{fontSize:14}}>{faceBlur?"🕶️":"👤"}</span>
-              {isAr?"إخفاء الوجه":"Face blur"}
-            </button>
-            <button onClick={()=>{ setShowSkeleton(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_skeleton",nv?"1":"0");}catch{} return nv; }); }} style={{
-              flex:1,background:showSkeleton?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
-              border:`1px solid ${showSkeleton?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
-              padding:"8px 2px",fontSize:10.5,fontWeight:700,color:showSkeleton?"#38bdf8":cs.muted,cursor:"pointer",
-              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
-            }}>
-              <span style={{fontSize:14}}>{showSkeleton?"🦴":"⬚"}</span>
-              {isAr?"الهيكل":"Skeleton"}
-            </button>
-            <button onClick={()=>{ setShowAngles(v=>{ const nv=!v; try{localStorage.setItem("corvus_show_angles",nv?"1":"0");}catch{} return nv; }); }} style={{
-              flex:1,background:showAngles?"rgba(14,165,233,.1)":"rgba(255,255,255,.04)",
-              border:`1px solid ${showAngles?"rgba(14,165,233,.35)":cs.border}`,borderRadius:9,
-              padding:"8px 2px",fontSize:10.5,fontWeight:700,color:showAngles?"#38bdf8":cs.muted,cursor:"pointer",
-              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
-            }}>
-              <span style={{fontSize:14}}>{showAngles?"📐":"⬚"}</span>
-              {isAr?"الزوايا":"Angles"}
-            </button>
-          </div>
-          {/* Pro tools — Custom Alert Rules + PDF grouped together as what
-              they are (both Pro-tier session tools), instead of one sitting
-              here and the other sitting several rows further down. */}
-          {(tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"))&&(
-            <div style={{display:"flex",gap:6}}>
-              {tierAtLeast(effectiveTier,"professional") && (
-                <button onClick={()=>setShowCustomAlertRules(true)} style={{
-                  flex:1,background:customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.12)":"rgba(255,255,255,.04)",
-                  border:`1px solid ${customAlertRules.some(r=>r.enabled)?"rgba(124,58,237,.4)":cs.border}`,borderRadius:9,
-                  padding:"8px 0",fontSize:11,fontWeight:700,color:customAlertRules.some(r=>r.enabled)?"#c4b5fd":cs.muted,cursor:"pointer",
-                  display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-                }}>
-                  ⚙️ {isAr?"قواعد تنبيه":"Alert rules"}
-                </button>
-              )}
-              {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail!=="none"&&(
-<button onClick={async ()=>{
-              const hist=histRef.current||[];
-              const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
-              const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
-              const gp=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
-              try {
-                const { generateSessionPDF } = await import("./lib/pdfReports.js");
-                await generateSessionPDF({
-                  session:{
-                    avg_score:sc, duration_s:dur, good_pct:gp,
-                    alerts_count:acRef.current?.total||0, mode, tier:effectiveTier,
-                    score_history:hist.slice(-60), created_at:new Date(),
-                    metrics:lastAnalRef.current?.metrics||{},
-                    worst_snapshots:worstSnapsRef.current.slice(0,3),
-                  },
-                  profile: { ...profile, tier: effectiveTier },
-                  allSessions: userSessions,
-                  aiSummary: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
-                });
-              } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
-            }} style={{
-              flex:1,background:"rgba(59,130,246,.08)",
-              color:"#93c5fd",
-              border:"1px solid rgba(59,130,246,.2)",borderRadius:9,
-              padding:"8px 0",fontSize:11,fontWeight:600,cursor:"pointer",
-            }}>
-              📄 {isAr?"تنزيل PDF":"Download PDF"}
-            </button>
-              )}
-            </div>
-          )}
           {/* Calibrate for accuracy — personalises scoring to the user's own
               neutral posture; reachable straight from the live session. Kept
               visually distinct (green, not a toggle) since it's a one-time
