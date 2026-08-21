@@ -42,7 +42,7 @@ import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal, ModalPortal } from "./ui/index.jsx";
 import {
   LT, Icon, IconBtn, Btn as LiveBtn, StatusPill, SectionCard, StatTile, MetricRow,
-  LiveHeader, ScoreGauge, AICoachCard, CameraFrame, CameraOverlay, OverlayCard,
+  LiveHeader, ScoreGauge, AICoachCard, CameraFrame, CameraOverlay, OverlayCard, StartingRing,
   CountdownRing, GuidanceHint, useLiveUICSS, fmtTime, scoreTierColor, alpha as liveAlpha,
   Switch, SettingsRow, SettingsDivider,
 } from "./LiveUI.jsx";
@@ -2199,13 +2199,19 @@ export default function App(){
   // these two modals closed on ANY transition away from the live page, via
   // any mechanism (not just back-button).
   useEffect(()=>{
-    if(page!=="live"){ setShowHealthConsent(false); setPreviewPhase(null); }
+    if(page!=="live"){ setShowHealthConsent(false); setPreviewPhase(null); setStartingSession(false); }
   },[page]);
   const[cameraStatus,setCameraStatus]=useState("idle"); // idle | requesting | ready | denied | no-device
   // Camera preview → 3-2-1 countdown flow, cancellable the whole time.
   const[previewPhase,setPreviewPhase]=useState(null); // null | "preview" | "countdown"
   const[countdownN,setCountdownN]=useState(3);
   const countdownIvRef=useRef(null);
+  // Bridges the gap between the 3-2-1 countdown finishing (previewPhase→null)
+  // and camActive actually flipping true inside beginScoring() — that gap can
+  // be up to ~1.2s (see the startSession race comment below) and, without
+  // this flag, the idle "Tap Start Analysis" guidance would flash back on
+  // screen during it, reading to the user as the page freezing/breaking.
+  const[startingSession,setStartingSession]=useState(false);
   // True pause/resume — freezes the RAF analysis loop and the session
   // timer without ending or saving the session. Camera stream stays
   // attached (video keeps showing) so resuming is instant, no re-request.
@@ -3532,6 +3538,7 @@ export default function App(){
         clearInterval(countdownIvRef.current);
         countdownIvRef.current=null;
         setPreviewPhase(null);
+        setStartingSession(true);
         beginScoring();
       } else {
         setCountdownN(n);
@@ -3583,6 +3590,7 @@ export default function App(){
             setCameraStatus("idle");
             streamRef.current?.getTracks?.().forEach(t=>t.stop());
             setCamActive(false);
+            setStartingSession(false);
             if(rafRef.current) cancelAnimationFrame(rafRef.current);
             if(timerRef.current) clearInterval(timerRef.current);
             const hitDaily=(e?.body?.used_daily??0)>=(e?.body?.limit_daily??Infinity);
@@ -3597,6 +3605,7 @@ export default function App(){
       if(paywallBlocked) return;
 
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
+      setStartingSession(false);
       // NOTE: previously showed an info toast here ("{mode} camera · {tier}
       // tier active") on every session start. Removed — that fact is already
       // permanently visible in both the header and the sidebar badges, so the
@@ -3623,6 +3632,7 @@ export default function App(){
       const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
       const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
       setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
+      setStartingSession(false);
       const errMsg=isDenied
         ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
         :noDevice
@@ -5328,20 +5338,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
         borderLeft:  isAr ? `1px solid ${cs.border}` : "none",
         minWidth:0,
       }}>
-        {/* Session guidance strip — the Back / language / theme controls that
-            used to live in a duplicate top bar here now live once, in the
-            unified LiveHeader inside the sticky sidebar. This strip keeps
-            only the one thing it uniquely adds: live session guidance text. */}
-        <div style={{padding:"10px 16px",borderBottom:`1px solid ${cs.border}`,background:cs.card}}>
-          <div style={{fontSize:12.5,fontWeight:600,color:cs.text}}>
-            {mpStatus==="ready"
-              ? (M_ ? (isAr?`المسافة المثلى ${M_.optDist[0]}–${M_.optDist[1]} سم`:`Optimal distance ${M_.optDist[0]}–${M_.optDist[1]}cm`) : (isAr?"جاهز للتحليل":"Ready to analyse"))
-              : mpStatus==="fallback" ? (isAr?"جاهز — عبر السيرفر":"Ready — via server")
-              : mpStatus==="error" ? (isAr?"تعذر تحميل نموذج التحليل":"Analysis model failed to load")
-              : (isAr?"جاري تحميل النموذج...":"Loading AI model...")}
-          </div>
-        </div>
-
         {/* Session Summary — clearly secondary to the live camera view (per
             design brief): compact stat tiles instead of a full-bleed 4-up
             grid competing for visual weight. */}
@@ -5642,30 +5638,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
           onBack={backFromLive}
           onToggleDark={()=>setDarkMode(!darkMode)}
           onToggleLang={()=>setLang(lang==="en"?"ar":"en")}
-          onOpenSettings={()=>setShowLiveSettings(v=>!v)}
           mpStatus={mpStatus}
+          aiCoachStatus={aiCoachStatus}
           camActive={camActive}
           timeLabel={fmtTime(sessionTime)}
           tierLabel={[TN?.name,M_?.label].filter(Boolean).join(" · ")}
           showUpgrade={!camActive && !tierAtLeast(effectiveTier,"basic")}
           onUpgrade={()=>setShowBilling(true)}
         />
-        {/* AI Coach readiness — kept as its own compact pill since it tracks
-            a second, independent pipeline (Elite AI insight generation)
-            distinct from the pose-detection status shown in the header. */}
-        <div style={{padding:"0 14px 10px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-          <StatusPill cs={cs}
-            tone={aiCoachStatus.error?"bad":aiCoachStatus.ready?"good":"info"}
-            icon={aiCoachStatus.error?"alertTriangle":aiCoachStatus.ready?"checkCircle":"infoCircle"}
-            pulse={!aiCoachStatus.ready&&!aiCoachStatus.error}
-            label={aiCoachStatus.ready
-              ? (isAr?"مدرب AI ✓":"AI Coach ✓")
-              : aiCoachStatus.loading
-              ? (isAr?`مدرب AI ${aiCoachStatus.progress}%`:`AI Coach ${aiCoachStatus.progress}%`)
-              : (isAr?"مدرب AI ...":"AI Coach ...")}
-          />
-        </div>
-
 
         {/* ── Quick Start Banner (for users who skipped onboarding) ─── */}
         {profile?.onboarding_done?.[0]==="skipped" && !score && (
@@ -5863,13 +5843,26 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </CameraOverlay>
           )}
 
+          {/* Starting-session transition — bridges the 3-2-1 countdown ending
+              (previewPhase→null) and camActive actually flipping true, which
+              can take up to ~1.2s (see the startSession race comment in
+              beginScoring()). Without this, the idle-cue overlay right below
+              briefly flashed back on during that gap, reading as the page
+              freezing or resetting rather than starting normally. */}
+          {startingSession && (
+            <CameraOverlay align="center">
+              <StartingRing label={isAr?"جاري بدء الجلسة...":"Starting session..."} />
+            </CameraOverlay>
+          )}
+
           {/* Idle-state visual cue — previously the camera area was just a black box
               with no indication a click was needed. First-time users had no way to
               know to press "Start Analysis" below. Must NOT show during preview/
-              countdown — camActive is still false at that point (correct, scoring
-              hasn't started), so without excluding previewPhase this rendered on
-              top of the preview overlay's own text simultaneously, garbled. */}
-          {!camActive && !previewPhase && cameraStatus!=="requesting" && (
+              countdown/starting — camActive is still false during all three (correct,
+              scoring hasn't started), so without excluding them this rendered on
+              top of those overlays' own text simultaneously, garbled — and during
+              the starting gap specifically, it read as the session resetting. */}
+          {!camActive && !previewPhase && !startingSession && cameraStatus!=="requesting" && (
             <div style={{
               position:"absolute",inset:0,display:"flex",flexDirection:"column",
               alignItems:"center",justifyContent:"center",gap:10,
@@ -6098,8 +6091,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Primary control — placed directly under the camera so Start / Stop
             is always visible without scrolling past the metrics list. */}
         <div style={{padding:"12px 14px 0"}}>
-          {previewPhase
-            ? null /* overlay's own Start/Cancel buttons are the CTA here */
+          {previewPhase || startingSession
+            ? null /* overlay's own Start/Cancel buttons (or the "Starting
+                       session..." overlay) are the CTA here — without also
+                       excluding startingSession, this button briefly
+                       reappeared during the countdown→camActive gap,
+                       right alongside the new "Starting session..." overlay,
+                       which is exactly the confusing double-state the fix
+                       for the reported lag/freeze was meant to remove. */
             : !camActive
             ? <button
                 onClick={cameraStatus==="requesting" ? undefined : startCamera}
