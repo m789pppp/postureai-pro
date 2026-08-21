@@ -47,9 +47,13 @@ stripe==10.4.0
 # SMTP via standard library smtplib
 
 # ── Task queue ────────────────────────────────────────────────────
+# flower (Celery's monitoring UI) removed: it's a standalone dashboard
+# process, not something the Flask app imports — meaningless on Vercel
+# where Celery workers/beat can't run at all (serverless, no persistent
+# process). See requirements-dev.txt if it's ever needed for local dev
+# against a real worker.
 celery==5.4.0
 redis==5.0.6
-flower==2.0.1               # Celery monitoring UI
 
 # ── PDF generation ────────────────────────────────────────────────
 reportlab==4.2.2
@@ -64,15 +68,15 @@ pytz==2024.1
 pydantic==2.7.4             # request validation
 marshmallow==3.21.3         # serialization
 
-# ── Testing ───────────────────────────────────────────────────────
-pytest==8.2.2
-pytest-cov==5.0.0
-pytest-mock==3.14.0
-responses==0.25.3
-
-# ── Security ──────────────────────────────────────────────────────
-bandit==1.7.9
-safety==3.2.3
-
 # WorkOS SSO (merged from v13)
 workos>=3.0.0
+
+# ── Testing / security-scan tools ────────────────────────────────
+# Moved to requirements-dev.txt: pytest, pytest-cov, pytest-mock,
+# responses, bandit, safety are dev/CI-only (nothing in the deployed
+# app imports them), and every KB in this file counts directly against
+# Vercel's Python function bundle size limit (500MB standard / 5GB
+# with the Large Functions beta — see VERCEL_ENV_SETUP.md). Keeping
+# them out of the production dependency list is free size savings.
+# CI installs requirements-dev.txt (which pulls this file in via -r)
+# so `pytest tests/` still works exactly as before.
