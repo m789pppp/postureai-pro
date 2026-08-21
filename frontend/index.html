@@ -179,7 +179,16 @@
       *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
       html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
       body{background:#030b14;color:#e8f0ff;font-family:'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif;line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
-      #root{min-height:100vh;contain:layout style}
+      /* contain:style only — NOT layout/paint/content/strict. Those values
+         make #root a "containing block" for every position:fixed descendant
+         in the app (CSS spec behavior), so any fixed sidebar/toolbar/overlay
+         anywhere stops pinning to the real browser viewport and instead
+         scrolls away with the page — exactly the "sidebar drifts out of
+         alignment with the dashboard while scrolling" bug this caused for
+         HomePage's fixed <aside> sidebar. contain:style keeps the (minor)
+         intent of the original landing-page perf pass without that side
+         effect. */
+      #root{min-height:100vh;contain:style}
       /* Prevent invisible text during font load */
       @font-face{font-display:swap}
       /* Loading state */
