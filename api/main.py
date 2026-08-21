@@ -1,6 +1,15 @@
 """
 Vercel Python entrypoint for the Flask backend.
 
+Lives inside api/ (not the repo root) because Vercel's `functions`
+config in vercel.json validates its keys against files it finds inside
+the `api` directory specifically — a root-level main.py, even with a
+matching pyproject.toml `tool.vercel.entrypoint`, fails to deploy with
+"The pattern ... doesn't match any Serverless Functions inside the
+`api` directory" on a project (like this one) that already has other
+file-based functions under api/. Confirmed by hitting that exact error
+with main.py at the repo root and fixing it by moving the file here.
+
 Loads the real Flask `app` object from backend/backend.py (16,000+
 lines — see backend/app.py's own docstring for why backend.py, not a
 thinner file, is the actual application) by explicit file path rather
@@ -27,7 +36,9 @@ import importlib.util
 import os
 import sys
 
-_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
+# This file is api/main.py, so backend/ is a sibling of api/'s parent
+# (the repo root), not of this file itself — one level up.
+_BACKEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
 
 # backend/backend.py imports sibling modules with flat, absolute names
 # (e.g. `from scoring_utils import ...`, `from auth.middleware import
