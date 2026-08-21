@@ -1,0 +1,22 @@
+# Dev / CI-only additions on top of the production dependency list.
+#
+# Nothing in the deployed Flask app imports pytest, responses, bandit,
+# or safety — they're test-runner and security-scan tooling. Keeping
+# them out of requirements.txt keeps the Vercel Python function bundle
+# smaller (every installed package counts against the 500MB standard /
+# 5GB Large-Functions-beta uncompressed size limit — see
+# VERCEL_ENV_SETUP.md). CI (.github/workflows/ci.yml) installs this
+# file instead of requirements.txt directly so `pytest tests/` still
+# has everything it needs.
+-r requirements.txt
+
+pytest==8.2.2
+pytest-cov==5.0.0
+pytest-mock==3.14.0
+responses==0.25.3
+
+# Security-scan tools — not run by any CI job today (grepped for
+# `bandit`/`safety` across .github/workflows and found no invocation),
+# kept here for local/manual scans rather than removed outright.
+bandit==1.7.9
+safety==3.2.3

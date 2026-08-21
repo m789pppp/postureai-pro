@@ -39,9 +39,14 @@ jobs:
       # files were added, silently, because nobody was watching the
       # Actions tab. Installing the real requirements.txt costs a couple
       # extra minutes but means this job actually tests what it claims to.
+      # Installs requirements-dev.txt (requirements.txt + pytest/etc.)
+      # rather than requirements.txt directly — pytest, pytest-cov,
+      # pytest-mock, and responses were moved out of the production
+      # dependency list to keep the deployed Vercel Python function
+      # bundle smaller (see backend/requirements-dev.txt).
       - name: Install backend dependencies
         working-directory: backend
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Run backend tests
         working-directory: backend
