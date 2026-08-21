@@ -299,16 +299,101 @@ except Exception:
 
 # ── Config ─────────────────────────────────────────────────────────
 # AI backend — server-side ONLY, never exposed to the client.
-# Groq (primary): free tier, 14,400 req/day, ~500ms latency.
+# Gemini (primary): free tier via Google AI Studio, flagship-quality
+#   multilingual model (real global-brand quality for chat/writing, not
+#   just an open-weight fallback). Sign up at aistudio.google.com →
+#   Get API key → set GEMINI_API_KEY in Railway. Uses the new unified
+#   `google-genai` SDK (the old `google-generativeai` package is
+#   deprecated upstream and is NOT what's used here).
+# Groq (secondary): free tier, 14,400 req/day, ~500ms latency, also
+#   genuinely good quality (Llama 3.3 70B) — kept as a fast fallback.
 #   Sign up at console.groq.com → API Keys → set GROQ_API_KEY in Railway.
-# Ollama (optional fallback): self-hosted, zero cost but needs a server.
+# Ollama (optional last-resort fallback): self-hosted, zero cost but
+#   needs a dedicated server — most deployments won't set this.
+GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL        = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")       # best free-tier-eligible model
+GEMINI_MODEL_FAST   = os.getenv("GEMINI_MODEL_FAST", "gemini-3.5-flash-lite")  # fallback if primary is rate-limited
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")  # best free model
 GROQ_MODEL_FAST     = "llama-3.1-8b-instant"   # fallback if 70b rate-limited
 GROQ_URL            = "https://api.groq.com/openai/v1/chat/completions"
 OLLAMA_URL          = os.getenv("OLLAMA_URL", "")
 LOCAL_LLM_MODEL     = os.getenv("LOCAL_LLM_MODEL", "qwen2.5:3b")
-AI_CONFIGURED       = bool(GROQ_API_KEY or OLLAMA_URL)
+AI_CONFIGURED       = bool(GEMINI_API_KEY or GROQ_API_KEY or OLLAMA_URL)
+
+_gemini_client = None
+def _get_gemini_client():
+    """Lazily create (and cache) the Gemini client. Returns None if no key
+    is set or the SDK/init fails, so callers can fall through to Groq
+    without the whole request ever crashing on a missing/broken dependency."""
+    global _gemini_client
+    if _gemini_client is not None:
+        return _gemini_client if _gemini_client is not False else None
+    if not GEMINI_API_KEY:
+        _gemini_client = False
+        return None
+    try:
+        from google import genai
+        from google.genai import types
+        _gemini_client = genai.Client(
+            api_key=GEMINI_API_KEY,
+            # ms — bounds worst-case latency so a slow/unreachable Gemini
+            # call can never hang the request; falls through to Groq instead.
+            # Kept well under Groq's own 18s per-call timeout so the
+            # Gemini→Groq chain has a sane total ceiling (see the frontend
+            # fetch timeout in localAI.js's _backendLLM, sized to match).
+            http_options=types.HttpOptions(timeout=9000),
+        )
+        return _gemini_client
+    except Exception as e:
+        print(f"[gemini] client init failed (falling back to Groq): {e}", file=sys.stderr)
+        _gemini_client = False
+        return None
+
+def call_gemini(messages, max_tokens=600, temperature=0.5):
+    """Call Google Gemini (free tier via AI Studio). Server-side only.
+    `messages` is the same [{role, content}, ...] shape used by call_groq —
+    the leading system message (if present) becomes system_instruction;
+    the rest is flattened into one turn, since no caller in this backend
+    needs true multi-turn history."""
+    client = _get_gemini_client()
+    if not client:
+        return None
+    from google.genai import types
+    system_instruction = None
+    turns = []
+    for m in messages:
+        if m.get("role") == "system" and system_instruction is None:
+            system_instruction = m.get("content", "")
+        else:
+            turns.append(str(m.get("content", "")))
+    contents = "\n\n".join(t for t in turns if t) or " "
+    for model in (GEMINI_MODEL, GEMINI_MODEL_FAST):
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                ),
+            )
+            text = (getattr(resp, "text", None) or "").strip()
+            if text:
+                return text
+        except Exception as e:
+            _msg = str(e).lower()
+            if "429" in _msg or "quota" in _msg or "resource_exhausted" in _msg:
+                continue   # rate-limited on this model — try the lighter one
+            # Anything else (bad key, invalid argument, network error) will
+            # fail identically on the fallback model too — don't waste up
+            # to another 12s retrying a request that can't succeed. This
+            # matters for latency: callers chain Gemini → Groq → LLM7, and
+            # a slow "fail" here delays every step after it.
+            print(f"[gemini] call failed (model={model}): {e}", file=sys.stderr)
+            return None
+    return None
 
 def call_groq(messages, max_tokens=600, temperature=0.5):
     """Call Groq API — free tier (14,400 req/day). Server-side only."""
@@ -323,9 +408,13 @@ def call_groq(messages, max_tokens=600, temperature=0.5):
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"].strip()
             if resp.status_code == 429:
-                continue   # rate-limited on this model, try faster one
+                continue   # rate-limited on this model — try faster one
+            # Any other failure (bad key, 5xx, etc.) will fail the same way
+            # on the fallback model — return immediately instead of
+            # burning another 18s timeout on a request that can't succeed.
+            return None
         except Exception:
-            pass
+            return None
     return None
 
 PAYMOB_SECRET_KEY   = os.getenv("PAYMOB_SECRET_KEY", "")
@@ -3712,11 +3801,13 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
     calling call_local_llm() directly.
 
     Server-side only — no AI provider credential is ever sent to the
-    client. Tries Groq first (if GROQ_API_KEY is set — free tier,
-    14,400 req/day, ~500ms latency), then Ollama (if OLLAMA_URL is set —
-    free, self-hosted, zero per-request cost). `tier` is accepted for
-    call-site compatibility; token budget is set by the caller via
-    tier_quality.py, not by this function.
+    client. Tries Gemini first (if GEMINI_API_KEY is set — free tier via
+    Google AI Studio, flagship-quality multilingual model), then Groq (if
+    GROQ_API_KEY is set — free tier, 14,400 req/day, ~500ms latency, also
+    genuinely good quality), then Ollama (if OLLAMA_URL is set — free,
+    self-hosted, zero per-request cost). `tier` is accepted for call-site
+    compatibility; token budget is set by the caller via tier_quality.py,
+    not by this function.
 
     Returns None if no AI backend is configured / unreachable.
     """
@@ -3726,20 +3817,22 @@ def call_ai(prompt, system_prompt=None, max_tokens=900, temperature=0.25,
         if _cached:
             return _cached
 
-    # Bug fix: this function's own docstring/config comments describe
-    # Groq as "primary" and Ollama as "optional fallback" (see
-    # GROQ_API_KEY/OLLAMA_URL setup above), but only the Ollama branch
-    # was ever actually called — call_groq() was fully dead code. Any
-    # deployment with GROQ_API_KEY set but no OLLAMA_URL (the expected
-    # normal case — Ollama needs a dedicated self-hosted server) had
-    # AI_CONFIGURED=True (gates pass) while call_ai() silently returned
-    # None every time, degrading every AI feature with no error at all.
+    # Bug fix (kept from the original fix note): this function's own
+    # docstring/config comments used to describe Groq as "primary" and
+    # Ollama as "optional fallback", but only the Ollama branch was ever
+    # actually called — call_groq() was fully dead code. Any deployment
+    # with GROQ_API_KEY set but no OLLAMA_URL (the expected normal case)
+    # had AI_CONFIGURED=True (gates pass) while call_ai() silently
+    # returned None every time, degrading every AI feature with no error
+    # at all. Both Gemini and Groq are now actually wired below.
     result = None
-    if GROQ_API_KEY:
-        _messages = []
-        if system_prompt:
-            _messages.append({"role": "system", "content": system_prompt})
-        _messages.append({"role": "user", "content": prompt})
+    _messages = []
+    if system_prompt:
+        _messages.append({"role": "system", "content": system_prompt})
+    _messages.append({"role": "user", "content": prompt})
+    if GEMINI_API_KEY:
+        result = call_gemini(_messages, max_tokens=max_tokens, temperature=temperature)
+    if not result and GROQ_API_KEY:
         result = call_groq(_messages, max_tokens=max_tokens, temperature=temperature)
     if not result and OLLAMA_URL:
         result = call_local_llm(prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature)
@@ -9152,7 +9245,7 @@ def ai_analyze():
             max_tokens = 1200
         max_tokens = max(100, min(2000, max_tokens))
 
-        # call_ai() routes through local Ollama only
+        # call_ai() routes through Gemini → Groq → local Ollama, in that order
         text = call_ai(
             prompt,
             system_prompt=context.get("system_prompt"),
@@ -16325,10 +16418,14 @@ def llm_proxy():
     directly at /api/llm; vercel.json used to intercept that path to a
     client-side-provider Vercel Edge Function before it ever reached here,
     which has since been fixed so it actually lands on this route).
-    Tries Groq first (fast, reliable, 14,400 req/day free tier — same
-    provider used by call_ai()), then falls back to the LLM7.io anonymous
-    pool below, which is shared/rate-limited and not sized for real
-    production traffic on its own.
+    Tries Gemini first (free tier via Google AI Studio — flagship-quality,
+    strong multilingual EN/AR output, same provider used by call_ai()),
+    then Groq (fast, reliable, 14,400 req/day free tier, also good
+    quality), then falls back to the LLM7.io anonymous pool below, which
+    is shared/rate-limited and not sized for real production traffic on
+    its own — kept last-resort only, with a short timeout and a trimmed
+    model list, so a fully-down Gemini+Groq degrades gracefully instead
+    of turning into a long hang before the user sees anything.
     No auth required — rate limited by IP (flask-limiter, enforced server-side).
     """
     if request.method == "OPTIONS":
@@ -16354,6 +16451,16 @@ def llm_proxy():
             for m in messages
         ]
 
+        if GEMINI_API_KEY:
+            try:
+                gemini_text = call_gemini(llm_messages, max_tokens=max_tokens, temperature=temperature)
+                if gemini_text:
+                    resp = jsonify({"ok": True, "text": gemini_text, "model": "gemini"})
+                    resp.headers["Access-Control-Allow-Origin"] = "*"
+                    return resp, 200
+            except Exception:
+                pass  # fall through to Groq
+
         if GROQ_API_KEY:
             try:
                 groq_text = call_groq(llm_messages, max_tokens=max_tokens, temperature=temperature)
@@ -16364,7 +16471,11 @@ def llm_proxy():
             except Exception:
                 pass  # fall through to the LLM7 chain below
 
-        models = ["gpt-4o-mini", "meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-r1"]
+        # Last resort only — shared anonymous relay, not sized for real
+        # production traffic on its own. Kept tight (short timeout, fewer
+        # models) so this branch can't turn into a 70s+ hang if it's ever
+        # actually reached.
+        models = ["gpt-4o-mini", "meta-llama/llama-3.3-70b-instruct"]
 
         import requests as _req
         for model in models:
@@ -16374,7 +16485,7 @@ def llm_proxy():
                     headers={"Content-Type": "application/json", "Authorization": f"Bearer {LLM7_API_KEY}"},
                     json={"model": model, "messages": llm_messages,
                           "max_tokens": max_tokens, "temperature": temperature},
-                    timeout=25,
+                    timeout=10,
                 )
                 if r.status_code == 429:
                     continue
