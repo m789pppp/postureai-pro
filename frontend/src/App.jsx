@@ -3242,13 +3242,14 @@ export default function App(){
                   _sc.width=_sw;_sc.height=_sh;
                   const _sctx=_sc.getContext("2d");
                   _sctx.drawImage(_v,0,0,_sw,_sh);
-                  // The face-blur toggle only ever pixelated the on-screen
-                  // overlay canvas — it never touched this snapshot, which
-                  // draws straight from the raw <video> element. A user with
-                  // "Blur face (privacy)" ON still had their real,
-                  // unblurred face captured here and stored/shown in the
-                  // session report. Apply the same blur to the snapshot too.
-                  if(faceBlur) drawFaceBlur(_sctx,_v,lms,_sw,_sh);
+                  // Always blurred, regardless of the live "Blur face
+                  // (privacy)" toggle — these worst-moment snapshots are
+                  // saved into Firestore, PDF exports, and the Sessions
+                  // list, all places a face is more likely to be seen by
+                  // someone other than the user (an HR admin viewing team
+                  // reports, a shared/downloaded PDF, etc.) than the live
+                  // on-screen feed the toggle otherwise controls.
+                  drawFaceBlur(_sctx,_v,lms,_sw,_sh);
                   const _img=_sc.toDataURL("image/jpeg",0.6);
                   lastSnapMsRef.current=_snow;
                   _snaps.push({img:_img,score:finalResult.overall,time:new Date().toLocaleTimeString()});
@@ -5147,7 +5148,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {/* ── Session Result Modal ── */}
       {sessionResult&&(
         <div style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"rgba(8,14,28,.98)",border:`2px solid ${sessionResult.color}30`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+          {/* maxHeight+overflowY — this card has no cap on how much it can
+              grow (top issue, worst-moment photos, trend badge, improvement
+              tip, and pain summary are all optional, additive sections, and
+              Elite sessions show every one of them at once), so on a
+              shorter viewport the bottom of the card — down to the New
+              Session / Dashboard / Download PDF / Share Report buttons —
+              was pushed past the visible screen with no way to reach it. */}
+          <div style={{background:"rgba(8,14,28,.98)",border:`2px solid ${sessionResult.color}30`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",maxHeight:"90dvh",overflowY:"auto",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
             {/* Score ring */}
             <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>
               <svg width="130" height="130" style={{transform:"rotate(-90deg)"}}>
