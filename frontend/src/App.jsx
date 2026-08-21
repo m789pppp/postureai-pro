@@ -6167,7 +6167,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             on-video badge already uses: `analysis && score>0`). */}
         {analysis && score>0 && (
           <div style={{padding:"16px 14px 4px",display:"flex",justifyContent:"center"}}>
-            <ScoreGauge cs={cs} score={scoreStatus.score||score} grade={scoreStatus.grade}/>
+            <ScoreGauge cs={cs} score={scoreStatus?.score||score} grade={scoreStatus?.grade}/>
           </div>
         )}
 
@@ -6447,14 +6447,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <div style={{width:8,height:8,borderRadius:"50%",background:"#4FAE8E",flexShrink:0,boxShadow:"0 0 6px #4FAE8E"}}/>
               <span style={{fontSize:11,color:"#6ee7b7",fontWeight:600}}>
-                {isAr?`النتيجة ${scoreStatus.score}/100 — ${scoreStatus.grade}`:`Score ${scoreStatus.score}/100 — ${scoreStatus.grade}`}
+                {isAr?`النتيجة ${scoreStatus?.score}/100 — ${scoreStatus?.grade}`:`Score ${scoreStatus?.score}/100 — ${scoreStatus?.grade}`}
                 {camActive&&calibData?.tolerances&&(
                   <span style={{color:"#34d399",fontWeight:500}}> · {isAr?"مُخصّص":"Personalised"}</span>
                 )}
               </span>
             </div>
             <div style={{fontSize:10,color:cs.muted,marginTop:3,paddingLeft:16,lineHeight:1.4}}>
-              {gradeContext(scoreStatus.score, isAr)}
+              {gradeContext(scoreStatus?.score, isAr)}
             </div>
           </div>
         )}
