@@ -212,7 +212,7 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "/main.py"
+      "dest": "/api/main.py"
     },
     {
       "handle": "filesystem"
@@ -223,9 +223,9 @@
     }
   ],
   "functions": {
-    "main.py": {
+    "api/main.py": {
       "maxDuration": 60,
-      "excludeFiles": "{frontend/**,.git/**,e2e/**,mobile/**,mobile_rn/**,tools/**,backend/tests/**,backend/__pycache__/**,**/__pycache__/**,api/**,*.md,docker-compose*.yml,nginx*.conf}"
+      "excludeFiles": "{frontend/**,.git/**,e2e/**,mobile/**,mobile_rn/**,tools/**,backend/tests/**,backend/__pycache__/**,**/__pycache__/**,api/*.js,api/_handlers/**,api/_lib/**,*.md,docker-compose*.yml,nginx*.conf}"
     },
     "api/kashier.js": {
       "maxDuration": 30
