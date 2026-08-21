@@ -40,7 +40,13 @@ async function _backendLLM(messages, systemPrompt, maxTokens, temperature = 0.5)
   if (!token) throw new Error("backend_llm_no_token");
 
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 18000); // 18s timeout
+  // 26s: the backend now chains Gemini (9s ceiling) → Groq (18s ceiling)
+  // → LLM7 last-resort before giving up, so the client timeout needs
+  // enough room for that full chain to actually finish server-side —
+  // otherwise a slow-but-about-to-succeed Groq fallback gets aborted
+  // client-side right before it would have returned a real answer,
+  // forcing a worse (local rule-based) result for no reason.
+  const t = setTimeout(() => ctrl.abort(), 26000);
 
   try {
     const r = await fetch(`${API_BASE_URL}/llm`, {
