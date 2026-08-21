@@ -283,10 +283,18 @@ export function Switch({ on, onChange, cs, tone = "blue", disabled, label }) {
 }
 
 export function SettingsRow({ icon, label, sub, right, cs, onClick, disabled }) {
+  // Rows that pass onClick (Alert rules, Download PDF) render as a real
+  // <button> so keyboard users can Tab to and activate them — this used to
+  // be a <div onClick> with no tabIndex/role, silently unreachable by
+  // keyboard regardless of `disabled`. Rows without onClick (the Switch-based
+  // ones — Face blur, Skeleton, etc.) stay a plain <div>: their `right` slot
+  // is itself an interactive control, and a <button> can't legally nest one.
+  const Tag = onClick ? "button" : "div";
   return (
-    <div onClick={disabled ? undefined : onClick} style={{
+    <Tag type={onClick ? "button" : undefined} onClick={disabled ? undefined : onClick} disabled={onClick ? disabled : undefined} style={{
       display: "flex", alignItems: "center", gap: 10, padding: "9px 2px",
       cursor: onClick && !disabled ? "pointer" : "default", opacity: disabled ? 0.55 : 1,
+      width: "100%", background: "transparent", border: "none", font: "inherit", color: "inherit", textAlign: "inherit",
     }}>
       <div style={{
         width: 28, height: 28, borderRadius: LT.radius.sm, background: cs.inp || "rgba(255,255,255,.04)",
@@ -299,7 +307,7 @@ export function SettingsRow({ icon, label, sub, right, cs, onClick, disabled }) 
         {sub && <div style={{ fontSize: LT.font.xs, color: cs.muted, marginTop: 1, lineHeight: 1.4 }}>{sub}</div>}
       </div>
       {right}
-    </div>
+    </Tag>
   );
 }
 

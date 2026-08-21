@@ -2757,28 +2757,12 @@ export default function App(){
           if(p.company_id) setCompanyId(p.company_id);
         }
         getUserSessions(u.uid).then(setUserSessions).catch(e=>console.warn("[Sessions]",e.message));
-        // Retry any sessions that failed to save last time (see the
-        // saveSession catch in stopCamera) now that we have a fresh,
-        // authenticated connection to Firestore.
-        (async()=>{
-          try{
-            const key="corvus_pending_sessions";
-            const queue=JSON.parse(localStorage.getItem(key)||"[]");
-            if(!queue.length) return;
-            const mine=queue.filter(q=>q.uid===u.uid);
-            const others=queue.filter(q=>q.uid!==u.uid);
-            const stillFailed=[];
-            for(const q of mine){
-              try{ await saveSession(u.uid,q.data); }
-              catch{ if(Date.now()-q.queuedAt < 7*86400000) stillFailed.push(q); } // drop after 7 days
-            }
-            localStorage.setItem(key, JSON.stringify([...others,...stillFailed]));
-            if(mine.length>stillFailed.length){
-              addToast?.(isAr?`✅ اتحفظت ${mine.length-stillFailed.length} جلسة كانت متعلقة`:`✅ Saved ${mine.length-stillFailed.length} previously pending session(s)`,"success");
-              getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
-            }
-          }catch{}
-        })();
+        // Pending-session retry used to live here too — moved to the main
+        // onAuthStateChanged success path below, which fires for every
+        // login method (this redirect flow included, once Firebase's own
+        // listener picks up the session set above) instead of only this
+        // one narrow path. Keeping it in both places would race two
+        // concurrent read-modify-writes of the same localStorage queue.
         setAuthChecked(true);
         if (isNew) setPage("setup");
         else setPage("home");
@@ -2955,6 +2939,38 @@ export default function App(){
                 setPage(planParam && TIERS[planParam] ? "pricing" : "home");
               }
             } catch{ setPage("home"); }
+            // Retry any sessions that failed to save last time (see the
+            // saveSession catch in stopCamera). This used to only run inside
+            // the OAuth-*redirect*-specific handler above, which meant it
+            // never fired for the far more common paths — email/password
+            // login, Google/Microsoft *popup* login, or simply reopening the
+            // app with an already-persisted session. onAuthStateChanged is
+            // the one handler that genuinely fires on every login path
+            // (including the redirect one, right after it sets the user), so
+            // this is the single correct place for it — gated on
+            // routedUidRef so it runs once per real login, not on every
+            // token-refresh refire, and on !mfaPending so it doesn't touch
+            // session data before the 2FA challenge clears.
+            if(!mfaPending) (async()=>{
+              try{
+                const key="corvus_pending_sessions";
+                const queue=JSON.parse(localStorage.getItem(key)||"[]");
+                if(!queue.length) return;
+                const mine=queue.filter(q=>q.uid===u.uid);
+                if(!mine.length) return;
+                const others=queue.filter(q=>q.uid!==u.uid);
+                const stillFailed=[];
+                for(const q of mine){
+                  try{ await saveSession(u.uid,q.data); }
+                  catch{ if(Date.now()-q.queuedAt < 7*86400000) stillFailed.push(q); } // drop after 7 days
+                }
+                localStorage.setItem(key, JSON.stringify([...others,...stillFailed]));
+                if(mine.length>stillFailed.length){
+                  addToast?.(isAr?`✅ اتحفظت ${mine.length-stillFailed.length} جلسة كانت متعلقة`:`✅ Saved ${mine.length-stillFailed.length} previously pending session(s)`,"success");
+                  getUserSessions(u.uid).then(setUserSessions).catch(()=>{});
+                }
+              }catch{}
+            })();
           }
           setAuthChecked(true); // always mark checked when user is logged in
           // Pre-generate AI insights in background (3s delay so auth fully settles)
@@ -5797,7 +5813,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
           })()}
 
           {/* Fullscreen / focus-mode toggle */}
-          <button onClick={toggleFullscreen} title={isAr?"ملء الشاشة":"Fullscreen"} aria-label={isAr?"ملء الشاشة":"Toggle fullscreen"} style={{
+          <button onClick={toggleFullscreen}
+            title={isFs?(isAr?"إنهاء ملء الشاشة":"Exit fullscreen"):(isAr?"ملء الشاشة":"Fullscreen")}
+            aria-label={isFs?(isAr?"إنهاء ملء الشاشة":"Exit fullscreen"):(isAr?"ملء الشاشة":"Fullscreen")} style={{
             position:"absolute",bottom:8,right:8,zIndex:20,
             width:32,height:32,borderRadius:8,
             background:"rgba(2,8,16,.8)",border:"1px solid rgba(255,255,255,.15)",
@@ -6194,6 +6212,40 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
             );
           })()}
+
+          {/* Fullscreen-only control bar. toggleFullscreen() calls the real
+              W3C Fullscreen API on camWrapRef — only ITS subtree paints while
+              active, so the primary Pause/Resume + Stop & Save bar below
+              (a sibling outside this div) simply disappears once fullscreen
+              engages. Without this, entering fullscreen silently took away
+              the only way to pause or stop a session short of exiting
+              fullscreen first (Esc / the same corner button). */}
+          {isFs && camActive && !previewPhase && (
+            <div style={{position:"absolute",left:0,right:0,bottom:20,zIndex:20,
+              display:"flex",justifyContent:"center",gap:10,padding:"0 24px"}}>
+              <button onClick={isPaused?resumeSession:pauseSession} style={{
+                minWidth:140,
+                background: isPaused ? "linear-gradient(135deg,rgba(79,174,142,.25),rgba(5,150,105,.18))" : "rgba(2,8,16,.72)",
+                backdropFilter:"blur(8px)",
+                color: isPaused ? "#6ee7b7" : "#fff",
+                border:`1px solid ${isPaused?"rgba(79,174,142,.5)":"rgba(255,255,255,.18)"}`,borderRadius:10,
+                padding:"12px 18px",fontSize:13,fontWeight:700,cursor:"pointer",
+              }}>
+                {isPaused ? (isAr?"▶ استكمال":"▶ Resume") : (isAr?"⏸ وقف مؤقت":"⏸ Pause")}
+              </button>
+              <button onClick={stopCamera} disabled={isSavingSession} style={{
+                minWidth:140,
+                background: isSavingSession ? "rgba(2,8,16,.5)" : "rgba(198,96,79,.28)",
+                backdropFilter:"blur(8px)",
+                color: isSavingSession ? "#94a3b8" : "#fca5a5",
+                border:`1px solid ${isSavingSession?"rgba(255,255,255,.1)":"rgba(198,96,79,.55)"}`,borderRadius:10,
+                padding:"12px 18px",fontSize:13,fontWeight:700,
+                cursor: isSavingSession ? "not-allowed" : "pointer",
+              }}>
+                {isSavingSession ? (isAr?"⏳ جاري الحفظ…":"⏳ Saving…") : (isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save")}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Primary control — placed directly under the camera so Start / Stop
@@ -6814,11 +6866,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
             don't stack during a calibrated front-mode session. */}
         {calibData&&!(camActive&&calibData?.tolerances)&&( /* Side mode removed app-wide */
           calibStale ? (
-            <div style={{margin:"10px 14px 0",background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.3)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#D6A24C",fontWeight:500,cursor:"pointer"}}
+            <button type="button" style={{margin:"10px 14px 0",width:"calc(100% - 28px)",display:"block",fontFamily:"inherit",background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.3)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#D6A24C",fontWeight:500,cursor:"pointer"}}
               onClick={()=>setShowCalibWizard(true)}
               title={isAr?"المعايرة أقدم من 30 يوم — يُنصح بإعادتها":"Calibration is over 30 days old — recalibrate for best accuracy"}>
               ⚠️ {isAr?"المعايرة قديمة — أعد المعايرة":"Calibration outdated — recalibrate"}
-            </div>
+            </button>
           ) : (
             <div style={{margin:"10px 14px 0",background:"rgba(79,174,142,.07)",border:"1px solid rgba(79,174,142,.2)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#4FAE8E",fontWeight:500}}>
               ✓ {isAr?"المعايرة الشخصية نشطة":"Personal calibration active"}
