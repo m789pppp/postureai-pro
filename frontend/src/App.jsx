@@ -5006,6 +5006,21 @@ async function downloadPDF(sessionOverride, isClinical=false){
       // at during a live session, so it should read as the primary element:
       // widened to 460px, and the stats panel capped so it can't sprawl.
       gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
+      // The sidebar column below is `position:sticky, maxHeight:100vh,
+      // overflowY:auto` on purpose — a standard sticky-sidebar-next-to-
+      // scrolling-main-content layout, meant to stay pinned to the
+      // viewport while the main column scrolls normally past it. Two
+      // separate grid defaults fight that on a short/idle session where
+      // the main column has barely any content: `align-content:stretch`
+      // stretches the single row to fill the container's minHeight:100vh
+      // before either column is even laid out, and `align-items:stretch`
+      // then stretches the shorter (main) column to match that inflated
+      // row. Together they turned "not much content yet" into a large
+      // empty area with a border running through nothing below "Score
+      // History". Both need to be `start` — one alone still leaves the
+      // row padded out to the container's full height.
+      alignContent: isMobile ? undefined : "start",
+      alignItems: isMobile ? undefined : "start",
       minHeight:"100vh",
       background:cs.bg, color:cs.text,
       fontFamily:"'Inter',system-ui,sans-serif",
@@ -6666,6 +6681,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <button onClick={()=>setMuted(v=>!v)}
               title={muted?(isAr?"صوت تذكير الاستراحة: متوقف":"Break-reminder chime: OFF"):(isAr?"صوت تذكير الاستراحة: شغّال":"Break-reminder chime: ON")}
+              aria-label={muted?(isAr?"صوت تذكير الاستراحة: متوقف":"Break-reminder chime: off"):(isAr?"صوت تذكير الاستراحة: شغّال":"Break-reminder chime: on")}
+              aria-pressed={!muted}
               style={{
                 flexShrink:0,width:38,height:36,borderRadius:9,fontSize:15,cursor:"pointer",
                 background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#4FAE8E",
