@@ -1,0 +1,7 @@
+# Vercel Python function dependencies.
+#
+# The real, maintained requirements file is backend/requirements.txt
+# (also used by Render/Railway/local dev) — this file just includes it,
+# so there is exactly one place to add/update a Python dependency instead
+# of two lists silently drifting apart.
+-r backend/requirements.txt

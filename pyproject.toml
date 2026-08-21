@@ -1,0 +1,18 @@
+[project]
+name = "postureai-pro-backend"
+version = "1.0.0"
+requires-python = ">=3.12,<3.13"
+
+# ── Vercel Python entrypoint ─────────────────────────────────────────
+# main.py (repo root) loads the real Flask app object from
+# backend/backend.py (16,000+ lines) by explicit file path — see
+# main.py's own docstring for why a dotted `backend.xxx` import path
+# doesn't work here. This entry is mostly documentation/explicitness:
+# main.py is already one of Vercel's auto-detected root entrypoint
+# filenames, but declaring it here removes any ambiguity.
+#
+# Dependencies are resolved from requirements.txt at the repo root
+# (which simply does `-r backend/requirements.txt` — see that file),
+# per Vercel's Python runtime docs.
+[tool.vercel]
+entrypoint = "main:app"
