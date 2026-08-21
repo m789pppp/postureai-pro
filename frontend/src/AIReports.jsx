@@ -9,6 +9,7 @@ import { getLocalAIStatus } from "./localAI.js";
 import { featureTier, qualityFor } from "./lib/tierQuality.js";
 import { exportPDFReport } from "./lib/pdfReports.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import { weekKey } from "./lib/exercisePlanLib.js";
 
 // ── helpers ───────────────────────────────────────────────────────
 const avg  = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
@@ -220,7 +221,12 @@ function WeekSummaryCard({ sessions, isAr }) {
   const weeks = {};
   sessions.forEach(s => {
     const d = s.created_at?.toDate?.() || new Date(s.created_at || 0);
-    const wk = `${d.getFullYear()}-W${Math.ceil((d.getDate() + new Date(d.getFullYear(), d.getMonth(), 1).getDay()) / 7)}`;
+    // Was year + week-of-month only (no month component) — sessions from
+    // different months whose day-of-month fell in the same 0-6/7-13/etc
+    // range collided into one bucket (e.g. Feb 3 and Apr 4, 2026 both
+    // produced "2026-W1"). Use a real ISO week key instead (same helper
+    // exercisePlanLib.js already uses for this).
+    const wk = weekKey(d);
     if (!weeks[wk]) weeks[wk] = [];
     weeks[wk].push(s.avg_score || 0);
   });
@@ -256,7 +262,7 @@ function ReportSkeleton() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "en", effectiveTier, onClose }) {
+export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "en", effectiveTier, onClose, uid }) {
   useBodyScrollLock();
   const [tab, setTab]           = useState("summary");
   const [aiText, setAiText]     = useState({});  // keyed by tab
@@ -304,6 +310,15 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   const weekAvg    = avg(thisWeek.map(s => s.avg_score || 0));
   const lastWeekAvg = avg(lastWeek.map(s => s.avg_score || 0));
   const trendPct   = pct(weekAvg, lastWeekAvg);
+  // pct() returns a display-formatted STRING like "+20%"/"-15%"/"—" (used
+  // correctly below at trendPct.startsWith("+") for the UI trend chips).
+  // The clinical-narrative interpretation further down was comparing that
+  // string against numbers (trendPct>5, trendPct<-5, …) — Number("+20%")
+  // is NaN, so every one of those comparisons was always false, which
+  // silently collapsed every trend interpretation to "Plateau" and meant
+  // the "declining score = overuse/fatigue" safety flag could never fire.
+  // Use a real number for those comparisons instead.
+  const trendPctNum = lastWeekAvg ? Math.round(((weekAvg - lastWeekAvg) / lastWeekAvg) * 100) : 0;
 
   const _name = profile?.name?.split(" ")[0] || (isAr ? "المستخدم" : "Patient");
   const _scoreL = avgScore>=85?"Excellent":avgScore>=70?"Good":avgScore>=55?"Fair":"Needs Attention";
@@ -316,7 +331,7 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
 
 PATIENT: ${_name} | Tier: ${_tier}
 Score: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg}/100 | Last week: ${lastWeekAvg}/100
-Trend: ${trendPct>0?"+":""}${trendPct}% | Sessions: ${sessions.length} total, ${thisWeek.length} this week, ${lastWeek.length} last week
+Trend: ${trendPct} | Sessions: ${sessions.length} total, ${thisWeek.length} this week, ${lastWeek.length} last week
 
 CLINICAL INTERPRETATION FOR THIS REPORT:
 Cervical loading (Hansraj 2014): Score ${avgScore}/100 → ~${cervAngle}° flexion → ~${cervLoad} load (neutral = 4.5 kg)
@@ -325,9 +340,9 @@ ${avgScore<55?"C5-C7 facet joint chronic overload — disc dehydration risk elev
 Disc pressure (Nachemson): ${discLoad} vs standing baseline
 ${avgScore<60?"⚠️ Sustained high disc pressure — annular breakdown risk":"Disc pressure manageable"}
 
-Trend: ${trendPct>5?"Meaningful improvement — reinforce what changed":trendPct>0?"Marginal progress — consider protocol upgrade":trendPct<-5?"⚠️ Significant decline — immediate corrective action":trendPct<0?"Slight decline — early intervention recommended":"Plateau — progression protocol needed"}
+Trend: ${trendPctNum>5?"Meaningful improvement — reinforce what changed":trendPctNum>0?"Marginal progress — consider protocol upgrade":trendPctNum<-5?"⚠️ Significant decline — immediate corrective action":trendPctNum<0?"Slight decline — early intervention recommended":"Plateau — progression protocol needed"}
 Adherence: ${thisWeek.length}/week sessions ${thisWeek.length>=5?"(Excellent)":thisWeek.length>=3?"(Good)":thisWeek.length>=1?"(Below optimal — target 4-5/week)":"(None this week — re-engagement needed)"}
-${trendPct<-5&&thisWeek.length>4?"⚠️ High frequency + declining score = overuse/fatigue pattern":""}
+${trendPctNum<-5&&thisWeek.length>4?"⚠️ High frequency + declining score = overuse/fatigue pattern":""}
 
 STANDARDS:
 1. Every section must use ${_name}'s actual numbers — zero generic statements
@@ -336,13 +351,19 @@ STANDARDS:
 4. ## for sections, **bold** key terms, numbered protocols — prefer bullets over tables
 5. ⚕️ Flag anything requiring in-person physiotherapy
 6. Start immediately — no preamble
-${isAr?"LANGUAGE: Egyptian Arabic (عامية مصرية) — medical terms + simple explanation.":"LANGUAGE: Professional clinical English."}`;
+${isAr?"LANGUAGE: Egyptian Arabic (عامية مصرية) — medical terms + simple explanation.":"LANGUAGE: Professional clinical English."}
+
+[CTXDATA:${JSON.stringify({avg:avgScore||0, sessions:sessions.length||0, weekAvg:weekAvg||0, weekSessions:thisWeek.length||0, trendPct:trendPctNum||0, lang:isAr?"ar":"en"})}]`;
+  // ^ Without this marker, if the primary LLM path ever failed here, the
+  // rule-based fallback in localAI.js (parseData()) would regex-match this
+  // free-form prose and get every field wrong or default to 0 — same fix
+  // already applied to AICoach.jsx, aiPreloader.js and AIInsights.jsx.
 
   const prompts = {
     summary: () => `Generate a weekly clinical posture summary for ${_name}.
 
 ## Executive Summary — ${_name}
-[2-3 sentences: interpret ${weekAvg}/100 this week vs ${lastWeekAvg}/100 last week (${trendPct > 0 ? "+" : ""}${trendPct}% trend). What does this mean clinically for MSK load?]
+[2-3 sentences: interpret ${weekAvg}/100 this week vs ${lastWeekAvg}/100 last week (${trendPct} trend). What does this mean clinically for MSK load?]
 
 ## Performance vs Last Week
 [Specific comparison with clinical interpretation. Reference session count: ${thisWeek.length} this week vs last week.]
@@ -444,7 +465,10 @@ This user score: ${avgScore}/100
 
   // Mock dept data if no allUsers
   const deptData = allUsers.length > 0
-    ? allUsers.slice(0, 6).map(u => ({ name: u.name || u.email?.split("@")[0] || "User", score: u.avg_score || 0 }))
+    // id carries the Firestore users/{uid} doc id (see getAllUsers in
+    // firebase.js) so "Your Rank" below can identify the current user by
+    // identity instead of by score value, which broke on ties.
+    ? allUsers.slice(0, 6).map(u => ({ id: u.id, name: u.name || u.email?.split("@")[0] || "User", score: u.avg_score || 0 }))
     : [
         { name: isAr ? "فريق التطوير" : "Engineering",  score: 74 },
         { name: isAr ? "فريق التسويق" : "Marketing",    score: 61 },
@@ -683,7 +707,13 @@ This user score: ${avgScore}/100
                 {[
                   { l: isAr ? "متوسط الفريق" : "Team Avg",   v: `${avg(deptData.map(d => d.score))}/100`, c: sc(avg(deptData.map(d => d.score))) },
                   { l: isAr ? "الأفضل" : "Top Score",         v: `${Math.max(...deptData.map(d => d.score))}/100`, c: "#10b981" },
-                  { l: isAr ? "أنت" : "Your Rank",            v: `#${deptData.sort((a, b) => b.score - a.score).findIndex(d => d.score === avgScore || d.name === (isAr ? "أنت" : "You")) + 1 || "—"}`, c: "#60a5fa" },
+                  // Match by identity (uid) when we have one — matching by
+                  // score value alone broke on ties (whichever tied member
+                  // sorted first got credited as "you"), or silently picked
+                  // a coworker's rank if the current user wasn't in
+                  // allUsers at all. Falls back to the score/"You" match
+                  // for the mock dataset above, which has no ids.
+                  { l: isAr ? "أنت" : "Your Rank",            v: `#${deptData.sort((a, b) => b.score - a.score).findIndex(d => (uid && d.id) ? d.id === uid : (d.score === avgScore || d.name === (isAr ? "أنت" : "You"))) + 1 || "—"}`, c: "#60a5fa" },
                 ].map((m, i) => (
                   <div key={i} style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: "12px 14px", textAlign: "center" }}>
                     <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#6b82a6", marginBottom: 6 }}>{m.l}</div>

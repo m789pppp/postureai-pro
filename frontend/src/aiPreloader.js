@@ -17,37 +17,51 @@ const MEMORY_TTL    = 60 * 60 * 1000;       // 1 hour in-memory cache
 // ── In-memory L1 cache (fastest, per-session) ──────────────────
 const _memCache = new Map();
 
-function cacheKey(uid, tab, lang) {
-  return `corvus_ai_${uid}_${tab}_${lang}`;
+// sessionCount is folded into the key itself (not compared after the
+// fact) so a new posture session naturally misses the old cache entry —
+// no separate invalidation logic needed for these two layers. Previously
+// only Firestore's own session_count field was checked (see
+// getFirestoreCached below), but getCachedAsync short-circuits on a
+// mem/session hit BEFORE ever reaching that Firestore check (and the
+// sync getCached() used for instant reads never reaches Firestore at
+// all), so a still-TTL-valid mem/sessionStorage entry from before the
+// new session kept being served as current for up to an hour (mem) or
+// until the tab closed (sessionStorage) — no invalidation trigger ever
+// fired. sessionCount defaults to "" so a caller that genuinely has no
+// count handy still gets a stable (if less precise) key rather than a
+// crash.
+function cacheKey(uid, tab, lang, sessionCount = "") {
+  return `corvus_ai_${uid}_${tab}_${lang}_${sessionCount}`;
 }
 
 // ── Memory cache ───────────────────────────────────────────────
-function getMemCached(uid, tab, lang) {
-  const key = cacheKey(uid, tab, lang);
+function getMemCached(uid, tab, lang, sessionCount) {
+  const key = cacheKey(uid, tab, lang, sessionCount);
   const entry = _memCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.ts > MEMORY_TTL) { _memCache.delete(key); return null; }
   return entry.text;
 }
 
-function setMemCache(uid, tab, lang, text) {
-  _memCache.set(cacheKey(uid, tab, lang), { text, ts: Date.now() });
+function setMemCache(uid, tab, lang, text, sessionCount) {
+  _memCache.set(cacheKey(uid, tab, lang, sessionCount), { text, ts: Date.now() });
 }
 
 // ── SessionStorage L2 fallback ─────────────────────────────────
-function getSessionCached(uid, tab, lang) {
+function getSessionCached(uid, tab, lang, sessionCount) {
   try {
-    const raw = sessionStorage.getItem(cacheKey(uid, tab, lang));
+    const key = cacheKey(uid, tab, lang, sessionCount);
+    const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     const { text, ts } = JSON.parse(raw);
-    if (Date.now() - ts > FIRESTORE_TTL) { sessionStorage.removeItem(cacheKey(uid, tab, lang)); return null; }
+    if (Date.now() - ts > FIRESTORE_TTL) { sessionStorage.removeItem(key); return null; }
     return text;
   } catch { return null; }
 }
 
-function setSessionCache(uid, tab, lang, text) {
+function setSessionCache(uid, tab, lang, text, sessionCount) {
   try {
-    sessionStorage.setItem(cacheKey(uid, tab, lang), JSON.stringify({ text, ts: Date.now() }));
+    sessionStorage.setItem(cacheKey(uid, tab, lang, sessionCount), JSON.stringify({ text, ts: Date.now() }));
   } catch {}
 }
 
@@ -82,32 +96,35 @@ async function setFirestoreCache(uid, tab, lang, text, sessionCount) {
 // ── Unified getCached — checks all 3 layers ────────────────────
 async function getCachedAsync(uid, tab, lang, sessionCount) {
   // L1: memory
-  const mem = getMemCached(uid, tab, lang);
+  const mem = getMemCached(uid, tab, lang, sessionCount);
   if (mem) return mem;
 
   // L2: sessionStorage
-  const sess = getSessionCached(uid, tab, lang);
-  if (sess) { setMemCache(uid, tab, lang, sess); return sess; }
+  const sess = getSessionCached(uid, tab, lang, sessionCount);
+  if (sess) { setMemCache(uid, tab, lang, sess, sessionCount); return sess; }
 
   // L3: Firestore
   const fs = await getFirestoreCached(uid, tab, lang, sessionCount);
   if (fs) {
-    setMemCache(uid, tab, lang, fs);
-    setSessionCache(uid, tab, lang, fs);
+    setMemCache(uid, tab, lang, fs, sessionCount);
+    setSessionCache(uid, tab, lang, fs, sessionCount);
     return fs;
   }
 
   return null;
 }
 
-// Sync version (memory + session only — for immediate reads)
-function getCached(uid, tab, lang) {
-  return getMemCached(uid, tab, lang) || getSessionCached(uid, tab, lang);
+// Sync version (memory + session only — for immediate reads).
+// sessionCount is optional here (callers that don't have it handy yet
+// still get mem/session lookups, just scoped to the "" bucket) — pass it
+// whenever available so a fresh session count actually misses old text.
+function getCached(uid, tab, lang, sessionCount) {
+  return getMemCached(uid, tab, lang, sessionCount) || getSessionCached(uid, tab, lang, sessionCount);
 }
 
-function setCache(uid, tab, lang, text) {
-  setMemCache(uid, tab, lang, text);
-  setSessionCache(uid, tab, lang, text);
+function setCache(uid, tab, lang, text, sessionCount) {
+  setMemCache(uid, tab, lang, text, sessionCount);
+  setSessionCache(uid, tab, lang, text, sessionCount);
 }
 
 export { getCached, setCache, cacheKey, getCachedAsync, setFirestoreCache };
@@ -159,7 +176,19 @@ Calibration: ${ctx.calibrated?"COMPLETE":"NOT DONE"}
 Alerts: ${ctx.topAlerts?.join("; ")||"None"}
 
 ${isAr?"اللغة: عامية مصرية كاملة.":"LANGUAGE: Clear professional English."}
-CONCISE: Max 200 words. Start answer immediately — no preamble.`;
+CONCISE: Max 200 words. Start answer immediately — no preamble.
+
+[CTXDATA:${JSON.stringify({avg:ctx.avgScore||0, sessions:ctx.totalSessions||0, weekAvg:ctx.weekAvg||0, weekSessions:ctx.thisWeekSessions||0, trendPct:ctx.trendPct||0, neckRisk:ctx.neckRisk||0, fatigue:ctx.fatigueScore||0, burnout:ctx.burnoutRisk||0, calibrated:!!ctx.calibrated, alerts:(ctx.topAlerts||[]).join("; "), lang})}]`;
+  // ^ The prose above is free-form and was never matched by localAI.js's
+  // parseData() regex fallback (it expects phrases like "Overall avg
+  // score:"/"Neck risk:"/"Fatigue index:" that don't appear here — see
+  // AICoach.jsx's buildSystemPrompt for the established fix: emit a
+  // stable [CTXDATA:{...}] JSON marker that parseData() prefers over
+  // regex-matching prose). Without it, if the primary LLM path ever
+  // failed and this fell through to the rule-based fallback, that
+  // fallback would report fabricated data — a genuinely calibrated user
+  // told "Calibration: NOT DONE", real risk/fatigue/burnout percentages
+  // silently replaced with 0 — instead of erroring or matching reality.
 
   return {
     executive: `Generate a clinical executive summary for ${ctx.name}.
@@ -208,11 +237,16 @@ Max 250 words.`,
 }
 
 // ── Main preloader ──────────────────────────────────────────────────
-let _preloading = false;
+// Was a single shared boolean, not scoped per user — calling this for
+// user A and then (before A's generation finished, e.g. an account
+// switch without a full reload) for user B made B's call silently no-op
+// against A's in-flight guard, generating nothing for B. Scope it by uid
+// instead so concurrent/successive users don't block each other.
+const _preloadingUids = new Set();
 
 export async function preloadAIInsights(uid, profile, sessions, calibration, effectiveTier, lang = "en") {
   if (!uid || !sessions?.length || sessions.length < 1) return;
-  if (_preloading) return;
+  if (_preloadingUids.has(uid)) return;
 
   const sessionCount = sessions.length;
   const tabs = ["executive", "trends", "fatigue", "recommendations"];
@@ -228,38 +262,49 @@ export async function preloadAIInsights(uid, profile, sessions, calibration, eff
   }
 
   // ── Generate missing tabs only ────────────────────────────────
-  _preloading = true;
+  _preloadingUids.add(uid);
   console.info("[AIPreloader] Generating missing tabs...");
 
   const ctx     = buildCtx(profile, sessions, calibration, effectiveTier);
   const prompts = buildPrompts(ctx, lang);
 
-  tabs.forEach(async (tab, i) => {
-    // Skip if already cached
-    if (cachedResults[i] !== null) return;
+  // Was tabs.forEach(async ...) (fire-and-forget, never awaited) plus a
+  // fixed setTimeout(…, 15000) to clear the guard — but the tabs are
+  // staggered up to 3*800=2400ms apart before even starting, and each
+  // geminiAnalysis call can itself take up to ~22s (see localAI.js's
+  // hardDeadline), so the last tab's generation routinely outlived the
+  // 15s timer. That let the guard clear while work was still in flight,
+  // allowing an overlapping second preloadAIInsights call to start and
+  // duplicate outbound LLM requests. Await the real work instead, so the
+  // guard's lifetime always matches how long generation actually took.
+  try {
+    await Promise.allSettled(tabs.map(async (tab, i) => {
+      // Skip if already cached
+      if (cachedResults[i] !== null) return;
 
-    try {
-      // Stagger requests to avoid rate limits
-      await new Promise(r => setTimeout(r, i * 800));
+      try {
+        // Stagger requests to avoid rate limits
+        await new Promise(r => setTimeout(r, i * 800));
 
-      const text = await geminiAnalysis(prompts[tab], {
-        systemPrompt: prompts._system,
-        lang,
-        maxTokens: 500,
-      });
+        const text = await geminiAnalysis(prompts[tab], {
+          systemPrompt: prompts._system,
+          lang,
+          maxTokens: 500,
+        });
 
-      if (text && text.length > 30) {
-        // Save to all cache layers
-        setMemCache(uid, tab, lang, text);
-        setSessionCache(uid, tab, lang, text);
-        // Save to Firestore (persists across reloads)
-        await setFirestoreCache(uid, tab, lang, text, sessionCount);
-        console.info(`[AIPreloader] ✅ ${tab} generated + saved to Firestore`);
+        if (text && text.length > 30) {
+          // Save to all cache layers
+          setMemCache(uid, tab, lang, text, sessionCount);
+          setSessionCache(uid, tab, lang, text, sessionCount);
+          // Save to Firestore (persists across reloads)
+          await setFirestoreCache(uid, tab, lang, text, sessionCount);
+          console.info(`[AIPreloader] ✅ ${tab} generated + saved to Firestore`);
+        }
+      } catch(e) {
+        console.warn(`[AIPreloader] ${tab} failed:`, e.message);
       }
-    } catch(e) {
-      console.warn(`[AIPreloader] ${tab} failed:`, e.message);
-    }
-  });
-
-  setTimeout(() => { _preloading = false; }, 15000);
+    }));
+  } finally {
+    _preloadingUids.delete(uid);
+  }
 }

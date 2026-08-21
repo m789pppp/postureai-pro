@@ -9,6 +9,7 @@ import { SymptomAPI } from "./services/api.js";
 import { updateUserProfile } from "./firebase.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
+import { weekKey } from "./lib/exercisePlanLib.js";
 
 async function callGemini(prompt, system, maxTokens = 900) {
   try {
@@ -103,11 +104,23 @@ function computeWeeklyForecast(sessions) {
     const weekday = d.getDay();
     const part = _dayPartOf(d.getHours());
     const key = `${weekday}-${part}`;
-    weeksSeen.add(`${d.getFullYear()}-W${Math.floor(d.getDate()/7)}`);
+    // Was `${year}-W${floor(dayOfMonth/7)}` — no month component, so
+    // sessions from different months whose day-of-month fell in the same
+    // 0-6/7-13/etc range collided into the same "week" (e.g. Jan 3, Feb 2
+    // and Mar 1 all produced "2026-W0"), while a genuinely tight cluster
+    // spanning 8 calendar days could count as "3 distinct weeks". Use a
+    // real ISO week key (same helper exercisePlanLib.js already uses) so
+    // the "at least 3 distinct weeks of data" gate below means what it says.
+    weeksSeen.add(weekKey(d));
     if (!buckets[key]) buckets[key] = { weekday, part, scores: [], metricSums: {}, metricCounts: {} };
     buckets[key].scores.push(s.avg_score);
     Object.entries(s.metrics || {}).forEach(([k, v]) => {
-      if (k.startsWith("_")) return;
+      // session_fatigue/confidence_val are meta/diagnostic fields, not
+      // real posture metrics — without this exclusion either could win
+      // "worstMetric" below purely from e.g. poor lighting hurting
+      // detection confidence, silently replacing the actual worst body
+      // region with a generic fallback (see WF_REGION_LABEL lookup).
+      if (k.startsWith("_") || k === "session_fatigue" || k === "confidence_val") return;
       const sc = typeof v === "number" ? v : (v?.score ?? null);
       if (sc == null) return;
       buckets[key].metricSums[k] = (buckets[key].metricSums[k] || 0) + sc;
@@ -662,19 +675,26 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   const riskScore = Math.min(100, Math.round(riskFactors.reduce((s, f) => s + f.raw * f.weight, 0)));
 
   const _scoreL = avgScore>=85?"Excellent":avgScore>=70?"Good":avgScore>=55?"Fair":"Needs Attention";
-  const _cervAngle = riskScore>=70?"35-50":riskScore>=40?"20-35":"<20";
-  const _cervLoad  = riskScore>=70?"18-27 kg":riskScore>=40?"12-18 kg":"4-12 kg";
+  // These narrative thresholds used to be 40 while riskColor() — used for
+  // every risk-related color/badge in this file's UI, 10+ call sites —
+  // and _cervAngle/_cervLoad just above use 45. A score of 42 rendered
+  // green "safe zone" in the UI while the AI-generated clinical text
+  // narrated it as "MODERATE" / "1.4x elevated risk — early intervention
+  // critical", directly contradicting the color-coded UI next to it.
+  // Aligned to the same 45 cutoff the UI already uses everywhere.
+  const _cervAngle = riskScore>=70?"35-50":riskScore>=45?"20-35":"<20";
+  const _cervLoad  = riskScore>=70?"18-27 kg":riskScore>=45?"12-18 kg":"4-12 kg";
 
   const system = `You are Dr. Corvus — senior clinical physiotherapist and MSK specialist with 15 years experience.
 
 PATIENT PROFILE:
 - Posture: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg}/100 | Sessions: ${sessions.length}
-- Burnout: ${burnoutScore}% (${burnoutScore>=70?"HIGH":burnoutScore>=40?"MODERATE":"LOW"}) | Risk index: ${riskScore}/100 | Anomalies: ${anomalies.length}
+- Burnout: ${burnoutScore}% (${burnoutScore>=70?"HIGH":burnoutScore>=45?"MODERATE":"LOW"}) | Risk index: ${riskScore}/100 | Anomalies: ${anomalies.length}
 
 CLINICAL INTERPRETATION FOR THIS PATIENT:
 Score ${avgScore}/100 → cervical angle ~${_cervAngle}° → load ~${_cervLoad} (Hansraj 2014, neutral=4.5kg)
-${riskScore>=70?"C5-C7 facet joints under chronic overload — disc dehydration accelerated":riskScore>=40?"Approaching chronic cervicalgia threshold":"Within safe loading parameters"}
-Burnout ${burnoutScore}% → ${burnoutScore>=70?"2.3x elevated MSK injury risk (Holtermann 2018) — muscles in chronic guarding":burnoutScore>=40?"1.4x elevated risk — early intervention critical":"minimal elevated risk"}
+${riskScore>=70?"C5-C7 facet joints under chronic overload — disc dehydration accelerated":riskScore>=45?"Approaching chronic cervicalgia threshold":"Within safe loading parameters"}
+Burnout ${burnoutScore}% → ${burnoutScore>=70?"2.3x elevated MSK injury risk (Holtermann 2018) — muscles in chronic guarding":burnoutScore>=45?"1.4x elevated risk — early intervention critical":"minimal elevated risk"}
 Anomalies: ${anomalies.length>=3?"Pattern = inconsistent postural control, likely fatigue spikes":anomalies.length>=1?"Isolated deviations — identify trigger events":"No significant anomalies"}
 
 STANDARDS:
@@ -684,7 +704,14 @@ STANDARDS:
 - Recovery protocols: sets x reps, hold time, frequency, weeks to improvement
 - ${riskScore>=70||burnoutScore>=70?"⚕️ HIGH RISK — recommend professional evaluation":"⚕️ Flag any red flag symptoms"}
 - No preamble, max 220 words, start immediately
-${lang === "ar" ? "LANGUAGE: Egyptian Arabic (عامية مصرية) + medical terms with simple explanation." : "LANGUAGE: Clear professional English."}`;
+${lang === "ar" ? "LANGUAGE: Egyptian Arabic (عامية مصرية) + medical terms with simple explanation." : "LANGUAGE: Clear professional English."}
+
+[CTXDATA:${JSON.stringify({avg:avgScore||0, sessions:sessions.length||0, weekAvg:weekAvg||0, weekSessions:thisWeek.length||0, burnout:burnoutScore||0, lang})}]`;
+  // ^ Without this marker, if the primary LLM path ever failed here, the
+  // rule-based fallback in localAI.js (parseData()) would regex-match this
+  // free-form prose and get every field wrong or default to 0 — same fix
+  // already applied to AICoach.jsx, aiPreloader.js, AIInsights.jsx and
+  // AIReports.jsx.
 
   const prompts = {
     burnout: () => `Burnout & fatigue analysis for ${sessions.length} sessions.
@@ -774,12 +801,12 @@ Max 180 words. Start immediately.`,
   const loadAI = useCallback(async (key) => {
     if (!sessions.length) return;
     const cacheTabKey = `predictive_${key}`;
-    const cached = uid ? getCached(uid, cacheTabKey, lang) : null;
+    const cached = uid ? getCached(uid, cacheTabKey, lang, sessions.length) : null;
     if (cached) { setAiText(cached); return; }
     setLoading(true); setError(""); setAiText("");
     try {
       const text = await callGemini(prompts[key]?.() || "", system);
-      if (text && uid) setCache(uid, cacheTabKey, lang, text);
+      if (text && uid) setCache(uid, cacheTabKey, lang, text, sessions.length);
       setAiText(text);
     }
     catch (e) { setError(e.message); }

@@ -373,8 +373,12 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
     const trendPct=lAvg>0?Math.round(((wAvg-lAvg)/lAvg)*100):0;
     const ac={};
     (sessions||[]).slice(0,20).forEach(s=>{
-      (s.alerts||[]).forEach(a=>{
-        const k=typeof a==="string"?a:(a?.label||a?.type||"");
+      // Saved sessions store this under alert_causes (see App.jsx saveSession
+      // calls), not alerts — s.alerts is always undefined on real session
+      // docs, which silently zeroed out "top issues" for every user in this
+      // component (DailyCheckinPanel below already got this right).
+      (s.alert_causes||s.alerts||[]).forEach(a=>{
+        const k=typeof a==="string"?a:(a?.cause||a?.label||a?.type||"");
         if(k) ac[k]=(ac[k]||0)+1;
       });
     });
@@ -390,7 +394,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
       fatigue_score:fatigue,burnout_risk:burnout,streak_days:profile?.streak_days||0,
       user_name:profile?.name?.split(" ")[0]||"",top_alerts:topAlerts,
     };
-  },[sessions,calibration,_tier]);
+  },[sessions,calibration,_tier,profile]);
 
   // Welcome message
   useEffect(()=>{
