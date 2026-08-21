@@ -304,8 +304,18 @@ function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,
   if(!eng) return null;
   const dist = eng.metrics?.screen_distance;
   // lo/hi come from engine (no duplication)
+  // The engine computes a posture-drift/fatigue penalty (real physical
+  // degradation over a 10+ min session) into fatigue_adjusted_score, but
+  // until now nothing downstream ever read it — the live score, the
+  // saved session's avg_score, alert severity, and the PDF report all
+  // used the pre-penalty eng.score, so the penalty was computed every
+  // frame (a real per-frame cost) and shown only as an inert "Fatigue
+  // −Npt" badge that never affected the number beside it. Use the
+  // fatigue-adjusted score as the one true "overall" everywhere — the
+  // badge now describes a real adjustment instead of a decorative one.
   return{
-    overall: eng.score,
+    overall: eng.fatigue_adjusted_score ?? eng.score,
+    rawScore: eng.score,
     distCm:  dist?.value || eng.distCm || null,
     lo:      eng.lo,
     hi:      eng.hi,
