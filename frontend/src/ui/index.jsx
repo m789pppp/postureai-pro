@@ -1196,11 +1196,24 @@ export function SessionDetailModal({ session, allSessions = [], profile, cs, isA
           <div style={{ fontSize: 10.5, fontWeight: 700, color: UI_TOKENS.muted, marginBottom: 4 }}>
             {isAr ? "تفاصيل القياسات" : "Metric Breakdown"}
           </div>
-          {Object.entries(metrics).map(([k, v]) => (
-            <MetRow key={k} label={labels[k] || k}
-              value={typeof v === "number" ? Math.round(v) : v}
-              score={typeof v === "number" ? v : 0} cs={cs} />
-          ))}
+          {Object.entries(metrics)
+            // session_fatigue/confidence_val are meta/diagnostic fields, not
+            // real posture metrics — exclude them from the breakdown list.
+            .filter(([k]) => k !== "session_fatigue" && k !== "confidence_val")
+            .map(([k, v]) => {
+              // The engine returns each metric as {value, score, unit, label}
+              // (see postureEngine.js) — v used to be assumed to be a plain
+              // number here, which crashed this modal (React can't render a
+              // raw object as a child) for every session with real analysis
+              // data. Pull the fields out explicitly instead.
+              const isNum = typeof v === "number";
+              const score = isNum ? v : (v?.score ?? 0);
+              const rawVal = isNum ? v : v?.value;
+              const unit = isNum ? "" : (v?.unit === "depth" ? "" : (v?.unit || ""));
+              const value = rawVal != null ? `${typeof rawVal==="number"?Math.round(rawVal*10)/10:rawVal}${unit}` : null;
+              const label = labels[k] || v?.label || k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              return <MetRow key={k} label={label} value={value} score={score} cs={cs} />;
+            })}
         </div>}
 
         {session.alert_causes?.length > 0 && <div style={{ marginBottom: 12 }}>

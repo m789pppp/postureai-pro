@@ -44,6 +44,16 @@ const METRIC_LABELS_AR = {
   session_fatigue:"تعديل الإجهاد", confidence_val:"دقة الكشف",
 };
 
+// session_fatigue and confidence_val are meta/diagnostic fields the engine
+// attaches to every metrics object — not real posture metrics with an
+// "ideal angle" to correct. Left un-excluded, they were being iterated
+// alongside neck_lean/head_tilt/etc in the per-session priority tables AND
+// in the cross-session longitudinal trend analysis, where confidence_val's
+// naturally lower value could surface as a bogus "recurring pattern" (e.g.
+// "Detection Confidence" listed as a top concern next to real posture
+// issues). Exclude both from any generic Object.entries(metrics) walk.
+const META_METRIC_KEYS = new Set(["session_fatigue", "confidence_val"]);
+
 
 // ── Elite-extras helpers (goal progress / exercise plan / snapshots) ──
 const _exToMs = s => { try { return s.created_at?.toDate?.()?.getTime?.() || new Date(s.created_at||0).getTime(); } catch { return 0; } };
@@ -655,7 +665,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const gradeL   = avg>=80?(isAr?"ممتاز":"Excellent"):avg>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs Work");
 
   const mEntries = Object.entries(metrics)
-    .filter(([k])=>!k.startsWith("_")&&metrics[k])
+    .filter(([k])=>!k.startsWith("_")&&!META_METRIC_KEYS.has(k)&&metrics[k])
     .map(([k,v])=>{
       const sc=typeof v==="number"?v:(v?.score??100);
       const lbl=(isAr?METRIC_LABELS_AR[k]:METRIC_LABELS[k])||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
@@ -1722,7 +1732,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   })();
 
   const metricEntries = Object.entries(metrics)
-    .filter(([k])=>!k.startsWith("_") && metrics[k])
+    .filter(([k])=>!k.startsWith("_") && !META_METRIC_KEYS.has(k) && metrics[k])
     .map(([k,v])=>{
       const sc  = typeof v==="number" ? v : (v?.score ?? 100);
       // English labels — clinical report is rendered in helvetica which can't
@@ -3849,7 +3859,7 @@ function _dnaAnalyze(sessions) {
     const mins = s.duration_min ?? (s.duration_s || s.duration_sec || 0) / 60;
     const metrics = s.metrics || {};
     Object.entries(metrics).forEach(([k, v]) => {
-      if (k.startsWith("_")) return;
+      if (k.startsWith("_") || META_METRIC_KEYS.has(k)) return;
       const sc = typeof v === "number" ? v : (v?.score ?? null);
       if (sc == null) return;
       if (!byMetric[k]) byMetric[k] = { scores: [], shortScores: [], longScores: [] };

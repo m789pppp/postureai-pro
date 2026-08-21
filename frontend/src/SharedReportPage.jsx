@@ -262,7 +262,7 @@ export default function SharedReportPage() {
     lumbar:   {title:"القطن (أسفل الظهر)", region:"L1–S1", detail:"محاذاة العمود، زاوية الورك، ميل الجذع"},
   };
   const metricEntries = Object.entries(metrics)
-    .filter(([,v]) => v !== null && v !== undefined)
+    .filter(([k,v]) => v !== null && v !== undefined && k!=="session_fatigue" && k!=="confidence_val")
     .map(([k,v]) => ({
       k,
       lbl: isAr ? (METRIC_LABELS_AR[k] || METRIC_LABELS[k] || k) : (METRIC_LABELS[k] || k),
