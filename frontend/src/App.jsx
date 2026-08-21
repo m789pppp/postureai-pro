@@ -3531,22 +3531,37 @@ export default function App(){
       alertCauseRef.current={};
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
-      try{
-        const d=await AnalysisAPI.startSession({mode:effectiveMode});
-        sid=d.session_id||sid;
-      }catch(e){
-        if(e?.status===403 && e?.upgrade){
-          setCameraStatus("idle");
-          streamRef.current?.getTracks?.().forEach(t=>t.stop());
-          const hitDaily=(e?.body?.used_daily??0)>=(e?.body?.limit_daily??Infinity);
-          const msg=hitDaily
-            ?(isAr?`وصلت لحد ${e.body.limit_daily} جلسات في اليوم للخطة المجانية. جرّب تاني بكرة أو رقّي الخطة`:`You've hit today's ${e.body.limit_daily}-session Free plan cap. Try again tomorrow or upgrade`)
-            :(isAr?"وصلت لحد جلسات الخطة المجانية الشهري. قم بالترقية للمتابعة":"You've reached the Free plan's monthly session limit. Upgrade to continue");
-          addToast(msg,"warn");
-          setShowUpgrade?.(true);setUpgradeReason?.(isAr?(hitDaily?"حد الجلسات اليومي":"حد الجلسات الشهري"):(hitDaily?"Daily session limit":"Monthly session limit"));
-          return;
-        }
-      }
+      // Previously this network call was awaited unconditionally, which meant
+      // a slow or cold-starting backend directly delayed camActive/timer/RAF
+      // from starting at all — the 3-2-1 countdown would finish and the
+      // screen would just sit there until this resolved. Capped at 1.2s: if
+      // the backend responds in time we still get the real session_id and
+      // the 403/paywall check runs normally; if it's slow, we proceed
+      // immediately with the local id and let the real response (including
+      // a late paywall block) resolve in the background instead of stalling
+      // the whole session start on it.
+      let paywallBlocked=false;
+      const startSessionP = AnalysisAPI.startSession({mode:effectiveMode})
+        .then(d=>{ sid=d.session_id||sid; if(camActiveRef.current) setSessionId(sid); return d; })
+        .catch(e=>{
+          if(e?.status===403 && e?.upgrade){
+            paywallBlocked=true;
+            setCameraStatus("idle");
+            streamRef.current?.getTracks?.().forEach(t=>t.stop());
+            setCamActive(false);
+            if(rafRef.current) cancelAnimationFrame(rafRef.current);
+            if(timerRef.current) clearInterval(timerRef.current);
+            const hitDaily=(e?.body?.used_daily??0)>=(e?.body?.limit_daily??Infinity);
+            const msg=hitDaily
+              ?(isAr?`وصلت لحد ${e.body.limit_daily} جلسات في اليوم للخطة المجانية. جرّب تاني بكرة أو رقّي الخطة`:`You've hit today's ${e.body.limit_daily}-session Free plan cap. Try again tomorrow or upgrade`)
+              :(isAr?"وصلت لحد جلسات الخطة المجانية الشهري. قم بالترقية للمتابعة":"You've reached the Free plan's monthly session limit. Upgrade to continue");
+            addToast(msg,"warn");
+            setShowUpgrade?.(true);setUpgradeReason?.(isAr?(hitDaily?"حد الجلسات اليومي":"حد الجلسات الشهري"):(hitDaily?"Daily session limit":"Monthly session limit"));
+          }
+        });
+      await Promise.race([startSessionP, new Promise(r=>setTimeout(r,1200))]);
+      if(paywallBlocked) return;
+
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
       // NOTE: previously showed an info toast here ("{mode} camera · {tier}
       // tier active") on every session start. Removed — that fact is already
