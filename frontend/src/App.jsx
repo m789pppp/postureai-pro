@@ -3495,11 +3495,38 @@ export default function App(){
       streamRef.current=s;
       if(!vidRef.current){setCameraStatus("idle");return;}
       vidRef.current.srcObject=s;
+      let metadataLoaded=true;
       await new Promise((res,rej)=>{
         vidRef.current.onloadedmetadata=res;
         setTimeout(rej,8000); // 8s timeout
-      }).catch(()=>{});
+      }).catch(()=>{ metadataLoaded=false; });
       if(!vidRef.current){return;}
+      // The 8s timeout above used to be swallowed silently and this
+      // function proceeded to "ready" regardless of whether metadata ever
+      // arrived. If the stream never actually delivered a frame (driver
+      // hiccup, a device that grants permission but never starts
+      // streaming), videoWidth/videoHeight stay 0 forever — the countdown
+      // would still run, beginScoring() would still flip camActive=true
+      // (nothing in that path depends on the video actually being ready),
+      // and runLoop()'s own `vid.readyState<2` guard would then just
+      // reschedule itself via requestAnimationFrame forever with no error,
+      // no retry, and no visible sign anything was wrong: the "Starting
+      // session..." transition would clear right on schedule, but the
+      // camera panel behind it would just sit there frozen — exactly the
+      // intermittent "starting session hangs" reports. Treat a stream that
+      // never produced a real frame the same as any other camera failure
+      // instead of silently proceeding.
+      if(!metadataLoaded || !vidRef.current.videoWidth || !vidRef.current.videoHeight){
+        setCameraStatus("idle");
+        if(streamRef.current){ streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current=null; }
+        if(vidRef.current) vidRef.current.srcObject=null;
+        const errMsg=isAr
+          ?"الكاميرا اتفتحت بس مفيش صورة وصلت — جرب تاني"
+          :"Camera opened but no video signal arrived — please retry";
+        setAlertMsg({text:errMsg,type:"bad"});
+        addToast(errMsg,"error");
+        return;
+      }
       setCameraStatus("ready");
       setPreviewPhase("preview"); // shows live feed + "Start"/"Cancel" — NOT scoring yet
     }catch(e){
