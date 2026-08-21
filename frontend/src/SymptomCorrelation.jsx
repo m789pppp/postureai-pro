@@ -5,8 +5,7 @@
  * shown during a session with an after-the-fact, explainable correlation.
  */
 import { useState, useEffect, useCallback } from "react";
-import { db } from "./firebase.js";
-import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
+import { SymptomAPI } from "./services/api.js";
 
 const border = "1px solid rgba(255,255,255,.08)";
 const card   = { background:"rgba(255,255,255,.03)", border, borderRadius:16, padding:20 };
@@ -28,10 +27,6 @@ const CAUSE_LABEL = {
   dist:    { en:"screen distance", ar:"مسافة الشاشة" },
   posture: { en:"general posture", ar:"وضعية عامة" },
 };
-
-function todayStr() {
-  return new Date().toISOString().slice(0,10);
-}
 
 export function SymptomCorrelation({ cs, lang="en", onClose }) {
   const isAr = lang === "ar";
@@ -69,13 +64,19 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
     if (symptoms.length === 0) return;
     setSaving(true);
     try {
-      // Write directly to Firestore — no Railway backend needed
-      const uid = profile?.uid;
-      if (!uid) throw new Error("No user");
-      await setDoc(doc(db, "symptom_logs", `${uid}_${todayStr()}`), {
-        uid, date: todayStr(), symptoms,
-        saved_at: new Date().toISOString(),
-      }, { merge: true });
+      // Was writing straight to a Firestore `symptom_logs` collection,
+      // bypassing the backend entirely (and referencing an undefined
+      // `profile` variable in the process — this component is never
+      // given a profile/uid prop, so every call here threw a
+      // ReferenceError the instant a user tried to save a check-in).
+      // The correlation engine below (SymptomAPI.correlation, already
+      // used successfully by PredictiveAI.jsx) reads from the backend's
+      // own store, not that Firestore collection, so even fixing the
+      // crash in place would have left symptoms saved somewhere the
+      // correlation engine never sees. Log through the same backend API
+      // instead — auth is handled automatically via the Firebase ID
+      // token, no uid needed here at all.
+      await SymptomAPI.log({ symptoms });
       setSavedToday(true);
     } catch (e) {
       // silent — non-critical background feature
@@ -86,55 +87,44 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
 
   const loadInsights = useCallback(() => {
     setLoadingInsights(true);
-    // Compute correlation locally from Firestore symptom logs + sessions
     (async () => {
       try {
-        const uid = profile?.uid;
-        if (!uid) { setInsights([]); return; }
-        const cutoff = new Date(Date.now() - 90*24*3600000).toISOString().slice(0,10);
-        const snap = await getDocs(query(
-          collection(db, "symptom_logs"),
-          where("uid","==",uid),
-          where("date",">=",cutoff),
-          orderBy("date","desc"),
-          limit(90)
-        ));
-        const logs = snap.docs.map(d => d.data());
-        // Count symptom frequency
-        const freq = {};
-        logs.forEach(l => l.symptoms?.forEach(s => { freq[s.type] = (freq[s.type]||0)+1; }));
-        // Build insights from frequency
-        const insights = Object.entries(freq)
-          .sort((a,b)=>b[1]-a[1])
-          .slice(0,4)
-          .map(([type, count]) => {
-            const sym = ["neck_pain","back_pain"].includes(type)
-              ? { cause:"neck", strength: count > 10 ? "strong" : "moderate" }
-              : { cause:"posture", strength: count > 5 ? "moderate" : "weak" };
-            return { symptom_type: type, ...sym, occurrences: count, total_days: logs.length };
-          });
-        setInsights(insights);
-        if (!logs.length) setNote(isAr?"سجّل أعراضك يومياً لمدة أسبوع لرؤية الربط":"Log symptoms daily for a week to see correlations");
+        // Was reimplemented as a local symptom-frequency count that
+        // returned {symptom_type, cause, strength, occurrences,
+        // total_days} — a completely different shape than what the
+        // render below actually reads (ins.symptom, ins.direction,
+        // ins.score_gap, ins.avg_score_on_symptom_days/other_days,
+        // ins.days_logged, ins.dominant_alert_cause). Every field the UI
+        // needed was always undefined, so the "insights" tab could never
+        // show a real correlation — every symptom silently fell through
+        // to "No meaningful posture-score difference" regardless of the
+        // actual data, and the two avg-score lines rendered the literal
+        // word "undefined". Use the real backend correlation engine
+        // (same one PredictiveAI.jsx already calls successfully), which
+        // returns exactly the shape this UI expects.
+        const d = await SymptomAPI.correlation("90d");
+        const list = Array.isArray(d) ? d : (d?.insights || []);
+        setInsights(list);
+        if (!list.length) setNote(isAr?"سجّل أعراضك يومياً لمدة أسبوع لرؤية الربط":"Log symptoms daily for a week to see correlations");
       } catch { setInsights([]); }
       finally { setLoadingInsights(false); }
     })();
-  }, []);
+  }, [isAr]);
 
   const loadHistory = useCallback((period) => {
     setLoadingHistory(true);
     (async () => {
       try {
-        const uid = profile?.uid;
-        if (!uid) { setHistory([]); return; }
-        const days = period === "30d" ? 30 : period === "7d" ? 7 : 14;
-        const cutoff = new Date(Date.now() - days*24*3600000).toISOString().slice(0,10);
-        const snap = await getDocs(query(
-          collection(db, "symptom_logs"),
-          where("uid","==",uid),
-          where("date",">=",cutoff),
-          orderBy("date","desc")
-        ));
-        setHistory(snap.docs.map(d => d.data()));
+        // Was also direct-Firestore, with the same undefined-`profile`
+        // crash, plus a separate bug: the day-count mapping only handled
+        // "30d"/"7d" and fell through to 14 for anything else — so
+        // selecting "90d" in the tab above actually fetched just 14
+        // days. SymptomAPI.history(period) takes the "7d"/"30d"/"90d"
+        // strings directly, so there's no local day-count math to get
+        // wrong.
+        const d = await SymptomAPI.history(period);
+        const list = Array.isArray(d) ? d : (d?.logs || d?.history || d?.data || []);
+        setHistory(list);
       } catch { setHistory([]); }
       finally { setLoadingHistory(false); }
     })();
@@ -289,6 +279,14 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
               {(insights||[]).map((ins, i) => {
                 const sDef = SYMPTOMS.find(s=>s.type===ins.symptom);
                 const worse = ins.direction === "worse";
+                // Backend only includes an insight when |score_gap|>=3 or a
+                // dominant cause was found, so "better" (score_gap<0, i.e.
+                // posture score was actually *higher* on symptom days) is a
+                // real, meaningful result too — not the same as
+                // "no_difference". Previously both fell into the same
+                // "no meaningful difference" copy, which misrepresented a
+                // real (if counter-intuitive) correlation as no correlation.
+                const better = ins.direction === "better";
                 const causeLabel = ins.dominant_alert_cause ? (CAUSE_LABEL[ins.dominant_alert_cause]?.[isAr?"ar":"en"] || ins.dominant_alert_cause) : null;
                 return (
                   <div key={i} style={card}>
@@ -304,6 +302,12 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
                         {isAr
                           ? `في الأيام اللي حسّيت فيها بـ${isAr?sDef?.ar:sDef?.en}، متوسط سكور وضعيتك كان أقل بـ ${ins.score_gap} نقطة${causeLabel ? ` — والسبب الأكتر تكرارًا كان ${causeLabel}` : ""}.`
                           : `On days you reported ${sDef?.en?.toLowerCase()||ins.symptom}, your average posture score was ${ins.score_gap} points lower${causeLabel ? ` — most often driven by ${causeLabel}` : ""}.`}
+                      </div>
+                    ) : better ? (
+                      <div style={{ fontSize:13, color:"#e2e8f0", lineHeight:1.6 }}>
+                        {isAr
+                          ? `في الأيام اللي حسّيت فيها بـ${isAr?sDef?.ar:sDef?.en}، متوسط سكور وضعيتك كان أعلى بـ ${Math.abs(ins.score_gap)} نقطة عن باقي الأيام.`
+                          : `On days you reported ${sDef?.en?.toLowerCase()||ins.symptom}, your average posture score was actually ${Math.abs(ins.score_gap)} points higher than other days.`}
                       </div>
                     ) : (
                       <div style={{ fontSize:13, color:"#94a3b8", lineHeight:1.6 }}>
