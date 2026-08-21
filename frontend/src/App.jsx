@@ -3898,6 +3898,13 @@ export default function App(){
     if(!camActive || isPaused) return;
     if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; }
     if(timerRef.current){ clearInterval(timerRef.current); timerRef.current=null; }
+    // Freeze the actual video *playback* too, not just the analysis loop.
+    // vidRef keeps its live srcObject either way (camera hardware stays on,
+    // resume never re-requests permission) — but without this, the feed
+    // visibly kept moving under the "Session paused" overlay, which reads
+    // as "pause did nothing, the camera/analysis is still running" even
+    // though scoring had genuinely stopped underneath.
+    try{ vidRef.current?.pause?.(); }catch{}
     pausedAtRef.current = Date.now();
     setIsPaused(true);
   }
@@ -3911,6 +3918,7 @@ export default function App(){
       sessRef.current += (Date.now() - pausedAtRef.current);
       pausedAtRef.current = null;
     }
+    try{ vidRef.current?.play?.().catch(()=>{}); }catch{}
     setIsPaused(false);
     timerRef.current=setInterval(()=>{
       const elapsed=Math.floor((Date.now()-sessRef.current)/1000);
