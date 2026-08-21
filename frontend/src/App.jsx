@@ -40,6 +40,11 @@ import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
 import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
 import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal, ModalPortal } from "./ui/index.jsx";
+import {
+  LT, Icon, IconBtn, Btn as LiveBtn, StatusPill, SectionCard, StatTile, MetricRow,
+  LiveHeader, ScoreGauge, AICoachCard, CameraFrame, CameraOverlay, OverlayCard,
+  CountdownRing, GuidanceHint, useLiveUICSS, fmtTime, scoreTierColor, alpha as liveAlpha,
+} from "./LiveUI.jsx";
 import { gradeScore, gradeScoreAr, gradeContext, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
 import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
@@ -254,7 +259,6 @@ const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,
 
 // ── Helpers ───────────────────────────────────────────────────────
 const sc    = v => v>=70?"#4FAE8E":v>=55?"#D6A24C":"#C6604F"; // aligned to gradeScore's tier boundaries (85/70/55/40) — see postureEngine.js
-const grade = (v,t) => v>=85?t.excellent:v>=70?t.good:v>=50?t.fair:t.poor;
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 const LM = {NOSE:0,L_EYE:2,R_EYE:5,L_EAR:7,R_EAR:8,L_SHOULDER:11,R_SHOULDER:12,L_HIP:23,R_HIP:24,L_KNEE:25,R_KNEE:26,L_ANKLE:27,R_ANKLE:28};
 // ── API wrappers (use service layer with auth) ────────────────────
@@ -2016,6 +2020,7 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
 }
 
 export default function App(){
+  useLiveUICSS(); // one-time keyframe injection for the Live page's redesigned UI (LiveUI.jsx)
   const[user,setUser]=useState(null);
   const[mfaChallengePending,setMfaChallengePending]=useState(false);
   const[backendDown,setBackendDown]=useState(false); // true when /api/analyze fails repeatedly in fallback mode — see runLoop
@@ -3305,7 +3310,13 @@ export default function App(){
             }else{
               badRef.current=null;
               // Good posture — silent status update only, no alert box noise
-              startTransition(()=>setScoreStatus({score:finalResult.overall,grade:grade(finalResult.overall,t)}));
+              // NOTE: was `grade(finalResult.overall,t)` — `grade()` reads
+              // t.excellent/t.good/t.fair/t.poor, which this translations
+              // object never defined, so scoreStatus.grade was always
+              // literally the string "undefined" wherever it got rendered.
+              // gradeScore/gradeScoreAr (already imported, already used by
+              // the engine's own grading) give the real label.
+              startTransition(()=>setScoreStatus({score:finalResult.overall,grade:isAr?gradeScoreAr(finalResult.overall):gradeScore(finalResult.overall)}));
             }
           }
         } else {
@@ -3397,7 +3408,7 @@ export default function App(){
               } // close else if(badRef>15000)
             }else{
               badRef.current=null;
-              startTransition(()=>setScoreStatus({score:smoothed,grade:grade(smoothed,t)}));
+              startTransition(()=>setScoreStatus({score:smoothed,grade:isAr?gradeScoreAr(smoothed):gradeScore(smoothed)}));
             }
           }
           // Always use local Corvus AI for Elite-equivalent tiers
@@ -4740,10 +4751,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
     }catch{return timeStr;}
   };
 
-  const SB={background:cs.card,borderRight:`0.5px solid ${cs.border}`,display:"flex",flexDirection:"column",overflowY:"auto"};
-  const SEC={padding:"10px 12px",borderBottom:`0.5px solid ${cs.border}`};
-  const LBL={fontSize:8.5,color:cs.muted,textTransform:"uppercase",letterSpacing:".09em",marginBottom:6,fontWeight:500};
-  const SC2={background:cs.card2,border:`0.5px solid ${cs.border}`,borderRadius:8,padding:"9px 10px"};
   const abox=tp=>({borderRadius:8,padding:"9px 11px",fontSize:10.5,lineHeight:1.5,border:"0.5px solid",
     background:tp==="warn"?"rgba(214,162,76,.07)":tp==="good"?"rgba(79,174,142,.07)":tp==="bad"?"rgba(198,96,79,.07)":"rgba(99,102,241,.07)",
     borderColor:tp==="warn"?"rgba(214,162,76,.3)":tp==="good"?"rgba(79,174,142,.3)":tp==="bad"?"rgba(198,96,79,.3)":"rgba(99,102,241,.3)",
@@ -4997,6 +5004,58 @@ async function downloadPDF(sessionOverride, isClinical=false){
         set the state and nothing happened: no modal, no error, just a
         dead button. Mounted here too so it actually opens on this page. */}
     {showCalibWizard&&<ErrorBoundary key="calibwizard-live"><CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/></ErrorBoundary>}
+    {/* The 4 modals below are triggered from buttons on THIS page (Billing/
+        Upgrade, Custom Alert Rules, Onboarding restart, Company setup) but
+        were previously only ever mounted inside the page==="home" branch —
+        the exact same bug already fixed for CalibrationWizard above. Their
+        setShowX(true) calls did nothing here; these mirror-mounts are the
+        fix, reusing the identical handlers already defined for the home
+        branch's copies (see page==="home" above) so behaviour is identical,
+        not reimplemented. */}
+    {showBilling&&<ErrorBoundary key="billing-live"><BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={async(plan)=>{
+      const newTier = normalizeTier(plan);
+      setTier(newTier);
+      setShowBilling(false);
+      addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");
+      if(user?.uid){
+        try{
+          const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");
+          const{db:_db}=await import("./firebase.js");
+          await _u(_d(_db,"users",user.uid),{
+            tier: newTier,
+            tier_updated_at: new Date().toISOString(),
+            updated_at: _s(),
+          });
+          setProfile(p=>p?({...p,tier:newTier}):p);
+        }catch(e){ console.warn("tier update failed",e?.code); }
+      }
+      if(user?.uid){
+        getUserProfile(user.uid).then(p=>{
+          if(p){ setProfile(p); if(p.tier) setTier(normalizeTier(p.tier)); }
+        }).catch(()=>{});
+      }
+    }}/></ErrorBoundary>}
+    {showCustomAlertRules&&<CustomAlertRulesPanel isAr={isAr} cs={cs} rules={customAlertRules}
+      onSave={(next)=>{
+        setCustomAlertRules(next);
+        setProfile(p=>p?({...p,custom_alert_rules:next}):p);
+        if(user?.uid) updateUserProfile(user.uid,{custom_alert_rules:next}).catch(()=>{});
+      }}
+      onClose={()=>setShowCustomAlertRules(false)}/>}
+    {showOnboard&&<ErrorBoundary key="onboard-live"><OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={async()=>{
+      setShowOnboard(false);
+      if(user?.uid){
+        try{
+          await updateDoc(doc(db,"users",user.uid),{
+            onboarding_done:["skipped"],
+            setup_complete:true,
+            updated_at:serverTimestamp(),
+          });
+          setProfile(p=>p?({...p,onboarding_done:["skipped"],setup_complete:true}):p);
+        }catch(e){ console.warn("skip onboard:",e?.code); }
+      }
+    }}/></ErrorBoundary>}
+    {showCompanyOnboard&&<ErrorBoundary key="companyonboard-live"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/></ErrorBoundary>}
     <div dir={dir} style={{
       display:"grid",
       // Video panel was a fixed 320px while the stats/history panel took
@@ -5268,90 +5327,31 @@ async function downloadPDF(sessionOverride, isClinical=false){
         borderLeft:  isAr ? `1px solid ${cs.border}` : "none",
         minWidth:0,
       }}>
-        {/* Top bar */}
-        <div style={{
-          padding:"12px 16px",
-          borderBottom:`1px solid ${cs.border}`,
-          background:cs.card,
-          display:"flex", alignItems:"center",
-          justifyContent:"space-between",
-          position:"sticky", top:0, zIndex:10,
-        }}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {/* Desktop only — on mobile the sidebar (which renders first,
-                above the fold) has its own copy of this exact same button.
-                Showing both was a real "which Back do I use" confusion. */}
-            {!isMobile && (
-            <button
-              onClick={backFromLive}
-              style={{
-                background:"rgba(148,163,184,.08)",
-                border:`1px solid ${cs.border}`,
-                borderRadius:8,padding:"6px 12px",
-                fontSize:12,fontWeight:500,color:cs.muted,cursor:"pointer",
-                display:"flex",alignItems:"center",gap:5,
-              }}>
-              {isAr ? "→" : "←"} {isAr?"رجوع":"Back"}
-            </button>
-            )}
-            <div>
-              {/* Model-ready state lives in the sidebar status row; tier/mode
-                  are already shown permanently as badges in the sidebar too —
-                  this used to repeat "Elite · Laptop" here as well, tripling
-                  the same two facts across the screen for no new information.
-                  Header now carries only the one thing it uniquely adds:
-                  session guidance. */}
-              <div style={{fontSize:12.5,fontWeight:600,color:cs.text}}>
-                {mpStatus==="ready"
-                  ? (M_ ? (isAr?`المسافة المثلى ${M_.optDist[0]}–${M_.optDist[1]} سم`:`Optimal distance ${M_.optDist[0]}–${M_.optDist[1]}cm`) : (isAr?"جاهز للتحليل":"Ready to analyse"))
-                  // mpStatus also settles into "fallback" (local model never
-                  // loaded in time, now scoring via the backend) or "error" —
-                  // this only ever checked for "ready", so both of those left
-                  // the header stuck reading "Loading AI model…" for the rest
-                  // of the session even once the status pill below had
-                  // already moved on to "Server mode ✓" / "Error", one line
-                  // of the UI still telling the user something that had
-                  // stopped being true.
-                  : mpStatus==="fallback" ? (isAr?"جاهز — عبر السيرفر":"Ready — via server")
-                  : mpStatus==="error" ? (isAr?"تعذر تحميل نموذج التحليل":"Analysis model failed to load")
-                  : (isAr?"جاري تحميل النموذج...":"Loading AI model...")}
-              </div>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <button onClick={()=>setLang(lang==="en"?"ar":"en")} aria-label={isAr?"تغيير اللغة":"Change language"}
-              style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:8,padding:"4px 10px",fontSize:11,color:cs.muted,cursor:"pointer"}}>
-              {lang==="en"?"عربي":"EN"}
-            </button>
-            <button onClick={()=>setDarkMode(!darkMode)} aria-label={isAr?(darkMode?"وضع فاتح":"وضع داكن"):(darkMode?"Light mode":"Dark mode")}
-              style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:8,padding:"4px 8px",fontSize:12,cursor:"pointer"}}>
-              {darkMode?"☀️":"🌙"}
-            </button>
-            <button onClick={()=>setPage("pricing")}
-              style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:600,color:"#a5b4fc",cursor:"pointer"}}>
-              ↑ {isAr?"ترقية":"Upgrade"}
-            </button>
+        {/* Session guidance strip — the Back / language / theme controls that
+            used to live in a duplicate top bar here now live once, in the
+            unified LiveHeader inside the sticky sidebar. This strip keeps
+            only the one thing it uniquely adds: live session guidance text. */}
+        <div style={{padding:"10px 16px",borderBottom:`1px solid ${cs.border}`,background:cs.card}}>
+          <div style={{fontSize:12.5,fontWeight:600,color:cs.text}}>
+            {mpStatus==="ready"
+              ? (M_ ? (isAr?`المسافة المثلى ${M_.optDist[0]}–${M_.optDist[1]} سم`:`Optimal distance ${M_.optDist[0]}–${M_.optDist[1]}cm`) : (isAr?"جاهز للتحليل":"Ready to analyse"))
+              : mpStatus==="fallback" ? (isAr?"جاهز — عبر السيرفر":"Ready — via server")
+              : mpStatus==="error" ? (isAr?"تعذر تحميل نموذج التحليل":"Analysis model failed to load")
+              : (isAr?"جاري تحميل النموذج...":"Loading AI model...")}
           </div>
         </div>
 
-        {/* Main 4 stats */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,background:cs.border,margin:"0",borderBottom:`1px solid ${cs.border}`}}>
-          {[
-            {label:isAr?"متوسط النقاط":"Avg Score",   value:avg||"--",  color:avg?sc(avg):"#475569"},
-            {label:isAr?"وقت الجلسة":"Session Time", value:`${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`, color:"#94a3b8"},
-            {label:isAr?"وضعية جيدة":"Good Posture",  value:gPct+"%",   color:"#4FAE8E"},
-            {label:isAr?"التنبيهات":"Alerts",         value:alertCounts.total, color:alertCounts.total>0?"#D6A24C":"#475569"},
-          ].map((s,i)=>(
-            <div key={s.label} style={{
-              background:cs.card,
-              padding:i<2?"16px 20px":"12px 20px",
-              display:"flex", flexDirection:"column", gap:2,
-            }}>
-              <div style={{fontSize:i<2?28:22,fontWeight:800,color:s.color,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{s.value}</div>
-              <div style={{fontSize:10,color:cs.muted,fontWeight:500,textTransform:"uppercase",letterSpacing:".06em",marginTop:2}}>{s.label}</div>
-            </div>
-          ))}
-        </div>
+        {/* Session Summary — clearly secondary to the live camera view (per
+            design brief): compact stat tiles instead of a full-bleed 4-up
+            grid competing for visual weight. */}
+        <SectionCard title={isAr?"ملخص الجلسة":"Session Summary"} icon="barChart" cs={cs} style={{margin:"14px 16px 0"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <StatTile cs={cs} label={isAr?"متوسط النقاط":"Avg Score"} value={avg||"--"} tone={avg?(avg>=70?"good":avg>=55?"warn":"bad"):"neutral"}/>
+            <StatTile cs={cs} label={isAr?"وقت الجلسة":"Session Time"} value={fmtTime(sessionTime)} tone="neutral"/>
+            <StatTile cs={cs} label={isAr?"وضعية جيدة":"Good Posture"} value={gPct+"%"} tone="good"/>
+            <StatTile cs={cs} label={isAr?"التنبيهات":"Alerts"} value={alertCounts.total} tone={alertCounts.total>0?"warn":"neutral"}/>
+          </div>
+        </SectionCard>
 
         {/* Onboarding / calibration guidance — single card, priority-ordered.
             Previously this was two separate stacked banners (calibration +
@@ -5631,87 +5631,39 @@ async function downloadPDF(sessionOverride, isClinical=false){
         position: isMobile ? "static" : "sticky",
         top: 0,
       }}>
-        {/* Sidebar header */}
-        <div style={{
-          padding:"10px 14px",
-          borderBottom:`1px solid ${cs.border}`,
-          display:"flex",alignItems:"center",justifyContent:"space-between",
-        }}>
-          <div style={{display:"flex",alignItems:"center",gap:7}}>
-            {/* Mobile-only back button — LEFT PANEL's back button is now
-                below the fold on mobile (camera renders first), so this
-                sidebar needs its own way back to Home. */}
-            {isMobile && (
-              <button
-                onClick={backFromLive}
-                aria-label={isAr?"رجوع":"Back"}
-                style={{background:"rgba(148,163,184,.08)",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",fontSize:12,color:cs.muted,cursor:"pointer",display:"flex",alignItems:"center",marginRight:isAr?0:2,marginLeft:isAr?2:0}}>
-                {isAr ? "→" : "←"}
-              </button>
-            )}
-            <div style={{width:22,height:22,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>◈</div>
-            <span style={{fontSize:12,fontWeight:700,color:cs.text}}>Corvus</span>
-          </div>
-          <div style={{display:"flex",gap:5,alignItems:"center"}}>
-            {TN&&<span style={{background:TN.colorDim,border:`1px solid ${TN.color}40`,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,color:TN.color}}>{TN.name}</span>}
-            {M_&&<span style={{background:"rgba(99,102,241,.1)",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,color:M_.color}}>{M_.label}</span>}
-            {/* Upgrade CTA — only shown when idle, hidden during active session */}
-            {!camActive && !tierAtLeast(effectiveTier,"basic") && (
-              <button onClick={()=>setShowBilling(true)} style={{fontSize:9.5,fontWeight:700,
-                background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.25)",
-                borderRadius:5,padding:"2px 8px",color:"#a5b4fc",cursor:"pointer"}}>
-                ↑ {isAr?"ترقية":"Upgrade"}
-              </button>
-            )}
-          </div>
+        {/* Unified Live Header — replaces the old sidebar header + separate
+            status-bar row + the desktop-only top bar that used to live in
+            the left panel. One compact, always-visible (sticky sidebar)
+            header instead of three fragments repeating the same facts
+            (back nav, tier/mode, AI status, timer) in different places. */}
+        <LiveHeader
+          isAr={isAr} cs={cs} darkMode={darkMode}
+          onBack={backFromLive}
+          onToggleDark={()=>setDarkMode(!darkMode)}
+          onToggleLang={()=>setLang(lang==="en"?"ar":"en")}
+          onOpenSettings={()=>setShowLiveSettings(v=>!v)}
+          mpStatus={mpStatus}
+          camActive={camActive}
+          timeLabel={fmtTime(sessionTime)}
+          tierLabel={[TN?.name,M_?.label].filter(Boolean).join(" · ")}
+          showUpgrade={!camActive && !tierAtLeast(effectiveTier,"basic")}
+          onUpgrade={()=>setShowBilling(true)}
+        />
+        {/* AI Coach readiness — kept as its own compact pill since it tracks
+            a second, independent pipeline (Elite AI insight generation)
+            distinct from the pose-detection status shown in the header. */}
+        <div style={{padding:"0 14px 10px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+          <StatusPill cs={cs}
+            tone={aiCoachStatus.error?"bad":aiCoachStatus.ready?"good":"info"}
+            icon={aiCoachStatus.error?"alertTriangle":aiCoachStatus.ready?"checkCircle":"infoCircle"}
+            pulse={!aiCoachStatus.ready&&!aiCoachStatus.error}
+            label={aiCoachStatus.ready
+              ? (isAr?"مدرب AI ✓":"AI Coach ✓")
+              : aiCoachStatus.loading
+              ? (isAr?`مدرب AI ${aiCoachStatus.progress}%`:`AI Coach ${aiCoachStatus.progress}%`)
+              : (isAr?"مدرب AI ...":"AI Coach ...")}
+          />
         </div>
-
-        {/* ── Status bar — posture model + AI Coach in ONE compact row ── */}
-        <div style={{padding:"6px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:10,background:"rgba(0,0,0,.15)"}}>
-          {/* Posture model dot */}
-          {/* Posture model dot — "fallback" used to fall into the same
-              "Loading..." branch as "loading" itself. Once MediaPipe has
-              actually given up and switched to server-side analysis,
-              telling the user it's still "loading" is misleading for the
-              rest of the session — they'd reasonably expect it to finish
-              loading and never understand why it never does. */}
-          <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
-            <div style={{
-              width:6,height:6,borderRadius:"50%",flexShrink:0,
-              background:mpStatus==="ready"?"#4FAE8E":mpStatus==="error"?"#C6604F":mpStatus==="fallback"?"#60a5fa":"#D6A24C",
-              animation:mpStatus==="loading"?"livePulse 1.2s infinite":"none",
-            }}/>
-            <span style={{fontSize:10,color:mpStatus==="ready"?"#4FAE8E":mpStatus==="error"?"#C6604F":mpStatus==="fallback"?"#60a5fa":"#D6A24C",fontWeight:600}}>
-              {mpStatus==="ready"?(isAr?"وضعية ✓":"Pose ✓"):mpStatus==="error"?(isAr?"خطأ":"Error"):mpStatus==="fallback"?(isAr?"عبر السيرفر ✓":"Server mode ✓"):(isAr?"تحميل...":"Loading...")}
-            </span>
-          </div>
-          {/* Divider */}
-          <div style={{width:1,height:14,background:cs.border,flexShrink:0}}/>
-          {/* AI Coach dot */}
-          <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
-            <div style={{
-              width:6,height:6,borderRadius:"50%",flexShrink:0,
-              background:aiCoachStatus.error?"#C6604F":aiCoachStatus.ready?"#6366f1":"#D6A24C",
-              animation:(!aiCoachStatus.ready&&!aiCoachStatus.error)?"livePulse 1.2s infinite":"none",
-            }}/>
-            <span style={{fontSize:10,color:aiCoachStatus.error?"#C6604F":aiCoachStatus.ready?"#6366f1":"#D6A24C",fontWeight:600}}>
-              {aiCoachStatus.ready
-                ?(isAr?"AI ✓":"AI ✓")
-                :aiCoachStatus.loading
-                ?(isAr?`AI ${aiCoachStatus.progress}%`:`AI ${aiCoachStatus.progress}%`)
-                :(isAr?"AI ...":"AI ...")}
-            </span>
-          </div>
-          {/* Session timer if active */}
-          {camActive&&(
-            <div style={{fontSize:10,color:cs.muted,fontWeight:600,flexShrink:0,marginInlineStart:"auto"}}>
-              🔴 {Math.floor(sessionTime/60)}:{String(sessionTime%60).padStart(2,"0")}
-            </div>
-          )}
-        </div>
-
-        {/* Camera-mode switcher removed — Laptop is now the only mode
-            (Phone and Side were removed app-wide). */}
 
 
         {/* ── Quick Start Banner (for users who skipped onboarding) ─── */}
@@ -5836,13 +5788,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               3 times in a row. Without this the camera feed just sits
               there with no score ever updating and zero explanation. */}
           {camActive && backendDown && (
-            <div style={{
-              position:"absolute",inset:0,display:"flex",flexDirection:"column",
-              alignItems:"center",justifyContent:"center",gap:14,textAlign:"center",padding:"0 28px",
-              background:"rgba(2,8,16,.9)",backdropFilter:"blur(4px)",zIndex:16,
-            }}>
-              <div style={{width:44,height:44,borderRadius:12,background:"rgba(198,96,79,.14)",
-                border:"1px solid rgba(198,96,79,.35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⚠️</div>
+            <CameraOverlay align="center">
+              <div style={{width:44,height:44,borderRadius:LT.radius.md,background:liveAlpha(LT.color.bad,0.14),
+                border:`1px solid ${liveAlpha(LT.color.bad,0.35)}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Icon name="alertTriangle" size={22} color={LT.color.bad}/>
+              </div>
               <div>
                 <div style={{fontSize:15,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
                   {isAr?"تعذر الوصول لخادم التحليل":"Can't reach the analysis server"}
@@ -5851,12 +5801,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {isAr?"جهازك مش شغال بالتحليل المحلي دلوقتي، والسيرفر مش بيرد. تأكد من الإنترنت وحاول تاني":"Local analysis isn't available on this device right now, and the server isn't responding. Check your connection and retry"}
                 </div>
               </div>
-              <button onClick={()=>{ backendFailRef.current=0; backendFailShownRef.current=false; setBackendDown(false); }}
-                style={{background:"rgba(148,163,184,.1)",border:"1px solid rgba(148,163,184,.25)",borderRadius:9,
-                  padding:"9px 18px",fontSize:12,fontWeight:700,color:"#e2e8f0",cursor:"pointer"}}>
-                {isAr?"🔄 حاول تاني":"🔄 Retry"}
-              </button>
-            </div>
+              <LiveBtn variant="ghost" icon="refresh" cs={{muted:"#e2e8f0",border:"rgba(148,163,184,.25)"}}
+                onClick={()=>{ backendFailRef.current=0; backendFailShownRef.current=false; setBackendDown(false); }}>
+                {isAr?"حاول تاني":"Retry"}
+              </LiveBtn>
+            </CameraOverlay>
           )}
 
 
@@ -5865,24 +5814,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
               position:"absolute",inset:0,display:"flex",flexDirection:"column",
               alignItems:"center",justifyContent:"flex-end",padding:"0 0 22px",
               background:"linear-gradient(to top, rgba(2,8,16,.85), transparent 45%)",zIndex:15,
+              animation:`liveuiFadeIn ${LT.duration.base}ms ease`,
             }}>
               <div style={{fontSize:12.5,color:"#e2e8f0",marginBottom:12,textAlign:"center",padding:"0 20px"}}>
                 {isAr?"اتأكد إنك ظاهر كويس في الكاميرا، وابدأ لما تجهز":"Make sure you're framed well, then start when you're ready"}
               </div>
               <div style={{display:"flex",gap:10}}>
-                <button onClick={cancelPreview} style={{
-                  background:"rgba(255,255,255,.08)",border:`1px solid ${cs.border}`,borderRadius:14,
-                  padding:"14px 22px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",
-                }}>
+                <LiveBtn size="lg" variant="ghost" cs={{muted:"#fff",border:"rgba(255,255,255,.2)"}} onClick={cancelPreview}>
                   {isAr?"إلغاء":"Cancel"}
-                </button>
-                <button onClick={confirmStartSession} style={{
-                  background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
-                  padding:"14px 32px",fontSize:14.5,fontWeight:800,color:"#fff",cursor:"pointer",
-                  boxShadow:"0 8px 24px rgba(26,86,219,.4)",
-                }}>
-                  ▶ {isAr?"ابدأ الجلسة الآن":"Start session now"}
-                </button>
+                </LiveBtn>
+                <LiveBtn size="lg" variant="primary" icon="play" cs={{blue:"#1a56db"}} onClick={confirmStartSession}
+                  style={{boxShadow:"0 8px 24px rgba(26,86,219,.4)"}}>
+                  {isAr?"ابدأ الجلسة الآن":"Start session now"}
+                </LiveBtn>
               </div>
             </div>
           )}
@@ -5892,45 +5836,30 @@ async function downloadPDF(sessionOverride, isClinical=false){
               session running invisibly in the background; this actually
               stops. */}
           {camActive && isPaused && (
-            <div style={{
-              position:"absolute",inset:0,display:"flex",flexDirection:"column",
-              alignItems:"center",justifyContent:"center",gap:14,
-              background:"rgba(2,8,16,.62)",backdropFilter:"blur(2px)",zIndex:14,
-            }}>
-              <div style={{fontSize:36}}>⏸</div>
+            <CameraOverlay align="center">
+              <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(255,255,255,.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Icon name="pause" size={22} color="#fff"/>
+              </div>
               <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>
                 {isAr?"الجلسة متوقفة مؤقتاً":"Session paused"}
               </div>
-              <button onClick={resumeSession} style={{
-                background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:14,
-                padding:"12px 28px",fontSize:13.5,fontWeight:800,color:"#fff",cursor:"pointer",
-                boxShadow:"0 8px 24px rgba(26,86,219,.4)",
-              }}>
-                ▶ {isAr?"استكمال":"Resume"}
-              </button>
-            </div>
+              <LiveBtn size="lg" variant="primary" icon="play" cs={{blue:"#1a56db"}} onClick={resumeSession}
+                style={{boxShadow:"0 8px 24px rgba(26,86,219,.4)"}}>
+                {isAr?"استكمال":"Resume"}
+              </LiveBtn>
+            </CameraOverlay>
           )}
 
           {/* 3-2-1 countdown right before scoring actually begins — Cancel
               stays visible and cancels the countdown + closes the camera,
               same as during preview. */}
           {previewPhase==="countdown" && (
-            <div style={{
-              position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-              background:"rgba(2,8,16,.55)",zIndex:16,gap:18,
-            }}>
-              <div key={countdownN} style={{
-                fontSize:88,fontWeight:900,color:"#fff",
-                animation:"countdownPop .9s ease-out",
-                textShadow:"0 4px 24px rgba(0,0,0,.5)",
-              }}>{countdownN}</div>
-              <button onClick={cancelPreview} style={{
-                background:"rgba(255,255,255,.1)",border:`1px solid ${cs.border}`,borderRadius:12,
-                padding:"9px 20px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",
-              }}>
+            <CameraOverlay align="center">
+              <CountdownRing n={countdownN} />
+              <LiveBtn variant="ghost" cs={{muted:"#fff",border:"rgba(255,255,255,.2)"}} onClick={cancelPreview}>
                 {isAr?"إلغاء":"Cancel"}
-              </button>
-            </div>
+              </LiveBtn>
+            </CameraOverlay>
           )}
 
           {/* Idle-state visual cue — previously the camera area was just a black box
@@ -5946,11 +5875,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               background:"rgba(2,8,16,.55)",backdropFilter:"blur(2px)",
               pointerEvents:"none",
             }}>
-              <div style={{fontSize:34}}>📷</div>
-              <div style={{fontSize:12.5,fontWeight:700,color:"#e2e8f0",textAlign:"center",padding:"0 24px"}}>
-                {isAr?"اضغط \"ابدأ التحليل\" أدناه للبدء":"Tap \"Start Analysis\" below to begin"}
+              <GuidanceHint icon="camera"
+                title={isAr?"اضغط \"ابدأ التحليل\" أدناه للبدء":"Tap \"Start Analysis\" below to begin"}
+                cs={cs}/>
+              <div style={{fontSize:16,color:"rgba(255,255,255,.5)",animation:"bounceDown 1.4s infinite"}}>
+                <Icon name="chevronDown" size={16} color="rgba(255,255,255,.6)"/>
               </div>
-              <div style={{fontSize:20,color:TN?.color||"#1a56db",animation:"bounceDown 1.4s infinite"}}>↓</div>
             </div>
           )}
 
@@ -6228,6 +6158,30 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
           }
         </div>
+
+        {/* Prominent Posture Score — the on-video badge above is a compact
+            glanceable overlay for while you're looking at the camera; this
+            is the "score never small" primary read-out the design brief
+            calls for, shown once real analysis is flowing (same gating the
+            on-video badge already uses: `analysis && score>0`). */}
+        {analysis && score>0 && (
+          <div style={{padding:"16px 14px 4px",display:"flex",justifyContent:"center"}}>
+            <ScoreGauge cs={cs} score={scoreStatus.score||score} grade={scoreStatus.grade}/>
+          </div>
+        )}
+
+        {/* AI Coach — short, actionable live guidance. Reuses the same
+            `aiInsight` data + Elite tier-gate already used by the left
+            panel's history-style AI card; this is the live-session-facing
+            copy of it, placed where the design brief wants AI feedback:
+            directly beside the camera, not buried below the fold. */}
+        {camActive && (
+          <div style={{padding:"4px 14px 12px"}}>
+            <AICoachCard cs={cs} isAr={isAr} text={aiInsight}
+              locked={!aiInsight && !tierAtLeast(effectiveTier,"elite")}
+              onUnlock={()=>{ addToast(isAr?"🧠 تحليل AI اللحظي متاح لباقة Elite فقط":"🧠 Live AI analysis is an Elite feature","warn"); setShowBilling(true); }}/>
+          </div>
+        )}
 
         {/* Optimal distance hint — score/user shown in left panel & video overlay */}
         {M_ && !camActive && (
@@ -6527,11 +6481,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <button onClick={()=>setShowLiveSettings(v=>!v)} style={{
             width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
-            background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:10,
+            background:cs.inp||"rgba(255,255,255,.03)",border:`1px solid ${cs.inpB||cs.border}`,borderRadius:LT.radius.sm,
             padding:"10px 14px",fontSize:12.5,fontWeight:700,color:cs.text,cursor:"pointer",
           }}>
-            <span>⚙️ {isAr?"إعدادات الجلسة":"Session settings"}</span>
-            <span style={{fontSize:11,color:cs.muted}}>{showLiveSettings?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?"عرض ▼":"Show ▼")}</span>
+            <span style={{display:"flex",alignItems:"center",gap:7}}>
+              <Icon name="settings" size={14} color={cs.muted}/> {isAr?"إعدادات الجلسة":"Session settings"}
+            </span>
+            <span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:cs.muted}}>
+              {showLiveSettings?(isAr?"إخفاء":"Hide"):(isAr?"عرض":"Show")}
+              <Icon name={showLiveSettings?"chevronUp":"chevronDown"} size={12} color={cs.muted}/>
+            </span>
           </button>
         </div>
         {showLiveSettings && (
@@ -6668,7 +6627,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
             padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:"#34d399",cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",gap:6,
           }}>
-            🎯 {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
+            <Icon name="target" size={14} color={calibData?cs.muted:"#34d399"}/>
+            {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
           </button>
           {/* Break-reminder chime toggle + interval picker — used to be a
               full-width "Break-reminder chime: ON/OFF" text button sitting
@@ -6684,12 +6644,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               aria-label={muted?(isAr?"صوت تذكير الاستراحة: متوقف":"Break-reminder chime: off"):(isAr?"صوت تذكير الاستراحة: شغّال":"Break-reminder chime: on")}
               aria-pressed={!muted}
               style={{
-                flexShrink:0,width:38,height:36,borderRadius:9,fontSize:15,cursor:"pointer",
+                flexShrink:0,width:38,height:36,borderRadius:9,cursor:"pointer",
                 background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#4FAE8E",
                 border:`1px solid ${muted?cs.border:"rgba(79,174,142,.25)"}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
               }}>
-              {muted?"🔇":"🔔"}
+              <Icon name={muted?"bellOff":"bell"} size={15}/>
             </button>
             <div style={{
               flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,
