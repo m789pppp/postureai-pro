@@ -2652,6 +2652,7 @@ export default function App(){
   const backendFailRef  = useRef(0);
   const backendFailShownRef = useRef(false);
   const startingCameraRef = useRef(false); // sync guard — see startCamera()
+  const stoppingRef = useRef(false); // sync guard — see stopCamera()
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
   const lightAlRef=useRef(0); // separate cooldown for lighting alerts (60s, not 8s)
   const insightsRef=useRef(null);
@@ -3454,11 +3455,19 @@ export default function App(){
   // NOTE: must be declared AFTER runLoop — its dep array reads runLoop, which
   // is in the temporal dead zone until the useCallback above initialises it.
   useEffect(() => {
-    if(!camActive) return;
+    // isPaused must gate this too, not just camActive: pauseSession() cancels
+    // rafRef and sets it to null, but changing any of runLoop's own deps
+    // (sound/faceBlur/showSkeleton/showAngles/mode/calibData — all editable
+    // from the still-interactive Session Settings panel while paused) gives
+    // runLoop a new identity and re-fires this effect. It used to reschedule
+    // requestAnimationFrame(runLoop) unconditionally, silently resuming
+    // detection/scoring/alerts behind the "Session paused" overlay — the
+    // user sees "paused" while analysis is actually still running.
+    if(!camActive || isPaused) return;
     if(rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(runLoop);
     return () => { if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; } };
-  }, [runLoop, camActive]);
+  }, [runLoop, camActive, isPaused]);
 
   async function startCamera(){
     // Guards a real bug: cameraStatus==="requesting" is the only thing that
@@ -3557,6 +3566,15 @@ export default function App(){
   // countdown (gives a moment to get in frame / sit down), cancellable the
   // whole time, then hand off to beginScoring().
   function confirmStartSession(){
+    // Reentrancy guard: a fast double-click/double-tap on "Start session
+    // now" used to run this twice before React re-rendered previewPhase
+    // away from "preview" — the second call overwrote countdownIvRef with
+    // a fresh interval WITHOUT clearing the first, leaking an orphaned
+    // countdown that independently called beginScoring() again when it
+    // reached 0, duplicating the whole session-start flow. countdownIvRef
+    // is a ref (synchronous, unlike previewPhase state), so checking it
+    // here closes the race regardless of render timing.
+    if(countdownIvRef.current) return;
     setPreviewPhase("countdown");
     setCountdownN(3);
     let n=3;
@@ -3583,6 +3601,7 @@ export default function App(){
       // see commit message for the exact double-timer bug this caused.
       setIsPaused(false);
       pausedAtRef.current = null;
+      stoppingRef.current = false; // clears stopCamera()'s reentrancy guard for this new session
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
@@ -3631,6 +3650,16 @@ export default function App(){
         });
       await Promise.race([startSessionP, new Promise(r=>setTimeout(r,1200))]);
       if(paywallBlocked) return;
+      // If the user backed out (Back button / browser back) during this
+      // ~1.2s await, stopCamera() already ran and tore down streamRef —
+      // nothing else ever nulls it in a normal flow. Without this check,
+      // this continuation would resurrect camActive=true and schedule a
+      // fresh timer/RAF loop for a page the user already left: it runs
+      // forever in the background (nothing on Home ever calls
+      // stopCamera() again), and worse, the next time they open Live and
+      // hit Start, startCamera()'s own `camActive && return` guard would
+      // silently refuse to start a new session at all.
+      if(!streamRef.current){ setStartingSession(false); return; }
 
       setSessionId(sid);sessRef.current=Date.now();setCamActive(true);
       setStartingSession(false);
@@ -3674,6 +3703,20 @@ export default function App(){
   const[sessionResult,setSessionResult]=useState(null);
 
   async function stopCamera(){
+    // Reentrancy guard: this function isn't actually awaited end-to-end
+    // (the Firestore saveSession() call below is fire-and-forget via
+    // .then()/.catch(), not awaited) and isSavingSession — the only thing
+    // that disables the Stop button — is React state, set asynchronously
+    // by this same call. A rapid double-click, or Stop immediately
+    // followed by Back, could run this function twice before either of
+    // those catches up, and the second call would read the same
+    // not-yet-reset hist/avg/session data and fire a SECOND saveSession()
+    // for the same session — a duplicate Firestore doc and doubly-applied
+    // user stats. stoppingRef is a synchronous ref, reset at the start of
+    // the next beginScoring(), so it closes the race regardless of render
+    // timing.
+    if(stoppingRef.current) return;
+    stoppingRef.current = true;
     setIsSavingSession(true); // show saving state on stop button
     stopSpeaking(); // cut any in-flight voice-coach cue
     lmSmootherRef.current?.reset();
@@ -3937,14 +3980,21 @@ export default function App(){
   }
 
   function resumeSession(){
-    if(!camActive || !isPaused) return;
+    // Reentrancy guard: isPaused is React state, so a genuine double-click
+    // can fire this twice with both invocations still reading the same
+    // stale (pre-render) isPaused===true closure — each would then create
+    // its own setInterval + requestAnimationFrame(runLoop) below, and the
+    // second call's refs silently overwrite the first's without cancelling
+    // them, leaking an uncancellable duplicate timer/analysis loop that
+    // outlives the session. pausedAtRef is a ref (always current, no
+    // batching lag) and is cleared synchronously below, so checking —
+    // and clearing — it here is what actually closes the race.
+    if(!camActive || !pausedAtRef.current) return;
     // Shift the session's start timestamp forward by however long the
     // pause lasted, so sessionTime keeps counting from where it left off
     // instead of jumping ahead by the paused duration.
-    if(pausedAtRef.current){
-      sessRef.current += (Date.now() - pausedAtRef.current);
-      pausedAtRef.current = null;
-    }
+    sessRef.current += (Date.now() - pausedAtRef.current);
+    pausedAtRef.current = null;
     try{ vidRef.current?.play?.().catch(()=>{}); }catch{}
     setIsPaused(false);
     timerRef.current=setInterval(()=>{
@@ -5228,7 +5278,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Top issue */}
             {sessionResult.top_metric&&(
-              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,textAlign:"left"}}>
+              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,textAlign:isAr?"right":"left"}}>
                 <div style={{fontSize:11,color:"#D6A24C",fontWeight:700,marginBottom:3}}>
                   {isAr?"أبرز مشكلة":"Top issue to fix"}
                 </div>
@@ -5240,7 +5290,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Elite: worst-posture snapshots */}
             {sessionResult.worst_snapshots?.length>0&&(
-              <div style={{marginBottom:20,textAlign:"left"}}>
+              <div style={{marginBottom:20,textAlign:isAr?"right":"left"}}>
                 <div style={{fontSize:11,color:"#4FAE8E",fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
                   📸 {isAr?"أسوأ لحظات الجلسة":"Worst posture moments"}
                   <span style={{fontSize:8,background:"rgba(79,174,142,.12)",border:"1px solid rgba(79,174,142,.25)",borderRadius:99,padding:"1px 6px"}}>ELITE</span>
@@ -5273,7 +5323,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Improvement tip */}
             {sessionResult.improvement_tip && (
-              <div style={{background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.2)",borderRadius:10,padding:"10px 14px",marginBottom:12,textAlign:"left"}}>
+              <div style={{background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.2)",borderRadius:10,padding:"10px 14px",marginBottom:12,textAlign:isAr?"right":"left"}}>
                 <div style={{fontSize:10,color:"#818cf8",fontWeight:700,marginBottom:3}}>
                   💡 {isAr?"نصيحة للتحسين":"Improvement tip"}
                 </div>
@@ -5858,8 +5908,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {/* Paused — analysis + timer frozen, camera stays attached so
               resume is instant. Distinct from "Break now", which keeps the
               session running invisibly in the background; this actually
-              stops. */}
-          {camActive && isPaused && (
+              stops. Excludes backendDown: both are full-bleed CameraOverlay
+              instances with no mutual exclusion, so pausing during a real
+              backend outage used to stack "Session paused" directly on top
+              of "Can't reach the analysis server" — two scrims, two
+              messages, unreadable. The backend error (with its own Retry
+              action) takes priority while it's showing; this overlay
+              reappears as soon as backendDown clears, since isPaused is
+              untouched either way. */}
+          {camActive && isPaused && !backendDown && (
             <CameraOverlay align="center">
               <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(255,255,255,.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
                 <Icon name="pause" size={22} color="#fff"/>
@@ -6000,7 +6057,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Professional live metrics panel */}
         {analysis && score > 0 && (
           <div style={{
-            position:"absolute", top:10, right:10,
+            // Mirrors the persistent distance chip above (which correctly
+            // flips left:isAr?"auto":8 / right:isAr?8:"auto"). This panel
+            // was hardcoded right:10 in both languages — in Arabic that put
+            // it in the exact same top-right corner as the now-mirrored
+            // chip, overlapping its own "ERGONOMIC SCORE" header.
+            position:"absolute", top:10, left:isAr?10:"auto", right:isAr?"auto":10,
             background:"rgba(2,8,20,.55)", backdropFilter:"blur(8px)",
             border:"1px solid rgba(255,255,255,.08)", borderRadius:12,
             padding:"10px 14px", minWidth:160, zIndex:10,
@@ -6114,8 +6176,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               shows in the on-video panel header and in the left column ring.) */}
 
           {/* Big actionable correction cue — the single most useful "do this
-              now" instruction, shown over the video when a metric is clearly off. */}
-          {camActive && !previewPhase && (()=>{
+              now" instruction, shown over the video when a metric is clearly
+              off. Excludes isPaused: `analysis` isn't cleared on pause, so
+              without this the last cue stayed rendered — a second, stale
+              message layered right alongside the "Session paused" overlay. */}
+          {camActive && !previewPhase && !isPaused && (()=>{
             const cue=postureCue(analysis,isAr);
             if(!cue) return null;
             return (
