@@ -56,6 +56,7 @@ const LIVEUI_CSS = `
 @keyframes liveuiPop     { from{transform:scale(.85);opacity:0} to{transform:scale(1);opacity:1} }
 @keyframes liveuiPulse   { 0%{transform:scale(1);opacity:.45} 100%{transform:scale(1.9);opacity:0} }
 @keyframes liveuiSlideUp { from{transform:translateY(6px);opacity:0} to{transform:translateY(0);opacity:1} }
+@keyframes liveuiSpin    { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 .liveui-focusable:focus-visible { outline:2px solid #1a56db; outline-offset:2px; border-radius:6px; }
 `;
 let _liveuiCssInjected = false;
@@ -342,12 +343,19 @@ export function MetricRow({ label, value, unit, score, cs }) {
 // ─────────────────────────────────────────────────────────────────────────
 export function LiveHeader({
   isAr, cs, darkMode, onBack, onToggleDark, onToggleLang,
-  mpStatus, camActive, timeLabel, tierLabel,
+  mpStatus, camActive, timeLabel, tierLabel, aiCoachStatus,
   showUpgrade, onUpgrade, onOpenSettings,
 }) {
   const mpTone = mpStatus === "ready" ? "good" : mpStatus === "loading" ? "info" : mpStatus === "fallback" ? "warn" : "bad";
   const mpIcon = mpTone === "good" ? "checkCircle" : mpTone === "bad" ? "alertTriangle" : "infoCircle";
   const mpLabel = { ready: isAr ? "جاهز" : "Ready", loading: isAr ? "تحميل" : "Loading", fallback: isAr ? "احتياطي" : "Fallback", error: isAr ? "خطأ" : "Error" }[mpStatus] || mpStatus;
+  const coachTone = aiCoachStatus?.error ? "bad" : aiCoachStatus?.ready ? "good" : "info";
+  const coachIcon = aiCoachStatus?.error ? "alertTriangle" : aiCoachStatus?.ready ? "checkCircle" : "infoCircle";
+  const coachLabel = aiCoachStatus?.ready
+    ? (isAr ? "المدرب ✓" : "Coach ✓")
+    : aiCoachStatus?.loading
+    ? (isAr ? `المدرب ${aiCoachStatus.progress}%` : `Coach ${aiCoachStatus.progress}%`)
+    : (isAr ? "المدرب..." : "Coach…");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 12, borderBottom: `1px solid ${cs.border}`, marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -360,6 +368,10 @@ export function LiveHeader({
             {tierLabel && <div style={{ fontSize: LT.font.xs, color: cs.muted, fontWeight: 600, marginTop: 1 }}>{tierLabel}</div>}
           </div>
         </div>
+        {/* Only 2 icon controls now (theme, language) — a 3rd "settings" gear
+            here duplicated the "Session settings" toggle already lower on
+            the page, and at header size read as a near-twin of the theme
+            sun icon (both circle+rays), confusing rather than useful. */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           {showUpgrade && <Btn size="sm" variant="secondary" icon="star" onClick={onUpgrade} cs={cs}>{isAr ? "ترقية" : "Upgrade"}</Btn>}
           <IconBtn name={darkMode ? "sun" : "moon"} label={isAr ? "تبديل السمة" : "Toggle theme"} onClick={onToggleDark} cs={cs} />
@@ -367,8 +379,11 @@ export function LiveHeader({
           {onOpenSettings && <IconBtn name="settings" label={isAr ? "الإعدادات" : "Settings"} onClick={onOpenSettings} cs={cs} />}
         </div>
       </div>
+      {/* One status row, not two stacked ones — pose-detection and AI-coach
+          readiness are related facts a user reads together at a glance. */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         <StatusPill icon={mpIcon} label={`${isAr ? "الذكاء الاصطناعي" : "AI"}: ${mpLabel}`} tone={mpTone} cs={cs} pulse={mpStatus === "loading"} />
+        {aiCoachStatus && <StatusPill icon={coachIcon} label={coachLabel} tone={coachTone} cs={cs} pulse={!aiCoachStatus.ready && !aiCoachStatus.error} />}
         {camActive && <StatusPill icon="clock" label={timeLabel} tone="neutral" cs={cs} />}
       </div>
     </div>
@@ -496,6 +511,25 @@ export function CountdownRing({ n, size = 92 }) {
       animation: `liveuiPop ${LT.duration.base}ms ease`,
     }}>
       <span style={{ fontSize: 38, fontWeight: 800, color: "#fff" }}>{n}</span>
+    </div>
+  );
+}
+
+// Shown for the brief (usually well under a second, capped ~1.2s) window
+// between the 3-2-1 countdown finishing and the session actually going
+// live — without this, that gap read as the page freezing/breaking.
+export function StartingRing({ size = 92, label }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+      <div style={{
+        width: size, height: size, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+        background: alpha(LT.color.info, 0.16), border: `2px solid ${alpha(LT.color.info, 0.45)}`,
+      }}>
+        <div style={{ width: size * 0.42, height: size * 0.42, animation: "liveuiSpin 900ms linear infinite" }}>
+          <Icon name="refresh" size={size * 0.42} color="#fff" strokeWidth={2.25} />
+        </div>
+      </div>
+      {label && <div style={{ fontSize: LT.font.sm, fontWeight: 700, color: "#fff" }}>{label}</div>}
     </div>
   );
 }
