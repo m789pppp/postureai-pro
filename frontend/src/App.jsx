@@ -3784,6 +3784,13 @@ export default function App(){
     })() : 0;
     const dur  = sessRef.current ? Math.floor((Date.now()-sessRef.current)/1000) : 0;
     const gPct = totalRef.current ? Math.round(goodRef.current/totalRef.current*100) : 0;
+    // session_fatigue/confidence_val are meta/diagnostic fields the engine
+    // attaches to every metrics object, not real posture metrics — without
+    // this exclusion they could get picked as the session's "top issue to
+    // fix" (e.g. "Detection Confidence — score 62/100"), which is
+    // meaningless and unfixable feedback to show right after a session.
+    const NON_POSTURAL_METRICS = new Set(["session_fatigue","confidence_val"]);
+    const _realMetricEntries = la.metrics ? Object.entries(la.metrics).filter(([k])=>!NON_POSTURAL_METRICS.has(k)) : [];
 
     const result={
       avg_score:avg,
@@ -3791,9 +3798,9 @@ export default function App(){
       good_pct:gPct,
       alerts_count:acRef.current?.total||0,
       frames:totalRef.current||0,
-      top_metric: la.metrics ? Object.entries(la.metrics)
+      top_metric: _realMetricEntries
         .filter(([,v])=>v.score<75)
-        .sort(([,a],[,b])=>a.score-b.score)[0] : null,
+        .sort(([,a],[,b])=>a.score-b.score)[0] || null,
       grade: avg>=85?"Excellent":avg>=70?"Good":avg>=55?"Fair":"Needs work",
       gradeAr: avg>=85?"ممتاز":avg>=70?"جيد":avg>=55?"مقبول":"يحتاج تحسين",
       color: avg>=75?"#4FAE8E":avg>=50?"#D6A24C":"#C6604F",
@@ -3809,7 +3816,7 @@ export default function App(){
       // Improvement tip for worst metric — specific with actual angles/values
       improvement_tip: (()=>{
         if(!la.metrics) return isAr?"خذ استراحة وضعية كل 30 دقيقة.":"Take a posture break every 30 minutes.";
-        const worst=Object.entries(la.metrics).filter(([,v])=>v.score<75).sort(([,a],[,b])=>a.score-b.score)[0];
+        const worst=_realMetricEntries.filter(([,v])=>v.score<75).sort(([,a],[,b])=>a.score-b.score)[0];
         if(!worst) return isAr?"وضعيتك ممتازة! استمر.":"Great posture! Keep it up.";
         const [key, m] = worst;
         const val = m.value != null ? Math.round(m.value*10)/10 : null;
@@ -4256,7 +4263,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         try {
           const { geminiAnalysis } = await import("./gemini.js");
           const topMetrics = Object.entries(la.metrics||{})
-            .filter(([,v])=>v?.score!==undefined)
+            .filter(([k,v])=>v?.score!==undefined && !["session_fatigue","confidence_val"].includes(k))
             .sort(([,a],[,b])=>(a.score??100)-(b.score??100))
             .slice(0,3)
             .map(([k,v])=>`${k}: score ${Math.round(v.score)}, value ${v.value}${v.unit||""}`)
