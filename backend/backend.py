@@ -411,6 +411,56 @@ def call_gemini(messages, max_tokens=600, temperature=0.5):
             return None
     return None
 
+def call_gemini_vision(image_b64_list, prompt, system_instruction=None, max_tokens=500, temperature=0.4):
+    """Multimodal Gemini call — text + up to a few images. Used for the
+    Elite-only AI visual review of a session's already-captured, already
+    face-blurred "worst moment" snapshots (see App.jsx's worstSnapsRef —
+    those are already privacy-reduced: 320px wide, JPEG quality 0.6, face
+    always blurred regardless of the live "blur face" toggle).
+
+    Vision has no fallback in this codebase — Groq's free-tier text models
+    used here don't do vision, and LLM7's anonymous access is dead (see
+    llm_proxy's own comments). Callers should treat a None return as
+    "skip this feature for now", not retry with a different provider."""
+    client = _get_gemini_client()
+    if not client:
+        return None
+    from google.genai import types
+    parts = [prompt]
+    for b64 in (image_b64_list or [])[:4]:  # hard cap regardless of caller
+        try:
+            if "," in b64:
+                b64 = b64.split(",", 1)[1]
+            img_bytes = base64.b64decode(b64)
+        except Exception:
+            continue
+        if not img_bytes:
+            continue
+        parts.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
+    if len(parts) < 2:
+        return None  # no valid images decoded
+    for model in (GEMINI_MODEL, GEMINI_MODEL_FAST):
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=parts,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                ),
+            )
+            text = (getattr(resp, "text", None) or "").strip()
+            if text:
+                return text
+        except Exception as e:
+            _msg = str(e).lower()
+            if "429" in _msg or "quota" in _msg or "resource_exhausted" in _msg:
+                continue
+            print(f"[gemini-vision] call failed (model={model}): {e}", file=sys.stderr)
+            return None
+    return None
+
 def call_groq(messages, max_tokens=600, temperature=0.5):
     """Call Groq API — free tier (14,400 req/day). Server-side only.
 
@@ -16545,6 +16595,68 @@ def llm_proxy():
         resp.headers["Access-Control-Allow-Origin"] = "*"
         return resp, 503
 
+    except Exception as e:
+        return safe_error(e)
+
+
+@app.route("/api/vision/posture-review", methods=["POST"])
+@require_auth
+@require_tier("elite")
+@limiter.limit("10 per minute")
+def vision_posture_review():
+    """Elite-only: a genuine Gemini VISION reading of a session's already-
+    captured "worst moment" snapshots (App.jsx's worstSnapsRef — up to 3
+    per session, already 320px/JPEG-q0.6, face always blurred regardless
+    of the live privacy toggle — see the capture site's own comment for
+    why). This is a qualitative add-on next to the deterministic MediaPipe
+    score, not a replacement for it: joint-angle geometry is exact and a
+    vision LLM is not a more "accurate" way to measure an angle, but it
+    can describe what a fixed threshold can't — the actual character of a
+    slouch, visible desk/chair context, whether the same issue reads the
+    same way across the 3 moments, etc.
+
+    No fallback chain: Groq's free-tier text models don't do vision here,
+    and LLM7 anonymous access is dead. A None/failed call just means the
+    frontend omits this section — same "skip, don't show broken filler"
+    contract as the Posture DNA AI narrative (see pdfReports.js's
+    _dnaAINarrative / localAI.js's backendAnalysisOnly)."""
+    try:
+        data   = request.get_json(force=True) or {}
+        images = data.get("images") or []
+        if not isinstance(images, list) or not images:
+            return jsonify({"ok": False, "error": "images required"}), 400
+        images = [str(i) for i in images if i][:3]
+        lang   = "ar" if data.get("lang") == "ar" else "en"
+
+        lang_line = ("Respond ENTIRELY in Egyptian Arabic (عامية مصرية)."
+                     if lang == "ar" else
+                     "Respond in clear, professional English.")
+        system_instruction = (
+            "You are a senior physiotherapist giving a brief visual read of a "
+            "handful of low-resolution, deliberately face-blurred posture "
+            "snapshots from a tracking app — these were auto-captured at the "
+            "worst-scoring moments of one session, for a paying Elite-tier "
+            "user, as a qualitative companion to a separate precise numeric "
+            "angle-based score (do not attempt to estimate angles/degrees "
+            "yourself — you don't have the resolution for that; the numeric "
+            "score already covers it). Focus on what a photo can show that "
+            "numbers can't: the visible character of the posture (e.g. "
+            "rounded shoulders, forward head, leaning to one side), anything "
+            "about the visible setup (monitor height, chair, desk) that "
+            "looks relevant, and whether the same issue repeats across the "
+            "images. 80-120 words, confident and specific, no bullet points, "
+            "no medical-diagnosis language, no disclaimer (shown elsewhere). "
+            + lang_line
+        )
+        prompt = (
+            f"{len(images)} worst-moment snapshot(s) from one posture-tracking "
+            "session, in chronological order. Give your visual read."
+        )
+
+        text = call_gemini_vision(images, prompt, system_instruction=system_instruction, max_tokens=400)
+        if not text:
+            return jsonify({"ok": False, "error": "vision analysis unavailable"}), 503
+        return jsonify({"ok": True, "text": text})
     except Exception as e:
         return safe_error(e)
 

@@ -1165,6 +1165,11 @@ async function _downloadSessionPdf(kind, session, allSessions, profile, isAr, ad
 }
 
 export function SessionDetailModal({ session, allSessions = [], profile, cs, isAr = false, addToast, onClose }) {
+  // Hooks must run unconditionally (before the `if (!session)` early
+  // return below), even though this state is only ever used once a
+  // session exists.
+  const [visionText, setVisionText]       = useState(null);
+  const [visionLoading, setVisionLoading] = useState(false);
   if (!session) return null;
   const labels = isAr ? _SESSION_METRIC_LABELS_AR : _SESSION_METRIC_LABELS;
   const metrics = session.metrics || {};
@@ -1245,6 +1250,48 @@ export function SessionDetailModal({ session, allSessions = [], profile, cs, isA
               </div>
             ))}
           </div>
+
+          {/* Elite: on-demand Gemini Vision read of the snapshots above —
+              a qualitative companion to the numeric score, not a redo of
+              it (see backend's vision_posture_review docstring). On-demand
+              rather than automatic: a vision call is slower/heavier than
+              the app's text-only AI features, so it shouldn't fire just
+              from opening this modal. */}
+          {!visionText && !visionLoading && (
+            <button
+              onClick={async () => {
+                setVisionLoading(true);
+                try {
+                  const { AIAPI } = await import("../services/api.js");
+                  const r = await AIAPI.visionReview(session.worst_snapshots.map(s => s.img), isAr ? "ar" : "en");
+                  if (r?.ok && r?.text) setVisionText(r.text);
+                  else addToast?.(isAr ? "التحليل البصري مش متاح دلوقتي" : "Visual analysis isn't available right now", "warn");
+                } catch {
+                  addToast?.(isAr ? "التحليل البصري مش متاح دلوقتي" : "Visual analysis isn't available right now", "warn");
+                } finally {
+                  setVisionLoading(false);
+                }
+              }}
+              style={{ marginTop: 10, padding: "8px 14px", borderRadius: 8,
+                border: `0.5px solid ${cs.border}`, background: "transparent",
+                color: cs.text, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>
+              🔍 {isAr ? "تحليل بصري بالذكاء الاصطناعي" : "AI Visual Analysis"}
+            </button>
+          )}
+          {visionLoading && (
+            <div style={{ marginTop: 10, fontSize: 11.5, color: UI_TOKENS.muted }}>
+              {isAr ? "جاري التحليل..." : "Analyzing..."}
+            </div>
+          )}
+          {visionText && (
+            <div style={{ marginTop: 10, padding: "12px 14px", borderRadius: 10,
+              background: "rgba(99,102,241,.06)", border: "1px solid rgba(99,102,241,.15)" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#a5b4fc", marginBottom: 4 }}>
+                🔍 {isAr ? "تحليل بصري — Gemini" : "AI Visual Analysis — Gemini"}
+              </div>
+              <div style={{ fontSize: 12, color: cs.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{visionText}</div>
+            </div>
+          )}
         </div>}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>

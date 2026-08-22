@@ -180,6 +180,12 @@ export const AIAPI = {
   // ─────────────────────────────────────────────────────────────
   coach:   (data) => apiFetch("/coach/chat",  { method: "POST", body: data, timeout: 30000 }),
   insight: (data) => apiFetch("/ai/insight",  { method: "POST", body: data, timeout: 30000 }),
+  /** Elite: Gemini Vision read of a session's worst-moment snapshots
+   *  (already face-blurred data-URL strings, max 3). 503 {ok:false} means
+   *  vision genuinely unavailable right now — callers should just hide
+   *  the section, not show an error, same contract as the rest of this
+   *  app's "real AI or nothing" features. */
+  visionReview: (images, lang) => apiFetch("/vision/posture-review", { method: "POST", body: { images, lang }, timeout: 30000 }),
 };
 
 // ── Payment API ────────────────────────────────────────────────────
