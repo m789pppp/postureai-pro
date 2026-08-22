@@ -450,7 +450,7 @@ function KpiBox({ label, value, sub, color, icon, trend, accent }) {
   return (
     <div style={{ position:"fixed", inset:0, zIndex:2000, overflowY:"auto",
       background:TOKENS.bg, color:TOKENS.text,
-      fontFamily:"'DM Sans',system-ui,sans-serif", direction:isAr?"rtl":"ltr" }}>
+      fontFamily:"'IBM Plex Sans Arabic','DM Sans',system-ui,sans-serif", direction:isAr?"rtl":"ltr" }}>
       <style>{GLOBAL_CSS}</style>
 
       {/* HEADER */}

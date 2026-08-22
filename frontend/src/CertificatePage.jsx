@@ -179,7 +179,7 @@ export function CertVerifyPage({ certId: propCertId }) {
   const icon  = valid ? "✅" : "❌";
 
   return (
-    <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div style={{minHeight:"100dvh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'IBM Plex Sans Arabic',system-ui,sans-serif"}}>
       <div style={{maxWidth:480,width:"100%",background:cs.card,border:`1px solid ${valid?"rgba(16,185,129,.3)":"rgba(239,68,68,.3)"}`,borderRadius:20,padding:36,textAlign:"center"}}>
 
         {/* Corvus header */}
@@ -313,7 +313,7 @@ export function CertBadgeModal({ profile, cs, isAr, onClose, addToast }) {
   const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:9999,
     display:"flex",alignItems:"center",justifyContent:"center",padding:16 };
   const modal = { background:cs.card,border:`1px solid ${cs.border}`,borderRadius:20,
-    padding:32,maxWidth:460,width:"100%",fontFamily:"system-ui,sans-serif" };
+    padding:32,maxWidth:460,width:"100%",fontFamily:"'IBM Plex Sans Arabic',system-ui,sans-serif" };
 
   return (
     <div style={overlay} onClick={e=>{if(e.target===e.currentTarget)onClose?.()}}>

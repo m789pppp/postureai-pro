@@ -259,7 +259,7 @@ function Btn({children,onClick,variant="primary",size="base",disabled=false,icon
       onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       style={{display:"inline-flex",alignItems:"center",gap:6,padding:pads[size],
         fontSize:fss[size],fontWeight:700,borderRadius:9,cursor:disabled?"not-allowed":"pointer",
-        opacity:disabled?.45:1,fontFamily:"'DM Sans',system-ui,sans-serif",
+        opacity:disabled?.45:1,fontFamily:"'IBM Plex Sans Arabic','DM Sans',system-ui,sans-serif",
         whiteSpace:"nowrap",transition:`all 200ms ${SPRING}`,
         transform:hov&&!disabled?"translateY(-1px)":"none",
         background:v.bg,color:v.c,border:v.border,boxShadow:v.shadow||"none",
@@ -280,7 +280,7 @@ function Input({label,value,onChange,placeholder,type="text",hint,error,mono=fal
         style={{width:"100%",padding:"9px 13px",background:RBAC_TOKENS.surf,
           border:`1.5px solid ${error?RBAC_TOKENS.red:foc?RBAC_TOKENS.blue:RBAC_TOKENS.border}`,
           borderRadius:9,color:RBAC_TOKENS.text,fontSize:12,outline:"none",
-          fontFamily:mono?"'DM Mono',monospace":"'DM Sans',system-ui,sans-serif",
+          fontFamily:mono?"'DM Mono',monospace":"'IBM Plex Sans Arabic','DM Sans',system-ui,sans-serif",
           boxShadow:foc?(error?`0 0 0 3px rgba(239,68,68,.12)`:`0 0 0 3px rgba(26,86,219,.12)`):"none",
           transition:`border-color 150ms, box-shadow 150ms`}}/>
       {(hint||error)&&<div style={{fontSize:10,color:error?RBAC_TOKENS.red:RBAC_TOKENS.muted,marginTop:4,fontWeight:500}}>{error||hint}</div>}

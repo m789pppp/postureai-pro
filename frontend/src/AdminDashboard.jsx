@@ -157,7 +157,7 @@ function Input({ value, onChange, placeholder, style, type = "text" }) {
         padding: "8px 14px",
         fontSize: 12, color: TOKENS.text,
         outline: "none", transition: "border-color .15s",
-        fontFamily: "DM Sans, system-ui, sans-serif",
+        fontFamily: "'IBM Plex Sans Arabic', DM Sans, system-ui, sans-serif",
         ...style,
       }}
       onFocus={e => e.target.style.borderColor = TOKENS.blue}
@@ -438,7 +438,7 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack,
     <div style={{
       minHeight:"100dvh",
       background:TOKENS.bg,
-      fontFamily:"'DM Sans', system-ui, sans-serif",
+      fontFamily:"'IBM Plex Sans Arabic', 'DM Sans', system-ui, sans-serif",
       color:TOKENS.text,
       direction: isAr ? "rtl" : "ltr",
       display:"flex",

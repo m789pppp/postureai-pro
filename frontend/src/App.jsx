@@ -254,8 +254,21 @@ const PAY_METHODS = [
 // HR_EMAILS — list of emails with HR admin access
 const HR_EMAILS = [];
 
-const DARK  = {bg:"#030b14",card:"#05101f",card2:"#080f1e",border:"rgba(148,163,184,.1)",text:"#f0f4f8",muted:"#7b8aa3",blue:"#1a56db",inp:"rgba(148,163,184,.08)",inpB:"rgba(148,163,184,.15)"};
-const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,139,.15)",text:"#0f172a",muted:"#5b6b80",blue:"#1a56db",inp:"rgba(100,116,139,.07)",inpB:"rgba(100,116,139,.2)"};
+// textDim and red: used in 11 files (MFASetup, WhiteLabel, APIMarketplace,
+// MultiTenantManager, EnterpriseAdminTools, IntegrationsHub,
+// ReferralProgram, AccountActivity, APIChangelog, and here in App.jsx)
+// as `cs.textDim`/`cs.red` — neither key ever existed here, so every one
+// of those was `color: undefined`, silently dropped by React and falling
+// back to inherited text color in both themes, not just light mode.
+// textDim's real usage everywhere is identical to `muted` (de-emphasized
+// secondary text), so it's aliased to the same value per theme rather
+// than introducing a new, unreviewed shade. red is a dedicated error/
+// danger accent (currently only App.jsx:1675's coupon-error input
+// border) — not aliased to the existing #f87171 danger-text color used
+// elsewhere in this file, since a 0.5px border needs more contrast than
+// text does, especially against LIGHT's white card background.
+const DARK  = {bg:"#030b14",card:"#05101f",card2:"#080f1e",border:"rgba(148,163,184,.1)",text:"#f0f4f8",muted:"#7b8aa3",textDim:"#7b8aa3",red:"#ef4444",blue:"#1a56db",inp:"rgba(148,163,184,.08)",inpB:"rgba(148,163,184,.15)"};
+const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,139,.15)",text:"#0f172a",muted:"#5b6b80",textDim:"#5b6b80",red:"#dc2626",blue:"#1a56db",inp:"rgba(100,116,139,.07)",inpB:"rgba(100,116,139,.2)"};
 
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -870,7 +883,7 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
   }
 
   return(
-    <div dir={dir} style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div dir={dir} style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif"}}>
       <div style={{width:"100%",maxWidth:400}}>
 
         {/* Controls */}
@@ -983,7 +996,7 @@ function Waiting({paymentId,payMethod,amount,tier,refCode,onSuccess,cs,t}){
   const[status,setStatus]=useState("pending"),[payData,setPayData]=useState(null);
   useEffect(()=>{const unsub=listenToPayment(paymentId,d=>{setPayData(d);if(d.status==="confirmed"){setStatus("confirmed");onSuccess();}else if(d.status==="rejected")setStatus("rejected");});return unsub;},[paymentId]);
   const pm=PAY_METHODS.find(p=>p.id===payMethod),tierInfo=TIERS[tier];
-  return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+  return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif"}}>
     <div style={{maxWidth:480,width:"100%"}}>
       {status==="confirmed"?(<div style={{background:cs.card,border:"0.5px solid rgba(79,174,142,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
         <div style={{fontSize:52,marginBottom:12}}>✅</div>
@@ -1049,7 +1062,7 @@ function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
     }catch{addToast(isAr?"خطأ في الحفظ":"Error saving","error");}
     setSaving(false);
   }
-  return <div style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div style={{minHeight:"100vh",background:cs.bg,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:700,margin:"0 auto",padding:"26px 18px 52px"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:24}}>
         <button onClick={onBack} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
@@ -1128,7 +1141,7 @@ function PaymentResultScreen({result, cs, lang, onContinue}){
   const isAr=lang==="ar";
   const isSuccess=result==="success";
   return(
-    <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui,sans-serif"}}>
+    <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif"}}>
       <div style={{maxWidth:460,width:"100%",textAlign:"center"}}>
         <div style={{
           width:72,height:72,borderRadius:"50%",margin:"0 auto 20px",
@@ -1224,7 +1237,7 @@ function Leaderboard({users,cs,t,onBack,lang}){
   const filtered=users.filter(u=>deptFilter==="all"||(u.department||u.company||"")=== deptFilter);
   const sorted=[...filtered].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
   const medals=["🥇","🥈","🥉"];
-  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:700,margin:"0 auto",padding:"24px 17px 52px"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:18,flexDirection:isAr?"row-reverse":"row"}}>
         <button onClick={onBack} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
@@ -1342,7 +1355,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
     }).reduce((a,p)=>a+(p.amount||0),0)};
   });
 
-  return <div style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif"}}>
+  return <div style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif"}}>
     {modal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}}>
       <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:14,padding:22,width:340}}>
         <div style={{fontSize:14,fontWeight:700,marginBottom:11}}>{isAr?"رفض الدفعة":"Reject Payment"}</div>
@@ -1563,7 +1576,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
   if(step==="waiting")return <Waiting paymentId={paymentId} payMethod={payMethod} amount={price}
     tier={selTier} refCode={""} onSuccess={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");onPaid();}} cs={cs} t={t}/>;
 
-  if(step==="kashier")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"system-ui,sans-serif"}}>
+  if(step==="kashier")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif"}}>
     <div style={{padding:"12px 18px",borderBottom:"0.5px solid "+cs.border,display:"flex",alignItems:"center",gap:11,background:cs.card}}>
       <button aria-label="Go back" onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{"← "}{isAr?"رجوع":"Back"}</button>
       <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{"🔒 "}{isAr?"دفع آمن عبر Kashier":"Secure payment via Kashier"}{" — "}{price?.toLocaleString()}{" EGP"}</div>
@@ -1571,7 +1584,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
     <iframe src={kashierUrl} style={{flex:1,border:"none",width:"100%"}} title="Kashier Checkout"/>
   </div>;
 
-  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"system-ui,sans-serif",overflowY:"auto"}}>
+  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif",overflowY:"auto"}}>
     <div style={{maxWidth:880,margin:"0 auto",padding:"24px 17px 52px"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:20,flexDirection:isAr?"row-reverse":"row"}}>
@@ -1873,7 +1886,7 @@ function UpgradePrompt({cs,t,reason,onUpgrade,onDismiss,onClose,lang}){
 function AccountTypeSelect({cs,t,lang,onSelect}){
   const isAr=lang==="ar";
   const dir=isAr?"rtl":"ltr";
-  return <div dir={dir} style={{position:"fixed",inset:0,background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,fontFamily:"system-ui,sans-serif",padding:24}}>
+  return <div dir={dir} style={{position:"fixed",inset:0,background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif",padding:24}}>
     <div style={{maxWidth:480,width:"100%"}}>
       <div style={{textAlign:"center",marginBottom:32}}>
         <div style={{width:52,height:52,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 14px"}}>◈</div>
@@ -4404,7 +4417,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       background: darkMode ? "#040d1a" : "#f8fafc",
       display:"flex", flexDirection:"column",
       alignItems:"center", justifyContent:"center",
-      fontFamily:"'DM Sans',system-ui,-apple-system,sans-serif",
+      fontFamily:"'IBM Plex Sans Arabic','DM Sans',system-ui,-apple-system,sans-serif",
     }}>
       <style>{`
         @keyframes splash-in  { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
@@ -4655,7 +4668,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <div style={{
       minHeight:"100vh",background:"#0d1a2e",
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-      gap:16,fontFamily:"'Inter',system-ui,sans-serif",
+      gap:16,fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui,sans-serif",
     }}>
       <div style={{
         width:48,height:48,borderRadius:13,
@@ -4782,7 +4795,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── SETUP SCREEN: account type + device selection ─────────────────
   if(page==="setup"){
     return(<ErrorBoundary>
-      <div dir={dir} style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"system-ui,sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
+      <div dir={dir} style={{minHeight:"100vh",background:cs.bg,color:cs.text,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
         <Toasts toasts={toasts} dismiss={dismissToast} isAr={isAr}/>
         {/* Lang + Dark toggle */}
         <div style={{position:"absolute",top:16,right:16,display:"flex",gap:7}}>
@@ -5354,7 +5367,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       alignItems: isMobile ? undefined : "start",
       minHeight:"100vh",
       background:cs.bg, color:cs.text,
-      fontFamily:"'Inter',system-ui,sans-serif",
+      fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui,sans-serif",
     }}>
 
       {/* ── GlobalModals: render on ALL pages ──────────────────── */}

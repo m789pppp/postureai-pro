@@ -323,7 +323,7 @@ export function BillingDashboard({ profile, user, payments:initialPayments=[], i
 
   return (
     <div style={{ minHeight:"100dvh", background:TOKENS.bg, color:TOKENS.text,
-      fontFamily:"'DM Sans',system-ui,sans-serif",
+      fontFamily:"'IBM Plex Sans Arabic','DM Sans',system-ui,sans-serif",
       direction:isAr_?"rtl":"ltr" }}>
       <style>{GLOBAL_CSS}</style>
 

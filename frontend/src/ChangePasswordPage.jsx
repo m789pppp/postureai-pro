@@ -100,7 +100,7 @@ export default function ChangePasswordPage({ darkMode, lang, onClose }) {
       position:"fixed",inset:0,zIndex:1000,
       display:"flex",alignItems:"center",justifyContent:"center",
       background:"rgba(0,0,0,.6)",backdropFilter:"blur(8px)",
-      padding:16,fontFamily:"'Inter',system-ui,sans-serif",
+      padding:16,fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui,sans-serif",
       direction:isAr?"rtl":"ltr",
     }} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{
