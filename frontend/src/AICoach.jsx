@@ -45,12 +45,23 @@ function mkT(cs) {
 const T = T_DARK; // module-level fallback (overridden inside component)
 
 // ── Markdown renderer ─────────────────────────────────────────────
+// Table support: previously any line starting with "|" (a markdown
+// table row — common in the clinical/comparison content the Gemini/Groq
+// backend now actually returns, now that it's reachable at all — see
+// backend.py's Groq fallback fix) fell straight into the generic
+// "else" branch below and rendered as one raw line of literal pipe
+// characters per row, no columns/borders — every AI table in this chat
+// came out as unreadable "| Metric | Value |" text. AIInsights.jsx's
+// MdText already handles this correctly (collect consecutive "|" lines,
+// drop the "---" separator row, render a real <table>); mirrored that
+// same approach here rather than inventing a second implementation.
 function renderMd(raw) {
   if (!raw) return "";
   let t = raw.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   const lines = t.split("\n");
   const out = [];
-  for (const l of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
     if (/^## (.+)$/.test(l))
       out.push(`<div style="font-size:13px;font-weight:700;color:#79c0ff;margin:14px 0 5px;letter-spacing:-.01em;border-bottom:0.5px solid rgba(56,139,253,.15);padding-bottom:5px">${l.replace(/^## /,"")}</div>`);
     else if (/^### (.+)$/.test(l))
@@ -61,6 +72,27 @@ function renderMd(raw) {
     }
     else if (/^[-•▸] (.+)$/.test(l)) {
       out.push(`<div style="display:flex;gap:8px;margin:3px 0;align-items:baseline"><span style="color:#39d353;font-size:9px;flex-shrink:0;margin-top:4px">●</span><span style="font-size:13px">${inl(l.replace(/^[-•▸] /,""))}</span></div>`);
+    }
+    else if (l.trim().startsWith("|")) {
+      // Table — collect every consecutive "|" line, then render as <table>.
+      const tableLines = [l.trim()];
+      while (i + 1 < lines.length && lines[i+1].trim().startsWith("|")) {
+        i++; tableLines.push(lines[i].trim());
+      }
+      // Drop markdown's "|---|---|" separator row.
+      const rows = tableLines.filter(r => !/^[|\s-]+$/.test(r));
+      if (rows.length >= 2) {
+        const cellsOf = r => r.split("|").filter((_,j,a)=>j>0&&j<a.length-1).map(c=>c.trim());
+        const headers = cellsOf(rows[0]);
+        const body    = rows.slice(1);
+        out.push(`<div style="overflow-x:auto;margin:10px 0"><table style="width:100%;border-collapse:collapse;font-size:12.5px">`
+          + `<thead><tr>${headers.map(h=>`<th style="padding:7px 11px;text-align:left;background:rgba(56,139,253,.1);color:#79c0ff;font-weight:600;border-bottom:1px solid rgba(56,139,253,.2)">${inl(h)}</th>`).join("")}</tr></thead>`
+          + `<tbody>${body.map((r,ri)=>`<tr style="background:${ri%2===0?"rgba(255,255,255,.02)":"transparent"}">${cellsOf(r).map(c=>`<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.05)">${inl(c)}</td>`).join("")}</tr>`).join("")}</tbody>`
+          + `</table></div>`);
+      } else {
+        // Not a real table (e.g. a single "|" line) — fall back to plain text.
+        out.push(`<span style="font-size:13px">${inl(l)}</span><br/>`);
+      }
     }
     else if (l.startsWith("⚕️") || l.startsWith("⚠️"))
       out.push(`<div style="background:rgba(248,81,73,.07);border:0.5px solid rgba(248,81,73,.2);border-radius:8px;padding:8px 11px;margin:9px 0;font-size:12.5px;line-height:1.6">${inl(l)}</div>`);
