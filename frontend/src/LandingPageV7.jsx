@@ -1855,12 +1855,26 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                         <>
                           <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
                             <span style={{ fontSize:40, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
-                              ${p.priceUSD[billing] ?? p.priceUSD.monthly ?? "—"}
+                              {/* Was `p.priceUSD[billing]` — for "yearly" that indexed the stored
+                                  ANNUAL TOTAL (e.g. $95.9), rendered straight under a hardcoded
+                                  "/mo" label, so switching to Yearly made the price jump ~10x
+                                  instead of showing the ~20%-cheaper monthly-equivalent. Mirrors
+                                  the EGP branch just above, which already divided by 12 correctly. */}
+                              ${billing==="monthly"
+                                ? (p.priceUSD.monthly ?? 0)
+                                : p.priceUSD.yearly
+                                  ? +(p.priceUSD.yearly/12).toFixed(2)
+                                  : (p.priceUSD.monthly ?? "—")}
                             </span>
                             <span style={{ fontSize:14.5, color:LPV7_TOKENS.muted }}>
                               {p.perUser ? (ar ? "/مستخدم/شهر" : "/user/mo") : (ar ? "/شهر" : "/mo")}
                             </span>
                           </div>
+                          {billing==="yearly" && p.priceUSD.yearly && (
+                            <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginTop:6, fontFamily:FONT_MONO }}>
+                              ${p.priceUSD.yearly} {ar?"سنوياً":"billed yearly"}
+                            </div>
+                          )}
                           {p.priceEGP.yearly || p.priceEGP.monthly ? (
                             <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginTop:6, fontFamily:FONT_MONO }}>
                               ≈ {billing==="monthly" || !p.priceEGP.yearly
