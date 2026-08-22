@@ -104,8 +104,28 @@ function renderMd(raw) {
   return out.join("");
 }
 
+// Links: matches either markdown [text](url) or a bare http(s) URL in one
+// pass (alternation), so a URL already captured as the markdown form never
+// gets re-matched by the bare-URL branch. Previously there was no link
+// handling at all — a URL just passed through as plain text, unclickable.
+function linkify(t) {
+  return t.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"']+)/g,
+    (m, mdText, mdUrl, bareUrl) => {
+      if (mdUrl) return `<a href="${mdUrl}" target="_blank" rel="noopener noreferrer" style="color:#58a6ff;text-decoration:underline">${mdText}</a>`;
+      // Trailing punctuation (., , ; : ! ? or a closing paren) after a bare
+      // URL is almost always sentence punctuation, not part of the link —
+      // strip it from the href/label and put it back after the tag.
+      let url = bareUrl, trail = "";
+      const tm = url.match(/([.,;:!?)]+)$/);
+      if (tm) { trail = tm[1]; url = url.slice(0, -trail.length); }
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#58a6ff;text-decoration:underline">${url}</a>${trail}`;
+    }
+  );
+}
+
 function inl(t) {
-  return t
+  return linkify(t)
     .replace(/\*\*(.+?)\*\*/g,"<strong style='color:#e6edf3;font-weight:600'>$1</strong>")
     .replace(/\*(.+?)\*/g,"<em style='color:#8b949e'>$1</em>")
     .replace(/`(.+?)`/g,"<code style='background:rgba(56,139,253,.12);padding:1px 5px;border-radius:4px;font-size:.88em;font-family:\"SF Mono\",monospace;color:#79c0ff'>$1</code>");
