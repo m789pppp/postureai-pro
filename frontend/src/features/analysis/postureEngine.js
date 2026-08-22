@@ -76,6 +76,12 @@ const THR = {
   ROUNDED:     { ok: 10, bad: 22  },  // was ok:8 — raised to reduce false positives for natural posture
   ELBOW:       { ok: 15, bad: 30  },  // deviation from 95° ideal
   MONITOR_PITCH:{ ok: 5, bad: 18  },  // head pitch degrees
+  // Dedicated shoulder-shrug/tension metric — see analyzeShoulderElevation()
+  // for why this needed its own scale separate from ROUNDED. Units: % of
+  // shoulder-width the shoulders have risen above the user's neutral rest
+  // position. ok=3 (~1.2cm rise at typical desk distance, ignorable) →
+  // bad=10 (~4cm rise, a real deliberate shrug) crosses into the red zone.
+  SHOULDER_ELEV:{ ok: 3,  bad: 10  },
 
   // Side camera
   NECK_SIDE:   { ok: 8,  bad: 22  },
@@ -121,6 +127,8 @@ const SEV = {
   YAW: { mild: 8, moderate: 18, severe: 30 },
   // Spine lean (degrees)
   SPINE: { mild: 5, moderate: 10, severe: 18 },
+  // Shoulder elevation / shrug (% of shoulder width above neutral)
+  SHOULDER_ELEV: { mild: 3, moderate: 7, severe: 12 },
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -697,8 +705,15 @@ function checkFrameQuality(lms, W, H) {
   const rShPx = rShX * W;
   const shWidthPx = Math.abs(rShPx - lShPx);
 
-  // Too close: either shoulder within 3% of frame edge
-  if (lShPx < W * 0.03 || rShPx > W * 0.97) {
+  // Too close: either shoulder within 1% of frame edge.
+  // Was 3%/97% — that fires on off-center framing alone (leaning slightly
+  // toward the screen while not perfectly centered on a laptop's often
+  // off-axis camera, or turning a bit toward the keyboard/mouse), not just
+  // genuine proximity, since it's independent of total shoulder width.
+  // The shWidthFracCheck>0.88 check below already catches real over-
+  // proximity; this edge check only needs to catch a shoulder that's
+  // actually run off the visible frame, so it can be tighter.
+  if (lShPx < W * 0.01 || rShPx > W * 0.99) {
     return { ok: false, reason: "too_close" };
   }
 
@@ -921,6 +936,59 @@ function analyzeRoundedShoulders(lms, prop, H, calib = null) {
   };
 }
 
+/**
+ * Dedicated shoulder-shrug/tension metric.
+ *
+ * Previously the only signal that reacted to raising your shoulders was
+ * buried inside analyzeRoundedShoulders() — the same raw ear-to-shoulder
+ * gap, scaled ×45 and then blended 80/20 with a Z-depth signal meant for a
+ * completely different posture problem (forward protraction). For a real,
+ * deliberate shrug (shoulders rising ~3-5cm, the natural "raise your
+ * shoulders toward your ears" motion), that produced a "deviation" of only
+ * ~3-5 out of THR.ROUNDED's {ok:10, bad:22} scale — nowhere near the
+ * round_mid alert floor of depth>8 — so the reading barely moved and no
+ * alert ever fired. On top of that, analyzeShoulderLevel() (shoulder TILT)
+ * is structurally blind to a symmetric shrug too: it only measures the
+ * angle between the two shoulder points, which doesn't change when both
+ * shoulders rise together. Net result: no metric in this engine reacted to
+ * a shoulder shrug at all.
+ *
+ * backend.py's analyze_front() already has this as its own metric
+ * ("shoulder_elevation") — this ports the same underlying signal (ear-to-
+ * shoulder Y gap) but normalizes it by shoulder-width-in-pixels
+ * (prop.shWidthPx) rather than raw frame height, so — like every other
+ * metric in this file — it stays camera-distance-invariant instead of
+ * drifting with how close the user happens to be sitting. It also gets its
+ * own THR.SHOULDER_ELEV/SEV.SHOULDER_ELEV scale (see above) tuned so an
+ * actual shrug lands in the yellow/red zone instead of being diluted
+ * inside a metric built for a slow structural deviation.
+ */
+function analyzeShoulderElevation(lms, W, H, prop, calib = null) {
+  const g   = i => lms[i];
+  const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
+  const earOK = vis(PL.L_EAR) && vis(PL.R_EAR);
+  if (!prop.shOK || !earOK) return { elevPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+
+  const lEarYpx = g(PL.L_EAR).y * H;
+  const rEarYpx = g(PL.R_EAR).y * H;
+  const lGap = (prop.lSh.y - lEarYpx) / Math.max(prop.shWidthPx, 1);
+  const rGap = (prop.rSh.y - rEarYpx) / Math.max(prop.shWidthPx, 1);
+  const elevRatio = (lGap + rGap) / 2;
+
+  // Same neutral baseline as analyzeRoundedShoulders — anatomically the
+  // same reference measurement (resting ear-to-shoulder gap at upright
+  // posture) — reusing calib.rounded_neutral means a user doesn't need a
+  // second calibration step for it.
+  const NEUTRAL = (typeof calib?.rounded_neutral === "number" && calib.rounded_neutral > 0.2 && calib.rounded_neutral < 1.0)
+    ? calib.rounded_neutral
+    : 0.52;
+
+  const elevPct  = Math.max(0, NEUTRAL - elevRatio) * 100;
+  const score    = scoreMetric(elevPct, 0, THR.SHOULDER_ELEV.ok, THR.SHOULDER_ELEV.bad);
+  const severity = classify(elevPct, SEV.SHOULDER_ELEV);
+  return { elevPct: Math.round(elevPct * 10) / 10, score, severity, confidence: 82, reliable: true };
+}
+
 function analyzeFHP(lms, W, H, prop) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
@@ -1037,7 +1105,7 @@ function buildAlerts(modules, distCm, lo, hi) {
     return text;
   };
 
-  const { neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance } = modules;
+  const { neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance, shoulderElev } = modules;
 
   return [
     add("neck_sev",  neck.angle > neck.badAdj,                    `⚠️ Severe neck lean ${neck.angle}° — raise monitor to eye level immediately`),
@@ -1055,6 +1123,8 @@ function buildAlerts(modules, distCm, lo, hi) {
     add("round_sev", rounded.reliable && rounded.depth > 15,      `⚠️ Rounded shoulders — pull shoulder blades together`),
     add("round_mid", rounded.reliable && rounded.depth > 8 && rounded.depth <= 15, `Shoulders slightly forward — open chest`),
     add("round_side_tip", rounded.sideModeRecommended,            `Tip: switch to Side mode for a more precise rounded-shoulders reading`),
+    add("shrug_sev", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.bad, `⚠️ Shoulders elevated/shrugging (${shoulderElev.elevPct}%) — relax shoulders down and back`),
+    add("shrug_mid", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.ok && shoulderElev.elevPct <= THR.SHOULDER_ELEV.bad, `Shoulders slightly raised — relax your trap muscles`),
     add("elbow_hi",  elbow.reliable && elbow.angle != null && elbow.angle < 70, `⚠️ Elbows too high (${elbow.angle}°) — lower keyboard`),
     add("elbow_lo",  elbow.reliable && elbow.angle != null && elbow.angle > 125, `Elbows too low (${elbow.angle}°) — raise keyboard`),
     add("mon_low",   monitor.reliable && monitor.direction === "below" && monitor.offsetCm > 5, `Monitor ~${monitor.offsetCm}cm below eye level — raise it`),
@@ -1106,6 +1176,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const headTilt = analyzeHeadTilt(lms, W, H, calib);
   const shoulder = analyzeShoulderLevel(lms, W, H, prop, calib);
   const yaw      = analyzeHeadYawModule(lms, W, H);
+  const shoulderElev = analyzeShoulderElevation(lms, W, H, prop, calib);
 
   // Expensive metrics — cached between frames.
   // IMPORTANT: rounded must be computed BEFORE spine because analyzeSpineLean
@@ -1206,7 +1277,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   }
 
   // Alerts
-  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor }, distCm, lo, hi);
+  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, shoulderElev }, distCm, lo, hi);
 
   return {
     score:       overall,
@@ -1223,6 +1294,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       yaw:      { ...yaw,      label: "Head Rotation" },
       elbow:    { ...elbow,    label: "Elbow Angle" },
       monitor:  { ...monitor,  label: "Monitor Height" },
+      shoulderElev: { ...shoulderElev, label: "Shoulder Elevation" },
     },
 
     detectedConditions: [
@@ -1232,6 +1304,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       shoulder.severity !== "normal" && { name: "Shoulder Imbalance", severity: shoulder.severity, value: `${shoulder.angle}°` },
       rounded.severity  !== "normal" && { name: "Rounded Shoulders",  severity: rounded.severity,  value: rounded.depth },
       spine.severity    !== "normal" && spine.reliable && { name: "Spine Lean", severity: spine.severity, value: `${spine.angle}°` },
+      shoulderElev.severity !== "normal" && shoulderElev.reliable && { name: "Shoulder Elevation", severity: shoulderElev.severity, value: `${shoulderElev.elevPct}%` },
     ].filter(Boolean),
 
     // Legacy metrics shape (backward-compatible with App.jsx/overlays)
@@ -1244,6 +1317,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       screen_distance:   { value: distCm,           score: distSc,         unit: "cm", label: "Screen distance",     calibrated: !!(distCalibFactor && distCalibFactor > 0) },
       fhp_index:         { value: fhp.distCm,       score: fhp.score,      unit: "cm", label: "Forward head posture",extra_load_kg: fhp.extraLoadKg, reliable: fhp.reliable },
       rounded_shoulders: { value: rounded.depth,    score: rounded.score,  unit: "depth", label: "Rounded shoulders",asymmetry: rounded.asymmetry, reliable: rounded.reliable },
+      shoulder_elevation:{ value: shoulderElev.elevPct, score: shoulderElev.score, unit: "%", label: "Shoulder elevation (shrug)", reliable: shoulderElev.reliable },
       elbow_angle:       { value: elbow.angle,      score: elbow.score,    unit: "°",  label: "Elbow angle",         reliable: elbow.reliable },
       monitor_height:    { value: monitor.offsetCm, score: monitor.score,  unit: "cm", label: "Monitor height offset",direction: monitor.direction, reliable: monitor.reliable },
       session_fatigue:   { value: fatiguePenalty,   score: Math.max(0, overall - fatiguePenalty), unit: "pts", label: "Fatigue adjustment", session_min: sessionMin },

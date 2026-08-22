@@ -511,6 +511,7 @@ function postureCue(analysis, isAr){
   add("spine_lean","Sit up straight — support your back","اجلس مستقيماً واسند ظهرك","↑");
   add("rounded_shoulders","Roll your shoulders back","افرد كتفيك للخلف","↔");
   add("shoulder_level","Level your shoulders","سوِّ كتفيك","⇄");
+  add("shoulder_elevation","Drop your shoulders — relax your traps","ارخي كتفيك للأسفل — رخي عضلات الرقبة","↓");
   add("head_tilt","Level your head","سوِّ رأسك","⟲");
   if(typeof m.screen_distance?.score==="number" && m.screen_distance.score<55 && raw.distCm!=null && raw.lo!=null){
     if(raw.distCm<raw.lo)      cands.push({sc:m.screen_distance.score,en:"Move back from the screen",ar:"ابعد عن الشاشة شوية",icon:"⟵"});
@@ -6240,6 +6241,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         {distCm<M_.optDist[0] ? (isAr?"↩ ابعد":"↩ back up") : (isAr?"↪ اقترب":"↪ move in")}
                       </span>
                     )}
+                    {badQuality && (analysis.qualityReason==="too_close" || analysis.qualityReason==="too_far") && (
+                      <span style={{opacity:.7,fontWeight:500}}>
+                        {analysis.qualityReason==="too_close" ? (isAr?"↩ ابعد":"↩ back up") : (isAr?"↪ اقترب":"↪ move in")}
+                      </span>
+                    )}
                   </div>
                 );
               })()}
@@ -6700,6 +6706,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {camActive
                     ? (mpStatus!=="ready"
                         ? (isAr?"جاري تحميل نموذج الذكاء الاصطناعي (أول مرة بس)...":"Loading the AI model (first time only)...")
+                        // Quality-gate failure (too close/far/body cropped) used to fall
+                        // through to the generic messages below — worst case, after 8s,
+                        // telling a user who's TOO CLOSE to "move closer", the opposite
+                        // of what they needed to hear. Surface the engine's own
+                        // qualityReason here instead, since it already knows exactly
+                        // what's wrong.
+                        : (analysis?.qualityScore != null && analysis.qualityScore < 100 && analysis?.qualityReason)
+                        ? (analysis.qualityReason === "too_close"
+                            ? (isAr?"⚠️ قريب جداً من الكاميرا — ابعد شوية":"⚠️ Too close to the camera — move back a bit")
+                            : analysis.qualityReason === "too_far"
+                            ? (isAr?"⚠️ بعيد جداً عن الكاميرا — اقترب شوية":"⚠️ Too far from the camera — move closer")
+                            : analysis.qualityReason === "body_cropped"
+                            ? (isAr?"⚠️ جزء من جسمك مش ظاهر — اتأكد إن كتافك الاتنين في الكادر":"⚠️ Part of your body is out of frame — make sure both shoulders are visible")
+                            : (isAr?"⚠️ جودة الصورة منخفضة — عدّل الإضاءة أو وضعك":"⚠️ Frame quality is low — adjust lighting or position"))
                         : sessionTime>8
                         ? (isAr?"لسه مش شايفينك — قرّب من الكاميرا وخلي الإضاءة كويسة":"Still not detecting you — move closer and check your lighting")
                         : (isAr?"بنحلل وضعيتك... استنى ثانية":"Detecting your posture... one moment"))
