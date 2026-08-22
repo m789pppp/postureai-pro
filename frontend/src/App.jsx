@@ -1758,7 +1758,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
 
 // ── Upgrade Prompt ────────────────────────────────────────────────
 // ── Nav Avatar Dropdown — replaces 10-button header overload ─────
-function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfile,onLeaderboard,onHR,onAdmin,onSetup,onOnboarding,onSignOut}){
+function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfile,onLeaderboard,onHR,onAdmin,onSetup,onOnboarding,onTour,onSignOut}){
   const[open,setOpen]=useState(false);
   const ref=useRef(null);
   const initial=(profile?.name||user?.email||"U")[0].toUpperCase();
@@ -1782,6 +1782,7 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
     ...(isAdmin?[{label:isAr?"لوحة الإدارة":"Admin",icon:"🛡️",color:"#fca5a5",onClick:()=>{onAdmin();setOpen(false);}}]:[]),
     {label:isAr?"إعدادات الجهاز":"Device Setup",icon:"⚙️",onClick:()=>{onSetup();setOpen(false);}},
     {label:isAr?"معالج الإعداد":"Setup Wizard",icon:"🚀",color:"#60a5fa",onClick:()=>{onOnboarding?.();setOpen(false);}},
+    {label:isAr?"جولة تعريفية بالموقع":"Take a Tour",icon:"🧭",onClick:()=>{onTour?.();setOpen(false);}},
     {label:isAr?"تسجيل خروج":"Sign out",icon:"→",onClick:()=>{onSignOut();setOpen(false);}},
   ];
 
@@ -5115,6 +5116,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
         setShowReferralProgram={setShowReferralProgram}
         setShowIntegrationsHub={setShowIntegrationsHub}
         setShowMFASetup={setShowMFASetup}
+        setShowChangePw={setShowChangePw}
+        setShowProductTour={setShowProductTour}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin} companyId={companyId}
         darkMode={darkMode} setDarkMode={setDarkMode} setLang={setLang}
         t={t} logOut={logOut} setUser={setUser} setProfile={setProfile}
@@ -5392,12 +5395,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       )}
-      {/* ProductTour destructures onComplete, not onClose — it was never
-          destructured at all before, so skipping/finishing the tour only
-          hid it locally (its own internal `visible` state), while
-          showProductTour here never cleared, and nothing currently calls
-          setShowProductTour(true) either way. Fixed the prop name for
-          when this does get wired up to a trigger. */}
+      {/* ProductTour destructures onComplete, not onClose — was previously
+          unreachable (no trigger called setShowProductTour(true) anywhere).
+          Now wired to a "Take a Tour" item in the nav avatar dropdown. */}
       {showProductTour&&<ErrorBoundary key="producttour"><ProductTour profile={profile} cs={cs} lang={lang} onComplete={()=>setShowProductTour(false)}/></ErrorBoundary>}
       {showSecurityCenter&&<ErrorBoundary key="securitycenter"><Suspense fallback={null}><SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/></Suspense></ErrorBoundary>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }

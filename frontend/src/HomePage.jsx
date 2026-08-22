@@ -1616,7 +1616,7 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
-  onBillingHistory, onReferral, onIntegrations, onNotifications, onMFA,
+  onBillingHistory, onReferral, onIntegrations, onNotifications, onMFA, onChangePassword,
   lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
@@ -2297,11 +2297,11 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                   </div>
                 </div>
               </div>
-              <button onClick={()=>setTab("accounts")}
+              <button onClick={()=>onChangePassword?.()}
                 style={{ padding:"7px 14px", background:"rgba(99,102,241,.12)",
                   border:"1px solid rgba(99,102,241,.25)", borderRadius:7,
                   color:"#a5b4fc", fontSize:12, fontWeight:600, cursor:"pointer" }}>
-                {isAr?"إدارة":"Manage"}
+                {isAr?"تغيير":"Change"}
               </button>
             </div>
             {/* Sign out all */}
@@ -3256,7 +3256,7 @@ export default function HomePage({
   setShowPredictiveAI, setShowMRR, setShowChangelog,
   setShowNotificationsHub, setShowEnterpriseRBAC,
   setShowBillingDashboard, setShowReferralProgram, setShowIntegrationsHub,
-  setShowMFASetup,
+  setShowMFASetup, setShowChangePw, setShowProductTour,
   isAdmin, isHRAdmin, companyId,
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,
@@ -3361,6 +3361,7 @@ export default function HomePage({
       onNotifications={()=>setShowNotificationsHub?.(true)}
       onIntegrations={()=>setShowIntegrationsHub?.(true)}
       onMFA={()=>setShowMFASetup?.(true)}
+      onChangePassword={()=>setShowChangePw?.(true)}
       lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}
       AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}/>
   ) : null;
@@ -3527,6 +3528,7 @@ export default function HomePage({
                 onAdmin={()=>setPage("admin")}
                 onSetup={()=>setPage("setup")}
                 onOnboarding={openCalib}
+                onTour={()=>setShowProductTour?.(true)}
                 onSignOut={handleSignOut}
               />
             ) : (
