@@ -3,22 +3,30 @@ name = "postureai-pro-backend"
 version = "1.0.0"
 # A real Vercel build picked CPython 3.14.7 and failed ("No solution
 # found... mediapipe==0.10.14 has no wheels with a matching Python ABI
-# tag... we only found wheels for cp39/cp310/cp311/cp312"), which led to
-# a previous, WRONG fix here: this line used to read the compound
-# ">=3.12,<3.13" and got simplified down to a bare ">=3.12" on the theory
-# that the compound specifier wasn't being parsed. That was backwards —
-# per Vercel's own Feb 2026 changelog ("Python 3.13 and 3.14 are now
-# available"): "The default will switch to Python 3.14 in the coming
-# months. To continue using Python 3.12, specify an upper bound in your
-# project manifest." A bare lower bound is exactly what lets it float up
-# to the new default — which is why the build failed again, with the
-# identical error, after that change. Restored the upper bound.
+# tag... we only found wheels for cp39/cp310/cp311/cp312") — TWICE, with
+# two different requires-python values that both looked reasonable:
+# first a bare ">=3.12" (removed on the theory that a compound specifier
+# wasn't parsing), then ">=3.12,<3.13" (restored, since Vercel's Feb 2026
+# changelog says an upper bound is needed once the default floats to
+# 3.14). Neither actually fixed it — the exact same error reproduced
+# again with ">=3.12,<3.13" in place, confirmed via a second real Vercel
+# build log pasted by the user.
+#
+# Went back to that changelog and read the EXACT syntax it gives, not
+# just its prose description: "Python 3.13 and 3.14 are now available"
+# shows the pin as `requires-python = "~=3.12.0"` (PEP 440 compatible-
+# release operator — equivalent to >=3.12.0,==3.12.*), not a >=/< range.
+# Verified locally with Python's own packaging library that "~=3.12.0"
+# matches 3.12.0/3.12.7 and rejects 3.13.0/3.14.7/3.11.9 — the exact
+# behavior needed. Whatever Vercel/uv's parser does differently between
+# a compound range and this operator, matching their documented example
+# byte-for-byte is the safest bet after two guesses already failed.
 #
 # api/.python-version ("3.12") stays as a second, defensive pin
 # co-located with the entrypoint. mediapipe (backend/requirements.txt)
 # only ships wheels through cp312, so this project cannot run on 3.13/3.14
 # regardless of which pin mechanism Vercel actually honors.
-requires-python = ">=3.12,<3.13"
+requires-python = "~=3.12.0"
 
 # ── Vercel Python entrypoint ─────────────────────────────────────────
 # api/main.py loads the real Flask app object from backend/backend.py
