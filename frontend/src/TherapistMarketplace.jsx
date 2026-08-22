@@ -16,6 +16,19 @@ import {
 const TEAL  = "#0d9488";
 const TEALLT= "#5eead4";
 
+/* ── Launch status ─────────────────────────────────────────── */
+// We don't have signed clinic/therapist partnerships live yet — every
+// "therapist" a visitor sees right now is either demo data (backend
+// unreachable) or admin-seeded placeholder data, not a real, vetted
+// physiotherapist who can actually take a booking. Rather than let people
+// go through a full "Confirm & Pay" flow that can't really be fulfilled,
+// the Book action shows a "Coming Soon" notice instead — we're actively
+// contracting with clinics, and real booking opens once that's signed.
+// Flip this to `true` (and nothing else needs to change — the full
+// BookingModal/payment flow below is untouched and still wired up) once
+// the first real clinic contract is live.
+const BOOKING_LIVE = false;
+
 function mkT(cs) {
   const BORDER = cs.border;
   const TEXT   = cs.text;
@@ -568,6 +581,39 @@ function BookingModal({ therapist, isAr, loading, eliteCredit, cs, tk, onClose, 
   );
 }
 
+/* ── Coming Soon (booking not live yet) ──────────────────────── */
+function ComingSoonModal({ therapistName, isAr, cs, tk, onClose }) {
+  if(!cs||!tk){ cs={card:"#111827",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; tk=mkT(cs); }
+  const { TEXT, MUTED } = tk;
+  const btnP = tk.btnP;
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"flex",
+      alignItems:"center", justifyContent:"center", zIndex:1000, padding:20 }}
+      onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:"#0d1a2e", border:"1px solid rgba(13,148,136,.3)", borderRadius:18,
+        width:"100%", maxWidth:400, padding:"32px 26px", textAlign:"center",
+        boxShadow:"0 24px 64px rgba(0,0,0,.5)" }}>
+        <div style={{ width:56, height:56, borderRadius:16, margin:"0 auto 16px",
+          background:"linear-gradient(135deg,#0d9488,#0891b2)", display:"flex",
+          alignItems:"center", justifyContent:"center", fontSize:26,
+          boxShadow:"0 8px 20px rgba(13,148,136,.35)" }}>🚀</div>
+        <div style={{ fontSize:17, fontWeight:800, color:TEXT, marginBottom:8 }}>
+          {isAr ? "الحجز قريبًا" : "Booking is coming soon"}
+        </div>
+        <div style={{ fontSize:13, color:MUTED, lineHeight:1.6, marginBottom:22 }}>
+          {isAr
+            ? <>إحنا حاليًا بنتعاقد مع عيادات علاج طبيعي معتمدة عشان نقدملك حجز حقيقي وآمن{therapistName?<> — حجزك مع <strong style={{color:TEALLT}}>{therapistName}</strong> هيبقى متاح أول ما نطلق</>:""}. تابعنا، مش هياخد وقت طويل!</>
+            : <>We're currently partnering with certified physiotherapy clinics to bring you real, secure bookings{therapistName?<> — booking with <strong style={{color:TEALLT}}>{therapistName}</strong> will open the moment we launch</>:""}. Stay tuned, it won't be long!</>}
+        </div>
+        <button style={{ ...btnP, width:"100%" }} onClick={onClose}>
+          {isAr ? "تمام" : "Got it"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Admin panels (unchanged logic, minor style cleanup) ──────── */
 // NOTE: these 4 components previously referenced bare `card`/`MUTED`/`SUB`/
 // `TEALLT`(ok, that one's a module const)/`btnP`/`btnG`/`lbl`/`inp`/`border`
@@ -739,6 +785,7 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
   const [cityFilter, setCityFilter] = useState("");
   const [specFilter, setSpecFilter] = useState("");
   const [selected, setSelected]     = useState(null);
+  const [comingSoonFor, setComingSoonFor] = useState(null); // therapist clicked while booking isn't live
   const [booking, setBooking]       = useState(false);
   const [myBookings, setMyBookings] = useState([]);
   const [demoMode, setDemoMode]     = useState(false);
@@ -803,6 +850,11 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
     }
   },[tab,demoMode]);
 
+  const handleBookClick = (th) => {
+    if (!BOOKING_LIVE) { setComingSoonFor(th); return; }
+    setSelected(th);
+  };
+
   const submitBooking = async(preferredTime,notes,slotDatetime,discountCode)=>{
     if(!selected) return;
     setBooking(true);
@@ -855,28 +907,59 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
     <div dir={isAr?"rtl":"ltr"} style={{ maxWidth:1000, margin:"0 auto", padding:"24px 20px", color:TEXT, background:cs.bg, minHeight:"100vh" }}>
 
       {/* ── Header ── */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
-        <div>
-          <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-            <h1 style={{ margin:0, fontSize:22, fontWeight:900, color:TEXT }}>
-              🩺 {isAr?"دليل أخصائيي العلاج الطبيعي":"Physiotherapist Marketplace"}
-            </h1>
-            {demoMode && (
-              <span style={{ fontSize:10, fontWeight:700, color:MUTED, background:"rgba(255,255,255,.05)",
-                border:`1px solid ${BORDER}`, borderRadius:6, padding:"3px 8px" }}>
-                {isAr?"وضع تجريبي":"Demo"}
-              </span>
-            )}
+      <div style={{ ...card, display:"flex", justifyContent:"space-between", alignItems:"center",
+        gap:16, marginBottom:20, flexWrap:"wrap" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+          <div style={{ width:44, height:44, borderRadius:12, flexShrink:0,
+            background:`linear-gradient(135deg,${TEAL},#0891b2)`, display:"flex",
+            alignItems:"center", justifyContent:"center", fontSize:20,
+            boxShadow:"0 4px 14px rgba(13,148,136,.3)" }}>🩺</div>
+          <div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+              <h1 style={{ margin:0, fontSize:19, fontWeight:900, color:TEXT }}>
+                {isAr?"دليل أخصائيي العلاج الطبيعي":"Physiotherapist Marketplace"}
+              </h1>
+              {demoMode && (
+                <span style={{ fontSize:10, fontWeight:700, color:MUTED, background:"rgba(255,255,255,.05)",
+                  border:`1px solid ${BORDER}`, borderRadius:6, padding:"3px 8px" }}>
+                  {isAr?"وضع تجريبي":"Demo"}
+                </span>
+              )}
+            </div>
+            <p style={{ margin:"3px 0 0", fontSize:12.5, color:MUTED }}>
+              {isAr?"احجز جلسة مع أخصائي معتمد — دفع آمن عبر Kashier":"Book with a vetted therapist — secure payment via Kashier"}
+            </p>
           </div>
-          <p style={{ margin:"4px 0 0", fontSize:13, color:MUTED }}>
-            {isAr?"احجز جلسة مع أخصائي معتمد — دفع آمن عبر Kashier":"Book with a vetted therapist — secure payment via Kashier"}
-          </p>
         </div>
-        {onBack && <button onClick={onBack} style={{background:cs.card,border:"0.5px solid "+cs.border,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{isAr?"← رجوع":"← Back"}</button>}
+        {onBack && (
+          <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6,
+            background:cs.inp, border:`0.5px solid ${BORDER}`, borderRadius:9,
+            padding:"8px 15px", fontSize:12, fontWeight:600, color:MUTED, cursor:"pointer",
+            flexShrink:0, transition:"color .15s, border-color .15s" }}
+            onMouseEnter={e=>{e.currentTarget.style.color=TEXT;e.currentTarget.style.borderColor="rgba(13,148,136,.4)";}}
+            onMouseLeave={e=>{e.currentTarget.style.color=MUTED;e.currentTarget.style.borderColor=BORDER;}}>
+            <span>{isAr?"→":"←"}</span>{isAr?"رجوع":"Back"}
+          </button>
+        )}
       </div>
 
+      {/* ── Coming soon notice — booking isn't live yet ── */}
+      {!BOOKING_LIVE && (
+        <div style={{ marginBottom:18, padding:"12px 18px", borderRadius:12,
+          background:"linear-gradient(135deg,rgba(13,148,136,.1),rgba(8,145,178,.05))",
+          border:"1px solid rgba(13,148,136,.25)", display:"flex", alignItems:"center", gap:12 }}>
+          <span style={{ fontSize:20 }}>🚀</span>
+          <div style={{ fontSize:12.5, color:MUTED, lineHeight:1.5 }}>
+            <strong style={{ color:TEALLT }}>{isAr?"قريبًا":"Coming soon"}</strong>{" — "}
+            {isAr
+              ? "إحنا حاليًا بنتعاقد مع عيادات علاج طبيعي معتمدة. اللي تحت ده معاينة لشكل الخدمة — الحجز الفعلي هيتفعّل قريب."
+              : "We're currently contracting with certified physiotherapy clinics. What's below is a preview of the service — real booking opens soon."}
+          </div>
+        </div>
+      )}
+
       {/* ── Elite free credit banner ── */}
-      {eliteCredit && (
+      {BOOKING_LIVE && eliteCredit && (
         <div style={{ marginBottom:18, padding:"12px 18px", borderRadius:12,
           background:"linear-gradient(135deg,rgba(212,175,55,.12),rgba(184,134,11,.06))",
           border:"1px solid rgba(212,175,55,.3)", display:"flex", alignItems:"center", gap:12 }}>
@@ -973,7 +1056,7 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14 }}>
             {filtered.map(th=>(
               <TherapistCard key={th.id} th={th} isAr={isAr}
-                eliteCredit={eliteCredit} onBook={setSelected} cs={cs} tk={tk}/>
+                eliteCredit={BOOKING_LIVE && eliteCredit} onBook={handleBookClick} cs={cs} tk={tk}/>
             ))}
           </div>
         </>
@@ -1013,11 +1096,17 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
         <AdminMarketplaceManager isAr={isAr} addToast={addToast} adminUid={user?.uid} cs={cs}/>
       )}
 
-      {/* ══ Booking modal ══ */}
-      {selected && (
+      {/* ══ Booking modal — only reachable once BOOKING_LIVE is true ══ */}
+      {BOOKING_LIVE && selected && (
         <BookingModal therapist={selected} isAr={isAr} loading={booking}
           eliteCredit={eliteCredit} cs={cs} tk={tk}
           onClose={()=>setSelected(null)} onSubmit={submitBooking}/>
+      )}
+
+      {/* ══ Coming soon notice ══ */}
+      {comingSoonFor !== null && (
+        <ComingSoonModal therapistName={comingSoonFor?.name} isAr={isAr} cs={cs} tk={tk}
+          onClose={()=>setComingSoonFor(null)}/>
       )}
     </div>
   );
