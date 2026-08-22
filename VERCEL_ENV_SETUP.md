@@ -67,10 +67,13 @@ OR:
 The Flask backend that powers AI Coach/Insights/Predictive/Reports,
 posture analysis, symptom log, gamification, and everything else under
 `/api/*` not already covered by the smaller `api/*.js` functions now
-deploys as **one Vercel Python Function** (see `main.py` + `pyproject.toml`
-at the repo root, and the `/api/(.*)` route in `vercel.json`). It used to
-run on a separate Railway service — that's gone; everything is on Vercel
-now.
+deploys as **one Vercel Python Function** (see `api/main.py` +
+`pyproject.toml` at the repo root, and the `/api/(.*)` route in
+`vercel.json` — the entrypoint lives under `api/`, not the repo root,
+because Vercel's `functions` config validates against files inside
+`api/` on a project that already has other functions there). It used
+to run on a separate Railway service — that's gone; everything is on
+Vercel now.
 
 ### 🔴 REQUIRED — won't start without this
 | Variable | Where to get it |
@@ -78,6 +81,7 @@ now.
 | SECRET_KEY | Any long random string (`openssl rand -hex 32`) |
 | FLASK_ENV | Set to `production` |
 | REDIS_URL | **Required in production** — the app refuses to start without it (shared rate limiting across function instances needs it). Easiest: Vercel Dashboard → Storage → Marketplace → add **Upstash Redis** → copy its `redis://`/`rediss://` connection string (not the REST URL) into `REDIS_URL`. |
+| UV_PYTHON | Set to `3.12`. **Required** — real deploys kept failing with `Using CPython 3.14.7 ... mediapipe has no wheels with a matching Python ABI tag`, even after three different attempts to pin the version via `pyproject.toml`'s `requires-python` (a bare lower bound, a compound range, and the exact `~=3.12.0` syntax from Vercel's own changelog) and a `.python-version` file, and even after redeploying with the build cache disabled. Per uv's own docs, `requires-python` in `pyproject.toml` is only consulted for "project command" invocations (`uv sync`, `uv run`) — Vercel's Python builder actually runs `uv pip install`, the plain pip-compatible interface, which doesn't read it. `UV_PYTHON` is uv's own environment variable and — per its docs — "uv will use this Python interpreter for all operations," including `uv pip install`. This is the one mechanism that isn't file-discovery-dependent, so it's the one actually being relied on now; the `.python-version` files and `pyproject.toml`'s `requires-python` stay in the repo as documentation/defensive belt-and-suspenders, not as the active fix. |
 
 ### 🟠 AI quality (Coach/Insights/Predictive/Reports) — free, strongly recommended
 | Variable | Where to get it |
