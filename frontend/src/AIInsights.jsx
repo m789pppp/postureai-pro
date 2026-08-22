@@ -54,8 +54,23 @@ function MdText({ text }) {
     bulletBuffer = [];
   };
 
-  const inlineFormat = s => s
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  // Links: markdown [text](url) or a bare http(s) URL, in one pass so a
+  // markdown-form URL never also gets caught by the bare-URL branch.
+  // Previously not handled at all — a link in AI text just sat there as
+  // plain unclickable text.
+  const linkify = s => s.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"']+)/g,
+    (m, mdText, mdUrl, bareUrl) => {
+      if (mdUrl) return `<a href="${mdUrl}" target="_blank" rel="noopener noreferrer" style="color:#60a5fa;text-decoration:underline">${mdText}</a>`;
+      let url = bareUrl, trail = "";
+      const tm = url.match(/([.,;:!?)]+)$/);
+      if (tm) { trail = tm[1]; url = url.slice(0, -trail.length); }
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#60a5fa;text-decoration:underline">${url}</a>${trail}`;
+    }
+  );
+
+  const inlineFormat = s => linkify(s
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"))
     .replace(/\*\*(.+?)\*\*/g, `<strong style="color:#e2eaf6;font-weight:700">$1</strong>`)
     .replace(/\*(.+?)\*/g, `<em style="color:#94a3b8">$1</em>`);
 
