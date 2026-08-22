@@ -65,6 +65,18 @@ const FRAME_BUFFER_SIZE = 60; // 2s at 20fps after throttle — balances smoothn
 /** Beep cooldown in ms */
 const BEEP_COOLDOWN_MS = 30000;
 
+/**
+ * Consecutive frames a module's `reliable` flag must disagree with its
+ * current stable state before that state actually flips — see
+ * debounceReliable(). At the ~20fps effective analysis rate documented
+ * above (FRAME_BUFFER_SIZE), 5 frames ≈ 250ms: long enough to smooth out
+ * a single-frame visibility dip (e.g. ears sitting right at VIS_MIN, a
+ * known-common case per the VIS_MIN comment above), short enough to still
+ * react quickly to genuine occlusion (hand covering the camera, standing
+ * up out of frame).
+ */
+const RELIABILITY_HYSTERESIS_FRAMES = 5;
+
 // ─── Scoring thresholds (synced with backend.py score_m calls) ─────
 const THR = {
   // Front camera
@@ -100,16 +112,25 @@ const THR = {
 // analyzeFHP() already measures it correctly using true 3D (X+Z) distance.
 // Given a real weight (0.18) and the other 7 weights rescaled by ×0.82 so
 // they still sum to 1.0.
+//
+// monitor (head pitch — looking down/up) had the exact same problem as
+// FHP used to: analyzeMonitorHeight() measured it correctly but it was
+// never in this table, so a genuinely bad pitch (e.g. looking down at a
+// phone/notes for long stretches) never moved the overall score, only
+// ever appeared as an easy-to-miss informational alert. Given a real
+// weight (0.08) and the other 8 weights rescaled by ×0.92 so the table
+// still sums to 1.0.
 const WEIGHTS_FRONT = {
-  neck:     0.2788,
-  tilt:     0.0902,
-  shoulder: 0.0984,
-  spine:    0.123,
-  distance: 0.1066,
-  yaw:      0.0492,
-  rounded:  0.0738,
-  fhp:      0.18,
-  // sums to 1.00
+  neck:     0.2565,
+  tilt:     0.0834,
+  shoulder: 0.0905,
+  spine:    0.1132,
+  distance: 0.0981,
+  yaw:      0.0453,
+  rounded:  0.0679,
+  fhp:      0.1656,
+  monitor:  0.0796,
+  // sums to ~1.00 (rounding)
 };
 
 
@@ -129,6 +150,8 @@ const SEV = {
   SPINE: { mild: 5, moderate: 10, severe: 18 },
   // Shoulder elevation / shrug (% of shoulder width above neutral)
   SHOULDER_ELEV: { mild: 3, moderate: 7, severe: 12 },
+  // Monitor/gaze pitch (degrees off level — looking down or up)
+  MONITOR_PITCH: { mild: 5, moderate: 10, severe: 18 },
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -506,6 +529,68 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
   };
 }
 
+/**
+ * Debounces a module's `reliable` flag against single-frame flicker.
+ *
+ * Without this, a module whose visibility hovers right around VIS_MIN
+ * (the file's own comment on VIS_MIN documents ears commonly scoring
+ * 0.45-0.58 — straddling the 0.55 cutoff in normal conditions, worse
+ * under imperfect lighting) flips `reliable` true/false on individual
+ * frames. Because confWeight() gives an unreliable module zero weight and
+ * redistributes it via the W_ACTUAL baseline (see analyzeMP), that flip
+ * doesn't just grey out one metric — it can swing the overall score by
+ * double digits between two consecutive frames with zero real posture
+ * change (verified: a fixed bad-posture case moved 64→81, "Fair"→"Good",
+ * purely from ear visibility ticking under VIS_MIN and back). This holds
+ * the module's effective reliability at its last stable value until the
+ * new value has persisted for RELIABILITY_HYSTERESIS_FRAMES consecutive
+ * frames, so a momentary dip doesn't move the score at all, while a real,
+ * sustained change (actually covering the camera, standing up) still
+ * takes effect within a fraction of a second.
+ *
+ * @param {string}  key               stable identifier per module (e.g. "neck")
+ * @param {boolean} currentReliable   this frame's raw reliable flag
+ */
+function debounceReliable(key, currentReliable) {
+  if (!analyzeMP._relState) analyzeMP._relState = Object.create(null);
+  let st = analyzeMP._relState[key];
+  if (!st) st = analyzeMP._relState[key] = { stable: currentReliable, streak: 0 };
+
+  if (currentReliable === st.stable) {
+    st.streak = 0;
+  } else {
+    st.streak++;
+    if (st.streak >= RELIABILITY_HYSTERESIS_FRAMES) {
+      st.stable = currentReliable;
+      st.streak = 0;
+    }
+  }
+  return st.stable;
+}
+
+/**
+ * EMA-smooths a module's `confidence` value (separate from the boolean
+ * debounce above). Most modules report a flat, constant confidence once
+ * reliable — but a few (analyzeNeckLean, analyzeRoundedShoulders) derive
+ * confidence from the SAME per-frame visibility signal that flickers near
+ * VIS_MIN, so even with the reliable flag correctly debounced, confWeight's
+ * `w * confidence/100` term could still wobble frame to frame on its own
+ * (measured: with only the reliable-flag debounce applied, a single
+ * flicker frame still moved a fixed pose's score 92→85 — the reliable
+ * flag correctly stayed "true" throughout, but the raw confidence number
+ * feeding confWeight() dipped on that one frame regardless). alpha=0.25
+ * means a single-frame anomaly contributes at most a quarter of its full
+ * delta, while a real sustained change still tracks within a few frames.
+ * Harmless no-op for modules with a constant confidence.
+ */
+function smoothConfidence(key, currentConfidence, alpha = 0.25) {
+  if (!analyzeMP._confEMA) analyzeMP._confEMA = Object.create(null);
+  const prev = analyzeMP._confEMA[key];
+  const next = prev == null ? currentConfidence : prev + alpha * (currentConfidence - prev);
+  analyzeMP._confEMA[key] = next;
+  return next;
+}
+
 /** Call on session reset / camera restart to clear proportion memory */
 export function resetProportions() {
   _shRatioEMA = null;
@@ -516,6 +601,8 @@ export function resetProportions() {
   analyzeMP._cachedElbow   = null;
   analyzeMP._cachedMonitor = null;
   analyzeMP._scoreBuf = null;
+  analyzeMP._relState = null;
+  analyzeMP._confEMA = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1069,7 +1156,7 @@ function analyzeElbow(lms, W, H) {
 function analyzeMonitorHeight(lms, W, H, distCm) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
-  if (!vis(PL.L_EYE) || !vis(PL.R_EYE)) return { offsetCm: 0, direction: "ok", score: 90, confidence: 0, reliable: false };
+  if (!vis(PL.L_EYE) || !vis(PL.R_EYE)) return { offsetCm: 0, direction: "ok", score: 90, severity: "normal", confidence: 0, reliable: false };
 
   const lEye = { x: g(PL.L_EYE).x * W, y: g(PL.L_EYE).y * H };
   const rEye = { x: g(PL.R_EYE).x * W, y: g(PL.R_EYE).y * H };
@@ -1077,7 +1164,7 @@ function analyzeMonitorHeight(lms, W, H, distCm) {
 
   const eyeMidY  = (lEye.y + rEye.y) / 2;
   const eyeWidth = Math.abs(rEye.x - lEye.x);
-  if (eyeWidth < 2) return { offsetCm: 0, direction: "ok", score: 90, confidence: 0, reliable: false };
+  if (eyeWidth < 2) return { offsetCm: 0, direction: "ok", score: 90, severity: "normal", confidence: 0, reliable: false };
 
   const noseDropFrac = (nose.y - eyeMidY) / eyeWidth;
   const pitchProxy   = (noseDropFrac - NEUTRAL_NOSE_DROP_FRAC) * 90;
@@ -1089,8 +1176,9 @@ function analyzeMonitorHeight(lms, W, H, distCm) {
     direction = pitchDeg > 0 ? "below" : "above";
   }
 
-  const score = scoreMetric(Math.abs(pitchDeg), 0, THR.MONITOR_PITCH.ok, THR.MONITOR_PITCH.bad);
-  return { offsetCm, direction, pitchDeg, score, confidence: 72, reliable: true };
+  const score    = scoreMetric(Math.abs(pitchDeg), 0, THR.MONITOR_PITCH.ok, THR.MONITOR_PITCH.bad);
+  const severity = classify(Math.abs(pitchDeg), SEV.MONITOR_PITCH);
+  return { offsetCm, direction, pitchDeg, score, severity, confidence: 72, reliable: true };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1105,7 +1193,7 @@ function buildAlerts(modules, distCm, lo, hi) {
     return text;
   };
 
-  const { neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance, shoulderElev } = modules;
+  const { neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance, shoulderElev, handProp } = modules;
 
   return [
     add("neck_sev",  neck.angle > neck.badAdj,                    `⚠️ Severe neck lean ${neck.angle}° — raise monitor to eye level immediately`),
@@ -1127,8 +1215,20 @@ function buildAlerts(modules, distCm, lo, hi) {
     add("shrug_mid", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.ok && shoulderElev.elevPct <= THR.SHOULDER_ELEV.bad, `Shoulders slightly raised — relax your trap muscles`),
     add("elbow_hi",  elbow.reliable && elbow.angle != null && elbow.angle < 70, `⚠️ Elbows too high (${elbow.angle}°) — lower keyboard`),
     add("elbow_lo",  elbow.reliable && elbow.angle != null && elbow.angle > 125, `Elbows too low (${elbow.angle}°) — raise keyboard`),
-    add("mon_low",   monitor.reliable && monitor.direction === "below" && monitor.offsetCm > 5, `Monitor ~${monitor.offsetCm}cm below eye level — raise it`),
-    add("mon_hi",    monitor.reliable && monitor.direction === "above" && monitor.offsetCm > 5, `Monitor ~${monitor.offsetCm}cm above eye level — lower it`),
+    // "below" (looking down) used to always be worded as "Monitor too low —
+    // raise it", which is actively wrong advice when the real cause is
+    // looking down at a phone/notes rather than a low monitor — the engine
+    // can't tell those apart from a single frame's pitch reading alone, so
+    // the copy now covers both possibilities honestly instead of asserting
+    // one specific (and often incorrect) cause.
+    add("mon_low",   monitor.reliable && monitor.direction === "below" && monitor.offsetCm > 5, `Looking down ~${monitor.offsetCm}cm below eye level — raise your monitor, or if you're checking a phone/notes, keep it brief`),
+    add("mon_hi",    monitor.reliable && monitor.direction === "above" && monitor.offsetCm > 5, `Looking up ~${monitor.offsetCm}cm above eye level — lower your monitor`),
+    // Hand/chin-prop occlusion — see analyzeMP() for detection logic. This
+    // is deliberately informational-only (no score weight): we can't
+    // quantify the actual neck angle once an ear is occluded, so this just
+    // makes sure the user isn't left with zero feedback while a real
+    // desk habit silently drops ~50% of the score's weight to "unreliable".
+    add("hand_prop", handProp?.detected, `Hand/object covering one ear — resting your chin on your hand hides real neck strain from being measured`),
   ].filter(Boolean);
 }
 
@@ -1139,11 +1239,31 @@ function buildAlerts(modules, distCm, lo, hi) {
 export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartMs = null, calibKnownDistCm = null, calib = null) {
   if (!lms || lms.length < 25) return null;
 
-  // Quality gate
+  // Quality gate — split into HARD blocks (genuinely nothing measurable —
+  // a shoulder isn't even visible) and SOFT warnings (shoulders ARE
+  // visible, so real posture metrics — especially spine lean and forward-
+  // head — can and should still run; the qualityReason is surfaced as a
+  // warning alongside the reading rather than instead of it).
+  //
+  // Previously ANY quality failure — including too_close/too_far —
+  // returned immediately with no metrics at all. Since the most common way
+  // to trigger too_close is leaning/slouching forward toward the screen,
+  // that meant the exact "severe spine lean"/"forward head" event those
+  // metrics exist to catch got silently swallowed and replaced with a
+  // blank quality-failure screen instead of the real (and worse) reading.
+  // too_close/too_far are the only reasons where checkFrameQuality() has
+  // already confirmed both shoulders are visible (that check runs first,
+  // as "body_cropped" — a genuine hard block below) — so there is enough
+  // landmark data to keep going. Allowlisted explicitly rather than
+  // denylisting "body_cropped"/"no_body" so any future/unexpected reason
+  // string defaults to the old, safe, hard-blocking behaviour.
   const quality = checkFrameQuality(lms, W, H);
-  if (!quality.ok) {
+  const SOFT_QUALITY_REASONS = new Set(["too_close", "too_far"]);
+  if (!quality.ok && !SOFT_QUALITY_REASONS.has(quality.reason)) {
     return { score: null, qualityScore: 0, qualityReason: quality.reason, detected: false };
   }
+  const qualityScore  = quality.ok ? 100 : 0;
+  const qualityReason = quality.ok ? null : quality.reason;
 
   // Body proportions — if a real known calibration distance is available,
   // back-calculate the user's actual shoulder width in cm rather than using
@@ -1168,6 +1288,28 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const [lo, hi] = MODES[mode]?.distRange || MODES.laptop.distRange;
   const distCm  = estimateDistanceCm(lms, W, H, headYaw, distCalibFactor, prop.effectiveShoulderWidthCm);
   const distSc  = distanceScore(distCm, lo, hi);
+
+  // ── Hand/chin-prop occlusion detection ─────────────────────────────
+  // Very common desk habit: resting your chin/cheek on your hand. The
+  // propping hand typically covers one ear, dropping its visibility below
+  // VIS_MIN — at which point analyzeNeckLean/analyzeFHP/analyzeRoundedShoulders
+  // (together ~50% of the score's weight) correctly mark themselves
+  // unreliable and exclude themselves from the score via confWeight()
+  // below. That's the right call numerically (no false inflation from a
+  // landmark we can't trust) — but it means the actual posture problem
+  // silently vanishes into "insufficient data" with zero user-facing
+  // feedback, instead of being flagged.
+  // Detected as: exactly one ear visible while facing roughly forward
+  // (|yaw|<15°). A genuinely turned head would show much larger yaw and
+  // typically still resolves the far ear (just at lower confidence)
+  // rather than losing it outright — so a missing ear WITHOUT a
+  // corresponding head turn is a strong, cheap signal of physical
+  // occlusion (hand, hair, phone) rather than normal head rotation.
+  const handPropG   = i => lms[i];
+  const handPropVis = i => (handPropG(i)?.visibility ?? 0) >= VIS_MIN;
+  const handProp = {
+    detected: (handPropVis(PL.L_EAR) !== handPropVis(PL.R_EAR)) && Math.abs(headYaw) < 15,
+  };
 
   // Body module analysis — quick metrics run every frame, expensive every 3rd.
   // `calib` personalises neck/tilt/shoulder/spine scoring to the user's own
@@ -1201,6 +1343,28 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // Spine runs every frame (fast) but depends on rounded.score from above
   const spine = analyzeSpineLean(lms, W, H, prop, rounded.score, calib);
 
+  // Debounce every module's `reliable` flag — see debounceReliable() for
+  // why a raw per-frame flip is a real score-stability bug, not cosmetic.
+  // Safe to apply uniformly to cached (rounded/fhp/elbow/monitor) as well
+  // as per-frame modules: on a cache-hit frame the flag hasn't changed
+  // since the last call, so this is a no-op that just keeps the streak
+  // counter at 0 until the next genuinely fresh (every-3rd-frame) reading.
+  neck.reliable          = debounceReliable("neck",          neck.reliable);
+  headTilt.reliable      = debounceReliable("headTilt",      headTilt.reliable);
+  shoulder.reliable      = debounceReliable("shoulder",      shoulder.reliable);
+  spine.reliable         = debounceReliable("spine",         spine.reliable);
+  yaw.reliable           = debounceReliable("yaw",           yaw.reliable);
+  shoulderElev.reliable  = debounceReliable("shoulderElev",  shoulderElev.reliable);
+  rounded.reliable       = debounceReliable("rounded",       rounded.reliable);
+  fhp.reliable           = debounceReliable("fhp",           fhp.reliable);
+  elbow.reliable         = debounceReliable("elbow",         elbow.reliable);
+  monitor.reliable       = debounceReliable("monitor",       monitor.reliable);
+
+  // Smooth the numeric confidence too — see smoothConfidence() for why the
+  // boolean debounce above isn't the whole story.
+  neck.confidence     = Math.round(smoothConfidence("neck",     neck.confidence));
+  rounded.confidence  = Math.round(smoothConfidence("rounded",  rounded.confidence));
+
   // Confidence-weighted overall score.
   // Previous: unreliable modules contributed at a fixed 30% weight, meaning
   // a default score of 90 from an invisible landmark was still inflating the
@@ -1217,9 +1381,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const W_yaw      = confWeight(yaw,      WEIGHTS_FRONT.yaw);
   const W_rounded  = confWeight(rounded,  WEIGHTS_FRONT.rounded);
   const W_fhp      = confWeight(fhp,      WEIGHTS_FRONT.fhp);
+  const W_monitor  = confWeight(monitor,  WEIGHTS_FRONT.monitor);
   const W_dist     = WEIGHTS_FRONT.distance; // distance is always measured
 
-  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp;
+  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp + W_monitor;
   const baseline = 72 * Math.max(0, 1 - W_ACTUAL);
 
   const overall = Math.max(0, Math.min(100, Math.round(
@@ -1231,6 +1396,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     yaw.score      * W_yaw      +
     rounded.score  * W_rounded  +
     fhp.score      * W_fhp      +
+    monitor.score  * W_monitor  +
     baseline
   )));
 
@@ -1277,11 +1443,12 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   }
 
   // Alerts
-  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, shoulderElev }, distCm, lo, hi);
+  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, shoulderElev, handProp }, distCm, lo, hi);
 
   return {
     score:       overall,
-    qualityScore: 100,
+    qualityScore,
+    qualityReason,
     confidence:  detectionConfidence,
 
     bodyModules: {
@@ -1295,6 +1462,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       elbow:    { ...elbow,    label: "Elbow Angle" },
       monitor:  { ...monitor,  label: "Monitor Height" },
       shoulderElev: { ...shoulderElev, label: "Shoulder Elevation" },
+      handProp: { ...handProp, label: "Hand/Chin Prop Detected" },
     },
 
     detectedConditions: [
@@ -1305,6 +1473,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       rounded.severity  !== "normal" && { name: "Rounded Shoulders",  severity: rounded.severity,  value: rounded.depth },
       spine.severity    !== "normal" && spine.reliable && { name: "Spine Lean", severity: spine.severity, value: `${spine.angle}°` },
       shoulderElev.severity !== "normal" && shoulderElev.reliable && { name: "Shoulder Elevation", severity: shoulderElev.severity, value: `${shoulderElev.elevPct}%` },
+      monitor.severity  !== "normal" && monitor.reliable && { name: "Monitor/Gaze Angle", severity: monitor.severity, value: `${monitor.pitchDeg}°` },
+      handProp.detected && { name: "Hand/Chin Prop", severity: "mild", value: "detected" },
     ].filter(Boolean),
 
     // Legacy metrics shape (backward-compatible with App.jsx/overlays)
