@@ -904,44 +904,54 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
   );
 
   return (
-    <div dir={isAr?"rtl":"ltr"} style={{ maxWidth:1000, margin:"0 auto", padding:"24px 20px", color:TEXT, background:cs.bg, minHeight:"100vh" }}>
+    <div dir={isAr?"rtl":"ltr"} style={{ color:TEXT, background:cs.bg, minHeight:"100vh" }}>
 
-      {/* ── Header ── */}
-      <div style={{ ...card, display:"flex", justifyContent:"space-between", alignItems:"center",
-        gap:16, marginBottom:20, flexWrap:"wrap" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-          <div style={{ width:44, height:44, borderRadius:12, flexShrink:0,
-            background:`linear-gradient(135deg,${TEAL},#0891b2)`, display:"flex",
-            alignItems:"center", justifyContent:"center", fontSize:20,
-            boxShadow:"0 4px 14px rgba(13,148,136,.3)" }}>🩺</div>
-          <div>
-            <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-              <h1 style={{ margin:0, fontSize:19, fontWeight:900, color:TEXT }}>
-                {isAr?"دليل أخصائيي العلاج الطبيعي":"Physiotherapist Marketplace"}
-              </h1>
-              {demoMode && (
-                <span style={{ fontSize:10, fontWeight:700, color:MUTED, background:"rgba(255,255,255,.05)",
-                  border:`1px solid ${BORDER}`, borderRadius:6, padding:"3px 8px" }}>
-                  {isAr?"وضع تجريبي":"Demo"}
-                </span>
-              )}
+      {/* ── Header — full-bleed bar, edge to edge, like the rest of the
+          site's page chrome (HomePage's topbar, HRPanel's tab bar) — the
+          page used to be one single maxWidth:1000 column floating in the
+          middle of the viewport with the raw page background exposed as
+          two big flat gutters on either side; only the scrollable content
+          below is width-capped now, same convention those pages use. ── */}
+      <div style={{ borderBottom:`1px solid ${BORDER}`, background:cs.card }}>
+        <div style={{ maxWidth:1100, margin:"0 auto", padding:"18px 20px",
+          display:"flex", justifyContent:"space-between", alignItems:"center",
+          gap:16, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+            <div style={{ width:44, height:44, borderRadius:12, flexShrink:0,
+              background:`linear-gradient(135deg,${TEAL},#0891b2)`, display:"flex",
+              alignItems:"center", justifyContent:"center", fontSize:20,
+              boxShadow:"0 4px 14px rgba(13,148,136,.3)" }}>🩺</div>
+            <div>
+              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                <h1 style={{ margin:0, fontSize:19, fontWeight:900, color:TEXT }}>
+                  {isAr?"دليل أخصائيي العلاج الطبيعي":"Physiotherapist Marketplace"}
+                </h1>
+                {demoMode && (
+                  <span style={{ fontSize:10, fontWeight:700, color:MUTED, background:"rgba(255,255,255,.05)",
+                    border:`1px solid ${BORDER}`, borderRadius:6, padding:"3px 8px" }}>
+                    {isAr?"وضع تجريبي":"Demo"}
+                  </span>
+                )}
+              </div>
+              <p style={{ margin:"3px 0 0", fontSize:12.5, color:MUTED }}>
+                {isAr?"احجز جلسة مع أخصائي معتمد — دفع آمن عبر Kashier":"Book with a vetted therapist — secure payment via Kashier"}
+              </p>
             </div>
-            <p style={{ margin:"3px 0 0", fontSize:12.5, color:MUTED }}>
-              {isAr?"احجز جلسة مع أخصائي معتمد — دفع آمن عبر Kashier":"Book with a vetted therapist — secure payment via Kashier"}
-            </p>
           </div>
+          {onBack && (
+            <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6,
+              background:cs.inp, border:`0.5px solid ${BORDER}`, borderRadius:9,
+              padding:"8px 15px", fontSize:12, fontWeight:600, color:MUTED, cursor:"pointer",
+              flexShrink:0, transition:"color .15s, border-color .15s" }}
+              onMouseEnter={e=>{e.currentTarget.style.color=TEXT;e.currentTarget.style.borderColor="rgba(13,148,136,.4)";}}
+              onMouseLeave={e=>{e.currentTarget.style.color=MUTED;e.currentTarget.style.borderColor=BORDER;}}>
+              <span>{isAr?"→":"←"}</span>{isAr?"رجوع":"Back"}
+            </button>
+          )}
         </div>
-        {onBack && (
-          <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6,
-            background:cs.inp, border:`0.5px solid ${BORDER}`, borderRadius:9,
-            padding:"8px 15px", fontSize:12, fontWeight:600, color:MUTED, cursor:"pointer",
-            flexShrink:0, transition:"color .15s, border-color .15s" }}
-            onMouseEnter={e=>{e.currentTarget.style.color=TEXT;e.currentTarget.style.borderColor="rgba(13,148,136,.4)";}}
-            onMouseLeave={e=>{e.currentTarget.style.color=MUTED;e.currentTarget.style.borderColor=BORDER;}}>
-            <span>{isAr?"→":"←"}</span>{isAr?"رجوع":"Back"}
-          </button>
-        )}
       </div>
+
+      <div style={{ maxWidth:1100, margin:"0 auto", padding:"24px 20px" }}>
 
       {/* ── Coming soon notice — booking isn't live yet ── */}
       {!BOOKING_LIVE && (
@@ -1053,10 +1063,21 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
               </div>
             </div>
           )}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14 }}>
+          {/* CSS grid's `auto-fill` reserves a track for every column that
+              COULD fit the container, even with far fewer cards than that —
+              with 1-2 filtered results (e.g. a specialty chip active) the
+              real card(s) got squeezed into one narrow left-aligned column
+              while the rest of the row sat empty, reading as a broken/
+              half-built layout. Flex-wrap with centered justification fixes
+              this at any count: a full row lays out left-to-right exactly
+              like before, but 1-2 results land centered on the page instead
+              of stranded in the top-left corner. */}
+          <div style={{ display:"flex", flexWrap:"wrap", gap:14, justifyContent:"center" }}>
             {filtered.map(th=>(
-              <TherapistCard key={th.id} th={th} isAr={isAr}
-                eliteCredit={BOOKING_LIVE && eliteCredit} onBook={handleBookClick} cs={cs} tk={tk}/>
+              <div key={th.id} style={{ flex:"1 1 300px", maxWidth:380 }}>
+                <TherapistCard th={th} isAr={isAr}
+                  eliteCredit={BOOKING_LIVE && eliteCredit} onBook={handleBookClick} cs={cs} tk={tk}/>
+              </div>
             ))}
           </div>
         </>
@@ -1095,6 +1116,8 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
       {tab==="admin" && isAdmin && (
         <AdminMarketplaceManager isAr={isAr} addToast={addToast} adminUid={user?.uid} cs={cs}/>
       )}
+
+      </div>
 
       {/* ══ Booking modal — only reachable once BOOKING_LIVE is true ══ */}
       {BOOKING_LIVE && selected && (
