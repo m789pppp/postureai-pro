@@ -332,8 +332,16 @@ export function WhatsAppReminder({ profile, cs, isAr, addToast }) {
 // were client-only with a hardcoded if/else "AI tip" (not real AI, just
 // templated text), vs the backend-verified LLM + Firestore/Redis
 // versions kept elsewhere.
-export function BasicDashboard({ profile, userSessions, cs, isAr, addToast }) {
-  const isAnyPaid = tierAtLeast(profile?.tier || "standard", "basic");
+export function BasicDashboard({ profile, userSessions, cs, isAr, addToast, tier }) {
+  // Was tierAtLeast(profile?.tier, ...) — self-gating directly off the raw
+  // Firestore field bypasses trial-awareness by construction, regardless
+  // of what the caller already correctly gated on. This component wasn't
+  // even given a tier/effectiveTier prop before, so a trial Basic+ user's
+  // caller-side gate (now fixed to use the effective tier) could pass,
+  // yet this component would still independently decide "standard" and
+  // return null. Falls back to profile?.tier only if no prop is passed,
+  // so any other caller that hasn't been updated still behaves as before.
+  const isAnyPaid = tierAtLeast(tier ?? profile?.tier ?? "standard", "basic");
 
   if (!isAnyPaid) return null;
 

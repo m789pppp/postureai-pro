@@ -3900,7 +3900,12 @@ export default function App(){
     };
     setSessionResult(result);
       if((result.avg_score||0)>=70){
-        setShareCardData({score:result.avg_score,grade:result.grade,streak:0});
+        // sessions/name were never set here — ShareCard destructures both
+        // and draws them directly onto the card (session count, name
+        // badge), so every shared card silently showed "Sessions: 0" and
+        // no name regardless of the user's actual data.
+        setShareCardData({score:result.avg_score,grade:result.grade,streak:0,
+          avgScore:result.avg_score, sessions:(userSessions?.length||0), name:profile?.name||""});
       }
 
     if(window.__demoMode && dur >= 5){
@@ -4263,8 +4268,13 @@ export default function App(){
   }
 
 async function downloadPDF(sessionOverride, isClinical=false){
-    // Normalise tier string — Firestore sometimes returns "Elite" or "ELITE"
-    const normTier = (tier||"standard").toLowerCase();
+    // Was (tier||"standard") — raw tier state, not effectiveTier, so a
+    // trial Elite/Pro user (whose entitlement only lives in
+    // profile.trial_tier, which raw `tier` never reflects) got wrongly
+    // blocked from PDF/Clinical PDF export here even though the inline
+    // Download-PDF button elsewhere on this same page already correctly
+    // uses qualityFor(effectiveTier) for the identical check.
+    const normTier = (effectiveTier||"standard").toLowerCase();
     const isEliteTier = tierAtLeast(normTier,"elite");
     const isProTier   = tierAtLeast(normTier,"professional");
 
@@ -4510,6 +4520,40 @@ async function downloadPDF(sessionOverride, isClinical=false){
           setPage("landing");
         }}
       />
+      {/* This whole block is an early return that bails out of the normal
+          home/live render entirely — so it never reaches the BillingModal
+          mount down in the "home" branch below. onUpgrade above set
+          showBilling=true, but with no BillingModal anywhere in THIS
+          tree, clicking "Upgrade" here did nothing: trialExpired is a
+          plain derived const re-evaluated every render (recomputed from
+          profile.tier==="standard"), and the only thing that ever clears
+          it is BillingModal's onSuccess calling setTier(...) — which
+          could never run because the modal it lives on never mounted. A
+          standard-tier user whose trial expired was permanently stuck on
+          this screen with a literally-dead Upgrade button. */}
+      {showBilling&&<ErrorBoundary key="billing-trialexpired"><BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={async(plan)=>{
+        const newTier = normalizeTier(plan);
+        setTier(newTier);
+        setShowBilling(false);
+        addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");
+        if(user?.uid){
+          try{
+            const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");
+            const{db:_db}=await import("./firebase.js");
+            await _u(_d(_db,"users",user.uid),{
+              tier: newTier,
+              tier_updated_at: new Date().toISOString(),
+              updated_at: _s(),
+            });
+            setProfile(p=>p?({...p,tier:newTier}):p);
+          }catch(e){ console.warn("tier update failed",e?.code); }
+        }
+        if(user?.uid){
+          getUserProfile(user.uid).then(p=>{
+            if(p){ setProfile(p); if(p.tier) setTier(normalizeTier(p.tier)); }
+          }).catch(()=>{});
+        }
+      }}/></ErrorBoundary>}
     </ErrorBoundary>
   );
 
@@ -4882,11 +4926,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
       </div>
       {showChangePw&&<ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/>}
       {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
-      {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} onClose={()=>setShowCustomerSuccess(false)}/>}
+      {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} token={authToken} onClose={()=>setShowCustomerSuccess(false)}/>}
       {showAPIMarketplace&&<ErrorBoundary key="apimarketplace"><Suspense fallback={null}><APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/></Suspense></ErrorBoundary>}
       {showWhiteLabel&&<ErrorBoundary key="whitelabel"><Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/></Suspense></ErrorBoundary>}
       {showMultiTenant&&<ErrorBoundary key="multitenant"><Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/></Suspense></ErrorBoundary>}
-      {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} onClose={()=>setShowAuditSystem(false)}/>}
+      {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} token={authToken} onClose={()=>setShowAuditSystem(false)}/>}
     </ErrorBoundary>);
   }
 
@@ -5010,7 +5054,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showWorkforceAnalytics&&(isAdmin||isHRAdmin)&&<ErrorBoundary key="workforceanalytics"><Suspense fallback={null}><WorkforceAnalytics uid={profile?.uid} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowWorkforceAnalytics(false)}/></Suspense></ErrorBoundary>}
       {showEnterpriseRBAC&&<ErrorBoundary key="enterpriserbac"><Suspense fallback={null}><EnterpriseRBAC orgId={profile?.company_id||companyId} adminUid={user?.uid} profile={profile} members={allUsers} cs={cs} lang={lang} onClose={()=>setShowEnterpriseRBAC(false)}/></Suspense></ErrorBoundary>}
       
-      {showFeatureFlags&&isAdmin&&<ErrorBoundary key="featureflags"><FeatureFlags profile={profile} cs={cs} lang={lang} onClose={()=>setShowFeatureFlags(false)}/></ErrorBoundary>}
+      {showFeatureFlags&&isAdmin&&<ErrorBoundary key="featureflags"><FeatureFlags profile={profile} cs={cs} lang={lang} token={authToken} onClose={()=>setShowFeatureFlags(false)}/></ErrorBoundary>}
       {showNotificationsHub&&<ErrorBoundary key="notificationshub"><Suspense fallback={null}><NotificationsHub orgId={profile?.company_id||companyId} profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} onClose={()=>setShowNotificationsHub(false)}/></Suspense></ErrorBoundary>}
       {showUpgrade&&<ErrorBoundary key="upgrade"><UpgradePrompt reason={upgradeReason} cs={cs} lang={lang} profile={profile} onUpgrade={()=>{setShowUpgrade(false);setShowBilling(true);}} onClose={()=>setShowUpgrade(false)}/></ErrorBoundary>}
       {healthConsentModalEl}
@@ -5125,7 +5169,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   : `${qualityFor(profile?.tier).label.en} · Annual · 17% off`}
               </p>
             </div>
-            <button onClick={()=>{ setShowAnnualUpsell(false); setPage("billing"); }}
+            {/* Was setPage("billing") — there is no page==="billing" route
+                anywhere in this file's page switch (billing is a modal,
+                gated by showBilling, not a page), so this fell through
+                every if-branch to the unconditional Live/camera fallback
+                at the bottom of this function: clicking "Get annual
+                discount" silently dumped the user onto the live camera
+                screen instead of opening billing. setShowBilling(true) is
+                the actual mechanism every other "open billing" button in
+                this file uses. */}
+            <button onClick={()=>{ setShowAnnualUpsell(false); setShowBilling(true); }}
               style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#6366f1,#0891b2)",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",marginBottom:10}}>
               {lang==="ar"?"احصل على الخصم السنوي →":"Get annual discount →"}
             </button>
@@ -5139,8 +5192,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showShareCard&&shareCardData&&(
       <ShareCard score={shareCardData.score} grade={shareCardData.grade}
         streak={shareCardData.streak||0} percentile={null}
+        sessions={shareCardData.sessions} avgScore={shareCardData.avgScore} name={shareCardData.name}
         lang={lang} cs={cs} addToast={addToast} onClose={()=>setShowShareCard(false)}/>
     )}
+      {/* Same class of bug already fixed once for BillingModal/CalibrationWizard/
+          CustomAlertRulesPanel/OnboardingWizard/CompanyOnboarding: each of these
+          11 modals below is only mounted in the Live page branch or the one-time
+          Setup branch, but the button that opens it lives in HomePage's sidebar/
+          settings tabs — which only render inside page==="home". Clicking any of
+          them from Home set the show-state and nothing ever rendered. Mirrored
+          each one's exact mount here (verbatim from its Live/Setup-branch copy)
+          rather than moving it, matching the pattern already used above. */}
+      {showSecurityCenter&&<ErrorBoundary key="securitycenter-home"><Suspense fallback={null}><SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/></Suspense></ErrorBoundary>}
+      {showMFASetup&&<ErrorBoundary key="mfasetup-home"><Suspense fallback={null}><MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/></Suspense></ErrorBoundary>}
+      {showBillingDashboard&&<ErrorBoundary key="billingdashboard-home"><Suspense fallback={null}><BillingDashboard profile={profile} user={user} isAr={lang==="ar"} isAdmin={isAdmin} onClose={()=>setShowBillingDashboard(false)} onUpgrade={(plan)=>{setShowBillingDashboard(false);setShowBilling(true);}}/></Suspense></ErrorBoundary>}
+      {showReferralProgram&&<ErrorBoundary key="referralprogram-home"><Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense></ErrorBoundary>}
+      {showIntegrationsHub&&<ErrorBoundary key="integrationshub-home"><Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense></ErrorBoundary>}
+      {showChurnPrediction&&(isAdmin||isHRAdmin)&&<ChurnPrediction profile={profile} cs={cs} lang={lang} onClose={()=>setShowChurnPrediction(false)}/>}
+      {showCustomerSuccess&&(isAdmin||isHRAdmin)&&<CustomerSuccess profile={profile} cs={cs} lang={lang} token={authToken} onClose={()=>setShowCustomerSuccess(false)}/>}
+      {showAPIMarketplace&&<ErrorBoundary key="apimarketplace-home"><Suspense fallback={null}><APIMarketplace profile={profile} cs={cs} lang={lang} onClose={()=>setShowAPIMarketplace(false)}/></Suspense></ErrorBoundary>}
+      {showWhiteLabel&&<ErrorBoundary key="whitelabel-home"><Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/></Suspense></ErrorBoundary>}
+      {showMultiTenant&&<ErrorBoundary key="multitenant-home"><Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/></Suspense></ErrorBoundary>}
+      {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} token={authToken} onClose={()=>setShowAuditSystem(false)}/>}
     </ErrorBoundary>);
   const TN = T_norm;
   const scoreColor = score ? sc(score) : cs.muted;
@@ -5319,7 +5392,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
       )}
-      {showProductTour&&<ErrorBoundary key="producttour"><ProductTour profile={profile} cs={cs} lang={lang} onClose={()=>setShowProductTour(false)}/></ErrorBoundary>}
+      {/* ProductTour destructures onComplete, not onClose — it was never
+          destructured at all before, so skipping/finishing the tour only
+          hid it locally (its own internal `visible` state), while
+          showProductTour here never cleared, and nothing currently calls
+          setShowProductTour(true) either way. Fixed the prop name for
+          when this does get wired up to a trigger. */}
+      {showProductTour&&<ErrorBoundary key="producttour"><ProductTour profile={profile} cs={cs} lang={lang} onComplete={()=>setShowProductTour(false)}/></ErrorBoundary>}
       {showSecurityCenter&&<ErrorBoundary key="securitycenter"><Suspense fallback={null}><SecurityCenter user={user} profile={profile} cs={cs} lang={lang} onNavigate={setPage} onClose={()=>setShowSecurityCenter(false)} onSignOut={()=>{logOut();setShowSecurityCenter(false);setUser(null);setProfile(null);}}/></Suspense></ErrorBoundary>}
       {showAccountActivity&&<AccountActivity profile={profile} cs={cs} lang={lang} onClose={()=>setShowAccountActivity(false)}/> }
       {showMFASetup&&<ErrorBoundary key="mfasetup"><Suspense fallback={null}><MFASetup profile={profile} cs={cs} lang={lang} onClose={()=>setShowMFASetup(false)} onEnabled={()=>setShowMFASetup(false)} onProfileChange={p=>setProfile(prev=>({...prev,...p}))}/></Suspense></ErrorBoundary>}
