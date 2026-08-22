@@ -1,7 +1,20 @@
 [project]
 name = "postureai-pro-backend"
 version = "1.0.0"
-requires-python = ">=3.12,<3.13"
+# A real Vercel build picked CPython 3.14.7 for this function and failed
+# ("No solution found... mediapipe==0.10.14 has no wheels with a matching
+# Python ABI tag... we only found wheels for cp39/cp310/cp311/cp312")
+# even though this file already said requires-python = ">=3.12,<3.13" and
+# the repo root already has a .python-version file containing "3.12".
+# Simplified the bound to match Vercel's own documented example exactly
+# (a single lower bound, no upper bound) in case the compound
+# ">=3.12,<3.13" specifier was the reason it wasn't picked up; also added
+# api/.python-version as a second, defensive declaration co-located with
+# the entrypoint, for the same "Vercel scopes discovery to the function's
+# own directory under api/" reason api/requirements.txt exists (see the
+# comment there). mediapipe (a hard dependency — see backend/requirements.txt)
+# only ships wheels through cp312, so this project cannot run on 3.13/3.14.
+requires-python = ">=3.12"
 
 # ── Vercel Python entrypoint ─────────────────────────────────────────
 # api/main.py loads the real Flask app object from backend/backend.py
