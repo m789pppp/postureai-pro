@@ -87,7 +87,7 @@ function Avatar({ name, size=44 }) {
 }
 
 /* ── Stars ───────────────────────────────────────────────────── */
-function Stars({ rating, count }) {
+function Stars({ rating, count, muted="#64748b" }) {
   if (!rating) return null;
   return (
     <div style={{ display:"flex", alignItems:"center", gap:4 }}>
@@ -96,7 +96,7 @@ function Stars({ rating, count }) {
           <span key={n} style={{ fontSize:12, color: n<=Math.round(rating) ? "#fbbf24" : "#334155" }}>★</span>
         ))}
       </div>
-      <span style={{ fontSize:11, color:MUTED }}>{rating} {count ? `(${count})` : ""}</span>
+      <span style={{ fontSize:11, color:muted }}>{rating} {count ? `(${count})` : ""}</span>
     </div>
   );
 }
@@ -104,12 +104,19 @@ function Stars({ rating, count }) {
 /* ── Therapist card ──────────────────────────────────────────── */
 function TherapistCard({ th, onBook, eliteCredit, isAr, cs, tk }) {
   if(!cs||!tk){ cs={card:"#111827",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; tk=mkT(cs); }
-  const { BORDER, TEXT, MUTED } = tk;
+  const { BORDER, TEXT, MUTED, SUB } = tk;
   const btnP = tk.btnP; const card = tk.card;
   const [expanded, setExpanded] = useState(false);
+  // Inline React styles can't express ":hover" as an object key — that was
+  // dead, silently-ignored CSS (React just renders it as a literal, inert
+  // style property) and every card had zero hover feedback despite the
+  // apparent intent. Real hover state instead.
+  const [hovered, setHovered] = useState(false);
   return (
-    <div style={{ ...card, display:"flex", flexDirection:"column", gap:0,
-      transition:"border-color .2s", ":hover":{borderColor:"rgba(13,148,136,.3)"} }}>
+    <div
+      onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
+      style={{ ...card, display:"flex", flexDirection:"column", gap:0,
+        transition:"border-color .2s", borderColor: hovered ? "rgba(13,148,136,.3)" : BORDER }}>
       <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
         <Avatar name={th.name} size={48}/>
         <div style={{ flex:1, minWidth:0 }}>
@@ -125,7 +132,7 @@ function TherapistCard({ th, onBook, eliteCredit, isAr, cs, tk }) {
           <div style={{ fontSize:12, color:MUTED, marginTop:2 }}>
             {[th.city, th.years_experience && `${th.years_experience}${isAr?" سنة خبرة":"y exp"}`].filter(Boolean).join(" · ")}
           </div>
-          <Stars rating={th.rating} count={th.review_count}/>
+          <Stars rating={th.rating} count={th.review_count} muted={MUTED}/>
         </div>
         <div style={{ textAlign:"end", flexShrink:0 }}>
           {eliteCredit ? (
@@ -174,7 +181,7 @@ function BookingCard({ b, isAr, currentUid, demoMode, onCancel, cancellingId,
                        ratingId, setRatingId, submitReview, submittingReview, cs, tk }) {
   if(!cs||!tk){ cs={card:"#111827",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; tk=mkT(cs); }
   const { BORDER, TEXT, MUTED, SUB, CARD } = tk;
-  const btnG = tk.btnGh; const lbl = tk.lbl;
+  const card = tk.card; const btnG = tk.btnGh; const lbl = tk.lbl;
   const [chatOpen, setChatOpen] = useState(false);
   const sc = STATUS_COLORS[b.status] || MUTED;
 
@@ -204,7 +211,7 @@ function BookingCard({ b, isAr, currentUid, demoMode, onCancel, cancellingId,
       {/* Rating display */}
       {b.rating && (
         <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:6 }}>
-          <Stars rating={b.rating}/>
+          <Stars rating={b.rating} muted={MUTED}/>
           {b.review_text && <span style={{ fontSize:11.5, color:SUB }}>"{b.review_text}"</span>}
         </div>
       )}
@@ -231,7 +238,7 @@ function BookingCard({ b, isAr, currentUid, demoMode, onCancel, cancellingId,
       </div>
 
       {ratingId === b.id && (
-        <ReviewForm booking={b} isAr={isAr} submitting={submittingReview}
+        <ReviewForm booking={b} isAr={isAr} submitting={submittingReview} tk={tk}
           onCancel={()=>setRatingId(null)}
           onSubmit={(r,c)=>submitReview(b,r,c)}/>
       )}
@@ -366,7 +373,9 @@ function BookingChat({ bookingId, isAr, currentUid, demoMode, cs, tk }) {
 }
 
 /* ── Review form ─────────────────────────────────────────────── */
-function ReviewForm({ booking, isAr, submitting, onCancel, onSubmit }) {
+function ReviewForm({ booking, isAr, submitting, onCancel, onSubmit, tk }) {
+  if(!tk){ tk = mkT({card:"#111827",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}); }
+  const { TEXT } = tk; const inp = tk.inp; const btnP = tk.btnP; const btnG = tk.btnGh;
   const [rating, setRating]   = useState(0);
   const [hover, setHover]     = useState(0);
   const [comment, setComment] = useState("");
@@ -404,8 +413,8 @@ function ReviewForm({ booking, isAr, submitting, onCancel, onSubmit }) {
 /* ── Booking modal ───────────────────────────────────────────── */
 function BookingModal({ therapist, isAr, loading, eliteCredit, cs, tk, onClose, onSubmit }) {
   if(!cs||!tk){ cs={card:"#0d1a2e",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; tk=mkT(cs); }
-  const { BORDER, TEXT, MUTED } = tk;
-  const inp = tk.inp; const btnP = tk.btnP; const btnG = tk.btnGh; const lbl = tk.lbl;
+  const { BORDER, TEXT, MUTED, SUB } = tk;
+  const card = tk.card; const inp = tk.inp; const btnP = tk.btnP; const btnG = tk.btnGh; const lbl = tk.lbl;
   const [preferredTime, setPreferredTime] = useState("");
   const [notes, setNotes]                 = useState("");
   const [slots, setSlots]                 = useState(null);
@@ -560,24 +569,37 @@ function BookingModal({ therapist, isAr, loading, eliteCredit, cs, tk, onClose, 
 }
 
 /* ── Admin panels (unchanged logic, minor style cleanup) ──────── */
-function AdminMarketplaceManager({ isAr, addToast, adminUid }) {
+// NOTE: these 4 components previously referenced bare `card`/`MUTED`/`SUB`/
+// `TEALLT`(ok, that one's a module const)/`btnP`/`btnG`/`lbl`/`inp`/`border`
+// identifiers that were never defined in their own scope (not props, not
+// module-level consts, not local vars) — every one of `AdminMarketplaceManager`
+// / `AdminPayoutsManager` / `AdminBookingsManager` / `AdminTherapistManager`
+// threw `ReferenceError` the instant a real admin opened the "Manage" tab,
+// which is what actually made that whole tab unusable, not a styling issue.
+// Fixed by threading `cs`/`tk` through the same way every other component in
+// this file already does (mkT(cs) once, destructure the pieces each
+// component needs).
+function AdminMarketplaceManager({ isAr, addToast, adminUid, cs }) {
+  if(!cs){ cs={card:"#111827",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; }
+  const tk = mkT(cs);
   const [subTab, setSubTab] = useState("therapists");
   return (
     <div>
       <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-        <Tab active={subTab==="therapists"} onClick={()=>setSubTab("therapists")}>{isAr?"الأخصائيون":"Therapists"}</Tab>
-        <Tab active={subTab==="bookings"}   onClick={()=>setSubTab("bookings")}>{isAr?"الحجوزات":"Bookings"}</Tab>
-        <Tab active={subTab==="payouts"}    onClick={()=>setSubTab("payouts")}>{isAr?"المستحقات":"Payouts"}</Tab>
+        <Tab active={subTab==="therapists"} onClick={()=>setSubTab("therapists")} cs={cs}>{isAr?"الأخصائيون":"Therapists"}</Tab>
+        <Tab active={subTab==="bookings"}   onClick={()=>setSubTab("bookings")} cs={cs}>{isAr?"الحجوزات":"Bookings"}</Tab>
+        <Tab active={subTab==="payouts"}    onClick={()=>setSubTab("payouts")} cs={cs}>{isAr?"المستحقات":"Payouts"}</Tab>
       </div>
-      {subTab==="therapists" && <AdminTherapistManager isAr={isAr} addToast={addToast}/>}
-      {subTab==="bookings"   && <AdminBookingsManager  isAr={isAr} addToast={addToast} adminUid={adminUid}/>}
-      {subTab==="payouts"    && <AdminPayoutsManager   isAr={isAr} addToast={addToast}/>}
+      {subTab==="therapists" && <AdminTherapistManager isAr={isAr} addToast={addToast} cs={cs} tk={tk}/>}
+      {subTab==="bookings"   && <AdminBookingsManager  isAr={isAr} addToast={addToast} adminUid={adminUid} cs={cs} tk={tk}/>}
+      {subTab==="payouts"    && <AdminPayoutsManager   isAr={isAr} addToast={addToast} cs={cs} tk={tk}/>}
     </div>
   );
 }
 
 /* Reuse existing admin sub-components with minimal wiring */
-function AdminPayoutsManager({ isAr, addToast }) {
+function AdminPayoutsManager({ isAr, addToast, tk }) {
+  const { MUTED } = tk; const card = tk.card; const btnP = tk.btnP;
   const [payouts,setPayouts]=useState([]); const [loading,setLoading]=useState(true); const [payingId,setPayingId]=useState(null);
   const load=()=>{setLoading(true);MarketplaceAPI.adminPayouts().then(d=>setPayouts(d?.payouts||[])).catch(e=>addToast?.(e.message,"error")).finally(()=>setLoading(false));};
   useEffect(()=>{load();},[]);
@@ -598,7 +620,8 @@ function AdminPayoutsManager({ isAr, addToast }) {
   </div>);
 }
 
-function AdminBookingsManager({ isAr, addToast, adminUid }) {
+function AdminBookingsManager({ isAr, addToast, adminUid, tk }) {
+  const { MUTED, SUB } = tk; const card = tk.card;
   const [bookings,setBookings]=useState([]); const [loading,setLoading]=useState(true);
   useEffect(()=>{MarketplaceAPI.adminListBookings().then(d=>setBookings(d?.bookings||[])).catch(e=>addToast?.(e.message,"error")).finally(()=>setLoading(false));},[]);
   if(loading)return<div style={{color:MUTED}}>{isAr?"جاري التحميل…":"Loading…"}</div>;
@@ -614,7 +637,9 @@ function AdminBookingsManager({ isAr, addToast, adminUid }) {
   </div>);
 }
 
-function AdminTherapistManager({ isAr, addToast }) {
+function AdminTherapistManager({ isAr, addToast, tk }) {
+  const { MUTED, SUB, BORDER } = tk; const card = tk.card; const inp = tk.inp;
+  const btnP = tk.btnP; const btnG = tk.btnG; const lbl = tk.lbl; const border = BORDER;
   const [list,setList]=useState([]); const [showNew,setShowNew]=useState(false);
   const [form,setForm]=useState({name:"",city:"",bio:"",specialties:"",session_fee_cents:"",currency:"EGP",years_experience:"",partner_type:"individual",discount_pct:"",bulk_seats:""});
   const [availability,setAvailability]=useState({}); const [saving,setSaving]=useState(false);
@@ -732,24 +757,49 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
     MarketplaceAPI.listTherapists(cityFilter?{city:cityFilter}:{})
       .then(d=>{ setTherapists(d?.therapists||[]); setDemoMode(false); })
       .catch(e=>{
-        if(e.isBackendDown){
-          const f = cityFilter
-            ? DEMO_THERAPISTS.filter(t=>t.city.toLowerCase().includes(cityFilter.toLowerCase()))
-            : DEMO_THERAPISTS;
-          setTherapists(f); setDemoMode(true);
-        } else setErr(e.message||"Failed to load");
+        // Previously only e.isBackendDown (network failure / 404 / non-JSON
+        // response) fell back to demo data — any other failure (e.g. a real
+        // 500 from the backend, like the Firebase Admin credentials
+        // misconfiguration this actually hit in production) fell through to
+        // setErr and rendered the raw server error message as the entire
+        // page content, with no therapists shown and no way to recover.
+        // Any failure now degrades to the same demo experience instead —
+        // the user always sees a working (if demo-labeled) marketplace, and
+        // the real error is still logged for whoever's watching the console
+        // / error monitoring, just not dumped onto the page.
+        console.error("[Marketplace] listTherapists failed, showing demo data:", e);
+        const f = cityFilter
+          ? DEMO_THERAPISTS.filter(t=>t.city.toLowerCase().includes(cityFilter.toLowerCase()))
+          : DEMO_THERAPISTS;
+        setTherapists(f); setDemoMode(true);
       })
       .finally(()=>setLoading(false));
   },[cityFilter]);
 
-  useEffect(()=>{ if(tab==="browse") load(); },[tab,load]);
+  // Debounced: cityFilter changes on every keystroke, and load()'s identity
+  // (useCallback deps) changes with it — without debouncing this fired one
+  // full network request per keystroke while typing a city name.
+  useEffect(()=>{
+    if(tab!=="browse") return;
+    const t = setTimeout(load, 350);
+    return ()=>clearTimeout(t);
+  },[tab,load]);
 
   useEffect(()=>{
     if(tab==="mine"){
       if(demoMode){ setMyBookings(getDemoBookings()); return; }
       MarketplaceAPI.myBookings()
         .then(d=>setMyBookings(d?.bookings||[]))
-        .catch(e=>{ if(e.isBackendDown){ setDemoMode(true); setMyBookings(getDemoBookings()); } });
+        .catch(e=>{
+          // Was gated on e.isBackendDown only — any other failure (e.g. the
+          // same Firebase Admin misconfiguration listTherapists can hit)
+          // silently left myBookings as [], which renders identically to
+          // "you genuinely have zero bookings" — misleading, not just ugly.
+          // Same policy as listTherapists now: degrade to demo, don't lie
+          // about the reason by looking like an empty state.
+          console.error("[Marketplace] myBookings failed, showing demo data:", e);
+          setDemoMode(true); setMyBookings(getDemoBookings());
+        });
     }
   },[tab,demoMode]);
 
@@ -899,6 +949,16 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
             <div style={{ padding:"14px 18px", borderRadius:10, background:"rgba(248,113,113,.08)",
               border:"1px solid rgba(248,113,113,.2)", color:"#f87171", fontSize:13 }}>⚠ {err}</div>
           )}
+          {!loading && demoMode && (
+            <div style={{ padding:"11px 16px", borderRadius:10, marginBottom:14,
+              background:"rgba(255,255,255,.03)", border:`1px solid ${BORDER}`,
+              color:MUTED, fontSize:12.5, display:"flex", alignItems:"center", gap:8 }}>
+              <span>ℹ️</span>
+              <span>{isAr
+                ? "مش قادرين نوصل لقائمة الأخصائيين الحقيقية دلوقتي — ده وضع تجريبي للاستعراض بس، محدش هيشوف حجزك ولا هيتحصّل عليه فلوس."
+                : "We couldn't reach the real therapist list right now — this is demo data for browsing only. Bookings made here aren't real and won't charge you."}</span>
+            </div>
+          )}
           {!loading && !err && filtered.length===0 && (
             <div style={{ ...card, textAlign:"center", padding:"40px 20px" }}>
               <div style={{ fontSize:32, marginBottom:10 }}>🔍</div>
@@ -950,7 +1010,7 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
 
       {/* ══ Admin tab ══ */}
       {tab==="admin" && isAdmin && (
-        <AdminMarketplaceManager isAr={isAr} addToast={addToast} adminUid={user?.uid}/>
+        <AdminMarketplaceManager isAr={isAr} addToast={addToast} adminUid={user?.uid} cs={cs}/>
       )}
 
       {/* ══ Booking modal ══ */}
