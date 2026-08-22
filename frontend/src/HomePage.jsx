@@ -988,11 +988,17 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
       </div>
 
       {/* ── Pain risk card (Basic+) ── */}
-      {tierAtLeast(profile?.tier,"basic")&&<PainRiskCard sessions={userSessions} cs={cs} isAr={isAr}/>}
+      {/* Was tierAtLeast(profile?.tier,...) — raw Firestore tier field,
+          not the effective (trial-aware) tier this component already
+          receives as its own `tier` prop, and every other tier check in
+          DashEmployee already correctly uses. The sibling DashIndividual
+          component's identical PainRiskCard gate already uses `tier` —
+          this was the one outlier. */}
+      {tierAtLeast(tier,"basic")&&<PainRiskCard sessions={userSessions} cs={cs} isAr={isAr}/>}
 
       {/* ── BasicDashboard: habit score + streak freeze + whatsapp (Basic+) ── */}
-      {tierAtLeast(profile?.tier,"basic")&&(
-        <BasicDashboard profile={profile} userSessions={userSessions} cs={cs} isAr={isAr} addToast={addToast}/>
+      {tierAtLeast(tier,"basic")&&(
+        <BasicDashboard profile={profile} userSessions={userSessions} cs={cs} isAr={isAr} addToast={addToast} tier={tier}/>
       )}
 
       {/* ── 7-day chart ── */}
@@ -1610,7 +1616,7 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
-  onBillingHistory, onReferral, onIntegrations, onNotifications,
+  onBillingHistory, onReferral, onIntegrations, onNotifications, onMFA,
   lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
@@ -2207,8 +2213,16 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             {/* MFA / 2FA status — MFASetup.jsx has been a fully working
                 TOTP+SMS flow for a while; this row was still a permanently
-                dead "Soon" badge with nothing wired to open it. */}
-            <div onClick={()=>setShowMFASetup?.(true)} style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+                dead "Soon" badge with nothing wired to open it. That earlier
+                fix called setShowMFASetup directly, but PanelSettings is
+                never given that setter (only HomePage itself receives it as
+                a prop) — every other action on this same panel goes through
+                an onX callback prop (onBillingHistory/onReferral/
+                onIntegrations/onNotifications) for exactly this reason.
+                setShowMFASetup here was a bare undeclared identifier: not a
+                silent no-op, an actual ReferenceError the moment this row
+                was clicked. */}
+            <div onClick={()=>onMFA?.()} style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
               borderRadius:10, border:`1px solid ${cs.border}`, cursor:"pointer",
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -3346,6 +3360,7 @@ export default function HomePage({
       onReferral={()=>setShowReferralProgram?.(true)}
       onNotifications={()=>setShowNotificationsHub?.(true)}
       onIntegrations={()=>setShowIntegrationsHub?.(true)}
+      onMFA={()=>setShowMFASetup?.(true)}
       lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}
       AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}/>
   ) : null;
