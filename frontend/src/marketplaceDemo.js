@@ -19,19 +19,19 @@ const MESSAGES_KEY = NS + "messages";
 
 export const DEMO_THERAPISTS = [
   {
-    id: "demo-th-1", name: "Dr. Nourhan El-Sayed", city: "Cairo",
+    id: "demo-th-1", name: "Dr. Mina", city: "Cairo",
     specialties: ["Neck & Shoulder", "Desk Posture"], years_experience: 7,
     bio: "Specializes in tech-worker posture rehab and cervical spine care.",
     session_fee_cents: 45000, currency: "EGP", rating: 4.8, review_count: 62,
   },
   {
-    id: "demo-th-2", name: "Dr. Ahmed Farouk", city: "Giza",
+    id: "demo-th-2", name: "Dr. Menna", city: "Giza",
     specialties: ["Lower Back Pain", "Sports Injury"], years_experience: 11,
     bio: "Former national athletics team physio, focuses on functional movement.",
     session_fee_cents: 60000, currency: "EGP", rating: 4.9, review_count: 118,
   },
   {
-    id: "demo-th-3", name: "Dr. Mariam Adel", city: "Alexandria",
+    id: "demo-th-3", name: "Dr. Adly", city: "Alexandria",
     specialties: ["Postural Correction", "Ergonomics"], years_experience: 5,
     bio: "Works closely with remote/hybrid employees on home-office setup.",
     session_fee_cents: 40000, currency: "EGP", rating: 4.7, review_count: 34,
