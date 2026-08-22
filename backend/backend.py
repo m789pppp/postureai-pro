@@ -348,10 +348,17 @@ def _get_gemini_client():
             api_key=GEMINI_API_KEY,
             # ms — bounds worst-case latency so a slow/unreachable Gemini
             # call can never hang the request; falls through to Groq instead.
-            # Kept well under Groq's own 18s per-call timeout so the
-            # Gemini→Groq chain has a sane total ceiling (see the frontend
-            # fetch timeout in localAI.js's _backendLLM, sized to match).
-            http_options=types.HttpOptions(timeout=9000),
+            # Gemini's API rejects any deadline under 10s outright (400
+            # INVALID_ARGUMENT "Manually set deadline Xs is too short") -
+            # this used to be 9000 and so failed on literally every call,
+            # silently routing 100% of traffic through the Groq fallback
+            # with nothing in the response indicating Gemini was dead.
+            # 10500 clears that floor with a small margin. Paired with
+            # call_groq's timeout (also trimmed, see below) so the
+            # Gemini→Groq chain still fits under the frontend's 26s fetch
+            # deadline (localAI.js's _backendLLM) even in the worst case
+            # where Gemini times out and Groq is then tried too.
+            http_options=types.HttpOptions(timeout=10500),
         )
         return _gemini_client
     except Exception as e:
@@ -429,7 +436,12 @@ def call_groq(messages, max_tokens=600, temperature=0.5):
             resp = req.post(GROQ_URL,
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
                 json=payload,
-                timeout=18)
+                # Trimmed from 18s -> 15s so a worst-case Gemini timeout
+                # (10.5s, see _get_gemini_client) followed by a worst-case
+                # Groq timeout still lands under the frontend's 26s fetch
+                # deadline, instead of the 27s the old 9+18 combo actually
+                # summed to (already over budget before Gemini's own bug).
+                timeout=15)
             if resp.status_code == 200:
                 text = (resp.json()["choices"][0]["message"].get("content") or "").strip()
                 if text:
