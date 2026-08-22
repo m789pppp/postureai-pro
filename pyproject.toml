@@ -1,20 +1,24 @@
 [project]
 name = "postureai-pro-backend"
 version = "1.0.0"
-# A real Vercel build picked CPython 3.14.7 for this function and failed
-# ("No solution found... mediapipe==0.10.14 has no wheels with a matching
-# Python ABI tag... we only found wheels for cp39/cp310/cp311/cp312")
-# even though this file already said requires-python = ">=3.12,<3.13" and
-# the repo root already has a .python-version file containing "3.12".
-# Simplified the bound to match Vercel's own documented example exactly
-# (a single lower bound, no upper bound) in case the compound
-# ">=3.12,<3.13" specifier was the reason it wasn't picked up; also added
-# api/.python-version as a second, defensive declaration co-located with
-# the entrypoint, for the same "Vercel scopes discovery to the function's
-# own directory under api/" reason api/requirements.txt exists (see the
-# comment there). mediapipe (a hard dependency — see backend/requirements.txt)
-# only ships wheels through cp312, so this project cannot run on 3.13/3.14.
-requires-python = ">=3.12"
+# A real Vercel build picked CPython 3.14.7 and failed ("No solution
+# found... mediapipe==0.10.14 has no wheels with a matching Python ABI
+# tag... we only found wheels for cp39/cp310/cp311/cp312"), which led to
+# a previous, WRONG fix here: this line used to read the compound
+# ">=3.12,<3.13" and got simplified down to a bare ">=3.12" on the theory
+# that the compound specifier wasn't being parsed. That was backwards —
+# per Vercel's own Feb 2026 changelog ("Python 3.13 and 3.14 are now
+# available"): "The default will switch to Python 3.14 in the coming
+# months. To continue using Python 3.12, specify an upper bound in your
+# project manifest." A bare lower bound is exactly what lets it float up
+# to the new default — which is why the build failed again, with the
+# identical error, after that change. Restored the upper bound.
+#
+# api/.python-version ("3.12") stays as a second, defensive pin
+# co-located with the entrypoint. mediapipe (backend/requirements.txt)
+# only ships wheels through cp312, so this project cannot run on 3.13/3.14
+# regardless of which pin mechanism Vercel actually honors.
+requires-python = ">=3.12,<3.13"
 
 # ── Vercel Python entrypoint ─────────────────────────────────────────
 # api/main.py loads the real Flask app object from backend/backend.py
