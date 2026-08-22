@@ -30,8 +30,28 @@ const _memCache = new Map();
 // fired. sessionCount defaults to "" so a caller that genuinely has no
 // count handy still gets a stable (if less precise) key rather than a
 // crash.
+//
+// CACHE_VERSION: none of the layers above ever distinguish "a real LLM
+// answer" from "the offline rule-based KB fallback" — localChat/
+// localAnalysis in localAI.js return a non-empty string either way (that
+// fallback exists specifically so the UI never shows a hard error), and
+// every call site here just checks `text.length` before caching. During
+// the recent outage where both configured providers were failing on
+// every single request (dead retired model names, then an empty-content
+// reasoning-model response — see backend.py's call_groq fix), that meant
+// every AI Insights / Predictive AI tab got the *generic offline KB
+// text* cached as if it were a real personalized answer — 1hr in memory,
+// 24hr in Firestore/sessionStorage. Fixing the backend does nothing for
+// a user who already has one of those stale entries: every cache layer
+// keeps serving the cached generic text (same uid/tab/lang/session
+// count, still within TTL) instead of ever calling the now-working
+// backend again. Bumping this string forces a clean cache miss across
+// every layer on next deploy, one time, for everyone — cheap enough to
+// bump again the next time a provider outage silently poisons the
+// cache like this.
+const CACHE_VERSION = "v2";
 function cacheKey(uid, tab, lang, sessionCount = "") {
-  return `corvus_ai_${uid}_${tab}_${lang}_${sessionCount}`;
+  return `corvus_ai_${CACHE_VERSION}_${uid}_${tab}_${lang}_${sessionCount}`;
 }
 
 // ── Memory cache ───────────────────────────────────────────────
@@ -68,7 +88,7 @@ function setSessionCache(uid, tab, lang, text, sessionCount) {
 // ── Firestore L3 cache (persistent) ───────────────────────────
 async function getFirestoreCached(uid, tab, lang, sessionCount) {
   try {
-    const ref = doc(db, "users", uid, "ai_insights", `${tab}_${lang}`);
+    const ref = doc(db, "users", uid, "ai_insights", `${tab}_${lang}_${CACHE_VERSION}`);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
     const { text, ts, session_count } = snap.data();
@@ -81,7 +101,7 @@ async function getFirestoreCached(uid, tab, lang, sessionCount) {
 
 async function setFirestoreCache(uid, tab, lang, text, sessionCount) {
   try {
-    const ref = doc(db, "users", uid, "ai_insights", `${tab}_${lang}`);
+    const ref = doc(db, "users", uid, "ai_insights", `${tab}_${lang}_${CACHE_VERSION}`);
     await setDoc(ref, {
       text,
       ts: Date.now(),
