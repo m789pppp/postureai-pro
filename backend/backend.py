@@ -305,17 +305,26 @@ except Exception:
 #   Get API key → set GEMINI_API_KEY in Railway. Uses the new unified
 #   `google-genai` SDK (the old `google-generativeai` package is
 #   deprecated upstream and is NOT what's used here).
-# Groq (secondary): free tier, 14,400 req/day, ~500ms latency, also
-#   genuinely good quality (Llama 3.3 70B) — kept as a fast fallback.
-#   Sign up at console.groq.com → API Keys → set GROQ_API_KEY in Railway.
+# Groq (secondary): free tier, 14,400 req/day, ~500ms latency — kept as
+#   a fast fallback. Sign up at console.groq.com → API Keys → set
+#   GROQ_API_KEY (Vercel project env vars, Production scope — see
+#   VERCEL_ENV_SETUP.md; this backend now runs as a Vercel serverless
+#   function, not on Railway).
 # Ollama (optional last-resort fallback): self-hosted, zero cost but
 #   needs a dedicated server — most deployments won't set this.
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL        = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")       # best free-tier-eligible model
 GEMINI_MODEL_FAST   = os.getenv("GEMINI_MODEL_FAST", "gemini-3.5-flash-lite")  # fallback if primary is rate-limited
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")  # best free model
-GROQ_MODEL_FAST     = "llama-3.1-8b-instant"   # fallback if 70b rate-limited
+# Live-verified against the current Groq catalog (August 2026) — the
+# previous defaults, "llama-3.3-70b-versatile" and "llama-3.1-8b-instant",
+# have both been retired from Groq's model list entirely (a real key
+# against either now gets a hard 404 "does not exist or you do not have
+# access to it" on every single call, so Groq silently never worked even
+# with a valid, correctly-configured key). Groq's current general-purpose
+# chat models are the open-weight "openai/gpt-oss" line instead.
+GROQ_MODEL          = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")       # best current free model
+GROQ_MODEL_FAST     = "openai/gpt-oss-20b"     # fallback if 120b rate-limited
 GROQ_URL            = "https://api.groq.com/openai/v1/chat/completions"
 OLLAMA_URL          = os.getenv("OLLAMA_URL", "")
 LOCAL_LLM_MODEL     = os.getenv("LOCAL_LLM_MODEL", "qwen2.5:3b")
@@ -396,17 +405,36 @@ def call_gemini(messages, max_tokens=600, temperature=0.5):
     return None
 
 def call_groq(messages, max_tokens=600, temperature=0.5):
-    """Call Groq API — free tier (14,400 req/day). Server-side only."""
+    """Call Groq API — free tier (14,400 req/day). Server-side only.
+
+    The current default models (openai/gpt-oss-120b / -20b) are reasoning
+    models: unlike the old Llama defaults, they spend part of the token
+    budget "thinking" in a separate `reasoning` field before writing the
+    actual `content` field. Live-tested without reasoning_effort set: a
+    modest max_tokens (e.g. 100) gets consumed entirely by reasoning,
+    finish_reason comes back "length", and `content` is "" — a *successful*
+    200 response that still silently produces no usable text (this was
+    reached during testing, not hypothesized: the exact call this code
+    makes, unmodified, returned empty content until reasoning_effort was
+    added). "low" reasoning_effort fixes this — verified live: same prompt,
+    same max_tokens, real content comes back with finish_reason "stop".
+    """
     if not GROQ_API_KEY:
         return None
     for model in (GROQ_MODEL, GROQ_MODEL_FAST):
         try:
+            payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
+            if model.startswith("openai/gpt-oss"):
+                payload["reasoning_effort"] = "low"
             resp = req.post(GROQ_URL,
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-                json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
+                json=payload,
                 timeout=18)
             if resp.status_code == 200:
-                return resp.json()["choices"][0]["message"]["content"].strip()
+                text = (resp.json()["choices"][0]["message"].get("content") or "").strip()
+                if text:
+                    return text
+                continue  # 200 but empty content (e.g. reasoning ate the budget) — try the other model
             if resp.status_code == 429:
                 continue   # rate-limited on this model — try faster one
             # Any other failure (bad key, 5xx, etc.) will fail the same way
