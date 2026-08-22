@@ -5021,11 +5021,26 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <AnnouncementsBar token={authToken}/>
         </div>
       )}
+      {/* HomePage's `tier` prop below was `tier={tier}` — the raw tier
+          state, not the `effectiveTier` this same file's own comment (a few
+          hundred lines up, at its definition) says every feature gate
+          should use instead, because raw `tier` starts null on load and
+          never gets set to a trial user's trial_tier at all (grep confirms:
+          no setTier() call site anywhere references trial_tier). HomePage
+          has zero trial-awareness of its own — no is_trial/trial_tier
+          reference anywhere in it — it just threads whatever `tier` it's
+          given straight into isPro()/isElite()/tierAtLeast() and the tier
+          badge/plan-name text everywhere. Net effect: every Elite trial
+          user saw "Free"/"Standard" branding and had every Elite-gated
+          button in this component — including the Posture DNA button this
+          fix was prompted by — silently missing, despite
+          downloadPostureDNAReport() itself correctly checking effectiveTier
+          and being willing to run for them. */}
       <HomePage
         user={user} profile={profile} cs={cs} lang={lang} isAr={isAr} dir={dir}
         userSessions={userSessions} setUserSessions={setUserSessions}
         allUsers={allUsers} setAllUsers={setAllUsers}
-        tier={tier} setTier={setTier} mode={mode} setMode={setMode}
+        tier={effectiveTier} setTier={setTier} mode={mode} setMode={setMode}
         setPage={setPage} startCamera={startCamera} addToast={addToast} goToBreak={goToBreak}
         setShowCertModal={setShowCertModal}
         setShowDashboard={setShowDashboard} setShowCoach={setShowCoach}
