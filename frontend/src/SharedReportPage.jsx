@@ -19,7 +19,7 @@ const METRIC_LABELS = {
 const SRP_TOKENS = {
   page: {
     minHeight:"100dvh", background:"#030b14", color:"#f1f5f9",
-    fontFamily:"'DM Sans', system-ui, sans-serif",
+    fontFamily:"'IBM Plex Sans Arabic', 'DM Sans', system-ui, sans-serif",
   },
   center: {
     display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",

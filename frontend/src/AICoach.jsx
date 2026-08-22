@@ -133,7 +133,7 @@ function inl(t) {
 
 function MdText({ text }) {
   return (
-    <div style={{ lineHeight:1.74,fontFamily:"'DM Sans',system-ui,sans-serif",fontSize:13,letterSpacing:"-.01em",color:T.text }}
+    <div style={{ lineHeight:1.74,fontFamily:"'IBM Plex Sans Arabic','DM Sans',system-ui,sans-serif",fontSize:13,letterSpacing:"-.01em",color:T.text }}
       dangerouslySetInnerHTML={{ __html: renderMd(text) }}/>
   );
 }

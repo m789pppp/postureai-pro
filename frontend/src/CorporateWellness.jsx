@@ -93,7 +93,7 @@ Be concise, professional, and action-oriented. ${isAr ? "Write in Arabic." : "Wr
     display:"flex",alignItems:"center",justifyContent:"center",padding:16 };
   const modal = { background:cs.card,border:`1px solid ${cs.border}`,borderRadius:20,
     padding:28,maxWidth:540,width:"100%",maxHeight:"90dvh",overflowY:"auto",
-    fontFamily:"system-ui,sans-serif" };
+    fontFamily:"'IBM Plex Sans Arabic',system-ui,sans-serif" };
 
   return (
     <div style={overlay} onClick={e=>{ if(e.target===e.currentTarget) onClose?.(); }}>
@@ -256,7 +256,7 @@ export function SchoolsModal({ cs, isAr, onClose, addToast }) {
     display:"flex",alignItems:"center",justifyContent:"center",padding:16 };
   const modal = { background:cs.card,border:`1px solid ${cs.border}`,borderRadius:20,
     padding:28,maxWidth:520,width:"100%",maxHeight:"90dvh",overflowY:"auto",
-    fontFamily:"system-ui,sans-serif" };
+    fontFamily:"'IBM Plex Sans Arabic',system-ui,sans-serif" };
   const inp = { width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,.04)",
     border:`1px solid ${cs.border}`,borderRadius:9,padding:"10px 13px",
     fontSize:13,color:cs.text,outline:"none",marginBottom:10 };

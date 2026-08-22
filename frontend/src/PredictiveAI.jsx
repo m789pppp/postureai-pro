@@ -252,7 +252,7 @@ function MdText({ text }) {
     i++;
   }
   return (
-    <div style={{ fontFamily:"'DM Sans',system-ui,sans-serif", padding:'2px 0' }}
+    <div style={{ fontFamily:"'IBM Plex Sans Arabic','DM Sans',system-ui,sans-serif", padding:'2px 0' }}
          dangerouslySetInnerHTML={{ __html: out.join("") }} />
   );
 }

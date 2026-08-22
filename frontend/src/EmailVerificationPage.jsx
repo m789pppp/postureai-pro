@@ -48,7 +48,7 @@ export default function EmailVerificationPage({ oobCode, user, darkMode, lang, o
     <div style={{
       minHeight:"100dvh", background:c.bg, display:"flex",
       alignItems:"center", justifyContent:"center",
-      fontFamily:"'Inter',system-ui,sans-serif", padding:24,
+      fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui,sans-serif", padding:24,
       direction:isAr?"rtl":"ltr",
     }}>
       <div style={{

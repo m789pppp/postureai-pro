@@ -160,7 +160,7 @@ function MdText({ text }) {
     }
   }
   flushBullets();
-  return <div style={{ display:"flex", flexDirection:"column", fontFamily:"'DM Sans',system-ui,sans-serif" }}>{elements}</div>;
+  return <div style={{ display:"flex", flexDirection:"column", fontFamily:"'IBM Plex Sans Arabic','DM Sans',system-ui,sans-serif" }}>{elements}</div>;
 }
 
 // ── Fatigue Gauge ──────────────────────────────────────────────────
@@ -554,7 +554,7 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
   const D = {
     // Typography
     displayFont: "'Syne', 'DM Sans', system-ui, sans-serif",
-    bodyFont:    "'DM Sans', system-ui, sans-serif",
+    bodyFont:    "'IBM Plex Sans Arabic', 'DM Sans', system-ui, sans-serif",
     // Type scale
     t: {
       display: { fontSize:22, fontWeight:800, letterSpacing:"-0.03em", lineHeight:1.15, fontFamily:"'Syne','DM Sans',system-ui" },
