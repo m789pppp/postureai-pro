@@ -1,11 +1,49 @@
 # Vercel Python function dependencies for api/main.py.
 #
-# This file previously excluded mediapipe/opencv on the assumption that
-# Vercel's Python function size limit was 250MB (with real posture
-# analysis falling back to rule-based scoring). That limit is now
-# 500MB standard / 5GB with the Large Functions beta enabled — the real
-# analysis engine fits, so it's no longer excluded. Rather than
-# maintain a second, different dependency list here, just include the
-# one real list (see requirements.txt at the repo root and
-# backend/requirements.txt, which it in turn includes).
--r ../requirements.txt
+# MUST be fully self-contained — no `-r` include directive. A real
+# Vercel build failed with:
+#   could not parse requirements.txt: Error parsing included file in
+#   `/vercel/path0/api/requirements.txt` at position 585
+# where position 585 is the exact byte offset of this file's old
+# `-r ../requirements.txt` line — Vercel's own requirements.txt parser
+# (used to determine what to bundle into the Python function) doesn't
+# support `-r` includes at all, unlike pip's real parser. The previous
+# version of this file relied on `-r ../requirements.txt` specifically
+# to avoid maintaining a second, different dependency list — that
+# reasoning was right, the mechanism just doesn't work here.
+#
+# So: this file's package list must be kept in sync BY HAND with
+# backend/requirements.txt (the real, canonical, well-commented list —
+# see that file for why each package is here, version-conflict notes,
+# etc.). backend/requirements.txt itself, and the repo-root
+# requirements.txt that `-r`-includes it, are unaffected by this — `-r`
+# works fine for actual pip (local venvs, CI), it's specifically
+# Vercel's own bundling-time parser that can't handle it. If you change
+# backend/requirements.txt, mirror the change here too.
+flask==3.0.3
+flask-cors==4.0.2
+flask-limiter==3.7.0
+gunicorn==22.0.0
+python-dotenv==1.2.2
+requests==2.32.4
+httpx==0.28.1
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.30
+firebase-admin==6.5.0
+PyJWT==2.13.0
+bcrypt==4.1.3
+mediapipe==0.10.14
+opencv-python-headless==4.10.0.82
+numpy==1.26.4
+google-genai>=1.0.0
+stripe==10.4.0
+celery==5.4.0
+redis==5.0.6
+reportlab==4.2.2
+Pillow==10.4.0
+sentry-sdk[flask]==2.8.0
+python-dateutil==2.9.0
+pytz==2024.1
+pydantic==2.7.4
+marshmallow==3.21.3
+workos>=3.0.0
