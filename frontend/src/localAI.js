@@ -78,6 +78,19 @@ async function _backendLLM(messages, systemPrompt, maxTokens, temperature = 0.5)
   }
 }
 
+// Real-AI-only, no rule-based fallback: throws instead of ever returning
+// the offline canned KB text. localChat/localAnalysis below intentionally
+// always resolve with *something* (never throw) so live chat/insight
+// panels never show a dead end — but that same behavior is wrong for a
+// paid, one-shot artifact like the Posture DNA PDF's AI narrative
+// section: silently substituting generic rule-based filler there would
+// look like a broken/incoherent "AI analysis" in a report Elite users are
+// paying for, not a graceful degradation. Callers should catch and simply
+// omit the AI section when this throws, rather than rendering a fallback.
+export async function backendAnalysisOnly(prompt, systemPrompt = "", maxTokens = 500) {
+  return _backendLLM([{ role: "user", content: prompt }], systemPrompt, maxTokens);
+}
+
 // Pollinations text/chat completions: per their current docs, anonymous
 // no-key access is stated to be for IMAGE generation only — text/chat
 // needs at least a free publishable key (pk_) registered to a specific

@@ -3915,6 +3915,42 @@ function _dnaAnalyze(sessions) {
   };
 }
 
+// Elite-only AI narrative for the Posture DNA report — a real Gemini
+// (server-side, via backendAnalysisOnly -> POST /api/llm) reading of the
+// *actual* computed stats (top concerns, their real avg/stdev/short-vs-
+// long numbers, profile classification, profession benchmark), not a
+// generic canned paragraph. Returns "" (never throws) if no genuine AI
+// answer comes back, so callers can just omit the section — see
+// backendAnalysisOnly's own comment for why the rule-based offline
+// fallback is deliberately NOT used here.
+async function _dnaAINarrative(A, bench, isAr) {
+  try {
+    const { backendAnalysisOnly } = await import("../localAI.js");
+    const topLines = A.topConcerns.map((m, i) => {
+      const lbl = (isAr ? METRIC_LABELS_AR[m.key] : METRIC_LABELS[m.key]) || m.key.replace(/_/g, " ");
+      const short = m.shortAvg != null ? Math.round(m.shortAvg) : "n/a";
+      const long  = m.longAvg  != null ? Math.round(m.longAvg)  : "n/a";
+      const sd    = m.stdev    != null ? m.stdev.toFixed(1)     : "n/a";
+      return `${i + 1}. ${lbl}: avg ${Math.round(m.avgScore)}/100 across ${m.n} sessions (stdev ${sd}; short-session avg ${short}, long-session avg ${long})`;
+    }).join("\n");
+
+    const prompt = [
+      `Posture tracking data, last ${A.daySpan} days: ${A.sessionCount} sessions, ${Math.round(A.totalMinutes)} total minutes, overall avg score ${Math.round(A.overallAvg)}/100.`,
+      `Computed pattern classification: ${A.profileType} (behavioral = gets worse the longer a session runs, points to fatigue/habit; structural = stays consistent regardless of session length, points to a fixed factor; mixed = not enough signal to tell).`,
+      `Top 3 recurring low-scoring areas:\n${topLines}`,
+      `Profession benchmark ("${isAr ? bench.ar : bench.en}"): typical healthy range ${bench.typical_range[0]}-${bench.typical_range[1]}/100.`,
+      `Write a 120-180 word expert narrative for the "AI Expert Analysis" section of this person's Posture DNA report. Reference the specific numbers above — do not write generic advice that could apply to anyone. Explain what this pattern most likely means for THIS person specifically, then give exactly 2 concrete next steps tailored to their #1 concern above. Do not add medical-disclaimer language — that already appears elsewhere on the report. Confident, warm, expert clinical tone, no bullet points, no markdown.`,
+    ].join("\n\n");
+
+    const systemPrompt = "You are a senior physiotherapist writing the expert-analysis section of a premium posture report for a paying Elite-tier user. Be precise and specific to the numbers given.";
+
+    const text = await backendAnalysisOnly(prompt, systemPrompt, 500);
+    return (text || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 export async function generatePostureDNAReport({ sessions = [], profile, user, profession = "other", lang = "en" }) {
   const { jsPDF } = await import("jspdf");
   const isAr = lang === "ar";
@@ -3970,6 +4006,13 @@ export async function generatePostureDNAReport({ sessions = [], profile, user, p
     await doc.save(`Corvus-Posture-DNA-${(profile?.name || "report").replace(/\s/g, "-")}.pdf`, {returnPromise:true});
     return;
   }
+
+  // Fetch the AI expert narrative now (server round-trip, ~2-5s typically)
+  // while there's real data to analyze — the "Analyzing your last 90 days"
+  // toast shown by the caller already sets that expectation. "" if no
+  // genuine AI answer came back; the render call below just skips the
+  // section in that case rather than showing generic filler.
+  const aiNarrative = await _dnaAINarrative(A, bench, isAr);
 
   // ── PAGE 2: Overview ──────────────────────────────────────────
   doc.addPage();
@@ -4072,6 +4115,26 @@ export async function generatePostureDNAReport({ sessions = [], profile, user, p
     ? "ملاحظة: ده تصنيف استكشافي مبني على أنماط الجلسات، مش تشخيص طبي."
     : "Note: this is an exploratory classification based on session patterns, not a medical diagnosis.", ml, y, { maxWidth: cw });
   y += 14;
+
+  // ── AI Expert Analysis — Elite only, real Gemini reading of the actual
+  //    computed stats above (see _dnaAINarrative). Omitted entirely (not
+  //    a placeholder/error box) when no genuine AI answer came back, so
+  //    the report degrades to exactly what it was before this feature.
+  if (aiNarrative) {
+    const lines = doc.splitTextToSize(aiNarrative, cw - 16);
+    const boxH = lines.length * 4.6 + 10;
+    if (y + boxH + 30 > H) { doc.addPage(); fc(doc, ...PDF_TOKENS.bg); doc.rect(0, 0, W, H, "F"); y = 22; }
+    sf(13, "bold"); tc(doc, ...PDF_TOKENS.ink);
+    doc.text(isAr ? "تحليل الخبير — AI" : "AI Expert Analysis", ml, y); y += 4;
+    sf(7, "normal"); tc(doc, ...PDF_TOKENS.muted);
+    doc.text(isAr ? "مبني على بياناتك الفعلية أعلاه، بواسطة Gemini" : "Generated from your actual data above, by Gemini", ml, y); y += 8;
+    fc(doc, ...PDF_TOKENS.card); rr(doc, ml, y, cw, boxH, 3, "F");
+    dc(doc, ...PDF_TOKENS.border); doc.setLineWidth(0.3); rr(doc, ml, y, cw, boxH, 3, "S");
+    sf(8.5, "normal"); tc(doc, ...PDF_TOKENS.ink2);
+    doc.text(lines, ml + 8, y + 9, { lineHeightFactor: 1.5 });
+    y += boxH + 12;
+    if (y + 60 > H) { doc.addPage(); fc(doc, ...PDF_TOKENS.bg); doc.rect(0, 0, W, H, "F"); y = 22; }
+  }
 
   sf(13, "bold"); tc(doc, ...PDF_TOKENS.ink);
   doc.text(isAr ? "التوصيات" : "Recommendations", ml, y); y += 8;
