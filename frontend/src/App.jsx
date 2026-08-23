@@ -5552,10 +5552,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <svg width="130" height="130" style={{transform:"rotate(-90deg)"}}>
                 <circle cx="65" cy="65" r="55" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="9"/>
                 <circle cx="65" cy="65" r="55" fill="none" stroke={sessionResult.color} strokeWidth="9"
-                  strokeDasharray={`${(sessionResult.avg_score/100)*345.6} 345.6`} strokeLinecap="round"/>
+                  strokeDasharray={`${(sessionResult?.avg_score/100)*345.6} 345.6`} strokeLinecap="round"/>
               </svg>
               <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                <div style={{fontSize:36,fontWeight:900,color:sessionResult.color,lineHeight:1}}>{sessionResult.avg_score}</div>
+                <div style={{fontSize:36,fontWeight:900,color:sessionResult.color,lineHeight:1}}>{sessionResult?.avg_score}</div>
                 <div style={{fontSize:11,color:"rgba(255,255,255,.4)",fontWeight:600}}>/ 100</div>
               </div>
             </div>
@@ -5571,9 +5571,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
             {/* Stats row */}
             <div style={{display:"flex",gap:12,marginBottom:24}}>
               {[
-                {label:isAr?"مدة الجلسة":"Duration", value:`${Math.floor(sessionResult.duration_s/60)}:${String(sessionResult.duration_s%60).padStart(2,"0")}`},
-                {label:isAr?"وضعية جيدة":"Good posture", value:`${sessionResult.good_pct}%`},
-                {label:isAr?"التنبيهات":"Alerts", value:sessionResult.alerts_count},
+                {label:isAr?"مدة الجلسة":"Duration", value:`${Math.floor(sessionResult?.duration_s/60)}:${String(sessionResult?.duration_s%60).padStart(2,"0")}`},
+                {label:isAr?"وضعية جيدة":"Good posture", value:`${sessionResult?.good_pct}%`},
+                {label:isAr?"التنبيهات":"Alerts", value:sessionResult?.alerts_count},
               ].map((s,i)=>(
                 <div key={i} style={{flex:1,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,padding:"10px 8px"}}>
                   <div style={{fontSize:16,fontWeight:800,color:"#f0f6ff"}}>{s.value}</div>
@@ -5602,7 +5602,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   <span style={{fontSize:8,background:"rgba(79,174,142,.12)",border:"1px solid rgba(79,174,142,.25)",borderRadius:99,padding:"1px 6px"}}>ELITE</span>
                 </div>
                 <div style={{display:"flex",gap:8}}>
-                  {sessionResult.worst_snapshots.map((s,i)=>(
+                  {(sessionResult.worst_snapshots||[]).map((s,i)=>(
                     <div key={i} style={{flex:1,position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid rgba(198,96,79,.3)"}}>
                       <img src={s.img} alt={`posture ${s.score}`} style={{width:"100%",display:"block",transform:"scaleX(-1)"}}/>
                       <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,.65)",padding:"3px 6px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -5848,11 +5848,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   )}
                   <div style={{
                     width:"100%", borderRadius:"3px 3px 0 0",
-                    minHeight:3,
-                    height: s ? Math.max(3,Math.round(s*.80)) : 3,
-                    background: s ? sc(s) : "rgba(148,163,184,.06)",
-                    transition:"height .25s ease",
-                    opacity: s ? (hoverBarIdx===i ? 1 : 0.85) : 1,
+                    minHeight:2,
+                    height: s ? Math.max(2,Math.round(s*.64)) : 2,
+                    background: s ? sc(s) : "rgba(148,163,184,.05)",
+                    transition:"height .3s ease",
+                    opacity: s ? (hoverBarIdx===i ? 1 : 0.8) : 1,
                     boxShadow: isLast&&s ? `0 0 8px ${sc(s)}60` : "none",
                   }}/>
                 </div>
