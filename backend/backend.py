@@ -2146,7 +2146,7 @@ def head_pose_from_face(face_lms, w, h):
         return None
 
 # ── FRONT ANALYSIS ─────────────────────────────────────────────────
-def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_baseline_cm=None, dist_calib_factor=None):
+def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_baseline_cm=None, dist_calib_factor=None, rounded_neutral=None):
     _ensure_models()  # lazy-load MediaPipe on first call
     h, w = image.shape[:2]
     rgb   = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -2382,34 +2382,74 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     except Exception:
         pass
 
-    # ── Rounded shoulders (protraction) — Z depth asymmetry ───────
-    # MediaPipe Z: more negative = closer to camera (in front of body)
-    # Rounded shoulders: both shoulders move FORWARD (more negative Z)
-    # vs neutral: Z ≈ 0 relative to spine midpoint
-    _ls_z = g(PL.L_SHOULDER).z   # normalized, relative to hip midpoint
+    # ── Rounded shoulders (protraction) ────────────────────────────
+    # PRIMARY: 2D ear-to-shoulder elevation ratio — mirrors the frontend
+    # live-camera engine's analyzeRoundedShoulders() in postureEngine.js.
+    # This used to be Z-depth only. MediaPipe Z is noisy and, used alone,
+    # silently gave a different rounded-shoulders reading here (PDF
+    # reports / AI insights) than the live camera gave for the exact same
+    # posture — flagged to the user as an open "backend not synced with
+    # frontend" risk. SECONDARY: Z is now blended in only when both
+    # shoulder Z readings agree (low L/R asymmetry = a stable, non-jittery
+    # frame), same as the frontend. Also now honors the user's own
+    # Personal Posture Calibration (rounded_neutral) — it was already
+    # being saved and sent to this endpoint, just never read here.
+    _ls_z = g(PL.L_SHOULDER).z
     _rs_z = g(PL.R_SHOULDER).z
-    # Forward protraction: both Z values are negative (shoulders in front)
-    # Score: average forward displacement, scaled by shoulder width
-    _sh_z_avg        = (_ls_z + _rs_z) / 2.0          # negative = forward
-    _sh_z_asym       = abs(_ls_z - _rs_z)              # L/R asymmetry
-    _rounded_depth   = max(0.0, -_sh_z_avg * 100)      # convert to 0-100 scale
-    _rounded_sc      = score_m(_rounded_depth, 0, 8, 20)
+    _sh_z_avg  = (_ls_z + _rs_z) / 2.0     # negative = forward of spine
+    _sh_z_asym = abs(_ls_z - _rs_z)         # L/R asymmetry — low = stable frame
+    _ear_ok    = vis_l_ear > 0.5 and vis_r_ear > 0.5
+    _personalised = False
+    _z_blended    = False
+    conf_rounded  = 0.0
+
+    if _ear_ok:
+        _elev_ratio = (mid_sh[1] - mid_ear[1]) / max(sh_width_px, 1)  # mid_sh/mid_ear already in px
+        _neutral_ratio = (rounded_neutral if isinstance(rounded_neutral, (int, float))
+                           and 0.2 < rounded_neutral < 1.0 else 0.52)
+        _personalised = _neutral_ratio != 0.52
+        _rounded_depth = max(0.0, (_neutral_ratio - _elev_ratio) * 45)
+        if _sh_z_asym <= 0.04:
+            _z_depth = max(0.0, -_sh_z_avg * 100)
+            _rounded_depth = _rounded_depth * 0.8 + _z_depth * 0.2
+            _z_blended = True
+        conf_rounded = 1.0
+    elif _sh_z_asym <= 0.04:
+        # Fallback: ears not visible — Z only, same as frontend's fallback path
+        _rounded_depth = max(0.0, -_sh_z_avg * 100)
+        conf_rounded = 0.5
+    else:
+        # Neither signal trustworthy — don't fabricate a reading
+        _rounded_depth = 0.0
+        conf_rounded = 0.0
+
+    _rounded_sc = score_m(_rounded_depth, 0, 10, 22)
+    _rounded_severity = ("severe" if _rounded_depth >= 18 else
+                          "moderate" if _rounded_depth >= 10 else
+                          "mild" if _rounded_depth >= 5 else "normal")
     out["metrics"]["rounded_shoulders"] = {
-        "value":      round(_rounded_depth, 1),
-        "z_left":     round(_ls_z, 3),
-        "z_right":    round(_rs_z, 3),
-        "asymmetry":  round(_sh_z_asym, 3),
-        "score":      _rounded_sc,
-        "unit":       "depth units",
-        "label":      "Rounded shoulders (protraction)",
-        "reference":  "MediaPipe Z-depth, negative = forward of spine",
+        "value":        round(_rounded_depth, 1),
+        "z_left":       round(_ls_z, 3),
+        "z_right":      round(_rs_z, 3),
+        "asymmetry":    round(_sh_z_asym, 3),
+        "score":        _rounded_sc,
+        "severity":     _rounded_severity,
+        "unit":         "depth units",
+        "label":        "Rounded shoulders (protraction)",
+        "personalised": _personalised,
+        "reference":    ("2D ear-to-shoulder elevation ratio" + (" + Z-depth blend" if _z_blended else "")
+                          if _ear_ok else "MediaPipe Z-depth (ears not visible)"),
     }
-    if _rounded_depth > 15:
-        out["alerts"].append(f"⚠️ Rounded shoulders detected — pull shoulder blades together and down")
+    if _rounded_depth > 18:
+        out["alerts"].append("⚠️ Rounded shoulders detected — pull shoulder blades together and down")
         if "alerts_ar" not in out: out["alerts_ar"] = []
         out["alerts_ar"].append("⚠️ كتفان مائلان للأمام — اسحب لوحي الكتف للخلف وللأسفل")
-    elif _rounded_depth > 8:
+    elif _rounded_depth > 10:
         out["alerts"].append("Shoulders slightly forward — open chest, squeeze shoulder blades gently")
+    if _rounded_severity in ("mild", "moderate") and not _personalised:
+        out["alerts"].append("Tip: run Personal Posture Calibration for a more precise rounded-shoulders reading")
+        if "alerts_ar" not in out: out["alerts_ar"] = []
+        out["alerts_ar"].append("نصيحة: شغّل معايرة الوضعية الشخصية لقراءة أدق لانحناء الكتفين")
 
     # ── IMPROVED: 4-point spine with kyphosis detection ──────────
     # 4 reference points (top→bottom):
@@ -2454,6 +2494,19 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     spine_scurve_pen = max(0, abs(spine_upper - spine_lower) - 8) * 0.5
     spine_lean   = min(45.0, spine_lean + spine_scurve_pen + _kyphosis_pen)
     spine_sc     = score_m(spine_lean, 0, 4, 12)
+
+    # ── Signed lateral direction ────────────────────────────────────
+    # angle_vert() (scoring_utils.py) only ever receives (x,y) pairs here —
+    # it is 2D-only — so this composite, like the frontend's
+    # analyzeSpineLean(), is geometrically a LATERAL (sideways) lean
+    # detector: a forward slouch toward the screen barely moves it, since
+    # that motion is mostly along the camera's depth axis. The alert copy
+    # below used to say "sit back with lumbar support", which assumes
+    # forward slouch — wrong for what this number actually measures.
+    # Matches the frontend fix: name the real side instead.
+    _spine_dir    = "right" if (mid_sh[0] - mid_hip[0]) > 0 else "left"
+    _spine_dir_ar = "اليمين" if _spine_dir == "right" else "اليسار"
+    _spine_signed = spine_lean if _spine_dir == "right" else -spine_lean
 
     out["metrics"]["spine_upper"] = {"value": round(spine_upper, 1), "unit": "°", "label": "Upper spine (thoracic)"}
     out["metrics"]["spine_mid"]   = {"value": round(spine_mid,   1), "unit": "°", "label": "Mid spine (thoracolumbar)"}
@@ -2782,27 +2835,44 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
 
     # ── Overall score — confidence-weighted ───────────────────────
     # All weights defined upfront so normalization is correct.
-    # eye_sc weight 0.05 — always included when FaceMesh available
-    # wrist_sc weight 0.08 — only for paid tiers
+    # eye_sc weight 0.046 — always included when FaceMesh available
+    # wrist_sc weight 0.083 — only for paid tiers
     # pose_sc weight up to 0.15 — solvePnP most accurate
 
     # eye confidence: needs FaceMesh iris landmarks (very reliable when available)
     conf_eye   = 1.0 if (eye_sc is not None) else 0.0
     conf_wrist = 1.0 if (wrist_sc is not None) else 0.0
 
-    BASE_W = {"neck": 0.28, "tilt": 0.10, "sh": 0.08, "spine": 0.18, "dist": 0.22,
-              "eye": 0.05, "wrist": 0.09}
-    # dist boosted to 0.22 — screen distance is #1 preventable risk factor
+    # "rounded" (rounded-shoulders) added below — it used to be computed and
+    # alerted on but NEVER folded into the overall score here, unlike the
+    # frontend's live-camera engine (WEIGHTS_FRONT.rounded), so the exact
+    # same rounded-shoulders posture could tank the live score while leaving
+    # the PDF/report score untouched. All other weights scaled by ×0.92 to
+    # make room (same rebalancing approach used for the frontend's
+    # WEIGHTS_FRONT when a new weighted metric was added there) — new sum
+    # is still ~1.00.
+    BASE_W = {"neck": 0.258, "tilt": 0.092, "sh": 0.074, "spine": 0.166, "dist": 0.202,
+              "eye": 0.046, "wrist": 0.083, "rounded": 0.08}
+    # dist boosted — screen distance is #1 preventable risk factor
     # Refs: AOA 2023 (20-20-20 rule), WHO screen guidelines
+    #
+    # NOTE: monitor height (pitch-based) is deliberately NOT added as its
+    # own weighted component here — pitch already feeds pose_sc below
+    # (pitch*0.45 + yaw*0.40 + roll*0.15). Giving it a second, separate
+    # weight would double-count the same signal. It stays alert-only via
+    # the existing "monitor_height"/"ergonomics_score" metrics, same as
+    # shoulder_elevation and hand-prop occlusion are alert-only (not
+    # score-weighted) on the frontend by deliberate design, not oversight.
 
     eff_w = {
-        "neck":  BASE_W["neck"]  * conf_neck,
-        "tilt":  BASE_W["tilt"]  * conf_tilt,
-        "sh":    BASE_W["sh"]    * conf_sh,
-        "spine": BASE_W["spine"] * conf_spine,
-        "dist":  BASE_W["dist"],                    # camera-independent — no penalty
-        "eye":   BASE_W["eye"]   * conf_eye,        # 0.05 when FaceMesh active, else 0
-        "wrist": BASE_W["wrist"] * conf_wrist,      # 0.08 for paid tiers, else 0
+        "neck":    BASE_W["neck"]    * conf_neck,
+        "tilt":    BASE_W["tilt"]    * conf_tilt,
+        "sh":      BASE_W["sh"]      * conf_sh,
+        "spine":   BASE_W["spine"]   * conf_spine,
+        "dist":    BASE_W["dist"],                    # camera-independent — no penalty
+        "eye":     BASE_W["eye"]     * conf_eye,      # 0.046 when FaceMesh active, else 0
+        "wrist":   BASE_W["wrist"]   * conf_wrist,    # 0.083 for paid tiers, else 0
+        "rounded": BASE_W["rounded"] * conf_rounded,  # 0 when ears occluded AND Z unreliable
     }
 
     # Lost weight from low-vis metrics → redistributed to dist (stable)
@@ -2811,13 +2881,14 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
 
     # Build score_val from all present metrics
     scores = {
-        "neck":  neck_sc,
-        "tilt":  tilt_sc,
-        "sh":    sh_sc,
-        "spine": spine_sc,
-        "dist":  dist_sc,
-        "eye":   eye_sc   if eye_sc   is not None else 0,
-        "wrist": wrist_sc if wrist_sc is not None else 0,
+        "neck":    neck_sc,
+        "tilt":    tilt_sc,
+        "sh":      sh_sc,
+        "spine":   spine_sc,
+        "dist":    dist_sc,
+        "eye":     eye_sc   if eye_sc   is not None else 0,
+        "wrist":   wrist_sc if wrist_sc is not None else 0,
+        "rounded": _rounded_sc,
     }
     score_val = sum(scores[k] * eff_w[k] for k in scores)
     remaining = 1.0 - sum(eff_w.values())
@@ -2842,6 +2913,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         "spine": round(conf_spine, 2),
         "eye":   round(conf_eye,   2),
         "wrist": round(conf_wrist, 2),
+        "rounded": round(conf_rounded, 2),
         "eff_weights": {k: round(v, 3) for k, v in eff_w.items()},
         "label": "Per-metric visibility confidence",
     }
@@ -2927,7 +2999,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         "neck_lean":       {"value": round(neck_lean, 1),  "score": neck_sc,  "unit": "°",  "label": "Neck lean"},
         "head_tilt":       {"value": round(head_tilt, 1),  "score": tilt_sc,  "unit": "°",  "label": "Head tilt"},
         "shoulder_level":  {"value": round(sh_tilt, 1),    "score": sh_sc,    "unit": "°",  "label": "Shoulder level"},
-        "spine_lean":      {"value": round(spine_lean,1),  "score": spine_sc, "unit": "°",  "label": "Spine lean"},
+        "spine_lean":      {"value": round(spine_lean,1),  "score": spine_sc, "unit": "°",  "label": "Spine lean",
+                             "direction": _spine_dir, "signed": round(_spine_signed, 1)},
         "screen_distance": {"value": dist_cm,               "score": dist_sc,  "unit": "cm", "label": "Screen distance"},
     })
     if hp:
@@ -2985,9 +3058,13 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         if "alerts_ar" not in out: out["alerts_ar"] = []
         out["alerts_ar"].append(f"بعيد جداً عن الشاشة ({round(dist_cm)}سم) — المثالي {lo}–{hi}سم")
     if spine_lean > 18:
-        out["alerts"].append(f"⚠️ Spine lean {round(spine_lean,1)}° — sit back and use lumbar support")
+        out["alerts"].append(f"⚠️ Leaning {_spine_dir} {round(spine_lean,1)}° — sit centered, weight even on both hips")
+        if "alerts_ar" not in out: out["alerts_ar"] = []
+        out["alerts_ar"].append(f"⚠️ ميل إلى {_spine_dir_ar} {round(spine_lean,1)}° — اجلس في المنتصف ووزّع وزنك على الوركين")
     elif spine_lean > 10:
-        out["alerts"].append(f"Spine lean {round(spine_lean,1)}° — engage your core and sit upright")
+        out["alerts"].append(f"Leaning {_spine_dir} {round(spine_lean,1)}° — engage core, sit centered")
+        if "alerts_ar" not in out: out["alerts_ar"] = []
+        out["alerts_ar"].append(f"ميل إلى {_spine_dir_ar} {round(spine_lean,1)}° — شد عضلات البطن واجلس في المنتصف")
     if hp and abs(hp["pitch"]) > 20:
         out["alerts"].append(f"Head pitched {round(hp['pitch'],1)}° — {'raise your monitor' if hp['pitch'] < 0 else 'lower your monitor'}")
 
@@ -4311,7 +4388,13 @@ def analyze():
         _session_id_for_analysis = data.get("session_id", f"{uid}:default")
         result = analyze_front(img_to_analyze, mode, tier, session_id=_session_id_for_analysis,
                                 dist_baseline_cm=(calib or {}).get("distance_calibrated_cm"),
-                                dist_calib_factor=(calib or {}).get("distCalibFactor"))  # Side mode removed app-wide — analyze_side no longer called
+                                dist_calib_factor=(calib or {}).get("distCalibFactor"),
+                                # calib.rounded_neutral was already being saved by the calibration
+                                # wizard and sent up in every request's `calibration` payload, but
+                                # analyze_front() never read it — rounded-shoulders scoring here was
+                                # not personalized at all, unlike every other metric a few lines
+                                # below. Threading it through the same way dist_baseline_cm already is.
+                                rounded_neutral=(calib or {}).get("rounded_neutral"))  # Side mode removed app-wide — analyze_side no longer called
         # ── Apply personal calibration with asymmetric thresholds ──
         # Asymmetric: if user's natural lean is toward right (+),
         # we widen the ok/bad zone on the right side and tighten on left.
