@@ -2044,7 +2044,7 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
             : (isAr?"افتح تطبيق المصادقة وادخل الكود المكون من 6 أرقام":"Open your authenticator app and enter the 6-digit code")}
         </div>
         {method==="sms" && (
-          <button onClick={sendSms} disabled={busy} style={{ marginBottom:14, background:"rgba(255,255,255,0.06)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"8px 16px", cursor:"pointer", fontWeight:600, fontSize:12 }}>
+          <button onClick={sendSms} disabled={busy} style={{ marginBottom:14, background:cs.inp, border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"8px 16px", cursor:"pointer", fontWeight:600, fontSize:12 }}>
             {smsSent ? (isAr?"✓ اتبعت — ابعت تاني":"✓ Sent — resend") : (isAr?"إرسال كود":"Send code")}
           </button>
         )}
@@ -2054,7 +2054,7 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
           onKeyDown={e=>e.key==="Enter"&&verify()}
           placeholder={isAr?"الكود":"Code"}
           maxLength={11}
-          style={{ width:"100%", boxSizing:"border-box", textAlign:"center", fontSize:20, letterSpacing:3, fontWeight:700, background:"rgba(255,255,255,0.05)", border:`1.5px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"12px", outline:"none", marginBottom:12 }}
+          style={{ width:"100%", boxSizing:"border-box", textAlign:"center", fontSize:20, letterSpacing:3, fontWeight:700, background:cs.inp, border:`1.5px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"12px", outline:"none", marginBottom:12 }}
           autoFocus
         />
         {error && <div style={{ color:"#C6604F", fontSize:12, marginBottom:12 }}>{error}</div>}
@@ -4739,7 +4739,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // During OAuth redirect: user is temporarily null — show spinner NOT auth page
   if(!user && (_oauthInProgress.current || _oauthRedirect?.current)) return(
     <div style={{
-      minHeight:"100vh",background:"#0d1a2e",
+      minHeight:"100vh",background:cs.bg,
       display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
       gap:16,fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui,sans-serif",
     }}>
@@ -4751,7 +4751,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       }}>◈</div>
       <div style={{width:32,height:32,border:"3px solid rgba(26,86,219,.2)",borderTopColor:"#1a56db",
         borderRadius:"50%",animation:"authSpin 1s linear infinite"}}/>
-      <div style={{color:"rgba(255,255,255,.5)",fontSize:14}}>
+      <div style={{color:cs.muted,fontSize:14}}>
         {lang==="ar"?"جاري تسجيل الدخول…":"Signing you in…"}
       </div>
       <style>{"@keyframes authSpin{to{transform:rotate(360deg)}}"}</style>
@@ -4923,7 +4923,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     }}>
                     <div style={{display:"flex",alignItems:"flex-start",gap:14}}>
                       <div style={{width:46,height:46,borderRadius:11,flexShrink:0,
-                        background:acctType===o.id?`${o.color}22`:"rgba(255,255,255,.06)",
+                        background:acctType===o.id?`${o.color}22`:cs.inp,
                         border:`1.5px solid ${acctType===o.id?o.color+"55":"rgba(148,163,184,.12)"}`,
                         display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{o.icon}</div>
                       <div style={{flex:1}}>
@@ -4935,7 +4935,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                           {o.features.map((f,i)=>(
                             <span key={i} style={{fontSize:9.5,fontWeight:600,padding:"2px 8px",borderRadius:99,
-                              background:acctType===o.id?`${o.color}15`:"rgba(255,255,255,.04)",
+                              background:acctType===o.id?`${o.color}15`:cs.inp,
                               color:acctType===o.id?o.color:cs.muted,
                               border:`1px solid ${acctType===o.id?o.color+"30":"rgba(148,163,184,.08)"}`}}>{f}</span>
                           ))}
@@ -5450,13 +5450,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showNPS && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>setShowNPS(false)}>
-          <div style={{background:"var(--color-background-primary,#0f172a)",border:"1px solid rgba(148,163,184,.15)",borderRadius:20,padding:"36px 32px",maxWidth:440,width:"90%",textAlign:"center"}}
+          <div style={{background:cs.card,border:`1px solid ${cs.border}`,borderRadius:20,padding:"36px 32px",maxWidth:440,width:"90%",textAlign:"center"}}
             onClick={e=>e.stopPropagation()}>
             <p style={{fontSize:28,marginBottom:8}}>👋</p>
-            <p style={{fontSize:18,fontWeight:700,color:"var(--color-text-primary,#eef2ff)",marginBottom:8}}>
+            <p style={{fontSize:18,fontWeight:700,color:cs.text,marginBottom:8}}>
               {lang==="ar"?"كيف تقيّم Corvus؟":"How would you rate Corvus?"}
             </p>
-            <p style={{fontSize:13,color:"var(--color-text-secondary,#94a3b8)",marginBottom:24}}>
+            <p style={{fontSize:13,color:cs.muted,marginBottom:24}}>
               {lang==="ar"?"رأيك يساعدنا على التحسين":"Your feedback helps us improve"}
             </p>
             <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:20}}>
@@ -5469,13 +5469,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   setShowNPS(false);
                   if(n>=9) toast(lang==="ar"?"شكراً! 🎉":"Thank you! 🎉","success");
                 }}
-                  style={{width:36,height:36,borderRadius:8,border:"1px solid rgba(148,163,184,.2)",background:"rgba(255,255,255,.04)",color:"#e2e8f0",cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s"}}
+                  style={{width:36,height:36,borderRadius:8,border:`1px solid ${cs.border}`,background:cs.inp,color:cs.text,cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s"}}
                   onMouseEnter={e=>{e.target.style.background="#6366f1";e.target.style.borderColor="#6366f1";}}
-                  onMouseLeave={e=>{e.target.style.background="rgba(255,255,255,.04)";e.target.style.borderColor="rgba(148,163,184,.2)";}}
+                  onMouseLeave={e=>{e.target.style.background=cs.inp;e.target.style.borderColor=cs.border;}}
                 >{n}</button>
               ))}
             </div>
-            <button onClick={()=>setShowNPS(false)} style={{fontSize:12,color:"#94a3b8",background:"none",border:"none",cursor:"pointer"}}>
+            <button onClick={()=>setShowNPS(false)} style={{fontSize:12,color:cs.muted,background:"none",border:"none",cursor:"pointer"}}>
               {lang==="ar"?"لاحقاً":"Dismiss"}
             </button>
           </div>
@@ -5842,7 +5842,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {!aiInsight&&camActive&&!tierAtLeast(effectiveTier,"elite")&&(
           <div style={{margin:"0 16px 12px",display:"flex"}}>
             <button onClick={()=>{ addToast(isAr?"🧠 تحليل AI اللحظي متاح لباقة Elite فقط":"🧠 Live AI analysis is an Elite feature","warn"); setShowBilling(true); }}
-              style={{background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+              style={{background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:7,
                 padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                 display:"flex",alignItems:"center",gap:4}}>
               🔒 🧠 {isAr?"تحليل AI":"AI analysis"}
@@ -7068,7 +7068,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   addToast(isAr?"⚙️ قواعد التنبيه المخصصة متاحة لباقة Pro فأعلى":"⚙️ Custom Alert Rules is a Pro feature","warn");
                   setShowBilling(true);
                 }} style={{
-                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:7,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
@@ -7081,7 +7081,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   addToast(isAr?"🎙️ المدرب الصوتي متاح لباقة Elite فقط":"🎙️ Voice coach is an Elite feature","warn");
                   setShowBilling(true);
                 }} style={{
-                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:7,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
@@ -7094,7 +7094,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
                   setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
                 }} style={{
-                  background:"rgba(255,255,255,.03)",border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:7,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
