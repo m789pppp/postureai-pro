@@ -508,7 +508,20 @@ function postureCue(analysis, isAr){
   const add=(k,en,ar,icon)=>{ const sc=m[k]?.score; if(typeof sc==="number"&&sc<55&&m[k]?.reliable!==false) cands.push({sc,en,ar,icon}); };
   add("fhp_index","Tuck your chin back","أدخل ذقنك للخلف","⟲");
   add("neck_lean","Raise screen to eye level","ارفع الشاشة لمستوى عينك","↑");
-  add("spine_lean","Sit up straight — support your back","اجلس مستقيماً واسند ظهرك","↑");
+  // spine_lean is geometrically a LATERAL (sideways) lean signal — the
+  // engine's angleVert() is documented 2D-only (ignores Z), so it barely
+  // reacts to forward slouch (fhp_index/neck_lean already cover that) but
+  // reacts strongly to leaning toward one armrest/side. The old copy —
+  // "sit up straight — support your back" — described a forward-slouch
+  // correction for what's actually a sideways lean; now names the real
+  // side using m.spine_lean.signed (positive = leaning right).
+  if(typeof m.spine_lean?.score==="number" && m.spine_lean.score<55 && m.spine_lean?.reliable!==false){
+    const rightLean = (m.spine_lean.signed ?? 0) > 0;
+    cands.push({sc:m.spine_lean.score,
+      en:rightLean?"Leaning right — sit centered":"Leaning left — sit centered",
+      ar:rightLean?"مايل لليمين — اتوسط في الكرسي":"مايل للشمال — اتوسط في الكرسي",
+      icon:rightLean?"⇥":"⇤"});
+  }
   add("rounded_shoulders","Roll your shoulders back","افرد كتفيك للخلف","↔");
   add("shoulder_level","Level your shoulders","سوِّ كتفيك","⇄");
   add("shoulder_elevation","Drop your shoulders — relax your traps","ارخي كتفيك للأسفل — رخي عضلات الرقبة","↓");
@@ -693,9 +706,19 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
   }
 
   // ── Rounded shoulders badge ───────────────────────────────────
+  // Was gated on the raw `value>5` (a depth number on its own 0-30ish
+  // scale), completely independent of the score-based Low/Med/High
+  // classification the side panel's "Rounding" row uses (score>=80 Low,
+  // >=60 Med, else High). Since THR.ROUNDED={ok:10,bad:22}, a depth of
+  // 6-9 already scores 80-90 ("Low" in the side panel) while still being
+  // >5 here — so this badge could show "⚠ Rounded" on top of the video
+  // at the exact same time the side panel said "Rounding: Low", a
+  // confirmed live contradiction (seen in a user screenshot). Now driven
+  // by the same score thresholds as the side panel, so the two can never
+  // disagree.
   const rsMet = metrics?.rounded_shoulders;
-  if(rsMet?.reliable!==false && (rsMet?.value ?? 0) > 5){
-    const rsCol = (rsMet.value??0) > 15 ? "#C6604F" : "#D6A24C";
+  if(rsMet?.reliable!==false && rsMet?.score!=null && rsMet.score < 80){
+    const rsCol = rsMet.score < 60 ? "#C6604F" : "#D6A24C";
     ctx.save();
     ctx.globalAlpha = .88;
     ctx.fillStyle = "rgba(2,8,20,.85)";

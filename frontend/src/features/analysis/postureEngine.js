@@ -931,7 +931,15 @@ function analyzeSpineLean(lms, W, H, prop, roundedScore, calib = null) {
   const dev = Math.abs(angle - t.ideal);
   const score   = scoreMetric(angle, t.ideal, t.ok, t.bad);
   const severity = classify(dev, SEV.SPINE);
-  return { angle: Math.round(angle), score, severity, confidence: 88, reliable: true, personalised:t.personalised };
+  // Signed lean direction: angleVert() is documented as 2D-only (ignores
+  // Z), so this metric is geometrically a LATERAL (sideways) lean
+  // detector — a forward slouch toward the screen barely moves it, since
+  // that motion is mostly along the camera's depth axis, not sideways in
+  // the image. Positive = shoulders shifted right of the hip midpoint =
+  // leaning right; negative = leaning left. Needed so buildAlerts() can
+  // give direction-correct advice instead of assuming forward slouch.
+  const signed = (prop.midSh.x - midHip.x) > 0 ? angle : -angle;
+  return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 88, reliable: true, personalised:t.personalised };
 }
 
 function analyzeRoundedShoulders(lms, prop, H, calib = null) {
@@ -1013,13 +1021,19 @@ function analyzeRoundedShoulders(lms, prop, H, calib = null) {
   const score    = scoreMetric(finalDeviation, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
   const severity = classify(finalDeviation, SEV.ROUNDED);
   // Front-mode rounded-shoulders is inherently the weakest metric here —
-  // side mode measures actual sagittal protraction directly. Surface that
-  // so the UI can nudge users toward side mode when this reading matters
-  // (mild/moderate cases where the extra precision changes what they do).
+  // it's a 2D elevation proxy blended with noisy Z depth, not a direct
+  // sagittal-protraction measurement. This used to nudge users toward a
+  // "Side mode" for a more precise reading — that mode was removed
+  // app-wide (see MODES below, and every "Side mode removed" comment in
+  // this file/App.jsx), so that tip pointed at a UI that no longer
+  // exists. The other real lever this engine has for precision here is
+  // calibration (calib.rounded_neutral) — surface that instead, only
+  // when the user hasn't already calibrated (personalised===false),
+  // since re-suggesting it to someone who already has is pointless.
   return {
     depth: Math.round(finalDeviation * 10) / 10, asymmetry: 0, score, severity,
     confidence: zBlended ? 85 : 80, reliable: true, personalised, zBlended,
-    sideModeRecommended: severity === "mild" || severity === "moderate",
+    calibrationRecommended: (severity === "mild" || severity === "moderate") && !personalised,
   };
 }
 
@@ -1202,15 +1216,27 @@ function buildAlerts(modules, distCm, lo, hi) {
     add("fhp_mid",   fhp.reliable && fhp.distCm > 3 && fhp.distCm <= 6, `Forward head ${fhp.distCm}cm (+${fhp.extraLoadKg}kg) — tuck chin back`),
     add("tilt",      headTilt.reliable && headTilt.angle > 10,    `Head tilting ${headTilt.angle}° — check chair height`),
     add("sh",        shoulder.reliable && shoulder.angle > 10,    `Shoulder imbalance ${shoulder.angle}° — adjust armrests`),
-    add("spine_sev", spine.reliable && spine.angle > 18,          `⚠️ Spine lean ${spine.angle}° — sit back with lumbar support`),
-    add("spine_mid", spine.reliable && spine.angle > 10 && spine.angle <= 18, `Spine lean ${spine.angle}° — engage core, sit upright`),
+    // angleVert() (what spine.angle/signedAngle come from) is documented
+    // as 2D-only — it ignores Z — so this metric is geometrically a
+    // LATERAL lean detector: leaning sideways moves it a lot, leaning
+    // forward toward the screen barely moves it at all (that's what
+    // fhp/neck/rounded are for). The old copy — "sit back with lumbar
+    // support" — assumed forward slouch, the wrong correction for what's
+    // actually the dominant real-world cause here (reaching for a
+    // phone/mouse, resting on one armrest, leaning toward a coworker).
+    // Now uses spine.signedAngle to name the actual side and give the
+    // matching correction.
+    add("spine_sev", spine.reliable && Math.abs(spine.signedAngle ?? spine.angle) > 18,
+        `⚠️ Leaning ${(spine.signedAngle ?? spine.angle) > 0 ? "right" : "left"} ${spine.angle}° — sit centered, weight even on both hips`),
+    add("spine_mid", spine.reliable && Math.abs(spine.signedAngle ?? spine.angle) > 10 && Math.abs(spine.signedAngle ?? spine.angle) <= 18,
+        `Leaning ${(spine.signedAngle ?? spine.angle) > 0 ? "right" : "left"} ${spine.angle}° — engage core, sit centered`),
     add("yaw",       yaw.reliable && yaw.absAngle > 18,           `Head turned ${yaw.absAngle}° ${yaw.angle > 0 ? "right" : "left"} — face monitor`),
     add("dist_cl",   distCm < lo - 10,                            `⚠️ Very close (${distCm}cm) — move back to ${lo}–${hi}cm`),
     add("dist_c",    distCm < lo && distCm >= lo - 10,            `Too close (${distCm}cm) — ideal ${lo}–${hi}cm`),
     add("dist_f",    distCm > hi + 15,                            `Too far (${distCm}cm) — ideal ${lo}–${hi}cm`),
     add("round_sev", rounded.reliable && rounded.depth > 15,      `⚠️ Rounded shoulders — pull shoulder blades together`),
     add("round_mid", rounded.reliable && rounded.depth > 8 && rounded.depth <= 15, `Shoulders slightly forward — open chest`),
-    add("round_side_tip", rounded.sideModeRecommended,            `Tip: switch to Side mode for a more precise rounded-shoulders reading`),
+    add("round_calib_tip", rounded.calibrationRecommended,        `Tip: run Personal Posture Calibration for a more precise rounded-shoulders reading`),
     add("shrug_sev", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.bad, `⚠️ Shoulders elevated/shrugging (${shoulderElev.elevPct}%) — relax shoulders down and back`),
     add("shrug_mid", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.ok && shoulderElev.elevPct <= THR.SHOULDER_ELEV.bad, `Shoulders slightly raised — relax your trap muscles`),
     add("elbow_hi",  elbow.reliable && elbow.angle != null && elbow.angle < 70, `⚠️ Elbows too high (${elbow.angle}°) — lower keyboard`),
@@ -1482,7 +1508,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       neck_lean:         { value: neck.angle,       score: neck.score,     unit: "°",  label: "Neck lean",           reliable: neck.reliable },
       head_tilt:         { value: headTilt.angle,   score: headTilt.score, unit: "°",  label: "Head tilt",           reliable: headTilt.reliable },
       shoulder_level:    { value: shoulder.angle,   score: shoulder.score, unit: "°",  label: "Shoulder level",      reliable: shoulder.reliable, signed: shoulder.signedAngle },
-      spine_lean:        { value: spine.angle,      score: spine.score,    unit: "°",  label: "Spine lean",          reliable: spine.reliable },
+      spine_lean:        { value: spine.angle,      score: spine.score,    unit: "°",  label: "Spine lean",          reliable: spine.reliable, signed: spine.signedAngle },
       head_yaw:          { value: yaw.angle,        score: yaw.score,      unit: "°",  label: "Head turn",           reliable: yaw.reliable },
       screen_distance:   { value: distCm,           score: distSc,         unit: "cm", label: "Screen distance",     calibrated: !!(distCalibFactor && distCalibFactor > 0) },
       fhp_index:         { value: fhp.distCm,       score: fhp.score,      unit: "cm", label: "Forward head posture",extra_load_kg: fhp.extraLoadKg, reliable: fhp.reliable },
