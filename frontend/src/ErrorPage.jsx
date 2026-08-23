@@ -14,7 +14,7 @@ export function NotFound({ onHome, lang="en" }) {
           {isAr?"الصفحة التي تبحث عنها غير موجودة أو تم نقلها.":"The page you're looking for doesn't exist or has been moved."}
         </div>
         <button onClick={onHome} style={{background:"#1a56db",border:"none",borderRadius:12,padding:"12px 28px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:"0 4px 20px rgba(26,86,219,.35)"}}>
-          {isAr?"← الرئيسية":"← Go Home"}
+          {isAr?"→ الرئيسية":"← Go Home"}
         </button>
       </div>
     </div>

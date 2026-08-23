@@ -163,7 +163,7 @@ export default function BreakPage({ cs, lang="en", onExit, muted=false }) {
               <button onClick={()=>setIdx(i=>Math.max(0,i-1))} disabled={idx===0}
                 style={btn("rgba(148,163,184,.08)",idx===0?"rgba(148,163,184,.3)":muted2,
                   { flex:1, fontSize:13, border:`1px solid ${border}`, cursor:idx===0?"not-allowed":"pointer" })}>
-                {isAr?"← السابق":"← Prev"}
+                {isAr?"→ السابق":"← Prev"}
               </button>
               <button onClick={goNext}
                 style={btn("rgba(14,165,233,.12)",ACCENT,{ flex:2, fontSize:13, border:"1px solid rgba(14,165,233,.3)" })}>

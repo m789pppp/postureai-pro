@@ -229,7 +229,7 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
               <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#10b981,#6366f1)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🛠</div>
               <div>
                 <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>Enterprise Admin Tools</div>
-                <div style={{ fontSize:12, color:cs.textDim }}>Feature flags · System health · User management · Announcements</div>
+                <div style={{ fontSize:12, color:cs.muted }}>Feature flags · System health · User management · Announcements</div>
               </div>
             </div>
             <div style={{ display:"flex", gap:10, alignItems:"center" }}>
@@ -241,14 +241,14 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
               )}
               <div style={{ textAlign:"center", padding:"6px 14px", background:"rgba(16,185,129,0.1)", borderRadius:10 }}>
                 <div style={{ fontSize:17, fontWeight:800, color:"#10b981" }}>{flags.filter(f=>f.enabled).length}/{flags.length}</div>
-                <div style={{ fontSize:10, color:cs.textDim }}>Flags On</div>
+                <div style={{ fontSize:10, color:cs.muted }}>Flags On</div>
               </div>
               <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }} aria-label="Close">✕</button>
             </div>
           </div>
           <div style={{ display:"flex", gap:4 }}>
             {tabs.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{ background:tab===t.id?"rgba(16,185,129,0.12)":"transparent", border:"none", color:tab===t.id?"#10b981":cs.textDim, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #10b981":"2px solid transparent" }}>
+              <button key={t.id} onClick={() => setTab(t.id)} style={{ background:tab===t.id?"rgba(16,185,129,0.12)":"transparent", border:"none", color:tab===t.id?"#10b981":cs.muted, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #10b981":"2px solid transparent" }}>
                 {t.icon} {t.label}
               </button>
             ))}
@@ -263,28 +263,28 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
             <div>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                 <div style={{ fontWeight:700, color:cs.text, fontSize:16 }}>🚩 Feature Flags</div>
-                <div style={{ fontSize:12, color:cs.textDim }}>{flags.filter(f=>f.enabled).length} active · {flags.filter(f=>!f.enabled).length} disabled</div>
+                <div style={{ fontSize:12, color:cs.muted }}>{flags.filter(f=>f.enabled).length} active · {flags.filter(f=>!f.enabled).length} disabled</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {flags.map(f => (
                   <div key={f.id} style={{ background:cs.bg, borderRadius:12, padding:"14px 16px", border:`1px solid ${f.enabled?`${envColors[f.env]}44`:cs.border}`, display:"flex", alignItems:"center", gap:14 }}>
                     {/* Toggle */}
                     <div onClick={() => toggleFlag(f.id)} style={{ width:44, height:24, borderRadius:12, background:f.enabled?"#10b981":"rgba(255,255,255,0.1)", cursor:"pointer", position:"relative", transition:"background .2s", flexShrink:0 }}>
-                      <div style={{ position:"absolute", top:3, left:f.enabled?22:3, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left .2s" }} />
+                      <div style={{ position:"absolute", top:3, insetInlineStart:f.enabled?22:3, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"inset-inline-start .2s" }} />
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                         <span style={{ fontWeight:700, color:cs.text, fontSize:14 }}>{f.label}</span>
                         <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20, background:`${envColors[f.env]}18`, color:envColors[f.env] }}>{f.env}</span>
                       </div>
-                      <div style={{ fontSize:11, color:cs.textDim, marginTop:2 }}>{f.desc}</div>
+                      <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>{f.desc}</div>
                     </div>
                     {/* Rollout slider */}
                     <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:160 }}>
                       <input type="range" min={0} max={100} value={f.rollout} onChange={e => setRollout(f.id, e.target.value)} style={{ flex:1, accentColor:"#10b981" }} />
-                      <span style={{ fontSize:12, fontWeight:700, color:f.enabled?"#10b981":cs.textDim, width:36, textAlign:"right" }}>{f.rollout}%</span>
+                      <span style={{ fontSize:12, fontWeight:700, color:f.enabled?"#10b981":cs.muted, width:36, textAlign:"right" }}>{f.rollout}%</span>
                     </div>
-                    <code style={{ fontSize:10, color:cs.textDim, background:"rgba(0,0,0,0.2)", padding:"2px 8px", borderRadius:5, whiteSpace:"nowrap" }}>{f.id}</code>
+                    <code style={{ fontSize:10, color:cs.muted, background:"rgba(0,0,0,0.2)", padding:"2px 8px", borderRadius:5, whiteSpace:"nowrap" }}>{f.id}</code>
                   </div>
                 ))}
               </div>
@@ -297,7 +297,7 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
               {/* Live-checked services — every row here is a real backend check, no fabricated numbers.
                   Latency/uptime/load aren't tracked yet, so this shows status + detail instead of pretending to have them. */}
               <div style={{ background:cs.bg, borderRadius:14, border:`1px solid ${cs.border}`, padding:16 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:cs.textDim, marginBottom:10, textTransform:"uppercase", letterSpacing:".05em" }}>
+                <div style={{ fontSize:11, fontWeight:700, color:cs.muted, marginBottom:10, textTransform:"uppercase", letterSpacing:".05em" }}>
                   Service Status {!realHealth && "(checking…)"}
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -308,7 +308,7 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                         <div style={{ width:8, height:8, borderRadius:"50%", background: STATUS_DOT[s.status] || STATUS_DOT.unknown }} />
                         <span style={{ fontWeight:600, color:cs.text, fontSize:13 }}>{s.name}</span>
                       </div>
-                      <span style={{ fontSize:11.5, color:cs.textDim }}>{s.detail}</span>
+                      <span style={{ fontSize:11.5, color:cs.muted }}>{s.detail}</span>
                     </div>
                   ))}
                 </div>
@@ -328,7 +328,7 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                 ].map(m => (
                   <div key={m.label} style={{ background:cs.bg, borderRadius:12, padding:"12px 16px", border:`1px solid ${cs.border}`, flex:"1 1 140px" }}>
                     <div style={{ fontSize:20, fontWeight:800, color:m.color }}>{m.value}</div>
-                    <div style={{ fontSize:11, color:cs.textDim, marginTop:4 }}>{m.label}</div>
+                    <div style={{ fontSize:11, color:cs.muted, marginTop:4 }}>{m.label}</div>
                   </div>
                 ))}
               </div>
@@ -344,10 +344,10 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {usersLoading && (
-                  <div style={{ textAlign:"center", padding:24, color:cs.textDim, fontSize:12.5 }}>Loading users…</div>
+                  <div style={{ textAlign:"center", padding:24, color:cs.muted, fontSize:12.5 }}>Loading users…</div>
                 )}
                 {!usersLoading && filteredUsers.length === 0 && (
-                  <div style={{ textAlign:"center", padding:24, color:cs.textDim, fontSize:12.5 }}>No matching users</div>
+                  <div style={{ textAlign:"center", padding:24, color:cs.muted, fontSize:12.5 }}>No matching users</div>
                 )}
                 {filteredUsers.map(u => (
                   <div key={u.uid} style={{ background:cs.bg, borderRadius:12, padding:16, border:`1px solid ${cs.border}`, display:"flex", gap:14, alignItems:"center" }}>
@@ -356,13 +356,13 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:700, color:cs.text, fontSize:14 }}>{u.name}</div>
-                      <div style={{ fontSize:11, color:cs.textDim }}>{u.email} · {u.org} · {u.sessions} sessions</div>
+                      <div style={{ fontSize:11, color:cs.muted }}>{u.email} · {u.org} · {u.sessions} sessions</div>
                     </div>
                     <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:"rgba(245,158,11,0.12)", color:"#f59e0b" }}>{u.plan}</span>
-                    <span style={{ fontSize:11, color:cs.textDim }}>{u.lastSeen}</span>
+                    <span style={{ fontSize:11, color:cs.muted }}>{u.lastSeen}</span>
                     <div style={{ display:"flex", gap:6 }}>
                       <button onClick={() => setImpersonating(u)} style={{ background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.3)", color:"#6366f1", borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11, fontWeight:600 }}>👤 Impersonate</button>
-                      <button style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11 }}>Edit</button>
+                      <button style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11 }}>Edit</button>
                       <button style={{ background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11 }}>Suspend</button>
                     </div>
                   </div>
@@ -378,22 +378,22 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
                 <div style={{ fontWeight:600, color:cs.text, marginBottom:14, fontSize:14 }}>Compose Announcement</div>
                 <div style={{ marginBottom:12 }}>
-                  <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Title</label>
+                  <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>Title</label>
                   <input value={announcement.title} onChange={e => setAnnouncement(p => ({...p,title:e.target.value}))} placeholder="Scheduled maintenance window" style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
                 </div>
                 <div style={{ marginBottom:12 }}>
-                  <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Message</label>
+                  <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>Message</label>
                   <textarea value={announcement.body} onChange={e => setAnnouncement(p => ({...p,body:e.target.value}))} rows={3} placeholder="Brief maintenance from 02:00–02:05 UTC on June 10…" style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", resize:"vertical", boxSizing:"border-box" }} />
                 </div>
                 <div style={{ display:"flex", gap:10, marginBottom:14 }}>
                   <div style={{ flex:1 }}>
-                    <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Type</label>
+                    <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>Type</label>
                     <select value={announcement.type} onChange={e => setAnnouncement(p => ({...p,type:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none" }}>
                       {["info","warning","critical","success"].map(t => <option key={t} value={t} style={{ background:"#1e293b" }}>{t}</option>)}
                     </select>
                   </div>
                   <div style={{ flex:1 }}>
-                    <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Target</label>
+                    <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>Target</label>
                     <select value={announcement.targets} onChange={e => setAnnouncement(p => ({...p,targets:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none" }}>
                       {["all","enterprise","scale","growth","starter","admins"].map(t => <option key={t} value={t} style={{ background:"#1e293b" }}>{t}</option>)}
                     </select>
@@ -409,11 +409,11 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
                     <div style={{ fontWeight:700, color:cs.text }}>{a.title}</div>
                     <div style={{ display:"flex", gap:8 }}>
-                      <span style={{ fontSize:11, padding:"2px 9px", borderRadius:20, background:"rgba(255,255,255,0.07)", color:cs.textDim }}>{a.targets}</span>
-                      <span style={{ fontSize:11, color:cs.textDim }}>{a.sent}</span>
+                      <span style={{ fontSize:11, padding:"2px 9px", borderRadius:20, background:"rgba(255,255,255,0.07)", color:cs.muted }}>{a.targets}</span>
+                      <span style={{ fontSize:11, color:cs.muted }}>{a.sent}</span>
                     </div>
                   </div>
-                  <div style={{ fontSize:13, color:cs.textDim }}>{a.body}</div>
+                  <div style={{ fontSize:13, color:cs.muted }}>{a.body}</div>
                 </div>
               ))}
             </div>
@@ -435,7 +435,7 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                   <div key={tool.title} style={{ background:cs.bg, borderRadius:12, padding:18, border:`1px solid ${tool.danger?"rgba(239,68,68,0.2)":cs.border}` }}>
                     <div style={{ fontSize:28, marginBottom:8 }}>{tool.icon}</div>
                     <div style={{ fontWeight:700, color:cs.text, fontSize:14, marginBottom:4 }}>{tool.title}</div>
-                    <div style={{ fontSize:12, color:cs.textDim, marginBottom:12, lineHeight:1.5 }}>{tool.desc}</div>
+                    <div style={{ fontSize:12, color:cs.muted, marginBottom:12, lineHeight:1.5 }}>{tool.desc}</div>
                     <button style={{ background:`${tool.color}18`, border:`1px solid ${tool.color}55`, color:tool.color, borderRadius:8, padding:"8px 16px", cursor:"pointer", fontWeight:700, fontSize:12 }}>{tool.action}</button>
                   </div>
                 ))}
@@ -453,7 +453,7 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                   ].map(m => (
                     <div key={m.label} style={{ textAlign:"center" }}>
                       <div style={{ fontSize:22, fontWeight:800, color:m.color }}>{m.value}</div>
-                      <div style={{ fontSize:11, color:cs.textDim, marginTop:4 }}>{m.label}</div>
+                      <div style={{ fontSize:11, color:cs.muted, marginTop:4 }}>{m.label}</div>
                     </div>
                   ))}
                 </div>

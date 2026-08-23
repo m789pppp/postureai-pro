@@ -809,7 +809,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                       ].map(r=>(
                         <button key={r.id} type="button" onClick={()=>{setCompanyRole(r.id);}}
                           style={{
-                            padding:"14px 12px",borderRadius:12,cursor:"pointer",textAlign:"left",
+                            padding:"14px 12px",borderRadius:12,cursor:"pointer",textAlign:isAr?"right":"left",
                             background:companyRole===r.id?"rgba(26,86,219,.1)":t.faint,
                             border:`1.5px solid ${companyRole===r.id?"rgba(26,86,219,.5)":t.border}`,
                             transition:"all .18s",fontFamily:"inherit",

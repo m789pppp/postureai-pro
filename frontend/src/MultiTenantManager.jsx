@@ -127,7 +127,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
               <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#f59e0b,#10b981)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🏢</div>
               <div>
                 <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>Multi-Tenant Manager</div>
-                <div style={{ fontSize:12, color:cs.textDim }}>Super-admin control for all organizations</div>
+                <div style={{ fontSize:12, color:cs.muted }}>Super-admin control for all organizations</div>
               </div>
             </div>
             <div style={{ display:"flex", gap:10, alignItems:"center" }}>
@@ -138,7 +138,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
               ].map(m => (
                 <div key={m.label} style={{ textAlign:"center", padding:"6px 14px", background:"rgba(255,255,255,0.04)", borderRadius:10 }}>
                   <div style={{ fontSize:17, fontWeight:800, color:m.color }}>{m.value}</div>
-                  <div style={{ fontSize:10, color:cs.textDim }}>{m.label}</div>
+                  <div style={{ fontSize:10, color:cs.muted }}>{m.label}</div>
                 </div>
               ))}
               <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }} aria-label="Close">✕</button>
@@ -146,7 +146,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
           </div>
           <div style={{ display:"flex", gap:4 }}>
             {tabs.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{ background:tab===t.id?"rgba(245,158,11,0.12)":"transparent", border:"none", color:tab===t.id?"#f59e0b":cs.textDim, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #f59e0b":"2px solid transparent" }}>
+              <button key={t.id} onClick={() => setTab(t.id)} style={{ background:tab===t.id?"rgba(245,158,11,0.12)":"transparent", border:"none", color:tab===t.id?"#f59e0b":cs.muted, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #f59e0b":"2px solid transparent" }}>
                 {t.icon} {t.label}
               </button>
             ))}
@@ -174,15 +174,15 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
               </div>
 
               <div style={{ flex:1, overflowY:"auto" }}>
-                {loading && <div style={{ padding:24, textAlign:"center", fontSize:12, color:cs.textDim }}>Loading…</div>}
+                {loading && <div style={{ padding:24, textAlign:"center", fontSize:12, color:cs.muted }}>Loading…</div>}
                 {!loading && loadError && <div style={{ padding:24, textAlign:"center", fontSize:12, color:"#ef4444" }}>{loadError}</div>}
-                {!loading && !loadError && filtered.length===0 && <div style={{ padding:24, textAlign:"center", fontSize:12, color:cs.textDim }}>No organizations yet — provision one to get started</div>}
+                {!loading && !loadError && filtered.length===0 && <div style={{ padding:24, textAlign:"center", fontSize:12, color:cs.muted }}>No organizations yet — provision one to get started</div>}
                 {!loading && !loadError && filtered.length>0 && (
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
                     <tr style={{ background:"rgba(255,255,255,0.03)", position:"sticky", top:0 }}>
                       {["Organization","Plan","Status","Seats","MRR","Region","Actions"].map(h => (
-                        <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontWeight:600, color:cs.textDim, fontSize:11, borderBottom:`1px solid ${cs.border}`, whiteSpace:"nowrap" }}>{h}</th>
+                        <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontWeight:600, color:cs.muted, fontSize:11, borderBottom:`1px solid ${cs.border}`, whiteSpace:"nowrap" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -191,20 +191,20 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                       <tr key={t.org_id} onClick={() => setSelectedTenant(t)} style={{ borderBottom:`1px solid ${cs.border}`, cursor:"pointer", background:selectedTenant?.org_id===t.org_id?"rgba(245,158,11,0.06)":"transparent", transition:"background .1s" }}>
                         <td style={{ padding:"12px 14px" }}>
                           <div style={{ fontWeight:700, color:cs.text }}>{t.name}</div>
-                          <div style={{ fontSize:11, color:cs.textDim }}>{t.domain} · {t.admin_email}</div>
+                          <div style={{ fontSize:11, color:cs.muted }}>{t.domain} · {t.admin_email}</div>
                         </td>
                         <td style={{ padding:"12px 14px" }}>
-                          <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:`${PLAN_COLORS[t.plan]||cs.border}22`, color:PLAN_COLORS[t.plan]||cs.textDim }}>{t.plan}</span>
+                          <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:`${PLAN_COLORS[t.plan]||cs.border}22`, color:PLAN_COLORS[t.plan]||cs.muted }}>{t.plan}</span>
                         </td>
                         <td style={{ padding:"12px 14px" }}>
-                          <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:`${STATUS_COLORS[t.status]||cs.border}18`, color:STATUS_COLORS[t.status]||cs.textDim }}>{(t.status||"").replace("_"," ")}</span>
+                          <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:`${STATUS_COLORS[t.status]||cs.border}18`, color:STATUS_COLORS[t.status]||cs.muted }}>{(t.status||"").replace("_"," ")}</span>
                         </td>
                         <td style={{ padding:"12px 14px", color:cs.text }}>{t.seats}</td>
                         <td style={{ padding:"12px 14px", fontWeight:700, color:cs.text }}>${(t.mrr||0).toLocaleString()}</td>
-                        <td style={{ padding:"12px 14px", color:cs.textDim, fontSize:11 }}>{t.region}</td>
+                        <td style={{ padding:"12px 14px", color:cs.muted, fontSize:11 }}>{t.region}</td>
                         <td style={{ padding:"12px 14px" }}>
                           <div style={{ display:"flex", gap:4 }}>
-                            <button onClick={e => { e.stopPropagation(); setSelectedTenant(t); }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:6, padding:"4px 9px", cursor:"pointer", fontSize:11 }}>View</button>
+                            <button onClick={e => { e.stopPropagation(); setSelectedTenant(t); }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:6, padding:"4px 9px", cursor:"pointer", fontSize:11 }}>View</button>
                             {t.status==="active" ? (
                               <button onClick={e => { e.stopPropagation(); patchTenant(t,{status:"suspended"},"Tenant suspended"); }} disabled={busy} style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", color:"#ef4444", borderRadius:6, padding:"4px 9px", cursor:"pointer", fontSize:11 }}>Suspend</button>
                             ) : (
@@ -234,7 +234,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                   <div key={m.label} style={{ background:cs.bg, borderRadius:14, padding:16, border:`1px solid ${cs.border}` }}>
                     <div style={{ fontSize:24 }}>{m.icon}</div>
                     <div style={{ fontSize:22, fontWeight:800, color:m.color, marginTop:8 }}>{m.value}</div>
-                    <div style={{ fontSize:12, color:cs.textDim }}>{m.label}</div>
+                    <div style={{ fontSize:12, color:cs.muted }}>{m.label}</div>
                   </div>
                 ))}
               </div>
@@ -250,7 +250,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                       <div style={{ flex:1, height:10, background:"rgba(255,255,255,0.06)", borderRadius:5, overflow:"hidden" }}>
                         <div style={{ height:"100%", width:`${pct}%`, background:PLAN_COLORS[plan], borderRadius:5 }} />
                       </div>
-                      <div style={{ width:40, fontSize:12, color:cs.textDim, textAlign:"right" }}>{count} org{count!==1?"s":""}</div>
+                      <div style={{ width:40, fontSize:12, color:cs.muted, textAlign:"right" }}>{count} org{count!==1?"s":""}</div>
                     </div>
                   );
                 })}
@@ -258,14 +258,14 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
 
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:14, fontSize:15 }}>⚠️ Needs Attention</div>
-                {tenants.filter(t => t.status !== "active").length===0 && <div style={{ fontSize:12, color:cs.textDim }}>Nothing needs attention right now</div>}
+                {tenants.filter(t => t.status !== "active").length===0 && <div style={{ fontSize:12, color:cs.muted }}>Nothing needs attention right now</div>}
                 {tenants.filter(t => t.status !== "active").map(t => (
                   <div key={t.org_id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${cs.border}` }}>
                     <div>
                       <div style={{ fontWeight:700, color:cs.text, fontSize:13 }}>{t.name}</div>
-                      <div style={{ fontSize:11, color:cs.textDim }}>{t.domain} · {(t.status||"").replace("_"," ")}</div>
+                      <div style={{ fontSize:11, color:cs.muted }}>{t.domain} · {(t.status||"").replace("_"," ")}</div>
                     </div>
-                    <button onClick={() => { setTab("tenants"); setSelectedTenant(t); }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:7, padding:"4px 11px", cursor:"pointer", fontSize:11 }}>View</button>
+                    <button onClick={() => { setTab("tenants"); setSelectedTenant(t); }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:7, padding:"4px 11px", cursor:"pointer", fontSize:11 }}>View</button>
                   </div>
                 ))}
               </div>
@@ -282,37 +282,37 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                 { key:"admin_email", label:"Admin Email *",       placeholder:"admin@acme.com" },
               ].map(f => (
                 <div key={f.key} style={{ marginBottom:14 }}>
-                  <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>{f.label}</label>
+                  <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>{f.label}</label>
                   <input value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
                 </div>
               ))}
 
               <div style={{ marginBottom:14 }}>
-                <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Plan</label>
+                <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>Plan</label>
                 <select value={form.plan} onChange={e=>setForm(p=>({...p,plan:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none" }}>
                   {["starter","growth","scale","enterprise"].map(p => <option key={p} value={p} style={{ background:"#1e293b", textTransform:"capitalize" }}>{p}</option>)}
                 </select>
               </div>
 
               <div style={{ marginBottom:14 }}>
-                <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Seats Limit</label>
+                <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>Seats Limit</label>
                 <input type="number" value={form.seats} onChange={e=>setForm(p=>({...p,seats:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
               </div>
 
               <div style={{ marginBottom:14 }}>
-                <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Region</label>
+                <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>Region</label>
                 <select value={form.region} onChange={e=>setForm(p=>({...p,region:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none" }}>
                   {["us-east","us-west","eu-west","ap-south"].map(r => <option key={r} value={r} style={{ background:"#1e293b" }}>{r}</option>)}
                 </select>
               </div>
 
               <div style={{ marginBottom:14 }}>
-                <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>White-label Domain (optional)</label>
+                <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>White-label Domain (optional)</label>
                 <input value={form.white_label_domain} onChange={e=>setForm(p=>({...p,white_label_domain:e.target.value}))} placeholder="app.acmecorp.com" style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
               </div>
 
               <div style={{ marginBottom:20 }}>
-                <label style={{ fontSize:12, fontWeight:600, color:cs.textDim, display:"block", marginBottom:5 }}>Trial Period (days, 0 = no trial)</label>
+                <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>Trial Period (days, 0 = no trial)</label>
                 <input type="number" value={form.trial_days} onChange={e=>setForm(p=>({...p,trial_days:e.target.value}))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
               </div>
 
@@ -321,7 +321,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                 {provisionOk ? "✓ Provisioned!" : busy ? "Provisioning…" : "🚀 Provision Tenant"}
               </button>
 
-              <div style={{ marginTop:16, padding:14, background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:10, fontSize:12, color:cs.textDim, lineHeight:1.7 }}>
+              <div style={{ marginTop:16, padding:14, background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:10, fontSize:12, color:cs.muted, lineHeight:1.7 }}>
                 This creates the org record in Firestore and returns its org_id — it does not yet send an admin welcome email, configure SSO, or set up billing automatically.
               </div>
             </div>
@@ -331,18 +331,18 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
           {tab==="audit" && (
             <div style={{ flex:1, overflowY:"auto", padding:24 }}>
               <div style={{ fontWeight:700, color:cs.text, fontSize:16, marginBottom:16 }}>📋 This Session's Actions</div>
-              <div style={{ fontSize:12, color:cs.textDim, marginBottom:16 }}>Provision and update calls are also recorded server-side in the admin audit log — this is just a local view of what you've done this session.</div>
-              {actionLog.length===0 && <div style={{ fontSize:12, color:cs.textDim }}>No actions yet this session</div>}
+              <div style={{ fontSize:12, color:cs.muted, marginBottom:16 }}>Provision and update calls are also recorded server-side in the admin audit log — this is just a local view of what you've done this session.</div>
+              {actionLog.length===0 && <div style={{ fontSize:12, color:cs.muted }}>No actions yet this session</div>}
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 {actionLog.map(log => (
                   <div key={log.id} style={{ background:cs.bg, borderRadius:10, padding:"12px 16px", border:`1px solid ${cs.border}`, display:"flex", gap:14, alignItems:"flex-start" }}>
-                    <div style={{ fontSize:10, color:cs.textDim, whiteSpace:"nowrap", marginTop:2, fontFamily:"monospace" }}>{log.ts}</div>
+                    <div style={{ fontSize:10, color:cs.muted, whiteSpace:"nowrap", marginTop:2, fontFamily:"monospace" }}>{log.ts}</div>
                     <div style={{ flex:1 }}>
                       <span style={{ fontWeight:700, color:"#f59e0b" }}>{log.tenant}</span>
-                      <span style={{ color:cs.textDim }}> — </span>
+                      <span style={{ color:cs.muted }}> — </span>
                       <span style={{ color:cs.text, fontSize:13 }}>{log.action}</span>
                     </div>
-                    <div style={{ fontSize:11, color:cs.textDim, whiteSpace:"nowrap" }}>by {log.by}</div>
+                    <div style={{ fontSize:11, color:cs.muted, whiteSpace:"nowrap" }}>by {log.by}</div>
                   </div>
                 ))}
               </div>
@@ -354,7 +354,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
             <div style={{ width:340, borderLeft:`1px solid ${cs.border}`, padding:20, overflowY:"auto", background:"rgba(0,0,0,0.15)" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                 <div style={{ fontWeight:700, color:cs.text, fontSize:15 }}>{selectedTenant.name}</div>
-                <button onClick={() => setSelectedTenant(null)} style={{ background:"transparent", border:"none", color:cs.textDim, cursor:"pointer", fontSize:18 }}>✕</button>
+                <button onClick={() => setSelectedTenant(null)} style={{ background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:18 }}>✕</button>
               </div>
 
               {[
@@ -368,7 +368,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                 ["MRR",      `$${(selectedTenant.mrr||0).toLocaleString()}`],
               ].map(([k,v]) => (
                 <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${cs.border}`, fontSize:13 }}>
-                  <span style={{ color:cs.textDim }}>{k}</span>
+                  <span style={{ color:cs.muted }}>{k}</span>
                   <span style={{ color:cs.text, fontWeight:600 }}>{v}</span>
                 </div>
               ))}
@@ -378,7 +378,7 @@ export function MultiTenantManager({ profile, cs, lang, onClose }) {
                 <button onClick={() => patchTenant(selectedTenant, { seats:(selectedTenant.seats||0)+10 }, "Seat limit +10")} disabled={busy} style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, padding:"8px 12px", cursor:"pointer", fontSize:12, fontWeight:600, textAlign:"left" }}>💺 Add 10 Seats</button>
                 <button onClick={() => patchTenant(selectedTenant, { trial_days:(selectedTenant.trial_days||0)+7 }, "Trial extended 7 days")} disabled={busy} style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, padding:"8px 12px", cursor:"pointer", fontSize:12, fontWeight:600, textAlign:"left" }}>⏱ Extend Trial +7 days</button>
                 {NOT_WIRED.map(label => (
-                  <button key={label} disabled title="Not implemented yet" style={{ background:"rgba(255,255,255,0.02)", border:`1px dashed ${cs.border}`, color:cs.textDim, borderRadius:8, padding:"8px 12px", cursor:"not-allowed", fontSize:12, fontWeight:600, textAlign:"left", opacity:0.6 }}>
+                  <button key={label} disabled title="Not implemented yet" style={{ background:"rgba(255,255,255,0.02)", border:`1px dashed ${cs.border}`, color:cs.muted, borderRadius:8, padding:"8px 12px", cursor:"not-allowed", fontSize:12, fontWeight:600, textAlign:"left", opacity:0.6 }}>
                     {label==="Email Admin"?"📧":label==="Reset SSO"?"🔑":label==="Export Data"?"📊":"🗑"} {label} <span style={{fontSize:10}}>— not wired yet</span>
                   </button>
                 ))}

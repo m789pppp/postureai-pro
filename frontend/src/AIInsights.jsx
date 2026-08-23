@@ -124,7 +124,7 @@ function MdText({ text }) {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12.5 }}>
               <thead>
                 <tr>{headers.map((h,hi)=>(
-                  <th key={hi} style={{ padding:"8px 12px", textAlign:"left", background:"rgba(99,179,237,.1)", color:"#93c5fd", fontWeight:600, borderBottom:"1px solid rgba(99,179,237,.2)" }}
+                  <th key={hi} style={{ padding:"8px 12px", textAlign:isAr?"right":"left", background:"rgba(99,179,237,.1)", color:"#93c5fd", fontWeight:600, borderBottom:"1px solid rgba(99,179,237,.2)" }}
                     dangerouslySetInnerHTML={{ __html: inlineFormat(h) }}/>
                 ))}</tr>
               </thead>

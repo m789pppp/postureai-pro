@@ -213,14 +213,14 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
               <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#10b981)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🛡</div>
               <div>
                 <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>{isAr?"المصادقة الثنائية":"Two-Factor Authentication"}</div>
-                <div style={{ fontSize:12, color:cs.textDim }}>{isAr?"احمِ حسابك بخطوة إضافية":"Protect your account with an extra layer of security"}</div>
+                <div style={{ fontSize:12, color:cs.muted }}>{isAr?"احمِ حسابك بخطوة إضافية":"Protect your account with an extra layer of security"}</div>
               </div>
             </div>
             <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }} aria-label="Close">✕</button>
           </div>
           <div style={{ display:"flex", gap:4 }}>
             {tabs.map(t => (
-              <button key={t.id} onClick={() => { setTab(t.id); setError(""); setCode(""); }} style={{ background:tab===t.id?"rgba(99,102,241,0.12)":"transparent", border:"none", color:tab===t.id?"#6366f1":cs.textDim, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #6366f1":"2px solid transparent" }}>
+              <button key={t.id} onClick={() => { setTab(t.id); setError(""); setCode(""); }} style={{ background:tab===t.id?"rgba(99,102,241,0.12)":"transparent", border:"none", color:tab===t.id?"#6366f1":cs.muted, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #6366f1":"2px solid transparent" }}>
                 {t.icon} {t.label}
               </button>
             ))}
@@ -232,7 +232,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
           {/* ── OVERVIEW ── */}
           {tab==="overview" && (
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-              <div style={{ background:"rgba(99,102,241,0.08)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:12, padding:16, fontSize:13, color:cs.textDim, lineHeight:1.7 }}>
+              <div style={{ background:"rgba(99,102,241,0.08)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:12, padding:16, fontSize:13, color:cs.muted, lineHeight:1.7 }}>
                 🛡 {isAr?"المصادقة الثنائية بتضيف خطوة إضافية عند تسجيل الدخول. حتى لو حد عرف الباسورد، مش هيقدر يدخل من غير العامل التاني.":"Two-factor authentication (2FA) adds an extra step when signing in. Even if someone gets your password, they can't access your account without the second factor."}
               </div>
               {mfaEnabled ? (
@@ -240,7 +240,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <div>
                       <div style={{ fontWeight:700, color:cs.text, fontSize:14, marginBottom:4 }}>✓ {isAr?"مفعّلة":"Enabled"} — {mfaMethod==="sms"?(isAr?"عبر SMS":"via SMS"):(isAr?"عبر تطبيق مصادقة":"via Authenticator App")}</div>
-                      <div style={{ fontSize:12, color:cs.textDim }}>{isAr?"حسابك محمي بعامل ثاني حقيقي":"Your account is protected by a real second factor"}</div>
+                      <div style={{ fontSize:12, color:cs.muted }}>{isAr?"حسابك محمي بعامل ثاني حقيقي":"Your account is protected by a real second factor"}</div>
                     </div>
                     <button onClick={()=>disableMFA()} disabled={verifying} style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.3)", color:"#ef4444", borderRadius:9, padding:"8px 16px", cursor:"pointer", fontWeight:700, fontSize:12 }}>{isAr?"إلغاء":"Disable"}</button>
                   </div>
@@ -257,7 +257,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                         <span style={{ fontWeight:700, color:cs.text, fontSize:14 }}>{m.label}</span>
                         {m.recommended && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20, background:"rgba(16,185,129,0.12)", color:"#10b981" }}>{isAr?"موصى به":"Recommended"}</span>}
                       </div>
-                      <div style={{ fontSize:12, color:cs.textDim }}>{m.desc}</div>
+                      <div style={{ fontSize:12, color:cs.muted }}>{m.desc}</div>
                     </div>
                     <button onClick={() => setTab(m.key)} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:9, padding:"8px 16px", cursor:"pointer", fontWeight:700, fontSize:12, whiteSpace:"nowrap" }}>{isAr?"إعداد":"Set up"}</button>
                   </div>
@@ -278,13 +278,13 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
               ) : totpStep === 1 && (
                 <>
                   <div style={{ fontWeight:700, color:cs.text, fontSize:15, marginBottom:4 }}>{isAr?"الخطوة 1: أضف المفتاح":"Step 1: Add the key"}</div>
-                  <p style={{ fontSize:13, color:cs.textDim, lineHeight:1.6, margin:0 }}>{isAr?"افتح تطبيق المصادقة → إضافة حساب → إدخال يدوي → الصق المفتاح ده":"Open your authenticator app → Add account → Enter manually → paste this key"}</p>
+                  <p style={{ fontSize:13, color:cs.muted, lineHeight:1.6, margin:0 }}>{isAr?"افتح تطبيق المصادقة → إضافة حساب → إدخال يدوي → الصق المفتاح ده":"Open your authenticator app → Add account → Enter manually → paste this key"}</p>
                   {loadingSetup ? (
-                    <div style={{ textAlign:"center", padding:20, fontSize:12, color:cs.textDim }}>{isAr?"جاري التحضير…":"Preparing…"}</div>
+                    <div style={{ textAlign:"center", padding:20, fontSize:12, color:cs.muted }}>{isAr?"جاري التحضير…":"Preparing…"}</div>
                   ) : secret ? (
                     <div style={{ background:"rgba(0,0,0,0.2)", borderRadius:9, padding:12, display:"flex", gap:8, alignItems:"center" }}>
                       <code style={{ flex:1, fontSize:13, color:"#a5f3fc", letterSpacing:2, wordBreak:"break-all" }}>{secret}</code>
-                      <button aria-label="Copy secret" onClick={copySecret} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:7, padding:"5px 12px", cursor:"pointer", fontSize:11, flexShrink:0 }}>{copied?"✓":(isAr?"نسخ":"Copy")}</button>
+                      <button aria-label="Copy secret" onClick={copySecret} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:7, padding:"5px 12px", cursor:"pointer", fontSize:11, flexShrink:0 }}>{copied?"✓":(isAr?"نسخ":"Copy")}</button>
                     </div>
                   ) : (
                     <button onClick={startTotpSetup} style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"10px", cursor:"pointer", fontWeight:600, fontSize:13 }}>{isAr?"إعادة المحاولة":"Retry"}</button>
@@ -296,16 +296,16 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
               {!mfaEnabled && totpStep === 2 && (
                 <>
                   <div style={{ fontWeight:700, color:cs.text, fontSize:15, marginBottom:4 }}>{isAr?"الخطوة 2: أدخل الكود من 6 أرقام":"Step 2: Enter the 6-digit code"}</div>
-                  <p style={{ fontSize:13, color:cs.textDim, lineHeight:1.6, margin:"0 0 16px" }}>{isAr?"افتح تطبيق المصادقة وأدخل الكود الحالي":"Open your authenticator app and enter the current 6-digit code"}</p>
+                  <p style={{ fontSize:13, color:cs.muted, lineHeight:1.6, margin:"0 0 16px" }}>{isAr?"افتح تطبيق المصادقة وأدخل الكود الحالي":"Open your authenticator app and enter the current 6-digit code"}</p>
                   <CodeInputRow onVerify={verifyTOTP} />
-                  <button onClick={() => setTotpStep(1)} style={{ background:"transparent", border:"none", color:cs.textDim, cursor:"pointer", fontSize:12, textAlign:"center" }}>← {isAr?"رجوع":"Back"}</button>
+                  <button onClick={() => setTotpStep(1)} style={{ background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:12, textAlign:"center" }}>← {isAr?"رجوع":"Back"}</button>
                 </>
               )}
               {!mfaEnabled && totpStep === 3 && (
                 <div style={{ textAlign:"center", padding:24 }}>
                   <div style={{ fontSize:56, marginBottom:16 }}>✅</div>
                   <div style={{ fontWeight:800, fontSize:20, color:"#10b981", marginBottom:8 }}>{isAr?"تم تفعيل تطبيق المصادقة!":"Authenticator app enabled!"}</div>
-                  <p style={{ fontSize:13, color:cs.textDim, lineHeight:1.6 }}>{isAr?"حسابك محمي دلوقتي. هتحتاج الكود في كل مرة تسجل دخول.":"Your account is now protected. You'll need your authenticator code each time you sign in."}</p>
+                  <p style={{ fontSize:13, color:cs.muted, lineHeight:1.6 }}>{isAr?"حسابك محمي دلوقتي. هتحتاج الكود في كل مرة تسجل دخول.":"Your account is now protected. You'll need your authenticator code each time you sign in."}</p>
                   <button onClick={() => { setTab("backup"); onEnabled?.(); }} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"12px 28px", cursor:"pointer", fontWeight:700, fontSize:14, marginTop:16 }}>{isAr?"احفظ الأكواد الاحتياطية →":"Save Backup Codes →"}</button>
                 </div>
               )}
@@ -328,7 +328,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
               ) : smsStep === 1 && (
                 <>
                   <div style={{ fontWeight:700, color:cs.text, fontSize:15, marginBottom:4 }}>{isAr?"أدخل رقم تليفونك":"Enter your phone number"}</div>
-                  <p style={{ fontSize:13, color:cs.textDim, lineHeight:1.6, margin:0 }}>{isAr?"هنبعتلك كود من 6 أرقام على الرقم ده كل ما تسجل دخول":"We'll send a 6-digit code to this number each time you sign in"}</p>
+                  <p style={{ fontSize:13, color:cs.muted, lineHeight:1.6, margin:0 }}>{isAr?"هنبعتلك كود من 6 أرقام على الرقم ده كل ما تسجل دخول":"We'll send a 6-digit code to this number each time you sign in"}</p>
                   <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+20 100 000 0000" style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"12px 14px", fontSize:16, outline:"none" }} />
                   {error && <div style={{ color:"#ef4444", fontSize:12 }}>{error}</div>}
                   <button onClick={sendSmsCode} disabled={!phone||verifying} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"13px", cursor:"pointer", fontWeight:800, fontSize:15 }}>{verifying?(isAr?"جاري الإرسال…":"Sending…"):(isAr?"إرسال الكود →":"Send Code →")}</button>
@@ -337,16 +337,16 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
               {!mfaEnabled && smsStep === 2 && (
                 <>
                   <div style={{ fontWeight:700, color:cs.text, fontSize:15, marginBottom:4 }}>{isAr?"أدخل كود SMS":"Enter the SMS code"}</div>
-                  <p style={{ fontSize:13, color:cs.textDim, margin:"0 0 16px" }}>{isAr?"بعتنا كود لـ":"We sent a code to"} <b style={{ color:cs.text }}>{phone}</b></p>
+                  <p style={{ fontSize:13, color:cs.muted, margin:"0 0 16px" }}>{isAr?"بعتنا كود لـ":"We sent a code to"} <b style={{ color:cs.text }}>{phone}</b></p>
                   <CodeInputRow onVerify={verifySMS} />
-                  <button onClick={() => setSmsStep(1)} style={{ background:"transparent", border:"none", color:cs.textDim, cursor:"pointer", fontSize:12, textAlign:"center" }}>← {isAr?"تغيير الرقم":"Change number"}</button>
+                  <button onClick={() => setSmsStep(1)} style={{ background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:12, textAlign:"center" }}>← {isAr?"تغيير الرقم":"Change number"}</button>
                 </>
               )}
               {!mfaEnabled && smsStep === 3 && (
                 <div style={{ textAlign:"center", padding:24 }}>
                   <div style={{ fontSize:56, marginBottom:16 }}>✅</div>
                   <div style={{ fontWeight:800, fontSize:20, color:"#10b981", marginBottom:8 }}>{isAr?"تم تفعيل SMS!":"SMS 2FA enabled!"}</div>
-                  <p style={{ fontSize:13, color:cs.textDim, lineHeight:1.6 }}>{isAr?"هتستلم كود على رقمك كل ما تسجل دخول.":"You'll receive a text message code each time you sign in."}</p>
+                  <p style={{ fontSize:13, color:cs.muted, lineHeight:1.6 }}>{isAr?"هتستلم كود على رقمك كل ما تسجل دخول.":"You'll receive a text message code each time you sign in."}</p>
                   <button onClick={() => { setTab("backup"); onEnabled?.(); }} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"12px 28px", cursor:"pointer", fontWeight:700, fontSize:14, marginTop:16 }}>{isAr?"احفظ الأكواد الاحتياطية →":"Save Backup Codes →"}</button>
                 </div>
               )}
@@ -356,7 +356,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
           {/* ── BACKUP CODES ── */}
           {tab==="backup" && (
             <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-              <div style={{ background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:12, padding:14, fontSize:13, color:cs.textDim, lineHeight:1.6 }}>
+              <div style={{ background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:12, padding:14, fontSize:13, color:cs.muted, lineHeight:1.6 }}>
                 ⚠️ {isAr?"احفظ الأكواد دي في مكان آمن. كل كود يُستخدم مرة واحدة بس. لو فقدت الوصول لتطبيق المصادقة، استخدم كود احتياطي لتسجيل الدخول.":"Save these backup codes somewhere safe. Each code can only be used once. If you lose access to your authenticator, use a backup code to sign in."}
               </div>
               {backupCodes.length>0 ? (
@@ -374,11 +374,11 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                 </>
               ) : mfaEnabled ? (
                 <div style={{ textAlign:"center", padding:20 }}>
-                  <p style={{ fontSize:13, color:cs.textDim, marginBottom:14 }}>{isAr?"الأكواد بتتشفّر وبتتعرض مرة واحدة بس. لو ضيّعتها، تقدر تنشئ مجموعة جديدة (هتلغي القديمة).":"Codes are hashed and only ever shown once. If you've lost yours, generate a new set (this invalidates the old ones)."}</p>
+                  <p style={{ fontSize:13, color:cs.muted, marginBottom:14 }}>{isAr?"الأكواد بتتشفّر وبتتعرض مرة واحدة بس. لو ضيّعتها، تقدر تنشئ مجموعة جديدة (هتلغي القديمة).":"Codes are hashed and only ever shown once. If you've lost yours, generate a new set (this invalidates the old ones)."}</p>
                   <button onClick={regenerateBackupCodes} disabled={verifying} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"12px 24px", cursor:"pointer", fontWeight:700, fontSize:14 }}>{verifying?(isAr?"جاري الإنشاء…":"Generating…"):(isAr?"إنشاء أكواد جديدة":"Generate new codes")}</button>
                 </div>
               ) : (
-                <div style={{ textAlign:"center", padding:20, fontSize:13, color:cs.textDim }}>{isAr?"فعّل تطبيق المصادقة أو SMS الأول عشان تحصل على أكواد احتياطية":"Enable Authenticator or SMS first to get backup codes"}</div>
+                <div style={{ textAlign:"center", padding:20, fontSize:13, color:cs.muted }}>{isAr?"فعّل تطبيق المصادقة أو SMS الأول عشان تحصل على أكواد احتياطية":"Enable Authenticator or SMS first to get backup codes"}</div>
               )}
             </div>
           )}
@@ -389,7 +389,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:2100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ width:"100%", maxWidth:360, background:cs.card, border:`1px solid ${cs.border}`, borderRadius:16, padding:24 }}>
             <div style={{ fontWeight:800, fontSize:16, color:cs.text, marginBottom:6 }}>{isAr?"أكّد كلمة السر":"Confirm your password"}</div>
-            <p style={{ fontSize:12, color:cs.textDim, lineHeight:1.6, marginBottom:16 }}>{isAr?"عشان نتأكد إنك إنت اللي بتلغي المصادقة الثنائية":"To confirm it's really you disabling two-factor authentication"}</p>
+            <p style={{ fontSize:12, color:cs.muted, lineHeight:1.6, marginBottom:16 }}>{isAr?"عشان نتأكد إنك إنت اللي بتلغي المصادقة الثنائية":"To confirm it's really you disabling two-factor authentication"}</p>
             <input
               type="password"
               value={reauthPassword}
@@ -401,7 +401,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
             />
             {reauthError && <div style={{ color:"#ef4444", fontSize:12, marginBottom:10 }}>{reauthError}</div>}
             <div style={{ display:"flex", gap:8 }}>
-              <button onClick={()=>setReauthPrompt(false)} style={{ flex:1, background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:9, padding:"11px", cursor:"pointer", fontWeight:600, fontSize:13 }}>{isAr?"إلغاء":"Cancel"}</button>
+              <button onClick={()=>setReauthPrompt(false)} style={{ flex:1, background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:9, padding:"11px", cursor:"pointer", fontWeight:600, fontSize:13 }}>{isAr?"إلغاء":"Cancel"}</button>
               <button onClick={confirmReauthPassword} disabled={verifying} style={{ flex:1, background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:9, padding:"11px", cursor:"pointer", fontWeight:700, fontSize:13 }}>{verifying?(isAr?"…":"…"):(isAr?"تأكيد":"Confirm")}</button>
             </div>
           </div>

@@ -483,7 +483,7 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack,
                   padding:"9px 12px", borderRadius:TOKENS.radiusSm, marginBottom:2,
                   background: active ? TOKENS.blueBg : "transparent",
                   border: `1px solid ${active ? `${TOKENS.blue}40` : "transparent"}`,
-                  cursor:"pointer", transition:".15s", textAlign:"left",
+                  cursor:"pointer", transition:".15s", textAlign:isAr?"right":"left",
                 }}
               >
                 <span style={{ fontSize:14, color: active ? TOKENS.blue : TOKENS.muted, width:18, textAlign:"center" }}>{t.icon}</span>

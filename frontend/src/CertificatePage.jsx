@@ -204,7 +204,7 @@ export function CertVerifyPage({ certId: propCertId }) {
               {data.type==="company" ? "Corporate Ergonomics Certificate" : "Individual Ergonomics Certificate"}
             </div>
 
-            <div style={{background:"rgba(255,255,255,.04)",borderRadius:12,padding:"16px 20px",textAlign:"left",marginBottom:20}}>
+            <div style={{background:"rgba(255,255,255,.04)",borderRadius:12,padding:"16px 20px",textAlign:isAr?"right":"left",marginBottom:20}}>
               {[
                 ["Certificate ID", data.cert_id],
                 ["Standard", "ISO 9241-110"],

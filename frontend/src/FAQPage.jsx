@@ -68,7 +68,7 @@ function FaqItem({ q, a, color, isOpen, onToggle }) {
   return (
     <div style={{ borderBottom:"1px solid rgba(148,163,184,.06)" }}>
       <button onClick={onToggle} style={{
-        width:"100%", textAlign:"left", background:"none", border:"none",
+        width:"100%", textAlign:lang==="ar"?"right":"left", background:"none", border:"none",
         cursor:"pointer", padding:"20px 0", display:"flex",
         justifyContent:"space-between", alignItems:"center", gap:16,
         fontFamily:FD,
@@ -190,7 +190,7 @@ export default function FAQPage() {
                     onClick={()=>{ setActiveCategory(cat.id); setOpenItem(0); }}
                     style={{
                       display:"flex", alignItems:"center", gap:10,
-                      padding:"11px 14px", borderRadius:10, textAlign:"left",
+                      padding:"11px 14px", borderRadius:10, textAlign:lang==="ar"?"right":"left",
                       background: activeCategory===cat.id ? `${cat.color}10` : "transparent",
                       border: activeCategory===cat.id ? `1px solid ${cat.color}25` : "1px solid transparent",
                       color: activeCategory===cat.id ? T.text : T.muted,

@@ -146,7 +146,7 @@ function StepAccountType({ isAr, onNext, setProfile }) {
       <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:28}}>
         {types.map(t=>(
           <button key={t.id} onClick={()=>setChosen(t.id)} style={{
-            width:"100%",textAlign:"left",padding:"18px 20px",borderRadius:14,cursor:"pointer",
+            width:"100%",textAlign:isAr?"right":"left",padding:"18px 20px",borderRadius:14,cursor:"pointer",
             background:chosen===t.id?`linear-gradient(135deg,${t.color}18,${t.color}08)`:"rgba(255,255,255,.02)",
             border:`2px solid ${chosen===t.id?t.color:"rgba(148,163,184,.1)"}`,
             transition:`all 200ms ${SPRING}`,
@@ -328,7 +328,7 @@ function StepProfile({ isAr, profile, setProfile, onNext, onBack }) {
         </div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <Btn variant="ghost" onClick={onBack} size="base">{isAr?"← رجوع":"← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack} size="base">{isAr?"→ رجوع":"← Back"}</Btn>
         <Btn onClick={onNext} fullWidth>{isAr?"التالي ←":"Continue →"}</Btn>
       </div>
     </div>
@@ -418,7 +418,7 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "← رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
         <Btn onClick={() => { setProfile(p => ({ ...p, mode })); onNext(); }} fullWidth>
           {isAr ? "التالي ←" : "Continue →"}
         </Btn>
@@ -496,7 +496,7 @@ function StepGoals({ isAr, profile, setProfile, onNext, onBack }) {
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "← رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
         <Btn onClick={() => { setProfile(p => ({ ...p, goals: selected })); onNext(); }} fullWidth disabled={selected.length === 0}>
           {isAr ? "التالي ←" : "Continue →"}
         </Btn>
@@ -635,7 +635,7 @@ function StepDemoWorkspace({ isAr, onNext, onBack }) {
       )}
 
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "← رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
         <Btn onClick={onNext} fullWidth>
           {isAr ? "يبدو رائعاً! التالي ←" : "Looks great! Continue →"}
         </Btn>
@@ -754,7 +754,7 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "← رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
         <Btn onClick={onNext} fullWidth variant={allDone ? "primary" : "secondary"}>
           {allDone ? (isAr ? "ممتاز! التالي ←" : "Excellent! Continue →") : (isAr ? "تخطي للآن ←" : "Skip for now →")}
         </Btn>
@@ -831,7 +831,7 @@ function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "← رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
         <Btn onClick={() => { setProfile(p => ({ ...p, interestedIntegrations: selected })); onNext(); }} fullWidth>
           {selected.length > 0 ? (isAr ? `${selected.length} مُختارة ← التالي` : `${selected.length} selected → Continue`) : (isAr ? "تخطي للآن ←" : "Skip for now →")}
         </Btn>
