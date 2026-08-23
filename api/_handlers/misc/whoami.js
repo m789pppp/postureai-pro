@@ -26,8 +26,15 @@ export default async function handler(req, res) {
   const token = (req.headers.authorization || "").replace("Bearer ", "");
   if (!token) return res.status(401).json({ error: "No token" });
 
+  // Graceful fallback if Firebase not configured
+  if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_PRIVATE_KEY) {
+    return res.status(200).json({ uid: null, tier: "standard", source: "firebase_not_configured" });
+  }
+
   try {
-    const { db, auth } = getAdmin();
+    let db, auth;
+    try { ({ db, auth } = getAdmin()); }
+    catch(e) { return res.status(200).json({ uid: null, tier: "standard", source: "firebase_init_error" }); }
     const decoded = await auth.verifyIdToken(token);
     const snap = await db.collection("users").doc(decoded.uid).get();
     const data = snap.data() || {};

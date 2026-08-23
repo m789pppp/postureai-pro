@@ -804,10 +804,10 @@ function checkFrameQuality(lms, W, H) {
     return { ok: false, reason: "too_close" };
   }
 
-  // Too close: shoulders take up >88% of frame width = person is too near
-  // 0.72 was too aggressive for laptop wide-angle cameras
+  // Too close: shoulders take up >85% of frame width
+  // 0.72 was too aggressive for laptop wide-angle, 0.88 too permissive
   const shWidthFracCheck = shWidthPx / Math.max(W, 1);
-  if (shWidthFracCheck > 0.88) {
+  if (shWidthFracCheck > 0.85) {
     return { ok: false, reason: "too_close" };
   }
 
