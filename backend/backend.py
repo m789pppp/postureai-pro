@@ -237,6 +237,44 @@ def translate_alert_ar(alert: str) -> str:
             return alert.replace(en, ar)
     return alert   # return as-is if no match found
 
+def add_alert(out, en, ar=None, front=False):
+    """
+    Append an English alert to out["alerts"], and — critically — register
+    its hand-written Arabic translation (if given) in out["_alert_ar_map"]
+    so it survives to the final out["alerts_ar"] build near the end of
+    analyze_front().
+
+    Why this exists: that final build used to be
+    `out["alerts_ar"] = [translate_alert_ar(a) for a in out["alerts"]]`,
+    which unconditionally REBUILT alerts_ar from scratch via generic
+    keyword-substring matching — discarding every hand-written Arabic
+    alert added anywhere earlier in the function (there were 16+ such
+    sites: rounded-shoulders, kyphosis, lying-down, screen-distance tiers,
+    the spine-lean direction fix, the break-recommendation message, etc.)
+    the moment execution reached that line. Every one of those specific,
+    context-aware Arabic messages was silently thrown away and replaced
+    with whatever (often much cruder, sometimes just the raw English
+    string unchanged) translate_alert_ar()'s keyword matching produced
+    instead — for every single request, this whole time.
+
+    Use add_alert()/insert_alert() instead of touching out["alerts"] /
+    out["alerts_ar"] directly for any NEW alert that has (or might later
+    get) a specific Arabic translation. Alerts added via plain
+    out["alerts"].append() with no matching call here still safely fall
+    back to translate_alert_ar()'s generic matching — nothing about
+    existing English-only alerts changes.
+    """
+    out["alerts"].append(en)
+    if ar:
+        out.setdefault("_alert_ar_map", {})[en] = ar
+
+def insert_alert(out, en, ar=None, pos=0):
+    """Same as add_alert(), but inserts at a specific position (e.g. 0, to
+    put an alert first) instead of appending."""
+    out["alerts"].insert(pos, en)
+    if ar:
+        out.setdefault("_alert_ar_map", {})[en] = ar
+
 def log_event(event, uid=None, meta=None):
     import json as _j
     rec = {"ts": datetime.utcnow().isoformat()+"Z", "event": event,
@@ -2168,6 +2206,21 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
 
     # ── Landmark averaging: reduce ±3° jitter to ±1° ─────────────
     _sid  = session_id or out.get("session_id", "front_default")
+    # `out["session_id"]` itself was never actually written anywhere in this
+    # function before this line — grepped every `out.get("session_id", ...)`
+    # read in this file (8 of them: blink-rate keying, the confidence-bonus
+    # lookup, breathing/movement/head-velocity buffer keys, sitting-duration
+    # fatigue, pain-prediction elapsed time, and the smart-break-reminder's
+    # session_start lookup) and every single one was silently falling back
+    # to its default ("default"/""/"front_default") instead of the real
+    # per-user session id, because there was nothing here to set it. Most
+    # visibly: sitting-duration/pain-prediction "elapsed session time" was
+    # therefore always computed as ~0 minutes (falls through to
+    # sessions.get("", {}) or sessions.get("default", {}), which is either
+    # empty or a shared bucket — never this session's real `start` time),
+    # so those features could never actually fire. One line fixes all of
+    # them at the root instead of patching each read site separately.
+    out["session_id"] = _sid
     _raw  = pose_result.pose_landmarks.landmark
     _hist = _lm_history.setdefault(_sid, [])
     _hist.append(_raw)
@@ -2260,9 +2313,14 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                               f"Lower monitor {_monitor_offset_cm}cm",
             }
             if abs(_pitch_val) > 12:
-                out["alerts"].append(
+                _dir_ar = "أسفل" if _monitor_dir == "below" else "أعلى"
+                _verb_ar = "ارفع" if _monitor_dir == "below" else "اخفض"
+                add_alert(
+                    out,
                     f"⚠️ Monitor ~{_monitor_offset_cm}cm {_monitor_dir} eye level — "
-                    f"{'raise' if _monitor_dir == 'below' else 'lower'} monitor to reduce neck strain")
+                    f"{'raise' if _monitor_dir == 'below' else 'lower'} monitor to reduce neck strain",
+                    f"⚠️ الشاشة على بُعد {_monitor_offset_cm} سم {_dir_ar} مستوى العين — "
+                    f"{_verb_ar} الشاشة لتقليل إجهاد الرقبة")
     except Exception:
         pass
 
@@ -2336,8 +2394,12 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
             "label":       "Forward head creep rate",
         }
         if _creep.get("alert"):
-            out["alerts"].append(_creep["alert"])
-            out.setdefault("alerts_ar", []).append(
+            # 17th alerts_ar site — found via a follow-up grep after the
+            # initial 16-site sweep missed this one (dynamic f-string AR
+            # text, same blind-overwrite bug as the other 16 — see
+            # add_alert()/insert_alert() docstring above).
+            add_alert(
+                out, _creep["alert"],
                 f"⚠️ زحف الرأس للأمام {_creep['creep_rate']:.1f}°/دقيقة — وضعيتك تتردى تدريجياً. خذ استراحة."
                 if _creep["severity"] == "severe"
                 else f"رقبتك تتحرك للأمام ببطء ({_creep['creep_rate']:.1f}°/دقيقة) — اضبط وضعيتك"
@@ -2375,10 +2437,11 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
             "reference":  "Normal: 12-25% gap between ear and shoulder",
         }
         if _sh_elev_pct < 6:
-            out["alerts"].append("⚠️ Shoulders elevated/shrugging — relax shoulders down and back")
-            out.setdefault("alerts_ar", []).append("⚠️ الكتفان مرفوعان — أرخِ كتفيك للأسفل والخلف")
+            add_alert(out, "⚠️ Shoulders elevated/shrugging — relax shoulders down and back",
+                      "⚠️ الكتفان مرفوعان — أرخِ كتفيك للأسفل والخلف")
         elif _sh_elev_pct < 10:
-            out["alerts"].append("Shoulders slightly elevated — try to relax trap muscles")
+            add_alert(out, "Shoulders slightly elevated — try to relax trap muscles",
+                      "الكتفان مرتفعان قليلاً — حاول إرخاء عضلات الترابيس")
     except Exception:
         pass
 
@@ -2441,15 +2504,14 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                           if _ear_ok else "MediaPipe Z-depth (ears not visible)"),
     }
     if _rounded_depth > 18:
-        out["alerts"].append("⚠️ Rounded shoulders detected — pull shoulder blades together and down")
-        if "alerts_ar" not in out: out["alerts_ar"] = []
-        out["alerts_ar"].append("⚠️ كتفان مائلان للأمام — اسحب لوحي الكتف للخلف وللأسفل")
+        add_alert(out, "⚠️ Rounded shoulders detected — pull shoulder blades together and down",
+                  "⚠️ كتفان مائلان للأمام — اسحب لوحي الكتف للخلف وللأسفل")
     elif _rounded_depth > 10:
-        out["alerts"].append("Shoulders slightly forward — open chest, squeeze shoulder blades gently")
+        add_alert(out, "Shoulders slightly forward — open chest, squeeze shoulder blades gently",
+                  "الكتفان مائلان للأمام قليلاً — افتح صدرك واضغط لوحي الكتف برفق")
     if _rounded_severity in ("mild", "moderate") and not _personalised:
-        out["alerts"].append("Tip: run Personal Posture Calibration for a more precise rounded-shoulders reading")
-        if "alerts_ar" not in out: out["alerts_ar"] = []
-        out["alerts_ar"].append("نصيحة: شغّل معايرة الوضعية الشخصية لقراءة أدق لانحناء الكتفين")
+        add_alert(out, "Tip: run Personal Posture Calibration for a more precise rounded-shoulders reading",
+                  "نصيحة: شغّل معايرة الوضعية الشخصية لقراءة أدق لانحناء الكتفين")
 
     # ── IMPROVED: 4-point spine with kyphosis detection ──────────
     # 4 reference points (top→bottom):
@@ -2484,9 +2546,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     if spine_upper > 3 and spine_lower < 3 and (_upper_signed * _lower_signed < 0):
         # Segments curve in opposite directions — classic thoracic kyphosis
         _kyphosis_pen = min(12.0, spine_upper * 0.6)
-        out["alerts"].append(f"⚠️ Thoracic kyphosis detected ({round(spine_upper,1)}°) — sit back, open chest")
-        if "alerts_ar" not in out: out["alerts_ar"] = []
-        out["alerts_ar"].append(f"⚠️ انحناء الصدر للأمام ({round(spine_upper,1)}°) — اجلس للخلف وافتح صدرك")
+        add_alert(out, f"⚠️ Thoracic kyphosis detected ({round(spine_upper,1)}°) — sit back, open chest",
+                  f"⚠️ انحناء الصدر للأمام ({round(spine_upper,1)}°) — اجلس للخلف وافتح صدرك")
 
     # Weighted composite: upper most visible/relevant for desk posture
     spine_lean   = spine_upper * 0.50 + spine_mid * 0.30 + spine_lower * 0.20
@@ -2613,12 +2674,12 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         if _yaw_abs > 40:
             # Face turned >40° = person looking at 2nd screen or far away
             pose_sc = max(5, int(100 - _yaw_abs * 2.2))
-            out["alerts"].append(f"⚠️ Head turned {round(_yaw_abs)}° — face your primary screen directly")
-            if "alerts_ar" not in out: out["alerts_ar"] = []
-            out["alerts_ar"].append(f"⚠️ رأسك مائل {round(_yaw_abs)}° — واجه شاشتك الرئيسية مباشرة")
+            add_alert(out, f"⚠️ Head turned {round(_yaw_abs)}° — face your primary screen directly",
+                      f"⚠️ رأسك مائل {round(_yaw_abs)}° — واجه شاشتك الرئيسية مباشرة")
         elif _yaw_abs > 25:
             pose_sc = max(25, int(score_m(pose_combined, 0, 8, 20)))
-            out["alerts"].append(f"Head turned {round(_yaw_abs)}° — try to face screen more directly")
+            add_alert(out, f"Head turned {round(_yaw_abs)}° — try to face screen more directly",
+                      f"رأسك مائل {round(_yaw_abs)}° — حاول مواجهة الشاشة بشكل مباشر أكثر")
         else:
             pose_sc = score_m(pose_combined, 0, 8, 22)
 
@@ -2627,13 +2688,13 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         # Also: face aspect ratio changes (wider than tall)
         _roll_abs = abs(roll)
         if _roll_abs > 55:
-            out["alerts"].append(f"⚠️ Lying down detected (roll {round(_roll_abs)}°) — PostureAI requires upright seating position")
-            if "alerts_ar" not in out: out["alerts_ar"] = []
-            out["alerts_ar"].append(f"⚠️ تم اكتشاف وضعية استلقاء ({round(_roll_abs)}°) — يتطلب PostureAI الجلوس منتصباً")
+            add_alert(out, f"⚠️ Lying down detected (roll {round(_roll_abs)}°) — PostureAI requires upright seating position",
+                      f"⚠️ تم اكتشاف وضعية استلقاء ({round(_roll_abs)}°) — يتطلب PostureAI الجلوس منتصباً")
             pose_sc = min(pose_sc, 20)
             out["posture_valid"] = False   # flag for frontend to show warning
         elif _roll_abs > 30:
-            out["alerts"].append(f"Head tilted {round(_roll_abs)}° — are you lying down or leaning?")
+            add_alert(out, f"Head tilted {round(_roll_abs)}° — are you lying down or leaning?",
+                      f"رأسك مائل {round(_roll_abs)}° — هل أنت مستلقٍ أم منحنٍ؟")
             pose_sc = min(pose_sc, 50)
 
         # ── Proximity gate: too close to camera ─────────────────────
@@ -2645,14 +2706,14 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                 _face_width_frac = abs(_r_cheek.x - _l_cheek.x)  # 0-1 fraction of frame
                 if _face_width_frac > 0.45:
                     _approx_cm = int(14 / _face_width_frac * 0.7)  # rough estimate
-                    out["alerts"].insert(0, f"🔴 Too close to camera ({_face_width_frac:.0%} frame) — move back at least 50cm")
-                    if "alerts_ar" not in out: out["alerts_ar"] = []
-                    out["alerts_ar"].insert(0, f"🔴 قريب جداً من الكاميرا — ابتعد على الأقل 50 سم")
+                    insert_alert(out, f"🔴 Too close to camera ({_face_width_frac:.0%} frame) — move back at least 50cm",
+                                 f"🔴 قريب جداً من الكاميرا — ابتعد على الأقل 50 سم")
                     out["proximity_warning"] = True
                     # Also tank the score when too close
                     pose_sc = min(pose_sc, 30)
                 elif _face_width_frac > 0.35:
-                    out["alerts"].append(f"⚠️ Move back slightly — you're closer than recommended")
+                    add_alert(out, "⚠️ Move back slightly — you're closer than recommended",
+                              "⚠️ ابتعد قليلاً — أنت أقرب من المسافة الموصى بها")
                     out["proximity_warning"] = True
                 else:
                     out["proximity_warning"] = False
@@ -2773,16 +2834,31 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                 _wrist_source = "right_elbow_only"
 
             if wrist_angle is not None:
+                # This is the angle AT THE ELBOW (angle_3pt_3d's "angle at b"
+                # with b=elbow — shoulder→elbow→wrist), not wrist deviation.
+                # The codebase defines no hand landmarks (index/pinky/thumb
+                # tips) anywhere, so a real wrist-flexion angle can't
+                # actually be computed from what MediaPipe Pose gives us —
+                # this was mislabeled "Wrist angle (CTD risk)" with Carpal
+                # Tunnel-specific alert copy, which is the wrong joint and
+                # the wrong condition for what's actually being measured
+                # (matches the frontend engine's own naming for the same
+                # 3-point shoulder/elbow/wrist angle: "elbow"). Keeping the
+                # JSON key/variable names ("wrist_angle"/"wrist") unchanged
+                # since other code and any stored history already key off
+                # them — fixing only the user-facing text.
                 wrist_sc = score_m(wrist_angle, 0, 10, 25)
                 out["metrics"]["wrist_angle"] = {
                     "value": round(wrist_angle, 1), "score": wrist_sc,
-                    "unit": "°", "label": "Wrist angle (CTD risk)",
+                    "unit": "°", "label": "Elbow angle",
                     "source": _wrist_source,
                 }
                 if wrist_angle > 20:
-                    out["alerts"].append(f"⚠️ Wrist deviation {round(wrist_angle,1)}° — risk of Carpal Tunnel. Keep wrists straight.")
+                    add_alert(out, f"⚠️ Elbow angle {round(wrist_angle,1)}° off neutral — bring elbows closer to 90°, keyboard/mouse closer to your body.",
+                              f"⚠️ زاوية الكوع {round(wrist_angle,1)}° عن الوضع الطبيعي — قرّب مرفقيك من 90° وقرّب لوحة المفاتيح/الماوس من جسمك.")
                 elif wrist_angle > 12:
-                    out["alerts"].append(f"Wrist deviation {round(wrist_angle,1)}° — try to keep wrists flat on desk.")
+                    add_alert(out, f"Elbow angle {round(wrist_angle,1)}° off neutral — try to keep elbows near 90°.",
+                              f"زاوية الكوع {round(wrist_angle,1)}° عن الوضع الطبيعي — حاول إبقاء مرفقيك قريبة من 90°.")
         except Exception:
             pass
 
@@ -2809,8 +2885,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                 "unit": "%", "label": "Gaze deviation from screen center"
             }
             if gaze_dev > 0.35:
-                out["alerts"].append("Eyes not centered on screen — reposition monitor or chair")
-                out.setdefault("alerts_ar", []).append("عيناك لا تنظران للشاشة — اضبط الشاشة أو الكرسي")
+                add_alert(out, "Eyes not centered on screen — reposition monitor or chair",
+                          "عيناك لا تنظران للشاشة — اضبط الشاشة أو الكرسي")
     except Exception:
         pass
 
@@ -2828,8 +2904,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
             "label":      "Eye strain (blink + gaze)",
         }
         if blink_data["eye_strain_risk"] == "high":
-            out["alerts"].append(f"⚠️ Eye strain risk — only {br} blinks/min. Apply 20-20-20 rule.")
-            out.setdefault("alerts_ar", []).append(f"⚠️ خطر إجهاد عيون — {br} رمشة/دقيقة فقط. طبّق قاعدة 20-20-20.")
+            add_alert(out, f"⚠️ Eye strain risk — only {br} blinks/min. Apply 20-20-20 rule.",
+                      f"⚠️ خطر إجهاد عيون — {br} رمشة/دقيقة فقط. طبّق قاعدة 20-20-20.")
         elif blink_data["eye_strain_risk"] == "moderate":
             out["alerts"].append(f"Low blink rate ({br}/min) — blink consciously.")
 
@@ -3042,29 +3118,23 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     if sh_tilt > 10:
         out["alerts"].append(f"Shoulder imbalance {round(sh_tilt,1)}° — adjust armrests")
     if dist_cm < lo - 20:
-        out["alerts"].append(f"🔴 DANGER: Screen only {round(dist_cm)}cm away — severe eye & neck strain risk. Move back to {lo}–{hi}cm NOW")
-        if "alerts_ar" not in out: out["alerts_ar"] = []
-        out["alerts_ar"].append(f"🔴 خطر: الشاشة على بُعد {round(dist_cm)}سم فقط — ابتعد فوراً إلى {lo}–{hi}سم")
+        add_alert(out, f"🔴 DANGER: Screen only {round(dist_cm)}cm away — severe eye & neck strain risk. Move back to {lo}–{hi}cm NOW",
+                  f"🔴 خطر: الشاشة على بُعد {round(dist_cm)}سم فقط — ابتعد فوراً إلى {lo}–{hi}سم")
     elif dist_cm < lo - 10:
-        out["alerts"].append(f"⚠️ Too close to screen ({round(dist_cm)}cm) — risk of eye strain & neck compression. Move to {lo}–{hi}cm")
-        if "alerts_ar" not in out: out["alerts_ar"] = []
-        out["alerts_ar"].append(f"⚠️ قريب جداً من الشاشة ({round(dist_cm)}سم) — خطر إجهاد عيون وضغط رقبة. ابتعد إلى {lo}–{hi}سم")
+        add_alert(out, f"⚠️ Too close to screen ({round(dist_cm)}cm) — risk of eye strain & neck compression. Move to {lo}–{hi}cm",
+                  f"⚠️ قريب جداً من الشاشة ({round(dist_cm)}سم) — خطر إجهاد عيون وضغط رقبة. ابتعد إلى {lo}–{hi}سم")
     elif dist_cm < lo:
-        out["alerts"].append(f"Screen distance {round(dist_cm)}cm — move back slightly to {lo}–{hi}cm")
-        if "alerts_ar" not in out: out["alerts_ar"] = []
-        out["alerts_ar"].append(f"مسافة الشاشة {round(dist_cm)}سم — ابتعد قليلاً إلى {lo}–{hi}سم")
+        add_alert(out, f"Screen distance {round(dist_cm)}cm — move back slightly to {lo}–{hi}cm",
+                  f"مسافة الشاشة {round(dist_cm)}سم — ابتعد قليلاً إلى {lo}–{hi}سم")
     elif dist_cm > hi + 15:
-        out["alerts"].append(f"Too far from screen ({round(dist_cm)}cm) — ideal is {lo}–{hi}cm")
-        if "alerts_ar" not in out: out["alerts_ar"] = []
-        out["alerts_ar"].append(f"بعيد جداً عن الشاشة ({round(dist_cm)}سم) — المثالي {lo}–{hi}سم")
+        add_alert(out, f"Too far from screen ({round(dist_cm)}cm) — ideal is {lo}–{hi}cm",
+                  f"بعيد جداً عن الشاشة ({round(dist_cm)}سم) — المثالي {lo}–{hi}سم")
     if spine_lean > 18:
-        out["alerts"].append(f"⚠️ Leaning {_spine_dir} {round(spine_lean,1)}° — sit centered, weight even on both hips")
-        if "alerts_ar" not in out: out["alerts_ar"] = []
-        out["alerts_ar"].append(f"⚠️ ميل إلى {_spine_dir_ar} {round(spine_lean,1)}° — اجلس في المنتصف ووزّع وزنك على الوركين")
+        add_alert(out, f"⚠️ Leaning {_spine_dir} {round(spine_lean,1)}° — sit centered, weight even on both hips",
+                  f"⚠️ ميل إلى {_spine_dir_ar} {round(spine_lean,1)}° — اجلس في المنتصف ووزّع وزنك على الوركين")
     elif spine_lean > 10:
-        out["alerts"].append(f"Leaning {_spine_dir} {round(spine_lean,1)}° — engage core, sit centered")
-        if "alerts_ar" not in out: out["alerts_ar"] = []
-        out["alerts_ar"].append(f"ميل إلى {_spine_dir_ar} {round(spine_lean,1)}° — شد عضلات البطن واجلس في المنتصف")
+        add_alert(out, f"Leaning {_spine_dir} {round(spine_lean,1)}° — engage core, sit centered",
+                  f"ميل إلى {_spine_dir_ar} {round(spine_lean,1)}° — شد عضلات البطن واجلس في المنتصف")
     if hp and abs(hp["pitch"]) > 20:
         out["alerts"].append(f"Head pitched {round(hp['pitch'],1)}° — {'raise your monitor' if hp['pitch'] < 0 else 'lower your monitor'}")
 
@@ -3074,7 +3144,9 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     hip_y_diff = abs(l_hip[1] - r_hip[1]) / max(h, 1) * 100
     if hip_y_diff > 5.0:
         higher_side = "left" if l_hip[1] < r_hip[1] else "right"
-        out["alerts"].append(f"Hip asymmetry — {higher_side} hip {round(hip_y_diff, 1)}% higher. Check seat levelness.")
+        _higher_side_ar = "اليسرى" if higher_side == "left" else "اليمنى"
+        add_alert(out, f"Hip asymmetry — {higher_side} hip {round(hip_y_diff, 1)}% higher. Check seat levelness.",
+                  f"عدم تماثل الوركين — الورك {_higher_side_ar} أعلى بنسبة {round(hip_y_diff, 1)}%. تحقق من استواء المقعد.")
         out["metrics"]["hip_asymmetry"] = {
             "value": round(hip_y_diff, 1), "score": max(5, int(100 - hip_y_diff * 8)),
             "unit": "%", "label": "Hip height asymmetry"
@@ -3215,7 +3287,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
             "reference":   "McAtamney & Corlett 1993",
         }
         if _rula_norm >= 3:
-            out["alerts"].append(f"⚠️ RULA score {_rula_norm}/4 — ergonomic investigation required")
+            add_alert(out, f"⚠️ RULA score {_rula_norm}/4 — ergonomic investigation required",
+                      f"⚠️ درجة RULA {_rula_norm}/4 — يتطلب مراجعة بيئة العمل")
     except Exception:
         pass
 
@@ -3340,10 +3413,14 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                     "jaw":      _cog["jaw_tension"],
                 }
                 if _cog["load_score"] > 70:
-                    out["alerts"].append(
+                    add_alert(
+                        out,
                         f"High cognitive load detected — consider a 5-min break "
                         f"(brow furrow: {round(_cog['brow_furrow']*100)}%, "
-                        f"jaw tension: {round(_cog['jaw_tension']*100)}%)")
+                        f"jaw tension: {round(_cog['jaw_tension']*100)}%)",
+                        f"تم رصد إجهاد ذهني مرتفع — خذ استراحة 5 دقائق "
+                        f"(تجهم الحاجب: {round(_cog['brow_furrow']*100)}%، "
+                        f"توتر الفك: {round(_cog['jaw_tension']*100)}%)")
         except Exception:
             pass
 
@@ -3361,11 +3438,15 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                 "sudden":  _hv["sudden_move"],
             }
             if _hv["sudden_move"]:
-                out["alerts"].append(
+                add_alert(
+                    out,
                     f"Rapid head movement detected ({_hv['velocity']}mm/s) — "
-                    f"possible attention switching or startled response")
+                    f"possible attention switching or startled response",
+                    f"تم رصد حركة رأس سريعة ({_hv['velocity']}مم/ث) — "
+                    f"ربما تحويل انتباه مفاجئ")
             elif _hv["pattern"] == "frozen":
-                out["alerts"].append("Head completely still — micro-movements help maintain blood flow")
+                add_alert(out, "Head completely still — micro-movements help maintain blood flow",
+                          "رأسك ثابت تماماً — الحركات الصغيرة تساعد على تدفق الدم")
     except Exception:
         pass
 
@@ -3384,7 +3465,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                     "on_screen": _gaze["looking_at_screen"],
                 }
                 if not _gaze["looking_at_screen"]:
-                    out["alerts"].append(f"Eyes not focused on screen — gaze offset h={_gaze['h']:+.2f} v={_gaze['v']:+.2f}")
+                    add_alert(out, f"Eyes not focused on screen — gaze offset h={_gaze['h']:+.2f} v={_gaze['v']:+.2f}",
+                              "عيناك غير مركزتين على الشاشة — عدّل اتجاه نظرك")
         except Exception:
             pass
 
@@ -3463,9 +3545,17 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
             "reference":   "Physiotherapy plumb line assessment",
         }
         if _plumb_total > 6:
-            out["alerts"].append(f"⚠️ Body lateral sway {round(_plumb_total,1)}% — realign head over shoulders over hips")
+            # Found while verifying the alerts_ar architecture fix: this
+            # plumb-line sway alert never had an Arabic pairing anywhere —
+            # a separate, pre-existing gap from the main alerts_ar bug (it
+            # always fell through to the generic keyword translator, which
+            # doesn't match this phrasing, so it silently rendered in
+            # English). Adding one now since it's the same class of issue.
+            add_alert(out, f"⚠️ Body lateral sway {round(_plumb_total,1)}% — realign head over shoulders over hips",
+                      f"⚠️ تمايل جانبي في الجسم {round(_plumb_total,1)}% — أعد محاذاة رأسك فوق كتفيك فوق وركيك")
         elif _plumb_total > 3.5:
-            out["alerts"].append(f"Slight lateral lean {round(_plumb_total,1)}% — check chair balance and armrest height")
+            add_alert(out, f"Slight lateral lean {round(_plumb_total,1)}% — check chair balance and armrest height",
+                      f"ميل جانبي بسيط {round(_plumb_total,1)}% — تحقق من توازن الكرسي وارتفاع مسند الذراعين")
     except Exception:
         pass
 
@@ -3506,7 +3596,8 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         if _ear_sh_diff < 0.05 and _sh_hip_diff < 0.05:
             # Extremely small vertical separation = lying flat
             if not out.get("posture_valid") == False:  # don't double-flag
-                out["alerts"].insert(0, "⚠️ Lying down detected — sit upright for accurate posture tracking")
+                insert_alert(out, "⚠️ Lying down detected — sit upright for accurate posture tracking",
+                             "⚠️ تم اكتشاف وضعية استلقاء — اجلس منتصباً لتتبع دقيق للوضعية")
                 out["posture_valid"] = False
                 # Invalidate score when lying
                 overall = min(overall, 25)
@@ -3514,20 +3605,43 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
             # Leaning heavily or reclining
             out.setdefault("alerts", [])
             if not any("lying" in a.lower() or "reclining" in a.lower() for a in out["alerts"]):
-                out["alerts"].append("Possible reclining posture — sit upright for best results")
+                add_alert(out, "Possible reclining posture — sit upright for best results",
+                          "وضعية استلقاء محتملة — اجلس منتصباً لأفضل النتائج")
     except Exception:
         pass
 
     # ── Smart break recommendation ───────────────────────────────
     try:
-        _session_start = out.get("session_start", time.time())
+        # `out["session_start"]` was never written anywhere either (separate
+        # dead key from out["session_id"], fixed above) — this always fell
+        # back to time.time() = "right now", so update_break_profile()'s
+        # session_min was always ~0 and this engine could never accumulate
+        # the 5+ minutes of data it requires to recommend anything. Use the
+        # session's REAL start time, same source already used a few lines
+        # below for the sitting-duration fatigue model.
+        _session_start = sessions.get(_sid, {}).get("start", time.time()) if "sessions" in dir() else time.time()
         _break_uid = getattr(g, "uid", None)
         _break_rec = update_break_profile(_break_uid, overall, _session_start) if _break_uid else None
         if _break_rec:
+            # `_break_rec` has no "message"/"urgency"/"message_ar" keys at
+            # all when update_break_profile() hasn't collected 5min/5
+            # samples yet (its early-data-insufficient return is just
+            # {"recommendation": None, "session_min": ...}) — the old code
+            # used to read _break_rec["message_ar"] unconditionally, which
+            # KeyError'd on literally every call during a session's first
+            # 5 minutes (silently swallowed by this try/except) and, once
+            # past that window, still inserted a bare `None` into alerts_ar
+            # whenever urgency was "later"/"ok" (message present-but-None
+            # in that branch of update_break_profile). Gating on
+            # `.get("message")` truthiness fixes both. `break_recommendation`
+            # itself is always attached so get_session()/the frontend can see
+            # session_min etc. even before there's a message to alert on.
             out["break_recommendation"] = _break_rec
             if _break_rec.get("message") and _break_rec["urgency"] in ("now", "soon"):
-                out["alerts"].insert(0, _break_rec["message"])
-            out.setdefault("alerts_ar", []).insert(0, _break_rec["message_ar"])
+                # 16th and final alerts_ar site — see add_alert()/insert_alert()
+                # docstring for why this must go through the _alert_ar_map
+                # instead of a raw out["alerts_ar"].insert(0, ...).
+                insert_alert(out, _break_rec["message"], _break_rec.get("message_ar"))
     except Exception:
         pass
 
@@ -3718,7 +3832,14 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     deduped.sort(key=lambda a: (0 if a.startswith("⚠️") else 1))
     out["alerts"] = deduped[:5]   # max 5 alerts — avoid overwhelming user
     # ── Arabic alerts ─────────────────────────────────────────────
-    out["alerts_ar"] = [translate_alert_ar(a) for a in out["alerts"]]
+    # Prefer a hand-written translation registered via add_alert()/
+    # insert_alert() (keyed by exact English text, so it's immune to the
+    # dedup/sort/cap reordering above) over the generic keyword-matched
+    # fallback. See add_alert()'s docstring for why this replaced a blind
+    # `translate_alert_ar()` call that used to discard every hand-written
+    # Arabic alert in this function.
+    _ar_map = out.pop("_alert_ar_map", {})
+    out["alerts_ar"] = [_ar_map.get(a) or translate_alert_ar(a) for a in out["alerts"]]
 
     grade_str = ("Excellent" if overall >= 85 else "Good" if overall >= 70
                  else "Fair — needs attention" if overall >= 55 else "Poor — correct now")
@@ -3869,7 +3990,8 @@ def analyze_front_cascade(image, mode, out, dist_baseline_cm=None, dist_calib_fa
     elif dist_cm > hi + 15:
         out["alerts"].append(f"Too far from screen ({round(dist_cm)}cm) — ideal is {lo}–{hi}cm")
     if neck_proxy > 20:
-        out["alerts"].append(f"Forward head detected — raise monitor to eye level")
+        add_alert(out, "Forward head detected — raise monitor to eye level",
+                  "تم اكتشاف انحناء الرأس للأمام — ارفع الشاشة لمستوى العين")
 
     grade = "Good" if overall >= 70 else "Fair" if overall >= 55 else "Poor"
     out["recommendations"] = [
@@ -4557,6 +4679,21 @@ def analyze():
                     _mcnt[_mk] = _mcnt.get(_mk, 0) + 1
                 s["metric_scores"] = {k: round(_msum[k] / _mcnt[k], 1) for k in _msum if _mcnt.get(k)}
 
+            # ── Latest pain-prediction estimate, for get_session()'s
+            # pain_summary ─────────────────────────────────────────────
+            # Same bug class as metric_scores above: get_session() reads
+            # s.get("pain_prediction_min") to build pain_summary, but
+            # nothing wrote that key — pain_summary was always None.
+            # analyze_front() computes a real one every frame
+            # (result["pain_prediction"]["time_to_pain_min"]), it just
+            # never made it into session state. Store the latest reading
+            # (not averaged — "minutes until pain at current posture" is a
+            # live estimate, not something meaningful to average over a
+            # whole session the way avg_score is).
+            _pain = result.get("pain_prediction") or {}
+            if isinstance(_pain.get("time_to_pain_min"), (int, float)):
+                s["pain_prediction_min"] = _pain["time_to_pain_min"]
+
             # ── Fatigue detection: score trend within session ────
             hist_scores = s["score_history"]
             if len(hist_scores) >= 10:
@@ -4959,7 +5096,13 @@ def get_session(sid):
         worst_score   = 101
         tip_map = {
             "neck":    "Raise your monitor to eye level to reduce neck flexion.",
-            "spine":   "Sit back fully in your chair and use lumbar support.",
+            # spine_lean is a LATERAL-lean detector only (angle_vert() here and
+            # in the frontend's postureEngine.js both only ever receive (x,y)
+            # pairs — there is no forward/backward axis being measured), so
+            # "sit back with lumbar support" was the wrong fix for what this
+            # metric actually flags. Matches the signed left/right alert copy
+            # already shipped for the live in-session alerts.
+            "spine":   "Sit centered over your hips — you're leaning to one side. Adjust your chair or screen position so you're not reaching or turning toward it.",
             "dist":    "Move your screen to 50–70cm away from your eyes.",
             "tilt":    "Keep your head level — avoid tilting toward your dominant side.",
             "sh":      "Relax your shoulders down and back, away from your ears.",
@@ -10772,12 +10915,20 @@ def update_coaching_profile(uid: str, result: dict, session_metrics: dict) -> di
 
     ISSUE_ADVICE = {
         "neck_lean":       ("Raise monitor to exact eye level", "Place monitor on books/stand"),
-        "spine_lean":      ("Engage lumbar support", "Sit back fully, activate core"),
+        # spine_lean is a LATERAL-lean metric (see the tip_map["spine"] fix
+        # above) — "lumbar support"/"sit back" is forward-slouch advice for
+        # an axis this metric doesn't measure.
+        "spine_lean":      ("Sit centered over your hips, weight even on both sides", "Check your chair/monitor aren't offset to one side"),
         "screen_distance": ("Position screen arm-length away", "Use monitor arm for easy adjustment"),
         "head_yaw":        ("Reposition chair to face screen directly", "Place main screen directly ahead"),
         "shoulder_level":  ("Set armrests to equal height", "Check chair arm height settings"),
         "eye_strain":      ("Apply 20-20-20 rule every session", "Enable night mode, reduce brightness"),
-        "wrist_angle":     ("Use wrist rest, lower keyboard", "Check keyboard tray height"),
+        # wrist_angle is computed as angle_3pt_3d(shoulder, elbow, wrist) —
+        # angle_3pt_3d(a,b,c) returns the angle AT b, so this is elbow flexion,
+        # not a wrist metric (no hand landmarks exist anywhere in this codebase
+        # to compute a real wrist angle). Matches the elbow-angle relabel
+        # already applied to the metric's UI label/live alert text.
+        "wrist_angle":     ("Bring elbows closer to your body, aim for ~90°", "Lower keyboard/mouse closer to elbow height"),
         "breathing_rate":  ("Practice diaphragmatic breathing", "Set breathing reminder every 20min"),
         "fhp_index":       ("Chin tuck exercise x10 daily", "Wall posture check 3x per day"),
         "rsi_risk":        ("Take micro-breaks every 25min", "Try Pomodoro technique"),
@@ -13823,8 +13974,13 @@ def explain_score():
                                     "تأكد من استواء رأسك — اضبط ارتفاع الكرسي"),
                 "shoulder_level":  ("Adjust armrests to equal height — relax both shoulders",
                                     "اضبط ذراعَي الكرسي لنفس الارتفاع"),
-                "spine_lean":      ("Sit back fully against chair back, engage lumbar support",
-                                    "اجلس للخلف واستخدم دعامة أسفل الظهر"),
+                # spine_lean is a LATERAL-lean metric only (angle_vert() here
+                # and in the frontend both only ever see (x,y) — no forward/
+                # backward axis is measured), so this used to give forward-
+                # slouch advice ("sit back, lumbar support") for a sideways-
+                # lean metric. Matches the tip_map["spine"]/ISSUE_ADVICE fixes.
+                "spine_lean":      ("Sit centered over your hips — you're leaning to one side, not slouching forward",
+                                    "اجلس بشكل متمركز فوق وركيك — أنت تميل لجانب واحد"),
                 "screen_distance": ("Move screen to 50–80cm away (arm's length)",
                                     "ضع الشاشة على بُعد 50–80سم (مسافة ذراع)"),
                 "head_yaw":        ("Face monitor directly — reposition chair if needed",

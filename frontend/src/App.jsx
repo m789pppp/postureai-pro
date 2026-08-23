@@ -2417,8 +2417,6 @@ export default function App(){
   const[breakReturnPage,setBreakReturnPage]=useState("live"); // where the break page returns to
   const goToBreak=useCallback(()=>{ setBreakReturnPage(page==="break"?"live":page); setPage("break"); },[page]);
   const[breakIntervalMin,setBreakIntervalMin]=useState(25);
-  const[breakTimerSec,setBreakTimerSec]=useState(0);
-  const setBreakTimer = setBreakTimerSec; // alias for legacy references
   const[showDashboard,setShowDashboard]=useState(false);
 
   // Calibration (personal baseline)
@@ -2483,7 +2481,6 @@ export default function App(){
 
   // Break timer
   const { showBreak, dismiss: dismissBreak, snooze: snoozeBreak } = useBreakTimer(breakIntervalMin, breakReminder);
-  const[showBreakAlert,setShowBreakAlert]=useState(false);
 
   // Sound feedback
   const[muted,setMuted]=useState(false);
@@ -2547,6 +2544,31 @@ export default function App(){
   const t=TR[lang];
   const isAr=lang==="ar";
   const dir=isAr?"rtl":"ltr";
+
+  // Sound + desktop notification when the REAL, user-configured break timer
+  // fires (showBreak, from useBreakTimer(breakIntervalMin, breakReminder)
+  // above). This replaces a duplicate, hardcoded-25-minute break-alert
+  // system that used to live inline in the two session-loop setInterval
+  // callbacks (initial start + pause/resume) — it fired playPostureAlert()/
+  // sendDesktopNotif() at a fixed 1500s regardless of the user's actual
+  // breakIntervalMin setting (15/25/45/60/90min), running in parallel with
+  // this correctly-configured hook and its own visible break-reminder UI
+  // (the "{isAr?...}" card below, `showBreak&&(...)`). Its `showBreakAlert`
+  // latch was set but never read in JSX and never reset, and `breakTimerSec`
+  // itself was never read anywhere — both fully dead state kept alive only
+  // to gate this wrongly-scheduled duplicate. Firing only on the false->true
+  // transition (not on every muted/breakIntervalMin/isAr change) is
+  // intentional, so the deps list is deliberately narrowed to showBreak.
+  useEffect(()=>{
+    if(!showBreak) return;
+    if(!muted) playPostureAlert();
+    sendDesktopNotif(
+      isAr?`وقت الاستراحة! مرّت ${breakIntervalMin} دقيقة — خذ استراحة دقيقتين`
+          :`Break time! ${breakIntervalMin} min passed — take a 2-min stretch`,
+      0
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[showBreak]);
 
   // Health consent gate — must be accepted once before the first analysis.
   // Corvus is a wellness/awareness tool, NOT a medical device; explicit
@@ -3812,15 +3834,8 @@ export default function App(){
       timerRef.current=setInterval(()=>{
         const elapsed=Math.floor((Date.now()-sessRef.current)/1000);
         setSessionTime(elapsed);
-        setBreakTimer(bt=>{
-          const next=bt+1;
-          if(next>=1500&&breakReminder&&!showBreakAlert){
-            setShowBreakAlert(true);
-            if(!muted)playPostureAlert();
-            sendDesktopNotif("Break time! 25 minutes passed — take a 2-min stretch",0);
-          }
-          return next;
-        });
+        // Break reminder itself is handled by the real useBreakTimer hook
+        // (breakIntervalMin-aware) — see the showBreak effect near isAr/dir.
       },1000);
       rafRef.current=requestAnimationFrame(runLoop);
     }catch(e){
@@ -4150,15 +4165,8 @@ export default function App(){
     timerRef.current=setInterval(()=>{
       const elapsed=Math.floor((Date.now()-sessRef.current)/1000);
       setSessionTime(elapsed);
-      setBreakTimer(bt=>{
-        const next=bt+1;
-        if(next>=1500&&breakReminder&&!showBreakAlert){
-          setShowBreakAlert(true);
-          if(!muted)playPostureAlert();
-          sendDesktopNotif("Break time! 25 minutes passed — take a 2-min stretch",0);
-        }
-        return next;
-      });
+      // Break reminder itself is handled by the real useBreakTimer hook
+      // (breakIntervalMin-aware) — see the showBreak effect near isAr/dir.
     },1000);
     rafRef.current=requestAnimationFrame(runLoop);
   }
