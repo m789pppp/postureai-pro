@@ -3466,11 +3466,25 @@ export default function App(){
         signal:       _ctrl.signal,
       }).then(d=>{
         clearTimeout(_tmr);
-          // For Elite-equivalent: send snapshot every ~12 frames for PDF
-          if(eliteEquivalent&&totalRef.current%12===0&&d.overall>0){
-            AnalysisAPI.addSnapshot(sessionId, c.toDataURL("image/jpeg",.6), d.overall||d.score, new Date().toLocaleTimeString())
-              .catch(()=>{});
-          }
+          // REMOVED: an `AnalysisAPI.addSnapshot(...)` call used to fire here
+          // every ~12 frames for Elite-equivalent users, uploading a JPEG +
+          // running a full backend analyze_front() pass purely to POST it to
+          // /api/session/snapshot. Traced where that data actually goes:
+          // add_snapshot() (backend.py) only ever appends to an in-memory
+          // session_snapshots dict that NOTHING reads back — no route,
+          // no PDF code, no session-summary code ever queries it; the only
+          // other reference to session_snapshots is the cleanup delete at
+          // session end. The real "worst 3 moments" feature shown in the
+          // PDF (worstSnapsRef below) is a completely separate, already
+          // frontend-scored mechanism using this same engine's own
+          // finalResult.overall — self-consistent with the live score by
+          // construction. So this call bought nothing: it was pure extra
+          // backend compute (a second full MediaPipe pass), bandwidth, and
+          // server-side memory for every Elite session, for data no one
+          // ever displayed. Deleting it changes zero user-visible behavior.
+          // (Left the /api/session/snapshot route itself alone in
+          // backend.py — removing a live API route has a different, higher
+          // risk profile than removing its one caller.)
           // Use backend result if local MP not available (fallback mode)
           if(mpStatus==="fallback"&&d.overall>0){
             backendFailRef.current=0; // reset — backend is responding fine
