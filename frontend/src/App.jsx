@@ -2218,6 +2218,7 @@ export default function App(){
   });
   const setMode=(m)=>{ _setMode(m); try{localStorage.setItem("last_mode",m);}catch{} };
   const[lowLight,setLowLight]=useState(false);
+  const[multiPersonWarning,setMultiPersonWarning]=useState(false); // see subjectRejectStreakRef in runLoop
   const[sessionInsights,setSessionInsights]=useState([]);
   useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); distSmootherRef.current?.reset(); resetProportions(); },[mode]);
   const[tier,setTier]=useState(null);
@@ -2736,6 +2737,14 @@ export default function App(){
   const stoppingRef = useRef(false); // sync guard — see stopCamera()
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
   const lightAlRef=useRef(0); // separate cooldown for lighting alerts (60s, not 8s)
+  // Streak counter for the subject-switch guard below (a different/second
+  // person's centroid jump silently drops frames — previously with zero
+  // user feedback, so the display just looked frozen while it happened).
+  // Same debounce reasoning as RELIABILITY_HYSTERESIS_FRAMES in
+  // postureEngine.js: a couple of single-frame rejects shouldn't flash a
+  // banner, only a sustained run of them.
+  const subjectRejectStreakRef=useRef(0);
+  const multiPersonShownRef=useRef(false); // avoids reading multiPersonWarning state inside runLoop's closure
   const insightsRef=useRef(null);
   // alertCauseRef: { [causeKey]: { last: timestamp, count: number } }
   // count drives exponential backoff: 1st repeat → 5min, 2nd → 10min, 3rd+ → 20min
@@ -3238,7 +3247,25 @@ export default function App(){
           const curCentroidX = (lShX + rShX) / 2;
           if(prevCentroid != null && Math.abs(curCentroidX - prevCentroid) > 0.30) subjectOk = false;
           if(lmSmootherRef.current) lmSmootherRef.current._prevCentroid = curCentroidX;
-          if(!subjectOk){ return; } // drop frame — don't update smoother or score
+          if(!subjectOk){
+            // This guard used to fail completely silently: the frame gets
+            // dropped, `analysis`/`scoreStatus` never update, and from the
+            // user's side the whole display just looks frozen for however
+            // long a second person (a coworker walking past, someone
+            // sitting down next to them) keeps triggering it — a real,
+            // plausible workplace scenario with zero explanation on screen.
+            subjectRejectStreakRef.current++;
+            if(subjectRejectStreakRef.current>=5 && !multiPersonShownRef.current){
+              multiPersonShownRef.current=true; setMultiPersonWarning(true);
+            }
+            return; // drop frame — don't update smoother or score
+          }
+          if(subjectRejectStreakRef.current>0){
+            subjectRejectStreakRef.current=0;
+            if(multiPersonShownRef.current){
+              multiPersonShownRef.current=false; setMultiPersonWarning(false);
+            }
+          }
           const lms=lmSmootherRef.current.smooth(rawLms);
           totalRef.current++;setTotalF(totalRef.current);
           const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData); // Side mode removed app-wide
@@ -6823,6 +6850,18 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{padding:"8px 14px",background:"rgba(214,162,76,.12)",borderBottom:`1px solid ${cs.border}`,
             display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#D6A24C",fontWeight:600}}>
             💡 {isAr?"الإضاءة ضعيفة — حسّن الإضاءة لقراءات أدق":"Low lighting — improve lighting for more accurate readings"}
+          </div>
+        )}
+
+        {/* Multi-person / subject-switch warning — see subjectRejectStreakRef
+            in runLoop. Tracking silently pauses when a second person's
+            centroid displaces the tracked subject; this makes that visible
+            instead of the display just looking frozen. */}
+        {multiPersonWarning && (
+          <div style={{padding:"8px 14px",background:"rgba(214,162,76,.12)",borderBottom:`1px solid ${cs.border}`,
+            display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#D6A24C",fontWeight:600}}>
+            👥 {isAr?"تم رصد شخص آخر أو حركة مفاجئة — التتبع متوقف مؤقتًا. تأكد إنك انت بس في الكادر":
+                     "Another person or sudden movement detected — tracking paused. Make sure only you are in frame"}
           </div>
         )}
 
