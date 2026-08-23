@@ -4470,6 +4470,31 @@ def analyze():
                 result["overall"] = result["score"]
                 result["calibration_applied"]   = True
                 result["asymmetric_correction"] = True
+
+        # ── Per-metric score snapshot for session-level tracking ─────
+        # Feeds sessions[sid]["metric_scores"] below, which in turn feeds
+        # get_session()'s "worst metric + improvement tip" response field.
+        # That field existed already but had NO writer anywhere in this
+        # file — s.get("metric_scores", {}) was always {}, so worst_metric
+        # was always None and improvement_tip always silently fell back to
+        # the generic "take a break" text, for every session, forever.
+        # Built here (after the calibration-override block above, not
+        # inside analyze_front() itself) so it reflects the FINAL
+        # calibration-adjusted scores when a personal calibration applied,
+        # not the pre-calibration raw ones.
+        _mflat = result.get("metrics", {})
+        def _msc(key):
+            v = _mflat.get(key, {}).get("score")
+            return v if isinstance(v, (int, float)) else None
+        result["metric_scores"] = {k: v for k, v in {
+            "neck":    _msc("neck_lean"),
+            "tilt":    _msc("head_tilt"),
+            "sh":      _msc("shoulder_level"),
+            "spine":   _msc("spine_lean"),
+            "dist":    _msc("screen_distance"),
+            "rounded": _msc("rounded_shoulders"),
+            "wrist":   _msc("wrist_angle"),
+        }.items() if v is not None}
         result["brightness"] = round(brightness, 1)
         result["low_light_enhanced"] = was_enhanced
         result["light_quality"]     = {
@@ -4518,6 +4543,19 @@ def analyze():
             s["frames"] = s.get("frames", 0) + 1
             if result["score"] >= 65: s["good"] = s.get("good", 0) + 1
             s["engine"] = result.get("engine", "")
+
+            # ── Accumulate per-metric scores for the "worst metric" tip ──
+            # Running average per metric across the session — matches how
+            # avg_score itself is a session-wide average, not a single-frame
+            # read. See the metric_scores build above for why this exists.
+            _mscores = result.get("metric_scores") or {}
+            if _mscores:
+                _msum = s.setdefault("metric_scores_sum", {})
+                _mcnt = s.setdefault("metric_scores_count", {})
+                for _mk, _mv in _mscores.items():
+                    _msum[_mk] = _msum.get(_mk, 0) + _mv
+                    _mcnt[_mk] = _mcnt.get(_mk, 0) + 1
+                s["metric_scores"] = {k: round(_msum[k] / _mcnt[k], 1) for k in _msum if _mcnt.get(k)}
 
             # ── Fatigue detection: score trend within session ────
             hist_scores = s["score_history"]
@@ -4920,12 +4958,17 @@ def get_session(sid):
         worst_metric  = None
         worst_score   = 101
         tip_map = {
-            "neck":  "Raise your monitor to eye level to reduce neck flexion.",
-            "spine": "Sit back fully in your chair and use lumbar support.",
-            "dist":  "Move your screen to 50–70cm away from your eyes.",
-            "tilt":  "Keep your head level — avoid tilting toward your dominant side.",
-            "sh":    "Relax your shoulders down and back, away from your ears.",
-            "wrist": "Keep wrists straight and elbows at 90° when typing.",
+            "neck":    "Raise your monitor to eye level to reduce neck flexion.",
+            "spine":   "Sit back fully in your chair and use lumbar support.",
+            "dist":    "Move your screen to 50–70cm away from your eyes.",
+            "tilt":    "Keep your head level — avoid tilting toward your dominant side.",
+            "sh":      "Relax your shoulders down and back, away from your ears.",
+            "wrist":   "Keep wrists straight and elbows at 90° when typing.",
+            # Added alongside the metric_scores fix below — "rounded" is a
+            # real key that can now actually be selected as worst_metric,
+            # so it needs its own tip instead of silently falling through
+            # to the generic one.
+            "rounded": "Pull your shoulder blades together and open your chest — consider running Personal Posture Calibration for a more precise reading.",
         }
         for metric, sc in metric_scores.items():
             if isinstance(sc, (int, float)) and sc < worst_score:
