@@ -293,8 +293,8 @@ function Toggle({value,onChange,label}) {
     <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>onChange(!value)}>
       <div style={{width:40,height:22,borderRadius:99,background:value?"#1a56db":"rgba(148,163,184,.15)",
         position:"relative",transition:"background 200ms",border:`1px solid ${value?"#1a56db":"rgba(148,163,184,.2)"}`}}>
-        <div style={{position:"absolute",top:2,left:value?20:2,width:16,height:16,borderRadius:"50%",
-          background:"#fff",transition:`left 200ms ${SPRING}`,boxShadow:"0 1px 4px rgba(0,0,0,.25)"}}/>
+        <div style={{position:"absolute",top:2,insetInlineStart:value?20:2,width:16,height:16,borderRadius:"50%",
+          background:"#fff",transition:`inset-inline-start 200ms ${SPRING}`,boxShadow:"0 1px 4px rgba(0,0,0,.25)"}}/>
       </div>
       {label&&<span style={{fontSize:12,color:RBAC_TOKENS.text2,fontWeight:500}}>{label}</span>}
     </div>

@@ -259,7 +259,7 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
             <div style={{ fontSize: 13, color: "#64748b", marginBottom: 20 }}>{err}</div>
             <button onClick={() => { window.location.hash = "home"; }}
               style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 10, padding: "10px 24px", fontSize: 13, color: "#94a3b8", cursor: "pointer" }}>
-              {isAr ? "← الرئيسية" : "← Go Home"}
+              {isAr ? "→ الرئيسية" : "← Go Home"}
             </button>
           </div>
         )}

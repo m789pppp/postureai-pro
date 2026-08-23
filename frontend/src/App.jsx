@@ -1602,7 +1602,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
 
   if(step==="kashier")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif"}}>
     <div style={{padding:"12px 18px",borderBottom:"0.5px solid "+cs.border,display:"flex",alignItems:"center",gap:11,background:cs.card}}>
-      <button aria-label="Go back" onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{"← "}{isAr?"رجوع":"Back"}</button>
+      <button aria-label="Go back" onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{isAr?"→ ":"← "}{isAr?"رجوع":"Back"}</button>
       <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{"🔒 "}{isAr?"دفع آمن عبر Kashier":"Secure payment via Kashier"}{" — "}{price?.toLocaleString()}{" EGP"}</div>
     </div>
     <iframe src={kashierUrl} style={{flex:1,border:"none",width:"100%"}} title="Kashier Checkout"/>
@@ -1612,7 +1612,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
     <div style={{maxWidth:880,margin:"0 auto",padding:"24px 17px 52px"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:20,flexDirection:isAr?"row-reverse":"row"}}>
-        <button onClick={onBack} style={{background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"6px 12px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{isAr?"← رجوع":"← Back"}</button>
+        <button onClick={onBack} style={{background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"6px 12px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{isAr?"→ رجوع":"← Back"}</button>
         <div>
           <div style={{fontSize:14,fontWeight:700,color:cs.text}}>{t.choosePlan}</div>
           <div style={{fontSize:10,color:cs.muted}}>{isAr?"7 أيام مجاناً · إلغاء في أي وقت":"7-day free trial · Cancel anytime"} · {SUPPORT_EMAIL}</div>
@@ -1709,7 +1709,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
             <div style={{flex:1,position:"relative"}}>
               <input value={coupon} onChange={e=>setCoupon(e.target.value.toUpperCase())}
                 placeholder={isAr?"كود الخصم (سيُطبَّق تلقائياً)":"Coupon code (auto-validates)"}
-                style={{width:"100%",boxSizing:"border-box",background:cs.inp,border:`0.5px solid ${couponErr?cs.red:couponData?"rgba(79,174,142,.5)":cs.border}`,
+                style={{width:"100%",boxSizing:"border-box",background:cs.inp,border:`0.5px solid ${couponErr?"#C6604F":couponData?"rgba(79,174,142,.5)":cs.border}`,
                   borderRadius:8,padding:"9px 30px 9px 12px",fontSize:12,color:cs.text,outline:"none"}}/>
               {couponChecking&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:11,color:cs.muted,animation:"spin 0.7s linear infinite"}}>⟳</div>}
               {!couponChecking&&couponData&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#4FAE8E"}}>✓</div>}
@@ -2038,7 +2038,7 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
       <div style={{ width:"100%", maxWidth:400, background:cs.card, border:`1px solid ${cs.border}`, borderRadius:18, padding:28, textAlign:"center" }}>
         <div style={{ fontSize:40, marginBottom:10 }}>🛡</div>
         <div style={{ fontWeight:800, fontSize:18, color:cs.text, marginBottom:6 }}>{isAr?"تأكيد الدخول":"Verify it's you"}</div>
-        <div style={{ fontSize:13, color:cs.textDim, marginBottom:20, lineHeight:1.6 }}>
+        <div style={{ fontSize:13, color:cs.muted, marginBottom:20, lineHeight:1.6 }}>
           {method==="sms"
             ? (isAr?`أرسلنا كود لرقمك المسجل. اضغط "إرسال كود" لو محتاج واحد جديد.`:`We'll text a code to your registered number. Tap "Send code" if you need a new one.`)
             : (isAr?"افتح تطبيق المصادقة وادخل الكود المكون من 6 أرقام":"Open your authenticator app and enter the 6-digit code")}
@@ -2061,8 +2061,8 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
         <button onClick={verify} disabled={busy} style={{ width:"100%", background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"13px", cursor:"pointer", fontWeight:800, fontSize:15, marginBottom:10 }}>
           {busy ? (isAr?"جاري التحقق…":"Verifying…") : (isAr?"تأكيد":"Verify")}
         </button>
-        <div style={{ fontSize:11, color:cs.textDim, marginBottom:14 }}>{isAr?"مش عندك وصول للتطبيق أو الرقم؟ استخدم أحد أكواد النسخ الاحتياطي":"Lost access to your app or phone? Use one of your backup codes instead"}</div>
-        <button onClick={onSignOut} style={{ background:"transparent", border:"none", color:cs.textDim, cursor:"pointer", fontSize:12, textDecoration:"underline" }}>{isAr?"تسجيل خروج":"Sign out"}</button>
+        <div style={{ fontSize:11, color:cs.muted, marginBottom:14 }}>{isAr?"مش عندك وصول للتطبيق أو الرقم؟ استخدم أحد أكواد النسخ الاحتياطي":"Lost access to your app or phone? Use one of your backup codes instead"}</div>
+        <button onClick={onSignOut} style={{ background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:12, textDecoration:"underline" }}>{isAr?"تسجيل خروج":"Sign out"}</button>
       </div>
     </div>
   );
@@ -4914,7 +4914,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     type="button"
                     onClick={()=>setAcctType(o.id)}
                     style={{
-                      width:"100%",textAlign:"left",
+                      width:"100%",textAlign:isAr?"right":"left",
                       background:acctType===o.id?`linear-gradient(135deg,${o.color}18,${o.color}08)`:cs.card,
                       border:`2px solid ${acctType===o.id?o.color:o.color+"30"}`,
                       borderRadius:14,padding:"18px 18px",cursor:"pointer",
@@ -4949,7 +4949,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           ):(
             <>
               <div style={{textAlign:"center",marginBottom:24}}>
-                {!(profile?.acct_type||profile?.user_type==="employee"||profile?.user_type==="hr_admin")&&<button onClick={()=>{setAcctType(null);setDevicePref(null);}} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:11,marginBottom:12}}>{isAr?"← رجوع":"← Back"}</button>}
+                {!(profile?.acct_type||profile?.user_type==="employee"||profile?.user_type==="hr_admin")&&<button onClick={()=>{setAcctType(null);setDevicePref(null);}} style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:11,marginBottom:12}}>{isAr?"→ رجوع":"← Back"}</button>}
                 <div style={{fontSize:20,fontWeight:700,marginBottom:6,color:cs.text}}>{t.deviceType}</div>
                 {acctType==="company"&&<div style={{fontSize:12,color:cs.muted,marginTop:4}}>
                   {isAr?`لفريق ${profile?.company||"شركتك"}`:`For ${profile?.company||"your team"}`}
@@ -4999,7 +4999,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 setPage("home");
               }}
                 style={{width:"100%",padding:"13px",background:devicePref?cs.blue:"rgba(148,163,184,.2)",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:devicePref?"pointer":"not-allowed",transition:"all .2s"}}>
-                {isAr?"متابعة →":"Continue →"}
+                {isAr?"متابعة ←":"Continue →"}
               </button>
               {!devicePref&&<div style={{textAlign:"center",marginTop:8,fontSize:10,color:cs.muted}}>
                 {isAr?"↑ اختار جهازك للمتابعة":"↑ Choose your device to continue"}
@@ -5269,7 +5269,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 this file uses. */}
             <button onClick={()=>{ setShowAnnualUpsell(false); setShowBilling(true); }}
               style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#6366f1,#0891b2)",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",marginBottom:10}}>
-              {lang==="ar"?"احصل على الخصم السنوي →":"Get annual discount →"}
+              {lang==="ar"?"احصل على الخصم السنوي ←":"Get annual discount →"}
             </button>
             <button onClick={()=>setShowAnnualUpsell(false)}
               style={{fontSize:12,color:"#475569",background:"none",border:"none",cursor:"pointer"}}>

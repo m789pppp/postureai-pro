@@ -3019,7 +3019,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
                 borderLeft:tab===item.id?"2px solid #3b82f6":"2px solid transparent",
                 background:tab===item.id?"rgba(59,130,246,.1)":hov===item.id?"rgba(255,255,255,.04)":"transparent",
                 color:tab===item.id?"#3b82f6":"rgba(255,255,255,.65)",
-                fontSize:12.5, fontWeight:tab===item.id?700:400, textAlign:"left", transition:"all .1s" }}>
+                fontSize:12.5, fontWeight:tab===item.id?700:400, textAlign:isAr?"right":"left", transition:"all .1s" }}>
               <span style={{ fontSize:14, width:18, textAlign:"center" }}>{item.icon}</span>
               <span style={{ flex:1 }}>{isAr?item.ar:item.en}</span>
               {(item.badge||0)>0&&<span style={{ background:"#ef4444", color:"#fff", fontSize:9,
@@ -3060,7 +3060,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
                     padding:"7px 11px", border:"none", borderRadius:7, cursor:"pointer",
                     background:hov===tool.id&&!tool.locked?"rgba(255,255,255,.05)":"transparent",
                     color:tool.locked?"rgba(255,255,255,.28)":"rgba(255,255,255,.72)",
-                    fontSize:12, fontWeight:500, textAlign:"left", transition:"all .1s" }}>
+                    fontSize:12, fontWeight:500, textAlign:isAr?"right":"left", transition:"all .1s" }}>
                   <span style={{ fontSize:13, width:18, textAlign:"center", opacity:tool.locked?.45:1 }}>{tool.icon}</span>
                   <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                     {isAr&&tool.ar ? tool.ar : tool.en}
@@ -3100,7 +3100,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
           style={{ width:"100%", display:"flex", alignItems:"center", gap:8,
             padding:"8px 9px", background:"rgba(255,255,255,.03)",
             border:`1px solid ${cs.border}`, borderRadius:9, cursor:"pointer",
-            textAlign:"left", transition:"background .12s" }}
+            textAlign:isAr?"right":"left", transition:"background .12s" }}
           onMouseEnter={e=>e.currentTarget.style.background="rgba(59,130,246,.08)"}
           onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,.03)"}>
           <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={28}/>

@@ -63,7 +63,7 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
               <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#10b981,#6366f1)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🎯</div>
               <div>
                 <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>{isAr?"برنامج الإحالة":"Referral Program"}</div>
-                <div style={{ fontSize:12, color:cs.textDim }}>{isAr?"ادعُ أصدقاءك · اكسب رصيد · انموا مع بعض":"Invite friends · Earn EGP credit · Grow together"}</div>
+                <div style={{ fontSize:12, color:cs.muted }}>{isAr?"ادعُ أصدقاءك · اكسب رصيد · انموا مع بعض":"Invite friends · Earn EGP credit · Grow together"}</div>
               </div>
             </div>
             <div style={{ display:"flex", gap:10, alignItems:"center" }}>
@@ -74,7 +74,7 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
               ].map(m => (
                 <div key={m.label} style={{ textAlign:"center", padding:"6px 14px", background:"rgba(255,255,255,0.04)", borderRadius:10 }}>
                   <div style={{ fontSize:17, fontWeight:800, color:m.color }}>{m.value}</div>
-                  <div style={{ fontSize:10, color:cs.textDim }}>{m.label}</div>
+                  <div style={{ fontSize:10, color:cs.muted }}>{m.label}</div>
                 </div>
               ))}
               <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }}>✕</button>
@@ -82,7 +82,7 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
           </div>
           <div style={{ display:"flex", gap:4 }}>
             {tabs.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{ background:tab===t.id?"rgba(16,185,129,0.12)":"transparent", border:"none", color:tab===t.id?"#10b981":cs.textDim, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #10b981":"2px solid transparent" }}>
+              <button key={t.id} onClick={() => setTab(t.id)} style={{ background:tab===t.id?"rgba(16,185,129,0.12)":"transparent", border:"none", color:tab===t.id?"#10b981":cs.muted, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, borderBottom:tab===t.id?"2px solid #10b981":"2px solid transparent" }}>
                 {t.icon} {t.label}
               </button>
             ))}
@@ -103,7 +103,7 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
                     {copied ? (isAr?"✓ تم النسخ!":"✓ Copied!") : (isAr?"نسخ الرابط":"Copy Link")}
                   </button>
                 </div>
-                <div style={{ marginTop:10, fontSize:12, color:cs.textDim }}>
+                <div style={{ marginTop:10, fontSize:12, color:cs.muted }}>
                   {isAr?"الكود:":"Code:"} <b style={{ color:cs.text, fontFamily:"monospace" }}>{refCode || "…"}</b> · {isAr?"من يسجل برابطك يحصل على 50 جنيه رصيد فوراً":"Anyone who signs up with your link gets 50 EGP credit right away"}
                 </div>
               </div>
@@ -119,7 +119,7 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
                 ].map(s => (
                   <div key={s.step} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
                     <div style={{ width:22, height:22, borderRadius:"50%", background:"rgba(99,102,241,0.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#6366f1", flexShrink:0 }}>{s.step}</div>
-                    <div style={{ fontSize:12, color:cs.textDim, lineHeight:1.5 }}>{s.text}</div>
+                    <div style={{ fontSize:12, color:cs.muted, lineHeight:1.5 }}>{s.text}</div>
                   </div>
                 ))}
               </div>
@@ -127,14 +127,14 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
               {/* Your referrals list */}
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:12, fontSize:14 }}>{isAr?"إحالاتك":"Your Referrals"}</div>
-                {loading && <div style={{ fontSize:12, color:cs.textDim }}>{isAr?"جاري التحميل...":"Loading..."}</div>}
-                {!loading && referrals.length===0 && <div style={{ fontSize:12, color:cs.textDim }}>{isAr?"لسه مفيش إحالات — شارك رابطك عشان تبدأ":"No referrals yet — share your link to get started"}</div>}
+                {loading && <div style={{ fontSize:12, color:cs.muted }}>{isAr?"جاري التحميل...":"Loading..."}</div>}
+                {!loading && referrals.length===0 && <div style={{ fontSize:12, color:cs.muted }}>{isAr?"لسه مفيش إحالات — شارك رابطك عشان تبدأ":"No referrals yet — share your link to get started"}</div>}
                 {!loading && referrals.map(r => (
                   <div key={r.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${cs.border}` }}>
                     <div style={{ fontSize:12, color:cs.text }}>{r.referred_email || r.referred_uid}</div>
                     <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                       {r.earned>0 && <span style={{ fontSize:12, fontWeight:700, color:"#f59e0b" }}>+{r.earned} EGP</span>}
-                      <span style={{ fontSize:10, fontWeight:700, padding:"2px 9px", borderRadius:20, background:`${STATUS_COLORS[r.status]||cs.border}22`, color:STATUS_COLORS[r.status]||cs.textDim }}>{r.status}</span>
+                      <span style={{ fontSize:10, fontWeight:700, padding:"2px 9px", borderRadius:20, background:`${STATUS_COLORS[r.status]||cs.border}22`, color:STATUS_COLORS[r.status]||cs.muted }}>{r.status}</span>
                     </div>
                   </div>
                 ))}
@@ -169,8 +169,8 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
               ].map(m => (
                 <div key={m.label} style={{ background:cs.bg, borderRadius:12, padding:16, border:`1px solid ${cs.border}` }}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                    <span style={{ fontSize:12, fontWeight:600, color:cs.textDim }}>{m.label}</span>
-                    <button onClick={() => { navigator.clipboard?.writeText(m.text).catch(() => {}); }} disabled={!refLink} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:6, padding:"3px 10px", cursor:refLink?"pointer":"default", fontSize:11 }}>{isAr?"نسخ":"Copy"}</button>
+                    <span style={{ fontSize:12, fontWeight:600, color:cs.muted }}>{m.label}</span>
+                    <button onClick={() => { navigator.clipboard?.writeText(m.text).catch(() => {}); }} disabled={!refLink} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:6, padding:"3px 10px", cursor:refLink?"pointer":"default", fontSize:11 }}>{isAr?"نسخ":"Copy"}</button>
                   </div>
                   <div style={{ fontSize:12, color:cs.text, lineHeight:1.6 }}>{m.text}</div>
                 </div>

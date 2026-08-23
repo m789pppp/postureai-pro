@@ -356,7 +356,7 @@ curl -X POST https://corvus.io/api/posture-api/analyze \\
                         {isAr?"جنيه / شهر":"EGP / month"}
                       </div>
                     )}
-                    <div style={{ marginTop:14,textAlign:"left" }}>
+                    <div style={{ marginTop:14,textAlign:isAr?"right":"left" }}>
                       {p.features.map(f=>(
                         <div key={f} style={{ fontSize:11,color:cs.muted,padding:"5px 0",
                           borderBottom:`1px solid ${cs.border}`,display:"flex",gap:6,alignItems:"center" }}>

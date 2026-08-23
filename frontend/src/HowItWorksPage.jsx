@@ -247,7 +247,7 @@ export default function HowItWorksPage() {
         {FAQS_HOW.map(([q, a], i) => (
           <div key={q} style={{ borderTop:"1px solid rgba(148,163,184,.07)", padding:"20px 0" }}>
             <button onClick={() => setOpenFaq(openFaq===i ? null : i)}
-              style={{ width:"100%", textAlign:"left", background:"none", border:"none",
+              style={{ width:"100%", textAlign:lang==="ar"?"right":"left", background:"none", border:"none",
                 cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center",
                 gap:16, fontFamily:"inherit" }}>
               <span style={{ fontSize:15.5, fontWeight:600, color:T.text }}>{q}</span>

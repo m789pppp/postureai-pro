@@ -283,8 +283,8 @@ export function WhatsAppReminder({ profile, cs, isAr, addToast }) {
           style={{ marginInlineStart: "auto", width: 38, height: 22, borderRadius: 99, border: "none",
             background: enabled ? "#10b981" : "rgba(255,255,255,.1)", cursor: "pointer",
             position: "relative", transition: "background .2s", flexShrink: 0 }}>
-          <div style={{ position: "absolute", top: 3, left: enabled ? 18 : 3, width: 16, height: 16,
-            borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+          <div style={{ position: "absolute", top: 3, insetInlineStart: enabled ? 18 : 3, width: 16, height: 16,
+            borderRadius: "50%", background: "#fff", transition: "inset-inline-start .2s" }} />
         </button>
       </div>
 

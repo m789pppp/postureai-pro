@@ -96,7 +96,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
   const InputRow = ({ label, value, onChange, placeholder, type="text", hint }) => (
     <div style={{ marginBottom: 16 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: cs.textDim, display: "block", marginBottom: 5 }}>{label}</label>
+      <label style={{ fontSize: 12, fontWeight: 600, color: cs.muted, display: "block", marginBottom: 5 }}>{label}</label>
       <input
         type={type}
         value={value}
@@ -104,7 +104,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
         placeholder={placeholder}
         style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: `1px solid ${cs.border}`, color: cs.text, borderRadius: 9, padding: "9px 13px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
       />
-      {hint && <div style={{ fontSize: 11, color: cs.textDim, marginTop: 4 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 11, color: cs.muted, marginTop: 4 }}>{hint}</div>}
     </div>
   );
 
@@ -112,7 +112,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${cs.border}` }}>
       <div>
         <div style={{ fontSize: 13, fontWeight: 600, color: cs.text }}>{label}</div>
-        {hint && <div style={{ fontSize: 11, color: cs.textDim, marginTop: 2 }}>{hint}</div>}
+        {hint && <div style={{ fontSize: 11, color: cs.muted, marginTop: 2 }}>{hint}</div>}
       </div>
       <div onClick={() => onChange(!value)} style={{ width: 44, height: 24, borderRadius: 12, background: value ? config.primaryColor : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background .2s", flexShrink: 0 }}>
         <div style={{ position: "absolute", top: 3, left: value ? 22 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
@@ -131,7 +131,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
               <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#8b5cf6,#ec4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🏷️</div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 20, color: cs.text }}>White-Label Configuration</div>
-                <div style={{ fontSize: 12, color: cs.textDim }}>Fully rebrand Corvus for your clients</div>
+                <div style={{ fontSize: 12, color: cs.muted }}>Fully rebrand Corvus for your clients</div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
@@ -147,7 +147,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
           </div>
           <div style={{ display: "flex", gap: 4 }}>
             {tabs.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{ background: tab === t.id ? "rgba(139,92,246,0.15)" : "transparent", border: "none", color: tab === t.id ? "#8b5cf6" : cs.textDim, padding: "8px 14px", cursor: "pointer", borderRadius: "8px 8px 0 0", fontWeight: tab === t.id ? 700 : 500, fontSize: 13, borderBottom: tab === t.id ? "2px solid #8b5cf6" : "2px solid transparent" }}>
+              <button key={t.id} onClick={() => setTab(t.id)} style={{ background: tab === t.id ? "rgba(139,92,246,0.15)" : "transparent", border: "none", color: tab === t.id ? "#8b5cf6" : cs.muted, padding: "8px 14px", cursor: "pointer", borderRadius: "8px 8px 0 0", fontWeight: tab === t.id ? 700 : 500, fontSize: 13, borderBottom: tab === t.id ? "2px solid #8b5cf6" : "2px solid transparent" }}>
                 {t.icon} {t.label}
               </button>
             ))}
@@ -168,7 +168,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
                 {/* Logo upload */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.textDim, display: "block", marginBottom: 5 }}>Logo</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.muted, display: "block", marginBottom: 5 }}>Logo</label>
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                     <div style={{ width: 56, height: 56, borderRadius: 12, background: "rgba(255,255,255,0.07)", border: `1px dashed ${cs.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: config.logoUrl ? 28 : 22, overflow: "hidden" }}>
                       {config.logoUrl ? <img src={config.logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : "🖼"}
@@ -182,14 +182,14 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
                 {/* Color pickers */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.textDim, display: "block", marginBottom: 8 }}>Brand Colors</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.muted, display: "block", marginBottom: 8 }}>Brand Colors</label>
                   <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                     {[["Primary", "primaryColor"], ["Accent", "accentColor"], ["Background", "bgColor"]].map(([lbl, k]) => (
                       <div key={k} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <input type="color" value={config[k]} onChange={e => set(k, e.target.value)} style={{ width: 36, height: 36, borderRadius: 8, border: "none", cursor: "pointer", background: "none" }} />
                         <div>
                           <div style={{ fontSize: 12, fontWeight: 600, color: cs.text }}>{lbl}</div>
-                          <div style={{ fontSize: 11, color: cs.textDim, fontFamily: "monospace" }}>{config[k]}</div>
+                          <div style={{ fontSize: 11, color: cs.muted, fontFamily: "monospace" }}>{config[k]}</div>
                         </div>
                       </div>
                     ))}
@@ -198,7 +198,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
                 {/* Preset themes */}
                 <div style={{ marginBottom: 20 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.textDim, display: "block", marginBottom: 8 }}>Quick Theme Presets</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.muted, display: "block", marginBottom: 8 }}>Quick Theme Presets</label>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {PRESET_THEMES.map(t => (
                       <button key={t.name} onClick={() => applyPreset(t)} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.05)", border: `1px solid ${cs.border}`, color: cs.text, borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12 }}>
@@ -211,7 +211,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
                 {/* Font */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.textDim, display: "block", marginBottom: 5 }}>Font Family</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.muted, display: "block", marginBottom: 5 }}>Font Family</label>
                   <select value={config.fontFamily} onChange={e => set("fontFamily", e.target.value)} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: `1px solid ${cs.border}`, color: cs.text, borderRadius: 9, padding: "9px 13px", fontSize: 13, outline: "none" }}>
                     {FONT_OPTIONS.map(f => <option key={f} value={f} style={{ background: "#1e293b" }}>{f}</option>)}
                   </select>
@@ -219,7 +219,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
                 {/* Border radius */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.textDim, display: "block", marginBottom: 5 }}>Border Radius — {config.borderRadius}px</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.muted, display: "block", marginBottom: 5 }}>Border Radius — {config.borderRadius}px</label>
                   <input type="range" min={0} max={24} value={config.borderRadius} onChange={e => set("borderRadius", e.target.value)} style={{ width: "100%" }} />
                 </div>
 
@@ -233,7 +233,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
             {/* ── DOMAIN ── */}
             {tab === "domain" && (
               <div>
-                <div style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 12, padding: 14, marginBottom: 20, fontSize: 13, color: cs.textDim, lineHeight: 1.6 }}>
+                <div style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 12, padding: 14, marginBottom: 20, fontSize: 13, color: cs.muted, lineHeight: 1.6 }}>
                   ℹ️ To use a custom domain, add a <b style={{ color: cs.text }}>CNAME record</b> pointing to <code style={{ color: "#a5f3fc" }}>whitelabel.corvus.com</code> from your DNS provider. SSL is provisioned automatically.
                 </div>
                 <InputRow label="Custom Domain" value={config.customDomain} onChange={v => set("customDomain", v)} placeholder="app.yourcompany.com" hint="e.g. app.acme.com — must have CNAME to whitelabel.corvus.com" />
@@ -250,7 +250,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                   ].map(r => (
                     <div key={r.record} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${cs.border}` }}>
                       <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: "#a5f3fc", width: 48 }}>{r.record}</span>
-                      <span style={{ flex: 1, fontSize: 12, color: cs.textDim, fontFamily: "monospace" }}>{r.host}</span>
+                      <span style={{ flex: 1, fontSize: 12, color: cs.muted, fontFamily: "monospace" }}>{r.host}</span>
                       <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 20, background: r.status === "active" ? "rgba(16,185,129,0.1)" : "rgba(245,158,11,0.1)", color: r.status === "active" ? "#10b981" : "#f59e0b", fontWeight: 600 }}>
                         {r.status === "active" ? "✓ Active" : r.status === "pending" ? "⏳ Pending" : r.status === "provisioning" ? "⏳ Provisioning" : "— Not set"}
                       </span>
@@ -266,7 +266,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                 <InputRow label="Welcome Message" value={config.welcomeMessage} onChange={v => set("welcomeMessage", v)} placeholder="Welcome to your posture dashboard" />
                 <InputRow label="Login Button Text" value={config.loginBtnText} onChange={v => set("loginBtnText", v)} placeholder="Sign in with Google" />
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.textDim, display: "block", marginBottom: 5 }}>Login Page Background</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: cs.muted, display: "block", marginBottom: 5 }}>Login Page Background</label>
                   <div style={{ display: "flex", gap: 10 }}>
                     <input type="color" value={config.bgColor} onChange={e => set("bgColor", e.target.value)} style={{ width: 42, height: 42, borderRadius: 8, border: "none", cursor: "pointer" }} />
                     <input value={config.customLoginBg} onChange={e => set("customLoginBg", e.target.value)} placeholder="Or background image URL" style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: `1px solid ${cs.border}`, color: cs.text, borderRadius: 9, padding: "9px 13px", fontSize: 13, outline: "none" }} />
@@ -295,7 +295,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                     <div key={t} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${cs.border}` }}>
                       <span style={{ fontSize: 13, color: cs.text }}>📧 {t}</span>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button style={{ background: "transparent", border: `1px solid ${cs.border}`, color: cs.textDim, borderRadius: 7, padding: "4px 11px", cursor: "pointer", fontSize: 11 }}>Preview</button>
+                        <button style={{ background: "transparent", border: `1px solid ${cs.border}`, color: cs.muted, borderRadius: 7, padding: "4px 11px", cursor: "pointer", fontSize: 11 }}>Preview</button>
                         <button style={{ background: "transparent", border: `1px solid ${cs.border}`, color: "#8b5cf6", borderRadius: 7, padding: "4px 11px", cursor: "pointer", fontSize: 11 }}>Edit</button>
                       </div>
                     </div>
@@ -332,9 +332,9 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
                 <div style={{ background: cs.bg, borderRadius: 12, padding: 16, border: `1px solid ${cs.border}`, marginBottom: 16 }}>
                   <div style={{ fontWeight: 700, color: cs.text, marginBottom: 12, fontSize: 13 }}>Custom CSS / JS</div>
-                  <label style={{ fontSize: 12, color: cs.textDim, display: "block", marginBottom: 5 }}>Custom CSS injection</label>
+                  <label style={{ fontSize: 12, color: cs.muted, display: "block", marginBottom: 5 }}>Custom CSS injection</label>
                   <textarea rows={5} placeholder=":root { --brand: #ff0066; } .sidebar { display: none; }" style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: `1px solid ${cs.border}`, color: "#a5f3fc", borderRadius: 9, padding: "10px 13px", fontSize: 12, fontFamily: "monospace", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
-                  <label style={{ fontSize: 12, color: cs.textDim, display: "block", margin: "10px 0 5px" }}>Custom JS (head)</label>
+                  <label style={{ fontSize: 12, color: cs.muted, display: "block", margin: "10px 0 5px" }}>Custom JS (head)</label>
                   <textarea rows={3} placeholder="window.analytics.init('UA-XXXXX')" style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: `1px solid ${cs.border}`, color: "#fde68a", borderRadius: 9, padding: "10px 13px", fontSize: 12, fontFamily: "monospace", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
                 </div>
 
@@ -348,7 +348,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
           {/* ── LIVE PREVIEW ── */}
           <div style={{ width: 340, borderLeft: `1px solid ${cs.border}`, padding: 20, overflowY: "auto", background: "rgba(0,0,0,0.2)" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: cs.textDim, marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>Live Preview</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: cs.muted, marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>Live Preview</div>
 
             {/* Mini login preview */}
             <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${cs.border}`, marginBottom: 14 }}>
@@ -396,10 +396,10 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
               ))}
             </div>
 
-            <div style={{ marginTop: 14, fontSize: 11, color: cs.textDim, lineHeight: 1.6 }}>
+            <div style={{ marginTop: 14, fontSize: 11, color: cs.muted, lineHeight: 1.6 }}>
               Font: <b style={{ color: cs.text }}>{config.fontFamily}</b><br />
               Radius: <b style={{ color: cs.text }}>{config.borderRadius}px</b><br />
-              Domain: <b style={{ color: config.customDomain ? "#10b981" : cs.textDim }}>{config.customDomain || "Not configured"}</b>
+              Domain: <b style={{ color: config.customDomain ? "#10b981" : cs.muted }}>{config.customDomain || "Not configured"}</b>
             </div>
           </div>
         </div>

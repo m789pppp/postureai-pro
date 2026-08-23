@@ -241,13 +241,13 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
             <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🔌</div>
             <div>
               <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>Integrations Hub</div>
-              <div style={{ fontSize:12, color:cs.textDim }}>Connect Corvus to your existing tools</div>
+              <div style={{ fontSize:12, color:cs.muted }}>Connect Corvus to your existing tools</div>
             </div>
           </div>
           <div style={{ display:"flex", gap:10, alignItems:"center" }}>
             <div style={{ textAlign:"center", padding:"6px 14px", background:"rgba(16,185,129,0.1)", borderRadius:10 }}>
               <div style={{ fontSize:17, fontWeight:800, color:"#10b981" }}>{Object.values(connected).filter(Boolean).length}</div>
-              <div style={{ fontSize:10, color:cs.textDim }}>Connected</div>
+              <div style={{ fontSize:10, color:cs.muted }}>Connected</div>
             </div>
             <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }} aria-label="Close">✕</button>
           </div>
@@ -259,15 +259,15 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
           <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
             {/* Category filter */}
             <div style={{ display:"flex", gap:6, padding:"12px 18px", borderBottom:`1px solid ${cs.border}`, flexWrap:"wrap" }}>
-              <button onClick={() => setCatFilter("all")} style={{ padding:"5px 13px", borderRadius:20, border:"1px solid", fontSize:11, cursor:"pointer", fontWeight:600, borderColor:catFilter==="all"?cs.text:cs.border, color:catFilter==="all"?cs.text:cs.textDim, background:catFilter==="all"?"rgba(255,255,255,0.08)":"transparent" }}>All ({INTEGRATIONS.length})</button>
+              <button onClick={() => setCatFilter("all")} style={{ padding:"5px 13px", borderRadius:20, border:"1px solid", fontSize:11, cursor:"pointer", fontWeight:600, borderColor:catFilter==="all"?cs.text:cs.border, color:catFilter==="all"?cs.text:cs.muted, background:catFilter==="all"?"rgba(255,255,255,0.08)":"transparent" }}>All ({INTEGRATIONS.length})</button>
               {Object.entries(CAT_LABELS).map(([k,l]) => (
-                <button key={k} onClick={() => setCatFilter(k)} style={{ padding:"5px 13px", borderRadius:20, border:"1px solid", fontSize:11, cursor:"pointer", fontWeight:600, borderColor:catFilter===k?"#6366f1":cs.border, color:catFilter===k?"#6366f1":cs.textDim, background:catFilter===k?"rgba(99,102,241,0.12)":"transparent" }}>{l}</button>
+                <button key={k} onClick={() => setCatFilter(k)} style={{ padding:"5px 13px", borderRadius:20, border:"1px solid", fontSize:11, cursor:"pointer", fontWeight:600, borderColor:catFilter===k?"#6366f1":cs.border, color:catFilter===k?"#6366f1":cs.muted, background:catFilter===k?"rgba(99,102,241,0.12)":"transparent" }}>{l}</button>
               ))}
             </div>
 
             {/* Integration cards */}
             <div style={{ flex:1, overflowY:"auto", padding:16, display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:12, alignContent:"start" }}>
-              {loading && <div style={{ gridColumn:"1/-1", textAlign:"center", padding:20, fontSize:12, color:cs.textDim }}>Loading…</div>}
+              {loading && <div style={{ gridColumn:"1/-1", textAlign:"center", padding:20, fontSize:12, color:cs.muted }}>Loading…</div>}
               {!loading && filtered.map(intg => {
                 const isConnected = connected[intg.id];
                 return (
@@ -277,9 +277,9 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                     )}
                     <div style={{ fontSize:32, marginBottom:10 }}>{intg.icon}</div>
                     <div style={{ fontWeight:800, fontSize:14, color:cs.text, marginBottom:4 }}>{intg.name}</div>
-                    <div style={{ fontSize:11, color:cs.textDim, lineHeight:1.5, marginBottom:12 }}>{intg.desc.slice(0,80)}...</div>
+                    <div style={{ fontSize:11, color:cs.muted, lineHeight:1.5, marginBottom:12 }}>{intg.desc.slice(0,80)}...</div>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                      <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:isConnected?"rgba(16,185,129,0.12)":"rgba(255,255,255,0.06)", color:isConnected?"#10b981":cs.textDim }}>
+                      <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:isConnected?"rgba(16,185,129,0.12)":"rgba(255,255,255,0.06)", color:isConnected?"#10b981":cs.muted }}>
                         {isConnected ? "✓ Connected" : CAT_LABELS[intg.category]?.split(" ")[1] || intg.category}
                       </span>
                     </div>
@@ -302,9 +302,9 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                       <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20, background:`${STATUS_COLORS[selected.status]}18`, color:STATUS_COLORS[selected.status] }}>{selected.status}</span>
                     </div>
                   </div>
-                  <button onClick={() => setSelected(null)} style={{ background:"transparent", border:"none", color:cs.textDim, cursor:"pointer", fontSize:18 }}>✕</button>
+                  <button onClick={() => setSelected(null)} style={{ background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:18 }}>✕</button>
                 </div>
-                <p style={{ fontSize:13, color:cs.textDim, lineHeight:1.6, margin:0 }}>{selected.desc}</p>
+                <p style={{ fontSize:13, color:cs.muted, lineHeight:1.6, margin:0 }}>{selected.desc}</p>
               </div>
 
               <div style={{ flex:1, overflowY:"auto", padding:20 }}>
@@ -312,7 +312,7 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                 <div style={{ marginBottom:16 }}>
                   <div style={{ fontWeight:700, color:cs.text, fontSize:13, marginBottom:8 }}>What you get</div>
                   {selected.features.map((f,i) => (
-                    <div key={i} style={{ display:"flex", gap:8, fontSize:12, color:cs.textDim, marginBottom:6 }}>
+                    <div key={i} style={{ display:"flex", gap:8, fontSize:12, color:cs.muted, marginBottom:6 }}>
                       <span style={{ color:"#10b981", flexShrink:0 }}>✓</span>{f}
                     </div>
                   ))}
@@ -329,11 +329,11 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                   <div style={{ fontWeight:700, color:cs.text, fontSize:13, marginBottom:10 }}>Configuration</div>
                   {selected.configFields.map(f => (
                     <div key={f.key} style={{ marginBottom:12 }}>
-                      <label style={{ fontSize:11, fontWeight:600, color:cs.textDim, display:"block", marginBottom:4 }}>{f.label}</label>
+                      <label style={{ fontSize:11, fontWeight:600, color:cs.muted, display:"block", marginBottom:4 }}>{f.label}</label>
                       {f.type === "toggle" ? (
                         <div onClick={() => setConfigs(p => ({ ...p, [selected.id]: { ...p[selected.id], [f.key]: !p[selected.id]?.[f.key] } }))}
                           style={{ width:44, height:24, borderRadius:12, background:configs[selected.id]?.[f.key]?selected.color:"rgba(255,255,255,0.1)", cursor:"pointer", position:"relative", transition:"background .2s" }}>
-                          <div style={{ position:"absolute", top:3, left:configs[selected.id]?.[f.key]?22:3, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left .2s" }} />
+                          <div style={{ position:"absolute", top:3, insetInlineStart:configs[selected.id]?.[f.key]?22:3, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"inset-inline-start .2s" }} />
                         </div>
                       ) : f.type === "select" ? (
                         <select value={configs[selected.id]?.[f.key]||""} onChange={e => setConfigs(p => ({ ...p, [selected.id]:{ ...p[selected.id], [f.key]:e.target.value } }))} style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, padding:"8px 12px", fontSize:12, outline:"none" }}>
@@ -347,7 +347,7 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                   ))}
                   {selected.id === "webhooks" && connected.webhooks && configs.webhooks?.secret && (
                     <div style={{ marginBottom:12 }}>
-                      <label style={{ fontSize:11, fontWeight:600, color:cs.textDim, display:"block", marginBottom:4 }}>Signing Secret (save this — shown once)</label>
+                      <label style={{ fontSize:11, fontWeight:600, color:cs.muted, display:"block", marginBottom:4 }}>Signing Secret (save this — shown once)</label>
                       <code style={{ display:"block", background:"rgba(0,0,0,0.25)", padding:"8px 12px", borderRadius:8, color:"#a5f3fc", fontSize:11, wordBreak:"break-all" }}>{configs.webhooks.secret}</code>
                     </div>
                   )}
@@ -372,7 +372,7 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                       <button onClick={() => handleDisconnect(selected.id)} style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", color:"#ef4444", borderRadius:10, padding:"10px", cursor:"pointer", fontWeight:600, fontSize:13 }}>Disconnect</button>
                     </>
                   )}
-                  <a href={selected.docs} target="_blank" rel="noreferrer" style={{ textAlign:"center", fontSize:12, color:cs.textDim, textDecoration:"none", padding:"6px" }}>📚 View documentation →</a>
+                  <a href={selected.docs} target="_blank" rel="noreferrer" style={{ textAlign:"center", fontSize:12, color:cs.muted, textDecoration:"none", padding:"6px" }}>📚 View documentation →</a>
                 </div>
               </div>
             </div>

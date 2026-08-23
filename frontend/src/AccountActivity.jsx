@@ -99,7 +99,7 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
             <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#8b5cf6,#6366f1)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>📜</div>
             <div>
               <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>Account Activity</div>
-              <div style={{ fontSize:12, color:cs.textDim }}>Everything that happened in your account</div>
+              <div style={{ fontSize:12, color:cs.muted }}>Everything that happened in your account</div>
             </div>
           </div>
           <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }} aria-label="Close">✕</button>
@@ -109,13 +109,13 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
             <button key={t} onClick={() => setFilter(t)} style={{ padding:"4px 12px", borderRadius:20, border:"1px solid", fontSize:11, cursor:"pointer", fontWeight:600,
               borderColor: filter===t?(TYPE_COLORS[t]||"#6366f1"):cs.border,
               background:  filter===t?`${TYPE_COLORS[t]||"#6366f1"}18`:"transparent",
-              color:       filter===t?(TYPE_COLORS[t]||"#6366f1"):cs.textDim }}>
+              color:       filter===t?(TYPE_COLORS[t]||"#6366f1"):cs.muted }}>
               {t === "all" ? `All (${activity.length})` : t}
             </button>
           ))}
         </div>
         <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
-          {loading && <div style={{ textAlign:"center", color:cs.textDim, padding:40 }}>Loading activity…</div>}
+          {loading && <div style={{ textAlign:"center", color:cs.muted, padding:40 }}>Loading activity…</div>}
           {!loading && loadError && <div style={{ textAlign:"center", color:"#ef4444", padding:40 }}>Couldn't load your activity log — try again later.</div>}
           <div style={{ display:"flex", flexDirection:"column" }}>
             {!loading && !loadError && filtered.map((event, i) => (
@@ -130,10 +130,10 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                     <div>
                       <div style={{ fontWeight:700, color:cs.text, fontSize:13 }}>{event.title}</div>
-                      <div style={{ fontSize:11, color:cs.textDim, marginTop:2 }}>{event.detail}</div>
+                      <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>{event.detail}</div>
                     </div>
                     <div style={{ textAlign:"right", flexShrink:0 }}>
-                      <div style={{ fontSize:11, color:cs.textDim, fontFamily:"monospace" }}>{event.ts}</div>
+                      <div style={{ fontSize:11, color:cs.muted, fontFamily:"monospace" }}>{event.ts}</div>
                       {event.severity !== "info" && (
                         <span style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:20, background:`${SEV_COLORS[event.severity]}15`, color:SEV_COLORS[event.severity] }}>
                           {event.severity}
@@ -145,10 +145,10 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
               </div>
             ))}
           </div>
-          {!loading && !loadError && filtered.length === 0 && <div style={{ textAlign:"center", color:cs.textDim, padding:40 }}>No {filter} activity found</div>}
+          {!loading && !loadError && filtered.length === 0 && <div style={{ textAlign:"center", color:cs.muted, padding:40 }}>No {filter} activity found</div>}
         </div>
-        <div style={{ padding:"12px 20px", borderTop:`1px solid ${cs.border}`, fontSize:11, color:cs.textDim, textAlign:"center" }}>
-          Activity log retained for 90 days · <span style={{ color: exporting?cs.textDim:"#6366f1", cursor: exporting?"default":"pointer" }} onClick={exporting?undefined:exportCsv}>{exporting?"Exporting…":"Export as CSV"}</span>
+        <div style={{ padding:"12px 20px", borderTop:`1px solid ${cs.border}`, fontSize:11, color:cs.muted, textAlign:"center" }}>
+          Activity log retained for 90 days · <span style={{ color: exporting?cs.muted:"#6366f1", cursor: exporting?"default":"pointer" }} onClick={exporting?undefined:exportCsv}>{exporting?"Exporting…":"Export as CSV"}</span>
           {exportError && <div style={{ color:"#ef4444", marginTop:6 }}>{exportError}</div>}
         </div>
       </div>

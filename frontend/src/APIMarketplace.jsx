@@ -176,24 +176,24 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
               <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🛒</div>
               <div>
                 <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>API Marketplace</div>
-                <div style={{ fontSize:12, color:cs.textDim }}>Integrate Corvus into any platform</div>
+                <div style={{ fontSize:12, color:cs.muted }}>Integrate Corvus into any platform</div>
               </div>
             </div>
             <div style={{ display:"flex", gap:12, alignItems:"center" }}>
               <div style={{ textAlign:"center", padding:"6px 14px", background:"rgba(99,102,241,0.1)", borderRadius:10 }}>
                 <div style={{ fontSize:18, fontWeight:800, color:"#6366f1" }}>{fmtNum(totalReqs)}</div>
-                <div style={{ fontSize:10, color:cs.textDim }}>Total Requests</div>
+                <div style={{ fontSize:10, color:cs.muted }}>Total Requests</div>
               </div>
               <div style={{ textAlign:"center", padding:"6px 14px", background:"rgba(16,185,129,0.1)", borderRadius:10 }}>
                 <div style={{ fontSize:18, fontWeight:800, color:"#10b981" }}>{activeKeys}</div>
-                <div style={{ fontSize:10, color:cs.textDim }}>Active Keys</div>
+                <div style={{ fontSize:10, color:cs.muted }}>Active Keys</div>
               </div>
               <button onClick={onClose} style={{ background:"rgba(255,255,255,0.08)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }}>✕ Close</button>
             </div>
           </div>
           <div style={{ display:"flex", gap:4 }}>
             {tabs.map(t=>(
-              <button key={t.id} onClick={()=>setTab(t.id)} style={{ background:tab===t.id?"rgba(99,102,241,0.15)":"transparent", border:"none", color:tab===t.id?"#6366f1":cs.textDim, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, transition:"all .15s", borderBottom:tab===t.id?"2px solid #6366f1":"2px solid transparent" }}>
+              <button key={t.id} onClick={()=>setTab(t.id)} style={{ background:tab===t.id?"rgba(99,102,241,0.15)":"transparent", border:"none", color:tab===t.id?"#6366f1":cs.muted, padding:"8px 14px", cursor:"pointer", borderRadius:"8px 8px 0 0", fontWeight:tab===t.id?700:500, fontSize:13, transition:"all .15s", borderBottom:tab===t.id?"2px solid #6366f1":"2px solid transparent" }}>
                 {t.icon} {t.label}
               </button>
             ))}
@@ -216,7 +216,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                   <div key={m.label} style={{ background:cs.bg, borderRadius:14, padding:16, border:`1px solid ${cs.border}` }}>
                     <div style={{ fontSize:24 }}>{m.icon}</div>
                     <div style={{ fontSize:22, fontWeight:800, color:m.color, marginTop:6 }}>{m.value}</div>
-                    <div style={{ fontSize:12, color:cs.textDim }}>{m.label}</div>
+                    <div style={{ fontSize:12, color:cs.muted }}>{m.label}</div>
                   </div>
                 ))}
               </div>
@@ -268,7 +268,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                     <code style={{ flex:1, background:"rgba(0,0,0,0.3)", padding:"8px 12px", borderRadius:8, color:"#10b981", fontSize:13, wordBreak:"break-all" }}>{createdKey.key}</code>
                     <button onClick={()=>copy(createdKey.key,"newkey")} style={{ background:"#10b981", border:"none", color:"#fff", borderRadius:8, padding:"8px 14px", cursor:"pointer", fontWeight:700, whiteSpace:"nowrap" }}>{copied==="newkey"?"Copied!":"Copy"}</button>
                   </div>
-                  <button onClick={()=>setCreatedKey(null)} style={{ marginTop:10, background:"transparent", border:"none", color:cs.textDim, cursor:"pointer", fontSize:12 }}>Dismiss</button>
+                  <button onClick={()=>setCreatedKey(null)} style={{ marginTop:10, background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:12 }}>Dismiss</button>
                 </div>
               )}
 
@@ -278,16 +278,16 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                   <div style={{ display:"flex", gap:8 }}>
                     <input value={newKeyName} onChange={e=>setNewKeyName(e.target.value)} placeholder="Key name (e.g. Production)" style={{ flex:1, background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none" }} onKeyDown={e=>e.key==="Enter"&&createKey()} />
                     <button onClick={createKey} disabled={creatingKey} style={{ background:"#6366f1", border:"none", color:"#fff", borderRadius:8, padding:"8px 18px", cursor:creatingKey?"default":"pointer", fontWeight:700, opacity:creatingKey?0.6:1 }}>{creatingKey?(isAr?"جاري الإنشاء...":"Creating..."):"Create"}</button>
-                    <button onClick={()=>setShowNewKey(false)} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:8, padding:"8px 14px", cursor:"pointer" }}>Cancel</button>
+                    <button onClick={()=>setShowNewKey(false)} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:8, padding:"8px 14px", cursor:"pointer" }}>Cancel</button>
                   </div>
                 </div>
               )}
 
               {keysError && <div style={{ color:"#ef4444", fontSize:13 }}>{keysError}</div>}
               {keysLoading ? (
-                <div style={{ color:cs.textDim, fontSize:13 }}>{isAr?"جاري التحميل...":"Loading..."}</div>
+                <div style={{ color:cs.muted, fontSize:13 }}>{isAr?"جاري التحميل...":"Loading..."}</div>
               ) : apiKeys.length===0 && !showNewKey ? (
-                <div style={{ color:cs.textDim, fontSize:13, textAlign:"center", padding:"24px 0" }}>
+                <div style={{ color:cs.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>
                   {isAr?"لسه معملتش أي مفتاح API":"You haven't created any API key yet"}
                 </div>
               ) : apiKeys.map(k=>(
@@ -295,7 +295,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
                     <div>
                       <div style={{ fontWeight:700, color:cs.text, fontSize:15 }}>{k.name}</div>
-                      <div style={{ fontSize:11, color:cs.textDim, marginTop:2 }}>Created {(k.created_at||"").slice(0,10)||"—"} · Last used {k.last_used?String(k.last_used).slice(0,10):"—"}</div>
+                      <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>Created {(k.created_at||"").slice(0,10)||"—"} · Last used {k.last_used?String(k.last_used).slice(0,10):"—"}</div>
                     </div>
                     <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                       <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:"rgba(99,102,241,0.15)", color:"#6366f1", fontWeight:600 }}>{k.plan}</span>
@@ -310,12 +310,12 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                     {/* Only the preview is ever available for existing keys — the
                         full key is shown once, at creation, and never again
                         (same principle as GitHub/Stripe token pages). */}
-                    <code style={{ flex:1, background:"rgba(0,0,0,0.2)", padding:"8px 12px", borderRadius:8, color:cs.textDim, fontSize:12, letterSpacing:1 }}>
+                    <code style={{ flex:1, background:"rgba(0,0,0,0.2)", padding:"8px 12px", borderRadius:8, color:cs.muted, fontSize:12, letterSpacing:1 }}>
                       {k.key_preview || "pai_••••••"}
                     </code>
                   </div>
                   <div style={{ marginTop:10, display:"flex", gap:16 }}>
-                    <div style={{ fontSize:12, color:cs.textDim }}><b style={{ color:cs.text }}>{fmtNum(k.usage||0)}</b> requests total</div>
+                    <div style={{ fontSize:12, color:cs.muted }}><b style={{ color:cs.text }}>{fmtNum(k.usage||0)}</b> requests total</div>
                   </div>
                 </div>
               ))}
@@ -327,11 +327,11 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
             <div style={{ display:"flex", gap:16, height:"100%" }}>
               <div style={{ width:360, display:"flex", flexDirection:"column", gap:6, overflowY:"auto" }}>
                 {ENDPOINTS.map((ep,i)=>(
-                  <button key={i} onClick={()=>setSelectedEndpoint(ep)} style={{ background:selectedEndpoint===ep?"rgba(99,102,241,0.12)":cs.bg, border:selectedEndpoint===ep?"1px solid #6366f1":`1px solid ${cs.border}`, borderRadius:10, padding:"10px 14px", cursor:"pointer", textAlign:"left", display:"flex", gap:10, alignItems:"center" }}>
+                  <button key={i} onClick={()=>setSelectedEndpoint(ep)} style={{ background:selectedEndpoint===ep?"rgba(99,102,241,0.12)":cs.bg, border:selectedEndpoint===ep?"1px solid #6366f1":`1px solid ${cs.border}`, borderRadius:10, padding:"10px 14px", cursor:"pointer", textAlign:isAr?"right":"left", display:"flex", gap:10, alignItems:"center" }}>
                     <span style={{ fontSize:10, fontWeight:700, color:METHOD_COLORS[ep.method]||"#999", background:`${METHOD_COLORS[ep.method]}22`, padding:"2px 7px", borderRadius:5, flexShrink:0 }}>{ep.method}</span>
                     <div style={{ flex:1, overflow:"hidden" }}>
                       <div style={{ fontSize:12, color:cs.text, fontFamily:"monospace", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ep.path}</div>
-                      <div style={{ fontSize:10, color:cs.textDim, marginTop:2 }}>{ep.desc}</div>
+                      <div style={{ fontSize:10, color:cs.muted, marginTop:2 }}>{ep.desc}</div>
                     </div>
                   </button>
                 ))}
@@ -343,10 +343,10 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                       <span style={{ fontSize:13, fontWeight:700, color:METHOD_COLORS[selectedEndpoint.method], background:`${METHOD_COLORS[selectedEndpoint.method]}22`, padding:"4px 12px", borderRadius:8 }}>{selectedEndpoint.method}</span>
                       <code style={{ fontSize:16, color:cs.text, fontWeight:700 }}>{selectedEndpoint.path}</code>
                     </div>
-                    <p style={{ color:cs.textDim, fontSize:14, marginBottom:16 }}>{selectedEndpoint.desc}</p>
+                    <p style={{ color:cs.muted, fontSize:14, marginBottom:16 }}>{selectedEndpoint.desc}</p>
                     <div style={{ display:"flex", gap:16, marginBottom:18 }}>
-                      <div style={{ fontSize:12, color:cs.textDim }}>⏱ Avg latency: <b style={{ color:cs.text }}>{selectedEndpoint.latency}</b></div>
-                      <div style={{ fontSize:12, color:cs.textDim }}>🔒 Min plan: <b style={{ color:"#6366f1" }}>{selectedEndpoint.tier}</b></div>
+                      <div style={{ fontSize:12, color:cs.muted }}>⏱ Avg latency: <b style={{ color:cs.text }}>{selectedEndpoint.latency}</b></div>
+                      <div style={{ fontSize:12, color:cs.muted }}>🔒 Min plan: <b style={{ color:"#6366f1" }}>{selectedEndpoint.tier}</b></div>
                     </div>
                     <div style={{ fontWeight:700, color:cs.text, marginBottom:8, fontSize:13 }}>Example Request</div>
                     <pre style={{ background:"rgba(0,0,0,0.3)", borderRadius:10, padding:14, color:"#a5f3fc", fontSize:12, overflowX:"auto", lineHeight:1.6 }}>{`curl -X ${selectedEndpoint.method} https://api.corvus.com${selectedEndpoint.path} \\
@@ -365,7 +365,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
 }`}</pre>
                   </>
                 ) : (
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100%", color:cs.textDim }}>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100%", color:cs.muted }}>
                     <div style={{ fontSize:40, marginBottom:12 }}>📡</div>
                     <div style={{ fontSize:14 }}>Select an endpoint to view details</div>
                   </div>
@@ -385,7 +385,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                   <div style={{ fontWeight:600, color:cs.text, fontSize:13, marginTop:4 }}>Events to subscribe:</div>
                   <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
                     {WEBHOOK_EVENTS.map(ev=>(
-                      <button key={ev} onClick={()=>setWebhookEvents(p=>p.includes(ev)?p.filter(e=>e!==ev):[...p,ev])} style={{ padding:"5px 12px", borderRadius:20, border:"1px solid", fontSize:12, cursor:"pointer", fontWeight:600, borderColor:webhookEvents.includes(ev)?"#6366f1":cs.border, background:webhookEvents.includes(ev)?"rgba(99,102,241,0.15)":"transparent", color:webhookEvents.includes(ev)?"#6366f1":cs.textDim }}>{ev}</button>
+                      <button key={ev} onClick={()=>setWebhookEvents(p=>p.includes(ev)?p.filter(e=>e!==ev):[...p,ev])} style={{ padding:"5px 12px", borderRadius:20, border:"1px solid", fontSize:12, cursor:"pointer", fontWeight:600, borderColor:webhookEvents.includes(ev)?"#6366f1":cs.border, background:webhookEvents.includes(ev)?"rgba(99,102,241,0.15)":"transparent", color:webhookEvents.includes(ev)?"#6366f1":cs.muted }}>{ev}</button>
                     ))}
                   </div>
                   <button onClick={addWebhook} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"10px 20px", cursor:"pointer", fontWeight:700, fontSize:13, alignSelf:"flex-start" }}>Add Webhook</button>
@@ -393,9 +393,9 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
               </div>
               {whError && <div style={{ color:"#ef4444", fontSize:13 }}>{whError}</div>}
               {whLoading ? (
-                <div style={{ color:cs.textDim, fontSize:13 }}>{isAr?"جاري التحميل...":"Loading..."}</div>
+                <div style={{ color:cs.muted, fontSize:13 }}>{isAr?"جاري التحميل...":"Loading..."}</div>
               ) : webhooks.length===0 ? (
-                <div style={{ color:cs.textDim, fontSize:13, textAlign:"center", padding:"24px 0" }}>
+                <div style={{ color:cs.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>
                   {isAr?"لسه مفيش webhooks مسجلة":"No webhooks registered yet"}
                 </div>
               ) : webhooks.map(wh=>(
@@ -403,11 +403,11 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
                     <div>
                       <code style={{ fontSize:13, color:cs.text }}>{wh.url}</code>
-                      <div style={{ fontSize:11, color:cs.textDim, marginTop:4 }}>Created {(wh.created_at||"").slice(0,10)||"—"}</div>
+                      <div style={{ fontSize:11, color:cs.muted, marginTop:4 }}>Created {(wh.created_at||"").slice(0,10)||"—"}</div>
                     </div>
                     <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                       <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:"rgba(16,185,129,0.1)", color:"#10b981", fontWeight:600 }}>Active</span>
-                      <button onClick={async()=>{ try{ await apiFetch(`/webhooks/${wh.id}/test`,{method:"POST"}); }catch(e){ setWhError(e.message); } }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:11 }}>{isAr?"اختبار":"Test"}</button>
+                      <button onClick={async()=>{ try{ await apiFetch(`/webhooks/${wh.id}/test`,{method:"POST"}); }catch(e){ setWhError(e.message); } }} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:11 }}>{isAr?"اختبار":"Test"}</button>
                       <button onClick={()=>deleteWebhook(wh.id)} style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", color:"#ef4444", borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:11, fontWeight:600 }}>{isAr?"حذف":"Delete"}</button>
                     </div>
                   </div>
@@ -433,16 +433,16 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
               {SDK_LANGS.filter(l=>l.id===sdkLang).map(l=>(
                 <div key={l.id}>
                   <div style={{ background:cs.bg, borderRadius:12, padding:16, border:`1px solid ${cs.border}`, marginBottom:12 }}>
-                    <div style={{ fontSize:12, color:cs.textDim, marginBottom:8 }}>Install</div>
+                    <div style={{ fontSize:12, color:cs.muted, marginBottom:8 }}>Install</div>
                     <div style={{ display:"flex", gap:8 }}>
                       <code style={{ flex:1, background:"rgba(0,0,0,0.3)", padding:"10px 14px", borderRadius:8, color:"#a5f3fc", fontSize:13 }}>{l.install}</code>
-                      <button onClick={()=>copy(l.install,"install")} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:8, padding:"8px 14px", cursor:"pointer", fontSize:12 }}>{copied==="install"?"✓":"Copy"}</button>
+                      <button onClick={()=>copy(l.install,"install")} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:8, padding:"8px 14px", cursor:"pointer", fontSize:12 }}>{copied==="install"?"✓":"Copy"}</button>
                     </div>
                   </div>
                   <div style={{ background:cs.bg, borderRadius:12, padding:16, border:`1px solid ${cs.border}` }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                      <div style={{ fontSize:12, color:cs.textDim }}>Usage</div>
-                      <button onClick={()=>copy(l.snippet,"snippet")} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.textDim, borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:11 }}>{copied==="snippet"?"✓ Copied":"Copy"}</button>
+                      <div style={{ fontSize:12, color:cs.muted }}>Usage</div>
+                      <button onClick={()=>copy(l.snippet,"snippet")} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:11 }}>{copied==="snippet"?"✓ Copied":"Copy"}</button>
                     </div>
                     <pre style={{ background:"rgba(0,0,0,0.3)", borderRadius:10, padding:14, color:"#86efac", fontSize:12.5, overflowX:"auto", lineHeight:1.7, margin:0 }}>{l.snippet}</pre>
                   </div>
@@ -458,7 +458,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                 <div style={{ fontWeight:700, color:cs.text, fontSize:16 }}>📊 API Usage</div>
                 <div style={{ display:"flex", gap:6 }}>
                   {["7d","30d","90d"].map(p=>(
-                    <button key={p} onClick={()=>setUsagePeriod(p)} style={{ background:usagePeriod===p?"rgba(99,102,241,0.15)":"transparent", border:`1px solid ${usagePeriod===p?"#6366f1":cs.border}`, color:usagePeriod===p?"#6366f1":cs.textDim, borderRadius:8, padding:"5px 12px", cursor:"pointer", fontSize:12, fontWeight:600 }}>{p}</button>
+                    <button key={p} onClick={()=>setUsagePeriod(p)} style={{ background:usagePeriod===p?"rgba(99,102,241,0.15)":"transparent", border:`1px solid ${usagePeriod===p?"#6366f1":cs.border}`, color:usagePeriod===p?"#6366f1":cs.muted, borderRadius:8, padding:"5px 12px", cursor:"pointer", fontSize:12, fontWeight:600 }}>{p}</button>
                   ))}
                 </div>
               </div>
@@ -472,8 +472,8 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                   })}
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
-                  <span style={{ fontSize:11, color:cs.textDim }}>Earlier</span>
-                  <span style={{ fontSize:11, color:cs.textDim }}>Today</span>
+                  <span style={{ fontSize:11, color:cs.muted }}>Earlier</span>
+                  <span style={{ fontSize:11, color:cs.muted }}>Today</span>
                 </div>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
@@ -484,7 +484,7 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                 ].map(m=>(
                   <div key={m.label} style={{ background:cs.bg, borderRadius:12, padding:16, border:`1px solid ${cs.border}`, textAlign:"center" }}>
                     <div style={{ fontSize:24, fontWeight:800, color:m.color }}>{m.value}</div>
-                    <div style={{ fontSize:12, color:cs.textDim, marginTop:4 }}>{m.label}</div>
+                    <div style={{ fontSize:12, color:cs.muted, marginTop:4 }}>{m.label}</div>
                   </div>
                 ))}
               </div>
@@ -500,8 +500,8 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                   <div key={p.id} onClick={()=>setSelectedPlan(p.id)} style={{ background:selectedPlan===p.id?`${p.color}18`:cs.bg, border:`2px solid ${selectedPlan===p.id?p.color:cs.border}`, borderRadius:16, padding:20, cursor:"pointer", transition:"all .2s", position:"relative" }}>
                     {p.badge && <div style={{ position:"absolute", top:12, right:12, fontSize:10, fontWeight:700, background:p.color, color:"#fff", padding:"2px 9px", borderRadius:20 }}>{p.badge}</div>}
                     <div style={{ fontSize:22, fontWeight:800, color:p.color }}>{p.name}</div>
-                    <div style={{ fontSize:28, fontWeight:900, color:cs.text, margin:"8px 0" }}>{p.price===null?"Custom":`$${p.price}`}<span style={{ fontSize:13, color:cs.textDim, fontWeight:400 }}>{p.price!==null?"/mo":""}</span></div>
-                    <div style={{ fontSize:12, color:cs.textDim, marginBottom:14 }}>{fmtNum(p.reqs)} req/mo · {fmtNum(p.rps)} req/s</div>
+                    <div style={{ fontSize:28, fontWeight:900, color:cs.text, margin:"8px 0" }}>{p.price===null?"Custom":`$${p.price}`}<span style={{ fontSize:13, color:cs.muted, fontWeight:400 }}>{p.price!==null?"/mo":""}</span></div>
+                    <div style={{ fontSize:12, color:cs.muted, marginBottom:14 }}>{fmtNum(p.reqs)} req/mo · {fmtNum(p.rps)} req/s</div>
                     {p.features.map(f=>(
                       <div key={f} style={{ fontSize:12, color:cs.text, marginBottom:6, display:"flex", gap:6 }}><span style={{ color:p.color }}>✓</span>{f}</div>
                     ))}

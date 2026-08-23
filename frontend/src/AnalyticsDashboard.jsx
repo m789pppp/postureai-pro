@@ -403,7 +403,7 @@ function KpiBox({ label, value, sub, color, icon, trend, accent }) {
          totalSessions:"إجمالي الجلسات", avgScore:"متوسط النقاط",
          goodPosture:"وضعية جيدة", totalTime:"الوقت الكلي",
          loading:"جارٍ التحليل…", noData:"لا توجد جلسات",
-         back:"رجوع ←", burnout:"خطر الإرهاق", posture:"خطر الوضعية",
+         back:"رجوع →", burnout:"خطر الإرهاق", posture:"خطر الوضعية",
          executive:"ملخص تنفيذي", weekly:"رؤى الأسبوع",
          fatigue:"تحليل الإجهاد", predictive:"الذكاء التنبؤي" },
   };

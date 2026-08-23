@@ -123,14 +123,14 @@ export function APIChangelog({ cs, onClose }) {
             <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>📋</div>
             <div>
               <div style={{ fontWeight:800, fontSize:20, color:cs.text }}>API Changelog</div>
-              <div style={{ fontSize:12, color:cs.textDim }}>Corvus API v1.5.0 · Current stable</div>
+              <div style={{ fontSize:12, color:cs.muted }}>Corvus API v1.5.0 · Current stable</div>
             </div>
           </div>
           <button onClick={onClose} style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontSize:13 }} aria-label="Close">✕</button>
         </div>
 
         <div style={{ flex:1, overflowY:"auto", padding:24 }}>
-          <div style={{ background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:12, padding:14, marginBottom:20, fontSize:13, color:cs.textDim }}>
+          <div style={{ background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:12, padding:14, marginBottom:20, fontSize:13, color:cs.muted }}>
             📢 Subscribe to changelog: <a href="/api/changelog/rss" style={{ color:"#6366f1" }}>RSS Feed</a> · <a href="https://corvus.com/changelog" style={{ color:"#6366f1" }}>Web view</a>
           </div>
 
@@ -147,8 +147,8 @@ export function APIChangelog({ cs, onClose }) {
                     {entry.breaking && <span style={{ fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20, background:"rgba(239,68,68,0.12)", color:"#ef4444" }}>⚠ Breaking</span>}
                     <span style={{ fontSize:13, fontWeight:700, color:cs.text }}>{entry.title}</span>
                   </div>
-                  <span style={{ fontSize:11, color:cs.textDim }}>{entry.date}</span>
-                  <span style={{ color:cs.textDim, fontSize:16 }}>{open?"▼":"▶"}</span>
+                  <span style={{ fontSize:11, color:cs.muted }}>{entry.date}</span>
+                  <span style={{ color:cs.muted, fontSize:16 }}>{open?"▼":"▶"}</span>
                 </div>
 
                 {/* Items */}

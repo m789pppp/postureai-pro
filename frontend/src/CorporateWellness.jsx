@@ -304,7 +304,7 @@ export function SchoolsModal({ cs, isAr, onClose, addToast }) {
               <div style={{ fontSize:14,color:"#8896ac",marginBottom:12 }}>
                 {isAr ? "جنيه / طالب / شهر" : "EGP / student / month"}
               </div>
-              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,textAlign:"left" }}>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,textAlign:isAr?"right":"left" }}>
                 {[
                   [isAr?"500 طالب":"500 students",      isAr?"24,500 جنيه":"24,500 EGP/mo"],
                   [isAr?"1,000 طالب":"1,000 students",  isAr?"49,000 جنيه":"49,000 EGP/mo"],
