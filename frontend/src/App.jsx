@@ -2484,7 +2484,19 @@ export default function App(){
 
   // Sound feedback
   const[muted,setMuted]=useState(false);
-  const { alertIfNeeded } = useSoundFeedback(muted);
+  // useSoundFeedback's beep fires whenever the live score drops below 60 —
+  // that's a posture-alert sound in every meaningful sense, so it belongs
+  // under the "Posture alerts" toggle (`sound`, below) like the other
+  // cause-based alert beeps (playBeep() calls elsewhere in this file). It
+  // used to be gated by `muted` instead — a state whose only UI control is
+  // the "Break-reminder chime" toggle further down (scoped to
+  // breakReminder&&!showBreak, and even fully hidden from the settings
+  // panel whenever the user has break reminders turned off entirely) — so
+  // turning "Posture alerts" off did nothing to this beep, and there was no
+  // way to silence it at all once break reminders were disabled. `muted`
+  // itself is left as-is: it still correctly gates BreakPage's own sounds
+  // and the break-reminder chime (see the showBreak effect above).
+  const { alertIfNeeded } = useSoundFeedback(!sound);
   const { update: updatePainPrediction, reset: resetPainPrediction } = usePainPrediction();
 
   // Pro-tier Custom Alert Rules — sync local copy once profile loads/changes
@@ -3276,6 +3288,18 @@ export default function App(){
             // long a second person (a coworker walking past, someone
             // sitting down next to them) keeps triggering it — a real,
             // plausible workplace scenario with zero explanation on screen.
+            //
+            // CRITICAL bug found in this branch (2-agent audit): unlike
+            // every other early-return in this function, this one used to
+            // `return` WITHOUT re-scheduling requestAnimationFrame(runLoop)
+            // first — so the very first time this guard fired in a session
+            // (which can be as mundane as leaning sideways or briefly
+            // stepping out of frame, not just a second person), the entire
+            // self-rescheduling analysis loop died permanently: score,
+            // skeleton and alerts froze silently while the camera preview
+            // kept playing normally, with zero on-screen indication why,
+            // and no recovery short of stopping and restarting the session.
+            rafRef.current=requestAnimationFrame(runLoop);
             subjectRejectStreakRef.current++;
             if(subjectRejectStreakRef.current>=5 && !multiPersonShownRef.current){
               multiPersonShownRef.current=true; setMultiPersonWarning(true);
@@ -3777,6 +3801,17 @@ export default function App(){
       lightAlRef.current=0;
       badRef.current=null;
       alertCauseRef.current={};
+      // Found alongside the runLoop-freeze bug above: subjectRejectStreakRef/
+      // multiPersonShownRef/multiPersonWarning were only ever written inside
+      // runLoop's subject-switch guard and never reset anywhere — including
+      // here, unlike every other alert-cooldown ref on this list. That meant
+      // the "another person detected" banner (rendered with no session-scope
+      // guard at all) could survive Stop & Save and stay visible through the
+      // idle screen and into a brand-new session, falsely claiming someone
+      // else was in frame, until pure chance cleared it inside runLoop.
+      subjectRejectStreakRef.current=0;
+      multiPersonShownRef.current=false;
+      setMultiPersonWarning(false);
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
       // Previously this network call was awaited unconditionally, which meant
@@ -3877,6 +3912,13 @@ export default function App(){
     distSmootherRef.current?.reset();
     resetProportions();
     lightCheckRef.current={t:0,canvas:lightCheckRef.current.canvas,wasLow:false};setLowLight(false);
+    // Also clear on Stop (not just at the next session's beginScoring()) so
+    // the "another person detected" banner doesn't linger on the idle
+    // "Start Analysis" screen with the camera off — see the matching reset
+    // in beginScoring() for the full bug explanation.
+    subjectRejectStreakRef.current=0;
+    multiPersonShownRef.current=false;
+    setMultiPersonWarning(false);
     // Stop camera stream tracks
     if(streamRef.current){
       streamRef.current.getTracks().forEach(x=>{x.stop(); x.enabled=false;});
@@ -5361,7 +5403,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         the page==="home" branch's own return. Clicking any of them here
         set the state and nothing happened: no modal, no error, just a
         dead button. Mounted here too so it actually opens on this page. */}
-    {showCalibWizard&&<ErrorBoundary key="calibwizard-live"><CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast("Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/></ErrorBoundary>}
+    {showCalibWizard&&<ErrorBoundary key="calibwizard-live"><CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast(isAr?"تم حفظ المعايرة ✓":"Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/></ErrorBoundary>}
     {/* The 4 modals below are triggered from buttons on THIS page (Billing/
         Upgrade, Custom Alert Rules, Onboarding restart, Company setup) but
         were previously only ever mounted inside the page==="home" branch —
@@ -6838,13 +6880,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </span>
             </div>
             <div style={{position:"relative",height:8,background:"rgba(148,163,184,.08)",borderRadius:99,overflow:"hidden"}}>
-              <div style={{position:"absolute",left:"28%",top:0,bottom:0,width:"44%",background:"rgba(79,174,142,.15)",borderRadius:99}}/>
+              {/* The "20cm ... 115cm" labels below auto-mirror under dir="rtl"
+                  (a flex row with justifyContent:"space-between"), so in
+                  Arabic "20cm" renders on the right and "115cm" on the left —
+                  but these two bars were positioned with a physical `left`
+                  percentage, which never flipped. That put the near/close-zone
+                  marker at the visual left (under the now-far "115cm" label)
+                  in RTL — backwards. insetInlineStart resolves against the
+                  same dir the labels already mirror by, so both stay in sync
+                  in both languages (matches the pattern already used for the
+                  Score History chart above). */}
+              <div style={{position:"absolute",insetInlineStart:"28%",top:0,bottom:0,width:"44%",background:"rgba(79,174,142,.15)",borderRadius:99}}/>
               <div style={{
                 position:"absolute",top:1,bottom:1,
-                left:`${clamp((distCm-20)/(115-20)*100,2,96)}%`,
+                insetInlineStart:`${clamp((distCm-20)/(115-20)*100,2,96)}%`,
                 width:6,borderRadius:99,
                 background:distCm>=M_.optDist[0]&&distCm<=M_.optDist[1]?"#4FAE8E":distCm>=(M_.optDist[0]-15)?"#D6A24C":"#C6604F",
-                transition:"left .4s ease",
+                transition:"inset-inline-start .4s ease",
               }}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:cs.muted}}>
