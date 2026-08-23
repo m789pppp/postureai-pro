@@ -46,7 +46,7 @@ function Avatar({ name, photo, size = 36, style = {} }) {
   if(photo) return (
     <img src={photo} alt={label}
       style={{ width:size, height:size, borderRadius:"50%", flexShrink:0,
-        objectFit:"cover", border:"2px solid rgba(255,255,255,.08)", ...style }}/>
+        objectFit:"cover", border:`2px solid ${cs.border}`, ...style }}/>
   );
   return (
     <div style={{
@@ -54,7 +54,7 @@ function Avatar({ name, photo, size = 36, style = {} }) {
       background: `hsl(${hue},55%,32%)`,
       display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: size * 0.38, fontWeight: 700, color: "#fff",
-      border: "2px solid rgba(255,255,255,.08)",
+      border: `2px solid ${cs.border}`,
       ...style,
     }}>{ch}</div>
   );
@@ -68,7 +68,7 @@ function Ring({ score = 0, size = 100 }) {
   const col  = pct >= 80 ? "#10b981" : pct >= 60 ? "#f59e0b" : "#ef4444";
   return (
     <svg width={size} height={size} style={{ transform:"rotate(-90deg)", flexShrink:0 }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth={6}/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={cs.border} strokeWidth={6}/>
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={6}
         strokeDasharray={`${(pct/100)*circ} ${circ}`} strokeLinecap="round"
         style={{ transition:"stroke-dasharray 1.2s cubic-bezier(.4,0,.2,1)" }}/>
@@ -195,7 +195,7 @@ function WeekChart({ sessions, cs }) {
     <div style={{ display:"flex", gap:8, alignItems:"flex-end", height:56 }}>
       {days.map((d,i)=>{
         const h=d.has?Math.max(6,(d.score/100)*50):4;
-        const c=d.score>=80?"#10b981":d.score>=60?"#f59e0b":d.has?"#ef4444":"rgba(255,255,255,.07)";
+        const c=d.score>=80?"#10b981":d.score>=60?"#f59e0b":d.has?"#ef4444":cs.border;
         return (
           <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
             <div style={{ width:"100%", height:h, borderRadius:4, background:c,
@@ -366,7 +366,7 @@ function AnalyticsInline({ userSessions = [], profile, cs, isAr, tier, onOpenFul
             <div style={{ display:"flex", gap:4, alignItems:"flex-end", height:64 }}>
               {days14.map((d,i)=>{
                 const h = d.score ? Math.max(6,(d.score/maxBar)*60) : 3;
-                const col = !d.score?"rgba(255,255,255,.06)":d.score>=80?"#10b981":d.score>=60?"#f59e0b":"#ef4444";
+                const col = !d.score?cs.border:d.score>=80?"#10b981":d.score>=60?"#f59e0b":"#ef4444";
                 return (
                   <div key={i} style={{ flex:1, display:"flex", flexDirection:"column",
                     alignItems:"center", gap:4 }}>
@@ -686,7 +686,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
               const dur=s.duration_sec?`${Math.round(s.duration_sec/60)}m`:"";
               return (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:12,
-                  padding:"10px 12px", background:"rgba(255,255,255,.025)",
+                  padding:"10px 12px", background:cs.inp,
                   borderRadius:8, border:`1px solid ${cs.border}` }}>
                   <div style={{ width:38, height:38, borderRadius:8, flexShrink:0,
                     background:`${col}18`, display:"flex", alignItems:"center",
@@ -810,7 +810,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
             <div style={{ fontSize:12, color:cs.muted, marginTop:3 }}>
               {isAr?`متوسط الفريق: ${teamAvg}/100`:`Team average: ${teamAvg}/100`}
             </div>
-            <div style={{ marginTop:8, height:6, borderRadius:99, background:"rgba(255,255,255,.08)", position:"relative", maxWidth:220 }}>
+            <div style={{ marginTop:8, height:6, borderRadius:99, background:cs.inp, position:"relative", maxWidth:220 }}>
               <div style={{ height:6, borderRadius:99, background:gradeColor(avg), width:`${avg}%`, maxWidth:"100%" }}/>
             </div>
             <div style={{ fontSize:11, color:cs.muted, marginTop:3 }}>
@@ -828,7 +828,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
             {["all",...depts].map(d=>(
               <button key={d} onClick={()=>setDeptFilter(d)}
                 style={{ padding:"5px 13px", borderRadius:99, fontSize:12, fontWeight:600,
-                  background:deptFilter===d?"#1a56db":"rgba(255,255,255,.05)",
+                  background:deptFilter===d?"#1a56db":cs.inp,
                   border:`1px solid ${deptFilter===d?"#1a56db":cs.border}`,
                   color:deptFilter===d?"#fff":cs.muted, cursor:"pointer" }}>
                 {d==="all"?(isAr?"الكل":"All"):d}
@@ -851,7 +851,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
               return (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:10,
                   padding:"10px 12px", borderRadius:9,
-                  background:isMe?"rgba(59,130,246,.1)":"rgba(255,255,255,.02)",
+                  background:isMe?"rgba(59,130,246,.1)":cs.inp,
                   border:`1px solid ${isMe?"rgba(59,130,246,.35)":cs.border}` }}>
                   <div style={{ width:26, textAlign:"center", fontSize:13, color:cs.muted, fontWeight:700, flexShrink:0 }}>
                     {realIdx===0?"🥇":realIdx===1?"🥈":realIdx===2?"🥉":`#${realIdx+1}`}
@@ -1029,7 +1029,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
               const dur=s.duration_sec?`${Math.round(s.duration_sec/60)}m`:"";
               return (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:12,
-                  padding:"9px 12px", background:"rgba(255,255,255,.025)",
+                  padding:"9px 12px", background:cs.inp,
                   borderRadius:8, border:`1px solid ${cs.border}` }}>
                   <div style={{ width:36, height:36, borderRadius:8, flexShrink:0,
                     background:`${col}18`, display:"flex", alignItems:"center",
@@ -1069,7 +1069,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
               return (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:9,
                   padding:"8px 11px", borderRadius:8,
-                  background:isMe?"rgba(59,130,246,.08)":"rgba(255,255,255,.02)",
+                  background:isMe?"rgba(59,130,246,.08)":cs.inp,
                   border:`1px solid ${isMe?"rgba(59,130,246,.3)":cs.border}` }}>
                   <div style={{ width:20, textAlign:"center", fontSize:12, color:cs.muted, fontWeight:700, flexShrink:0 }}>
                     {i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}
@@ -1121,7 +1121,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
   const healthy = users.filter(u=>(u.avg_score||0)>=80).length;
   const atRisk  = users.filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50).length;
   const active  = users.filter(u=>u.last_session_at).length;
-  const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":s>0?"#ef4444":"rgba(255,255,255,.25)";
+  const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":s>0?"#ef4444":cs.muted;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
@@ -1138,7 +1138,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
           <div style={{ fontSize:20, fontWeight:800, color:"#f0f6ff" }}>
             {profile?.company||(isAr?"شركتي":"My Company")}
           </div>
-          <div style={{ fontSize:12, color:"rgba(255,255,255,.4)", marginTop:2 }}>
+          <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>
             {users.length} {isAr?"موظف":"employees"} · <TierBadge tier={profile?.tier||"standard"}/>
           </div>
         </div>
@@ -1148,8 +1148,8 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
             {isAr?"+ دعوة موظفين":"+ Invite Employees"}
           </button>
           <button onClick={onBilling} style={{ padding:"9px 16px",
-            background:"rgba(255,255,255,.06)", color:"rgba(255,255,255,.75)",
-            border:"1px solid rgba(255,255,255,.1)", borderRadius:8, fontSize:12,
+            background:cs.inp, color:cs.text,
+            border:`1px solid ${cs.border}`, borderRadius:8, fontSize:12,
             fontWeight:600, cursor:"pointer" }}>
             {isAr?"الاشتراك":"Billing"}
           </button>
@@ -1219,7 +1219,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
             <div style={{ fontSize:13, fontWeight:700, color:"#f87171" }}>
               {isAr?`${atRisk} موظف في خطر (وضعية < 50)`:`${atRisk} employees at risk (score < 50)`}
             </div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,.4)" }}>
+            <div style={{ fontSize:11, color:cs.muted }}>
               {filtered.filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50).map(u=>u.name||u.email?.split("@")[0]).join("، ")||""}
             </div>
           </div>
@@ -1240,7 +1240,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
           </div>
           <input value={search} onChange={e=>setSearch(e.target.value)}
             placeholder={isAr?"بحث بالاسم أو الإيميل...":"Search by name or email..."}
-            style={{ padding:"7px 11px", background:"rgba(255,255,255,.05)",
+            style={{ padding:"7px 11px", background:cs.inp,
               border:`1px solid ${cs.border}`, borderRadius:7, color:cs.text,
               fontSize:12, outline:"none", width:180 }}/>
           {depts.length>1&&(
@@ -1516,7 +1516,7 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
                 <div style={{ fontSize:13, fontWeight:600, color:cs.text, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                   {isAr ? `جلسة #${s.session_number||(totalSessions-i)}` : `Session #${s.session_number||(totalSessions-i)}`}
                   {s.mode && <span style={{ fontSize:10, color:cs.muted,
-                    background:"rgba(255,255,255,.06)", padding:"1px 7px", borderRadius:99 }}>
+                    background:cs.inp, padding:"1px 7px", borderRadius:99 }}>
                     {s.mode}
                   </span>}
                 </div>
@@ -1590,7 +1590,7 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
     <div style={{ display:"flex", gap:8 }}>
       <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
         placeholder={isAr?"كلمة مرور جديدة (6+ أحرف)":"New password (6+ chars)"}
-        style={{ flex:1, padding:"8px 12px", background:"rgba(255,255,255,.05)",
+        style={{ flex:1, padding:"8px 12px", background:cs.inp,
           border:`1px solid ${cs.border}`, borderRadius:7, color:cs.text,
           fontSize:12, outline:"none" }}/>
       <button disabled={pw.length<6||saving} onClick={async ()=>{
@@ -1749,7 +1749,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
     <input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
       disabled={disabled}
       style={{ width:"100%", padding:"10px 12px",
-        background:disabled?"rgba(255,255,255,.02)":"rgba(255,255,255,.05)",
+        background:disabled?cs.inp:cs.inp,
         border:`1px solid ${cs.border}`, borderRadius:8, color:disabled?cs.muted:cs.text,
         fontSize:13, outline:"none", boxSizing:"border-box", cursor:disabled?"not-allowed":"text",
         transition:"border-color .15s" }}
@@ -1776,7 +1776,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {profile?.photoURL
               ? <img src={profile.photoURL} alt="avatar"
                   style={{ width:72, height:72, borderRadius:"50%",
-                    objectFit:"cover", border:"2px solid rgba(255,255,255,.1)" }}/>
+                    objectFit:"cover", border:`2px solid ${cs.border}` }}/>
               : <Avatar name={profile?.name||profile?.email} photo={null} size={72}/>}
             <label title={isAr?"تغيير الصورة":"Change photo"}
               style={{ position:"absolute", bottom:0, right:0, width:24, height:24,
@@ -1879,7 +1879,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 value={name}
                 onChange={e=>{ setName(e.target.value); setNameDirty(true); }}
                 placeholder={isAr?"أدخل اسمك الكامل":"Enter full name"}
-                style={{ width:"100%", padding:"10px 12px", background:"rgba(255,255,255,.05)",
+                style={{ width:"100%", padding:"10px 12px", background:cs.inp,
                   border:`1px solid ${cs.border}`, borderRadius:8, color:cs.text,
                   fontSize:13, outline:"none", boxSizing:"border-box" }}
               />
@@ -1898,7 +1898,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                     if (user?.uid) await updateUserProfile(user.uid, { profession: val });
                   } catch { addToast(isAr?"تعذر حفظ المهنة":"Couldn't save profession","error"); }
                 }}
-                style={{ width:"100%", padding:"10px 12px", background:"rgba(255,255,255,.05)",
+                style={{ width:"100%", padding:"10px 12px", background:cs.inp,
                   border:`1px solid ${cs.border}`, borderRadius:8, color:cs.text,
                   fontSize:13, outline:"none", boxSizing:"border-box" }}
               >
@@ -1937,14 +1937,14 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </div>
               <div style={{ display:"flex", gap:8 }}>
                 <button onClick={()=>setLang?.(lang==="ar"?"en":"ar")}
-                  style={{ flex:1, padding:"10px", background:"rgba(255,255,255,.03)",
+                  style={{ flex:1, padding:"10px", background:cs.inp,
                     border:`1px solid ${cs.border}`, borderRadius:8,
                     color:cs.text, fontSize:12, fontWeight:600, cursor:"pointer",
                     display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
                   {lang==="ar"?"🇬🇧 Switch to English":"🇪🇬 التبديل للعربية"}
                 </button>
                 <button onClick={()=>setDarkMode?.(!darkMode)}
-                  style={{ padding:"10px 16px", background:"rgba(255,255,255,.03)",
+                  style={{ padding:"10px 16px", background:cs.inp,
                     border:`1px solid ${cs.border}`, borderRadius:8,
                     color:cs.text, fontSize:13, cursor:"pointer" }}>
                   {darkMode?"☀️":"🌙"}
@@ -1961,7 +1961,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {isAr?"النمو والتكاملات":"Growth & Integrations"}
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-            <button onClick={onReferral} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
+            <button onClick={onReferral} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
               <span style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <span style={{ fontSize:18 }}>🤝</span>
                 <span>
@@ -1971,7 +1971,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </span>
               <span style={{ color:cs.muted }}>›</span>
             </button>
-            <button onClick={onIntegrations} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
+            <button onClick={onIntegrations} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
               <span style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <span style={{ fontSize:18 }}>🔌</span>
                 <span>
@@ -1981,7 +1981,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </span>
               <span style={{ color:cs.muted }}>›</span>
             </button>
-            <button onClick={onNotifications} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
+            <button onClick={onNotifications} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
               <span style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <span style={{ fontSize:18 }}>🔔</span>
                 <span>
@@ -2006,7 +2006,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {/* Google */}
-            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+            <div style={{ padding:"14px 16px", background:cs.inp,
               borderRadius:10, border:`1px solid ${hasGoogle?"rgba(66,133,244,.3)":cs.border}`,
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2033,7 +2033,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               }
             </div>
             {/* Email/Password */}
-            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+            <div style={{ padding:"14px 16px", background:cs.inp,
               borderRadius:10, border:`1px solid ${hasEmail?"rgba(16,185,129,.25)":cs.border}` }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2087,7 +2087,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {isAr?"خطتك الحالية":"Current Plan"}
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:16, padding:"16px",
-            background:"rgba(255,255,255,.03)", borderRadius:10,
+            background:cs.inp, borderRadius:10,
             border:`1px solid ${cs.border}`, marginBottom:16 }}>
             <div style={{ fontSize:32 }}>
               {tier==="elite"?"✦":tier==="professional"?"⭐":tier==="business"?"🏢":"🆓"}
@@ -2105,7 +2105,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             </div>
             <TierBadge tier={tier}/>
           </div>
-          <button onClick={onBillingHistory} style={{ width:"100%", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+          <button onClick={onBillingHistory} style={{ width:"100%", background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
             <span style={{ display:"flex", alignItems:"center", gap:10 }}>
               <span style={{ fontSize:18 }}>📄</span>
               <span style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"الفواتير والاستخدام":"Invoices & Usage"}</span>
@@ -2222,7 +2222,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 setShowMFASetup here was a bare undeclared identifier: not a
                 silent no-op, an actual ReferenceError the moment this row
                 was clicked. */}
-            <div onClick={()=>onMFA?.()} style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+            <div onClick={()=>onMFA?.()} style={{ padding:"14px 16px", background:cs.inp,
               borderRadius:10, border:`1px solid ${cs.border}`, cursor:"pointer",
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2246,7 +2246,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </span>
             </div>
             {/* Active sessions */}
-            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+            <div style={{ padding:"14px 16px", background:cs.inp,
               borderRadius:10, border:`1px solid ${cs.border}` }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                 <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2283,7 +2283,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               </div>
             </div>
             {/* Password change */}
-            <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+            <div style={{ padding:"14px 16px", background:cs.inp,
               borderRadius:10, border:`1px solid ${cs.border}`,
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2353,8 +2353,8 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                         {isAr?'اكتب "DELETE" في الخانة تحت للتأكيد:':'Type "DELETE" below to confirm:'}
                       </div>
                       <input value={deleteConfirmText} onChange={e=>setDeleteConfirmText(e.target.value)} placeholder="DELETE"
-                        style={{ width:"100%", maxWidth:220, padding:"8px 10px", background:"rgba(255,255,255,.05)",
-                          border:"1px solid rgba(255,255,255,.1)", borderRadius:7, color:cs.text, fontSize:12,
+                        style={{ width:"100%", maxWidth:220, padding:"8px 10px", background:cs.inp,
+                          border:`1px solid ${cs.border}`, borderRadius:7, color:cs.text, fontSize:12,
                           outline:"none", boxSizing:"border-box" }}/>
                       <div style={{ display:"flex", gap:8, marginTop:10 }}>
                         <button onClick={()=>{setShowDeleteBox(false);setDeleteConfirmText("");}} disabled={deleting}
@@ -2479,7 +2479,7 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
         {isAr?"استقبل تنبيهات لما سلسلة الالتزام بتاعتك في خطر أو لما نكتشف نمط وضعية محتاج انتباه."
              :"Get notified when your streak is at risk or when we detect a posture pattern worth your attention."}
       </div>
-      <div style={{ padding:"14px 16px", background:"rgba(255,255,255,.03)",
+      <div style={{ padding:"14px 16px", background:cs.inp,
         borderRadius:10, border:`1px solid ${cs.border}`,
         display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
         <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -2520,10 +2520,10 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
               {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
                 <div key={key} onClick={()=>toggleCategory(key)} style={{
                   display:"flex", justifyContent:"space-between", alignItems:"center",
-                  padding:"8px 12px", background:"rgba(255,255,255,.025)", borderRadius:8, cursor:"pointer" }}>
+                  padding:"8px 12px", background:cs.inp, borderRadius:8, cursor:"pointer" }}>
                   <span style={{ fontSize:12.5, color:cs.text }}>{isAr?label.ar:label.en}</span>
                   <div style={{ width:36, height:20, borderRadius:99, position:"relative", transition:"background-color .15s",
-                    background: prefs.categories?.[key]!==false ? "#10b981" : "rgba(255,255,255,.12)" }}>
+                    background: prefs.categories?.[key]!==false ? "#10b981" : cs.inp }}>
                     <div style={{ width:16, height:16, borderRadius:"50%", background:"#fff", position:"absolute", top:2,
                       left: prefs.categories?.[key]!==false ? 18 : 2, transition:"left .15s" }} />
                   </div>
@@ -2647,7 +2647,7 @@ function FamilyPartnerSettings({ cs, isAr, tier, onUpgrade, addToast }) {
           <input value={email} onChange={e=>setEmail(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&sendInvite()}
             placeholder={isAr?"إيميل الشريك/فرد العيلة":"Partner/family member's email"}
-            style={{ flex:1, padding:"9px 12px", background:"rgba(255,255,255,.05)", border:`1px solid ${cs.border}`,
+            style={{ flex:1, padding:"9px 12px", background:cs.inp, border:`1px solid ${cs.border}`,
               borderRadius:8, color:cs.text, fontSize:12.5, outline:"none" }} />
           <button onClick={sendInvite} disabled={sending || !email.trim()} style={{ padding:"9px 16px",
             background: email.trim() ? "#1a56db" : "rgba(26,86,219,.3)", border:"none", borderRadius:8,
@@ -2716,7 +2716,7 @@ function EarlyAccessPanel({ cs, isAr, tier, onUpgrade }) {
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           {data.flags.map(f => (
             <div key={f.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-              padding:"9px 12px", background:"rgba(255,255,255,.03)", borderRadius:8 }}>
+              padding:"9px 12px", background:cs.inp, borderRadius:8 }}>
               <div style={{ fontSize:12, color:cs.text }}>{f.description}</div>
               <span style={{ fontSize:9, fontWeight:700, borderRadius:99, padding:"2px 8px",
                 color: f.available_to_me ? "#10b981" : "#f59e0b",
@@ -2813,7 +2813,7 @@ function VoiceCoachSettings({ cs, isAr, lang, addToast }) {
             {isAr?"الصوت":"Voice"}
           </div>
           <select value={prefs.voiceURI || ""} onChange={e=>update({ voiceURI: e.target.value || null })}
-            style={{ width:"100%", background:"rgba(255,255,255,.03)", border:`1px solid ${cs.border}`,
+            style={{ width:"100%", background:cs.inp, border:`1px solid ${cs.border}`,
               borderRadius:8, color:cs.text, padding:"8px 10px", fontSize:12.5 }}>
             <option value="">{isAr?"تلقائي (أفضل مطابقة)":"Automatic (best match)"}</option>
             {voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
@@ -3017,8 +3017,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
               style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
                 padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
                 borderLeft:tab===item.id?"2px solid #3b82f6":"2px solid transparent",
-                background:tab===item.id?"rgba(59,130,246,.1)":hov===item.id?"rgba(255,255,255,.04)":"transparent",
-                color:tab===item.id?"#3b82f6":"rgba(255,255,255,.65)",
+                background:tab===item.id?"rgba(59,130,246,.1)":hov===item.id?cs.inp:"transparent",
+                color:tab===item.id?"#3b82f6":cs.muted,
                 fontSize:12.5, fontWeight:tab===item.id?700:400, textAlign:isAr?"right":"left", transition:"all .1s" }}>
               <span style={{ fontSize:14, width:18, textAlign:"center" }}>{item.icon}</span>
               <span style={{ flex:1 }}>{isAr?item.ar:item.en}</span>
@@ -3047,7 +3047,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         {toolGroups.map(group=>(
           <div key={group.id}>
             <div style={{ borderTop:`1px solid ${cs.border}`, margin:"0 8px", padding:"8px 3px 4px" }}>
-              <div style={{ fontSize:9, fontWeight:700, color:"rgba(255,255,255,.22)",
+              <div style={{ fontSize:9, fontWeight:700, color:cs.muted,
                 textTransform:"uppercase", letterSpacing:".1em", paddingLeft:8 }}>
                 {isAr?group.header.ar:group.header.en}
               </div>
@@ -3058,8 +3058,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
                   onMouseEnter={()=>setHov(tool.id)} onMouseLeave={()=>setHov(null)}
                   style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
                     padding:"7px 11px", border:"none", borderRadius:7, cursor:"pointer",
-                    background:hov===tool.id&&!tool.locked?"rgba(255,255,255,.05)":"transparent",
-                    color:tool.locked?"rgba(255,255,255,.28)":"rgba(255,255,255,.72)",
+                    background:hov===tool.id&&!tool.locked?cs.inp:"transparent",
+                    color:tool.locked?cs.muted:cs.text,
                     fontSize:12, fontWeight:500, textAlign:isAr?"right":"left", transition:"all .1s" }}>
                   <span style={{ fontSize:13, width:18, textAlign:"center", opacity:tool.locked?.45:1 }}>{tool.icon}</span>
                   <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -3085,12 +3085,12 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         {/* Lang + Dark mode row */}
         <div style={{ display:"flex", gap:5, marginBottom:8 }}>
           <button onClick={()=>setLang(lang==="ar"?"en":"ar")}
-            style={{ flex:1, padding:"5px", background:"rgba(255,255,255,.03)",
+            style={{ flex:1, padding:"5px", background:cs.inp,
               border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer" }}>
             {lang==="ar"?"🇬🇧 EN":"🇪🇬 عربي"}
           </button>
           <button onClick={()=>setDarkMode(!darkMode)}
-            style={{ padding:"5px 9px", background:"rgba(255,255,255,.03)",
+            style={{ padding:"5px 9px", background:cs.inp,
               border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer" }}>
             {darkMode?"☀️":"🌙"}
           </button>
@@ -3098,11 +3098,11 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         {/* User card — click → Settings */}
         <button onClick={()=>setTab("settings")}
           style={{ width:"100%", display:"flex", alignItems:"center", gap:8,
-            padding:"8px 9px", background:"rgba(255,255,255,.03)",
+            padding:"8px 9px", background:cs.inp,
             border:`1px solid ${cs.border}`, borderRadius:9, cursor:"pointer",
             textAlign:isAr?"right":"left", transition:"background .12s" }}
           onMouseEnter={e=>e.currentTarget.style.background="rgba(59,130,246,.08)"}
-          onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,.03)"}>
+          onMouseLeave={e=>e.currentTarget.style.background=cs.inp}>
           <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={28}/>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:11, fontWeight:600, color:"#f0f6ff",
@@ -3163,7 +3163,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
               {(tools||[]).map(t=>(
                 <button key={t.id} onClick={()=>{ t.onClick?.(); setShowMore(false); }}
                   style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4,
-                    padding:"10px 6px", background:"rgba(255,255,255,.03)",
+                    padding:"10px 6px", background:cs.inp,
                     border:`1px solid ${cs.border}`, borderRadius:10,
                     cursor:"pointer" }}>
                   <span style={{ fontSize:20 }}>{t.icon}</span>
@@ -3174,7 +3174,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
               {/* Settings shortcut */}
               <button onClick={()=>{ setTab("settings"); setShowMore(false); }}
                 style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4,
-                  padding:"10px 6px", background:"rgba(255,255,255,.03)",
+                  padding:"10px 6px", background:cs.inp,
                   border:`1px solid ${cs.border}`, borderRadius:10, cursor:"pointer" }}>
                 <span style={{ fontSize:20 }}>⚙️</span>
                 <span style={{ fontSize:9, color:"#94a3b8", fontWeight:600 }}>{isAr?"إعدادات":"Settings"}</span>
@@ -3202,7 +3202,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
                 boxShadow:"0 4px 14px rgba(26,86,219,.5)" }}>▶</div>
             ) : (
               <>
-                <span style={{ fontSize:17, color:tab===t.id?"#3b82f6":"rgba(255,255,255,.3)" }}>
+                <span style={{ fontSize:17, color:tab===t.id?"#3b82f6":cs.muted }}>
                   {t.icon}
                 </span>
                 {(t.badge||0)>0&&(
@@ -3216,7 +3216,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
             )}
             {!t.special&&(
               <span style={{ fontSize:9, fontWeight:tab===t.id?700:400,
-                color:tab===t.id?"#3b82f6":"rgba(255,255,255,.3)" }}>
+                color:tab===t.id?"#3b82f6":cs.muted }}>
                 {isAr?t.ar:t.en}
               </span>
             )}
@@ -3226,8 +3226,8 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
         <button onClick={()=>setShowMore(o=>!o)}
           style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center",
             gap:3, padding:"4px 0", background:"none", border:"none", cursor:"pointer" }}>
-          <span style={{ fontSize:17, color:showMore?"#3b82f6":"rgba(255,255,255,.3)" }}>⋯</span>
-          <span style={{ fontSize:9, fontWeight:600, color:showMore?"#3b82f6":"rgba(255,255,255,.3)" }}>
+          <span style={{ fontSize:17, color:showMore?"#3b82f6":cs.muted }}>⋯</span>
+          <span style={{ fontSize:9, fontWeight:600, color:showMore?"#3b82f6":cs.muted }}>
             {isAr?"المزيد":"More"}
           </span>
         </button>
@@ -3389,7 +3389,7 @@ export default function HomePage({
                 <Avatar name={u.name||u.email} photo={u.photoURL} size={40}/>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:600, color:"#f0f6ff" }}>{u.name||u.email}</div>
-                  <div style={{ fontSize:12, color:"rgba(255,255,255,.4)" }}>
+                  <div style={{ fontSize:12, color:cs.muted }}>
                     {isAr?"وضعية:":"Score:"} {u.avg_score||0} · {u.department||""}
                   </div>
                 </div>
