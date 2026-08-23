@@ -3680,7 +3680,6 @@ export default function App(){
   async function openPreview(){
     const effectiveMode = mode || "laptop";
     if (!mode) { setMode("laptop"); }
-    console.log("[Corvus] Starting camera in mode:", effectiveMode);
     setCameraStatus("requesting");
     try{
       const facingMode="user"; // Phone mode removed app-wide — always front camera now

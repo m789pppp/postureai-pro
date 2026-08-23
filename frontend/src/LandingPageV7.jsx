@@ -822,7 +822,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
                   <span style={{ fontSize:11.5, color:LPV7_TOKENS.muted, fontFamily:FONT_MONO,
                     background:"rgba(255,255,255,.04)", padding:"3px 14px", borderRadius:6 }}>
-                    postureai-pro-omega-nine.vercel.app
+                    corvus.io
                   </span>
                 </div>
               </div>

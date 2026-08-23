@@ -161,7 +161,7 @@ function drawCard(canvas, data) {
     ctx.font = "13px -apple-system,sans-serif";
     ctx.fillStyle = "#a5b4fc";
     ctx.textAlign = "center";
-    ctx.fillText("🌐 corvus-omega.vercel.app", rx + 155, ctaY + 24);
+    ctx.fillText("🌐 corvus.io", rx + 155, ctaY + 24);
 
     // Date
     ctx.textAlign = "right"; ctx.textBaseline = "alphabetic";
@@ -232,8 +232,8 @@ export function ShareCard({ score, sessions, avgScore, streak, name, lang, onClo
   const share = async () => {
     setSharing(true);
     const text = isAr
-      ? `حققت نتيجة ${score}/100 في وضعية الجسم على Corvus 🧠💪\nجرّب مجاناً: corvus-omega.vercel.app`
-      : `I scored ${score}/100 on posture health with Corvus 🧠💪\nTry free: corvus-omega.vercel.app`;
+      ? `حققت نتيجة ${score}/100 في وضعية الجسم على Corvus 🧠💪\nجرّب مجاناً: corvus.io`
+      : `I scored ${score}/100 on posture health with Corvus 🧠💪\nTry free: corvus.io`;
     try {
       const url  = getDataURL();
       if (url && navigator.canShare) {
