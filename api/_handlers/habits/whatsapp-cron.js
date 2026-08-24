@@ -23,7 +23,18 @@ function getAdmin() {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).end();
+  // Was completely unauthenticated, and required POST — but Vercel Cron
+  // always calls its target via GET (see api/_handlers/misc/symptom-alerts.js's
+  // header comment for the same point), so even if this HAD been added to
+  // vercel.json's crons array, the real cron hit would have 405'd every
+  // time. Meanwhile the missing auth meant anyone who found this URL could
+  // POST to it directly and trigger real, Twilio-billed WhatsApp sends to
+  // every matching user on demand. Gated the same way
+  // symptom-alerts.js is, and no longer POST-only.
+  const vercelCronHeader = req.headers["x-vercel-cron"];
+  if (!vercelCronHeader && process.env.NODE_ENV === "production") {
+    return res.status(401).json({ error: "Not a Vercel Cron request" });
+  }
 
   const TWILIO_SID   = process.env.TWILIO_ACCOUNT_SID;
   const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN;

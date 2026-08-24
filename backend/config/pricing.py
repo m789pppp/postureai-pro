@@ -21,12 +21,16 @@ and USD × 100 (cents) for Stripe.
 # ── B2C (Individual) Pricing — EGP via PayMob ─────────────────────
 # Format: (tier, billing_cycle) → amount_cents
 PAYMOB_PRICES_EGP: dict[tuple[str, str], int] = {
+    # NOTE: B2C yearly = 8x monthly (~33% off), NOT 20% — these comments
+    # said "20% off" for years, which a UI-side audit copied verbatim into
+    # several frontend "Save 20%" labels. B2B below really is ~20% off;
+    # don't copy that pattern up here again.
     ("basic",         "monthly"):    19900,   #   199 EGP/mo
-    ("basic",         "yearly"):    159000,   # 1,590 EGP/yr  (20% off)
+    ("basic",         "yearly"):    159000,   # 1,590 EGP/yr  (~33% off)
     ("professional",  "monthly"):   39900,   #   399 EGP/mo
-    ("professional",  "yearly"):   319000,   # 3,190 EGP/yr  (20% off)
+    ("professional",  "yearly"):   319000,   # 3,190 EGP/yr  (~33% off)
     ("elite",         "monthly"):   69900,   #   699 EGP/mo
-    ("elite",         "yearly"):   559000,   # 5,590 EGP/yr  (20% off)
+    ("elite",         "yearly"):   559000,   # 5,590 EGP/yr  (~33% off)
     # ── B2B (Company) — flat-rate, NOT per-seat ──
     ("b2b_starter",    "monthly"):  249900,   # 2,499 EGP/mo
     ("b2b_starter",    "yearly"):  2399000,   # 23,990 EGP/yr (20% off)

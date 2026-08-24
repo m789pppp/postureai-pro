@@ -24,6 +24,13 @@ import { useState, useEffect } from "react";
 import { apiFetch } from "./services/api.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
+// docs links below were all "docs.corvus.com" — wrong TLD (this product's
+// real, established domain is corvus.io — see support@/sales@corvus.io,
+// app.corvus.io SAML endpoints elsewhere in the app) AND a domain that
+// live-resolves to an unrelated company, not this product. There's no
+// existing "docs." subdomain convention elsewhere in the app to mirror, so
+// these now point at corvus.io/docs/... instead of guessing a second
+// unclaimed subdomain.
 const INTEGRATIONS = [
   {
     id:"slack", name:"Slack", icon:"💬", category:"messaging", status:"available",
@@ -37,7 +44,7 @@ const INTEGRATIONS = [
       { key:"weekly",    label:"Weekly Digest",      placeholder:"",                    type:"toggle" },
       { key:"leaderboard",label:"Monthly Leaderboard",placeholder:"",                  type:"toggle" },
     ],
-    color:"#4A154B", docs:"https://docs.corvus.com/integrations/slack",
+    color:"#4A154B", docs:"https://corvus.io/docs/integrations/slack",
   },
   {
     id:"teams", name:"Microsoft Teams", icon:"🟦", category:"messaging", status:"beta",
@@ -48,7 +55,7 @@ const INTEGRATIONS = [
       { key:"webhook_url",label:"Teams Webhook URL", placeholder:"https://outlook.office.com/webhook/...", type:"text" },
       { key:"threshold",  label:"Alert Threshold",   placeholder:"70",    type:"number" },
     ],
-    color:"#5558AF", docs:"https://docs.corvus.com/integrations/teams",
+    color:"#5558AF", docs:"https://corvus.io/docs/integrations/teams",
     note:"Saves your config for our team to wire up — delivery isn't automated per-org yet.",
   },
   {
@@ -60,7 +67,7 @@ const INTEGRATIONS = [
       { key:"api_key", label:"API Key", placeholder:"pak_live_...", type:"text" },
     ],
     zapierUrl:"https://zapier.com/apps/corvus",
-    color:"#FF4A00", docs:"https://docs.corvus.com/integrations/zapier",
+    color:"#FF4A00", docs:"https://corvus.io/docs/integrations/zapier",
     note:"Enter your Zapier webhook URL to receive Corvus posture events.",
   },
   {
@@ -72,7 +79,7 @@ const INTEGRATIONS = [
       { key:"api_key", label:"API Key", placeholder:"pak_live_...", type:"text" },
     ],
     makeUrl:"https://make.com/en/integrations/corvus",
-    color:"#6D00CC", docs:"https://docs.corvus.com/integrations/make",
+    color:"#6D00CC", docs:"https://corvus.io/docs/integrations/make",
     note:"Enter your Make.com webhook URL to receive Corvus triggers.",
   },
   {
@@ -84,7 +91,7 @@ const INTEGRATIONS = [
       { key:"sheet_id",  label:"Spreadsheet ID",    placeholder:"1BxiM...",      type:"text" },
       { key:"frequency", label:"Export Frequency",  placeholder:"daily",         type:"select", options:["realtime","hourly","daily","weekly"] },
     ],
-    color:"#34A853", docs:"https://docs.corvus.com/integrations/sheets",
+    color:"#34A853", docs:"https://corvus.io/docs/integrations/sheets",
     note:"Saves your config for our team to wire up — export isn't automated yet.",
   },
   {
@@ -97,7 +104,7 @@ const INTEGRATIONS = [
       { key:"api_url",    label:"HRIS API URL",  placeholder:"https://api.bamboohr.com/...", type:"text" },
       { key:"api_key",    label:"HRIS API Key",  placeholder:"•••••",                    type:"password" },
     ],
-    color:"#0F4C81", docs:"https://docs.corvus.com/integrations/hr",
+    color:"#0F4C81", docs:"https://corvus.io/docs/integrations/hr",
     note:"Saves your details for our sales/onboarding team to follow up on.",
   },
   {
@@ -109,7 +116,7 @@ const INTEGRATIONS = [
       { key:"project",  label:"Project Key",  placeholder:"EHS",                           type:"text" },
       { key:"token",    label:"API Token",    placeholder:"•••••",                         type:"password" },
     ],
-    color:"#0052CC", docs:"https://docs.corvus.com/integrations/jira",
+    color:"#0052CC", docs:"https://corvus.io/docs/integrations/jira",
     note:"Saves your config for our team to wire up — ticket creation isn't automated yet.",
   },
   {
@@ -119,7 +126,7 @@ const INTEGRATIONS = [
     configFields:[
       { key:"url",    label:"Endpoint URL",  placeholder:"https://yourapp.com/webhooks/posture", type:"text" },
     ],
-    color:"#6366F1", docs:"https://docs.corvus.com/integrations/webhooks",
+    color:"#6366F1", docs:"https://corvus.io/docs/integrations/webhooks",
   },
 ];
 

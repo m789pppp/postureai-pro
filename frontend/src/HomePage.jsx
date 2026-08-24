@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession, getAuthToken, deleteAuthUser, logOut } from "./firebase.js";
 import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
-import { tierAtLeast } from "./lib/tierQuality.js";
+import { tierAtLeast, featureTier } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
 import { PushAPI, dispatchNotification, FeatureFlagsAPI, BillingAPI, FamilyAPI } from "./services/api.js";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
@@ -20,9 +20,15 @@ import { WeeklyIntelligenceButton, WeeklyIntelligenceModal } from "./WeeklyIntel
 function role(profile, isAdmin, isHRAdmin) {
   if (isAdmin) return "platform_admin";
   // HR/Company: prop OR profile fields
+  // Was also `|| profile?.acct_type === "company"` — see the matching fix
+  // + full explanation on App.jsx's isHRAdmin computation (the isHRAdmin
+  // prop passed in here comes from there). Every employee profile also
+  // carries acct_type:"company", so this line alone was enough to route
+  // every company employee to the full HR-admin dashboard even with the
+  // App.jsx fix in place, since it re-implemented the same wrong check
+  // independently.
   if (isHRAdmin
     || profile?.user_type === "hr_admin"
-    || profile?.acct_type === "company"
     || profile?.is_org_owner === true
   ) return "hr_admin";
   // Employee: belongs to a company but is NOT hr_admin
@@ -39,7 +45,14 @@ function isPro(tier)   { return tierAtLeast(tier, "professional"); }
 function isElite(tier) { return tierAtLeast(tier, "elite"); }
 
 // ─── Avatar (photo or initial + color) ────────────────────────────
-function Avatar({ name, photo, size = 36, style = {} }) {
+// cs was added to every call site's props below when commit b2fd1b5 (the
+// light-mode background pass) replaced these components' hardcoded border
+// colors with cs.border, but that commit never added `cs` to Avatar's own
+// parameter list — every call crashed with "cs is not defined" the moment
+// this component tried to render (which is on essentially every load of
+// the dashboard, since it's used in the default individual/employee/HR
+// home tabs and the sidebar/mobile nav user chip).
+function Avatar({ name, photo, size = 36, style = {}, cs }) {
   const label = (name||"User");
   const ch    = label[0].toUpperCase();
   const hue   = label.split("").reduce((a,c)=>a+c.charCodeAt(0),0) % 360;
@@ -61,7 +74,8 @@ function Avatar({ name, photo, size = 36, style = {} }) {
 }
 
 // ─── Score ring ────────────────────────────────────────────────────
-function Ring({ score = 0, size = 100 }) {
+// Same missing-`cs`-parameter bug as Avatar above — see that comment.
+function Ring({ score = 0, size = 100, cs }) {
   const r    = (size - 12) / 2;
   const circ = 2 * Math.PI * r;
   const pct  = Math.min(100, Math.max(0, score));
@@ -160,7 +174,12 @@ function PainRiskCard({ sessions, cs, isAr }) {
 
   return (
     <div style={{
-      background: `${col}12`, border: `1px solid ${col}44`, borderLeft: `4px solid ${col}`,
+      // Was a hardcoded borderLeft accent stripe regardless of language —
+      // in RTL the stripe should sit on the same side the text starts
+      // from, matching how this convention is applied elsewhere in the app.
+      background: `${col}12`, border: `1px solid ${col}44`,
+      borderLeft: isAr ? "none" : `4px solid ${col}`,
+      borderRight: isAr ? `4px solid ${col}` : "none",
       borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "flex-start", gap: 12,
     }}>
       <span style={{ fontSize: 22, lineHeight: 1 }}>{icon}</span>
@@ -254,9 +273,24 @@ function ToolBtn({ icon, label, desc, color, onClick, locked, lockLabel="PRO", o
 
 // ─── Tier badge ────────────────────────────────────────────────────
 function TierBadge({ tier }) {
-  const map = { elite:["#10b981","Elite ✦"], business:["#a855f7","Business"],
-    professional:["#3b82f6","Pro"], standard:["#64748b","Free"] };
-  const [col,label]=map[tier]||map.standard;
+  // Keyed by featureTier()'s actual 4-rung ladder output (standard/basic/
+  // professional/elite — see lib/tierQuality.js LEVELS). The map used to
+  // have a "business" key instead of "basic": featureTier() never returns
+  // "business" (raw tier "business" itself maps to "elite" on the ladder),
+  // so that entry was dead code, while real Basic-tier users (raw tier
+  // "basic"/"personal_basic"/"starter") hit the missing "basic" key, fell
+  // through to the `||map.standard` fallback, and showed "Free" despite
+  // paying for Basic.
+  const map = { elite:["#10b981","Elite ✦"], professional:["#3b82f6","Pro"],
+    basic:["#a855f7","Basic"], standard:["#64748b","Free"] };
+  // Was a raw lookup on the literal `tier` string, so any B2B account
+  // (tier="b2b_starter"/"b2b_growth"/"b2b_enterprise" — real, paid plans,
+  // see Billing.jsx/PricingPage.jsx) fell through to map.standard and
+  // showed as "Free" despite paying. Route through the same canonical
+  // featureTier() ladder every other tier check in this file already uses
+  // (isPro/isElite above, tierAtLeast throughout) so B2B plans map onto
+  // their equivalent B2C badge instead of being silently ignored.
+  const [col,label]=map[featureTier(tier)]||map.standard;
   return <span style={{ fontSize:10, fontWeight:700, color:col,
     background:`${col}18`, padding:"2px 8px", borderRadius:99,
     border:`1px solid ${col}40` }}>{label}</span>;
@@ -281,7 +315,10 @@ function AnalyticsInline({ userSessions = [], profile, cs, isAr, tier, onOpenFul
   const dist = useMemo(()=>{
     const ex=userSessions.filter(s=>(s.avg_score||0)>=80).length;
     const gd=userSessions.filter(s=>(s.avg_score||0)>=60&&(s.avg_score||0)<80).length;
-    const pr=userSessions.filter(s=>(s.avg_score||0)>0&&(s.avg_score||0)<60).length;
+    // Was `>0` — a session that scored exactly 0 (the worst possible score)
+    // fell out of all three buckets, so it silently vanished from the
+    // distribution chart entirely instead of counting as "Poor".
+    const pr=userSessions.filter(s=>(s.avg_score||0)>=0&&(s.avg_score||0)<60).length;
     const total=ex+gd+pr||1;
     return { ex, gd, pr, total };
   },[userSessions]);
@@ -347,8 +384,15 @@ function AnalyticsInline({ userSessions = [], profile, cs, isAr, tier, onOpenFul
               { label:isAr?"الاتجاه":"Trend", val:trend>0?`+${trend}`:trend===0?"—":trend, col:trend>0?"#10b981":trend<0?"#ef4444":"#64748b" },
               { label:isAr?"إجمالي الجلسات":"Sessions", val:profile?.sessions_count||userSessions.length, col:"#a855f7" },
             ].map((k,i)=>(
+              // Was a hardcoded borderRight — in this 4-col grid under dir="rtl"
+              // the DOM order stays 0..3 but the grid track's PHYSICAL right
+              // edge is the visual outer edge, not the shared inner edge with
+              // the next item, so the dividers landed on the wrong side of
+              // each cell. Flips to borderLeft for Arabic like the rest of
+              // this file's isAr convention.
               <div key={i} style={{ padding:"12px 14px",
-                borderRight:i<3?`1px solid ${cs.border}`:"none",
+                borderRight:(!isAr&&i<3)?`1px solid ${cs.border}`:"none",
+                borderLeft:(isAr&&i<3)?`1px solid ${cs.border}`:"none",
                 borderTop:`1px solid ${cs.border}` }}>
                 <div style={{ fontSize:9, color:cs.muted, textTransform:"uppercase",
                   letterSpacing:".07em", fontWeight:600, marginBottom:4 }}>{k.label}</div>
@@ -478,7 +522,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
             main "at a glance" gauge showed a colored arc with no indication
             of what score it represented. */}
         <div style={{ position:"relative", width:104, height:104, flexShrink:0 }}>
-          <Ring score={last||avg} size={104}/>
+          <Ring score={last||avg} size={104} cs={cs}/>
           <div style={{ position:"absolute", inset:0, display:"flex",
             flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
             <div style={{ fontSize:26, fontWeight:900, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
@@ -489,14 +533,18 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
         </div>
         <div style={{ flex:1, minWidth:180 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-            <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36}/>
+            <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={36} cs={cs}/>
             <div>
               <div style={{ fontSize:18, fontWeight:800, color:cs.text, lineHeight:1.1 }}>
-                {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || ""}!`:`Hey, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
+                {/* Arabic branch fell back to "" instead of a word (unlike the
+                    English "there"), producing a broken-looking "أهلاً, !"
+                    for any user with no name/displayName/email prefix. */}
+                {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || "بيك"}!`:`Hey, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
               </div>
               <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:3 }}>
                 <TierBadge tier={tier}/>
-                {streak>0&&<span style={{ fontSize:10, color:"#f59e0b", fontWeight:600 }}>🔥 {streak}d</span>}
+                {/* "d" suffix was hardcoded English even in Arabic mode. */}
+                {streak>0&&<span style={{ fontSize:10, color:"#f59e0b", fontWeight:600 }}>🔥 {streak}{isAr?" يوم":"d"}</span>}
               </div>
             </div>
           </div>
@@ -561,10 +609,17 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 
       {/* Stats */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
-        <StatCard label={isAr?"آخر جلسة":"Last Session"} value={last||"—"} color={gradeColor(last)} cs={cs}/>
+        {/* gradeColor(0) falls into the "s>=60? ... : red" branch, so a
+            brand-new user with zero sessions (last===0, already shown as
+            "—" above) got a red/danger-colored stat card on their very
+            first visit — nothing is actually bad yet. */}
+        <StatCard label={isAr?"آخر جلسة":"Last Session"} value={last||"—"} color={last?gradeColor(last):cs.muted} cs={cs}/>
         <StatCard label={isAr?"المتوسط":"Average"} value={avg||"—"} color="#3b82f6" cs={cs}/>
         <StatCard label={isAr?"هذا الشهر":"This Month"} value={month||"—"} sub={isAr?"جلسة":"sessions"} color="#f59e0b" cs={cs}/>
-        <StatCard label={isAr?"الإجمالي":"Total"} value={(profile?.sessions_count ?? userSessions.length)||"—"} sub={isAr?"جلسة":"sessions"} color="#a855f7" cs={cs}/>
+        {/* Was `??` here vs `||` at every other sessions_count fallback in this
+            file (lines 374/1014/1384) — harmless in practice but inconsistent;
+            aligned to the same convention used everywhere else. */}
+        <StatCard label={isAr?"الإجمالي":"Total"} value={(profile?.sessions_count||userSessions.length)||"—"} sub={isAr?"جلسة":"sessions"} color="#a855f7" cs={cs}/>
       </div>
 
       {/* Week chart */}
@@ -672,6 +727,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
         cs={cs}
         isAr={isAr}
         addToast={addToast}
+        tier={tier}
       />
 
       {/* Session history */}
@@ -721,7 +777,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 // ══════════════════════════════════════════════════════════════════
 // EMPLOYEE DASHBOARD
 // ══════════════════════════════════════════════════════════════════
-function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage, startCamera, onCoach, addToast, tier, tab }) {
+function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage, startCamera, onCoach, addToast, tier, tab, setTab }) {
   const last    = userSessions[0]?.avg_score || 0;
   const avg     = profile?.avg_score || (userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0);
   const streak  = profile?.streak_days || 0;
@@ -741,7 +797,11 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
   if(tab==="coach"){
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14, padding:"24px",
+        {/* Was two `background` keys in the same object — JS silently kept
+            only the second (gradient), so `background:cs.card` was dead
+            code. Kept the gradient (translucent, reads fine on both
+            themes over cs.bg) and dropped the unreachable one. */}
+        <div style={{ border:`1px solid ${cs.border}`, borderRadius:14, padding:"24px",
           background:"linear-gradient(135deg,rgba(99,102,241,.1),rgba(8,145,178,.06))" }}>
           <div style={{ fontSize:28, marginBottom:8 }}>🤖</div>
           <div style={{ fontSize:20, fontWeight:800, color:cs.text, marginBottom:4 }}>
@@ -849,14 +909,17 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
               const col=gradeColor(sc);
               const realIdx=teamSorted.findIndex(x=>x.uid===u.uid||x.id===u.id);
               return (
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:10,
+                // Was key={i} — this list re-sorts live as scores change,
+                // so an index key let React reuse a row (Avatar included)
+                // for a different teammate across re-renders.
+                <div key={u.uid||u.id||i} style={{ display:"flex", alignItems:"center", gap:10,
                   padding:"10px 12px", borderRadius:9,
                   background:isMe?"rgba(59,130,246,.1)":cs.inp,
                   border:`1px solid ${isMe?"rgba(59,130,246,.35)":cs.border}` }}>
                   <div style={{ width:26, textAlign:"center", fontSize:13, color:cs.muted, fontWeight:700, flexShrink:0 }}>
                     {realIdx===0?"🥇":realIdx===1?"🥈":realIdx===2?"🥉":`#${realIdx+1}`}
                   </div>
-                  <Avatar name={u.name||u.email} photo={u.photoURL} size={30}/>
+                  <Avatar name={u.name||u.email} photo={u.photoURL} size={30} cs={cs}/>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight:isMe?700:500,
                       color:isMe?"#60a5fa":cs.text,
@@ -916,7 +979,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
         border:"1px solid rgba(59,130,246,.18)", borderRadius:16, padding:"22px 24px" }}>
         <div style={{ display:"flex", alignItems:"flex-start", gap:14, flexWrap:"wrap" }}>
           <div style={{ position:"relative", width:80, height:80, flexShrink:0 }}>
-            <Ring score={last||avg} size={80}/>
+            <Ring score={last||avg} size={80} cs={cs}/>
             <div style={{ position:"absolute", inset:0, display:"flex",
               flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
               <div style={{ fontSize:20, fontWeight:900, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
@@ -1016,7 +1079,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
         <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"16px 18px" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"آخر الجلسات":"Recent Sessions"}</div>
-            <button onClick={()=>{/* setTab("sessions") handled via sidebar */}}
+            <button onClick={()=>setTab?.("sessions")}
               style={{ fontSize:11, color:"#60a5fa", background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
               {isAr?"عرض الكل ←":"View all →"}
             </button>
@@ -1067,14 +1130,15 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
               const isMe=u.uid===profile?.uid||u.id===profile?.uid;
               const sc=u.avg_score||0;
               return (
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:9,
+                // Same live-resort index-key issue as the full leaderboard above.
+                <div key={u.uid||u.id||i} style={{ display:"flex", alignItems:"center", gap:9,
                   padding:"8px 11px", borderRadius:8,
                   background:isMe?"rgba(59,130,246,.08)":cs.inp,
                   border:`1px solid ${isMe?"rgba(59,130,246,.3)":cs.border}` }}>
                   <div style={{ width:20, textAlign:"center", fontSize:12, color:cs.muted, fontWeight:700, flexShrink:0 }}>
                     {i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}
                   </div>
-                  <Avatar name={u.name||u.email} photo={u.photoURL} size={26}/>
+                  <Avatar name={u.name||u.email} photo={u.photoURL} size={26} cs={cs}/>
                   <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                     <span style={{ fontSize:12.5, fontWeight:isMe?700:500, color:isMe?"#60a5fa":cs.text }}>
                       {u.name||u.email?.split("@")[0]}
@@ -1098,7 +1162,8 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
 // HR ADMIN DASHBOARD
 // ══════════════════════════════════════════════════════════════════
 function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
-  onAnalytics, onWorkforce, onReports, onQuarterlyReport, onDevPortal, onInsurance }) {
+  onAnalytics, onWorkforce, onReports, onQuarterlyReport, onDevPortal, onInsurance,
+  tier, tab }) {
   const [search, setSearch]   = useState("");
   const [dept,   setDept]     = useState("all");
   const [sortBy, setSortBy]   = useState("score"); // score | name | sessions
@@ -1123,23 +1188,64 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
   const active  = users.filter(u=>u.last_session_at).length;
   const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":s>0?"#ef4444":cs.muted;
 
+  // Was duplicated inline on the "🔔 Alerts" ToolBtn only — the risk-alert
+  // banner's own "Send Alert" button just showed a canned success toast
+  // with no dispatchNotification call at all, so an HR admin who clicked
+  // it believed at-risk employees were notified when nothing was sent.
+  // Both buttons now share this one real implementation.
+  async function sendRiskAlerts(){
+    const atRiskUsers = users.filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50);
+    if(!atRiskUsers.length){ addToast(isAr?"مفيش حد في خطر دلوقتي":"No one is currently at risk","info"); return; }
+    const results = await Promise.allSettled(atRiskUsers.map(u =>
+      dispatchNotification({
+        type: "posture_warning",
+        channels: ["in_app"],
+        payload: {
+          recipients: "uid",
+          uid: u.uid || u.id,
+          body: isAr
+            ? `درجة وضعيتك ${u.avg_score||0}/100 — محتاجة انتباه`
+            : `Your posture score is ${u.avg_score||0}/100 — worth a look`,
+          actions: [{ label: isAr?"عرض":"View", key:"view" }],
+        },
+      })
+    ));
+    const sent = results.filter(r=>r.status==="fulfilled").length;
+    const failed = results.length - sent;
+    if(failed===0) addToast(isAr?`تم إرسال ${sent} تنبيه`:`Sent ${sent} alert${sent!==1?"s":""}`,"success");
+    else addToast(isAr?`اتبعت ${sent} وفشل ${failed}`:`Sent ${sent}, ${failed} failed`, sent>0?"info":"error");
+  }
+
+  // "Overview" (tab==="home") and "Employees" (tab==="employees") used to
+  // render the exact same content — DashHR never received `tab` at all, so
+  // clicking either nav item changed only the active-nav highlight, not
+  // what was on screen. "Employees" now skips straight to the always-
+  // present searchable table below instead of duplicating "Overview".
+  const employeesOnly = tab==="employees";
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      {!employeesOnly && <>
       {/* Company header */}
       <div style={{ background:"linear-gradient(135deg,rgba(26,86,219,.1),rgba(8,145,178,.06))",
         border:"1px solid rgba(59,130,246,.2)", borderRadius:14, padding:"20px 22px",
         display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
-        <Avatar name={profile?.company||profile?.name} size={48}/>
+        <Avatar name={profile?.company||profile?.name} size={48} cs={cs}/>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:11, color:"#60a5fa", fontWeight:600, textTransform:"uppercase",
             letterSpacing:".07em", marginBottom:3 }}>
             {isAr?"لوحة إدارة الشركة":"Company Admin Dashboard"}
           </div>
-          <div style={{ fontSize:20, fontWeight:800, color:"#f0f6ff" }}>
+          <div style={{ fontSize:20, fontWeight:800, color:cs.text }}>
             {profile?.company||(isAr?"شركتي":"My Company")}
           </div>
           <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>
-            {users.length} {isAr?"موظف":"employees"} · <TierBadge tier={profile?.tier||"standard"}/>
+            {/* Was raw profile?.tier — the non-trial-aware Firestore field.
+                DashEmployee already receives the trial-aware `tier`
+                (App.jsx's effectiveTier) for exactly this reason; DashHR
+                was missed, so an HR admin mid-trial saw "Free" instead of
+                their real trial tier. */}
+            {users.length} {isAr?"موظف":"employees"} · <TierBadge tier={tier||profile?.tier||"standard"}/>
           </div>
         </div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -1185,28 +1291,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
             desc={isAr?"خصم تأمين":"Partner discount"} onClick={onInsurance} cs={cs}/>
           <ToolBtn icon="🔔" label={isAr?"تنبيهات":"Alerts"} color="245,158,11"
             desc={isAr?`${atRisk} في خطر`:`${atRisk} at risk`}
-            onClick={async()=>{
-              const atRiskUsers = users.filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50);
-              if(!atRiskUsers.length){ addToast(isAr?"مفيش حد في خطر دلوقتي":"No one is currently at risk","info"); return; }
-              const results = await Promise.allSettled(atRiskUsers.map(u =>
-                dispatchNotification({
-                  type: "posture_warning",
-                  channels: ["in_app"],
-                  payload: {
-                    recipients: "uid",
-                    uid: u.uid || u.id,
-                    body: isAr
-                      ? `درجة وضعيتك ${u.avg_score||0}/100 — محتاجة انتباه`
-                      : `Your posture score is ${u.avg_score||0}/100 — worth a look`,
-                    actions: [{ label: isAr?"عرض":"View", key:"view" }],
-                  },
-                })
-              ));
-              const sent = results.filter(r=>r.status==="fulfilled").length;
-              const failed = results.length - sent;
-              if(failed===0) addToast(isAr?`تم إرسال ${sent} تنبيه`:`Sent ${sent} alert${sent!==1?"s":""}`,"success");
-              else addToast(isAr?`اتبعت ${sent} وفشل ${failed}`:`Sent ${sent}, ${failed} failed`, sent>0?"info":"error");
-            }} cs={cs}/>
+            onClick={sendRiskAlerts} cs={cs}/>
         </div>
       </div>
 
@@ -1220,16 +1305,22 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
               {isAr?`${atRisk} موظف في خطر (وضعية < 50)`:`${atRisk} employees at risk (score < 50)`}
             </div>
             <div style={{ fontSize:11, color:cs.muted }}>
-              {filtered.filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50).map(u=>u.name||u.email?.split("@")[0]).join("، ")||""}
+              {/* Was `filtered` (the search/department-filtered subset shown
+                  in the table below) while the count above uses `users`
+                  (the full company) — typing into search or picking a
+                  department instantly desynced the headline count from
+                  this name list. Both now read from the same `users`. */}
+              {users.filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50).map(u=>u.name||u.email?.split("@")[0]).join("، ")||""}
             </div>
           </div>
-          <button onClick={()=>addToast(isAr?"تم إرسال تنبيهات":"Alerts sent ✓","success")}
+          <button onClick={sendRiskAlerts}
             style={{ padding:"7px 14px", background:"#ef4444", color:"#fff", border:"none",
               borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
             {isAr?"أرسل تنبيه":"Send Alert"}
           </button>
         </div>
       )}
+      </>}
 
       {/* Employee table */}
       <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, overflow:"hidden" }}>
@@ -1269,10 +1360,14 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
             const col=gradeColor(sc);
             const risk=sc>0&&sc<50;
             return (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:10,
+              // Was key={i} — this list re-sorts live (score/name/sessions
+              // dropdown, search, department filter), so an index key let
+              // React reuse a row's DOM (Avatar included) for a different
+              // person across re-renders. Keyed by the user's real id.
+              <div key={u.uid||u.id||i} style={{ display:"flex", alignItems:"center", gap:10,
                 padding:"10px 16px", borderBottom:`1px solid ${cs.border}`,
                 background:risk?"rgba(239,68,68,.03)":"transparent" }}>
-                <Avatar name={u.name||u.email} photo={u.photoURL} size={32}/>
+                <Avatar name={u.name||u.email} photo={u.photoURL} size={32} cs={cs}/>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:cs.text,
                     overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
@@ -1286,7 +1381,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
                     {u.department||u.email||"—"}
                   </div>
                 </div>
-                <div style={{ textAlign:"right", flexShrink:0 }}>
+                <div style={{ textAlign:isAr?"left":"right", flexShrink:0 }}>
                   <div style={{ fontSize:17, fontWeight:800, color:col }}>{sc||"—"}</div>
                   <div style={{ fontSize:9, color:cs.muted }}>{u.sessions_count||0} sess</div>
                 </div>
@@ -1302,7 +1397,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
-function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onPostureDNA, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false }) {
+function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onPostureDNA, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false, addToast }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
   const [showWeeklyIntel, setShowWeeklyIntel] = useState(false);
@@ -1320,23 +1415,44 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
   const bestScore = Math.max(...userSessions.map(s=>s.avg_score||0));
   const totalMins = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
 
-  const normTier    = (tier||"standard").toLowerCase();
-  const isProTier   = ["professional","elite"].includes(normTier);
+  // Was a literal ["professional","elite"].includes(normTier) check — missed
+  // every B2B tier (b2b_starter/b2b_growth/b2b_enterprise) and legacy B2C
+  // aliases (pro/premium/personal_pro/personal_elite/growth/enterprise/
+  // business/etc, see lib/tierQuality.js), silently denying PDF export/
+  // Compare to paying customers on those tiers and (via handlePDF below)
+  // routing their Clinical PDF button into the "upgrade" path instead of
+  // actually generating a clinical PDF. isPro()/isElite() both already
+  // route through the canonical featureTier() ladder.
+  const isProTier   = isPro(tier);
   const isEliteTier = isElite(tier); // handles b2b_enterprise + trial tiers
 
   async function handlePDF(s, i, clinical=false) {
     if (!isProTier) { onDownloadPDF?.(null); return; } // triggers billing in App.jsx
     setPdfLoading((s.id||i)+(clinical?"_c":""));
-    if (clinical) await onDownloadClinicalPDF?.(s);
-    else          await onDownloadPDF?.(s);
-    setPdfLoading(null);
+    // Was missing try/catch — a thrown/rejected download left pdfLoading
+    // stuck forever, permanently disabling this row's button until reload.
+    try {
+      if (clinical) await onDownloadClinicalPDF?.(s);
+      else          await onDownloadPDF?.(s);
+    } catch(e) {
+      console.error("[PDF]", e);
+      addToast?.(isAr?"فشل تنزيل PDF":"PDF download failed", "error");
+    } finally {
+      setPdfLoading(null);
+    }
   }
 
   async function handleDelete(s) {
     if(!window.confirm(isAr?"هل تريد حذف هذه الجلسة نهائياً؟":"Delete this session permanently?")) return;
     setDeleting(s.id);
-    await onDeleteSession?.(s.id);
-    setDeleting(null);
+    try {
+      await onDeleteSession?.(s.id);
+    } catch(e) {
+      console.error("[Delete session]", e);
+      addToast?.(isAr?"فشل حذف الجلسة":"Failed to delete session", "error");
+    } finally {
+      setDeleting(null);
+    }
   }
 
   return (
@@ -1404,11 +1520,17 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
         {isProTier && userSessions.length >= 2 && (
           <button onClick={async ()=>{
               setPdfLoading("compare");
-              // Compare latest vs previous session (most meaningful comparison)
-              const s1 = userSessions[1]; // previous (older)
-              const s2 = userSessions[0]; // latest (newer)
-              await onComparisonPDF?.(s1, s2);
-              setPdfLoading(null);
+              try {
+                // Compare latest vs previous session (most meaningful comparison)
+                const s1 = userSessions[1]; // previous (older)
+                const s2 = userSessions[0]; // latest (newer)
+                await onComparisonPDF?.(s1, s2);
+              } catch(e) {
+                console.error("[Comparison PDF]", e);
+                addToast?.(isAr?"فشل إنشاء تقرير المقارنة":"Comparison report failed", "error");
+              } finally {
+                setPdfLoading(null);
+              }
             }}
             disabled={pdfLoading==="compare"}
             style={{ padding:"9px 14px", background:"rgba(139,92,246,.1)",
@@ -1424,8 +1546,14 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
         {isEliteTier && userSessions.length >= 5 && (
           <button onClick={async ()=>{
               setPdfLoading("longitudinal");
-              await onLongitudinalPDF?.();
-              setPdfLoading(null);
+              try {
+                await onLongitudinalPDF?.();
+              } catch(e) {
+                console.error("[Longitudinal PDF]", e);
+                addToast?.(isAr?"فشل إنشاء التقرير الطولي":"Longitudinal report failed", "error");
+              } finally {
+                setPdfLoading(null);
+              }
             }}
             disabled={pdfLoading==="longitudinal"}
             style={{ padding:"9px 14px", background:"rgba(245,158,11,.1)",
@@ -1462,8 +1590,14 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
         {isEliteTier && userSessions.length >= 1 && (
           <button onClick={async ()=>{
               setPdfLoading("share");
-              await onShareReport?.(userSessions[0]);
-              setPdfLoading(null);
+              try {
+                await onShareReport?.(userSessions[0]);
+              } catch(e) {
+                console.error("[Share Report]", e);
+                addToast?.(isAr?"فشلت مشاركة الجلسة":"Failed to share session", "error");
+              } finally {
+                setPdfLoading(null);
+              }
             }}
             disabled={pdfLoading==="share"}
             style={{ padding:"9px 14px", background:"rgba(99,102,241,.1)",
@@ -1477,8 +1611,14 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
         {isHRAdmin && (
           <button onClick={async ()=>{
               setPdfLoading("team");
-              await onTeamPDF?.();
-              setPdfLoading(null);
+              try {
+                await onTeamPDF?.();
+              } catch(e) {
+                console.error("[Team PDF]", e);
+                addToast?.(isAr?"فشل إنشاء تقرير الفريق":"Team report failed", "error");
+              } finally {
+                setPdfLoading(null);
+              }
             }}
             disabled={pdfLoading==="team"}
             style={{ padding:"9px 14px", background:"rgba(16,185,129,.1)",
@@ -1532,8 +1672,13 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
                 <span style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:99,
                   background:`${col}18`, color:col }}>{grade(sc,isAr)}</span>
                 {/* PDF button — Pro+ only */}
+                {/* isLoadingPDF is already the boolean `pdfLoading === (s.id||i)` from
+                    above — this button used to compare it AGAIN to (s.id||i), i.e. a
+                    boolean === string/number, which is always false, so it never
+                    actually disabled itself and rapid double-clicks could fire
+                    handlePDF twice. */}
                 <button onClick={()=>handlePDF(s, totalSessions-i)}
-                  disabled={isLoadingPDF===((s.id||i))}
+                  disabled={isLoadingPDF}
                   title={isProTier?(isAr?"تنزيل PDF":"Download PDF"):(isAr?"PDF — Pro & Elite":"PDF — Pro & Elite")}
                   style={{ padding:"6px 10px",
                     background: isProTier?(isEliteTier?"rgba(16,185,129,.1)":"rgba(26,86,219,.12)"):"rgba(99,102,241,.08)",
@@ -1620,6 +1765,11 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
+  // Was document.querySelector('input[type=file]') — grabs the FIRST file
+  // input anywhere in the whole page's DOM, not necessarily this avatar
+  // picker's own input (this file has other file inputs, e.g. the family
+  // invite import below). A ref targets the exact element.
+  const avatarFileRef = useRef(null);
 
   const [tab,     setTab]     = useState("profile");
   const [linkingGoogle, setLinkingGoogle] = useState(false);
@@ -1777,14 +1927,14 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               ? <img src={profile.photoURL} alt="avatar"
                   style={{ width:72, height:72, borderRadius:"50%",
                     objectFit:"cover", border:`2px solid ${cs.border}` }}/>
-              : <Avatar name={profile?.name||profile?.email} photo={null} size={72}/>}
+              : <Avatar name={profile?.name||profile?.email} photo={null} size={72} cs={cs}/>}
             <label title={isAr?"تغيير الصورة":"Change photo"}
-              style={{ position:"absolute", bottom:0, right:0, width:24, height:24,
+              style={{ position:"absolute", bottom:0, right:isAr?"auto":0, left:isAr?0:"auto", width:24, height:24,
                 background:"#1a56db", borderRadius:"50%", cursor:"pointer",
                 display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:12, border:"2px solid rgba(4,9,20,1)" }}>
+                fontSize:12, border:`2px solid ${cs.card}` }}>
               📷
-              <input type="file" accept="image/*" style={{ display:"none" }}
+              <input ref={avatarFileRef} type="file" accept="image/*" style={{ display:"none" }}
                 onChange={async e=>{
                   const file=e.target.files[0]; if(!file) return;
                   if(file.size>5*1024*1024){ addToast(isAr?"الصورة أكبر من 5MB":"Image > 5MB","error"); return; }
@@ -1810,7 +1960,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             </label>
           </div>
           <span style={{ fontSize:10, color:"#3b82f6", cursor:"pointer", fontWeight:500 }}
-            onClick={()=>document.querySelector('input[type=file]')?.click()}>
+            onClick={()=>avatarFileRef.current?.click()}>
             {isAr?"تغيير الصورة":"Change photo"}
           </span>
         </div>
@@ -1893,10 +2043,17 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 value={profile?.profession || "other"}
                 onChange={async e=>{
                   const val = e.target.value;
+                  const prevVal = profile?.profession || "other";
                   setProfile(p=>({...(p||{}), profession: val}));
                   try {
                     if (user?.uid) await updateUserProfile(user.uid, { profession: val });
-                  } catch { addToast(isAr?"تعذر حفظ المهنة":"Couldn't save profession","error"); }
+                  } catch {
+                    // Was a fire-and-forget optimistic update — on failure it showed
+                    // an error toast but left the dropdown on the unsaved value, so
+                    // the UI silently disagreed with what's actually stored.
+                    setProfile(p=>({...(p||{}), profession: prevVal}));
+                    addToast(isAr?"تعذر حفظ المهنة":"Couldn't save profession","error");
+                  }
                 }}
                 style={{ width:"100%", padding:"10px 12px", background:cs.inp,
                   border:`1px solid ${cs.border}`, borderRadius:8, color:cs.text,
@@ -2171,7 +2328,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                         padding:"2px 7px", borderRadius:20, fontWeight:700 }}>{plan.tag}</span>
                     </div>
                     <div style={{ textAlign:"right" }}>
-                      <span style={{ fontSize:15, fontWeight:900, color:"#f0f6ff" }}>
+                      <span style={{ fontSize:15, fontWeight:900, color:cs.text }}>
                         {currency==="EGP" ? `${plan.priceEGP} EGP` : `$${plan.priceUSD}`}
                       </span>
                       <span style={{ fontSize:10, color:cs.muted }}> /{isAr?"شهر":"mo"}</span>
@@ -2522,10 +2679,18 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
                   display:"flex", justifyContent:"space-between", alignItems:"center",
                   padding:"8px 12px", background:cs.inp, borderRadius:8, cursor:"pointer" }}>
                   <span style={{ fontSize:12.5, color:cs.text }}>{isAr?label.ar:label.en}</span>
+                  {/* OFF track used to be cs.inp — identical to this row's own
+                      background two lines up, so the whole switch vanished
+                      when off. cs.border reads as a visible, muted track
+                      against both light and dark themes. Knob position is
+                      also now RTL-mirrored like the rest of this file's
+                      left/right convention. */}
                   <div style={{ width:36, height:20, borderRadius:99, position:"relative", transition:"background-color .15s",
-                    background: prefs.categories?.[key]!==false ? "#10b981" : cs.inp }}>
+                    background: prefs.categories?.[key]!==false ? "#10b981" : cs.border }}>
                     <div style={{ width:16, height:16, borderRadius:"50%", background:"#fff", position:"absolute", top:2,
-                      left: prefs.categories?.[key]!==false ? 18 : 2, transition:"left .15s" }} />
+                      left: isAr ? "auto" : (prefs.categories?.[key]!==false ? 18 : 2),
+                      right: isAr ? (prefs.categories?.[key]!==false ? 18 : 2) : "auto",
+                      transition:"left .15s, right .15s" }} />
                   </div>
                 </div>
               ))}
@@ -2563,8 +2728,17 @@ function FamilyPartnerSettings({ cs, isAr, tier, onUpgrade, addToast }) {
   };
   useEffect(() => { load(); }, []);
 
+  // Was only checking non-empty — any garbage string reached FamilyAPI.invite()
+  // and surfaced as a generic backend error instead of an inline validation hint.
+  const isValidEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
   const sendInvite = async () => {
-    if (!email.trim() || sending) return;
+    const trimmed = email.trim();
+    if (!trimmed || sending) return;
+    if (!isValidEmail(trimmed)) {
+      addToast?.(isAr ? "إيميل غير صالح" : "Enter a valid email address", "error");
+      return;
+    }
     setSending(true);
     try {
       const res = await FamilyAPI.invite(email.trim());
@@ -2649,9 +2823,9 @@ function FamilyPartnerSettings({ cs, isAr, tier, onUpgrade, addToast }) {
             placeholder={isAr?"إيميل الشريك/فرد العيلة":"Partner/family member's email"}
             style={{ flex:1, padding:"9px 12px", background:cs.inp, border:`1px solid ${cs.border}`,
               borderRadius:8, color:cs.text, fontSize:12.5, outline:"none" }} />
-          <button onClick={sendInvite} disabled={sending || !email.trim()} style={{ padding:"9px 16px",
-            background: email.trim() ? "#1a56db" : "rgba(26,86,219,.3)", border:"none", borderRadius:8,
-            color:"#fff", fontSize:12, fontWeight:700, cursor: email.trim() ? "pointer" : "default" }}>
+          <button onClick={sendInvite} disabled={sending || !isValidEmail(email)} style={{ padding:"9px 16px",
+            background: isValidEmail(email) ? "#1a56db" : "rgba(26,86,219,.3)", border:"none", borderRadius:8,
+            color:"#fff", fontSize:12, fontWeight:700, cursor: isValidEmail(email) ? "pointer" : "default" }}>
             {sending ? "…" : (isAr?"ادعُ":"Invite")}
           </button>
         </div>
@@ -2981,8 +3155,15 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const [hov, setHov] = useState(null);
 
   return (
-    <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0, left:0,
-      background:"rgba(4,9,20,.98)", borderRight:`1px solid ${cs.border}`, zIndex:50,
+    // Was hardcoded to always-dark background + a fixed `left:0`. The inner
+    // nav items/dividers/hover states already read from `cs`/`isAr` (see
+    // below) — only this outer shell was left behind when the rest of the
+    // file's light-mode/RTL passes landed, so the persistent nav rail
+    // stayed pinned black-and-left-edge even in light mode / Arabic.
+    <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0,
+      left:isAr?"auto":0, right:isAr?0:"auto",
+      background:cs.card, borderRight:isAr?"none":`1px solid ${cs.border}`,
+      borderLeft:isAr?`1px solid ${cs.border}`:"none", zIndex:50,
       display:"flex", flexDirection:"column" }}>
 
       {/* Logo */}
@@ -2992,12 +3173,18 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
             borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center",
             fontSize:16, flexShrink:0 }}>◈</div>
           <div>
-            <div style={{ fontSize:13, fontWeight:800, color:"#f0f6ff", letterSpacing:"-.01em" }}>Corvus</div>
+            <div style={{ fontSize:13, fontWeight:800, color:cs.text, letterSpacing:"-.01em" }}>Corvus</div>
             <div style={{ fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em",
               color: userRole==="platform_admin"?"#f87171":
                      userRole==="hr_admin"?"#34d399":
                      userRole==="employee"?"#60a5fa":"#3b82f6" }}>
-              {tier==="elite"?"Elite ✦":tier==="professional"?"Pro":tier==="business"?"Business":"Free"}
+              {/* Was a literal tier==="elite"/"professional"/"business" check —
+                  same bug class already fixed in TierBadge above: missed
+                  every B2B plan and every legacy B2C alias, showing "Free"
+                  for paying users. Routed through the same featureTier()
+                  ladder. */}
+              {(()=>{const ft=featureTier(tier);
+                return ft==="elite"?"Elite ✦":ft==="professional"?"Pro":ft==="basic"?"Basic":"Free";})()}
               {" · "}
               {userRole==="platform_admin"?"🛡 Platform Admin":
                userRole==="hr_admin"?"🏢 Company HR":
@@ -3016,7 +3203,13 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
               onMouseEnter={()=>setHov(item.id)} onMouseLeave={()=>setHov(null)}
               style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
                 padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
-                borderLeft:tab===item.id?"2px solid #3b82f6":"2px solid transparent",
+                // Was a hardcoded borderLeft accent bar — but the whole
+                // sidebar itself flips to the right edge of the screen in
+                // Arabic (see `right:isAr?0:"auto"` on the <aside> above), so
+                // an un-mirrored left accent landed on the sidebar's OUTER
+                // edge in RTL instead of its inner edge next to the content.
+                borderLeft:(!isAr&&tab===item.id)?"2px solid #3b82f6":"2px solid transparent",
+                borderRight:(isAr&&tab===item.id)?"2px solid #3b82f6":"2px solid transparent",
                 background:tab===item.id?"rgba(59,130,246,.1)":hov===item.id?cs.inp:"transparent",
                 color:tab===item.id?"#3b82f6":cs.muted,
                 fontSize:12.5, fontWeight:tab===item.id?700:400, textAlign:isAr?"right":"left", transition:"all .1s" }}>
@@ -3103,9 +3296,9 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
             textAlign:isAr?"right":"left", transition:"background .12s" }}
           onMouseEnter={e=>e.currentTarget.style.background="rgba(59,130,246,.08)"}
           onMouseLeave={e=>e.currentTarget.style.background=cs.inp}>
-          <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={28}/>
+          <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={28} cs={cs}/>
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:11, fontWeight:600, color:"#f0f6ff",
+            <div style={{ fontSize:11, fontWeight:600, color:cs.text,
               overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
               {profile?.name||user?.displayName||profile?.email?.split("@")[0]||"—"}
             </div>
@@ -3151,12 +3344,12 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
         <div style={{ position:"fixed", inset:0, zIndex:299 }} onClick={()=>setShowMore(false)}>
           <div onClick={e=>e.stopPropagation()} style={{
             position:"fixed", bottom:64, left:8, right:8, zIndex:300,
-            background:"rgba(5,16,31,.98)", border:"1px solid rgba(148,163,184,.12)",
+            background:cs.card, border:`1px solid ${cs.border}`,
             borderRadius:16, padding:"16px 12px",
             boxShadow:"0 -8px 40px rgba(0,0,0,.5)",
           }}>
-            <div style={{ fontSize:10, color:"#64748b", fontWeight:700, textTransform:"uppercase",
-              letterSpacing:1, marginBottom:12, paddingLeft:4 }}>
+            <div style={{ fontSize:10, color:cs.muted, fontWeight:700, textTransform:"uppercase",
+              letterSpacing:1, marginBottom:12, paddingLeft:isAr?0:4, paddingRight:isAr?4:0 }}>
               {isAr ? "الأدوات" : "Tools"}
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
@@ -3167,7 +3360,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
                     border:`1px solid ${cs.border}`, borderRadius:10,
                     cursor:"pointer" }}>
                   <span style={{ fontSize:20 }}>{t.icon}</span>
-                  <span style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textAlign:"center",
+                  <span style={{ fontSize:9, color:cs.muted, fontWeight:600, textAlign:"center",
                     lineHeight:1.2 }}>{isAr?t.ar:t.en}</span>
                 </button>
               ))}
@@ -3177,7 +3370,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
                   padding:"10px 6px", background:cs.inp,
                   border:`1px solid ${cs.border}`, borderRadius:10, cursor:"pointer" }}>
                 <span style={{ fontSize:20 }}>⚙️</span>
-                <span style={{ fontSize:9, color:"#94a3b8", fontWeight:600 }}>{isAr?"إعدادات":"Settings"}</span>
+                <span style={{ fontSize:9, color:cs.muted, fontWeight:600 }}>{isAr?"إعدادات":"Settings"}</span>
               </button>
             </div>
           </div>
@@ -3185,7 +3378,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
       )}
 
       <nav style={{ position:"fixed", bottom:0, left:0, right:0, zIndex:200,
-        background:"rgba(4,9,20,1)", borderTop:`1px solid ${cs.border}`,
+        background:cs.card, borderTop:`1px solid ${cs.border}`,
         display:"flex",
         padding:`6px 0 max(6px,env(safe-area-inset-bottom))` }}>
         {tabs.map(t=>(
@@ -3206,7 +3399,8 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
                   {t.icon}
                 </span>
                 {(t.badge||0)>0&&(
-                  <span style={{ position:"absolute", top:0, right:"15%",
+                  <span style={{ position:"absolute", top:0,
+                    left:isAr?"15%":"auto", right:isAr?"auto":"15%",
                     background:"#ef4444", color:"#fff", fontSize:8, fontWeight:700,
                     borderRadius:99, padding:"0 4px", minWidth:14, textAlign:"center" }}>
                     {t.badge}
@@ -3375,7 +3569,7 @@ export default function HomePage({
           addToast={addToast} onBilling={openBilling} onInvite={openInvite}
           onAnalytics={openAnalytics} onWorkforce={openWorkforce} onReports={openReports}
           onQuarterlyReport={onQuarterlyReport}
-          onDevPortal={onDevPortal} onInsurance={onInsurance}/>
+          onDevPortal={onDevPortal} onInsurance={onInsurance} tier={tier} tab={tab}/>
       );
       if(tab==="analytics") { openAnalytics(); setTab("home"); return null; }
       if(tab==="alerts") return (
@@ -3383,17 +3577,37 @@ export default function HomePage({
           {atRisk===0 ? <EmptyBlock icon="✅" cs={cs}
             title={isAr?"لا توجد تنبيهات":"No alerts"}
             desc={isAr?"كل الموظفين بوضعية جيدة":"All employees have healthy posture scores"}/> :
-            (allUsers||[]).filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50).map((u,i)=>(
-              <div key={i} style={{ background:"rgba(239,68,68,.06)", border:"1px solid rgba(239,68,68,.18)",
+            (allUsers||[]).filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50).map((u)=>(
+              <div key={u.uid||u.id} style={{ background:"rgba(239,68,68,.06)", border:"1px solid rgba(239,68,68,.18)",
                 borderRadius:12, padding:"14px 18px", display:"flex", gap:12, alignItems:"center" }}>
-                <Avatar name={u.name||u.email} photo={u.photoURL} size={40}/>
+                <Avatar name={u.name||u.email} photo={u.photoURL} size={40} cs={cs}/>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:600, color:"#f0f6ff" }}>{u.name||u.email}</div>
+                  <div style={{ fontSize:14, fontWeight:600, color:cs.text }}>{u.name||u.email}</div>
                   <div style={{ fontSize:12, color:cs.muted }}>
                     {isAr?"وضعية:":"Score:"} {u.avg_score||0} · {u.department||""}
                   </div>
                 </div>
-                <button onClick={()=>addToast(`${isAr?"تم إرسال تنبيه لـ":"Alert sent to"} ${u.name||u.email}`,"success")}
+                {/* Was a canned success toast with no dispatchNotification
+                    call — same "lies about sending" bug as the risk-alert
+                    banner's button (see sendRiskAlerts above), just for a
+                    single employee instead of the whole at-risk list. */}
+                <button onClick={async()=>{
+                    const ok = await dispatchNotification({
+                      type: "posture_warning",
+                      channels: ["in_app"],
+                      payload: {
+                        recipients: "uid",
+                        uid: u.uid || u.id,
+                        body: isAr
+                          ? `درجة وضعيتك ${u.avg_score||0}/100 — محتاجة انتباه`
+                          : `Your posture score is ${u.avg_score||0}/100 — worth a look`,
+                        actions: [{ label: isAr?"عرض":"View", key:"view" }],
+                      },
+                    }).then(()=>true).catch(()=>false);
+                    addToast(ok
+                      ? `${isAr?"تم إرسال تنبيه لـ":"Alert sent to"} ${u.name||u.email}`
+                      : (isAr?"تعذر إرسال التنبيه":"Couldn't send the alert"), ok?"success":"error");
+                  }}
                   style={{ padding:"7px 14px", background:"#ef4444", color:"#fff",
                     border:"none", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer" }}>
                   {isAr?"أرسل تنبيه":"Alert"}
@@ -3401,6 +3615,21 @@ export default function HomePage({
               </div>
             ))}
         </div>
+      );
+      // Was missing entirely — hr_admin/platform_admin's MobileNav has a
+      // "History" tab (id:"sessions") with no matching case here, so tapping
+      // it fell through past this whole block (it doesn't early-return) all
+      // the way to the *individual* fallback at the bottom of this function,
+      // silently showing the admin's own personal camera-session history
+      // instead of anything the tap was meant to show. Giving it an
+      // explicit case here — same content as the individual fallback, but
+      // now an intentional branch instead of an accidental one.
+      if(tab==="sessions") return (
+        <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
+          setPage={setPage} startCamera={startCamera}
+          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin} addToast={addToast}
+          onDeleteSession={handleDeleteSession}
+          onTrend={handleTrend}/>
       );
     }
 
@@ -3413,22 +3642,28 @@ export default function HomePage({
       if(tab==="home"||tab==="team"||tab==="coach") return (
         <DashEmployee user={user} profile={profile} userSessions={userSessions} allUsers={teamData}
           cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
-          onCoach={openCoach} addToast={addToast} tier={tier} tab={tab}/>
+          onCoach={openCoach} addToast={addToast} tier={tier} tab={tab} setTab={setTab}/>
       );
       if(tab==="sessions") return (
         <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
           setPage={setPage} startCamera={startCamera}
-          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
+          onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin} addToast={addToast}
           onDeleteSession={handleDeleteSession}
           onTrend={handleTrend}/>
       );
     }
 
     // Individual
+    // MobileNav has an "Analytics" tab for this role with no matching case
+    // here — it fell through to the default DashIndividual return below,
+    // identical to "home" (AnalyticsInline is already embedded there, but
+    // tapping this nav item produced no visible change at all). Mirrors how
+    // the hr_admin branch above handles its own "analytics" tab.
+    if(tab==="analytics") { openAnalytics(); setTab("home"); return null; }
     if(tab==="sessions") return (
       <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
         setPage={setPage} startCamera={startCamera}
-        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin}
+        onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin} addToast={addToast}
         onDeleteSession={handleDeleteSession}
         onTrend={handleTrend}/>
     );
@@ -3493,11 +3728,11 @@ export default function HomePage({
           setShowCalibWizard={setShowCalibWizard} setShowDashboard={setShowDashboard}
         />}
 
-      <main style={{ flex:1, minWidth:0, marginLeft:mobile?0:236, display:"flex", flexDirection:"column" }}>
+      <main style={{ flex:1, minWidth:0, marginLeft:mobile?0:(isAr?0:236), marginRight:mobile?0:(isAr?236:0), display:"flex", flexDirection:"column" }}>
         <div style={{ flex:1, overflowY:"auto", paddingBottom:mobile?80:0 }}>
         {/* Topbar */}
         <header style={{ position:"sticky", top:0, zIndex:100,
-          background:"rgba(4,9,20,1)", borderBottom:`1px solid ${cs.border}`,
+          background:cs.card, borderBottom:`1px solid ${cs.border}`,
           padding:"0 20px", height:50,
           display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
           {mobile&&(
@@ -3505,10 +3740,10 @@ export default function HomePage({
               <div style={{ width:26, height:26, background:"linear-gradient(135deg,#1a56db,#0891b2)",
                 borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:14 }}>◈</div>
-              <span style={{ fontSize:13, fontWeight:800, color:"#f0f6ff" }}>Corvus</span>
+              <span style={{ fontSize:13, fontWeight:800, color:cs.text }}>Corvus</span>
             </div>
           )}
-          <div style={{ fontSize:14, fontWeight:700, color:"#f0f6ff" }}>
+          <div style={{ fontSize:14, fontWeight:700, color:cs.text }}>
             {isAr?tabLabels.ar[tab]:tabLabels.en[tab]||"Dashboard"}
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
@@ -3534,7 +3769,7 @@ export default function HomePage({
             ) : (
               <button onClick={()=>setTab("settings")}
                 style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={30}/>
+                <Avatar name={profile?.name||profile?.email} photo={profile?.photoURL} size={30} cs={cs}/>
               </button>
             )}
           </div>

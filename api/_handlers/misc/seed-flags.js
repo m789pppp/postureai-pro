@@ -58,9 +58,12 @@ export default async function handler(req, res) {
     for (const flag of DEFAULT_FLAGS) {
       const ref  = db.collection("feature_flags").doc(flag.id);
       const snap = await ref.get();
-      if (snap.exists() && !force) { results.push({ id: flag.id, action:"skipped" }); continue; }
+      // Same `.exists()` vs `.exists` bug as org-invite.js — a property in
+      // this (Node admin) SDK, not a method. Threw on every call, breaking
+      // this admin utility entirely.
+      if (snap.exists && !force) { results.push({ id: flag.id, action:"skipped" }); continue; }
       batch.set(ref, { ...flag, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { merge: true });
-      results.push({ id: flag.id, action: snap.exists() ? "updated" : "created" });
+      results.push({ id: flag.id, action: snap.exists ? "updated" : "created" });
     }
 
     await batch.commit();

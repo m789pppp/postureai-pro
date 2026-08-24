@@ -1646,6 +1646,11 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
 
   // ── Single source of truth — MUST match App.jsx TIERS/B2B_TIERS,
   //    Billing.jsx PLANS/B2B_PLANS, and PricingPage.jsx exactly ──
+  // Yearly prices below match App.jsx TIERS / B2B_TIERS and
+  // backend/config/pricing.py exactly (a 2-agent audit found this page had
+  // drifted to independently-hardcoded ~20%-off-monthly numbers instead of
+  // the real annual prices actually charged — e.g. Basic showed 1,910 EGP/yr
+  // here but the real charge, everywhere else including checkout, is 1,590).
   const b2cPlans = [
     {
       id:"free", name: ar?"مجاني":"Free",
@@ -1657,7 +1662,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     },
     {
       id:"basic", name: ar?"أساسي":"Basic",
-      priceUSD:{ monthly:9.99, yearly:95.9 }, priceEGP:{ monthly:199, yearly:1910 },
+      priceUSD:{ monthly:9.99, yearly:79.99 }, priceEGP:{ monthly:199, yearly:1590 },
       color:LPV7_TOKENS.sub,
       features: ar
         ? ["جلسات غير محدودة","مدرب AI (غير محدود)","سجل 90 يوم","تقارير أسبوعية","تصدير CSV/PDF","دعم بريد إلكتروني"]
@@ -1665,7 +1670,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     },
     {
       id:"professional", name: ar?"احترافي":"Pro",
-      priceUSD:{ monthly:19.99, yearly:191.9 }, priceEGP:{ monthly:399, yearly:3830 },
+      priceUSD:{ monthly:19.99, yearly:159.99 }, priceEGP:{ monthly:399, yearly:3190 },
       popular:true, color:LPV7_TOKENS.blue,
       features: ar
         ? ["كل Basic","رؤى AI متقدمة","مقارنة الجلسات","تنبيهات الشذوذ","برامج تمدد مخصصة","دعم أولوية"]
@@ -1673,7 +1678,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     },
     {
       id:"elite", name: ar?"إيليت":"Elite",
-      priceUSD:{ monthly:39.99, yearly:383.9 }, priceEGP:{ monthly:699, yearly:6710 },
+      priceUSD:{ monthly:39.99, yearly:299.99 }, priceEGP:{ monthly:699, yearly:5590 },
       color:LPV7_TOKENS.green,
       features: ar
         ? ["كل Pro","AI تنبؤي","تقرير PDF سريري","معايرة متقدمة","سرد الجلسة","وصول مبكر للمميزات"]
@@ -1681,34 +1686,56 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
     },
   ];
 
+  // These used to advertise a completely different, per-seat pricing model
+  // ("$5-8/user/mo", "10-100 employees", ids "b2b_starter"/"b2b_business")
+  // than what the backend actually charges — flat-rate regardless of team
+  // size, and "b2b_business" isn't even a valid tier id (real id is
+  // "b2b_growth"; backend/config/pricing.py ALL_TIERS would reject it).
+  // Replaced with the real flat-rate plans/copy, matching App.jsx
+  // B2B_TIERS exactly (confirmed with the user which model is correct).
   const b2bPlans = [
     {
       id:"b2b_starter", name: ar?"ستارتر":"Starter",
-      priceUSD:{ monthly:5, yearly:48 }, priceEGP:{ monthly:249, yearly:2390 },
-      perUser:true, color:LPV7_TOKENS.sub,
+      priceUSD:{ monthly:79, yearly:758 }, priceEGP:{ monthly:2499, yearly:23990 },
+      color:LPV7_TOKENS.sub,
       features: ar
-        ? ["10–100 موظف","لوحة HR","إدارة الأقسام","تقارير أسبوعية تلقائية","تنبيهات Slack/Teams","استيراد CSV","وصول API"]
-        : ["10–100 employees","HR dashboard","Department management","Weekly auto-reports","Slack/Teams alerts","CSV import","API access"],
+        ? ["حتى 30 موظف","كشف 33 نقطة بالـAI","نقاط الوضعية الآنية","تقارير PDF صحية","لوحة تحليلات HR","دعم بالبريد"]
+        : ["Up to 30 employees","33-landmark AI pose detection","Real-time posture score","PDF wellness reports","HR analytics dashboard","Email support"],
     },
     {
-      id:"b2b_business", name: ar?"بيزنس":"Business",
-      priceUSD:{ monthly:8, yearly:77 }, priceEGP:{ monthly:399, yearly:3830 },
-      perUser:true, popular:true, color:LPV7_TOKENS.blue,
+      id:"b2b_growth", name: ar?"جروث":"Growth",
+      priceUSD:{ monthly:199, yearly:1910 }, priceEGP:{ monthly:6999, yearly:67190 },
+      popular:true, color:LPV7_TOKENS.blue,
       features: ar
-        ? ["10–5,000 موظف","كل Team","SSO / SAML 2.0","عتبات مخاطرة مخصصة","موصلات SAP / Workday","تأهيل مخصص","SLA 99.9%"]
-        : ["10–5,000 employees","Everything in Team","SSO / SAML 2.0","Custom risk thresholds","SAP / Workday connectors","Dedicated onboarding","SLA 99.9%"],
+        ? ["حتى 100 موظف","كل مزايا ستارتر","كشف 478 نقطة FaceMesh","وضع رأس 3D solvePnP","تحليلات HR متقدمة","تنبيهات Slack/Teams","تقارير HR تنفيذية","دعم أولوية"]
+        : ["Up to 100 employees","Everything in Starter","FaceMesh 478 landmarks","3D solvePnP head pose","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
     },
     {
       id:"b2b_enterprise", name: ar?"إنتربرايز":"Enterprise",
-      priceUSD:{ monthly:null, yearly:null }, priceEGP:{ monthly:null, yearly:null },
+      priceUSD:{ monthly:null, yearly:null, startingAt:499 }, priceEGP:{ monthly:null, yearly:null },
       isEnterprise:true, color:LPV7_TOKENS.green,
       features: ar
-        ? ["موظفون غير محدودون","كل Business","خيار on-premise","SLA مخصص","مدير نجاح مخصص","تسعير مخصص","حزمة قانونية"]
-        : ["Unlimited employees","Everything in Business","On-premise option","Custom SLA","Dedicated CSM","Volume pricing","Legal & compliance pack"],
+        ? ["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالذكاء الاصطناعي","SSO / SAML / Azure AD / Okta","علامة تجارية White-label","وصول API + Webhooks","مدير نجاح مخصص","ضمان SLA مخصص"]
+        : ["Unlimited employees","Everything in Growth","Corvus AI clinical narrative","SSO / SAML / Azure AD / Okta","White-label branding","API + Webhooks access","Dedicated success manager","Custom SLA guarantee"],
     },
   ];
 
   const plans = isCompany ? b2bPlans : b2cPlans;
+  // Real discount vs. monthly×12 (used to say a flat, wrong "save 20%" —
+  // B2C annual is priced at 8× the monthly rate across every plan, i.e.
+  // ~33% off, not 20%). Computed from the actual numbers above so this
+  // can't drift out of sync with the prices again.
+  //
+  // This was also always computed from b2cPlans[1] (Basic) regardless of
+  // which segment (Individual/Company) was selected — so switching the
+  // "Individual/Company" toggle to Company still showed the B2C ~33%
+  // figure next to the Yearly button, even though B2B's real annual
+  // discount is genuinely only ~20%. Now derived from whichever plan set
+  // is actually on screen (`plans`, already mode-aware above).
+  const _refPlan = plans.find(p => p.priceEGP?.monthly && p.priceEGP?.yearly);
+  const yearlyDiscountPct = _refPlan
+    ? Math.round((1 - (_refPlan.priceEGP.yearly / (_refPlan.priceEGP.monthly*12))) * 100)
+    : 20;
 
   return (
     <section id="pricing" className="lp-section" style={{ background:LPV7_TOKENS.bg1 }}>
@@ -1765,7 +1792,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                 }}>
                   {b === "monthly"
                     ? (ar ? "شهري" : "Monthly")
-                    : (ar ? "سنوي (وفّر 20%)" : "Yearly (save 20%)")}
+                    : (ar ? `سنوي (وفّر ${yearlyDiscountPct}%)` : `Yearly (save ${yearlyDiscountPct}%)`)}
                 </button>
               ))}
             </div>
@@ -1910,7 +1937,12 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
                     {ar ? "احجز عرضاً" : "Book a Demo"}
                   </a>
                 ) : (
-                  <a href={`/auth?mode=signup&plan=${p.id}`} onClick={onCTA}
+                  // Toggling Yearly correctly recomputes the price shown above
+                  // (see the /12 math), but the chosen billing cycle was never
+                  // passed on to signup — this link only ever carried `plan`,
+                  // so an annual selection was silently discarded before the
+                  // user got anywhere near checkout.
+                  <a href={`/auth?mode=signup&plan=${p.id}&billing=${billing}`} onClick={onCTA}
                     className={p.popular ? "lp-btn lp-btn-primary" : "lp-btn lp-btn-ghost"}
                     style={{ ...(p.popular ? btn("primary","lg") : btn("ghost","lg")),
                       display:"flex", width:"100%" }}>

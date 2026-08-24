@@ -32,7 +32,12 @@ const DEFAULT_THERAPISTS = [
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({error:"POST only"});
   const secret = req.headers["x-seed-secret"];
-  if (secret !== process.env.SEED_SECRET && secret !== "corvus-seed-2026") return res.status(403).json({error:"Forbidden"});
+  // Was `|| secret !== "corvus-seed-2026"` — a literal, permanent auth
+  // bypass hardcoded into source regardless of what SEED_SECRET is actually
+  // set to in the environment. Require SEED_SECRET to be configured at all
+  // (an unset env var must not silently authorize an empty/undefined header
+  // either) and check only against it.
+  if (!process.env.SEED_SECRET || secret !== process.env.SEED_SECRET) return res.status(403).json({error:"Forbidden"});
 
   let db;
   try { db = getAdmin(); }

@@ -50,7 +50,13 @@ export default async function handler(req, res) {
       // Validate invite
       const inviteRef  = db.collection("invites").doc(token);
       const inviteSnap = await inviteRef.get();
-      if (!inviteSnap.exists()) return res.status(404).json({ error: "Invite not found or expired" });
+      // Was `.exists()` — in the firebase-admin (Node) SDK, DocumentSnapshot
+      // .exists is a boolean PROPERTY, not a method (contrast the client SDK,
+      // where it is a method — easy to mix up). Calling it threw
+      // "inviteSnap.exists is not a function", caught by the outer try/catch
+      // below and returned as a bare 500 — every single invite-accept call
+      // failed, breaking company-invite onboarding entirely.
+      if (!inviteSnap.exists) return res.status(404).json({ error: "Invite not found or expired" });
 
       const invite = inviteSnap.data();
       if (invite.status === "accepted") return res.status(400).json({ error: "Invite already accepted" });
@@ -64,7 +70,7 @@ export default async function handler(req, res) {
 
       // Get company info
       const companySnap = await db.collection("companies").doc(company_id).get();
-      const company     = companySnap.exists() ? companySnap.data() : {};
+      const company     = companySnap.exists ? companySnap.data() : {};
 
       // Link user to company using Admin SDK (bypasses Firestore client rules)
       await db.collection("users").doc(uid).update({

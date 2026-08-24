@@ -131,7 +131,7 @@ export function APIChangelog({ cs, onClose }) {
 
         <div style={{ flex:1, overflowY:"auto", padding:24 }}>
           <div style={{ background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:12, padding:14, marginBottom:20, fontSize:13, color:cs.muted }}>
-            📢 Subscribe to changelog: <a href="/api/changelog/rss" style={{ color:"#6366f1" }}>RSS Feed</a> · <a href="https://corvus.com/changelog" style={{ color:"#6366f1" }}>Web view</a>
+            📢 Subscribe to changelog: <a href="/api/changelog/rss" style={{ color:"#6366f1" }}>RSS Feed</a> · <a href="https://corvus.io/changelog" style={{ color:"#6366f1" }}>Web view</a>
           </div>
 
           {CHANGELOG.map((entry) => {

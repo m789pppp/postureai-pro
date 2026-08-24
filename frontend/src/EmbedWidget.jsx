@@ -1,6 +1,6 @@
 /**
  * EmbedWidget.jsx — Corvus public leaderboard embed
- * <iframe src="https://app.corvus.com/embed/leaderboard?org=ORGID&theme=dark" />
+ * <iframe src="https://app.corvus.io/embed/leaderboard?org=ORGID&theme=dark" />
  * B2B viral: companies can embed their team leaderboard in Notion, Confluence, Slack tabs
  */
 import { useState, useEffect } from "react";
@@ -70,7 +70,7 @@ export default function EmbedWidget() {
             <div style={{ fontSize: 11, color: dim }}>Posture Leaderboard</div>
           </div>
         </div>
-        <a href="https://corvus.com" target="_blank" rel="noreferrer"
+        <a href="https://corvus.io" target="_blank" rel="noreferrer"
            style={{ fontSize: 10, color: dim, textDecoration: "none" }}>
           Powered by Corvus 🧘
         </a>
@@ -127,7 +127,7 @@ export default function EmbedWidget() {
 
       {/* Footer CTA */}
       <div style={{ textAlign: "center", marginTop: 16 }}>
-        <a href={`https://app.corvus.com?ref=embed&org=${orgId}`}
+        <a href={`https://app.corvus.io?ref=embed&org=${orgId}`}
            target="_blank" rel="noreferrer"
            style={{ fontSize: 12, color: "#6366f1", textDecoration: "none", fontWeight: 600 }}>
           Join the leaderboard →

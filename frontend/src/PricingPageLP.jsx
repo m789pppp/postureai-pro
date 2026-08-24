@@ -54,11 +54,11 @@ const IND_PLANS = [
       { t:"AI Coach",              v:false },
       { t:"WhatsApp Reminders",    v:false },
     ],
-    cta:"Get started free", href:"/auth?mode=signup",
+    cta:"Get started free", href:"/auth?mode=signup&plan=standard",
   },
   {
     name:"Basic", color:"#94a3b8", popular:false,
-    price:{ egp:199, usd:9.99 }, period:"month",
+    price:{ egp:199, usd:9.99 }, priceYearly:{ egp:1590, usd:79.99 }, period:"month",
     desc:"For individuals building better posture habits.",
     features:[
       { t:"Sessions / month",      v:"Unlimited" },
@@ -70,11 +70,11 @@ const IND_PLANS = [
       { t:"WhatsApp Reminders",    v:true },
       { t:"AI Coach messages",     v:"10 / month" },
     ],
-    cta:"Start 7-day trial", href:"/auth?mode=signup",
+    cta:"Start 7-day trial", href:"/auth?mode=signup&plan=basic",
   },
   {
     name:"Pro", color:"#4f7cf9", popular:true,
-    price:{ egp:399, usd:19.99 }, period:"month",
+    price:{ egp:399, usd:19.99 }, priceYearly:{ egp:3190, usd:159.99 }, period:"month",
     desc:"For individuals serious about posture health.",
     features:[
       { t:"Everything in Basic",          v:true },
@@ -86,11 +86,11 @@ const IND_PLANS = [
       { t:"Custom Alert Rules",           v:true },
       { t:"Family / Partner Mode (+1)",   v:true },
     ],
-    cta:"Start 7-day trial", href:"/auth?mode=signup",
+    cta:"Start 7-day trial", href:"/auth?mode=signup&plan=professional",
   },
   {
     name:"Elite", color:"#10d9a0", popular:false,
-    price:{ egp:699, usd:39.99 }, period:"month",
+    price:{ egp:699, usd:39.99 }, priceYearly:{ egp:5590, usd:299.99 }, period:"month",
     desc:"For power users and health professionals.",
     features:[
       { t:"Everything in Pro",              v:true },
@@ -102,57 +102,62 @@ const IND_PLANS = [
       { t:"Priority WhatsApp Support",      v:true },
       { t:"Elite Early Access",             v:true },
     ],
-    cta:"Start 7-day trial", href:"/auth?mode=signup",
+    cta:"Start 7-day trial", href:"/auth?mode=signup&plan=elite",
   },
 ];
 
 // ── Company Plans ─────────────────────────────────────────────────
+// Was a per-seat model ("$5-8/user/mo", "Team"/"Business" names, ids that
+// don't exist in the backend) that didn't match what the backend actually
+// charges: flat-rate regardless of headcount, up to a seat cap. Replaced
+// with the real plans (App.jsx B2B_TIERS / backend/config/pricing.py),
+// confirmed with the user which model is correct.
 const CO_PLANS = [
   {
-    name:"Team", color:"#4f7cf9", popular:false,
-    price:{ egp:249, usd:5 }, period:"user / month", min:10,
-    desc:"For teams of 10–100 employees.",
+    name:"Starter", color:"#4f7cf9", popular:false,
+    price:{ egp:2499, usd:79 }, priceYearly:{ egp:23990, usd:758 }, period:"month",
+    desc:"Flat-rate, for teams up to 30 employees.",
     features:[
-      { t:"Employees", v:"10–100" },
-      { t:"HR dashboard", v:true },
-      { t:"Department management", v:true },
+      { t:"Employees", v:"Up to 30" },
+      { t:"33-landmark AI pose detection", v:true },
+      { t:"HR analytics dashboard", v:true },
       { t:"Weekly auto-reports", v:true },
       { t:"Slack / Teams alerts", v:true },
       { t:"CSV import", v:true },
       { t:"SSO / SAML 2.0", v:false },
       { t:"HR system connectors", v:false },
     ],
-    cta:"Start free trial", href:"/auth?mode=signup",
+    cta:"Start free trial", href:"/auth?mode=signup&plan=b2b_starter",
   },
   {
-    name:"Business", color:"#818cf8", popular:true,
-    price:{ egp:399, usd:8 }, period:"user / month", min:10,
-    desc:"For mid-size companies that need more control.",
+    name:"Growth", color:"#818cf8", popular:true,
+    price:{ egp:6999, usd:199 }, priceYearly:{ egp:67190, usd:1910 }, period:"month",
+    desc:"Flat-rate, for teams up to 100 employees.",
     features:[
-      { t:"Employees", v:"10–5,000" },
-      { t:"HR dashboard + heatmaps", v:true },
-      { t:"Department management", v:true },
-      { t:"Weekly auto-reports", v:true },
+      { t:"Employees", v:"Up to 100" },
+      { t:"Everything in Starter", v:true },
+      { t:"FaceMesh 478-landmark detection", v:true },
+      { t:"3D solvePnP head pose", v:true },
+      { t:"Advanced HR analytics", v:true },
       { t:"Slack / Teams alerts", v:true },
-      { t:"SSO / SAML 2.0", v:true },
-      { t:"HR system connectors", v:"SAP, Workday" },
-      { t:"Dedicated onboarding", v:true },
+      { t:"Executive HR reports", v:true },
+      { t:"Priority support", v:true },
     ],
-    cta:"Start free trial", href:"/auth?mode=signup",
+    cta:"Start free trial", href:"/auth?mode=signup&plan=b2b_growth",
   },
   {
     name:"Enterprise", color:"#22d3ee", popular:false,
     price:null, period:"custom",
-    desc:"For 500+ employee organisations.",
+    desc:"For unlimited-headcount organisations. Starting at $499/mo.",
     features:[
       { t:"Employees", v:"Unlimited" },
-      { t:"Everything in Business", v:true },
-      { t:"On-premise option", v:true },
-      { t:"Custom SLA", v:true },
-      { t:"Dedicated CSM", v:true },
-      { t:"Volume pricing", v:true },
-      { t:"Legal & compliance pack", v:true },
-      { t:"Custom reporting", v:true },
+      { t:"Everything in Growth", v:true },
+      { t:"Corvus AI clinical narrative", v:true },
+      { t:"SSO / SAML / Azure AD / Okta", v:true },
+      { t:"White-label branding", v:true },
+      { t:"API + Webhooks access", v:true },
+      { t:"Dedicated success manager", v:true },
+      { t:"Custom SLA guarantee", v:true },
     ],
     cta:"Contact sales", href:`mailto:${SUPPORT}?subject=Corvus Enterprise`,
   },
@@ -204,7 +209,16 @@ function Check({ val, color }) {
 
 function PlanCard({ plan, isEgypt, billing }) {
   const rawPrice = plan.price ? (isEgypt ? plan.price.egp : plan.price.usd) : null;
-  const discounted = rawPrice && billing === "yearly" ? Math.round(rawPrice * .8) : rawPrice;
+  // Was a flat *.8 (a hardcoded, wrong "20% off everything" assumption) —
+  // the real annual total (plan.priceYearly) isn't a fixed 20% off monthly
+  // for every plan: individual plans are priced at 8× the monthly rate
+  // (~33% off), company plans genuinely are ~20% off. Deriving both the
+  // displayed monthly-equivalent and the "Save X%" label directly from the
+  // real annual total keeps them correct for either case and can't drift
+  // out of sync with the actual charge again.
+  const yearlyRaw = plan.priceYearly ? (isEgypt ? plan.priceYearly.egp : plan.priceYearly.usd) : null;
+  const discounted = rawPrice && billing === "yearly" && yearlyRaw ? Math.round(yearlyRaw / 12) : rawPrice;
+  const discountPct = rawPrice && yearlyRaw ? Math.round((1 - yearlyRaw / (rawPrice * 12)) * 100) : null;
 
   return (
     <div style={{
@@ -268,9 +282,9 @@ function PlanCard({ plan, isEgypt, billing }) {
               </span>
               <span style={{ fontSize:13, color:T.muted }}>/ {plan.period}</span>
             </div>
-            {billing==="yearly" && (
+            {billing==="yearly" && discountPct != null && (
               <div style={{ fontSize:12, color:T.green, fontWeight:700, marginTop:5, fontFamily:FM }}>
-                ↓ Save 20% with annual billing
+                ↓ Save {discountPct}% with annual billing
               </div>
             )}
             {plan.min && <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Min. {plan.min} users</div>}
@@ -288,8 +302,12 @@ function PlanCard({ plan, isEgypt, billing }) {
         ))}
       </ul>
 
-      {/* CTA */}
-      <a href={plan.href} style={{
+      {/* CTA — toggling Yearly changes the price shown above but this link
+          never carried that choice, so an annual selection was silently
+          dropped before the user got anywhere near checkout. Only append
+          &billing= to links that actually take a plan id (not the free
+          Get-started/Contact-sales links, which have nothing to bill). */}
+      <a href={plan.price && rawPrice>0 ? `${plan.href}&billing=${billing}` : plan.href} style={{
         display:"flex", alignItems:"center", justifyContent:"center", gap:6,
         padding:"13px 20px", borderRadius:12, fontSize:14.5, fontWeight:700,
         background: plan.popular ? "linear-gradient(135deg,#1a56db,#0891b2)" : `${plan.color}10`,
@@ -326,6 +344,15 @@ export default function PricingPageStandalone() {
   }, []);
 
   const plans = mode==="individual" ? IND_PLANS : CO_PLANS;
+  // Individual plans are priced at 8x monthly (~33% off); company plans are
+  // genuinely ~20% off — this toggle-level badge used to say a flat "Save
+  // 20%" regardless of mode, which was only ever true for one of the two.
+  // Derived from the first paid plan of whichever list is active so it
+  // can't drift from the real numbers again.
+  const _refPlan = plans.find(p=>p.priceYearly);
+  const badgeDiscountPct = _refPlan
+    ? Math.round((1 - (_refPlan.priceYearly.usd / (_refPlan.price.usd*12))) * 100)
+    : 20;
 
   return (
     <PageShell lang={lang} setLang={setLang} activePage="pricing">
@@ -410,7 +437,7 @@ export default function PricingPageStandalone() {
                     <span style={{ fontSize:11.5, fontWeight:700, color:T.green,
                       background:"rgba(16,217,160,.1)", border:"1px solid rgba(16,217,160,.25)",
                       borderRadius:99, padding:"3px 10px", fontFamily:FM, marginLeft:4 }}>
-                      Save 20%
+                      Save {badgeDiscountPct}%
                     </span>
                   )}
                 </div>
@@ -520,7 +547,7 @@ export default function PricingPageStandalone() {
             ["What payment methods?","Credit/debit cards, Vodafone Cash, Fawry, and bank transfer for annual plans. EGP accepted via Kashier."],
             ["What happens after the trial?","You choose a paid plan or move to Free automatically. All your data and history is preserved either way."],
             ["Discounts for NGOs or universities?","Yes — 50% off for verified educational institutions and NGOs. Contact us with your organisation details."],
-            ["Is the company plan per active user?","Yes, you're billed only for active users each month. Inactive accounts don't count toward your bill."],
+            ["Is the company plan per active user?","No — company plans are flat-rate: one fixed monthly price covers your whole team up to that plan's employee cap (30 for Starter, 100 for Growth), regardless of how many are actively using it."],
             ["Can I get a custom quote?","Yes. For teams over 200 employees we offer volume discounts. Book a call and we'll build a package for you."],
           ].map(([q,a],i)=>(
             <Reveal key={q} delay={i*.04}>

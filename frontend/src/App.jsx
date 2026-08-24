@@ -497,6 +497,41 @@ function _angle3pt(a,b,c){
   return Math.round(Math.acos(Math.min(1,Math.max(-1,dot/mag)))*180/Math.PI);
 }
 
+// Arabic labels for the Live Metrics list and Detected Conditions list —
+// postureEngine.js's `metrics`/`detectedConditions` output is English-only
+// (it's a pure computation module with no isAr/lang concept, and shouldn't
+// need one just to label its own output). Every other piece of copy on the
+// Live page already branches on isAr, but these two lists rendered the raw
+// English `label`/`name` strings unconditionally even in Arabic mode.
+// Keyed by the engine's own stable metric ids (METRIC_LABEL_AR) and literal
+// condition-name strings (CONDITION_NAME_AR — detectedConditions carries no
+// id, only the name itself) — see postureEngine.js's `metrics`/
+// `detectedConditions` blocks for the exact source strings this must match.
+const METRIC_LABEL_AR = {
+  neck_lean:          "ميل الرقبة",
+  head_tilt:           "ميل الرأس",
+  shoulder_level:      "توازن الكتفين",
+  spine_lean:          "ميل العمود الفقري",
+  head_yaw:            "دوران الرأس",
+  screen_distance:     "المسافة من الشاشة",
+  fhp_index:           "بروز الرأس للأمام",
+  rounded_shoulders:   "انحناء الكتفين",
+  shoulder_elevation:  "ارتفاع الكتفين (شد)",
+  elbow_angle:         "زاوية الكوع",
+  monitor_height:      "ارتفاع الشاشة",
+};
+const CONDITION_NAME_AR = {
+  "Neck Lean":          "ميل الرقبة",
+  "Forward Head":       "بروز الرأس للأمام",
+  "Head Tilt":          "ميل الرأس",
+  "Shoulder Imbalance": "عدم توازن الكتفين",
+  "Rounded Shoulders":  "انحناء الكتفين",
+  "Spine Lean":         "ميل العمود الفقري",
+  "Shoulder Elevation": "ارتفاع الكتفين",
+  "Monitor/Gaze Angle": "زاوية الشاشة/النظر",
+  "Hand/Chin Prop":     "إسناد اليد على الذقن",
+};
+
 // Pick the single most actionable correction cue from the current analysis —
 // the worst-scoring metric that's genuinely off — and phrase it as a direct,
 // directional instruction ("Raise screen to eye level") instead of a number.
@@ -533,7 +568,12 @@ function postureCue(analysis, isAr){
   if(!cands.length) return null;
   cands.sort((a,b)=>a.sc-b.sc);
   const w=cands[0];
-  return { text:isAr?w.ar:w.en, icon:w.icon, col:w.sc<40?"#C6604F":"#f97316" };
+  // Was its own 40-point split with a third color (#f97316) found nowhere
+  // else on this page — every candidate here already scored <55 by the
+  // add()/spine_lean filters above, i.e. already in scoreTierColor()'s
+  // "bad" tier (<55), so this cue should always read as bad/red like every
+  // other indicator on the page, not invent an intermediate severity.
+  return { text:isAr?w.ar:w.en, icon:w.icon, col:scoreTierColor(w.sc) };
 }
 
 function drawFront(ctx,res,W,H,isAr=false,opts={}){
@@ -2821,7 +2861,12 @@ export default function App(){
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
     const plan=params.get("plan"),bill=params.get("billing")||"monthly";
-    if(plan&&TIERS[plan]){setDeepPlan(plan);setDeepBilling(bill);}
+    // Was `TIERS[plan]` only — TIERS holds just the B2C ids (standard/basic/
+    // professional/elite), so a marketing link deep-linking a B2B plan
+    // (?plan=b2b_starter etc.) silently failed this check and deepPlan never
+    // got set, even though B2B_TIERS[plan] is valid. See the matching fix
+    // at the onAuthStateChanged routing check below.
+    if(plan&&(TIERS[plan]||B2B_TIERS[plan])){setDeepPlan(plan);setDeepBilling(bill);}
     const ref=params.get("ref");
     if(ref) window.__referral_code=ref;
     // Handle invite token in URL: ?invite=TOKEN
@@ -3060,7 +3105,13 @@ export default function App(){
               else if(!p || !p.setup_complete) setPage("setup");
               else {
                 const planParam = params.get("plan");
-                setPage(planParam && TIERS[planParam] ? "pricing" : "home");
+                // Was `TIERS[planParam]` only, so a freshly-signed-up user who
+                // deep-linked a B2B plan (?plan=b2b_starter/b2b_growth) got
+                // silently routed to "home" instead of "pricing" — TIERS only
+                // has the B2C ids. Now checks both maps, matching the
+                // deepPlan/deepBilling wiring above and the defaultSeg passed
+                // into PricingPage below.
+                setPage(planParam && (TIERS[planParam]||B2B_TIERS[planParam]) ? "pricing" : "home");
               }
             } catch{ setPage("home"); }
             // Retry any sessions that failed to save last time (see the
@@ -3811,6 +3862,16 @@ export default function App(){
       subjectRejectStreakRef.current=0;
       multiPersonShownRef.current=false;
       setMultiPersonWarning(false);
+      // Same bug class as multiPersonWarning above: alertMsg is set to
+      // type:"warn"/"bad" whenever a real issue fires during a session, but
+      // was never reset back to neutral anywhere — not here, not in
+      // stopCamera(). The last warning/error from a PREVIOUS session (e.g.
+      // "Lighting too low") stayed pinned in the status strip through Stop &
+      // Save and into a brand-new session, and — because that row is gated
+      // on alertMsg.type!=="warn"&&!=="bad" — permanently blocked the
+      // positive "Score X/100 — Grade" status row from ever showing again
+      // this browser session.
+      setAlertMsg({text:isAr?"جاري تحليل وضعيتك...":"Analyzing your posture...",type:"info"});
       // Notification permission requested contextually after first alert (not cold on start)
       let sid="local_"+Date.now();
       // Previously this network call was awaited unconditionally, which meant
@@ -3918,6 +3979,11 @@ export default function App(){
     subjectRejectStreakRef.current=0;
     multiPersonShownRef.current=false;
     setMultiPersonWarning(false);
+    // Same reasoning as multiPersonWarning above — alertMsg previously stuck
+    // at whatever warn/bad message last fired (e.g. "Lighting too low")
+    // straight through onto the idle "Start Analysis" screen with the
+    // camera off. Reset to the same neutral instruction the app opens with.
+    setAlertMsg({text:isAr?"اضبط وضعيتك أمام الكاميرا ثم اضغط ابدأ":"Position yourself in frame, then press Start",type:"info"});
     // Stop camera stream tracks
     if(streamRef.current){
       streamRef.current.getTracks().forEach(x=>{x.stop(); x.enabled=false;});
@@ -4512,10 +4578,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // platform_admin: is_admin=true in Firestore (set manually, never by client)
   const isAdmin   = profile?.is_admin === true;
   // hr_admin: org owner OR explicitly set as HR OR signed up as company
+  // Was also `|| profile?.acct_type === "company"` — but every EMPLOYEE
+  // profile is written with acct_type:"company" too (see the onboarding
+  // write below and org-invite.js's accept handler: both set
+  // acct_type:"company" for employees AND hr_admins alike, distinguishing
+  // them only via user_type/is_org_owner/is_hr). That made this condition
+  // true for every employee, not just HR admins, so every company employee
+  // was silently treated as an HR admin app-wide (this flows straight into
+  // HomePage.jsx's role() router too) — full, unfiltered access to
+  // Invite/Billing/Workforce Analytics/team rosters/the alert-dispatch
+  // tool, and every coworker's posture data with none of the field-
+  // stripping real employees are supposed to get. The three remaining
+  // conditions already fully cover "is HR admin" — every HR-admin-signup
+  // path sets user_type:"hr_admin" AND is_org_owner:true together with
+  // acct_type, so this line drops zero real HR admins.
   const isHRAdmin = isAdmin
     || profile?.is_org_owner === true
     || profile?.user_type === "hr_admin"
-    || profile?.acct_type === "company"
     || profile?.is_hr === true
     || (HR_EMAILS||[]).includes(user?.email||"");
   // employee: has company_id but NOT hr_admin → role() handles this
@@ -4810,6 +4889,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
           profile={null} darkMode={darkMode}
           onBack={()=>{ window.location.hash=""; setPage("auth"); }}
           onSelectPlan={()=>{ setPage("auth"); }}
+          // deepPlan/deepBilling come from the ?plan=&billing= URL params
+          // (parsed above) — pre-select the right segment/billing cycle and
+          // highlight the linked-to plan instead of always dropping the
+          // visitor on the default B2C-monthly view regardless of which
+          // marketing link they actually clicked.
+          defaultSeg={deepPlan && B2B_TIERS[deepPlan] ? "b2b" : "b2c"}
+          defaultBilling={deepBilling}
+          highlightPlanId={deepPlan}
         />
       </ErrorBoundary>
     );
@@ -4881,6 +4968,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
         cs={cs} lang={lang} isAr={isAr} dir={dir}
         profile={profile} darkMode={darkMode}
         onBack={()=>setPage("home")}
+        // Same deep-link wiring as the logged-out pricing page above — this
+        // is the branch a freshly-signed-up user actually lands on when
+        // they followed a ?plan=&billing= marketing link (see the routing
+        // check in onAuthStateChanged).
+        defaultSeg={deepPlan && B2B_TIERS[deepPlan] ? "b2b" : "b2c"}
+        defaultBilling={deepBilling}
+        highlightPlanId={deepPlan}
         onSelectPlan={(planId,billing)=>{
           // SECURITY/CORRECTNESS: do NOT setTier() here. Selecting a plan on the
           // pricing page must only open the payment flow — the tier is committed
@@ -5065,12 +5159,21 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
   // Sidebar & card styles
   // #8 Fix-it tips per cause key
+  // stepsAr added — this panel's header ("How to fix:") already branched on
+  // isAr, but the actual steps underneath it were English-only regardless
+  // of language, so an Arabic user got a translated heading over untranslated
+  // instructions.
   const FIX_TIPS={
-    neck:    {icon:"🔼", steps:["Raise monitor so top edge is at eye level","Tuck chin slightly — imagine a string pulling crown of head up","Check chair height — elbows should be at 90°"], img:"↕️"},
-    yaw:     {icon:"↔️", steps:["Center monitor directly in front of you","If using dual screens, put primary screen center","Avoid reading from phone while looking sideways"], img:"↔️"},
-    dist:    {icon:"📏", steps:["Arm's length from screen (50–70 cm)","Increase font size so you don't lean in","Use zoom shortcut: Ctrl/⌘ + to reduce urge to lean forward"], img:"📏"},
-    posture: {icon:"🪑", steps:["Sit back fully — use lumbar support or rolled towel","Feet flat on floor, knees at 90°","Relax shoulders down and back"], img:"🪑"},
-    default: {icon:"✅", steps:["Take a 2-minute stretch break","Roll shoulders backward 5 times","Stand up and walk for 60 seconds"], img:"🚶"},
+    neck:    {icon:"🔼", steps:["Raise monitor so top edge is at eye level","Tuck chin slightly — imagine a string pulling crown of head up","Check chair height — elbows should be at 90°"],
+              stepsAr:["ارفع الشاشة بحيث يكون حرفها العلوي عند مستوى عينك","ادخل ذقنك شوية للداخل — تخيل خيط بيشد قمة رأسك لأعلى","اتأكد من ارتفاع الكرسي — المرفقين لازم يبقوا بزاوية 90°"], img:"↕️"},
+    yaw:     {icon:"↔️", steps:["Center monitor directly in front of you","If using dual screens, put primary screen center","Avoid reading from phone while looking sideways"],
+              stepsAr:["حط الشاشة بالظبط قدامك في النص","لو بتستخدم شاشتين، خلي الشاشة الأساسية في النص","تجنب القراءة من الموبايل وانت باصص على الجنب"], img:"↔️"},
+    dist:    {icon:"📏", steps:["Arm's length from screen (50–70 cm)","Increase font size so you don't lean in","Use zoom shortcut: Ctrl/⌘ + to reduce urge to lean forward"],
+              stepsAr:["ابعد عن الشاشة بطول ذراعك (50–70 سم)","كبّر حجم الخط عشان متحتاجش تقرب","استخدم اختصار التكبير: Ctrl/⌘ + عشان تقلل رغبتك في الميل للأمام"], img:"📏"},
+    posture: {icon:"🪑", steps:["Sit back fully — use lumbar support or rolled towel","Feet flat on floor, knees at 90°","Relax shoulders down and back"],
+              stepsAr:["اتكي على الكرسي بالكامل — استخدم مسند لأسفل الظهر أو فوطة ملفوفة","رجليك تلامسوا الأرض بالكامل، والركب بزاوية 90°","ارخي كتفيك لأسفل وللخلف"], img:"🪑"},
+    default: {icon:"✅", steps:["Take a 2-minute stretch break","Roll shoulders backward 5 times","Stand up and walk for 60 seconds"],
+              stepsAr:["خذ استراحة تمدد لمدة دقيقتين","لف كتفيك للخلف 5 مرات","قوم امشي لمدة 60 ثانية"], img:"🚶"},
   };
   // #9 Time-ago helper
   const timeAgo=(timeStr)=>{
@@ -5588,7 +5691,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {isAr?"أبرز مشكلة":"Top issue to fix"}
                 </div>
                 <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
-                  {sessionResult.top_metric[1]?.label} — score {sessionResult.top_metric[1]?.score}/100
+                  {/* Was English `label` + the literal word "score" rendered
+                      unconditionally, even under the Arabic "أبرز مشكلة"
+                      heading right above it. */}
+                  {isAr
+                    ? `${METRIC_LABEL_AR[sessionResult.top_metric[0]]||sessionResult.top_metric[1]?.label} — النتيجة ${sessionResult.top_metric[1]?.score}/100`
+                    : `${sessionResult.top_metric[1]?.label} — score ${sessionResult.top_metric[1]?.score}/100`}
                 </div>
               </div>
             )}
@@ -5972,7 +6080,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {isOpen&&(
                     <div style={{margin:"0 10px 8px",background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.2)",borderRadius:8,padding:"10px 12px"}}>
                       <div style={{fontSize:10,fontWeight:700,color:"#a5b4fc",marginBottom:6}}>{tips.icon} {isAr?"الحل:":"How to fix:"}</div>
-                      {tips.steps.map((s,si)=>(
+                      {(isAr?(tips.stepsAr||tips.steps):tips.steps).map((s,si)=>(
                         <div key={si} style={{display:"flex",gap:6,marginBottom:4,alignItems:"flex-start"}}>
                           <span style={{fontSize:10,color:"#a5b4fc",fontWeight:700,flexShrink:0}}>{si+1}.</span>
                           <span style={{fontSize:10,color:cs.text,lineHeight:1.5}}>{s}</span>
@@ -6276,8 +6384,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
               background:"rgba(2,8,16,.55)",backdropFilter:"blur(2px)",
               pointerEvents:"none",
             }}>
+              {/* Was one static "Tap Start Analysis" message regardless of
+                  cameraStatus — including while the status pill (below) was
+                  already saying "Denied" and the Start button (further
+                  below) had switched to "🔄 Retry". Match this overlay's
+                  copy to the actual error instead of repeating the generic
+                  first-run instruction over it. */}
               <GuidanceHint icon="camera"
-                title={isAr?"اضغط \"ابدأ التحليل\" أدناه للبدء":"Tap \"Start Analysis\" below to begin"}
+                title={
+                  cameraStatus==="denied"
+                    ? (isAr?"الوصول للكاميرا مرفوض — اسمح بالوصول من إعدادات المتصفح":"Camera access denied — allow it in your browser settings")
+                    : cameraStatus==="no-device"
+                      ? (isAr?"مفيش كاميرا متاحة على الجهاز ده":"No camera found on this device")
+                      : (isAr?"اضغط \"ابدأ التحليل\" أدناه للبدء":"Tap \"Start Analysis\" below to begin")
+                }
                 cs={cs}/>
               <div style={{fontSize:16,color:"rgba(255,255,255,.5)",animation:"bounceDown 1.4s infinite"}}>
                 <Icon name="chevronDown" size={16} color="rgba(255,255,255,.6)"/>
@@ -6384,7 +6504,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               paddingBottom:8,borderBottom:"1px solid rgba(255,255,255,.06)"}}>
               <div style={{
                 width:38,height:38,borderRadius:"50%",
-                background:`conic-gradient(${score>=75?"#4FAE8E":score>=55?"#D6A24C":"#C6604F"} ${score*3.6}deg, rgba(255,255,255,.06) 0deg)`,
+                // Aligned to the same scoreTierColor() thresholds (70/55) used
+                // by ScoreGauge elsewhere on this page — this badge used to key
+                // off its own hardcoded 75/55 split, which disagreed with the
+                // gauge's color for any score in [70,75).
+                background:`conic-gradient(${scoreTierColor(score)} ${score*3.6}deg, rgba(255,255,255,.06) 0deg)`,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:11,fontWeight:900,color:"#f0f6ff",flexShrink:0,
               }}>{score}</div>
@@ -6393,8 +6517,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {isAr?"الدرجة الكلية":"ERGONOMIC SCORE"}
                 </div>
                 <div style={{fontSize:11,fontWeight:700,
-                  color:score>=75?"#4FAE8E":score>=55?"#D6A24C":"#C6604F"}}>
-                  {score>=75?(isAr?"ممتاز":"Excellent"):score>=55?(isAr?"مقبول":"Fair"):(isAr?"ضعيف":"Poor")}
+                  color:scoreTierColor(score)}}>
+                  {score>=70?(isAr?"ممتاز":"Excellent"):score>=55?(isAr?"مقبول":"Fair"):(isAr?"ضعيف":"Poor")}
                 </div>
               </div>
             </div>
@@ -6429,8 +6553,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               // persistent chip pinned on the video (see above) plus the
               // detailed bar further down the page.
             ].map(({label,score:s,value,unit},i)=>{
-              const col = s==null?"#475569":s>=80?"#4FAE8E":s>=60?"#D6A24C":"#C6604F";
-              const risk= s==null?(isAr?"—":"—"):s>=80?(isAr?"منخفض":"Low"):s>=60?(isAr?"متوسط":"Med"):(isAr?"مرتفع":"High");
+              // Same scoreTierColor() thresholds (70/55) as the badge above and
+              // ScoreGauge — these bars used to use their own 80/60 split, a
+              // third disagreeing color scheme on the same screen.
+              const col = s==null?"#475569":scoreTierColor(s);
+              const risk= s==null?"—":s>=70?(isAr?"منخفض":"Low"):s>=55?(isAr?"متوسط":"Med"):(isAr?"مرتفع":"High");
               return (
                 <div key={i} style={{display:"flex",alignItems:"center",
                   justifyContent:"space-between",marginBottom:5}}>
@@ -6496,7 +6623,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
             const cue=postureCue(analysis,isAr);
             if(!cue) return null;
             return (
-              <div style={{position:"absolute",left:8,right:46,bottom:8,
+              // bottom:8 put this right underneath the fullscreen Pause/Stop
+              // bar (which sits at bottom:20 with ~40px-tall buttons, so it
+              // occupies roughly the 20-60px band) — nothing here excluded
+              // rendering both at once (this cue has no `!isFs` guard, the
+              // control bar has no cue-aware guard either), so reaching for
+              // Pause/Stop while a cue was showing meant tapping through
+              // overlapping text. Clear the control bar's band in fullscreen.
+              <div style={{position:"absolute",left:8,right:46,bottom:isFs?68:8,
                 background:"rgba(2,8,16,.9)",backdropFilter:"blur(6px)",
                 border:`1.5px solid ${cue.col}`,borderRadius:12,
                 padding:"10px 12px",display:"flex",alignItems:"center",gap:10,
@@ -6697,7 +6831,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 return (
                   <>
                     {visible.map(([k,m])=>(
-                      <MetRow key={k} label={m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
+                      <MetRow key={k} label={isAr?(METRIC_LABEL_AR[k]||m.label):m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
                         dim={m.reliable===false}
                       />
                     ))}
@@ -6735,7 +6869,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                                 border:`1px solid ${sevColor}25`,
                               }}>
                                 <span style={{fontSize:10.5,color:cs.text,fontWeight:500}}>
-                                  {cond.name}
+                                  {isAr?(CONDITION_NAME_AR[cond.name]||cond.name):cond.name}
                                 </span>
                                 <div style={{display:"flex",alignItems:"center",gap:5}}>
                                   <span style={{fontSize:9.5,color:cs.muted}}>{cond.value}</span>
@@ -6933,9 +7067,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
             when there's no score-status row to attach to. */}
         {scoreStatus&&alertMsg.type!=="warn"&&alertMsg.type!=="bad"&&(
           <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`}}>
+            {/* Was hardcoded to always render green regardless of the actual
+                score — this row can render whenever there's no active
+                warn/bad alert, which isn't the same as the score always
+                being in the "good" tier. Now uses the same scoreTierColor()
+                (70/55) as ScoreGauge and the on-video overlay, so this text
+                readout agrees with the other two score displays instead of
+                being an independent, unconditionally-green 4th system. */}
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:"#4FAE8E",flexShrink:0,boxShadow:"0 0 6px #4FAE8E"}}/>
-              <span style={{fontSize:11,color:"#6ee7b7",fontWeight:600}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:scoreTierColor(scoreStatus?.score??100),flexShrink:0,boxShadow:`0 0 6px ${scoreTierColor(scoreStatus?.score??100)}`}}/>
+              <span style={{fontSize:11,color:scoreTierColor(scoreStatus?.score??100),fontWeight:600}}>
                 {isAr?`النتيجة ${scoreStatus?.score}/100 — ${scoreStatus?.grade}`:`Score ${scoreStatus?.score}/100 — ${scoreStatus?.grade}`}
                 {camActive&&calibData?.tolerances&&(
                   <span style={{color:"#34d399",fontWeight:500}}> · {isAr?"مُخصّص":"Personalised"}</span>
@@ -7093,6 +7234,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             }}>
               <span style={{fontSize:11,color:cs.muted,whiteSpace:"nowrap"}}>{isAr?"استراحة كل":"Break every"}</span>
               <select value={breakIntervalMin} onChange={e=>setBreakIntervalMin(Number(e.target.value))}
+                className="liveui-focusable"
                 style={{
                   background:"transparent",border:"none",color:cs.text,fontSize:12,fontWeight:700,
                   cursor:"pointer",outline:"none",textAlign:isAr?"left":"right",
@@ -7254,7 +7396,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {streakAlert&&(
           <div style={{margin:"10px 14px",background:"rgba(214,162,76,.08)",border:"1px solid rgba(214,162,76,.35)",borderRadius:12,padding:"12px 14px"}}>
             <div style={{fontSize:13,fontWeight:700,color:"#fcd34d",marginBottom:4}}>
-              ⚡ {isAr?`الـ ${profile?.streak_days}-day streak بتاعتك في خطر!`:`Your ${profile?.streak_days}-day streak is at risk!`}
+              ⚡ {isAr?`سلسلة الـ ${profile?.streak_days} يوم بتاعتك في خطر!`:`Your ${profile?.streak_days}-day streak is at risk!`}
             </div>
             <div style={{fontSize:11,color:cs.muted,marginBottom:10}}>
               {isAr?"وضعيتك وحشة أكتر من دقيقتين. خذ استراحة صغيرة؟":"Poor posture for 2+ min. Take a quick break to protect it?"}

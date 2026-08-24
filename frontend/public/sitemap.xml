@@ -2,6 +2,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
 
+  <!-- Previously listed /#pricing and /#features — hash-fragment URLs that
+       search engines collapse into "/" and don't index as separate pages.
+       Meanwhile the app has real, standalone, crawlable routes (each with
+       its own <title>/meta via main.jsx's STANDALONE_ROUTES + index.html's
+       per-route PAGE_META) that weren't listed here at all. Replaced with
+       the actual route list. -->
+
   <url>
     <loc>https://postureai-pro-omega-nine.vercel.app/</loc>
     <lastmod>2026-06-07</lastmod>
@@ -12,17 +19,38 @@
   </url>
 
   <url>
-    <loc>https://postureai-pro-omega-nine.vercel.app/#pricing</loc>
+    <loc>https://postureai-pro-omega-nine.vercel.app/pricing</loc>
     <lastmod>2026-06-07</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
-    <loc>https://postureai-pro-omega-nine.vercel.app/#features</loc>
+    <loc>https://postureai-pro-omega-nine.vercel.app/product</loc>
     <lastmod>2026-06-07</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://postureai-pro-omega-nine.vercel.app/solutions</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://postureai-pro-omega-nine.vercel.app/how-it-works</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://postureai-pro-omega-nine.vercel.app/faq</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
 
 </urlset>

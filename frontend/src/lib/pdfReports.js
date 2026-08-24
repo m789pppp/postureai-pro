@@ -3574,7 +3574,16 @@ export async function generateQuarterlyWellnessReport({
   const projectedSickLeaveCost = Math.round(atRisk.length * SICK_DAYS_AT_RISK * (AVG_SALARY_EGP / 22));
   const productivityLoss = Math.round(atRisk.length * AVG_SALARY_EGP * PRODUCTIVITY_LOSS_PCT);
   const totalRisk = projectedSickLeaveCost + productivityLoss;
-  const corvusCost = Math.round(totalU * 499 * 3); // Pro plan × 3 months
+  // Was `totalU * 499 * 3` — treating the cost as PER-USER, at a price
+  // (499 EGP) that doesn't match any real tier either (individual Pro is
+  // 399 EGP/mo; the 499 figure was actually the unrelated USD Enterprise
+  // "starting at $499/mo" number, reused here as an EGP per-user rate).
+  // This report is for a company (B2B) account, and B2B pricing is
+  // FLAT-RATE regardless of headcount (confirmed against
+  // backend/config/pricing.py / App.jsx B2B_TIERS) — so the real cost is
+  // just the org's actual flat monthly fee × 3, not multiplied by totalU.
+  const _B2B_FLAT_EGP_MONTHLY = { b2b_starter: 2499, b2b_growth: 6999 };
+  const corvusCost = Math.round((_B2B_FLAT_EGP_MONTHLY[profile?.tier] || _B2B_FLAT_EGP_MONTHLY.b2b_starter) * 3);
   const roi = corvusCost > 0 ? Math.round(((totalRisk - corvusCost) / corvusCost) * 100) : 0;
 
   // ── COVER PAGE ────────────────────────────────────────────────────────────
@@ -3667,7 +3676,7 @@ export async function generateQuarterlyWellnessReport({
     [isAr ? "تكلفة الإجازات المرضية المتوقعة" : "Projected sick-leave cost", `${projectedSickLeaveCost.toLocaleString()} EGP`],
     [isAr ? "خسارة الإنتاجية المقدّرة" : "Estimated productivity loss",     `${productivityLoss.toLocaleString()} EGP`],
     [isAr ? "إجمالي الخسارة بدون Corvus" : "Total risk without Corvus",      `${totalRisk.toLocaleString()} EGP`],
-    [isAr ? "تكلفة Corvus Pro (الربع)" : "Corvus Pro cost (quarter)",        `${corvusCost.toLocaleString()} EGP`],
+    [isAr ? "تكلفة Corvus (الربع)" : "Corvus cost (quarter)",        `${corvusCost.toLocaleString()} EGP`],
     [isAr ? "العائد على الاستثمار المتوقع" : "Projected ROI",                `${roi}%`],
   ];
   financials.forEach(([k, v], i) => {

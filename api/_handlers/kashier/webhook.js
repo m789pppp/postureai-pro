@@ -9,6 +9,27 @@ import crypto from "crypto";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
+// Vercel's default body parser JSON-parses the request before this handler
+// runs, discarding the original bytes — the handler below used to
+// re-serialize that parsed object with JSON.stringify() and sign THAT
+// instead of what Kashier actually signed. re-stringifying isn't guaranteed
+// byte-identical to the original request (key order, number formatting like
+// trailing zeros, unicode escaping can all differ), so a real, successful
+// payment could fail signature verification and get logged as "possible
+// spoofing" — the subscription would then never activate despite the
+// customer being charged. Disabling the parser and reading the true raw
+// bytes ourselves makes signature verification match what Kashier actually
+// sent, byte for byte.
+export const config = { api: { bodyParser: false } };
+
+async function readRawBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 const BACKEND_URL = process.env.VITE_API_URL || process.env.BACKEND_URL || "";
 const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET || "";
 
@@ -121,14 +142,28 @@ async function confirmBookingPayment(db, orderId, amount, transactionId) {
   return { received: true, action: "booking_confirmed", booking_id: parsed.bookingId };
 }
 
+export const config = { api: { bodyParser: false } };
+
+async function readRawBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
   const KASHIER_API_KEY = process.env.KASHIER_API_KEY || "";
 
   try {
-    // Kashier sends raw JSON — need raw body for signature verification
-    const rawBody = JSON.stringify(req.body || {});
+    // Kashier sends raw JSON — need the TRUE raw bytes for signature
+    // verification (see the config/readRawBody comment above). bodyParser
+    // is disabled for this route now, so req.body no longer exists —
+    // parse rawBody ourselves instead.
+    const rawBody = await readRawBody(req);
     const receivedSig = req.headers["x-kashier-signature"] || "";
 
     // Verify signature — ALWAYS required (never skip in production)
@@ -141,7 +176,9 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Invalid signature" });
     }
 
-    const payload  = req.body || {};
+    let payload = {};
+    try { payload = JSON.parse(rawBody || "{}"); }
+    catch (e) { console.error("[Kashier Webhook] Body is not valid JSON:", e.message); return res.status(400).json({ error: "Invalid JSON body" }); }
 
     // Kashier statuses: SUCCESS, PENDING, FAILED, EXPIRED
     const status   = (payload.status || payload.transactionStatus || "").toUpperCase();
@@ -182,6 +219,19 @@ export default async function handler(req, res) {
       if (!snap.empty) {
         const userDoc = snap.docs[0];
         const uid     = userDoc.id;
+
+        // Idempotency — same protection confirmBookingPayment() above
+        // already has for marketplace bookings, was missing here. Kashier
+        // can legitimately retry a webhook call (timeout, cold start, 5xx)
+        // for the SAME successful payment; without this check, every retry
+        // recomputed `expiry = now + 1 month/year` and overwrote it, so a
+        // single real charge could silently extend a subscription by
+        // multiple billing periods for free.
+        if (userDoc.data().last_transaction_id === transactionId) {
+          console.log("[Kashier Webhook] Transaction", transactionId, "already processed for user", uid, "— skipping duplicate");
+          return res.json({ received: true, note: "already processed", uid });
+        }
+
         const now     = new Date();
         const expiry  = new Date(now);
         if (billing === "yearly") {
