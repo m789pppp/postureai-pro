@@ -29,7 +29,20 @@ export default async function handler(req, res) {
   if (!uid || !name) return res.status(400).json({error:"uid and name required"});
 
   const { db, auth } = getAdmin();
-  try { await auth.getUser(uid); } catch { return res.status(401).json({error:"Invalid user"}); }
+  // Was unauthenticated — only checked that `uid` belonged to SOME real
+  // Firebase user via auth.getUser(uid), never that the CALLER was that
+  // user. Anyone who knew (or guessed/enumerated) any uid could POST here
+  // directly and get a certificate issued in that person's name for free,
+  // bypassing payment_ref entirely (it was stored but never verified
+  // against anything). Now requires a valid ID token whose own uid matches
+  // the uid being issued a cert, same pattern as org-invite.js's
+  // requireAuth().
+  const idToken = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (!idToken) return res.status(401).json({error:"Authentication required"});
+  let decoded;
+  try { decoded = await auth.verifyIdToken(idToken); }
+  catch { return res.status(401).json({error:"Invalid or expired token"}); }
+  if (decoded.uid !== uid) return res.status(403).json({error:"Cannot issue a certificate for another user"});
 
   // Check existing active cert
   const existing = await db.collection("certificates")

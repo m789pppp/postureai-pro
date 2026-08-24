@@ -948,8 +948,16 @@ export function Ring({ score, size = 78, strokeWidth = 6 }) {
 // METRIC ROW
 // ─────────────────────────────────────────────────────────────────
 export function MetRow({ label, value, unit, score: s, cs }) {
-  const col = s>=75?UI_TOKENS.green:s>=50?UI_TOKENS.amber:s>0?UI_TOKENS.red:"rgba(148,163,184,.25)";
-  const icon = s>=75?"✅":s>=50?"⚠️":s>0?"❌":"○";
+  // Thresholds/colors intentionally match LiveUI.jsx's scoreTierColor()
+  // (70/55, #4FAE8E/#D6A24C/#C6604F) rather than this file's own
+  // UI_TOKENS.green/amber/red (75/50, brighter hex) — this row renders the
+  // exact same posture score as the Live page's ScoreGauge and on-video
+  // overlay, and used to disagree with both on color for any score in
+  // [50,55) or [70,75). Not importing scoreTierColor directly to avoid a
+  // cross-file dependency from this general-purpose UI kit onto the
+  // Live-page-specific module — the literal values are copied instead.
+  const col = s>=70?"#4FAE8E":s>=55?"#D6A24C":s>0?"#C6604F":"rgba(148,163,184,.25)";
+  const icon = s>=70?"✅":s>=55?"⚠️":s>0?"❌":"○";
   return (
     <div style={{ padding:"8px 0", borderBottom:`1px solid ${UI_TOKENS.border}` }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>

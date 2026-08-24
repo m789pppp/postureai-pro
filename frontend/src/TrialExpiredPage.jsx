@@ -19,15 +19,22 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
     btn:    "linear-gradient(135deg,#1a56db,#0891b2)",
   };
 
+  // Prices here were shifted down one tier from the canonical ones in
+  // backend/config/pricing.py / App.jsx TIERS / Billing.jsx PLANS (id
+  // "professional" showed Basic's 199 EGP/$9.99, "elite" showed Pro's
+  // 399 EGP/$19.99 — Elite's real price never appeared on this page at
+  // all). onUpgrade(plan.id) passes the id straight through to checkout,
+  // so a user who saw "$9.99" here and clicked would actually be charged
+  // $19.99 — corrected to match the real per-tier prices everywhere else.
   const plans = isAr ? [
-    { id:"professional", name:"احترافي", price:"199 جنيه", period:"/شهر", color:"#0ea5e9",
+    { id:"professional", name:"احترافي", price:"399 جنيه", period:"/شهر", color:"#0ea5e9",
       features:["✓ AI Coach بدون حدود","✓ تقارير PDF كاملة","✓ تحليل وضعية متقدم","✓ إحصائيات تفصيلية"] },
-    { id:"elite", name:"إيليت", price:"399 جنيه", period:"/شهر", color:"#10b981", badge:"الأفضل",
+    { id:"elite", name:"إيليت", price:"699 جنيه", period:"/شهر", color:"#10b981", badge:"الأفضل",
       features:["✓ كل مميزات الاحترافي","✓ AI بالذكاء الاصطناعي العميق","✓ توقع الألم المبكر","✓ دعم أولوية 24/7"] },
   ] : [
-    { id:"professional", name:"Professional", price:"$9.99", period:"/mo", color:"#0ea5e9",
+    { id:"professional", name:"Professional", price:"$19.99", period:"/mo", color:"#0ea5e9",
       features:["✓ Unlimited AI Coach","✓ Full PDF Reports","✓ Advanced Analysis","✓ Detailed Stats"] },
-    { id:"elite", name:"Elite", price:"$19.99", period:"/mo", color:"#10b981", badge:"Best Value",
+    { id:"elite", name:"Elite", price:"$39.99", period:"/mo", color:"#10b981", badge:"Best Value",
       features:["✓ Everything in Pro","✓ Deep AI Insights","✓ Pain Onset Prediction","✓ Priority Support 24/7"] },
   ];
 

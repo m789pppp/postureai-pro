@@ -106,7 +106,7 @@ const B2B_PAID_PLANS = [
   },
 ];
 
-function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
+function PlanCard({ plan, billing, region, onSelect, currentPlan, highlighted, lang, cs }) {
   const isAr    = lang === "ar";
   const isEGP   = region === "egypt";
   const isCurr  = currentPlan === plan.id;
@@ -121,11 +121,26 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
   const perMonth  = (billing==="yearly" && price)
     ? (isEGP ? Math.round(price/12) : (price/12).toFixed(2))
     : null;
+  // Was a hardcoded "Save 20%" — B2C plans are actually priced at 8x
+  // monthly (~33% off, e.g. Basic: 199*12=2,388 vs 1,590 charged), while
+  // B2B plans really are ~20% off. Computing it from the real numbers
+  // means the label is correct for both and can't drift from the price.
+  const monthlyPrice = plan.price
+    ? (isEGP ? plan.price.egp_monthly : plan.price.usd_monthly)
+    : null;
+  const discountPct = (billing==="yearly" && price && monthlyPrice)
+    ? Math.round((1 - price/(monthlyPrice*12)) * 100)
+    : null;
 
   return (
     <div style={{
       background: isPopular ? `${plan.color}08` : "rgba(255,255,255,.03)",
-      border: `1.5px solid ${isPopular ? plan.color : "rgba(255,255,255,.08)"}`,
+      // A deep-linked plan (?plan=... in the URL) gets its own ring instead
+      // of piggybacking on isPopular's border color — a link to a
+      // non-"popular" plan (e.g. Elite) used to land on a page where nothing
+      // visually distinguished which plan the visitor actually clicked.
+      border: highlighted ? `2px solid ${plan.color}` : `1.5px solid ${isPopular ? plan.color : "rgba(255,255,255,.08)"}`,
+      boxShadow: highlighted ? `0 0 0 4px ${plan.color}22` : "none",
       borderRadius: 16, padding: "28px 24px", flex: 1, minWidth: 240, maxWidth: 320,
       position: "relative", transition: "transform .2s",
     }}>
@@ -167,10 +182,10 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
             <span style={{ fontSize: 13, color: "#64748b", marginLeft: 4 }}>
               {isEGP && "EGP "}/{isAr?"شهر":"mo"}
             </span>
-            {billing === "yearly" && (
+            {billing === "yearly" && discountPct != null && (
               <div style={{ fontSize: 11, color: "#10b981", marginTop: 4 }}>
-                {isAr ? `${isEGP?price+" EGP":"$"+price} / سنة — وفّر 20%`
-                       : `${isEGP?price+" EGP":"$"+price} / year — Save 20%`}
+                {isAr ? `${isEGP?price+" EGP":"$"+price} / سنة — وفّر ${discountPct}%`
+                       : `${isEGP?price+" EGP":"$"+price} / year — Save ${discountPct}%`}
               </div>
             )}
           </>
@@ -206,8 +221,14 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, lang, cs }) {
   );
 }
 
-export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, cs: csProp, defaultSeg }) {
-  const [billing, setBilling] = useState("monthly");
+export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSelectPlan, cs: csProp, defaultSeg, defaultBilling, highlightPlanId }) {
+  // defaultBilling/highlightPlanId let a caller pre-select the billing cycle
+  // and visually point at a specific plan when the visitor arrived via a
+  // ?plan=&billing= deep link (App.jsx passes these from deepPlan/
+  // deepBilling) — previously ignored, so a link like
+  // "/auth?mode=signup&plan=elite&billing=yearly" always landed on this
+  // page's hardcoded monthly/B2C default regardless of what was clicked.
+  const [billing, setBilling] = useState(defaultBilling || "monthly");
   const [region,  setRegion]  = useState("gulf");
   const [seg,     setSeg]     = useState(defaultSeg || "b2c");  // "b2c" | "b2b"
   const isAr   = lang === "ar";
@@ -222,6 +243,14 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSe
     if (onSelectPlan) onSelectPlan(planId, billing, region);
     else if (onSelect) onSelect(planId);
   };
+
+  // Same "hardcoded 20%" bug as PlanCard above, at the toggle-button level —
+  // B2C is really ~33% off, B2B really is ~20% off. Derived from the first
+  // priced plan in whichever segment is active.
+  const _refPlan = plans.find(p => p.price);
+  const segDiscountPct = _refPlan
+    ? Math.round((1 - _refPlan.price.usd_yearly/(_refPlan.price.usd_monthly*12)) * 100)
+    : 20;
 
   return (
     <div style={{ fontFamily: "Inter,sans-serif", padding: "40px 20px", maxWidth: 1100, margin: "0 auto" }}>
@@ -282,7 +311,7 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSe
           }}>
             {b === "monthly"
               ? (isAr ? "شهري" : "Monthly")
-              : (isAr ? "سنوي — وفّر 20%" : "Yearly — Save 20%")}
+              : (isAr ? `سنوي — وفّر ${segDiscountPct}%` : `Yearly — Save ${segDiscountPct}%`)}
           </button>
         ))}
       </div>
@@ -297,6 +326,7 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSe
             region={region}
             onSelect={handleSelect}
             currentPlan={currentPlan}
+            highlighted={highlightPlanId === plan.id}
             lang={lang}
             cs={cs}
           />
