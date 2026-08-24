@@ -142,16 +142,13 @@ async function confirmBookingPayment(db, orderId, amount, transactionId) {
   return { received: true, action: "booking_confirmed", booking_id: parsed.bookingId };
 }
 
-export const config = { api: { bodyParser: false } };
-
-async function readRawBody(req) {
-  const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
-
+// `config` and `readRawBody` were duplicated here (a second copy of the
+// same two declarations already defined near the top of this file, lines
+// 23/25) — a leftover from how an earlier patch got applied. Two top-level
+// `export const config` declarations in the same ES module is a hard
+// SyntaxError at parse time, which took down this ENTIRE handler — every
+// Kashier payment webhook call would 500 immediately (module fails to even
+// load), meaning no subscription ever activated after a real charge.
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
