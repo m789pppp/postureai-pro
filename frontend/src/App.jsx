@@ -5584,12 +5584,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
     {showCompanyOnboard&&<ErrorBoundary key="companyonboard-live"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/></ErrorBoundary>}
     <div dir={dir} style={{
       display:"grid",
-      // Video panel was a fixed 320px while the stats/history panel took
-      // whatever space remained (unbounded 1fr) — on any reasonably wide
-      // screen this meant a small camera next to an increasingly empty
-      // Score History graph. Camera feed is the thing users actually look
-      // at during a live session, so it should read as the primary element:
-      // widened to 460px, and the stats panel capped so it can't sprawl.
+      // Camera panel is the narrow (320px) fixed track; the stats/history
+      // panel takes the remaining wide (1fr) space. Restored per explicit
+      // user preference after a later pass briefly swapped this so the
+      // camera took the wide track instead — kept here, reverted back.
       gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
       // The sidebar column below is `position:sticky, maxHeight:100vh,
       // overflowY:auto` on purpose — a standard sticky-sidebar-next-to-
@@ -5863,14 +5861,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
       <div style={{
         display:"flex", flexDirection:"column",
         overflowY:"auto", background:cs.bg,
-        // Was `isAr?1:0` — CSS Grid auto-placement fills tracks in
-        // order-modified document order, so this actually put the stats
-        // panel into whichever track gridTemplateColumns above made the
-        // WIDE 1fr one (track 1 in LTR, track 2 in RTL) — the exact
-        // opposite of the "camera is primary, stats panel capped at
-        // 320px" intent documented above. Swapped so this panel always
-        // lands in the narrow (320px) track.
-        order: isMobile ? 1 : (isAr ? 0 : 1),
+        // Reverted per explicit user preference: camera small (320px) on
+        // the right, stats panel wide — the original arrangement. This
+        // panel (stats) goes in the WIDE 1fr track again.
+        order: isMobile ? 1 : (isAr ? 1 : 0),
         borderRight: isAr ? "none" : `1px solid ${cs.border}`,
         borderLeft:  isAr ? `1px solid ${cs.border}` : "none",
         minWidth:0,
@@ -6147,11 +6141,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
         display:"flex", flexDirection:"column",
         maxHeight: isMobile ? "auto" : "100vh",
         overflowY:"auto",
-        // Same swap as the stats panel's `order` above — this camera+controls
-        // panel is meant to be the WIDE (1fr) track on desktop per the
-        // "camera is primary" comment two blocks up; the old order value put
-        // it in the capped 320px track instead, in both languages.
-        order: isMobile ? 0 : (isAr ? 1 : 0),
+        // Reverted per explicit user preference: camera stays small (320px)
+        // on the right, matching the stats panel's order revert above.
+        order: isMobile ? 0 : (isAr ? 0 : 1),
         position: isMobile ? "static" : "sticky",
         top: 0,
       }}>
