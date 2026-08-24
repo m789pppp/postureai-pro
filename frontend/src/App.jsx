@@ -5189,10 +5189,34 @@ async function downloadPDF(sessionOverride, isClinical=false){
     }catch{return timeStr;}
   };
 
+  // Text colors used to be the same washed-out light-mode-only shades
+  // (#fcd34d/#6ee7b7/#fca5a5/#a5b4fc) regardless of theme — against the
+  // light theme's near-white background these sit around ~1.6:1 contrast
+  // (WCAG wants >=4.5:1) on what's the primary "something's wrong right
+  // now" alert box during a live session. Darker variants for light mode.
   const abox=tp=>({borderRadius:8,padding:"9px 11px",fontSize:10.5,lineHeight:1.5,border:"0.5px solid",
     background:tp==="warn"?"rgba(214,162,76,.07)":tp==="good"?"rgba(79,174,142,.07)":tp==="bad"?"rgba(198,96,79,.07)":"rgba(99,102,241,.07)",
     borderColor:tp==="warn"?"rgba(214,162,76,.3)":tp==="good"?"rgba(79,174,142,.3)":tp==="bad"?"rgba(198,96,79,.3)":"rgba(99,102,241,.3)",
-    color:tp==="warn"?"#fcd34d":tp==="good"?"#6ee7b7":tp==="bad"?"#fca5a5":"#a5b4fc"});
+    color:tp==="warn"?(darkMode?"#fcd34d":"#b45309"):tp==="good"?(darkMode?"#6ee7b7":"#15803d"):tp==="bad"?(darkMode?"#fca5a5":"#b91c1c"):(darkMode?"#a5b4fc":"#4338ca")});
+
+  // Single source of truth for "how far is the user from the screen"
+  // color, used by the on-video distance chip, the Distance bar's number,
+  // and the Distance bar's position marker. These three used to compute
+  // color independently: the chip derived its color from the analysis
+  // engine's qualityScore/qualityReason (falling back to a calm grey
+  // whenever the quality gate hadn't failed), while the bar derived color
+  // from a simple distCm-vs-optDist threshold — so the same live distance
+  // reading could show as a calm grey pill on the video while the bar
+  // just below it showed amber/red for that identical number. The old bar
+  // threshold was also asymmetric: it only ever escalated to red on the
+  // "too close" side (distCm below optDist[0]-15) — no matter how far the
+  // user sat back, it topped out at amber. Symmetric on both sides now.
+  const distColor = (d, m) => {
+    if (d==null || !m) return cs.muted;
+    if (d>=m.optDist[0] && d<=m.optDist[1]) return "#4FAE8E";
+    if (d>=(m.optDist[0]-15) && d<=(m.optDist[1]+30)) return "#D6A24C";
+    return "#C6604F";
+  };
 
   // ── HOME PAGE ─────────────────────────────────────────────────────
   const tierList=isAr?Object.values(TIERS).slice().reverse():Object.values(TIERS);
@@ -5839,7 +5863,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
       <div style={{
         display:"flex", flexDirection:"column",
         overflowY:"auto", background:cs.bg,
-        order: isMobile ? 1 : (isAr ? 1 : 0),
+        // Was `isAr?1:0` — CSS Grid auto-placement fills tracks in
+        // order-modified document order, so this actually put the stats
+        // panel into whichever track gridTemplateColumns above made the
+        // WIDE 1fr one (track 1 in LTR, track 2 in RTL) — the exact
+        // opposite of the "camera is primary, stats panel capped at
+        // 320px" intent documented above. Swapped so this panel always
+        // lands in the narrow (320px) track.
+        order: isMobile ? 1 : (isAr ? 0 : 1),
         borderRight: isAr ? "none" : `1px solid ${cs.border}`,
         borderLeft:  isAr ? `1px solid ${cs.border}` : "none",
         minWidth:0,
@@ -5976,29 +6007,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
           </div>
         </div>
 
-        {/* AI insight */}
-        {aiInsight&&(
-          <div style={{margin:"0 16px 12px",background:"rgba(79,174,142,.06)",border:"1px solid rgba(79,174,142,.2)",borderRadius:12,padding:"12px 14px",animation:"fadeUp .3s ease"}}>
-            <div style={{fontSize:9.5,fontWeight:700,color:"#4FAE8E",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>
-              {isAr?"تحليل AI":"AI Analysis"}
-            </div>
-            <div style={{fontSize:11.5,color:cs.text,lineHeight:1.65}}>{aiInsight}</div>
-          </div>
-        )}
-        {/* Below Elite this card just never appeared with zero explanation —
-            looked like a missing feature rather than a tier boundary. One
-            small locked hint, same compact style as the tools row below. */}
-        {!aiInsight&&camActive&&!tierAtLeast(effectiveTier,"elite")&&(
-          <div style={{margin:"0 16px 12px",display:"flex"}}>
-            <button onClick={()=>{ addToast(isAr?"🧠 تحليل AI اللحظي متاح لباقة Elite فقط":"🧠 Live AI analysis is an Elite feature","warn"); setShowBilling(true); }}
-              style={{background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:7,
-                padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
-                display:"flex",alignItems:"center",gap:4}}>
-              🔒 🧠 {isAr?"تحليل AI":"AI analysis"}
-              <span style={{fontSize:8,color:"#4FAE8E",fontWeight:800}}>ELITE</span>
-            </button>
-          </div>
-        )}
+        {/* AI insight now lives ONLY in the right sidebar's <AICoachCard>
+            (see "AI Coach" below, next to the camera) — this left-panel copy
+            used to render the exact same `aiInsight` text under a different
+            heading ("AI Analysis") whenever camActive, and its own separate
+            "upgrade to Elite" locked-hint duplicated the sidebar card's own
+            locked state too, so non-Elite users during a live session could
+            see two different "upgrade to unlock AI" prompts on screen at
+            once. Removed here; the sidebar version already covers both the
+            shown-insight and locked states. */}
 
         {/* Recommendations */}
         {analysis?.recommendations&&(
@@ -6130,7 +6147,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
         display:"flex", flexDirection:"column",
         maxHeight: isMobile ? "auto" : "100vh",
         overflowY:"auto",
-        order: isMobile ? 0 : (isAr ? 0 : 1),
+        // Same swap as the stats panel's `order` above — this camera+controls
+        // panel is meant to be the WIDE (1fr) track on desktop per the
+        // "camera is primary" comment two blocks up; the old order value put
+        // it in the capped 320px track instead, in both languages.
+        order: isMobile ? 0 : (isAr ? 1 : 0),
         position: isMobile ? "static" : "sticky",
         top: 0,
       }}>
@@ -6213,7 +6234,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <button onClick={toggleFullscreen}
             title={isFs?(isAr?"إنهاء ملء الشاشة":"Exit fullscreen"):(isAr?"ملء الشاشة":"Fullscreen")}
             aria-label={isFs?(isAr?"إنهاء ملء الشاشة":"Exit fullscreen"):(isAr?"ملء الشاشة":"Fullscreen")} style={{
-            position:"absolute",bottom:8,right:8,zIndex:20,
+            // Was hardcoded right:8 — unlike its sibling overlays on this
+            // same video (status pill, distance chip) which mirror for isAr.
+            position:"absolute",bottom:8,
+            left:isAr?8:"auto", right:isAr?"auto":8, zIndex:20,
             width:32,height:32,borderRadius:8,
             background:"rgba(2,8,16,.8)",border:"1px solid rgba(255,255,255,.15)",
             backdropFilter:"blur(6px)",color:"#e2e8f0",cursor:"pointer",
@@ -6447,16 +6471,22 @@ async function downloadPDF(sessionOverride, isClinical=false){
               further down the page, but that one needs a scroll past ~8
               sections to reach, which is useless for something the user is
               meant to react to while looking at THIS video. Pinned here so
-              it's visible the entire time the camera is on, and reflects
-              qualityScore so it can never show a number that disagrees with
-              a "too close/far" warning — it just goes into the warning
-              state itself instead of freezing on a stale reading. */}
+              it's visible the entire time the camera is on. Color now comes
+              from the same distColor() the Distance bar further down uses —
+              this chip used to color itself off the analysis engine's
+              qualityScore/qualityReason instead (falling back to a calm
+              grey whenever the quality gate hadn't failed), so the same
+              live distance reading could show a calm grey pill here while
+              the Distance bar showed amber/red for that identical number.
+              badQuality/qualityReason are still used for the LABEL text
+              (an actually more specific "too close"/"too far"/"body
+              cropped" reason from the engine), just not for color anymore. */}
           {camActive && M_ && (
             <div style={{position:"absolute",top:38,left:isAr?"auto":8,right:isAr?8:"auto",zIndex:11}}>
               {(()=>{
                 const badQuality = analysis?.qualityScore != null && analysis.qualityScore < 100;
                 const inRange = !badQuality && distCm!=null && distCm>=M_.optDist[0] && distCm<=M_.optDist[1];
-                const col = badQuality ? "#D6A24C" : inRange ? "#4FAE8E" : "#8A93A3";
+                const col = distColor(distCm, M_);
                 const label = badQuality
                   ? (analysis.qualityReason==="too_close" ? (isAr?"قريب جداً":"Too close")
                     : analysis.qualityReason==="too_far" ? (isAr?"بعيد جداً":"Too far")
@@ -6630,7 +6660,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               // control bar has no cue-aware guard either), so reaching for
               // Pause/Stop while a cue was showing meant tapping through
               // overlapping text. Clear the control bar's band in fullscreen.
-              <div style={{position:"absolute",left:8,right:46,bottom:isFs?68:8,
+              // left:8/right:46 was hardcoded — the asymmetric 46 exists to
+              // dodge the fullscreen button, which now mirrors to the
+              // opposite side for isAr (see its fix above), so this must
+              // mirror too or the two will start overlapping in Arabic.
+              <div style={{position:"absolute",
+                left:isAr?46:8, right:isAr?8:46, bottom:isFs?68:8,
                 background:"rgba(2,8,16,.9)",backdropFilter:"blur(6px)",
                 border:`1.5px solid ${cue.col}`,borderRadius:12,
                 padding:"10px 12px",display:"flex",alignItems:"center",gap:10,
@@ -7008,7 +7043,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
               <span style={{fontSize:10,color:cs.muted,fontWeight:600}}>{isAr?"المسافة":"Distance"}</span>
-              <span style={{fontSize:12,fontWeight:700,color:distCm>=M_.optDist[0]&&distCm<=M_.optDist[1]?"#4FAE8E":distCm>=(M_.optDist[0]-15)?"#D6A24C":"#C6604F"}}>
+              <span style={{fontSize:12,fontWeight:700,color:distColor(distCm, M_)}}>
                 {Math.round(distCm)}cm
               </span>
             </div>
@@ -7028,7 +7063,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 position:"absolute",top:1,bottom:1,
                 insetInlineStart:`${clamp((distCm-20)/(115-20)*100,2,96)}%`,
                 width:6,borderRadius:99,
-                background:distCm>=M_.optDist[0]&&distCm<=M_.optDist[1]?"#4FAE8E":distCm>=(M_.optDist[0]-15)?"#D6A24C":"#C6604F",
+                background:distColor(distCm, M_),
                 transition:"inset-inline-start .4s ease",
               }}/>
             </div>
@@ -7079,11 +7114,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <span style={{fontSize:11,color:scoreTierColor(scoreStatus?.score??100),fontWeight:600}}>
                 {isAr?`النتيجة ${scoreStatus?.score}/100 — ${scoreStatus?.grade}`:`Score ${scoreStatus?.score}/100 — ${scoreStatus?.grade}`}
                 {camActive&&calibData?.tolerances&&(
-                  <span style={{color:"#34d399",fontWeight:500}}> · {isAr?"مُخصّص":"Personalised"}</span>
+                  <span style={{color:darkMode?"#34d399":"#15803d",fontWeight:500}}> · {isAr?"مُخصّص":"Personalised"}</span>
                 )}
               </span>
             </div>
-            <div style={{fontSize:10,color:cs.muted,marginTop:3,paddingLeft:16,lineHeight:1.4}}>
+            {/* paddingLeft was hardcoded — meant to indent this line under the
+                dot+text row above, which sits at the physical right edge in
+                RTL, so a physical-left indent no longer lines up under it. */}
+            <div style={{fontSize:10,color:cs.muted,marginTop:3,paddingLeft:isAr?0:16,paddingRight:isAr?16:0,lineHeight:1.4}}>
               {gradeContext(scoreStatus?.score, isAr)}
             </div>
           </div>
@@ -7091,8 +7129,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {!(scoreStatus&&alertMsg.type!=="warn"&&alertMsg.type!=="bad")&&camActive&&calibData?.tolerances&&(
           <div style={{padding:"7px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",alignItems:"center",gap:8,background:"rgba(79,174,142,.05)"}}>
-            <span style={{fontSize:11,color:"#34d399",fontWeight:700}}>✓</span>
-            <span style={{fontSize:11,color:"#34d399",fontWeight:600}}>
+            <span style={{fontSize:11,color:darkMode?"#34d399":"#15803d",fontWeight:700}}>✓</span>
+            <span style={{fontSize:11,color:darkMode?"#34d399":"#15803d",fontWeight:600}}>
               {isAr?"التحليل مُخصّص لوضعيتك الطبيعية":"Analysis personalised to your natural posture"}
             </span>
           </div>
@@ -7174,6 +7212,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   const sc=hist.length?Math.round(hist.reduce((a,b)=>a+b,0)/hist.length):0;
                   const dur=sessRef.current?Math.floor((Date.now()-sessRef.current)/1000):0;
                   const gp=totalRef.current?Math.round(goodRef.current/totalRef.current*100):0;
+                  // Was silent while working and on success — only errors ever
+                  // showed a toast, unlike the near-identical PDF button in the
+                  // session-result modal (see its "Generating PDF..."/"✅
+                  // downloaded" toasts above). A user clicking this mid-session
+                  // had zero feedback until the browser's download popped up
+                  // (or silently didn't).
+                  addToast(isAr?"جاري إنشاء PDF...":"Generating PDF...","info");
                   try {
                     const { generateSessionPDF } = await import("./lib/pdfReports.js");
                     await generateSessionPDF({
@@ -7188,9 +7233,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
                       allSessions: userSessions,
                       aiSummary: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
                     });
+                    addToast(isAr?"✅ تم تحميل PDF":"✅ PDF downloaded","success");
                   } catch(e){ addToast("PDF: "+(e?.message||"error"),"error"); }
                 }}
-                right={<Icon name="chevronDown" size={13} color={cs.muted} style={{transform:isAr?"rotate(90deg)":"rotate(-90deg)"}}/>}/>
+                // Was the same rotated-chevron affordance used for "Alert
+                // rules" one row up — that row opens another panel, so a
+                // chevron ("more to see") fits. This row triggers an
+                // immediate file download, not navigation, so the leading
+                // download icon is repeated instead of implying there's a
+                // sub-view to expand into.
+                right={<Icon name="download" size={13} color={cs.muted}/>}/>
             )}
           </div>
           {/* Calibrate for accuracy — personalises scoring to the user's own
@@ -7200,10 +7252,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <button onClick={()=>setShowCalibWizard(true)} style={{
             background:calibData?"rgba(148,163,184,.06)":"rgba(79,174,142,.1)",
             border:`1px solid ${calibData?cs.border:"rgba(79,174,142,.4)"}`,borderRadius:10,
-            padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:"#34d399",cursor:"pointer",
+            padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:(darkMode?"#34d399":"#15803d"),cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",gap:6,
           }}>
-            <Icon name="target" size={14} color={calibData?cs.muted:"#34d399"}/>
+            <Icon name="target" size={14} color={calibData?cs.muted:(darkMode?"#34d399":"#15803d")}/>
             {calibData?(isAr?"إعادة المعايرة":"Re-calibrate"):(isAr?"عايِر للدقة (مُوصى به)":"Calibrate for accuracy")}
           </button>
           {/* Break-reminder chime toggle + interval picker — used to be a
@@ -7395,7 +7447,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* #10 Streak protection alert */}
         {streakAlert&&(
           <div style={{margin:"10px 14px",background:"rgba(214,162,76,.08)",border:"1px solid rgba(214,162,76,.35)",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#fcd34d",marginBottom:4}}>
+            {/* #fcd34d is a light-mode-illegible shade on its own (~1.6:1
+                against this app's near-white light background) — darker
+                variant for light mode, same pattern as the abox() fix above. */}
+            <div style={{fontSize:13,fontWeight:700,color:darkMode?"#fcd34d":"#b45309",marginBottom:4}}>
               ⚡ {isAr?`سلسلة الـ ${profile?.streak_days} يوم بتاعتك في خطر!`:`Your ${profile?.streak_days}-day streak is at risk!`}
             </div>
             <div style={{fontSize:11,color:cs.muted,marginBottom:10}}>
@@ -7404,7 +7459,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{display:"flex",gap:6}}>
               <button onClick={()=>{setStreakAlert(false);goToBreak();}} style={{
                 flex:1,background:"rgba(214,162,76,.15)",border:"1px solid rgba(214,162,76,.35)",
-                borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
+                borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:700,color:darkMode?"#fcd34d":"#b45309",cursor:"pointer"}}>
                 {isAr?"استراحة الآن 🧘":"Break now 🧘"}
               </button>
               <button onClick={()=>setStreakAlert(false)} style={{
@@ -7419,7 +7474,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* #4 Contextual notification permission card */}
         {showNotifCard&&"Notification" in window&&Notification.permission==="default"&&(
           <div style={{margin:"10px 14px",background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.25)",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#a5b4fc",marginBottom:4}}>
+            <div style={{fontSize:12,fontWeight:700,color:darkMode?"#a5b4fc":"#4338ca",marginBottom:4}}>
               🔔 {isAr?"تفعيل التنبيهات؟":"Enable background alerts?"}
             </div>
             <div style={{fontSize:10,color:cs.muted,marginBottom:10,lineHeight:1.5}}>
@@ -7428,7 +7483,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{display:"flex",gap:6}}>
               <button onClick={()=>{Notification.requestPermission().catch(()=>{});setShowNotifCard(false);}} style={{
                 flex:1,background:"rgba(99,102,241,.15)",border:"1px solid rgba(99,102,241,.35)",
-                borderRadius:8,padding:"6px 0",fontSize:11,fontWeight:700,color:"#a5b4fc",cursor:"pointer"}}>
+                borderRadius:8,padding:"6px 0",fontSize:11,fontWeight:700,color:darkMode?"#a5b4fc":"#4338ca",cursor:"pointer"}}>
                 {isAr?"السماح ✓":"Allow ✓"}
               </button>
               <button onClick={()=>setShowNotifCard(false)} style={{
@@ -7443,13 +7498,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Break reminder */}
         {showBreak&&(
           <div style={{margin:"10px 14px",background:"rgba(214,162,76,.08)",border:"1px solid rgba(214,162,76,.3)",borderRadius:12,padding:"12px 14px",textAlign:"center",animation:"fadeUp .3s ease"}}>
-            <div style={{fontSize:14,fontWeight:700,color:"#fcd34d",marginBottom:4}}>⏰ {isAr?"وقت استراحة!":"Break time!"}</div>
+            <div style={{fontSize:14,fontWeight:700,color:darkMode?"#fcd34d":"#b45309",marginBottom:4}}>⏰ {isAr?"وقت استراحة!":"Break time!"}</div>
             <div style={{fontSize:11,color:cs.muted,marginBottom:10}}>
               {isAr?`${breakIntervalMin} دقيقة مرت — استرح دقيقتين`:`${breakIntervalMin} min passed — take a 2-min stretch`}
             </div>
             <div style={{display:"flex",gap:6,justifyContent:"center"}}>
               <button onClick={()=>{dismissBreak();goToBreak();}}
-                style={{background:"rgba(214,162,76,.18)",border:"1px solid rgba(214,162,76,.4)",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,color:"#fcd34d",cursor:"pointer"}}>
+                style={{background:"rgba(214,162,76,.18)",border:"1px solid rgba(214,162,76,.4)",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,color:darkMode?"#fcd34d":"#b45309",cursor:"pointer"}}>
                 {isAr?"ابدأ الاستراحة 🧘":"Start break 🧘"}
               </button>
               <button onClick={()=>snoozeBreak(5)}
