@@ -26,7 +26,13 @@ const sc = v => v >= 75 ? "#10b981" : v >= 50 ? "#f59e0b" : "#ef4444";
 const pct = (a, b) => b ? Math.round(((a - b) / b) * 100) : 0;
 const avg = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
 
-function MdText({ text }) {
+function MdText({ text, isAr }) {
+  // `isAr` used to be referenced below (in the table-header cell) with no
+  // closure over it — this component never received it as a prop, only
+  // the much-later AIInsights component that renders it has `isAr` in
+  // scope. That's a bare undeclared identifier, throwing ReferenceError
+  // and crashing the whole modal any time an AI response contains a
+  // markdown table (a format this file's own system prompts allow).
   if (!text) return null;
 
   // Process line by line for correct bullet grouping
@@ -310,7 +316,7 @@ function AITextSection({ loading, data, error, onRetry, isAr, D }) {
       )}
       {!loading && data && (
         <div style={{ ...T.body, color:"#b8cce0", animation:"fadeIn 300ms both" }}>
-          <MdText text={data}/>
+          <MdText text={data} isAr={isAr}/>
         </div>
       )}
       {!loading && error && (

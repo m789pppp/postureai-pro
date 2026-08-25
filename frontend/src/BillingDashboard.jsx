@@ -17,13 +17,19 @@ const TOKENS = {
   blue:C.blue, green:C.green, amber:C.amber, red:C.red,
 };
 
+// Was named after the B2B plan tier ("Starter"/"Growth"/"Enterprise") even
+// though this dashboard is B2C-only (see the unused `isCompany` note further
+// down) — a real Pro subscriber saw their own plan badge read "GROWTH", a
+// Basic subscriber saw "STARTER", both B2B plans they never bought. "basic"
+// had no entry at all and silently fell back to PLAN_META.standard.
 const PLAN_META = {
-  standard:     { color:"#64748b", label:"Starter",      labelAr:"ستارتر"    },
-  professional: { color:"#38bdf8", label:"Growth",       labelAr:"جروث"      },
-  elite:        { color:"#10b981", label:"Enterprise",   labelAr:"إنتربرايز" },
+  standard:     { color:"#64748b", label:"Free",         labelAr:"مجاني"     },
+  basic:        { color:"#8b5cf6", label:"Basic",         labelAr:"بيسك"      },
+  professional: { color:"#38bdf8", label:"Pro",           labelAr:"برو"       },
+  elite:        { color:"#10b981", label:"Elite",         labelAr:"إيليت"     },
 };
 
-const PLAN_ORDER = ["standard","professional","elite"];
+const PLAN_ORDER = ["standard","basic","professional","elite"];
 const planRank   = p => PLAN_ORDER.indexOf(p);
 
 const money = n => n != null ? `${Number(n).toLocaleString()} EGP` : "—";
@@ -663,8 +669,10 @@ export function BillingDashboard({ profile, user, payments:initialPayments=[], i
 
             <Divider label={isAr_?"اختر خطة جديدة":"Select New Plan"}/>
 
-            {/* Plan selector */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)",
+            {/* Plan selector — was repeat(3,1fr) matching the old 3-entry
+                PLAN_ORDER, which meant "basic" (now added above) couldn't
+                even be laid out here, on top of not being selectable at all. */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)",
               gap:SP[2], marginBottom:SP[4] }}>
               {PLAN_ORDER.map(plan => {
                 const m   = PLAN_META[plan];
@@ -712,7 +720,14 @@ export function BillingDashboard({ profile, user, payments:initialPayments=[], i
                       fontSize:10, fontWeight:600, cursor:"pointer",
                     }}>
                       {cy==="monthly"?(isAr_?"شهري":"Monthly"):(isAr_?"سنوي":"Yearly")}
-                      {cy==="yearly"&&<span style={{ fontSize:8, color:TOKENS.green, marginLeft:4 }}>-20%</span>}
+                      {/* Was a hardcoded "-20%" — this dashboard doesn't have
+                          the real per-plan price table available to compute
+                          an accurate discount (B2C individual plans are
+                          actually ~33% off annually, not 20% — see the fix
+                          in Billing.jsx's BillingModal), so a wrong static
+                          number was worse than none. Removed rather than
+                          show a number that can be wrong per plan; also had
+                          a hardcoded marginLeft with no RTL swap. */}
                     </button>
                   ))}
                 </div>

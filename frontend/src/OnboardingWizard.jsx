@@ -429,7 +429,13 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
 
 /* ── Step 3: Goals ───────────────────────────────────────────────── */
 function StepGoals({ isAr, profile, setProfile, onNext, onBack }) {
-  const [selected, setSelected] = useState([]);
+  // BUG FIX: this always started empty, even when `profile.goals` already
+  // had a value — every step in this wizard mounts/unmounts fresh as the
+  // user moves between steps (each step index renders a different
+  // component type, so React tears down the old one), so navigating
+  // forward then back to this step silently threw away everything the
+  // user had already selected here.
+  const [selected, setSelected] = useState(profile.goals || []);
   const isCompany = profile.acct_type === "company";
 
   const individualGoals = [
@@ -765,7 +771,10 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
 
 /* ── Step 6: Integrations quick connect ──────────────────────────── */
 function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
-  const [selected, setSelected] = useState([]);
+  // BUG FIX: same remount-drops-state issue as StepGoals — hydrate from
+  // whatever was already saved to profile.interestedIntegrations instead
+  // of always starting from an empty selection.
+  const [selected, setSelected] = useState(profile.interestedIntegrations || []);
   const isCompany = profile.acct_type === "company";
 
   // BUG FIX: Teams ("Team health updates") and Jira ("Auto HR tickets") are
@@ -859,7 +868,10 @@ function StepFinish({ isAr, profile, onComplete }) {
   }, []);
 
   const summary = [
-    { icon: "🎯", label: isAr ? "الدور" : "Role",          value: profile.userType || "Individual" },
+    // BUG FIX: was reading `profile.userType`, a field nothing in this
+    // wizard ever sets (the account-type step writes `acct_type`) — this
+    // always showed "Individual" here, even for company signups.
+    { icon: "🎯", label: isAr ? "الدور" : "Role",          value: profile.acct_type === "company" ? (isAr ? "شركة" : "Company") : (isAr ? "فردي" : "Individual") },
     { icon: "💻", label: isAr ? "وضع الكاميرا" : "Mode",   value: profile.mode || "Laptop" },
     { icon: "🎯", label: isAr ? "الأهداف" : "Goals",       value: `${(profile.goals||[]).length} ${isAr ? "أهداف" : "selected"}` },
     { icon: "🔌", label: isAr ? "التكاملات" : "Integrations", value: `${(profile.interestedIntegrations||[]).length} ${isAr ? "مُختارة" : "selected"}` },
@@ -939,10 +951,15 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
         updateDoc(doc(db, "users", user.uid), {
           onboarding_step:         step,
           onboarding_step_at:      new Date().toISOString(),
-          // Save partial profile data progressively
+          // Save partial profile data progressively. BUG FIX: this used to
+          // save `profile.userType`, a field this wizard never actually
+          // sets (the real field is `acct_type`) — so account type was
+          // silently never persisted, and interestedIntegrations wasn't
+          // saved either, even though both are needed to resume correctly.
           ...(profile.name  ? { name:  profile.name  } : {}),
           ...(profile.goals ? { goals: profile.goals } : {}),
-          ...(profile.userType ? { user_type: profile.userType } : {}),
+          ...(profile.acct_type ? { onboarding_acct_type: profile.acct_type } : {}),
+          ...(profile.interestedIntegrations ? { onboarding_integrations: profile.interestedIntegrations } : {}),
         }).catch(() => {}) // silent — don't block UI
       )
     );
@@ -954,8 +971,24 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
     import("firebase/firestore").then(({ doc, getDoc }) =>
       import("./firebase.js").then(({ db }) =>
         getDoc(doc(db, "users", user.uid)).then(snap => {
-          const saved = snap.data()?.onboarding_step;
+          const data  = snap.data();
+          const saved = data?.onboarding_step;
           if (saved && saved > 0 && saved < 8) { // don't resume from finish step
+            // BUG FIX: this jumped straight to the saved step but never
+            // restored the profile fields that went with it — a user who
+            // closed the tab on the Goals/Integrations step and came back
+            // landed there again with an EMPTY profile: no name, no
+            // account type (so company accounts silently saw the
+            // individual goal/integration list — see StepGoals/
+            // StepIntegrations), and none of their previously saved
+            // selections.
+            setProfile(p => ({
+              ...p,
+              ...(data.name ? { name: data.name } : {}),
+              ...(data.goals ? { goals: data.goals } : {}),
+              ...(data.onboarding_acct_type ? { acct_type: data.onboarding_acct_type } : {}),
+              ...(data.onboarding_integrations ? { interestedIntegrations: data.onboarding_integrations } : {}),
+            }));
             setStep(saved);
           }
         }).catch(() => {})

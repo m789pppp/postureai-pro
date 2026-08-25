@@ -886,7 +886,15 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     background:fieldErr.terms?"rgba(239,68,68,.05)":agreeTerms?"rgba(26,86,219,.04)":"transparent",
                     border:`1.5px solid ${fieldErr.terms?"rgba(239,68,68,.45)":agreeTerms?"rgba(26,86,219,.3)":t.border}`,
                     transition:"all .2s"}}>
-                    <div onClick={()=>{setAgreeTerms(v=>!v);touch("terms");}} style={{
+                    {/* Was a plain <div onClick>, not a real control — invisible
+                        to screen readers and unreachable by keyboard, so a
+                        keyboard-only user had no way to accept Terms and
+                        finish signup. */}
+                    <div onClick={()=>{setAgreeTerms(v=>!v);touch("terms");}}
+                      role="checkbox" aria-checked={agreeTerms} tabIndex={0}
+                      aria-label={isAr?"أوافق على شروط الاستخدام وسياسة الخصوصية":"I agree to the Terms of Service and Privacy Policy"}
+                      onKeyDown={e=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); setAgreeTerms(v=>!v); touch("terms"); } }}
+                      style={{
                       width:20,height:20,borderRadius:5,flexShrink:0,marginTop:1,
                       background:agreeTerms?t.accBtn:"transparent",
                       border:`2px solid ${fieldErr.terms?"rgba(239,68,68,.6)":agreeTerms?t.acc:t.border}`,
@@ -912,7 +920,11 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                   background:newsletter?"rgba(26,86,219,.05)":"transparent",
                   border:`1px solid ${newsletter?"rgba(26,86,219,.2)":t.border}`,
                   transition:"all .2s"}}>
-                  <div onClick={()=>setNewsletter(v=>!v)} style={{
+                  <div onClick={()=>setNewsletter(v=>!v)}
+                    role="checkbox" aria-checked={newsletter} tabIndex={0}
+                    aria-label={isAr?"أريد تلقي نصائح وتحديثات Corvus":"Send me Corvus tips and updates"}
+                    onKeyDown={e=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); setNewsletter(v=>!v); } }}
+                    style={{
                     width:18,height:18,borderRadius:4,flexShrink:0,
                     background:newsletter?"rgba(26,86,219,.9)":"transparent",
                     border:`1.5px solid ${newsletter?t.acc:t.border}`,
