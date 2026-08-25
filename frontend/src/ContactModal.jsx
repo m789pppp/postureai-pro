@@ -10,7 +10,7 @@ const TOPICS_AR = ["سؤال عام", "الفواتير", "مشكلة تقنية
  * this too). Falls back to a mailto: link if the request fails, so a
  * network hiccup never leaves the user with no way to reach support.
  */
-export function ContactModal({ cs, isAr = false, supportEmail = "m789pppp@gmail.com", onClose }) {
+export function ContactModal({ cs, isAr = false, supportEmail = "m789pppp@gmail.com", supportPhone = "01210271841", onClose }) {
   useBodyScrollLock();
   const t = isAr ? TOPICS_AR : TOPICS_EN;
   const [name, setName] = useState("");
@@ -76,7 +76,8 @@ export function ContactModal({ cs, isAr = false, supportEmail = "m789pppp@gmail.
             <div style={{ fontSize: 13, color: muted, marginBottom: 20 }}>
               {isAr ? "هنرد عليك على إيميلك في أقرب وقت." : "We'll get back to you at your email soon."}
             </div>
-            <button onClick={onClose} style={{ background: "rgba(56,139,253,.15)", border: "1px solid rgba(56,139,253,.35)", color: "#60a5fa", borderRadius: 10, padding: "9px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            <DirectContactInfo isAr={isAr} email={supportEmail} phone={supportPhone} border={border} muted={muted} text={text} />
+            <button onClick={onClose} style={{ marginTop: 18, background: "rgba(56,139,253,.15)", border: "1px solid rgba(56,139,253,.35)", color: "#60a5fa", borderRadius: 10, padding: "9px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
               {isAr ? "تمام" : "Done"}
             </button>
           </div>
@@ -148,8 +149,30 @@ export function ContactModal({ cs, isAr = false, supportEmail = "m789pppp@gmail.
             >
               {status === "sending" ? (isAr ? "بيتبعت..." : "Sending...") : (isAr ? "ابعت الرسالة" : "Send message")}
             </button>
+
+            <DirectContactInfo isAr={isAr} email={supportEmail} phone={supportPhone} border={border} muted={muted} text={text} />
           </form>
         )}
+      </div>
+    </div>
+  );
+}
+
+function DirectContactInfo({ isAr, email, phone, border, muted, text }) {
+  return (
+    <div style={{ marginTop: 22, paddingTop: 18, borderTop: `1px solid ${border}` }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>
+        {isAr ? "أو تواصل مباشرة" : "Or reach us directly"}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <a href={`tel:${phone.replace(/\s+/g, "")}`} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: text, textDecoration: "none", fontWeight: 600 }}>
+          <span style={{ fontSize: 15 }}>📞</span>
+          <span dir="ltr">{phone}</span>
+        </a>
+        <a href={`mailto:${email}`} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: text, textDecoration: "none", fontWeight: 600 }}>
+          <span style={{ fontSize: 15 }}>✉️</span>
+          <span dir="ltr">{email}</span>
+        </a>
       </div>
     </div>
   );
