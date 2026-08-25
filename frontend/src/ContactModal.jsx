@@ -10,7 +10,7 @@ const TOPICS_AR = ["سؤال عام", "الفواتير", "مشكلة تقنية
  * this too). Falls back to a mailto: link if the request fails, so a
  * network hiccup never leaves the user with no way to reach support.
  */
-export function ContactModal({ cs, isAr = false, supportEmail = "support@corvus.io", onClose }) {
+export function ContactModal({ cs, isAr = false, supportEmail = "m789pppp@gmail.com", onClose }) {
   useBodyScrollLock();
   const t = isAr ? TOPICS_AR : TOPICS_EN;
   const [name, setName] = useState("");

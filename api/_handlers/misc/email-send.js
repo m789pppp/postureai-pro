@@ -27,7 +27,7 @@ function getAdminAuth() {
 
 const RESEND_KEY   = process.env.RESEND_API_KEY || "";
 const FROM_EMAIL   = process.env.EMAIL_FROM     || "Corvus PostureAI <noreply@corvus.io>";
-const SUPPORT_EMAIL_TO = process.env.SUPPORT_EMAIL || "support@corvus.io";
+const SUPPORT_EMAIL_TO = process.env.SUPPORT_EMAIL || "m789pppp@gmail.com";
 const APP_URL      = process.env.VITE_APP_URL   || "https://postureai-pro-omega-nine.vercel.app";
 
 // ── Send via Resend ───────────────────────────────────────────────

@@ -11,7 +11,7 @@ const T = {
 };
 const FD = "'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif";
 const FM = "'IBM Plex Mono','Segoe UI',monospace";
-const SUPPORT = import.meta.env.VITE_SUPPORT_EMAIL || "support@corvus.io";
+const SUPPORT = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
 
 // ── Nav links → the dedicated standalone pages (matches LandingPageV7's nav) ──
 const NAV_EN = [
