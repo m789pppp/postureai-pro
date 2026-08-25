@@ -157,7 +157,7 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, highlighted, l
       <div style={{ fontSize: 11, fontWeight: 700, color: plan.color, marginBottom: 4, letterSpacing: 1 }}>
         {isAr ? plan.name.ar : plan.name.en}
       </div>
-      <div style={{ fontSize: 11, color: "#64748b", marginBottom: 20 }}>
+      <div style={{ fontSize: 11, color: cs.muted, marginBottom: 20 }}>
         {isAr ? plan.tagline.ar : plan.tagline.en}
       </div>
 
@@ -165,21 +165,21 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, highlighted, l
       <div style={{ marginBottom: 20 }}>
         {price == null ? (
           <div>
-            <div style={{ fontSize:22, fontWeight:800, color:"#f0f6ff" }}>
+            <div style={{ fontSize:22, fontWeight:800, color:cs.text }}>
               {isAr ? "تواصل معنا" : "Contact Sales"}
             </div>
             {plan.startingAtUsd && (
-              <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: cs.muted, marginTop: 4 }}>
                 {isAr ? `يبدأ من $${plan.startingAtUsd}/شهر` : `Starting at $${plan.startingAtUsd}/mo`}
               </div>
             )}
           </div>
         ) : (
           <>
-            <span style={{ fontSize: 40, fontWeight: 900, color: "#f0f6ff" }}>
+            <span style={{ fontSize: 40, fontWeight: 900, color: cs.text }}>
               {!isEGP && "$"}{billing === "yearly" ? perMonth : price}
             </span>
-            <span style={{ fontSize: 13, color: "#64748b", marginLeft: 4 }}>
+            <span style={{ fontSize: 13, color: cs.muted, marginLeft: isAr?0:4, marginRight: isAr?4:0 }}>
               {isEGP && "EGP "}/{isAr?"شهر":"mo"}
             </span>
             {billing === "yearly" && discountPct != null && (
@@ -206,8 +206,8 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, highlighted, l
         disabled={isCurr}
         style={{
           width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
-          background: isCurr ? "rgba(255,255,255,.06)" : plan.color,
-          color: isCurr ? "#64748b" : "#fff", fontWeight: 700, fontSize: 14,
+          background: isCurr ? cs.border : plan.color,
+          color: isCurr ? cs.muted : "#fff", fontWeight: 700, fontSize: 14,
           cursor: isCurr ? "default" : "pointer",
         }}
       >

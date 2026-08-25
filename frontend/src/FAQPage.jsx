@@ -64,7 +64,12 @@ const CATEGORIES = [
   },
 ];
 
-function FaqItem({ q, a, color, isOpen, onToggle }) {
+function FaqItem({ q, a, color, isOpen, onToggle, lang }) {
+  // `lang` used to be referenced here with no closure over it — this
+  // component never received it as a prop, only the sibling FAQPage
+  // component that renders it has `lang` in scope. That's a bare
+  // undeclared identifier, which threw ReferenceError on every render —
+  // the whole FAQ page crashed for every visitor, in both languages.
   return (
     <div style={{ borderBottom:"1px solid rgba(148,163,184,.06)" }}>
       <button onClick={onToggle} style={{
@@ -143,12 +148,18 @@ export default function FAQPage() {
 
           {/* Search */}
           <div style={{ maxWidth:480, margin:"0 auto", position:"relative" }}>
-            <span style={{ position:"absolute", left:16, top:"50%", transform:"translateY(-50%)",
+            {/* Icon + input padding were hardcoded to the left with no lang
+                check, unlike this file's own textAlign:lang==="ar"?"right":"left"
+                convention used elsewhere — in Arabic the icon overlapped the
+                start of right-aligned placeholder text instead of sitting at
+                the reading-start (right) edge. */}
+            <span style={{ position:"absolute", left:lang==="ar"?"auto":16, right:lang==="ar"?16:"auto",
+              top:"50%", transform:"translateY(-50%)",
               fontSize:16, color:T.muted, pointerEvents:"none" }}>🔍</span>
             <input className="faq-search" value={search} onChange={e=>setSearch(e.target.value)}
               placeholder="Search all questions..."
               style={{
-                width:"100%", padding:"14px 16px 14px 44px",
+                width:"100%", padding:lang==="ar"?"14px 44px 14px 16px":"14px 16px 14px 44px",
                 background:T.card, border:"1px solid rgba(148,163,184,.12)",
                 borderRadius:12, fontSize:15, color:T.text,
                 fontFamily:FD, transition:"border-color .2s, box-shadow .2s",
@@ -174,7 +185,7 @@ export default function FAQPage() {
                 </p>
               </div>
             ) : filtered.map(([q, a, color, cat], i) => (
-              <FaqItem key={i} q={q} a={a} color={T.blue}
+              <FaqItem key={i} q={q} a={a} color={T.blue} lang={lang}
                 isOpen={openItem===i} onToggle={()=>setOpenItem(openItem===i?null:i)}/>
             ))}
           </div>
@@ -240,7 +251,7 @@ export default function FAQPage() {
                   initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
                   exit={{ opacity:0 }} transition={{ duration:.25 }}>
                   {activeCat.faqs.map(([q, a], i) => (
-                    <FaqItem key={q} q={q} a={a} color={activeCat.color}
+                    <FaqItem key={q} q={q} a={a} color={activeCat.color} lang={lang}
                       isOpen={openItem===i} onToggle={()=>setOpenItem(openItem===i?null:i)}/>
                   ))}
                 </motion.div>

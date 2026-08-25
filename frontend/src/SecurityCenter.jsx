@@ -70,6 +70,7 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
   const [sessions, setSessions]     = useState([]);      // /api/security/active-sessions
   const [loading, setLoading]       = useState(true);
   const [revoking, setRevoking]     = useState(false);
+  const [revokeError, setRevokeError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,15 +86,30 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
   }, []);
 
   const signOutEverywhere = useCallback(async () => {
+    // This is destructive (kicks every other signed-in device immediately)
+    // and previously fired with a single click and no confirmation.
+    if (!window.confirm("Sign out of all devices? You'll need to sign in again everywhere, including this device.")) return;
     setRevoking(true);
+    setRevokeError(null);
+    // Revoke server-side refresh tokens first (kills any other active sessions),
+    // then run the app's normal client sign-out for this device. The revoke
+    // call used to be swallowed with `.catch(() => {})` and onSignOut always
+    // ran regardless — if the server call failed, the user was still signed
+    // out of THIS device but every other session stayed alive, while the UI
+    // gave no indication anything had gone wrong (a false sense of security).
+    let revokeFailed = false;
     try {
-      // Revoke server-side refresh tokens first (kills any other active sessions),
-      // then run the app's normal client sign-out for this device.
-      await apiFetch("/security/revoke-session", { method: "POST" }).catch(() => {});
-    } finally {
-      setRevoking(false);
-      onSignOut?.();
+      await apiFetch("/security/revoke-session", { method: "POST" });
+    } catch {
+      revokeFailed = true;
     }
+    if (revokeFailed) {
+      setRevoking(false);
+      setRevokeError("Couldn't reach the server to sign out other devices. Your other sessions may still be active — please try again.");
+      return;
+    }
+    setRevoking(false);
+    onSignOut?.();
   }, [onSignOut]);
 
   const auth = getAuth();
@@ -258,6 +274,9 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
                   borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer" }}>
                 {revoking ? "…" : "⏻ Sign Out Everywhere"}
               </button>
+              {revokeError && (
+                <div style={{ fontSize:11, color:SEC_TOKENS.red, lineHeight:1.5 }}>{revokeError}</div>
+              )}
             </div>
           </div>
         )}
@@ -323,6 +342,9 @@ export default function SecurityCenter({ user, onClose, onSignOut }) {
                 borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer" }}>
               {revoking ? "…" : "⏻ Sign Out Everywhere"}
             </button>
+            {revokeError && (
+              <div style={{ fontSize:11, color:SEC_TOKENS.red, lineHeight:1.5 }}>{revokeError}</div>
+            )}
           </div>
         )}
 

@@ -147,9 +147,15 @@ export async function createStripeCheckout({ planId, billing, userEmail, userId,
   }
 
   const tok = await getAuthToken();
+  // `tok` was fetched but never actually attached — the backend route
+  // (/api/stripe/create-session) is decorated with @require_auth, which
+  // returns 401 "Missing Authorization header" immediately if no Bearer
+  // token is present. Every Stripe checkout attempt was 401ing before it
+  // ever reached Stripe, silently breaking the entire Stripe payment path
+  // (used for non-Kashier/international customers).
   const resp = await fetch(`${API}/stripe/create-session`, {
     method:  "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${tok}` },
     body: JSON.stringify({
       price_id:      priceId,
       customer_email: userEmail,
@@ -172,9 +178,13 @@ export async function createStripeCheckout({ planId, billing, userEmail, userId,
 // ── Stripe Portal (manage subscription) ──────────────────────────
 export async function openStripePortal(userId) {
   const tok2 = await getAuthToken();
+  // Same missing-auth-header bug as create-session above — /api/stripe/portal
+  // is also @require_auth-gated, so this always 401ed before attaching the
+  // token, meaning no existing Stripe subscriber could open the billing
+  // portal to manage or cancel their subscription.
   const resp = await fetch(`${API}/stripe/portal`, {
     method:  "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${tok2}` },
     body: JSON.stringify({ uid: userId, return_url: window.location.href }),
   });
   const data = await resp.json();
@@ -325,9 +335,17 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
             </div>
             {/* Billing toggle */}
             <div style={{ display: "flex", background: "rgba(148,163,184,.06)", border: `0.5px solid ${DARK.border}`, borderRadius: 8, overflow: "hidden" }}>
+              {/* This toggle isn't tied to any one plan, so it can't show a
+                  single accurate discount badge here — the real % differs
+                  per plan (B2C individual plans are ~33% off annually,
+                  B2B plans ~20%, see the per-plan discountPct computed
+                  below). The old static "Save 20%" badge on this button
+                  was simply wrong for every B2C plan; the correct,
+                  plan-specific % is shown next to each plan's own price
+                  instead. */}
               {["monthly", "yearly"].map(b => (
                 <button key={b} onClick={() => setBilling(b)} style={{ background: billing === b ? "#1a56db" : "none", border: "none", padding: "5px 12px", fontSize: 11, fontWeight: 600, color: billing === b ? "white" : DARK.muted, cursor: "pointer" }}>
-                  {b === "monthly" ? t.monthly : `${t.yearly} 🏷 ${t.save}`}
+                  {b === "monthly" ? t.monthly : t.yearly}
                 </button>
               ))}
             </div>
@@ -344,7 +362,23 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
             const isCurr = currentPlan === planId;
             const isEnt  = planId === "b2b_enterprise";
             const isEntCustom = isEnt && (price == null || !plan.stripePriceId?.[billing]);
-            const isFree = false;
+            // Was hardcoded `false` — the Free ("standard", price 0) plan
+            // never hit the isFree branch below, so it displayed
+            // "0 EGP/mo" instead of "Free forever" and its payment button
+            // stayed live: clicking it for a $0 plan fell into the
+            // no-price-configured branch and showed "Enterprise pricing is
+            // custom — please contact sales" to someone just trying to use
+            // the free tier.
+            const isFree = price === 0;
+            // Was a hardcoded "Save 20%" everywhere — B2C individual plans
+            // are actually priced at 8x monthly (~33% off, e.g. Basic:
+            // 199*12=2,388 vs 1,590 charged), while B2B plans really are
+            // ~20% off. Computed from the real numbers so it can't drift
+            // from the actual price, mirroring PricingPage.jsx's PlanCard.
+            const monthlyPriceForDiscount = currency === "USD" ? plan.priceUSD?.monthly : plan.priceEGP?.monthly;
+            const discountPct = (billing === "yearly" && price && monthlyPriceForDiscount)
+              ? Math.round((1 - price / (monthlyPriceForDiscount * 12)) * 100)
+              : null;
             const name   = isAr ? plan.nameAr : plan.name;
             // B2C individuals: use INDIVIDUAL_FEATURES for cleaner copy
             // B2B companies: use plan's own features
@@ -387,7 +421,11 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                     <>
                       <span style={{ fontSize: 28, fontWeight: 800, color: DARK.text }}>{price?.toLocaleString()}</span>
                       <span style={{ fontSize: 11, color: DARK.muted }}> {currency} {billing === "monthly" ? t.perMonth : t.perYear}</span>
-                      {billing === "yearly" && <div style={{ fontSize: 9, color: "#10b981", marginTop: 2 }}>{t.save}</div>}
+                      {billing === "yearly" && discountPct != null && (
+                        <div style={{ fontSize: 9, color: "#10b981", marginTop: 2 }}>
+                          {isAr ? `وفر ${discountPct}%` : `Save ${discountPct}%`}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -417,9 +455,15 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                   </button>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {/* Stripe/Kashier buttons used to only disable themselves
+                        for their OWN exact loading key (planId vs "ks_"+planId)
+                        — clicking Stripe didn't disable the Kashier button for
+                        the same plan, so a user could fire both checkouts
+                        concurrently before either redirect completed. Both
+                        now disable whenever ANY checkout is in flight. */}
                     {/* Stripe button — shown as "coming soon" if not configured */}
                     {STRIPE_KEY ? (
-                      <button onClick={() => handleStripe(planId)} disabled={loading === planId} style={{ width: "100%", background: loading === planId ? `${col}60` : col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: loading === planId ? "wait" : "pointer" }}>
+                      <button onClick={() => handleStripe(planId)} disabled={!!loading} style={{ width: "100%", background: loading === planId ? `${col}60` : col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: loading ? "wait" : "pointer" }}>
                         {loading === planId ? "..." : `${t.upgrade} — Stripe 💳`}
                       </button>
                     ) : (
@@ -428,7 +472,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                       </button>
                     )}
                     {/* Kashier button */}
-                    <button onClick={() => handleKashier(planId)} disabled={loading === ("ks_" + planId)} style={{ width: "100%", background: loading === ("ks_" + planId) ? "rgba(16,185,129,.3)" : "rgba(16,185,129,.08)", border: "1px solid rgba(16,185,129,.3)", borderRadius: 9, padding: "9px 0", fontSize: 11, fontWeight: 600, color: "#10b981", cursor: "pointer" }}>
+                    <button onClick={() => handleKashier(planId)} disabled={!!loading} style={{ width: "100%", background: loading === ("ks_" + planId) ? "rgba(16,185,129,.3)" : "rgba(16,185,129,.08)", border: "1px solid rgba(16,185,129,.3)", borderRadius: 9, padding: "9px 0", fontSize: 11, fontWeight: 600, color: "#10b981", cursor: "pointer" }}>
                       {loading === ("ks_" + planId) ? "..." : "Kashier \uD83C\uDDEA\uD83C\uDDEC (" + (isAr ? "\u0628\u0637\u0627\u0642\u0629/\u0645\u062D\u0641\u0638\u0629" : "Card/Wallet") + ")"}
                     </button>
                   </div>
