@@ -639,6 +639,7 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   const [symptomInsights, setSymptomInsights] = useState(null); // from the symptom correlation engine
   const [reminderSaving, setReminderSaving] = useState(false);
   const [reminderSaved,  setReminderSaved]  = useState(!!profile?.predictive_stretch_reminder?.enabled);
+  const [reminderError,  setReminderError]  = useState(false);
   const isAr = lang === "ar";
 
   useEffect(() => {
@@ -852,7 +853,7 @@ Max 180 words. Start immediately.`,
   const saveStretchReminder = async () => {
     if (!weeklyForecast?.ready || !uid) return;
     if (!profile?.whatsapp_phone) return; // nothing to deliver to — button below stays disabled + note stays visible
-    setReminderSaving(true);
+    setReminderSaving(true); setReminderError(false);
     try {
       const region = WF_REGION_LABEL[weeklyForecast.worstMetric?.key] || { en: "your posture", ar: "وضعيتك" };
       // Reminder fires 1 day before the predicted risk window, at a fixed
@@ -873,6 +874,7 @@ Max 180 words. Start immediately.`,
       setReminderSaved(true);
     } catch (e) {
       console.error("[predictive reminder]", e);
+      setReminderError(true);
     } finally {
       setReminderSaving(false);
     }
@@ -1198,6 +1200,11 @@ Max 180 words. Start immediately.`,
                         ? "…"
                         : (isAr ? `🔔 فعّل التذكير عبر واتساب` : `🔔 Enable WhatsApp reminder`)}
                     </button>
+                    {reminderError && (
+                      <div style={{ fontSize: TOKENS.xs, color: "#ef4444" }}>
+                        {isAr ? "تعذر حفظ التذكير — حاول تاني" : "Couldn't save the reminder — please try again"}
+                      </div>
+                    )}
                   </>
                 );
               })()}

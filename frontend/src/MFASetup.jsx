@@ -229,6 +229,16 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
 
         <div style={{ flex:1, overflowY:"auto", padding:24 }}>
 
+          {/* Shared error banner — visible regardless of which tab/step is
+              active, so errors from disableMFA() (which can fire from the
+              Overview "Enabled" screen or either method's "Already enabled"
+              screen, none of which had their own error render before) are
+              never silently lost. The per-step error blocks further below
+              stay for the setup-flow steps that already worked correctly. */}
+          {error && (tab==="overview" || (tab==="totp" && mfaEnabled && mfaMethod==="totp") || (tab==="sms" && mfaEnabled && mfaMethod==="sms")) && (
+            <div style={{ color:"#ef4444", fontSize:12, textAlign:"center", marginBottom:14, background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:9, padding:"10px 14px" }}>{error}</div>
+          )}
+
           {/* ── OVERVIEW ── */}
           {tab==="overview" && (
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -290,7 +300,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                     <button onClick={startTotpSetup} style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"10px", cursor:"pointer", fontWeight:600, fontSize:13 }}>{isAr?"إعادة المحاولة":"Retry"}</button>
                   )}
                   {error && <div style={{ color:"#ef4444", fontSize:12, textAlign:"center" }}>{error}</div>}
-                  <button onClick={() => setTotpStep(2)} disabled={!secret} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"13px", cursor:"pointer", fontWeight:800, fontSize:15, opacity:secret?1:0.5 }}>{isAr?"أضفته →":"I've added it →"}</button>
+                  <button onClick={() => setTotpStep(2)} disabled={!secret} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"13px", cursor:"pointer", fontWeight:800, fontSize:15, opacity:secret?1:0.5 }}>{isAr?"أضفته ←":"I've added it →"}</button>
                 </>
               )}
               {!mfaEnabled && totpStep === 2 && (
@@ -298,7 +308,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                   <div style={{ fontWeight:700, color:cs.text, fontSize:15, marginBottom:4 }}>{isAr?"الخطوة 2: أدخل الكود من 6 أرقام":"Step 2: Enter the 6-digit code"}</div>
                   <p style={{ fontSize:13, color:cs.muted, lineHeight:1.6, margin:"0 0 16px" }}>{isAr?"افتح تطبيق المصادقة وأدخل الكود الحالي":"Open your authenticator app and enter the current 6-digit code"}</p>
                   <CodeInputRow onVerify={verifyTOTP} />
-                  <button onClick={() => setTotpStep(1)} style={{ background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:12, textAlign:"center" }}>← {isAr?"رجوع":"Back"}</button>
+                  <button onClick={() => setTotpStep(1)} style={{ background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:12, textAlign:"center" }}>{isAr?"رجوع →":"← Back"}</button>
                 </>
               )}
               {!mfaEnabled && totpStep === 3 && (
@@ -306,7 +316,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                   <div style={{ fontSize:56, marginBottom:16 }}>✅</div>
                   <div style={{ fontWeight:800, fontSize:20, color:"#10b981", marginBottom:8 }}>{isAr?"تم تفعيل تطبيق المصادقة!":"Authenticator app enabled!"}</div>
                   <p style={{ fontSize:13, color:cs.muted, lineHeight:1.6 }}>{isAr?"حسابك محمي دلوقتي. هتحتاج الكود في كل مرة تسجل دخول.":"Your account is now protected. You'll need your authenticator code each time you sign in."}</p>
-                  <button onClick={() => { setTab("backup"); onEnabled?.(); }} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"12px 28px", cursor:"pointer", fontWeight:700, fontSize:14, marginTop:16 }}>{isAr?"احفظ الأكواد الاحتياطية →":"Save Backup Codes →"}</button>
+                  <button onClick={() => { setTab("backup"); onEnabled?.(); }} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"12px 28px", cursor:"pointer", fontWeight:700, fontSize:14, marginTop:16 }}>{isAr?"احفظ الأكواد الاحتياطية ←":"Save Backup Codes →"}</button>
                 </div>
               )}
             </div>
@@ -331,7 +341,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                   <p style={{ fontSize:13, color:cs.muted, lineHeight:1.6, margin:0 }}>{isAr?"هنبعتلك كود من 6 أرقام على الرقم ده كل ما تسجل دخول":"We'll send a 6-digit code to this number each time you sign in"}</p>
                   <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+20 100 000 0000" style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"12px 14px", fontSize:16, outline:"none" }} />
                   {error && <div style={{ color:"#ef4444", fontSize:12 }}>{error}</div>}
-                  <button onClick={sendSmsCode} disabled={!phone||verifying} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"13px", cursor:"pointer", fontWeight:800, fontSize:15 }}>{verifying?(isAr?"جاري الإرسال…":"Sending…"):(isAr?"إرسال الكود →":"Send Code →")}</button>
+                  <button onClick={sendSmsCode} disabled={!phone||verifying} style={{ background:"linear-gradient(135deg,#6366f1,#0ea5e9)", border:"none", color:"#fff", borderRadius:10, padding:"13px", cursor:"pointer", fontWeight:800, fontSize:15 }}>{verifying?(isAr?"جاري الإرسال…":"Sending…"):(isAr?"إرسال الكود ←":"Send Code →")}</button>
                 </>
               )}
               {!mfaEnabled && smsStep === 2 && (
@@ -339,7 +349,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
                   <div style={{ fontWeight:700, color:cs.text, fontSize:15, marginBottom:4 }}>{isAr?"أدخل كود SMS":"Enter the SMS code"}</div>
                   <p style={{ fontSize:13, color:cs.muted, margin:"0 0 16px" }}>{isAr?"بعتنا كود لـ":"We sent a code to"} <b style={{ color:cs.text }}>{phone}</b></p>
                   <CodeInputRow onVerify={verifySMS} />
-                  <button onClick={() => setSmsStep(1)} style={{ background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:12, textAlign:"center" }}>← {isAr?"تغيير الرقم":"Change number"}</button>
+                  <button onClick={() => setSmsStep(1)} style={{ background:"transparent", border:"none", color:cs.muted, cursor:"pointer", fontSize:12, textAlign:"center" }}>{isAr?"تغيير الرقم →":"← Change number"}</button>
                 </>
               )}
               {!mfaEnabled && smsStep === 3 && (
