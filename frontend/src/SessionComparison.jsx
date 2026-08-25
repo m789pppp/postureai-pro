@@ -57,8 +57,8 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
     <div style={{ position: "fixed", inset: 0, zIndex: 9200, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
         <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "مقارنة الجلسات — Pro" : "Session Comparison — Pro"}</div>
-        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>{isAr ? "قارن آخر 3 جلسات جنب بعض وشوف التحسن في كل metric" : "Compare your last 3 sessions side by side across every metric"}</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: cs.text, marginBottom: 8 }}>{isAr ? "مقارنة الجلسات — Pro" : "Session Comparison — Pro"}</div>
+        <div style={{ fontSize: 13, color: cs.muted, marginBottom: 22 }}>{isAr ? "قارن آخر 3 جلسات جنب بعض وشوف التحسن في كل metric" : "Compare your last 3 sessions side by side across every metric"}</div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <button onClick={onClose} style={{ padding: "10px 20px", background: "rgba(255,255,255,.06)", color: "#94a3b8", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{isAr ? "إغلاق" : "Close"}</button>
           <button onClick={()=>{ onClose?.(); onUpgrade?.(); }} style={{ padding: "10px 20px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{isAr ? "الترقية لـ Pro" : "Upgrade to Pro"}</button>
@@ -71,8 +71,8 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
     <div style={{ position: "fixed", inset: 0, zIndex: 9200, background: "rgba(0,0,0,.50)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
         <div style={{ fontSize: 42, marginBottom: 14 }}>📋</div>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "تحتاج جلستين على الأقل" : "Need at least 2 sessions"}</div>
-        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>{isAr ? "أكمل جلسة أخرى لتظهر المقارنة" : "Complete another session to enable comparison"}</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: cs.text, marginBottom: 8 }}>{isAr ? "تحتاج جلستين على الأقل" : "Need at least 2 sessions"}</div>
+        <div style={{ fontSize: 13, color: cs.muted, marginBottom: 22 }}>{isAr ? "أكمل جلسة أخرى لتظهر المقارنة" : "Complete another session to enable comparison"}</div>
         <button onClick={onClose} style={{ padding: "10px 28px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>OK</button>
       </div>
     </div>
@@ -87,13 +87,13 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9200, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}>
-      <div style={{ background: "rgba(15,23,42,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, width: "100%", maxWidth: 700, maxHeight: "92dvh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 32px 80px rgba(0,0,0,.7)" }}>
+      <div style={{ background: "rgba(15,23,42,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, width: "100%", maxWidth: 700, maxHeight: "92dvh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 32px 80px rgba(0,0,0,.7)", direction: isAr ? "rtl" : "ltr" }}>
 
         {/* Header */}
         <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#f0f6ff" }}>{isAr ? "مقارنة الجلسات" : "Session Comparison"}</div>
-            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{isAr ? `آخر ${s3.length} جلسات` : `Last ${s3.length} sessions`}</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: cs.text }}>{isAr ? "مقارنة الجلسات" : "Session Comparison"}</div>
+            <div style={{ fontSize: 12, color: cs.muted, marginTop: 2 }}>{isAr ? `آخر ${s3.length} جلسات` : `Last ${s3.length} sessions`}</div>
           </div>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#94a3b8", fontSize: 16, cursor: "pointer" }} aria-label="Close">✕</button>
         </div>
@@ -103,7 +103,7 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
           {/* Overall score row */}
           <div style={{ display: "grid", gridTemplateColumns: `180px repeat(${s3.length}, 1fr)`, gap: 12, marginBottom: 20 }}>
             <div style={{ display: "flex", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: ".07em" }}>{isAr ? "المجموع" : "Overall Score"}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: cs.muted, textTransform: "uppercase", letterSpacing: ".07em" }}>{isAr ? "المجموع" : "Overall Score"}</span>
             </div>
             {s3.map((s, i) => {
               const score = s.avg_score || 0;
@@ -111,7 +111,7 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
               const diff  = prev != null ? score - prev : null;
               return (
                 <div key={i} style={{ background: "rgba(255,255,255,.03)", border: `1px solid ${sc(score)}30`, borderRadius: 12, padding: "14px 12px", textAlign: "center" }}>
-                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 500 }}>{labels[i]}</div>
+                  <div style={{ fontSize: 11, color: cs.muted, marginBottom: 4, fontWeight: 500 }}>{labels[i]}</div>
                   <div style={{ fontSize: 30, fontWeight: 900, color: sc(score), lineHeight: 1 }}>{score}</div>
                   <MiniBar score={score}/>
                   {diff !== null && (
@@ -133,7 +133,7 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
             ].map((row, ri) => (
               <React.Fragment key={ri}>
                 <div style={{ display: "flex", alignItems: "center", gridColumn: ri === 0 ? "1" : undefined }}>
-                  {ri === 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: ".07em" }}>{isAr ? "إحصائيات" : "Stats"}</span>}
+                  {ri === 0 && <span style={{ fontSize: 11, fontWeight: 600, color: cs.muted, textTransform: "uppercase", letterSpacing: ".07em" }}>{isAr ? "إحصائيات" : "Stats"}</span>}
                 </div>
                 {ri === 0 && s3.map((s, si) => (
                   <div key={si} style={{ background: "rgba(255,255,255,.025)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 10, padding: "10px 12px" }}>
@@ -143,8 +143,8 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
                       { label: isAr ? "التنبيهات" : "Alerts",  val: s.alerts_count || 0,         color: (s.alerts_count||0) === 0 ? "#10b981" : "#f59e0b" },
                     ].map((stat, stj) => (
                       <div key={stj} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: stj < 2 ? "1px solid rgba(255,255,255,.04)" : "none" }}>
-                        <span style={{ fontSize: 11, color: "#64748b" }}>{stat.label}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: stat.color || "#f0f6ff" }}>{stat.val}</span>
+                        <span style={{ fontSize: 11, color: cs.muted }}>{stat.label}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: stat.color || cs.text }}>{stat.val}</span>
                       </div>
                     ))}
                   </div>
@@ -154,7 +154,7 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
           </div>
 
           {/* Metrics comparison table */}
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: cs.muted, textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 12 }}>
             {isAr ? "تفصيل المقاييس" : "Metric Breakdown"}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -171,14 +171,14 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
                   <div style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8" }}>{isAr ? m.labelAr : m.label}</div>
                   {/* Values */}
                   {vals.map((v, vi) => {
-                    if (!v) return <div key={vi} style={{ textAlign: "center", color: "#64748b", fontSize: 12 }}>—</div>;
+                    if (!v) return <div key={vi} style={{ textAlign: "center", color: cs.muted, fontSize: 12 }}>—</div>;
                     const prev   = vals[vi + 1];
                     const diff   = prev ? v.value - prev.value : null;
                     return (
                       <div key={vi} style={{ textAlign: "center" }}>
                         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 3 }}>
                           <span style={{ fontSize: 16, fontWeight: 800, color: sc(v.score) }}>{v.value != null ? Math.round(v.value) : "—"}</span>
-                          <span style={{ fontSize: 10, color: "#64748b" }}>{m.unit}</span>
+                          <span style={{ fontSize: 10, color: cs.muted }}>{m.unit}</span>
                         </div>
                         <MiniBar score={v.score}/>
                         <div style={{ marginTop: 4 }}>
@@ -212,7 +212,7 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>
                       {isAr ? "أكثر تحسناً" : "Most Improved"}
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#f0f6ff" }}>{best.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: cs.text }}>{best.label}</div>
                     <div style={{ fontSize: 12, color: "#10b981", marginTop: 2 }}>▲ {best.diff.toFixed(1)} {isAr ? "تحسن" : "better"}</div>
                   </div>
                 )}
@@ -221,7 +221,7 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#ef4444", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>
                       {isAr ? "يحتاج انتباه" : "Needs Attention"}
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#f0f6ff" }}>{worst.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: cs.text }}>{worst.label}</div>
                     <div style={{ fontSize: 12, color: "#ef4444", marginTop: 2 }}>▼ {worst.diff.toFixed(1)} {isAr ? "تراجع" : "declined"}</div>
                   </div>
                 )}

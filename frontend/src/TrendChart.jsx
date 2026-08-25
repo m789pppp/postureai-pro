@@ -72,6 +72,10 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
     const reg    = linReg(regPts);
 
     // Trend verdict
+    // Note: default color only, unused whenever verdict stays null (render
+    // gates on `data.verdict` truthy) — kept hardcoded rather than reading
+    // `cs` here since this runs inside a useMemo keyed on [sessions, isAr],
+    // not on cs, so a theme-derived value here could go stale on toggle.
     let verdict = null, verdictColor = "#64748b";
     if (reg && regPts.length >= 5) {
       const slope30 = reg.m * 30;
@@ -98,8 +102,8 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
     <div style={{ position: "fixed", inset: 0, zIndex: 9200, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
         <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "مسار التحسن — Pro" : "Trend — Pro"}</div>
-        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>{isAr ? "شوف اتجاه وضعيتك على مدار 30 يوم مع خط الانحدار" : "See your 30-day posture trend with a regression line"}</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: cs.text, marginBottom: 8 }}>{isAr ? "مسار التحسن — Pro" : "Trend — Pro"}</div>
+        <div style={{ fontSize: 13, color: cs.muted, marginBottom: 22 }}>{isAr ? "شوف اتجاه وضعيتك على مدار 30 يوم مع خط الانحدار" : "See your 30-day posture trend with a regression line"}</div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <button onClick={onClose} style={{ padding: "10px 20px", background: "rgba(255,255,255,.06)", color: "#94a3b8", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{isAr ? "إغلاق" : "Close"}</button>
           <button onClick={()=>{ onClose?.(); onUpgrade?.(); }} style={{ padding: "10px 20px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{isAr ? "الترقية لـ Pro" : "Upgrade to Pro"}</button>
@@ -146,8 +150,8 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
       <div style={{ position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
         <div style={{ background:"rgba(8,14,28,.98)",border:"1px solid rgba(255,255,255,.08)",borderRadius:18,padding:"40px 28px",maxWidth:360,textAlign:"center" }}>
           <div style={{ fontSize:44,marginBottom:14 }}>📊</div>
-          <div style={{ fontSize:17,fontWeight:800,color:"#f0f6ff",marginBottom:8 }}>{isAr?"لا توجد بيانات بعد":"No data yet"}</div>
-          <div style={{ fontSize:13,color:"#64748b",marginBottom:22 }}>{isAr?"أكمل بعض الجلسات لتظهر الاتجاهات":"Complete some sessions to see trends"}</div>
+          <div style={{ fontSize:17,fontWeight:800,color:cs.text,marginBottom:8 }}>{isAr?"لا توجد بيانات بعد":"No data yet"}</div>
+          <div style={{ fontSize:13,color:cs.muted,marginBottom:22 }}>{isAr?"أكمل بعض الجلسات لتظهر الاتجاهات":"Complete some sessions to see trends"}</div>
           <button onClick={onClose} style={{ padding:"10px 28px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer" }}>OK</button>
         </div>
       </div>
@@ -156,13 +160,13 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
 
   return (
     <div style={{ position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflowY:"auto" }}>
-      <div style={{ background:"rgba(15,23,42,.98)",border:"1px solid rgba(255,255,255,.08)",borderRadius:20,width:"100%",maxWidth:660,maxHeight:"92dvh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.7)" }}>
+      <div style={{ background:"rgba(15,23,42,.98)",border:"1px solid rgba(255,255,255,.08)",borderRadius:20,width:"100%",maxWidth:660,maxHeight:"92dvh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,.7)",direction:isAr?"rtl":"ltr" }}>
 
         {/* Header */}
         <div style={{ padding:"20px 24px 16px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0 }}>
           <div>
-            <div style={{ fontSize:17,fontWeight:800,color:"#f0f6ff" }}>{isAr?"مسار الـ 30 يوم":"30-Day Trend"}</div>
-            <div style={{ fontSize:12,color:"#64748b",marginTop:2 }}>{isAr?"متوسط النقاط اليومي + خط الاتجاه":"Daily avg score + regression trend line"}</div>
+            <div style={{ fontSize:17,fontWeight:800,color:cs.text }}>{isAr?"مسار الـ 30 يوم":"30-Day Trend"}</div>
+            <div style={{ fontSize:12,color:cs.muted,marginTop:2 }}>{isAr?"متوسط النقاط اليومي + خط الاتجاه":"Daily avg score + regression trend line"}</div>
           </div>
           <button onClick={onClose} style={{ width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",color:"#94a3b8",fontSize:16,cursor:"pointer" }} aria-label="Close">✕</button>
         </div>
@@ -174,7 +178,7 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
             <div style={{ background:`${data.verdictColor}12`,border:`1px solid ${data.verdictColor}35`,borderRadius:12,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:12 }}>
               <div style={{ fontSize:15,fontWeight:700,color:data.verdictColor,flex:1 }}>{data.verdict}</div>
               {data.reg && (
-                <div style={{ fontSize:11,color:"#64748b",textAlign:"right" }}>
+                <div style={{ fontSize:11,color:cs.muted,textAlign:"right" }}>
                   {isAr?"الميل":"slope"}: {data.reg.m > 0 ? "+" : ""}{(data.reg.m).toFixed(2)}{isAr?" نقطة/يوم":" pts/day"}
                 </div>
               )}
@@ -257,13 +261,13 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
             ].map((s,i)=>(
               <div key={i} style={{ background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,padding:"12px 10px",textAlign:"center" }}>
                 <div style={{ fontSize:22,fontWeight:900,color:s.color,lineHeight:1 }}>{s.value}</div>
-                <div style={{ fontSize:10,color:"#64748b",marginTop:4,fontWeight:500 }}>{s.label}</div>
+                <div style={{ fontSize:10,color:cs.muted,marginTop:4,fontWeight:500 }}>{s.label}</div>
               </div>
             ))}
           </div>
 
           {/* Weekly breakdown */}
-          <div style={{ fontSize:11,fontWeight:600,color:"#64748b",textTransform:"uppercase",letterSpacing:".07em",marginBottom:10 }}>
+          <div style={{ fontSize:11,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10 }}>
             {isAr?"ملخص أسبوعي":"Weekly Breakdown"}
           </div>
           <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
@@ -278,7 +282,7 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
               const diff  = prevAvg!==null ? wAvg - prevAvg : null;
               return(
                 <div key={w} style={{ display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)",borderRadius:10 }}>
-                  <div style={{ fontSize:11,color:"#64748b",width:90,flexShrink:0 }}>{wStart} – {wEnd}</div>
+                  <div style={{ fontSize:11,color:cs.muted,width:90,flexShrink:0 }}>{wStart} – {wEnd}</div>
                   <div style={{ flex:1,height:6,background:"rgba(255,255,255,.06)",borderRadius:99,overflow:"hidden" }}>
                     <div style={{ width:`${wAvg}%`,height:"100%",background:sc(wAvg),borderRadius:99,transition:"width .6s" }}/>
                   </div>
@@ -288,7 +292,7 @@ export default function TrendChart({ sessions = [], cs, lang, onClose, effective
                       {diff>=0?"+":""}{diff}
                     </span>
                   )}
-                  <div style={{ fontSize:10,color:"#64748b",flexShrink:0 }}>{wDays.length}{isAr?" يوم":" days"}</div>
+                  <div style={{ fontSize:10,color:cs.muted,flexShrink:0 }}>{wDays.length}{isAr?" يوم":" days"}</div>
                 </div>
               );
             })}

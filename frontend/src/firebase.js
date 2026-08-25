@@ -302,28 +302,32 @@ export async function trackReferral(refCode, newUserUid, newUserEmail) {
 }
 
 export async function getReferralStats(uid) {
-  try {
-    const { getAuth } = await import("firebase/auth");
-    const tok = await getAuth().currentUser?.getIdToken?.();
-    // Use Vercel serverless endpoint (not Railway)
-    const res = await fetch("/api/referral/stats", {
-      headers: tok ? { "Authorization": `Bearer ${tok}` } : {},
-    });
-    const d = await res.json();
-    if (!d.ok) return { total:0, converted:0, pending:0, earned:0, credits:0, referrals:[], ref_code:null };
-    const refs = d.referrals || [];
-    return {
-      total: d.count || 0,
-      converted: refs.filter(r=>r.status==="active").length,
-      pending: refs.filter(r=>r.status==="pending").length,
-      earned: d.total_earned || 0,
-      credits: d.credits || 0,
-      referrals: refs,
-      ref_code: d.ref_code,
-    };
-  } catch (e) {
-    return { total:0, converted:0, pending:0, earned:0, credits:0, referrals:[], ref_code:null };
+  // Deliberately does NOT catch-and-return-zeros here anymore: this feature
+  // involves real EGP credit, so a failed load must be distinguishable from
+  // "genuinely zero referrals" by the caller. Every current caller either
+  // has its own .catch() (App.jsx, AnalyticsDashboard.jsx — both already
+  // treat the value as optional via `?.`) or now handles rejection itself
+  // (ReferralProgram.jsx) rather than silently rendering zero credits.
+  const { getAuth } = await import("firebase/auth");
+  const tok = await getAuth().currentUser?.getIdToken?.();
+  // Use Vercel serverless endpoint (not Railway)
+  const res = await fetch("/api/referral/stats", {
+    headers: tok ? { "Authorization": `Bearer ${tok}` } : {},
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok || !d.ok) {
+    throw new Error(d.error || "Failed to load referral stats");
   }
+  const refs = d.referrals || [];
+  return {
+    total: d.count || 0,
+    converted: refs.filter(r=>r.status==="active").length,
+    pending: refs.filter(r=>r.status==="pending").length,
+    earned: d.total_earned || 0,
+    credits: d.credits || 0,
+    referrals: refs,
+    ref_code: d.ref_code,
+  };
 }
 
 // ── Email Nurture ─────────────────────────────────────────────────

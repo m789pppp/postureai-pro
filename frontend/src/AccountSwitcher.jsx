@@ -87,16 +87,25 @@ export default function AccountSwitcher({
   const [pass,        setPass]        = useState("");
   const [adding,      setAdding]      = useState(false);
   const [removing,    setRemoving]    = useState(null);
+  const [loadError,   setLoadError]   = useState(false);
   const dropRef = useRef(null);
 
   // Load linked accounts when open
-  useEffect(() => {
-    if (!open || !user?.uid) return;
-    setLoading(true);
+  const loadAccounts = () => {
+    if (!user?.uid) return;
+    setLoading(true); setLoadError(false);
     getLinkedAccounts(user.uid)
       .then(setAccounts)
-      .catch(() => {})
+      .catch(() => {
+        setLoadError(true);
+        addToast(isAr ? "تعذر تحميل الأكونتات المضافة" : "Couldn't load linked accounts", "error");
+      })
       .finally(() => setLoading(false));
+  };
+  useEffect(() => {
+    if (!open || !user?.uid) return;
+    loadAccounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user?.uid]);
 
   // Close on outside click
@@ -249,7 +258,7 @@ export default function AccountSwitcher({
             +{accounts.length}
           </span>
         )}
-        <span style={{ fontSize: 10, color: cs.muted, marginLeft: 2 }}>
+        <span style={{ fontSize: 10, color: cs.muted, marginInlineStart: 2 }}>
           {open ? "▲" : "▼"}
         </span>
       </button>
@@ -294,6 +303,17 @@ export default function AccountSwitcher({
             <div style={{ padding: "16px", textAlign: "center", color: cs.muted, fontSize: 12 }}>
               {isAr ? "جاري التحميل..." : "Loading..."}
             </div>
+          ) : loadError ? (
+            <div style={{ padding: "16px", textAlign: "center", borderBottom: `1px solid ${cs.border}` }}>
+              <div style={{ fontSize: 12, color: "#f87171", marginBottom: 8 }}>
+                {isAr ? "تعذر تحميل الأكونتات المضافة" : "Couldn't load linked accounts"}
+              </div>
+              <button onClick={loadAccounts} style={{ padding: "6px 14px", background: "rgba(255,255,255,.06)",
+                border: `1px solid ${cs.border}`, borderRadius: 7, color: cs.text, fontSize: 11,
+                fontWeight: 600, cursor: "pointer" }}>
+                {isAr ? "إعادة المحاولة" : "Retry"}
+              </button>
+            </div>
           ) : accounts.length > 0 && (
             <div style={{ padding: "10px 0", borderBottom: `1px solid ${cs.border}` }}>
               <div style={{ fontSize: 10, color: cs.muted, fontWeight: 600, padding: "0 16px 8px",
@@ -311,7 +331,12 @@ export default function AccountSwitcher({
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                 >
                   <Avatar name={acc.display_name} email={acc.email} size={30} />
-                  <div style={{ flex: 1, minWidth: 0 }} onClick={() => switchTo(acc)}>
+                  <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                    role="button" tabIndex={0}
+                    aria-label={isAr ? `تبديل إلى ${acc.email}` : `Switch to ${acc.email}`}
+                    onClick={() => switchTo(acc)}
+                    onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); switchTo(acc); } }}
+                  >
                     <div style={{ fontSize: 12, fontWeight: 600, color: cs.text,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {acc.display_name}

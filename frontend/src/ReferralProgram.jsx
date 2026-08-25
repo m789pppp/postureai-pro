@@ -19,12 +19,17 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
   const [copied, setCopied]   = useState(false);
   const [stats, setStats]     = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
     let live = true;
-    getReferralStats(profile?.uid).then(d => { if (live) { setStats(d); setLoading(false); } });
+    setLoading(true); setLoadError(false);
+    getReferralStats(profile?.uid)
+      .then(d => { if (live) { setStats(d); setLoading(false); } })
+      .catch(() => { if (live) { setLoadError(true); setLoading(false); } });
     return () => { live = false; };
-  }, [profile?.uid]);
+  }, [profile?.uid, retryTick]);
 
   const refCode = stats?.ref_code || "";
   const refLink = refCode ? `${window.location.origin}?ref=${refCode}` : "";
@@ -68,9 +73,9 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
             </div>
             <div style={{ display:"flex", gap:10, alignItems:"center" }}>
               {[
-                { label:isAr?"محوّلة":"Converted", value:totalReferrals, color:"#10b981" },
-                { label:isAr?"معلّقة":"Pending",   value:pendingReferrals, color:"#f59e0b" },
-                { label:isAr?"الرصيد":"Credit",    value:`${credits} EGP`, color:"#6366f1" },
+                { label:isAr?"محوّلة":"Converted", value:loadError?"—":totalReferrals, color:"#10b981" },
+                { label:isAr?"معلّقة":"Pending",   value:loadError?"—":pendingReferrals, color:"#f59e0b" },
+                { label:isAr?"الرصيد":"Credit",    value:loadError?"—":`${credits} EGP`, color:"#6366f1" },
               ].map(m => (
                 <div key={m.label} style={{ textAlign:"center", padding:"6px 14px", background:"rgba(255,255,255,0.04)", borderRadius:10 }}>
                   <div style={{ fontSize:17, fontWeight:800, color:m.color }}>{m.value}</div>
@@ -94,6 +99,14 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
           {/* ── DASHBOARD ── */}
           {tab==="dashboard" && (
             <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+              {loadError && (
+                <div style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:12, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+                  <div style={{ fontSize:12, color:"#ef4444", lineHeight:1.6 }}>
+                    {isAr?"تعذر تحميل بيانات الإحالة والرصيد — الأرقام اللي فوق مش دقيقة دلوقتي.":"Couldn't load your referral and credit data — the numbers above aren't accurate right now."}
+                  </div>
+                  <button onClick={()=>setRetryTick(t=>t+1)} style={{ background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.3)", color:"#ef4444", borderRadius:8, padding:"7px 14px", cursor:"pointer", fontWeight:700, fontSize:12, whiteSpace:"nowrap" }}>{isAr?"إعادة المحاولة":"Retry"}</button>
+                </div>
+              )}
               {/* Ref link */}
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:12, fontSize:14 }}>{isAr?"رابط الإحالة الخاص بك":"Your Referral Link"}</div>
@@ -128,8 +141,9 @@ export function ReferralProgram({ profile, cs, lang, onClose }) {
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:12, fontSize:14 }}>{isAr?"إحالاتك":"Your Referrals"}</div>
                 {loading && <div style={{ fontSize:12, color:cs.muted }}>{isAr?"جاري التحميل...":"Loading..."}</div>}
-                {!loading && referrals.length===0 && <div style={{ fontSize:12, color:cs.muted }}>{isAr?"لسه مفيش إحالات — شارك رابطك عشان تبدأ":"No referrals yet — share your link to get started"}</div>}
-                {!loading && referrals.map(r => (
+                {!loading && loadError && <div style={{ fontSize:12, color:cs.muted }}>{isAr?"مش متاح دلوقتي":"Not available right now"}</div>}
+                {!loading && !loadError && referrals.length===0 && <div style={{ fontSize:12, color:cs.muted }}>{isAr?"لسه مفيش إحالات — شارك رابطك عشان تبدأ":"No referrals yet — share your link to get started"}</div>}
+                {!loading && !loadError && referrals.map(r => (
                   <div key={r.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${cs.border}` }}>
                     <div style={{ fontSize:12, color:cs.text }}>{r.referred_email || r.referred_uid}</div>
                     <div style={{ display:"flex", gap:10, alignItems:"center" }}>
