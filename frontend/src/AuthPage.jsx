@@ -6,6 +6,8 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { API_BASE_URL } from "./config/api.js";
+import { LegalModal } from "./LegalCompliance.jsx";
+import { ContactModal } from "./ContactModal.jsx";
 import {
   signInGoogle, signInMicrosoft, signInEmail, signUpEmail, resetPassword,
   getUserProfile, createUserProfile, SUPPORT_EMAIL, setRememberMe,
@@ -234,6 +236,8 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [inviteCode,  setInviteCode] = useState(""); // for employee joining via invite
   // UI
   const [agreeTerms,  setAgreeTerms] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(null); // "tos" | "privacy" | null
+  const [contactOpen, setContactOpen] = useState(false);
   const [newsletter,  setNewsletter] = useState(true);
   const [showPass,    setShowPass]   = useState(false);
   const [showPass2,   setShowPass2]  = useState(false);
@@ -893,9 +897,9 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                     </div>
                     <span style={{fontSize:13,color:t.textSub,lineHeight:1.55}}>
                       {isAr?"أوافق على":"I agree to the"}{" "}
-                      <a href={`mailto:${SUPPORT_EMAIL}?subject=Terms`} style={{color:t.acc,textDecoration:"none",fontWeight:600}}>{isAr?"شروط الاستخدام":"Terms of Service"}</a>
+                      <button type="button" onClick={(e)=>{e.stopPropagation();setLegalOpen("tos");}} style={{background:"none",border:"none",padding:0,color:t.acc,textDecoration:"underline",fontWeight:600,fontSize:"inherit",fontFamily:"inherit",cursor:"pointer"}}>{isAr?"شروط الاستخدام":"Terms of Service"}</button>
                       {" "}{isAr?"و":"and"}{" "}
-                      <a href={`mailto:${SUPPORT_EMAIL}?subject=Privacy`} style={{color:t.acc,textDecoration:"none",fontWeight:600}}>{isAr?"سياسة الخصوصية":"Privacy Policy"}</a>
+                      <button type="button" onClick={(e)=>{e.stopPropagation();setLegalOpen("privacy");}} style={{background:"none",border:"none",padding:0,color:t.acc,textDecoration:"underline",fontWeight:600,fontSize:"inherit",fontFamily:"inherit",cursor:"pointer"}}>{isAr?"سياسة الخصوصية":"Privacy Policy"}</button>
                       <span style={{color:"#ef4444",marginLeft:2}}>*</span>
                     </span>
                   </label>
@@ -967,9 +971,12 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         {/* Footer */}
         <div style={{textAlign:"center",marginTop:16,fontSize:12,color:t.muted}}>
           {isAr?"للدعم:":"Need help?"}{" "}
-          <a href={`mailto:${SUPPORT_EMAIL}`} style={{color:t.acc,textDecoration:"none",fontWeight:500}}>{SUPPORT_EMAIL}</a>
+          <button type="button" onClick={()=>setContactOpen(true)} style={{background:"none",border:"none",padding:0,color:t.acc,textDecoration:"none",fontWeight:500,fontSize:"inherit",fontFamily:"inherit",cursor:"pointer"}}>{isAr?"تواصل معنا":"Contact us"}</button>
         </div>
       </div>
+
+      {legalOpen && <LegalModal doc={legalOpen} onClose={()=>setLegalOpen(null)} />}
+      {contactOpen && <ContactModal isAr={isAr} supportEmail={SUPPORT_EMAIL} onClose={()=>setContactOpen(false)} />}
 
       <style>{`
         @keyframes spin      { to { transform:rotate(360deg) } }
