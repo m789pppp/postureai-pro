@@ -27,18 +27,21 @@ function getAdminAuth() {
 
 const RESEND_KEY   = process.env.RESEND_API_KEY || "";
 const FROM_EMAIL   = process.env.EMAIL_FROM     || "Corvus PostureAI <noreply@corvus.io>";
+const SUPPORT_EMAIL_TO = process.env.SUPPORT_EMAIL || "support@corvus.io";
 const APP_URL      = process.env.VITE_APP_URL   || "https://postureai-pro-omega-nine.vercel.app";
 
 // ── Send via Resend ───────────────────────────────────────────────
-async function sendResend(to, subject, html) {
+async function sendResend(to, subject, html, replyTo) {
   if (!RESEND_KEY) {
-    console.log("[Email] RESEND_API_KEY not set — dev mode:", { to, subject });
+    console.log("[Email] RESEND_API_KEY not set — dev mode:", { to, subject, replyTo });
     return { ok: true, dev: true };
   }
+  const payload = { from: FROM_EMAIL, to: [to], subject, html };
+  if (replyTo) payload.reply_to = replyTo;
   const res = await fetch("https://api.resend.com/emails", {
     method:  "POST",
     headers: { "Authorization": "Bearer " + RESEND_KEY, "Content-Type": "application/json" },
-    body:    JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
+    body:    JSON.stringify(payload),
     signal:  AbortSignal.timeout(10000),
   });
   if (!res.ok) {
@@ -151,6 +154,21 @@ function sequenceTemplate({ name, step, subject: subj, body }) {
   `);
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+function contactTemplate({ name, email, topic, message }) {
+  return baseLayout(`
+    <h1>New contact form message</h1>
+    <div class="stat"><span class="stat-label">From</span><span class="stat-val" style="font-size:14px">${escapeHtml(name)}</span></div>
+    <div class="stat"><span class="stat-label">Email</span><span class="stat-val" style="font-size:14px">${escapeHtml(email)}</span></div>
+    <div class="stat"><span class="stat-label">Topic</span><span class="stat-val" style="font-size:14px">${escapeHtml(topic || "General")}</span></div>
+    <hr class="divider">
+    <p style="white-space:pre-wrap;">${escapeHtml(message)}</p>
+  `);
+}
+
 // ── Handler ───────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin",  APP_URL);
@@ -159,17 +177,22 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST")   return res.status(405).json({ error: "Method not allowed" });
 
-  // Auth — require valid Firebase token
-  const idToken = (req.headers.authorization || "").replace("Bearer ", "").trim();
-  if (!idToken) return res.status(401).json({ error: "Authentication required" });
-  try { await getAdminAuth().verifyIdToken(idToken); }
-  catch { return res.status(401).json({ error: "Invalid token" }); }
-
   const path = req.url.split("?")[0];
   const body = req.body || {};
+  const isContact = path.endsWith("/contact");
+
+  // Auth — require valid Firebase token for every email type EXCEPT the
+  // public contact form (logged-out landing-page visitors need to reach
+  // this with no account at all).
+  if (!isContact) {
+    const idToken = (req.headers.authorization || "").replace("Bearer ", "").trim();
+    if (!idToken) return res.status(401).json({ error: "Authentication required" });
+    try { await getAdminAuth().verifyIdToken(idToken); }
+    catch { return res.status(401).json({ error: "Invalid token" }); }
+  }
 
   try {
-    let to, subject, html;
+    let to, subject, html, replyTo;
 
     if (path.endsWith("/welcome")) {
       to      = body.email;
@@ -189,6 +212,23 @@ export default async function handler(req, res) {
       to      = body.email;
       subject = body.subject || "A note from Corvus";
       html    = sequenceTemplate(body);
+    } else if (isContact) {
+      // Honeypot — a hidden field real users never fill; bots that
+      // auto-fill every input will trip it.
+      if (body.website) return res.json({ ok: true });
+      const name    = String(body.name || "").trim().slice(0, 120);
+      const email   = String(body.email || "").trim().slice(0, 200);
+      const topic   = String(body.topic || "").trim().slice(0, 80);
+      const message = String(body.message || "").trim().slice(0, 4000);
+      if (!name || !email.includes("@") || message.length < 5) {
+        return res.status(400).json({ error: "Name, a valid email, and a message are required" });
+      }
+      to      = SUPPORT_EMAIL_TO;
+      subject = `[Contact] ${topic || "General"} — ${name}`;
+      html    = contactTemplate({ name, email, topic, message });
+      replyTo = email;
+      const result = await sendResend(to, subject, html, replyTo);
+      return res.json(result);
     } else {
       return res.status(404).json({ error: "Unknown email endpoint" });
     }

@@ -157,10 +157,10 @@ function B2BPlanCard({ plan, billing, current, isAr, addToast }) {
             {isAr?"خطتك الحالية v":"Current Plan v"}
           </div>
         ):plan.price_mo?(
-          <button onClick={()=>addToast(isAr?"تواصل معنا للترقية":"Contact us to upgrade","info")}
-            style={{width:"100%",background:`linear-gradient(135deg,${plan.color},${plan.color}cc)`,border:"none",borderRadius:8,padding:"9px 0",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+          <a href={`mailto:support@corvus.io?subject=Upgrade to ${encodeURIComponent(plan.name||plan.id)}`}
+            style={{display:"block",width:"100%",boxSizing:"border-box",background:`linear-gradient(135deg,${plan.color},${plan.color}cc)`,border:"none",borderRadius:8,padding:"9px 0",textAlign:"center",fontSize:12,fontWeight:700,color:"#fff",textDecoration:"none",cursor:"pointer"}}>
             {isAr?"ترقية <-":"Upgrade ->"}
-          </button>
+          </a>
         ):(
           <a href={`mailto:support@corvus.io?subject=Enterprise Plan`}
             style={{display:"block",background:`${plan.color}12`,border:`1px solid ${plan.color}25`,borderRadius:8,padding:"9px 0",textAlign:"center",fontSize:12,fontWeight:700,color:plan.color,textDecoration:"none"}}>

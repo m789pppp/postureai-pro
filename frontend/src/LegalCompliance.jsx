@@ -116,7 +116,7 @@ export function LegalModal({ doc, cs, onClose }) {
         { heading: "3. Account Obligations", body: "You are responsible for maintaining the security of your account credentials. You agree not to share your login or API keys with unauthorised parties." },
         { heading: "4. Acceptable Use", body: "You may not use the Service to: (a) violate laws; (b) infringe IP rights; (c) transmit malware; (d) reverse-engineer proprietary models; (e) scrape data without authorisation." },
         { heading: "5. Data & Privacy", body: "Camera frames are processed in-memory and never stored on our servers. Session scores and metadata are stored per our Privacy Policy. You retain ownership of your data and may export or delete it at any time." },
-        { heading: "6. Billing", body: "Subscriptions are billed monthly or annually. Overages are charged at metered rates shown in the Billing dashboard. Refunds are at our discretion within 14 days of charge." },
+        { heading: "6. Billing", body: "Subscriptions are billed monthly or annually. Overages are charged at metered rates shown in the Billing dashboard. Payments are final and non-refundable except as described in our Refund Policy." },
         { heading: "7. Uptime & SLA", body: "We target 99.9% monthly uptime for Enterprise plans. Credits are issued for downtime exceeding 0.1% in a calendar month, up to one month's base fee." },
         { heading: "8. IP Rights", body: "Corvus owns all IP in the Service. We grant you a limited, non-exclusive licence to use the Service per your plan. Nothing here transfers ownership of our models or code." },
         { heading: "9. Limitation of Liability", body: "To the maximum extent permitted by law, Corvus is not liable for indirect, incidental, or consequential damages. Our total liability shall not exceed the fees paid in the 3 months preceding the claim." },
@@ -140,13 +140,24 @@ export function LegalModal({ doc, cs, onClose }) {
         { heading: "10. Contact", body: "Data Controller: Corvus Ltd, London, UK. DPO: dpo@corvus.com. Privacy team: privacy@corvus.com." },
       ],
     },
+    refund: {
+      title: "Refund Policy",
+      lastUpdated: "2026-08-24",
+      sections: [
+        { heading: "1. General Policy", body: "All subscription payments are final and non-refundable, except in the exceptional circumstances described below. By subscribing, you acknowledge and accept this policy." },
+        { heading: "2. Exceptional Cases", body: "A refund may be issued at our discretion where: (a) a technical failure on our side prevented you from accessing the Service you paid for and the issue could not be resolved within a reasonable time; (b) you were charged in error (e.g. duplicate charge, incorrect amount, or a charge after a subscription was already cancelled); or (c) applicable consumer-protection law in your country grants you a mandatory refund right we cannot contractually waive." },
+        { heading: "3. What Is Not Covered", body: "Refunds are not provided for change of mind, underuse or non-use of the Service, dissatisfaction with AI accuracy or results, or cancelling partway through a billing period — cancellation stops future renewals but does not refund the current period." },
+        { heading: "4. How to Request", body: "Email support@corvus.io with your account email, payment reference, and the reason for your request within 14 days of the charge. We aim to respond within 3 business days." },
+        { heading: "5. Processing", body: "Approved refunds are returned to the original payment method within 5–10 business days, subject to your payment provider's own processing times." },
+        { heading: "6. Enterprise & Custom Contracts", body: "Enterprise agreements with a separately negotiated order form are governed by the refund/termination terms in that order form where they conflict with this policy." },
+      ],
+    },
     dpa: {
       title: "Data Processing Agreement",
       lastUpdated: "2026-06-01",
       sections: [
         { heading: "1. Parties", body: "This DPA is between Corvus Ltd ('Processor') and the Customer ('Controller'). It supplements the main Terms of Service." },
-        { heading: "2. Subject Matter", body: "Corvus processes personal data on behalf of the Customer solely to provide the Service described in the Terms of Service." },
-        { heading: "3. Categories of Data", body: "Employee names and emails; posture session scores; usage metadata. Special category data (health-related scores) is processed under Article 9(2)(b) GDPR (employment context)." },
+        { heading: "2. Subject Matter", body: "Corvus processes personal data on behalf of the Customer solely to provide the Service described in the Terms of Service." },        { heading: "3. Categories of Data", body: "Employee names and emails; posture session scores; usage metadata. Special category data (health-related scores) is processed under Article 9(2)(b) GDPR (employment context)." },
         { heading: "4. Customer Obligations", body: "The Customer warrants it has lawful basis to provide employee data; has informed employees of processing; has obtained necessary consents where required." },
         { heading: "5. Corvus Obligations", body: "Process data only on documented Customer instructions; ensure personnel are bound by confidentiality; implement Article 32 security measures; assist with DSAR requests within 5 business days." },
         { heading: "6. Sub-processors", body: "Current sub-processors: Google Firebase (Ireland), Stripe (Ireland), SendGrid (USA — SCCs in place), Sentry (USA — SCCs in place). 30 days' notice given for changes." },
@@ -196,7 +207,7 @@ export function LegalFooter({ cs }) {
   return (
     <>
       <div style={{ display: "flex", gap: 16, justifyContent: "center", padding: "12px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-        {[["tos","Terms of Service"],["privacy","Privacy Policy"],["dpa","DPA"]].map(([k,l]) => (
+        {[["tos","Terms of Service"],["privacy","Privacy Policy"],["refund","Refund Policy"],["dpa","DPA"]].map(([k,l]) => (
           <button key={k} onClick={() => setOpen(k)} style={{ background: "none", border: "none", color: cs?.textDim || "#94a3b8", fontSize: 11, cursor: "pointer", textDecoration: "underline", padding: 0 }}>{l}</button>
         ))}
         <a href="mailto:privacy@corvus.com" style={{ color: cs?.textDim || "#94a3b8", fontSize: 11, textDecoration: "underline" }}>Privacy Requests</a>

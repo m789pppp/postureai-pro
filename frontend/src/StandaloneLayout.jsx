@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { LegalModal } from "./LegalCompliance.jsx";
+import { ContactModal } from "./ContactModal.jsx";
 
 // ── Tokens (mirror LandingPageV7) ─────────────────────────────────
 const T = {
@@ -229,14 +231,17 @@ export function SharedFooter({ lang }) {
   const cols = ar ? [
     { title:"المنتج", links:[["المميزات","/product"],["كيف يعمل","/how-it-works"],["الأسعار","/pricing"]] },
     { title:"الحلول", links:[["للشركات","/solutions"],["للأفراد","/pricing"],["شراكات",`mailto:${SUPPORT}?subject=Partnership`]] },
-    { title:"الدعم",  links:[["الأسئلة الشائعة","/faq"],["تواصل معنا",`mailto:${SUPPORT}`],["حجز عرض",`mailto:${SUPPORT}?subject=Demo`]] },
-    { title:"قانوني", links:[["الخصوصية",`mailto:${SUPPORT}?subject=Privacy`],["الشروط",`mailto:${SUPPORT}?subject=Terms`],["الأمان",`mailto:${SUPPORT}?subject=Security`]] },
+    { title:"الدعم",  links:[["الأسئلة الشائعة","/faq"],["تواصل معنا","modal:contact"],["حجز عرض",`mailto:${SUPPORT}?subject=Demo`]] },
+    { title:"قانوني", links:[["الخصوصية","modal:privacy"],["الشروط","modal:tos"],["سياسة الاسترداد","modal:refund"],["الأمان",`mailto:${SUPPORT}?subject=Security`]] },
   ] : [
     { title:"Product",  links:[["Features","/product"],["How it works","/how-it-works"],["Pricing","/pricing"]] },
     { title:"Solutions",links:[["For Teams","/solutions"],["For Individuals","/pricing"],["Partnerships",`mailto:${SUPPORT}?subject=Partnership`]] },
-    { title:"Support",  links:[["FAQ","/faq"],["Contact us",`mailto:${SUPPORT}`],["Book a Demo",`mailto:${SUPPORT}?subject=Demo`]] },
-    { title:"Legal",    links:[["Privacy",`mailto:${SUPPORT}?subject=Privacy`],["Terms",`mailto:${SUPPORT}?subject=Terms`],["Security",`mailto:${SUPPORT}?subject=Security`]] },
+    { title:"Support",  links:[["FAQ","/faq"],["Contact us","modal:contact"],["Book a Demo",`mailto:${SUPPORT}?subject=Demo`]] },
+    { title:"Legal",    links:[["Privacy","modal:privacy"],["Terms","modal:tos"],["Refund Policy","modal:refund"],["Security",`mailto:${SUPPORT}?subject=Security`]] },
   ];
+
+  const [legalOpen, setLegalOpen] = useState(null);
+  const [contactOpen, setContactOpen] = useState(false);
 
   return (
     <>
@@ -305,7 +310,17 @@ export function SharedFooter({ lang }) {
                   {col.title}
                 </div>
                 {col.links.map(([label, href]) => (
-                  <a key={label} href={href} className="sf-link">{label}</a>
+                  href.startsWith("modal:")
+                    ? <button key={label} type="button"
+                        onClick={()=>{
+                          const doc = href.slice(6);
+                          if (doc === "contact") setContactOpen(true);
+                          else setLegalOpen(doc);
+                        }}
+                        className="sf-link" style={{background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"inherit",font:"inherit"}}>
+                        {label}
+                      </button>
+                    : <a key={label} href={href} className="sf-link">{label}</a>
                 ))}
               </div>
             ))}
@@ -328,6 +343,8 @@ export function SharedFooter({ lang }) {
           </div>
         </div>
       </footer>
+      {legalOpen && <LegalModal doc={legalOpen} onClose={()=>setLegalOpen(null)} />}
+      {contactOpen && <ContactModal isAr={ar} supportEmail={SUPPORT} onClose={()=>setContactOpen(false)} />}
     </>
   );
 }

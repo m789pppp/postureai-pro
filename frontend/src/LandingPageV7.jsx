@@ -7,6 +7,8 @@
  */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { ContactModal } from "./ContactModal.jsx";
+import { LegalModal } from "./LegalCompliance.jsx";
 
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "support@corvus.io";
 const CALENDLY_URL  = import.meta.env.VITE_CALENDLY_URL  || `mailto:${import.meta.env.VITE_SUPPORT_EMAIL||"support@corvus.io"}?subject=Demo%20Request%20—%20Corvus%20PostureAI&body=Hi%2C%20I%27d%20like%20to%20book%20a%20demo.%0A%0ACompany%3A%0ATeam%20size%3A%0ACountry%3A`;
@@ -2514,13 +2516,14 @@ function Footer({ lang }) {
     { title:"الموارد", links:[
       { label:"شهادات العملاء",  href:"#testimonials", anchor:true },
       { label:"دراسات الحالة",  href:"#casestudies",  anchor:true },
-      { label:"تواصل معنا",     href:`mailto:${SUPPORT_EMAIL}` },
+      { label:"تواصل معنا",     modal:"contact" },
       { label:"الدعم الفني",    href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
     ]},
     { title:"الشركة", links:[
       { label:"من نحن",           href:`mailto:${SUPPORT_EMAIL}?subject=About Corvus` },
-      { label:"الأمان والخصوصية", href:`mailto:${SUPPORT_EMAIL}?subject=Privacy` },
-      { label:"شروط الاستخدام",   href:`mailto:${SUPPORT_EMAIL}?subject=Terms` },
+      { label:"سياسة الخصوصية",   modal:"privacy" },
+      { label:"شروط الاستخدام",   modal:"tos" },
+      { label:"سياسة الاسترداد",  modal:"refund" },
       { label:"شراكات",          href:`mailto:${SUPPORT_EMAIL}?subject=Partnership` },
     ]},
   ] : [
@@ -2540,13 +2543,14 @@ function Footer({ lang }) {
     { title:"Resources", links:[
       { label:"Testimonials",  href:"#testimonials", anchor:true },
       { label:"Case Studies",  href:"#casestudies",  anchor:true },
-      { label:"Contact us",    href:`mailto:${SUPPORT_EMAIL}` },
+      { label:"Contact us",    modal:"contact" },
       { label:"Support",       href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
     ]},
     { title:"Company", links:[
       { label:"About us",          href:`mailto:${SUPPORT_EMAIL}?subject=About Corvus` },
-      { label:"Security & Privacy",href:`mailto:${SUPPORT_EMAIL}?subject=Privacy` },
-      { label:"Terms of Service",  href:`mailto:${SUPPORT_EMAIL}?subject=Terms` },
+      { label:"Privacy Policy",    modal:"privacy" },
+      { label:"Terms of Service",  modal:"tos" },
+      { label:"Refund Policy",     modal:"refund" },
       { label:"Partnerships",      href:`mailto:${SUPPORT_EMAIL}?subject=Partnership` },
     ]},
   ];
@@ -2562,7 +2566,16 @@ function Footer({ lang }) {
     if(el) el.scrollIntoView({ behavior:"smooth", block:"start" });
   };
 
+  const [legalOpen, setLegalOpen] = useState(null);   // "tos" | "privacy" | "refund" | "dpa" | null
+  const [contactOpen, setContactOpen] = useState(false);
+  const openLink = (link) => {
+    if (link.modal === "contact") setContactOpen(true);
+    else if (link.modal) setLegalOpen(link.modal);
+    else if (link.anchor) scrollTo(link.href);
+  };
+
   return (
+    <>
     <footer style={{ background:"#030812", borderTop:"1px solid rgba(255,255,255,.07)" }}>
       {/* Main grid */}
       <div className="lp-wrap" style={{ padding:"56px 32px 40px" }}>
@@ -2613,10 +2626,10 @@ function Footer({ lang }) {
                 textTransform:"uppercase", color:"#8896ac", marginBottom:16,
               }}>{col.title}</div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {col.links.map(({ label, href, anchor }) => (
-                  anchor
+                {col.links.map(({ label, href, anchor, modal }) => (
+                  (anchor || modal)
                     ? <button key={label}
-                        onClick={() => scrollTo(href)}
+                        onClick={() => openLink({ href, anchor, modal })}
                         style={{
                           background:"none", border:"none", padding:0, cursor:"pointer",
                           textAlign: ar ? "right" : "left", color:"#8896ac",
@@ -2663,6 +2676,9 @@ function Footer({ lang }) {
         </div>
       </div>
     </footer>
+    {contactOpen && <ContactModal isAr={ar} supportEmail={SUPPORT_EMAIL} onClose={() => setContactOpen(false)} />}
+    {legalOpen && <LegalModal doc={legalOpen} onClose={() => setLegalOpen(null)} />}
+    </>
   );
 }
 
