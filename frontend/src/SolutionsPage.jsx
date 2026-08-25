@@ -80,8 +80,12 @@ export default function SolutionsPage() {
   const [activeIndustry, setActiveIndustry] = useState(0);
   const ind = INDUSTRIES[activeIndustry];
 
+  // BUG FIX: activePage was "casestudies" — this page's own nav link is
+  // href="/solutions", so the old value never matched via
+  // href.includes(activePage) and Solutions never highlighted in its own
+  // nav.
   return (
-    <PageShell lang={lang} setLang={setLang} activePage="casestudies">
+    <PageShell lang={lang} setLang={setLang} activePage="solutions">
       <style>{`
         body{background:#030b14}
         .sol-wrap{max-width:1100px;margin:0 auto;padding:0 32px}

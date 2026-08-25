@@ -168,12 +168,12 @@ export function Icon({ name, size = 18, color = "currentColor", strokeWidth = 1.
 // ─────────────────────────────────────────────────────────────────────────
 // SMALL BUILDING BLOCKS
 // ─────────────────────────────────────────────────────────────────────────
-export function StatusPill({ icon, label, tone = "neutral", pulse = false, cs }) {
+export function StatusPill({ icon, label, tone = "neutral", pulse = false, cs, title }) {
   const color = tone === "neutral" ? cs.muted : LT.color[tone];
   const bg = tone === "neutral" ? (cs.inp || "rgba(148,163,184,.08)") : alpha(color, 0.12);
   const bd = tone === "neutral" ? (cs.inpB || cs.border) : alpha(color, 0.28);
   return (
-    <span style={{
+    <span title={title} style={{
       display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px",
       borderRadius: LT.radius.pill, background: bg, border: `1px solid ${bd}`,
       fontSize: LT.font.xs, fontWeight: 600, color, whiteSpace: "nowrap", lineHeight: 1,
@@ -354,9 +354,16 @@ export function LiveHeader({
   mpStatus, camActive, timeLabel, tierLabel, aiCoachStatus,
   showUpgrade, onUpgrade, onOpenSettings,
 }) {
-  const mpTone = mpStatus === "ready" ? "good" : mpStatus === "loading" ? "info" : mpStatus === "fallback" ? "warn" : "bad";
+  // BUG FIX: "fallback" means analysis switched to running server-side
+  // instead of on-device — it still works fully, it's just slower. This
+  // used to render as an amber "AI: Fallback" pill with no explanation,
+  // which reads as broken/degraded to a non-technical user when nothing
+  // is actually wrong. Softened to an "info" tone with a plain-language
+  // label and a hover tooltip explaining what it means.
+  const mpTone = mpStatus === "ready" ? "good" : mpStatus === "loading" ? "info" : mpStatus === "fallback" ? "info" : "bad";
   const mpIcon = mpTone === "good" ? "checkCircle" : mpTone === "bad" ? "alertTriangle" : "infoCircle";
-  const mpLabel = { ready: isAr ? "جاهز" : "Ready", loading: isAr ? "تحميل" : "Loading", fallback: isAr ? "احتياطي" : "Fallback", error: isAr ? "خطأ" : "Error" }[mpStatus] || mpStatus;
+  const mpLabel = { ready: isAr ? "جاهز" : "Ready", loading: isAr ? "تحميل" : "Loading", fallback: isAr ? "يعمل (سيرفر)" : "Active (cloud)", error: isAr ? "خطأ" : "Error" }[mpStatus] || mpStatus;
+  const mpTitle = mpStatus === "fallback" ? (isAr ? "تحليل الوضعية شغال عادي، بس بيتم على السيرفر بدل جهازك — أبطأ شوية بس نفس الدقة" : "Posture analysis is working normally, just running on our server instead of your device — slightly slower, same accuracy") : undefined;
   const coachTone = aiCoachStatus?.error ? "bad" : aiCoachStatus?.ready ? "good" : "info";
   const coachIcon = aiCoachStatus?.error ? "alertTriangle" : aiCoachStatus?.ready ? "checkCircle" : "infoCircle";
   const coachLabel = aiCoachStatus?.ready
@@ -390,7 +397,7 @@ export function LiveHeader({
       {/* One status row, not two stacked ones — pose-detection and AI-coach
           readiness are related facts a user reads together at a glance. */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <StatusPill icon={mpIcon} label={`${isAr ? "الذكاء الاصطناعي" : "AI"}: ${mpLabel}`} tone={mpTone} cs={cs} pulse={mpStatus === "loading"} />
+        <StatusPill icon={mpIcon} label={`${isAr ? "الذكاء الاصطناعي" : "AI"}: ${mpLabel}`} tone={mpTone} cs={cs} pulse={mpStatus === "loading"} title={mpTitle} />
         {aiCoachStatus && <StatusPill icon={coachIcon} label={coachLabel} tone={coachTone} cs={cs} pulse={!aiCoachStatus.ready && !aiCoachStatus.error} />}
         {camActive && <StatusPill icon="clock" label={timeLabel} tone="neutral" cs={cs} />}
       </div>

@@ -264,6 +264,7 @@ export function SSOSetupPanel({ companyId, cs, lang = "en", onSaved }) {
   const [form, setForm] = useState({ domain: "", provider_id: "", provider_type: "saml", provider_name: "", color: "#0078D4" });
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   const isAr = lang === "ar";
   const DARK = cs || { card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
@@ -271,12 +272,18 @@ export function SSOSetupPanel({ companyId, cs, lang = "en", onSaved }) {
   const save = async () => {
     if (!form.domain || !form.provider_id) return;
     setSaving(true);
+    setSaveError(false);
     try {
       await saveSSOConfig({ ...form, company_id: companyId });
       setSaved(true);
       onSaved?.();
     } catch (e) {
+      // BUG FIX: this only did console.error — no user-facing feedback at
+      // all. The button just reverted to "Save SSO Config" with no
+      // explanation, so an admin who didn't notice the missing success
+      // banner had no way to know the save had failed.
       console.error(e);
+      setSaveError(true);
     } finally {
       setSaving(false);
     }
@@ -318,9 +325,16 @@ export function SSOSetupPanel({ companyId, cs, lang = "en", onSaved }) {
       {saved ? (
         <div style={{ fontSize: 12, color: "#10b981", padding: "8px 12px", background: "rgba(16,185,129,.08)", borderRadius: 7 }}>✅ {isAr ? "تم حفظ إعدادات SSO" : "SSO configuration saved"}</div>
       ) : (
-        <button onClick={save} disabled={saving} style={{ background: "#1a56db", border: "none", borderRadius: 8, padding: "10px 22px", fontSize: 12, fontWeight: 600, color: "white", cursor: "pointer" }}>
-          {saving ? "Saving…" : (isAr ? "حفظ الإعدادات" : "Save SSO Config")}
-        </button>
+        <>
+          <button onClick={save} disabled={saving} style={{ background: "#1a56db", border: "none", borderRadius: 8, padding: "10px 22px", fontSize: 12, fontWeight: 600, color: "white", cursor: "pointer" }}>
+            {saving ? "Saving…" : (isAr ? "حفظ الإعدادات" : "Save SSO Config")}
+          </button>
+          {saveError && (
+            <div style={{ fontSize: 11, color: "#ef4444", marginTop: 8 }}>
+              {isAr ? "تعذّر حفظ إعدادات SSO — حاول مرة أخرى" : "Couldn't save the SSO configuration — please try again"}
+            </div>
+          )}
+        </>
       )}
       <div style={{ fontSize: 10, color: DARK.muted, marginTop: 12, lineHeight: 1.6 }}>
         📖 {isAr ? "تعليمات:" : "Setup guide:"} Firebase Console → Authentication → Sign-in providers → SAML → Add provider → Paste metadata URL from Azure/Okta

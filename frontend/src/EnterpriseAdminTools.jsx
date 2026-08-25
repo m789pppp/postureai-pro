@@ -234,8 +234,14 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
             </div>
             <div style={{ display:"flex", gap:10, alignItems:"center" }}>
               {impersonating && (
+                // BUG FIX: was "👤 Impersonating: X" — but no session/token
+                // swap actually happens anywhere in this file; it was a
+                // purely cosmetic banner. That label implies the admin is
+                // now acting as that user (seeing what they see, able to
+                // act as them) when nothing of the sort occurs — relabeled
+                // to say what's actually true.
                 <div style={{ background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:10, padding:"6px 14px", fontSize:12, color:"#ef4444", fontWeight:700 }}>
-                  👤 Impersonating: {impersonating.name}
+                  👤 Viewing as (preview only, not a real session): {impersonating.name}
                   <button onClick={() => setImpersonating(null)} style={{ background:"none", border:"none", color:"#ef4444", cursor:"pointer", marginLeft:8, fontSize:14 }}>✕</button>
                 </div>
               )}
@@ -340,7 +346,9 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
             <div>
               <div style={{ display:"flex", gap:10, marginBottom:16, alignItems:"center" }}>
                 <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="🔍 Search users…" style={{ flex:1, background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"8px 13px", fontSize:13, outline:"none" }} />
-                <button style={{ background:"linear-gradient(135deg,#10b981,#6366f1)", border:"none", color:"#fff", borderRadius:9, padding:"8px 18px", cursor:"pointer", fontWeight:700, fontSize:13 }}>+ Create User</button>
+                {/* BUG FIX: had no onClick at all — clicking did nothing,
+                    with no feedback that it wasn't implemented. */}
+                <button onClick={() => alert("Create User isn't wired up yet — create accounts through normal signup for now.")} style={{ background:"linear-gradient(135deg,#10b981,#6366f1)", border:"none", color:"#fff", borderRadius:9, padding:"8px 18px", cursor:"pointer", fontWeight:700, fontSize:13 }}>+ Create User</button>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {usersLoading && (
@@ -361,9 +369,10 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                     <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:"rgba(245,158,11,0.12)", color:"#f59e0b" }}>{u.plan}</span>
                     <span style={{ fontSize:11, color:cs.muted }}>{u.lastSeen}</span>
                     <div style={{ display:"flex", gap:6 }}>
-                      <button onClick={() => setImpersonating(u)} style={{ background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.3)", color:"#6366f1", borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11, fontWeight:600 }}>👤 Impersonate</button>
-                      <button style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11 }}>Edit</button>
-                      <button style={{ background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11 }}>Suspend</button>
+                      <button onClick={() => setImpersonating(u)} style={{ background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.3)", color:"#6366f1", borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11, fontWeight:600 }}>👤 View As</button>
+                      {/* BUG FIX: Edit/Suspend had no onClick — silent no-ops. */}
+                      <button onClick={() => alert("Edit user isn't wired up yet.")} style={{ background:"transparent", border:`1px solid ${cs.border}`, color:cs.muted, borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11 }}>Edit</button>
+                      <button onClick={() => alert("Suspend isn't wired up yet.")} style={{ background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", borderRadius:7, padding:"5px 11px", cursor:"pointer", fontSize:11 }}>Suspend</button>
                     </div>
                   </div>
                 ))}
@@ -376,7 +385,20 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
             <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
               <div style={{ fontWeight:700, color:cs.text, fontSize:16 }}>📢 System Announcements</div>
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
-                <div style={{ fontWeight:600, color:cs.text, marginBottom:14, fontSize:14 }}>Compose Announcement</div>
+                {/* BUG FIX: this composer used to only push into local
+                    React state — nothing was ever sent to real users. The
+                    "Sent" list below made it look like publishing worked.
+                    A real, working /announcements endpoint already exists
+                    and is used by AdminDashboard.jsx's Announcements tab —
+                    pointing admins there instead of silently faking success
+                    here, rather than guessing at this endpoint's tier/target
+                    contract from this file (whose "Target" options like
+                    "admins" don't map cleanly onto that endpoint's tier
+                    list) and risking a wrong-but-"successful" send. */}
+                <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:9, padding:"10px 13px", marginBottom:14, fontSize:12, color:"#f59e0b", lineHeight:1.5 }}>
+                  ⚠️ This composer is not yet wired to the real notification system — entries below are saved locally only and are not sent to users. Use the Announcements tab in the main Admin Dashboard to publish a real announcement.
+                </div>
+                <div style={{ fontWeight:600, color:cs.text, marginBottom:14, fontSize:14 }}>Compose Announcement (local preview)</div>
                 <div style={{ marginBottom:12 }}>
                   <label style={{ fontSize:12, fontWeight:600, color:cs.muted, display:"block", marginBottom:5 }}>Title</label>
                   <input value={announcement.title} onChange={e => setAnnouncement(p => ({...p,title:e.target.value}))} placeholder="Scheduled maintenance window" style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:`1px solid ${cs.border}`, color:cs.text, borderRadius:9, padding:"9px 13px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
@@ -436,7 +458,13 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                     <div style={{ fontSize:28, marginBottom:8 }}>{tool.icon}</div>
                     <div style={{ fontWeight:700, color:cs.text, fontSize:14, marginBottom:4 }}>{tool.title}</div>
                     <div style={{ fontSize:12, color:cs.muted, marginBottom:12, lineHeight:1.5 }}>{tool.desc}</div>
-                    <button style={{ background:`${tool.color}18`, border:`1px solid ${tool.color}55`, color:tool.color, borderRadius:8, padding:"8px 16px", cursor:"pointer", fontWeight:700, fontSize:12 }}>{tool.action}</button>
+                    {/* BUG FIX: none of these had an onClick — clicking
+                        "Flush Cache" or "Run Cleanup" (both destructive)
+                        silently did nothing, with zero feedback either way.
+                        No real backend endpoint for any of these six exists
+                        yet, so rather than guess at one, this is now honest
+                        that it isn't implemented instead of a silent no-op. */}
+                    <button onClick={() => alert(`${tool.title} isn't wired up to a live backend action yet.`)} style={{ background:`${tool.color}18`, border:`1px solid ${tool.color}55`, color:tool.color, borderRadius:8, padding:"8px 16px", cursor:"pointer", fontWeight:700, fontSize:12 }}>{tool.action}</button>
                   </div>
                 ))}
               </div>

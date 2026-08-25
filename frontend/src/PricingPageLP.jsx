@@ -472,7 +472,10 @@ export default function PricingPageStandalone() {
         {/* Trust badges */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
           gap:24, flexWrap:"wrap", padding:"40px 0 16px" }}>
-          {["✓ 14-day free trial","✓ No credit card","✓ Cancel anytime","✓ Egyptian payment methods"].map(t=>(
+          {/* BUG FIX: said 14 days here but "7-day trial" everywhere else
+              on this same page (and across the rest of the app) — fixed to
+              match the real trial length. */}
+          {["✓ 7-day free trial","✓ No credit card","✓ Cancel anytime","✓ Egyptian payment methods"].map(t=>(
             <span key={t} style={{ fontSize:13, color:T.muted }}>{t}</span>
           ))}
         </div>
@@ -574,7 +577,7 @@ export default function PricingPageStandalone() {
               padding:"8px 20px", borderRadius:99,
               background:"rgba(16,217,160,.08)", border:"1px solid rgba(16,217,160,.2)" }}>
               <span style={{ fontSize:14 }}>🎉</span>
-              <span style={{ fontSize:13, color:T.green, fontWeight:600 }}>14-day free trial — no credit card required</span>
+              <span style={{ fontSize:13, color:T.green, fontWeight:600 }}>7-day free trial — no credit card required</span>
             </div>
             <h2 style={{ fontSize:"clamp(28px,3.5vw,48px)", fontWeight:800, color:T.text,
               margin:"0 0 18px", fontFamily:FD, letterSpacing:"-.025em" }}>

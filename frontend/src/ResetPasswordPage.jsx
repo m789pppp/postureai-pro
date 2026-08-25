@@ -67,11 +67,17 @@ export default function ResetPasswordPage({ oobCode, darkMode, lang, onDone }) {
   const score  = pwScore(pass);
   const sColor = ["#ef4444","#f97316","#eab308","#22c55e","#22c55e"][Math.min(score,5)-1] || c.muted;
 
-  const inp = (value, onChange, placeholder, type="text") => (
+  // BUG FIX: fixed `right:14` icon placement over flat `padding:"13px 16px"`
+  // meant typed text ran under the show/hide icon as the password got
+  // longer, and got worse in Arabic (RTL) where the input text starts
+  // flush against the icon from the first character. `withIcon` now
+  // reserves real space using logical padding, and the button below uses
+  // `insetInlineEnd` so it sits on the correct side in both directions.
+  const inp = (value, onChange, placeholder, type="text", withIcon=false) => (
     <input type={type} value={value} onChange={e=>onChange(e.target.value)}
       placeholder={placeholder} required
       style={{
-        width:"100%", padding:"13px 16px", marginBottom:12,
+        width:"100%", paddingBlock:13, paddingInlineStart:16, paddingInlineEnd:withIcon?42:16, marginBottom:12,
         background:c.inp, border:`1.5px solid ${c.inpB}`,
         borderRadius:10, fontSize:14.5, color:c.text, outline:"none",
         boxSizing:"border-box", fontFamily:"inherit",
@@ -142,9 +148,9 @@ export default function ResetPasswordPage({ oobCode, darkMode, lang, onDone }) {
             </div>
             <form onSubmit={handleSubmit} noValidate>
               <div style={{position:"relative",marginBottom:0}}>
-                {inp(pass, setPass, isAr?"كلمة المرور الجديدة":"New password", showP?"text":"password")}
+                {inp(pass, setPass, isAr?"كلمة المرور الجديدة":"New password", showP?"text":"password", true)}
                 <button type="button" onClick={()=>setShowP(v=>!v)} style={{
-                  position:"absolute",right:14,top:14,background:"none",border:"none",
+                  position:"absolute",insetInlineEnd:14,top:14,background:"none",border:"none",
                   color:c.muted,cursor:"pointer",fontSize:15,padding:0,
                 }}>
                   {showP?"🙈":"👁"}

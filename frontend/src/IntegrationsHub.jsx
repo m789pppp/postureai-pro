@@ -338,7 +338,14 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                     <div key={f.key} style={{ marginBottom:12 }}>
                       <label style={{ fontSize:11, fontWeight:600, color:cs.muted, display:"block", marginBottom:4 }}>{f.label}</label>
                       {f.type === "toggle" ? (
+                        // BUG FIX: was a plain <div onClick> — not natively
+                        // focusable/keyboard-operable and not announced as
+                        // a control to screen readers. role="switch" +
+                        // aria-checked + tabIndex + Enter/Space handling
+                        // make it a real accessible toggle.
                         <div onClick={() => setConfigs(p => ({ ...p, [selected.id]: { ...p[selected.id], [f.key]: !p[selected.id]?.[f.key] } }))}
+                          role="switch" aria-checked={!!configs[selected.id]?.[f.key]} aria-label={f.label} tabIndex={0}
+                          onKeyDown={e => { if (e.key===" "||e.key==="Enter") { e.preventDefault(); setConfigs(p => ({ ...p, [selected.id]: { ...p[selected.id], [f.key]: !p[selected.id]?.[f.key] } })); } }}
                           style={{ width:44, height:24, borderRadius:12, background:configs[selected.id]?.[f.key]?selected.color:"rgba(255,255,255,0.1)", cursor:"pointer", position:"relative", transition:"background .2s" }}>
                           <div style={{ position:"absolute", top:3, insetInlineStart:configs[selected.id]?.[f.key]?22:3, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"inset-inline-start .2s" }} />
                         </div>

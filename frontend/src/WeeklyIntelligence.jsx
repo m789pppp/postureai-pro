@@ -29,7 +29,15 @@ function computeWeeklyIntelligence(sessions) {
   const thisWeek = (sessions || []).filter(s => { const t = getTime(s); return t >= now - 7*dayMs && t <= now; });
   const lastWeek = (sessions || []).filter(s => { const t = getTime(s); return t >= now - 14*dayMs && t < now - 7*dayMs; });
 
-  if (thisWeek.length < 1 || lastWeek.length < 1) {
+  // BUG FIX: this only required 1 session in each week, but the not-ready
+  // screen tells the user they need "at least 3 sessions in each of the
+  // last two weeks" — either the copy was wrong, or (worse) a single
+  // session per week was enough to produce a confident-sounding "declined
+  // by N points" verdict, presenting a statistically meaningless
+  // comparison as clinical insight. Raised the threshold to match what's
+  // actually promised, since a real per-week average is what makes the
+  // week-over-week comparison meaningful in the first place.
+  if (thisWeek.length < 3 || lastWeek.length < 3) {
     return { ready: false, thisWeekCount: thisWeek.length, lastWeekCount: lastWeek.length };
   }
 

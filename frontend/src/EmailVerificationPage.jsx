@@ -13,6 +13,7 @@ export default function EmailVerificationPage({ oobCode, user, darkMode, lang, o
   const [sending, setSending]= useState(false);
   const [sent,    setSent]   = useState(false);
   const [err,     setErr]    = useState("");
+  const [cooldown, setCooldown] = useState(0);
 
   const c = dark ? {
     bg:"#030b14", card:"rgba(15,23,42,.9)", border:"rgba(255,255,255,.08)",
@@ -34,11 +35,25 @@ export default function EmailVerificationPage({ oobCode, user, darkMode, lang, o
       .catch(() => setStep("error"));
   }, [oobCode]);
 
+  // BUG FIX: `sent` used to stay true forever once set — the resend
+  // button permanently swapped for a static "Resent" message with no way
+  // to trigger a second send (short of reloading the whole flow) if the
+  // email never actually arrived. Now shows the confirmation for a 60s
+  // cooldown (a reasonable rate limit) and then lets the user resend again.
+  useEffect(() => {
+    if (!sent || cooldown <= 0) return;
+    const t = setInterval(() => setCooldown(c => {
+      if (c <= 1) { setSent(false); return 0; }
+      return c - 1;
+    }), 1000);
+    return () => clearInterval(t);
+  }, [sent, cooldown]);
+
   const handleResend = async () => {
     setSending(true); setErr("");
     try {
       await sendVerificationEmail(user || auth.currentUser);
-      setSent(true);
+      setSent(true); setCooldown(60);
     } catch(e) {
       setErr(isAr?"فشل الإرسال — انتظر دقيقة وحاول مرة أخرى":"Failed — wait a minute and try again");
     } finally { setSending(false); }
@@ -101,6 +116,9 @@ export default function EmailVerificationPage({ oobCode, user, darkMode, lang, o
             {sent ? (
               <div style={{color:dark?"#4ade80":"#16a34a",fontSize:13,marginBottom:16,fontWeight:500}}>
                 ✓ {isAr?"تم إرسال بريد التحقق مرة أخرى":"Verification email resent"}
+                <div style={{color:c.muted,fontWeight:400,marginTop:4,fontSize:12}}>
+                  {isAr?`تقدر تعيد الإرسال بعد ${cooldown} ثانية`:`You can resend again in ${cooldown}s`}
+                </div>
               </div>
             ) : (
               <button onClick={handleResend} disabled={sending} style={{

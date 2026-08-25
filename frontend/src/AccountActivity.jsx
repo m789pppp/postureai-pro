@@ -148,7 +148,10 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
           {!loading && !loadError && filtered.length === 0 && <div style={{ textAlign:"center", color:cs.muted, padding:40 }}>No {filter} activity found</div>}
         </div>
         <div style={{ padding:"12px 20px", borderTop:`1px solid ${cs.border}`, fontSize:11, color:cs.muted, textAlign:"center" }}>
-          Activity log retained for 90 days · <span style={{ color: exporting?cs.muted:"#6366f1", cursor: exporting?"default":"pointer" }} onClick={exporting?undefined:exportCsv}>{exporting?"Exporting…":"Export as CSV"}</span>
+          {/* BUG FIX: was a <span onClick> — not focusable/keyboard-operable
+              and not announced as a control, despite being the only way to
+              export the log. */}
+          Activity log retained for 90 days · <button onClick={exporting?undefined:exportCsv} disabled={exporting} style={{ background:"none", border:"none", padding:0, font:"inherit", color: exporting?cs.muted:"#6366f1", cursor: exporting?"default":"pointer" }}>{exporting?"Exporting…":"Export as CSV"}</button>
           {exportError && <div style={{ color:"#ef4444", marginTop:6 }}>{exportError}</div>}
         </div>
       </div>

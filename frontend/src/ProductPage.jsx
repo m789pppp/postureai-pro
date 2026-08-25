@@ -72,8 +72,12 @@ const FEATURES = [
 export default function ProductPage() {
   const [lang, setLang] = useState(() => { try { return localStorage.getItem("lp_lang")||"en"; } catch { return "en"; } });
 
+  // BUG FIX: activePage was "features" — SharedNav matches via
+  // href.includes(activePage), and this page's own nav link is
+  // href="/product", so "features" never matched and Product never
+  // highlighted as active in its own nav.
   return (
-    <PageShell lang={lang} setLang={setLang} activePage="features">
+    <PageShell lang={lang} setLang={setLang} activePage="product">
       <style>{`
         body { background:#030b14; }
         .pp-wrap { max-width:1120px; margin:0 auto; padding:0 40px; }
