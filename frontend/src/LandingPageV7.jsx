@@ -1632,7 +1632,7 @@ function CaseStudies({ lang }) {
 }
 
 // ── Pricing ───────────────────────────────────────────────────────
-function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) {
+function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurrencyOverride }) {
   const ar = lang === "ar";
   const [billing, setBilling] = useState("yearly");
   const [priceVis, setPriceVis] = useState(true);
@@ -1648,6 +1648,7 @@ function Pricing({ lang, onCTA, mode: modeProp, isEgypt, setCurrencyOverride }) 
       setLocalMode(modeProp);
     }
   }, [modeProp]);
+  const switchLocalMode = (m) => { setLocalMode(m); onModeChange?.(m); };
 
   const isCompany = localMode === "company";
 
@@ -2735,7 +2736,7 @@ export default function LandingPage({ onNavigate }) {
       <Features lang={lang}/>
       <HowItWorks lang={lang}/>
       <CaseStudies lang={lang}/>
-      <Pricing lang={lang} onCTA={handleCTA} mode={mode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
+      <Pricing lang={lang} onCTA={handleCTA} mode={mode} onModeChange={setMode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
       <Testimonials lang={lang}/>
       <FAQ lang={lang}/>
       {/* BUG FIX: was routing "Book a Demo for Your Institution" straight
