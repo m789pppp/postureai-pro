@@ -63,8 +63,14 @@ function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDe
   const planLabel = escapeHtml(qualityFor(tier).label[isAr ? "ar" : "en"]);
 
   // ── Dynamic tier label (Fix: was hardcoded "Pro")
-  const tierLabel = tier === "elite" ? "Elite" : tier === "professional" ? "Pro" : tier === "basic" ? "Basic" : "";
-  const tierColor = tier === "elite" ? "#10b981" : "#0891b2";
+  // BUG FIX: these string-literal checks only ever matched the literal B2C
+  // tier strings — a B2B user (tier="b2b_enterprise" etc.) matched none of
+  // them, so the PDF badge silently rendered blank with the wrong (non-elite)
+  // color despite paying for Elite-equivalent access. Routed through the
+  // canonical featureTier() ladder used everywhere else in this codebase.
+  const featLevel = featureTier(tier);
+  const tierLabel = featLevel === "elite" ? "Elite" : featLevel === "professional" ? "Pro" : featLevel === "basic" ? "Basic" : "";
+  const tierColor = featLevel === "elite" ? "#10b981" : "#0891b2";
 
   const safeSummaryHtml = (() => {
   let raw = summaryText || "";
@@ -582,7 +588,12 @@ This user score: ${avgScore}/100
             {[
               { l: isAr ? "المتوسط" : "Avg",       v: `${avgScore}/100`,     c: sc(avgScore) },
               { l: isAr ? "هذا الأسبوع" : "Week",   v: weekAvg ? `${weekAvg}/100` : "—", c: sc(weekAvg) },
-              { l: isAr ? "الاتجاه" : "Trend",      v: trendPct,             c: trendPct.startsWith("+") ? "#10b981" : "#ef4444" },
+              // BUG FIX: was missing the "no data" branch that the identical
+              // Trend tile further down (line ~654) has — a user with no
+              // prior week to compare (trendPct === "—") saw this tile
+              // rendered in alarm-red, as if their posture were declining,
+              // instead of neutral.
+              { l: isAr ? "الاتجاه" : "Trend",      v: trendPct,             c: trendPct.startsWith("+") ? "#10b981" : trendPct === "—" ? "#6b82a6" : "#ef4444" },
               { l: isAr ? "الجلسات" : "Sessions",   v: sessions.length,      c: "#60a5fa" },
             ].map((m, i) => (
               <div key={i} style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 8, padding: "6px 12px" }}>

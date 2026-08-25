@@ -559,7 +559,7 @@ function postureCue(analysis, isAr){
   }
   add("rounded_shoulders","Roll your shoulders back","افرد كتفيك للخلف","↔");
   add("shoulder_level","Level your shoulders","سوِّ كتفيك","⇄");
-  add("shoulder_elevation","Drop your shoulders — relax your traps","ارخي كتفيك للأسفل — رخي عضلات الرقبة","↓");
+  add("shoulder_elevation","Drop your shoulders — let them relax down","ارخي كتفيك للأسفل — رخي عضلات الرقبة","↓");
   add("head_tilt","Level your head","سوِّ رأسك","⟲");
   if(typeof m.screen_distance?.score==="number" && m.screen_distance.score<55 && raw.distCm!=null && raw.lo!=null){
     if(raw.distCm<raw.lo)      cands.push({sc:m.screen_distance.score,en:"Move back from the screen",ar:"ابعد عن الشاشة شوية",icon:"⟵"});
@@ -3775,11 +3775,19 @@ export default function App(){
     }catch(e){
       const isDenied=e.name==="NotAllowedError"||e.name==="PermissionDeniedError";
       const noDevice=e.name==="NotFoundError"||e.name==="DevicesNotFoundError";
+      // BUG FIX: NotReadableError/TrackStartError — what the browser
+      // actually throws when the camera is locked by another app (Zoom,
+      // Teams, another tab) — used to fall through to a generic "Camera
+      // error, please retry" that never told the user WHY, so retrying
+      // (without closing the other app) would just fail again the same way.
+      const inUse=e.name==="NotReadableError"||e.name==="TrackStartError";
       setCameraStatus(isDenied?"denied":noDevice?"no-device":"idle");
       const errMsg=isDenied
         ?(isAr?"تم رفض الوصول للكاميرا — اضغط 'سماح' في المتصفح":"Camera access denied — click Allow in browser bar")
         :noDevice
         ?(isAr?"لا توجد كاميرا — قم بتوصيل كاميرا والمحاولة مجدداً":"No camera detected — connect one and retry")
+        :inUse
+        ?(isAr?"الكاميرا مستخدمة في برنامج تاني (زوم، تيمز، تاب تاني...) — قفلها وحاول تاني":"Your camera is in use by another app or browser tab (Zoom, Teams, etc.) — close it and try again")
         :(isAr?"خطأ في الكاميرا":"Camera error — please retry");
       setAlertMsg({text:errMsg,type:"bad"});
       addToast(errMsg,"error");
@@ -4077,7 +4085,7 @@ export default function App(){
                              ar: val!=null?`رأسك مائل ${val}${unit} — تخيّل خط رأسي يمر بأذنك وسوّ كتفيك`:"سوّي رأسك وحافظ على التوازن" },
           shoulder_level:  { en: val!=null?`Shoulder imbalance ${val}${unit} — drop the higher shoulder, check armrest height`:"Level armrests so both shoulders sit evenly",
                              ar: val!=null?`عدم توازن الكتفين ${val}${unit} — انزّل الكتف الأعلى واضبط ارتفاع مسند الذراع`:"اضبط مسند الذراع لتسوية الكتفين" },
-          rounded_shoulders:{ en: val!=null?`Shoulders rounded ${val}${unit} — pull shoulder blades together and down (retract + depress)`:"Pull shoulder blades together and down",
+          rounded_shoulders:{ en: val!=null?`Shoulders rounded ${val}${unit} — pull shoulder blades together and down`:"Pull shoulder blades together and down",
                               ar: val!=null?`كتفان مدوّران ${val}${unit} — اسحب لوحَي الكتف للداخل وللأسفل`:"اسحب كتفيك للداخل وللأسفل" },
           head_yaw:        { en: val!=null?`Head turned ${val}${unit} — reposition monitor or keyboard to face you directly`:"Face your monitor directly — avoid turning head",
                              ar: val!=null?`رأسك مدار ${val}${unit} — حرّك الشاشة أو الكيبورد ليكونا أمامك مباشرة`:"اجعل الشاشة أمامك مباشرة" },
@@ -5906,7 +5914,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 </div>
                 <div style={{fontSize:11,color:cs.muted,lineHeight:1.55}}>
                   {needsCalib
-                    ? (isAr?"اعمل معايرة سريعة (30 ثانية) للحصول على درجة دقيقة مخصصة لوضعيتك الطبيعية":"A quick 30-second calibration gets you a score tuned to your natural posture")
+                    ? (isAr?"اعمل معايرة سريعة (10 ثواني) للحصول على درجة دقيقة مخصصة لوضعيتك الطبيعية":"A quick 10-second calibration gets you a score tuned to your natural posture")
                     : (isAr?"Corvus هيحلل وضعيتك لحظياً ويديك درجة ونصائح فورية":"Corvus will analyse your posture live and give you a score + instant tips")}
                 </div>
                 {userSessions?.length > 0 && (
@@ -6418,6 +6426,25 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{fontSize:16,color:"rgba(255,255,255,.5)",animation:"bounceDown 1.4s infinite"}}>
                 <Icon name="chevronDown" size={16} color="rgba(255,255,255,.6)"/>
               </div>
+            </div>
+          )}
+
+          {/* BUG FIX: while the browser's own permission prompt is up, the
+              only on-screen feedback used to be a small "Opening..." corner
+              pill — nothing told a first-time user (who may not recognize
+              the browser's native permission bar, especially Safari's
+              compact address-bar prompt) to actually look for a popup and
+              click Allow. */}
+          {cameraStatus==="requesting" && (
+            <div style={{
+              position:"absolute",inset:0,display:"flex",flexDirection:"column",
+              alignItems:"center",justifyContent:"center",gap:10,
+              background:"rgba(2,8,16,.55)",backdropFilter:"blur(2px)",
+              pointerEvents:"none",
+            }}>
+              <GuidanceHint icon="camera"
+                title={isAr?"دوّر على نافذة إذن الكاميرا اللي فتحها المتصفح فوق واضغط \"سماح\"":"Look for your browser's permission popup and click \"Allow\""}
+                cs={cs}/>
             </div>
           )}
 

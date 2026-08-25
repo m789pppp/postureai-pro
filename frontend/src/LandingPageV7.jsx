@@ -1055,12 +1055,17 @@ function SocialProof({ lang }) {
               <span style={{ fontSize:11, color:LPV7_TOKENS.muted, fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>
                 {ar ? "يُستخدم في" : "Currently used at"}
               </span>
+              {/* BUG FIX: this badge hardcoded "Coventry University" (never
+                  translated either) while the text right next to it named
+                  a DIFFERENT institution, "Cairo University" — two
+                  different names in the same trust-signal row. Made them
+                  consistent. */}
               <div style={{ background:"rgba(255,255,255,.04)", border:`1px solid ${LPV7_TOKENS.border}`,
                 borderRadius:9, padding:"6px 14px", fontSize:13.5, fontWeight:700, color:LPV7_TOKENS.text }}>
-                Coventry University
+                {ar ? "جامعة القاهرة" : "Cairo University"}
               </div>
               <span style={{ fontSize:12, color:LPV7_TOKENS.muted }}>
-                {ar ? "جامعة القاهرة — تجريبي · 50+ مستخدم في 4 دول" : "Cairo University — Pilot · 50+ users across 4 countries"}
+                {ar ? "تجريبي · 50+ مستخدم في 4 دول" : "Pilot · 50+ users across 4 countries"}
               </span>
             </div>
             <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
@@ -2733,7 +2738,12 @@ export default function LandingPage({ onNavigate }) {
       <Pricing lang={lang} onCTA={handleCTA} mode={mode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
       <Testimonials lang={lang}/>
       <FAQ lang={lang}/>
-      <SchoolsSection lang={lang} onCTA={()=>window.__spaNavigate?.("/auth?mode=signup")}/>
+      {/* BUG FIX: was routing "Book a Demo for Your Institution" straight
+          to self-serve signup, same as every other CTA on the page —
+          every OTHER "Book a Demo" button on this page correctly opens
+          CALENDLY_URL. An institution clicking this got dumped into
+          signup instead of an actual demo request. */}
+      <SchoolsSection lang={lang} onCTA={()=>window.open(CALENDLY_URL,"_blank","noopener,noreferrer")}/>
       <FinalCTA lang={lang} onCTA={handleCTA}/>
       <Footer lang={lang}/>
     </div>

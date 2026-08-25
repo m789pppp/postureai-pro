@@ -334,7 +334,8 @@ export function SharedFooter({ lang }) {
             flexWrap:"wrap", gap:12,
           }}>
             <span dir="ltr" style={{ fontSize:12.5, color:"#8896ac" }}>
-              © 2025 Corvus Health Intelligence.{" "}
+              {/* BUG FIX: was a hardcoded "© 2025", already stale. */}
+              © {new Date().getFullYear()} Corvus Health Intelligence.{" "}
               {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
             </span>
             <span style={{ fontSize:12, color:"#7590aa", fontWeight:500 }}>

@@ -325,6 +325,17 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
 
   const save=async()=>{
     if(!sel) return;
+    // BUG FIX: granting org_owner (full platform control) or revoking
+    // security_admin used to save on a single click with zero confirmation
+    // — notably less protected than this same file's department-delete
+    // flow, which does have an inline confirm step first.
+    const grantingOwner = roleEdit==="org_owner" && sel.role!=="org_owner";
+    const revokingSecurityAdmin = sel.role==="security_admin" && roleEdit!=="security_admin";
+    if((grantingOwner||revokingSecurityAdmin) && !window.confirm(
+      grantingOwner
+        ? "Grant this person full Org Owner control? This gives them access to everything, including billing and every other member's permissions."
+        : "Revoke Security Admin from this person? They will lose access to security policies, SSO config, and audit logs."
+    )) return;
     setSaving(true);
     const perms=showCustom?customPerms:ROLES[roleEdit]?.scopes||[];
     await setUserRole(orgId,sel.uid||sel.id,roleEdit,perms,adminUid);
@@ -742,9 +753,18 @@ function SAMLConfig({orgId,adminUid,isAr}) {
     setTimeout(()=>setSaved(false),3000);
   };
 
+  // BUG FIX: this used to be labeled "Test Connection" / "Connection
+  // successful" but never actually contacted the IdP or validated the SAML
+  // metadata/certificate at all — it just checked whether `ssoUrl` was a
+  // non-empty string. An admin could type garbage into the SSO URL field,
+  // see "✓ Connection successful," and enable "Enforce SSO" (which
+  // disables password login) on the strength of that false signal —
+  // risking a full workforce lockout. Relabeled to be honest about what
+  // this actually checks (the config looks complete), not a real test.
   const testSSO=async()=>{
     setTestResult("testing");
-    setTimeout(()=>setTestResult(config.ssoUrl?"success":"error"),1800);
+    const complete = !!(config.ssoUrl && config.entityId && config.certificate?.trim());
+    setTimeout(()=>setTestResult(complete?"success":"error"),1000);
   };
 
   const PROVIDERS=[
@@ -782,7 +802,17 @@ function SAMLConfig({orgId,adminUid,isAr}) {
           {/* Enable toggle */}
           <div style={{display:"flex",gap:20,marginBottom:16,flexWrap:"wrap"}}>
             <Toggle value={config.enabled} onChange={v=>setConfig(c=>({...c,enabled:v}))} label={isAr?"تفعيل SSO":"Enable SSO"} />
-            <Toggle value={config.enforceSSO} onChange={v=>setConfig(c=>({...c,enforceSSO:v}))} label={isAr?"إلزامي (بدون كلمة مرور)":"Enforce SSO (disable passwords)"} />
+            <Toggle value={config.enforceSSO} onChange={v=>{
+              // BUG FIX: this could be flipped on with zero SAML fields
+              // filled in — since it disables password login, that's a
+              // real risk of locking every employee out at once. Now
+              // requires the config to at least look complete first.
+              if(v && !(config.ssoUrl && config.entityId && config.certificate?.trim())){
+                setTestResult("error");
+                return;
+              }
+              setConfig(c=>({...c,enforceSSO:v}));
+            }} label={isAr?"إلزامي (بدون كلمة مرور)":"Enforce SSO (disable passwords)"} />
             <Toggle value={config.allowPasswordFallback} onChange={v=>setConfig(c=>({...c,allowPasswordFallback:v}))} label={isAr?"السماح بكلمة المرور كبديل":"Allow password fallback"} />
           </div>
 
@@ -867,10 +897,10 @@ function SAMLConfig({orgId,adminUid,isAr}) {
               {saving?(isAr?"جاري الحفظ...":"Saving..."):saved?(isAr?"تم الحفظ!":"Saved!"):(isAr?"حفظ الإعداد":"Save Config")}
             </Btn>
             <Btn variant="ghost" onClick={testSSO} disabled={testResult==="testing"} icon="🧪">
-              {testResult==="testing"?(isAr?"جاري الاختبار...":"Testing..."):(isAr?"اختبار الاتصال":"Test Connection")}
+              {testResult==="testing"?(isAr?"جاري الفحص...":"Checking..."):(isAr?"فحص الإعداد":"Check Configuration")}
             </Btn>
-            {testResult==="success"&&<span style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:RBAC_TOKENS.green}}>✓ {isAr?"الاتصال ناجح":"Connection successful"}</span>}
-            {testResult==="error"&&<span style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:RBAC_TOKENS.red}}>✕ {isAr?"فشل الاتصال":"Connection failed"}</span>}
+            {testResult==="success"&&<span style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:RBAC_TOKENS.green}}>✓ {isAr?"الإعداد مكتمل — هذا فحص شكلي فقط، جرّب تسجيل دخول حقيقي قبل التفعيل":"Configuration looks complete — this only checks the fields, not a live connection. Test a real sign-in before enforcing SSO."}</span>}
+            {testResult==="error"&&<span style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:RBAC_TOKENS.red}}>✕ {isAr?"حقول ناقصة (الرابط / Entity ID / الشهادة)":"Missing required fields (URL / Entity ID / certificate)"}</span>}
           </div>
         </>
       )}
@@ -1020,11 +1050,34 @@ function SecurityPolicies({orgId,adminUid,isAr}) {
   });
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
+  const [saveError,setSaveError]=useState(false);
+
+  // BUG FIX: this screen used to only write an audit-log line saying
+  // "Security policies updated" — the actual policy object (MFA
+  // requirement, password rules, session timeout, IP allowlist, data
+  // residency, encryption) was never persisted anywhere. The UI showed a
+  // green "Saved!" confirmation regardless, so an admin who set, say,
+  // MFA-required and an IP allowlist would believe those were enforced —
+  // a page refresh silently reverted everything to the defaults above.
+  // Now actually persists to (and loads from) the org document.
+  useEffect(()=>{
+    if(!orgId) return;
+    getDoc(doc(db,"orgs",orgId)).then(snap=>{
+      const saved = snap.exists() ? snap.data()?.security_policies : null;
+      if(saved) setPolicies(p=>({...p,...saved}));
+    }).catch(()=>{});
+  },[orgId]);
 
   const save=async()=>{
     setSaving(true);
-    await logAuditEvent(orgId||"demo",{type:"settings_changed",actor:adminUid||"admin",details:"Security policies updated",severity:"high"});
-    setTimeout(()=>{setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),3000);},700);
+    setSaveError(false);
+    try {
+      await setDoc(doc(db,"orgs",orgId||"demo"), {security_policies:policies}, {merge:true});
+      await logAuditEvent(orgId||"demo",{type:"settings_changed",actor:adminUid||"admin",details:"Security policies updated",severity:"high"});
+      setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),3000);
+    } catch {
+      setSaving(false);setSaveError(true);
+    }
   };
 
   const REGIONS=[{id:"eu",label:"EU (Frankfurt)"},{id:"us",label:"US (Virginia)"},{id:"me",label:"ME (UAE)"}];
@@ -1095,6 +1148,11 @@ function SecurityPolicies({orgId,adminUid,isAr}) {
       <Btn variant="primary" onClick={save} disabled={saving} icon={saved?"✓":"🔒"}>
         {saving?(isAr?"جاري الحفظ...":"Saving..."):saved?(isAr?"تم الحفظ!":"Saved!"):(isAr?"حفظ السياسات":"Save Policies")}
       </Btn>
+      {saveError && (
+        <div style={{fontSize:11,color:RBAC_TOKENS.red,marginTop:8}}>
+          {isAr?"تعذّر حفظ السياسات — حاول مرة أخرى":"Couldn't save the policies — please try again"}
+        </div>
+      )}
     </Sec>
   );
 }

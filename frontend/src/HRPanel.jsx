@@ -231,6 +231,8 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
   const [employees,  setEmployees]= useState([]);
   const [allSessions,setAllSess]  = useState([]);
   const [loading,    setLoading]  = useState(true);
+  const [loadError,  setLoadError]= useState(false);
+  const [retryTick,  setRetryTick]= useState(0);
   const [newDept,    setNewDept]  = useState({name:"",manager:""});
   const [inviteText, setInvite]   = useState("");
   const [inviteRole, setInvRole]  = useState("employee");
@@ -249,6 +251,7 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
   // Load everything
   useEffect(()=>{
     if(!companyId){ setLoading(false); return; }
+    setLoadError(false);
     Promise.all([
       getCompany(companyId),
       getDepartments(companyId),
@@ -263,8 +266,13 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
           const all=results.flatMap(r=>r.status==="fulfilled"?r.value:[]);
           setAllSess(all);
         });
-    }).catch(()=>{}).finally(()=>setLoading(false));
-  },[companyId]);
+    // BUG FIX: this used to be `.catch(()=>{})` — a failed load (permission
+    // error, network drop) silently fell through to render the full
+    // dashboard with company=null / 0 employees / 0 departments, which is
+    // visually identical to a legitimately empty new company. An HR admin
+    // had no way to tell "you have no team yet" from "something's broken."
+    }).catch(()=>{ setLoadError(true); }).finally(()=>setLoading(false));
+  },[companyId, retryTick]);
 
   // Derived stats
   const totalSess  = allSessions.length;
@@ -304,6 +312,11 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
     const emails = inviteText.split(/[\n,]+/).map(e=>e.trim()).filter(e=>e.includes("@"));
     if(!emails.length) { addToast(isAr?"أدخل إيميل واحد على الأقل":"Enter at least one email","error"); return; }
     setSending(true);
+    // BUG FIX: this never called setSending(false) on any path — success or
+    // failure — so after the very first "Send Invites" click, the button
+    // (and, since `sending` is shared, the Import-invite Send button and
+    // the Monthly Report download button too) stayed permanently disabled
+    // for the rest of the session.
     try {
       const emps = emails.map(email=>({name:email.split("@")[0], email, department:"", role:inviteRole}));
       const results = await bulkInviteEmployees(emps, companyId, user.uid);
@@ -311,7 +324,8 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
       addToast(`${ok} ${isAr?"دعوة تم إرسالها":"invites sent"}${results.length-ok>0?` . ${results.length-ok} failed`:""}`, ok>0?"success":"error");
       setInvite("");
     } catch { addToast("Error sending invites","error"); }
-  };
+    finally { setSending(false); }
+  }
 
   const generateInviteLink = async () => {
     if (!companyId) { addToast(isAr?"مفيش company ID":"No company ID","error"); return; }
@@ -413,11 +427,17 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
   async function sendImportInvites() {
     if(!importEmps.length) return;
     setSending(true);
-    const results=await bulkInviteEmployees(importEmps, companyId, user.uid);
-    const ok=results.filter(r=>r.ok).length;
-    addToast(`${ok} ${isAr?"دعوة تم إرسالها":"invites sent"}`, "success");
-    setImportE([]);
-    setSending(false);
+    // BUG FIX: the network call had no try/catch — if it rejected, every
+    // line after it (including setSending(false)) was skipped, leaving
+    // the Send Invites button stuck disabled/spinning forever with no
+    // error shown and no way to retry short of reloading the page.
+    try {
+      const results = await bulkInviteEmployees(importEmps, companyId, user.uid);
+      const ok = results.filter(r=>r.ok).length;
+      addToast(`${ok} ${isAr?"دعوة تم إرسالها":"invites sent"}${results.length-ok>0?` . ${results.length-ok} failed`:""}`, ok>0?"success":"error");
+      setImportE([]);
+    } catch { addToast(isAr?"فشل إرسال الدعوات":"Failed to send invites","error"); }
+    finally { setSending(false); }
   }
 
   async function downloadReport() {
@@ -477,8 +497,35 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
           {isAr?"أنشئ مساحة عمل شركتك من الداشبورد الرئيسي":"Create your company workspace from the home dashboard"}
         </div>
         <button onClick={onBack} style={{background:"#1a56db",border:"none",borderRadius:10,padding:"11px 24px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
-          {isAr?"<- رجوع للداشبورد":"<- Back to Dashboard"}
+          {/* BUG FIX: was a hardcoded "<-" glyph even in Arabic — reads
+              backwards next to RTL text. Mirrored to match the convention
+              already used elsewhere in this app (e.g. InviteAccept.jsx). */}
+          {isAr?"رجوع للداشبورد ->":"<- Back to Dashboard"}
         </button>
+      </div>
+    </div>
+  );
+
+  // BUG FIX: was no error state at all — a failed load (see the .catch above)
+  // used to render straight through to the full dashboard looking like a
+  // legitimately empty company. This makes the failure visible and gives
+  // the admin a way to retry instead of assuming there's simply no data.
+  if(loadError) return (
+    <div style={{minHeight:"100dvh",background:"#0d1a2e",display:"flex",alignItems:"center",justifyContent:"center",color:"#f0f6ff",fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui",padding:24}}>
+      <div style={{textAlign:"center",maxWidth:360}}>
+        <div style={{fontSize:40,marginBottom:16}}>⚠️</div>
+        <div style={{fontSize:18,fontWeight:800,marginBottom:8}}>{isAr?"تعذّر تحميل بيانات الشركة":"Couldn't Load Company Data"}</div>
+        <div style={{fontSize:13,color:"#64748b",lineHeight:1.6,marginBottom:20}}>
+          {isAr?"حدث خطأ في الاتصال — حاول مرة أخرى":"Something went wrong connecting to the server — please try again"}
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+          <button onClick={()=>{setLoading(true);setRetryTick(t=>t+1);}} style={{background:"#1a56db",border:"none",borderRadius:10,padding:"11px 24px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+            {isAr?"إعادة المحاولة":"Retry"}
+          </button>
+          <button onClick={onBack} style={{background:"transparent",border:"1px solid rgba(255,255,255,.15)",borderRadius:10,padding:"11px 24px",fontSize:13,fontWeight:700,color:"#f0f6ff",cursor:"pointer"}}>
+            {isAr?"رجوع":"Back"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -643,8 +690,10 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
         position:"sticky", top:0, zIndex:50,
       }}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <button onClick={onBack} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.08)",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:500,color:"#94a3b8",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-            {"<-"} {isAr?"رجوع":"Back"}
+          <button onClick={onBack} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.08)",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:500,color:"#94a3b8",cursor:"pointer",display:"flex",alignItems:"center",gap:5,flexDirection:isAr?"row-reverse":"row"}}>
+            {/* BUG FIX: arrow was hardcoded "<-" even in Arabic, reading
+                backwards next to RTL text ("رجوع"). */}
+            {isAr?"->":"<-"} {isAr?"رجوع":"Back"}
           </button>
           <div style={{width:1,height:20,background:"rgba(255,255,255,.08)"}}/>
           <div style={{width:26,height:26,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>◈</div>

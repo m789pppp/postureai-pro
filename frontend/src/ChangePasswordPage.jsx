@@ -27,6 +27,7 @@ export default function ChangePasswordPage({ darkMode, lang, onClose }) {
   const [confirm,  setConfirm]  = useState("");
   const [showC,    setShowC]    = useState(false);
   const [showN,    setShowN]    = useState(false);
+  const [showConf, setShowConf] = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [err,      setErr]      = useState("");
   const [success,  setSuccess]  = useState(false);
@@ -171,7 +172,10 @@ export default function ChangePasswordPage({ darkMode, lang, onClose }) {
               </div>
             )}
 
-            {inp("confirm", isAr?"تأكيد كلمة المرور الجديدة":"Confirm New Password", "password", confirm, setConfirm, false, ()=>{})}
+            {/* BUG FIX: was passed a hardcoded `false` and a no-op setter —
+                the eye icon rendered but clicking it did nothing, so this
+                field could never be un-masked to check what was typed. */}
+            {inp("confirm", isAr?"تأكيد كلمة المرور الجديدة":"Confirm New Password", "password", confirm, setConfirm, showConf, setShowConf)}
 
             {err && (
               <div style={{background:"rgba(239,68,68,.08)",border:"1px solid rgba(239,68,68,.2)",

@@ -275,7 +275,12 @@ function FeedTab({ profile, isAr }) {
       limit(50)
     );
     const unsub = onSnapshot(q, snap => {
-      const items = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      // BUG FIX: dismiss() below never wrote to Firestore, so a dismissed
+      // notification would resurrect on the next snapshot. Filtering out
+      // `dismissed` docs here (rather than adding a `where` clause, which
+      // would need a new composite index) makes the persisted dismiss
+      // actually stick across snapshots/reloads.
+      const items = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(n => !n.dismissed);
       if (items.length === 0) {
         // Show demo data for new users
         setNotifs([
@@ -299,6 +304,14 @@ function FeedTab({ profile, isAr }) {
 
   const dismiss = async (id) => {
     setNotifs(p => p.filter(n => n.id !== id));
+    // BUG FIX: this only updated local state — no Firestore write at all,
+    // unlike markRead just above it. Since the doc was never touched, the
+    // next onSnapshot fire (e.g. on reload, or any other write to this
+    // notification list) resurrected the "dismissed" notification.
+    const uid = profile?.uid || profile?.id;
+    if (uid && !id.startsWith("d")) {
+      updateDoc(doc(db, "users", uid, "notifications", id), { dismissed:true }).catch(() => {});
+    }
   };
 
   const markAll = () => setNotifs(p => p.map(n => ({...n, read:true})));
