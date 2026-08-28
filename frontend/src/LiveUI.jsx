@@ -57,7 +57,15 @@ const LIVEUI_CSS = `
 @keyframes liveuiPulse   { 0%{transform:scale(1);opacity:.45} 100%{transform:scale(1.9);opacity:0} }
 @keyframes liveuiSlideUp { from{transform:translateY(6px);opacity:0} to{transform:translateY(0);opacity:1} }
 @keyframes liveuiSpin    { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-.liveui-focusable:focus-visible { outline:2px solid #1a56db; outline-offset:2px; border-radius:6px; }
+/* 10px sits 2px outside an 8px control corner (matching outline-offset), so
+   the ring follows the control instead of cutting inside its corners. */
+.liveui-focusable:focus-visible { outline:2px solid #1a56db; outline-offset:2px; border-radius:10px; }
+.liveui-focusable[role="switch"]:focus-visible { border-radius:999px; }
+/* Hover feedback for the page's plain inline <button>s, which previously had
+   no hover, active or focus state at all while every LiveUI control did. */
+.liveui-focusable:not(:disabled):hover { filter:brightness(1.12); }
+.liveui-focusable:not(:disabled):active { transform:translateY(0.5px); }
+@media (prefers-reduced-motion: reduce) { .liveui-focusable:active { transform:none; } }
 `;
 let _liveuiCssInjected = false;
 function injectLiveUICSS() {
@@ -226,8 +234,8 @@ export function Btn({ children, onClick, variant = "primary", size = "md", icon,
     <button onClick={onClick} disabled={disabled} className="liveui-focusable" {...rest}
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
-        padding: pad, fontSize: fs, fontWeight: 650, borderRadius: LT.radius.sm,
-        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1,
+        padding: pad, fontSize: fs, fontWeight: 700, borderRadius: LT.radius.sm,
+        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
         transition: `filter ${LT.duration.fast}ms ease, transform ${LT.duration.fast}ms ease`,
         whiteSpace: "nowrap", ...v, ...style,
       }}>
@@ -293,7 +301,7 @@ export function SettingsRow({ icon, label, sub, right, cs, onClick, disabled }) 
   return (
     <Tag type={onClick ? "button" : undefined} onClick={disabled ? undefined : onClick} disabled={onClick ? disabled : undefined} style={{
       display: "flex", alignItems: "center", gap: 10, padding: "9px 2px",
-      cursor: onClick && !disabled ? "pointer" : "default", opacity: disabled ? 0.55 : 1,
+      cursor: onClick && !disabled ? "pointer" : "default", opacity: disabled ? 0.5 : 1,
       width: "100%", background: "transparent", border: "none", font: "inherit", color: "inherit", textAlign: "inherit",
     }}>
       <div style={{
@@ -388,7 +396,7 @@ export function LiveHeader({
             the page, and at header size read as a near-twin of the theme
             sun icon (both circle+rays), confusing rather than useful. */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          {showUpgrade && <Btn size="sm" variant="secondary" icon="star" onClick={onUpgrade} cs={cs}>{isAr ? "ترقية" : "Upgrade"}</Btn>}
+          {showUpgrade && <Btn size="sm" variant="secondary" icon="star" onClick={onUpgrade} cs={cs} style={{ height: 34 }}>{isAr ? "ترقية" : "Upgrade"}</Btn>}
           <IconBtn name={darkMode ? "sun" : "moon"} label={isAr ? "تبديل السمة" : "Toggle theme"} onClick={onToggleDark} cs={cs} />
           <IconBtn name="globe" label={isAr ? "اللغة" : "Language"} onClick={onToggleLang} cs={cs} />
           {onOpenSettings && <IconBtn name="settings" label={isAr ? "الإعدادات" : "Settings"} onClick={onOpenSettings} cs={cs} />}

@@ -959,17 +959,22 @@ export function MetRow({ label, value, unit, score: s, cs }) {
   const col = s>=70?"#4FAE8E":s>=55?"#D6A24C":s>0?"#C6604F":"rgba(148,163,184,.25)";
   const icon = s>=70?"✅":s>=55?"⚠️":s>0?"❌":"○";
   return (
-    <div style={{ padding:"8px 0", borderBottom:`1px solid ${UI_TOKENS.border}` }}>
+    // Was rendering UI_TOKENS (a dark-only palette: #f1f5f9 text,
+    // rgba(255,255,255,.06) rules and track) while ignoring the `cs` prop both
+    // call sites already pass — so in light mode this whole list, which is the
+    // Live page's primary data readout, was near-white on white. Falls back to
+    // UI_TOKENS when no theme is supplied so any other caller is unaffected.
+    <div style={{ padding:"8px 0", borderBottom:`1px solid ${cs?.border || UI_TOKENS.border}` }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
         <div style={{ display:"flex", alignItems:"center", gap:6 }}>
           <span style={{ fontSize:11 }}>{icon}</span>
-          <span style={{ fontSize:11.5, color:s>0?UI_TOKENS.text:UI_TOKENS.muted, fontWeight:s>0?500:400 }}>{label}</span>
+          <span style={{ fontSize:12, color:s>0?(cs?.text||UI_TOKENS.text):(cs?.muted||UI_TOKENS.muted), fontWeight:s>0?500:400 }}>{label}</span>
         </div>
-        <span style={{ fontSize:12, fontWeight:700, color:col }}>
+        <span style={{ fontSize:12, fontWeight:700, color:col, fontVariantNumeric:"tabular-nums" }}>
           {value!=null?value:"—"}{unit&&value!=null?unit:""}
         </span>
       </div>
-      <div style={{ height:4, borderRadius:99, background:"rgba(255,255,255,.06)", overflow:"hidden" }}>
+      <div style={{ height:4, borderRadius:99, background:cs?.inp || "rgba(255,255,255,.06)", overflow:"hidden" }}>
         <div style={{ height:"100%", width:s>0?`${Math.min(100,s)}%`:"0%",
           background:`linear-gradient(90deg,${col}88,${col})`,
           borderRadius:99, transition:"width .5s cubic-bezier(.4,0,.2,1)" }}/>
