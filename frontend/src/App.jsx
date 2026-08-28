@@ -973,7 +973,7 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
           </div>
 
           {/* Academic badge */}
-          {isAuto&&<div style={{background:"rgba(79,174,142,.08)",border:"0.5px solid rgba(79,174,142,.25)",borderRadius:9,padding:"9px 12px",marginBottom:14,fontSize:11,color:"#6ee7b7",display:"flex",gap:8,alignItems:"center"}}>
+          {isAuto&&<div style={{background:"rgba(79,174,142,.08)",border:"0.5px solid rgba(79,174,142,.25)",borderRadius:9,padding:"9px 12px",marginBottom:14,fontSize:11,color:darkMode?"#6ee7b7":"#15803d",display:"flex",gap:8,alignItems:"center"}}>
             <span style={{fontSize:15}}>🎓</span>
             <span><strong>{isAr?"نطاق أكاديمي!":"Academic domain!"}</strong> {isAr?"Elite مجاناً لـ":"Elite free for"} {AUTO_APPROVE_DOMAIN}</span>
           </div>}
@@ -1033,7 +1033,7 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
             </div>}
 
             {/* Reset sent */}
-            {resetSent&&<div style={{fontSize:11,color:"#6ee7b7",marginBottom:12,background:"rgba(79,174,142,.07)",padding:"10px 12px",borderRadius:8,border:"0.5px solid rgba(79,174,142,.2)"}}>
+            {resetSent&&<div style={{fontSize:11,color:darkMode?"#6ee7b7":"#15803d",marginBottom:12,background:"rgba(79,174,142,.07)",padding:"10px 12px",borderRadius:8,border:"0.5px solid rgba(79,174,142,.2)"}}>
               ✅ {isAr?"تم إرسال رابط إعادة تعيين كلمة المرور — راجع بريدك":"Password reset link sent — check your email"}
             </div>}
 
@@ -5440,7 +5440,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {lang==="ar"?"حوّل اشتراكك لخطة سنوية واستمتع بتوفير 20٪":"Switch to annual and save 20% — that's 2 months free."}
             </p>
             <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"16px",marginBottom:20}}>
-              <p style={{margin:0,color:"#a5b4fc",fontSize:13}}>
+              <p style={{margin:0,color:darkMode?"#a5b4fc":"#4338ca",fontSize:13}}>
                 {lang==="ar"
                   ? `${qualityFor(profile?.tier).label.ar} · سنوي · وفّر 17٪`
                   : `${qualityFor(profile?.tier).label.en} · Annual · 17% off`}
@@ -5493,32 +5493,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} token={authToken} onClose={()=>setShowAuditSystem(false)}/>}
     </ErrorBoundary>);
   const TN = T_norm;
-  const scoreColor = score ? sc(score) : cs.muted;
-  const tier_label = TN?.name || "—";
-  const mode_label = M_?.label || "—";
-
-  // Inline ActionBtn for the 4 bottom buttons
-  const ActionBtn = ({icon, label, color, dimColor, onClick}) => {
-    const [h,setH] = useState(false);
-    return (
-      <button
-        onClick={onClick}
-        onMouseEnter={()=>setH(true)}
-        onMouseLeave={()=>setH(false)}
-        style={{
-          flex:1, display:"flex", flexDirection:"column",
-          alignItems:"center", justifyContent:"center", gap:5,
-          padding:"11px 6px",
-          background: h ? `${color}18` : `${color}0c`,
-          border:`1px solid ${h?color+"50":color+"25"}`,
-          borderRadius:12, cursor:"pointer",
-          transition:"all .18s",
-        }}>
-        <span style={{fontSize:18, lineHeight:1}}>{icon}</span>
-        <span style={{fontSize:10.5, fontWeight:600, color: h ? color : dimColor}}>{label}</span>
-      </button>
-    );
-  };
 
   return(<ErrorBoundary><>
     <style>{`
@@ -5647,7 +5621,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </p>
             <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:20}}>
               {[1,2,3,4,5,6,7,8,9,10].map(n=>(
-                <button key={n} onClick={async()=>{
+                <button className="liveui-focusable" key={n} onClick={async()=>{
                   try {
                     await apiFetch("/nps/submit",{method:"POST",body:{score:n,uid:profile?.uid}});
                     await updateUserProfile(profile?.uid,{last_nps_at:new Date().toISOString()});
@@ -5656,12 +5630,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   if(n>=9) toast(lang==="ar"?"شكراً! 🎉":"Thank you! 🎉","success");
                 }}
                   style={{width:36,height:36,borderRadius:8,border:`1px solid ${cs.border}`,background:cs.inp,color:cs.text,cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s"}}
-                  onMouseEnter={e=>{e.target.style.background="#6366f1";e.target.style.borderColor="#6366f1";}}
+                  onMouseEnter={e=>{e.target.style.background=cs.blue;e.target.style.borderColor=cs.blue;}}
                   onMouseLeave={e=>{e.target.style.background=cs.inp;e.target.style.borderColor=cs.border;}}
                 >{n}</button>
               ))}
             </div>
-            <button onClick={()=>setShowNPS(false)} style={{fontSize:12,color:cs.muted,background:"none",border:"none",cursor:"pointer"}}>
+            <button className="liveui-focusable" onClick={()=>setShowNPS(false)} style={{fontSize:12,color:cs.muted,background:"none",border:"none",cursor:"pointer"}}>
               {lang==="ar"?"لاحقاً":"Dismiss"}
             </button>
           </div>
@@ -5690,7 +5664,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               shorter viewport the bottom of the card — down to the New
               Session / Dashboard / Download PDF / Share Report buttons —
               was pushed past the visible screen with no way to reach it. */}
-          <div style={{background:"rgba(8,14,28,.98)",border:`2px solid ${sessionResult.color}30`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",maxHeight:"90dvh",overflowY:"auto",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+          <div style={{background:"rgba(8,14,28,.98)",border:`1px solid ${sessionResult.color}55`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",maxHeight:"90dvh",overflowY:"auto",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
             {/* Score ring */}
             <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>
               <svg width="130" height="130" style={{transform:"rotate(-90deg)"}}>
@@ -5699,7 +5673,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   strokeDasharray={`${(sessionResult?.avg_score/100)*345.6} 345.6`} strokeLinecap="round"/>
               </svg>
               <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                <div style={{fontSize:36,fontWeight:900,color:sessionResult.color,lineHeight:1}}>{sessionResult?.avg_score}</div>
+                <div style={{fontSize:36,fontWeight:800,color:sessionResult.color,lineHeight:1}}>{sessionResult?.avg_score}</div>
                 <div style={{fontSize:11,color:"rgba(255,255,255,.4)",fontWeight:600}}>/ 100</div>
               </div>
             </div>
@@ -5719,7 +5693,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 {label:isAr?"وضعية جيدة":"Good posture", value:`${sessionResult?.good_pct}%`},
                 {label:isAr?"التنبيهات":"Alerts", value:sessionResult?.alerts_count},
               ].map((s,i)=>(
-                <div key={i} style={{flex:1,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,padding:"10px 8px"}}>
+                <div key={i} style={{flex:1,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.07)",borderRadius:12,padding:"10px 8px"}}>
                   <div style={{fontSize:16,fontWeight:800,color:"#f0f6ff"}}>{s.value}</div>
                   <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginTop:2}}>{s.label}</div>
                 </div>
@@ -5728,8 +5702,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Top issue */}
             {sessionResult.top_metric&&(
-              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,textAlign:isAr?"right":"left"}}>
-                <div style={{fontSize:11,color:"#D6A24C",fontWeight:700,marginBottom:3}}>
+              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.2)",borderRadius:12,padding:"10px 14px",marginBottom:20,textAlign:isAr?"right":"left"}}>
+                <div style={{fontSize:11,color:darkMode?"#D6A24C":"#b45309",fontWeight:700,marginBottom:3}}>
                   {isAr?"أبرز مشكلة":"Top issue to fix"}
                 </div>
                 <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
@@ -5748,11 +5722,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{marginBottom:20,textAlign:isAr?"right":"left"}}>
                 <div style={{fontSize:11,color:"#4FAE8E",fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
                   📸 {isAr?"أسوأ لحظات الجلسة":"Worst posture moments"}
-                  <span style={{fontSize:8,background:"rgba(79,174,142,.12)",border:"1px solid rgba(79,174,142,.25)",borderRadius:99,padding:"1px 6px"}}>ELITE</span>
+                  <span style={{fontSize:8,background:"rgba(79,174,142,.12)",border:"1px solid rgba(79,174,142,.25)",borderRadius:99,padding:"1px 6px",fontWeight:800,letterSpacing:".04em"}}>ELITE</span>
                 </div>
                 <div style={{display:"flex",gap:8}}>
                   {(sessionResult.worst_snapshots||[]).map((s,i)=>(
-                    <div key={i} style={{flex:1,position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid rgba(198,96,79,.3)"}}>
+                    <div key={i} style={{flex:1,position:"relative",borderRadius:12,overflow:"hidden",border:"1px solid rgba(198,96,79,.3)"}}>
                       <img src={s.img} alt={`posture ${s.score}`} style={{width:"100%",display:"block",transform:"scaleX(-1)"}}/>
                       <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,.65)",padding:"3px 6px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <span style={{fontSize:10,fontWeight:800,color:s.score<40?"#C6604F":"#D6A24C"}}>{s.score}</span>
@@ -5766,7 +5740,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Trend badge */}
             {sessionResult.trend && sessionResult.trend !== "stable" && (
-              <div style={{display:"flex",alignItems:"center",gap:8,background:sessionResult.trend==="improving"?"rgba(79,174,142,.08)":"rgba(198,96,79,.08)",border:`1px solid ${sessionResult.trend==="improving"?"rgba(79,174,142,.25)":"rgba(198,96,79,.25)"}`,borderRadius:10,padding:"9px 14px",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,background:sessionResult.trend==="improving"?"rgba(79,174,142,.08)":"rgba(198,96,79,.08)",border:`1px solid ${sessionResult.trend==="improving"?"rgba(79,174,142,.25)":"rgba(198,96,79,.25)"}`,borderRadius:12,padding:"9px 14px",marginBottom:12}}>
                 <span style={{fontSize:18}}>{sessionResult.trend==="improving"?"📈":"📉"}</span>
                 <div style={{fontSize:12,color:sessionResult.trend==="improving"?"#4FAE8E":"#C6604F",fontWeight:600}}>
                   {sessionResult.trend==="improving"
@@ -5778,8 +5752,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Improvement tip */}
             {sessionResult.improvement_tip && (
-              <div style={{background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.2)",borderRadius:10,padding:"10px 14px",marginBottom:12,textAlign:isAr?"right":"left"}}>
-                <div style={{fontSize:10,color:"#818cf8",fontWeight:700,marginBottom:3}}>
+              <div style={{background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"10px 14px",marginBottom:12,textAlign:isAr?"right":"left"}}>
+                <div style={{fontSize:10,color:darkMode?"#818cf8":"#4338ca",fontWeight:700,marginBottom:3}}>
                   💡 {isAr?"نصيحة للتحسين":"Improvement tip"}
                 </div>
                 <div style={{fontSize:12,color:"#e0e7ff",lineHeight:1.5}}>{sessionResult.improvement_tip}</div>
@@ -5788,29 +5762,29 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Pain prediction */}
             {sessionResult.pain_summary && (
-              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.25)",borderRadius:10,padding:"9px 14px",marginBottom:12}}>
-                <div style={{fontSize:12,color:"#D6A24C",fontWeight:600}}>{sessionResult.pain_summary}</div>
+              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.25)",borderRadius:12,padding:"9px 14px",marginBottom:12}}>
+                <div style={{fontSize:12,color:darkMode?"#D6A24C":"#b45309",fontWeight:600}}>{sessionResult.pain_summary}</div>
               </div>
             )}
 
             {/* CTAs */}
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <button onClick={()=>{setSessionResult(null);setPage("live");setTimeout(()=>startCamera(),300);}}
-                style={{padding:"12px",background:`linear-gradient(135deg,#1a56db,#0891b2)`,color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer"}}>
+              <button className="liveui-focusable" onClick={()=>{setSessionResult(null);setPage("live");setTimeout(()=>startCamera(),300);}}
+                style={{padding:"12px",background:`linear-gradient(135deg,#1a56db,#0891b2)`,color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer"}}>
                 {isAr?"▶ جلسة جديدة":"▶ New Session"}
               </button>
               <div style={{display:"flex",gap:10}}>
-                <button onClick={()=>{
+                <button className="liveui-focusable" onClick={()=>{
                     setSessionResult(null);
                     if(window.__demoMode){ setPage("demo_dashboard"); return; }
                     // Refresh sessions before going home so Sessions tab is up to date
                     if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
                     setPage("home");
                   }}
-                  style={{flex:1,padding:"10px",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  style={{flex:1,padding:"10px",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {isAr?"لوحة التحكم":"Dashboard"}
                 </button>
-<button onClick={async ()=>{
+<button className="liveui-focusable" onClick={async ()=>{
                   // Same canonical gate as downloadPDF() — this button bypassed it
                   // entirely by calling generateSessionPDF() directly.
                   if(qualityFor(effectiveTier).pdfDetail === "none"){
@@ -5838,7 +5812,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     addToast("PDF error: "+(e?.message||"unknown"),"error");
                   }
                 }}
-                  style={{flex:1,padding:"10px",background:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.05)":effectiveTier==="elite"?"rgba(79,174,142,.15)":"rgba(99,102,241,.15)",color:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.4)":effectiveTier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.1)":effectiveTier==="elite"?"rgba(79,174,142,.3)":"rgba(99,102,241,.3)"}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  style={{flex:1,padding:"10px",background:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.05)":effectiveTier==="elite"?"rgba(79,174,142,.15)":"rgba(99,102,241,.15)",color:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.4)":effectiveTier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.1)":effectiveTier==="elite"?"rgba(79,174,142,.3)":"rgba(99,102,241,.3)"}`,borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {qualityFor(effectiveTier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${effectiveTier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
                 </button>
                 {/* Share button — Elite only. Was gated on raw `tier`, which
@@ -5847,7 +5821,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     could lose this button entirely even though every other
                     Elite check on this same page correctly uses effectiveTier. */}
                 {tierAtLeast(effectiveTier,"elite") && (
-                  <button onClick={()=>shareReport({
+                  <button className="liveui-focusable" onClick={()=>shareReport({
                       avg_score: sessionResult?.avg_score, good_pct: sessionResult?.good_pct,
                       duration_s: sessionResult?.duration_s, alerts_count: sessionResult?.alerts_count,
                       mode, tier: effectiveTier, session_id: sessionId,
@@ -5858,8 +5832,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
                       created_at: new Date(),
                     })}
                     style={{flex:1,padding:"10px",background:"rgba(99,102,241,.12)",
-                      color:"#a5b4fc",border:"1px solid rgba(99,102,241,.3)",
-                      borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                      color:darkMode?"#a5b4fc":"#4338ca",border:"1px solid rgba(99,102,241,.3)",
+                      borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                     🔗 {isAr?"شارك التقرير":"Share Report"}
                   </button>
                 )}
@@ -5885,8 +5859,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
         // the right, stats panel wide — the original arrangement. This
         // panel (stats) goes in the WIDE 1fr track again.
         order: isMobile ? 1 : (isAr ? 1 : 0),
-        borderRight: isAr ? "none" : `1px solid ${cs.border}`,
-        borderLeft:  isAr ? `1px solid ${cs.border}` : "none",
+        // No border here: the camera sidebar next to it already draws the
+        // divider on this exact seam, so both painted and the column edge came
+        // out 2px where every other rule on the page is 1px. On mobile the two
+        // panels stack full-width, where this rendered as a stray vertical line
+        // down the side of the stats block.
+        borderRight:"none",
+        borderLeft:"none",
         minWidth:0,
       }}>
         {/* Session Summary — clearly secondary to the live camera view (per
@@ -5930,14 +5909,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     : (isAr?"Corvus هيحلل وضعيتك لحظياً ويديك درجة ونصائح فورية":"Corvus will analyse your posture live and give you a score + instant tips")}
                 </div>
                 {userSessions?.length > 0 && (
-                  <div style={{marginTop:6,fontSize:10.5,color:cs.muted}}>
+                  <div style={{marginTop:6,fontSize:10,color:cs.muted}}>
                     {isAr?`آخر جلسة: ${userSessions[0]?.avg_score||0}/100`:`Last session: ${userSessions[0]?.avg_score||0}/100`}
                   </div>
                 )}
               </div>
               {needsCalib && (
-                <button onClick={()=>setShowCalibWizard(true)}
-                  style={{fontSize:10.5,fontWeight:700,padding:"6px 11px",
+                <button className="liveui-focusable" onClick={()=>setShowCalibWizard(true)}
+                  style={{fontSize:10,fontWeight:700,padding:"6px 11px",
                     background:`${col}1a`,border:`1px solid ${col}55`,
                     borderRadius:8,color:col,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
                   {isAr?"معايرة الآن":"Calibrate →"}
@@ -5948,13 +5927,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
         })()}
 
         {/* Score history chart */}
-        <div style={{margin:"0 16px 12px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:14,padding:"14px 16px"}}>
+        <div style={{margin:"0 16px 12px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:12,padding:"12px 14px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:10,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".08em"}}>
+            <div style={{fontSize:10,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".05em"}}>
               {isAr?"سجل النقاط":"Score History"}
             </div>
             {history.length>0&&(
-              <div style={{fontSize:13,fontWeight:800,color:sc(history[history.length-1]||0)}}>
+              <div style={{fontSize:13,fontWeight:800,color:sc(history[history.length-1]||0),fontVariantNumeric:"tabular-nums"}}>
                 {history[history.length-1]||0}/100
               </div>
             )}
@@ -5982,8 +5961,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {hoverBarIdx===i && s>0 && (
                     <div style={{
                       position:"absolute",bottom:"calc(100% + 6px)",insetInlineStart:"50%",transform:"translateX(-50%)",
-                      background:"#0a0f1e",border:`1px solid ${cs.border}`,borderRadius:7,padding:"4px 8px",
-                      fontSize:10,fontWeight:700,color:"#fff",whiteSpace:"nowrap",zIndex:20,pointerEvents:"none",
+                      background:cs.card2||cs.card,border:`1px solid ${cs.border}`,borderRadius:8,padding:"4px 8px",
+                      fontSize:10,fontWeight:700,color:cs.text,whiteSpace:"nowrap",zIndex:20,pointerEvents:"none",
+                      fontVariantNumeric:"tabular-nums",
                       boxShadow:"0 4px 12px rgba(0,0,0,.4)",
                     }}>
                       {isAr?`النتيجة: ${s} عند ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`:`Score: ${s} at ${Math.floor(atSec/60)}:${String(atSec%60).padStart(2,"0")}`}
@@ -6002,7 +5982,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     width:"100%", borderRadius:"3px 3px 0 0",
                     minHeight:2,
                     height: s ? Math.max(2,Math.round(s*.64)) : 2,
-                    background: s ? sc(s) : "rgba(148,163,184,.05)",
+                    background: s ? sc(s) : cs.inp,
                     transition:"height .3s ease",
                     opacity: s ? (hoverBarIdx===i ? 1 : 0.8) : 1,
                     boxShadow: isLast&&s ? `0 0 8px ${sc(s)}60` : "none",
@@ -6034,12 +6014,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Recommendations */}
         {analysis?.recommendations&&(
           <div style={{margin:"0 16px 12px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontSize:9.5,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>
+            <div style={{fontSize:10,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".05em",marginBottom:8}}>
               {isAr?"التوصيات":"Recommendations"}
             </div>
             {analysis.recommendations.map((r,i)=>(
               <div key={i} style={{display:"flex",gap:8,padding:"6px 0",borderBottom:i<analysis.recommendations.length-1?`1px solid ${cs.border}`:"none"}}>
-                <span style={{color:"#6ee7b7",flexShrink:0,fontSize:12}}>✓</span>
+                <span style={{color:darkMode?"#6ee7b7":"#15803d",flexShrink:0,fontSize:12}}>✓</span>
                 <span style={{fontSize:12,color:cs.text,lineHeight:1.5}}>{r}</span>
               </div>
             ))}
@@ -6050,7 +6030,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {sessionInsights.length>0&&(
           <div style={{margin:"0 16px 16px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:12,overflow:"hidden"}}>
             <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontSize:9.5,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".06em"}}>
+              <div style={{fontSize:10,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".05em"}}>
                 {isAr?"ملاحظات الجلسة":"Session Insights"}
               </div>
               <span style={{fontSize:10,fontWeight:700,color:"#6366f1",background:"rgba(99,102,241,.12)",
@@ -6074,11 +6054,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {alerts.length>0&&(
           <div style={{margin:"0 16px 16px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:12,overflow:"hidden"}}>
             <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontSize:9.5,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".06em"}}>
+              <div style={{fontSize:10,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".05em"}}>
                 {isAr?"سجل التنبيهات":"Alert Log"}
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                {alerts.length>0&&<button onClick={()=>setAlerts([])} aria-label={isAr?"مسح كل التنبيهات":"Clear all alerts"} style={{fontSize:9,color:cs.muted,background:"none",border:"none",cursor:"pointer",padding:"6px 8px",minHeight:28}}>✕ {isAr?"مسح":"clear"}</button>}
+                {alerts.length>0&&<button className="liveui-focusable" onClick={()=>setAlerts([])} aria-label={isAr?"مسح كل التنبيهات":"Clear all alerts"} style={{fontSize:9,color:cs.muted,background:"none",border:"none",cursor:"pointer",padding:"6px 8px",minHeight:28}}>✕ {isAr?"مسح":"clear"}</button>}
                 <span style={{fontSize:10,fontWeight:700,color:"#C6604F",background:"rgba(198,96,79,.12)",borderRadius:99,padding:"1px 7px"}}>{alerts.length}</span>
               </div>
             </div>
@@ -6086,34 +6066,33 @@ async function downloadPDF(sessionOverride, isClinical=false){
               const sev = a.severity==="severe"||a.score<40 ? "severe"
                         : a.severity==="moderate"||a.score<55 ? "moderate" : "mild";
               const sevColor = sev==="severe"?"#C6604F":sev==="moderate"?"#f97316":"#D6A24C";
-              const sevIcon  = sev==="severe"?"🔴":sev==="moderate"?"🟠":"🟡";
               const sevLabel = sev==="severe"?(isAr?"حرج":"Critical"):sev==="moderate"?(isAr?"متوسط":"Moderate"):(isAr?"خفيف":"Mild");
               const tips = FIX_TIPS[a.cause]||FIX_TIPS.default;
               const isOpen = fixItOpen===i;
               return (
                 <div key={i} style={{borderBottom:i<Math.min(alerts.length,3)-1?`1px solid ${cs.border}`:"none",background:i===0?`${sevColor}06`:"transparent"}}>
                   <div style={{display:"flex",gap:8,padding:"8px 14px",alignItems:"flex-start"}}>
-                    <span style={{fontSize:10,flexShrink:0,marginTop:1}}>{sevIcon}</span>
+                    <span style={{width:6,height:6,borderRadius:"50%",background:sevColor,flexShrink:0,marginTop:5}}/>
                     <div style={{flex:1,minWidth:0}}>
                       <span style={{fontSize:11,color:cs.text,lineHeight:1.4,display:"block"}}>{a.msg}</span>
                       <span style={{fontSize:9,color:cs.muted}}>{timeAgo(a.time)}</span>
                     </div>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3,flexShrink:0}}>
-                      <span style={{fontSize:9,fontWeight:700,color:sevColor,background:`${sevColor}15`,borderRadius:4,padding:"1px 5px"}}>{sevLabel}</span>
+                      <span style={{fontSize:9,fontWeight:700,color:sevColor,background:`${sevColor}15`,borderRadius:8,padding:"1px 5px"}}>{sevLabel}</span>
                       {/* #8 Fix-it button */}
-                      <button onClick={()=>setFixItOpen(isOpen?null:i)} style={{
-                        fontSize:9,fontWeight:600,color:"#a5b4fc",background:"rgba(99,102,241,.1)",
-                        border:"1px solid rgba(99,102,241,.25)",borderRadius:5,padding:"2px 6px",cursor:"pointer",
+                      <button className="liveui-focusable" onClick={()=>setFixItOpen(isOpen?null:i)} style={{
+                        fontSize:9,fontWeight:600,color:darkMode?"#a5b4fc":"#4338ca",background:"rgba(99,102,241,.1)",
+                        border:"1px solid rgba(99,102,241,.25)",borderRadius:8,padding:"2px 6px",cursor:"pointer",
                       }}>{isOpen?(isAr?"✕":"✕"):(isAr?"كيف أصلح؟":"Fix it →")}</button>
                     </div>
                   </div>
                   {/* #8 Fix-it expanded card */}
                   {isOpen&&(
                     <div style={{margin:"0 10px 8px",background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.2)",borderRadius:8,padding:"10px 12px"}}>
-                      <div style={{fontSize:10,fontWeight:700,color:"#a5b4fc",marginBottom:6}}>{tips.icon} {isAr?"الحل:":"How to fix:"}</div>
+                      <div style={{fontSize:10,fontWeight:700,color:darkMode?"#a5b4fc":"#4338ca",marginBottom:6}}>{tips.icon} {isAr?"الحل:":"How to fix:"}</div>
                       {(isAr?(tips.stepsAr||tips.steps):tips.steps).map((s,si)=>(
                         <div key={si} style={{display:"flex",gap:6,marginBottom:4,alignItems:"flex-start"}}>
-                          <span style={{fontSize:10,color:"#a5b4fc",fontWeight:700,flexShrink:0}}>{si+1}.</span>
+                          <span style={{fontSize:10,color:darkMode?"#a5b4fc":"#4338ca",fontWeight:700,flexShrink:0}}>{si+1}.</span>
                           <span style={{fontSize:10,color:cs.text,lineHeight:1.5}}>{s}</span>
                         </div>
                       ))}
@@ -6136,7 +6115,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* #9 Weekly pattern card */}
         {weeklyPattern&&!camActive&&(
           <div style={{margin:"0 16px 16px",background:"rgba(99,102,241,.05)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontSize:9.5,fontWeight:700,color:"#a5b4fc",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>
+            <div style={{fontSize:10,fontWeight:700,color:darkMode?"#a5b4fc":"#4338ca",textTransform:"uppercase",letterSpacing:".05em",marginBottom:8}}>
               📊 {isAr?"نمط هذا الأسبوع":"This Week's Pattern"}
             </div>
             <div style={{fontSize:11,color:cs.text,lineHeight:1.6,marginBottom:6}}>{weeklyPattern.summary}</div>
@@ -6156,8 +6135,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {/* ── RIGHT SIDEBAR — camera + controls ── */}
       <div style={{
         background:cs.card,
-        borderLeft:  isAr ? "none" : `1px solid ${cs.border}`,
-        borderRight: isAr ? `1px solid ${cs.border}` : "none",
+        // sole owner of the column divider (see the stats panel above); dropped
+        // on mobile, where the columns stack and there is no seam to divide
+        borderLeft:  isMobile ? "none" : (isAr ? "none" : `1px solid ${cs.border}`),
+        borderRight: isMobile ? "none" : (isAr ? `1px solid ${cs.border}` : "none"),
         display:"flex", flexDirection:"column",
         maxHeight: isMobile ? "auto" : "100vh",
         overflowY:"auto",
@@ -6191,15 +6172,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{margin:"10px 14px",background:"rgba(26,86,219,.08)",border:"1px solid rgba(26,86,219,.2)",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:18}}>👋</span>
             <div style={{flex:1}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#93c5fd"}}>
+              <div style={{fontSize:11,fontWeight:700,color:darkMode?"#93c5fd":"#1e40af"}}>
                 {isAr?"هل تريد جولة سريعة؟":"Want a quick tour?"}
               </div>
               <div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>
                 {isAr?"اضغط لإعادة معالج الإعداد":"Tap to restart the setup wizard"}
               </div>
             </div>
-            <button onClick={()=>setShowOnboard(true)}
-              style={{background:"rgba(26,86,219,.2)",border:"1px solid rgba(26,86,219,.35)",borderRadius:8,padding:"5px 11px",fontSize:10,color:"#93c5fd",cursor:"pointer",fontWeight:700,flexShrink:0}}>
+            <button className="liveui-focusable" onClick={()=>setShowOnboard(true)}
+              style={{background:"rgba(26,86,219,.2)",border:"1px solid rgba(26,86,219,.35)",borderRadius:8,padding:"5px 11px",fontSize:10,color:darkMode?"#93c5fd":"#1e40af",cursor:"pointer",fontWeight:700,flexShrink:0}}>
               {isAr?"إعادة":"Restart"}
             </button>
           </div>
@@ -6222,7 +6203,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               below, but visible at a glance without reading anything. */}
           {(()=>{
             const badQuality = camActive && analysis?.qualityScore != null && analysis.qualityScore < 100;
-            const vfColor = !camActive ? "rgba(255,255,255,.22)" : badQuality ? "#D6A24C" : (TN?.color || "#38bdf8");
+            const vfColor = !camActive ? "rgba(255,255,255,.22)" : badQuality ? "#D6A24C" : (TN?.color || cs.blue);
             const corner = (top, left) => ({
               position:"absolute", width:26, height:26, [top?"top":"bottom"]:10, [left?"left":"right"]:10,
               borderTop: top ? `2.5px solid ${vfColor}` : "none",
@@ -6243,7 +6224,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           })()}
 
           {/* Fullscreen / focus-mode toggle */}
-          <button onClick={toggleFullscreen}
+          <button className="liveui-focusable" onClick={toggleFullscreen}
             title={isFs?(isAr?"إنهاء ملء الشاشة":"Exit fullscreen"):(isAr?"ملء الشاشة":"Fullscreen")}
             aria-label={isFs?(isAr?"إنهاء ملء الشاشة":"Exit fullscreen"):(isAr?"ملء الشاشة":"Fullscreen")} style={{
             // Was hardcoded right:8 — unlike its sibling overlays on this
@@ -6254,7 +6235,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             background:"rgba(2,8,16,.8)",border:"1px solid rgba(255,255,255,.15)",
             backdropFilter:"blur(6px)",color:"#e2e8f0",cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
-          }}>{isFs?"🗗":"⛶"}</button>
+          }}><Icon name={isFs?"collapse":"expand"} size={15} color="#e2e8f0"/></button>
 
           {/* AI model loading overlay — the camera permission/feed itself
               resolves in a couple seconds, but the pose-detection model
@@ -6341,7 +6322,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               background:"linear-gradient(to top, rgba(2,8,16,.85), transparent 45%)",zIndex:15,
               animation:`liveuiFadeIn ${LT.duration.base}ms ease`,
             }}>
-              <div style={{fontSize:12.5,color:"#e2e8f0",marginBottom:12,textAlign:"center",padding:"0 20px"}}>
+              <div style={{fontSize:12,color:"#e2e8f0",marginBottom:12,textAlign:"center",padding:"0 20px"}}>
                 {isAr?"اتأكد إنك ظاهر كويس في الكاميرا، وابدأ لما تجهز":"Make sure you're framed well, then start when you're ready"}
               </div>
               <div style={{display:"flex",gap:10}}>
@@ -6349,7 +6330,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {isAr?"إلغاء":"Cancel"}
                 </LiveBtn>
                 <LiveBtn size="lg" variant="primary" icon="play" cs={{blue:"#1a56db"}} onClick={confirmStartSession}
-                  style={{boxShadow:"0 8px 24px rgba(26,86,219,.4)"}}>
+                  style={{boxShadow:"0 4px 14px rgba(26,86,219,.33)"}}>
                   {isAr?"ابدأ الجلسة الآن":"Start session now"}
                 </LiveBtn>
               </div>
@@ -6372,11 +6353,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(255,255,255,.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
                 <Icon name="pause" size={22} color="#fff"/>
               </div>
-              <div style={{fontSize:13.5,fontWeight:700,color:"#fff"}}>
+              <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>
                 {isAr?"الجلسة متوقفة مؤقتاً":"Session paused"}
               </div>
               <LiveBtn size="lg" variant="primary" icon="play" cs={{blue:"#1a56db"}} onClick={resumeSession}
-                style={{boxShadow:"0 8px 24px rgba(26,86,219,.4)"}}>
+                style={{boxShadow:"0 4px 14px rgba(26,86,219,.33)"}}>
                 {isAr?"استكمال":"Resume"}
               </LiveBtn>
             </CameraOverlay>
@@ -6472,6 +6453,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   padding:"4px 10px",display:"flex",alignItems:"center",gap:5,
                   fontSize:10,color:"#fff",backdropFilter:"blur(6px)",
                   border:`1px solid ${dot}30`,
+                  fontVariantNumeric:"tabular-nums",
                 }}>
                   <div style={{width:6,height:6,borderRadius:"50%",background:dot,
                     boxShadow:`0 0 6px ${dot}`,
@@ -6571,7 +6553,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 // gauge's color for any score in [70,75).
                 background:`conic-gradient(${scoreTierColor(score)} ${score*3.6}deg, rgba(255,255,255,.06) 0deg)`,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:11,fontWeight:900,color:"#f0f6ff",flexShrink:0,
+                fontSize:11,fontWeight:800,color:"#f0f6ff",flexShrink:0,fontVariantNumeric:"tabular-nums",
               }}>{score}</div>
               <div>
                 <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,letterSpacing:.5}}>
@@ -6624,9 +6606,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   justifyContent:"space-between",marginBottom:5}}>
                   <div style={{fontSize:10,color:"#94a3b8",width:60}}>{label}</div>
                   <div style={{flex:1,height:4,background:"rgba(255,255,255,.06)",
-                    borderRadius:2,margin:"0 6px",overflow:"hidden"}}>
+                    borderRadius:8,margin:"0 6px",overflow:"hidden"}}>
                     <div style={{height:"100%",width:`${s??0}%`,
-                      background:col,borderRadius:2,transition:"width .4s ease"}}/>
+                      background:col,borderRadius:8,transition:"width .4s ease"}}/>
                   </div>
                   <div style={{fontSize:9,fontWeight:700,color:col,width:28,textAlign:"right"}}>
                     {risk}
@@ -6701,8 +6683,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 border:`1.5px solid ${cue.col}`,borderRadius:12,
                 padding:"10px 12px",display:"flex",alignItems:"center",gap:10,
                 boxShadow:`0 4px 18px ${cue.col}55`,animation:"fadeUp .3s ease"}}>
-                <span style={{fontSize:24,color:cue.col,fontWeight:900,lineHeight:1,flexShrink:0}}>{cue.icon}</span>
-                <span style={{fontSize:13.5,fontWeight:800,color:"#fff",lineHeight:1.3}}>{cue.text}</span>
+                <span style={{fontSize:24,color:cue.col,fontWeight:800,lineHeight:1,flexShrink:0}}>{cue.icon}</span>
+                <span style={{fontSize:14,fontWeight:800,color:"#fff",lineHeight:1.3}}>{cue.text}</span>
               </div>
             );
           })()}
@@ -6717,26 +6699,31 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {isFs && camActive && !previewPhase && (
             <div style={{position:"absolute",left:0,right:0,bottom:20,zIndex:20,
               display:"flex",justifyContent:"center",gap:10,padding:"0 24px"}}>
-              <button onClick={isPaused?resumeSession:pauseSession} style={{
+              <button className="liveui-focusable" onClick={isPaused?resumeSession:pauseSession} style={{
                 minWidth:140,
                 background: isPaused ? "linear-gradient(135deg,rgba(79,174,142,.25),rgba(5,150,105,.18))" : "rgba(2,8,16,.72)",
                 backdropFilter:"blur(8px)",
                 color: isPaused ? "#6ee7b7" : "#fff",
-                border:`1px solid ${isPaused?"rgba(79,174,142,.5)":"rgba(255,255,255,.18)"}`,borderRadius:10,
+                border:`1px solid ${isPaused?"rgba(79,174,142,.5)":"rgba(255,255,255,.18)"}`,borderRadius:12,
                 padding:"12px 18px",fontSize:13,fontWeight:700,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                transition:`filter ${LT.duration.fast}ms ease`,
               }}>
-                {isPaused ? (isAr?"▶ استكمال":"▶ Resume") : (isAr?"⏸ وقف مؤقت":"⏸ Pause")}
+                <Icon name={isPaused?"play":"pause"} size={14} color="currentColor"/>{isPaused ? (isAr?"استكمال":"Resume") : (isAr?"وقف مؤقت":"Pause")}
               </button>
-              <button onClick={stopCamera} disabled={isSavingSession} style={{
+              <button className="liveui-focusable" onClick={stopCamera} disabled={isSavingSession} style={{
                 minWidth:140,
                 background: isSavingSession ? "rgba(2,8,16,.5)" : "rgba(198,96,79,.28)",
                 backdropFilter:"blur(8px)",
                 color: isSavingSession ? "#94a3b8" : "#fca5a5",
-                border:`1px solid ${isSavingSession?"rgba(255,255,255,.1)":"rgba(198,96,79,.55)"}`,borderRadius:10,
+                border:`1px solid ${isSavingSession?"rgba(255,255,255,.1)":"rgba(198,96,79,.55)"}`,borderRadius:12,
                 padding:"12px 18px",fontSize:13,fontWeight:700,
                 cursor: isSavingSession ? "not-allowed" : "pointer",
+                opacity: isSavingSession ? .5 : 1,
+                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                transition:`filter ${LT.duration.fast}ms ease, opacity ${LT.duration.fast}ms ease`,
               }}>
-                {isSavingSession ? (isAr?"⏳ جاري الحفظ…":"⏳ Saving…") : (isAr?"⏹ إيقاف وحفظ":"⏹ Stop & Save")}
+                {isSavingSession ? (isAr?"جاري الحفظ…":"Saving…") : (<><Icon name="stop" size={14} color="currentColor"/>{isAr?"إيقاف وحفظ":"Stop & Save"}</>)}
               </button>
             </div>
           )}
@@ -6754,7 +6741,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                        which is exactly the confusing double-state the fix
                        for the reported lag/freeze was meant to remove. */
             : !camActive
-            ? <button
+            ? <button className="liveui-focusable"
                 onClick={cameraStatus==="requesting" ? undefined : startCamera}
                 disabled={cameraStatus==="requesting"}
                 style={{
@@ -6765,49 +6752,53 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     ? "rgba(148,163,184,.1)"
                     : `linear-gradient(135deg,${TN?.color||"#1a56db"},${TN?.colorDim||"#0891b2"})`,
                   border: cameraStatus==="no-device"||cameraStatus==="denied" ? "1px solid rgba(198,96,79,.4)" : "none",
-                  borderRadius:12, padding:"14px 0",
+                  borderRadius:12, padding:"12px 0", minHeight:46,
                   fontSize:14, fontWeight:800,
                   color: cameraStatus==="no-device"||cameraStatus==="denied" ? "#fca5a5"
                     : cameraStatus==="requesting" ? cs.muted : "#fff",
                   cursor: cameraStatus==="requesting" ? "not-allowed" : "pointer",
+                  opacity: cameraStatus==="requesting" ? .5 : 1,
                   boxShadow: cameraStatus==="requesting"||cameraStatus==="no-device"||cameraStatus==="denied"
-                    ? "none" : `0 4px 20px ${TN?.color||"#1a56db"}50`,
+                    ? "none" : `0 4px 14px ${TN?.color||"#1a56db"}33`,
                   letterSpacing:"-.01em",
                   display:"flex", alignItems:"center", justifyContent:"center", gap:8,
                 }}>
                 {cameraStatus==="requesting"
-                  ? <><span style={{animation:"spin 700ms linear infinite",display:"inline-block"}}>⟳</span> {isAr?"جاري الفتح...":"Opening camera..."}</>
+                  ? <><span style={{animation:"spin 700ms linear infinite",display:"inline-flex"}}><Icon name="refresh" size={15} color="currentColor"/></span>{isAr?"جاري الفتح...":"Opening camera..."}</>
                   : cameraStatus==="denied"
-                  ? (isAr?"🔄 حاول تاني — لو سمحت للكاميرا":"🔄 Retry — if you've allowed the camera")
+                  ? (<><Icon name="refresh" size={14} color="currentColor"/>{isAr?"حاول تاني — لو سمحت للكاميرا":"Retry — if you've allowed the camera"}</>)
                   : cameraStatus==="no-device"
-                  ? (isAr?"🔄 حاول تاني — لو وصّلت كاميرا":"🔄 Retry — if you've connected one")
-                  : (isAr?"▶ ابدأ التحليل":"▶ Start Analysis")}
+                  ? (<><Icon name="refresh" size={14} color="currentColor"/>{isAr?"حاول تاني — لو وصّلت كاميرا":"Retry — if you've connected one"}</>)
+                  : (<><Icon name="play" size={15} color="currentColor"/>{isAr?"ابدأ التحليل":"Start Analysis"}</>)}
               </button>
             : <div style={{display:"flex",gap:8}}>
-                <button onClick={isPaused?resumeSession:pauseSession} style={{
+                <button className="liveui-focusable" onClick={isPaused?resumeSession:pauseSession} style={{
                   flex:1,
                   background: isPaused ? "linear-gradient(135deg,rgba(79,174,142,.18),rgba(5,150,105,.12))" : "rgba(148,163,184,.08)",
                   color: isPaused ? "#6ee7b7" : cs.text,
-                  border:`1px solid ${isPaused?"rgba(79,174,142,.4)":cs.border}`,borderRadius:10,
-                  padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",
+                  border:`1px solid ${isPaused?"rgba(79,174,142,.4)":cs.border}`,borderRadius:12,
+                  padding:"12px 0",fontSize:13,fontWeight:700,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                  transition:`filter ${LT.duration.fast}ms ease`,
                 }}>
-                  {isPaused ? (isAr?"▶ استكمال":"▶ Resume") : (isAr?"⏸ وقف مؤقت":"⏸ Pause")}
+                  <Icon name={isPaused?"play":"pause"} size={14} color="currentColor"/>{isPaused ? (isAr?"استكمال":"Resume") : (isAr?"وقف مؤقت":"Pause")}
                 </button>
-                <button onClick={stopCamera} disabled={isSavingSession} style={{
+                <button className="liveui-focusable" onClick={stopCamera} disabled={isSavingSession} style={{
                   flex:1,
                   background: isSavingSession
                     ? "rgba(255,255,255,.05)"
                     : "linear-gradient(135deg,rgba(198,96,79,.18),rgba(220,38,38,.12))",
                   color: isSavingSession ? "#94a3b8" : "#fca5a5",
-                  border:`1px solid ${isSavingSession?"rgba(255,255,255,.08)":"rgba(198,96,79,.5)"}`,borderRadius:10,
-                  padding:"13px 0",fontSize:13,fontWeight:700,
+                  border:`1px solid ${isSavingSession?"rgba(255,255,255,.08)":"rgba(198,96,79,.5)"}`,borderRadius:12,
+                  padding:"12px 0",fontSize:13,fontWeight:700,
                   cursor: isSavingSession ? "not-allowed" : "pointer",
-                  boxShadow: isSavingSession ? "none" : "0 2px 12px rgba(198,96,79,.2)",
-                  letterSpacing:"-.01em",transition:"all .2s",
+                  opacity: isSavingSession ? .5 : 1,
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                  letterSpacing:"-.01em",transition:`filter ${LT.duration.fast}ms ease, opacity ${LT.duration.fast}ms ease`,
                 }}>
                   {isSavingSession
-                    ? (isAr ? "⏳ جاري الحفظ…" : "⏳ Saving…")
-                    : (isAr ? "⏹ إيقاف وحفظ" : "⏹ Stop & Save")}
+                    ? (isAr ? "جاري الحفظ…" : "Saving…")
+                    : (<><Icon name="stop" size={14} color="currentColor"/>{isAr?"إيقاف وحفظ":"Stop & Save"}</>)}
                 </button>
               </div>
           }
@@ -6867,11 +6858,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {pp.primary_driver?` · ${pp.primary_driver}`:""}
                 </div>
               </div>
-              <div style={{height:3,borderRadius:99,background:"rgba(255,255,255,.08)"}}>
+              <div style={{height:3,borderRadius:99,background:cs.inp}}>
                 <div style={{height:"100%",borderRadius:99,width:`${pct}%`,
                   background:col,transition:"width .5s ease"}}/>
               </div>
-              <div style={{fontSize:8.5,color:cs.muted,marginTop:3}}>
+              <div style={{fontSize:10,color:cs.muted,marginTop:3}}>
                 {isAr?`الثقة: ${conf} — تقدير توعوي، ليس تشخيصاً طبياً`
                      :`Confidence: ${conf} — awareness estimate, not a medical diagnosis`}
               </div>
@@ -6881,7 +6872,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Live metrics */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
-          <div style={{fontSize:9.5,fontWeight:600,color:cs.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".05em",marginBottom:8}}>
             {isAr?"القياسات المباشرة":"Live Metrics"}
           </div>
           {analysis?.metrics
@@ -6902,7 +6893,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                       />
                     ))}
                     {sorted.length > 3 && (
-                      <button onClick={()=>setShowAllMetrics(v=>!v)}
+                      <button className="liveui-focusable" onClick={()=>setShowAllMetrics(v=>!v)}
                         style={{width:"100%",background:"none",border:`1px solid ${cs.border}`,borderRadius:8,
                           padding:"5px 0",fontSize:10,color:cs.muted,cursor:"pointer",marginTop:4}}>
                         {showAllMetrics?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?`+ ${sorted.length-3} مقياس ▼`:`+ ${sorted.length-3} more ▼`)}
@@ -6911,7 +6902,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     {/* ── Detected conditions with severity badges ── */}
                     {analysis.detectedConditions?.length > 0 && (
                       <div style={{marginTop:10,marginBottom:4}}>
-                        <div style={{fontSize:9,fontWeight:700,color:cs.muted,textTransform:"uppercase",
+                        <div style={{fontSize:10,fontWeight:700,color:cs.muted,textTransform:"uppercase",
                           letterSpacing:".07em",marginBottom:6}}>
                           {isAr?"الحالات المرصودة":"Detected Conditions"}
                         </div>
@@ -6930,19 +6921,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
                             return(
                               <div key={i} style={{display:"flex",alignItems:"center",
                                 justifyContent:"space-between",gap:6,
-                                padding:"4px 8px",borderRadius:7,
+                                padding:"4px 8px",borderRadius:8,
                                 background:`${sevColor}10`,
                                 border:`1px solid ${sevColor}25`,
                               }}>
-                                <span style={{fontSize:10.5,color:cs.text,fontWeight:500}}>
+                                <span style={{fontSize:10,color:cs.text,fontWeight:500}}>
                                   {isAr?(CONDITION_NAME_AR[cond.name]||cond.name):cond.name}
                                 </span>
                                 <div style={{display:"flex",alignItems:"center",gap:5}}>
-                                  <span style={{fontSize:9.5,color:cs.muted}}>{cond.value}</span>
+                                  <span style={{fontSize:10,color:cs.muted}}>{cond.value}</span>
                                   <span style={{fontSize:9,fontWeight:700,color:sevColor,
                                     padding:"1px 6px",borderRadius:99,
                                     background:`${sevColor}20`,
-                                    textTransform:"uppercase",letterSpacing:".04em",
+                                    textTransform:"uppercase",letterSpacing:".05em",
                                   }}>{sevLabel}</span>
                                 </div>
                               </div>
@@ -6954,8 +6945,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
                     {/* ── Quality score indicator ── */}
                     {analysis.qualityScore != null && analysis.qualityScore < 100 && (
-                      <div style={{fontSize:9.5,padding:"3px 8px",borderRadius:99,
-                        background:"rgba(198,96,79,.1)",color:"#f87171",
+                      <div style={{fontSize:10,padding:"3px 8px",borderRadius:99,
+                        background:"rgba(198,96,79,.1)",color:darkMode?"#f87171":"#b91c1c",
                         fontWeight:600,marginBottom:4,display:"inline-flex",alignItems:"center",gap:4}}>
                         ⚠️ {analysis.qualityReason === "body_cropped"
                           ? (isAr?"الجسم مقطوع":"Body partially visible")
@@ -6970,7 +6961,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     {/* Confidence + fatigue compact row */}
                     <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
                       {analysis.confidence!=null&&(
-                        <span style={{fontSize:9.5,padding:"2px 8px",borderRadius:99,
+                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:99,
                           background:`rgba(${analysis.confidence>85?"79,174,142":analysis.confidence>70?"214,162,76":"198,96,79"},.12)`,
                           color:analysis.confidence>85?"#4FAE8E":analysis.confidence>70?"#D6A24C":"#C6604F",
                           fontWeight:600}}>
@@ -6978,14 +6969,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         </span>
                       )}
                       {analysis.metrics?.session_fatigue?.value>0&&(
-                        <span style={{fontSize:9.5,padding:"2px 8px",borderRadius:99,
+                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:99,
                           background:"rgba(139,92,246,.12)",color:"#8b5cf6",fontWeight:600}}>
                           🕐 {isAr?`تعب −${analysis.metrics.session_fatigue.value}pt`:`Fatigue −${analysis.metrics.session_fatigue.value}pt`}
                         </span>
                       )}
                       {analysis.metrics?.monitor_height?.value>5&&(
-                        <span style={{fontSize:9.5,padding:"2px 8px",borderRadius:99,
-                          background:"rgba(214,162,76,.12)",color:"#D6A24C",fontWeight:600}}>
+                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:99,
+                          background:"rgba(214,162,76,.12)",color:darkMode?"#D6A24C":"#b45309",fontWeight:600}}>
                           🖥 {isAr
                             ?(analysis.metrics.monitor_height.direction==="below"?`الشاشة أسفل ${analysis.metrics.monitor_height.value}سم`:`الشاشة أعلى ${analysis.metrics.monitor_height.value}سم`)
                             :(analysis.metrics.monitor_height.direction==="below"?`Monitor ${analysis.metrics.monitor_height.value}cm low`:`Monitor ${analysis.metrics.monitor_height.value}cm high`)
@@ -7003,11 +6994,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
                       <span style={{fontSize:10,color:cs.muted,flex:1}}>{isAr?["انحناء الرقبة","إمالة الرأس","مستوى الكتفين","انحناء العمود"][i]:m}</span>
                       <div style={{width:80,height:3,borderRadius:99,
-                        background:`rgba(255,255,255,${.03+i*.01})`,overflow:"hidden"}}>
+                        background:cs.inp,overflow:"hidden"}}>
                         <div style={{height:"100%",width: camActive?"40%":"0%",background:"rgba(148,163,184,.15)",
                           animation: camActive?"livePulse 1.4s ease-in-out infinite":"none"}}/>
                       </div>
-                      <span style={{fontSize:10,color:"rgba(255,255,255,.15)",minWidth:16,textAlign:"right"}}>—</span>
+                      <span style={{fontSize:10,color:cs.muted,opacity:.5,minWidth:16,textAlign:"right"}}>—</span>
                     </div>
                   ))}
                 </div>
@@ -7038,9 +7029,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         : (isAr?"بنحلل وضعيتك... استنى ثانية":"Detecting your posture... one moment"))
                     : (isAr?"ابدأ الكاميرا للتحليل":"Start camera to see metrics")}
                 </div>
-                <div style={{background:"rgba(79,174,142,.05)",border:"1px solid rgba(79,174,142,.12)",borderRadius:10,padding:"10px 12px",
+                <div style={{background:"rgba(79,174,142,.05)",border:"1px solid rgba(79,174,142,.12)",borderRadius:12,padding:"10px 12px",
                   display: camActive ? "none" : "block" /* #13: hide tips during active session */}}>
-                  <div style={{fontSize:9.5,fontWeight:700,color:"#4FAE8E",marginBottom:8,textTransform:"uppercase",letterSpacing:".05em"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#4FAE8E",marginBottom:8,textTransform:"uppercase",letterSpacing:".05em"}}>
                     {isAr?"نصائح الوضعية الصحيحة":"Correct Posture Tips"}
                   </div>
                   {(isAr?[
@@ -7074,7 +7065,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
               <span style={{fontSize:10,color:cs.muted,fontWeight:600}}>{isAr?"المسافة":"Distance"}</span>
-              <span style={{fontSize:12,fontWeight:700,color:distColor(distCm, M_)}}>
+              <span style={{fontSize:12,fontWeight:700,color:distColor(distCm, M_),fontVariantNumeric:"tabular-nums"}}>
                 {Math.round(distCm)}cm
               </span>
             </div>
@@ -7107,7 +7098,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         {/* Lighting warning */}
         {lowLight && (
           <div style={{padding:"8px 14px",background:"rgba(214,162,76,.12)",borderBottom:`1px solid ${cs.border}`,
-            display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#D6A24C",fontWeight:600}}>
+            display:"flex",alignItems:"center",gap:8,fontSize:12,color:darkMode?"#D6A24C":"#b45309",fontWeight:600}}>
             💡 {isAr?"الإضاءة ضعيفة — حسّن الإضاءة لقراءات أدق":"Low lighting — improve lighting for more accurate readings"}
           </div>
         )}
@@ -7118,7 +7109,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             instead of the display just looking frozen. */}
         {multiPersonWarning && (
           <div style={{padding:"8px 14px",background:"rgba(214,162,76,.12)",borderBottom:`1px solid ${cs.border}`,
-            display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#D6A24C",fontWeight:600}}>
+            display:"flex",alignItems:"center",gap:8,fontSize:12,color:darkMode?"#D6A24C":"#b45309",fontWeight:600}}>
             👥 {isAr?"تم رصد شخص آخر أو حركة مفاجئة — التتبع متوقف مؤقتًا. تأكد إنك انت بس في الكادر":
                      "Another person or sudden movement detected — tracking paused. Make sure only you are in frame"}
           </div>
@@ -7179,10 +7170,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
             to open everything below, instead of 7 rows shown unconditionally
             the moment the page loads. */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
-          <button onClick={()=>setShowLiveSettings(v=>!v)} style={{
+          <button className="liveui-focusable" onClick={()=>setShowLiveSettings(v=>!v)} style={{
             width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
             background:cs.inp||"rgba(255,255,255,.03)",border:`1px solid ${cs.inpB||cs.border}`,borderRadius:LT.radius.sm,
-            padding:"10px 14px",fontSize:12.5,fontWeight:700,color:cs.text,cursor:"pointer",
+            padding:"10px 14px",fontSize:12,fontWeight:700,color:cs.text,cursor:"pointer",
           }}>
             <span style={{display:"flex",alignItems:"center",gap:7}}>
               <Icon name="settings" size={14} color={cs.muted}/> {isAr?"إعدادات الجلسة":"Session settings"}
@@ -7280,9 +7271,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
               neutral posture; reachable straight from the live session. Kept
               visually distinct (green, not a toggle) since it's a one-time
               setup action, not an on/off switch like everything above it. */}
-          <button onClick={()=>setShowCalibWizard(true)} style={{
+          <button className="liveui-focusable" onClick={()=>setShowCalibWizard(true)} style={{
             background:calibData?"rgba(148,163,184,.06)":"rgba(79,174,142,.1)",
-            border:`1px solid ${calibData?cs.border:"rgba(79,174,142,.4)"}`,borderRadius:10,
+            border:`1px solid ${calibData?cs.border:"rgba(79,174,142,.4)"}`,borderRadius:12,
             padding:"9px 0",fontSize:12,fontWeight:700,color:calibData?cs.muted:(darkMode?"#34d399":"#15803d"),cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",gap:6,
           }}>
@@ -7298,12 +7289,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               controls. */}
           {breakReminder&&!showBreak&&(
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <button onClick={()=>setMuted(v=>!v)}
+            <button className="liveui-focusable" onClick={()=>setMuted(v=>!v)}
               title={muted?(isAr?"صوت تذكير الاستراحة: متوقف":"Break-reminder chime: OFF"):(isAr?"صوت تذكير الاستراحة: شغّال":"Break-reminder chime: ON")}
               aria-label={muted?(isAr?"صوت تذكير الاستراحة: متوقف":"Break-reminder chime: off"):(isAr?"صوت تذكير الاستراحة: شغّال":"Break-reminder chime: on")}
               aria-pressed={!muted}
               style={{
-                flexShrink:0,width:38,height:36,borderRadius:9,cursor:"pointer",
+                flexShrink:0,width:38,height:36,borderRadius:8,cursor:"pointer",
                 background:"rgba(148,163,184,.06)",color:muted?cs.muted:"#4FAE8E",
                 border:`1px solid ${muted?cs.border:"rgba(79,174,142,.25)"}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
@@ -7312,7 +7303,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             </button>
             <div style={{
               flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,
-              background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,borderRadius:9,
+              background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,borderRadius:8,
               padding:"0 6px 0 12px",height:36,
             }}>
               <span style={{fontSize:11,color:cs.muted,whiteSpace:"nowrap"}}>{isAr?"استراحة كل":"Break every"}</span>
@@ -7340,42 +7331,42 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {(!tierAtLeast(effectiveTier,"elite")||!tierAtLeast(effectiveTier,"professional")||(histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail==="none"))&&(
             <div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:2}}>
               {!tierAtLeast(effectiveTier,"professional")&&(
-                <button onClick={()=>{
+                <button className="liveui-focusable" onClick={()=>{
                   addToast(isAr?"⚙️ قواعد التنبيه المخصصة متاحة لباقة Pro فأعلى":"⚙️ Custom Alert Rules is a Pro feature","warn");
                   setShowBilling(true);
                 }} style={{
-                  background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:8,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
-                  🔒 ⚙️ {isAr?"قواعد تنبيه":"Alert rules"}
-                  <span style={{fontSize:8,color:"#a78bfa",fontWeight:800}}>PRO</span>
+                  <Icon name="lock" size={11} color={cs.muted}/>{isAr?"قواعد تنبيه":"Alert rules"}
+                  <span style={{fontSize:8,color:"#a78bfa",fontWeight:800,letterSpacing:".04em"}}>PRO</span>
                 </button>
               )}
               {!tierAtLeast(effectiveTier,"elite")&&(
-                <button onClick={()=>{
+                <button className="liveui-focusable" onClick={()=>{
                   addToast(isAr?"🎙️ المدرب الصوتي متاح لباقة Elite فقط":"🎙️ Voice coach is an Elite feature","warn");
                   setShowBilling(true);
                 }} style={{
-                  background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:8,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
-                  🔒 🎙️ {isAr?"مدرب صوتي":"Voice coach"}
-                  <span style={{fontSize:8,color:"#4FAE8E",fontWeight:800}}>ELITE</span>
+                  <Icon name="lock" size={11} color={cs.muted}/>{isAr?"مدرب صوتي":"Voice coach"}
+                  <span style={{fontSize:8,color:"#4FAE8E",fontWeight:800,letterSpacing:".04em"}}>ELITE</span>
                 </button>
               )}
               {histRef.current?.length>0&&qualityFor(effectiveTier).pdfDetail==="none"&&(
-                <button onClick={()=>{
+                <button className="liveui-focusable" onClick={()=>{
                   addToast(isAr?"تصدير PDF متاح من خطة Professional فأعلى":"PDF export requires Professional plan or higher","warn");
                   setShowUpgrade?.(true); setUpgradeReason?.(isAr?"تصدير PDF":"PDF export");
                 }} style={{
-                  background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:7,
+                  background:cs.inp,border:`1px solid ${cs.border}`,borderRadius:8,
                   padding:"5px 10px",fontSize:10,fontWeight:600,color:cs.muted,cursor:"pointer",
                   display:"flex",alignItems:"center",gap:4,
                 }}>
-                  🔒 📄 {isAr?"تقرير PDF":"PDF report"}
-                  <span style={{fontSize:8,color:"#93c5fd",fontWeight:800}}>PRO</span>
+                  <Icon name="lock" size={11} color={cs.muted}/>{isAr?"تقرير PDF":"PDF report"}
+                  <span style={{fontSize:8,color:"#a78bfa",fontWeight:800,letterSpacing:".04em"}}>PRO</span>
                 </button>
               )}
             </div>
@@ -7387,23 +7378,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
             since last calibration. Recalibrating tightens the baseline. */}
         {calibDrift && !calibStale && calibData && !camActive && (
           <div style={{margin:"10px 14px 0",background:"rgba(99,102,241,.07)",
-            border:"1px solid rgba(99,102,241,.3)",borderRadius:9,padding:"10px 12px"}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#818cf8",marginBottom:4}}>
+            border:"1px solid rgba(99,102,241,.3)",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{fontSize:11,fontWeight:700,color:darkMode?"#818cf8":"#4338ca",marginBottom:4}}>
               🎯 {isAr?"وضعيتك تحسّنت كثيراً!":"Your posture improved significantly!"}
             </div>
-            <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5,marginBottom:8}}>
+            <div style={{fontSize:10,color:cs.muted,lineHeight:1.5,marginBottom:8}}>
               {isAr
                 ? `تحسّنت ${calibDrift.pts} نقطة منذ آخر معايرة (${calibDrift.sessions} جلسة). إعادة المعايرة الآن ستضبط الحدود بدقة أعلى.`
                 : `You've improved ${calibDrift.pts}pts since calibrating (${calibDrift.sessions} sessions). Recalibrating now gives you tighter, more precise thresholds.`}
             </div>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>setShowCalibWizard(true)}
-                style={{flex:1,fontSize:10.5,fontWeight:700,padding:"5px 0",
+              <button className="liveui-focusable" onClick={()=>setShowCalibWizard(true)}
+                style={{flex:1,fontSize:10,fontWeight:700,padding:"5px 0",
                   background:"rgba(99,102,241,.15)",border:"1px solid rgba(99,102,241,.4)",
-                  borderRadius:7,color:"#818cf8",cursor:"pointer"}}>
+                  borderRadius:8,color:darkMode?"#818cf8":"#4338ca",cursor:"pointer"}}>
                 {isAr?"إعادة المعايرة":"Recalibrate"}
               </button>
-              <button onClick={()=>setCalibDrift(null)}
+              <button className="liveui-focusable" onClick={()=>setCalibDrift(null)}
                 style={{fontSize:10,padding:"5px 10px",background:"transparent",
                   border:"none",color:cs.muted,cursor:"pointer"}}>
                 {isAr?"لاحقاً":"Later"}
@@ -7418,11 +7409,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
             Dismissible so it doesn't block the interface. */}
         {calibNudge && !calibData && camActive && (
           <div style={{margin:"10px 14px 0",background:"rgba(214,162,76,.07)",
-            border:"1px solid rgba(214,162,76,.3)",borderRadius:9,padding:"9px 12px",
+            border:"1px solid rgba(214,162,76,.3)",borderRadius:8,padding:"9px 12px",
             display:"flex",alignItems:"center",gap:8}}>
             <span style={{fontSize:15,flexShrink:0}}>📐</span>
             <div style={{flex:1}}>
-              <div style={{fontSize:10.5,fontWeight:700,color:"#D6A24C",marginBottom:2}}>
+              <div style={{fontSize:10,fontWeight:700,color:darkMode?"#D6A24C":"#b45309",marginBottom:2}}>
                 {isAr?"الدقة تتحسن مع المعايرة":"Accuracy improves with calibration"}
               </div>
               <div style={{fontSize:10,color:cs.muted,lineHeight:1.4}}>
@@ -7430,13 +7421,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
-              <button onClick={()=>{setCalibNudge(false);setShowCalibWizard(true);}}
+              <button className="liveui-focusable" onClick={()=>{setCalibNudge(false);setShowCalibWizard(true);}}
                 style={{fontSize:10,fontWeight:700,padding:"4px 8px",
                   background:"rgba(214,162,76,.15)",border:"1px solid rgba(214,162,76,.4)",
-                  borderRadius:6,color:"#D6A24C",cursor:"pointer",whiteSpace:"nowrap"}}>
+                  borderRadius:8,color:darkMode?"#D6A24C":"#b45309",cursor:"pointer",whiteSpace:"nowrap"}}>
                 {isAr?"معايرة":"Calibrate"}
               </button>
-              <button onClick={()=>setCalibNudge(false)}
+              <button className="liveui-focusable" onClick={()=>setCalibNudge(false)}
                 style={{fontSize:10,padding:"3px 8px",background:"transparent",
                   border:"none",color:cs.muted,cursor:"pointer"}}>
                 {isAr?"تجاهل":"Dismiss"}
@@ -7450,13 +7441,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
             don't stack during a calibrated front-mode session. */}
         {calibData&&!(camActive&&calibData?.tolerances)&&( /* Side mode removed app-wide */
           calibStale ? (
-            <button type="button" style={{margin:"10px 14px 0",width:"calc(100% - 28px)",display:"block",fontFamily:"inherit",background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.3)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#D6A24C",fontWeight:500,cursor:"pointer"}}
+            <button className="liveui-focusable" type="button" style={{margin:"10px 14px 0",width:"calc(100% - 28px)",display:"block",fontFamily:"inherit",background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.3)",borderRadius:8,padding:"7px 10px",textAlign:"center",fontSize:11,color:darkMode?"#D6A24C":"#b45309",fontWeight:500,cursor:"pointer"}}
               onClick={()=>setShowCalibWizard(true)}
               title={isAr?"المعايرة أقدم من 30 يوم — يُنصح بإعادتها":"Calibration is over 30 days old — recalibrate for best accuracy"}>
               ⚠️ {isAr?"المعايرة قديمة — أعد المعايرة":"Calibration outdated — recalibrate"}
             </button>
           ) : (
-            <div style={{margin:"10px 14px 0",background:"rgba(79,174,142,.07)",border:"1px solid rgba(79,174,142,.2)",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#4FAE8E",fontWeight:500}}>
+            <div style={{margin:"10px 14px 0",background:"rgba(79,174,142,.07)",border:"1px solid rgba(79,174,142,.2)",borderRadius:8,padding:"7px 10px",textAlign:"center",fontSize:11,color:"#4FAE8E",fontWeight:500}}>
               ✓ {isAr?"المعايرة الشخصية نشطة":"Personal calibration active"}
             </div>
           )
@@ -7466,10 +7457,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
             company/HR account and haven't finished linking to their org yet,
             not individual paying customers on Pro/Elite */}
         {profile&&profile.acct_type==="company"&&profile.user_type!=="employee"&&!profile.company_id&&(
-          <div style={{margin:"10px 14px",background:"rgba(79,174,142,.05)",border:"1px solid rgba(79,174,142,.15)",borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+          <div style={{margin:"10px 14px",background:"rgba(79,174,142,.05)",border:"1px solid rgba(79,174,142,.15)",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
             <span style={{fontSize:11,color:cs.muted}}>🏢 {isAr?"إعداد مساحة الشركة":"Set up company workspace"}</span>
-            <button onClick={()=>setShowCompanyOnboard(true)}
-              style={{background:"#4FAE8E",border:"none",borderRadius:7,padding:"4px 10px",fontSize:10,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
+            <button className="liveui-focusable" onClick={()=>setShowCompanyOnboard(true)}
+              style={{background:"#4FAE8E",border:"none",borderRadius:8,padding:"4px 10px",fontSize:10,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
               {isAr?"ابدأ":"Start"}
             </button>
           </div>
@@ -7488,12 +7479,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?"وضعيتك وحشة أكتر من دقيقتين. خذ استراحة صغيرة؟":"Poor posture for 2+ min. Take a quick break to protect it?"}
             </div>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>{setStreakAlert(false);goToBreak();}} style={{
+              <button className="liveui-focusable" onClick={()=>{setStreakAlert(false);goToBreak();}} style={{
                 flex:1,background:"rgba(214,162,76,.15)",border:"1px solid rgba(214,162,76,.35)",
                 borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:700,color:darkMode?"#fcd34d":"#b45309",cursor:"pointer"}}>
                 {isAr?"استراحة الآن 🧘":"Break now 🧘"}
               </button>
-              <button onClick={()=>setStreakAlert(false)} style={{
+              <button className="liveui-focusable" onClick={()=>setStreakAlert(false)} style={{
                 background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,
                 borderRadius:8,padding:"7px 12px",fontSize:11,color:cs.muted,cursor:"pointer"}}>
                 {isAr?"تجاهل":"Ignore"}
@@ -7512,12 +7503,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?"نبعتلك تنبيه لو وضعيتك وحشت وانت مش شايف الشاشة — مفيش spam.":"Get notified when posture drops even when the tab is in the background. No spam."}
             </div>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>{Notification.requestPermission().catch(()=>{});setShowNotifCard(false);}} style={{
+              <button className="liveui-focusable" onClick={()=>{Notification.requestPermission().catch(()=>{});setShowNotifCard(false);}} style={{
                 flex:1,background:"rgba(99,102,241,.15)",border:"1px solid rgba(99,102,241,.35)",
                 borderRadius:8,padding:"6px 0",fontSize:11,fontWeight:700,color:darkMode?"#a5b4fc":"#4338ca",cursor:"pointer"}}>
                 {isAr?"السماح ✓":"Allow ✓"}
               </button>
-              <button onClick={()=>setShowNotifCard(false)} style={{
+              <button className="liveui-focusable" onClick={()=>setShowNotifCard(false)} style={{
                 background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,
                 borderRadius:8,padding:"6px 10px",fontSize:11,color:cs.muted,cursor:"pointer"}}>
                 {isAr?"مش دلوقتي":"Not now"}
@@ -7534,11 +7525,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?`${breakIntervalMin} دقيقة مرت — استرح دقيقتين`:`${breakIntervalMin} min passed — take a 2-min stretch`}
             </div>
             <div style={{display:"flex",gap:6,justifyContent:"center"}}>
-              <button onClick={()=>{dismissBreak();goToBreak();}}
+              <button className="liveui-focusable" onClick={()=>{dismissBreak();goToBreak();}}
                 style={{background:"rgba(214,162,76,.18)",border:"1px solid rgba(214,162,76,.4)",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,color:darkMode?"#fcd34d":"#b45309",cursor:"pointer"}}>
                 {isAr?"ابدأ الاستراحة 🧘":"Start break 🧘"}
               </button>
-              <button onClick={()=>snoozeBreak(5)}
+              <button className="liveui-focusable" onClick={()=>snoozeBreak(5)}
                 style={{background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:500,color:cs.muted,cursor:"pointer"}}>
                 {isAr?"5 دقايق":"5 min"}
               </button>
@@ -7550,15 +7541,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
         {/* Manual break entry — the guided break is always one tap away */}
         <div style={{padding:"10px 14px 0"}}>
-          <button onClick={goToBreak} style={{
+          <button className="liveui-focusable" onClick={goToBreak} style={{
             width:"100%",background:"rgba(14,165,233,.08)",border:"1px solid rgba(14,165,233,.25)",
-            borderRadius:10,padding:"10px 0",fontSize:12,fontWeight:700,color:"#38bdf8",cursor:"pointer",
+            borderRadius:12,padding:"10px 0",fontSize:12,fontWeight:700,color:darkMode?"#38bdf8":"#0369a1",cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             🧘 {isAr?"خذ استراحة حركة":"Take a movement break"}
           </button>
         </div>
 
-        <div style={{padding:"10px 14px",fontSize:9.5,color:cs.muted,textAlign:"center"}}>
+        <div style={{padding:"10px 14px",fontSize:10,color:cs.muted,textAlign:"center"}}>
           {isAr ? "☁ تم الحفظ · ⚡ مدعوم بالذكاء الاصطناعي" : "☁ Data saved · ⚡ AI powered"}
         </div>
       </div>
