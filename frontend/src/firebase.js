@@ -222,7 +222,7 @@ export async function createUserProfile(uid, data, referredBy = null) {
 
   // Tier logic:
   // - Auto-approve domain (e.g. tkh.edu.eg) → elite (also elevated server-side)
-  // - Everyone else → standard with 14-day professional trial
+  // - Everyone else → standard with the 7-day trial set above
   // Previously was 'professional' + is_trial=true which was contradictory
   const baseTier = isAuto ? "elite" : "standard";
 

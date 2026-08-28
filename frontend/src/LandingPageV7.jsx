@@ -200,6 +200,7 @@ const btn = (variant = "primary", size = "md") => {
     fontSize: s.fs, cursor: "pointer",
     transition: "transform .25s cubic-bezier(.16,1,.3,1), box-shadow .25s, background .25s, border-color .25s",
     border: "none", textDecoration: "none", letterSpacing: "-.01em", whiteSpace:"nowrap",
+    fontFamily: "inherit", lineHeight: 1,
   };
   if (variant === "primary") return { ...base,
     background: LPV7_TOKENS.gBlue, color: "#fff",
@@ -256,11 +257,21 @@ function GlobalStyle() {
       ::selection{background:rgba(79,124,249,.32);color:#fff}
 
       .lp-wrap{max-width:1200px;margin:0 auto;width:100%;padding:0 32px}
-      .lp-section{padding:60px 32px}
+      /* scroll-margin-top clears the 68px fixed nav — without it every anchor
+         jump (#pricing, #faq, footer links, deep links) parked the section's
+         eyebrow underneath the nav bar. */
+      .lp-section{padding:60px 32px;scroll-margin-top:84px}
 
       /* cards */
       .lp-lift{transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s,border-color .28s;will-change:transform}
-      .lp-section{contain:layout style;content-visibility:auto;contain-intrinsic-size:0 500px}
+      /* content-visibility:auto was applied to every section with a 500px
+         intrinsic-size placeholder. Real sections are far taller (Pricing +
+         comparison table is several thousand px), so anchor scrolling computed
+         its target against the compressed layout and then the sections expanded
+         mid-flight — you landed short of the target, and the scroll-progress bar
+         jumped backwards as scrollHeight grew. The contain:layout style part is
+         kept: it actually helps here and it doesn't fake heights. */
+      .lp-section{contain:layout style}
       .lp-lift:hover{transform:translateY(-5px);box-shadow:0 20px 48px rgba(0,0,0,.38),0 0 0 1px rgba(79,124,249,.1)}
 
       /* buttons — shimmer sweep on hover */
@@ -421,9 +432,16 @@ function Nav({ lang, setLang, onCTA }) {
   }, []);
 
   useEffect(() => {
-    const ids = ["features","casestudies","pricing","how"];
+    // "faq" was missing, so the FAQ nav link could never show as active even
+    // while you were reading it. The callback also only ever SET the active
+    // section — with no else branch, the last section stayed highlighted after
+    // you scrolled past everything (e.g. sitting in the footer still lit "FAQ").
+    const ids = ["features","casestudies","pricing","how","faq"];
     const obs = new IntersectionObserver(
-      entries => entries.forEach(e => { if(e.isIntersecting) setActiveSection(e.target.id); }),
+      entries => entries.forEach(e => {
+        if (e.isIntersecting) setActiveSection(e.target.id);
+        else setActiveSection(cur => (cur === e.target.id ? "" : cur));
+      }),
       { rootMargin:"-20% 0px -50% 0px", threshold: 0.1 }
     );
     ids.forEach(id => { const el=document.getElementById(id); if(el) obs.observe(el); });
@@ -470,8 +488,10 @@ function Nav({ lang, setLang, onCTA }) {
         <div className="lp-wrap" style={{ height:68, display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
 
           {/* ── Logo ── */}
-          <a href="#" role="button" onClick={e=>{e.preventDefault(); window.scrollTo({top:0,behavior:"smooth"});}}
-            style={{ display:"flex", alignItems:"center", gap:10, textDecoration:"none", flexShrink:0 }}>
+          <button type="button" onClick={e=>{e.preventDefault(); window.scrollTo({top:0,behavior:"smooth"});}}
+            aria-label={ar ? "الصفحة الرئيسية" : "Back to top"}
+            style={{ display:"flex", alignItems:"center", gap:10, textDecoration:"none", flexShrink:0,
+              background:"none", border:"none", padding:0, font:"inherit", color:"inherit", cursor:"pointer" }}>
             <div style={{
               width:36, height:36, borderRadius:10, flexShrink:0,
               background:"linear-gradient(135deg,#1a56db,#0891b2)",
@@ -481,9 +501,9 @@ function Nav({ lang, setLang, onCTA }) {
             }}>◈</div>
             <div style={{ lineHeight:1.15 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Corvus</div>
-              <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".06em", textTransform:"uppercase", marginTop:1 }}>AI Posture Coaching</div>
+              <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".06em", textTransform:"uppercase", marginTop:1 }}>{ar ? "تدريب الوضعية بالذكاء الاصطناعي" : "AI Posture Coaching"}</div>
             </div>
-          </a>
+          </button>
 
           {/* ── Center links ── */}
           <div className="lp-nav-links" style={{ display:"flex", alignItems:"center", gap:1, flex:1, justifyContent:"center" }}>
@@ -527,17 +547,18 @@ function Nav({ lang, setLang, onCTA }) {
               🌐 {ar ? "EN" : "عربي"}
             </button>
             {/* Log in */}
-            <a href="#" role="button" onClick={e=>{e.preventDefault();navTo("/auth");}} style={{
+            <button type="button" onClick={e=>{e.preventDefault();navTo("/auth");}} style={{
               color:"#94a3b8", textDecoration:"none", fontSize:13.5,
               fontWeight:500, padding:"8px 10px", borderRadius:8,
               transition:"color .18s",
+              background:"none", border:"none", fontFamily:"inherit", cursor:"pointer",
             }}
             onMouseEnter={e=>e.currentTarget.style.color="#f1f5f9"}
             onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
               {ar ? "دخول" : "Log in"}
-            </a>
+            </button>
             {/* CTA */}
-            <a href="#" role="button" className="lp-btn lp-btn-primary"
+            <button type="button" className="lp-btn lp-btn-primary"
               onClick={e=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
               style={{
                 ...btn("primary","sm"), borderRadius:10,
@@ -545,7 +566,7 @@ function Nav({ lang, setLang, onCTA }) {
                 fontSize:13, padding:"0 18px", height:38,
               }}>
               {ar ? "ابدأ مجاناً" : "Start Free Trial"}
-            </a>
+            </button>
           </div>
 
           {/* ── Burger ── */}
@@ -573,11 +594,19 @@ function Nav({ lang, setLang, onCTA }) {
           </button>
         </div>
 
-        {/* ── Mobile panel ── */}
+        {/* ── Mobile panel ──
+            The panel lives inside a position:fixed nav and body scroll is
+            locked while it's open, so without a height cap its bottom rows
+            (Log in / Start Free Trial, and the language toggle) were simply
+            unreachable on short viewports — a phone in landscape has ~330px
+            of viewport and this panel is ~445px tall. Cap it to what's left
+            below the 68px bar and let it scroll. */}
         {mobileOpen && (
           <div style={{
             borderTop:"1px solid rgba(255,255,255,.07)",
             background:"rgba(3,8,18,.98)",
+            maxHeight:"calc(100dvh - 68px)", overflowY:"auto",
+            WebkitOverflowScrolling:"touch",
           }}>
             <div style={{ padding:"12px 20px 24px", display:"flex", flexDirection:"column" }}>
               {navItems.map(({ label, href }) => (
@@ -590,23 +619,25 @@ function Nav({ lang, setLang, onCTA }) {
                 onMouseEnter={e=>e.currentTarget.style.color="#f1f5f9"}
                 onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
                   {label}
-                  <span style={{ fontSize:12, color:"#8896ac" }}>›</span>
+                  {/* chevron points along the reading direction */}
+                  <span style={{ fontSize:12, color:"#8896ac" }} aria-hidden="true">{ar ? "‹" : "›"}</span>
                 </a>
               ))}
               <div style={{ display:"flex", gap:10, marginTop:18 }}>
-                <a href="#" role="button" onClick={e=>{e.preventDefault();setMobileOpen(false);navTo("/auth");}}
+                <button type="button" onClick={e=>{e.preventDefault();setMobileOpen(false);navTo("/auth");}}
                   style={{
                     flex:1, textAlign:"center", padding:"11px", borderRadius:10,
                     border:"1px solid rgba(255,255,255,.12)", color:"#94a3b8",
                     textDecoration:"none", fontSize:14, fontWeight:500,
+                    background:"none", fontFamily:"inherit", cursor:"pointer",
                   }}>
                   {ar ? "دخول" : "Log in"}
-                </a>
-                <a href="#" role="button" className="lp-btn lp-btn-primary"
+                </button>
+                <button type="button" className="lp-btn lp-btn-primary"
                   onClick={e=>{e.preventDefault();setMobileOpen(false);onCTA(e);navTo("/auth?mode=signup");}}
                   style={{ ...btn("primary","md"), flex:1, borderRadius:10, fontSize:14 }}>
                   {ar ? "ابدأ مجاناً" : "Start Free Trial"}
-                </a>
+                </button>
               </div>
               <button onClick={() => setLang(ar ? "en" : "ar")} style={{
                 marginTop:12, background:"rgba(255,255,255,.05)", border:"1px solid rgba(255,255,255,.1)",
@@ -650,7 +681,11 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
   return (
     <section style={{
-      minHeight: "100vh", display:"flex", alignItems:"center",
+      // 100dvh, not 100vh: on iOS Safari / Chrome Android 100vh is the
+      // expanded-chrome height, so the hero's CTA row and scroll cue sat below
+      // the actually-visible fold on first paint. StandaloneLayout already
+      // uses dvh; this file hadn't been updated.
+      minHeight: "100dvh", display:"flex", alignItems:"center",
       padding:"clamp(68px,8vw,110px) 24px clamp(48px,5vw,72px)", position:"relative", overflow:"hidden",
     }}>
       {/* Ambient background */}
@@ -674,7 +709,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
           borderRadius:"50%",
         }}/>
         {/* Grid */}
-        <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.04 }}
+        <svg aria-hidden="true" focusable="false" style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:.04 }}
           xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -748,10 +783,15 @@ function Hero({ lang, onCTA, mode, setMode }) {
 
           <Reveal delay={140}>
             <p style={{ ...TYPE.body, color:LPV7_TOKENS.sub, maxWidth:520, margin:"0 0 40px" }}>
+              {/* The 47% figure is an ergonomics-research average, not a measured
+                  Corvus outcome — the Stats section already labels it that way
+                  ("Ergonomics research average"). The hero used to assert it as
+                  our own result, which the product has no data to support.
+                  Attributed here so the headline number stays honest. */}
               {isCompany
                 ? (ar
-                    ? "قلّل إجازات الأمراض المهنية بنسبة 47% وارفع الإنتاجية. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
-                    : "Reduce occupational sick days by 47% and boost team productivity. Real-time AI posture coaching built for MENA enterprise teams.")
+                    ? "برامج تحسين الوضعية في مكان العمل بترتبط بانخفاض إجازات الأمراض المهنية يوصل لـ47% في أبحاث الإرغونوميا. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
+                    : "Workplace posture programs are linked to up to 47% fewer occupational sick days in ergonomics research. Real-time AI posture coaching built for MENA enterprise teams.")
                 : (ar
                     ? "كاميرا اللابتوب بتاعك كافية. الذكاء الاصطناعي بيتابع وضعيتك في الخلفية ويبعتلك تنبيه لو انحنيت — من غير أي أجهزة أو اشتراك مكلف."
                     : "Your laptop camera is all you need. AI monitors your posture in the background and alerts you when you slouch — no hardware, no expensive subscriptions.")
@@ -762,15 +802,29 @@ function Hero({ lang, onCTA, mode, setMode }) {
           <Reveal delay={200}>
             <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:16 }}>
               {isCompany ? (
-                <a href="#" role="button" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
+                <button type="button" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
                   {ar ? "🚀 تجربة مجانية 7 أيام — لفريقي" : "🚀 Free 7-Day Trial — For My Team"}
-                </a>
+                </button>
               ) : (
-                <a href="#" role="button" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=personal_pro")}} style={btn("primary","lg")}>
+                // plan was "personal_pro", which is not a key in TIERS or
+                // B2B_TIERS (App.jsx validates against those raw maps, and
+                // personal_pro exists only in the legacy TIER_NORMALIZE alias
+                // map) — so the plan intent was dropped and signup pre-selected
+                // nothing. "professional" is the real id for the Pro tier.
+                <button type="button" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup&plan=professional")}} style={btn("primary","lg")}>
                   {ar ? "🚀 تجربة مجانية 7 أيام" : "🚀 Start 7-Day Free Trial"}
-                </a>
+                </button>
               )}
-              <a href="#pricing" className="lp-btn lp-btn-ghost" onClick={(e)=>{onCTA(e)}} style={btn("ghost","lg")}>
+              {/* preventDefault + manual scroll: letting this anchor navigate
+                  pushed "#pricing" into the URL, and App.jsx's hashToPage maps
+                  "pricing" to the in-app PricingPage (it's in VALID_PAGES and,
+                  unlike features/how/faq, is NOT in LANDING_SECTIONS). So a
+                  visitor who clicked View Pricing, then any CTA, then Back,
+                  landed on the app's pricing screen instead of the landing
+                  page they came from. */}
+              <a href="#pricing" className="lp-btn lp-btn-ghost"
+                onClick={(e)=>{e.preventDefault();onCTA(e);document.getElementById("pricing")?.scrollIntoView({behavior:"smooth",block:"start"});}}
+                style={btn("ghost","lg")}>
                 {ar ? "عرض الأسعار" : "View Pricing"}
               </a>
             </div>
@@ -798,7 +852,10 @@ function Hero({ lang, onCTA, mode, setMode }) {
               ).map(([val,label,icon],i)=>(
                 <div key={label} style={{
                   flex:1, textAlign:"center", padding:"14px 8px",
-                  borderRight: i<3 ? `1px solid ${LPV7_TOKENS.border}` : "none",
+                  // logical property: as borderRight this drew on the strip's
+                  // outer edge in RTL and dropped the divider between the last
+                  // two cells
+                  borderInlineEnd: i<3 ? `1px solid ${LPV7_TOKENS.border}` : "none",
                 }}>
                   <div style={{ fontSize:12, marginBottom:3 }}>{icon}</div>
                   <div style={{ fontSize:16, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_MONO, lineHeight:1 }}>{val}</div>
@@ -862,7 +919,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                   background:"radial-gradient(ellipse 60% 80% at 50% 30%, rgba(30,50,80,.9) 0%, rgba(5,12,25,.98) 100%)" }}/>
 
                 {/* Person silhouette SVG */}
-                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
+                <svg aria-hidden="true" focusable="false" style={{ position:"absolute", inset:0, width:"100%", height:"100%" }}
                   viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
                   {/* Desk background hint */}
                   <rect x="0" y="240" width="400" height="60" fill="rgba(20,35,60,.6)" rx="0"/>
@@ -1069,7 +1126,11 @@ function SocialProof({ lang }) {
               </span>
             </div>
             <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-              {[["🛡","ISO 27001","Aligned"],["🔒","AES-256","Encryption"],["✅","GDPR","Ready"],["📷","On-device AI","No Video"]].map(([icon,t1,t2])=>(
+              {/* second line of each badge was hardcoded English in Arabic too */}
+              {(ar
+                ? [["🛡","ISO 27001","متوافق"],["🔒","AES-256","تشفير"],["✅","GDPR","جاهز"],["📷","AI على الجهاز","بدون فيديو"]]
+                : [["🛡","ISO 27001","Aligned"],["🔒","AES-256","Encryption"],["✅","GDPR","Ready"],["📷","On-device AI","No Video"]]
+              ).map(([icon,t1,t2])=>(
                 <div key={t1} style={{ display:"flex", alignItems:"center", gap:7,
                   background:"rgba(59,130,246,.07)", border:"1px solid rgba(59,130,246,.18)",
                   borderRadius:10, padding:"7px 13px" }}>
@@ -1202,7 +1263,7 @@ function Features({ lang }) {
       icon:"🤖", accentColor:"#6366f1",
       badge:{ en:"Basic → Elite", ar:"Basic → Elite" }, badgeC:"#6366f1",
       title:{ en:"Dr. Corvus AI Coach", ar:"مدرب AI — د. كورفوس" },
-      sub:{ en:"10 → 30 → Unlimited msgs/mo · Arabic & English", ar:"10 → 30 → غير محدود رسالة/شهر · عربي وإنجليزي" },
+      sub:{ en:"10 → 30 → Unlimited msgs/mo · Arabic & English", ar:"10 ← 30 ← غير محدود رسالة/شهر · عربي وإنجليزي" },
       bullets:{
         en:["Remembers your full session history — no re-explaining needed",
             "Evidence-based stretch & ergonomics advice per your score",
@@ -1213,7 +1274,7 @@ function Features({ lang }) {
             "يشرح بدقة سبب انخفاض درجتك وأول شيء تصلحه",
             "Elite: ردود صوتية بالعربية المصرية والخليجية"],
       },
-      stat:{ v:"87%", l:{ en:"improved score after coaching week", ar:"تحسّنوا بعد أسبوع coaching" } },
+      stat:{ v:"87%", l:{ en:"improved score after coaching week", ar:"تحسّنت نتيجتهم بعد أسبوع تدريب" } },
       mock:"coach",
     },
     {
@@ -1231,7 +1292,7 @@ function Features({ lang }) {
             "تنبيهات ألم استباقية تُرسل تلقائياً عند ارتفاع الخطر",
             "مدعوم بـ Twilio — يعمل على أي هاتف بدون تنزيل تطبيق"],
       },
-      stat:{ v:"3×", l:{ en:"more check-ins vs. no reminders", ar:"ضعف التسجيلات بالمقارنة بغير المذكّرين" } },
+      stat:{ v:"3×", l:{ en:"more check-ins vs. no reminders", ar:"3 أضعاف التسجيلات مقارنة بغير المذكّرين" } },
       mock:"whatsapp",
     },
     {
@@ -1277,7 +1338,7 @@ function Features({ lang }) {
     if (type === "score") return (
       <div style={{ ...s, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", padding:"18px 20px", display:"flex", alignItems:"center", gap:20 }}>
         <div style={{ position:"relative", width:72, height:72, flexShrink:0 }}>
-          <svg viewBox="0 0 72 72" width="72" height="72">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 72 72" width="72" height="72">
             <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="7"/>
             <circle cx="36" cy="36" r="30" fill="none" stroke={accent} strokeWidth="7"
               strokeDasharray={`${2*Math.PI*30*0.78} ${2*Math.PI*30}`}
@@ -1290,7 +1351,12 @@ function Features({ lang }) {
         </div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:11, color:"#8896ac", marginBottom:6 }}>{ar?"الجلسة الحالية":"Live session"}</div>
-          {[["Neck angle","12°","#10b981"],["Shoulder tilt","4°","#f59e0b"],["Head forward","8mm","#10b981"]].map(([l,v,c])=>(
+          {/* metric labels were hardcoded English while the heading above them
+              was already translated — the mock rendered half-Arabic in AR */}
+          {(ar
+            ? [["زاوية الرقبة","12°","#10b981"],["ميل الكتف","4°","#f59e0b"],["تقدّم الرأس","8mm","#10b981"]]
+            : [["Neck angle","12°","#10b981"],["Shoulder tilt","4°","#f59e0b"],["Head forward","8mm","#10b981"]]
+          ).map(([l,v,c])=>(
             <div key={l} style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
               <span style={{ color:"#8896ac", fontSize:11 }}>{l}</span>
               <span style={{ color:c, fontWeight:600, fontSize:11 }}>{v}</span>
@@ -1394,7 +1460,12 @@ function Features({ lang }) {
     );
     if (type === "security") return (
       <div style={{ ...s, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", padding:"16px 18px" }}>
-        {[["SAML 2.0 SSO","Azure AD · Okta · Google"],["AES-256 Encryption","at rest + TLS 1.3 in transit"],["RBAC","HR · Manager · Employee roles"],["GDPR Erasure API","right-to-delete in < 24h"],["Audit Logs","every event, exportable CSV"]].map(([t,s2])=>(
+        {/* descriptions were English-only; the product names stay in English
+            deliberately (SAML/AES/RBAC/GDPR are used as-is in Arabic too) */}
+        {(ar
+          ? [["SAML 2.0 SSO","Azure AD · Okta · Google"],["تشفير AES-256","أثناء التخزين + TLS 1.3 أثناء النقل"],["RBAC","أدوار HR · مدير · موظف"],["GDPR Erasure API","حق المحو خلال أقل من 24 ساعة"],["سجلات التدقيق","كل حدث، قابل للتصدير CSV"]]
+          : [["SAML 2.0 SSO","Azure AD · Okta · Google"],["AES-256 Encryption","at rest + TLS 1.3 in transit"],["RBAC","HR · Manager · Employee roles"],["GDPR Erasure API","right-to-delete in < 24h"],["Audit Logs","every event, exportable CSV"]]
+        ).map(([t,s2])=>(
           <div key={t} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,.05)" }}>
             <span style={{ color:accent, fontWeight:700, fontSize:14, flexShrink:0 }}>✓</span>
             <div>
@@ -1438,7 +1509,11 @@ function Features({ lang }) {
                   <span style={{ width:36, height:36, borderRadius:10, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, background: isActive ? `${item.accentColor}22` : "rgba(255,255,255,.05)", border: isActive ? `1px solid ${item.accentColor}44` : "1px solid transparent", transition:"background .2s,border-color .2s" }}>{item.icon}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13.5, fontWeight:600, color: isActive ? LPV7_TOKENS.text : LPV7_TOKENS.sub, lineHeight:1.3 }}>{ar ? item.title.ar : item.title.en}</div>
-                    <div style={{ fontSize:11, color: isActive ? item.accentColor : "transparent", marginTop:1, fontWeight:500, transition:"color .2s", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ar ? item.sub.ar : item.sub.en}</div>
+                    {/* was color:"transparent" when inactive — visually hidden
+                        but still read aloud, so a screen-reader user heard all
+                        seven subtitles while a sighted user saw one. Hidden from
+                        the a11y tree too when it isn't shown. */}
+                    <div aria-hidden={!isActive} style={{ fontSize:11, color: isActive ? item.accentColor : "transparent", marginTop:1, fontWeight:500, transition:"color .2s", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ar ? item.sub.ar : item.sub.en}</div>
                   </div>
                 </button>
               );
@@ -1562,12 +1637,20 @@ function HowItWorks({ lang }) {
 // ── Case Studies ──────────────────────────────────────────────────
 function CaseStudies({ lang }) {
   const ar = lang === "ar";
+  // NOTE FOR THE OWNER: these three case studies are presented as real named
+  // customers with real figures. Nothing else in the codebase evidences them.
+  // If they are not real, they should be removed or relabelled as illustrative
+  // — fabricated customer results are a legal exposure, not just a copy issue.
+  // What IS fixed here: the first case told two different stories depending on
+  // language — "$340K" in English vs "1.2م ج.م." (~$25K) in Arabic, and a
+  // different named person in each ("A. Hassan" vs "م. أحمد"). Both sides now
+  // state the same amount in the same unit and name the same person.
   const cases = ar ? [
-    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52%", resultLabel:"غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي", quote:"Corvus غيّر طريقة تفكيرنا في صحة الموظفين — من تكلفة لاستثمار", quoteName:"م. أحمد، مدير الموارد البشرية" },
+    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52%", resultLabel:"غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي", quote:"Corvus غيّر طريقة تفكيرنا في صحة الموظفين — من تكلفة لاستثمار", quoteName:"أ. حسن، مدير الموارد البشرية" },
     { co:"بنك وطني", industry:"مصرفية", employees:"850", result:"↑23%", resultLabel:"رضا الموظفين", time:"3 أشهر", detail:"انتشار ممتاز: 94% معدل استخدام يومي", quote:"أسهل أداة أطلقناها على الإطلاق. الفريق استخدمها من اليوم الأول", quoteName:"ن. سعيد، مدير التقنية" },
     { co:"شركة تقنية ناشئة", industry:"تكنولوجيا", employees:"120", result:"↓38%", resultLabel:"شكاوى آلام الظهر", time:"4 أشهر", detail:"عائد استثمار 4.1× خلال السنة الأولى", quote:"ROI واضح خلال 6 أسابيع. أوصي به لكل فريق remote", quoteName:"ي. حسن، المدير التنفيذي" },
   ] : [
-    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52%", resultLabel:"posture-related absences", time:"6 months", detail:"Saved $340K annually in physiotherapy costs", quote:"Corvus changed how we think about employee health — from a cost to an investment.", quoteName:"A. Hassan, HR Director" },
+    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52%", resultLabel:"posture-related absences", time:"6 months", detail:"Saved 1.2M EGP annually in physiotherapy costs", quote:"Corvus changed how we think about employee health — from a cost to an investment.", quoteName:"A. Hassan, HR Director" },
     { co:"National Bank", industry:"Banking", employees:"850", result:"↑23%", resultLabel:"employee satisfaction", time:"3 months", detail:"Excellent adoption: 94% daily active rate", quote:"Easiest tool we've ever rolled out. Team was using it from day one.", quoteName:"N. Said, CTO" },
     { co:"Tech Startup", industry:"Technology", employees:"120", result:"↓38%", resultLabel:"back pain complaints", time:"4 months", detail:"4.1× ROI in the first year", quote:"Clear ROI within 6 weeks. I recommend it to every remote-first team.", quoteName:"Y. Hassan, CEO" },
   ];
@@ -1605,7 +1688,9 @@ function CaseStudies({ lang }) {
                   {c.detail}
                 </p>
                 {/* Quote */}
-                <div style={{ flex:1, background:"rgba(255,255,255,.025)", borderRadius:12, padding:"12px 14px", marginBottom:16, borderLeft:`3px solid ${LPV7_TOKENS.green}` }}>
+                {/* borderInlineStart so the quote's accent bar stays on the
+                    leading edge in Arabic (it used to sit on the trailing edge). */}
+                <div style={{ flex:1, background:"rgba(255,255,255,.025)", borderRadius:12, padding:"12px 14px", marginBottom:16, borderInlineStart:`3px solid ${LPV7_TOKENS.green}` }}>
                   <p style={{ fontSize:13, color:LPV7_TOKENS.sub, lineHeight:1.6, margin:"0 0 8px", fontStyle:"italic" }}>"{c.quote}"</p>
                   <span style={{ fontSize:11.5, color:LPV7_TOKENS.muted, fontWeight:600 }}>— {c.quoteName}</span>
                 </div>
@@ -1659,38 +1744,46 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
   // drifted to independently-hardcoded ~20%-off-monthly numbers instead of
   // the real annual prices actually charged — e.g. Basic showed 1,910 EGP/yr
   // here but the real charge, everywhere else including checkout, is 1,590).
+  // Feature lists mirror App.jsx TIERS exactly. They previously advertised
+  // entitlements the product does not grant at those tiers — Free listed
+  // "AI Coach (5 msgs/day)" (Free has no AI Coach at all), Basic listed
+  // "AI Coach (unlimited)" (Basic is 10 msgs/MONTH; unlimited is Elite) plus
+  // "Export CSV/PDF" (a Pro feature), and Elite omitted the unlimited AI
+  // Coach that is its headline entitlement. The page's own comparison table
+  // further down already had the correct values, so the cards contradicted
+  // the table on the same screen. Keep these in sync with App.jsx TIERS.
   const b2cPlans = [
     {
-      id:"free", name: ar?"مجاني":"Free",
+      id:"standard", name: ar?"مجاني":"Free",
       priceUSD:{ monthly:0, yearly:0 }, priceEGP:{ monthly:0, yearly:0 },
       color:LPV7_TOKENS.muted,
       features: ar
-        ? ["5 جلسات / شهر","مدرب AI (5 رسائل/يوم)","لوحة نتائج أساسية","سجل 7 أيام"]
-        : ["5 sessions / month","AI Coach (5 msgs/day)","Basic score dashboard","7-day history"],
+        ? ["5 جلسات / شهر (بحد أقصى 3/يوم)","نقاط الوضعية","تنبيهات أساسية"]
+        : ["5 sessions / month (max 3/day)","Posture score","Basic alerts"],
     },
     {
       id:"basic", name: ar?"أساسي":"Basic",
       priceUSD:{ monthly:9.99, yearly:79.99 }, priceEGP:{ monthly:199, yearly:1590 },
       color:LPV7_TOKENS.sub,
       features: ar
-        ? ["جلسات غير محدودة","مدرب AI (غير محدود)","سجل 90 يوم","تقارير أسبوعية","تصدير CSV/PDF","دعم بريد إلكتروني"]
-        : ["Unlimited sessions","AI Coach (unlimited)","90-day history","Weekly reports","Export CSV/PDF","Email support"],
+        ? ["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","تتبع الاستمرارية","الأهداف","توقع الألم"]
+        : ["Unlimited sessions","AI Coach (10 msgs/mo)","Streak tracking","Goals","Pain prediction"],
     },
     {
       id:"professional", name: ar?"احترافي":"Pro",
       priceUSD:{ monthly:19.99, yearly:159.99 }, priceEGP:{ monthly:399, yearly:3190 },
       popular:true, color:LPV7_TOKENS.blue,
       features: ar
-        ? ["كل Basic","رؤى AI متقدمة","مقارنة الجلسات","تنبيهات الشذوذ","برامج تمدد مخصصة","دعم أولوية"]
-        : ["Everything in Basic","Advanced AI insights","Session compare","Anomaly alerts","Custom stretch programs","Priority support"],
+        ? ["كل مزايا Basic","رؤى AI","تقارير","مقارنة الجلسات","لوحة المتصدرين","تصدير CSV/PDF"]
+        : ["Everything in Basic","AI Insights","Reports","Session compare","Leaderboard","Export CSV/PDF"],
     },
     {
       id:"elite", name: ar?"إيليت":"Elite",
       priceUSD:{ monthly:39.99, yearly:299.99 }, priceEGP:{ monthly:699, yearly:5590 },
       color:LPV7_TOKENS.green,
       features: ar
-        ? ["كل Pro","AI تنبؤي","تقرير PDF سريري","معايرة متقدمة","سرد الجلسة","وصول مبكر للمميزات"]
-        : ["Everything in Pro","Predictive AI","Clinical PDF report","Advanced calibration","Session narrative","Early feature access"],
+        ? ["كل مزايا Pro","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية","معايرة متقدمة"]
+        : ["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support","Calibration"],
     },
   ];
 
@@ -1768,7 +1861,7 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                 { id:"individual", icon:"👤", en:"Individual", ar:"فرد" },
                 { id:"company",    icon:"🏢", en:"Company / HR", ar:"شركة / HR" },
               ].map(seg => (
-                <button key={seg.id} onClick={() => setLocalMode(seg.id)} style={{
+                <button key={seg.id} onClick={() => switchLocalMode(seg.id)} style={{
                   background: localMode === seg.id
                     ? (seg.id === "company" ? LPV7_TOKENS.indigo : LPV7_TOKENS.blue)
                     : "transparent",
@@ -1822,7 +1915,12 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
           </div>
         </Reveal>
 
-        <Stagger className="lp-pricing-grid" style={{ alignItems:"start", opacity:priceVis?1:0, transition:"opacity 140ms ease" }}>
+        {/* alignItems was "start", which content-sizes each grid item — that
+            makes the card's own height:100% resolve to auto and the features
+            list's flex:1 never expand, so the "Get started" buttons sat at a
+            different height on every card (Free has 3 features, Growth has 8).
+            "stretch" is what the equal-height card layout below assumes. */}
+        <Stagger className="lp-pricing-grid" style={{ alignItems:"stretch", opacity:priceVis?1:0, transition:"opacity 140ms ease" }}>
           {plans.map((p) => (
             <StaggerItem key={p.id}>
               <div className={p.popular ? "lp-lift lp-glow lp-popular-card" : "lp-lift"} style={{
@@ -1871,10 +1969,10 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                           <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
                             <span style={{ fontSize:40, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_MONO, letterSpacing:"-.02em" }}>
                               {billing==="monthly"
-                                ? (p.priceEGP.monthly ?? 0).toLocaleString()
+                                ? (p.priceEGP.monthly ?? 0).toLocaleString("en-US")
                                 : p.priceEGP.yearly
-                                  ? Math.round(p.priceEGP.yearly/12).toLocaleString()
-                                  : (p.priceEGP.monthly ?? 0).toLocaleString()}
+                                  ? Math.round(p.priceEGP.yearly/12).toLocaleString("en-US")
+                                  : (p.priceEGP.monthly ?? 0).toLocaleString("en-US")}
                             </span>
                             <span style={{ fontSize:14.5, color:LPV7_TOKENS.muted }}>
                               {p.perUser ? (ar ? "ج.م./مستخدم/شهر" : "EGP/user/mo") : (ar ? "ج.م./شهر" : "EGP/mo")}
@@ -1882,7 +1980,14 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                           </div>
                           {billing==="yearly" && p.priceEGP.yearly && (
                             <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginTop:6, fontFamily:FONT_MONO }}>
-                              {(p.priceEGP.yearly).toLocaleString()} {ar?"سنوياً":"EGP/yr"}
+                              {/* Arabic dropped the currency entirely — it read
+                                  "23,990 سنوياً" (just "annually"), with no EGP
+                                  anywhere, while English read "23,990 EGP/yr".
+                                  Locale pinned to en-US so the digits stay Latin
+                                  and match every other hardcoded number on the
+                                  page (an ar-EG browser locale would otherwise
+                                  render ٢٣٬٩٩٠ here and nowhere else). */}
+                              {(p.priceEGP.yearly).toLocaleString("en-US")} {ar?"ج.م. سنوياً":"EGP/yr"}
                             </div>
                           )}
                         </>
@@ -1913,8 +2018,8 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                           {p.priceEGP.yearly || p.priceEGP.monthly ? (
                             <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginTop:6, fontFamily:FONT_MONO }}>
                               ≈ {billing==="monthly" || !p.priceEGP.yearly
-                                ? (p.priceEGP.monthly ?? 0).toLocaleString()
-                                : Math.round(p.priceEGP.yearly/12).toLocaleString()
+                                ? (p.priceEGP.monthly ?? 0).toLocaleString("en-US")
+                                : Math.round(p.priceEGP.yearly/12).toLocaleString("en-US")
                               } {ar ? "ج.م./شهر" : "EGP/mo"}
                             </div>
                           ) : null}
@@ -1964,10 +2069,15 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
 
         {/* ── Feature Comparison Table — switches with isCompany ─────────── */}
         {(()=>{
+          // Column labels/keys track the real B2B_TIERS in App.jsx. The middle
+          // column used to be labelled "Business" while the plan cards directly
+          // above call the same plan "Growth" (real id b2b_growth) — one screen,
+          // two names for one plan. The `business` row key is kept as the
+          // internal field name so the row data below stays untouched.
           const COLS = isCompany ? [
-            { key:"starter",    label:"Starter",    color:"#8896ac" },
-            { key:"business",   label:"Business",   color:"#6366f1", popular:true },
-            { key:"enterprise", label:"Enterprise", color:"#f59e0b" },
+            { key:"starter",    label:ar?"ستارتر":"Starter",       color:"#8896ac" },
+            { key:"business",   label:ar?"جروث":"Growth",          color:"#6366f1", popular:true },
+            { key:"enterprise", label:ar?"إنتربرايز":"Enterprise", color:"#f59e0b" },
           ] : [
             { key:"free",  label:ar?"مجاني":"Free",   color:"#8896ac" },
             { key:"basic", label:"Basic",              color:"#1a56db" },
@@ -1978,7 +2088,11 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
             {
               en:"Core HR",ar:"الأساسيات",
               rows:[
-                { en:"Employees",            ar:"الموظفون",              starter:"10–100",         business:"10–5,000",    enterprise:ar?"غير محدود":"Unlimited" },
+                // Seat caps are the real B2B_TIERS.seats values (30 / 100 / -1).
+                // These previously read "10–100" and "10–5,000" — 3× and 50×
+                // what the plans actually sell, and contradicting the plan
+                // cards on the same screen ("Up to 30" / "Up to 100").
+                { en:"Employees",            ar:"الموظفون",              starter:ar?"حتى 30":"Up to 30", business:ar?"حتى 100":"Up to 100", enterprise:ar?"غير محدود":"Unlimited" },
                 { en:"HR Dashboard",         ar:"لوحة HR",               starter:"✅",              business:"✅",           enterprise:"✅" },
                 { en:"Department Mgmt",      ar:"إدارة الأقسام",         starter:"✅",              business:"✅",           enterprise:"✅" },
                 { en:"Auto Weekly Reports",  ar:"تقارير أسبوعية تلقائية",starter:"✅",              business:"✅",           enterprise:"✅" },
@@ -1991,7 +2105,9 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
               rows:[
                 { en:"Workforce Analytics",  ar:"تحليلات القوى العاملة",  starter:"—",              business:"✅",           enterprise:"✅" },
                 { en:"Pain Prediction",      ar:"توقع الألم",             starter:"—",              business:"✅",           enterprise:"✅" },
-                { en:"Churn Prediction",     ar:"توقع الإنهاء",           starter:"—",              business:"✅",           enterprise:"✅" },
+                // "توقع الإنهاء" reads as predicting *termination* (firing someone)
+                // in an HR product — wrong and alarming. Churn/attrition is التسرب.
+                { en:"Churn Prediction",     ar:"توقع تسرب الموظفين",     starter:"—",              business:"✅",           enterprise:"✅" },
                 { en:"AI Executive Summary", ar:"ملخص AI تنفيذي",         starter:"—",              business:"✅",           enterprise:"✅" },
                 { en:"Quarterly PDF Report", ar:"تقرير PDF ربع سنوي",    starter:"—",              business:ar?"إضافي":"Add-on",enterprise:"✅" },
               ],
@@ -1999,9 +2115,13 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
             {
               en:"Integrations",ar:"التكاملات",
               rows:[
-                { en:"Slack / Teams Alerts", ar:"تنبيهات Slack/Teams",   starter:"✅",              business:"✅",           enterprise:"✅" },
-                { en:"API Access",           ar:"وصول API",               starter:"✅",              business:"✅",           enterprise:"✅" },
-                { en:"SSO / SAML 2.0",       ar:"تسجيل دخول موحد",        starter:"—",              business:"✅",           enterprise:"✅" },
+                // Gating below matches B2B_TIERS in App.jsx: Slack/Teams is a
+                // Growth feature, API + Webhooks and SSO/SAML are Enterprise
+                // only. This table used to grant Slack and API to Starter and
+                // SSO to Growth — features those plans don't include.
+                { en:"Slack / Teams Alerts", ar:"تنبيهات Slack/Teams",   starter:"—",              business:"✅",           enterprise:"✅" },
+                { en:"API Access",           ar:"وصول API",               starter:"—",              business:"—",           enterprise:"✅" },
+                { en:"SSO / SAML 2.0",       ar:"تسجيل دخول موحد",        starter:"—",              business:"—",           enterprise:"✅" },
                 { en:"SAP / Workday",        ar:"تكامل SAP/Workday",      starter:"—",              business:"✅",           enterprise:"✅" },
                 { en:"On-Premise Option",    ar:"خيار On-Premise",        starter:"—",              business:"—",           enterprise:"✅" },
               ],
@@ -2067,7 +2187,11 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
 
           const cell = (val, colColor) => {
             if(val==="✅") return <span style={{color:"#10b981",fontSize:16}}>✓</span>;
-            if(val==="—")  return <span style={{color:"#334155",fontSize:14}}>—</span>;
+            // #334155 on this table's #0d1f33 background is 1.61:1 — effectively
+            // invisible, and this dash is the only signal that a plan does NOT
+            // include a feature (~24 rows × 3-4 columns read as blank cells).
+            // LPV7_TOKENS.muted (#8896ac) clears 4.5:1 on the same background.
+            if(val==="—")  return <span style={{color:LPV7_TOKENS.muted,fontSize:14}} aria-label="Not included">—</span>;
             return <span style={{color:colColor||"#94a3b8",fontSize:12.5,fontWeight:600}}>{val}</span>;
           };
 
@@ -2116,10 +2240,14 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                   </thead>
 
                   <tbody>
+                    {/* React.Fragment with an explicit key — the shorthand <>
+                        cannot carry one, so this list was keyless (React logged
+                        a warning on every render and reconciled the group blocks
+                        by index when the B2C/B2B toggle flips). */}
                     {GROUPS.map((g,gi)=>(
-                      <>
+                      <React.Fragment key={`grp${gi}`}>
                         {/* group header row */}
-                        <tr key={`g${gi}`}>
+                        <tr>
                           <td colSpan={COLS.length + 1} style={{
                             padding:"10px 18px 6px",
                             fontSize:10.5,fontWeight:700,color:LPV7_TOKENS.muted,
@@ -2156,7 +2284,7 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                             ))}
                           </tr>
                         ))}
-                      </>
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -2263,13 +2391,19 @@ function Testimonials({ lang }) {
 }
 
 // ── FAQ ───────────────────────────────────────────────────────────
-function FAQItem({ q, a, isOpen, onToggle, ar }) {
+function FAQItem({ q, a, isOpen, onToggle, ar, idx }) {
+  // Collapsed answers were hidden only by height:0 + overflow:hidden, so every
+  // answer stayed in the accessibility tree and was read aloud regardless of
+  // state. inert/aria-hidden closes that, and aria-controls/id pairs the
+  // button with the panel it actually toggles.
+  const panelId = `faq-panel-${idx}`;
+  const btnId   = `faq-btn-${idx}`;
   return (
     <div style={{
       background:LPV7_TOKENS.card, border:`1px solid ${isOpen ? "rgba(79,124,249,.35)" : LPV7_TOKENS.border}`,
       borderRadius:16, overflow:"hidden", transition:"border-color .25s",
     }}>
-      <button onClick={onToggle} aria-expanded={isOpen} style={{
+      <button id={btnId} onClick={onToggle} aria-expanded={isOpen} aria-controls={panelId} style={{
         width:"100%", padding:"20px 22px", background:"transparent",
         border:"none", cursor:"pointer",
         display:"flex", justifyContent:"space-between", alignItems:"center", gap:16,
@@ -2286,6 +2420,7 @@ function FAQItem({ q, a, isOpen, onToggle, ar }) {
         }}>+</span>
       </button>
       <motion.div
+        id={panelId} role="region" aria-labelledby={btnId} aria-hidden={!isOpen}
         initial={false}
         animate={{ height: isOpen ? "auto" : 0, opacity: isOpen ? 1 : 0 }}
         transition={{ duration:.28, ease:[0.22,1,0.36,1] }}
@@ -2325,7 +2460,7 @@ function FAQ({ lang }) {
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             {items.map(([q, a], i) => (
               <Reveal key={i} delay={i * 50} y={16}>
-                <FAQItem q={q} a={a} ar={ar} isOpen={open===i} onToggle={() => setOpen(open===i ? null : i)}/>
+                <FAQItem q={q} a={a} ar={ar} idx={i} isOpen={open===i} onToggle={() => setOpen(open===i ? null : i)}/>
               </Reveal>
             ))}
           </div>
@@ -2344,8 +2479,11 @@ function MidCTA({ lang, onCTA, variant="features" }) {
       ar: { h:"شفت كفاية؟ ابدأ مجاناً في 60 ثانية.", sub:"بدون بطاقة · في المتصفح · إلغاء في أي وقت", cta:"ابدأ مجاناً ←" },
     },
     cases: {
-      en: { h:"Join 50+ teams improving posture with AI.", sub:"7-day free trial, full access, no commitment.", cta:"Try Corvus Free →" },
-      ar: { h:"انضم لـ 50+ فريق بيحسّن الوضعية بالـ AI.", sub:"تجربة مجانية 7 أيام، وصول كامل، بدون التزام.", cta:"جرّب Corvus مجاناً ←" },
+      // "50+ teams" contradicted the same 50+ figure used everywhere else on
+      // this page, where it means 50+ beta *users* (see SocialProof and Stats).
+      // One page cannot claim both; users is what the rest of the copy supports.
+      en: { h:"Join 50+ people improving their posture with AI.", sub:"7-day free trial, full access, no commitment.", cta:"Try Corvus Free →" },
+      ar: { h:"انضم لـ 50+ شخص بيحسّنوا وضعيتهم بالـ AI.", sub:"تجربة مجانية 7 أيام، وصول كامل، بدون التزام.", cta:"جرّب Corvus مجاناً ←" },
     },
   };
   const m = (msgs[variant]||msgs.features)[ar?"ar":"en"];
@@ -2362,10 +2500,10 @@ function MidCTA({ lang, onCTA, variant="features" }) {
             <div style={{ fontSize:17, fontWeight:700, color:LPV7_TOKENS.text, marginBottom:5, fontFamily:FONT_DISPLAY }}>{m.h}</div>
             <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted }}>{m.sub}</div>
           </div>
-          <a href="#" role="button" className="lp-btn lp-btn-primary" onClick={e=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
+          <button type="button" className="lp-btn lp-btn-primary" onClick={e=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
             style={{...btn("primary","md"), whiteSpace:"nowrap", flexShrink:0}}>
             {m.cta}
-          </a>
+          </button>
         </div>
       </div>
     </div>
@@ -2397,16 +2535,18 @@ function FinalCTA({ lang, onCTA }) {
             </h2>
             <p style={{ ...TYPE.body, color:LPV7_TOKENS.sub, maxWidth:460, margin:"0 auto 32px",
               fontSize:"clamp(14px,1.2vw,16px)" }}>
+              {/* Was "50+ teams" — same contradiction as the FinalCTA above.
+                  The Arabic side already avoided the number; both now do. */}
               {ar
-                ? "انضم إلى الشركات التي تستخدم Corvus. تجربة مجانية 7 أيام."
-                : "Join 50+ teams reducing workplace pain with AI posture coaching. 7-day free trial, no credit card."}
+                ? "انضم إلى الشركات التي تستخدم Corvus. تجربة مجانية 7 أيام، بدون بطاقة بنكية."
+                : "Reduce workplace pain with AI posture coaching. 7-day free trial, no credit card."}
             </p>
             <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
-              <a href="#" role="button" className="lp-btn lp-btn-primary"
+              <button type="button" className="lp-btn lp-btn-primary"
                 onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}}
                 style={btn("primary","lg")}>
                 {ar ? "🚀 ابدأ تجربتك المجانية" : "🚀 Start Free Trial"}
-              </a>
+              </button>
               <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer"
                 className="lp-btn lp-btn-ghost" style={btn("ghost","lg")}>
                 {ar ? "احجز عرضاً" : "Book Demo"}
@@ -2437,7 +2577,7 @@ function SchoolsSection({ lang, onCTA }) {
           </h2>
           <p style={{ fontSize:15, color:"#8896ac", maxWidth:560, margin:"0 auto", lineHeight:1.7 }}>
             {ar
-              ? "سعر خاص للجامعات والمدارس — 49 جنيه للطالب شهرياً. جامعة 5,000 طالب = 245,000 جنيه recurring revenue."
+              ? "سعر خاص للجامعات والمدارس — 49 جنيه للطالب شهرياً. جامعة بـ5,000 طالب = 245,000 جنيه شهرياً."
               : "Special pricing for universities & schools — 49 EGP/student/month. 5,000 students = 245,000 EGP monthly recurring."}
           </p>
         </div>
@@ -2517,6 +2657,9 @@ function Footer({ lang }) {
       { label:"فرق HR",          href:"#casestudies",  anchor:true },
       { label:"نتائج العملاء",   href:"#casestudies",  anchor:true },
       { label:"التسعير المؤسسي", href:"#pricing",      anchor:true },
+      // the #schools section renders in both languages, but only the English
+      // footer had a link to it
+      { label:"للجامعات والمدارس", href:"#schools",   anchor:true },
       { label:"احجز عرضاً",     href:CALENDLY_URL },
     ]},
     { title:"الموارد", links:[
@@ -2599,7 +2742,7 @@ function Footer({ lang }) {
               }}>◈</div>
               <div style={{ lineHeight:1.2 }}>
                 <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Corvus</div>
-                <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+                <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>{ar ? "تدريب الوضعية بالذكاء الاصطناعي" : "AI Posture Coaching"}</div>
               </div>
             </div>
 
@@ -2689,10 +2832,21 @@ function Footer({ lang }) {
 }
 
 // ── Root ──────────────────────────────────────────────────────────
-export default function LandingPage({ onNavigate }) {
-  const [lang, setLang] = useState(
+export default function LandingPage({ onNavigate, lang: langProp, setLang: setLangProp }) {
+  // App.jsx owns `lang` and persists it to localStorage, and it passes both
+  // lang and setLang here — but this component used to ignore them and keep a
+  // private state seeded only from navigator.language. Two visible bugs came
+  // from that: a returning Arabic user landed on an English page unless their
+  // browser locale was ar, and toggling the language here then clicking any
+  // CTA dropped you on a sign-up screen still rendered in the other language
+  // (App's own lang never changed). Now the prop is the source of truth when
+  // present, with the old local state kept only as a standalone fallback for
+  // rendering this page outside App (e.g. a static/marketing mount).
+  const [langLocal, setLangLocal] = useState(
     typeof navigator !== "undefined" && navigator.language.startsWith("ar") ? "ar" : "en"
   );
+  const lang    = langProp    ?? langLocal;
+  const setLang = setLangProp ?? setLangLocal;
   // Individual vs Company — drives Hero copy + Pricing plan set across the whole page.
   // Defaults to "company" since this is primarily a B2B workforce intelligence product,
   // but individuals get an equally first-class path via the toggle.
@@ -2726,7 +2880,7 @@ export default function LandingPage({ onNavigate }) {
   }, []);
 
   return (
-    <div dir={lang==="ar"?"rtl":"ltr"} style={{ background:LPV7_TOKENS.bg, minHeight:"100vh", color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
+    <div dir={lang==="ar"?"rtl":"ltr"} style={{ background:LPV7_TOKENS.bg, minHeight:"100dvh", color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
       <GlobalStyle/>
       <ScrollProgress/>
       <Nav lang={lang} setLang={setLang} onCTA={handleCTA} mode={mode} setMode={setMode}/>

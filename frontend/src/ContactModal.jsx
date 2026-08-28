@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const TOPICS_EN = ["General question", "Billing", "Technical issue", "Enterprise / Sales", "Other"];
@@ -12,6 +12,13 @@ const TOPICS_AR = ["سؤال عام", "الفواتير", "مشكلة تقنية
  */
 export function ContactModal({ cs, isAr = false, supportEmail = "m789pppp@gmail.com", supportPhone = "01210271841", onClose }) {
   useBodyScrollLock();
+  // Escape closes the dialog. Previously the only way out was clicking the
+  // backdrop, so keyboard-only users could not dismiss this modal at all.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const t = isAr ? TOPICS_AR : TOPICS_EN;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -57,11 +64,12 @@ export function ContactModal({ cs, isAr = false, supportEmail = "m789pppp@gmail.
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        role="dialog" aria-modal="true" aria-labelledby="cm-title"
         dir={isAr ? "rtl" : "ltr"}
         style={{ width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto", background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: 28, fontFamily: "'Inter',system-ui,sans-serif" }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: text }}>
+          <h2 id="cm-title" style={{ margin: 0, fontSize: 19, fontWeight: 800, color: text }}>
             {isAr ? "تواصل معنا" : "Contact us"}
           </h2>
           <button onClick={onClose} aria-label={isAr ? "إغلاق" : "Close"} style={{ background: "none", border: "none", color: muted, fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 4 }}>×</button>
@@ -95,37 +103,37 @@ export function ContactModal({ cs, isAr = false, supportEmail = "m789pppp@gmail.
               aria-hidden="true"
             />
 
-            <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: muted, marginBottom: 5 }}>
+            <label htmlFor="cm-name" style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: muted, marginBottom: 5 }}>
               {isAr ? "الاسم" : "Name"}
             </label>
             <input
-              value={name} onChange={(e) => setName(e.target.value)} required maxLength={120}
+              id="cm-name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={120}
               style={fieldStyle(inputBg, border, text)}
             />
 
-            <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: muted, margin: "14px 0 5px" }}>
+            <label htmlFor="cm-email" style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: muted, margin: "14px 0 5px" }}>
               {isAr ? "الإيميل" : "Email"}
             </label>
             <input
-              type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={200}
+              id="cm-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={200}
               style={fieldStyle(inputBg, border, text)}
             />
 
-            <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: muted, margin: "14px 0 5px" }}>
+            <label htmlFor="cm-topic" style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: muted, margin: "14px 0 5px" }}>
               {isAr ? "الموضوع" : "Topic"}
             </label>
             <select
-              value={topic} onChange={(e) => setTopic(e.target.value)}
+              id="cm-topic" value={topic} onChange={(e) => setTopic(e.target.value)}
               style={{ ...fieldStyle(inputBg, border, text), cursor: "pointer" }}
             >
               {t.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
             </select>
 
-            <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: muted, margin: "14px 0 5px" }}>
+            <label htmlFor="cm-message" style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: muted, margin: "14px 0 5px" }}>
               {isAr ? "الرسالة" : "Message"}
             </label>
             <textarea
-              value={message} onChange={(e) => setMessage(e.target.value)} required maxLength={4000} rows={5}
+              id="cm-message" value={message} onChange={(e) => setMessage(e.target.value)} required maxLength={4000} rows={5}
               style={{ ...fieldStyle(inputBg, border, text), resize: "vertical", fontFamily: "inherit" }}
             />
 

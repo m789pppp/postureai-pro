@@ -45,7 +45,9 @@ const CATEGORIES = [
   {
     id:"pricing", label:"Pricing & Plans", icon:"💳", color:"#f59e0b",
     faqs:[
-      ["Is there a free trial?","Yes. All plans include a 14-day free trial — no credit card required. You get full access to all features for your plan tier during the trial."],
+      // 7 days, not 14 — the real trial length is set in firebase.js
+      // (trialExpires.setDate(+7)) and every other surface says 7.
+      ["Is there a free trial?","Yes. All plans include a 7-day free trial — no credit card required. You get full access to all features for your plan tier during the trial."],
       ["What's the difference between Individual and Company plans?","Individual plans are for single users. Company (HR) plans add the HR dashboard, team management, department reporting, bulk user import, weekly auto-reports, and API access."],
       ["Can I change plans later?","Yes. You can upgrade or downgrade at any time. Downgrades take effect at the end of your billing period. Upgrades are instant with pro-rated billing."],
       ["Do you offer discounts for NGOs or universities?","Yes. We offer 50% discounts for verified educational institutions and NGOs. Contact us with your organisation details to apply."],
@@ -267,7 +269,7 @@ export default function FAQPage() {
           <h2 style={{ fontSize:"clamp(24px,3vw,38px)", fontWeight:800, color:T.text,
             margin:"0 0 14px", fontFamily:FD }}>Ready to get started?</h2>
           <p style={{ fontSize:16, color:T.sub, margin:"0 auto 32px", maxWidth:400, lineHeight:1.7 }}>
-            14-day free trial. No credit card. Cancel anytime.
+            7-day free trial. No credit card. Cancel anytime.
           </p>
           <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
             <a href="/auth?mode=signup" style={{
