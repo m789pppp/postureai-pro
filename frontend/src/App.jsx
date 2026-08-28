@@ -2355,8 +2355,20 @@ export default function App(){
   const[darkMode,setDarkMode]=useState(()=>{
     try{const v=localStorage.getItem("darkMode");return v!==null?v==="true":true;}catch{return true;}
   });
+  // Stored preference wins; otherwise fall back to the browser locale so an
+  // Arabic-locale visitor (the primary market) lands in Arabic on first visit.
+  // The landing page used to do this detection privately off navigator.language
+  // while ignoring the lang prop passed to it — which is why toggling language
+  // there never followed you into sign-up. Now that it reads this value, the
+  // locale fallback has to live here or first-visit auto-detection is lost.
   const[lang,setLang]=useState(()=>{
-    try{return localStorage.getItem("lang")||"en";}catch{return "en";}
+    try{
+      const saved = localStorage.getItem("lang");
+      if (saved) return saved;
+    }catch{}
+    try{
+      return (typeof navigator!=="undefined" && navigator.language||"").toLowerCase().startsWith("ar") ? "ar" : "en";
+    }catch{return "en";}
   });
 
   // Persist preferences
