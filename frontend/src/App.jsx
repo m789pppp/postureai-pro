@@ -2125,7 +2125,7 @@ export default function App(){
     return ()=>clearTimeout(t);
   },[]);
   // ── Hash-based routing — fixes back button & enables deep links ──
-  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace","break"]);
+  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace","break","demo","demo_dashboard"]);
   const hashToPage = (h) => {
     const p = h.replace(/^#\/?/, "") || "landing";
     // Map known aliases
@@ -3946,8 +3946,9 @@ export default function App(){
       pausedAtRef.current = null;
       stoppingRef.current = false; // clears stopCamera()'s reentrancy guard for this new session
       // Per-session counters. These were NOT reset here, and stopCamera didn't
-      // reset them either — the only reset lived in switchMode(), which has no
-      // caller. So a second session in the same page load was written to
+      // reset them either (the only reset lived in a switchMode() that had no
+      // caller and has since been deleted). So a second session in the same page
+      // load was written to
       // Firestore with session 1's data pooled in: good_pct averaged across
       // both, `frames` and `alerts_count` cumulative, and alert_causes (which
       // drives the weekly pattern) still holding the previous session's alerts.
@@ -4147,6 +4148,10 @@ export default function App(){
     }
     pausedAtRef.current=null;
     setPreviewPhase(null);
+    // NOTE: the "Saving…" flag is cleared where the write actually settles
+    // (the saveSession .then/.catch below), not on a timer. This 1500ms
+    // fallback only covers the branches that never call saveSession at all
+    // (too-short session, signed out), so the button can't stay stuck.
     setTimeout(()=>setIsSavingSession(false), 1500);
     if(countdownIvRef.current){ clearInterval(countdownIvRef.current); countdownIvRef.current=null; }
     setShowHealthConsent(false);
@@ -4269,7 +4274,14 @@ export default function App(){
       addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
     } else if(user && dur >= 5){ // Save if session lasted at least 5 seconds
       addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
-      saveSession(user.uid,{
+      setIsSavingSession(true);
+      // Snapshot the payload synchronously. The .catch below used to rebuild it
+      // by re-reading alRef/worstSnapsRef AT REJECTION TIME — and beginScoring
+      // now clears those, so starting a new session inside the rejection window
+      // (the result modal's "New Session" button fires startCamera 300ms after
+      // stop) silently dropped the alerts and snapshots from the queued retry.
+      // One object, used for both the write and the retry queue.
+      const _sessionPayload = {
         session_id:sessionId, mode, tier:effectiveTier, avg_score:avg,
         good_pct:gPct, duration_s:dur, duration_sec:dur,
         alerts_count:acRef.current?.total||0,
@@ -4292,22 +4304,27 @@ export default function App(){
           if(roughBytes > 600_000) return {}; // skip if > ~600KB to leave room for other fields
           return { worst_snapshots: snaps };
         })(),
-      }).then(()=>{
+      };
+      // The weekly pattern is derived from this session's alerts, which are
+      // also reset by the next beginScoring — capture them now too.
+      const _alertsAtSave = alRef.current.slice();
+      saveSession(user.uid, _sessionPayload).then(()=>{
+        setIsSavingSession(false);
         addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
         // Refresh sessions list so the new session appears immediately
         // without waiting for the user to re-login or navigate away.
         if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
         // #9 Compute weekly pattern from this session's alert causes
-        if(alRef.current.length>=3){
+        if(_alertsAtSave.length>=3){
           const causeCounts={};
-          alRef.current.forEach(a=>{const c=a.cause||"posture";causeCounts[c]=(causeCounts[c]||0)+1;});
+          _alertsAtSave.forEach(a=>{const c=a.cause||"posture";causeCounts[c]=(causeCounts[c]||0)+1;});
           const top=Object.entries(causeCounts).sort(([,a],[,b])=>b-a)[0];
           if(top){
             const[topKey,topCount]=top;
-            const pct=Math.round(topCount/alRef.current.length*100);
+            const pct=Math.round(topCount/_alertsAtSave.length*100);
             const causeLabel={neck:"neck lean",yaw:"head rotation",dist:"screen distance",posture:"general posture"}[topKey]||topKey;
             const hourCounts={};
-            alRef.current.filter(a=>(a.cause||"posture")===topKey).forEach(a=>{
+            _alertsAtSave.filter(a=>(a.cause||"posture")===topKey).forEach(a=>{
               const h=a.time?.split(":")?.[0]||"?";
               hourCounts[h]=(hourCounts[h]||0)+1;
             });
@@ -4323,6 +4340,7 @@ export default function App(){
           }
         }
       }).catch(e=>{
+        setIsSavingSession(false);
         console.error("saveSession failed:", e?.code, e?.message);
         // Firestore's persistent cache (see firebase.js) now absorbs most
         // transient network failures automatically, but for whatever still
@@ -4333,20 +4351,9 @@ export default function App(){
         try{
           const key="corvus_pending_sessions";
           const queue=JSON.parse(localStorage.getItem(key)||"[]");
-          queue.push({uid:user.uid,data:{
-            session_id:sessionId, mode, tier:effectiveTier, avg_score:avg,
-            good_pct:gPct, duration_s:dur, duration_sec:dur,
-            alerts_count:acRef.current?.total||0,
-            score_history:hist.slice(-60),
-            alert_causes: alRef.current.map(a=>({cause:a.cause||"posture",hour:a.time?.split(":")?.[0]||"0",severity:a.severity||"mild"})),
-            metrics:la.metrics||{},
-            ai_tip: la.ai_tip||la.ai_insight||la.claude_analysis||"",
-            improvement_tip: result.improvement_tip||"",
-            pain_summary: result.pain_summary||null,
-            pain_prediction: la.pain_prediction||null,
-            trend: result.trend||"stable",
-            ...(worstSnapsRef.current.length?{worst_snapshots:worstSnapsRef.current.slice(0,3)}:{}),
-          },queuedAt:Date.now()});
+          // Same object that was sent, captured before the write — not rebuilt
+          // from refs that a newly started session may already have cleared.
+          queue.push({uid:user.uid,data:_sessionPayload,queuedAt:Date.now()});
           localStorage.setItem(key, JSON.stringify(queue.slice(-10))); // cap at 10 pending
           addToast(isAr?"⚠️ فشل الحفظ — هنحاول تاني تلقائياً":"⚠️ Save failed — will retry automatically","warn");
         }catch{
@@ -4472,23 +4479,6 @@ export default function App(){
   // setup screen — users had to leave the session to change it. This lets
   // them switch on the fly; when a session is running we reset the analysis
   // buffers so the new mode (front vs side use different maths) starts clean.
-  function switchMode(m){
-    if(!m || m===mode) return;
-    setMode(m);
-    if(camActive){
-      lmSmootherRef.current?.reset();
-      frameBufferRef.current?.clear();
-      distSmootherRef.current?.reset();
-      resetProportions();
-      resetScore();
-      histRef.current=[]; setHistory([]);
-      goodRef.current=0; setGoodF(0);
-      totalRef.current=0; setTotalF(0);
-      setAnalysis(null);
-      addToast(isAr?`تم التبديل إلى ${MC[m]?.label||m}`:`Switched to ${MC[m]?.label||m}`,"info");
-    }
-  }
-
   // ── Multi-Account Switch ────────────────────────────────────────
   async function handleSwitchAccount(linkedAccount) {
     // linkedAccount = { linked_uid, email, display_name, provider }
