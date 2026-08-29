@@ -2467,7 +2467,20 @@ export default function App(){
   const[showDeviceSelect,setShowDeviceSelect]=useState(false);
   const[breakReminder,setBreakReminder]=useState(true);
   const[breakReturnPage,setBreakReturnPage]=useState("live"); // where the break page returns to
-  const goToBreak=useCallback(()=>{ setBreakReturnPage(page==="break"?"live":page); setPage("break"); },[page]);
+  // Leaving Live for the break page unmounts the <video>, but nothing here used
+  // to stop or pause anything: the camera tracks kept running (OS indicator
+  // light on for the whole break), the session timer and the rAF loop kept
+  // going, and on return a fresh <video> mounted with no srcObject — black feed
+  // forever, while the UI still showed "Live", a running clock and Pause/Stop.
+  // Stopping then saved a session whose duration included the break.
+  // These refs are assigned by the effect below, because pauseSession/camActive
+  // are declared several thousand lines further down.
+  const pauseForBreakRef = useRef(null);
+  const goToBreak=useCallback(()=>{
+    pauseForBreakRef.current?.();
+    setBreakReturnPage(page==="break"?"live":page);
+    setPage("break");
+  },[page]);
   const[breakIntervalMin,setBreakIntervalMin]=useState(25);
   const[showDashboard,setShowDashboard]=useState(false);
 
@@ -2821,6 +2834,11 @@ export default function App(){
   const backendFailShownRef = useRef(false);
   const startingCameraRef = useRef(false); // sync guard — see startCamera()
   const stoppingRef = useRef(false); // sync guard — see stopCamera()
+  // Wall-clock pacing for the backend /analyze call, replacing a frame-counter
+  // gate that could either freeze analysis permanently or flood the network —
+  // see the comment at the call site in runLoop().
+  const lastBackendMsRef = useRef(0);
+  const backendInFlightRef = useRef(false);
   const lightCheckRef=useRef({t:0,canvas:null,wasLow:false});
   const lightAlRef=useRef(0); // separate cooldown for lighting alerts (60s, not 8s)
   // Streak counter for the subject-switch guard below (a different/second
@@ -2836,6 +2854,25 @@ export default function App(){
   // count drives exponential backoff: 1st repeat → 5min, 2nd → 10min, 3rd+ → 20min
   const alertCauseRef=useRef({});
   const histRef=useRef([]);const goodRef=useRef(0);const totalRef=useRef(0);
+  // histRef is the 40-entry SPARKLINE buffer (it feeds the 40-bar chart, so it
+  // is capped at 40). It was also being used as the session record — but
+  // analysis runs at ~20fps, so 40 samples is about TWO SECONDS. Every saved
+  // avg_score, trend and score_history therefore described only the last ~2s of
+  // the session: a 45-minute session was graded on its final two seconds, and
+  // the chart tooltip's "score at MM:SS" spread the whole session clock across
+  // those 2 seconds. fullHistRef keeps the actual session, sampled ~every 2s so
+  // an hour costs ~1800 numbers.
+  const fullHistRef=useRef([]); const fullHistLastMsRef=useRef(0);
+  const pushSessionScore=useCallback((v)=>{
+    if(!Number.isFinite(v)) return;
+    const now=Date.now();
+    if(now-fullHistLastMsRef.current < 2000) return;
+    fullHistLastMsRef.current=now;
+    fullHistRef.current.push(v);
+    // Hard ceiling for a very long session: halve by keeping every 2nd sample,
+    // which preserves the shape while bounding memory.
+    if(fullHistRef.current.length>2400) fullHistRef.current=fullHistRef.current.filter((_,i)=>i%2===0);
+  },[]);
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
   // Elite: worst-posture snapshots captured during the session (max 3, small JPEGs)
@@ -3433,6 +3470,7 @@ export default function App(){
             finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
+            pushSessionScore(displayScore);
             lastAnalRef.current=finalResult;
             startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(finalResult); });
             // Privacy: pixelate the face first so the skeleton draws on top of it.
@@ -3587,21 +3625,47 @@ export default function App(){
     // Standard/Basic/Professional tiers with working local MediaPipe never touch the backend here.
     const eliteEquivalent = tierAtLeast(effectiveTier, "elite");
     const needsBackend = mpStatus==="fallback" || eliteEquivalent;
-    if(needsBackend && totalRef.current%45===0 && canvRef.current){
+    // Gate on ELAPSED TIME, not on `totalRef % 45`.
+    //
+    // In fallback mode (local MediaPipe failed to load) mpRef is null, so the
+    // local block above never runs and totalRef is incremented ONLY inside this
+    // request's own .then(). That made the old counter gate self-defeating in
+    // both directions:
+    //   - backend responding: totalRef 0 -> gate open -> a request every tick
+    //     (~20/s) until the first response sets totalRef=1, after which the
+    //     gate is shut and the only thing that could reopen it lives behind
+    //     the gate. Analysis stopped permanently — feed still playing, score
+    //     frozen on its first value, and no "backend down" overlay because
+    //     nothing had actually failed.
+    //   - backend failing: totalRef never increments at all -> gate never
+    //     closes -> ~20 POSTs/sec, each a full-frame JPEG (~150-250KB), all
+    //     with a 20s timeout. Hundreds of concurrent uploads; the tab dies.
+    // A wall-clock interval is independent of which code path increments what,
+    // so it behaves the same whether the backend is healthy, slow or down.
+    // (It also fixes the Elite case, where leaving frame froze totalRef on a
+    // multiple of 45 and fired a request every tick until the user returned.)
+    const _bnow = Date.now();
+    const BACKEND_MIN_INTERVAL_MS = mpStatus==="fallback" ? 1200 : 2500;
+    const backendDue = _bnow - (lastBackendMsRef.current||0) >= BACKEND_MIN_INTERVAL_MS;
+    if(needsBackend && backendDue && !backendInFlightRef.current && canvRef.current){
+      lastBackendMsRef.current = _bnow;
+      backendInFlightRef.current = true;
       const c=canvRef.current,v2=vidRef.current;
       if(v2&&v2.readyState>=2){c.width=v2.videoWidth;c.height=v2.videoHeight;c.getContext("2d").drawImage(v2,0,0);}
-      // Non-blocking fire-and-forget with 4s timeout — never stalls local analysis
-      const _ctrl = new AbortController();
-      const _tmr  = setTimeout(() => _ctrl.abort(), 4000);
+      // Non-blocking fire-and-forget. The timeout is passed as a real option
+      // (AnalysisAPI.analyze forwards it to apiFetch, which owns the abort
+      // controller) — it used to be an AbortSignal placed inside the payload,
+      // which was JSON-serialised into the request body and listened to by
+      // nothing, so these requests actually hung for apiFetch's 20s default.
       AnalysisAPI.analyze({
         frame:        c.toDataURL("image/jpeg",.88),
         mode,
         lang,
         session_id:   sessionId,
         calibration:  calibData,
-        signal:       _ctrl.signal,
+        timeout:      4000,
       }).then(d=>{
-        clearTimeout(_tmr);
+        backendInFlightRef.current = false;
           // REMOVED: an `AnalysisAPI.addSnapshot(...)` call used to fire here
           // every ~12 frames for Elite-equivalent users, uploading a JPEG +
           // running a full backend analyze_front() pass purely to POST it to
@@ -3633,6 +3697,7 @@ export default function App(){
             if(smoothed>=65){goodRef.current++;setGoodF(goodRef.current);}
             histRef.current.push(smoothed);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
+            pushSessionScore(smoothed);
             lastAnalRef.current=result;
             startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(result); });
             const now=Date.now();
@@ -3670,7 +3735,7 @@ export default function App(){
           // Always use local Corvus AI for Elite-equivalent tiers
           if(d.claude_analysis&&eliteEquivalent)setAiInsight(d.claude_analysis);
         }).catch(e=>{
-          clearTimeout(_tmr);
+          backendInFlightRef.current = false;
           // In fallback mode the backend call IS the only analysis — a
           // silent failure here means zero score updates, ever, with the
           // camera looking "frozen." For the Elite-parallel case (local
@@ -3746,16 +3811,40 @@ export default function App(){
     setCameraStatus("requesting");
     try{
       const facingMode="user"; // Phone mode removed app-wide — always front camera now
+      // Over plain HTTP (or any insecure origin) navigator.mediaDevices is
+      // undefined, so this threw a bare TypeError that fell through to the
+      // generic "Camera error — please retry" — advice the user can never act
+      // on, because retrying can't fix the page's protocol.
+      if(!navigator.mediaDevices?.getUserMedia){
+        setCameraStatus("no-device");
+        setAlertMsg({ text: isAr
+          ? "الكاميرا محتاجة اتصال آمن (HTTPS). افتح الموقع من رابط https."
+          : "Camera access requires a secure connection (HTTPS). Please open this site over https.", type:"bad" });
+        startingCameraRef.current=false;
+        return;
+      }
       const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}}});
       streamRef.current=s;
-      if(!vidRef.current){setCameraStatus("idle");return;}
+      // Both of these bail-outs used to leave the just-granted MediaStream
+      // running in streamRef with nothing attached to it — the OS camera light
+      // stayed on with no way to turn it off short of a reload. The second one
+      // also left cameraStatus pinned on "requesting", which is the exact state
+      // that disables the Start button, so the page read "Opening camera…"
+      // forever. vidRef goes null whenever the live subtree unmounts during the
+      // permission prompt or the metadata wait — pressing Back, browser-back,
+      // or any break button.
+      const _releaseStream = () => {
+        try { s.getTracks().forEach(t=>t.stop()); } catch {}
+        if(streamRef.current === s) streamRef.current = null;
+      };
+      if(!vidRef.current){ _releaseStream(); setCameraStatus("idle"); return; }
       vidRef.current.srcObject=s;
       let metadataLoaded=true;
       await new Promise((res,rej)=>{
         vidRef.current.onloadedmetadata=res;
         setTimeout(rej,8000); // 8s timeout
       }).catch(()=>{ metadataLoaded=false; });
-      if(!vidRef.current){return;}
+      if(!vidRef.current){ _releaseStream(); setCameraStatus("idle"); return; }
       // The 8s timeout above used to be swallowed silently and this
       // function proceeded to "ready" regardless of whether metadata ever
       // arrived. If the stream never actually delivered a frame (driver
@@ -3856,6 +3945,19 @@ export default function App(){
       setIsPaused(false);
       pausedAtRef.current = null;
       stoppingRef.current = false; // clears stopCamera()'s reentrancy guard for this new session
+      // Per-session counters. These were NOT reset here, and stopCamera didn't
+      // reset them either — the only reset lived in switchMode(), which has no
+      // caller. So a second session in the same page load was written to
+      // Firestore with session 1's data pooled in: good_pct averaged across
+      // both, `frames` and `alerts_count` cumulative, and alert_causes (which
+      // drives the weekly pattern) still holding the previous session's alerts.
+      // The result modal's own "New Session" button reaches this in one click.
+      histRef.current=[]; setHistory([]);
+      fullHistRef.current=[]; fullHistLastMsRef.current=0;
+      goodRef.current=0; setGoodF(0);
+      totalRef.current=0; setTotalF(0);
+      acRef.current={total:0,neck:0,dist:0};
+      alRef.current=[]; setAlerts([]);
       lmSmootherRef.current?.reset();
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
@@ -3865,6 +3967,7 @@ export default function App(){
       insightsRef.current=null;setSessionInsights([]);
       worstSnapsRef.current=[];lastSnapMsRef.current=0;
       backendFailRef.current=0;backendFailShownRef.current=false;setBackendDown(false);
+      lastBackendMsRef.current=0; backendInFlightRef.current=false;
       // Reset all alert cooldowns — exponential backoff from previous
       // sessions must not carry over into a fresh session
       lastAlRef.current=0;
@@ -3980,11 +4083,22 @@ export default function App(){
     // those catches up, and the second call would read the same
     // not-yet-reset hist/avg/session data and fire a SECOND saveSession()
     // for the same session — a duplicate Firestore doc and doubly-applied
-    // user stats. stoppingRef is a synchronous ref, reset at the start of
-    // the next beginScoring(), so it closes the race regardless of render
-    // timing.
+    // user stats. stoppingRef is a synchronous ref that closes the race
+    // regardless of render timing.
+    //
+    // It used to be cleared ONLY in beginScoring(), i.e. only when a brand-new
+    // session actually started scoring — so after any completed session the
+    // flag stayed true and every later stopCamera() early-returned as a silent
+    // no-op. Repro: finish a session -> press Start (opens the camera, preview
+    // only, camActive still false) -> press Back. backFromLive skips its
+    // confirm because camActive is false, calls stopCamera(), which returns
+    // immediately: the stream is never stopped and you land on Home with the
+    // camera still capturing and the indicator light on, unrecoverable without
+    // a reload. It also disabled the browser-back teardown safety net.
+    // Now released in the finally below, so it guards only this invocation.
     if(stoppingRef.current) return;
     stoppingRef.current = true;
+    try {
     setIsSavingSession(true); // show saving state on stop button
     stopSpeaking(); // cut any in-flight voice-coach cue
     lmSmootherRef.current?.reset();
@@ -4023,6 +4137,14 @@ export default function App(){
     setCamActive(false);
     setIsPaused(false);
     backendFailRef.current=0;backendFailShownRef.current=false;setBackendDown(false);
+    // Settle any open pause BEFORE clearing the marker, exactly as
+    // resumeSession does. Stop is enabled while paused (only isSavingSession
+    // disables it), and pausedAtRef was simply discarded here — so pausing a
+    // 2-minute session, walking away for an hour and hitting Stop & Save wrote
+    // duration_s = 62 minutes while the on-screen timer still read 2:00.
+    if(pausedAtRef.current && sessRef.current){
+      sessRef.current += (Date.now() - pausedAtRef.current);
+    }
     pausedAtRef.current=null;
     setPreviewPhase(null);
     setTimeout(()=>setIsSavingSession(false), 1500);
@@ -4031,7 +4153,9 @@ export default function App(){
 
     // Always save — even if no analysis data (backend offline/MediaPipe not loaded)
     const la  = lastAnalRef.current||{};
-    const hist = histRef.current||[];
+    // Full session, not the 40-frame sparkline window (see fullHistRef).
+    // Falls back to the sparkline for a session too short to have sampled yet.
+    const hist = (fullHistRef.current&&fullHistRef.current.length ? fullHistRef.current : histRef.current)||[];
     // Recency-weighted average: later frames get up to 3× the weight of
     // the earliest frames. This means 45 min of slumping after 5 min of
     // good posture is correctly reflected — not averaged away.
@@ -4234,6 +4358,21 @@ export default function App(){
     } else if(!user){
       addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
+    } finally {
+      // The session clock is over. It was left set, and both PDF paths
+      // recompute duration live from it (`Date.now() - sessRef.current`), with
+      // the `sessionResult.duration_s` fallback unreachable because the ref
+      // stayed truthy — so exporting a PDF ten minutes after a five-minute
+      // session printed fifteen minutes, growing for as long as the tab stayed
+      // open. Clearing it here makes those paths fall back to the real
+      // recorded duration.
+      sessRef.current = null;
+      // Release the reentrancy guard for THIS invocation. Anything that throws
+      // above must not leave the flag stuck true, or every subsequent stop —
+      // including the browser-back camera teardown — becomes a no-op and the
+      // camera keeps running.
+      stoppingRef.current = false;
+    }
   } // end stopCamera
 
   // Back button while ACTIVELY scoring (not paused, not idle) used to
@@ -4248,9 +4387,20 @@ export default function App(){
         :"Your session is currently running. Going back will stop and save it. Continue?");
       if(!ok) return;
     }
+    const hadSession = camActive;
     stopCamera();
     setPage("home");
     setCamActive(false);
+    // stopCamera() sets sessionResult, but the summary modal is only mounted in
+    // the live branch — and sessionResult is only cleared by that modal's own
+    // buttons. Leaving via Back therefore saved the session but never showed
+    // the summary, AND left the stale modal armed so it popped over the page
+    // the next time the user opened Live. Clear it here and confirm the save
+    // with a toast instead, so nothing is silently swallowed or deferred.
+    if(hadSession){
+      setSessionResult(null);
+      addToast(isAr?"اتحفظت الجلسة":"Session saved","success");
+    }
   }
 
   // Freezes analysis + the session timer WITHOUT ending/saving the session.
@@ -4270,6 +4420,24 @@ export default function App(){
     pausedAtRef.current = Date.now();
     setIsPaused(true);
   }
+
+  // Wire goToBreak (declared far above, before these functions exist) to the
+  // real pauseSession, so navigating to the break page freezes the session and
+  // its timer instead of abandoning it with the camera running.
+  useEffect(()=>{ pauseForBreakRef.current = () => { if(camActive && !isPaused) pauseSession(); }; });
+
+  // Returning from the break page remounts the <video>, which comes back with
+  // no srcObject — the stream object itself is still live in streamRef. Without
+  // this the feed was permanently black while the UI still claimed to be live.
+  useEffect(()=>{
+    if(page!=="live") return;
+    const v=vidRef.current, st=streamRef.current;
+    if(!v || !st || v.srcObject) return;
+    // Only re-attach a stream whose tracks are still usable.
+    if(!st.getVideoTracks?.().some(t=>t.readyState==="live")) return;
+    v.srcObject=st;
+    if(!isPaused) { try{ v.play?.().catch(()=>{}); }catch{} }
+  },[page,isPaused]);
 
   function resumeSession(){
     // Reentrancy guard: isPaused is React state, so a genuine double-click
@@ -4514,7 +4682,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
     }
 
     const la=lastAnalRef.current||{};
-    const hist    = histRef.current || history || [];
+    const hist    = (fullHistRef.current?.length ? fullHistRef.current : histRef.current) || history || [];
     const durS    = sessRef.current ? Math.floor((Date.now()-sessRef.current)/1000) : (sessionResult?.duration_s ?? 0);
     const gPctPDF = totalRef.current ? Math.round(goodRef.current/totalRef.current*100) : (sessionResult?.good_pct ?? 0);
 
@@ -4706,7 +4874,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
   if(page==="demo_dashboard")return(
     <ErrorBoundary>
       <DemoDashboard isAr={isAr}
-        onStartSession={()=>{ window.__demoMode=true; setPage("live"); setTimeout(()=>startCamera(),200); }}
+        onStartSession={()=>{
+          // The live page requires an authenticated user (see the guard further
+          // down: `page==="live" && (!user||!profile)` returns null). A demo
+          // visitor has neither, so sending them there rendered a blank page
+          // while startCamera() went on to open the camera against a <video>
+          // that was never mounted — white screen, camera light on, no controls.
+          // Route them to sign-up instead of a dead end.
+          if(!user||!profile){ setPage("auth"); return; }
+          window.__demoMode=true; setPage("live"); setTimeout(()=>startCamera(),200);
+        }}
         onExit={()=>clearDemoOnExit(setPage)}
         onUpgrade={()=>{ clearDemoOnExit(()=>{}); window.__demoMode=false; setPage("auth"); }}
       />

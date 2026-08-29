@@ -133,7 +133,14 @@ async function _parseJsonOrThrow(response) {
 
 // ── Analysis API ───────────────────────────────────────────────────
 export const AnalysisAPI = {
-  analyze:      (data) => apiFetch("/analyze",          { method: "POST", body: data }),
+  // `timeout` is pulled out of the payload rather than being sent as part of
+  // the frame body. The caller in App.jsx used to pass an AbortSignal inside
+  // `data`, which meant it was JSON-serialised into the request body (as `{}`)
+  // and nothing ever listened to it — the documented "4s timeout" was dead
+  // code and requests actually hung for the 20s default, which is what turned
+  // a backend outage into hundreds of concurrent full-frame uploads.
+  analyze:      ({ timeout, signal, ...data } = {}) =>
+    apiFetch("/analyze", { method: "POST", body: data, ...(timeout ? { timeout } : {}) }),
   snapshot:     (data) => apiFetch("/session/snapshot", { method: "POST", body: data }),
   addSnapshot:  (sid, frame, score, timestamp) =>
     apiFetch("/session/snapshot", { method: "POST", body: { session_id: sid, frame, score, timestamp } }),
