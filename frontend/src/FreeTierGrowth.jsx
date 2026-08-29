@@ -314,11 +314,23 @@ const PAIN_AREAS = [
 export function PainAreaSelfReport({ isAr, cs, initial = null, onSave }) {
   const [selected, setSelected] = useState(initial);
   const [saved, setSaved] = useState(!!initial);
+  const [saveError, setSaveError] = useState(false);
 
   const choose = (id) => {
+    const prev = selected;
     setSelected(id);
-    setSaved(true);
-    onSave?.(id);
+    setSaved(false); setSaveError(false);
+    // onSave may return a promise (it does — it writes to Firestore). Only
+    // confirm once that write actually resolves, and roll the selection back
+    // if it doesn't, so the UI can't claim a save that never happened.
+    let r;
+    try { r = onSave?.(id); } catch { setSelected(prev); setSaveError(true); return; }
+    if (r && typeof r.then === "function") {
+      r.then(() => setSaved(true))
+       .catch(() => { setSelected(prev); setSaveError(true); });
+    } else {
+      setSaved(true);
+    }
   };
 
   return (
@@ -349,9 +361,14 @@ export function PainAreaSelfReport({ isAr, cs, initial = null, onSave }) {
           );
         })}
       </div>
-      {saved && (
+      {saved && !saveError && (
         <div style={{ fontSize: 11, color: "#34d399", marginTop: 10 }}>
           {isAr ? "✓ تم الحفظ — هنراعي ده في نصايحنا" : "✓ Saved — we'll factor this into your tips"}
+        </div>
+      )}
+      {saveError && (
+        <div style={{ fontSize: 11, color: "#f87171", marginTop: 10 }}>
+          {isAr ? "تعذر الحفظ — جرّب تاني" : "Couldn't save — please try again"}
         </div>
       )}
     </div>

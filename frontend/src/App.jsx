@@ -5491,6 +5491,17 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showWhiteLabel&&<ErrorBoundary key="whitelabel-home"><Suspense fallback={null}><WhiteLabel profile={profile} cs={cs} lang={lang} onClose={()=>setShowWhiteLabel(false)}/></Suspense></ErrorBoundary>}
       {showMultiTenant&&<ErrorBoundary key="multitenant-home"><Suspense fallback={null}><MultiTenantManager profile={profile} cs={cs} lang={lang} onClose={()=>setShowMultiTenant(false)}/></Suspense></ErrorBoundary>}
       {showAuditSystem&&(isAdmin||isHRAdmin)&&<AuditSystem profile={profile} cs={cs} lang={lang} token={authToken} onClose={()=>setShowAuditSystem(false)}/>}
+      {/* Both of these were mounted in the wrong branch, so their triggers on
+          this page did nothing at all:
+          - ChangePasswordPage was mounted only inside page==="setup", while the
+            only button that opens it is Settings → Security → Change, which
+            lives here.
+          - ProductTour was mounted only in the live-camera fallback return,
+            while its only trigger ("Take a Tour") is in the nav avatar
+            dropdown, which HomePage renders and therefore only exists here.
+          Same bug class as the Live-page modals fixed earlier. */}
+      {showChangePw&&<ErrorBoundary key="changepw-home"><ChangePasswordPage darkMode={darkMode} lang={lang} onClose={()=>setShowChangePw(false)}/></ErrorBoundary>}
+      {showProductTour&&<ErrorBoundary key="producttour-home"><ProductTour profile={profile} cs={cs} lang={lang} onComplete={()=>setShowProductTour(false)}/></ErrorBoundary>}
     </ErrorBoundary>);
   const TN = T_norm;
 

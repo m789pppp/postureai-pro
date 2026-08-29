@@ -75,7 +75,7 @@ function Avatar({ name, photo, size = 36, style = {}, cs }) {
 
 // ─── Score ring ────────────────────────────────────────────────────
 // Same missing-`cs`-parameter bug as Avatar above — see that comment.
-function Ring({ score = 0, size = 100, cs }) {
+function Ring({ score = 0, size = 100, cs, showValue = true }) {
   const r    = (size - 12) / 2;
   const circ = 2 * Math.PI * r;
   const pct  = Math.min(100, Math.max(0, score));
@@ -86,11 +86,15 @@ function Ring({ score = 0, size = 100, cs }) {
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={6}
         strokeDasharray={`${(pct/100)*circ} ${circ}`} strokeLinecap="round"
         style={{ transition:"stroke-dasharray 1.2s cubic-bezier(.4,0,.2,1)" }}/>
-      <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="middle"
-        fill={col} fontSize={size/3.5} fontWeight={800} fontFamily="system-ui"
-        style={{ transform:`rotate(90deg)`,transformOrigin:`${size/2}px ${size/2}px` }}>
-        {pct||"—"}
-      </text>
+      {/* Callers that draw their own centered value pass showValue={false};
+          otherwise two copies of the score render on the same center point. */}
+      {showValue && (
+        <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="middle"
+          fill={col} fontSize={size/3.5} fontWeight={800} fontFamily="system-ui"
+          style={{ transform:`rotate(90deg)`,transformOrigin:`${size/2}px ${size/2}px` }}>
+          {pct||"—"}
+        </text>
+      )}
     </svg>
   );
 }
@@ -311,20 +315,33 @@ function AnalyticsInline({ userSessions = [], profile, cs, isAr, tier, onOpenFul
     });
   },[userSessions]);
 
+  // Sessions inside the 14-day window this card is titled with. Everything
+  // below reads from this rather than the full list, so the numbers match the
+  // period named in the header.
+  const win14 = useMemo(()=>{
+    const cutoff = new Date(); cutoff.setHours(0,0,0,0); cutoff.setDate(cutoff.getDate()-13);
+    return (userSessions||[]).filter(s=>{
+      const d = s.created_at?.toDate?.() ?? new Date(s.created_at||0);
+      return d >= cutoff;
+    });
+  },[userSessions]);
+
   // Score distribution
   const dist = useMemo(()=>{
-    const ex=userSessions.filter(s=>(s.avg_score||0)>=80).length;
-    const gd=userSessions.filter(s=>(s.avg_score||0)>=60&&(s.avg_score||0)<80).length;
+    const ex=win14.filter(s=>(s.avg_score||0)>=80).length;
+    const gd=win14.filter(s=>(s.avg_score||0)>=60&&(s.avg_score||0)<80).length;
     // Was `>0` — a session that scored exactly 0 (the worst possible score)
     // fell out of all three buckets, so it silently vanished from the
     // distribution chart entirely instead of counting as "Poor".
-    const pr=userSessions.filter(s=>(s.avg_score||0)>=0&&(s.avg_score||0)<60).length;
+    const pr=win14.filter(s=>(s.avg_score||0)>=0&&(s.avg_score||0)<60).length;
     const total=ex+gd+pr||1;
     return { ex, gd, pr, total };
-  },[userSessions]);
+  },[win14]);
 
-  // Best/worst scores
-  const scores = (userSessions||[]).map(s=>s.avg_score||0).filter(Boolean);
+  // Best/worst scores. `.filter(Boolean)` used to be applied here too, which
+  // dropped any session that scored exactly 0 — so "Worst Score" could never
+  // actually be 0, and `trend` then compared the wrong two sessions.
+  const scores = win14.map(s=>s.avg_score||0);
   const best  = scores.length ? Math.max(...scores) : 0;
   const worst = scores.length ? Math.min(...scores) : 0;
   const trend = scores.length>=2 ? scores[0]-scores[1] : 0; // positive = improving
@@ -382,7 +399,7 @@ function AnalyticsInline({ userSessions = [], profile, cs, isAr, tier, onOpenFul
               { label:isAr?"أفضل نتيجة":"Best Score", val:best||"—", col:"#10b981" },
               { label:isAr?"أسوأ نتيجة":"Worst Score", val:worst||"—", col:"#ef4444" },
               { label:isAr?"الاتجاه":"Trend", val:trend>0?`+${trend}`:trend===0?"—":trend, col:trend>0?"#10b981":trend<0?"#ef4444":"#64748b" },
-              { label:isAr?"إجمالي الجلسات":"Sessions", val:profile?.sessions_count||userSessions.length, col:"#a855f7" },
+              { label:isAr?"الجلسات":"Sessions", val:win14.length||"—", col:"#a855f7" },
             ].map((k,i)=>(
               // Was a hardcoded borderRight — in this 4-col grid under dir="rtl"
               // the DOM order stays 0..3 but the grid track's PHYSICAL right
@@ -522,10 +539,10 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
             main "at a glance" gauge showed a colored arc with no indication
             of what score it represented. */}
         <div style={{ position:"relative", width:104, height:104, flexShrink:0 }}>
-          <Ring score={last||avg} size={104} cs={cs}/>
+          <Ring score={last||avg} size={104} cs={cs} showValue={false}/>
           <div style={{ position:"absolute", inset:0, display:"flex",
             flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
-            <div style={{ fontSize:26, fontWeight:900, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
+            <div style={{ fontSize:26, fontWeight:800, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
               {(last||avg) || "—"}
             </div>
             {(last||avg) > 0 && <div style={{ fontSize:9, color:cs.muted, fontWeight:600 }}>/100</div>}
@@ -591,7 +608,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 
       {isFreeTier && (
         <PainAreaSelfReport isAr={isAr} cs={cs} initial={profile?.pain_area||null}
-          onSave={(areaId)=>{ if (user?.uid) updateUserProfile(user.uid,{pain_area:areaId}).catch(()=>{}); }}/>
+          onSave={(areaId)=> user?.uid ? updateUserProfile(user.uid,{pain_area:areaId}) : undefined}/>
       )}
 
       {pro && (
@@ -655,9 +672,9 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
       {/* Analytics section — inline rich view */}
       <AnalyticsInline
         userSessions={userSessions} profile={profile} cs={cs} isAr={isAr} tier={tier}
-        onOpenFull={()=>{getUserSessions(user.uid).then(setUserSessions);setShowDashboard(true);}}
-        onCompare={userSessions.length>=2?()=>{getUserSessions(user.uid).then(setUserSessions);setShowSessionComparison(true);}:null}
-        onTrend={userSessions.length>=3?()=>{getUserSessions(user.uid).then(setUserSessions);setShowTrendChart(true);}:null}
+        onOpenFull={()=>{getUserSessions(user.uid).then(setUserSessions).catch(()=>{});setShowDashboard(true);}}
+        onCompare={userSessions.length>=2?()=>{getUserSessions(user.uid).then(setUserSessions).catch(()=>{});setShowSessionComparison(true);}:null}
+        onTrend={userSessions.length>=3?()=>{getUserSessions(user.uid).then(setUserSessions).catch(()=>{});setShowTrendChart(true);}:null}
       />
 
       {/* Basic Plan extras — streak freeze, habit score, WhatsApp reminder
@@ -979,10 +996,10 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
         border:"1px solid rgba(59,130,246,.18)", borderRadius:16, padding:"22px 24px" }}>
         <div style={{ display:"flex", alignItems:"flex-start", gap:14, flexWrap:"wrap" }}>
           <div style={{ position:"relative", width:80, height:80, flexShrink:0 }}>
-            <Ring score={last||avg} size={80} cs={cs}/>
+            <Ring score={last||avg} size={80} cs={cs} showValue={false}/>
             <div style={{ position:"absolute", inset:0, display:"flex",
               flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
-              <div style={{ fontSize:20, fontWeight:900, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
+              <div style={{ fontSize:20, fontWeight:800, color:(last||avg)?gradeColor(last||avg):cs.muted, lineHeight:1 }}>
                 {(last||avg)||"—"}
               </div>
               {(last||avg)>0&&<div style={{ fontSize:8, color:cs.muted, fontWeight:600 }}>/100</div>}
@@ -1414,6 +1431,12 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
   const avgScore  = profile?.avg_score || Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length);
   const bestScore = Math.max(...userSessions.map(s=>s.avg_score||0));
   const totalMins = Math.round(userSessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/60);
+  // True when the loaded list is the capped page rather than the full history,
+  // so the three list-derived tiles below can say which window they cover.
+  const isCapped  = totalSessions > userSessions.length;
+  const spanNote  = isCapped
+    ? (isAr ? `آخر ${userSessions.length}` : `last ${userSessions.length}`)
+    : null;
 
   // Was a literal ["professional","elite"].includes(normTier) check — missed
   // every B2B tier (b2b_starter/b2b_growth/b2b_enterprise) and legacy B2C
@@ -1426,9 +1449,11 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
   const isProTier   = isPro(tier);
   const isEliteTier = isElite(tier); // handles b2b_enterprise + trial tiers
 
-  async function handlePDF(s, i, clinical=false) {
+  // `keyOverride` lets the toolbar buttons own a loading key that can't collide
+  // with a session row's key (rows use s.id, and the toolbar acts on row 0).
+  async function handlePDF(s, i, clinical=false, keyOverride=null) {
     if (!isProTier) { onDownloadPDF?.(null); return; } // triggers billing in App.jsx
-    setPdfLoading((s.id||i)+(clinical?"_c":""));
+    setPdfLoading(keyOverride || ((s.id||i)+(clinical?"_c":"")));
     // Was missing try/catch — a thrown/rejected download left pdfLoading
     // stuck forever, permanently disabling this row's button until reload.
     try {
@@ -1462,8 +1487,8 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
         {[
           { label:isAr?"الجلسات":"Sessions",   val:totalSessions,    col:"#a855f7" },
           { label:isAr?"المتوسط":"Avg Score",  val:avgScore||"—",    col:"#3b82f6" },
-          { label:isAr?"الأفضل":"Best",         val:bestScore||"—",   col:"#10b981" },
-          { label:isAr?"الدقائق":"Total Mins",  val:(totalMins||0)+"m", col:"#f59e0b" },
+          { label:(isAr?"الأفضل":"Best")+(spanNote?` (${spanNote})`:""),        val:bestScore||"—",   col:"#10b981" },
+          { label:(isAr?"الدقائق":"Total Mins")+(spanNote?` (${spanNote})`:""), val:(totalMins||0)+"m", col:"#f59e0b" },
         ].map(m=>(
           <div key={m.label} style={{ background:cs.card, border:`1px solid ${cs.border}`,
             borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
@@ -1476,8 +1501,9 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
       {/* Action buttons row */}
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
         {isProTier ? (
-          <button onClick={()=>handlePDF(userSessions[0], totalSessions)}
-            style={{ padding:"9px 14px",
+          <button onClick={()=>handlePDF(userSessions[0], totalSessions, false, "toolbar")}
+            disabled={pdfLoading==="toolbar"}
+            style={{ padding:"9px 14px", opacity: pdfLoading==="toolbar" ? .5 : 1,
               background: isEliteTier?"rgba(16,185,129,.12)":"rgba(26,86,219,.12)",
               border: `1px solid ${isEliteTier?"rgba(16,185,129,.3)":"rgba(26,86,219,.3)"}`,
               borderRadius:9,
@@ -1499,8 +1525,9 @@ function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, 
           <WeeklyIntelligenceButton sessions={userSessions} cs={cs} isAr={isAr} onOpen={()=>setShowWeeklyIntel(true)} />
         )}
         {isEliteTier && (
-          <button onClick={()=>handlePDF(userSessions[0], totalSessions, true)}
-            style={{ padding:"9px 14px", background:"rgba(14,165,233,.1)",
+          <button onClick={()=>handlePDF(userSessions[0], totalSessions, true, "toolbar_c")}
+            disabled={pdfLoading==="toolbar_c"}
+            style={{ padding:"9px 14px", opacity: pdfLoading==="toolbar_c" ? .5 : 1, background:"rgba(14,165,233,.1)",
               border:"1px solid rgba(14,165,233,.25)", borderRadius:9,
               color:"#38bdf8", fontSize:12, fontWeight:600, cursor:"pointer",
               display:"flex", alignItems:"center", gap:6 }}>
@@ -2246,18 +2273,30 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           <div style={{ display:"flex", alignItems:"center", gap:16, padding:"16px",
             background:cs.inp, borderRadius:10,
             border:`1px solid ${cs.border}`, marginBottom:16 }}>
+            {/* Was raw string equality on `tier`, so every B2B plan
+                (b2b_starter/b2b_growth/b2b_enterprise) and every legacy alias
+                (pro/premium/personal_elite/growth…) fell through to the final
+                "Free" branch — a paying customer opened Settings → Subscription
+                and read "🆓 Free — Limited daily sessions" right next to a
+                <TierBadge> that correctly said "Pro", because that component
+                already routes through featureTier(). Same fix here: use the
+                canonical 4-rung ladder, which also covers "basic" — a tier this
+                card had no branch for at all. */}
             <div style={{ fontSize:32 }}>
-              {tier==="elite"?"✦":tier==="professional"?"⭐":tier==="business"?"🏢":"🆓"}
+              {(()=>{const f=featureTier(tier);
+                return f==="elite"?"✦":f==="professional"?"⭐":f==="basic"?"◆":"🆓";})()}
             </div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:16, fontWeight:800, color:cs.text }}>
-                {tier==="elite"?"Elite":tier==="professional"?"Professional":tier==="business"?"Business":"Free"}
+                {(()=>{const f=featureTier(tier);
+                  return f==="elite"?"Elite":f==="professional"?"Professional":f==="basic"?"Basic":"Free";})()}
               </div>
               <div style={{ fontSize:12, color:cs.muted, marginTop:3 }}>
-                {tier==="elite"?(isAr?"كل المميزات + تحليل AI متقدم":"All features + Advanced AI")
-                :tier==="professional"?(isAr?"AI Coach + تقارير PDF + تحليلات":"AI Coach + PDF reports + Analytics")
-                :tier==="business"?(isAr?"كل مميزات Pro + إدارة المجموعة":"All Pro + Group management")
-                :(isAr?"جلسات يومية محدودة":"Limited daily sessions")}
+                {(()=>{const f=featureTier(tier);
+                  return f==="elite"?(isAr?"كل المميزات + تحليل AI متقدم":"All features + Advanced AI")
+                  :f==="professional"?(isAr?"AI Coach + تقارير PDF + تحليلات":"AI Coach + PDF reports + Analytics")
+                  :f==="basic"?(isAr?"جلسات غير محدودة + AI Coach":"Unlimited sessions + AI Coach")
+                  :(isAr?"جلسات يومية محدودة":"Limited daily sessions");})()}
               </div>
             </div>
             <TierBadge tier={tier}/>
@@ -2610,7 +2649,12 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
     setPrefsState(p => ({ ...p, categories: nextCategories }));
     setSavingPrefs(true);
     try { await PushAPI.setPreferences({ categories: nextCategories }); }
-    catch { /* non-critical */ }
+    catch {
+      // roll the optimistic update back and say so, rather than leaving a
+      // switch that shows "off" while the server still has it on
+      setPrefsState(p => ({ ...p, categories: prefs.categories }));
+      addToast?.(isAr ? "تعذر حفظ الإعداد — جرّب تاني" : "Couldn't save that setting — please try again", "error");
+    }
     finally { setSavingPrefs(false); }
   };
 
@@ -3075,13 +3119,13 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
           onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
         { id:"t-reports",   icon:"📋", en:"Team Reports",   ar:"تقارير الفريق",
           locked:!pro, lockLabel:"PRO",
-          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
+          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowAIReports?.(true); } else setShowBilling?.(true); }},
         { id:"t-insights",  icon:"🧠", en:"AI Insights",    ar:"رؤى AI",
           locked:!elite, lockLabel:"ELITE",
-          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
+          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
         { id:"t-predict",   icon:"🔮", en:"Burnout AI",     ar:"AI إرهاق",
           locked:!elite, lockLabel:"ELITE",
-          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
+          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
       ],
     },
     {
@@ -3117,21 +3161,20 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       header: { en:"Analytics & AI", ar:"التحليلات والذكاء الاصطناعي" },
       items: [
         { id:"t-coach",    icon:"🤖", en:"AI Coach",      ar:"AI Coach",
-          locked:!pro, lockLabel:"PRO",
-          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowCoach?.(true); } else setShowBilling?.(true); }},
+          onClick:()=>{ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowCoach?.(true); }},
         { id:"t-reports",  icon:"📋", en:"AI Reports",    ar:"تقارير AI",
           locked:!pro, lockLabel:"PRO",
-          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIReports?.(true); } else setShowBilling?.(true); }},
+          onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowAIReports?.(true); } else setShowBilling?.(true); }},
         { id:"t-compare",  icon:"📊", en:"Compare",       ar:"مقارنة الجلسات",
-          onClick:()=>{ uid&&getUserSessions(uid).then(setUserSessions); setShowSessionComparison?.(true); }},
+          onClick:()=>{ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowSessionComparison?.(true); }},
         { id:"t-trend",    icon:"📈", en:"Trend",         ar:"مسار التحسن",
-          onClick:()=>{ uid&&getUserSessions(uid).then(setUserSessions); setShowTrendChart?.(true); }},
+          onClick:()=>{ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowTrendChart?.(true); }},
         { id:"t-insights", icon:"🧠", en:"AI Insights",   ar:"رؤى AI",
           locked:!elite, lockLabel:"ELITE",
-          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
+          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
         { id:"t-predict",  icon:"🔮", en:"Predictive AI", ar:"AI تنبؤي",
           locked:!elite, lockLabel:"ELITE",
-          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
+          onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
       ],
     },
     {
@@ -3318,6 +3361,9 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
 function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRisk, profile,
   tools, setShowCoach, setShowBilling }) {
   const [showMore, setShowMore] = useState(false);
+  // setShowBilling was passed in and never used; a locked tool in the drawer
+  // silently did nothing. Route it to billing, matching the desktop Sidebar.
+  const onLockedTool = () => setShowBilling?.(true);
 
   const tabs = userRole==="hr_admin"||userRole==="platform_admin" ? [
     { id:"home",      icon:"⊞", en:"Overview", ar:"نظرة" },
@@ -3354,14 +3400,27 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
               {(tools||[]).map(t=>(
-                <button key={t.id} onClick={()=>{ t.onClick?.(); setShowMore(false); }}
+                <button key={t.id} aria-label={`${isAr?t.ar:t.en}${t.locked?` — ${t.lockLabel||"PRO"}`:""}`}
+                  onClick={()=>{
+                    setShowMore(false);
+                    if(t.locked){ onLockedTool?.(t); return; }
+                    t.onClick?.();
+                  }}
                   style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4,
                     padding:"10px 6px", background:cs.inp,
                     border:`1px solid ${cs.border}`, borderRadius:10,
-                    cursor:"pointer" }}>
+                    cursor:"pointer", position:"relative", opacity:t.locked?.75:1 }}>
                   <span style={{ fontSize:20 }}>{t.icon}</span>
                   <span style={{ fontSize:9, color:cs.muted, fontWeight:600, textAlign:"center",
                     lineHeight:1.2 }}>{isAr?t.ar:t.en}</span>
+                  {t.locked && (
+                    <span style={{ position:"absolute", top:3, insetInlineEnd:3, fontSize:7,
+                      fontWeight:800, letterSpacing:".04em", color:cs.muted,
+                      background:cs.bg, border:`1px solid ${cs.border}`,
+                      borderRadius:99, padding:"1px 4px", lineHeight:1.4 }}>
+                      {t.lockLabel||"PRO"}
+                    </span>
+                  )}
                 </button>
               ))}
               {/* Settings shortcut */}
@@ -3494,6 +3553,15 @@ export default function HomePage({
   const openBilling  = useCallback(()=>setShowBilling?.(true),[setShowBilling]);
   const openInvite   = useCallback(()=>setShowCompanyOnboard?.(true),[setShowCompanyOnboard]);
   const openAnalytics= useCallback(()=>{ getUserSessions(user.uid).then(setUserSessions).catch(()=>{}); setShowDashboard?.(true); },[setShowDashboard,user]);
+
+  // "Analytics" is a modal, not a tab: selecting it opens the dashboard modal
+  // and returns the nav to Home. Doing that from an effect rather than from
+  // render is what keeps React from warning about cross-component updates.
+  useEffect(()=>{
+    if(tab!=="analytics") return;
+    openAnalytics();
+    setTab("home");
+  },[tab,openAnalytics]);
   const openWorkforce= useCallback(()=>{ getAllUsers().then(setAllUsers).catch(()=>{}); setShowWorkforceAnalytics?.(true); },[setShowWorkforceAnalytics]);
   const openReports  = useCallback(()=>{ getUserSessions(user.uid).then(setUserSessions).catch(()=>{}); setShowAIReports?.(true); },[setShowAIReports,user]);
   const openCalib    = useCallback(()=>setShowCalibWizard?.(true),[setShowCalibWizard]);
@@ -3571,7 +3639,7 @@ export default function HomePage({
           onQuarterlyReport={onQuarterlyReport}
           onDevPortal={onDevPortal} onInsurance={onInsurance} tier={tier} tab={tab}/>
       );
-      if(tab==="analytics") { openAnalytics(); setTab("home"); return null; }
+      if(tab==="analytics") return null; // handled by the effect below
       if(tab==="alerts") return (
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           {atRisk===0 ? <EmptyBlock icon="✅" cs={cs}
@@ -3659,7 +3727,7 @@ export default function HomePage({
     // identical to "home" (AnalyticsInline is already embedded there, but
     // tapping this nav item produced no visible change at all). Mirrors how
     // the hr_admin branch above handles its own "analytics" tab.
-    if(tab==="analytics") { openAnalytics(); setTab("home"); return null; }
+    if(tab==="analytics") return null; // handled by the effect below
     if(tab==="sessions") return (
       <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
         setPage={setPage} startCamera={startCamera}
