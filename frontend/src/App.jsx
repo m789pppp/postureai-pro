@@ -6533,6 +6533,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         {analysis.qualityReason==="too_close" ? (isAr?"↩ ابعد":"↩ back up") : (isAr?"↪ اقترب":"↪ move in")}
                       </span>
                     )}
+                    {/* Say what the mispositioning is costing. The warning used
+                        to appear while the score sat unchanged next to it, so
+                        it read as a cosmetic notice rather than something that
+                        actually affects the reading. */}
+                    {analysis?.positionPenalty > 0 && (
+                      <span style={{fontWeight:800,fontVariantNumeric:"tabular-nums"}}>
+                        −{analysis.positionPenalty}
+                      </span>
+                    )}
                   </div>
                 );
               })()}
