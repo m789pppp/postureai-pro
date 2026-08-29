@@ -41,11 +41,29 @@ const FOCAL_PX_1280 = 800;
 /** Adult average shoulder width in cm */
 const SHOULDER_WIDTH_CM = 42.0;
 
-/** Reference shoulder-width fraction of frame at ~65cm distance */
-const REF_SH_FRAC = 0.34;
-
-/** Distance (cm) at which REF_SH_FRAC was empirically measured for an average 42cm-shoulder adult */
+/** Distance (cm) the shoulder-width reference is anchored at */
 const REF_DIST_CM = 60;
+
+/**
+ * Reference shoulder-width fraction of frame at REF_DIST_CM.
+ *
+ * DERIVED from FOCAL_PX_1280 rather than hardcoded, because the file used to
+ * carry three mutually incompatible focal-length models at once:
+ *   - FOCAL_PX_1280 = 800            (IPD branch)      → 77° HFOV
+ *   - REF_SH_FRAC 0.34 @ 60cm        (calibration)     → 92° HFOV
+ *   - `600 * (W/640)` = 1200 @1280   (shoulder branch) → 56° HFOV
+ * On one identical frame those returned 77cm, 60cm and 116cm. Because
+ * estimateDistanceCm picks the IPD or shoulder branch per-frame on eye
+ * visibility, a single blink or glare could flip the reading 77↔116cm on a
+ * motionless body, firing a spurious "Too far" alert and swinging the overall
+ * score ~11 points frame to frame.
+ *
+ * 800 is the one physically plausible value — a laptop webcam is ~60-78° HFOV;
+ * 622 implies a 92° ultra-wide and 1200 a 56° telephoto. So everything is now
+ * derived from it, which also fixes the calibration path: back-calculating a
+ * real 42cm-shouldered adult at 60cm now yields 42cm rather than 54cm.
+ */
+const REF_SH_FRAC = (SHOULDER_WIDTH_CM * FOCAL_PX_1280) / (REF_DIST_CM * 1280); // ≈ 0.4375
 
 /** Neutral nose-drop fraction relative to eye width (head level gaze) */
 const NEUTRAL_NOSE_DROP_FRAC = 0.62;
@@ -121,15 +139,22 @@ const THR = {
 // weight (0.08) and the other 8 weights rescaled by ×0.92 so the table
 // still sums to 1.0.
 const WEIGHTS_FRONT = {
-  neck:     0.2565,
-  tilt:     0.0834,
-  shoulder: 0.0905,
-  spine:    0.1132,
-  distance: 0.0981,
-  yaw:      0.0453,
-  rounded:  0.0679,
-  fhp:      0.1656,
-  monitor:  0.0796,
+  neck:     0.2437,
+  tilt:     0.0792,
+  shoulder: 0.0860,
+  spine:    0.1075,
+  distance: 0.0932,
+  yaw:      0.0430,
+  rounded:  0.0645,
+  fhp:      0.1573,
+  monitor:  0.0756,
+  // analyzeShoulderElevation() was added specifically because "no metric in
+  // this engine reacted to a shoulder shrug at all" — but it was never given a
+  // weight, so it still didn't: a measured SEVERE shrug (13.5% elevation) moved
+  // the overall score by 1 point while the UI simultaneously showed "Shoulder
+  // Elevation: severe" and surfaced "Drop your shoulders" as the top cue. The
+  // nine original weights above are scaled by 0.95 to make room for it.
+  shoulderElev: 0.05,
   // sums to ~1.00 (rounding)
 };
 
@@ -137,9 +162,14 @@ const WEIGHTS_FRONT = {
 // ─── Severity thresholds for condition classification ──────────────
 const SEV = {
   // Forward head posture (cm)
-  FHP: { mild: 1, moderate: 3, severe: 6 },
-  // Neck lean (degrees)
-  NECK: { mild: 5, moderate: 12, severe: 20 },
+  // mild was 1cm, which contradicted THR.FHP_CM.ok = 3: a 1cm reading scored
+  // 91/100 ("green") while simultaneously being listed as a "Forward Head"
+  // condition. 1cm is inside landmark noise, so every user carried a permanent
+  // condition badge. Aligned to the scoring threshold.
+  FHP: { mild: 3, moderate: 5, severe: 8 },
+  // Neck lean (degrees). mild was 5, exactly the floor of okAdj — so a 5°
+  // reading was "score 75, green zone" and "mild condition" at the same time.
+  NECK: { mild: 7, moderate: 12, severe: 20 },
   // Shoulder tilt (degrees)
   SHOULDER: { mild: 3, moderate: 7, severe: 12 },
   // Rounded shoulders (Z-depth units)
@@ -641,17 +671,34 @@ function estimateHeadYaw(lms, W, H) {
 
     const eyeMidX   = (lEye.x + rEye.x) / 2;
     const noseOffset = (nose.x - eyeMidX) / eyeWidth;
-    const yaw        = Math.max(-45, Math.min(45, Math.round(noseOffset * 60)));
 
-    if (vis(PL.L_EAR) && vis(PL.R_EAR)) {
-      const lEarX = g(PL.L_EAR).x * W;
-      const rEarX = g(PL.R_EAR).x * W;
-      const lToNose = Math.abs(nose.x - lEarX);
-      const rToNose = Math.abs(nose.x - rEarX);
-      const ratio = lToNose / Math.max(rToNose, 1);
-      if (ratio > 1.3) return -Math.min(45, Math.abs(yaw));
-      if (ratio < 0.7) return  Math.min(45, Math.abs(yaw));
-    }
+    // Recover the angle trigonometrically instead of scaling linearly.
+    //
+    // The nose tip sits ~2.2cm anterior to the inter-eye axis, so rotating the
+    // head by θ moves it sideways by 2.2·sin θ while the eye baseline (the
+    // outer-canthal span, ~9.3cm) foreshortens by cos θ. That makes
+    // noseOffset ≈ (2.2/9.3)·tan θ ≈ 0.215·tan θ — a TANGENT relationship, not
+    // a linear one. The old `noseOffset * 60` therefore under-reported badly:
+    // a real 30° head turn came out as 8°. Downstream that meant the yaw score
+    // effectively never left 90-100 for any normal desk head-turn, the "severe"
+    // classification at 30° needed ~67° of real rotation to trigger, and the
+    // understated angle was fed into estimateDistanceCm's cos-yaw
+    // foreshortening correction, inflating distance as the user turned.
+    const NOSE_PROTRUSION_RATIO = 0.215; // 2.2cm nose / 9.3cm outer-canthal span
+    const yaw = Math.max(-45, Math.min(45, Math.round(
+      Math.atan(noseOffset / NOSE_PROTRUSION_RATIO) * 180 / Math.PI
+    )));
+
+    // The ear cross-check that used to live here has been REMOVED, not
+    // repaired. It compared |nose−earL| against |nose−earR| and flipped the
+    // sign when the ratio passed 1.3/0.7 — but the ears are posterior and
+    // lateral while the nose is anterior and medial, so under yaw they
+    // translate in OPPOSITE image directions. The check therefore contradicted
+    // the nose estimate by construction rather than confirming it, making the
+    // reported angle non-monotonic and discontinuous: turning steadily one way
+    // gave +3°, +5°, then jumped NEGATIVE while still turning the same way. The
+    // alert copy reads `yaw.angle > 0 ? "right" : "left"`, so past that flip
+    // the app told users to correct the wrong side.
     return yaw;
   } catch { return 0; }
 }
@@ -697,7 +744,10 @@ function estimateDistanceCm(lms, W, H, yawDeg = 0, calibFactor = null, effective
     // Fallback: shoulder width
     const shPx = Math.abs(g(PL.R_SHOULDER).x * W - g(PL.L_SHOULDER).x * W);
     if (shPx > 5) {
-      const focal = 600 * (W / 640);
+      // Same focal model as the IPD branch above — these two used to disagree
+      // by ~50% on the same frame (see REF_SH_FRAC's note), so which one ran
+      // mattered more than where the user actually was.
+      const focal = FOCAL_PX_1280 * (W / 1280);
       return Math.max(20, Math.min(160, Math.round((effectiveShoulderWidthCm * focal) / shPx)));
     }
     return 65; // default when nothing is visible
@@ -1437,23 +1487,45 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const W_rounded  = confWeight(rounded,  WEIGHTS_FRONT.rounded);
   const W_fhp      = confWeight(fhp,      WEIGHTS_FRONT.fhp);
   const W_monitor  = confWeight(monitor,  WEIGHTS_FRONT.monitor);
+  const W_shElev   = confWeight(shoulderElev, WEIGHTS_FRONT.shoulderElev);
   const W_dist     = WEIGHTS_FRONT.distance; // distance is always measured
 
-  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp + W_monitor;
-  const baseline = 72 * Math.max(0, 1 - W_ACTUAL);
+  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp + W_monitor + W_shElev;
 
-  const weightedScore = Math.max(0, Math.min(100, Math.round(
-    neck.score     * W_neck     +
-    headTilt.score * W_tilt     +
-    shoulder.score * W_shoulder +
-    spine.score    * W_spine    +
-    distSc         * W_dist     +
-    yaw.score      * W_yaw      +
-    rounded.score  * W_rounded  +
-    fhp.score      * W_fhp      +
-    monitor.score  * W_monitor  +
-    baseline
-  )));
+  // True weighted average: divide by the weight actually used.
+  //
+  // This previously added `72 * (1 - W_ACTUAL)` instead of dividing — which is
+  // not redistribution, it substitutes a constant 72 for every point of missing
+  // weight, so it drags good posture down and props bad posture up. Three
+  // modules that together carry 49% of the table (neck 0.2565, fhp 0.1656,
+  // rounded 0.0679) go reliable:false the moment one ear is occluded — exactly
+  // the hand-on-chin case this file detects elsewhere — so the effect was large
+  // and trivially game-able: on a measured synthetic subject, a badly slumped
+  // pose scored 52 with both ears visible and 78 with one ear hidden (+26),
+  // while a textbook-perfect pose LOST 13 points for the same occlusion.
+  //
+  // The constant also capped the range: because confWeight scales each weight
+  // by that module's confidence (72-90%), W_ACTUAL peaks near 0.90, so a
+  // flawless pose could only ever reach 97 and the floor sat near 14.
+  //
+  // Dividing gives the weighted mean of whatever was actually measured, which
+  // is what the comment above always claimed the code did.
+  const weightedScore = W_ACTUAL > 0.05
+    ? Math.max(0, Math.min(100, Math.round((
+        neck.score     * W_neck     +
+        headTilt.score * W_tilt     +
+        shoulder.score * W_shoulder +
+        spine.score    * W_spine    +
+        distSc         * W_dist     +
+        yaw.score      * W_yaw      +
+        rounded.score  * W_rounded  +
+        fhp.score      * W_fhp      +
+        monitor.score  * W_monitor  +
+        shoulderElev.score * W_shElev
+      ) / W_ACTUAL)))
+    // Effectively nothing measurable this frame — report the distance channel
+    // alone rather than inventing a number out of a constant.
+    : Math.max(0, Math.min(100, Math.round(distSc)));
 
   // ── Positioning penalty ────────────────────────────────────────────
   // Distance carries only ~9.8% of the weighted score, and distanceScore()
@@ -1474,7 +1546,28 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     ? Math.round(6 + 12 * (typeof quality.severity === "number" ? quality.severity : 1))
     : 0;
 
-  const overall = Math.max(0, weightedScore - positionPenalty);
+  // ── Occlusion penalty ──────────────────────────────────────────────
+  // Resting your chin on your hand hides one ear, which makes neck lean,
+  // forward-head and rounded-shoulders unmeasurable — 49% of the weight table.
+  // Those are precisely the metrics that score badly when you're slumped, so
+  // excluding them RAISES a bad-posture score: measured, a slumped pose went
+  // from 72 to 83 purely by occluding an ear. The engine already detects this
+  // (handProp.detected), already tells the user "resting your chin on your hand
+  // hides real neck strain from being measured", and already lists it as a
+  // detected condition — it just never charged anything for it, leaving a
+  // straightforward way to game the number by adopting a bad habit.
+  //
+  // Scaled by how much weight was actually lost, so a brief occlusion that
+  // still leaves most modules measurable costs little.
+  const coverage       = Math.min(1, W_ACTUAL / 0.9);
+  const occlusionPenalty = handProp.detected
+    // 14 was still not enough: the modules that drop out are precisely the ones
+    // scoring worst for a slumped user, so the surviving average rises steeply.
+    // Sized so that covering an ear can no longer improve a bad-posture score.
+    ? Math.round(26 * (1 - coverage))
+    : 0;
+
+  const overall = Math.max(0, weightedScore - positionPenalty - occlusionPenalty);
 
   // Detection confidence
   const g   = i => lms[i];
@@ -1499,23 +1592,43 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     ? Math.max(0, Math.round((Date.now() - sessionStartMs) / 60000))
     : 0;
 
-  // Initialise on first frame of a new session
+  // The buffer is TIME-stamped, not frame-counted. It used to keep the last 300
+  // entries with the comment "~5 min at 1fps" — but App.jsx throttles analysis
+  // to ~20fps (a 50ms floor), so 300 frames is **15 seconds**, not 5 minutes.
+  // Two consequences, both of which the user experiences as the score moving on
+  // its own: a 2-second slouch was charged an extra 15 points on top of the
+  // drop the posture itself already caused (a double penalty), and then, with
+  // the user holding that exact same posture, the "early" window slid forward
+  // past the slouch and the penalty evaporated — the number climbed ~15 points
+  // with nothing changed. Keeping wall-clock time makes the window mean what
+  // the comment says regardless of frame rate.
+  const _nowMs = Date.now();
   if (!analyzeMP._scoreBuf) analyzeMP._scoreBuf = [];
-  analyzeMP._scoreBuf.push(overall);
-  if (analyzeMP._scoreBuf.length > 300) analyzeMP._scoreBuf.shift();
+  analyzeMP._scoreBuf.push({ t: _nowMs, v: overall });
+  const DRIFT_WINDOW_MS = 5 * 60 * 1000;
+  while (analyzeMP._scoreBuf.length && _nowMs - analyzeMP._scoreBuf[0].t > DRIFT_WINDOW_MS) {
+    analyzeMP._scoreBuf.shift();
+  }
 
   let fatiguePenalty = 0;
   const buf = analyzeMP._scoreBuf;
-  // Need at least 60 frames AND 10 minutes before we can meaningfully
-  // compare early vs late — avoids false penalty at session start.
+  // Compare the first vs the last 60 SECONDS of the window, rather than a fixed
+  // frame count, so a momentary dip can't masquerade as session-long drift.
   if (buf.length >= 60 && sessionMin >= 10) {
-    const earlySlice  = buf.slice(0, 30);
-    const recentSlice = buf.slice(-30);
-    const earlyAvg  = earlySlice.reduce((a, b) => a + b, 0)  / earlySlice.length;
-    const recentAvg = recentSlice.reduce((a, b) => a + b, 0) / recentSlice.length;
-    const drift = Math.max(0, earlyAvg - recentAvg); // positive = degradation
-    // Scale: 10pt drift → 5pt penalty, 20pt drift → 10pt, 30pt+ → 15pt cap
-    fatiguePenalty = Math.round(Math.min(15, drift * 0.5));
+    const t0 = buf[0].t, tN = buf[buf.length - 1].t;
+    const SLICE_MS = 60 * 1000;
+    // Only meaningful once the window actually spans a comparable stretch.
+    if (tN - t0 >= 3 * SLICE_MS) {
+      const earlySlice  = buf.filter(e => e.t <= t0 + SLICE_MS).map(e => e.v);
+      const recentSlice = buf.filter(e => e.t >= tN - SLICE_MS).map(e => e.v);
+      if (earlySlice.length >= 20 && recentSlice.length >= 20) {
+        const earlyAvg  = earlySlice.reduce((a, b) => a + b, 0)  / earlySlice.length;
+        const recentAvg = recentSlice.reduce((a, b) => a + b, 0) / recentSlice.length;
+        const drift = Math.max(0, earlyAvg - recentAvg); // positive = degradation
+        // Scale: 10pt drift → 5pt penalty, 20pt drift → 10pt, 30pt+ → 15pt cap
+        fatiguePenalty = Math.round(Math.min(15, drift * 0.5));
+      }
+    }
   }
 
   // Alerts
@@ -1525,10 +1638,15 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     score:       overall,
     qualityScore,
     qualityReason,
-    // How many points the positioning issue removed, so the UI can explain the
-    // drop ("−14 because you're too close") instead of the user seeing a number
-    // fall for no stated reason.
+    // How many points each adjustment removed, so the UI can explain the drop
+    // ("−14 because you're too close") instead of the user seeing a number fall
+    // for no stated reason.
     positionPenalty,
+    occlusionPenalty,
+    // Fraction of the weight table that was actually measurable this frame.
+    // < 1 means part of the body wasn't visible and the score is a partial
+    // reading — worth surfacing rather than presenting it as a full one.
+    coverage: Math.round(coverage * 100) / 100,
     confidence:  detectionConfidence,
 
     bodyModules: {

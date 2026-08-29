@@ -14,7 +14,7 @@
  * at 91 whether the user was well positioned or pressed against the lens.
  * Case 1 below locks that behaviour down.
  */
-import { analyzeMP, PL, MODES } from './postureEngine.js';
+import { analyzeMP, PL, MODES, resetProportions } from './postureEngine.js';
 
 const W = 1280, H = 720;
 
@@ -40,6 +40,10 @@ function makeLandmarks({ shoulderFrac = 0.35, neckLeanDeg = 0, shoulderTiltDeg =
   lms[PL.R_EAR] = { x: cx + 0.05 + lean, y: headY,        z: 0, visibility: 0.95 };
   lms[PL.L_EYE] = { x: cx - 0.03 + lean, y: headY - 0.01, z: 0, visibility: 0.96 };
   lms[PL.R_EYE] = { x: cx + 0.03 + lean, y: headY - 0.01, z: 0, visibility: 0.96 };
+  // estimateHeadYaw prefers the OUTER corners (3 & 6) and only falls back to
+  // the centres — leaving these at the default 0.5 gives eyeWidth 0.
+  lms[PL.L_EYE_OUTER] = { x: cx - 0.045 + lean, y: headY - 0.01, z: 0, visibility: 0.96 };
+  lms[PL.R_EYE_OUTER] = { x: cx + 0.045 + lean, y: headY - 0.01, z: 0, visibility: 0.96 };
   lms[PL.L_HIP] = { x: cx - half * 0.8,  y: shY + 0.30,   z: 0, visibility: 0.90 };
   lms[PL.R_HIP] = { x: cx + half * 0.8,  y: shY + 0.30,   z: 0, visibility: 0.90 };
   lms[PL.L_ELBOW] = { x: cx - half - 0.03, y: shY + 0.16, z: 0, visibility: 0.85 };
@@ -49,7 +53,7 @@ function makeLandmarks({ shoulderFrac = 0.35, neckLeanDeg = 0, shoulderTiltDeg =
   return lms;
 }
 
-const run = (opts) => analyzeMP(makeLandmarks(opts), W, H, 'laptop');
+const run = (opts) => { resetProportions(); return analyzeMP(makeLandmarks(opts), W, H, 'laptop'); };
 const ok = (c, m) => console.log(`${c ? 'PASS' : 'FAIL'}  ${m}`);
 let failures = 0;
 const check = (c, m) => { if (!c) failures++; ok(c, m); };
@@ -96,6 +100,85 @@ console.log('\n--- 4. too_far is handled too ---');
 const far = run({ shoulderFrac: 0.03 });
 console.log(`  tiny shoulders: score=${far?.score} reason=${far?.qualityReason} penalty=${far?.positionPenalty}`);
 check(far?.qualityReason === 'too_far' || far?.qualityReason === 'body_cropped', 'far user is flagged');
+
+// ── 5. occlusion must not REWARD bad posture ────────────────────────────────
+// Hiding one ear makes neck/FHP/rounded unmeasurable — 49% of the weight table
+// and exactly the metrics that score badly when slumped. Before the fix a
+// slumped pose GAINED 26 points from covering an ear (chin-on-hand), which made
+// the score trivially gameable by adopting a bad habit.
+console.log('\n--- 5. covering an ear must not raise a bad-posture score ---');
+{
+  const hide = (o) => { resetProportions(); const l = makeLandmarks(o); l[PL.L_EAR] = { ...l[PL.L_EAR], visibility: 0.1 }; return analyzeMP(l, W, H, 'laptop'); };
+  const slumpOpen = run({ neckLeanDeg: 24, shoulderTiltDeg: 12 });
+  const slumpHid  = hide({ neckLeanDeg: 24, shoulderTiltDeg: 12 });
+  console.log(`  slumped, both ears=${slumpOpen.score}  one ear hidden=${slumpHid.score}  delta=${slumpHid.score - slumpOpen.score}`);
+  check(slumpHid.score - slumpOpen.score <= 8, 'occluding an ear gains a slumped user <= 8 pts');
+  check(slumpHid.occlusionPenalty > 0, 'chin-prop occlusion is actually charged');
+}
+
+// ── 6. both distance branches must agree ────────────────────────────────────
+// The IPD branch and the shoulder fallback used three different focal-length
+// models between them and returned 77cm vs 116cm on the SAME frame; the branch
+// is chosen per-frame on eye visibility, so a blink flipped the reading.
+console.log('\n--- 6. IPD and shoulder distance branches agree ---');
+{
+  const F = 800, SH = 42, IPD_CM = 6.3;
+  const at = (distCm, eyes) => {
+    const shPx = SH * F / distCm, ipdPx = IPD_CM * F / distCm;
+    const a = Array.from({ length: 33 }, () => ({ x: .5, y: .5, z: 0, visibility: .95 }));
+    const cx = .5, half = (shPx / W) / 2, ih = (ipdPx / W) / 2, shY = .62, hy = shY - .26;
+    a[PL.L_SHOULDER] = { x: cx - half, y: shY, z: 0, visibility: .98 };
+    a[PL.R_SHOULDER] = { x: cx + half, y: shY, z: 0, visibility: .98 };
+    a[PL.NOSE]  = { x: cx, y: hy + .03, z: 0, visibility: .97 };
+    a[PL.L_EAR] = { x: cx - .05, y: hy, z: 0, visibility: .95 };
+    a[PL.R_EAR] = { x: cx + .05, y: hy, z: 0, visibility: .95 };
+    a[PL.L_EYE] = { x: cx - ih, y: hy - .01, z: 0, visibility: eyes ? .96 : 0.1 };
+    a[PL.R_EYE] = { x: cx + ih, y: hy - .01, z: 0, visibility: eyes ? .96 : 0.1 };
+    a[PL.L_HIP] = { x: cx - half * .8, y: shY + .3, z: 0, visibility: .9 };
+    a[PL.R_HIP] = { x: cx + half * .8, y: shY + .3, z: 0, visibility: .9 };
+    return a;
+  };
+  for (const d of [45, 60, 85]) {
+    resetProportions();
+    const withEyes = analyzeMP(at(d, true),  W, H, 'laptop').metrics.screen_distance.value;
+    resetProportions();
+    const noEyes   = analyzeMP(at(d, false), W, H, 'laptop').metrics.screen_distance.value;
+    console.log(`  true ${d}cm -> IPD ${withEyes}cm / shoulder ${noEyes}cm`);
+    check(Math.abs(withEyes - d) <= 3, `IPD branch accurate at ${d}cm`);
+    check(Math.abs(withEyes - noEyes) <= 3, `branches agree at ${d}cm (was 77 vs 116)`);
+  }
+}
+
+// ── 7. head yaw must be monotonic and correctly scaled ──────────────────────
+// The old estimator scaled nose offset linearly (a tangent relationship), so a
+// real 30 deg turn reported 8 deg; and an ear cross-check flipped the SIGN
+// mid-turn, so the app told users to correct the wrong side.
+console.log('\n--- 7. head yaw is monotonic and correctly scaled ---');
+{
+  const NOSE_R = 0.215;
+  const yawFrame = (deg) => {
+    resetProportions();
+    const l = makeLandmarks({});
+    const th = deg * Math.PI / 180;
+    const cx = 0.5, hy = 0.62 - 0.26;
+    // Outer-canthal span foreshortens by cos(theta); the nose tip swings
+    // sideways by its protrusion x sin(theta). That is the real geometry the
+    // estimator inverts.
+    const halfSpan = 0.045 * Math.cos(th);
+    const noseX = cx + (0.045 * 2) * NOSE_R * Math.sin(th);
+    l[PL.L_EYE_OUTER] = { x: cx - halfSpan, y: hy - .01, z: 0, visibility: .96 };
+    l[PL.R_EYE_OUTER] = { x: cx + halfSpan, y: hy - .01, z: 0, visibility: .96 };
+    l[PL.L_EYE] = { x: cx - halfSpan * 0.66, y: hy - .01, z: 0, visibility: .96 };
+    l[PL.R_EYE] = { x: cx + halfSpan * 0.66, y: hy - .01, z: 0, visibility: .96 };
+    l[PL.NOSE]  = { x: noseX, y: hy + .03, z: 0, visibility: .97 };
+    return analyzeMP(l, W, H, 'laptop')?.metrics?.head_yaw?.value;
+  };
+  const seq = [0, 10, 20, 30, 40].map(d => ({ d, got: yawFrame(d) }));
+  seq.forEach(r => console.log(`  true ${String(r.d).padStart(2)} deg -> reported ${r.got} deg`));
+  const vals = seq.map(r => Math.abs(r.got));
+  check(vals.every((v, i) => i === 0 || v >= vals[i - 1]), 'reported yaw never decreases as the head turns further (no sign flip)');
+  check(Math.abs(Math.abs(seq[3].got) - 30) <= 6, `30 deg turn reports ~30 deg, not ~8 (got ${seq[3].got})`);
+}
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
 process.exit(failures === 0 ? 0 : 1);
