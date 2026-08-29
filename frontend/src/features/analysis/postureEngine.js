@@ -800,24 +800,32 @@ function checkFrameQuality(lms, W, H) {
   // The shWidthFracCheck>0.88 check below already catches real over-
   // proximity; this edge check only needs to catch a shoulder that's
   // actually run off the visible frame, so it can be tighter.
+  // `severity` (0..1) reports HOW FAR past the threshold we are, not just that
+  // we crossed it. The overall score needs this: a boolean can only be applied
+  // as a flat penalty, which is either too harsh at the boundary or too weak
+  // when someone is right on top of the lens.
   if (lShPx < W * 0.01 || rShPx > W * 0.99) {
-    return { ok: false, reason: "too_close" };
+    return { ok: false, reason: "too_close", severity: 1 };
   }
 
   // Too close: shoulders take up >85% of frame width
   // 0.72 was too aggressive for laptop wide-angle, 0.88 too permissive
   const shWidthFracCheck = shWidthPx / Math.max(W, 1);
   if (shWidthFracCheck > 0.85) {
-    return { ok: false, reason: "too_close" };
+    // 0.85 → 0 ramping to 1.0 → 1 (shoulders filling the entire frame)
+    const sev = Math.min(1, (shWidthFracCheck - 0.85) / 0.15);
+    return { ok: false, reason: "too_close", severity: sev };
   }
 
   // Too far: shoulder width less than 50px regardless of frame size
   // (replaces < 0.10 span which penalised wide-shoulder users at normal distance)
   if (shWidthPx < 50) {
-    return { ok: false, reason: "too_far" };
+    // 50px → 0 ramping to 20px or less → 1
+    const sev = Math.min(1, (50 - shWidthPx) / 30);
+    return { ok: false, reason: "too_far", severity: sev };
   }
 
-  return { ok: true, reason: "ok" };
+  return { ok: true, reason: "ok", severity: 0 };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1313,7 +1321,28 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // MODES is ever edited elsewhere.
   const [lo, hi] = MODES[mode]?.distRange || MODES.laptop.distRange;
   const distCm  = estimateDistanceCm(lms, W, H, headYaw, distCalibFactor, prop.effectiveShoulderWidthCm);
-  const distSc  = distanceScore(distCm, lo, hi);
+  let   distSc  = distanceScore(distCm, lo, hi);
+
+  // Reconcile the two independent distance signals.
+  //
+  // checkFrameQuality() judges proximity from raw frame geometry (how much of
+  // the frame the shoulders span), while distCm is a back-calculated estimate
+  // that depends on distCalibFactor and the assumed shoulder width. When those
+  // disagree — the frame says the user is filling the lens while distCm still
+  // reads inside the ideal 50-80cm band — distSc stayed at a perfect 100 and
+  // the "move back" warning had literally zero effect on the score. That is the
+  // reported bug: the app says "too close" while the number doesn't move.
+  //
+  // Frame geometry is the more direct evidence here (it measures pixels that
+  // are actually there, with no calibration in the path), so on disagreement it
+  // wins: cap distSc to the band that the geometric severity implies.
+  if (!quality.ok && (quality.reason === "too_close" || quality.reason === "too_far")) {
+    const sev = typeof quality.severity === "number" ? quality.severity : 1;
+    // sev 0 (just over the line) → cap 70; sev 1 (extreme) → cap 30, matching
+    // distanceScore()'s own floor so the two scales stay comparable.
+    const cap = Math.round(70 - 40 * sev);
+    distSc = Math.min(distSc, cap);
+  }
 
   // ── Hand/chin-prop occlusion detection ─────────────────────────────
   // Very common desk habit: resting your chin/cheek on your hand. The
@@ -1413,7 +1442,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp + W_monitor;
   const baseline = 72 * Math.max(0, 1 - W_ACTUAL);
 
-  const overall = Math.max(0, Math.min(100, Math.round(
+  const weightedScore = Math.max(0, Math.min(100, Math.round(
     neck.score     * W_neck     +
     headTilt.score * W_tilt     +
     shoulder.score * W_shoulder +
@@ -1425,6 +1454,27 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     monitor.score  * W_monitor  +
     baseline
   )));
+
+  // ── Positioning penalty ────────────────────────────────────────────
+  // Distance carries only ~9.8% of the weighted score, and distanceScore()
+  // floors at 30 — so even sitting on top of the lens could only move the
+  // total by (100-30) × 0.0981 ≈ 6.9 points. In practice a user got told
+  // "too close — back up" while the score barely moved, or (when distCm and
+  // frame geometry disagreed) didn't move at all. That is not a weighting
+  // subtlety, it's the headline number contradicting the instruction next to
+  // it.
+  //
+  // Sitting too close is a real ergonomic problem in its own right — it drives
+  // forward-head posture and eye strain — and it also degrades every other
+  // reading on this frame, so the composite genuinely is less trustworthy.
+  // Both argue for a visible, explainable deduction rather than a silent one.
+  // Scaled by the same geometric severity, capped at 18 points so a marginal
+  // over-step is a nudge, not a cliff.
+  const positionPenalty = (!quality.ok && (quality.reason === "too_close" || quality.reason === "too_far"))
+    ? Math.round(6 + 12 * (typeof quality.severity === "number" ? quality.severity : 1))
+    : 0;
+
+  const overall = Math.max(0, weightedScore - positionPenalty);
 
   // Detection confidence
   const g   = i => lms[i];
@@ -1475,6 +1525,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     score:       overall,
     qualityScore,
     qualityReason,
+    // How many points the positioning issue removed, so the UI can explain the
+    // drop ("−14 because you're too close") instead of the user seeing a number
+    // fall for no stated reason.
+    positionPenalty,
     confidence:  detectionConfidence,
 
     bodyModules: {
@@ -1517,6 +1571,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       elbow_angle:       { value: elbow.angle,      score: elbow.score,    unit: "°",  label: "Elbow angle",         reliable: elbow.reliable },
       monitor_height:    { value: monitor.offsetCm, score: monitor.score,  unit: "cm", label: "Monitor height offset",direction: monitor.direction, reliable: monitor.reliable },
       session_fatigue:   { value: fatiguePenalty,   score: Math.max(0, overall - fatiguePenalty), unit: "pts", label: "Fatigue adjustment", session_min: sessionMin },
+      position_penalty:  { value: positionPenalty,  score: Math.max(0, 100 - positionPenalty),    unit: "pts", label: "Positioning adjustment", reason: qualityReason },
       confidence_val:    { value: detectionConfidence, score: detectionConfidence, unit: "%", label: "Detection confidence" },
     },
 
