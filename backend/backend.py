@@ -890,17 +890,41 @@ _redis_url = os.getenv("REDIS_URL", "")
 _flask_env = os.getenv("FLASK_ENV", "development")
 if not _redis_url:
     if _flask_env == "production":
-        print(
-            "🚨 FATAL: REDIS_URL not set in production.\n"
-            "   Rate limiting is per-process/per-instance only otherwise.\n"
-            "   Set REDIS_URL (e.g. via Vercel's Upstash Redis integration,\n"
-            "   or a Railway/Render Redis addon).\n"
-            "   Refusing to start without shared rate limiting.",
-            file=sys.stderr, flush=True
-        )
-        import sys as _sys_redis
-        _sys_redis.exit(1)
-    print("⚠️  REDIS_URL not set — rate limiter using in-memory (OK for development only)", file=sys.stderr)
+        # This used to be sys.exit(1) at import time. The intent was right —
+        # per-process rate limiting is not real rate limiting — but the
+        # failure mode was awful: api/main.py execs this module on every
+        # Vercel cold start, so with FLASK_ENV=production (which both env
+        # templates instruct you to set) and no Redis, every request to the
+        # ~190 Flask routes returned a function crash. It looked like a total
+        # backend outage rather than one unset variable, and .env.example
+        # labels REDIS_URL "RECOMMENDED", not required.
+        #
+        # Refusing to boot also fails in the wrong direction: rate limiting
+        # is a mitigation, and losing it should degrade the service, not take
+        # it down. So it now degrades loudly, and requires an explicit
+        # acknowledgement so nobody reaches production unaware.
+        if os.getenv("ALLOW_INMEMORY_RATELIMIT", "").lower() in ("1", "true", "yes"):
+            print(
+                "⚠️  PRODUCTION WITHOUT REDIS — rate limiting is per-process only.\n"
+                "   Running because ALLOW_INMEMORY_RATELIMIT is set. This is a\n"
+                "   temporary posture: set REDIS_URL (Upstash, Railway or Render)\n"
+                "   before any real traffic.",
+                file=sys.stderr, flush=True
+            )
+        else:
+            print(
+                "🚨 REDIS_URL not set in production.\n"
+                "   Rate limiting will be per-process/per-instance only.\n"
+                "   Set REDIS_URL (e.g. via Vercel's Upstash Redis integration,\n"
+                "   or a Railway/Render Redis addon).\n"
+                "   To start anyway with degraded rate limiting, set\n"
+                "   ALLOW_INMEMORY_RATELIMIT=true.",
+                file=sys.stderr, flush=True
+            )
+            import sys as _sys_redis
+            _sys_redis.exit(1)
+    else:
+        print("⚠️  REDIS_URL not set — rate limiter using in-memory (OK for development only)", file=sys.stderr)
     _limiter_storage = "memory://"
 else:
     _limiter_storage = _redis_url
@@ -9252,6 +9276,30 @@ def company_dashboard():
         days       = min(90, max(7, int(request.args.get("days", 30))))
         cutoff     = datetime.utcnow() - timedelta(days=days)
 
+        # ── Privacy mode ──────────────────────────────────────────
+        # This endpoint returns a NAMED posture leaderboard: every employee
+        # with their email, average score, an A-D grade, an alert count, a
+        # trend arrow and an "At Risk" status — plus an explicit worst-five
+        # list. For a commercial B2B customer that is the product they bought.
+        # For a university cohort it is the single thing most likely to fail
+        # an ethics review, and it cannot be fixed by the reviewer after the
+        # fact.
+        #
+        # `aggregate_only` on the company document switches this org to
+        # department/company aggregates with no individual identified to
+        # anyone but themselves, and applies a k-anonymity floor so a small
+        # group cannot be de-anonymised by subtraction. Off by default, so
+        # existing B2B deployments are unchanged.
+        _org = {}
+        try:
+            _org_snap = db.collection("companies").document(company_id).get()
+            if _org_snap.exists:
+                _org = _org_snap.to_dict() or {}
+        except Exception:
+            _org = {}
+        aggregate_only = bool(_org.get("aggregate_only", False))
+        min_group_size = int(_org.get("min_group_size", 5) or 5)
+
         # ── Fetch all employees in this company ───────────────────
         emp_docs = (db.collection("users")
                       .where("company_id", "==", company_id)
@@ -9333,6 +9381,30 @@ def company_dashboard():
         is_ar = lang == "ar"
         def _label(en, ar): return ar if is_ar else en
 
+        # ── k-anonymity floor ─────────────────────────────────────
+        # Suppressing names is not enough on its own. With three
+        # participants, "company average 61, one at risk" plus a person's own
+        # score is usually enough to work out the others — and in a small
+        # department a manager already knows who is in it. Below the floor we
+        # return the participant count and nothing else.
+        _active_participants = sum(1 for e in emp_list if e["sessions"] > 0)
+        suppressed = aggregate_only and _active_participants < min_group_size
+        if suppressed:
+            return jsonify({
+                "ok":            True,
+                "company_id":    company_id,
+                "period_days":   days,
+                "lang":          lang,
+                "privacy_mode":  "aggregate_only",
+                "suppressed":    True,
+                "min_group_size": min_group_size,
+                "active_participants": _active_participants,
+                "message":    (f"Reporting is hidden until at least {min_group_size} people have "
+                               f"recorded a session in this period. {_active_participants} so far."),
+                "message_ar": (f"التقارير مخفية لحد ما {min_group_size} أشخاص على الأقل يسجّلوا جلسات "
+                               f"في الفترة دي. دلوقتي {_active_participants}."),
+            })
+
         return jsonify({
             "ok":          True,
             "company_id":  company_id,
@@ -9361,11 +9433,22 @@ def company_dashboard():
                 },
             },
 
-            # Employee lists
-            "top_performers":  [_employee_card(e, is_ar) for e in top_5],
-            "needs_attention": [_employee_card(e, is_ar) for e in bottom_5],
-            "at_risk":         [_employee_card(e, is_ar) for e in at_risk],
-            "all_employees":   [_employee_card(e, is_ar) for e in emp_list],
+            # Employee lists.
+            # Under aggregate_only these are empty and the client is told
+            # why, rather than being handed data it is expected not to
+            # render — a suppression the server does not enforce is not a
+            # suppression.
+            "privacy_mode":    "aggregate_only" if aggregate_only else "individual",
+            "min_group_size":  min_group_size if aggregate_only else None,
+            "privacy_note":    (_label(
+                                  "This organisation is configured for aggregate reporting. "
+                                  "Individual scores are visible only to the person they belong to.",
+                                  "المؤسسة دي مضبوطة على التقارير المجمّعة. درجة كل شخص بيشوفها هو بس.")
+                                if aggregate_only else None),
+            "top_performers":  [] if aggregate_only else [_employee_card(e, is_ar) for e in top_5],
+            "needs_attention": [] if aggregate_only else [_employee_card(e, is_ar) for e in bottom_5],
+            "at_risk":         [] if aggregate_only else [_employee_card(e, is_ar) for e in at_risk],
+            "all_employees":   [] if aggregate_only else [_employee_card(e, is_ar) for e in emp_list],
 
             # ROI
             "roi_estimate": {
@@ -9423,6 +9506,27 @@ def company_alert_employees():
 
         if not message:
             return jsonify({"error": "message required"}), 400
+
+        # Aggregate-only organisations: HR cannot single people out here
+        # either. Suppressing the dashboard lists while leaving an endpoint
+        # that takes target="at_risk" — or a list of uids — would just move
+        # the same individual targeting one call to the left. Broadcast to
+        # everyone is still allowed; that identifies nobody.
+        _org = {}
+        try:
+            _snap = db.collection("companies").document(company_id).get()
+            if _snap.exists:
+                _org = _snap.to_dict() or {}
+        except Exception:
+            _org = {}
+        if bool(_org.get("aggregate_only", False)) and target != "all":
+            return jsonify({
+                "error": "individual_targeting_disabled",
+                "message": ("This organisation is configured for aggregate reporting. "
+                            "You can message everyone, but not select individuals by posture score."),
+                "message_ar": ("المؤسسة دي مضبوطة على التقارير المجمّعة. تقدر تبعت لكل الناس، "
+                               "لكن مش تختار أفراد على أساس درجة الوضعية."),
+            }), 403
 
         # Get target UIDs
         if isinstance(target, list):
