@@ -422,6 +422,24 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
         } catch(profileErr) {
           console.error("[Auth] profile creation failed:", profileErr?.message);
           try { await deleteAuthUser(); } catch {}
+          // KNOWN: HR-admin signup cannot succeed. buildProfile() sets
+          // is_hr:true, and firestore.rules rejects any create carrying
+          // is_hr — deliberately, since org membership must be assigned
+          // server-side and not claimed by the client. So this path runs
+          // every time, deletes the account it just made, and previously
+          // surfaced a raw Firebase permission error. Setting an org up
+          // needs an Admin SDK endpoint that does not exist yet.
+          //
+          // Until it does, say so plainly instead of looking broken: the
+          // person is not doing anything wrong and retrying will not help.
+          if (isCompany && companyRole === "hr_admin") {
+            setErr(isAr
+              ? "إنشاء حساب شركة مش متاح دلوقتي — بنجهّزه. سجّل حساب فردي دلوقتي، أو كلّمنا ونظبطلك المؤسسة يدوياً."
+              : "Company account setup isn't available yet — we're building it. Sign up as an individual for now, or contact us and we'll set your organisation up manually.");
+            setLoading(false);
+            doShake();
+            return;
+          }
           throw profileErr;
         }
         // Employee joining via a typed invite code — this previously just
