@@ -29,8 +29,13 @@ export const SSO_PROVIDERS = {
     color:    "#0078D4",
     hint:     "For companies using Microsoft 365 / Azure Active Directory",
     hintAr:   "للشركات التي تستخدم Microsoft 365 / Azure AD",
-    // Firebase SAML provider ID — configured in Firebase Console
-    providerId: import.meta.env.VITE_SAML_AZURE_PROVIDER_ID || "saml.azure-ad",
+    // Firebase SAML provider ID — configured in Firebase Console.
+    // NO FALLBACK. This used to default to the literal string
+    // "saml.azure-ad", which meant the button always looked live: with no
+    // SAML provider actually provisioned in Firebase, clicking it threw a
+    // raw auth/operation-not-allowed at the user. An unset env var now
+    // means "not provisioned", and the UI says so instead of pretending.
+    providerId: import.meta.env.VITE_SAML_AZURE_PROVIDER_ID || "",
     type:     "saml",
   },
   okta: {
@@ -41,7 +46,7 @@ export const SSO_PROVIDERS = {
     color:    "#007DC1",
     hint:     "For companies using Okta identity management",
     hintAr:   "للشركات التي تستخدم Okta",
-    providerId: import.meta.env.VITE_SAML_OKTA_PROVIDER_ID || "saml.okta",
+    providerId: import.meta.env.VITE_SAML_OKTA_PROVIDER_ID || "",
     type:     "saml",
   },
   google_workspace: {
@@ -56,6 +61,41 @@ export const SSO_PROVIDERS = {
     type:     "oidc",
   },
 };
+
+/**
+ * A provider is only usable if Firebase has something to hand the user off
+ * to. OIDC/Google providers are built into every Firebase project, so they
+ * are always available; SAML providers exist only when an admin has both
+ * enabled Identity Platform and set the matching VITE_SAML_*_PROVIDER_ID.
+ */
+export const isProviderConfigured = (p) =>
+  p.type !== "saml" ? true : Boolean(p.providerId);
+
+/** True when at least one SAML provider has been provisioned. */
+export const hasSamlConfigured = () =>
+  Object.values(SSO_PROVIDERS).some(p => p.type === "saml" && isProviderConfigured(p));
+
+/**
+ * Firebase surfaces an unprovisioned provider as a bare error code. Shown
+ * raw, "auth/operation-not-allowed" tells a user nothing and reads like a
+ * fault on their side, so translate the ones we can actually explain.
+ */
+export function describeSSOError(e, isAr = false) {
+  const code = e?.code || "";
+  if (code === "auth/operation-not-allowed" || code === "auth/invalid-provider-id" ||
+      code === "auth/argument-error") {
+    return isAr
+      ? "تسجيل الدخول الموحد لسه مش مفعّل لمؤسستك. كلّم فريق Corvus عشان يتظبط، أو استخدم البريد وكلمة المرور دلوقتي."
+      : "Single sign-on is not set up for your organisation yet. Contact the Corvus team to provision it, or sign in with email and password for now.";
+  }
+  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+    return isAr ? "تم إغلاق نافذة تسجيل الدخول." : "The sign-in window was closed.";
+  }
+  if (code === "auth/network-request-failed") {
+    return isAr ? "تعذّر الاتصال. راجع الشبكة وحاول تاني." : "Connection failed. Check your network and try again.";
+  }
+  return e?.message || (isAr ? "تعذّر تسجيل الدخول." : "Sign-in failed.");
+}
 
 // ── Domain-to-provider mapping (stored in Firestore) ─────────────
 export async function getProviderForDomain(domain) {
@@ -85,6 +125,14 @@ export async function saveSSOConfig(data) {
 
 // ── SSO Sign In ───────────────────────────────────────────────────
 export async function signInWithSSO(providerId, type = "saml") {
+  // Guard: an empty providerId means no SAML provider was provisioned.
+  // Without this, new SAMLAuthProvider("") throws an opaque argument error
+  // from deep inside the SDK.
+  if (type === "saml" && !providerId) {
+    const err = new Error("SAML provider not configured");
+    err.code = "auth/operation-not-allowed";
+    throw err;
+  }
   let provider;
   if (type === "saml") {
     // SAML 2.0 via Firebase Auth — requires SAML provider configured in Firebase Console
@@ -148,6 +196,7 @@ export function SSOLoginPanel({ cs, lang = "en", onSuccess, onError }) {
       providerTitle: "Sign in with",
       or:          "or sign in with a specific provider",
       setupSSO:    "Set up SSO for my organization →",
+      notProvisioned: "Available on request — not set up yet",
     },
     ar: {
       title:       "تسجيل الدخول المؤسسي SSO",
@@ -160,6 +209,7 @@ export function SSOLoginPanel({ cs, lang = "en", onSuccess, onError }) {
       providerTitle: "تسجيل الدخول بـ",
       or:          "أو اختر مزوداً محدداً",
       setupSSO:    "إعداد SSO لمؤسستي →",
+      notProvisioned: "متاح عند الطلب — لسه مش مفعّل",
     },
   };
   const t = T[lang] || T.en;
@@ -190,7 +240,7 @@ export function SSOLoginPanel({ cs, lang = "en", onSuccess, onError }) {
       const result = await signInWithSSO(providerId, type);
       if (result) onSuccess?.(result.user);
     } catch (e) {
-      onError?.(e.message);
+      onError?.(describeSSOError(e, isAr));
     } finally {
       setLoading(false);
     }
@@ -225,13 +275,33 @@ export function SSOLoginPanel({ cs, lang = "en", onSuccess, onError }) {
           <div style={{ marginTop: 18 }}>
             <div style={{ fontSize: 11, color: DARK.muted, textAlign: "center", marginBottom: 12 }}>{t.or}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {Object.values(SSO_PROVIDERS).map(p => (
-                <button key={p.id} onClick={() => doSSO(p.providerId, p.type)} style={{ display: "flex", gap: 10, alignItems: "center", background: "none", border: `0.5px solid ${DARK.border}`, borderRadius: 9, padding: "10px 14px", cursor: "pointer", color: DARK.text, fontSize: 12 }}>
+              {Object.values(SSO_PROVIDERS).map(p => {
+                // A SAML provider with no configured id cannot sign anyone
+                // in. It renders as an explicitly unavailable row rather
+                // than a live-looking button that fails on click.
+                const ready = isProviderConfigured(p);
+                return (
+                <button key={p.id} type="button"
+                  onClick={ready ? () => doSSO(p.providerId, p.type) : undefined}
+                  disabled={!ready}
+                  aria-disabled={!ready}
+                  title={ready ? undefined : t.notProvisioned}
+                  style={{ display: "flex", gap: 10, alignItems: "center", background: "none",
+                    border: `0.5px solid ${DARK.border}`, borderRadius: 9, padding: "10px 14px",
+                    cursor: ready ? "pointer" : "not-allowed", color: DARK.text, fontSize: 12,
+                    opacity: ready ? 1 : .5, textAlign: isAr ? "right" : "left",
+                    direction: isAr ? "rtl" : "ltr" }}>
                   <span style={{ fontSize: 16 }}>{p.icon}</span>
                   <span>{isAr ? p.nameAr : p.name}</span>
-                  <span style={{ marginLeft: "auto", fontSize: 9, color: DARK.muted }}>{isAr ? p.hintAr : p.hint}</span>
+                  {/* marginLeft:"auto" pinned this to the right edge in Arabic
+                      too, where it should hug the left. */}
+                  <span style={{ marginInlineStart: "auto", fontSize: 9, color: DARK.muted,
+                    textAlign: isAr ? "left" : "right" }}>
+                    {ready ? (isAr ? p.hintAr : p.hint) : t.notProvisioned}
+                  </span>
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         </>

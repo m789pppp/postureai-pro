@@ -53,8 +53,8 @@ const FAQ = [
     category: "enterprise",  category_ar: "المؤسسات",
     q_en: "Does Corvus support Single Sign-On (SSO)?",
     q_ar: "هل يدعم Corvus تسجيل الدخول الموحد SSO؟",
-    a_en: "Yes. Corvus supports Google Workspace, Microsoft Azure AD, Okta, and custom OIDC/SAML providers. Contact your account manager or go to Settings → Security → SSO Configuration.",
-    a_ar: "نعم. يدعم Corvus Google Workspace، Microsoft Azure AD، Okta، ومزودي OIDC/SAML المخصصين. تواصل مع مدير حسابك أو اذهب إلى الإعدادات ← الأمان ← إعداد SSO.",
+    a_en: "Google and Microsoft sign-in work out of the box on every plan. SAML 2.0 single sign-on (Azure AD, Okta, Google Workspace, or any SAML 2.0 IdP) is available on Enterprise and is provisioned with our team during onboarding — it is not a self-serve switch, because the identity provider has to be registered on our side first. Once provisioned, your admin manages it under Enterprise → Security → SAML SSO, and users sign in via the \"Sign in with your company account\" link on the login screen.",
+    a_ar: "الدخول بجوجل ومايكروسوفت شغال على طول في كل الباقات. أما SAML 2.0 (Azure AD أو Okta أو Google Workspace أو أي مزود SAML) فمتاح في باقة Enterprise ويتم إعداده مع فريقنا أثناء التهيئة — مش زر بتضغط عليه بنفسك، لأن مزود الهوية لازم يتسجل عندنا الأول. بعد الإعداد، الأدمن بيديره من Enterprise ← الأمان ← SAML SSO، والمستخدمين بيدخلوا من رابط \"تسجيل الدخول بحساب شركتك\" في صفحة الدخول.",
   },
   {
     category: "ai",          category_ar: "الذكاء الاصطناعي",

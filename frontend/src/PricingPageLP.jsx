@@ -153,7 +153,7 @@ const CO_PLANS = [
       { t:"Employees", v:"Unlimited" },
       { t:"Everything in Growth", v:true },
       { t:"Corvus AI clinical narrative", v:true },
-      { t:"SSO / SAML / Azure AD / Okta", v:true },
+      { t:"SAML SSO (Azure AD / Okta) — provisioned with our team", v:true },
       { t:"White-label branding", v:true },
       { t:"API + Webhooks access", v:true },
       { t:"Dedicated success manager", v:true },

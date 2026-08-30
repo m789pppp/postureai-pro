@@ -3,11 +3,16 @@
  * Individual vs Company fully separated
  * All Firestore fields consistent with role detection
  */
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { API_BASE_URL } from "./config/api.js";
 import { LegalModal } from "./LegalCompliance.jsx";
 import { ContactModal } from "./ContactModal.jsx";
+// Enterprise SSO was sold on four marketing surfaces but SSOLoginPanel was
+// never rendered anywhere in the app — only handleSSORedirect was imported,
+// so no user could ever START an SSO sign-in. Wired in here behind a link.
+const SSOLoginPanel = lazy(() =>
+  import("./EnterpriseSSO.jsx").then(m => ({ default: m.SSOLoginPanel })));
 import {
   signInGoogle, signInMicrosoft, signInEmail, signUpEmail, resetPassword,
   getUserProfile, createUserProfile, SUPPORT_EMAIL, setRememberMe,
@@ -252,6 +257,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [touched,     setTouched]    = useState({});
   const [mounted,     setMounted]    = useState(false);
   const [shake,       setShake]      = useState(false);
+  const [ssoOpen,     setSsoOpen]    = useState(false);
   const errRef = useRef(null);
 
   const isCompany = acctType === "company";
@@ -725,6 +731,35 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                 onClick={()=>withSocial("microsoft",signInMicrosoft)}
                 loading={social==="microsoft"} disabled={busy} dark={dark} t={t}/>
             </div>
+
+            {/* Enterprise SSO entry — login only. Signup goes through the
+                normal flow; SSO provisions the account on first sign-in. */}
+            {view==="login" && (
+              <div style={{marginBottom:10,textAlign:"center"}}>
+                <button type="button" onClick={()=>{setErr("");setSsoOpen(v=>!v);}}
+                  aria-expanded={ssoOpen}
+                  style={{background:"none",border:"none",padding:"2px 4px",cursor:"pointer",
+                    font:"inherit",fontSize:11.5,color:t.muted,textDecoration:"underline"}}>
+                  {isAr?"تسجيل الدخول بحساب شركتك (SSO)":"Sign in with your company account (SSO)"}
+                </button>
+              </div>
+            )}
+            {ssoOpen && view==="login" && (
+              <div style={{marginBottom:14,display:"flex",justifyContent:"center"}}>
+                <Suspense fallback={
+                  <div style={{fontSize:11.5,color:t.muted,padding:"14px 0"}}>
+                    {isAr?"جاري التحميل…":"Loading…"}
+                  </div>}>
+                  {/* Pass the page's own theme through — the panel otherwise
+                      falls back to its hardcoded dark palette and renders as
+                      a dark card inside the light-mode auth screen. */}
+                  <SSOLoginPanel lang={lang}
+                    cs={{ card:t.card, border:t.border, text:t.text, muted:t.textSub }}
+                    onSuccess={()=>setSsoOpen(false)}
+                    onError={(m)=>setErr(m)}/>
+                </Suspense>
+              </div>
+            )}
 
             {/* Divider */}
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:view==="signup"?12:16}}>

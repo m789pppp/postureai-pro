@@ -53,7 +53,7 @@ const CATEGORIES = [
       // one an enterprise buyer will ask for the study behind, and there is
       // no study. Replaced with what is actually true about the method.
       ["How accurate is the posture detection?","Corvus measures joint angles geometrically from Google MediaPipe pose landmarks — neck lean, forward-head distance, shoulder level, trunk rotation and torso flexion — and scores them against ergonomic thresholds. We have not run a clinical validation study, so we don't publish an accuracy percentage; anyone who does without one is guessing. What we can tell you: readings degrade in poor lighting, at extreme camera angles, and when part of your upper body is out of frame, and the app tells you when that happens rather than scoring you anyway."],
-      ["Does it work with SSO / Active Directory?","Yes. Enterprise plans support SAML 2.0 and OAuth 2.0 for SSO. Auto-provisioning is supported for SAP SuccessFactors, Workday, and BambooHR. Contact us to set up your integration."],
+      ["Does it work with SSO / Active Directory?","Google and Microsoft sign-in are available on every plan. SAML 2.0 SSO is an Enterprise feature and is set up with our team during onboarding. User auto-provisioning is done over SCIM, so it works with any SCIM-capable identity provider (Okta, Azure AD, OneLogin and others) — we do not ship product-specific HRIS connectors today. Contact us to set it up."],
     ],
   },
   {
@@ -71,7 +71,7 @@ const CATEGORIES = [
   {
     id:"hr", label:"For HR Teams", icon:"🏢", color:"#22d3ee",
     faqs:[
-      ["How do I add employees?","Three ways: (1) Send individual invite links by email, (2) Upload a CSV with employee names and emails, (3) Auto-provision via SSO if your HR system is connected."],
+      ["How do I add employees?","Three ways: (1) Send individual invite links by email, (2) Upload a CSV with employee names and emails, (3) Auto-provision over SCIM if your identity provider is connected."],
       ["Can I set up departments and teams?","Yes. The HR dashboard supports unlimited department hierarchies. You can assign managers, set department-level alert thresholds, and compare performance across teams."],
       ["What reports does HR receive?","Weekly PDF reports with company-wide posture trends, department risk heatmaps, individual high-risk flags, and ROI calculations based on estimated sick leave reduction. Reports are auto-generated every Monday at 8am."],
       ["Can I set custom alert thresholds?","Yes. HR admins can set risk score thresholds per department. When an employee's score drops below the threshold for 3+ consecutive sessions, an automatic alert is sent to the HR admin and optionally to the employee's manager."],

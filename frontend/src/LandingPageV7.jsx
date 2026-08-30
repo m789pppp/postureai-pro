@@ -1354,11 +1354,11 @@ function Features({ lang }) {
       title:{ en:"Enterprise Security", ar:"أمان المستوى المؤسسي" },
       sub:{ en:"SSO · RBAC · AES-256 · Audit logs · GDPR", ar:"SSO · RBAC · AES-256 · سجلات تدقيق · GDPR" },
       bullets:{
-        en:["SAML 2.0 / Azure AD / Okta single sign-on",
+        en:["SAML 2.0 / Azure AD / Okta single sign-on (provisioned with our team)",
             "Role-based access — HR, Manager & Employee tiers",
             "AES-256 at rest + TLS 1.3 in transit, zero data sold",
             "Full audit-log export + GDPR right-to-erasure API"],
-        ar:["تسجيل دخول موحد SAML 2.0 / Azure AD / Okta",
+        ar:["تسجيل دخول موحد SAML 2.0 / Azure AD / Okta (بإعداد من فريقنا)",
             "تحكم وصول بالأدوار — HR، مدير، موظف",
             "AES-256 للبيانات المخزنة + TLS 1.3 أثناء النقل، لا بيانات تُباع",
             "تصدير سجل تدقيق كامل + API حق الحذف GDPR"],
@@ -1503,8 +1503,8 @@ function Features({ lang }) {
         {/* descriptions were English-only; the product names stay in English
             deliberately (SAML/AES/RBAC/GDPR are used as-is in Arabic too) */}
         {(ar
-          ? [["SAML 2.0 SSO","Azure AD · Okta · Google"],["تشفير AES-256","أثناء التخزين + TLS 1.3 أثناء النقل"],["RBAC","أدوار HR · مدير · موظف"],["GDPR Erasure API","حق المحو خلال أقل من 24 ساعة"],["سجلات التدقيق","كل حدث، قابل للتصدير CSV"]]
-          : [["SAML 2.0 SSO","Azure AD · Okta · Google"],["AES-256 Encryption","at rest + TLS 1.3 in transit"],["RBAC","HR · Manager · Employee roles"],["GDPR Erasure API","right-to-delete in < 24h"],["Audit Logs","every event, exportable CSV"]]
+          ? [["SAML 2.0 SSO","Azure AD · Okta · Google — Enterprise"],["تشفير AES-256","أثناء التخزين + TLS 1.3 أثناء النقل"],["RBAC","أدوار HR · مدير · موظف"],["GDPR Erasure API","حق المحو خلال أقل من 24 ساعة"],["سجلات التدقيق","كل حدث، قابل للتصدير CSV"]]
+          : [["SAML 2.0 SSO","Azure AD · Okta · Google — Enterprise"],["AES-256 Encryption","at rest + TLS 1.3 in transit"],["RBAC","HR · Manager · Employee roles"],["GDPR Erasure API","right-to-delete in < 24h"],["Audit Logs","every event, exportable CSV"]]
         ).map(([t,s2])=>(
           <div key={t} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", borderBottom:"1px solid rgba(255,255,255,.05)" }}>
             <span style={{ color:accent, fontWeight:700, fontSize:14, flexShrink:0 }}>✓</span>
@@ -1847,8 +1847,8 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
       priceUSD:{ monthly:null, yearly:null, startingAt:499 }, priceEGP:{ monthly:null, yearly:null },
       isEnterprise:true, color:LPV7_TOKENS.green,
       features: ar
-        ? ["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالذكاء الاصطناعي","SSO / SAML / Azure AD / Okta","علامة تجارية White-label","وصول API + Webhooks","مدير نجاح مخصص","ضمان SLA مخصص"]
-        : ["Unlimited employees","Everything in Growth","Corvus AI clinical narrative","SSO / SAML / Azure AD / Okta","White-label branding","API + Webhooks access","Dedicated success manager","Custom SLA guarantee"],
+        ? ["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالذكاء الاصطناعي","SAML SSO (Azure AD / Okta) — بإعداد من فريقنا","علامة تجارية White-label","وصول API + Webhooks","مدير نجاح مخصص","التزام تشغيل بالاتفاق"]
+        : ["Unlimited employees","Everything in Growth","Corvus AI clinical narrative","SAML SSO (Azure AD / Okta) — provisioned with our team","White-label branding","API + Webhooks access","Dedicated success manager","Negotiated availability commitment"],
     },
   ];
 
@@ -2153,14 +2153,20 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                 { en:"Slack / Teams Alerts", ar:"تنبيهات Slack/Teams",   starter:"—",              business:"✅",           enterprise:"✅" },
                 { en:"API Access",           ar:"وصول API",               starter:"—",              business:"—",           enterprise:"✅" },
                 { en:"SSO / SAML 2.0",       ar:"تسجيل دخول موحد",        starter:"—",              business:"—",           enterprise:"✅" },
-                { en:"SAP / Workday",        ar:"تكامل SAP/Workday",      starter:"—",              business:"✅",           enterprise:"✅" },
+                { en:"SCIM provisioning",    ar:"توفير المستخدمين SCIM",  starter:"—",              business:"—",           enterprise:"✅" },
                 { en:"On-Premise Option",    ar:"خيار On-Premise",        starter:"—",              business:"—",           enterprise:"✅" },
               ],
             },
             {
               en:"Support & SLA",ar:"الدعم والـ SLA",
               rows:[
-                { en:"Uptime SLA",           ar:"اتفاقية التشغيل",        starter:ar?"معياري":"Standard",business:"99.9%",   enterprise:ar?"مخصص":"Custom" },
+                // "99.9%" here was a contractual availability commitment on a
+                // self-serve tier. There is no uptime monitoring, no status
+                // feed and no credit process behind it, so it promised
+                // something we cannot measure, let alone honour. Enterprise
+                // keeps a negotiated commitment because that one is written
+                // into a signed agreement.
+                { en:"Uptime commitment",    ar:"التزام التشغيل",         starter:ar?"أفضل جهد":"Best effort",business:ar?"أفضل جهد":"Best effort",enterprise:ar?"بالاتفاق":"By agreement" },
                 { en:"Support Channel",      ar:"قناة الدعم",             starter:ar?"إيميل":"Email",   business:ar?"أولوية":"Priority",enterprise:ar?"مدير مخصص":"Dedicated CSM" },
                 { en:"Onboarding",           ar:"التأهيل",                 starter:"—",              business:"✅",           enterprise:ar?"مخصص":"White-glove" },
               ],

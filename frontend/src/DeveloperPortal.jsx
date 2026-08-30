@@ -340,7 +340,7 @@ curl -X POST https://corvus.io/api/posture-api/analyze \\
                   ]},
                   { name:"Enterprise", calls:"∞", price:isAr?"تفاوض":"Custom", color:"#f59e0b", features:[
                     isAr?"استدعاءات غير محدودة":"Unlimited calls",
-                    isAr?"SLA 99.9%":"99.9% SLA",
+                    isAr?"SLA بالاتفاق":"SLA by agreement",
                     isAr?"On-premise option":"On-premise option",
                     isAr?"دعم مخصص":"Dedicated support",
                   ]},

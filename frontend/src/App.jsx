@@ -187,8 +187,8 @@ const B2B_TIERS = {
     price_egp_monthly:null, price_egp_yearly:null,    // Custom — contact sales
     price_usd_monthly:null, price_usd_yearly:null, price_usd_starting_at:499, // Starting at $499/mo
     seats:-1,
-    features:["Unlimited employees","Everything in Growth","Corvus AI clinical narrative","SSO / SAML / Azure AD / Okta","White-label branding","API + Webhooks access","Dedicated success manager","Custom SLA guarantee"],
-    featuresAr:["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالذكاء الاصطناعي","SSO / SAML / Azure AD / Okta","علامة تجارية White-label","وصول API + Webhooks","مدير نجاح مخصص","ضمان SLA مخصص"],
+    features:["Unlimited employees","Everything in Growth","Corvus AI clinical narrative","SAML SSO (Azure AD / Okta) — provisioned with our team","White-label branding","API + Webhooks access","Dedicated success manager","Negotiated availability commitment"],
+    featuresAr:["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالذكاء الاصطناعي","SAML SSO (Azure AD / Okta) — بإعداد من فريقنا","علامة تجارية White-label","وصول API + Webhooks","مدير نجاح مخصص","التزام تشغيل بالاتفاق"],
     badge:"Custom",
   },
 };
