@@ -1109,20 +1109,23 @@ function SocialProof({ lang }) {
           {/* Row 2 — used at + security badges */}
           <div className="lp-sp-row2">
             <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+              {/* "Currently used at" overstated it — this is a pilot, not a
+                  deployment, so the label now says what it actually is. */}
               <span style={{ fontSize:11, color:LPV7_TOKENS.muted, fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>
-                {ar ? "يُستخدم في" : "Currently used at"}
+                {ar ? "تجربة ميدانية مع" : "Pilot with"}
               </span>
-              {/* BUG FIX: this badge hardcoded "Coventry University" (never
-                  translated either) while the text right next to it named
-                  a DIFFERENT institution, "Cairo University" — two
-                  different names in the same trust-signal row. Made them
-                  consistent. */}
+              {/* Reverted to Coventry. An earlier edit replaced the real
+                  institution with "Cairo University" to resolve a naming
+                  mismatch — but it resolved it toward the name that ISN'T
+                  real. Coventry is corroborated independently by
+                  SolutionsPage.jsx and DemoMode.js, and confirmed by the owner
+                  as the actual pilot. */}
               <div style={{ background:"rgba(255,255,255,.04)", border:`1px solid ${LPV7_TOKENS.border}`,
                 borderRadius:9, padding:"6px 14px", fontSize:13.5, fontWeight:700, color:LPV7_TOKENS.text }}>
-                {ar ? "جامعة القاهرة" : "Cairo University"}
+                {ar ? "جامعة كوفنتري" : "Coventry University"}
               </div>
               <span style={{ fontSize:12, color:LPV7_TOKENS.muted }}>
-                {ar ? "تجريبي · 50+ مستخدم في 4 دول" : "Pilot · 50+ users across 4 countries"}
+                {ar ? "مرحلة مبكرة · 50+ مستخدم بيتا" : "Early stage · 50+ beta users"}
               </span>
             </div>
             <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
@@ -1637,81 +1640,72 @@ function HowItWorks({ lang }) {
 // ── Case Studies ──────────────────────────────────────────────────
 function CaseStudies({ lang }) {
   const ar = lang === "ar";
-  // NOTE FOR THE OWNER: these three case studies are presented as real named
-  // customers with real figures. Nothing else in the codebase evidences them.
-  // If they are not real, they should be removed or relabelled as illustrative
-  // — fabricated customer results are a legal exposure, not just a copy issue.
-  // What IS fixed here: the first case told two different stories depending on
-  // language — "$340K" in English vs "1.2م ج.م." (~$25K) in Arabic, and a
-  // different named person in each ("A. Hassan" vs "م. أحمد"). Both sides now
-  // state the same amount in the same unit and name the same person.
-  const cases = ar ? [
-    { co:"شركة اتصالات كبرى", industry:"اتصالات", employees:"2,400", result:"↓52%", resultLabel:"غياب مرتبط بوضعية الجسم", time:"6 أشهر", detail:"وفرت 1.2م ج.م. سنوياً في تكاليف العلاج الطبيعي", quote:"Corvus غيّر طريقة تفكيرنا في صحة الموظفين — من تكلفة لاستثمار", quoteName:"أ. حسن، مدير الموارد البشرية" },
-    { co:"بنك وطني", industry:"مصرفية", employees:"850", result:"↑23%", resultLabel:"رضا الموظفين", time:"3 أشهر", detail:"انتشار ممتاز: 94% معدل استخدام يومي", quote:"أسهل أداة أطلقناها على الإطلاق. الفريق استخدمها من اليوم الأول", quoteName:"ن. سعيد، مدير التقنية" },
-    { co:"شركة تقنية ناشئة", industry:"تكنولوجيا", employees:"120", result:"↓38%", resultLabel:"شكاوى آلام الظهر", time:"4 أشهر", detail:"عائد استثمار 4.1× خلال السنة الأولى", quote:"ROI واضح خلال 6 أسابيع. أوصي به لكل فريق remote", quoteName:"ي. حسن، المدير التنفيذي" },
-  ] : [
-    { co:"Major Telecom Corp.", industry:"Telecommunications", employees:"2,400", result:"↓52%", resultLabel:"posture-related absences", time:"6 months", detail:"Saved 1.2M EGP annually in physiotherapy costs", quote:"Corvus changed how we think about employee health — from a cost to an investment.", quoteName:"A. Hassan, HR Director" },
-    { co:"National Bank", industry:"Banking", employees:"850", result:"↑23%", resultLabel:"employee satisfaction", time:"3 months", detail:"Excellent adoption: 94% daily active rate", quote:"Easiest tool we've ever rolled out. Team was using it from day one.", quoteName:"N. Said, CTO" },
-    { co:"Tech Startup", industry:"Technology", employees:"120", result:"↓38%", resultLabel:"back pain complaints", time:"4 months", detail:"4.1× ROI in the first year", quote:"Clear ROI within 6 weeks. I recommend it to every remote-first team.", quoteName:"Y. Hassan, CEO" },
-  ];
+  // These three "case studies" — a 2,400-employee telecom, a national bank and
+  // a tech startup, each with a named executive, a headline percentage and a
+  // savings figure — were removed on the owner's instruction because none of
+  // them was real. Nothing in this codebase ever evidenced them, and inventing
+  // customer outcomes is a legal exposure rather than a marketing choice: the
+  // first HR buyer who asks for a reference call ends the conversation, and the
+  // company with it.
+  //
+  // Replaced with the single thing that IS true today: a pilot underway at
+  // Coventry University (corroborated independently by SolutionsPage.jsx and
+  // DemoMode.js, which both referenced Coventry all along — a landing-page edit
+  // had at some point swapped it for "Cairo University", which was itself not
+  // real and is reverted below).
+  //
+  // DELIBERATELY NO NUMBERS HERE. The pilot is in progress, so there are no
+  // results yet. Anything quantitative in this section would recreate exactly
+  // the problem that was just removed. When the pilot produces measured
+  // before/after data, that is what belongs here — and it will be worth more
+  // than the three invented ones ever were.
 
   return (
     <section id="casestudies" className="lp-section">
       <div className="lp-wrap">
-        <SectionHead eyebrow={ar ? "نتائج حقيقية" : "Real Results"}
+        <SectionHead eyebrow={ar ? "أين نحن الآن" : "Where we are"}
           eyebrowColor={LPV7_TOKENS.green} eyebrowBg="rgba(16,217,160,.08)" eyebrowBorder="rgba(16,217,160,.2)"
-          title={ar ? "عملاؤنا يحقّقون نتائج قابلة للقياس" : "Our customers achieve measurable results"}/>
+          title={ar ? "أول تجربة ميدانية جارية الآن" : "Our first field pilot is running now"}
+          sub={ar
+            ? "إحنا في مرحلة مبكرة وبنقولها بصراحة: Corvus حالياً في تجربة ميدانية مع جامعة كوفنتري. لسه منشرناش أرقام نتائج لأن التجربة لسه شغالة — وأول ما تخلص هننشر الأرقام الحقيقية هنا، مش تقديرات."
+            : "We're early, and we'd rather say so. Corvus is currently in a field pilot with Coventry University. We haven't published outcome numbers because the pilot is still running — when it concludes, the measured results will appear here, not estimates."}/>
 
-        <Stagger className="lp-cases-grid">
-          {cases.map((c) => (
-            <StaggerItem key={c.co}>
-              <div className="lp-lift" style={{ ...card(), height:"100%", display:"flex", flexDirection:"column" }}>
-                <div style={{
-                  background:"rgba(79,124,249,.08)", borderRadius:8,
-                  padding:"5px 12px", fontSize:12.5, color:LPV7_TOKENS.indigo,
-                  fontWeight:500, display:"inline-block", marginBottom:14,
-                }}>{c.industry}</div>
-                <h3 style={{ fontSize:17, fontWeight:700, color:LPV7_TOKENS.text, margin:"0 0 4px", fontFamily:FONT_DISPLAY }}>
-                  {c.co}
-                </h3>
-                <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted, marginBottom:18 }}>
-                  {c.employees} {ar ? "موظف" : "employees"} · {c.time}
-                </div>
-                <div style={{
-                  fontSize:"clamp(32px,2.8vw,40px)", fontWeight:700, color:LPV7_TOKENS.green, marginBottom:4,
-                  fontFamily:FONT_MONO, lineHeight:1,
-                }}>{c.result}</div>
-                <div style={{ fontSize:14, color:LPV7_TOKENS.text, fontWeight:600, marginBottom:14 }}>
-                  {c.resultLabel}
-                </div>
-                <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:"0 0 16px", paddingTop:14, borderTop:`1px solid ${LPV7_TOKENS.border}` }}>
-                  {c.detail}
-                </p>
-                {/* Quote */}
-                {/* borderInlineStart so the quote's accent bar stays on the
-                    leading edge in Arabic (it used to sit on the trailing edge). */}
-                <div style={{ flex:1, background:"rgba(255,255,255,.025)", borderRadius:12, padding:"12px 14px", marginBottom:16, borderInlineStart:`3px solid ${LPV7_TOKENS.green}` }}>
-                  <p style={{ fontSize:13, color:LPV7_TOKENS.sub, lineHeight:1.6, margin:"0 0 8px", fontStyle:"italic" }}>"{c.quote}"</p>
-                  <span style={{ fontSize:11.5, color:LPV7_TOKENS.muted, fontWeight:600 }}>— {c.quoteName}</span>
-                </div>
-                {/* CTA */}
-                <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer"
-                  style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-                    padding:"10px 0", borderRadius:10, fontSize:13.5, fontWeight:600,
-                    color:LPV7_TOKENS.indigo, border:`1px solid rgba(129,140,248,.25)`,
-                    background:"rgba(129,140,248,.06)", textDecoration:"none",
-                    transition:"background .2s, border-color .2s",
-                  }}
-                  onMouseEnter={e=>{ e.currentTarget.style.background="rgba(129,140,248,.12)"; e.currentTarget.style.borderColor="rgba(129,140,248,.4)"; }}
-                  onMouseLeave={e=>{ e.currentTarget.style.background="rgba(129,140,248,.06)"; e.currentTarget.style.borderColor="rgba(129,140,248,.25)"; }}>
-                  {ar ? "احجز عرضاً مشابهاً ←" : "Get similar results →"}
-                </a>
-              </div>
-            </StaggerItem>
-          ))}
-        </Stagger>
+        <div style={{ maxWidth:720, margin:"0 auto" }}>
+          <div className="lp-lift" style={{ ...card(), padding:"28px 30px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
+              <span style={{ width:8, height:8, borderRadius:"50%", background:LPV7_TOKENS.green, flexShrink:0,
+                boxShadow:`0 0 0 4px ${LPV7_TOKENS.green}22` }}/>
+              <span style={{ fontSize:13, fontWeight:700, color:LPV7_TOKENS.green, letterSpacing:".03em" }}>
+                {ar ? "تجربة جارية" : "Pilot in progress"}
+              </span>
+            </div>
+            <h3 style={{ fontSize:20, fontWeight:700, color:LPV7_TOKENS.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
+              {ar ? "جامعة كوفنتري" : "Coventry University"}
+            </h3>
+            <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:"0 0 20px", lineHeight:1.7 }}>
+              {ar
+                ? "بنشتغل مع فريق هناك على تجربة ميدانية لتحليل الوضعية أثناء العمل المكتبي. الهدف إننا نقيس فرق حقيقي قبل وبعد — مش نطلع برقم من أبحاث غيرنا."
+                : "We're working with a team there on a field pilot of workplace posture analysis. The goal is a measured before/after from our own deployment — not a figure borrowed from someone else's research."}
+            </p>
+            <div style={{ borderTop:`1px solid ${LPV7_TOKENS.border}`, paddingTop:18,
+              display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+              <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer"
+                style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6,
+                  padding:"11px 22px", borderRadius:10, fontSize:13.5, fontWeight:600,
+                  color:LPV7_TOKENS.indigo, border:`1px solid rgba(129,140,248,.25)`,
+                  background:"rgba(129,140,248,.06)", textDecoration:"none",
+                  transition:"background .2s, border-color .2s" }}
+                onMouseEnter={e=>{ e.currentTarget.style.background="rgba(129,140,248,.12)"; e.currentTarget.style.borderColor="rgba(129,140,248,.4)"; }}
+                onMouseLeave={e=>{ e.currentTarget.style.background="rgba(129,140,248,.06)"; e.currentTarget.style.borderColor="rgba(129,140,248,.25)"; }}>
+                {ar ? "كن من أوائل الفرق المشاركة ←" : "Join as an early pilot team →"}
+              </a>
+              <span style={{ fontSize:12.5, color:LPV7_TOKENS.muted }}>
+                {ar ? "بنقبل عدد محدود من فرق التجربة" : "We're taking a limited number of pilot teams"}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
-      <style>{`@media(max-width:860px){.lp-cases-grid{grid-template-columns:1fr!important}}`}</style>
     </section>
   );
 }
@@ -2319,76 +2313,20 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
 }
 
 // ── Testimonials ──────────────────────────────────────────────────
-function Testimonials({ lang }) {
-  const ar = lang === "ar";
-  const testimonials = ar ? [
-    { name:"س.م.", initials:"سم", role:"مهندسة برمجيات أولى", company:"شركة اتصالات كبرى", text:"كنت بعاني من آلام رقبة كل يوم بعد 8 ساعات شغل. بعد أسبوعين من Corvus، الألم راح تقريباً. أوضح ROI على أداة اشتريتها.", score:"5/5", outcome:"آلام الرقبة انتهت في أسبوعين", color:"#818cf8" },
-    { name:"أ.ك.", initials:"أك", role:"مدير موارد بشرية", company:"شركة تكنولوجيا متوسطة", text:"جربنا 3 أدوات قبل Corvus. دي الأولى اللي الفريق بيستخدمها فعلاً. الـ AI coach بيعمل فرق حقيقي ومش مجرد رقم على شاشة.", score:"4.9/5", outcome:"أعلى adoption rate من 3 أدوات", color:"#22d3ee" },
-    { name:"ي.ح.", initials:"يح", role:"مديرة تقنية", company:"شركة مدفوعات رقمية", text:"الإعداد خلص في 20 دقيقة. الدقة في تتبع وضعية الرقبة أعلى من أي أداة جربتها. التقارير الأسبوعية مفيدة للتتبع.", score:"4.8/5", outcome:"إعداد كامل في 20 دقيقة", color:"#10d9a0" },
-  ] : [
-    { name:"S.M.", initials:"SM", role:"Senior Software Engineer", company:"Major Telecom Company", text:"I had neck pain daily after 8-hour work sessions. Two weeks with Corvus and it's nearly gone. Clearest ROI of any tool I've bought.", score:"5/5", outcome:"Neck pain gone in 2 weeks", color:"#818cf8" },
-    { name:"A.K.", initials:"AK", role:"HR Director", company:"Mid-size Tech Company", text:"We tried 3 tools before Corvus. This is the first one the team actually uses. The AI coach makes a real difference — not just a number on a screen.", score:"4.9/5", outcome:"Highest adoption of 3 tools tested", color:"#22d3ee" },
-    { name:"Y.H.", initials:"YH", role:"Chief Technology Officer", company:"Digital Payments Company", text:"Setup took 20 minutes. Neck posture tracking accuracy is higher than any tool I've tested. Weekly reports are genuinely useful for tracking progress.", score:"4.8/5", outcome:"Full team setup in 20 min", color:"#10d9a0" },
-  ];
+// ── Testimonials — REMOVED ────────────────────────────────────────
+// This section carried three testimonials with named roles, company
+// descriptions and star ratings ("5/5", "4.9/5", "4.8/5"). They were removed
+// alongside the fabricated case studies, for the same reason and on the same
+// instruction: nothing evidenced them, and one of them was attributed to
+// "Major Telecom Company" — a customer that had just been deleted from this
+// same page as invented, so leaving it would have been incoherent as well as
+// untrue.
+//
+// TO RESTORE: real quotes from the 50+ beta users are genuinely worth showing.
+// They need to be things people actually said, attributable if asked, and
+// without invented star ratings. Re-add the component here and mount it back
+// in the page body where <Testimonials/> used to sit.
 
-  return (
-    <section id="testimonials" className="lp-section">
-      <div className="lp-wrap">
-        <SectionHead
-          eyebrow={ar ? "آراء العملاء" : "Real results"}
-          title={ar ? "ماذا يقول عملاؤنا" : "What our customers say"}
-          sub={ar ? "نتائج حقيقية من مستخدمين حقيقيين في مصر والخليج" : "Real results from real users across Egypt and the Gulf"}
-        />
-        <Stagger className="lp-testi-grid">
-          {testimonials.map((t) => (
-            <StaggerItem key={t.name}>
-              <div className="lp-lift" style={{
-                height:"100%", borderRadius:20, padding:28, position:"relative",
-                background:"rgba(255,255,255,.035)", border:`1px solid ${LPV7_TOKENS.border}`,
-                display:"flex", flexDirection:"column",
-              }}>
-                {/* Quote mark */}
-                <div style={{ position:"absolute", top:20, [ar?"left":"right"]:24,
-                  fontSize:44, color:"rgba(79,124,249,.14)", fontFamily:"Georgia,serif", lineHeight:1 }}>"</div>
-                {/* Outcome badge */}
-                <div style={{ display:"inline-flex", alignItems:"center", gap:6,
-                  background:"rgba(16,217,160,.08)", border:"1px solid rgba(16,217,160,.2)",
-                  borderRadius:99, padding:"4px 11px", marginBottom:14, alignSelf:"flex-start" }}>
-                  <span style={{ width:5, height:5, borderRadius:"50%", background:LPV7_TOKENS.green, flexShrink:0 }}/>
-                  <span style={{ fontSize:11, color:LPV7_TOKENS.green, fontWeight:600 }}>{t.outcome}</span>
-                </div>
-                {/* Stars */}
-                <div style={{ display:"flex", gap:2, marginBottom:14 }}>
-                  {"★★★★★".split("").map((s,i) => (
-                    <span key={i} style={{ color:LPV7_TOKENS.amber, fontSize:14 }}>{s}</span>
-                  ))}
-                  <span style={{ color:LPV7_TOKENS.muted, fontSize:11.5, marginInlineStart:8, fontFamily:FONT_MONO }}>{t.score}</span>
-                </div>
-                {/* Text */}
-                <p style={{ fontSize:15, color:LPV7_TOKENS.sub, lineHeight:1.7, margin:"0 0 22px", flex:1 }}>"{t.text}"</p>
-                {/* Author */}
-                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                  <div style={{
-                    width:44, height:44, borderRadius:"50%", flexShrink:0,
-                    background:`linear-gradient(135deg, ${t.color}40, ${t.color}18)`,
-                    border:`1.5px solid ${t.color}50`,
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:13, fontWeight:800, color:t.color, letterSpacing:".5px",
-                  }}>{t.initials}</div>
-                  <div style={{flex:1}}>
-                    <div style={{ fontWeight:700, color:LPV7_TOKENS.text, fontSize:14 }}>{t.name}</div>
-                    <div style={{ color:LPV7_TOKENS.muted, fontSize:11.5, marginTop:1 }}>{t.role}</div>
-                    <div style={{ color:t.color, fontSize:11, marginTop:2, fontWeight:600, opacity:.8 }}>{t.company}</div>
-                  </div>
-                </div>
-              </div>
-            </StaggerItem>
-          ))}
-        </Stagger>
-      </div>
-    </section>
-  );
-}
 
 // ── FAQ ───────────────────────────────────────────────────────────
 function FAQItem({ q, a, isOpen, onToggle, ar, idx }) {
@@ -2663,7 +2601,6 @@ function Footer({ lang }) {
       { label:"احجز عرضاً",     href:CALENDLY_URL },
     ]},
     { title:"الموارد", links:[
-      { label:"شهادات العملاء",  href:"#testimonials", anchor:true },
       { label:"دراسات الحالة",  href:"#casestudies",  anchor:true },
       { label:"تواصل معنا",     modal:"contact" },
       { label:"الدعم الفني",    href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
@@ -2690,7 +2627,6 @@ function Footer({ lang }) {
       { label:"Book a Demo",      href:CALENDLY_URL },
     ]},
     { title:"Resources", links:[
-      { label:"Testimonials",  href:"#testimonials", anchor:true },
       { label:"Case Studies",  href:"#casestudies",  anchor:true },
       { label:"Contact us",    modal:"contact" },
       { label:"Support",       href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
@@ -2891,7 +2827,7 @@ export default function LandingPage({ onNavigate, lang: langProp, setLang: setLa
       <HowItWorks lang={lang}/>
       <CaseStudies lang={lang}/>
       <Pricing lang={lang} onCTA={handleCTA} mode={mode} onModeChange={setMode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
-      <Testimonials lang={lang}/>
+      {/* <Testimonials/> removed — see the note at its former definition. */}
       <FAQ lang={lang}/>
       {/* BUG FIX: was routing "Book a Demo for Your Institution" straight
           to self-serve signup, same as every other CTA on the page —
