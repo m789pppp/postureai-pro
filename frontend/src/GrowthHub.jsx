@@ -301,8 +301,26 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
                   </div>
                 ))}
               </div>
-              {/* 90-day uptime bars */}
+              {/* 90-day uptime bars.
+                  These figures are NOT measured — statusData is the static
+                  SERVICES_STATUS constant and the percentages below are two
+                  hardcoded strings, so every user sees 90 green bars and
+                  "99.97%" regardless of what actually happened. Shipping a
+                  fabricated reliability record to customers is worse than
+                  shipping no status page, so the panel is labelled for what
+                  it is until a real uptime source is wired in. */}
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
+                <div style={{
+                  display:"flex", gap:8, alignItems:"flex-start",
+                  background:"rgba(214,162,76,.08)", border:"1px solid rgba(214,162,76,.28)",
+                  borderRadius:10, padding:"10px 12px", marginBottom:14 }}>
+                  <span style={{ fontSize:13, lineHeight:1.3 }}>⚠️</span>
+                  <div style={{ fontSize:11.5, color:"#D6A24C", lineHeight:1.55 }}>
+                    {isAr
+                      ? "عرض توضيحي — الأرقام دي مش مقاسة من مراقبة حقيقية للخدمة."
+                      : "Illustrative preview — these figures are not measured from live service monitoring."}
+                  </div>
+                </div>
                 <div style={{ fontWeight:700, color:cs.text, marginBottom:14, fontSize:14 }}>
                   {isAr?"وقت التشغيل — 90 يوم":"90-Day Uptime"}
                 </div>

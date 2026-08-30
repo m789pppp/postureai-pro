@@ -289,7 +289,11 @@ export function SharedFooter({ lang }) {
               </p>
               {/* Trust badges */}
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {[["🛡","ISO 27001"],["🔒","AES-256"],["✅","GDPR"]].map(([icon,label])=>(
+                {/* "ISO 27001" sat here as an earned trust badge. There is no audit,
+                    certificate or statement of applicability behind it, and a badge
+                    row is exactly where a reader takes a claim at face value.
+                    Replaced with capabilities that are actually true of the build. */}
+                {[["📷","On-device AI"],["🔒","AES-256"],["✅","GDPR"]].map(([icon,label])=>(
                   <div key={label} style={{
                     display:"flex", alignItems:"center", gap:5,
                     background:"rgba(79,124,249,.06)", border:"1px solid rgba(79,124,249,.14)",
