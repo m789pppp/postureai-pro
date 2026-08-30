@@ -1820,6 +1820,42 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   // Track whether user has started editing (prevents useEffect overriding their input)
   const [nameDirty, setNameDirty] = useState(false);
 
+  /**
+   * GDPR Art. 15 subject access — download your own data.
+   *
+   * The privacy policy has always promised portability and the FAQ has
+   * always claimed "user rights (access, deletion, export)". Deletion was
+   * implemented; export was not. There was no button anywhere, and the only
+   * endpoint returned other users' sessions to whoever asked (fixed
+   * separately). This is the missing half of the pair.
+   */
+  const [exporting, setExporting] = useState(false);
+  async function exportMyData() {
+    setExporting(true);
+    try {
+      const tok = await getAuthToken();
+      const res = await fetch("/api/user/export", {
+        method: "POST",
+        headers: { "Content-Type":"application/json", ...(tok?{Authorization:"Bearer "+tok}:{}) },
+        body: JSON.stringify({}),
+      });
+      const d = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(d?.error || "export_failed");
+      const blob = new Blob([JSON.stringify(d, null, 2)], { type:"application/json" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url;
+      a.download = `corvus-my-data-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 2000);
+      addToast(isAr?"تم تنزيل بياناتك":"Your data has been downloaded","success");
+    } catch {
+      addToast(isAr?"تعذّر تصدير البيانات — حاول تاني أو تواصل مع الدعم"
+                   :"Couldn't export your data — try again or contact support","error");
+    }
+    setExporting(false);
+  }
+
   async function deleteAccount() {
     if (deleteConfirmText.trim().toUpperCase() !== "DELETE") {
       addToast(isAr ? 'اكتب "DELETE" بالظبط للتأكيد' : 'Type "DELETE" exactly to confirm', "error");
@@ -2521,6 +2557,33 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                   color:"#f87171", fontSize:12, fontWeight:600, cursor:"pointer" }}>
                 {isAr?"خروج":"Sign Out"}
               </button>
+            </div>
+
+            {/* Export my data — GDPR right of access. Sits directly above
+                erasure because they are the same pair of rights and a user
+                looking for one is usually looking for both. */}
+            <div style={{ padding:"14px 16px", background:cs.card||"rgba(255,255,255,.02)",
+              borderRadius:10, border:`1px solid ${cs.border}`, marginBottom:12 }}>
+              <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+                <span style={{ fontSize:22 }}>📦</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+                    {isAr?"تنزيل بياناتي":"Download my data"}
+                  </div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2, lineHeight:1.6 }}>
+                    {isAr
+                      ?"ملف JSON فيه ملفك الشخصي، كل جلساتك، وسجل موافقتك — طبقاً لحقك في الوصول للبيانات (GDPR)."
+                      :"A JSON file containing your profile, every session, and your consent record — per your GDPR right of access."}
+                  </div>
+                  <button onClick={exporting?undefined:exportMyData} disabled={exporting}
+                    style={{ marginTop:10, padding:"8px 14px",
+                      background:"transparent", border:`1px solid ${cs.border}`,
+                      borderRadius:8, color:cs.text, fontSize:12, fontWeight:600,
+                      cursor:exporting?"default":"pointer", opacity:exporting?.6:1 }}>
+                    {exporting?(isAr?"جاري التجهيز…":"Preparing…"):(isAr?"تنزيل (JSON)":"Download (JSON)")}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Delete account — GDPR right to erasure */}

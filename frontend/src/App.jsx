@@ -10,6 +10,7 @@ if (typeof window !== 'undefined') {
 }
 import React, { lazy, Suspense, useState, useEffect, useRef, useCallback, startTransition } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
+import { CAMERA_VERSION, consentDocPath, makeConsentGrant, hasCurrentConsent } from "./lib/consent.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -21,7 +22,7 @@ import {
   notifyPaymentPending, notifyPaymentConfirmed,
   getCompany, createCompany, getUserSessions, onUserSessions, onUserProfile, updateUserProfile,
   checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, checkAndSendNurtureEmails,
-  doc, updateDoc,
+  doc, updateDoc, getDoc, setDoc,
 } from "./firebase.js";
 import { HRPanel } from "./HRPanel.jsx";
 const TherapistMarketplace = lazy(()=>import("./TherapistMarketplace.jsx").then(m=>({default:m.TherapistMarketplace})));
@@ -2674,13 +2675,78 @@ export default function App(){
   // Corvus is a wellness/awareness tool, NOT a medical device; explicit
   // informed consent protects the user and limits liability.
   const[showHealthConsent,setShowHealthConsent]=useState(false);
+  // Consent is now a per-ACCOUNT record, not a localStorage flag.
+  //
+  // It used to key off localStorage("corvus_health_consent_v1"), which made
+  // it per-browser: the same person was re-prompted on a second device with
+  // no link to the earlier acknowledgement, clearing site data silently
+  // reset it, and — the part that matters for an ethics review — the only
+  // thing stored server-side was a bare timestamp with no version and no
+  // scope. Asked to produce a participant's consent record, we had nothing.
+  //
+  // The ref still starts from localStorage so a returning user on the same
+  // browser isn't blocked while the profile loads; the effect below is what
+  // decides, and it re-prompts whenever the stored record is missing or
+  // predates the current CAMERA_VERSION.
   const healthConsentRef=useRef((()=>{try{return localStorage.getItem("corvus_health_consent_v1")==="1";}catch{return false;}})());
-  function acceptHealthConsent(){
-    try{localStorage.setItem("corvus_health_consent_v1","1");}catch{}
+  useEffect(()=>{
+    if(!user?.uid) return;
+    let cancelled=false;
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,...consentDocPath(user.uid)));
+        const rec=snap.exists()?snap.data():null;
+        const ok=hasCurrentConsent(rec,"camera",CAMERA_VERSION);
+        if(!cancelled){
+          healthConsentRef.current=ok;
+          try{ ok?localStorage.setItem("corvus_health_consent_v1","1")
+                :localStorage.removeItem("corvus_health_consent_v1"); }catch{}
+        }
+      }catch{
+        // Read failed (offline, rules). Leave the local value alone rather
+        // than locking a consenting user out of their own camera.
+      }
+    })();
+    return()=>{cancelled=true;};
+  },[user?.uid]);
+
+  async function acceptHealthConsent(){
     healthConsentRef.current=true;
+    try{localStorage.setItem("corvus_health_consent_v1","1");}catch{}
     setShowHealthConsent(false);
-    if(user?.uid){ updateDoc(doc(db,"users",user.uid),{healthDisclaimerAcceptedAt:new Date().toISOString()}).catch(()=>{}); }
+    if(user?.uid){
+      // setDoc with merge so granting camera consent never clobbers a terms
+      // record written elsewhere.
+      setDoc(doc(db,...consentDocPath(user.uid)),{
+        uid: user.uid,
+        camera: makeConsentGrant(CAMERA_VERSION),
+        updated_at: new Date().toISOString(),
+      },{merge:true}).catch(e=>console.warn("consent record write failed",e?.code));
+      updateDoc(doc(db,"users",user.uid),{healthDisclaimerAcceptedAt:new Date().toISOString()}).catch(()=>{});
+    }
     startCamera();
+  }
+
+  /** Withdraw camera consent. The invite page has always told users they
+      "can revoke consent at any time from your account settings" — there was
+      no such control anywhere, and the backend revoke endpoint had no
+      caller. */
+  async function revokeCameraConsent(){
+    healthConsentRef.current=false;
+    try{localStorage.removeItem("corvus_health_consent_v1");}catch{}
+    if(user?.uid){
+      try{
+        await setDoc(doc(db,...consentDocPath(user.uid)),{
+          uid: user.uid,
+          camera: { granted:false, version:CAMERA_VERSION, revoked_at:new Date().toISOString() },
+          updated_at: new Date().toISOString(),
+        },{merge:true});
+        addToast(isAr?"تم سحب الموافقة على استخدام الكاميرا":"Camera consent withdrawn","success");
+      }catch(e){
+        addToast(isAr?"تعذّر حفظ سحب الموافقة — حاول تاني":"Couldn't save the withdrawal — please try again","error");
+        console.warn("consent revoke failed",e?.code);
+      }
+    }
   }
   // Rendered from BOTH the page==="home" block and the page==="live" block —
   // startCamera() (called from the live page) is what sets showHealthConsent
@@ -2705,14 +2771,32 @@ export default function App(){
               ? "Corvus أداة توعية بوضعية الجسم للاستخدام العام — وليست جهازاً طبياً ولا بديلاً عن استشارة أخصائي. القياسات والتقارير تقريبية والغرض منها التوعية فقط."
               : "Corvus is a general wellness tool for posture awareness — not a medical device and not a substitute for professional advice. Measurements and reports are approximate and for informational purposes only."}
           </p>
-          <ul style={{color:cs.muted,fontSize:12.5,lineHeight:1.6,margin:"0 0 16px",paddingInlineStart:18}}>
+          {/* This modal used to be a medical disclaimer with one passing
+              mention of on-device processing. For a webcam product that is
+              the wrong shape: the thing the user is actually being asked to
+              permit is camera processing of images of their body, and a
+              reviewer expects that stated separately, specifically, and with
+              what is kept and who can see it. */}
+          <ul style={{color:cs.muted,fontSize:12.5,lineHeight:1.6,margin:"0 0 12px",paddingInlineStart:18}}>
             <li>{isAr?"لو عندك ألم أو حالة طبية، استشر طبيباً أو أخصائي علاج طبيعي.":"If you have pain or a medical condition, consult a doctor or physiotherapist."}</li>
             <li>{isAr?"لا تعتمد على النتائج في اتخاذ قرارات طبية.":"Do not rely on results for medical decisions."}</li>
-            <li>{isAr?"معالجة الفيديو تتم على جهازك في الوقت اللحظي.":"Video is processed on your device in real time."}</li>
           </ul>
+          <div style={{
+            background:"rgba(59,130,246,.07)",border:"1px solid rgba(59,130,246,.22)",
+            borderRadius:12,padding:"13px 15px",marginBottom:16}}>
+            <div style={{fontSize:12,fontWeight:800,color:cs.text,marginBottom:7}}>
+              📷 {isAr?"الموافقة على استخدام الكاميرا":"Camera consent"}
+            </div>
+            <ul style={{color:cs.muted,fontSize:12,lineHeight:1.65,margin:0,paddingInlineStart:17}}>
+              <li>{isAr?"الكاميرا هتشتغل عشان تحلّل وضعية جسمك أثناء الجلسة.":"Your camera is used to analyse your posture during a session."}</li>
+              <li>{isAr?"التحليل بيتم على جهازك. مفيش صور ولا فيديو بيترفع أو يتخزن.":"Analysis runs on your device. No image or video is uploaded or stored."}</li>
+              <li>{isAr?"اللي بيتحفظ هو أرقام بس: درجة الوضعية وقياسات الزوايا.":"What is saved is numbers only: your posture score and angle measurements."}</li>
+              <li>{isAr?"تقدر تسحب الموافقة في أي وقت من الإعدادات.":"You can withdraw this consent at any time in Settings."}</li>
+            </ul>
+          </div>
           <div style={{display:"flex",gap:10,flexDirection:isAr?"row-reverse":"row"}}>
             <button onClick={acceptHealthConsent} style={{flex:1,background:"linear-gradient(135deg,#3b82f6,#2563eb)",border:"none",borderRadius:11,padding:"13px 18px",fontSize:13.5,fontWeight:700,color:"#fff",cursor:"pointer"}}>
-              {isAr?"أوافق وابدأ":"I agree — start"}
+              {isAr?"أوافق على الاتنين وابدأ":"I agree to both — start"}
             </button>
             <button onClick={()=>{setShowHealthConsent(false); if(page==="live") setPage("home");}} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:11,padding:"13px 18px",fontSize:13,color:cs.muted,cursor:"pointer"}}>
               {isAr?"إلغاء":"Cancel"}

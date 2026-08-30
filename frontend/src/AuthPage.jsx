@@ -8,6 +8,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { API_BASE_URL } from "./config/api.js";
 import { LegalModal } from "./LegalCompliance.jsx";
 import { ContactModal } from "./ContactModal.jsx";
+import { TERMS_VERSION, MIN_AGE, meetsMinimumAge, ageFromDob, makeConsentGrant } from "./lib/consent.js";
 // Enterprise SSO was sold on four marketing surfaces but SSOLoginPanel was
 // never rendered anywhere in the app — only handleSSORedirect was imported,
 // so no user could ever START an SSO sign-in. Wired in here behind a link.
@@ -241,6 +242,11 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [inviteCode,  setInviteCode] = useState(""); // for employee joining via invite
   // UI
   const [agreeTerms,  setAgreeTerms] = useState(false);
+  // Age attestation. There was no age gate at all — no date of birth, no
+  // attestation, no minimum-age clause — while the product does
+  // biometric-adjacent processing of a webcam feed. First-year students can
+  // be 17, so for a university pilot this is a real case, not a formality.
+  const [dob,         setDob]        = useState("");
   const [legalOpen, setLegalOpen] = useState(null); // "tos" | "privacy" | null
   const [contactOpen, setContactOpen] = useState(false);
   const [newsletter,  setNewsletter] = useState(true);
@@ -282,6 +288,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const fnameValid   = fname.trim().length >= 1;
   const lnameValid   = lname.trim().length >= 1;
   const termsValid   = agreeTerms;
+  const dobValid     = meetsMinimumAge(dob);
   // Individual specific
   const countryValid = !isCompany ? country.length > 0 : true;
   // Company specific
@@ -296,6 +303,11 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
     fname:       touched.fname       && !fnameValid    ? (isAr?"الاسم الأول مطلوب":"First name required") : "",
     lname:       touched.lname       && !lnameValid    ? (isAr?"اسم العائلة مطلوب":"Last name required") : "",
     terms:       touched.terms       && !termsValid    ? (isAr?"يجب الموافقة على الشروط":"You must agree to the terms") : "",
+    dob:         touched.dob         && !dobValid      ? (
+                   !dob ? (isAr?"أدخل تاريخ ميلادك":"Enter your date of birth")
+                   : ageFromDob(dob)===null ? (isAr?"تاريخ غير صحيح":"That date isn't valid")
+                   : (isAr?`يجب أن يكون عمرك ${MIN_AGE} سنة أو أكثر`:`You must be ${MIN_AGE} or older`)
+                 ) : "",
     country:     touched.country     && !countryValid  ? (isAr?"اختر الدولة":"Select your country") : "",
     companyName: touched.companyName && !companyValid  ? (isAr?"اسم الشركة مطلوب":"Company name required") : "",
     inviteCode:  touched.inviteCode  && !inviteValid   ? (isAr?"كود الدعوة مطلوب":"Invite code required") : "",
@@ -313,6 +325,20 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       last_name:      lname.trim() || name.split(" ").slice(1).join(" ") || "",
       newsletter,
       setup_complete: false,
+      // The terms checkbox used to be validated and then thrown away — it
+      // never reached this object, so nothing anywhere recorded that a user
+      // had accepted anything. A data-protection officer asking "show me
+      // this participant's consent record" had no answer. Stored with the
+      // policy version so a later policy change can re-ask rather than
+      // silently inheriting an agreement to different words.
+      terms_accepted:         true,
+      terms_accepted_at:      new Date().toISOString(),
+      terms_version:          TERMS_VERSION,
+      // Age attestation — see MIN_AGE in lib/consent.js. Stored as the date
+      // the user gave, not a derived boolean, so the record stays meaningful
+      // as they age and can be audited.
+      date_of_birth:          dob || "",
+      age_attested_at:        new Date().toISOString(),
     };
     if (isCompany) {
       return {
@@ -375,10 +401,10 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       setTouched({email:true,pass:true});
       if (!emailValid||!passValid) { doShake(); return; }
     } else {
-      const allTouched = {email:true,pass:true,pass2:true,fname:true,lname:true,terms:true,
+      const allTouched = {email:true,pass:true,pass2:true,fname:true,lname:true,terms:true,dob:true,
         ...(isCompany?{companyName:true,teamSize:true}:{country:true})};
       setTouched(allTouched);
-      const valid = emailValid&&passValid&&pass2Valid&&fnameValid&&lnameValid&&termsValid
+      const valid = emailValid&&passValid&&pass2Valid&&fnameValid&&lnameValid&&termsValid&&dobValid
         &&companyValid&&inviteValid&&teamSizeValid&&countryValid;
       if (!valid) { doShake(); return; }
     }
@@ -438,7 +464,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
       setPass(""); setPass2(""); setShowP(false); setShowP2(false);
     } finally { setLoading(false); }
   },[view,email,pass,pass2,fname,lname,emailValid,passValid,pass2Valid,fnameValid,lnameValid,
-     termsValid,companyValid,teamSizeValid,countryValid,isCompany,isAr,onAuth,remember,
+     termsValid,dobValid,dob,companyValid,teamSizeValid,countryValid,isCompany,isAr,onAuth,remember,
      companyName,teamSize,profession,country,companyRole,newsletter,acctType,inviteCode,inviteValid]);
 
   // ── Pre-fill invite code from URL ────────────────────────────────
@@ -913,6 +939,38 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                   </>)}
 
                 </>)}
+
+                {/* Date of birth — age attestation.
+                    Placed immediately before the Terms because it is part of
+                    the same "can this person lawfully agree to this" block,
+                    and a reviewer reads them together. */}
+                <div style={{marginBottom:10}}>
+                  <label htmlFor="dob" style={{
+                    display:"block",fontSize:11.5,color:t.textSub,fontWeight:600,
+                    marginBottom:5,textAlign:isAr?"right":"left"}}>
+                    {isAr?"تاريخ الميلاد":"Date of birth"}
+                  </label>
+                  <input id="dob" type="date" value={dob}
+                    onChange={e=>{setDob(e.target.value);touch("dob");}}
+                    onBlur={()=>touch("dob")}
+                    max={new Date().toISOString().slice(0,10)}
+                    autoComplete="bday"
+                    aria-invalid={fieldErr.dob?"true":"false"}
+                    aria-describedby={fieldErr.dob?"dob-err":"dob-hint"}
+                    style={{
+                      width:"100%",boxSizing:"border-box",padding:"11px 13px",
+                      borderRadius:10,fontSize:14,fontFamily:"inherit",
+                      background:dark?"rgba(255,255,255,.03)":"rgba(0,0,0,.02)",
+                      color:t.text,
+                      border:`1.5px solid ${fieldErr.dob?"rgba(239,68,68,.5)":t.border}`,
+                      outline:"none",colorScheme:dark?"dark":"light",
+                      direction:"ltr",textAlign:isAr?"right":"left"}}/>
+                  {fieldErr.dob
+                    ? <div id="dob-err" style={{fontSize:11,color:"#ef4444",marginTop:4,textAlign:isAr?"right":"left"}}>{fieldErr.dob}</div>
+                    : <div id="dob-hint" style={{fontSize:11,color:t.muted,marginTop:4,textAlign:isAr?"right":"left"}}>
+                        {isAr?`Corvus متاح لمن عمرهم ${MIN_AGE} سنة أو أكثر.`:`Corvus is for people aged ${MIN_AGE} and over.`}
+                      </div>}
+                </div>
 
                 {/* Terms */}
                 <div style={{marginBottom:8}}>
