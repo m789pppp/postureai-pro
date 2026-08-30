@@ -106,6 +106,8 @@ const THR = {
   ROUNDED:     { ok: 10, bad: 22  },  // was ok:8 — raised to reduce false positives for natural posture
   ELBOW:       { ok: 15, bad: 30  },  // deviation from 95° ideal
   MONITOR_PITCH:{ ok: 5, bad: 18  },  // head pitch degrees
+  TRUNK_ROT:   { ok: 12, bad: 30  },  // trunk twist degrees (calibrated band)
+  TORSO_FLEX:  { ok: 12, bad: 30  },  // torso shortening % vs neutral (calibrated band)
   // Dedicated shoulder-shrug/tension metric — see analyzeShoulderElevation()
   // for why this needed its own scale separate from ROUNDED. Units: % of
   // shoulder-width the shoulders have risen above the user's neutral rest
@@ -139,15 +141,21 @@ const THR = {
 // weight (0.08) and the other 8 weights rescaled by ×0.92 so the table
 // still sums to 1.0.
 const WEIGHTS_FRONT = {
-  neck:     0.2437,
-  tilt:     0.0792,
-  shoulder: 0.0860,
-  spine:    0.1075,
-  distance: 0.0932,
-  yaw:      0.0430,
-  rounded:  0.0645,
-  fhp:      0.1573,
-  monitor:  0.0756,
+  neck:     0.2132,
+  tilt:     0.0693,
+  shoulder: 0.0757,
+  spine:    0.0915,
+  distance: 0.0820,
+  yaw:      0.0378,
+  rounded:  0.0568,
+  fhp:      0.1376,
+  monitor:  0.0661,
+  // Forward slouch and trunk twist were previously unscored entirely: a full
+  // slump moved the total by 2 points and a 45-degree twist by 0, while lower
+  // back and neck/shoulder are the two most-reported problem regions among
+  // office workers. The ten weights above are scaled to make room.
+  torsoFlex: 0.0800,
+  trunkRot:  0.0400,
   // analyzeShoulderElevation() was added specifically because "no metric in
   // this engine reacted to a shoulder shrug at all" — but it was never given a
   // weight, so it still didn't: a measured SEVERE shrug (13.5% elevation) moved
@@ -182,6 +190,10 @@ const SEV = {
   SHOULDER_ELEV: { mild: 3, moderate: 7, severe: 12 },
   // Monitor/gaze pitch (degrees off level — looking down or up)
   MONITOR_PITCH: { mild: 5, moderate: 10, severe: 18 },
+  // Trunk twist (degrees off square-on to the camera)
+  TRUNK_ROT:     { mild: 12, moderate: 20, severe: 30 },
+  // Torso flexion / forward slouch (% shortening of the shoulder-hip span)
+  TORSO_FLEX:    { mild: 12, moderate: 20, severe: 30 },
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -507,6 +519,38 @@ let _shRatioEMA  = null;
 // display, the score and the disagreement in one place.
 let _distMedBuf = [];
 const DIST_MED_N = 9;
+
+// ── Session self-baselines for the two posture-CHANGE metrics ──────────────
+// Trunk rotation and torso flexion are both ratios of body measurements, and
+// the population constants they would otherwise need vary enormously between
+// people: IPD spans ~5.5-7.0cm and shoulder width ~36-48cm, so a
+// shoulder/IPD ratio can sit +/-25% off "average" for a perfectly square
+// subject — enough phantom signal to swamp the real one. The same is true of
+// the shoulder-to-hip span, which additionally depends on camera height and
+// tilt as much as on the person.
+//
+// So neither is scored against an absolute constant. Each learns THIS user's
+// own neutral from the settled early part of the session and then scores the
+// CHANGE from it — which is also the more useful question for these two
+// postures, since slouching and twisting develop over a session rather than
+// being fixed traits. A calibrated neutral overrides the learned one.
+function _makeBaseline(warmupSkip, sampleN) {
+  return { skipped: 0, samples: [], value: null, warmupSkip, sampleN };
+}
+function _feedBaseline(b, v) {
+  if (!Number.isFinite(v)) return b.value;
+  if (b.value !== null) return b.value;
+  // Ignore the first frames: the user is usually still settling into the chair.
+  if (b.skipped < b.warmupSkip) { b.skipped++; return null; }
+  b.samples.push(v);
+  if (b.samples.length >= b.sampleN) {
+    const sorted = b.samples.slice().sort((a, c) => a - c);
+    b.value = sorted[Math.floor(sorted.length / 2)]; // median, robust to outliers
+  }
+  return b.value;
+}
+let _trunkBase = _makeBaseline(40, 60);
+let _torsoBase = _makeBaseline(40, 60);
 function smoothDistance(cm) {
   if (!Number.isFinite(cm)) return cm;
   _distMedBuf.push(cm);
@@ -567,6 +611,13 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
     midSh:      { x: (lSh.x + rSh.x) / 2, y: (lSh.y + rSh.y) / 2, z: (lSh.z + rSh.z) / 2 },
     midShZ:     (lSh.z + rSh.z) / 2,
     shWidthPx:  shWidthPxForCalc,
+    // The MEASURED shoulder-landmark separation, before the eye-span
+    // substitution above. shWidthPx deliberately swaps in an IPD-derived
+    // estimate when uncalibrated (it is steadier for the cm-per-pixel maths),
+    // but that estimate is blind to shoulder foreshortening by construction —
+    // so anything measuring the shoulder line itself, such as trunk rotation,
+    // must use this raw value instead.
+    shWidthPxRaw: shWidthPx,
     shWidthFrac,
     shRatio,
     cmPerPx,
@@ -642,6 +693,8 @@ function smoothConfidence(key, currentConfidence, alpha = 0.25) {
 export function resetProportions() {
   _shRatioEMA = null;
   _distMedBuf = [];
+  _trunkBase  = _makeBaseline(40, 60);
+  _torsoBase  = _makeBaseline(40, 60);
   _ipdShEMA   = null; // reset IPD estimate for new session
   analyzeMP._frameN = 0;
   analyzeMP._cachedRounded = null;
@@ -1026,6 +1079,123 @@ function analyzeShoulderLevel(lms, W, H, prop, calib = null) {
   return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 90, reliable: true, personalised:t.personalised };
 }
 
+/**
+ * Trunk rotation — how far the shoulder line is twisted away from square-on.
+ *
+ * WHY THIS EXISTS: nothing in this engine reacted to a twisted torso. Measured
+ * before adding it, a subject rotated a full 45 degrees scored identically to
+ * one sitting square (95 vs 95, zero movement). Sitting turned toward an
+ * off-centre monitor is one of the most common desk setups there is, it loads
+ * the lumbar spine and neck asymmetrically, and head_yaw does not catch it —
+ * someone twisted at the trunk is usually facing their screen squarely with
+ * their HEAD, so head yaw reads ~0 while the whole torso is rotated.
+ *
+ * METHOD: shoulder width foreshortens as cos(theta) under rotation, but it also
+ * shrinks with distance — so raw width says nothing on its own. Dividing by the
+ * inter-pupillary distance removes distance entirely (both are measured at
+ * essentially the same depth), leaving a pure rotation signal. Head yaw
+ * foreshortens the IPD in the same way, so it is corrected out first; otherwise
+ * simply turning your head would masquerade as a twisted trunk.
+ */
+function analyzeTrunkRotation(lms, W, H, prop, headYawDeg = 0, calib = null) {
+  const g   = i => lms[i];
+  const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
+  if (!prop.shOK || !vis(PL.L_EYE) || !vis(PL.R_EYE)) {
+    return { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+  }
+
+  const ipdPx = Math.abs(g(PL.R_EYE).x * W - g(PL.L_EYE).x * W);
+  // MUST be the measured shoulder separation, not prop.shWidthPx — that one is
+  // substituted with an eye-span-derived estimate when uncalibrated, which
+  // cannot shrink when the trunk turns, so this metric would read a flat 0
+  // degrees at any angle.
+  const shPx  = prop.shWidthPxRaw ?? prop.shWidthPx;
+  if (ipdPx < 4 || shPx < 20) {
+    return { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+  }
+
+  // Undo the head-yaw foreshortening of the IPD before using it as the ruler.
+  const cosYaw = Math.max(Math.cos(Math.min(60, Math.abs(headYawDeg)) * Math.PI / 180), 0.5);
+  const ipdTrue = ipdPx / cosYaw;
+
+  const ratio = shPx / ipdTrue;
+
+  // Neutral: the user's own settled early-session ratio (or a calibrated one).
+  // A population constant is unusable here — see the _makeBaseline note.
+  const personalised = typeof calib?.trunk_ratio_neutral === "number";
+  const neutralRatio = personalised
+    ? calib.trunk_ratio_neutral
+    : _feedBaseline(_trunkBase, ratio);
+
+  // Still learning this user's neutral — report nothing rather than guess.
+  if (neutralRatio == null) {
+    return { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false, calibrating: true };
+  }
+
+  // ratio = neutral * cos(theta)  ->  theta = acos(ratio / neutral).
+  // Only SHRINKAGE means rotation; a ratio above neutral is noise, not a twist.
+  const cosT  = Math.max(0, Math.min(1, ratio / Math.max(neutralRatio, 0.1)));
+  const angle = Math.round(Math.acos(cosT) * 180 / Math.PI);
+
+  const score    = scoreMetric(angle, 0, THR.TRUNK_ROT.ok, THR.TRUNK_ROT.bad);
+  const severity = classify(angle, SEV.TRUNK_ROT);
+  return { angle, score, severity, confidence: personalised ? 88 : 80, reliable: true, personalised };
+}
+
+/**
+ * Torso flexion — the forward slouch/slump.
+ *
+ * WHY THIS EXISTS: lower back is the second most affected region in office
+ * workers (~52% report it), and this engine had nothing that reacted to a
+ * forward slump. analyzeSpineLean is explicitly a LATERAL detector — its own
+ * comment says a forward slouch "barely moves it", because that motion is
+ * almost entirely along the camera's depth axis. Measured before adding this, a
+ * progressive slump from upright to fully slouched moved the overall score by
+ * 2 points while spine_lean sat at a perfect 100 the whole way.
+ *
+ * METHOD: as the trunk flexes forward, the shoulder-to-hip span foreshortens in
+ * the image. Normalising by shoulder width makes that scale-invariant, the same
+ * trick analyzeRoundedShoulders uses for the ear-shoulder gap. Requires hips in
+ * frame; on a laptop camera they often are not, in which case this reports
+ * unreliable and the composite simply redistributes its weight.
+ */
+function analyzeTorsoFlexion(lms, W, H, prop, calib = null) {
+  const g   = i => lms[i];
+  const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
+  const hipOK = vis(PL.L_HIP) && vis(PL.R_HIP);
+  if (!prop.shOK || !hipOK) {
+    return { ratio: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+  }
+
+  const midHipY = ((g(PL.L_HIP).y + g(PL.R_HIP).y) / 2) * H;
+  const torsoPx = midHipY - prop.midSh.y;           // image-space, hips below shoulders
+  const shRefPx = prop.shWidthPxRaw ?? prop.shWidthPx;
+  if (torsoPx <= 0 || shRefPx < 20) {
+    return { ratio: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+  }
+  const ratio = torsoPx / shRefPx;
+
+  // Neutral: this user's own settled early-session span, or a calibrated one.
+  // An absolute constant can't work — the projected shoulder-to-hip distance
+  // depends on camera height and tilt as much as on the person's build.
+  const personalised = typeof calib?.torso_ratio_neutral === "number";
+  const neutral = personalised
+    ? calib.torso_ratio_neutral
+    : _feedBaseline(_torsoBase, ratio);
+
+  if (neutral == null) {
+    return { ratio: 0, score: 90, severity: "normal", confidence: 0, reliable: false, calibrating: true };
+  }
+
+  // Only SHORTENING counts. A longer-than-neutral span means sitting taller
+  // than baseline, which is not a fault.
+  const shrinkPct = Math.max(0, (neutral - ratio) / Math.max(neutral, 0.1)) * 100;
+  const score    = scoreMetric(shrinkPct, 0, THR.TORSO_FLEX.ok, THR.TORSO_FLEX.bad);
+  const severity = classify(shrinkPct, SEV.TORSO_FLEX);
+  return { ratio: Math.round(ratio * 100) / 100, shrinkPct: Math.round(shrinkPct),
+           score, severity, confidence: personalised ? 88 : 82, reliable: true, personalised };
+}
+
 function analyzeSpineLean(lms, W, H, prop, roundedScore, calib = null) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
@@ -1365,7 +1535,7 @@ function buildAlerts(modules, distCm, lo, hi) {
     return text;
   };
 
-  const { neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance, shoulderElev, handProp } = modules;
+  const { neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance, shoulderElev, handProp, torsoFlex, trunkRot } = modules;
 
   return [
     add("neck_sev",  neck.angle > neck.badAdj,                    `⚠️ Severe neck lean ${neck.angle}° — raise monitor to eye level immediately`),
@@ -1417,6 +1587,18 @@ function buildAlerts(modules, distCm, lo, hi) {
     // quantify the actual neck angle once an ear is occluded, so this just
     // makes sure the user isn't left with zero feedback while a real
     // desk habit silently drops ~50% of the score's weight to "unreliable".
+    // Forward slouch — the posture behind most lower-back complaints, and one
+    // this engine used to be completely blind to.
+    add("slouch_sev", torsoFlex?.reliable && torsoFlex.severity === "severe",
+        `⚠️ Slouching forward — stack your ribs over your hips and let the chair back support you`),
+    add("slouch_mid", torsoFlex?.reliable && (torsoFlex.severity === "moderate" || torsoFlex.severity === "mild"),
+        `You're starting to slump — sit tall, hips back in the seat`),
+    // Trunk twist — usually an off-centre monitor rather than a habit, so the
+    // advice names the fix rather than telling the user to "sit better".
+    add("twist_sev", trunkRot?.reliable && trunkRot.severity === "severe",
+        `⚠️ Torso twisted ${trunkRot.angle}° — square your chair to the screen instead of turning your body`),
+    add("twist_mid", trunkRot?.reliable && trunkRot.severity === "moderate",
+        `Sitting turned ${trunkRot.angle}° — centre your monitor so you don't have to twist`),
     add("hand_prop", handProp?.detected, `Hand/object covering one ear — resting your chin on your hand hides real neck strain from being measured`),
   ].filter(Boolean);
 }
@@ -1530,6 +1712,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const shoulder = analyzeShoulderLevel(lms, W, H, prop, calib);
   const yaw      = analyzeHeadYawModule(lms, W, H);
   const shoulderElev = analyzeShoulderElevation(lms, W, H, prop, calib);
+  // Forward slouch and trunk twist — the two most common desk postures the
+  // engine previously had no reaction to at all. See each function's header.
+  const torsoFlex = analyzeTorsoFlexion(lms, W, H, prop, calib);
+  const trunkRot  = analyzeTrunkRotation(lms, W, H, prop, headYaw, calib);
 
   // Expensive metrics — cached between frames.
   // IMPORTANT: rounded must be computed BEFORE spine because analyzeSpineLean
@@ -1566,6 +1752,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   spine.reliable         = debounceReliable("spine",         spine.reliable);
   yaw.reliable           = debounceReliable("yaw",           yaw.reliable);
   shoulderElev.reliable  = debounceReliable("shoulderElev",  shoulderElev.reliable);
+  torsoFlex.reliable     = debounceReliable("torsoFlex",     torsoFlex.reliable);
+  trunkRot.reliable      = debounceReliable("trunkRot",      trunkRot.reliable);
   rounded.reliable       = debounceReliable("rounded",       rounded.reliable);
   fhp.reliable           = debounceReliable("fhp",           fhp.reliable);
   elbow.reliable         = debounceReliable("elbow",         elbow.reliable);
@@ -1594,9 +1782,11 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const W_fhp      = confWeight(fhp,      WEIGHTS_FRONT.fhp);
   const W_monitor  = confWeight(monitor,  WEIGHTS_FRONT.monitor);
   const W_shElev   = confWeight(shoulderElev, WEIGHTS_FRONT.shoulderElev);
+  const W_torso    = confWeight(torsoFlex, WEIGHTS_FRONT.torsoFlex);
+  const W_twist    = confWeight(trunkRot,  WEIGHTS_FRONT.trunkRot);
   const W_dist     = WEIGHTS_FRONT.distance; // distance is always measured
 
-  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp + W_monitor + W_shElev;
+  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp + W_monitor + W_shElev + W_torso + W_twist;
 
   // True weighted average: divide by the weight actually used.
   //
@@ -1627,7 +1817,9 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
         rounded.score  * W_rounded  +
         fhp.score      * W_fhp      +
         monitor.score  * W_monitor  +
-        shoulderElev.score * W_shElev
+        shoulderElev.score * W_shElev +
+        torsoFlex.score * W_torso   +
+        trunkRot.score  * W_twist
       ) / W_ACTUAL)))
     // Effectively nothing measurable this frame — report the distance channel
     // alone rather than inventing a number out of a constant.
@@ -1746,7 +1938,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   }
 
   // Alerts
-  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, shoulderElev, handProp }, distCm, lo, hi);
+  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, shoulderElev, handProp, torsoFlex, trunkRot }, distCm, lo, hi);
 
   return {
     score:       overall,
@@ -1778,6 +1970,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       monitor:  { ...monitor,  label: "Monitor Height" },
       shoulderElev: { ...shoulderElev, label: "Shoulder Elevation" },
       handProp: { ...handProp, label: "Hand/Chin Prop Detected" },
+      torsoFlex: { ...torsoFlex, label: "Forward Slouch" },
+      trunkRot:  { ...trunkRot,  label: "Trunk Rotation" },
     },
 
     detectedConditions: [
@@ -1790,6 +1984,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       shoulderElev.severity !== "normal" && shoulderElev.reliable && { name: "Shoulder Elevation", severity: shoulderElev.severity, value: `${shoulderElev.elevPct}%` },
       monitor.severity  !== "normal" && monitor.reliable && { name: "Monitor/Gaze Angle", severity: monitor.severity, value: `${monitor.pitchDeg}°` },
       handProp.detected && { name: "Hand/Chin Prop", severity: "mild", value: "detected" },
+      torsoFlex.reliable && torsoFlex.severity !== "normal" && { name: "Forward Slouch",   severity: torsoFlex.severity, value: `${torsoFlex.shrinkPct}%` },
+      trunkRot.reliable  && trunkRot.severity  !== "normal" && { name: "Trunk Rotation",   severity: trunkRot.severity,  value: `${trunkRot.angle}°` },
     ].filter(Boolean),
 
     // Legacy metrics shape (backward-compatible with App.jsx/overlays)
@@ -1802,6 +1998,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       screen_distance:   { value: distCm,           score: distSc,         unit: "cm", label: "Screen distance",     calibrated: !!(distCalibFactor && distCalibFactor > 0) },
       fhp_index:         { value: fhp.distCm,       score: fhp.score,      unit: "cm", label: "Forward head posture",extra_load_kg: fhp.extraLoadKg, reliable: fhp.reliable },
       rounded_shoulders: { value: rounded.depth,    score: rounded.score,  unit: "depth", label: "Rounded shoulders",asymmetry: rounded.asymmetry, reliable: rounded.reliable },
+      torso_flexion:     { value: torsoFlex.shrinkPct, score: torsoFlex.score, unit: "%",  label: "Forward slouch",   reliable: torsoFlex.reliable },
+      trunk_rotation:    { value: trunkRot.angle,      score: trunkRot.score,  unit: "°",  label: "Trunk rotation",   reliable: trunkRot.reliable },
       shoulder_elevation:{ value: shoulderElev.elevPct, score: shoulderElev.score, unit: "%", label: "Shoulder elevation (shrug)", reliable: shoulderElev.reliable },
       elbow_angle:       { value: elbow.angle,      score: elbow.score,    unit: "°",  label: "Elbow angle",         reliable: elbow.reliable },
       monitor_height:    { value: monitor.offsetCm, score: monitor.score,  unit: "cm", label: "Monitor height offset",direction: monitor.direction, reliable: monitor.reliable },

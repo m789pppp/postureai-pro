@@ -284,6 +284,8 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     const ipdFracs = []; // for distance calibration
     const roundedRatios = []; // neutral ear→shoulder elevation ratio (rounded-shoulder baseline)
     const noseDropFracs = []; // neutral nose-below-eyeline ratio (monitor-pitch baseline)
+    const trunkRatios   = []; // neutral shoulder-width / IPD  (trunk-rotation baseline)
+    const torsoRatios   = []; // neutral shoulder-hip span / shoulder width (slouch baseline)
     // Convert to PIXEL space (×W, ×H) so angles match postureEngine.js.
     const { W: Wd, H: Hd } = dimsRef.current;
     collected.forEach(lms0 => {
@@ -320,6 +322,19 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       const eyeSpanPx = Math.abs(rEye.x - lEye.x);
       if (eyeSpanPx > 2 && (lms0[LM.NOSE]?.visibility ?? 0) > 0.5) {
         noseDropFracs.push((nose.y - (lEye.y + rEye.y) / 2) / eyeSpanPx);
+      }
+      // Neutral shoulder-to-IPD ratio (trunk rotation) and shoulder-to-hip span
+      // (forward slouch). Both are scored as a CHANGE from the user's own
+      // neutral rather than against a population constant — IPD spans ~5.5-7.0cm
+      // and shoulder width ~36-48cm, so an absolute ratio can sit 25% off
+      // "average" for someone sitting perfectly square. Capturing them here
+      // means the engine doesn't have to spend the first minute of every
+      // session learning them.
+      const ipdPxC = Math.abs(rEye.x - lEye.x);
+      if (ipdPxC > 2 && shWpx > 1) trunkRatios.push(shWpx / ipdPxC);
+      if (shWpx > 1 && (lms0[23]?.visibility ?? 0) > 0.5 && (lms0[24]?.visibility ?? 0) > 0.5) {
+        const torsoPx = midHip.y - midSh.y;
+        if (torsoPx > 0) torsoRatios.push(torsoPx / shWpx);
       }
       // Signed for asymmetric offset detection
       neckAngles_s.push(angleV_signed(midSh, neckRef));
@@ -391,6 +406,8 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       ...(roundedRatios.length >= 5 ? { rounded_neutral: Math.round(avg(roundedRatios) * 1000) / 1000 } : {}),
       // Personal neutral for analyzeMonitorHeight() — see the capture note above.
       ...(noseDropFracs.length >= 5 ? { nose_drop_neutral: Math.round(avg(noseDropFracs) * 1000) / 1000 } : {}),
+      ...(trunkRatios.length   >= 5 ? { trunk_ratio_neutral: Math.round(avg(trunkRatios) * 1000) / 1000 } : {}),
+      ...(torsoRatios.length   >= 5 ? { torso_ratio_neutral: Math.round(avg(torsoRatios) * 1000) / 1000 } : {}),
     };
 
     // Distance calibration: distCalibFactor = knownDistanceCm * ipdFraction.
