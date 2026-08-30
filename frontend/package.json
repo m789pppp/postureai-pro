@@ -11,9 +11,12 @@
     "typecheck": "tsc --noEmit 2>/dev/null || true",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
-    "analyze": "vite-bundle-visualizer"
+    "analyze": "vite-bundle-visualizer",
+    "fetch:mediapipe": "node scripts/fetch-mediapipe.mjs",
+    "prebuild": "node scripts/fetch-mediapipe.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.14",
     "@mlc-ai/web-llm": "^0.2.84",
     "@sentry/react": "^8.0.0",
     "firebase": "^10.12.0",

@@ -141,9 +141,11 @@ export const AnalysisAPI = {
   // a backend outage into hundreds of concurrent full-frame uploads.
   analyze:      ({ timeout, signal, ...data } = {}) =>
     apiFetch("/analyze", { method: "POST", body: data, ...(timeout ? { timeout } : {}) }),
-  snapshot:     (data) => apiFetch("/session/snapshot", { method: "POST", body: data }),
-  addSnapshot:  (sid, frame, score, timestamp) =>
-    apiFetch("/session/snapshot", { method: "POST", body: { session_id: sid, frame, score, timestamp } }),
+  // REMOVED: snapshot() / addSnapshot(). These posted raw webcam frames to
+  // /session/snapshot, which stored them unblurred in Firestore. Nothing
+  // called them, the endpoint now returns 410, and keeping the wrappers
+  // around only invites someone to wire them back up. Posture analysis runs
+  // on-device; no image data is transmitted.
   startSession: (data) => apiFetch("/session/start",    { method: "POST", body: data, timeout: 8000 }),
   getSession:   (sid)  => apiFetch(`/session/${sid}`),
   deleteSession:(sid)  => apiFetch("/session/delete",   { method: "POST", body: { session_id: sid } }),

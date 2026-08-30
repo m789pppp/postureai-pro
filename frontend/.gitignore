@@ -28,3 +28,6 @@ dist-ssr/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# MediaPipe assets — ~28MB, staged at build time by scripts/fetch-mediapipe.mjs
+public/mediapipe/
