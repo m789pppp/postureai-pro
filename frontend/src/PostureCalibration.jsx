@@ -139,6 +139,11 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     },
   };
   const t = T[lang] || T.en;
+  // Defined here because the quality-warnings block below referenced `isAr`
+  // without it ever being declared — a ReferenceError that blanked the wizard
+  // at its final step, but only for the users whose calibration posture was
+  // poor enough to produce warnings.
+  const isAr = lang === "ar";
 
   // Start camera
   const startCamera = useCallback(async () => {
@@ -278,6 +283,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     const neckAngles_s = [], headTilts_s = [], shoulderTilts_s = [], spineAngles_s = []; // signed
     const ipdFracs = []; // for distance calibration
     const roundedRatios = []; // neutral ear→shoulder elevation ratio (rounded-shoulder baseline)
+    const noseDropFracs = []; // neutral nose-below-eyeline ratio (monitor-pitch baseline)
     // Convert to PIXEL space (×W, ×H) so angles match postureEngine.js.
     const { W: Wd, H: Hd } = dimsRef.current;
     collected.forEach(lms0 => {
@@ -300,6 +306,21 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       // (midShoulderY − midEarY) / shoulderWidthPx, in pixel space.
       const shWpx = Math.abs(rSh.x - lSh.x);
       if (shWpx > 1) roundedRatios.push((midSh.y - midEar.y) / shWpx);
+      // Personal neutral nose-drop, normalised by eye span — must match
+      // analyzeMonitorHeight() in postureEngine.js. That metric infers head
+      // pitch from how far the nose sits below the eye line, against a single
+      // hardcoded population constant (NEUTRAL_NOSE_DROP_FRAC). But the
+      // denominator is the ~6.3cm IPD, so its 5-degree "ok" band corresponds to
+      // a nose-drop difference of only ~0.35cm — well inside normal facial
+      // variation. Measured with a perfectly level head, a short nose read
+      // -7 degrees ("lower your monitor") and a long nose +10 ("raise your
+      // monitor"), each carrying a permanent unclearable alert and score
+      // deduction. Capturing the user's own neutral here is what actually makes
+      // this metric measure gaze pitch instead of face shape.
+      const eyeSpanPx = Math.abs(rEye.x - lEye.x);
+      if (eyeSpanPx > 2 && (lms0[LM.NOSE]?.visibility ?? 0) > 0.5) {
+        noseDropFracs.push((nose.y - (lEye.y + rEye.y) / 2) / eyeSpanPx);
+      }
       // Signed for asymmetric offset detection
       neckAngles_s.push(angleV_signed(midSh, neckRef));
       headTilts_s.push(angleH_signed(lEye, rEye));
@@ -368,6 +389,8 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
       asymmetric_correction: true,
       // Personal neutral ear→shoulder ratio for rounded-shoulder scoring
       ...(roundedRatios.length >= 5 ? { rounded_neutral: Math.round(avg(roundedRatios) * 1000) / 1000 } : {}),
+      // Personal neutral for analyzeMonitorHeight() — see the capture note above.
+      ...(noseDropFracs.length >= 5 ? { nose_drop_neutral: Math.round(avg(noseDropFracs) * 1000) / 1000 } : {}),
     };
 
     // Distance calibration: distCalibFactor = knownDistanceCm * ipdFraction.
