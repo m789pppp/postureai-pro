@@ -497,6 +497,23 @@ export function createFrameBuffer(size = FRAME_BUFFER_SIZE) {
  */
 // Stable shRatio — EMA across calls to prevent per-frame jitter
 let _shRatioEMA  = null;
+// Sliding median for distance. App.jsx had a smoother of its own, but it
+// overwrote only `distCm` and `metrics.screen_distance.value` AFTER analyzeMP
+// had already returned — so the distance SCORE (and the ~9.3% of the composite
+// it carries) was still computed from the raw single-frame estimate. Result:
+// the number on screen was smooth while the score it sat next to jittered, and
+// the two could disagree outright (display reading 60cm while the score came
+// from a 75cm spike). Smoothing here, before distanceScore() runs, fixes the
+// display, the score and the disagreement in one place.
+let _distMedBuf = [];
+const DIST_MED_N = 9;
+function smoothDistance(cm) {
+  if (!Number.isFinite(cm)) return cm;
+  _distMedBuf.push(cm);
+  if (_distMedBuf.length > DIST_MED_N) _distMedBuf.shift();
+  const sorted = _distMedBuf.slice().sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
 let _ipdShEMA    = null;  // IPD-based shoulder width estimate (pixels), EMA-smoothed
 
 function computeProportions(lms, W, H, calibKnownDistCm = null) {
@@ -624,6 +641,7 @@ function smoothConfidence(key, currentConfidence, alpha = 0.25) {
 /** Call on session reset / camera restart to clear proportion memory */
 export function resetProportions() {
   _shRatioEMA = null;
+  _distMedBuf = [];
   _ipdShEMA   = null; // reset IPD estimate for new session
   analyzeMP._frameN = 0;
   analyzeMP._cachedRounded = null;
@@ -854,8 +872,24 @@ function checkFrameQuality(lms, W, H) {
   // we crossed it. The overall score needs this: a boolean can only be applied
   // as a flat penalty, which is either too harsh at the boundary or too weak
   // when someone is right on top of the lens.
-  if (lShPx < W * 0.01 || rShPx > W * 0.99) {
-    return { ok: false, reason: "too_close", severity: 1 };
+  // Convention-agnostic edge test. This used to read
+  //   lShPx < W*0.01 || rShPx > W*0.99
+  // which assumes L_SHOULDER sits at the LOW-x edge — the mirrored
+  // convention. Landmarks actually arrive unmirrored (see the sign note in
+  // analyzeSpineLean), so L_SHOULDER is the HIGH-x one and both halves of that
+  // test were unsatisfiable for a forward-facing subject: the branch never
+  // fired. Comparing min/max instead makes it work under either convention,
+  // and — importantly — it can no longer misfire the OPPOSITE way, labelling a
+  // distant user at the frame edge as "too close" and telling them to back
+  // away from three metres out.
+  const shMinPx = Math.min(lShPx, rShPx);
+  const shMaxPx = Math.max(lShPx, rShPx);
+  if (shMinPx < W * 0.01 || shMaxPx > W * 0.99) {
+    // Only a genuinely wide subject can have a shoulder off-frame because they
+    // are close; a narrow one is simply off-centre, which is not a proximity
+    // problem and must not be scored as one.
+    const spanFrac = shWidthPx / Math.max(W, 1);
+    if (spanFrac > 0.55) return { ok: false, reason: "too_close", severity: 1 };
   }
 
   // Too close: shoulders take up >85% of frame width
@@ -921,9 +955,25 @@ function analyzeNeckLean(lms, W, H, prop, calib = null) {
     : 0;
   const angle = Math.max(0, rawAngle - correctionDeg);
 
-  // Normalize thresholds by distance (shoulder-width ratio)
-  const okAdj  = Math.max(5.0,  6.0  * prop.shRatio);
-  const badAdj = Math.max(12.0, 17.0 * prop.shRatio);
+  // FIXED angular thresholds — deliberately NOT scaled by apparent body size.
+  //
+  // These used to be `6.0 * prop.shRatio` / `17.0 * prop.shRatio`, where
+  // shRatio is just how much of the frame the shoulders span, i.e. a proxy for
+  // seating distance. But `angle` here comes from angleVert(), and an angle in
+  // a fronto-parallel plane is already scale-invariant: sitting nearer does not
+  // change the angle your neck makes, it only makes everything bigger in
+  // pixels. Widening the tolerance band for a nearer user had no geometric
+  // basis — if anything close-range landmarks are the more reliable ones.
+  //
+  // Measured on a fixed 12 deg neck lean with only the chair distance varied,
+  // the old scaling produced scores of 31 / 43 / 52 / 59 / 63 across the normal
+  // seating range: a 32-point swing on the single highest-weighted metric
+  // (~0.24 of the total), so the overall score drifted by ~8 points as the user
+  // leaned in and out over the day while their actual neck posture was
+  // unchanged. The anchor values are the ones the scaling produced at the
+  // reference distance.
+  const okAdj  = 6.0;
+  const badAdj = 17.0;
 
   // Personalised scoring: deviation from the user's own neutral neck angle
   // (from calibration) using their tolerance band; else distance-normalised
@@ -963,7 +1013,14 @@ function analyzeShoulderLevel(lms, W, H, prop, calib = null) {
   const dev = Math.abs(angle - t.ideal);
   const score    = scoreMetric(angle, t.ideal, t.ok, t.bad);
   const severity = classify(dev, SEV.SHOULDER);
-  // Signed: positive = right shoulder higher
+  // Signed: positive = the subject's RIGHT shoulder is LOWER.
+  // (Image y grows downward, so rSh.y > lSh.y means the right shoulder sits
+  // lower in the frame.) The comment here used to say "right shoulder higher",
+  // which is backwards on its own terms — the code and its consumer in
+  // App.jsx's session-insight tracker ("right shoulder lower on average") were
+  // already consistent with each other, so only the comment was wrong.
+  // Unlike the spine sign below this is a Y comparison, so it is unaffected by
+  // whether the frame is mirrored.
   const signed   = (prop.rSh.y - prop.lSh.y) > 0 ? angle : -angle;
 
   return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 90, reliable: true, personalised:t.personalised };
@@ -993,10 +1050,28 @@ function analyzeSpineLean(lms, W, H, prop, roundedScore, calib = null) {
   // Z), so this metric is geometrically a LATERAL (sideways) lean
   // detector — a forward slouch toward the screen barely moves it, since
   // that motion is mostly along the camera's depth axis, not sideways in
-  // the image. Positive = shoulders shifted right of the hip midpoint =
-  // leaning right; negative = leaning left. Needed so buildAlerts() can
-  // give direction-correct advice instead of assuming forward slouch.
-  const signed = (prop.midSh.x - midHip.x) > 0 ? angle : -angle;
+  // the image. Needed so buildAlerts() can give direction-correct advice
+  // instead of assuming forward slouch.
+  //
+  // SIGN CONVENTION — this was inverted, and the app told users to correct
+  // the wrong side. App.jsx calls detectForVideo() on the raw <video>
+  // element; the CSS `transform: scaleX(-1)` there is display-only and does
+  // not touch the pixels MediaPipe reads. So landmarks arrive UNMIRRORED,
+  // and in an unmirrored front-facing frame the subject's anatomical LEFT
+  // appears at HIGHER image x (L_SHOULDER.x > R_SHOULDER.x). The old test
+  // `(midSh.x - midHip.x) > 0` therefore meant "shoulders shifted toward the
+  // subject's LEFT" while every consumer — buildAlerts' "Leaning right" copy
+  // and App.jsx's `rightLean = signed > 0` cue — read positive as RIGHT.
+  //
+  // Derive the direction from the landmarks themselves rather than assuming
+  // an x-ordering, so this stays correct if a caller ever feeds a
+  // pre-mirrored frame: `leftIsHigherX` tells us which way anatomical-left
+  // points in THIS frame, and positive stays "leaning to the subject's
+  // right" as the consumers expect.
+  const leftIsHigherX = prop.lSh.x >= prop.rSh.x;
+  const towardHigherX = (prop.midSh.x - midHip.x) > 0;
+  const leaningRight  = leftIsHigherX ? !towardHigherX : towardHigherX;
+  const signed = leaningRight ? angle : -angle;
   return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 88, reliable: true, personalised:t.personalised };
 }
 
@@ -1225,7 +1300,7 @@ function analyzeElbow(lms, W, H) {
   return { angle: avg, idealMin: 90, idealMax: 120, score, severity, confidence: 80, reliable: true };
 }
 
-function analyzeMonitorHeight(lms, W, H, distCm) {
+function analyzeMonitorHeight(lms, W, H, distCm, calib = null) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
   if (!vis(PL.L_EYE) || !vis(PL.R_EYE)) return { offsetCm: 0, direction: "ok", score: 90, severity: "normal", confidence: 0, reliable: false };
@@ -1238,8 +1313,22 @@ function analyzeMonitorHeight(lms, W, H, distCm) {
   const eyeWidth = Math.abs(rEye.x - lEye.x);
   if (eyeWidth < 2) return { offsetCm: 0, direction: "ok", score: 90, severity: "normal", confidence: 0, reliable: false };
 
+  // Neutral = the user's OWN measured nose-drop when available.
+  //
+  // The denominator here is the eye-centre IPD (~6.3cm), so the 5-degree "ok"
+  // band corresponds to a nose-drop difference of only ~0.35cm — well inside
+  // normal facial variation. Against the single hardcoded population constant,
+  // a perfectly level head measured -7.2 degrees for a short nose and +9.9 for
+  // a long one: an unclearable "raise/lower your monitor" instruction plus a
+  // permanent score deduction determined by face shape rather than by where
+  // the monitor actually is. PostureCalibration now captures
+  // nose_drop_neutral, which removes that bias entirely for calibrated users.
+  const personalNeutral = typeof calib?.nose_drop_neutral === "number"
+    ? calib.nose_drop_neutral
+    : null;
+  const neutralFrac  = personalNeutral ?? NEUTRAL_NOSE_DROP_FRAC;
   const noseDropFrac = (nose.y - eyeMidY) / eyeWidth;
-  const pitchProxy   = (noseDropFrac - NEUTRAL_NOSE_DROP_FRAC) * 90;
+  const pitchProxy   = (noseDropFrac - neutralFrac) * 90;
   const pitchDeg     = Math.round(pitchProxy * 10) / 10;
 
   let offsetCm = 0, direction = "ok";
@@ -1248,9 +1337,20 @@ function analyzeMonitorHeight(lms, W, H, distCm) {
     direction = pitchDeg > 0 ? "below" : "above";
   }
 
-  const score    = scoreMetric(Math.abs(pitchDeg), 0, THR.MONITOR_PITCH.ok, THR.MONITOR_PITCH.bad);
-  const severity = classify(Math.abs(pitchDeg), SEV.MONITOR_PITCH);
-  return { offsetCm, direction, pitchDeg, score, severity, confidence: 72, reliable: true };
+  // Uncalibrated users keep a band wide enough that anatomy alone cannot push
+  // them out of it (normal face shape spans roughly +/-10 degrees of apparent
+  // pitch here); calibrated users get the tight, meaningful band because their
+  // neutral is measured rather than assumed. Confidence is likewise lower
+  // without a personal baseline, so the composite leans on it less.
+  const okThr  = personalNeutral != null ? THR.MONITOR_PITCH.ok  : 12;
+  const badThr = personalNeutral != null ? THR.MONITOR_PITCH.bad : 25;
+  const score    = scoreMetric(Math.abs(pitchDeg), 0, okThr, badThr);
+  const severity = classify(Math.abs(pitchDeg), personalNeutral != null
+    ? SEV.MONITOR_PITCH
+    : { mild: 12, moderate: 18, severe: 25 });
+  return { offsetCm, direction, pitchDeg, score, severity,
+           confidence: personalNeutral != null ? 72 : 55,
+           reliable: true, personalised: personalNeutral != null };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1305,8 +1405,13 @@ function buildAlerts(modules, distCm, lo, hi) {
     // can't tell those apart from a single frame's pitch reading alone, so
     // the copy now covers both possibilities honestly instead of asserting
     // one specific (and often incorrect) cause.
-    add("mon_low",   monitor.reliable && monitor.direction === "below" && monitor.offsetCm > 5, `Looking down ~${monitor.offsetCm}cm below eye level — raise your monitor, or if you're checking a phone/notes, keep it brief`),
-    add("mon_hi",    monitor.reliable && monitor.direction === "above" && monitor.offsetCm > 5, `Looking up ~${monitor.offsetCm}cm above eye level — lower your monitor`),
+    // Threshold depends on whether the neutral is measured or assumed: without
+    // calibration this reading carries up to ~10 deg of pure face-shape bias
+    // (~10cm of phantom offset at 60cm), which sailed past a flat 5cm trigger
+    // and gave a large subset of users a permanent, unclearable instruction to
+    // move a monitor that was already at eye level.
+    add("mon_low",   monitor.reliable && monitor.direction === "below" && monitor.offsetCm > (monitor.personalised ? 5 : 14), `Looking down ~${monitor.offsetCm}cm below eye level — raise your monitor, or if you're checking a phone/notes, keep it brief`),
+    add("mon_hi",    monitor.reliable && monitor.direction === "above" && monitor.offsetCm > (monitor.personalised ? 5 : 14), `Looking up ~${monitor.offsetCm}cm above eye level — lower your monitor`),
     // Hand/chin-prop occlusion — see analyzeMP() for detection logic. This
     // is deliberately informational-only (no score weight): we can't
     // quantify the actual neck angle once an ear is occluded, so this just
@@ -1370,7 +1475,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // of duplicating it with a hardcoded if/else that silently drifts if
   // MODES is ever edited elsewhere.
   const [lo, hi] = MODES[mode]?.distRange || MODES.laptop.distRange;
-  const distCm  = estimateDistanceCm(lms, W, H, headYaw, distCalibFactor, prop.effectiveShoulderWidthCm);
+  const distCm  = smoothDistance(estimateDistanceCm(lms, W, H, headYaw, distCalibFactor, prop.effectiveShoulderWidthCm));
   let   distSc  = distanceScore(distCm, lo, hi);
 
   // Reconcile the two independent distance signals.
@@ -1386,6 +1491,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // Frame geometry is the more direct evidence here (it measures pixels that
   // are actually there, with no calibration in the path), so on disagreement it
   // wins: cap distSc to the band that the geometric severity implies.
+  const distScUncapped = distSc;
   if (!quality.ok && (quality.reason === "too_close" || quality.reason === "too_far")) {
     const sev = typeof quality.severity === "number" ? quality.severity : 1;
     // sev 0 (just over the line) → cap 70; sev 1 (extreme) → cap 30, matching
@@ -1434,7 +1540,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     rounded = analyzeRoundedShoulders(lms, prop, H, calib);
     fhp     = analyzeFHP(lms, W, H, prop);
     elbow   = analyzeElbow(lms, W, H);
-    monitor = analyzeMonitorHeight(lms, W, H, distCm);
+    monitor = analyzeMonitorHeight(lms, W, H, distCm, calib);
     analyzeMP._cachedRounded = rounded;
     analyzeMP._cachedFhp     = fhp;
     analyzeMP._cachedElbow   = elbow;
@@ -1569,6 +1675,14 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
 
   const overall = Math.max(0, weightedScore - positionPenalty - occlusionPenalty);
 
+  // Mispositioning is charged twice — once by capping distSc (which makes the
+  // distance metric reflect reality) and once by positionPenalty (the ergonomic
+  // charge that makes the drop visible, since distance alone carries only ~9%).
+  // Both are intended, but the UI labels the drop with this number, so it has
+  // to be the TOTAL cost rather than just the second half of it.
+  const distScLoss = Math.round((distScUncapped - distSc) * W_dist);
+  const positionPenaltyTotal = positionPenalty + Math.max(0, distScLoss);
+
   // Detection confidence
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
@@ -1641,7 +1755,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     // How many points each adjustment removed, so the UI can explain the drop
     // ("−14 because you're too close") instead of the user seeing a number fall
     // for no stated reason.
-    positionPenalty,
+    // Total points removed for being mispositioned (the ergonomic charge plus
+    // the weighted loss from capping the distance metric), so the on-screen
+    // "-N" beside the distance chip matches what actually left the score.
+    positionPenalty: positionPenaltyTotal,
     occlusionPenalty,
     // Fraction of the weight table that was actually measurable this frame.
     // < 1 means part of the body wasn't visible and the score is a partial

@@ -180,5 +180,124 @@ console.log('\n--- 7. head yaw is monotonic and correctly scaled ---');
   check(Math.abs(Math.abs(seq[3].got) - 30) <= 6, `30 deg turn reports ~30 deg, not ~8 (got ${seq[3].got})`);
 }
 
+// ── 8. left/right must name the SUBJECT'S side ──────────────────────────────
+// App.jsx calls detectForVideo() on the raw <video>; its CSS scaleX(-1) is
+// display-only, so landmarks arrive UNMIRRORED and the subject's anatomical
+// LEFT sits at HIGHER image x. The spine sign test assumed the opposite, so
+// every direction cue named the wrong side.
+console.log('\n--- 8. lean direction names the correct side ---');
+{
+  const lean = (dir) => { // dir = the SUBJECT'S own side
+    const a = Array.from({ length: 33 }, () => ({ x: .5, y: .5, z: 0, visibility: .95 }));
+    const half = .17, shY = .60, hipY = .90, hy = shY - .26;
+    const shift = dir === 'right' ? -0.09 : +0.09;   // their right = lower x
+    const cxS = .5 + shift, cxH = .5;
+    a[PL.L_SHOULDER] = { x: cxS + half, y: shY, z: 0, visibility: .98 };
+    a[PL.R_SHOULDER] = { x: cxS - half, y: shY, z: 0, visibility: .98 };
+    a[PL.L_HIP] = { x: cxH + half * .8, y: hipY, z: 0, visibility: .95 };
+    a[PL.R_HIP] = { x: cxH - half * .8, y: hipY, z: 0, visibility: .95 };
+    a[PL.NOSE]  = { x: cxS, y: hy + .03, z: 0, visibility: .97 };
+    a[PL.L_EAR] = { x: cxS + .05, y: hy, z: 0, visibility: .95 };
+    a[PL.R_EAR] = { x: cxS - .05, y: hy, z: 0, visibility: .95 };
+    a[PL.L_EYE] = { x: cxS + .03, y: hy - .01, z: 0, visibility: .96 };
+    a[PL.R_EYE] = { x: cxS - .03, y: hy - .01, z: 0, visibility: .96 };
+    a[PL.L_EYE_OUTER] = { x: cxS + .045, y: hy - .01, z: 0, visibility: .96 };
+    a[PL.R_EYE_OUTER] = { x: cxS - .045, y: hy - .01, z: 0, visibility: .96 };
+    return a;
+  };
+  for (const d of ['right', 'left']) {
+    resetProportions();
+    const signed = analyzeMP(lean(d), W, H, 'laptop').metrics.spine_lean.signed;
+    const says = signed > 0 ? 'right' : 'left';
+    console.log(`  subject leans ${d.padEnd(5)} -> signed ${String(signed).padStart(6)} -> app says "${says}"`);
+    check(says === d, `lean ${d} is reported as ${d}, not the opposite side`);
+  }
+}
+
+// ── 9. neck score must not depend on how close you sit ──────────────────────
+// The thresholds were scaled by apparent body size, but angleVert() is already
+// scale-invariant — a fixed 12 deg lean scored 31 far away and 63 close up.
+console.log('\n--- 9. neck score is distance-independent ---');
+{
+  const neckAt = (frac) => {
+    const a = makeLandmarks({ shoulderFrac: frac });
+    const off = Math.tan(12 * Math.PI / 180) * 0.26, cx = .5, hy = .62 - .26;
+    a[PL.NOSE]  = { x: cx + off, y: hy + .03, z: 0, visibility: .97 };
+    a[PL.L_EAR] = { x: cx + off + .05, y: hy, z: 0, visibility: .95 };
+    a[PL.R_EAR] = { x: cx + off - .05, y: hy, z: 0, visibility: .95 };
+    resetProportions();
+    return analyzeMP(a, W, H, 'laptop').metrics.neck_lean.score;
+  };
+  const scores = [0.24, 0.29, 0.34, 0.40, 0.46].map(neckAt);
+  console.log('  same 12 deg lean at 5 seating distances ->', scores.join(' '));
+  const spread = Math.max(...scores) - Math.min(...scores);
+  check(spread <= 5, `neck score varies <= 5 pts with distance alone (was 32, got ${spread})`);
+}
+
+// ── 10. monitor pitch must measure gaze, not face shape ─────────────────────
+// The neutral nose-drop was one hardcoded population constant divided by the
+// ~6.3cm IPD, so its 5 deg band spanned ~0.35cm of nose length. A LEVEL head
+// read -7 deg for a short nose and +10 for a long one, each with a permanent
+// unclearable "raise/lower your monitor" and a score deduction.
+console.log('\n--- 10. monitor pitch does not punish face shape ---');
+{
+  const F = 800, dist = 60, IPD = 6.3;
+  const levelHead = (noseCm) => {
+    const ipdPx = IPD * F / dist, shPx = 42 * F / dist, nosePx = noseCm * F / dist;
+    const a = Array.from({ length: 33 }, () => ({ x: .5, y: .5, z: 0, visibility: .95 }));
+    const cx = .5, half = (shPx / W) / 2, ih = (ipdPx / W) / 2, shY = .62, eyeY = shY - .26;
+    a[PL.L_SHOULDER] = { x: cx + half, y: shY, z: 0, visibility: .98 };
+    a[PL.R_SHOULDER] = { x: cx - half, y: shY, z: 0, visibility: .98 };
+    a[PL.L_EYE] = { x: cx + ih, y: eyeY, z: 0, visibility: .96 };
+    a[PL.R_EYE] = { x: cx - ih, y: eyeY, z: 0, visibility: .96 };
+    a[PL.L_EYE_OUTER] = { x: cx + ih * 1.4, y: eyeY, z: 0, visibility: .96 };
+    a[PL.R_EYE_OUTER] = { x: cx - ih * 1.4, y: eyeY, z: 0, visibility: .96 };
+    a[PL.NOSE]  = { x: cx, y: eyeY + (nosePx / H), z: 0, visibility: .97 };
+    a[PL.L_EAR] = { x: cx + .05, y: eyeY, z: 0, visibility: .95 };
+    a[PL.R_EAR] = { x: cx - .05, y: eyeY, z: 0, visibility: .95 };
+    a[PL.L_HIP] = { x: cx + half * .8, y: shY + .3, z: 0, visibility: .9 };
+    a[PL.R_HIP] = { x: cx - half * .8, y: shY + .3, z: 0, visibility: .9 };
+    return a;
+  };
+  for (const nose of [3.4, 4.0, 4.6]) {
+    resetProportions();
+    const r = analyzeMP(levelHead(nose), W, H, 'laptop');
+    const fired = (r.alerts || []).some(a => /monitor/i.test(a));
+    console.log(`  level head, ${nose}cm nose -> monitor score ${r.bodyModules.monitor.score}, alert: ${fired ? 'YES' : 'no'}`);
+    check(!fired, `${nose}cm nose does not trigger a false monitor alert on a level head`);
+  }
+}
+
+// ── 11. sitting still must not make the score wander ────────────────────────
+// The distance smoother lived in App.jsx and ran AFTER analyzeMP returned, so
+// it fixed the displayed number while raw per-frame jitter still entered the
+// score through the distance weight.
+console.log('\n--- 11. distance jitter does not move the score ---');
+{
+  const F = 800;
+  const at = (d) => {
+    const shPx = 42 * F / d, ipdPx = 6.3 * F / d;
+    const a = Array.from({ length: 33 }, () => ({ x: .5, y: .5, z: 0, visibility: .95 }));
+    const cx = .5, half = (shPx / W) / 2, ih = (ipdPx / W) / 2, shY = .62, hy = shY - .26;
+    a[PL.L_SHOULDER] = { x: cx + half, y: shY, z: 0, visibility: .98 };
+    a[PL.R_SHOULDER] = { x: cx - half, y: shY, z: 0, visibility: .98 };
+    a[PL.NOSE]  = { x: cx, y: hy + .03, z: 0, visibility: .97 };
+    a[PL.L_EAR] = { x: cx + .05, y: hy, z: 0, visibility: .95 };
+    a[PL.R_EAR] = { x: cx - .05, y: hy, z: 0, visibility: .95 };
+    a[PL.L_EYE] = { x: cx + ih, y: hy - .01, z: 0, visibility: .96 };
+    a[PL.R_EYE] = { x: cx - ih, y: hy - .01, z: 0, visibility: .96 };
+    a[PL.L_EYE_OUTER] = { x: cx + ih * 1.4, y: hy - .01, z: 0, visibility: .96 };
+    a[PL.R_EYE_OUTER] = { x: cx - ih * 1.4, y: hy - .01, z: 0, visibility: .96 };
+    a[PL.L_HIP] = { x: cx + half * .8, y: shY + .3, z: 0, visibility: .9 };
+    a[PL.R_HIP] = { x: cx - half * .8, y: shY + .3, z: 0, visibility: .9 };
+    return a;
+  };
+  resetProportions();
+  const scores = [60,60,95,60,59,61,98,60,60,61,60,96,60,60].map(d => analyzeMP(at(d), W, H, 'laptop').score);
+  const spread = Math.max(...scores) - Math.min(...scores);
+  console.log('  scores while sitting still with a noisy estimate ->', scores.join(' '));
+  check(spread <= 4, `score spread while motionless stays <= 4 pts (was 8, got ${spread})`);
+}
+
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
 process.exit(failures === 0 ? 0 : 1);
