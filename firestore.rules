@@ -239,6 +239,23 @@ service cloud.firestore {
                     && request.resource.data.uid == request.auth.uid;
     }
 
+    // ── Consent records ──────────────────────────────────────────
+    // Was missing entirely, so the terminal deny-everything rule blocked it
+    // and the client could not record a consent grant at all — which is why
+    // consent was being kept in localStorage instead of anywhere durable.
+    //
+    // Read and write are the owner's own: a person granting or withdrawing
+    // consent about themselves is the whole point. Delete is denied so a
+    // record cannot be made to disappear — withdrawal writes granted:false
+    // with a revoked_at, which is what an auditor needs to see. The backend
+    // writes here too via the Admin SDK, which bypasses these rules.
+    match /user_consent/{uid} {
+      allow read:          if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid)
+                           && request.resource.data.get('uid', uid) == uid;
+      allow delete:        if false;
+    }
+
     // ── Invites ──────────────────────────────────────────────────
     match /invites/{inviteId} {
       // SECURITY: previously `allow read: if isAuthenticated()` let ANY signed-in
