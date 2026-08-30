@@ -2074,7 +2074,20 @@ function MFALoginChallenge({ user, profile, cs, lang, onVerified, onSignOut }) {
     setBusy(true); setError("");
     try {
       const {getAuthToken} = await import("./firebase.js");
-      await fetch("/api/auth/mfa/login-verify", {method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+(await getAuthToken().catch(()=>""))},body:JSON.stringify({code:code.trim()})});
+      // SECURITY FIX: this used to `await fetch(...)` and then call
+      // onVerified() unconditionally. fetch does not reject on a 4xx, so a
+      // 401 "Invalid code" resolved normally and cleared the challenge —
+      // ANY six-character string signed the user in. MFASetup.jsx:33 already
+      // checks res.ok; this call site did not.
+      const res = await fetch("/api/auth/mfa/login-verify", {method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+(await getAuthToken().catch(()=>""))},body:JSON.stringify({code:code.trim()})});
+      if(!res.ok){
+        let msg="";
+        try{ msg=(await res.json())?.error||""; }catch{}
+        setError(msg || (isAr?"كود غير صحيح":"Invalid code"));
+        setCode("");
+        setBusy(false);
+        return;
+      }
       onVerified();
     } catch(e) {
       setError(e?.message || (isAr?"كود غير صحيح":"Invalid code"));
@@ -4937,9 +4950,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
           this screen with a literally-dead Upgrade button. */}
       {showBilling&&<ErrorBoundary key="billing-trialexpired"><BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={async(plan)=>{
         const newTier = normalizeTier(plan);
-        setTier(newTier);
         setShowBilling(false);
-        addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");
+        // The success toast used to fire BEFORE the write, and the write's
+        // only failure handling was a console.warn. `tier` is on the
+        // noPrivilegeEscalation blocklist in firestore.rules, so the client
+        // write is DENIED — the user saw "Plan updated", kept the unlocked
+        // UI from setTier() until they reloaded, and then silently landed
+        // back on the trial-expired screen. Claim success only if it stuck.
+        let persisted = false;
         if(user?.uid){
           try{
             const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");
@@ -4950,7 +4968,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
               updated_at: _s(),
             });
             setProfile(p=>p?({...p,tier:newTier}):p);
+            persisted = true;
           }catch(e){ console.warn("tier update failed",e?.code); }
+        }
+        if(persisted){
+          setTier(newTier);
+          addToast(isAr?"✅ تم تحديث خطتك":"✅ Plan updated","success");
+        }else{
+          addToast(isAr
+            ?"تم استلام الدفع، لكن تفعيل الخطة محتاج يتم من عندنا. كلّمنا وهنفعّلها فوراً."
+            :"Payment received, but the plan has to be activated on our side. Contact us and we'll switch it on right away.","error");
         }
         if(user?.uid){
           getUserProfile(user.uid).then(p=>{
