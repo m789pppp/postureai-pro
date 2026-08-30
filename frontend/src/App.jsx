@@ -519,6 +519,8 @@ const METRIC_LABEL_AR = {
   shoulder_elevation:  "ارتفاع الكتفين (شد)",
   elbow_angle:         "زاوية الكوع",
   monitor_height:      "ارتفاع الشاشة",
+  torso_flexion:       "انحناء الجذع للأمام",
+  trunk_rotation:      "التفاف الجذع",
 };
 const CONDITION_NAME_AR = {
   "Neck Lean":          "ميل الرقبة",
@@ -530,6 +532,8 @@ const CONDITION_NAME_AR = {
   "Shoulder Elevation": "ارتفاع الكتفين",
   "Monitor/Gaze Angle": "زاوية الشاشة/النظر",
   "Hand/Chin Prop":     "إسناد اليد على الذقن",
+  "Forward Slouch":     "انحناء للأمام",
+  "Trunk Rotation":     "التفاف الجذع",
 };
 
 // Pick the single most actionable correction cue from the current analysis —
@@ -557,6 +561,12 @@ function postureCue(analysis, isAr){
       ar:rightLean?"مايل لليمين — اتوسط في الكرسي":"مايل للشمال — اتوسط في الكرسي",
       icon:rightLean?"⇥":"⇤"});
   }
+  // The two most common desk postures the engine can now actually see:
+  // a forward slump (the main driver of lower-back complaints) and sitting
+  // twisted toward an off-centre monitor. Both used to be invisible here —
+  // there was no metric to key a cue off.
+  add("torso_flexion","Sit tall — hips back in the seat","اقعد مفرود — رجّع وركك لآخر الكرسي","↥");
+  add("trunk_rotation","Square your chair to the screen","وجّه كرسيك ناحية الشاشة","⟳");
   add("rounded_shoulders","Roll your shoulders back","افرد كتفيك للخلف","↔");
   add("shoulder_level","Level your shoulders","سوِّ كتفيك","⇄");
   add("shoulder_elevation","Drop your shoulders — let them relax down","ارخي كتفيك للأسفل — رخي عضلات الرقبة","↓");

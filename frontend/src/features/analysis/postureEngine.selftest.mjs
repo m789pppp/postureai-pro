@@ -299,5 +299,64 @@ console.log('\n--- 11. distance jitter does not move the score ---');
   check(spread <= 4, `score spread while motionless stays <= 4 pts (was 8, got ${spread})`);
 }
 
+// ── 12/13. the two most common desk postures must actually register ─────────
+// Office-worker surveys put neck (~53-59%), lower back (~52%) and shoulders
+// (~37-52%) at the top of reported problems. Before these two metrics existed
+// the engine had NO reaction to the postures behind the lower-back half of
+// that: a full forward slump moved the score by 2 points and a 45-degree trunk
+// twist by 0. Both are scored against the user's OWN settled neutral rather
+// than a population constant, because IPD (~5.5-7.0cm) and shoulder width
+// (~36-48cm) vary far too much between people for an absolute ratio to mean
+// anything.
+console.log('\n--- 12. forward slouch is detected and scored ---');
+{
+  const F = 800;
+  const person = ({ slouch = 0, twistDeg = 0 } = {}) => {
+    const dist = 60 - slouch * 8, sc = F / dist;
+    const shW = 42 * sc * Math.cos(twistDeg * Math.PI / 180), ipd = 6.3 * sc;
+    const a = Array.from({ length: 33 }, () => ({ x: .5, y: .5, z: 0, visibility: .95 }));
+    const cx = .5, half = (shW / W) / 2, ih = (ipd / W) / 2;
+    const shY = .56 + slouch * .10, hipY = .93, eyeY = shY - (.24 - slouch * .07);
+    a[PL.L_SHOULDER] = { x: cx + half, y: shY, z: 0, visibility: .98 };
+    a[PL.R_SHOULDER] = { x: cx - half, y: shY, z: 0, visibility: .98 };
+    a[PL.L_HIP] = { x: cx + half * .8, y: hipY, z: 0, visibility: .93 };
+    a[PL.R_HIP] = { x: cx - half * .8, y: hipY, z: 0, visibility: .93 };
+    a[PL.L_EYE] = { x: cx + ih, y: eyeY, z: 0, visibility: .96 };
+    a[PL.R_EYE] = { x: cx - ih, y: eyeY, z: 0, visibility: .96 };
+    a[PL.L_EYE_OUTER] = { x: cx + ih * 1.4, y: eyeY, z: 0, visibility: .96 };
+    a[PL.R_EYE_OUTER] = { x: cx - ih * 1.4, y: eyeY, z: 0, visibility: .96 };
+    a[PL.NOSE]  = { x: cx, y: eyeY + (4.0 * sc / H), z: 0, visibility: .97 };
+    a[PL.L_EAR] = { x: cx + ih * 1.9, y: eyeY, z: 0, visibility: .95 };
+    a[PL.R_EAR] = { x: cx - ih * 1.9, y: eyeY, z: 0, visibility: .95 };
+    return a;
+  };
+  // The neutral is learned from a settled early stretch, so every case sits
+  // upright first — exactly as a real session begins.
+  const settleThen = (opts) => {
+    resetProportions();
+    let r;
+    for (let i = 0; i < 110; i++) r = analyzeMP(person({}), W, H, 'laptop');
+    for (let i = 0; i < 12;  i++) r = analyzeMP(person(opts), W, H, 'laptop');
+    return r;
+  };
+  const upright = settleThen({});
+  const slumped = settleThen({ slouch: 1.0 });
+  console.log(`  upright score ${upright.score} (slouch ${upright.metrics.torso_flexion.value}%) -> slumped ${slumped.score} (slouch ${slumped.metrics.torso_flexion.value}%)`);
+  check(slumped.metrics.torso_flexion.value >= 20, `a full slump registers as >=20% torso shortening (got ${slumped.metrics.torso_flexion.value}%)`);
+  check(upright.score - slumped.score >= 5, `slouching costs a visible number of points (was 2, got ${upright.score - slumped.score})`);
+  check((slumped.detectedConditions || []).some(c => c.name === 'Forward Slouch'), 'a full slump is reported as a Forward Slouch condition');
+  check(!(upright.detectedConditions || []).some(c => c.name === 'Forward Slouch'), 'sitting upright does NOT report a slouch');
+
+  console.log('\n--- 13. trunk rotation is detected and scored ---');
+  const square  = settleThen({});
+  const twisted = settleThen({ twistDeg: 45 });
+  console.log(`  square ${square.metrics.trunk_rotation.value}deg / score ${square.score}  ->  twisted 45deg reads ${twisted.metrics.trunk_rotation.value}deg / score ${twisted.score}`);
+  check(Math.abs(twisted.metrics.trunk_rotation.value - 45) <= 8, `a 45deg twist reads ~45deg (was always 0, got ${twisted.metrics.trunk_rotation.value})`);
+  check(square.metrics.trunk_rotation.value <= 5, 'sitting square reads ~0deg');
+  check((twisted.detectedConditions || []).some(c => c.name === 'Trunk Rotation'), 'a 45deg twist is reported as a Trunk Rotation condition');
+  // Slouching must not masquerade as a twist — they are separate faults.
+  check(!(slumped.detectedConditions || []).some(c => c.name === 'Trunk Rotation'), 'slouching is not misreported as a trunk twist');
+}
+
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
 process.exit(failures === 0 ? 0 : 1);
