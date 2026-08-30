@@ -11906,13 +11906,86 @@ def gemini_proxy_sync():
 @require_auth
 @limiter.limit("5 per hour")
 def user_export():
+    """
+    GDPR Art. 15 subject access — export the CALLER'S OWN data.
+
+    SECURITY FIX: this endpoint used to take `uid` from the request body and
+    never check it against the authenticated caller — and then ignore it
+    anyway, returning `sessions` (the process-global in-memory session store)
+    to whoever asked. Any authenticated user received every other user's live
+    session data from that worker. The uid now comes from the verified token
+    and nothing else, and the data is read from that user's own Firestore
+    documents rather than from shared process state.
+    """
     try:
-        data = request.get_json(force=True) or {}
-        uid  = data.get("uid","")
-        if not uid: return jsonify({"error":"uid required"}), 400
-        user_sess = {k:{kk:vv for kk,vv in v.items() if kk!="last_ai"} for k,v in sessions.items()}
-        return jsonify({"uid":uid,"exported":datetime.now().isoformat(),"sessions_count":len(user_sess),"sessions":user_sess,
-                        "note":"Firebase profile data: export from Firebase Console for complete GDPR package"})
+        uid = getattr(g, "uid", "")
+        if not uid:
+            return jsonify({"error": "unauthenticated"}), 401
+        if not _firebase_ok:
+            return jsonify({"error": "Database not available"}), 503
+
+        db = firestore.client()
+
+        profile = {}
+        try:
+            snap = db.collection("users").document(uid).get()
+            if snap.exists:
+                profile = snap.to_dict() or {}
+        except Exception:
+            profile = {}
+
+        # Strip fields that are ours, not the subject's: internal flags and
+        # anything that would let an export be replayed as an entitlement.
+        for _k in ("is_admin", "is_hr", "tier", "trial_tier", "is_org_owner",
+                   "subscription_status", "subscription_expiry", "stripe_customer_id"):
+            profile.pop(_k, None)
+
+        def _ser(v):
+            # Firestore timestamps / refs are not JSON-serialisable.
+            try:
+                if hasattr(v, "isoformat"):
+                    return v.isoformat()
+                if isinstance(v, dict):
+                    return {kk: _ser(vv) for kk, vv in v.items()}
+                if isinstance(v, list):
+                    return [_ser(x) for x in v]
+                if isinstance(v, (str, int, float, bool)) or v is None:
+                    return v
+                return str(v)
+            except Exception:
+                return str(v)
+
+        user_sessions = []
+        try:
+            q = (db.collection("sessions")
+                   .where("uid", "==", uid)
+                   .limit(2000).stream())
+            for d in q:
+                row = d.to_dict() or {}
+                # worst_snapshots are base64 images; they bloat the export and
+                # are being removed from capture entirely. Never echo them back.
+                row.pop("worst_snapshots", None)
+                row["id"] = d.id
+                user_sessions.append({k: _ser(v) for k, v in row.items()})
+        except Exception as _e:
+            app.logger.warning("export sessions read failed: %s", _e)
+
+        consent = {}
+        try:
+            csnap = db.collection("user_consent").document(uid).get()
+            if csnap.exists:
+                consent = {k: _ser(v) for k, v in (csnap.to_dict() or {}).items()}
+        except Exception:
+            consent = {}
+
+        return jsonify({
+            "uid":            uid,
+            "exported_at":    datetime.now().isoformat(),
+            "profile":        {k: _ser(v) for k, v in profile.items()},
+            "consent":        consent,
+            "sessions_count": len(user_sessions),
+            "sessions":       user_sessions,
+        })
     except Exception as e:
         return safe_error(e)
 

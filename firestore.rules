@@ -367,12 +367,13 @@ service cloud.firestore {
     }
 
     // ── Invites ───────────────────────────────────────────────────
-    match /invites/{inviteId} {
-      allow read: if isAuthenticated();
-      allow create: if isAdmin() || isHR();
-      allow update: if false; // Admin SDK only (accept flow)
-      allow delete: if isAdmin();
-    }
+    // SECURITY FIX: a second `match /invites/{inviteId}` block used to live
+    // here with `allow read: if isAuthenticated()`. Firestore grants access
+    // when ANY matching rule allows it, so this blanket read silently
+    // cancelled the hardened, company-scoped rule above — every signed-in
+    // user could read every organisation's invited emails, roles and
+    // company_ids. The scoped block near the top of this file is the only
+    // rule for this collection; do not re-add a second one.
 
     // ── Company Members Subcollection ─────────────────────────────
     match /companies/{companyId}/members/{uid} {

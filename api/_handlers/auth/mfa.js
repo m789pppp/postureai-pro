@@ -28,9 +28,48 @@ function getAdmin() {
   return { auth: getAuth(), db: getFirestore() };
 }
 
+// ── Base32 (RFC 4648) ────────────────────────────────────────────
+// Node has no "base32" encoding. generateTOTPSecret() used to call
+// Buffer.toString("base32") and totpCode() Buffer.from(secret,"base32");
+// both throw `TypeError: Unknown encoding: base32`, so /totp/setup returned
+// a 500 and TOTP enrolment was impossible. Implemented here rather than
+// pulling in a dependency for ~20 lines.
+const _B32_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function base32Encode(buf) {
+  let bits = 0, value = 0, out = "";
+  for (const byte of buf) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += _B32_ALPHA[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += _B32_ALPHA[(value << (5 - bits)) & 31];
+  return out;
+}
+
+function base32Decode(str) {
+  const clean = String(str || "").toUpperCase().replace(/=+$/, "").replace(/\s+/g, "");
+  let bits = 0, value = 0;
+  const out = [];
+  for (const ch of clean) {
+    const idx = _B32_ALPHA.indexOf(ch);
+    if (idx === -1) throw new Error("Invalid base32 character");
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return Buffer.from(out);
+}
+
 // ── TOTP helpers using speakeasy-style (RFC 6238) ────────────────
 function generateTOTPSecret() {
-  return crypto.randomBytes(20).toString("base32").toUpperCase().replace(/=/g, "");
+  return base32Encode(crypto.randomBytes(20));
 }
 
 function generateBackupCodes(n = 8) {
@@ -40,7 +79,7 @@ function generateBackupCodes(n = 8) {
 }
 
 function totpCode(secret, timeStep) {
-  const key     = Buffer.from(secret, "base32");
+  const key     = base32Decode(secret);
   const counter = Buffer.alloc(8);
   counter.writeBigUInt64BE(BigInt(timeStep));
   const hmac    = crypto.createHmac("sha1", key).update(counter).digest();

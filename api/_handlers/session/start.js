@@ -9,6 +9,34 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { randomBytes } from "crypto";
 
+/**
+ * Elite whitelist — MUST stay in sync with _ELITE_DOMAINS / _ELITE_EMAILS in
+ * frontend/src/firebase.js and backend/auth/middleware.py.
+ *
+ * BUG: the client elevates whitelisted accounts to Elite in
+ * _applyEliteElevation(), but that is presentation only — firestore.rules
+ * deliberately forbids the client from writing `tier`, so the STORED tier
+ * stays "standard" forever. This handler read the stored tier, so every
+ * whitelisted university account was shown as Elite while being metered as
+ * free: locked out after 3 sessions on day one and 5 in the month, with an
+ * upgrade prompt that cannot work. Mirroring the list here is what makes the
+ * server agree with the interface.
+ */
+const ELITE_EMAILS = [
+  "m789pppp@gmail.com",
+];
+const ELITE_DOMAINS = [
+  "coventry.ac.uk", "coventry-university.ac.uk",
+  "city.ac.uk", "tkh.edu.eg",
+];
+function shouldElevateToElite(email) {
+  if (!email) return false;
+  const em = String(email).trim().toLowerCase();
+  if (ELITE_EMAILS.includes(em)) return true;
+  const domain = em.includes("@") ? em.split("@").pop() : "";
+  return ELITE_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
+}
+
 function getAdmin() {
   if (!getApps().length) {
     initializeApp({ credential: cert({
@@ -50,7 +78,21 @@ export default async function handler(req, res) {
       uid = decoded.uid;
       // Get user tier from Firestore
       const userSnap = await _db.collection("users").doc(uid).get();
-      tier = userSnap.data()?.tier || "standard";
+      const userData = userSnap.data() || {};
+      tier = userData.tier || "standard";
+
+      // Whitelisted accounts (university pilots, founder) are Elite
+      // regardless of what is stored — see the note on ELITE_DOMAINS above.
+      // decoded.email is from the verified ID token, so this cannot be
+      // spoofed by the client.
+      const claimedEmail = decoded.email || userData.email || "";
+      if (shouldElevateToElite(claimedEmail)) tier = "elite";
+
+      // An active trial grants the trial tier. Previously neither is_trial
+      // nor trial_tier was consulted here, so a user inside their 7-day
+      // trial was still metered as free.
+      else if (userData.is_trial && userData.trial_tier) tier = userData.trial_tier;
+
       db_available = true;
     } catch(e) {
       // Firebase unavailable (missing env vars) — continue with local session
