@@ -2899,7 +2899,6 @@ export default function App(){
   const acRef=useRef({total:0,neck:0,dist:0});const alRef=useRef([]);
   const sessRef=useRef(null);const lastAnalRef=useRef(null);
   // Elite: worst-posture snapshots captured during the session (max 3, small JPEGs)
-  const worstSnapsRef=useRef([]);const lastSnapMsRef=useRef(0);
 
   // ── Effective tier — single source of truth ──────────────────
   // Rules:
@@ -3286,20 +3285,45 @@ export default function App(){
     };
   }, []);
 
-  // MediaPipe loader — tries CDN, falls back to backend-only mode
+  // MediaPipe loader — self-hosted first, CDN only as a fallback.
+  //
+  // This used to import the bundle from cdn.jsdelivr.net and pull the model
+  // from storage.googleapis.com. A network that filters either host — which
+  // is normal on university and corporate wifi — sent the app into
+  // backend-analysis mode, where /api/analyze is a stub returning
+  // `overall: null` with a 200, so the score froze silently and the
+  // "can't reach the analysis server" overlay never fired either.
+  //
+  // The assets are now staged into public/mediapipe by
+  // scripts/fetch-mediapipe.mjs at build time (they are ~28MB, so they are
+  // gitignored rather than committed). The CDN is kept as a second attempt
+  // for the case where that staging step was skipped or failed.
   useEffect(()=>{
     if(mpRef.current||window.__mpLoading)return;
     window.__mpLoading=true;
+    const CDN_BASE="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+    const SOURCES=[
+      { name:"self-hosted",
+        bundle:"/mediapipe/vision_bundle.mjs",
+        wasm:"/mediapipe/wasm",
+        model:"/mediapipe/pose_landmarker_full.task" },
+      { name:"cdn",
+        bundle:`${CDN_BASE}/vision_bundle.mjs`,
+        wasm:`${CDN_BASE}/wasm`,
+        model:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task" },
+    ];
     const load=async()=>{
+      let lastErr=null;
+      for(const src of SOURCES){
       try{
-        const mod=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
-        const fr=await mod.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+        const mod=await import(/* @vite-ignore */ src.bundle);
+        const fr=await mod.FilesetResolver.forVisionTasks(src.wasm);
         // "full" model: meaningfully more accurate landmarks than "lite",
         // especially for subtle angles (neck lean, spine lean). GPU
         // delegate is what makes this affordable in real time — CPU alone
         // is why "lite" was chosen originally. Falls back to CPU delegate
         // (still on the "full" model) if GPU isn't available on this device.
-        const MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+        const MODEL=src.model;
         const opts={
           runningMode:"VIDEO",numPoses:1,
           minPoseDetectionConfidence:.3,minPosePresenceConfidence:.3,minTrackingConfidence:.3
@@ -3312,10 +3336,20 @@ export default function App(){
           pl=await mod.PoseLandmarker.createFromOptions(fr,{baseOptions:{modelAssetPath:MODEL,delegate:"CPU"},...opts});
         }
         mpRef.current=pl;window.__mpPose=pl;setMpStatus("ready");
+        if(src.name!=="self-hosted"){
+          console.warn("[mediapipe] loaded from the CDN — the self-hosted assets in public/mediapipe are missing. Run `npm run build` (or scripts/fetch-mediapipe.mjs) so filtered networks still work.");
+        }
+        return; // loaded — stop trying sources
       }catch(err){
-        console.warn("MediaPipe CDN failed, using backend fallback:",err.message);
-        setMpStatus("fallback");
+        lastErr=err;
+        console.warn(`[mediapipe] ${src.name} source failed:`,err?.message);
       }
+      }
+      // Every source failed. The backend is the analysis from here, and the
+      // user needs to know the reading may be degraded rather than silently
+      // watching a frozen number.
+      console.warn("MediaPipe unavailable from all sources, using backend fallback:",lastErr?.message);
+      setMpStatus("fallback");
     };
     load();
     setTimeout(()=>{if(!mpRef.current&&mpStatus==="loading")setMpStatus("fallback");},18000);
@@ -3523,36 +3557,28 @@ export default function App(){
             }
 
             const gateScore=smoothed1||finalResult.overall;
-            // Elite: capture the worst 3 moments of the session as small JPEGs
-            // (≤20s apart; a new dip replaces the least-bad stored snapshot)
-            if(gateScore<60 && tierAtLeast(effectiveTier,"elite")){
-              try{
-                const _snow=Date.now();
-                const _v=vidRef.current;
-                const _snaps=worstSnapsRef.current;
-                if(_v && _v.readyState>=2 && _snow-lastSnapMsRef.current>20000 &&
-                   (_snaps.length<3 || finalResult.overall<Math.max(..._snaps.map(s=>s.score)))){
-                  const _sc=document.createElement("canvas");
-                  const _sw=320,_sh=Math.max(120,Math.round(320*(_v.videoHeight/Math.max(_v.videoWidth,1))))||240;
-                  _sc.width=_sw;_sc.height=_sh;
-                  const _sctx=_sc.getContext("2d");
-                  _sctx.drawImage(_v,0,0,_sw,_sh);
-                  // Always blurred, regardless of the live "Blur face
-                  // (privacy)" toggle — these worst-moment snapshots are
-                  // saved into Firestore, PDF exports, and the Sessions
-                  // list, all places a face is more likely to be seen by
-                  // someone other than the user (an HR admin viewing team
-                  // reports, a shared/downloaded PDF, etc.) than the live
-                  // on-screen feed the toggle otherwise controls.
-                  drawFaceBlur(_sctx,_v,lms,_sw,_sh);
-                  const _img=_sc.toDataURL("image/jpeg",0.6);
-                  lastSnapMsRef.current=_snow;
-                  _snaps.push({img:_img,score:finalResult.overall,time:new Date().toLocaleTimeString()});
-                  _snaps.sort((a,b)=>a.score-b.score);
-                  if(_snaps.length>3)_snaps.length=3;
-                }
-              }catch{}
-            }
+            // REMOVED: "worst 3 moments" JPEG capture.
+            //
+            // This drew the live <video> to a canvas, pixelated the face box
+            // and pushed base64 JPEGs into worstSnapsRef, which saveSession()
+            // then wrote into the Firestore session document as
+            // `worst_snapshots` — visible in the Sessions list, PDF exports
+            // and to an HR admin viewing team reports.
+            //
+            // Six places in the product state that video/images never leave
+            // the device (privacy policy §2, the landing page, the FAQ, How
+            // It Works, the product page, and the security section). That was
+            // false while this ran. The face blur was a real mitigation but a
+            // partial one: it covers the face box only, leaving body, clothing
+            // and room identifiable, and drawFaceBlur() returns false without
+            // blurring anything when the ear landmark is missing or the box is
+            // degenerate — with the failure swallowed by the empty catch this
+            // block used to end with, so an unblurred frame could be stored
+            // with nothing to indicate it.
+            //
+            // The product decision is that the claim is worth more than the
+            // feature, so nothing is captured any more. Analysis is unaffected
+            // — it runs on-device and never needed these.
             if(lightCheckRef.current.wasLow){
               // Don't trust score-based decisions in poor lighting — neither
               // accumulate nor reset the bad-streak timer, since we can't
@@ -3647,7 +3673,17 @@ export default function App(){
     //  2) Elite-equivalent tier (elite/premium/b2b_enterprise) → snapshots for PDF + Corvus AI insights
     // Standard/Basic/Professional tiers with working local MediaPipe never touch the backend here.
     const eliteEquivalent = tierAtLeast(effectiveTier, "elite");
-    const needsBackend = mpStatus==="fallback" || eliteEquivalent;
+    // PRIVACY: Elite users used to upload a full-resolution, quality-0.88
+    // JPEG of themselves every 2.5s purely to enrich insights — while six
+    // pages of copy stated that no video or images ever leave the device.
+    // That upload is gone. The backend is now contacted ONLY in fallback
+    // mode, where local MediaPipe failed to load and the server genuinely is
+    // the analysis; with MediaPipe self-hosted (see index.html) that path
+    // should effectively never be taken.
+    //
+    // Cost note: at 100 concurrent Elite users this was roughly 40 req/s of
+    // ~200KB uploads to an endpoint that discarded them.
+    const needsBackend = mpStatus==="fallback";
     // Gate on ELAPSED TIME, not on `totalRef % 45`.
     //
     // In fallback mode (local MediaPipe failed to load) mpRef is null, so the
@@ -3989,7 +4025,6 @@ export default function App(){
       resetScore();
       resetPainPrediction();
       insightsRef.current=null;setSessionInsights([]);
-      worstSnapsRef.current=[];lastSnapMsRef.current=0;
       backendFailRef.current=0;backendFailShownRef.current=false;setBackendDown(false);
       lastBackendMsRef.current=0; backendInFlightRef.current=false;
       // Reset all alert cooldowns — exponential backoff from previous
@@ -4268,8 +4303,10 @@ export default function App(){
         if(painMins<90) return isAr?`~${Math.round(painMins)} دقيقة قبل الإزعاج المحتمل`:`~${Math.round(painMins)} min before likely discomfort`;
         return null;
       })(),
-      // Elite: worst-posture snapshots captured during the session
-      worst_snapshots: worstSnapsRef.current.slice(0,3),
+      // No longer captured — see the note in the analysis loop. Kept as an
+      // empty array so the summary screen's `?.length>0` guard and any
+      // historical session document still render correctly.
+      worst_snapshots: [],
     };
     setSessionResult(result);
       if((result.avg_score||0)>=70){
@@ -4319,14 +4356,12 @@ export default function App(){
         // Elite: worst 3 posture snapshots — only include if total payload
         // stays under ~800KB (Firestore hard-limits docs to 1MB; base64
         // images are the main risk factor that caused silent addDoc failures).
-        ...(()=>{
-          if(!worstSnapsRef.current.length) return {};
-          const snaps = worstSnapsRef.current.slice(0,3);
-          // rough byte estimate: JSON.stringify is a good proxy
-          const roughBytes = JSON.stringify(snaps).length;
-          if(roughBytes > 600_000) return {}; // skip if > ~600KB to leave room for other fields
-          return { worst_snapshots: snaps };
-        })(),
+        // REMOVED: worst_snapshots. Base64 webcam JPEGs are no longer
+        // captured, so nothing image-shaped is written to Firestore at all.
+        // This is what makes "no video or images leave your device" true.
+        // (Session documents written before this change may still contain
+        // the field; they are the user's own data and still display, but
+        // nothing new is created.)
       };
       // The weekly pattern is derived from this session's alerts, which are
       // also reset by the next beginScoring — capture them now too.
@@ -7473,7 +7508,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         alerts_count:acRef.current?.total||0, mode, tier:effectiveTier,
                         score_history:hist.slice(-60), created_at:new Date(),
                         metrics:lastAnalRef.current?.metrics||{},
-                        worst_snapshots:worstSnapsRef.current.slice(0,3),
+                        worst_snapshots:[],   // no longer captured
                       },
                       profile: { ...profile, tier: effectiveTier },
                       allSessions: userSessions,

@@ -1264,13 +1264,18 @@ export function SessionDetailModal({ session, allSessions = [], profile, cs, isA
             ))}
           </div>
 
-          {/* Elite: on-demand Gemini Vision read of the snapshots above —
-              a qualitative companion to the numeric score, not a redo of
-              it (see backend's vision_posture_review docstring). On-demand
-              rather than automatic: a vision call is slower/heavier than
-              the app's text-only AI features, so it shouldn't fire just
-              from opening this modal. */}
-          {!visionText && !visionLoading && (
+          {/* REMOVED: the "AI Visual Analysis" button that posted these
+              images to a Gemini Vision endpoint.
+
+              Snapshot capture has been removed entirely — no new session
+              stores images — so this button only ever had historical
+              sessions to work on, and its whole job was to upload pictures
+              of the user to a third-party model. That is exactly what the
+              product now promises never happens. The images already stored
+              on older sessions are still shown here, because they are the
+              user's own data and this is the user looking at it, but
+              nothing transmits them anywhere. */}
+          {false && !visionText && !visionLoading && (
             <button
               onClick={async () => {
                 setVisionLoading(true);

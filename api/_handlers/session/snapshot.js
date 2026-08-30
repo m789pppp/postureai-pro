@@ -26,27 +26,18 @@ export default async function handler(req, res) {
   if (req.method==="OPTIONS") return res.status(200).end();
   if (req.method!=="POST") return res.status(405).json({error:"POST only"});
 
-  const token = (req.headers.authorization||"").replace("Bearer ","");
-  if (!token) return res.status(401).json({error:"Auth required"});
-
-  const { db, auth } = getAdmin();
-  let uid;
-  try { uid = (await auth.verifyIdToken(token)).uid; }
-  catch { return res.status(401).json({error:"Invalid token"}); }
-
-  const { session_id, frame, score, timestamp } = req.body||{};
-  if (!session_id || !frame) return res.status(400).json({error:"session_id and frame required"});
-
-  // Store snapshot in Firestore (truncate frame to ~20KB for safety)
-  const truncFrame = frame.length > 40000 ? frame.slice(0, 40000) : frame;
-  await db.collection("users").doc(uid)
-    .collection("sessions").doc(session_id)
-    .collection("snapshots").add({
-      score: score||0,
-      timestamp: timestamp||new Date().toISOString(),
-      frame: truncFrame,
-      created_at: FieldValue.serverTimestamp(),
-    });
-
-  return res.status(200).json({ ok: true });
+  // CLOSED. This endpoint accepted a raw webcam frame and wrote it to
+  // Firestore with no blurring of any kind. Its frontend caller was removed
+  // some time ago but the route stayed live and authenticated, so any signed-
+  // in user could still POST unblurred images of themselves into storage —
+  // directly contradicting the product's "no video or images leave your
+  // device" claim, and leaving image data in a collection that account
+  // deletion does not recurse into.
+  //
+  // Nothing calls this. Returning 410 rather than deleting the file so the
+  // route fails loudly and traceably if some client still tries.
+  return res.status(410).json({
+    error: "endpoint_removed",
+    message: "Snapshot upload has been removed. Posture analysis runs on-device; no images are transmitted.",
+  });
 }
