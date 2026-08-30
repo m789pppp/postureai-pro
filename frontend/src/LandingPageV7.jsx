@@ -847,8 +847,11 @@ function Hero({ lang, onCTA, mode, setMode }) {
               borderRadius:16, overflow:"hidden", marginTop:20,
             }}>
               {(ar
-                ? [["50+","مستخدم بيتا","👥"],["4.9★","تقييم","⭐"],["أسبوعان","للتحسن","⏱"],["0","فيديو محفوظ","🛡"]]
-                : [["50+","beta users","👥"],["4.9★","rating","⭐"],["2 wks","to improve","⏱"],["0","video stored","🛡"]]
+                // "4.9 stars" and "2 wks to improve" were removed: there is no
+                // review platform behind the rating and no measured cohort
+                // behind the improvement time. The remaining three are true.
+                ? [["50+","مستخدم بيتا","👥"],["عربي/EN","ثنائي اللغة","🌐"],["0","فيديو محفوظ","🛡"]]
+                : [["50+","beta users","👥"],["AR/EN","fully bilingual","🌐"],["0","video stored","🛡"]]
               ).map(([val,label,icon],i)=>(
                 <div key={label} style={{
                   flex:1, textAlign:"center", padding:"14px 8px",
@@ -1090,11 +1093,11 @@ function SocialProof({ lang }) {
           {/* 4 stat cards */}
           <div className="lp-sp-stats" style={{ marginBottom:20 }}>
             {(ar ? [
-              ["50+","مستخدم بيتا نشط","👥"],["4.9★","تقييم متوسط","⭐"],
-              ["أسبوعان","وقت التحسن","⏱"],["0","لا نحفظ فيديو","🛡"],
+              ["50+","مستخدم بيتا نشط","👥"],["عربي/EN","واجهة ثنائية اللغة","🌐"],
+              ["على جهازك","تتم المعالجة","⚙"],["0","لا نحفظ فيديو","🛡"],
             ] : [
-              ["50+","active beta users","👥"],["4.9★","average rating","⭐"],
-              ["2 weeks","avg improvement time","⏱"],["0","video data stored","🛡"],
+              ["50+","active beta users","👥"],["AR/EN","fully bilingual","🌐"],
+              ["On-device","processing","⚙"],["0","video data stored","🛡"],
             ]).map(([num, label, icon]) => (
               <div key={label} style={{
                 background:"rgba(255,255,255,.03)", border:`1px solid ${LPV7_TOKENS.border}`,
@@ -1131,8 +1134,11 @@ function SocialProof({ lang }) {
             <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
               {/* second line of each badge was hardcoded English in Arabic too */}
               {(ar
-                ? [["🛡","ISO 27001","متوافق"],["🔒","AES-256","تشفير"],["✅","GDPR","جاهز"],["📷","AI على الجهاز","بدون فيديو"]]
-                : [["🛡","ISO 27001","Aligned"],["🔒","AES-256","Encryption"],["✅","GDPR","Ready"],["📷","On-device AI","No Video"]]
+                // ISO 27001 dropped — see the footer note. Replaced with the
+                // on-device claim, which is the genuinely strong one here and
+                // is verifiable by watching the network tab.
+                ? [["🔒","AES-256","تشفير"],["✅","GDPR","جاهز"],["📷","AI على الجهاز","بدون فيديو"],["🚫","بدون تثبيت","من المتصفح"]]
+                : [["🔒","AES-256","Encryption"],["✅","GDPR","Ready"],["📷","On-device AI","No Video"],["🚫","No install","Browser only"]]
               ).map(([icon,t1,t2])=>(
                 <div key={t1} style={{ display:"flex", alignItems:"center", gap:7,
                   background:"rgba(59,130,246,.07)", border:"1px solid rgba(59,130,246,.18)",
@@ -1155,9 +1161,22 @@ function SocialProof({ lang }) {
 // ── Stats ─────────────────────────────────────────────────────────
 function Stats({ lang }) {
   const ar = lang === "ar";
+  // Every tile here now names its own source in the third field, and the two
+  // that had none were removed:
+  //  - "98% Beta user satisfaction" — no survey was ever run.
+  //  - "15min Team onboarding time / Tested with beta users" — not measured.
+  // The two that remain are legitimate BECAUSE they are labelled as what they
+  // are: an ergonomics-literature average and a cost model, neither of them a
+  // Corvus result. They are kept for exactly that reason — the sourcing line
+  // is not decoration, it is what makes the figure honest, and it renders
+  // directly beneath the number.
   const stats = ar
-    ? [["-47%","تقليل الإجازات المرضية","من متوسط تقارير الإرغونوميا","🏥"],["3.2×","عائد الاستثمار المتوقع","بناءً على تكاليف الغياب","💰"],["15دق","وقت الإعداد للفريق","مُختبر مع مستخدمي البيتا","⚡"],["98%","رضا مستخدمي البيتا","50+ مستخدم في 4 دول","⭐"]]
-    : [["-47%","Reduction in sick leave","Ergonomics research average","🏥"],["3.2×","Projected ROI in year 1","Based on absence cost models","💰"],["15min","Team onboarding time","Tested with beta users","⚡"],["98%","Beta user satisfaction","50+ users across 4 countries","⭐"]];
+    ? [["-47%","تقليل الإجازات المرضية","متوسط من أبحاث الإرغونوميا — مش نتيجتنا","🏥"],
+       ["3.2×","عائد استثمار تقديري","نموذج حسابي لتكاليف الغياب — مش نتيجة مقاسة","💰"],
+       ["على جهازك","المعالجة بالكامل","الفيديو مايغادرش الجهاز أبداً","⚙"]]
+    : [["-47%","Reduction in sick leave","Ergonomics research average — not our result","🏥"],
+       ["3.2×","Modelled ROI in year 1","An absence-cost model, not a measured outcome","💰"],
+       ["On-device","processing","Video never leaves the device","⚙"]];
   return (
     <section id="stats" className="lp-section">
       <div className="lp-wrap">
@@ -1223,7 +1242,10 @@ function Features({ lang }) {
             "تقييم تماثل الكتفين وزاوية العنق في كل إطار",
             "درجة حية 0-100 مع تنبيهات ملونة كل 15 ثانية"],
       },
-      stat:{ v:"96%",  l:{ en:"tracking accuracy", ar:"دقة التتبع" } },
+      // Was "96% tracking accuracy" — a number never measured against
+      // anything. Replaced with a fact about the method that is verifiable by
+      // looking at the product: the pose model does track 478 landmarks.
+      stat:{ v:"478",  l:{ en:"landmarks tracked", ar:"نقطة يتم تتبعها" } },
       mock:"score",
     },
     {
@@ -1241,7 +1263,11 @@ function Features({ lang }) {
             "مخطط دائري يُظهر مناطق خطر الجسم بلمحة",
             "تنبيه واتساب استباقي يُرسل قبل بلوغ الألم ذروته"],
       },
-      stat:{ v:"48h", l:{ en:"early warning window", ar:"نافذة الإنذار المبكر" } },
+      // "48h early warning window" — nothing in PredictiveAI.jsx works on a
+      // 48-hour horizon. forecast() projects 7 days ahead and the preventive
+      // pain forecast buckets by weekday/day-part across whole weeks, so the
+      // real, code-backed number is a 7-day horizon over 14 days of history.
+      stat:{ v:"7-day", l:{ en:"forecast horizon", ar:"أفق التوقع" } },
       mock:"pain",
     },
     {
@@ -1259,7 +1285,9 @@ function Features({ lang }) {
             "عداد سلسلة مع حماية تجميد مرة في الشهر",
             "شبكة اتساق 14 يوماً + درجة عادة 0-100"],
       },
-      stat:{ v:"+34%", l:{ en:"habit consistency vs. no reminders", ar:"اتساق أعلى مقارنةً بغير المذكَّرين" } },
+      // was "+34% habit consistency vs. no reminders" — no cohort comparison
+      // was ever run. States what the feature tracks instead.
+      stat:{ v:"14", l:{ en:"day consistency grid", ar:"شبكة اتساق 14 يوم" } },
       mock:"streak",
     },
     {
@@ -1277,7 +1305,8 @@ function Features({ lang }) {
             "يشرح بدقة سبب انخفاض درجتك وأول شيء تصلحه",
             "Elite: ردود صوتية بالعربية المصرية والخليجية"],
       },
-      stat:{ v:"87%", l:{ en:"improved score after coaching week", ar:"تحسّنت نتيجتهم بعد أسبوع تدريب" } },
+      // was "87% improved score after coaching week" — never measured.
+      stat:{ v:"AR/EN", l:{ en:"coaching in both languages", ar:"تدريب بالعربي والإنجليزي" } },
       mock:"coach",
     },
     {
@@ -1295,7 +1324,8 @@ function Features({ lang }) {
             "تنبيهات ألم استباقية تُرسل تلقائياً عند ارتفاع الخطر",
             "مدعوم بـ Twilio — يعمل على أي هاتف بدون تنزيل تطبيق"],
       },
-      stat:{ v:"3×", l:{ en:"more check-ins vs. no reminders", ar:"3 أضعاف التسجيلات مقارنة بغير المذكّرين" } },
+      // was "3x more check-ins vs. no reminders" — no such comparison exists.
+      stat:{ v:"0", l:{ en:"apps to install", ar:"تطبيقات للتثبيت" } },
       mock:"whatsapp",
     },
     {
@@ -1313,7 +1343,9 @@ function Features({ lang }) {
             "تنبيهات عالية الخطورة إلى Slack / Teams / بريد فورياً",
             "تصدير CSV + Excel لتقارير الامتثال والتأمين"],
       },
-      stat:{ v:"↓40%", l:{ en:"back pain complaints in 90 days", ar:"انخفاض شكاوى آلام الظهر خلال 90 يوماً" } },
+      // was "down 40% back pain complaints in 90 days" — an unmeasured clinical
+      // outcome, and the most legally exposed of this group.
+      stat:{ v:"CSV/PDF", l:{ en:"exportable HR reports", ar:"تقارير HR قابلة للتصدير" } },
       mock:"hr",
     },
     {
@@ -1331,7 +1363,12 @@ function Features({ lang }) {
             "AES-256 للبيانات المخزنة + TLS 1.3 أثناء النقل، لا بيانات تُباع",
             "تصدير سجل تدقيق كامل + API حق الحذف GDPR"],
       },
-      stat:{ v:"99.9%", l:{ en:"uptime SLA", ar:"وقت تشغيل مضمون" } },
+      // was "99.9% uptime SLA". An SLA is a CONTRACTUAL commitment with
+      // remedies attached — advertising one without a signed agreement or any
+      // uptime monitoring behind it creates an obligation the product cannot
+      // honour. The on-device processing claim below is true and is the
+      // stronger security point anyway.
+      stat:{ v:"0", l:{ en:"video frames leave your device", ar:"لقطات فيديو تغادر جهازك" } },
       mock:"security",
     },
   ];
@@ -2693,7 +2730,16 @@ function Footer({ lang }) {
 
             {/* Trust badges */}
             <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:18 }}>
-              {["ISO 27001","AES-256","GDPR"].map(b=>(
+              {/* "ISO 27001" was rendered here as a bare badge, in the visual
+                  language certifications use — which reads as "we are
+                  certified". Corvus is not: there is no audit, no certificate,
+                  no statement of applicability. The hedged "ISO 27001 aligned"
+                  elsewhere is not much better, since "aligned" is
+                  self-declared and unverifiable. Removed rather than softened.
+                  The two that remain are defensible: Firestore encrypts at
+                  rest with AES-256, and GDPR describes principles the product
+                  actually implements (deletion, export, minimisation). */}
+              {["AES-256","GDPR","On-device AI"].map(b=>(
                 <span key={b} style={{
                   fontSize:9.5, color:"#8896ac", padding:"3px 8px",
                   border:"1px solid rgba(255,255,255,.07)", borderRadius:99,

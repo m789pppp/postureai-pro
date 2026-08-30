@@ -33,26 +33,26 @@ const INDUSTRIES = [
   { icon:"🏦", name:"Banking & Finance", color:"#4f7cf9",
     problem:"Compliance teams and analysts spend 10+ hours/day at screens. Back and neck conditions are the #1 cause of sick leave.",
     solution:"Corvus monitors all desk-based staff silently, generates weekly ergonomic compliance reports, and flags high-risk employees before claims arise.",
-    results:[["↓44%","Sick leave (musculoskeletal)"],["↓61%","Ergonomic injury claims"],["↑29%","HR compliance score"]],
-    clients:"Used by 3 national banks across MENA",
+    results:[["13","Weighted posture metrics"],["Weekly","Automated PDF reports"],["0","Video frames stored"]],
+    clients:"Built for desk-based compliance, analyst and back-office teams",
   },
   { icon:"💻", name:"Technology & SaaS", color:"#22d3ee",
     problem:"Remote and hybrid engineers often work in non-ergonomic home setups. Burnout compounds posture neglect.",
     solution:"Deploy Corvus company-wide in 20 minutes via invite link. Engineers get an AI coach in their workflow — no meetings, no friction.",
-    results:[["↓38%","Back pain complaints"],["4.1×","ROI in year 1"],["94%","Daily active rate"]],
-    clients:"Trusted by 12 tech companies across Egypt and UAE",
+    results:[["0","Apps to install — runs in the browser"],["AR/EN","Fully bilingual interface"],["1 link","Invite-based team rollout"]],
+    clients:"Built for remote and hybrid engineering teams",
   },
   { icon:"📞", name:"Telecoms & BPO", color:"#10d9a0",
     problem:"Call center agents sit for 8-hour shifts in fixed positions. Turnover is high — and poor ergonomics is a hidden driver.",
     solution:"Corvus integrates with shift management. HR sees real-time posture scores by team, with automatic break recommendations when fatigue is detected.",
-    results:[["↓52%","Posture-related absences"],["↓19%","Staff turnover rate"],["↑35%","Agent satisfaction"]],
-    clients:"Running in 2 major telecom call centers",
+    results:[["Live","Team posture feed by shift"],["Custom","Alert rules and break timers"],["CSV","Raw data export for HR"]],
+    clients:"Built for shift-based contact centre floors",
   },
   { icon:"🏥", name:"Healthcare & Clinics", color:"#818cf8",
     problem:"Clinicians and admin staff experience some of the highest rates of work-related musculoskeletal disorders globally.",
     solution:"Corvus tracks posture during documentation sessions and flags dangerous patterns. Integrates with occupational health protocols.",
-    results:[["↓41%","MSK disorder incidence"],["↓28%","Physiotherapy costs"],["✅","Occupational health compliant"]],
-    clients:"Piloted at Coventry University Egypt Faculty of Health Sciences",
+    results:[["On-device","AI — no video upload"],["90-day","Activity and trend history"],["Audit","Full activity log per user"]],
+    clients:"Currently running a pilot with Coventry University Egypt",
   },
 ];
 
@@ -192,15 +192,20 @@ export default function SolutionsPage() {
               boxShadow:`0 0 60px ${ind.color}08` }}>
               <div style={{ fontSize:13, fontWeight:700, color:_txtSafe(ind.color), fontFamily:FM,
                 letterSpacing:".06em", textTransform:"uppercase", marginBottom:24 }}>
-                Measured Results
+                What Corvus Does Here
               </div>
               <div className="sol-results-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
                 {ind.results.map(([val, label]) => (
                   <div key={label} style={{ textAlign:"center",
                     background:`${ind.color}08`, borderRadius:12, padding:"20px 12px",
                     border:`1px solid ${ind.color}18` }}>
-                    <div style={{ fontSize:28, fontWeight:800, color:ind.color,
-                      fontFamily:FM, letterSpacing:"-.02em", marginBottom:6, lineHeight:1 }}>
+                    {/* These tiles now carry capability words ("On-device",
+                        "AR/EN") rather than the short numeric outcomes they
+                        used to hold, so the type has to shrink for the longer
+                        ones or they overflow the 3-column grid. */}
+                    <div style={{ fontSize: val.length > 6 ? 17 : val.length > 3 ? 22 : 28,
+                      fontWeight:800, color:ind.color,
+                      fontFamily:FM, letterSpacing:"-.02em", marginBottom:6, lineHeight:1.1 }}>
                       {val}
                     </div>
                     <div style={{ fontSize:11.5, color:T.muted, lineHeight:1.4 }}>{label}</div>

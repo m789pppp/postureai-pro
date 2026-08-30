@@ -1031,7 +1031,7 @@ function GDPRTools({orgId,adminUid,isAr}) {
           </div>
         </div>
         <div style={{background:"rgba(239,68,68,.07)",border:"1px solid rgba(239,68,68,.18)",borderRadius:9,padding:"10px 12px",fontSize:11,color:RBAC_TOKENS.text2,lineHeight:1.65}}>
-          ⚠️ {isAr?"الفيديو لا يُخزَّن أبداً افتراضياً. فقط نقاط البيانات المجردة تُحفظ. مطابق لـ GDPR وHIPAA.":"Video is never stored by default. Only anonymised data points are persisted. Compliant with GDPR & HIPAA."}
+          ⚠️ {isAr?"الفيديو لا يُخزَّن أبداً افتراضياً. فقط نقاط البيانات المجردة تُحفظ — بما يتوافق مع مبادئ GDPR لتقليل البيانات.":"Video is never stored by default. Only anonymised data points are persisted — in line with GDPR data-minimisation principles."}
         </div>
       </div>
     </Sec>

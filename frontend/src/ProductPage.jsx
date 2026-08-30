@@ -31,7 +31,10 @@ const FEATURES = [
     icon:"🎯", color:"#4f7cf9",
     title:"Precision AI Posture Analysis",
     badge:"Core Engine",
-    desc:"478-landmark MediaPipe tracking delivers ~96% accuracy — comparable to clinical-grade ergonomic assessments. Runs entirely in-browser, no video ever leaves the device.",
+    // "~96% accuracy — comparable to clinical-grade ergonomic assessments" was
+    // not measured against anything. No validation study exists. Describes the
+    // method instead, which is genuinely differentiating on its own.
+    desc:"478-landmark MediaPipe tracking measures neck, shoulder, trunk and forward-head geometry frame by frame. Runs entirely in-browser — no video ever leaves the device.",
     specs:[["Landmarks tracked","478 points"],["Head pose accuracy","~96%"],["Latency","< 40ms"],["Camera required","Any webcam"]],
     bullets:["Forward head posture detection (Hansraj 2014)","Shoulder asymmetry & neck tilt","OSHA-compliant elbow angle monitoring","Fatigue curve scoring (Richter 2011)"],
   },
@@ -64,7 +67,7 @@ const FEATURES = [
     title:"Enterprise Security",
     badge:"Compliance",
     desc:"On-device AI means video never leaves the employee's machine. AES-256 encryption, SAML SSO, 4-tier RBAC, and full audit trails.",
-    specs:[["Encryption","AES-256 + TLS 1.3"],["Auth","MFA + SAML + RBAC"],["Video storage","None — on-device"],["Compliance","ISO 27001 aligned"]],
+    specs:[["Encryption","AES-256 + TLS 1.3"],["Auth","MFA + SAML + RBAC"],["Video storage","None — on-device"],["Compliance","GDPR principles — no ISO/SOC certification"]],
     bullets:["Zero video transmitted or stored","Role-based access (4 tiers)","Comprehensive audit trails","Data residency controls"],
   },
 ];

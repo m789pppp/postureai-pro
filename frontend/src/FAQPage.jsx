@@ -28,7 +28,11 @@ const CATEGORIES = [
       ["Does Corvus record or store video?","No. This is a core design principle. All video processing happens on the employee's device using on-device AI (MediaPipe). Only numerical posture scores are transmitted — no video, no images, ever."],
       ["Is employee data private from managers?","Yes. Individual scores are visible to the employee and HR admins. Managers see aggregated team data only, not individual sessions. Employees can also pause tracking at any time."],
       ["What data is stored?","Corvus stores posture scores, session timestamps, AI coaching conversations, and HR reports. All data is encrypted with AES-256 at rest and TLS 1.3 in transit."],
-      ["Is Corvus GDPR compliant?","Corvus is built with GDPR principles — data minimisation, purpose limitation, and user rights (access, deletion, export). We are ISO 27001 aligned. Enterprise customers can request a Data Processing Agreement."],
+      // "We are ISO 27001 aligned" removed — there is no audit or certificate
+      // behind it, and "aligned" is self-declared and unverifiable. Saying
+      // plainly that we are not certified is both true and, for an enterprise
+      // buyer who will ask for the certificate, far better than being caught.
+      ["Is Corvus GDPR compliant?","Corvus is built with GDPR principles — data minimisation, purpose limitation, and user rights (access, deletion, export). We are not ISO 27001 certified and don't claim to be. Enterprise customers can request a Data Processing Agreement."],
       ["Can employees delete their data?","Yes. Employees can request full data deletion from their profile settings. HR admins can also delete individual employee records from the dashboard."],
     ],
   },
@@ -38,7 +42,17 @@ const CATEGORIES = [
       ["What camera do I need?","Any webcam works — including built-in laptop cameras. Minimum 720p is recommended for best accuracy. Corvus adapts its confidence scoring based on video quality."],
       ["Does it work on all browsers?","Corvus works on Chrome, Edge, and Firefox (desktop). Safari has limited WebRTC support. Mobile browsers are not currently supported for posture sessions, though the dashboard and reports are fully mobile-responsive."],
       ["What are the system requirements?","A modern browser, a webcam, and a stable internet connection. No installation, no plugins, no app download. The AI runs entirely in-browser via WebAssembly."],
-      ["How accurate is the posture detection?","Corvus achieves ~96% accuracy against clinical ergonomic assessments for forward head posture and shoulder asymmetry. Accuracy decreases in poor lighting or when the camera is positioned at extreme angles."],
+      // The previous answer claimed "~96% accuracy against clinical ergonomic
+      // assessments". No such comparison has ever been run — there is no
+      // validation study, dataset or clinical reference anywhere in this
+      // project, and the engine's own `detectionConfidence` is a hardcoded
+      // heuristic (78 plus landmark-visibility bonuses, capped at 94) that
+      // measures whether landmarks are VISIBLE, not whether the reading is
+      // correct. Presenting an invented figure as clinical validation is the
+      // most dangerous claim on the site: it is medical-adjacent, it is the
+      // one an enterprise buyer will ask for the study behind, and there is
+      // no study. Replaced with what is actually true about the method.
+      ["How accurate is the posture detection?","Corvus measures joint angles geometrically from Google MediaPipe pose landmarks — neck lean, forward-head distance, shoulder level, trunk rotation and torso flexion — and scores them against ergonomic thresholds. We have not run a clinical validation study, so we don't publish an accuracy percentage; anyone who does without one is guessing. What we can tell you: readings degrade in poor lighting, at extreme camera angles, and when part of your upper body is out of frame, and the app tells you when that happens rather than scoring you anyway."],
       ["Does it work with SSO / Active Directory?","Yes. Enterprise plans support SAML 2.0 and OAuth 2.0 for SSO. Auto-provisioning is supported for SAP SuccessFactors, Workday, and BambooHR. Contact us to set up your integration."],
     ],
   },

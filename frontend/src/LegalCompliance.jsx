@@ -136,7 +136,7 @@ export function LegalModal({ doc, cs, onClose }) {
         { heading: "6. Your Rights (GDPR)", body: "Right to access, rectify, erase, restrict, portability, and object. Submit requests to privacy@corvus.com. We respond within 30 days." },
         { heading: "7. CCPA Rights", body: "California residents may opt out of sale of personal information (we don't sell), request disclosure, and request deletion. Email privacy@corvus.com." },
         { heading: "8. Cookies", body: "We use necessary cookies (session), analytics cookies (with consent), and no third-party advertising cookies. Manage preferences via the cookie banner." },
-        { heading: "9. Security", body: "Data is encrypted in transit (TLS 1.3) and at rest (AES-256). Access is restricted by RBAC. We hold SOC 2 Type II and ISO 27001 certifications." },
+        { heading: "9. Security", body: "Data is encrypted in transit (TLS 1.3) and at rest (AES-256) by our infrastructure provider, Google Cloud / Firebase. Access is restricted by role-based access control. We are not currently SOC 2 or ISO 27001 certified and do not claim to be; enterprise customers can request our security questionnaire responses." },
         { heading: "10. Contact", body: "Data Controller: Corvus Ltd, London, UK. DPO: dpo@corvus.com. Privacy team: privacy@corvus.com." },
       ],
     },

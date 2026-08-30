@@ -341,6 +341,20 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
 
           {/* ── COMPLIANCE TAB ── */}
           {tab === "compliance" && (
+            <>
+            <div style={{
+              display:"flex", gap:8, alignItems:"flex-start",
+              background:"rgba(214,162,76,.08)", border:"1px solid rgba(214,162,76,.28)",
+              borderRadius:12, padding:"12px 14px", marginBottom:16 }}>
+              <span style={{ fontSize:14, lineHeight:1.3 }}>⚠️</span>
+              <div style={{ fontSize:12, color:"#D6A24C", lineHeight:1.55 }}>
+                <strong>Placeholder data — not a real audit.</strong> Corvus holds no
+                SOC&nbsp;2, HIPAA or ISO&nbsp;27001 certification. The rows below are a
+                static UI mock of how certification status would be surfaced; they are
+                not connected to any assessment and must not be shown to customers or
+                quoted in security questionnaires.
+              </div>
+            </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
               {COMPLIANCE_CHECKS.map(c => (
                 <div key={c.standard} style={{ background:"rgba(255,255,255,.03)",
@@ -375,6 +389,7 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
                 </div>
               ))}
             </div>
+            </>
           )}
 
           {/* ── ANOMALIES TAB ── */}
