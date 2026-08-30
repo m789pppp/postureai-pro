@@ -115,8 +115,8 @@ export const B2B_PLANS = {
     priceUSD: { monthly: null, yearly: null, startingAt: 499 }, // Starting at $499/mo
     stripePriceId: { monthly: "", yearly: "" }, // Always custom/contact-sales
     color:"#10b981", seats:-1,
-    features:   ["Unlimited employees","Everything in Growth","AI clinical narrative","SSO/SAML","White-label","API access","Dedicated success manager"],
-    featuresAr: ["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالذكاء الاصطناعي","SSO/SAML","White-label","وصول API","مدير نجاح مخصص"],
+    features:   ["Unlimited employees","Everything in Growth","AI clinical narrative","SAML SSO (set up with our team)","White-label","API access","Dedicated success manager"],
+    featuresAr: ["موظفون غير محدودون","كل مزايا جروث","تحليل سردي بالذكاء الاصطناعي","SAML SSO (بإعداد من فريقنا)","White-label","وصول API","مدير نجاح مخصص"],
   },
 };
 

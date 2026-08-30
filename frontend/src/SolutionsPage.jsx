@@ -71,7 +71,7 @@ const PERSONAS = [
   },
   { role:"IT / Security", icon:"🔐", color:"#818cf8",
     needs:["Zero video storage","SSO integration","GDPR compliance","Simple deployment"],
-    gets:"On-device AI (no video leaves the machine), SAML SSO, AES-256 encryption, full audit logs.",
+    gets:"On-device AI (no video leaves the machine), Google/Microsoft sign-in on every plan with SAML SSO on Enterprise, AES-256 encryption, full audit logs.",
   },
 ];
 

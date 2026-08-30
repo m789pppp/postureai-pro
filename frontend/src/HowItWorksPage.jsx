@@ -37,7 +37,7 @@ POST /api/v1/org/invite
   },
   { n:"02", icon:"👥", color:"#22d3ee", time:"10 min", title:"Onboard your team",
     desc:"Send invite links or upload a CSV. Employees get a 2-minute onboarding flow — no training sessions, no IT tickets.",
-    details:["Bulk invite via CSV upload","Individual invite links","SAML SSO auto-provisioning","Mobile-friendly onboarding flow"],
+    details:["Bulk invite via CSV upload","Individual invite links","SCIM auto-provisioning (Enterprise)","Mobile-friendly onboarding flow"],
     code:`// Bulk import employees
 POST /api/v1/employees/bulk
 { "file": "team.csv",
