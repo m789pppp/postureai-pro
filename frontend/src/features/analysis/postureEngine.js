@@ -140,31 +140,44 @@ const THR = {
 // ever appeared as an easy-to-miss informational alert. Given a real
 // weight (0.08) and the other 8 weights rescaled by ×0.92 so the table
 // still sums to 1.0.
+// Exported (read-only) so the self-test can assert that every module which
+// gets scored actually carries weight — twice now a metric has been computed,
+// classified, alerted on and displayed while contributing 0 to the score.
+export const WEIGHTS_FRONT_KEYS = {};
 const WEIGHTS_FRONT = {
-  neck:     0.2132,
-  tilt:     0.0693,
-  shoulder: 0.0757,
-  spine:    0.0915,
-  distance: 0.0820,
-  yaw:      0.0378,
-  rounded:  0.0568,
-  fhp:      0.1376,
-  monitor:  0.0661,
+  neck:     0.2057,
+  tilt:     0.0669,
+  shoulder: 0.0730,
+  spine:    0.0883,
+  distance: 0.0791,
+  yaw:      0.0365,
+  rounded:  0.0548,
+  fhp:      0.1328,
+  monitor:  0.0638,
+  // analyzeElbow() has always been computed, classified for severity, given
+  // alert copy and shown in the UI — but it was never in this table, so like
+  // shoulderElev before it, it contributed exactly 0 to the score. Reaching
+  // too far for a mouse is a named contributor to shoulder pain, so it should
+  // cost something. Modest weight: for most laptop users the hands sit below
+  // the frame, where the metric correctly reports unreliable and confWeight
+  // drops it to 0 anyway.
+  elbow:    0.0350,
   // Forward slouch and trunk twist were previously unscored entirely: a full
   // slump moved the total by 2 points and a 45-degree twist by 0, while lower
   // back and neck/shoulder are the two most-reported problem regions among
   // office workers. The ten weights above are scaled to make room.
-  torsoFlex: 0.0800,
-  trunkRot:  0.0400,
+  torsoFlex: 0.0772,
+  trunkRot:  0.0386,
   // analyzeShoulderElevation() was added specifically because "no metric in
   // this engine reacted to a shoulder shrug at all" — but it was never given a
   // weight, so it still didn't: a measured SEVERE shrug (13.5% elevation) moved
   // the overall score by 1 point while the UI simultaneously showed "Shoulder
   // Elevation: severe" and surfaced "Drop your shoulders" as the top cue. The
   // nine original weights above are scaled by 0.95 to make room for it.
-  shoulderElev: 0.05,
-  // sums to ~1.00 (rounding)
+  shoulderElev: 0.0483,
+  // sums to 1.00
 };
+Object.assign(WEIGHTS_FRONT_KEYS, WEIGHTS_FRONT);
 
 
 // ─── Severity thresholds for condition classification ──────────────
@@ -1782,11 +1795,12 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   const W_fhp      = confWeight(fhp,      WEIGHTS_FRONT.fhp);
   const W_monitor  = confWeight(monitor,  WEIGHTS_FRONT.monitor);
   const W_shElev   = confWeight(shoulderElev, WEIGHTS_FRONT.shoulderElev);
+  const W_elbow    = confWeight(elbow,     WEIGHTS_FRONT.elbow);
   const W_torso    = confWeight(torsoFlex, WEIGHTS_FRONT.torsoFlex);
   const W_twist    = confWeight(trunkRot,  WEIGHTS_FRONT.trunkRot);
   const W_dist     = WEIGHTS_FRONT.distance; // distance is always measured
 
-  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp + W_monitor + W_shElev + W_torso + W_twist;
+  const W_ACTUAL = W_neck + W_tilt + W_shoulder + W_spine + W_dist + W_yaw + W_rounded + W_fhp + W_monitor + W_shElev + W_torso + W_twist + W_elbow;
 
   // True weighted average: divide by the weight actually used.
   //
@@ -1819,7 +1833,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
         monitor.score  * W_monitor  +
         shoulderElev.score * W_shElev +
         torsoFlex.score * W_torso   +
-        trunkRot.score  * W_twist
+        trunkRot.score  * W_twist   +
+        elbow.score     * W_elbow
       ) / W_ACTUAL)))
     // Effectively nothing measurable this frame — report the distance channel
     // alone rather than inventing a number out of a constant.
