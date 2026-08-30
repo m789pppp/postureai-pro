@@ -14,7 +14,7 @@
  * at 91 whether the user was well positioned or pressed against the lens.
  * Case 1 below locks that behaviour down.
  */
-import { analyzeMP, PL, MODES, resetProportions } from './postureEngine.js';
+import { analyzeMP, PL, MODES, resetProportions, WEIGHTS_FRONT_KEYS } from './postureEngine.js';
 
 const W = 1280, H = 720;
 
@@ -356,6 +356,23 @@ console.log('\n--- 12. forward slouch is detected and scored ---');
   check((twisted.detectedConditions || []).some(c => c.name === 'Trunk Rotation'), 'a 45deg twist is reported as a Trunk Rotation condition');
   // Slouching must not masquerade as a twist — they are separate faults.
   check(!(slumped.detectedConditions || []).some(c => c.name === 'Trunk Rotation'), 'slouching is not misreported as a trunk twist');
+}
+
+// ── 14. every measured metric must actually affect the score ────────────────
+// Twice now a metric has been computed, severity-classified, given alert copy
+// and shown in the UI while carrying no weight at all, so it moved the score by
+// nothing (shoulderElev, then elbow). This check makes that class of bug loud.
+console.log('\n--- 14. no metric is measured but unweighted ---');
+{
+  const weighted = new Set(Object.keys(WEIGHTS_FRONT_KEYS));
+  const missing = ['neck','tilt','shoulder','spine','distance','yaw','rounded','fhp',
+                   'monitor','shoulderElev','torsoFlex','trunkRot','elbow']
+                   .filter(k => !weighted.has(k));
+  console.log('  weighted metrics:', [...weighted].join(', '));
+  check(missing.length === 0, `every scored module has a weight ${missing.length ? '-> missing: ' + missing.join(',') : ''}`);
+  const sum = Object.values(WEIGHTS_FRONT_KEYS).reduce((a, b) => a + b, 0);
+  console.log('  weight sum:', sum.toFixed(4));
+  check(Math.abs(sum - 1) < 0.005, `weights sum to 1.0 (got ${sum.toFixed(4)})`);
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
