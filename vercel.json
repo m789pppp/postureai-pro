@@ -103,8 +103,52 @@
       "dest": "/api/billing.js"
     },
     {
-      "src": "/api/auth/mfa/(.*)",
-      "dest": "/api/auth.js"
+      "src": "/api/account/delete",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/admin/seed-flags",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/email/send",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/email/send/contact",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/metrics/revenue",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/notify/dispatch",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/org/invite",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/org/invite/accept",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/cron/symptom-pattern-alerts",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/gamification/compute",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/announcements",
+      "dest": "/api/misc.js"
+    },
+    {
+      "src": "/api/stress/correlation",
+      "dest": "/api/misc.js"
     },
     {
       "src": "/api/habits/whatsapp-cron",
@@ -161,46 +205,6 @@
     {
       "src": "/api/cert/verify",
       "dest": "/api/cert.js"
-    },
-    {
-      "src": "/api/account/(.*)",
-      "dest": "/api/misc.js"
-    },
-    {
-      "src": "/api/admin/(.*)",
-      "dest": "/api/misc.js"
-    },
-    {
-      "src": "/api/email/(.*)",
-      "dest": "/api/misc.js"
-    },
-    {
-      "src": "/api/metrics/(.*)",
-      "dest": "/api/misc.js"
-    },
-    {
-      "src": "/api/notify/(.*)",
-      "dest": "/api/misc.js"
-    },
-    {
-      "src": "/api/org/(.*)",
-      "dest": "/api/misc.js"
-    },
-    {
-      "src": "/api/cron/(.*)",
-      "dest": "/api/misc.js"
-    },
-    {
-      "src": "/api/gamification/(.*)",
-      "dest": "/api/misc.js"
-    },
-    {
-      "src": "/api/announcements(.*)",
-      "dest": "/api/misc.js"
-    },
-    {
-      "src": "/api/stress/(.*)",
-      "dest": "/api/misc.js"
     },
     {
       "src": "/api/auth/whoami",
