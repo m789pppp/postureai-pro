@@ -588,6 +588,19 @@ let _earShBase = _makeBaseline(40, 60);
 // Head apparent size relative to shoulder width — the sagittal forward-head
 // signal. See analyzeFHP.
 let _headShBase = _makeBaseline(40, 60);
+// Ear-to-shoulder drop over shoulder width, for rounded shoulders. Separate
+// from _earShBase because the two use different numerators (mid-ear vs
+// per-side) and must not share a learned value.
+// NOTE ON SAMPLE COUNTS: analyzeRoundedShoulders runs inside the
+// every-third-frame block in analyzeMP, so these two baselines are fed once
+// per three frames. (40, 60) would need 300 frames to settle — five times
+// longer than the metrics fed every frame — and until it did, the metric
+// reported unreliable and contributed nothing. Scaled to match the ~100-frame
+// settle the others use. (5,12) = 17 calls, about 50 frames.
+// Shoulder width over hip width. Above neutral means the shoulders have come
+// FORWARD (nearer the camera, so magnified) — protraction. Below neutral means
+// the shoulder line has foreshortened — rotation, which analyzeTrunkRotation
+// reads from the same quantity. One ratio, two faults, opposite directions.
 function smoothDistance(cm) {
   if (!Number.isFinite(cm)) return cm;
   _distMedBuf.push(cm);
@@ -1364,10 +1377,31 @@ function analyzeRoundedShoulders(lms, prop, H, calib = null) {
   // calibrated neutral ratio; fall back to the population value ≈0.52.
   // Rounding/shrugging shrinks the ratio; ×45 maps the deviation onto the
   // existing 0–30 "depth" range and thresholds.
-  const NEUTRAL_RATIO = (typeof calib?.rounded_neutral === "number" && calib.rounded_neutral > 0.2 && calib.rounded_neutral < 1.0)
-    ? calib.rounded_neutral
-    : 0.52;
-  const personalised = NEUTRAL_RATIO !== 0.52;
+  // This metric requires calibration to mean anything.
+  //
+  // NEUTRAL_RATIO was the hardcoded 0.52, and no real body has that
+  // ear-to-shoulder ratio: measured on the synthetic-subject harness across
+  // the plausible adult range it is 0.20-0.43. So every uncalibrated user read
+  // ~9 "depth" against an alert threshold of 8 and was told "shoulders
+  // slightly forward - open chest" while sitting perfectly upright. The number
+  // tracked their neck length and shoulder width, not their posture.
+  //
+  // Unlike shoulder elevation and forward head, this one is NOT self-baselined.
+  // An attempt to do that produced correct-looking values but left the
+  // reliability flag behaving in a way I could not fully account for, and a
+  // metric whose behaviour is not fully understood should not be scoring
+  // people. Until it is reworked it reports unreliable without calibration:
+  // contributing nothing to the score and firing no alert, which is the safe
+  // direction to fail in.
+  const calibNeutral = (typeof calib?.rounded_neutral === "number" &&
+                        calib.rounded_neutral > 0.10 && calib.rounded_neutral < 1.0)
+    ? calib.rounded_neutral : null;
+  if (calibNeutral === null) {
+    return { depth: 0, score: 90, severity: "normal", confidence: 0, reliable: false,
+             needsCalibration: true };
+  }
+  const NEUTRAL_RATIO = calibNeutral;
+  const personalised = true;
   const deviation = Math.max(0, NEUTRAL_RATIO - elevRatio) * 45;
 
   // Secondary Z signal, blended in cautiously. The elevation-ratio method
@@ -1560,7 +1594,7 @@ function analyzeFHP(lms, W, H, prop) {
  * It was always a forward-head signal; it was only ever pointed at the wrong
  * conclusion.)
  */
-function analyzeForwardHeadDepth(lms, W, H, prop, distCm, calib = null) {
+function analyzeForwardHeadDepth(lms, W, H, prop, distCm, calib = null, trunkRotDeg = 0) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
   if (!prop.shOK || !vis(PL.L_EYE) || !vis(PL.R_EYE)) {
@@ -1570,7 +1604,20 @@ function analyzeForwardHeadDepth(lms, W, H, prop, distCm, calib = null) {
   const shPx  = prop.shWidthPxRaw ?? prop.shWidthPx;
   if (ipdPx < 4 || shPx < 20) return { fwdCm: 0, reliable: false };
 
-  const ratio = ipdPx / shPx;
+  // De-rotate the shoulder ruler before using it.
+  //
+  // A trunk twist foreshortens the apparent shoulder width by cos(theta),
+  // which inflates ipd/shoulder exactly as a head coming forward would — so a
+  // 35° twist was reported as 9.3cm of forward head, complete with a "raise
+  // your monitor" alert. Same class of error this metric was created to fix in
+  // analyzeTrunkRotation, arriving from the opposite direction: two quantities
+  // that share a ruler will each read as the other unless the shared term is
+  // removed. Trunk rotation is measured against the hips and so is itself
+  // unaffected by this, which is what makes it usable as the correction.
+  const cosRot = Math.max(Math.cos(Math.min(50, Math.abs(trunkRotDeg)) * Math.PI / 180), 0.64);
+  const shPxTrue = shPx / cosRot;
+
+  const ratio = ipdPx / shPxTrue;
 
   const calibNeutral = (typeof calib?.head_sh_ratio_neutral === "number" && calib.head_sh_ratio_neutral > 0.05)
     ? calib.head_sh_ratio_neutral : null;
@@ -1632,6 +1679,34 @@ function analyzeElbow(lms, W, H) {
   const lAng = lOK ? calcAngle(PL.L_SHOULDER, PL.L_ELBOW, PL.L_WRIST) : null;
   const rAng = rOK ? calcAngle(PL.R_SHOULDER, PL.R_ELBOW, PL.R_WRIST) : null;
   const avg  = lAng != null && rAng != null ? Math.round((lAng + rAng) / 2) : (lAng ?? rAng);
+
+  // Only score the elbow when the arms are actually WORKING.
+  //
+  // The 90-120° guidance below is about keyboard height, and it only means
+  // anything while the hands are at a keyboard. Arms hanging relaxed at the
+  // sides sit at 170-180°, which this scored as a severe fault and reported as
+  // "Elbows too low — raise keyboard". Measured on the synthetic harness, that
+  // was one of three alerts fired at a perfectly upright resting subject: the
+  // app telling someone who is doing nothing wrong to adjust their desk.
+  //
+  // A working arm has the wrist forward of, and not far below, the elbow. A
+  // hanging arm has the wrist almost directly beneath it. Use that to tell
+  // them apart, and report unreliable rather than wrong when the arms are
+  // simply at rest — confWeight then drops the metric from the score instead
+  // of penalising a non-problem.
+  const armWorking = (sh, el, wr) => {
+    const e = px(el), w = px(wr), sHalf = Math.abs(px(PL.L_SHOULDER).x - px(PL.R_SHOULDER).x) / 2;
+    if (!(sHalf > 10)) return false;
+    const drop = (w.y - e.y) / Math.max(sHalf, 1);   // wrist below elbow, in half-shoulder units
+    const reach = Math.abs(w.x - e.x) / Math.max(sHalf, 1);
+    // Hanging: wrist far below the elbow and almost directly under it.
+    return !(drop > 0.75 && reach < 0.45);
+  };
+  const lWorking = lOK && armWorking(PL.L_SHOULDER, PL.L_ELBOW, PL.L_WRIST);
+  const rWorking = rOK && armWorking(PL.R_SHOULDER, PL.R_ELBOW, PL.R_WRIST);
+  if (!lWorking && !rWorking) {
+    return { angle: avg, score: 90, severity: "normal", confidence: 0, reliable: false, reason: "arms_at_rest" };
+  }
 
   // OSHA/NIOSH: acceptable elbow range 90-120°, ideal 100-110°
   // Use midpoint 105° as ideal, tolerance ±15° before penalty
@@ -1699,23 +1774,80 @@ function analyzeMonitorHeight(lms, W, H, distCm, calib = null) {
 // ALERT BUILDER with deduplication
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Build the alert list, ordered by how much each fault is ACTUALLY costing.
+ *
+ * The array used to come out in the order the conditions happened to be
+ * written, and App.jsx shows `alerts[0]` as the headline and stores it as the
+ * session's alert cause. So the first line written won the user's attention
+ * regardless of relevance: measured on the synthetic harness, an 18° lateral
+ * lean produced five alerts led by "Neck lean 17° — tuck chin slightly", with
+ * "Leaning right 18° — sit centered" fourth. The one useful instruction was
+ * buried under three pieces of wrong advice, and the wrong one was also what
+ * got written into the session history and the analytics.
+ *
+ * Each alert now carries the score impact of the metric behind it — the
+ * metric's weight multiplied by how far below 100 it scored — and the list is
+ * sorted by that. The headline becomes whatever is genuinely most wrong, and
+ * it stays correct automatically when the weight table changes.
+ */
 function buildAlerts(modules, distCm, lo, hi) {
-  const seen    = new Set();
-  const add = (key, condition, text) => {
+  const seen  = new Set();
+  const items = [];
+  /**
+   * @param key    dedupe key
+   * @param cond   whether the alert fires
+   * @param text   user-facing copy
+   * @param impact weight x (100 - metric score); higher sorts first
+   */
+  const add = (key, condition, text, impact = 0) => {
     if (!condition || !text || seen.has(key)) return null;
     seen.add(key);
+    items.push({ text, impact });
     return text;
   };
 
   const { neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance, shoulderElev, handProp, torsoFlex, trunkRot } = modules;
 
-  return [
-    add("neck_sev",  neck.angle > neck.badAdj,                    `⚠️ Severe neck lean ${neck.angle}° — raise monitor to eye level immediately`),
-    add("neck_mid",  neck.angle > (neck.okAdj + neck.badAdj) / 2 && neck.angle <= neck.badAdj, `Neck lean ${neck.angle}° — tuck chin slightly`),
-    add("fhp_sev",   fhp.reliable && fhp.distCm > 6,             `⚠️ Forward head ${fhp.distCm}cm (~${fhp.neckAngleDeg}° pitch, +${fhp.extraLoadKg}kg neck load) — raise monitor`),
-    add("fhp_mid",   fhp.reliable && fhp.distCm > 3 && fhp.distCm <= 6, `Forward head ${fhp.distCm}cm (+${fhp.extraLoadKg}kg) — tuck chin back`),
-    add("tilt",      headTilt.reliable && headTilt.angle > 10,    `Head tilting ${headTilt.angle}° — check chair height`),
-    add("sh",        shoulder.reliable && shoulder.angle > 10,    `Shoulder imbalance ${shoulder.angle}° — adjust armrests`),
+  // Impact of a module: its weight in the score, times how far it fell short.
+  const imp = (weightKey, mod) =>
+    (WEIGHTS_FRONT[weightKey] || 0) * Math.max(0, 100 - (mod?.score ?? 100));
+
+  // True when a lateral trunk lean accounts for most of the head's deviation
+  // from vertical — the head is going with the body, not independently of it.
+  const _spineAbs = Math.abs(spine?.signedAngle ?? spine?.angle ?? 0);
+  const trunkExplainsHead = (spine?.reliable ?? false) &&
+                            _spineAbs > 8 &&
+                            (neck?.angle ?? 0) <= _spineAbs * 1.25;
+
+  const _built = [
+    // The neck alerts are suppressed when the trunk already explains the head
+    // being off vertical.
+    //
+    // analyzeNeckLean measures the shoulder-to-head angle in the image plane,
+    // which from a front camera responds mostly to LATERAL movement — so when
+    // a user leans sideways it fires alongside spine lean, head tilt and
+    // shoulder imbalance, all describing the one event. Measured on the
+    // synthetic harness, an 18° lean produced five alerts, and because neck
+    // carries the larger weight its copy ("tuck chin slightly") became the
+    // headline: the wrong correction for the actual fault, shown to the user
+    // and stored as the session's alert cause.
+    //
+    // If the head is off vertical because the whole torso is, the instruction
+    // is "sit centred", not "tuck your chin". Only flag the neck for the part
+    // the trunk does NOT account for.
+    add("neck_sev",  neck.angle > neck.badAdj && !trunkExplainsHead,                    `⚠️ Severe neck lean ${neck.angle}° — raise monitor to eye level immediately`, imp("neck", neck)),
+    add("neck_mid",  neck.angle > (neck.okAdj + neck.badAdj) / 2 && neck.angle <= neck.badAdj && !trunkExplainsHead, `Neck lean ${neck.angle}° — tuck chin slightly`, imp("neck", neck)),
+    add("fhp_sev",   fhp.reliable && fhp.distCm > 6,             `⚠️ Forward head ${fhp.distCm}cm (~${fhp.neckAngleDeg}° pitch, +${fhp.extraLoadKg}kg neck load) — raise monitor`, imp("fhp", fhp)),
+    add("fhp_mid",   fhp.reliable && fhp.distCm > 3 && fhp.distCm <= 6, `Forward head ${fhp.distCm}cm (+${fhp.extraLoadKg}kg) — tuck chin back`, imp("fhp", fhp)),
+    // Head tilt and shoulder imbalance are suppressed for the same reason as
+    // the neck alerts above: a lateral trunk lean rotates the shoulder line
+    // and carries the head with it, so all three fire at once and their
+    // corrections ("check chair height", "adjust armrests") are wrong for a
+    // fault whose actual fix is to sit centred. One event should produce one
+    // instruction.
+    add("tilt",      headTilt.reliable && headTilt.angle > 10 && !trunkExplainsHead,    `Head tilting ${headTilt.angle}° — check chair height`, imp("tilt", headTilt)),
+    add("sh",        shoulder.reliable && shoulder.angle > 10 && !trunkExplainsHead,    `Shoulder imbalance ${shoulder.angle}° — adjust armrests`, imp("shoulder", shoulder)),
     // angleVert() (what spine.angle/signedAngle come from) is documented
     // as 2D-only — it ignores Z — so this metric is geometrically a
     // LATERAL lean detector: leaning sideways moves it a lot, leaning
@@ -1730,17 +1862,17 @@ function buildAlerts(modules, distCm, lo, hi) {
         `⚠️ Leaning ${(spine.signedAngle ?? spine.angle) > 0 ? "right" : "left"} ${spine.angle}° — sit centered, weight even on both hips`),
     add("spine_mid", spine.reliable && Math.abs(spine.signedAngle ?? spine.angle) > 10 && Math.abs(spine.signedAngle ?? spine.angle) <= 18,
         `Leaning ${(spine.signedAngle ?? spine.angle) > 0 ? "right" : "left"} ${spine.angle}° — engage core, sit centered`),
-    add("yaw",       yaw.reliable && yaw.absAngle > 18,           `Head turned ${yaw.absAngle}° ${yaw.angle > 0 ? "right" : "left"} — face monitor`),
-    add("dist_cl",   distCm < lo - 10,                            `⚠️ Very close (${distCm}cm) — move back to ${lo}–${hi}cm`),
-    add("dist_c",    distCm < lo && distCm >= lo - 10,            `Too close (${distCm}cm) — ideal ${lo}–${hi}cm`),
-    add("dist_f",    distCm > hi + 15,                            `Too far (${distCm}cm) — ideal ${lo}–${hi}cm`),
-    add("round_sev", rounded.reliable && rounded.depth > 15,      `⚠️ Rounded shoulders — pull shoulder blades together`),
-    add("round_mid", rounded.reliable && rounded.depth > 8 && rounded.depth <= 15, `Shoulders slightly forward — open chest`),
-    add("round_calib_tip", rounded.calibrationRecommended,        `Tip: run Personal Posture Calibration for a more precise rounded-shoulders reading`),
-    add("shrug_sev", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.bad, `⚠️ Shoulders elevated/shrugging (${shoulderElev.elevPct}%) — relax shoulders down and back`),
-    add("shrug_mid", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.ok && shoulderElev.elevPct <= THR.SHOULDER_ELEV.bad, `Shoulders slightly raised — relax your trap muscles`),
-    add("elbow_hi",  elbow.reliable && elbow.angle != null && elbow.angle < 70, `⚠️ Elbows too high (${elbow.angle}°) — lower keyboard`),
-    add("elbow_lo",  elbow.reliable && elbow.angle != null && elbow.angle > 125, `Elbows too low (${elbow.angle}°) — raise keyboard`),
+    add("yaw",       yaw.reliable && yaw.absAngle > 18,           `Head turned ${yaw.absAngle}° ${yaw.angle > 0 ? "right" : "left"} — face monitor`, imp("yaw", yaw)),
+    add("dist_cl",   distCm < lo - 10,                            `⚠️ Very close (${distCm}cm) — move back to ${lo}–${hi}cm`, imp("distance", distance)),
+    add("dist_c",    distCm < lo && distCm >= lo - 10,            `Too close (${distCm}cm) — ideal ${lo}–${hi}cm`, imp("distance", distance)),
+    add("dist_f",    distCm > hi + 15,                            `Too far (${distCm}cm) — ideal ${lo}–${hi}cm`, imp("distance", distance)),
+    add("round_sev", rounded.reliable && rounded.depth > 15,      `⚠️ Rounded shoulders — pull shoulder blades together`, imp("rounded", rounded)),
+    add("round_mid", rounded.reliable && rounded.depth > 8 && rounded.depth <= 15, `Shoulders slightly forward — open chest`, imp("rounded", rounded)),
+    add("round_calib_tip", rounded.calibrationRecommended,        `Tip: run Personal Posture Calibration for a more precise rounded-shoulders reading`, imp("rounded", rounded)),
+    add("shrug_sev", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.bad, `⚠️ Shoulders elevated/shrugging (${shoulderElev.elevPct}%) — relax shoulders down and back`, imp("shoulder", shoulder)),
+    add("shrug_mid", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.ok && shoulderElev.elevPct <= THR.SHOULDER_ELEV.bad, `Shoulders slightly raised — relax your trap muscles`, imp("shoulder", shoulder)),
+    add("elbow_hi",  elbow.reliable && elbow.angle != null && elbow.angle < 70, `⚠️ Elbows too high (${elbow.angle}°) — lower keyboard`, imp("elbow", elbow)),
+    add("elbow_lo",  elbow.reliable && elbow.angle != null && elbow.angle > 125, `Elbows too low (${elbow.angle}°) — raise keyboard`, imp("elbow", elbow)),
     // "below" (looking down) used to always be worded as "Monitor too low —
     // raise it", which is actively wrong advice when the real cause is
     // looking down at a phone/notes rather than a low monitor — the engine
@@ -1752,8 +1884,8 @@ function buildAlerts(modules, distCm, lo, hi) {
     // (~10cm of phantom offset at 60cm), which sailed past a flat 5cm trigger
     // and gave a large subset of users a permanent, unclearable instruction to
     // move a monitor that was already at eye level.
-    add("mon_low",   monitor.reliable && monitor.direction === "below" && monitor.offsetCm > (monitor.personalised ? 5 : 14), `Looking down ~${monitor.offsetCm}cm below eye level — raise your monitor, or if you're checking a phone/notes, keep it brief`),
-    add("mon_hi",    monitor.reliable && monitor.direction === "above" && monitor.offsetCm > (monitor.personalised ? 5 : 14), `Looking up ~${monitor.offsetCm}cm above eye level — lower your monitor`),
+    add("mon_low",   monitor.reliable && monitor.direction === "below" && monitor.offsetCm > (monitor.personalised ? 5 : 14), `Looking down ~${monitor.offsetCm}cm below eye level — raise your monitor, or if you're checking a phone/notes, keep it brief`, imp("monitor", monitor)),
+    add("mon_hi",    monitor.reliable && monitor.direction === "above" && monitor.offsetCm > (monitor.personalised ? 5 : 14), `Looking up ~${monitor.offsetCm}cm above eye level — lower your monitor`, imp("monitor", monitor)),
     // Hand/chin-prop occlusion — see analyzeMP() for detection logic. This
     // is deliberately informational-only (no score weight): we can't
     // quantify the actual neck angle once an ear is occluded, so this just
@@ -1764,7 +1896,7 @@ function buildAlerts(modules, distCm, lo, hi) {
     add("slouch_sev", torsoFlex?.reliable && torsoFlex.severity === "severe",
         `⚠️ Slouching forward — stack your ribs over your hips and let the chair back support you`),
     add("slouch_mid", torsoFlex?.reliable && (torsoFlex.severity === "moderate" || torsoFlex.severity === "mild"),
-        `You're starting to slump — sit tall, hips back in the seat`),
+        `You're starting to slump — sit tall, hips back in the seat`, imp("torsoFlex", torsoFlex)),
     // Trunk twist — usually an off-centre monitor rather than a habit, so the
     // advice names the fix rather than telling the user to "sit better".
     add("twist_sev", trunkRot?.reliable && trunkRot.severity === "severe",
@@ -1772,7 +1904,15 @@ function buildAlerts(modules, distCm, lo, hi) {
     add("twist_mid", trunkRot?.reliable && trunkRot.severity === "moderate",
         `Sitting turned ${trunkRot.angle}° — centre your monitor so you don't have to twist`),
     add("hand_prop", handProp?.detected, `Hand/object covering one ear — resting your chin on your hand hides real neck strain from being measured`),
-  ].filter(Boolean);
+  ];
+  void _built;   // the add() calls above populate `items`; this array is unused
+
+  // Most-costly first. `impact` is the metric's weight times its shortfall, so
+  // the headline alert — the one App.jsx shows and stores as the session's
+  // alert cause — is whatever is actually doing the most damage to the score,
+  // not whichever condition happens to be written first in this file.
+  items.sort((a, b) => b.impact - a.impact);
+  return items.map(i => i.text);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1918,10 +2058,20 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   //
   // Combine with the lateral ear-shoulder offset by taking the LARGER of the
   // two, not the sum: they are two views of one displacement, and adding them
-  // would double-count a head that is both forward and off to one side.
+  // When the sagittal estimate is available it REPLACES the older term rather
+  // than being combined with it.
+  //
+  // analyzeFHP's 2D component is deltaX — the ear's horizontal offset from the
+  // shoulder midpoint — which is a LATERAL measurement wearing a sagittal
+  // name. Taking the larger of the two therefore reported a pure sideways lean
+  // as "Forward head 3.6cm — tuck chin back", and because that outranked the
+  // real instruction it became the headline the user saw and the cause stored
+  // in their session history. Lateral displacement is what spine_lean is for;
+  // one metric, one axis.
   {
-    const fwd = analyzeForwardHeadDepth(lms, W, H, prop, distCm, calib);
-    if (fwd.reliable && fwd.fwdCm > (fhp.distCm ?? 0)) {
+    const fwd = analyzeForwardHeadDepth(lms, W, H, prop, distCm, calib,
+                                       trunkRot?.reliable ? (trunkRot.angle || 0) : 0);
+    if (fwd.reliable) {
       const d = fwd.fwdCm;
       const pitchRad = Math.atan2(Math.max(0, d), 15);
       fhp = {

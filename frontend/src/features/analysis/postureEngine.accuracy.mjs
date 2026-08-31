@@ -197,7 +197,15 @@ console.log("\nRESPONSE — each defect must actually cost points");
     ["Neck flexion 25°",      { neckFlexDeg: 25 },      4],
     ["Forward head 8cm",      { forwardHeadCm: 8 },     5],
     ["Trunk flexion 20°",     { trunkFlexDeg: 20 },     8],
-    ["Rounded shoulders 6cm", { roundShoulderCm: 6 },   5],
+    // KNOWN WEAKNESS, asserted at its true value rather than an aspirational
+    // one. analyzeRoundedShoulders now reports unreliable without calibration,
+    // because its population constant (0.52) is anatomically wrong for
+    // everyone and produced a permanent false "shoulders slightly forward"
+    // alert. So an uncalibrated user gets almost no protraction detection —
+    // 6cm costs 3 points, coming mostly from other metrics. This is the next
+    // thing to rework in the engine; the assertion is here to make the gap
+    // visible rather than to pretend it is closed.
+    ["Rounded shoulders 6cm", { roundShoulderCm: 6 },   2],
     ["Lateral lean 15°",      { lateralLeanDeg: 15 },  10],
     ["Trunk rotation 30°",    { trunkRotDeg: 30 },      8],
     ["Shoulder shrug 4cm",    { shoulderElevCm: 4 },    2],
@@ -213,6 +221,48 @@ console.log("\nRESPONSE — each defect must actually cost points");
 
   const bad = read({ neckFlexDeg: 25, trunkFlexDeg: 15, roundShoulderCm: 5, forwardHeadCm: 6 })?.score;
   check("Compound bad posture drops >= 25 points", (neutral - bad) >= 25, `${neutral} -> ${bad}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+console.log("\nALERTS — the right instruction, and only the right one");
+
+{
+  // alerts[0] is what App.jsx shows the user AND what it stores as the
+  // session's alert cause, so its correctness matters twice.
+  const alertsFor = (pose) => (read(pose)?.alerts || []).filter(Boolean);
+
+  const quiet = alertsFor({});
+  if (VERBOSE && quiet.length) quiet.forEach(a => console.log(`    (neutral) ${a}`));
+  check("Correct posture fires NO alerts", quiet.length === 0,
+        `${quiet.length}: ${quiet.join(" | ") || "-"}`);
+
+  const cases = [
+    ["Lateral lean",   { lateralLeanDeg: 18 }, /Leaning (right|left)/],
+    ["Forward head",   { forwardHeadCm: 8 },   /Forward head/],
+    ["Trunk rotation", { trunkRotDeg: 35 },    /twisted/i],
+    ["Slouch",         { trunkFlexDeg: 20 },   /Slouch|slump/i],
+    ["Head turned",    { headYawDeg: 35 },     /Head turned/],
+  ];
+  for (const [label, pose, wanted] of cases) {
+    const a = alertsFor(pose);
+    if (VERBOSE) { console.log(`    ${label}:`); a.forEach(x => console.log(`      ${x}`)); }
+    check(`${label}: the right instruction is present`, a.some(x => wanted.test(x)),
+          a.join(" | ") || "no alerts");
+    // One fault should not produce a wall of corrections. A lateral lean used
+    // to fire eight, led by "tuck chin slightly".
+    check(`${label}: at most 3 alerts`, a.length <= 3, `${a.length} alerts`);
+  }
+
+  // Lateral lean must not be headlined by a neck/chin/armrest instruction —
+  // those describe the same event with the wrong correction.
+  const lean = alertsFor({ lateralLeanDeg: 18 });
+  check("Lateral lean is not headlined by chin/armrest advice",
+        !/tuck chin|armrest|chair height/i.test(lean[0] || ""), `headline: ${lean[0]}`);
+
+  // Severity levels of one metric are mutually exclusive.
+  const slouch = alertsFor({ trunkFlexDeg: 20 });
+  const both = slouch.some(x => /Slouching forward/.test(x)) && slouch.some(x => /starting to slump/.test(x));
+  check("Slump alert does not fire at two severities at once", !both, slouch.join(" | "));
 }
 
 // ═══════════════════════════════════════════════════════════════════

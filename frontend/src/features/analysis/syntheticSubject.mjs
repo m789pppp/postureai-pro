@@ -201,11 +201,19 @@ export function buildSubject3D(pose = {}, body = {}) {
     }
   }
 
-  // ── Arms: hanging, elbows slightly forward, wrists ahead (typing) ──────
-  const lElb = v(lSh.x + 4, lSh.y - B.upperArmCm, lSh.z + 6);
-  const rElb = v(rSh.x - 4, rSh.y - B.upperArmCm, rSh.z + 6);
-  const lWri = v(lElb.x - 4, lElb.y - B.forearmCm * 0.55, lElb.z + B.forearmCm * 0.8);
-  const rWri = v(rElb.x + 4, rElb.y - B.forearmCm * 0.55, rElb.z + B.forearmCm * 0.8);
+  // ── Arms in a typing posture ───────────────────────────────────────────
+  // Upper arm hangs close to the body, forearm reaches forward to the desk at
+  // roughly elbow height — which puts the elbow near the 90-105° that the
+  // ergonomic guidance is written about.
+  //
+  // The first version of this model ran the forearm steeply down and far
+  // forward, producing an almost straight 179° arm. That is a resting arm, not
+  // a typing one, and it made the engine look like it was firing a false
+  // "elbows too low" alert when the fixture was simply posing the wrong thing.
+  const lElb = v(lSh.x + 2, lSh.y - B.upperArmCm, lSh.z + 3);
+  const rElb = v(rSh.x - 2, rSh.y - B.upperArmCm, rSh.z + 3);
+  const lWri = v(lElb.x - 5, lElb.y + 1, lElb.z + B.forearmCm * 0.92);
+  const rWri = v(rElb.x + 5, rElb.y + 1, rElb.z + B.forearmCm * 0.92);
 
   // ── Whole-body transforms about the hips ──────────────────────────────
   const all = {
