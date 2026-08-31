@@ -155,7 +155,17 @@ console.log('\n--- 6. IPD and shoulder distance branches agree ---');
 // mid-turn, so the app told users to correct the wrong side.
 console.log('\n--- 7. head yaw is monotonic and correctly scaled ---');
 {
-  const NOSE_R = 0.215;
+  // Matches NOSE_PROTRUSION_RATIO in the engine (nose tip ahead of the
+  // OUTER-CANTHAL plane, over the outer-canthal span).
+  //
+  // Note the circularity: this fixture synthesises landmarks with the same
+  // ratio the estimator inverts, so it can only ever confirm that the
+  // inversion is arithmetically sound — it can never detect a wrong constant,
+  // and did not detect that the previous 0.215 mixed the corneal and canthal
+  // planes. The non-circular check lives in postureEngine.accuracy.mjs, which
+  // builds a body from independent anthropometry and projects it through a
+  // real perspective camera.
+  const NOSE_R = 0.32;
   const yawFrame = (deg) => {
     resetProportions();
     const l = makeLandmarks({});
@@ -315,12 +325,21 @@ console.log('\n--- 12. forward slouch is detected and scored ---');
     const dist = 60 - slouch * 8, sc = F / dist;
     const shW = 42 * sc * Math.cos(twistDeg * Math.PI / 180), ipd = 6.3 * sc;
     const a = Array.from({ length: 33 }, () => ({ x: .5, y: .5, z: 0, visibility: .95 }));
+    // Hip width is deliberately NOT foreshortened by twistDeg.
+    //
+    // It used to be derived from the already-foreshortened shoulder width, so
+    // a "twist" turned the shoulders and the pelvis by the same angle — which
+    // is the whole body (or the chair) turning, not a trunk rotation. Trunk
+    // rotation IS the shoulder line turning relative to a stationary pelvis,
+    // and that distinction is exactly what the metric now measures, so the
+    // fixture has to make it too.
     const cx = .5, half = (shW / W) / 2, ih = (ipd / W) / 2;
+    const hipHalf = ((32 * sc) / W) / 2;
     const shY = .56 + slouch * .10, hipY = .93, eyeY = shY - (.24 - slouch * .07);
     a[PL.L_SHOULDER] = { x: cx + half, y: shY, z: 0, visibility: .98 };
     a[PL.R_SHOULDER] = { x: cx - half, y: shY, z: 0, visibility: .98 };
-    a[PL.L_HIP] = { x: cx + half * .8, y: hipY, z: 0, visibility: .93 };
-    a[PL.R_HIP] = { x: cx - half * .8, y: hipY, z: 0, visibility: .93 };
+    a[PL.L_HIP] = { x: cx + hipHalf, y: hipY, z: 0, visibility: .93 };
+    a[PL.R_HIP] = { x: cx - hipHalf, y: hipY, z: 0, visibility: .93 };
     a[PL.L_EYE] = { x: cx + ih, y: eyeY, z: 0, visibility: .96 };
     a[PL.R_EYE] = { x: cx - ih, y: eyeY, z: 0, visibility: .96 };
     a[PL.L_EYE_OUTER] = { x: cx + ih * 1.4, y: eyeY, z: 0, visibility: .96 };

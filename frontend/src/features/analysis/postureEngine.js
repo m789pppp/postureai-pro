@@ -145,14 +145,31 @@ const THR = {
 // classified, alerted on and displayed while contributing 0 to the score.
 export const WEIGHTS_FRONT_KEYS = {};
 const WEIGHTS_FRONT = {
-  neck:     0.2057,
+  // WEIGHT REBALANCE, from the sensitivity matrix in
+  // postureEngine.accuracy.mjs rather than from intuition.
+  //
+  // `neck` carried the largest weight in the table, but analyzeNeckLean
+  // measures the ear-midpoint-to-shoulder angle in the IMAGE plane, and from a
+  // front-facing camera that is essentially a LATERAL measurement. Sweeping
+  // every pose parameter against every metric showed it responding only to
+  // lateral lean and to trunk rotation — both of which spine_lean and
+  // trunk_rotation already score. So the single heaviest weight in the engine
+  // was largely a duplicate of two others, and sagittal posture, which is what
+  // desk work actually damages, was carried almost entirely by `fhp`.
+  //
+  // Weight moved from neck to fhp and torsoFlex. It is a judgement about
+  // clinical priority, which no harness can settle, but it is a judgement
+  // informed by measurement: forward head posture and thoracic flexion are the
+  // dominant desk complaints and are now the metrics that actually detect them.
+  // The table still sums to exactly 1.0 — asserted by the self-test.
+  neck:     0.1400,
   tilt:     0.0669,
   shoulder: 0.0730,
   spine:    0.0883,
   distance: 0.0791,
   yaw:      0.0365,
   rounded:  0.0548,
-  fhp:      0.1328,
+  fhp:      0.1800,
   monitor:  0.0638,
   // analyzeElbow() has always been computed, classified for severity, given
   // alert copy and shown in the UI — but it was never in this table, so like
@@ -166,7 +183,7 @@ const WEIGHTS_FRONT = {
   // slump moved the total by 2 points and a 45-degree twist by 0, while lower
   // back and neck/shoulder are the two most-reported problem regions among
   // office workers. The ten weights above are scaled to make room.
-  torsoFlex: 0.0772,
+  torsoFlex: 0.0957,
   trunkRot:  0.0386,
   // analyzeShoulderElevation() was added specifically because "no metric in
   // this engine reacted to a shoulder shrug at all" — but it was never given a
@@ -564,6 +581,13 @@ function _feedBaseline(b, v) {
 }
 let _trunkBase = _makeBaseline(40, 60);
 let _torsoBase = _makeBaseline(40, 60);
+// Ear-to-shoulder gap, used by BOTH shoulder elevation and rounded shoulders.
+// See the note in analyzeShoulderElevation for why a population constant
+// cannot work for this one.
+let _earShBase = _makeBaseline(40, 60);
+// Head apparent size relative to shoulder width — the sagittal forward-head
+// signal. See analyzeFHP.
+let _headShBase = _makeBaseline(40, 60);
 function smoothDistance(cm) {
   if (!Number.isFinite(cm)) return cm;
   _distMedBuf.push(cm);
@@ -708,6 +732,8 @@ export function resetProportions() {
   _distMedBuf = [];
   _trunkBase  = _makeBaseline(40, 60);
   _torsoBase  = _makeBaseline(40, 60);
+  _earShBase  = _makeBaseline(40, 60);
+  _headShBase = _makeBaseline(40, 60);
   _ipdShEMA   = null; // reset IPD estimate for new session
   analyzeMP._frameN = 0;
   analyzeMP._cachedRounded = null;
@@ -768,7 +794,23 @@ function estimateHeadYaw(lms, W, H) {
     // classification at 30° needed ~67° of real rotation to trigger, and the
     // understated angle was fed into estimateDistanceCm's cos-yaw
     // foreshortening correction, inflating distance as the user turned.
-    const NOSE_PROTRUSION_RATIO = 0.215; // 2.2cm nose / 9.3cm outer-canthal span
+    // 3.0cm nose protrusion / 9.3cm outer-canthal span.
+    //
+    // Was 0.215, documented as "2.2cm nose / 9.3cm outer-canthal span" — but
+    // 2.2cm is roughly the nose tip's protrusion ahead of the CORNEAL plane,
+    // while the span in the denominator is measured at the outer canthi, which
+    // sit noticeably further back. Mixing the two planes made the lever arm
+    // too short and so over-reported every turn: measured on the
+    // synthetic-subject harness, a true 30° head turn read as 43° and
+    // saturated the ±45° clamp, and the inflated angle then propagated into
+    // estimateDistanceCm's cos-yaw foreshortening correction.
+    //
+    // This is a population constant and cannot be self-baselined the way the
+    // torso ratios are — at neutral the nose offset is zero regardless of the
+    // ratio, so there is no signal to learn from. It is therefore the metric
+    // in this file most worth checking against real users; treat the yaw angle
+    // as ±20% until then.
+    const NOSE_PROTRUSION_RATIO = 0.32;
     const yaw = Math.max(-45, Math.min(45, Math.round(
       Math.atan(noseOffset / NOSE_PROTRUSION_RATIO) * 180 / Math.PI
     )));
@@ -1117,21 +1159,41 @@ function analyzeTrunkRotation(lms, W, H, prop, headYawDeg = 0, calib = null) {
     return { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
   }
 
-  const ipdPx = Math.abs(g(PL.R_EYE).x * W - g(PL.L_EYE).x * W);
   // MUST be the measured shoulder separation, not prop.shWidthPx — that one is
   // substituted with an eye-span-derived estimate when uncalibrated, which
   // cannot shrink when the trunk turns, so this metric would read a flat 0
   // degrees at any angle.
   const shPx  = prop.shWidthPxRaw ?? prop.shWidthPx;
-  if (ipdPx < 4 || shPx < 20) {
+
+  // The ruler is the HIP width, not the inter-pupillary distance.
+  //
+  // Using the IPD conflated depth with rotation, because the eyes and the
+  // shoulders sit at different depths: anything that brings the head nearer
+  // the camera enlarges the IPD while the shoulders stay put, shrinking
+  // shPx/ipd exactly as a twist would. Measured on the synthetic-subject
+  // harness, the old formulation reported a trunk twist of 25° for pure neck
+  // flexion, 32° for 8cm of forward-head and 33° for a 20° forward lean — none
+  // of which involve any rotation at all. A user slouching was told they were
+  // twisted.
+  //
+  // Shoulders and hips are both on the torso and move together in depth, so
+  // their ratio is invariant to how near the user sits and to anything the
+  // head does. Anatomically it is also the right definition: trunk rotation IS
+  // the shoulder line turning relative to the pelvis. A whole-body turn (the
+  // chair swivels) foreshortens both equally and correctly reads zero — that
+  // is facing away, which head yaw already covers, not spinal rotation.
+  const hipsOK = vis(PL.L_HIP) && vis(PL.R_HIP);
+  if (!hipsOK) {
+    // Hips are frequently hidden by a desk. Report nothing rather than fall
+    // back to a ruler known to be wrong.
+    return { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false, reason: "hips_hidden" };
+  }
+  const hipPx = Math.abs(g(PL.R_HIP).x * W - g(PL.L_HIP).x * W);
+  if (hipPx < 20 || shPx < 20) {
     return { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
   }
 
-  // Undo the head-yaw foreshortening of the IPD before using it as the ruler.
-  const cosYaw = Math.max(Math.cos(Math.min(60, Math.abs(headYawDeg)) * Math.PI / 180), 0.5);
-  const ipdTrue = ipdPx / cosYaw;
-
-  const ratio = shPx / ipdTrue;
+  const ratio = shPx / hipPx;
 
   // Neutral: the user's own settled early-session ratio (or a calibrated one).
   // A population constant is unusable here — see the _makeBaseline note.
@@ -1392,18 +1454,37 @@ function analyzeShoulderElevation(lms, W, H, prop, calib = null) {
   const rGap = (prop.rSh.y - rEarYpx) / Math.max(prop.shWidthPx, 1);
   const elevRatio = (lGap + rGap) / 2;
 
-  // Same neutral baseline as analyzeRoundedShoulders — anatomically the
-  // same reference measurement (resting ear-to-shoulder gap at upright
-  // posture) — reusing calib.rounded_neutral means a user doesn't need a
-  // second calibration step for it.
-  const NEUTRAL = (typeof calib?.rounded_neutral === "number" && calib.rounded_neutral > 0.2 && calib.rounded_neutral < 1.0)
-    ? calib.rounded_neutral
-    : 0.52;
+  // NEUTRAL used to be the hardcoded constant 0.52, and no real body has that
+  // ratio. Measured on the synthetic-subject harness across the plausible
+  // adult range (neck 10-16cm, biacromial width 36-48cm), the true resting
+  // ratio is 0.20-0.43 — so an uncalibrated user sitting perfectly relaxed was
+  // reported at 9-32% "shoulder elevation", permanently, and the figure
+  // tracked their BUILD rather than their posture: a broad-shouldered,
+  // short-necked person read ~32 while a narrow-shouldered, long-necked one
+  // read ~9. Both were sitting identically. Since the metric is saturated by
+  // that offset it could not detect real elevation either — 4cm of genuine
+  // shrug moved it by 0.3.
+  //
+  // The ratio is a fact about the person's skeleton, so like trunk rotation
+  // and torso flexion it has to be learned from the user rather than assumed.
+  // Calibration value first, then the user's own learned median, and while
+  // still learning the metric reports unreliable rather than guessing — an
+  // unknown answer is better than a confident wrong one.
+  const calibNeutral = (typeof calib?.rounded_neutral === "number" &&
+                        calib.rounded_neutral > 0.10 && calib.rounded_neutral < 0.80)
+    ? calib.rounded_neutral : null;
+  const learned = _feedBaseline(_earShBase, elevRatio);
+  const NEUTRAL = calibNeutral ?? learned;
+
+  if (NEUTRAL === null) {
+    return { elevPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false, learning: true };
+  }
 
   const elevPct  = Math.max(0, NEUTRAL - elevRatio) * 100;
   const score    = scoreMetric(elevPct, 0, THR.SHOULDER_ELEV.ok, THR.SHOULDER_ELEV.bad);
   const severity = classify(elevPct, SEV.SHOULDER_ELEV);
-  return { elevPct: Math.round(elevPct * 10) / 10, score, severity, confidence: 82, reliable: true };
+  return { elevPct: Math.round(elevPct * 10) / 10, score, severity, confidence: 82, reliable: true,
+           neutral: Math.round(NEUTRAL * 1000) / 1000, personalised: calibNeutral !== null };
 }
 
 function analyzeFHP(lms, W, H, prop) {
@@ -1444,6 +1525,84 @@ function analyzeFHP(lms, W, H, prop) {
   const score    = scoreMetric(distCm, 0, THR.FHP_CM.ok, THR.FHP_CM.bad);
   const severity = classify(distCm, SEV.FHP);
   return { distCm, extraLoadKg, neckAngleDeg: Math.round(pitchDeg), score, severity, confidence: 88, reliable: true };
+}
+
+/**
+ * Forward-head displacement from apparent head size — the sagittal estimator.
+ *
+ * analyzeFHP above measures the ear-to-shoulder offset, which from a
+ * FRONT-facing camera is almost entirely a lateral measurement: moving your
+ * head forward is motion along the camera axis and barely changes any x or y.
+ * Its depth term leans on MediaPipe's z, which this file distrusts everywhere
+ * else ("Z-based depth is very noisy") and with good reason.
+ *
+ * Measured on the synthetic-subject harness with a geometrically EXACT z — the
+ * best case MediaPipe could ever achieve — 8cm of true forward-head read as
+ * 5.6cm, and 25° of neck flexion moved the total score by 2 points. Forward
+ * head posture and slouching are the actual epidemiology of desk work, so
+ * being blind to them is the most consequential thing this engine could get
+ * wrong.
+ *
+ * There is a much stronger signal available, and it needs no z at all. The
+ * head and the shoulders sit at different depths, so their apparent sizes
+ * scale differently as the head moves: at 60cm, moving the head 8cm forward
+ * enlarges it by ~15% while the shoulders are unchanged. That ratio uses only
+ * x-coordinates, which MediaPipe estimates far more accurately than depth.
+ *
+ *   r  = ipd_px / shoulder_px        (grows as the head comes forward)
+ *   r0 = the user's own neutral r
+ *   Δ  = distance · (1 − r0/r)
+ *
+ * Like every other ratio-of-this-body measurement here, r0 has to be learned
+ * from the user rather than assumed — see the _makeBaseline note.
+ *
+ * (This is the same quantity analyzeTrunkRotation used to misread as a twist.
+ * It was always a forward-head signal; it was only ever pointed at the wrong
+ * conclusion.)
+ */
+function analyzeForwardHeadDepth(lms, W, H, prop, distCm, calib = null) {
+  const g   = i => lms[i];
+  const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
+  if (!prop.shOK || !vis(PL.L_EYE) || !vis(PL.R_EYE)) {
+    return { fwdCm: 0, reliable: false };
+  }
+  const ipdPx = Math.abs(g(PL.R_EYE).x * W - g(PL.L_EYE).x * W);
+  const shPx  = prop.shWidthPxRaw ?? prop.shWidthPx;
+  if (ipdPx < 4 || shPx < 20) return { fwdCm: 0, reliable: false };
+
+  const ratio = ipdPx / shPx;
+
+  const calibNeutral = (typeof calib?.head_sh_ratio_neutral === "number" && calib.head_sh_ratio_neutral > 0.05)
+    ? calib.head_sh_ratio_neutral : null;
+  const learned = _feedBaseline(_headShBase, ratio);
+  const r0 = calibNeutral ?? learned;
+  if (r0 == null) return { fwdCm: 0, reliable: false, calibrating: true };
+
+  // Δ from the CURRENT head depth, not the neutral one:
+  //
+  //   r/r0 = depth0 / depth_now      (apparent size scales as 1/depth)
+  //   depth0 = depth_now · (r/r0)
+  //   Δ = depth0 − depth_now = depth_now · (r/r0 − 1)
+  //
+  // Writing it as D·(1 − r0/r) instead — the algebraically tempting form —
+  // silently substitutes the current distance for the neutral one, which is
+  // already shortened by the very movement being measured. That under-read
+  // 8cm of true forward-head as 6.8cm.
+  const D = Number.isFinite(distCm) && distCm > 20 ? distCm : 60;
+  // Only growth counts: a head further away than neutral is leaning back,
+  // which is not forward-head and is not scored here.
+  const fwdCm = Math.max(0, D * (Math.max(ratio, 1e-6) / r0 - 1));
+
+  // Guard against the ratio being disturbed by head yaw rather than depth:
+  // turning the head foreshortens the IPD, which would read as leaning BACK
+  // (harmless, clamped at 0) but a large yaw makes the estimate meaningless.
+  return {
+    fwdCm: Math.round(Math.min(fwdCm, 25) * 10) / 10,
+    ratio: Math.round(ratio * 1000) / 1000,
+    neutral: Math.round(r0 * 1000) / 1000,
+    reliable: true,
+    personalised: calibNeutral !== null,
+  };
 }
 
 function analyzeHeadYawModule(lms, W, H) {
@@ -1738,6 +1897,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   if (!skipExpensive || !analyzeMP._cachedRounded) {
     rounded = analyzeRoundedShoulders(lms, prop, H, calib);
     fhp     = analyzeFHP(lms, W, H, prop);
+
     elbow   = analyzeElbow(lms, W, H);
     monitor = analyzeMonitorHeight(lms, W, H, distCm, calib);
     analyzeMP._cachedRounded = rounded;
@@ -1749,6 +1909,32 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     fhp     = analyzeMP._cachedFhp;
     elbow   = analyzeMP._cachedElbow;
     monitor = analyzeMP._cachedMonitor;
+  }
+
+  // Sagittal forward-head, computed EVERY frame rather than inside the
+  // every-third-frame block above: it feeds a running baseline, and a
+  // baseline fed on one frame in three takes three times as long to settle
+  // (which is exactly why this read as a no-op when first wired in).
+  //
+  // Combine with the lateral ear-shoulder offset by taking the LARGER of the
+  // two, not the sum: they are two views of one displacement, and adding them
+  // would double-count a head that is both forward and off to one side.
+  {
+    const fwd = analyzeForwardHeadDepth(lms, W, H, prop, distCm, calib);
+    if (fwd.reliable && fwd.fwdCm > (fhp.distCm ?? 0)) {
+      const d = fwd.fwdCm;
+      const pitchRad = Math.atan2(Math.max(0, d), 15);
+      fhp = {
+        ...fhp,
+        distCm: d,
+        neckAngleDeg: Math.round(pitchRad * 180 / Math.PI),
+        extraLoadKg: Math.round(Math.max(0, (4.5 / Math.max(Math.cos(pitchRad), 0.35)) - 4.5) * 10) / 10,
+        score: scoreMetric(d, 0, THR.FHP_CM.ok, THR.FHP_CM.bad),
+        severity: classify(d, SEV.FHP),
+        reliable: true,
+        source: "depth",
+      };
+    }
   }
   // Spine runs every frame (fast) but depends on rounded.score from above
   const spine = analyzeSpineLean(lms, W, H, prop, rounded.score, calib);
