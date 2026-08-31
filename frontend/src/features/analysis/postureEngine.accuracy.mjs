@@ -35,7 +35,7 @@
  */
 
 import { analyzeMP, resetProportions } from "./postureEngine.js";
-import { renderSubject, jitter, mulberry32 } from "./syntheticSubject.mjs";
+import { renderSubject, jitter, mulberry32, DEFAULT_BODY } from "./syntheticSubject.mjs";
 
 const VERBOSE = process.argv.includes("--verbose");
 const W = 1280, H = 720;
@@ -165,15 +165,26 @@ console.log("ACCURACY — reported vs known truth");
 }
 
 {
+  // "Screen distance" is EYE to screen, which is what a user cares about and
+  // what the engine reports — it measures the inter-pupillary distance. The
+  // camera parameter here is set relative to the shoulder PLANE, and the eyes
+  // sit DEFAULT_BODY.eyeAheadCm in front of it, so the truth to compare
+  // against is that much less.
+  //
+  // Worth spelling out because the first version of this check did not, saw a
+  // clean -6cm offset at every distance, and briefly looked like a systematic
+  // engine bias. It was the harness measuring from the wrong landmark.
+  const EYE_AHEAD = DEFAULT_BODY.eyeAheadCm;
   const dists = [45, 50, 60, 70, 80, 90];
   const pct = [];
-  if (VERBOSE) console.log("\n  Screen distance");
+  if (VERBOSE) console.log("\n  Screen distance (eye to camera)");
   for (const d of dists) {
+    const truth = d - EYE_AHEAD;
     const got = val(read({}, { camera: { distCm: d } }), "screen_distance");
-    pct.push(Math.abs(100 * (got - d) / d));
-    if (VERBOSE) console.log(`    true ${String(d).padStart(2)}cm  ->  read ${fmt(got)}cm   err ${fmt(100 * (got - d) / d)}%`);
+    pct.push(Math.abs(100 * (got - truth) / truth));
+    if (VERBOSE) console.log(`    true ${String(truth).padStart(2)}cm  ->  read ${fmt(got)}cm   err ${fmt(100 * (got - truth) / truth)}%`);
   }
-  check("Distance: worst error within 20%", Math.max(...pct) <= 20, `worst ${fmt(Math.max(...pct))}%`);
+  check("Distance: worst error within 6%", Math.max(...pct) <= 6, `worst ${fmt(Math.max(...pct))}%`);
 }
 
 // ═══════════════════════════════════════════════════════════════════
