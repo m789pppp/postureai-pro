@@ -1414,15 +1414,37 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
 
   async function doConfirm(pay){
     setProc(pay.id);
-    await confirmPayment(pay.id,pay.uid,pay.tier,pay.billing_cycle==="yearly"?12:1);
-    // Send invoice email automatically
-    EmailAPI.invoice({email:pay.user_email,name:pay.user_name,tier:pay.tier,
+    // The confirmation write was not wrapped, so a Firestore failure left the
+    // row stuck on `proc` with nothing surfaced — the admin saw a spinner that
+    // never resolved and no reason why. And the toast asserted "Invoice sent"
+    // regardless: both the invoice email and the notification are
+    // fire-and-forget with swallowed errors, so the admin could tell a customer
+    // their invoice was on its way when nothing had been sent. Report the
+    // payment confirmation and the email separately, because they are separate
+    // facts and only one of them is confirmed here.
+    try {
+      await confirmPayment(pay.id,pay.uid,pay.tier,pay.billing_cycle==="yearly"?12:1);
+    } catch(e) {
+      addToast("Couldn't confirm this payment — "+(e?.message||"try again"),"error");
+      setProc(null);
+      return false;
+    }
+    let invoiceSent = false;
+    try {
+      await EmailAPI.invoice({email:pay.user_email,name:pay.user_name,tier:pay.tier,
         amount:pay.amount,billing:pay.billing_cycle,seats:pay.seats||25,
-        ref:pay.ref_code||"AUTO"}).catch(()=>{});
+        ref:pay.ref_code||"AUTO"});
+      invoiceSent = true;
+    } catch(e) { console.warn("[admin] invoice email failed:",e?.message); }
     PaymentAPI.notifyConfirmed(pay).catch(()=>{});
     // Mark coupon as used
     if(pay.coupon)PaymentAPI.validateCoupon({code:pay.coupon}).catch(()=>{});
-    addToast("✅ Confirmed — Invoice sent to "+pay.user_email,"success");await load();setProc(null);
+    addToast(invoiceSent
+      ? "✅ Confirmed — invoice sent to "+pay.user_email
+      : "✅ Confirmed — but the invoice email did NOT send. Send it manually to "+pay.user_email,
+      invoiceSent ? "success" : "warn");
+    await load();setProc(null);
+    return true;
   }
   async function doReject(){
     setProc(modal.id);
@@ -1430,8 +1452,21 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
     addToast("Rejected","warn");setModal(null);setReason("");await load();setProc(null);
   }
   async function bulkConfirm(){
-    for(const pid of selected){const pay=payments.find(p=>p.id===pid);if(pay)await doConfirm(pay);}
-    setSelected([]);addToast(`${selected.length} confirmed`,"success");
+    // Reported `selected.length` confirmed even when the loop aborted partway,
+    // so a run that failed on the second of ten still claimed ten.
+    let ok=0, failed=0;
+    for(const pid of selected){
+      const pay=payments.find(p=>p.id===pid);
+      if(!pay) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const done=await doConfirm(pay);
+      done?ok++:failed++;
+    }
+    setSelected([]);
+    addToast(failed
+      ? `${ok} confirmed, ${failed} failed — check the list and retry the failures`
+      : `${ok} confirmed`,
+      failed ? "warn" : "success");
   }
   function exportCSV(data,filename){
     if(!data.length)return;
@@ -2180,7 +2215,21 @@ export default function App(){
     return ()=>clearTimeout(t);
   },[]);
   // ── Hash-based routing — fixes back button & enables deep links ──
-  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace","break","demo","demo_dashboard"]);
+  // Every page that has a render branch below, and nothing that doesn't.
+  //
+  // This list had drifted apart from reality in BOTH directions, and each
+  // direction produced its own bug:
+  //   · "leaderboard" and "invite" are navigated to by the app but were
+  //     missing, so hashToPage fell through to "home" — a refresh or a shared
+  //     link silently dropped the user somewhere else.
+  //   · "report" had no branch at all and "enterprise" only has one for
+  //     LOGGED-OUT visitors, so a signed-in user on either fell past every
+  //     `if (page===...)` to the unconditional live-analysis return at the
+  //     bottom — an old bookmark to #report opened a camera session. Both stay
+  //     in the set (enterprise is a real marketing route) and now have explicit
+  //     signed-in redirects below.
+  // "profile" and "embed" have branches and are added so they stop being dead.
+  const VALID_PAGES = new Set(["home","live","setup","pricing","auth","landing","admin","hr","enterprise","report","marketplace","break","demo","demo_dashboard","leaderboard","invite","profile","embed"]);
   const hashToPage = (h) => {
     const p = h.replace(/^#\/?/, "") || "landing";
     // Map known aliases
@@ -5397,6 +5446,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
     </ErrorBoundary>
   );
   if(page==="profile"){setPage("home"); return null; /* Settings handled in HomePage tabs */}
+  // Signed-in fallbacks. Without these, both fell through to the live-camera
+  // return at the bottom of this component: #report had no branch anywhere,
+  // and #enterprise is only handled for logged-out visitors above.
+  if(page==="report" || page==="enterprise"){ setPage("home"); return null; }
   if(page==="leaderboard")return <ErrorBoundary><Leaderboard {...shared} users={allUsers} onBack={()=>setPage("home")} lang={lang}/></ErrorBoundary>;
 
   // Guard: live page requires user + profile — prevent crash on #live URL before auth resolves
@@ -5777,6 +5830,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         setShowReferralProgram={setShowReferralProgram}
         setShowIntegrationsHub={setShowIntegrationsHub}
         setShowMFASetup={setShowMFASetup}
+        setShowHelp={setShowHelp}
         setShowChangePw={setShowChangePw}
         setShowProductTour={setShowProductTour}
         isAdmin={isAdmin} isHRAdmin={isHRAdmin} companyId={companyId}
@@ -6167,6 +6221,21 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* CTAs */}
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {/* Share card.
+                  ShareCard is fully built, and after every session scoring 70+
+                  the app assembles shareCardData for it — but
+                  setShowShareCard(true) existed nowhere, so the modal had never
+                  once opened. Someone even fixed a data bug inside it. This is
+                  the product's only organic growth loop and it was one call
+                  away from working. */}
+              {shareCardData && (
+                <button className="liveui-focusable" onClick={()=>setShowShareCard(true)}
+                  style={{padding:"12px",background:"transparent",color:cs.text,
+                    border:`1px solid ${cs.border}`,borderRadius:12,fontSize:14,
+                    fontWeight:700,cursor:"pointer"}}>
+                  {isAr?"📤 شارك نتيجتك":"📤 Share your score"}
+                </button>
+              )}
               <button className="liveui-focusable" onClick={()=>{setSessionResult(null);setPage("live");setTimeout(()=>startCamera(),300);}}
                 style={{padding:"12px",background:`linear-gradient(135deg,#1a56db,#0891b2)`,color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer"}}>
                 {isAr?"▶ جلسة جديدة":"▶ New Session"}
