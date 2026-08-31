@@ -470,18 +470,19 @@ This user score: ${avgScore}/100
     ] : []),
   ];
 
-  // Mock dept data if no allUsers
+  // With no company data, this used to invent three departments —
+  // Engineering 74, Marketing 61, Operations 68 — and place the user's REAL
+  // score beside them, unlabelled. A reader had no way to tell which of the
+  // four numbers was theirs and which were fiction, and the comparison they
+  // drew from it was meaningless. An empty state is honest; a populated fake
+  // one is what ends up in a screenshot.
+  //
+  // id carries the Firestore users/{uid} doc id (see getAllUsers in
+  // firebase.js) so "Your Rank" below can identify the current user by
+  // identity instead of by score value, which broke on ties.
   const deptData = allUsers.length > 0
-    // id carries the Firestore users/{uid} doc id (see getAllUsers in
-    // firebase.js) so "Your Rank" below can identify the current user by
-    // identity instead of by score value, which broke on ties.
     ? allUsers.slice(0, 6).map(u => ({ id: u.id, name: u.name || u.email?.split("@")[0] || "User", score: u.avg_score || 0 }))
-    : [
-        { name: isAr ? "فريق التطوير" : "Engineering",  score: 74 },
-        { name: isAr ? "فريق التسويق" : "Marketing",    score: 61 },
-        { name: isAr ? "فريق العمليات" : "Operations",  score: 68 },
-        { name: isAr ? "أنت" : "You",                   score: avgScore },
-      ];
+    : [];
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(2,8,20,.55)", zIndex: 9100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
@@ -699,7 +700,22 @@ This user score: ${avgScore}/100
           )}
 
           {/* ── Department Comparison — company only ── */}
-          {tab === "department" && isCompany && (
+          {tab === "department" && isCompany && deptData.length === 0 && (
+            <div style={{ background:"rgba(15,30,54,.85)", border:"1px solid rgba(255,255,255,.07)",
+              borderRadius:14, padding:"28px 20px", textAlign:"center" }}>
+              <div style={{ fontSize:26, marginBottom:10 }}>👥</div>
+              <div style={{ fontFamily:"Syne,sans-serif", fontSize:14, fontWeight:800, color:"#e8f0fe", marginBottom:6 }}>
+                {isAr ? "لسه مفيش بيانات فريق" : "No team data yet"}
+              </div>
+              <div style={{ fontSize:12.5, color:"#94a3b8", lineHeight:1.65, maxWidth:"44ch", margin:"0 auto" }}>
+                {isAr
+                  ? "المقارنة هتظهر أول ما أعضاء الفريق يسجّلوا جلسات."
+                  : "Comparisons appear once your team members have recorded sessions."}
+              </div>
+            </div>
+          )}
+
+          {tab === "department" && isCompany && deptData.length > 0 && (
             <div>
               <div style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, padding: 16, marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>

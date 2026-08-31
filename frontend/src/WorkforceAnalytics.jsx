@@ -230,6 +230,56 @@ function buildAnalytics(sessions=[], allUsers=[], profile={}) {
   const regularityScore = Math.min(100, Math.round((week.length / sessPerWeekTarget) * 100));
   const productivityIndex = Math.round((avgScore * 0.65) + (regularityScore * 0.35));
 
+  // Time-of-day averages, computed from the user's own sessions.
+  //
+  // The "Your best times" tiles used to be the literal array [72,68,81,64],
+  // shown as if measured. The data to compute it properly was already here —
+  // every session carries created_at — so it is computed, and a slot with too
+  // few sessions shows a dash rather than an invented number.
+  const _dayPart = (d) => { const h = d.getHours(); return h < 12 ? 0 : h < 15 ? 1 : h < 18 ? 2 : 3; };
+  const _pSum = [0,0,0,0], _pCount = [0,0,0,0];
+  (sessions||[]).forEach(sess => {
+    const v0 = sess.avg_score || 0;
+    if (!v0) return;
+    const d = sess.created_at?.toDate?.() ?? new Date(sess.created_at || 0);
+    if (isNaN(d.getTime())) return;
+    const i = _dayPart(d);
+    _pSum[i] += v0; _pCount[i] += 1;
+  });
+  const timeOfDay = _pSum.map((sum, i) => _pCount[i] >= 2 ? Math.round(sum / _pCount[i]) : null);
+
+  // Body-zone risk, derived from the metrics the engine ACTUALLY measures.
+  //
+  // The heatmap used to compute each zone from the overall average score times
+  // an invented coefficient — (100-avgScore)*0.7+10 for neck, *0.4+12 for
+  // "Eyes", and so on — and present the result to HR as measured risk. Two
+  // things were wrong with that: the numbers were not measurements of anything,
+  // and one of the zones (Eyes) is not something this product can observe at
+  // all. A buyer asking "how do you measure eye strain?" had no good answer.
+  //
+  // Every session stores the engine's per-metric scores, so each zone is now
+  // the mean of the metrics that genuinely bear on it, and a zone with no data
+  // reports null and is not drawn.
+  const ZONE_METRICS = {
+    neck:     ["neck_lean", "fhp_index", "monitor_height"],
+    shoulder: ["shoulder_level", "rounded_shoulders", "shoulder_elevation"],
+    spine:    ["spine_lean", "trunk_rotation"],
+    lower:    ["torso_flexion", "spine_lean"],
+    arms:     ["elbow_angle"],
+  };
+  const zoneRisk = {};
+  for (const [zone, keys] of Object.entries(ZONE_METRICS)) {
+    let sum = 0, n = 0;
+    (sessions || []).forEach(sess => {
+      const m = sess.metrics || {};
+      keys.forEach(k => {
+        const sc0 = m[k]?.score;
+        if (Number.isFinite(sc0)) { sum += sc0; n += 1; }
+      });
+    });
+    zoneRisk[zone] = n >= 3 ? Math.max(0, Math.min(100, Math.round(100 - sum / n))) : null;
+  }
+
   // Focus trend: % sessions >= 70
   const focusSessions = month.filter(s=>(s.avg_score||0)>=70).length;
   const focusTrend = month.length ? Math.round((focusSessions/month.length)*100) : 0;
@@ -284,7 +334,7 @@ function buildAnalytics(sessions=[], allUsers=[], profile={}) {
     };
   });
 
-  return {avgScore,weekAvg,monthAvg,prevAvg,scores,daily30,monthly6,
+  return {avgScore,weekAvg,monthAvg,prevAvg,scores,daily30,monthly6,timeOfDay,zoneRisk,
     fatigueScore,productivityIndex,focusTrend,engagementScore,burnoutRisk,
     heatmap,depts,streak,week,month,prevMonth};
 }
@@ -530,16 +580,18 @@ function EngagementAnalytics({data,profile,isAr,loading}) {
               })}
             </div>
           </div>
-          {/* Sessions by time of day (mock) */}
+          {/* Sessions by time of day — computed from real sessions (was a
+              hardcoded array presented as measured data). */}
           <div>
             <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>{isAr?"أفضل أوقاتك":"Your best times"}</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
               {(isAr?["صباح","ظهر","بعد الظهر","مساء"]:["Morning","Noon","Afternoon","Evening"]).map((t,i)=>{
-                const vals=[72,68,81,64]; const v=vals[i];
+                const v = data?.timeOfDay?.[i] ?? null;
+                const col = v === null ? "var(--wa-muted)" : sc(v);
                 return (
-                  <div key={i} style={{background:`${sc(v)}10`,border:`1px solid ${sc(v)}22`,borderRadius:9,padding:"9px 8px",textAlign:"center"}}>
+                  <div key={i} style={{background:v===null?"transparent":`${col}10`,border:`1px solid ${v===null?"rgba(148,163,184,.18)":col+"22"}`,borderRadius:9,padding:"9px 8px",textAlign:"center"}}>
                     <div style={{fontSize:8,color:"var(--wa-muted)",fontWeight:600,marginBottom:4}}>{t}</div>
-                    <div style={{fontFamily:SYNE,fontSize:16,fontWeight:800,color:sc(v)}}>{v}</div>
+                    <div style={{fontFamily:SYNE,fontSize:16,fontWeight:800,color:col}}>{v===null?"—":v}</div>
                   </div>
                 );
               })}
@@ -553,17 +605,25 @@ function EngagementAnalytics({data,profile,isAr,loading}) {
 
 /* ── Posture Risk Heatmap ───────────────────────────────────────── */
 function PostureRiskHeatmap({data,isAr,loading}) {
+  // Zones are drawn only where the engine has data. "Eyes" is gone: nothing in
+  // this product measures eye strain, so there was never a number to show.
+  const zr = data?.zoneRisk || {};
   const zones = [
-    {id:"neck",    label:isAr?"الرقبة":"Neck",       risk:Math.min(100,Math.round((100-data.avgScore)*0.7+10)), icon:"🔴"},
-    {id:"shoulder",label:isAr?"الكتف":"Shoulders",   risk:Math.min(100,Math.round((100-data.avgScore)*0.5+15)), icon:"🟡"},
-    {id:"spine",   label:isAr?"العمود الفقري":"Spine",risk:Math.min(100,Math.round((100-data.avgScore)*0.6+8)),  icon:"🟠"},
-    {id:"eyes",    label:isAr?"العين":"Eyes",         risk:Math.min(100,Math.round((100-data.avgScore)*0.4+12)), icon:"🔵"},
-    {id:"wrists",  label:isAr?"المعصم":"Wrists",      risk:Math.min(100,Math.round((100-data.avgScore)*0.35+5)), icon:"🟢"},
-    {id:"lower",   label:isAr?"أسفل الظهر":"Lower Back",risk:Math.min(100,Math.round((100-data.avgScore)*0.55+14)),icon:"🔴"},
-  ];
+    {id:"neck",    label:isAr?"الرقبة":"Neck",            risk:zr.neck,     icon:"🔴"},
+    {id:"shoulder",label:isAr?"الكتف":"Shoulders",        risk:zr.shoulder, icon:"🟡"},
+    {id:"spine",   label:isAr?"العمود الفقري":"Spine",     risk:zr.spine,    icon:"🟠"},
+    {id:"lower",   label:isAr?"أسفل الظهر":"Lower Back",   risk:zr.lower,    icon:"🔴"},
+    {id:"arms",    label:isAr?"الذراع والكوع":"Arms & elbows", risk:zr.arms, icon:"🟢"},
+  ].filter(z => Number.isFinite(z.risk));
   return (
     <Sec title={isAr?"خريطة حرارة المخاطر الوضعية":"Posture Risk Heatmap"} sub={isAr?"توزيع المخاطر على مناطق الجسم":"Risk distribution across body zones"} accent="#7c3aed">
-      {loading ? <CardSkeleton h={120}/> : (
+      {loading ? <CardSkeleton h={120}/> : zones.length === 0 ? (
+        <div style={{padding:"18px 14px",textAlign:"center",fontSize:12,color:"var(--wa-muted)",lineHeight:1.6}}>
+          {isAr
+            ? "لسه مفيش جلسات كفاية لحساب مخاطر مناطق الجسم."
+            : "Not enough sessions yet to calculate body-zone risk."}
+        </div>
+      ) : (
         <>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
             {zones.map((z,i)=>(
